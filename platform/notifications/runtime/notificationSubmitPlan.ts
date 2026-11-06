@@ -118,7 +118,9 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  const bodyKey = resolveBodyKey(entry, input.request)
+  // 成品句子在手时**根本不读键**：变体表、正文键、理由键都不参与（契约 v2.56）。
+  // 否则「声明了变体表却交成品」会被 bodyVariant 那道门拒掉，而且记录里会多挂一份已作废的正文来源。
+  const bodyKey = input.request.rendered !== undefined ? undefined : resolveBodyKey(entry, input.request)
   if (bodyKey === null) {
     return rejected('unknown-body-variant', `notification event "${entry.id}" has no body variant "${input.request.bodyVariant ?? ''}"`)
   }
@@ -322,7 +324,7 @@ function toLegacyRequest(
     ...(request.titleParams === undefined ? {} : { titleParams: request.titleParams }),
     ...(bodyKey === undefined ? {} : { bodyKey: bodyKey as NotificationCopyKey }),
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
-    reasonKey: entry.reasonKey as NotificationCopyKey,
+    ...(request.rendered === undefined ? { reasonKey: entry.reasonKey as NotificationCopyKey } : {}),
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
     severity: request.severity ?? 'info',
     priority: 'normal',
@@ -369,7 +371,7 @@ function createRecord(
     ...(request.titleParams === undefined ? {} : { titleParams: request.titleParams }),
     ...(bodyKey === undefined ? {} : { bodyKey: bodyKey as NotificationCopyKey }),
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
-    reasonKey: entry.reasonKey as NotificationCopyKey,
+    ...(request.rendered === undefined ? { reasonKey: entry.reasonKey as NotificationCopyKey } : {}),
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
     severity: request.severity ?? 'info',
     priority: 'normal',

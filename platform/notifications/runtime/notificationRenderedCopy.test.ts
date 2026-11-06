@@ -135,6 +135,72 @@ describe('平台只拦不改', () => {
   })
 })
 
+describe('成品在手时不再读键', () => {
+  function runtimeWithVariants() {
+    const state = createDefaultNotificationStoreState()
+    const catalog = createNotificationEventCatalog({
+      policy: { 'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
+      sources: [{
+        productId: 'platform',
+        events: [{
+          id: 'platform.variant',
+          titleKey: 'notification.taskFailed.title',
+          bodyKeyByVariant: { failed: 'notification.taskFailed.body', done: 'notification.taskFailed.body' },
+          reasonKey: 'notification.taskFailed.body',
+          requiresUserAction: false,
+          category: 'reminder',
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'variant:{id}',
+          dedupeUnit: 'occurrence'
+        }]
+      }]
+    })
+    const instance = createNotificationRuntime({
+      storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
+      catalog,
+      getSettings: async () => createDefaultNotificationRuntimeSettings(),
+      clock,
+      getLanguage: async () => 'zh-CN'
+    })
+    return { instance, records: () => state.records }
+  }
+
+  it('声明了正文变体表、但交的是成品且没带 bodyVariant → 照收，不再拒 unknown-body-variant', async () => {
+    const { instance, records } = runtimeWithVariants()
+    const outcome = await instance.submit({
+      eventTypeId: 'platform.variant',
+      producerId: 'platform',
+      dedupeVars: { builder: 'template', vars: { id: 'v1' } },
+      rendered: RENDERED,
+      actions: [],
+      occurredAt: '2026-11-06T11:00:00.000Z'
+    })
+
+    expect(outcome.kind).toBe('accepted')
+    const stored = records()[0]
+    expect(stored?.rendered?.['zh-CN']?.title).toBe(RENDERED['zh-CN']?.title)
+    // 成品在手时记录里**不许**再挂已作废的键（否则同一条记录有两个正文来源）。
+    expect(stored?.titleKey).toBeUndefined()
+    expect(stored?.bodyKey).toBeUndefined()
+    expect(stored?.reasonKey).toBeUndefined()
+  })
+
+  it('老形状照旧要求 bodyVariant：声明了变体表而没带 → 仍拒', async () => {
+    const { instance, records } = runtimeWithVariants()
+    const outcome = await instance.submit({
+      eventTypeId: 'platform.variant',
+      producerId: 'platform',
+      dedupeVars: { builder: 'template', vars: { id: 'v2' } },
+      titleParams: { taskName: 'x' },
+      actions: [],
+      occurredAt: '2026-11-06T11:00:00.000Z'
+    })
+
+    expect(outcome).toMatchObject({ kind: 'rejected', reason: 'unknown-body-variant' })
+    expect(records()).toHaveLength(0)
+  })
+})
+
 describe('源头没拼完：拒收，不落库', () => {
   function runtime() {
     const state = createDefaultNotificationStoreState()
