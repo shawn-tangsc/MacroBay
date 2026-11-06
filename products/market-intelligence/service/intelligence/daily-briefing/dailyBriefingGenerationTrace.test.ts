@@ -192,10 +192,9 @@ describe('daily briefing generation trace', () => {
     expect(trace.state).toBe('failed')
     expect(stage(trace, 'selection')).toMatchObject({ state: 'failed', failureCode: 'invalid-shape' })
     expect(stage(trace, 'writing')?.state).toBe('skipped')
-    expect(result.state).toBe('available')
-    if (result.state === 'available') {
-      expect(result.document.provenance.editorialFailure).toBe('invalid-shape')
-    }
+    // 写作没出来 -> 不发布（用户 2026-11-06），失败码就是选择阶段的原因码。
+    expect(result.state).toBe('unavailable')
+    if (result.state === 'unavailable') expect(result.failureCode).toBe('invalid-shape')
   })
 
   it('records a truncated writing stage instead of calling every throw a timeout', async () => {
@@ -233,8 +232,8 @@ describe('daily briefing generation trace', () => {
     expect(stage(trace, 'repair-1')?.state).toBe('success')
     expect(stage(trace, 'repair-2')?.state).toBe('success')
     expect(stage(trace, 'repair-3')?.state).toBe('success')
-    // The fact layer still ships: the run failed, the edition was stored, and the trace says so.
-    expect(stage(trace, 'store')?.state).toBe('success')
+    // 校验没通过、写作没出来：**不落库**（用户 2026-11-06），阶段表也如实记成跳过。
+    expect(stage(trace, 'store')?.state).toBe('skipped')
   })
 
   it('locates a store failure and still persists the attempt', async () => {

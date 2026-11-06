@@ -210,6 +210,13 @@ function withTimeZoneSource(
 export type DailyBriefingTodayFailureCode =
   | 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
   | 'attempt-not-recorded' | 'run-timeout' // attempt row refused; the caller gave up waiting.
+  // 写作没出来（用户 2026-11-06 拍板）：不再发布模板版，失败码就是编辑失败的原因码本身，
+  // 页面据此说清"AI 超时 / 输出不合规"等，而不是笼统一句"失败"。
+  | 'editorial-timeout' | 'editorial-disabled' | 'editorial-fallback' | 'invalid-shape'
+  | 'unknown-fact' | 'unknown-number' | 'forbidden-content' | 'too-long' | 'language-mismatch'
+  | 'model-not-ready' | 'provider-disabled' | 'missing-api-key' | 'cancelled' | 'rate-limited'
+  | 'provider-error' | 'invalid-json' | 'schema-validation-failed' | 'invalid-translation'
+  | 'agent-turn-output-truncated' | 'direction-conflict' | 'row-set-mismatch' | 'model-unavailable'
   | 'not-generated' // Not a failure: a read-only open found nothing written for this issue yet.
 
 export type DailyBriefingTodayResult =
@@ -611,9 +618,22 @@ export function createDailyBriefingService(deps: Readonly<{
       // AI off is the fact-layer edition too: published, with the reason in the provenance.
       document = markEditorialFailure(document, 'editorial-disabled')
     }
+    // 写作没出来就**不发布**（用户 2026-11-06 拍板）：模板版（`lede.source='template'`、正文空）
+    // 一旦落库，页面就有正文可开、库里还记成功，三处口径互相打架。这里如实记一次失败并返回原因；
+    // 只有读者自己关掉 AI 编辑（`editorial-disabled`）才继续发事实层版次——那不是失败，是配置。
+    const editorialFailure = document.provenance.editorialFailure
+    if (editorialFailure !== undefined && editorialFailure !== 'editorial-disabled') {
+      const trace = recorder.complete('failed')
+      await attempts.settle('failed', trace.finishedAt ?? now(), { failureCode: editorialFailure, trace })
+      await run.settle('failed', 0)
+      await notifyDailyBriefing(deps.noticeSubmit, {
+        kind: 'failed', variant: 'editorial-missing', date: input.date, periodId: input.periodId
+      }, now())
+      return { state: 'unavailable', failureCode: editorialFailure as DailyBriefingTodayFailureCode, generationTrace: trace }
+    }
     recorder.begin('store')
     recorder.end('store', 'success')
-    const traced = withGenerationTrace(document, recorder.complete(document.provenance.editorialFailure ? 'failed' : 'success'))
+    const traced = withGenerationTrace(document, recorder.complete(editorialFailure ? 'failed' : 'success'))
     try {
       const edition = {
         date: input.date,

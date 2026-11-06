@@ -353,7 +353,7 @@ describe('daily briefing service', () => {
     }
   })
 
-  it('stores the fact layer and marks it when the agent turn fails', async () => {
+  it('does not publish a template edition when the agent turn fails, and records the failure', async () => {
     const store = memoryStore()
     const service = createDailyBriefingService({
       source: fakeSource(), store, now: () => asOf,
@@ -364,11 +364,11 @@ describe('daily briefing service', () => {
       }
     })
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    // A brief that could be read is a brief that ships: the reader gets the numbers, and the edition
-    // says in its provenance that the interpretation is missing. "No brief today" is the other thing.
-    expect(result.state).toBe('available')
-    expect(store.rows.size).toBe(1)
-    expect(result.state === 'available' ? result.document.provenance.editorialFailure : undefined).toBeDefined()
+    // 写作没出来就**不发布**（用户 2026-11-06 拍板）：模板版一旦落库，页面就有正文可开、库里还记成功，
+    // 三处口径互相打架。现在这一跑如实返回失败，库里没有版次。
+    expect(result.state).toBe('unavailable')
+    if (result.state === 'unavailable') expect(result.failureCode).toBe('invalid-shape')
+    expect(store.rows.size).toBe(0)
   })
 
   it('cancels the runtime session and abandons its link when the editorial deadline fires', async () => {
@@ -394,12 +394,11 @@ describe('daily briefing service', () => {
       const result = await pending
 
       expect(cancelAgentSession).toHaveBeenCalledWith('s-timeout')
+      // 会话被丢弃之外，这一跑也不许留下"看起来正常"的版次。
+      expect(result.state).toBe('unavailable')
+      expect(store.rows.size).toBe(0)
       expect((await links.findBySession('s-timeout'))?.state).toBe('abandoned')
-      expect(result.state).toBe('available')
-      if (result.state === 'available') {
-        expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
-      }
-      expect(store.rows.size).toBe(1)
+      if (result.state === 'unavailable') expect(result.failureCode).toBe('editorial-timeout')
     } finally {
       vi.useRealTimers()
     }
@@ -424,11 +423,9 @@ describe('daily briefing service', () => {
       const result = await pending
 
       expect(finish).not.toHaveBeenCalled()
-      expect(result.state).toBe('available')
-      if (result.state === 'available') {
-        expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
-      }
-      expect(store.rows.size).toBe(1)
+      expect(result.state).toBe('unavailable')
+      if (result.state === 'unavailable') expect(result.failureCode).toBe('editorial-timeout')
+      expect(store.rows.size).toBe(0)
     } finally {
       vi.useRealTimers()
     }
@@ -477,7 +474,7 @@ describe('daily briefing service', () => {
     }
   })
 
-  it('keeps the fact layer without starting a session when no model can be called', async () => {
+  it('publishes nothing when no model can be called, and says why', async () => {
     const store = memoryStore()
     const starts: number[] = []
     const service = createDailyBriefingService({
@@ -488,13 +485,10 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    expect(store.rows.size).toBe(1)
-    expect(result.state).toBe('available')
-    if (result.state === 'available') {
-      expect(result.document.lede.source).toBe('template')
-      expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
-      expect(result.document.provenance.editorialFailureDetail).toBe('default-unavailable')
-    }
+    // 模型不可用是失败，不是"发一份没解读的版次"：原因码会走到右列与失败面板。
+    expect(store.rows.size).toBe(0)
+    expect(result.state).toBe('unavailable')
+    if (result.state === 'unavailable') expect(result.failureCode).toBe('model-unavailable')
   })
 
   it('fails closed without starting a session when model readiness cannot be resolved', async () => {
@@ -508,10 +502,10 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    expect(store.rows.size).toBe(1)
-    if (result.state === 'available') {
-      expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
-    }
+    // 同样是失败：不发布、不记成功（用户 2026-11-06）。
+    expect(store.rows.size).toBe(0)
+    expect(result.state).toBe('unavailable')
+    if (result.state === 'unavailable') expect(result.failureCode).toBe('model-unavailable')
   })
 
   it('regenerates the same day, overwrites the row and applies the agent editorial', async () => {
@@ -972,9 +966,9 @@ describe('briefing notices', () => {
     })
   })
 
-  it('N5 ②: data ready but the interpretation missing still ships the brief', async () => {
-    // 数据齐了、解读没出来：**仍然出报**（事实层 + 标记），所以发的不是「失败」而是「完成」——
-    // 「未生成」会在读者那里变成「今天没有日报」，而那正是我们要避免的那句假话。
+  it('N5 ②（2026-11-06 用户翻案）：data ready but the interpretation missing is a failure notice, not a completion', async () => {
+    // 以前"数据齐、解读没出来"照发出报并报「完成」。用户 2026-11-06 拍板：写作失败不许发布模板版，
+    // 也不许记成功——所以现在发的是一条 `editorial-missing` 的失败通知，页面说失败、库也记失败。
     const notices: Array<Record<string, unknown>> = []
     const service = createDailyBriefingService({
       source: fakeSource(),
@@ -995,11 +989,8 @@ describe('briefing notices', () => {
     })
 
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    expect(result.state).toBe('available')
+    expect(result.state).toBe('unavailable')
     expect(notices).toHaveLength(1)
-    // A delivered brief is a completion notice, whatever the editor did: the reader opens it and sees
-    // the numbers plus "this edition has no interpretation". A failure notice would say nothing ran.
-    expect(notices[0]).toMatchObject({ eventTypeId: 'market-intelligence.briefing.ready' })
-    expect(notices[0]).not.toHaveProperty('bodyVariant', 'editorial-missing')
+    expect(notices[0]).toMatchObject({ eventTypeId: 'market-intelligence.briefing.failed', bodyVariant: 'editorial-missing' })
   })
 })
