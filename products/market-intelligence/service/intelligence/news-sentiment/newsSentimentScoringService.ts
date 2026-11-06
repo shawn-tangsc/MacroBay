@@ -51,6 +51,13 @@ export function createNewsSentimentScoringService(deps: {
   invoke: NewsSentimentInvoke
   now: () => string
   maxPerRun?: number
+  /**
+   * 判定点：每条判断落库之后调用一次（含规则兜底的，出口自己决定推不推）。
+   *
+   * 它**不影响评分**：通知那边抖一下不该让这一轮评分算失败，所以异常在这里吞掉。代价说清楚——
+   * 提交失败的那条已经在账本里记成「推过」，不会重推；宁可漏一条，也不重复打扰。
+   */
+  onJudged?: (record: NewsSentimentRecord) => Promise<void> | void
 }) {
   return {
     async scoreItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentScoringResult> {
@@ -239,7 +246,7 @@ export function createNewsSentimentScoringService(deps: {
           peers
         })
 
-        deps.store.upsertSentiment({
+        const record: NewsSentimentRecord = {
           itemId: item.itemId,
           sourceId: item.sourceId,
           publishedAt: item.publishedAt,
@@ -258,7 +265,9 @@ export function createNewsSentimentScoringService(deps: {
           ...(promptVersion ? { promptVersion } : {}),
           ...(ruleId ? { ruleId } : {}),
           caveats: [...new Set([...judgment.caveats, ...bodyCaveats, ...caveats])]
-        })
+        }
+        deps.store.upsertSentiment(record)
+        await Promise.resolve(deps.onJudged?.(record)).catch(() => undefined)
         if (entities.length > 0 && storyKey) {
           const day = utcDayBucket(item.publishedAt)
           if (day) readPeers(item.publishedAt).push({ itemId: item.itemId, publishedAt: item.publishedAt, entities, storyKey })

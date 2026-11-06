@@ -36,6 +36,10 @@ export function createNewsPushLedgerStore(filePath: string) {
       event_type_id text not null,
       pushed_at text not null
     );
+    create table if not exists news_push_watermark (
+      id text primary key check (id = 'outlet'),
+      enabled_at text not null
+    );
   `)
 
   return {
@@ -69,6 +73,38 @@ export function createNewsPushLedgerStore(filePath: string) {
         throw error
       }
       return written
+    },
+
+    /** 水位：读者按下开关那一刻。没有行 = 从未开启过，一条都不推。 */
+    readWatermark(): string | undefined {
+      const row = db.prepare("select enabled_at from news_push_watermark where id = 'outlet'").get() as
+        | { enabled_at?: string }
+        | undefined
+      return row?.enabled_at ? String(row.enabled_at) : undefined
+    },
+
+    /**
+     * 读者按下开关的那一下：**水位与基线在同一个事务里写完**，成功返回之后才允许任何一条发出去。
+     *
+     * 中间不许有「基线写了一半、推送已经开始」的窗口——那等于把历史当成新闻推一批。
+     * 重新启用就把水位改成这一刻（关掉说明这段他不要了），**账本不重置**（推过的不再推）。
+     */
+    enableOutlet(input: { at: string; baselineItemIds: readonly string[] }): { baselineWritten: number } {
+      let baselineWritten = 0
+      db.exec('begin')
+      try {
+        for (const itemId of input.baselineItemIds) {
+          baselineWritten += insert(db, { itemId, eventTypeId: 'baseline', pushedAt: input.at })
+        }
+        db.prepare(
+          "insert into news_push_watermark (id, enabled_at) values ('outlet', ?) on conflict(id) do update set enabled_at = excluded.enabled_at"
+        ).run(input.at)
+        db.exec('commit')
+      } catch (error) {
+        db.exec('rollback')
+        throw error
+      }
+      return { baselineWritten }
     },
 
     count(): number {

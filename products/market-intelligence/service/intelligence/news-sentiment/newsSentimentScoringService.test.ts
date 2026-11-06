@@ -47,7 +47,12 @@ function modelOutput() {
   }
 }
 
-async function harness(options: { withModel: boolean; items?: unknown[]; output?: () => Record<string, unknown> }) {
+async function harness(options: {
+  withModel: boolean
+  items?: unknown[]
+  output?: () => Record<string, unknown>
+  onJudged?: (record: { itemId: string; storyKey?: string }) => Promise<void> | void
+}) {
   const store = createNewsSentimentSqliteStore(':memory:')
   store.upsertDocument({
     itemId: 'item-a',
@@ -84,7 +89,8 @@ async function harness(options: { withModel: boolean; items?: unknown[]; output?
         }
       : {}),
     invoke,
-    now: () => '2026-10-24T13:00:00.000Z'
+    now: () => '2026-10-24T13:00:00.000Z',
+    ...(options.onJudged ? { onJudged: options.onJudged } : {})
   })
   return { store, service, invoke }
 }
@@ -136,6 +142,18 @@ describe('newsSentimentScoringService', () => {
       'us midterm elections'
     ])
     expect(second?.why).toBe('选举结果改变监管预期。')
+  })
+
+  it('hands every stored judgement to the outlet point, and a notification failure does not fail the pass', async () => {
+    const onJudged = vi.fn(async (_record: { itemId: string; storyKey?: string }) => {
+      throw new Error('notification runtime is down')
+    })
+    const { store, service } = await harness({ withModel: true, onJudged })
+    await expect(service.scoreItems({ itemIds: ['item-a'] })).resolves.toMatchObject({ processed: 1 })
+    // 判断照样落库、这一轮照样算成功：通知抖一下不该把评分算红。
+    expect(onJudged).toHaveBeenCalledTimes(1)
+    expect(onJudged.mock.calls[0]?.[0]).toMatchObject({ itemId: 'item-a' })
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')).toBeDefined()
   })
 
   it('leaves a rules-scored item without a story key, so it can never be pushed', async () => {

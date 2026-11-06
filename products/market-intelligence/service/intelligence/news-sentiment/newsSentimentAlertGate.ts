@@ -45,6 +45,8 @@ export function decideAlert(input: {
   const tier = tierOf(input.strength)
   if (tier === 'low') return { push: false, reason: 'below-medium' }
   if (!input.storyKey?.trim()) return { push: false, reason: 'no-story-key' }
+  // 账本先判：推过的是永久事实，不该因为后来重开开关、跨了 24 小时而被改写成别的原因。
+  if (input.alreadyPushed) return { push: false, reason: 'already-pushed' }
 
   const published = Date.parse(input.publishedAt)
   const now = Date.parse(input.now)
@@ -55,7 +57,6 @@ export function decideAlert(input: {
   }
   if (published < enabled) return { push: false, reason: 'before-enable' }
   if (published < now - NEWS_SENTIMENT_ALERT_STALE_MS) return { push: false, reason: 'stale' }
-  if (input.alreadyPushed) return { push: false, reason: 'already-pushed' }
   return { push: true, tier }
 }
 
