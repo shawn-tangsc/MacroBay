@@ -1,5 +1,6 @@
 import { computeEtfCumulativeFlow, etfFlowPolicy, etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../../contracts/etfFlows'
 import type { ModuleSignal, SignalSeverity } from '../../../../contracts/moduleSignal'
+import type { ModuleSignalRead, ModuleSignalReadFailureCode } from '../../../../contracts/moduleSignalRead'
 import {
   capitalConditionsDailyFlowPolicy,
   capitalConditionsSnapshotPolicy,
@@ -43,10 +44,13 @@ type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: D
  * `values`, never summed here. A rule that could not judge (window not complete, or the read
  * failed) is `insufficient` — a grey chip with no number, because a missing reading must not be
  * dressed as a small one. `hidden` is the normal state: nothing happened, so nothing is drawn.
+ * `unreadable` is the fourth: the read itself did not happen, which the reader can retry and a quiet
+ * market cannot.
  */
 export type DashboardEtfSignalChip =
   | Readonly<{ state: 'hidden' }>
   | Readonly<{ state: 'insufficient' }>
+  | Readonly<{ state: 'unreadable'; failureCode: ModuleSignalReadFailureCode }>
   | Readonly<{
       state: 'alert'
       asset: 'btc' | 'eth'
@@ -239,14 +243,15 @@ const signalSeverityRank: Readonly<Record<SignalSeverity, number>> = Object.free
  * no number: "we could not look" is not "a small outflow".
  */
 export function projectEtfOutflowChip(
-  signals: readonly ModuleSignal[] | undefined,
+  read: ModuleSignalRead | undefined,
   switchState: EtfOutflowOutletSwitch = etfOutflowOutletPolicy
 ): DashboardEtfSignalChip {
   if (!isEtfOutflowOutletOpen(switchState, 'panel')) return { state: 'hidden' }
-  // `undefined` is a failed signal read; `[]` is a rule with nothing to say. Only the second one
-  // is allowed to draw nothing.
-  if (signals === undefined) return { state: 'insufficient' }
-  const mine = signals.filter(signal => signal.moduleId === 'etf-flows')
+  // No read yet is "not yet"; a failed read is its own state — the reader retries one and waits for
+  // the other.
+  if (read === undefined) return { state: 'hidden' }
+  if (read.state === 'unavailable') return { state: 'unreadable', failureCode: read.failureCode }
+  const mine = read.signals.map(entry => entry.signal).filter(signal => signal.moduleId === 'etf-flows')
   if (mine.length === 0) return { state: 'hidden' }
   // One chip per card: the loudest speaks, the rest stay in its detail. Two chips side by side
   // invite a comparison the product says is meaningless.

@@ -101,8 +101,9 @@ describe('dashboard capital conditions model', () => {
     expect(result.etf.btc.rows).toHaveLength(30)
     expect(result.etf.eth.rows).toHaveLength(30)
     expect(result.etf.btc.rows.at(-2)).toMatchObject({ direction: 'zero', magnitudePercent: 0 })
-    expect(result.flowHistory?.rows[0]).toEqual({ tradingDate: '2026-08-11', funds: -23, btc: 24, eth: -24 })
-    expect(result.flowHistory?.rows).toHaveLength(7)
+    if (result.flowHistory?.state !== 'available') throw new Error('expected a readable flow history')
+    expect(result.flowHistory.rows[0]).toEqual({ tradingDate: '2026-08-11', funds: -23, btc: 24, eth: -24 })
+    expect(result.flowHistory.rows).toHaveLength(7)
   })
 
   it('reports too few aligned days as "not yet" instead of "the sources failed"', () => {
@@ -269,45 +270,57 @@ describe('ETF signal chip', () => {
     ...overrides
   })
 
+  /** 一次成功的读取：牌子的模型只关心信号本身。 */
+  const read = (signals: readonly ModuleSignal[]) => ({
+    state: 'available' as const,
+    signals: signals.map(signal => ({ signal, window: { unit: 'trading-days' as const, amount: 3, upperBoundMs: null } })),
+    droppedInvalid: 0
+  })
+
   // 金额只从规则给的 `values` 里读：这里再求和一次，卡片就会和通知各说一个数。
   it('reads the amount and the coverage out of the rule’s own values', () => {
-    expect(projectEtfOutflowChip([signal()], OPEN)).toEqual({
+    expect(projectEtfOutflowChip(read([signal()]), OPEN)).toEqual({
       state: 'alert', asset: 'btc', amountUsd: '$150M', cumulativeUsd: '-$150M',
       coveredDays: 3, requiredDays: 3, observedAt: tradingDay
     })
   })
 
   it('lets the loudest signal speak and keeps the one-chip rule', () => {
-    const chip = projectEtfOutflowChip([
+    const chip = projectEtfOutflowChip(read([
       signal(),
       signal({ asset: 'eth', severity: 'high', values: { cumulativeNetFlowUsd: -320_000_000, coveredDays: 3, requiredDays: 3 } })
-    ], OPEN)
+    ]), OPEN)
     expect(chip).toMatchObject({ state: 'alert', asset: 'eth', amountUsd: '$320M' })
   })
 
   it('shows no number when the rule could not judge, and never calls it quiet', () => {
-    expect(projectEtfOutflowChip([signal({ readiness: 'unavailable' })], OPEN)).toEqual({ state: 'insufficient' })
-    expect(projectEtfOutflowChip([signal({ values: { coveredDays: 2, requiredDays: 3 } })], OPEN)).toEqual({ state: 'insufficient' })
+    expect(projectEtfOutflowChip(read([signal({ readiness: 'unavailable' })]), OPEN)).toEqual({ state: 'insufficient' })
+    expect(projectEtfOutflowChip(read([signal({ values: { coveredDays: 2, requiredDays: 3 } })]), OPEN)).toEqual({ state: 'insufficient' })
   })
 
   it('draws nothing when the rule has nothing to say', () => {
-    expect(projectEtfOutflowChip([], OPEN)).toEqual({ state: 'hidden' })
-    expect(projectEtfOutflowChip([signal({ moduleId: 'open-interest' })], OPEN)).toEqual({ state: 'hidden' })
+    expect(projectEtfOutflowChip(read([]), OPEN)).toEqual({ state: 'hidden' })
+    expect(projectEtfOutflowChip(read([signal({ moduleId: 'open-interest' })]), OPEN)).toEqual({ state: 'hidden' })
   })
 
-  // 读不到 ≠ 没事：一个失败的信号读要画灰牌，不能消失。
-  it('marks a failed signal read as insufficient data, not as a quiet card', () => {
-    expect(projectEtfOutflowChip(undefined, OPEN)).toEqual({ state: 'insufficient' })
+  // 读不到 ≠ 没事：读取失败有自己的那一态，读者能重试；没事不能重试。
+  it('marks a failed signal read as its own state, not as insufficient data', () => {
+    expect(projectEtfOutflowChip({ state: 'unavailable', failureCode: 'query-failed' }, OPEN))
+      .toEqual({ state: 'unreadable', failureCode: 'query-failed' })
+    expect(projectEtfOutflowChip({ state: 'unavailable', failureCode: 'invalid-as-of' }, OPEN))
+      .toEqual({ state: 'unreadable', failureCode: 'invalid-as-of' })
+    // 还没有读取时什么都不画：那是「还没到」，不是「读不到」。
+    expect(projectEtfOutflowChip(undefined, OPEN)).toEqual({ state: 'hidden' })
   })
 
   // 出厂状态：牌子开着，生产调用不需要传开关就画得出来。
   it('draws from the shipped switch without being handed one', () => {
-    expect(projectEtfOutflowChip([signal()])).toMatchObject({ state: 'alert', amountUsd: '$150M' })
+    expect(projectEtfOutflowChip(read([signal()]))).toMatchObject({ state: 'alert', amountUsd: '$150M' })
   })
 
   // 牌子是总闸：它关着的时候，卡片连灰牌都不画。
   it('draws nothing at all while the panel switch is closed', () => {
-    expect(projectEtfOutflowChip([signal()], CLOSED)).toEqual({ state: 'hidden' })
+    expect(projectEtfOutflowChip(read([signal()]), CLOSED)).toEqual({ state: 'hidden' })
     expect(projectEtfOutflowChip(undefined, CLOSED)).toEqual({ state: 'hidden' })
   })
 })

@@ -111,8 +111,10 @@ describe('positioning hook signal wiring', () => {
     expect(state).toMatchObject({ state: 'available', signal: { state: 'hidden' } })
   })
 
-  it('keeps the series when the signal read fails: no chip, not a broken card', async () => {
+  it('keeps the series and says the read failed: a chip cannot claim "nothing happened"', async () => {
     const state = await renderProbe({ query: async () => { throw new Error('ipc down') } })
-    expect(state).toMatchObject({ state: 'available', signal: { state: 'hidden' } })
+    // The series is intact; only the chip changes state, and it says the read failed rather than
+    // disappearing into the same shape a quiet market produces.
+    expect(state).toMatchObject({ state: 'available', signal: { state: 'unreadable', failureCode: 'query-failed' } })
   })
 })

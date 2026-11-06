@@ -235,14 +235,14 @@ describe('useCapitalConditions · ETF signal chip', () => {
     expect(page.chip()).toBe('alert')
   })
 
-  // 读不到 ≠ 没事：信号读失败要出灰牌，不能悄悄消失成「今天没有」。
-  it('marks a failed signal read as insufficient data instead of a quiet card', async () => {
+  // 读不到 ≠ 没事：读取失败有自己的那一态（能重试），不能悄悄消失成「今天没有」。
+  it('marks a failed signal read as unreadable instead of a quiet card', async () => {
     const query = vi.fn(async (): Promise<ModuleSignalRead> => ({ state: 'unavailable', failureCode: 'query-failed' }))
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 
     expect(page.state()).toBe('available')
-    expect(page.chip()).toBe('insufficient')
+    expect(page.chip()).toBe('unreadable')
   })
 
   it('draws no chip when the rule has nothing to say', async () => {

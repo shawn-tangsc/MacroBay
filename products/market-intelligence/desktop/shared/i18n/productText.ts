@@ -20,6 +20,14 @@ import { intelligenceSourcesText } from './text/settings/intelligenceSources'
 /**
  * Market Intelligence 产品文案（i18n）。
  */
+/**
+ * Where the sentences shared by every module-signal card live.
+ *
+ * The failure codes are named in the contract; this is the path they are appended to, so two cards
+ * cannot end up with two spellings of "we could not read".
+ */
+export const moduleSignalReadCopyBase = 'pages.intelligence.portal.dashboard.signalRead'
+
 export const productText = {
   'zh-CN': {
     // 卡片空态的产品句（唯一出处）：键名与平台 `ui.state.*` 同形，由 `StateView` 的产品句入口按
@@ -273,6 +281,13 @@ mi: miText['zh-CN'],
             description: '按资金、宏观、加密风险偏好、杠杆顺序阅读；没有覆盖时保留 partial，不以中性填补。',
             backToAgents: '返回 Agent',
             configureSources: '配置情报源',
+            /** One sentence per failure code, shared by every card that reads module signals. */
+            signalRead: {
+              'query-failed': '判定记录没拿到',
+              'invalid-as-of': '时间不对，读不了',
+              'contract-invalid': '读取格式对不上',
+              retry: '重试'
+            },
             crossAsset: {
               title: '纳斯达克 100 / QQQ 代理 × BTC × ETH 联动', subtitle: 'Binance QQQUSDT 代币化永续代理（24/7，默认，带「代理」标签）；该腿不可用时回落到真实纳斯达克 100 指数（USTEC · 美股现金时段）',
               chart: '同起点收益率',
@@ -1560,6 +1575,12 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             description: 'Read capital, macro, crypto risk appetite, then leverage. Keep partial when coverage is missing; do not fill it as neutral.',
             backToAgents: 'Back to Agents',
             configureSources: 'Configure intelligence sources',
+            signalRead: {
+              'query-failed': 'Analysis record not available',
+              'invalid-as-of': 'Cannot read at this time',
+              'contract-invalid': 'Unreadable read format',
+              retry: 'Retry'
+            },
             crossAsset: {
               title: 'Nasdaq 100 / QQQ proxy × BTC × ETH', subtitle: 'Binance QQQUSDT, the tokenised perpetual proxy (24/7, default, labelled “Proxy”); the real Nasdaq 100 index (USTEC, US cash session) answers only when that leg cannot',
               chart: 'Common-anchor returns',

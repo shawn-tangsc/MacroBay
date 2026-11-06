@@ -5,7 +5,6 @@ import type { ModuleSignal } from '../../../../contracts/moduleSignal'
 import { isCanonicalCapitalConditionsSnapshotTime } from '../../../../contracts/intelligenceQueryContracts'
 import { moduleSignalClient } from '../../../shared/ipc/moduleSignalClient'
 import type { ModuleSignalRead } from '../../../../contracts/moduleSignalRead'
-import { moduleSignalsOf } from '../../../../contracts/moduleSignalRead'
 
 import { projectDashboardCapitalConditionsSnapshot, projectEtfOutflowChip, type DashboardCapitalConditionsState } from './capitalConditionsModel'
 
@@ -61,7 +60,7 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
     const read = (attempt: number): void => {
       void queryClient.querySnapshot({ asOf }).then(async (result) => {
         const projected = projectDashboardCapitalConditionsSnapshot(result, asOf)
-        const chip = projectEtfOutflowChip(moduleSignalsOf(await signals))
+        const chip = projectEtfOutflowChip(await signals)
         if (!active) return
         apply(projected.state === 'available' ? { ...projected, etfSignal: chip } : projected)
       }).catch(() => {

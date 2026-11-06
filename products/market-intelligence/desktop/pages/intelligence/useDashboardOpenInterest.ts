@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 
 import { isCanonicalOpenInterestTime, type OpenInterestHistoryResult, type OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import type { ModuleSignalRead } from '../../../contracts/moduleSignalRead'
-import { moduleSignalsOf } from '../../../contracts/moduleSignalRead'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { projectDashboardPositioning, projectModuleSignalChip, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { moduleSignalClient } from '../../shared/ipc/moduleSignalClient'
@@ -40,7 +39,7 @@ export function useDashboardOpenInterest(input: Readonly<{
       .then(async (result) => {
         if (!active) return
         const projected = projectDashboardPositioning(result, asOf, window, reload)
-        const chip = projectModuleSignalChip(moduleSignalsOf(await signals))
+        const chip = projectModuleSignalChip(await signals, 'open-interest', reload)
         if (!active) return
         setState(projected.state === 'available'
           ? { ...projected, signal: chip }

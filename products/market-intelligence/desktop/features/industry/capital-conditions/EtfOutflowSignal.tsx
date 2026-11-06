@@ -3,6 +3,8 @@ import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
+import { isModuleSignalReadRetryable, moduleSignalReadCopyKey } from '../../../../contracts/moduleSignalRead'
+import { moduleSignalReadCopyBase } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { SignalDetail, type SignalDetailRow } from '../shared'
 import type { DashboardEtfSignalChip } from './capitalConditionsModel'
@@ -34,7 +36,7 @@ export type EtfSignalText = {
 /** 展开块的 id：牌子的 `aria-controls` 指向它，一张卡上只有这一块。 */
 export const ETF_SIGNAL_DETAIL_ID = 'mi-capital-conditions-signal-detail'
 
-type VisibleChip = Extract<DashboardEtfSignalChip, { state: 'alert' | 'insufficient' }>
+type VisibleChip = Extract<DashboardEtfSignalChip, { state: 'alert' | 'insufficient' | 'unreadable' }>
 
 /**
  * 资金面卡片标题旁的牌子。
@@ -44,13 +46,27 @@ type VisibleChip = Extract<DashboardEtfSignalChip, { state: 'alert' | 'insuffici
  * **数据不齐是陈述，不是控件**——它背后没有可展开的读数，做成按钮只会让读者点了个空。
  * 两种状态都带悬停/聚焦解释：有事说有规则、窗口、这是事实；不齐说清缺哪一路。
  */
-export function EtfOutflowChip({ chip, text, triggerProps, onToggle }: Readonly<{
+export function EtfOutflowChip({ chip, text, triggerProps, onToggle, onRetry }: Readonly<{
   chip: VisibleChip
   text: EtfSignalText
   triggerProps: Readonly<{ 'aria-expanded': boolean; 'aria-controls': string }>
   onToggle: () => void
+  /** Re-reads the card; only a retryable failure offers it. */
+  onRetry: () => void
 }>): React.ReactElement {
   const resolveText = useProductTextKey()
+
+  // 读失败与「数据不齐」是两件事：前者能重试、后者只能等数据到。所以它自己一句话，不并进灰牌。
+  if (chip.state === 'unreadable') {
+    return <span className="mi-capital-conditions__signal-unreadable" role="status">
+      {resolveText(moduleSignalReadCopyKey(moduleSignalReadCopyBase, chip.failureCode))}
+      {isModuleSignalReadRetryable(chip.failureCode)
+        ? <button type="button" className="mi-capital-conditions__signal-retry" onClick={onRetry}>
+            {resolveText(`${moduleSignalReadCopyBase}.retry`)}
+          </button>
+        : null}
+    </span>
+  }
 
   if (chip.state !== 'alert') {
     return <Tooltip

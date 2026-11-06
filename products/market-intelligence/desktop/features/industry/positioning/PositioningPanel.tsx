@@ -9,6 +9,8 @@ import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { OpenInterestWindow } from '../../../../contracts/openInterestHistory'
+import { isModuleSignalReadRetryable, moduleSignalReadCopyKey } from '../../../../contracts/moduleSignalRead'
+import { moduleSignalReadCopyBase } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
@@ -116,6 +118,18 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             .replace('{pct}', formatDashboardChange(chip.dropPct))
             .replace('{multiple}', chip.volumeMultiple.toFixed(1))}
         </button>
+      ) : chip.state === 'unreadable' ? (
+        // The read did not happen. Say exactly that and offer the only action that can help when it
+        // is retryable; an invalid instant gets no button, because pressing it cannot change the
+        // answer and a control that never works is worse than none.
+        <span className="mi-positioning-panel__signal-unreadable" role="status">
+          {resolveProductKey(moduleSignalReadCopyKey(moduleSignalReadCopyBase, chip.failureCode))}
+          {isModuleSignalReadRetryable(chip.failureCode) ? (
+            <button type="button" className="mi-positioning-panel__signal-retry" onClick={chip.onReload}>
+              {resolveProductKey(`${moduleSignalReadCopyBase}.retry`)}
+            </button>
+          ) : null}
+        </span>
       ) : (
         // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
         <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />

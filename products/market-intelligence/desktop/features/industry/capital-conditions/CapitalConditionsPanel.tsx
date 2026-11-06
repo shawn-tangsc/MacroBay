@@ -116,7 +116,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           {/* The module rule's chip sits beside the title, at most one per card. It is drawn only
               when the rule had something to say; a quiet card renders no element at all. */}
           {state.etfSignal && state.etfSignal.state !== 'hidden'
-            ? <EtfOutflowChip chip={state.etfSignal} text={text}
+            ? <EtfOutflowChip chip={state.etfSignal} text={text} onRetry={onRefresh}
                 triggerProps={signalDetail.triggerProps} onToggle={signalDetail.toggle} />
             : null}
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
