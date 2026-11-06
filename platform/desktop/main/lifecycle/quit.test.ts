@@ -131,7 +131,8 @@ describe('runtime disposer order', () => {
       disposeAgentRuntimes: [async () => { steps.push('agent-runtime') }],
       disposeWorkspace: async () => ({ report: true }),
       reportWorkspaceDispose: () => steps.push('workspace-report'),
-      closeJobRunStore: () => steps.push('close-store')
+      closeJobRunStore: () => steps.push('close-store'),
+      closeCacheAuditStore: () => steps.push('close-cache-audit')
     })
 
     await disposer.dispose()
@@ -154,7 +155,8 @@ describe('runtime disposer order', () => {
       'product-disposers',
       'agent-runtime',
       'workspace-report',
-      'close-store'
+      'close-store',
+      'close-cache-audit'
     ])
   })
 
@@ -172,7 +174,8 @@ describe('runtime disposer order', () => {
       disposeAgentRuntimes: [],
       disposeWorkspace: async () => undefined,
       reportWorkspaceDispose: () => undefined,
-      closeJobRunStore
+      closeJobRunStore,
+      closeCacheAuditStore: () => undefined
     })
 
     await Promise.all([disposer.dispose(), disposer.dispose()])

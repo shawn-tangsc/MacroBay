@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createSqliteCacheOperationAuditRepository,
-  InMemoryCacheOperationAuditRepository
+  InMemoryCacheOperationAuditRepository,
+  type CacheOperationAuditRepository
 } from './CacheOperationAuditRepository'
 
 describe('CacheOperationAuditRepository', () => {
@@ -36,18 +37,23 @@ describe('CacheOperationAuditRepository', () => {
 
   it('persists audit history across sqlite repository re-creation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cache-audit-'))
+    let first: CacheOperationAuditRepository | undefined
+    let reloaded: CacheOperationAuditRepository | undefined
     try {
       const path = join(dir, 'cache-governance.sqlite')
-      const first = createSqliteCacheOperationAuditRepository(path)
+      first = createSqliteCacheOperationAuditRepository(path)
       await first.append(createRecord('one'))
       await first.append(createRecord('two', 'platform.second'))
 
-      const reloaded = createSqliteCacheOperationAuditRepository(path)
+      reloaded = createSqliteCacheOperationAuditRepository(path)
       const page = await reloaded.listPage({ limit: 10 })
 
       expect(page.records.map((record) => record.operationId)).toEqual(['two', 'one'])
       expect(page.records[0]?.cacheId).toBe('platform.second')
     } finally {
+      // 先关句柄再删目录：Windows 不许 unlink 还开着的文件，关闭时 SQLite 也会清掉 -wal / -shm。
+      first?.close()
+      reloaded?.close()
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -67,9 +73,11 @@ describe('CacheOperationAuditRepository', () => {
 
   it('prunes the sqlite table so a re-created repository no longer reads the removed rows', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cache-audit-prune-'))
+    let repository: CacheOperationAuditRepository | undefined
+    let reloaded: CacheOperationAuditRepository | undefined
     try {
       const path = join(dir, 'cache-governance.sqlite')
-      const repository = createSqliteCacheOperationAuditRepository(path)
+      repository = createSqliteCacheOperationAuditRepository(path)
       await repository.append(createRecord('old', 'platform.first', '2025-01-01T00:00:00.000Z'))
       await repository.append(createRecord('a', 'platform.first', '2026-11-02T00:00:00.000Z'))
       await repository.append(createRecord('b', 'platform.first', '2026-11-03T00:00:00.000Z'))
@@ -78,18 +86,39 @@ describe('CacheOperationAuditRepository', () => {
       expect(result).toEqual({ removedByAge: 1, removedByCount: 1 })
 
       // 重新打开同一个文件：删掉的行必须真的不在了，而不是只从内存视图里消失。
-      const reloaded = createSqliteCacheOperationAuditRepository(path)
+      reloaded = createSqliteCacheOperationAuditRepository(path)
       const page = await reloaded.listPage({ limit: 10 })
       expect(page.records.map((record) => record.operationId)).toEqual(['b'])
     } finally {
+      repository?.close()
+      reloaded?.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('closes the sqlite handle so the directory can be removed, and closing twice is safe', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cache-audit-close-'))
+    const path = join(dir, 'cache-governance.sqlite')
+    const repository = createSqliteCacheOperationAuditRepository(path)
+    await repository.append(createRecord('one'))
+    repository.close()
+    repository.close()
+
+    // 关闭之后再打开同一路径仍然读得到已提交的行：close 不是「丢数据」，只是放掉句柄。
+    const reopened = createSqliteCacheOperationAuditRepository(path)
+    try {
+      expect((await reopened.listPage({ limit: 10 })).records.map((entry) => entry.operationId)).toEqual(['one'])
+    } finally {
+      reopened.close()
       rmSync(dir, { recursive: true, force: true })
     }
   })
 
   it('is idempotent: pruning twice removes nothing the second time', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cache-audit-idempotent-'))
+    let repository: CacheOperationAuditRepository | undefined
     try {
-      const repository = createSqliteCacheOperationAuditRepository(join(dir, 'cache-governance.sqlite'))
+      repository = createSqliteCacheOperationAuditRepository(join(dir, 'cache-governance.sqlite'))
       await repository.append(createRecord('a', 'platform.first', '2026-11-02T00:00:00.000Z'))
 
       await repository.prune({ now: '2026-11-04T00:00:00.000Z' })
@@ -98,6 +127,7 @@ describe('CacheOperationAuditRepository', () => {
         removedByCount: 0
       })
     } finally {
+      repository?.close()
       rmSync(dir, { recursive: true, force: true })
     }
   })

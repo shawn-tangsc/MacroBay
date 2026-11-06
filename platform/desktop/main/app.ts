@@ -395,7 +395,9 @@ const runtimeDisposer = createRuntimeDisposer({
   disposeAgentRuntimes: [() => agentRuntimeService.dispose(), () => mcpRuntimeService.dispose()],
   disposeWorkspace: async () => getPanelWorkspaceForDisposal()?.dispose(),
   reportWorkspaceDispose: (report) => reportPanelWorkspaceDispose({ report }),
-  closeJobRunStore: () => jobRunStore.close()
+  closeJobRunStore: () => jobRunStore.close(),
+  // 关句柄而不是删文件：SQLite 关闭时 checkpoint 并移除 -wal/-shm，退出后不留半截日志。
+  closeCacheAuditStore: () => cacheAuditRepository.close()
 })
 async function disposePlatformRuntimes(): Promise<void> {
   await runtimeDisposer.dispose()
@@ -520,11 +522,12 @@ registerPlatformCacheProviders({
   agentModelRuntimeProbeService,
   agentRuntimeProbeSnapshotStore
 })
+const cacheAuditRepository = createSqliteCacheOperationAuditRepository(
+  join(app.getPath('userData'), 'platform', 'cache-governance.sqlite')
+)
 const cacheGovernanceService = new CacheGovernanceService({
   registry: cacheRegistry,
-  auditRepository: createSqliteCacheOperationAuditRepository(
-    join(app.getPath('userData'), 'platform', 'cache-governance.sqlite')
-  )
+  auditRepository: cacheAuditRepository
 })
 const cacheGovernanceIpcHandlers = createCacheGovernanceIpcHandlers(cacheGovernanceService)
 const registerProductCache = createProductCacheRegistrar(cacheRegistry)

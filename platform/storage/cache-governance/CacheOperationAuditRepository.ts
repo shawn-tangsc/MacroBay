@@ -35,6 +35,12 @@ export interface CacheOperationAuditRepository {
    * `registerCacheAuditRetentionJob`，挂在 `@platform/jobs` 上，不自造定时器。
    */
   prune(options?: CacheOperationAuditPruneOptions): Promise<CacheOperationAuditPruneResult>
+  /**
+   * 释放底层数据库句柄；幂等。**删库/删目录之前必须先调用**：Windows 不允许 unlink 一个还开着的
+   * 文件（`EBUSY`），而 SQLite 关闭时会 checkpoint 并移除 `-wal` / `-shm`，所以先关再删才删得干净。
+   * 纯内存实现无句柄，无需动作。
+   */
+  close(): void
 }
 
 export class InMemoryCacheOperationAuditRepository implements CacheOperationAuditRepository {
@@ -54,12 +60,16 @@ export class InMemoryCacheOperationAuditRepository implements CacheOperationAudi
     this.records.push(...result.records)
     return { removedByAge: result.removedByAge, removedByCount: result.removedByCount }
   }
+
+  /** 没有句柄可关：保留这个方法是为了调用方不必区分两种仓储。 */
+  close(): void {}
 }
 
 export function createSqliteCacheOperationAuditRepository(path: string): CacheOperationAuditRepository {
   const connection = openSqliteDatabase(path)
   connection.exec('pragma foreign_keys = on;')
   applyMigrations(connection)
+  let closed = false
 
   return {
     append: async (record) => {
@@ -160,6 +170,11 @@ export function createSqliteCacheOperationAuditRepository(path: string): CacheOp
         .run(maxRecords)
 
       return { removedByAge: Number(aged.changes), removedByCount: Number(trimmed.changes) }
+    },
+    close: () => {
+      if (closed) return
+      closed = true
+      connection.close()
     }
   }
 }
