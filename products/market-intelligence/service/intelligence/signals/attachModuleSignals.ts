@@ -33,7 +33,7 @@ export type ModuleSignalHost = {
 export type SignalAnalysisReader = Readonly<{
   rows: (changeHashes: readonly string[]) => readonly { changeHash: string; decision: 'queued' | 'skipped' | 'recorded'; reasonCode: string; analysisRunId: string | null }[]
   runs: (runIds: readonly string[]) => Readonly<Record<string, { status: string; failureCode: string | null }>>
-  analysisOffByReader: () => boolean
+  analysisOffByReader: () => boolean | Promise<boolean>
 }>
 
 export function attachModuleSignals(host: ModuleSignalHost & {
@@ -55,7 +55,7 @@ export function attachModuleSignals(host: ModuleSignalHost & {
       signals: entries,
       droppedInvalid: 0,
       store: { listLatestSignalLedgerStates: () => rows, getRunsByIds: () => runs },
-      analysisOffByReader: analysisReader.analysisOffByReader()
+      analysisOffByReader: await analysisReader.analysisOffByReader()
     })
   }
   // The legs that can answer a signal today, each an addition to this list rather than a second

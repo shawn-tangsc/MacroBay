@@ -107,3 +107,22 @@ export function appendAnalysisRunSummary(deps: AnalysisRunSessionDependencies) {
     })
   }
 }
+
+/**
+ * 「时刻 · 模块名」：会话标题的唯一来源。
+ *
+ * 时刻按**建会话时**的读者时区格式化，模块名按当时的语言；落成文本后不再随设置变——历史会话
+ * 是快照，和已发布结论保持发布时语言同一条规则。时间读不出来就不写时刻，绝不退回 run id。
+ */
+export function formatRunSessionTitle(
+  queuedAt: string,
+  language: keyof typeof analysisRunSessionPolicy.moduleName,
+  timeZone: string
+): string {
+  const instant = new Date(queuedAt)
+  const stamp = Number.isFinite(instant.getTime())
+    ? new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short', timeZone }).format(instant)
+    : ''
+  const moduleName = analysisRunSessionPolicy.moduleName[language]
+  return stamp ? `${stamp} · ${moduleName}` : moduleName
+}

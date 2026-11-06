@@ -26,6 +26,7 @@ import {
 } from './marketAnalysisRetention'
 import { linkRunJobRun as attachRunJobRun, linkTriggerLedgerRun as attachTriggerLedgerRun } from './marketAnalysisRunLinks'
 import { listLatestSignalLedgerStates } from './marketAnalysisSignalLedger'
+import { runsByIds } from './marketAnalysisRunsByIds'
 import { ensureRunColumns } from './marketAnalysisColumns'
 import { failureEpisodeFor } from './marketAnalysisFailureEpisode'
 import {
@@ -355,6 +356,7 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     // The two write-backs live in `marketAnalysisRunLinks`: each is one statement, and this file's
     // business is the run row, not the two other rows that must point at it.
     listLatestSignalLedgerStates: (changeHashes: readonly string[]) => listLatestSignalLedgerStates(sqlite, changeHashes),
+    getRunsByIds: (ids: readonly string[]) => runsByIds(sqlite.database, ids),
     linkTriggerLedgerRun(value: Readonly<{ id: string; analysisRunId: string; snapshotHash: string }>) {
       return attachTriggerLedgerRun(sqlite, value)
     },

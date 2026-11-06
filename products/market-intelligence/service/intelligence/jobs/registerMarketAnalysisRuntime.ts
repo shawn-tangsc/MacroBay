@@ -29,8 +29,8 @@ import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
-import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
-import { createReleaseCoverageReader, notifyAbandonedRelease, deliverAnalysisFailureNotice } from './analysisReleaseNoticeWiring'
+import { createAnalysisNoticeDeps, createReleaseCoverageReader, notifyAbandonedRelease } from './analysisReleaseNoticeWiring'
+import { createRunSessionBinding, type RunSessionPort } from './analysisRunSessionPort'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
@@ -60,10 +60,7 @@ export type MarketAnalysisRuntime = Readonly<{
   requestSignalAnalysis: SignalAnalysisService
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
   /** Mounted by the bootstrap: the session ports are injected there, not built here. */
-  setRunSessionPort: (port: Readonly<{
-    ensure: (input: Readonly<{ runId: string; queuedAt: string }>) => Promise<string | undefined>
-    appendSummary: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
-  }> | undefined) => void
+  setRunSessionPort: (port: RunSessionPort | undefined) => void
   dispose: () => void
 }>
 
@@ -158,12 +155,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   // 期间就被调用，所以它在任何调用之前初始化。
   const releaseCoverage = createReleaseCoverageReader({ now, repository, pipeline: input.pipeline })
   const triggerPolicy = createAnalysisTriggerPolicy()
-  // 会话端口迟绑定：会话依赖由 bootstrap 注入（就是追问会话用的那一份），运行时不自己构造。
-  type RunSessionPort = Readonly<{
-    ensure: (input: Readonly<{ runId: string; queuedAt: string }>) => Promise<string | undefined>
-    appendSummary: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
-  }>
-  let runSessionPort: RunSessionPort | undefined
+  const runSession = createRunSessionBinding()
   const analysisOrchestrator = createAnalysisOrchestrator({
     repository,
     // 原文存档：每次模型调用一行，提示词在调用前落盘、回答在回来后回填。存储那半在
@@ -174,15 +166,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     now,
     idFactory: () => randomUUID(),
     ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
-    // 0′：读者点的那次失败必回一条；两种语言的句子在提交时一起拼好，切语言后历史通知跟着变。
-    notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification }),
-    // 三档节流提醒：判定在 analysisFailureNotices，这里只把决策变成一次提交。平台文案没落时
-    // 构造返回 undefined——不发半句话，也不因此把一次已完成的运行弄成失败。
-    notifyAnalysisNotice: async ({ decision, occurredAt }) =>
-      deliverAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) }),
-    // 一次分析一条会话：认领之后建（失败那次也要能查原文），发布后补一句摘要。
-    ensureRunSession: async ({ runId, queuedAt }) => runSessionPort ? runSessionPort.ensure({ runId, queuedAt }) : undefined,
-    appendRunSummary: async ({ runId, summary }) => { if (runSessionPort) await runSessionPort.appendSummary({ runId, summary }) }
+    ...createAnalysisNoticeDeps(input),
+    ensureRunSession: runSession.ensureRunSession,
+    appendRunSummary: runSession.appendRunSummary
   })
   const predictionVerification = createPredictionVerificationService({
     repository,
@@ -424,8 +410,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     },
     requestInitialAnalysis,
     requestSignalAnalysis,
-    /** Mounted by the bootstrap, which is where the session ports are injected. */
-    setRunSessionPort(port) { runSessionPort = port },
+    setRunSessionPort: runSession.setPort,
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },
@@ -493,10 +478,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
             : analysisReleaseCoalescingPolicy.abandonedReasonCode
         })
         if (coverage.decision === 'abandoned') {
-          await notifyAbandonedRelease({
-            triggerKey: decision.triggerKey, groupId: result.group.id, repository, occurredAt: now(),
-            ...(input.submitNotification ? { submit: input.submitNotification } : {})
-          })
+          await notifyAbandonedRelease({ triggerKey: decision.triggerKey, groupId: result.group.id, repository, occurredAt: now(), ...(input.submitNotification ? { submit: input.submitNotification } : {}) })
         }
         return
       }

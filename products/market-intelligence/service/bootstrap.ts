@@ -36,7 +36,8 @@ import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerI
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
-import { analysisRunSessionPolicy, appendAnalysisRunSummary, createAnalysisRunSession } from './intelligence/analysis/analysisRunSession'
+import { appendAnalysisRunSummary, createAnalysisRunSession, formatRunSessionTitle } from './intelligence/analysis/analysisRunSession'
+import { mountSignalAnalysisReader } from './intelligence/signals/mountSignalAnalysisReader'
 import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import type {
   CrossAssetOps,
@@ -558,20 +559,19 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       createAgentSession: deps.createAgentSession,
       appendAgentSessionMessages: deps.appendAgentSessionMessages,
       // 「时刻 · 模块名」，按建会话时的读者时区与语言落成文本；之后不再随设置变。
-      titleFor: (queuedAt) => {
-        const instant = new Date(queuedAt)
-        const stamp = Number.isFinite(instant.getTime())
-          ? new Intl.DateTimeFormat(deps.getAppLanguage ? 'zh-CN' : 'zh-CN', {
-            dateStyle: 'short', timeStyle: 'short', timeZone: currentReaderTimeZone()
-          }).format(instant)
-          : ''
-        return `${stamp} · ${analysisRunSessionPolicy.moduleName['zh-CN']}`
-      }
+      titleFor: queuedAt => formatRunSessionTitle(queuedAt, 'zh-CN', currentReaderTimeZone()),
     }),
     appendSummary: appendAnalysisRunSummary({
       getAgentState: deps.getAgentState,
       appendAgentSessionMessages: deps.appendAgentSessionMessages
     })
+  })
+  // 「这条信号分析过没有」的读口：装配层这里挂一次，卡片才有状态可显示。漏挂不会报错，只会
+  // 让每张卡都显示「这次没查到」，所以这一处有专门的用例断言它真的被调用。
+  mountSignalAnalysisReader({
+    addReader: reader => intelligenceModule.publicQueryService.addSignalAnalysisReader(reader),
+    repository: intelligenceModule.marketAnalysisRuntime.repository,
+    analysisOffByReader: async () => !(await intelligenceModule.marketAnalysisRuntime.getSettings()).enabled
   })
   registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService, intelligenceModule.dailyBriefingAiSettings, intelligenceModule.deleteDailyBriefingPeriod, join(getIntelligenceProductDataDir(), 'daily-briefing-periods.json'))
   // Read-only startup diagnostic. The timeline renders the same empty state for "the

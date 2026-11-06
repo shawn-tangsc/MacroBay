@@ -1,5 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
+import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
+
 import type { AnalysisFailureNoticeDecision } from '../analysis/analysisFailureNotices'
 import { ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { buildAnalysisFailureNoticeRequest, decideAttemptAbandoned } from '../analysis/analysisFailureNotices'
@@ -76,4 +78,18 @@ export async function notifyAbandonedRelease(input: Readonly<{
     abandon: 'release'
   })
   await deliverAnalysisFailureNotice({ decision, occurredAt: input.occurredAt, ...(input.submit === undefined ? {} : { submit: input.submit }) })
+}
+
+/**
+ * 运行时要的三个通知端口，一处构造。
+ *
+ * 0′ 与三档共用一次提交入口：文案没落时构造返回 undefined——不发半句话，也不因为一次通知
+ * 没发出去就把已完成的运行弄成失败。
+ */
+export function createAnalysisNoticeDeps(input: Readonly<{ submitNotification?: (request: NotificationSubmitRequest) => Promise<unknown> }>) {
+  return {
+    notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification }),
+    notifyAnalysisNotice: async ({ decision, occurredAt }: Readonly<{ decision: AnalysisFailureNoticeDecision; occurredAt: string }>) =>
+      deliverAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) })
+  }
 }

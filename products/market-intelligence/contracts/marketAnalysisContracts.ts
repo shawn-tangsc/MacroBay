@@ -1,3 +1,22 @@
+import type {
+  AgentFact,
+  AgentEvidenceRef,
+  SourceHealthFlag,
+  SnapshotFactChange,
+  SnapshotChange,
+  EvidenceSnapshot,
+} from './marketAnalysisEvidenceContracts'
+
+/** Re-exported so the original path keeps working; the shapes live in their own file. */
+export type {
+  AgentFact,
+  AgentEvidenceRef,
+  SourceHealthFlag,
+  SnapshotFactChange,
+  SnapshotChange,
+  EvidenceSnapshot,
+} from './marketAnalysisEvidenceContracts'
+
 export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
   /**
    * Bumped from 1 when the policy-path facts started carrying `sourceUrl`: new snapshots are
@@ -121,6 +140,7 @@ export const MARKET_ANALYSIS_ID_PREFIXES = Object.freeze({
   timelineEntry: 'mi-tl-'
 })
 
+export type MarketAnalysisDataAccessProfileId = typeof MARKET_ANALYSIS_CONTRACT_POLICY.dataAccessProfileId
 export type MarketAnalysisIdKind = keyof typeof MARKET_ANALYSIS_ID_PREFIXES
 
 export const MARKET_ANALYSIS_ERROR_CODES = Object.freeze({
@@ -303,132 +323,6 @@ export type EventGroup = Readonly<{
   updatedAt: string
 }>
 
-export type AgentFact = Readonly<{
-  factId: string
-  domain: AnalysisDomain
-  subject: string
-  /**
-   * What to *call* this fact when the subject is only its kind.
-   *
-   * Calendar facts are keyed by the observation they came from, so their subject is the kind
-   * (`economic-indicator`) and their name lives in the calendar store. This carries that name for
-   * display only: it is never part of `factId`, which is what keeps a naming change from becoming a
-   * change the diff reports — every calendar fact would otherwise read as newly added.
-   */
-  subjectLabel?: string
-  metric: string
-  value: string | number | null
-  unit: string | null
-  sourceId: string
-  sourceLabel: string
-  observedAt: string | null
-  asOf: string
-  freshness: AnalysisFreshness
-  confidence: number
-  comparability: AnalysisComparability
-  evidenceRefId: string | null
-  /**
-   * The public page a reader can open to check this value. Optional because facts written before
-   * the policy path carried one stay valid; it never reaches the model prompt.
-   */
-  sourceUrl?: string
-}>
-
-export type AgentEvidenceRef = Readonly<{
-  evidenceRefId: string
-  sourceId: string
-  sourceLabel: string
-  itemId: string | null
-  occurredAt: string | null
-  publishedAt: string | null
-  detectedAt: string | null
-  computedAt: string | null
-  visibleAt: string
-  excerptHash: string
-  /** The public page behind this evidence, when the projection knows one. */
-  sourceUrl?: string
-}>
-
-export type SourceHealthFlag = Readonly<{
-  sourceId: string
-  status: 'healthy' | 'degraded' | 'failed' | 'paused'
-  asOf: string
-}>
-
-/**
- * One fact-level difference between a frozen snapshot and its predecessor in the
- * same event group. `changed` keeps both values so the agent can state what moved
- * instead of only what is currently true.
- */
-export type SnapshotFactChange = Readonly<{
-  factId: string
-  domain: AnalysisDomain
-  metric: string
-  /**
-   * Display fields copied from the fact. They let a reader describe the change
-   * ("BTC ETF 净流入", unit USD) instead of showing an internal fact id, and are
-   * optional because snapshots frozen before they existed carry none.
-   */
-  subject?: string
-  /** The subject's own name, when the subject is only its kind. Display only, never identity. */
-  subjectLabel?: string
-  unit?: string | null
-  sourceLabel?: string
-  kind: 'added' | 'removed' | 'changed'
-  /** Present for `removed` and `changed`; the value carried by the predecessor. */
-  previousValue?: string | number | null
-  /** Present for `added` and `changed`; the value carried by this snapshot. */
-  value?: string | number | null
-}>
-
-/**
- * Frozen record of what changed at publication time (product owner request:
- * every new conclusion must state which data moved). It is stored on the snapshot
- * and covered by `snapshotHash`, so a replay reproduces the same "what changed"
- * view without reading any mutable table.
- */
-export type SnapshotChange = Readonly<{
-  /** 1 for the first snapshot of an event group, then the predecessor's sequence + 1. */
-  sequence: number
-  previousSnapshotHash: string | null
-  /** Sorted factId order; empty when the snapshot is the first one or nothing moved. */
-  facts: readonly SnapshotFactChange[]
-  /** Domains that entered `missingDomains` compared with the predecessor. */
-  missingDomainsAdded: readonly AnalysisDomain[]
-  /** Domains that left `missingDomains` compared with the predecessor. */
-  missingDomainsRemoved: readonly AnalysisDomain[]
-  caveatsAdded: readonly string[]
-  caveatsRemoved: readonly string[]
-  evidenceRefsAdded: readonly string[]
-  evidenceRefsRemoved: readonly string[]
-}>
-
-export type EvidenceSnapshot = Readonly<{
-  id: string
-  /** 1 is a snapshot written before facts carried `sourceUrl`; new snapshots are written as 2. */
-  schemaVersion: 1 | 2
-  eventGroupId: string
-  asOf: string
-  dataCutoff: string
-  snapshotHash: string
-  profileId: typeof MARKET_ANALYSIS_CONTRACT_POLICY.dataAccessProfileId
-  facts: readonly AgentFact[]
-  missingDomains: readonly AnalysisDomain[]
-  caveats: readonly string[]
-  evidenceRefs: readonly AgentEvidenceRef[]
-  sourceHealth: readonly SourceHealthFlag[]
-  /**
-   * What moved since the previous snapshot of the same event group.
-   *
-   * Optional on purpose: snapshots written before this record existed stay valid,
-   * and `snapshotHash` deliberately does not cover it. Readers derive it from the
-   * immutable predecessor when it is absent, so the value is auditable without a
-   * hash migration that would invalidate persisted rows.
-   */
-  change?: SnapshotChange
-  createdAt: string
-  policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
-}>
 
 /**
  * Which criterion the trigger-focus rule used on this run (`missing-trigger-focus`).
