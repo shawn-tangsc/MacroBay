@@ -13,6 +13,7 @@ import {
 } from '../schema/newsSentiment'
 import { buildNewsSentimentMessages, parseNewsPolarityModelOutput } from './newsSentimentModel'
 import { scoreNewsWithRules } from './newsSentimentRules'
+import { storyKeyOf, utcDayBucket, type StoryKeyCandidate } from './newsSentimentStoryKey'
 import { resolveNewsSentimentModel } from './newsSentimentSettings'
 import type { NewsSentimentSettingsStore } from './newsSentimentSettingsStore'
 import type { NewsSentimentStore } from './newsSentimentStore'
@@ -43,7 +44,7 @@ const OKX_TYPES = new Set<string>(OKX_SENTIMENT_ANN_TYPES)
  */
 export function createNewsSentimentScoringService(deps: {
   pipeline: Pick<IntelligencePipeline, 'listItems'>
-  store: Pick<NewsSentimentStore, 'getLatestSentiment' | 'getDocument' | 'upsertSentiment'>
+  store: Pick<NewsSentimentStore, 'getLatestSentiment' | 'getDocument' | 'upsertSentiment' | 'listLatestSentiment'>
   settingsStore: Pick<NewsSentimentSettingsStore, 'getSettings'>
   getProviderState?: () => Promise<ProviderState>
   getModelDefaults?: () => Promise<ModelDefaultsSettings>
@@ -121,6 +122,29 @@ export function createNewsSentimentScoringService(deps: {
         } catch {
           return 'failed'
         }
+      }
+
+      /**
+       * 同一个 UTC 日里已经有判断的条目：归并键的「同一天同一簇」要靠它们才成立。
+       * 按日缓存，一轮 pass 里同一天的 20 条只读一次库；本轮新落库的条目也追加进来，
+       * 否则同一批里两条讲同一件事的新闻会各拿自己的键（漏并）。
+       */
+      const dayPeers = new Map<string, StoryKeyCandidate[]>()
+      const readPeers = (publishedAt: string): StoryKeyCandidate[] => {
+        const day = utcDayBucket(publishedAt)
+        if (!day) return []
+        const cached = dayPeers.get(day)
+        if (cached) return cached
+        const peers = deps.store
+          .listLatestSentiment({ from: `${day}T00:00:00.000Z`, to: `${day}T23:59:59.999Z`, limit: 500 })
+          .map((row) => ({
+            itemId: row.itemId,
+            publishedAt: row.publishedAt,
+            entities: row.entities ?? [],
+            ...(row.storyKey ? { storyKey: row.storyKey } : {})
+          }))
+        dayPeers.set(day, peers)
+        return peers
       }
 
       for (const item of candidates) {
@@ -205,6 +229,16 @@ export function createNewsSentimentScoringService(deps: {
           if (settings.modelScoringEnabled) caveats.push(NEWS_SENTIMENT_CAVEATS.modelUnavailable)
         }
 
+        // 归并键只从实体集与 UTC 日桶合成；规则兜底没有实体，因此没有键（没有键就不推）。
+        const entities = judgment.entities ?? []
+        const peers = readPeers(item.publishedAt)
+        const storyKey = storyKeyOf({
+          itemId: item.itemId,
+          publishedAt: item.publishedAt,
+          entities,
+          peers
+        })
+
         deps.store.upsertSentiment({
           itemId: item.itemId,
           sourceId: item.sourceId,
@@ -216,12 +250,19 @@ export function createNewsSentimentScoringService(deps: {
           symbols: judgment.symbols,
           reasonCode: judgment.reasonCode,
           ...(judgment.evidenceQuote ? { evidenceQuote: judgment.evidenceQuote } : {}),
+          ...(entities.length > 0 ? { entities } : {}),
+          ...(storyKey ? { storyKey } : {}),
+          ...(judgment.why ? { why: judgment.why } : {}),
           engine,
           ...(modelRefUsed ? { modelRef: modelRefUsed } : {}),
           ...(promptVersion ? { promptVersion } : {}),
           ...(ruleId ? { ruleId } : {}),
           caveats: [...new Set([...judgment.caveats, ...bodyCaveats, ...caveats])]
         })
+        if (entities.length > 0 && storyKey) {
+          const day = utcDayBucket(item.publishedAt)
+          if (day) readPeers(item.publishedAt).push({ itemId: item.itemId, publishedAt: item.publishedAt, entities, storyKey })
+        }
         processed += 1
         if (engine === 'model') modelCount += 1
         else rulesCount += 1

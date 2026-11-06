@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createDefaultProviderState } from '@platform/ai/providers/providerStore'
 
+import { NEWS_SENTIMENT_PROMPT_VERSION } from '../schema/newsSentiment'
 import { createNewsSentimentSqliteStore } from './newsSentimentStore'
 import { createInMemoryNewsSentimentSettingsStorage, createNewsSentimentSettingsStore } from './newsSentimentSettingsStore'
 import { createNewsSentimentScoringService, type NewsSentimentInvoke } from './newsSentimentScoringService'
@@ -46,7 +47,7 @@ function modelOutput() {
   }
 }
 
-async function harness(options: { withModel: boolean }) {
+async function harness(options: { withModel: boolean; items?: unknown[]; output?: () => Record<string, unknown> }) {
   const store = createNewsSentimentSqliteStore(':memory:')
   store.upsertDocument({
     itemId: 'item-a',
@@ -60,20 +61,26 @@ async function harness(options: { withModel: boolean }) {
   const { state, providerId, modelId } = readyProviders()
   const invoke = vi.fn(async () => ({
     ok: true as const,
-    output: modelOutput(),
+    output: options.output?.() ?? modelOutput(),
     providerId,
     modelId,
     trace: { taskId: 't', durationMs: 1 }
   })) as unknown as NewsSentimentInvoke
 
   const service = createNewsSentimentScoringService({
-    pipeline: { listItems: () => [item()] },
+    pipeline: { listItems: () => (options.items ?? [item()]) as never[] },
     store,
     settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
     ...(options.withModel
       ? {
           getProviderState: async () => state,
-          getModelDefaults: async () => ({ fastModelId: `${providerId}:${modelId}` })
+          getModelDefaults: async () => ({
+            assistantModelId: '',
+            agentModelId: '',
+            fastModelId: `${providerId}:${modelId}`,
+            translationModelId: '',
+            imageModelId: ''
+          })
         }
       : {}),
     invoke,
@@ -94,9 +101,49 @@ describe('newsSentimentScoringService', () => {
       engine: 'model',
       polarity: 'bullish',
       symbols: ['ETH'],
-      promptVersion: 'news-polarity-v1'
+      // 版本号从常量取：提示词升版时这条断言不该跟着红，它验的是「记录写了版本」。
+      promptVersion: NEWS_SENTIMENT_PROMPT_VERSION
     })
     expect(record?.modelRef).toMatch(/.+:.+/)
+  })
+
+  it('gives two reports of one event one story key and stores entities and why', async () => {
+    // 名字已是规范化形态：规范化由 `parseNewsSentimentEntities` 负责，这里验的是接线。
+    const entities = [
+      { name: 'democrats', kind: 'org' },
+      { name: 'us midterm elections', kind: 'event' },
+      { name: 'bitcoin', kind: 'asset' }
+    ]
+    const { store, service } = await harness({
+      withModel: true,
+      items: [
+        item({ itemId: 'item-a', publishedAt: '2026-10-24T04:55:00.000Z', title: 'Democrats surge toward Senate and House majorities' }),
+        item({ itemId: 'item-b', publishedAt: '2026-10-24T10:38:00.000Z', title: 'Analysts react to the new blue Congress' })
+      ],
+      output: () => ({ ...modelOutput(), entities, why: '选举结果改变监管预期。' })
+    })
+
+    await expect(service.scoreItems({})).resolves.toMatchObject({ processed: 2, model: 2 })
+    const first = store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')
+    const second = store.getLatestSentiment('item-b', '2026-10-24T13:00:00.000Z')
+    // 一轮按最新优先：较晚发布那条先评出来、先拿到键；较早那条随后并入它。
+    // 键只锚在「第一个拿到键的报道」上，同一件事因此只有一个键。
+    expect(second?.storyKey).toBe('story:2026-10-24:item-b')
+    expect(first?.storyKey).toBe('story:2026-10-24:item-b')
+    expect(second?.entities?.map((entity) => entity.name).sort()).toEqual([
+      'bitcoin',
+      'democrats',
+      'us midterm elections'
+    ])
+    expect(second?.why).toBe('选举结果改变监管预期。')
+  })
+
+  it('leaves a rules-scored item without a story key, so it can never be pushed', async () => {
+    const { store, service } = await harness({ withModel: false })
+    await service.scoreItems({ itemIds: ['item-a'] })
+    const record = store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')
+    expect(record?.engine).toBe('rules')
+    expect(record?.storyKey).toBeUndefined()
   })
 
   it('falls back to rules when the model output fails validation', async () => {
@@ -167,7 +214,13 @@ describe('newsSentimentScoringService budget, retry and fallback', () => {
       store,
       settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
       getProviderState: async () => state,
-      getModelDefaults: async () => ({ fastModelId: `${providerId}:${modelId}` }),
+      getModelDefaults: async () => ({
+        assistantModelId: '',
+        agentModelId: '',
+        fastModelId: `${providerId}:${modelId}`,
+        translationModelId: '',
+        imageModelId: ''
+      }),
       invoke,
       now: () => '2026-10-24T13:00:00.000Z'
     })

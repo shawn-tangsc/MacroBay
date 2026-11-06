@@ -1,9 +1,16 @@
+import { tierOf } from '../../../../contracts/newsSentimentTiers'
+
 import type { NewsSentimentText } from './NewsSentimentCard'
 
+/**
+ * 档位阈值**不在这里**：它住 `contracts/newsSentimentTiers.ts`，推送判据调的是同一个函数。
+ * 这里只把档位翻成读者看得见的词（弱 / 中 / 强）。
+ */
 export function strengthLabel(text: NewsSentimentText, strength: number): string {
   const levels = text.drawer.detail.strengthLevels
-  if (strength <= 2) return levels.weak
-  if (strength >= 4) return levels.strong
+  const tier = tierOf(strength)
+  if (tier === 'low') return levels.weak
+  if (tier === 'high') return levels.strong
   return levels.medium
 }
 

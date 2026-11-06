@@ -12,6 +12,20 @@ export type NewsSentimentEngine = 'model' | 'rules'
 /** 只认 BTC / ETH；无符号的新闻只进 crypto-market。 */
 export type NewsSentimentSymbol = 'BTC' | 'ETH'
 
+/**
+ * 实体类别是跨媒体归并的判据本身，不是给界面看的修饰。
+ *
+ * 只共享「比特币／以太坊」的两条新闻可以是毫不相干的两件事：只要类别里留着 `asset`，
+ * 任意两篇加密新闻都能凑够「共享两个实体」。所以连边条件必须要求其中至少一个不是资产。
+ */
+export type NewsSentimentEntityKind = 'person' | 'org' | 'bill' | 'asset' | 'event'
+
+export type NewsSentimentEntity = {
+  /** 归一化后的规范名：小写、去标点、折叠空白。 */
+  name: string
+  kind: NewsSentimentEntityKind
+}
+
 export type NewsBodyTranslationState = 'translated' | 'failed'
 
 export type NewsBodyTranslationRecord = {
@@ -77,7 +91,7 @@ export const NEWS_SENTIMENT_WINDOW_MS: Readonly<Record<NewsSentimentWindow, numb
 }
 
 /** 提示词版本：改动提示词必须同时改它，否则旧判断不会被重新评分。 */
-export const NEWS_SENTIMENT_PROMPT_VERSION = 'news-polarity-v1'
+export const NEWS_SENTIMENT_PROMPT_VERSION = 'news-polarity-v2'
 
 /** 正文抽取器版本：选择器变更时递增，旧正文不会被当成新格式复用。 */
 
@@ -91,7 +105,13 @@ export const NEWS_SENTIMENT_LIMITS = Object.freeze({
   /** 单次查询返回上限。 */
   queryItems: 100,
   /** 详情正文回显上限。 */
-  detailBodyChars: 8_000
+  detailBodyChars: 8_000,
+  /** 一条新闻最多带多少个实体：归并键只需要少数几个能区分事件的名字。 */
+  entitiesPerItem: 12,
+  /** `why` 上限（字符）。它本版不进推送，只入库供读者评估质量。 */
+  whyChars: 40,
+  /** 实体名长度上限：超过它的多半是模型把整句塞进来了。 */
+  entityNameChars: 60
 })
 
 export type NewsSentimentSettings = {
@@ -125,6 +145,10 @@ export type NewsSentimentJudgment = {
   symbols: NewsSentimentSymbol[]
   reasonCode: string
   evidenceQuote?: string
+  /** 模型给的规范化实体集；规则兜底时没有，因此也拿不到归并键。 */
+  entities?: NewsSentimentEntity[]
+  /** 一句为什么值得看（≤40 字符）。本版只入库，不进推送文案。 */
+  why?: string
   caveats: string[]
 }
 
@@ -137,6 +161,8 @@ export type NewsSentimentRecord = NewsSentimentJudgment & {
   modelRef?: string
   promptVersion?: string
   ruleId?: string
+  /** 跨媒体归并键；由 `storyKeyOf` 从实体集与 UTC 日桶确定性合成，没实体就没有。 */
+  storyKey?: string
 }
 
 export type NewsDocumentRecord = {
