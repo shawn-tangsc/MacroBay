@@ -39,6 +39,10 @@ import {
 } from './intelligenceTranslationHelpers'
 import { sanitizeIntelligenceText } from './intelligenceItemLabels'
 import {
+  createTranslationBatchTally,
+  translationAutoOffConclusion
+} from './intelligenceTranslationOutcome'
+import {
   buildTranslationSystemPrompt,
   buildTranslationUserPrompt,
   parseTranslationModelOutput
@@ -308,7 +312,20 @@ export function createIntelligenceTranslationService(deps: {
       }
     },
 
-    async translateItems(input: TranslateIntelligenceItemsJobInput): Promise<{ processed: number; failed: number }> {
+    /**
+     * 跑一批翻译。返回值里除了旧的两个计数，还有**这一批的结论**（四计数 + 原因码）：
+     * 运行记录要的是「多少条、成几条、跳过几条、为什么失败」，这些只能在跑完之后算，
+     * 所以由这里给出、由 handler 写进 `ctx.result`。算不出结论的批不给 `counts`——
+     * 补一个 0/0/0/0 会让没量过的批混进成功率。
+     */
+    async translateItems(input: TranslateIntelligenceItemsJobInput): Promise<{
+      processed: number
+      failed: number
+      counts?: { total: number; succeeded: number; failed: number; skipped: number }
+      reasonCode?: string
+      /** 失败按原因拆开的条数；没有失败时不出现。 */
+      reasons?: Readonly<Record<string, number>>
+    }> {
       const [settings, appLanguage, modelDefaults, providers] = await Promise.all([
         deps.storage.readSettings(),
         deps.getAppLanguage(),
@@ -317,7 +334,9 @@ export function createIntelligenceTranslationService(deps: {
       ])
       // 自动翻译关闭时，pipeline 仍会把 new-item 入队；在这里停住，而不是让每个新条目都调用模型。
       if (!shouldTranslateForReason(settings, input.reason)) {
-        return { processed: 0, failed: 0 }
+        // 条数是「跳过」，不是「成功 0 条」：读者点开这一行要看到为什么一条都没翻。
+        const conclusion = translationAutoOffConclusion(input.itemIds?.length ?? 0)
+        return { processed: 0, failed: 0, ...(conclusion ?? {}) }
       }
       // 每次任务开始时解析：显式绑定优先，其次模型服务的默认翻译模型，最后沿用供应商默认聊天模型。
       const model = resolveTranslationModel({ settings, modelDefaults, providers })
@@ -326,6 +345,7 @@ export function createIntelligenceTranslationService(deps: {
       const candidates = selectTranslationCandidates(deps.pipeline, input, settings, targetLocale, records)
       let processed = 0
       let failed = 0
+      const tally = createTranslationBatchTally()
 
       for (const candidate of candidates) {
         if (candidate.kind === 'skip-not-required') {
@@ -340,11 +360,13 @@ export function createIntelligenceTranslationService(deps: {
             promptVersion: INTELLIGENCE_TRANSLATION_PROMPT_VERSION
           })
           processed += 1
+          tally.recordSkipped()
           continue
         }
 
         if (candidate.kind === 'reuse') {
           processed += 1
+          tally.recordSkipped()
           continue
         }
 
@@ -389,6 +411,7 @@ export function createIntelligenceTranslationService(deps: {
 
         if (!modelResult.ok) {
           failed += 1
+          tally.recordFailure(modelResult.errorCode)
           records = upsertRecord(records, {
             ...pendingRecord,
             status: 'failed',
@@ -408,10 +431,11 @@ export function createIntelligenceTranslationService(deps: {
           translatedAt: new Date().toISOString()
         })
         processed += 1
+        tally.recordSuccess()
       }
 
       await writeRecords(records)
-      return { processed, failed }
+      return { processed, failed, ...tally.settle() }
     },
 
     async compactDerivedRecords(input: { retentionMode: 'compact' | 'balanced' | 'extended' }) {

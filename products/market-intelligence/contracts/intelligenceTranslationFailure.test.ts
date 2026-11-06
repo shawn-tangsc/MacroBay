@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest'
 import {
   BATCH_FAILURE_REASONS,
   countTranslationFailure,
+  dominantTranslationFailure,
+  translationReasonDistribution,
   settledTranslationFailures,
+  TRANSLATION_AUTO_OFF_REASON_CODE,
   translationFailureKindOf,
+  translationRunReasonCode,
   type BatchFailureReason
 } from './intelligenceTranslationFailure'
 
@@ -80,5 +84,36 @@ describe('translation failure kinds', () => {
     countTranslationFailure(tally, 'rate-limited')
     expect(settledTranslationFailures(tally)).toEqual({ timeout: 2, 'rate-limited': 1 })
     expect(settledTranslationFailures(emptyTally())).toEqual({})
+  })
+
+  it('运行记录的原因码是点分枚举，一个类一个码，不含句子', () => {
+    const codes = BATCH_FAILURE_REASONS.map((kind) => translationRunReasonCode(kind))
+    expect(codes).toEqual([
+      'model.timeout',
+      'model.rate-limited',
+      'model.not-configured',
+      'model.output-invalid',
+      'translation.undetermined'
+    ])
+    // 平台的写入校验只收点分小写；一句人话会被当场拒写。
+    for (const code of [...codes, TRANSLATION_AUTO_OFF_REASON_CODE]) {
+      expect(code).toMatch(/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/)
+    }
+  })
+
+  it('一批里失败原因不止一种时，记录写发生最多的那一类', () => {
+    const tally = emptyTally()
+    countTranslationFailure(tally, 'rate-limited')
+    countTranslationFailure(tally, 'timeout')
+    countTranslationFailure(tally, 'rate-limited')
+    expect(dominantTranslationFailure(tally)).toBe('rate-limited')
+    // 没有失败就不该有原因码：空结论不是「其它」。
+    expect(dominantTranslationFailure(emptyTally())).toBeUndefined()
+    // 主因码之外还要给分布：一个码说不出「超时 1、限流 2」。
+    expect(translationReasonDistribution(tally)).toEqual({
+      'model.rate-limited': 2,
+      'model.timeout': 1
+    })
+    expect(translationReasonDistribution(emptyTally())).toBeUndefined()
   })
 })

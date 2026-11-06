@@ -388,6 +388,52 @@ describe('intelligenceTranslationService', () => {
     expect('defaultModelId' in stored).toBe(false)
   })
 
+  it('reports how the batch concluded, not just how many items it touched', async () => {
+    const fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ title: '标题', summary: '摘要' }) } }]
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    )
+    const { service, pipeline } = createService({ fetch })
+    pipeline.listItems = () => [sampleItem()]
+    pipeline.listRevisions = () => []
+
+    const result = await service.translateItems({ itemIds: ['item-1'], reason: 'manual-selection' })
+
+    expect(result.counts).toEqual({ total: 1, succeeded: 1, failed: 0, skipped: 0 })
+    // A clean batch needs no reason: an empty code would read as "something went wrong".
+    expect(result.reasonCode).toBeUndefined()
+  })
+
+  it('counts a model failure as failed and names why', async () => {
+    const { service, pipeline } = createService({
+      fetch: vi.fn(async () => new Response('{}', { status: 503 }))
+    })
+    pipeline.listItems = () => [sampleItem()]
+    pipeline.listRevisions = () => []
+
+    const result = await service.translateItems({ itemIds: ['item-1'], reason: 'manual-selection' })
+
+    expect(result.counts).toEqual({ total: 1, succeeded: 0, failed: 1, skipped: 0 })
+    expect(result.reasonCode).toBe('translation.undetermined')
+    expect(result.reasons).toEqual({ 'translation.undetermined': 1 })
+  })
+
+  it('calls an auto-off batch skipped rather than a batch that succeeded zero times', async () => {
+    const { service, pipeline } = createService()
+    await service.saveSettings({ autoTranslateEnabled: false })
+    pipeline.listItems = () => [sampleItem()]
+    pipeline.listRevisions = () => []
+
+    const result = await service.translateItems({ itemIds: ['item-1'], reason: 'new-item' })
+
+    expect(result.counts).toEqual({ total: 1, succeeded: 0, failed: 0, skipped: 1 })
+    expect(result.reasonCode).toBe('translation.auto-off')
+  })
+
   it('names each queued batch after its source instead of a timestamp', async () => {
     const { service, pipeline, jobRuntime } = createService()
     await service.saveSettings({ autoTranslateEnabled: true })
