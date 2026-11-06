@@ -199,101 +199,20 @@ describe('signals follow a successful collection', () => {
   })
 })
 
-describe('handing a fired signal to the analysis entry', () => {
-  const queued = { state: 'queued' as const, groupId: 'group-1', attemptLedgerId: 'ledger-1', jobRunId: 'job-1' }
-
-  it('hands the signal itself, with the rule\'s own one-bucket window', async () => {
-    const requestAnalysis = vi.fn(async (_request: SignalAnalysisRequest) => queued)
+describe('the refresh path no longer calls analyses', () => {
+  it('exposes only a refresh, because the tick scan is the single entry', async () => {
+    const refresh = vi.fn(async () => ({ state: 'updated' as const }))
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'r', levels: [] }))
     const wrapped = createSignalledOpenInterestRefresh({
-      refresh: async () => ({ state: 'updated' as const }),
+      refresh,
       readHistory: async () => reading(),
-      requestAnalysis,
+      submit,
       now: () => asOf
     })
+    // The analysis binding is gone by construction: a second entry would make "when did it fire"
+    // have two answers, and a push lost between write and hand-off is never repaired.
+    expect(Object.keys(wrapped)).toEqual(['refresh'])
     await wrapped.refresh()
-    expect(requestAnalysis).toHaveBeenCalledTimes(1)
-    // One object, no scalar copies: the reading, its asset, its bucket and its severity all travel
-    // together, so the entry cannot be told two different things about one signal.
-    const request = requestAnalysis.mock.calls[0]![0]
-    expect(request.groupType).toBe('funding')
-    expect(request.signals[0]!.signal).toMatchObject({
-      moduleId: 'open-interest',
-      ruleId: 'oi-liquidation-proxy',
-      asset: 'btc',
-      severity: 'high',
-      observedAt: bucketAt,
-      readiness: 'available',
-      values: { dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 7.4e9 }
-    })
-    expect(request.signals[0]!.signal.dedupeKey).toBe('open-interest:oi-liquidation-proxy:btc:2026-11-03T10:15:00.000Z')
-    // The chip says "15 minutes": one closed bucket, never a 24-hour window borrowed from another rule.
-    expect(request.signals[0]!.window).toEqual({ unit: 'buckets', amount: 1, bucketMs, upperBoundMs: bucketMs })
-    // The key the budget recognises is built by the contract, not by this call site.
-    expect(signalTriggerKey(request.signals[0]!.signal.moduleId, request.signals[0]!.signal.ruleId)).toBe('signal.open-interest.oi-liquidation-proxy')
-  })
-
-  it('offers a bucket to the analysis entry once, not once per refresh', async () => {
-    const requestAnalysis = vi.fn(async () => queued)
-    const wrapped = createSignalledOpenInterestRefresh({
-      refresh: async () => ({ state: 'updated' as const }),
-      readHistory: async () => reading(),
-      requestAnalysis,
-      now: () => asOf
-    })
-    // The same bucket stays "fresh" for two buckets; a second refresh must not ask for a second run
-    // of the same collapse (the ledger row would dedupe, but the model call would not).
-    await wrapped.refresh()
-    await wrapped.refresh()
-    expect(requestAnalysis).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not remember a hand-off the entry refused because the capability was off', async () => {
-    const requestAnalysis = vi.fn(async () => ({ state: 'disabled' as const }))
-    const wrapped = createSignalledOpenInterestRefresh({
-      refresh: async () => ({ state: 'updated' as const }),
-      readHistory: async () => reading(),
-      requestAnalysis,
-      now: () => asOf
-    })
-    await wrapped.refresh()
-    await wrapped.refresh()
-    // The switch may be turned on while this bucket is still fresh; "off" is not "handed".
-    expect(requestAnalysis).toHaveBeenCalledTimes(2)
-  })
-
-  it('binds after construction, because the runtime is assembled later', async () => {
-    const requestAnalysis = vi.fn(async () => queued)
-    const wrapped = createSignalledOpenInterestRefresh({
-      refresh: async () => ({ state: 'updated' as const }),
-      readHistory: async () => reading(),
-      now: () => asOf
-    })
-    wrapped.bindSignalAnalysis(requestAnalysis)
-    await wrapped.refresh()
-    expect(requestAnalysis).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not hand anything when the source was switched off', async () => {
-    const requestAnalysis = vi.fn(async () => queued)
-    const wrapped = createSignalledOpenInterestRefresh({
-      refresh: async () => ({ state: 'unavailable' as const }),
-      readHistory: async () => reading(),
-      requestAnalysis,
-      now: () => asOf
-    })
-    await wrapped.refresh()
-    expect(requestAnalysis).not.toHaveBeenCalled()
-  })
-
-  it('keeps the collection result when the analysis entry refuses the hand-off', async () => {
-    const wrapped = createSignalledOpenInterestRefresh({
-      refresh: async () => ({ state: 'updated' as const }),
-      readHistory: async () => reading(),
-      requestAnalysis: async () => { throw new Error('analysis runtime missing') },
-      now: () => asOf
-    })
-    // The bucket is stored and the chip still draws; a run that could not be asked for is not a
-    // failed collection.
-    expect(await wrapped.refresh()).toEqual({ state: 'updated' })
+    expect(submit).toHaveBeenCalled()
   })
 })

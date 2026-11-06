@@ -16,7 +16,6 @@ import { buildMarketAnalysisContext } from '../public-query/marketAnalysisContex
 import { countAnalysisRuns, lastAutoRunAt } from '../analysis/analysisRunCounter'
 import { createAnalysisSignificanceGate } from '../analysis/analysisSignificanceGate'
 import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotTick'
-import { analysisSchedulePolicy, triggerKeyForSlot } from '../analysis/analysisSchedulePolicy'
 import type { SessionSlotInstant } from '../analysis/analysisSlotCoverage'
 import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
 import { queryMacroRoute } from '../public-query/macroRouteQuery'
@@ -32,6 +31,8 @@ import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '.
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
+import { createSignalScanRunner } from '../signals/signalScanRunner'
+import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
 import { isMarketAnalysisEnabled, isMarketAnalysisModelSet, type MarketAnalysisSettings, type MarketAnalysisSettingsPatch } from '../application/marketAnalysisSettings'
 import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
@@ -193,56 +194,42 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * does not cancel the open for the same reason — the open's own analysis is what says what the
    * session looked like.
    */
-  const isSlotDelivered = (instant: SessionSlotInstant): boolean => {
-    const from = instant.atMs
-    const to = from + analysisSchedulePolicy.coverageWindowMs
-    const key = triggerKeyForSlot(instant.slot)
-    return repository.listRuns().some(run => run.triggerKey === key && run.status === 'succeeded' &&
-      Date.parse(run.queuedAt) >= from && Date.parse(run.queuedAt) < to)
-  }
-  /**
-   * An open is abandoned when it was attempted inside its window, nothing came of it, and the window
-   * has closed: without this a failed attempt would be re-requested on every tick for the whole
-   * catch-up window. The open's ledger identity carries the local day (see `sessionSlotChangeHash`),
-   * so a row at or after the open's instant is that open's attempt.
-   */
-  const isSlotAbandoned = (instant: SessionSlotInstant): boolean => {
-    if (Date.parse(now()) - instant.atMs <= analysisSchedulePolicy.coverageWindowMs) return false
-    const key = triggerKeyForSlot(instant.slot)
-    return repository.listEventGroups().flatMap(group => repository.listTriggerLedger(group.id))
-      .some(row => row.triggerKey === key && row.decision === 'queued' && Date.parse(row.createdAt) >= instant.atMs)
-  }
+  const slotChecks = createSessionSlotChecks({
+    now,
+    listRuns: () => repository.listRuns(),
+    listEventGroups: () => repository.listEventGroups(),
+    listTriggerLedger: eventGroupId => repository.listTriggerLedger(eventGroupId)
+  })
   // The tick's log line is the record a reader/operator can see for "no more retries today"; the
   // job context that can write it only exists while the job runs.
-  let slotLog: ((message: string, metadata?: Record<string, unknown>) => Promise<void>) | undefined
+  let jobLog: ((input: { level: 'info' | 'warn'; message: string; metadata?: Record<string, unknown> }) => Promise<void>) | undefined
   const slotTick = createAnalysisSlotTick({
     now,
     timeZone,
-    isDelivered: isSlotDelivered,
-    isAbandoned: isSlotAbandoned,
-    // Attempts are counted from the run rows they wrote: a retry re-freezes, the as-of moves, and
-    // a new run row exists. No second counter, and no "attempt row" that would break one run per call.
-    attemptsToday: instant => repository.listRuns().filter(run =>
-      run.triggerKey === triggerKeyForSlot(instant.slot) && Date.parse(run.queuedAt) >= instant.atMs).length,
+    isDelivered: slotChecks.isDelivered,
+    isAbandoned: slotChecks.isAbandoned,
+    attemptsToday: slotChecks.attemptsToday,
     // The schedule only needs something to analyse; see `hasSlotAnchor` for why the analysis
     // anchor's eligibility rule must not gate it.
     hasEligibleAnchor: () => hasSlotAnchor(input.pipeline.listItems()),
     // Goes through the ordinary request path, so the gate's budget, interval and ledger apply.
     requestSlotAnalysis: instant => requestInitialAnalysis(undefined, undefined, 'refresh', 'session-slot', instant.slot).then(() => undefined),
-    log: (message, metadata) => slotLog?.(message, metadata) ?? Promise.resolve()
+    log: (message, metadata) => jobLog?.({ level: 'info', message, metadata }) ?? Promise.resolve()
   })
   const analysisJobs = registerMarketAnalysisJobs(input.jobRuntime, {
     runSessionSlots: async (context) => {
       // The schedule is unarmed while the capability is off, and the handler still refuses: a run
       // queued before the switch was turned off must not spend a request either.
       if (!await isEnabled()) return
-      slotLog = async (message, metadata) => { await context.log({ level: 'info', message, ...(metadata ? { metadata } : {}) }) }
+      jobLog = async input => { await context.log(input) }
       let result: Awaited<ReturnType<typeof slotTick.run>>
       try {
         result = await slotTick.run()
       } finally {
-        slotLog = undefined
+        // Keep the logger until the signal phase is done; only then clear it.
       }
+      // Re-checked after the slot phase: the switch may have been turned off during this tick.
+      if (!await isEnabled()) { jobLog = undefined; return }
       await context.log({
         level: result.outcome === 'no-anchor' ? 'warn' : 'info',
         // The opens are named: "which session was this conclusion for" is the question the reader
@@ -250,6 +237,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
         message: `Market analysis session slots: ${result.outcome}`,
         metadata: { outcome: result.outcome, requested: result.requested, deferred: result.deferred }
       })
+      try {
+        await runSignalScan()
+      } finally {
+        jobLog = undefined
+      }
     },
     groupChange: async (payload) => {
       if (!await isEnabled()) return
@@ -382,6 +374,13 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     now,
     idFactory: () => randomUUID(),
     isEnabled
+  })
+  // The tick is the only entry that asks for a signal analysis; the push paths were removed with it.
+  const runSignalScan = createSignalScanRunner({
+    now,
+    querySignals: query => input.publicQueryService.queryModuleSignals(query),
+    requestAnalysis: request => requestSignalAnalysis(request),
+    log: async input => { await jobLog?.(input) }
   })
 
   return {

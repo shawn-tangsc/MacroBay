@@ -1,9 +1,8 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
-import { signalWindow, type ModuleSignal } from '../../../contracts/moduleSignal'
+import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
-import type { SignalAnalysisRequest, SignalAnalysisOutcome } from '../jobs/requestSignalAnalysis'
 import { liquidationHintPolicy } from '../../../contracts/openInterestPositioning'
 import { openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
 import {
@@ -124,117 +123,56 @@ export function buildOpenInterestSignalRequest(
   }
 }
 
-/**
- * The one place a fired open-interest signal becomes an analysis request.
- *
- * The receiver (`jobs/requestSignalAnalysis`) owns the group, the ledger row and the queue; this
- * function only fills the fields it cannot know: the rule's own key, the board the signal belongs
- * to, and the bucket it happened in. Building the trigger key here instead of at the call site is
- * what keeps a typo out of the budget: the contract accepts exactly `signal.<module>.<rule>`.
- */
-export function analysisRequestFor(signal: ModuleSignal): SignalAnalysisRequest | undefined {
-  // "Nothing was read" is not "the rule fired"; a low-severity mark is the chip's business only.
-  if (signal.readiness !== 'available' || signal.asset === null) return undefined
-  if (signal.severity !== 'medium' && signal.severity !== 'high') return undefined
-  // This rule judges one closed bucket, not a 24-hour window: the window belongs to the rule, not
-  // to the reader and not to the receiver.
-  const window = signalWindow(signal.cadence, 1)
-  if (window === undefined) return undefined
-  return {
-    // One signal is a batch of one; the receiver's accounting unit is a run, not a signal.
-    signals: [{ signal, window }],
-    // The open-interest board is the funding one; reusing the existing group type, not a new one.
-    groupType: 'funding'
-  }
-}
-
 export function createOpenInterestSignalNotifier(deps: Readonly<{
   submit?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   readHistory: (input: Readonly<{ asOf: string; window: '24h' }>) => Promise<OpenInterestHistoryResult>
   now?: () => string
-  /**
-   * The analysis entry, when one is wired. Absent leaves behaviour exactly as it was: the rule
-   * still produces its chip and its notification, it just cannot ask for a run.
-   */
-  requestAnalysis?: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>
-  /** Buckets already offered in this process, keyed by the signal's dedupe key. */
-  handed?: Map<string, number>
   /** 阈值来自规则常量；测试注入别的值，用来证明句子跟着常量走。 */
   thresholds?: Readonly<{ dropPct: number; strongDropPct: number }>
 }>) {
   return async function notifyOpenInterestSignals(): Promise<readonly NotificationSubmitOutcome[]> {
     const asOf = (deps.now ?? (() => new Date().toISOString()))()
-    const asOfMs = Date.parse(asOf)
-    if (deps.handed !== undefined && Number.isFinite(asOfMs)) {
-      for (const [key, expiresAt] of deps.handed) if (expiresAt <= asOfMs) deps.handed.delete(key)
-    }
     const reading = await deps.readHistory({ asOf, window: '24h' })
     const candidates = selectSignalNotificationCandidates(openInterestSignalsFromHistory(reading, asOf), asOf)
     const outcomes: NotificationSubmitOutcome[] = []
     for (const signal of candidates) {
       const request = buildOpenInterestSignalRequest(signal, deps.thresholds ?? liquidationHintPolicy)
       if (request !== undefined && deps.submit !== undefined) outcomes.push(await deps.submit(request))
-      const analysis = analysisRequestFor(signal)
-      if (analysis === undefined || deps.requestAnalysis === undefined) continue
-      // The same bucket stays "fresh" for two buckets; asking twice would queue a second run for a
-      // reading the ledger already holds. The memory is per process; the ledger's unique key is
-      // what carries across restarts.
-      const handedSignal = analysis.signals[0]!.signal
-      if (deps.handed?.has(handedSignal.dedupeKey) === true) continue
-      try {
-        const outcome = await deps.requestAnalysis(analysis)
-        // "Disabled" is not "handed": the switch may be turned on while this bucket is still fresh.
-        if (outcome.state !== 'disabled') {
-          const observedMs = Date.parse(handedSignal.observedAt)
-          deps.handed?.set(handedSignal.dedupeKey, (Number.isFinite(observedMs) ? observedMs : asOfMs) + openInterestSignalNotificationPolicy.analysisHandoffMemoryMs)
-        }
-      } catch {
-        // One hand-off failing must not turn a stored bucket into a failed collection, and must
-        // not stop the next signal from being offered.
-      }
     }
     return Object.freeze(outcomes)
   }
 }
 
 /**
+/**
  * 采集完再出站：先写入、再说话。
+ *
+ * **不再叫分析**（2026-11-06 定，r9 08 §4.1）：分析的唯一入口是十五分钟扫描。这里的交接会
+ * 制造第二个入口，而推式在「采集写完、交接之前」崩掉时没人补；扫描下一个 tick 从同一份数据
+ * 重算，最多晚一步且能自愈。
  *
  * - 来源关着（`unavailable`）时不推——没有新读数，就没有「刚发生」这回事；
  * - 通知失败不改变采集结果——桶已经落盘了，一条推不出去的通知不该让这次采集看起来失败；
- * - 提交失败也不重试：下一轮采集会带着同一个桶再来一次，平台按 occurrence 合并，不会重复打扰。
+ * - 提交失败也不重试：下一轮采集会带着同一个桶再来一次，平台按 occurrence 合并。
  */
 export function createSignalledOpenInterestRefresh<T extends { state?: string }>(input: Readonly<{
   refresh: () => Promise<T>
   readHistory: (input: Readonly<{ asOf: string; window: '24h' }>) => Promise<OpenInterestHistoryResult>
   submit?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   now?: () => string
-  requestAnalysis?: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>
 }>): {
   refresh: () => Promise<T>
-  /**
-   * Late binding, not a constructor argument: the analysis runtime is assembled after this refresh
-   * service, and the module that wires both is a file-size baseline that may not grow. Until it is
-   * called the refresh behaves exactly as before.
-   */
-  bindSignalAnalysis: (service: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>) => void
 } {
-  let requestAnalysis = input.requestAnalysis
-  // One memory for the lifetime of this refresh service, not per call: the whole point is that the
-  // next refresh does not ask again for a bucket this one already offered.
-  const handed = new Map<string, number>()
   return {
     async refresh(): Promise<T> {
       const result = await input.refresh()
       if (result.state === 'unavailable') return result
       // Nothing is wired: keep the collection path free of a read it would only throw away.
-      if (input.submit === undefined && requestAnalysis === undefined) return result
+      if (input.submit === undefined) return result
       const notify = createOpenInterestSignalNotifier({
         ...(input.submit === undefined ? {} : { submit: input.submit }),
         readHistory: input.readHistory,
-        ...(input.now === undefined ? {} : { now: input.now }),
-        ...(requestAnalysis === undefined ? {} : { requestAnalysis }),
-        handed
+        ...(input.now === undefined ? {} : { now: input.now })
       })
       try {
         await notify()
@@ -242,7 +180,6 @@ export function createSignalledOpenInterestRefresh<T extends { state?: string }>
         // 采集结果已经落盘；一条通知发不出去不该让这次采集看起来失败。
       }
       return result
-    },
-    bindSignalAnalysis(service) { requestAnalysis = service }
+    }
   }
 }

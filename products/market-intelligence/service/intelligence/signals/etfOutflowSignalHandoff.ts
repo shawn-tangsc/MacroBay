@@ -1,38 +1,22 @@
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
-import type { SignalAnalysisService } from '../jobs/requestSignalAnalysis'
-import { etfOutflowAnalysisRequests } from './etfOutflowSignal'
 import { notifyEtfOutflowSignals, type SignalNoticeSubmit } from './etfOutflowNotifier'
 
 /**
- * 刷新服务的交接点：这一轮判出的信号，从这里分给两个消费者。
+ * 刷新服务的交接点：这一轮判出的信号，从这里交给通知。
  *
- * 通知与自动分析是两件事，所以各有各的入口：通知在自己的层里读出口开关（牌子没上、通知不发），
- * 分析由接收端判额度、去重与单飞。这里只做一件事——把同一份信号原样交给两边，谁都不在这层
- * 重判一次。
+ * **不再叫分析**（2026-11-06 定，r9 08 §4.1）：分析的唯一入口是十五分钟扫描。推式留在这里会
+ * 出现两个入口，而去重只会在事后拦一次，拦不住「谁先谁后」；应用在「采集写完、交接之前」崩掉
+ * 时，推式丢掉的这一次也没有人补。扫描下一个 tick 从同一份数据重算，最多晚一步，且能自愈。
  *
- * 分析入口是**延迟取**的：刷新服务在装配时比分析运行时先建好，拿不到那个对象；传一个取值函数，
- * 调用发生时再取，既能晚绑定，也不必让装配文件为它长一行。
- *
- * 接收端抛错不升级成采集失败：没入队的调用由接收端自己把账本行翻成 `skipped`，
- * 这里吞掉，行情照常算「这一轮写好了」。
+ * 通知留在刷新路径的前提（缺一就一起迁到扫描）：通知只发「数据到了」、不携带分析结论。
  */
 export function etfOutflowSignalHandoff(
-  submit: SignalNoticeSubmit | undefined,
-  resolveAnalysis?: () => SignalAnalysisService | undefined
+  submit: SignalNoticeSubmit | undefined
 ): Readonly<{ handOffSignals: (signals: readonly ModuleSignal[]) => Promise<void> }> {
   return {
     async handOffSignals(signals) {
+      // The analysis is not handed off here on purpose; see the comment above.
       await notifyEtfOutflowSignals(submit, signals)
-      const analyze = resolveAnalysis?.()
-      if (!analyze) return
-      // 一条一条交：同一天 BTC / ETH 是两条读数，接收端按各自的去重键记，合并与单飞归它。
-      for (const request of etfOutflowAnalysisRequests(signals)) {
-        try {
-          await analyze(request)
-        } catch {
-          // 见上：一次入队失败不该把已经落库的行情判成失败。
-        }
-      }
     }
   }
 }

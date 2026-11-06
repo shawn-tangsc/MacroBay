@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { isModuleSignal, signalCooldown, signalWindow } from '../../../contracts/moduleSignal'
 import { etfFlowPolicy } from '../../../contracts/etfFlows'
-import { buildEtfOutflowSignal, etfOutflowAnalysisRequests, etfOutflowSignalPolicy } from './etfOutflowSignal'
+import { buildEtfOutflowSignal, etfOutflowSignalPolicy } from './etfOutflowSignal'
 import { isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
 import { signalTriggerKey } from '../../../contracts/moduleSignal'
 
@@ -120,38 +120,5 @@ describe('ETF outflow signal', () => {
   it('keeps the rule name independent of its module', () => {
     expect(etfOutflowSignalPolicy.ruleId).toBe('etf-outflow-3d')
     expect(etfOutflowSignalPolicy.moduleId).toBe('etf-flows')
-  })
-})
-
-describe('handing a signal to the analysis entry', () => {
-  const readingAt = '2026-10-28T12:00:00.000Z'
-
-  // 请求只有一个形状：信号本身 + 规则自己的窗口 + 板子。标量副本一律不再各带一份。
-  it('hands the signal, its own three-day window, and the board it belongs to', () => {
-    const btc = buildEtfOutflowSignal({ asset: 'btc', rows: flows([-40_000_000, -50_000_000, -60_000_000]), asOf: readingAt })!
-    const eth = buildEtfOutflowSignal({ asset: 'eth', rows: flows([-10_000_000, -40_000_000, -120_000_000]), asOf: readingAt })!
-    const requests = etfOutflowAnalysisRequests([btc, eth])
-
-    expect(requests).toHaveLength(2)
-    for (const request of requests) {
-      expect(request.signals[0]!.signal).toBeDefined()
-      expect(request.groupType).toBe('capital')
-      // 窗口是规则的单位：三个交易日，不是 3×24 小时。
-      expect(request.signals[0]!.window).toEqual({ unit: 'trading-days', amount: 3, upperBoundMs: null })
-      // 键仍是预算认得的那个形状，只是现在由接收端从信号拼。
-      expect(signalTriggerKey(request.signals[0]!.signal.moduleId, request.signals[0]!.signal.ruleId)).toBe('signal.etf-flows.etf-outflow-3d')
-      expect(isSignalTriggerKey('signal.etf-flows.etf-outflow-3d')).toBe(true)
-    }
-    // 同一天两个资产是两条读数，各自的去重键不同、交易日相同。
-    expect(requests.map(request => request.signals[0]!.signal.dedupeKey).sort()).toEqual([
-      'etf-flows:etf-outflow-3d:btc:2026-10-28',
-      'etf-flows:etf-outflow-3d:eth:2026-10-28'
-    ])
-  })
-
-  it('asks for no analysis while the window is not complete', () => {
-    const short = buildEtfOutflowSignal({ asset: 'btc', rows: flows([-40_000_000, -50_000_000]), asOf: readingAt })!
-    expect(short.readiness).toBe('unavailable')
-    expect(etfOutflowAnalysisRequests([short])).toEqual([])
   })
 })

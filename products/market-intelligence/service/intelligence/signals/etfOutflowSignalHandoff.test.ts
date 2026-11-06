@@ -6,6 +6,7 @@ import { createSignalAnalysisRequest, type SignalAnalysisRequest } from '../jobs
 import { signalTriggerKey } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from './etfOutflowSignal'
 import { etfOutflowSignalHandoff } from './etfOutflowSignalHandoff'
+import { createSignalScanRunner } from './signalScanRunner'
 
 const readingAt = '2026-10-28T12:00:00.000Z'
 
@@ -24,38 +25,21 @@ function outflowSignals() {
 }
 
 describe('the ETF signal hand-off', () => {
-  // 通知与自动分析是两个消费者，同一份信号各交一次；谁都不在交接点重判。
-  it('hands the same signals to the notification and to the analysis entry', async () => {
+  // 交接点只剩通知：分析的唯一入口是十五分钟扫描（两个入口会让「什么时候叫」有两个答案）。
+  it('notifies and leaves the analysis to the tick scan', async () => {
     const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
-    const analyze = vi.fn(async (_request: SignalAnalysisRequest) => ({ state: 'queued' as const, groupId: 'g', attemptLedgerId: 'l', jobRunId: 'j' }))
 
-    await etfOutflowSignalHandoff(submit, () => analyze).handOffSignals(outflowSignals())
+    await etfOutflowSignalHandoff(submit).handOffSignals(outflowSignals())
 
-    expect(submit).toHaveBeenCalledTimes(2)
-    expect(analyze).toHaveBeenCalledTimes(2)
-    // 每条请求带的是信号本身与它自己的窗口，键由接收端从信号拼。
-    const requests = analyze.mock.calls.map(([request]) => request)
-    expect(requests.map(request => signalTriggerKey(request.signals[0]!.signal.moduleId, request.signals[0]!.signal.ruleId)))
-      .toEqual(['signal.etf-flows.etf-outflow-3d', 'signal.etf-flows.etf-outflow-3d'])
-    expect(requests.every(request => request.groupType === 'capital')).toBe(true)
-    expect(requests.every(request => request.signals[0]!.window.unit === 'trading-days' && request.signals[0]!.window.amount === 3)).toBe(true)
-  })
-
-  // 刷新服务先于分析运行时建好：入口还没绑定时，通知照发、分析一条都不递，不假装做过。
-  it('still notifies while the analysis entry is not bound yet', async () => {
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
-    await etfOutflowSignalHandoff(submit, () => undefined).handOffSignals(outflowSignals())
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
-  // 一次入队失败不能把已经写好的行情判成失败：接收端自己把账本行翻成 skipped。
-  it('does not let a failed enqueue reach the refresh result', async () => {
-    const analyze = vi.fn(async () => { throw new Error('job-runtime-unavailable') })
-    await expect(etfOutflowSignalHandoff(undefined, () => analyze).handOffSignals(outflowSignals())).resolves.toBeUndefined()
+  it('still works without a notification port, and never throws into the refresh result', async () => {
+    await expect(etfOutflowSignalHandoff(undefined).handOffSignals(outflowSignals())).resolves.toBeUndefined()
   })
 })
 
-describe('ETF signal → the analysis entry, end to end', () => {
+describe('ETF signal → the scan, end to end', () => {
   // 判据（架构师）：造一条信号 → 接收端收到该触发键 → 一次 queued 行 → 计数落在 event 线。
   it('writes one queued ledger row on the event line, and none on the calendar line', async () => {
     const groups = new Map<string, EventGroup>()
@@ -112,7 +96,13 @@ describe('ETF signal → the analysis entry, end to end', () => {
       answers.push(result.state)
       return result
     }
-    await etfOutflowSignalHandoff(undefined, () => recorded).handOffSignals([outflowSignals()[0]!])
+    const runScan = createSignalScanRunner({
+      now: () => readingAt,
+      querySignals: async () => [{ signal: outflowSignals()[0]!, window: { unit: 'trading-days' as const, amount: 3, upperBoundMs: null } }],
+      requestAnalysis: recorded,
+      log: async () => undefined
+    })
+    await runScan()
 
     expect(answers).toEqual(['queued'])
     expect(ledger).toHaveLength(1)

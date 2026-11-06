@@ -179,37 +179,3 @@ function canonicalTradingDayInstant(tradingDate: string): string | undefined {
   return new Date(parsed).toISOString().slice(0, 10) === tradingDate ? `${tradingDate}T00:00:00.000Z` : undefined
 }
 
-/**
- * 一条成立的三日净流出信号，转成一次分析请求。
- *
- * 形状就是接收端声明的那个：**信号本身 + 规则自己的窗口 + 板子**。触发键、模块、规则、资产、
- * 严重度、数据时刻、去重键都从信号取，不再各带一份标量副本——同一件事在两个字段里说两句话，
- * 迟早会有一句落后。窗口也不由接收端推：三天是这条规则自己的单位。
- */
-export type EtfOutflowAnalysisRequest = Readonly<{
-  /** 一条信号就是一批一条：接收端的会计单位是一次运行，不是一条信号。 */
-  signals: readonly Readonly<{ signal: ModuleSignal; window: SignalWindow }>[]
-  /** 牌子所属的板子：现货是资金面。 */
-  groupType: 'capital'
-}>
-
-/**
- * 这一批信号里，哪些值得递交一次分析。
- *
- * 只递成立的（`readiness: 'available'`）：窗口没凑齐是「还判不了」，不是一件已经发生的事。
- * 低档只打牌子、不叫分析，这里先挡掉。一条信号一个请求：同一天 BTC 与 ETH 是两条读数，
- * 靠各自的去重键区分，合并与单飞归接收端。
- */
-export function etfOutflowAnalysisRequests(signals: readonly ModuleSignal[]): readonly EtfOutflowAnalysisRequest[] {
-  const requests: EtfOutflowAnalysisRequest[] = []
-  for (const signal of signals) {
-    if (signal.moduleId !== etfOutflowSignalPolicy.moduleId || signal.readiness !== 'available') continue
-    if (signal.severity === 'low') continue
-    // 键拼不出来就不花额度：宁可不叫这次分析，也不匿名记账（接收端还会再拒一次）。
-    if (!signalTriggerKey(signal.moduleId, signal.ruleId)) continue
-    const window = signalWindow(signal.cadence, etfFlowPolicy.signalWindowDays)
-    if (!window) continue
-    requests.push(Object.freeze({ signals: [{ signal, window }], groupType: 'capital' as const }))
-  }
-  return Object.freeze(requests)
-}

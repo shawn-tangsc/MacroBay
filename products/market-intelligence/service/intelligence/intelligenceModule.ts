@@ -515,7 +515,7 @@ export function getIntelligenceModule(
       store: etfCurrentStateStore,
       now: () => new Date().toISOString(),
       // 交接点只交读数；开关、去重参数与事件 id 都在通知层（见 `etfOutflowSignalHandoff`）。
-      ...etfOutflowSignalHandoff(hooks?.submitNotification, () => marketAnalysisRuntime?.requestSignalAnalysis)
+      ...etfOutflowSignalHandoff(hooks?.submitNotification)
     })
     const capitalConditionsRefresh = createCapitalConditionsRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
@@ -770,7 +770,6 @@ export function getIntelligenceModule(
       ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
       dataDir
     })
-    openInterestWithSignals.bindSignalAnalysis(marketAnalysisRuntime.requestSignalAnalysis)
     const sourcesService = createIntelligenceSourcesService({
       profileStore,
       focusSettingsStore,
