@@ -30,6 +30,23 @@ import type { AgentSessionWorkspaceSource, CreateAgentWorkspaceDto, UpdateAgentW
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
 import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
 import { normalizeSessionOrigin, normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
+import {
+  normalizeMessagePageLimit,
+  normalizePageLimit,
+  sortSessionsByOrderKey,
+  compareSessionListOrder,
+  sessionCursorSortKey,
+  isSessionAfterCursor,
+  encodeSessionCursor,
+  decodeSessionCursor,
+  sortMessagesNewestFirst,
+  isMessageOlderThanCursor,
+  encodeMessageCursor,
+  decodeMessageCursor,
+  messageCreatedAtMs,
+  createOrderKey,
+  createFirstOrderKey
+} from './agentSessionListingCursor'
 import type { AgentProductToolPackageBinding } from '../productTools/productAgentToolSchemas'
 
 export type { AgentProductToolPackageBinding }
@@ -775,127 +792,9 @@ function textData(text: string): MessageData {
   return { parts: [{ type: 'text', text }] }
 }
 
-function normalizeMessagePageLimit(limit: number | undefined): number {
-  return normalizePageLimit(limit, DEFAULT_MESSAGE_PAGE_LIMIT, MAX_MESSAGE_PAGE_LIMIT)
-}
-
-function normalizePageLimit(limit: number | undefined, defaultLimit: number, maxLimit: number): number {
-  if (!Number.isFinite(limit) || limit === undefined) return defaultLimit
-  return Math.min(Math.max(Math.trunc(limit), 1), maxLimit)
-}
-
-function sortSessionsByOrderKey(a: AgentSessionEntity, b: AgentSessionEntity): number {
-  const order = (a.orderKey ?? '').localeCompare(b.orderKey ?? '')
-  return order === 0 ? a.id.localeCompare(b.id) : order
-}
-
-function compareSessionListOrder(
-  a: AgentSessionEntity,
-  b: AgentSessionEntity,
-  pins: readonly AgentSessionPin[]
-): number {
-  const pinIndex = new Map(pins.map((pin, index) => [pin.sessionId, index]))
-  const aPin = pinIndex.get(a.id)
-  const bPin = pinIndex.get(b.id)
-  if (aPin !== undefined || bPin !== undefined) {
-    if (aPin === undefined) return 1
-    if (bPin === undefined) return -1
-    return aPin - bPin
-  }
-  return sortSessionsByOrderKey(a, b)
-}
-
-function sessionCursorSortKey(session: AgentSessionEntity, pins: readonly AgentSessionPin[]): string {
-  const pinIndex = pins.findIndex((pin) => pin.sessionId === session.id)
-  if (pinIndex >= 0) return `pin:${String(pinIndex).padStart(6, '0')}`
-  return session.orderKey ?? ''
-}
-
-function isSessionAfterCursor(
-  session: AgentSessionEntity,
-  cursor: { kind: 'pin'; pinIndex: number; id: string } | { kind: 'session'; orderKey: string; id: string },
-  pins: readonly AgentSessionPin[]
-): boolean {
-  const pinIndex = pins.findIndex((pin) => pin.sessionId === session.id)
-  if (cursor.kind === 'pin') {
-    if (pinIndex >= 0) {
-      return pinIndex > cursor.pinIndex || (pinIndex === cursor.pinIndex && session.id > cursor.id)
-    }
-    return true
-  }
-
-  if (pinIndex >= 0) {
-    return false
-  }
-  const order = (session.orderKey ?? '').localeCompare(cursor.orderKey)
-  return order > 0 || (order === 0 && session.id > cursor.id)
-}
-
-function encodeSessionCursor(session: AgentSessionEntity, pins: readonly AgentSessionPin[]): string {
-  return `${sessionCursorSortKey(session, pins)}:${session.id}`
-}
-
-function decodeSessionCursor(raw: string):
-  | { kind: 'pin'; pinIndex: number; id: string }
-  | { kind: 'session'; orderKey: string; id: string }
-  | null {
-  const separatorIndex = raw.lastIndexOf(':')
-  if (separatorIndex < 0 || separatorIndex === raw.length - 1) return null
-
-  const key = raw.slice(0, separatorIndex)
-  const id = raw.slice(separatorIndex + 1)
-  if (!key || !id) return null
-  if (key.startsWith('pin:')) {
-    const pinIndex = Number(key.slice('pin:'.length))
-    return Number.isFinite(pinIndex) ? { kind: 'pin', pinIndex, id } : null
-  }
-  return { kind: 'session', orderKey: key, id }
-}
-
-function sortMessagesNewestFirst(a: AgentSessionMessageEntity, b: AgentSessionMessageEntity): number {
-  const createdAtOrder = messageCreatedAtMs(b) - messageCreatedAtMs(a)
-  return createdAtOrder === 0 ? b.id.localeCompare(a.id) : createdAtOrder
-}
-
-function isMessageOlderThanCursor(
-  message: AgentSessionMessageEntity,
-  cursor: { createdAt: number; id: string }
-): boolean {
-  const createdAt = messageCreatedAtMs(message)
-  return createdAt < cursor.createdAt || (createdAt === cursor.createdAt && message.id < cursor.id)
-}
-
-function encodeMessageCursor(message: AgentSessionMessageEntity): string {
-  return `${messageCreatedAtMs(message)}:${message.id}`
-}
-
-function decodeMessageCursor(raw: string): { createdAt: number; id: string } | null {
-  const separatorIndex = raw.indexOf(':')
-  if (separatorIndex <= 0 || separatorIndex === raw.length - 1) return null
-
-  const createdAt = Number(raw.slice(0, separatorIndex))
-  const id = raw.slice(separatorIndex + 1)
-  if (!Number.isFinite(createdAt) || !id) return null
-  return { createdAt, id }
-}
-
-function messageCreatedAtMs(message: AgentSessionMessageEntity): number {
-  const createdAt = Date.parse(message.createdAt)
-  return Number.isFinite(createdAt) ? createdAt : 0
-}
-
 function modelNameFromUniqueModelId(modelId: UniqueModelId): string {
   const [, modelName] = modelId.split(':')
   return modelName || modelId
-}
-
-function createOrderKey(timestamp: string, index: number): string {
-  return `${timestamp}-${String(index).padStart(4, '0')}`
-}
-
-function createFirstOrderKey(sessions: readonly AgentSessionEntity[]): string {
-  const smallest = sessions[0]?.orderKey
-  return smallest ? `0-${Date.now().toString(36)}-${smallest}` : '0'
 }
 
 function workspaceNameFromPath(path: string): string {
