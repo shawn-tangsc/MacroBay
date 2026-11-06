@@ -100,6 +100,17 @@ export type JobRunOutcome = {
   counts: { total: number; succeeded: number; failed: number; skipped: number }
   /** 产品侧稳定枚举（点分小写），例如 `model.timeout`。平台只校验形状。 */
   reasonCode?: string
+  /**
+   * 失败**按原因拆开**的条数：`{ 'model.timeout': 1, 'model.rate-limited': 1 }`。
+   *
+   * 与 `counts.failed` 是两层：那个是失败**总数**，这个是**分布**。一条 run 只有一个主因码，
+   * 拿它去反推分布只能说出「里面出现过某一类」，说不出「超时 1、限流 1」——所以分布必须自己存。
+   *
+   * 三条校验（`assertJobRunOutcome`）：加起来必须等于 `counts.failed`；每个键都过点分小写正则；
+   * 有 `reasonCode` 时它必须是这里的一个键。**`failed === 0` 时整个字段不出现**——写一张全零表
+   * 会让人以为「测过了、确实没有失败原因」，而事实是「没有失败」。
+   */
+  reasons?: Readonly<Record<string, number>>
 }
 
 export type JobCancelReasonKind = 'cancelled' | 'timeout' | 'shutdown'

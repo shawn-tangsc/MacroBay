@@ -12,7 +12,16 @@ import type { JobRunOutcome } from './jobTypes'
  */
 
 export class JobRunOutcomeRejected extends Error {
-  constructor(readonly code: 'counts-do-not-add-up' | 'count-not-an-integer' | 'reason-code-not-an-enum') {
+  constructor(
+    readonly code:
+      | 'counts-do-not-add-up'
+      | 'count-not-an-integer'
+      | 'reason-code-not-an-enum'
+      | 'reasons-do-not-add-up'
+      | 'reason-key-not-an-enum'
+      | 'reasons-without-failures'
+      | 'reason-code-not-in-reasons'
+  ) {
     super(`job-run-outcome-rejected:${code}`)
     this.name = 'JobRunOutcomeRejected'
   }
@@ -38,5 +47,36 @@ export function assertJobRunOutcome(outcome: JobRunOutcome): void {
   if (outcome.reasonCode !== undefined && !REASON_CODE.test(outcome.reasonCode)) {
     // 这一条专治「把一句话塞进 code」：`'模型没配'`、`'timeout (30s)'` 都会被拒。
     throw new JobRunOutcomeRejected('reason-code-not-an-enum')
+  }
+
+  assertReasons(outcome)
+}
+
+/**
+ * 失败**按原因**的分布。
+ *
+ * 与 `counts.failed` 是两层：那个是总数，这个是分布。校验四条：
+ * 1. `failed === 0` 时**整个字段不许出现**——一张全零表会读成「测过、确实没有失败原因」，
+ *    而事实是「没有失败」；两者混淆正是这个项目反复要挡的「拿不到写成没有」；
+ * 2. 每个键必须过点分小写正则，和 `reasonCode` 同一条规则（`'超时'` 这种句子拒写）；
+ * 3. 每个数必须是 ≥0 的整数；
+ * 4. 加起来必须等于 `counts.failed`，否则 `reasonCode` 与分布会各说各话。
+ *
+ * 有 `reasonCode` 时它必须是这里的一个键：主因码不在分布里，等于给同一件事存了两个结论。
+ */
+function assertReasons(outcome: JobRunOutcome): void {
+  const { reasons } = outcome
+  if (reasons === undefined) return
+  if (outcome.counts.failed === 0) throw new JobRunOutcomeRejected('reasons-without-failures')
+
+  let sum = 0
+  for (const [key, value] of Object.entries(reasons)) {
+    if (!REASON_CODE.test(key)) throw new JobRunOutcomeRejected('reason-key-not-an-enum')
+    assertCount(key, value)
+    sum += value
+  }
+  if (sum !== outcome.counts.failed) throw new JobRunOutcomeRejected('reasons-do-not-add-up')
+  if (outcome.reasonCode !== undefined && reasons[outcome.reasonCode] === undefined) {
+    throw new JobRunOutcomeRejected('reason-code-not-in-reasons')
   }
 }

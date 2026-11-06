@@ -31,6 +31,53 @@ describe('运行结论校验', () => {
     )
   })
 
+  it('按原因拆开的分布：加起来等于 failed 才合法', () => {
+    expect(() =>
+      assertJobRunOutcome({
+        counts: { total: 4, succeeded: 2, failed: 2, skipped: 0 },
+        reasons: { 'model.timeout': 1, 'model.rate-limited': 1 }
+      })
+    ).not.toThrow()
+    // 只写一类、但总数对不上：分布与总数各说各话，拒写。
+    expect(() =>
+      assertJobRunOutcome({
+        counts: { total: 4, succeeded: 2, failed: 2, skipped: 0 },
+        reasons: { 'model.timeout': 1 }
+      })
+    ).toThrow('reasons-do-not-add-up')
+  })
+
+  it('反向：把一句话当原因键必须拒写', () => {
+    expect(() =>
+      assertJobRunOutcome({
+        counts: { total: 1, succeeded: 0, failed: 1, skipped: 0 },
+        reasons: { 超时: 1 }
+      })
+    ).toThrow('reason-key-not-an-enum')
+  })
+
+  it('反向：一条没失败就不许出现分布，空表会被读成「测过、没有原因」', () => {
+    const withoutReasons = { counts: { total: 3, succeeded: 3, failed: 0, skipped: 0 } }
+    expect(() => assertJobRunOutcome(withoutReasons)).not.toThrow()
+    expect('reasons' in withoutReasons).toBe(false)
+    expect(() =>
+      assertJobRunOutcome({
+        counts: { total: 3, succeeded: 3, failed: 0, skipped: 0 },
+        reasons: {}
+      })
+    ).toThrow('reasons-without-failures')
+  })
+
+  it('反向：主因码不在分布里必须拒写（同一件事不许两个结论）', () => {
+    expect(() =>
+      assertJobRunOutcome({
+        counts: { total: 2, succeeded: 1, failed: 1, skipped: 0 },
+        reasonCode: 'model.timeout',
+        reasons: { 'model.rate-limited': 1 }
+      })
+    ).toThrow('reason-code-not-in-reasons')
+  })
+
   it('反向：把一句话塞进 reasonCode 必须拒写', () => {
     expect(() => assertJobRunOutcome(outcome({ total: 1, succeeded: 0, failed: 1, skipped: 0 }, '模型没配'))).toThrow(
       'reason-code-not-an-enum'
