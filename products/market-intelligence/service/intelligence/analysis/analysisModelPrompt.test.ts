@@ -212,6 +212,8 @@ describe('policy path prompt rules', () => {
     expect(system).toContain('各自写出那条概率自己的截至时刻')
     // The target range is not a probability and must not be handed a market-pricing citation.
     expect(system).toContain('政策目标区间、SEP 中位数这类读数不是概率')
+    // Avoiding the probability entirely is now a rejection; the first answer has to know that.
+    expect(system).toContain('至少要写出一条概率')
   })
 
   it('hides the source URL from the model while naming the fact', () => {

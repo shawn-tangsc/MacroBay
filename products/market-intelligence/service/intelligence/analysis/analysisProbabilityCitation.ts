@@ -12,13 +12,23 @@ import { MARKET_ANALYSIS_POLICY_PATH_METRICS } from '../../../contracts/marketAn
 /**
  * Which part of `policy-probability-citation` failed.
  *
- * The rule covers three different model mistakes — a probability cited without its as-of, a number
- * the snapshot does not carry, and a frozen value the model rounded on its own. All three arrived as
- * the same rule name, so a replay could say "it was rejected" but never which one, and the
- * question "is the prompt missing a sentence or is the rule too wide" could not be answered.
+ * The rule covers four different model mistakes — no probability at all, a probability cited
+ * without its as-of, a number the snapshot does not carry, and a frozen value the model rounded on
+ * its own. All four arrived as the same rule name, so a replay could say "it was rejected" but never
+ * which one, and the question "is the prompt missing a sentence or is the rule too wide" could not
+ * be answered.
  * These land in `failure_detail_code`; the primary code stays `policy-probability-citation`.
  */
 export const analysisProbabilityDefects = Object.freeze({
+  /**
+   * The snapshot carries a policy probability and the conclusion never mentions one.
+   *
+   * The other three defects are "mentioned it and got it wrong"; this one is "avoided it". It is
+   * the failure mode the rule would otherwise push the model into: once a cited value must match
+   * the snapshot exactly, the cheapest way to pass is to say nothing about the probability at all,
+   * and the reader would get a complete-looking analysis with the policy pricing silently missing.
+   */
+  absent: 'policy-probability-absent',
   missingInstant: 'policy-probability-missing-instant',
   notFrozen: 'policy-probability-not-frozen',
   rounded: 'policy-probability-rounded'
@@ -43,6 +53,7 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
   const probabilities = snapshot.facts.filter(fact =>
     fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.impliedProbability &&
     typeof fact.value === 'number' && Number.isFinite(fact.value) && typeof fact.observedAt === 'string')
+  // Only when there is a probability to cite: a snapshot without one must not be penalised.
   if (probabilities.length === 0) return undefined
   const prose = [
     conclusion.summary, conclusion.change, conclusion.causalChain,
@@ -52,6 +63,7 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
   ].join('\n')
   // Only percentages written as a probability are policed: a yield or a CPI print is not one.
   const mentioned = policyProbabilityMentions(prose)
+  if (mentioned.length === 0) return analysisProbabilityDefects.absent
   const allowed = probabilities.map(fact => Number(fact.value))
   for (const value of mentioned) {
     if (allowed.some(candidate => nearlyEqual(candidate, value))) continue

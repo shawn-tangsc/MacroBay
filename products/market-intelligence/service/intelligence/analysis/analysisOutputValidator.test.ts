@@ -223,6 +223,27 @@ describe('analysisOutputValidator', () => {
     })
   })
 
+  it('rejects a conclusion that says nothing about a frozen policy probability', () => {
+    // The cheapest way to pass "the cited value must equal the snapshot" is to cite no value at all.
+    // Without this rule the reader gets a complete-looking analysis with the policy pricing missing.
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：目标区间 4.00%–4.25%，下次会议 2026-12-09，SEP 中位 4.1%。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-absent'
+    })
+  })
+
+  it('does not require a probability when the snapshot carries none', () => {
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：目标区间 4.00%–4.25%，下次会议 2026-12-09。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toMatchObject({ ok: true })
+  })
+
   it('keeps a rounded value accepted when the frozen value is already whole', () => {
     const snapshot = frozenSnapshot()
     snapshot.facts = [...snapshot.facts, policyProbabilityFact(66)]
