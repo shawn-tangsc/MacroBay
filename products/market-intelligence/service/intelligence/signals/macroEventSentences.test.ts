@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
@@ -44,13 +44,9 @@ function landing(overrides: Partial<MacroEventLanding> = {}): MacroEventLanding 
   }
 }
 
-function render(input: MacroEventLanding, language: 'zh-CN' | 'en-US'): { title: string | null; body: string | null } {
-  const request = buildMacroEventLandedRequest(input)!
-  const bodyKey = entry.bodyKeyByVariant?.[request.bodyVariant ?? '']
-  return {
-    title: port.resolve({ scope: 'product', productId: 'market-intelligence', key: entry.titleKey, params: request.titleParams }, language),
-    body: port.resolve({ scope: 'product', productId: 'market-intelligence', key: bodyKey!, params: request.bodyParams }, language)
-  }
+function render(input: MacroEventLanding, language: 'zh-CN' | 'en-US'): { title: string | undefined; body: string | undefined } {
+  const rendered = buildMacroEventLandedRequest(input)!.rendered![language]!
+  return { title: rendered.title, body: rendered.body }
 }
 
 describe('macro event landed sentences', () => {
@@ -86,7 +82,7 @@ describe('macro event landed sentences', () => {
       'zh-CN'
     )
     expect(unknown.title).toBe('美国 Some Unlisted Release (Sep) 高于预期')
-    expect(unknown.title).not.toBe('有一条新通知，点开看详情')
+    expect(unknown.title).not.toBe('有一条新通知')
     expect(unknown.body).not.toBeNull()
   })
 
@@ -103,6 +99,37 @@ describe('macro event landed sentences', () => {
     expect(zh.title).toBe('美国 消费者物价指数（CPI） 低于预期')
     expect(zh.title).not.toContain('个百分点')
     expect(zh.body).not.toContain('个百分点')
+  })
+
+  it('carries both languages, and never lets an internal id or a bare placeholder into the sentence', () => {
+    const request = buildMacroEventLandedRequest(landing({ eventNameKey: 'cpi' }))!
+    // 两份都在：只给一份就会把语言钉死在提交那一刻。
+    expect(Object.keys(request.rendered!).sort()).toEqual(['en-US', 'zh-CN'])
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      const parts = request.rendered![language]!
+      for (const part of [parts.title, parts.body, parts.reason]) {
+        expect(part).not.toMatch(/\{\w+\??\}/u)
+        expect(part).not.toMatch(/cpi|macro\.event-landed|market-intelligence/u)
+        expect(part).not.toMatch(/点开|打开|查看|click to|tap to/u)
+      }
+    }
+    // 缺预期那条今天不可达（筛选要求可比的一对），骨架留着、不造用例：
+    // 结构里必须还在，否则那一天要改的是结构而不是句子。
+    expect(entry.bodyKeyByVariant?.noForecast).toBeDefined()
+  })
+
+  it('does not ask the copy port to assemble anything: the sentence is already finished', () => {
+    // 新记录的判据是「解析端口零调用」——否则「兼容」会变成两套都在跑，改文案时一半新一半旧。
+    const spy = vi.fn(() => ({ text: null, missingParams: [] }))
+    const original = port.resolveDetailed
+    ;(port as { resolveDetailed: typeof original }).resolveDetailed = spy
+    try {
+      buildMacroEventLandedRequest(landing({ eventNameKey: 'cpi' }))
+      buildMacroEventLandedRequest(landing({ previous: undefined }))
+    } finally {
+      ;(port as { resolveDetailed: typeof original }).resolveDetailed = original
+    }
+    expect(spy).not.toHaveBeenCalled()
   })
 
   it('keeps the provider’s own string: no reformatting, no extra percent sign', () => {

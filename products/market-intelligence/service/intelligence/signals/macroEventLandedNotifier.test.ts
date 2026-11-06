@@ -61,16 +61,23 @@ describe('macro event landed notifier', () => {
     // No deeplink and no action: the shell resolves settings sections only, so an "open" button
     // would point nowhere. A button that cannot go anywhere is worse than no button.
     expect(request).not.toHaveProperty('deeplink')
-    // 标题三个槽：国家（引用）、指标（无稳定标识 → 源站原文）、方向（引用）。
-    expect(request?.titleParams).toEqual({
-      country: { ref: { scope: 'product', productId: 'market-intelligence', key: 'notification.event.market-intelligence.macro.event-landed.country.US' } },
-      indicator: 'CPI',
-      direction: { ref: { scope: 'product', productId: 'market-intelligence', key: 'notification.event.market-intelligence.macro.event-landed.direction.above' } }
+    // 成品句子在源头拼好：国家翻成「美国」、指标查表、方向是词，三个值原样进句子。
+    expect(request?.titleParams).toBeUndefined()
+    expect(request?.bodyVariant).toBeUndefined()
+    expect(request?.rendered?.['zh-CN']).toEqual({
+      // 没有稳定标识 → 指标名用源站原文；国家仍翻（国家不是数据，是读者认得的名字）。
+      title: '美国 CPI 高于预期',
+      body: '实际 3，预期 2，前值 2',
+      reason: '读数达到这条规则的意外阈值。'
     })
-    // 三个值原样传；缺前值换句子，不拼「—」。
-    expect(request?.bodyVariant).toBe('values')
-    expect(request?.bodyParams).toEqual({ actual: '3', consensus: '2', previous: '2', periodLabel: '' })
-    expect(buildMacroEventLandedRequest(landing({ previous: undefined }))?.bodyVariant).toBe('noPrevious')
+    expect(request?.rendered?.['en-US']).toEqual({
+      title: 'US CPI above forecast',
+      body: 'Actual 3 vs 2 forecast; previous 2',
+      reason: 'The reading crossed this rule’s surprise threshold.'
+    })
+    // 缺前值换句子：不拼「—」，也不留一个空括号。
+    expect(buildMacroEventLandedRequest(landing({ previous: undefined }))?.rendered?.['zh-CN']?.body)
+      .toBe('实际 3，预期 2，前值没有公布')
     for (const bad of [{ ...landing(), eventId: '' }, { ...landing(), releaseAt: 'not-an-instant' }]) {
       expect(buildMacroEventLandedRequest(bad)).toBeUndefined()
     }

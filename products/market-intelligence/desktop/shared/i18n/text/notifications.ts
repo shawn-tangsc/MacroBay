@@ -1,6 +1,7 @@
 import type { NotificationCopyTableSet } from '@platform/notifications/contracts/notificationCopyPort'
 
 import { indicatorNames } from '../../../../contracts/indicatorNames'
+import { macroEventNotificationSentences } from '../../../../contracts/macroEventNotificationSentences'
 import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
@@ -26,8 +27,8 @@ export type MarketIntelligenceNotificationCopy = NotificationCopyTableSet
 const TITLE = notificationEventTitleKey
 
 /** 两种语言各一个别名：表里每一行都短，读起来像一句话而不是一条寻址。 */
-const zh = { signal: signalNotificationSentences['zh-CN'] }
-const en = { signal: signalNotificationSentences['en-US'] }
+const zh = { signal: signalNotificationSentences['zh-CN'], macro: macroEventNotificationSentences['zh-CN'] }
+const en = { signal: signalNotificationSentences['en-US'], macro: macroEventNotificationSentences['en-US'] }
 const BODY = notificationEventBodyKey
 const REASON = notificationEventReasonKey
 
@@ -52,9 +53,11 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: zh.signal.body.oiDropAggravated,
     [REASON(IDS.signalTriggered)]: zh.signal.reason,
 
-    [TITLE(IDS.macroEventLanded)]: '{country} {indicator} {direction}',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: '高于预期',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: '低于预期',
+    // 与源头拼成品**共用同一份字符串**（`contracts/macroEventNotificationSentences.ts`）；
+    // 这几条只服务已落库的旧记录——新记录存的是成品，平台不再读这张表。
+    [TITLE(IDS.macroEventLanded)]: zh.macro.title,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: zh.macro.direction.above,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: zh.macro.direction.below,
     // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
     ...Object.fromEntries(
       Object.entries(indicatorNames).map(([id, name]) => [
@@ -63,13 +66,13 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
       ])
     ),
 
-    [notificationEventNamedKey(IDS.macroEventLanded, 'country.US')]: '美国',
-    [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: '实际 {actual}，预期 {consensus}，前值 {previous}{periodLabel}',
-    [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: '实际 {actual}，预期 {consensus}，前值没有公布{periodLabel}',
-    [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: '实际 {actual}，这次没有预期值可比{periodLabel}',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: '（同比）',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: '（环比）',
-    [REASON(IDS.macroEventLanded)]: '读数达到这条规则的意外阈值。',
+    [notificationEventNamedKey(IDS.macroEventLanded, 'country.US')]: zh.macro.country.US,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: zh.macro.body.values,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: zh.macro.body.noPrevious,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: zh.macro.body.noForecast,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: zh.macro.periodicity.yoy,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: zh.macro.periodicity.mom,
+    [REASON(IDS.macroEventLanded)]: zh.macro.reason,
 
     [TITLE(IDS.sourceConsecutiveFailed)]: '{sourceName} 连续失败 {failures} 次',
     [BODY(IDS.sourceConsecutiveFailed)]: '这个来源一直取不到数据，去设置检查密钥或代理。',
@@ -104,9 +107,9 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: en.signal.body.oiDropAggravated,
     [REASON(IDS.signalTriggered)]: en.signal.reason,
 
-    [TITLE(IDS.macroEventLanded)]: '{country} {indicator} {direction}',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: 'above forecast',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: 'below forecast',
+    [TITLE(IDS.macroEventLanded)]: en.macro.title,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: en.macro.direction.above,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: en.macro.direction.below,
     // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
     ...Object.fromEntries(
       Object.entries(indicatorNames).map(([id, name]) => [
@@ -115,13 +118,13 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
       ])
     ),
 
-    [notificationEventNamedKey(IDS.macroEventLanded, 'country.US')]: 'US',
-    [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: 'Actual {actual} vs {consensus} forecast; previous {previous}{periodLabel}',
-    [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: 'Actual {actual} vs {consensus} forecast; no previous release{periodLabel}',
-    [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: 'Actual {actual}; no forecast to compare{periodLabel}',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: ' (YoY)',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: ' (MoM)',
-    [REASON(IDS.macroEventLanded)]: 'The reading crossed this rule’s surprise threshold.',
+    [notificationEventNamedKey(IDS.macroEventLanded, 'country.US')]: en.macro.country.US,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: en.macro.body.values,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: en.macro.body.noPrevious,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: en.macro.body.noForecast,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: en.macro.periodicity.yoy,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: en.macro.periodicity.mom,
+    [REASON(IDS.macroEventLanded)]: en.macro.reason,
 
     [TITLE(IDS.sourceConsecutiveFailed)]: '{sourceName} failed {failures} times in a row',
     [BODY(IDS.sourceConsecutiveFailed)]: 'This source keeps returning nothing. Check its key or proxy in settings.',

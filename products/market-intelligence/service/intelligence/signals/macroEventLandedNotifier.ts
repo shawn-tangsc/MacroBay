@@ -4,12 +4,8 @@ import { assessMarketCalendarSurprise, exceedsSurpriseTrigger } from '../../../c
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { providerReleaseSurprisePolicy } from '../analysis/providerReleaseSurprisePolicy'
-import {
-  macroEventPeriodLabel,
-  macroEventTitleParams,
-  recognizePeriodicity,
-  type SurprisePeriodicity
-} from './macroEventCopy'
+import { recognizePeriodicity, type SurprisePeriodicity } from './macroEventCopy'
+import { renderMacroEventSentence } from './macroEventSentence'
 import { firstSeenReleaseWindowMs } from '../analysis/significanceChangeMatcher'
 
 /**
@@ -151,29 +147,32 @@ export function selectLandedReleases(
   })
 }
 
-/** 一条落地 → 一次提交。只填参数，不填句子：标题与正文由平台的文案键按事件 id 解析。 */
+/**
+ * 一条落地 → 一次提交。**句子在这里拼**（契约 v2.56）：标题（国家 / 指标 / 方向）与正文（三值 + 口径）
+ * 中英各一份，平台只按读者语言挑一份。拼不出就不提交——那是源头没拼完，不是平台的降级动作。
+ */
 export function buildMacroEventLandedRequest(landing: MacroEventLanding): NotificationSubmitRequest | undefined {
   if (typeof landing.eventId !== 'string' || landing.eventId === '') return undefined
   if (!Number.isFinite(Date.parse(landing.releaseAt))) return undefined
   // 没有指标名就没有标题可读：整条不发（选择那一步已经数过，这里再挡一次）。
   if (landing.title.trim() === '') return undefined
+  const rendered = renderMacroEventSentence({
+    countryCode: landing.countryCode,
+    ...(landing.eventNameKey === undefined ? {} : { eventNameKey: landing.eventNameKey }),
+    title: landing.title,
+    actual: landing.actual,
+    consensus: landing.consensus,
+    ...(landing.previous === undefined ? {} : { previous: landing.previous }),
+    comparison: landing.comparison,
+    ...(landing.periodicity === undefined ? {} : { periodicity: landing.periodicity })
+  })
+  if (rendered === undefined) return undefined
+
   return {
     eventTypeId: EVENT_IDS.macroEventLanded,
     producerId: MACRO_EVENT_LANDED_PRODUCER_ID,
     dedupeVars: { builder: 'template', vars: { eventId: landing.eventId, releaseAt: landing.releaseAt } },
-    titleParams: macroEventTitleParams({
-      countryCode: landing.countryCode,
-      ...(landing.eventNameKey === undefined ? {} : { eventNameKey: landing.eventNameKey }),
-      title: landing.title,
-      comparison: landing.comparison
-    }),
-    bodyVariant: landing.previous === undefined ? 'noPrevious' : 'values',
-    bodyParams: {
-      actual: landing.actual,
-      consensus: landing.consensus,
-      ...(landing.previous === undefined ? {} : { previous: landing.previous }),
-      periodLabel: macroEventPeriodLabel(landing.periodicity)
-    },
+    rendered,
     actions: [],
     // 数据描述的那个时刻，不是我们发现的时刻：晚到的数据仍属于它自己那条发布。
     occurredAt: landing.releaseAt
