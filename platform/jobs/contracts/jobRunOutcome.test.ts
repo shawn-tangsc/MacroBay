@@ -55,3 +55,48 @@ describe('运行结论校验', () => {
     )
   })
 })
+
+describe('结论写进存储', () => {
+  it('内存 store 落得进去，读得出来；旧记录没有结论时是 undefined 而不是 0', async () => {
+    const { createJobRunStore } = await import('../runtime/jobRunStore')
+    const store = createJobRunStore()
+    const run = store.createRun({
+      definitionId: 'market-intelligence.translateItems.coindesk-rss',
+      handlerId: 'market-intelligence.translateItems',
+      owner: 'product',
+      productId: 'market-intelligence',
+      title: '翻译任务',
+      payload: {},
+      trigger: { kind: 'manual' },
+      maxAttempts: 1
+    })
+
+    // 没写过结论：保持缺省。把它当 0 会把「旧记录」算进成功率分母。
+    expect(store.getRun(run.id)?.result).toBeUndefined()
+
+    store.setResult(run.id, outcome({ total: 3, succeeded: 2, failed: 1, skipped: 0 }, 'model.timeout'))
+    expect(store.getRun(run.id)?.result).toEqual({
+      counts: { total: 3, succeeded: 2, failed: 1, skipped: 0 },
+      reasonCode: 'model.timeout'
+    })
+  })
+
+  it('反向：合计不等的结论连 store 都进不去', async () => {
+    const { createJobRunStore } = await import('../runtime/jobRunStore')
+    const store = createJobRunStore()
+    const run = store.createRun({
+      definitionId: 'd',
+      handlerId: 'h',
+      owner: 'platform',
+      title: 't',
+      payload: {},
+      trigger: { kind: 'manual' },
+      maxAttempts: 1
+    })
+
+    expect(() => store.setResult(run.id, outcome({ total: 3, succeeded: 1, failed: 1, skipped: 0 }))).toThrow(
+      'counts-do-not-add-up'
+    )
+    expect(store.getRun(run.id)?.result).toBeUndefined()
+  })
+})

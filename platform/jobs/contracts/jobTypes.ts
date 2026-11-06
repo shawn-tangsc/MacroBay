@@ -74,6 +74,13 @@ export type JobContext = {
   signal: AbortSignal
   log: (entry: Omit<JobLogEntry, 'at'> & { at?: string }) => Promise<void>
   progress: (progress: JobProgress) => Promise<void>
+  /**
+   * 写这一批的**结论**（四个计数 + 一个原因码）。与 `progress` 是两件事：进度会变、结论只写一次。
+   *
+   * **可选**：手写的测试上下文不必实现它；**运行时一定提供**，否则产品侧永远写不了计数。
+   * 写坏数据（合计不等、原因写成句子）由实现在写入前拒掉——见 `assertJobRunOutcome`。
+   */
+  result?: (outcome: JobRunOutcome) => Promise<void>
 }
 
 /**

@@ -154,6 +154,14 @@ function createJobContext(
     },
     async progress(progress) {
       store.setProgress(runId, progress)
+    },
+    async result(outcome) {
+      // 写坏数据会在这里抛错——任务已跑完，异常不该让整批判失败，所以只吞掉并记一条日志。
+      try {
+        store.setResult(runId, outcome)
+      } catch (error) {
+        store.appendLog(runId, { level: 'warn', message: `job-run-outcome-rejected: ${(error as Error).message}` })
+      }
     }
   }
 }

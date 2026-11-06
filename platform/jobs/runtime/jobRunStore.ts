@@ -6,9 +6,11 @@ import type {
   JobRunAggregateResult,
   JobRunPage,
   JobRunQuery,
+  JobRunOutcome,
   JobRunRecord,
   JobStatus
 } from '../contracts/jobTypes'
+import { assertJobRunOutcome } from '../contracts/jobRunOutcome'
 
 export type CreateRunInput = {
   definitionId: string
@@ -38,6 +40,8 @@ export type JobRunStore = {
   incrementAttempt: (runId: string) => JobRunRecord | undefined
   appendLog: (runId: string, entry: Omit<JobLogEntry, 'at'> & { at?: string }) => JobRunRecord | undefined
   setProgress: (runId: string, progress: JobProgress) => JobRunRecord | undefined
+  /** 写结论；合计不等或原因码不是枚举时**抛错拒写**（不做兜底，猜一个数还不如炸一次）。 */
+  setResult: (runId: string, result: JobRunOutcome) => JobRunRecord | undefined
   recoverStaleRunningRuns: () => JobRunRecord[]
   /**
    * `queued` rows that survived a process restart: the queue is in-memory, so nothing will
@@ -156,6 +160,11 @@ export function createJobRunStore(): JobRunStore {
         ...run,
         progress
       }))
+    },
+    setResult(runId, result) {
+      // 先校验再落：写进一个算不平的结论，比没有结论更糟——它看起来是对的。
+      assertJobRunOutcome(result)
+      return updateRun(runs, runId, (run) => ({ ...run, result }))
     },
     recoverStaleRunningRuns() {
       const recovered: JobRunRecord[] = []
