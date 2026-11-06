@@ -1,4 +1,5 @@
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
+import type { AnalysisIoStore } from '../store/marketAnalysisIoStore'
 import type { StructuredModelMessage, StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
 import {
   MARKET_ANALYSIS_ERROR_CODES,
@@ -28,6 +29,8 @@ import { withSnapshotChange } from './snapshotChange'
 
 type Repository = Readonly<{
   getRun: (id: string) => AnalysisRun | undefined
+  /** 每次模型调用一行的原文存档：提示词在调用之前落盘，回答在回来后回填。 */
+  analysisIo?: AnalysisIoStore
   /** The recent runs, for the failure-notice decision. Absent in narrow test doubles. */
   listRuns?: () => readonly AnalysisRun[]
   getSnapshot?: (id: string) => EvidenceSnapshot | undefined
@@ -219,6 +222,16 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // and the second answer was published). Asking again in place costs one call and no re-freeze.
     for (let attempt = 1; attempt <= marketAnalysisInvocationPolicy.maxModelAttempts; attempt += 1) {
       if (signal.aborted) return cancel(runRecord.id)
+      // 先写提示词再调用：进程在超时中被杀掉时，最该留的那份仍然在库里。
+      const ioRecord = deps.repository.analysisIo?.begin({
+        analysisRunId: runRecord.id,
+        callIndex: attempt,
+        callKind: attempt === 1 ? 'initial' : 'repair',
+        prompt: messages,
+        modelProviderId: runRecord.modelProviderId,
+        modelId: runRecord.modelId,
+        timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs
+      })
       try {
         invocation = await deps.structuredModelInvocation.invoke({
           taskId: runRecord.id,
@@ -231,7 +244,19 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       } catch {
         // The invocation contract reports failures as results, so a throw here means the call never
         // reached it. That is a provider fault we can name no further than "other".
+        if (ioRecord) deps.repository.analysisIo?.complete({ id: ioRecord.id, outputStatus: 'transport-error', failureDetailCode: 'provider-other' })
         return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
+      }
+      if (ioRecord) {
+        deps.repository.analysisIo?.complete({
+          id: ioRecord.id,
+          outputStatus: invocation.ok
+            ? 'answered'
+            : invocation.errorCode === 'cancelled' ? 'cancelled'
+              : invocation.errorCode === 'invalid-json' ? 'invalid-json'
+                : 'transport-error',
+          ...(invocation.ok ? { output: invocation.output } : { failureDetailCode: invocation.errorCode })
+        })
       }
       // A cancelled invocation never spent its budget: the caller ended it (the window closed, the
       // job was cancelled, the app is shutting down). Recording that as a timeout told the reader the
