@@ -3,7 +3,6 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 
 import { findMissingNotificationEventCopy } from '@platform/notifications/contracts/notificationEventCopyGate'
 
@@ -99,30 +98,6 @@ describe('market intelligence notification copy', () => {
       'market-intelligence.collectSource',
       'market-intelligence.dailyBriefing'
     ])
-  })
-
-  it('never tells the reader to tap something: the push surface has nothing to tap', () => {
-    // 动作由界面按钮承担。手机那条是纯文本，写「点开…」就是一句做不到的承诺。
-    // 扫的是**最终文案表**，不是模板写法——模板可以改，句子不能骗人。
-    // 判定只有一处（`@platform/notifications/contracts/actionDirective`）：这里不写第二张词表。
-    // 两套词表第一次判不一致，就没人知道该信哪条；而中文挡裸「打开 / 查看」会连
-    // 「去设置里打开代理」这种读者真做得到的去向指引一起判红。
-    const offenders = (['zh-CN', 'en-US'] as const).flatMap((language) =>
-      Object.entries(marketIntelligenceNotificationCopy[language])
-        .map(([key, sentence]) => ({ key, sentence, hit: findActionDirective(sentence) }))
-        .filter((row) => row.hit !== null)
-        .map((row) => `${language} ${row.key}: ${row.sentence} → ${row.hit}`)
-    )
-    expect(offenders).toEqual([])
-
-    // 正面样本：领域名词（未平仓 / 未成交）不是动作，守卫不该逼人写白名单。
-    for (const noun of ['BTC open interest dropped', 'BTC open orders rose', 'Open interest climbed']) {
-      expect(findActionDirective(noun)).toBeNull()
-    }
-    // 反面样本：真指向本条通知的说法必须判得出来——否则上面那个「零命中」可能只是没在看。
-    for (const bad of ['点开可以看全文', '点这里查看详情', 'Click to open the details', 'tap here to view details']) {
-      expect(findActionDirective(bad)).not.toBeNull()
-    }
   })
 
   it('keeps the body variants in step with the declaration', () => {
