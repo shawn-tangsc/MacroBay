@@ -43,18 +43,9 @@ That is the whole product: **not a paragraph you have to take on faith.**
 
 ### The daily briefing
 
-The briefing is the same evidence collected onto one page: a one-sentence lede, the past 24 hours of
-news, the numbers behind it, the conclusion, and what to watch. It runs on a schedule — 07:00 local
-time by default, and you can change it — or on demand.
-
-- Every item carries its source and its cutoff time. Anything missing is listed as a gap and grouped
-  by kind, instead of being filled with a neutral placeholder.
-- A day can hold more than one edition: a manual run or a catch-up run lands as its own edition, and
-  the page says how it differs from the previous one — direction changed or not, funding, stablecoin
-  supply, ETF flows, new macro events.
-- The nine generation stages are shown with their timings, so a slow or failed run is legible instead
-  of invisible.
-- An edition can be exported as an image, copied, published to a connected channel, or deleted.
+One page a morning, about three minutes: what the market is pricing, what changed overnight, and what
+to watch today. Every number carries its source and its cutoff time, so you can check it yourself —
+and whatever could not be collected is reported as a gap instead of being quietly filled in.
 
 <p align="center">
   <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: AI conclusion, market status, common-anchor returns, market sentiment and capital conditions, perpetual positioning and funding, source status, and the policy path and key sentiment rail" width="100%">
