@@ -48,3 +48,48 @@ describe('a manual run uses the cutoff the reader chose', () => {
     expect(input.runTrigger).toBe('manual')
   })
 })
+
+describe('a re-run takes the moment, window and language of the period it names', () => {
+  // 用户 2026-11-06：那一刻写的是"20:00 英文那期"的身份，内容是 07:00 的中文——三个来源各来一处。
+  it('uses the named period’s own time, window and language', async () => {
+    const resolve = vi.fn(async (_input: unknown) => ({ state: 'available', document: {} }) as never)
+    const regenerate = createDailyBriefingRegenerate({
+      now: () => NOW,
+      // 全局默认仍是 07:00 中文：这一笔的价值就在于它**不该**被用上。
+      readGeneration: async () => ({ generationTime: '07:00', windowHours: 24 }),
+      readPeriods: async () => [
+        { id: 'default', generationTime: '07:00', windowHours: 24 as const, language: 'zh-CN' as const },
+        { id: 'evening-en', generationTime: '20:00', windowHours: 24 as const, language: 'en-US' as const }
+      ],
+      runs: { join: async (_key, run) => run(), key: (date, periodId, locale) => `${date}:${periodId}:${locale}` },
+      resolve,
+      withZone: (result) => result
+    })
+
+    await regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'evening-en' })
+
+    const input = resolve.mock.calls[0]![0] as unknown as Record<string, unknown>
+    // 20:00 于 Asia/Shanghai = 当天 12:00Z，可此刻才 17:00 本地（09:00Z）：窗口不伸进未来，
+    // 所以截止到"现在"。日期仍是这一天（没有"当前期"）。
+    expect(input.asOf).toBe('2026-11-05T09:00:00.000Z')
+    expect(input.locale).toBe('en-US')
+    expect(input.periodId).toBe('evening-en')
+  })
+
+  it('keeps the schedule default when the period is not in the configuration', async () => {
+    const resolve = vi.fn(async (_input: unknown) => ({ state: 'available', document: {} }) as never)
+    const regenerate = createDailyBriefingRegenerate({
+      now: () => NOW,
+      readGeneration: async () => ({ generationTime: '07:00', windowHours: 24 }),
+      readPeriods: async () => [],
+      runs: { join: async (_key, run) => run(), key: (date, periodId, locale) => `${date}:${periodId}:${locale}` },
+      resolve,
+      withZone: (result) => result
+    })
+
+    await regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'manual-uuid' })
+
+    const input = resolve.mock.calls[0]![0] as unknown as Record<string, unknown>
+    expect(input.asOf).toBe('2026-11-04T23:00:00.000Z')
+  })
+})

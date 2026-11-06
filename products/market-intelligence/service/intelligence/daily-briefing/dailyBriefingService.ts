@@ -350,6 +350,11 @@ export function createDailyBriefingService(deps: Readonly<{
    * cutoff.
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
+  /**
+   * 期配置列表：`regenerate` 按 `periodId` 取这一期自己的时刻、窗口与语言（用户 2026-11-06）。
+   * 缺省时退回 `generationSettings`，行为与旧版一致（只用于没装配期模型的测试装配）。
+   */
+  readPeriods?: () => Promise<readonly Readonly<{ id: string; generationTime: string; windowHours: 12 | 24 | 48; language?: DailyBriefingLocale }>[]>
   noticeSubmit?: DailyBriefingNoticeSubmit
   redeliverPush?: BriefingRedeliver
   /** Waits for the market the brief reads; absent means generate at once, as before. */
@@ -420,7 +425,10 @@ export function createDailyBriefingService(deps: Readonly<{
     })
   }
 
-  const regenerate = createDailyBriefingRegenerate({ now, readGeneration: generation, runs, resolve: resolveToday, withZone: withTimeZoneSource })
+  const regenerate = createDailyBriefingRegenerate({
+    now, readGeneration: generation, runs, resolve: resolveToday, withZone: withTimeZoneSource,
+    ...(deps.readPeriods ? { readPeriods: deps.readPeriods } : {})
+  })
 
   async function resolveToday(input: Readonly<{
     asOf: string
