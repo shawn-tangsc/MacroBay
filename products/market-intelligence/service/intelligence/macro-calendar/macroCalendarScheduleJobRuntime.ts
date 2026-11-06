@@ -38,10 +38,20 @@ export const macroCalendarScheduleJobPolicy = {
 } as const
 
 const safeJobFailureMessage = 'Macro calendar schedule run failed.'
-const jobRecordFields = [
-  'id', 'definitionId', 'handlerId', 'owner', 'productId', 'title', 'status', 'trigger', 'payload',
-  'concurrencyKey', 'attempt', 'maxAttempts', 'createdAt', 'startedAt', 'completedAt', 'lastError', 'progress', 'logs'
-] as const
+/**
+ * 运行行允许出现的字段，**从平台类型派生**，不是手抄一份名单。
+ *
+ * 今晚平台给运行行加了 `result`，这份名单没跟上，于是「多一个字段」被判成非法，一次正常的运行
+ * 被记成 `schedule-provider-unavailable`：平台加字段是对的，错的是消费方靠人记得同步。
+ * `satisfies` 之后，平台再给运行行加字段，这里当场编译不过——漂移变成不可表达，而不是运行期
+ * 变成一个假的“运行失败”。
+ */
+const jobRecordFields = {
+  id: true, definitionId: true, handlerId: true, owner: true, productId: true, title: true,
+  status: true, trigger: true, payload: true, concurrencyKey: true, attempt: true, maxAttempts: true,
+  createdAt: true, startedAt: true, completedAt: true, lastError: true, progress: true, result: true,
+  logs: true
+} satisfies Record<keyof JobRunRecord, true>
 
 export function createMacroCalendarScheduleJobRuntime(deps: {
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueStartup' | 'enqueueDefinition' | 'getRun'>
@@ -240,7 +250,7 @@ function validateJobRun(
 function hasKnownFields(value: Record<string, unknown>): boolean {
   try {
     const names = Object.getOwnPropertyNames(value)
-    return names.every((name) => jobRecordFields.includes(name as never)) && Object.getOwnPropertySymbols(value).length === 0 && names.every((name) => {
+    return names.every((name) => Object.hasOwn(jobRecordFields, name)) && Object.getOwnPropertySymbols(value).length === 0 && names.every((name) => {
       const descriptor = Object.getOwnPropertyDescriptor(value, name)
       return Boolean(descriptor && 'value' in descriptor)
     })
