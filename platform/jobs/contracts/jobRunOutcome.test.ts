@@ -1,0 +1,57 @@
+import { describe, expect, it } from 'vitest'
+
+import { assertJobRunOutcome, JobRunOutcomeRejected } from './jobRunOutcome'
+
+/**
+ * 结论写入的两条反向用例是架构师点名要的：**合计不等拒写、自由文本 code 拒写**。
+ * 正向那几条同样重要——它们说明「部分失败」是一个**算得出来的数**（`succeeded > 0 && failed > 0`），
+ * 不是一句文案。
+ */
+
+const outcome = (counts: { total: number; succeeded: number; failed: number; skipped: number }, reasonCode?: string) => ({
+  counts,
+  ...(reasonCode === undefined ? {} : { reasonCode })
+})
+
+describe('运行结论校验', () => {
+  it('全部成功、部分失败、整批跳过都是合法结论', () => {
+    expect(() => assertJobRunOutcome(outcome({ total: 3, succeeded: 3, failed: 0, skipped: 0 }))).not.toThrow()
+    expect(() => assertJobRunOutcome(outcome({ total: 3, succeeded: 2, failed: 1, skipped: 0 }))).not.toThrow()
+    expect(() => assertJobRunOutcome(outcome({ total: 2, succeeded: 0, failed: 2, skipped: 0 }))).not.toThrow()
+    // 自动翻译没开的那批：跳过 2 条，不是「成功 0 条」。
+    expect(() => assertJobRunOutcome(outcome({ total: 2, succeeded: 0, failed: 0, skipped: 2 }))).not.toThrow()
+  })
+
+  it('反向：合计不等于总数必须拒写（不许猜哪一格错）', () => {
+    expect(() => assertJobRunOutcome(outcome({ total: 3, succeeded: 1, failed: 1, skipped: 0 }))).toThrow(
+      JobRunOutcomeRejected
+    )
+    expect(() => assertJobRunOutcome(outcome({ total: 3, succeeded: 1, failed: 1, skipped: 0 }))).toThrow(
+      'counts-do-not-add-up'
+    )
+  })
+
+  it('反向：把一句话塞进 reasonCode 必须拒写', () => {
+    expect(() => assertJobRunOutcome(outcome({ total: 1, succeeded: 0, failed: 1, skipped: 0 }, '模型没配'))).toThrow(
+      'reason-code-not-an-enum'
+    )
+    expect(() =>
+      assertJobRunOutcome(outcome({ total: 1, succeeded: 0, failed: 1, skipped: 0 }, 'timeout (30s)'))
+    ).toThrow('reason-code-not-an-enum')
+  })
+
+  it('点分小写的枚举可以通过，平台不理解它的含义', () => {
+    for (const code of ['model.timeout', 'model.not-configured', 'content.empty', 'language.unsupported']) {
+      expect(() => assertJobRunOutcome(outcome({ total: 1, succeeded: 0, failed: 1, skipped: 0 }, code))).not.toThrow()
+    }
+  })
+
+  it('负数与小数不是计数', () => {
+    expect(() => assertJobRunOutcome(outcome({ total: -1, succeeded: -1, failed: 0, skipped: 0 }))).toThrow(
+      'count-not-an-integer'
+    )
+    expect(() => assertJobRunOutcome(outcome({ total: 1.5, succeeded: 1.5, failed: 0, skipped: 0 }))).toThrow(
+      'count-not-an-integer'
+    )
+  })
+})
