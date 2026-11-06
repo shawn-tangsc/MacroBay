@@ -2662,3 +2662,37 @@ describe('a fresh open lands on the first row the rail actually draws', () => {
     expect(dom.querySelector('.mi-daily-briefing-page__content .state-view')).toBeNull()
   })
 })
+
+describe('a today row that is not the default period still opens', () => {
+  const today = '2026-10-30'
+
+  // 用户 2026-11-06 真机：今天有一版**手动期**（期号不是 default），列表左边画着这一行、
+  // 正文却说"这一期没有生成（07:00 已经过去）"——因为首屏只问了 `getToday`，而它读的是默认期。
+  it('reads today’s own row by its period, instead of asking the default period', async () => {
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: {
+          editions: [{
+            date: today, periodId: 'p-manual', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const,
+            state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`,
+            readingsAvailable: 5, summaryLine: '加密资产的跌幅比股票更深'
+          }],
+          dates: [today], today
+        }
+      })),
+      get: vi.fn(async ({ date, periodId }: { date: string; periodId?: string }) => date === today && periodId === 'p-manual'
+        ? { state: 'available' as const, document: { ...briefingDocument(today, '手动期这一版'), edition: { ...briefingDocument(today).edition, periodId: 'p-manual' } } }
+        : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+    // 按这一行自己的期号去读：不是 default。
+    expect(client.get).toHaveBeenCalledWith(expect.objectContaining({ date: today, periodId: 'p-manual', locale: 'zh-CN' }))
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('手动期这一版')
+    // 正文不再说"这一期没有生成"。
+    expect(dom.querySelector('.mi-daily-briefing-page__content')?.textContent).not.toContain('这一期没有生成')
+  })
+})

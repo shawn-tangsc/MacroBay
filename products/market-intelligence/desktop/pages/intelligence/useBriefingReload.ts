@@ -144,7 +144,11 @@ export function useBriefingReload(deps: Readonly<{
       // The list says this language exists, so the answer "nothing written" is the read's miss, not
       // the truth. Read that edition by its date and put the answer on screen here — handing it to
       // the row path made the result depend on state that was still settling after a delete.
-      const recovered = await readEdition(periodDate, localeForLoad, { fresh: true })
+      // 按**这一行自己的期号**读：今天这行可能是手动 UUID 期，不带期号会读到默认期（空）。
+      const recoveredRow = rows.find((edition) => edition.date === periodDate && edition.availableLocales.includes(localeForLoad))
+      const recovered = await readEdition(periodDate, localeForLoad, {
+        fresh: true, ...(recoveredRow === undefined ? {} : { periodId: recoveredRow.periodId })
+      })
       if (!active) return
       if (recovered.kind === 'available') {
         setRegenerateFailure(null)
@@ -152,6 +156,24 @@ export function useBriefingReload(deps: Readonly<{
       }
       setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
     } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated') {
+      /**
+       * `getToday` 读的是**默认期**。今天这一行可能是手动 UUID 期（用户 2026-11-06 实测：列表里
+       * 明明画着「截止 07:00 手动 中文」，正文却写"这一期没有生成"）。所以"今天有没有东西"
+       * 不许再看 `getToday(default)`，要看**列表**：今天有任意一行，就直接读那一行。
+       */
+      // 只要**这一门语言**今天有行：期号可以是任意期（手动 UUID 期也算）。缺这一门语言的，
+      // 仍走下面的 locale-missing 判定——"这一期有英文、你要中文"是另一件事。
+      const todayRow = rows.find((edition) => edition.date === periodDate
+        && edition.availableLocales.includes(localeForLoad))
+      if (todayRow !== undefined) {
+        setPinnedDate(todayRow.date)
+        setPickedPeriodId(todayRow.periodId)
+        setPickedLocale(todayRow.locale)
+        await readEdition(todayRow.date, todayRow.locale, { fresh: true, periodId: todayRow.periodId })
+        if (!active) return
+        setRegenerating(false)
+        return
+      }
       // Nothing is written in this language. Whether that means "the issue has no content" or
       // "this issue has the other language" is the list's answer, not this branch's guess.
       const row = rows.find((edition) => edition.date === periodDate)
