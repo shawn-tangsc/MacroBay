@@ -1000,3 +1000,55 @@ describe('no wording about missing data reaches the page', () => {
     }
   })
 })
+
+/**
+ * 导出图必须**自带**描边与尺寸（用户 2026-11-06：导出的简报里利率概率的环没画出来，只剩数字）。
+ *
+ * `html-to-image` 克隆节点时不保证把样式表里的 `stroke` / `width` 带过去，所以导出节点里的
+ * SVG 不能依赖外部 CSS 类。这条断言的就是"不依赖样式表"这件事本身。
+ */
+describe('the exported SVG carries its own paint', () => {
+  it('gives every gauge arc an inline stroke, a width and an explicit size', async () => {
+    const dom = await render()
+    const gauge = dom.querySelector('[data-briefing-policy-gauge]')!
+    expect(gauge.getAttribute('width')).toBe('88')
+    expect(gauge.getAttribute('height')).toBe('54')
+    const paths = [...gauge.querySelectorAll('path')]
+    expect(paths.length).toBeGreaterThan(1)
+    for (const path of paths) {
+      expect(path.getAttribute('stroke'), 'inline stroke 必须有').toMatch(/^#[0-9a-f]{6}$/i)
+      expect(path.getAttribute('stroke-width')).toBe('8')
+    }
+  })
+
+  it('gives the price-area SVGs explicit sizes, so the export does not need the stylesheet for them', async () => {
+    const dom = await render()
+    const areas = [...dom.querySelectorAll('[data-briefing-price-area]')]
+    expect(areas.length).toBeGreaterThan(0)
+    for (const area of areas) {
+      expect(area.getAttribute('width')).not.toBeNull()
+      expect(area.getAttribute('height')).not.toBeNull()
+    }
+  })
+
+  it('gives the sparkline explicit size and colour when the edition carries a series', async () => {
+    // 这个夹具没有 series（没有走势就不画 sparkline）；给上一条，走同一份导出路径。
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const doc = documentWithData()
+    const leverage = doc.data.leverage as { btc: { series?: unknown } }
+    leverage.btc.series = [
+      { at: `${today}T00:00:00.000Z`, value: 1 }, { at: `${today}T00:05:00.000Z`, value: 2 }
+    ]
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    const spark = host.querySelector('[data-briefing-oi-spark]')!
+    expect(spark.getAttribute('width')).toBe('60')
+    expect(spark.getAttribute('height')).toBe('26')
+    expect(spark.getAttribute('style') ?? '').toContain('#8a5a35')
+  })
+})

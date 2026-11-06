@@ -80,7 +80,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
           </span>
           {/* Only when the edition carries a series: no series means no element at all, never a flat
               placeholder line, because a flat line claims nothing moved. */}
-          {spark ? <svg className="mi-brief-poster__leverage-spark" data-briefing-oi-spark={asset} viewBox={`0 0 ${OI_SPARK.width} ${OI_SPARK.height}`} role="img" aria-label={`${asset.toUpperCase()} ${text.sections.leverage}`}>
+          {spark ? <svg className="mi-brief-poster__leverage-spark" data-briefing-oi-spark={asset} width={60} height={26} viewBox={`0 0 ${OI_SPARK.width} ${OI_SPARK.height}`} role="img" style={{ color: '#8a5a35' }} aria-label={`${asset.toUpperCase()} ${text.sections.leverage}`}>
             <polyline points={spark} fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />
             {sparkEnd(spark) ? <circle cx={sparkEnd(spark)!.x} cy={sparkEnd(spark)!.y} r="1.5" fill="currentColor" /> : null}
           </svg> : null}
@@ -221,9 +221,11 @@ function PolicyCard({ policy, text, locale, formatTime, words, windowEnd, editio
     <span className="mi-brief-poster__policy-title">{text.sections.policyProbability}</span>
     <span className="mi-brief-poster__policy-row">
     <span className="mi-brief-poster__policy-dial" data-briefing-policy-dial="true">
-      <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
-        <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
-        {arcs.map((arc) => <path key={arc.outcome} className={gaugeClass(arc.outcome, policy.outcome)} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
+      <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" width={POLICY_GAUGE.width} height={POLICY_GAUGE.height} viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
+        {/* 描边写 inline，不靠外部 CSS 类（用户 2026-11-06：导出图里环没画出来——`html-to-image`
+            克隆节点时不保证把样式表里的 `stroke` 带上；同一张卡的 sparkline 同理）。 */}
+        <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" stroke="#a89f8d" strokeWidth={8} opacity={0.35} vectorEffect="non-scaling-stroke" />
+        {arcs.map((arc) => <path key={arc.outcome} className={gaugeClass(arc.outcome, policy.outcome)} d={arc.path} fill="none" stroke={gaugeStroke(arc.outcome)} strokeWidth={8} vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} data-inline-stroke="true" />)}
       </svg>
       {/* The ring is the number's only home: "3.4% · 加息 25bp" is wider than the dial and wrapped across
           the copy, which is how it came to be printed as two broken lines. */}
@@ -282,6 +284,12 @@ function countdownDays(editionDate: string, meetingDate: string): number | undef
  * priced to hold gets the hold blue — so its class follows the lead rather than the segment's name.
  * `other`/`residual` share the grey: both mean "everything not named above".
  */
+/** 与 `dailyBriefingShareCard.css` 里 `.mi-brief-poster__gauge-*` 同一组值；导出件必须自带描边。 */
+const GAUGE_STROKE: Readonly<Record<string, string>> = {
+  hike: '#c2410c', cut: '#1f5b32', hold: '#3f6d8f', other: '#8c8474'
+}
+const gaugeStroke = (outcome: string): string => GAUGE_STROKE[outcome] ?? GAUGE_STROKE.other!
+
 function gaugeClass(outcome: string, lead: string): string {
   if (outcome === 'event') {
     if (lead.startsWith('hike')) return 'mi-brief-poster__gauge-hike'
@@ -351,7 +359,7 @@ function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
         the figure), and the travel is a shape beside the shape it describes. It is HTML over the plot —
         never an `svg` `<text>`, so the card's svg keeps zero text nodes. */}
     <span className="mi-brief-poster__price-plot" data-briefing-price-plot="true">
-      <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
+      <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} width={PRICE_AREA.width} height={PRICE_AREA.height} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
         <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
         {paths.areas.map((area, index) => area ? <path key={`area-${index}`} d={area} className="mi-brief-poster__price-fill" fill="currentColor" opacity=".18" /> : null)}
         {paths.lines.map((line, index) => <polyline key={`line-${index}`} points={line} className="mi-brief-poster__price-line" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />)}
