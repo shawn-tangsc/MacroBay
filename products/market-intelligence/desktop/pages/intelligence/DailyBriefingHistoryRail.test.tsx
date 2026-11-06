@@ -615,6 +615,33 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(row.closest('.mi-daily-briefing__rail-item')!.querySelectorAll('button')).toHaveLength(1)
   })
 
+  it('shows a running row’s own time, window and trigger, never a guessed 定时', () => {
+    // 用户 2026-11-06：进行中的那一行写过「未记录 未记录 定时」——来源被猜成了定时。身份只认那条尝试。
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined,
+        periodKind: 'manual', runTrigger: 'manual', periodTime: '2026-11-06T13:46:18.302Z', windowHours: 24,
+        languages: [{ locale: 'zh-CN', state: 'generating' }]
+      })],
+      timeZone: 'Asia/Shanghai', generatingStage: 'AI 选择'
+    })
+    const first = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-line')!
+    expect(first.textContent).toContain('21:46 发起')
+    expect(first.textContent).toContain('24 小时')
+    expect(first.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('manual')
+    expect(first.textContent).not.toContain('未记录')
+    expect(first.textContent).not.toContain('定时')
+  })
+
+  it('never guesses a trigger for a row whose attempt is gone — 未记录, not 定时', () => {
+    // 老记录（今天之前跑的）没存触发方式：写「未记录」，绝不许拿当前设置或期身份猜一个来源。
+    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
+    const first = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-line')!
+    expect(first.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-recorded')
+    expect(first.querySelector('[data-run-source]')?.textContent).toBe(text.history.notRecorded)
+    expect(first.textContent).not.toContain(text.history.runScheduled)
+  })
+
   it('spins only the row this page is regenerating', () => {
     // 用户 2026-11-06：点重新生成，正文在跑、列表那行不动。页面把这一次的身份交给列表，
     // **只让身份相等的那一行**转圈——同日别的行、别的语言都不许跟着转。

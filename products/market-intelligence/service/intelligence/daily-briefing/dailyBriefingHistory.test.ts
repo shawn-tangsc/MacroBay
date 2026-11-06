@@ -71,6 +71,26 @@ describe('history rows take incompleteness from the run', () => {
     expect(listed[0]?.scheduledTime).toBeUndefined()
   })
 
+  it('gives a running row its identity from that attempt, not from the run record', async () => {
+    // 用户 2026-11-06：手动发起的那一行在进行中显示「未记录 未记录 定时」——运行记录先建、把尝试挡在了
+    // 后面，身份没接上，来源还被猜成"定时"。运行记录不带这三样，身份必须取那一次的尝试。
+    const [row] = await briefingHistorySummaries({
+      dates: ['2026-11-06'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      runs: [{
+        ...run(['zh-CN']), periodId: 'period_running', state: 'running' as const, startedAt: '2026-11-06T13:46:20.000Z'
+      }],
+      attemptRuns: [{
+        date: '2026-11-06', periodId: 'period_running', locale: 'zh-CN', state: 'running',
+        startedAt: '2026-11-06T13:46:18.302Z', trigger: 'manual', windowHours: 24
+      }],
+      isRunning: () => true
+    })
+    expect(row).toMatchObject({
+      periodId: 'period_running', state: 'missing', periodTime: '2026-11-06T13:46:18.302Z',
+      periodKind: 'manual', runTrigger: 'manual', windowHours: 24
+    })
+  })
+
   it('gives a failed row its own time, trigger and window from that attempt', async () => {
     // 用户 2026-11-06：失败那一行以前只剩「这次失败 英文」，看不出是哪一次。时刻/来源/窗口必须来自
     // **这一次尝试**，不是默认期的 07:00、也不是当前设置。

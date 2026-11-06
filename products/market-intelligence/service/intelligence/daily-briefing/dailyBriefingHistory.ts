@@ -209,6 +209,15 @@ export async function briefingHistorySummaries(input: Readonly<{
     runsByDate.set(run.date, forDate)
   }
 
+  // 尝试的身份，按 (日期, 期号, 语言) 索引：运行记录行与只留下尝试的行都从这里取身份。
+  const attemptByKey = new Map<string, NonNullable<PeriodRows['attemptIdentity']>>()
+  for (const attempt of input.attemptRuns ?? []) {
+    attemptByKey.set(`${attempt.date}:${attempt.periodId}:${attempt.locale}`, {
+      startedAt: attempt.startedAt, locale: attempt.locale,
+      ...(attempt.trigger === undefined ? {} : { trigger: attempt.trigger }),
+      ...(attempt.windowHours === undefined ? {} : { windowHours: attempt.windowHours })
+    })
+  }
   const editions: DailyBriefingEditionSummary[] = []
   for (const date of [...input.dates].reverse()) {
     const periods: PeriodRows[] = [...byPeriod.values()]
@@ -226,7 +235,18 @@ export async function briefingHistorySummaries(input: Readonly<{
       known.add(periodId)
       // 这一行属于**它自己的语言**，不是界面语言：英文那一期失败，就要有一行英文，语言徽标也标英文
       // （用户 2026-11-06：18:11 那次英文失败在中日文界面下看不见）。
-      periods.push({ date, periodId, rows: new Map(), ...(run.expectedLocales.length > 0 ? { locales: run.expectedLocales } : {}) })
+      const locale = run.expectedLocales[0]
+      periods.push({
+        date, periodId, rows: new Map(),
+        ...(run.expectedLocales.length > 0 ? { locales: run.expectedLocales } : {}),
+        // 运行记录自己不带"怎么发起、覆盖多长"；这些在**那一次尝试**里。运行记录先到（事实冻结时就
+        // 建）会把尝试行挡在后面，于是"进行中"那一行曾经显示「未记录 未记录 定时」——
+        // 来源还被猜成"定时"（用户 2026-11-06）。这里按 (日期, 期号, 语言) 把尝试的身份接上。
+        ...(locale === undefined ? {} : (() => {
+          const attempt = attemptByKey.get(`${date}:${periodId}:${locale}`)
+          return attempt === undefined ? {} : { attemptIdentity: attempt }
+        })())
+      })
     }
     // 「到点时没能生成」：排期期今天该有却没有，也要留一行说明（甲案）。它排在建行之前，好让
     // 下面"有版次/有尝试就不再建"的判断优先——同一期已经有痕迹时，这一行不会被补出来。
@@ -250,11 +270,7 @@ export async function briefingHistorySummaries(input: Readonly<{
       known.add(attempt.periodId)
       periods.push({
         date, periodId: attempt.periodId, rows: new Map(), locales: [attempt.locale],
-        attemptIdentity: {
-          startedAt: attempt.startedAt, locale: attempt.locale,
-          ...(attempt.trigger === undefined ? {} : { trigger: attempt.trigger }),
-          ...(attempt.windowHours === undefined ? {} : { windowHours: attempt.windowHours })
-        },
+        attemptIdentity: attemptByKey.get(`${date}:${attempt.periodId}:${attempt.locale}`),
         ...(attempt.state === 'failed' ? { attemptFailed: true } : {})
       })
     }
