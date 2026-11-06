@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
+import { ToastHost } from '@platform/ui/components/toast'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -78,7 +79,7 @@ async function mount(): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  await act(async () => root?.render(createElement(ChannelSettingsPage, { language: 'zh-CN' })))
+  await act(async () => root?.render(createElement(ToastHost, null, createElement(ChannelSettingsPage, { language: 'zh-CN' }))))
   await act(async () => {})
   return container
 }
@@ -1199,10 +1200,17 @@ describe('opening the conversation a channel is bound to', () => {
     return container
   }
 
+  /** 入口是图标按钮：按读屏名找，不按文字找（行内不再有常驻文字）。 */
   function conversationButton(container: HTMLElement): HTMLButtonElement | undefined {
-    return [...container.querySelectorAll('button')].find(
-      (node) => node.textContent?.trim() === labels.channelOpenConversation
-    ) as HTMLButtonElement | undefined
+    return container.querySelector<HTMLButtonElement>(
+      `button[aria-label="${labels.channelOpenConversation}"]`
+    ) ?? undefined
+  }
+
+  function retryButton(container: HTMLElement): HTMLButtonElement | undefined {
+    return container.querySelector<HTMLButtonElement>(
+      `button[aria-label="${labels.channelConversationUnreadable}"]`
+    ) ?? undefined
   }
 
   it('offers the entry only when the channel has a bound conversation', async () => {
@@ -1228,30 +1236,77 @@ describe('opening the conversation a channel is bound to', () => {
     expect(conversationButton(bound)).toBeTruthy()
   })
 
-  it('keeps the entry visible when the conversation list cannot be read, and says which situation it is', async () => {
-    // 「没有」和「拿不到」是两件事：读失败时入口不许消失，也不许说成「没有会话」。
-    const channels = installPlatform({
+  it('swaps the entry for a retry icon when the list cannot be read: shape, not colour, and no inline copy', async () => {
+    // 「没有」和「拿不到」是两件事：读失败时入口换成**重试图标**（形状不同），行内不留常驻文字。
+    installPlatform({
       listConversations: vi.fn(async () => { throw new Error('channel-input-invalid') })
     })
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const container = await mountSettled()
 
-    const button = conversationButton(container)
-    expect(button).toBeTruthy()
-    expect(button?.disabled).toBe(true)
-    expect(container.querySelector('[data-conversation-unreadable]')?.textContent)
-      .toBe(labels.channelConversationUnreadable)
+    expect(conversationButton(container)).toBeUndefined()
+    const retry = retryButton(container)
+    expect(retry).toBeTruthy()
+    // 可点：一个禁用的按钮配一句「再试一次」是读者做不到的指令。
+    expect(retry?.disabled).toBe(false)
+    // 行内没有常驻文字，那句只在悬停/读屏（即 aria-label）里。
+    expect(container.querySelector('[data-conversation-unreadable]')).toBeNull()
+    expect(container.textContent).not.toContain(labels.channelConversationUnreadable)
     // 失败要留痕：一句话、单参数（第二个对象参数会被主进程丢掉）。
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('[channels] listConversations failed'))
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('channel-input-invalid'))
     errorSpy.mockRestore()
 
-    // 确实没有会话时才是「不出现」。
+    // 确实没有会话时才是「什么都不画」。
     installPlatform({ listConversations: vi.fn(async () => []) })
     const none = await mountSettled()
     expect(conversationButton(none)).toBeUndefined()
-    expect(none.querySelector('[data-conversation-unreadable]')).toBeNull()
-    void channels
+    expect(retryButton(none)).toBeUndefined()
+  })
+
+  it('retries on click: opens when a session is found, falls back to "none" when there is none', async () => {
+    // 第一条：读失败 → 点重试 → 读到会话 → 打开。
+    const channels = installPlatform({
+      listConversations: vi.fn()
+        .mockRejectedValueOnce(new Error('channel-input-invalid'))
+        .mockResolvedValueOnce([
+          { id: 'c-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, sessionTitle: 'Telegram · 贾维斯', createdAt: '2026-11-04' }
+        ])
+    })
+    const navigations: unknown[] = []
+    const onNavigate = (event: Event): void => { navigations.push((event as CustomEvent).detail) }
+    window.addEventListener('app-shell:navigate', onNavigate)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const container = await mountSettled()
+    expect(retryButton(container)).toBeTruthy()
+
+    await act(async () => retryButton(container)?.click())
+    await act(async () => {})
+    expect(channels.listConversations).toHaveBeenCalledTimes(2)
+    expect(channels.openConversation).toHaveBeenCalledWith({ channelId: 'channel-1', conversationId: 'c-1' })
+    expect(navigations).toEqual([{ navKey: 'agents' }])
+    expect(conversationButton(container)).toBeTruthy()
+    errorSpy.mockRestore()
+    window.removeEventListener('app-shell:navigate', onNavigate)
+
+    // 第二条：读失败 → 点重试 → 读到了但确实没有会话 → 落回「不画」，**不许**打开空列表。
+    installPlatform({
+      listConversations: vi.fn()
+        .mockRejectedValueOnce(new Error('channel-input-invalid'))
+        .mockResolvedValueOnce([])
+    })
+    const body = await mountSettled()
+    const navigationsAgain: unknown[] = []
+    const onNavigateAgain = (event: Event): void => { navigationsAgain.push((event as CustomEvent).detail) }
+    window.addEventListener('app-shell:navigate', onNavigateAgain)
+    const errorSpyAgain = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await act(async () => retryButton(body)?.click())
+    await act(async () => {})
+    expect(retryButton(body)).toBeUndefined()
+    expect(conversationButton(body)).toBeUndefined()
+    expect(navigationsAgain).toEqual([])
+    errorSpyAgain.mockRestore()
+    window.removeEventListener('app-shell:navigate', onNavigateAgain)
   })
 
   it('selects the agent the channel is bound to and lands on the agents page', async () => {

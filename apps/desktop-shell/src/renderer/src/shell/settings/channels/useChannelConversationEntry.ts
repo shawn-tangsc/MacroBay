@@ -36,18 +36,19 @@ export function useChannelConversationEntry(input: {
   entryByChannel: Readonly<Record<string, ChannelConversationEntryState>>
   readFlags: (channels: readonly Channel[]) => Promise<void>
   open: (channel: Channel) => Promise<void>
+  /** 读不到时点重试图标：重读这一条，成功就按读到的结果继续（有会话就打开，确实没有就落回不画）。 */
+  retry: (channel: Channel) => Promise<ChannelConversationEntryState>
 } {
   /** channelId → 三态之一。对话 id 是公开的，会话 id 仍不进渲染层。 */
   const [byChannel, setByChannel] = useState<Readonly<Record<string, ChannelConversationEntryState>>>({})
 
   const entryByChannel = useMemo(() => byChannel, [byChannel])
 
-  const readFlags = useCallback(async (channels: readonly Channel[]): Promise<void> => {
-    const entries = await Promise.all(channels.map(async (channel): Promise<readonly [string, ChannelConversationEntryState]> => {
+  const readOne = useCallback(async (channel: Channel): Promise<ChannelConversationEntryState> => {
       try {
         const conversations = await window.platform.channels.listConversations({ channelId: channel.id, limit: 50 })
         const bound = conversations.find((item) => item.hasBoundSession)
-        return [channel.id, bound ? { state: 'bound', conversationId: bound.id } : { state: 'none' }] as const
+        return bound ? { state: 'bound', conversationId: bound.id } : { state: 'none' }
       } catch (error) {
         // **不许把失败伪装成「这条频道没有会话」**：2026-11-06 就是这样——字段名对不上、每次调用
         // 都在主进程抛 `channel-input-invalid`，而这里静默吞掉，表现成「入口永远不出现」。
@@ -56,21 +57,21 @@ export function useChannelConversationEntry(input: {
           channelId: channel.id,
           reason: error instanceof Error ? error.message : String(error)
         })}`)
-        // 读不到≠没有：入口还得在，只是不能点。
-        return [channel.id, { state: 'unknown' }] as const
+        // 读不到≠没有：入口还得在，换成重试图标（形状不同，不靠颜色）。
+        return { state: 'unknown' }
       }
-    }))
-    setByChannel(Object.fromEntries(entries))
   }, [])
 
-  const open = useCallback(async (channel: Channel): Promise<void> => {
-    const entry = byChannel[channel.id]
-    if (!entry || entry.state !== 'bound') return
+  const readFlags = useCallback(async (channels: readonly Channel[]): Promise<void> => {
+    const entries = await Promise.all(channels.map(async (channel): Promise<readonly [string, ChannelConversationEntryState]> =>
+      [channel.id, await readOne(channel)] as const))
+    setByChannel(Object.fromEntries(entries))
+  }, [readOne])
+
+  const openBound = useCallback(async (channelId: string, conversationId: string): Promise<void> => {
     try {
       // 返回形状由 preload 声明提供，这里不写 `as {…}`（本目录有守卫：跨进程返回值不许手写形状）。
-      const result = await window.platform.channels.openConversation({
-        channelId: channel.id, conversationId: entry.conversationId
-      })
+      const result = await window.platform.channels.openConversation({ channelId, conversationId })
       if (!result.ok) {
         // 具名原因直接给读者：不吞成一句通用失败，也不替它猜是哪一种。
         input.onError(input.failureMessageFor(result.code))
@@ -81,7 +82,21 @@ export function useChannelConversationEntry(input: {
     } catch {
       input.onError(input.failureMessageFor(null))
     }
-  }, [byChannel, input])
+  }, [input])
 
-  return { entryByChannel, readFlags, open }
+  const open = useCallback(async (channel: Channel): Promise<void> => {
+    const entry = byChannel[channel.id]
+    if (!entry || entry.state !== 'bound') return
+    await openBound(channel.id, entry.conversationId)
+  }, [byChannel, openBound])
+
+  const retry = useCallback(async (channel: Channel): Promise<ChannelConversationEntryState> => {
+    const entry = await readOne(channel)
+    setByChannel((current) => ({ ...current, [channel.id]: entry }))
+    // 重读成功分两条路：有会话才打开；确实没有就落回「不画」（别拿空列表冒充打开）。
+    if (entry.state === 'bound') await openBound(channel.id, entry.conversationId)
+    return entry
+  }, [openBound, readOne])
+
+  return { entryByChannel, readFlags, open, retry }
 }

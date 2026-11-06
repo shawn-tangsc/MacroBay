@@ -260,12 +260,16 @@ export type PlatformText = {
     channelEnableSwitch: string
     /** 行内的「发送测试消息」：真发一次，回执三态就地显示。 */
     channelTestSend: string
-    /** 行内的「查看会话」：跳到这条频道绑定的助手，再打开那条会话（只在有绑定会话的频道上出现）。 */
+    /** 行内的「查看这个频道的会话」：跳到这条频道绑定的助手，再打开那条会话。 */
     channelOpenConversation: string
     /** 「查看会话」打不开时的一句：两种原因都收在这一句里，不假装知道是哪一种。 */
     channelOpenConversationFailed: string
-    /** 会话列表这次读不到：与「确实没有会话」是两件事，入口留着、话说清。 */
+    /** 会话列表这次读不到：与「确实没有会话」是两件事——入口换成重试图标，这句进悬停与读屏。 */
     channelConversationUnreadable: string
+    /** 重试还读不到：给一次 toast，入口保持可重试。 */
+    channelConversationUnreadableAgain: string
+    /** toast 上的重试动作。 */
+    channelConversationRetry: string
     channelTestMessageBody: string
     channelTestAccepted: string
     channelTestUnconfirmed: string
@@ -1696,9 +1700,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsEmpty: '这个频道还没有记录',
       channelEnableSwitch: '启用这个频道',
       channelTestSend: '发送测试消息',
-      channelOpenConversation: '查看会话',
+      channelOpenConversation: '查看这个频道的会话',
       channelOpenConversationFailed: '这条对话还没绑定会话，或会话列表暂时打不开。',
-      channelConversationUnreadable: '会话列表读不到，再试一次。',
+      channelConversationUnreadable: '会话列表读不到，点一下再试一次',
+      channelConversationUnreadableAgain: '会话列表还是读不到，稍后再试',
+      channelConversationRetry: '再试一次',
       channelTestMessageBody: '来自观潮的一条测试消息：收到它说明这个频道能把消息发到手机。',
       // `{target}` 是会话名（`Telegram · 贾维斯`）或平台名（读不到名字时）。
       // **只给事实**：发了没、发给谁。「已发给」而不是「已送达」——后者我们证明不了，
@@ -3050,9 +3056,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsEmpty: 'This channel has no records yet',
       channelEnableSwitch: 'Enable this channel',
       channelTestSend: 'Send test message',
-      channelOpenConversation: 'Open conversation',
+      channelOpenConversation: "Open this channel's conversations",
       channelOpenConversationFailed: 'This conversation has no session yet, or the session list is unavailable right now.',
-      channelConversationUnreadable: 'The conversation list could not be read; try again.',
+      channelConversationUnreadable: "Couldn't read the conversation list — click to try again",
+      channelConversationUnreadableAgain: "Still can't read the conversation list — try again later",
+      channelConversationRetry: 'Try again',
       channelTestMessageBody: 'A test message from MacroBay: if it arrives, this channel can reach your phone.',
       channelTestAccepted: 'Sent to {target}',
       channelTestUnconfirmed: 'Sent to {target}, no receipt yet',

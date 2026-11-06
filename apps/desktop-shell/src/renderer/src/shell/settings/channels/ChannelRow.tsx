@@ -1,5 +1,5 @@
 import { Button, Switch } from 'antd'
-import { FileText, Pencil, Trash2 } from 'lucide-react'
+import { FileText, MessageSquare, Pencil, RotateCw, Trash2 } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import type { PlatformText } from '../../../i18n/platformText'
@@ -37,6 +37,8 @@ export function ChannelRow(props: {
   /** 这条频道的会话入口三态：有会话 / 读不到 / 确实没有。 */
   conversationEntry?: ChannelConversationEntryState
   onOpenConversation?: (channel: Channel) => void
+  /** 读不到时点重试图标：重读这一条（不是「再点一次那个打不开的按钮」）。 */
+  onRetryConversation?: (channel: Channel) => void
 }): React.ReactElement {
   const { channel, labels } = props
   // 读屏名收的是**键**（点分路径）。键 → 句子只有这一张表，没有第二套 if 链；
@@ -45,7 +47,10 @@ export function ChannelRow(props: {
   const rowActionText: Readonly<Record<string, string>> = {
     'settings.channels.logs': labels.channelLogs,
     'settings.channels.edit': labels.channelEdit,
-    'settings.channels.delete': labels.channelDelete
+    'settings.channels.delete': labels.channelDelete,
+    // 会话入口两种形态各一句：有会话说「查看这个频道的会话」，读不到说「点一下再试一次」。
+    'settings.channels.openConversation': labels.channelOpenConversation,
+    'settings.channels.conversationUnreadable': labels.channelConversationUnreadable
   }
   const resolveText = (key: string): string => rowActionText[key] ?? ''
   // 凭据读不出来 = 这条频道现在不能用：点变红，完整说法写在掩码那一位（同一件事只说一遍）。
@@ -91,20 +96,26 @@ export function ChannelRow(props: {
         >
           {labels.channelTestSend}
         </Button>
-        {props.conversationEntry === undefined || props.conversationEntry.state === 'none' ? null : (
-          // 读不到时按钮也在，只是点不动：静默消失会让读者以为「这条频道没有会话」。
-          <Button
-            disabled={channel.state === 'deleting' || props.conversationEntry.state === 'unknown'}
-            onClick={() => props.onOpenConversation?.(channel)}
-            size="small"
-          >
-            {labels.channelOpenConversation}
-          </Button>
-        )}
+        {/* 会话入口三态靠**形状**区分，不靠灰字（`channelConversationEntryState`）：
+            有会话＝会话图标可点；读不到＝重试图标**可点**（点了重读，不是点一个禁用的按钮）；
+            确实没有＝什么都不画。行内不带常驻文字，句子在悬停与读屏里。 */}
+        {props.conversationEntry?.state === 'bound' ? (
+          <IconButton
+            ariaLabelKey="settings.channels.openConversation"
+            icon={MessageSquare}
+            onSelect={() => props.onOpenConversation?.(channel)}
+            resolveText={resolveText}
+            size="sm"
+          />
+        ) : null}
         {props.conversationEntry?.state === 'unknown' ? (
-          <span className="channel-row-error" data-conversation-unreadable role="note">
-            {labels.channelConversationUnreadable}
-          </span>
+          <IconButton
+            ariaLabelKey="settings.channels.conversationUnreadable"
+            icon={RotateCw}
+            onSelect={() => props.onRetryConversation?.(channel)}
+            resolveText={resolveText}
+            size="sm"
+          />
         ) : null}
         <IconButton
           ariaLabelKey="settings.channels.logs"

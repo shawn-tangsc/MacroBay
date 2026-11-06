@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
+import { useToast } from '@platform/ui/components/toast'
 import { platformText } from '../../../i18n/platformText'
 import { CHANNEL_DISPLAY_NAME } from '@platform/channels/channelDisplayNames'
 
@@ -82,6 +83,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   >({})
   const [logsFor, setLogsFor] = useState<Channel | null>(null)
   /** 「查看会话」：哪些频道有会话、点一下跳到哪（页面只给两句话，逻辑在 hook 里）。 */
+  // 平台 Toast：重试还读不到时给**一次**提示（行内不常驻文字，那句只在悬停与读屏里）。
+  const toast = useToast()
   const conversationEntry = useChannelConversationEntry({
     // 具名原因走既有的失败码表；表外的码才用那句兜底。
     failureMessageFor: (code) => channelFailureReason(code, labels) ?? labels.channelOpenConversationFailed,
@@ -113,6 +116,17 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     } finally {
       setInitialLoading(false)
     }
+  }
+
+  /** 点重试图标：重读这一条；还读不到才给一次 toast，入口保持可重试。 */
+  const retryConversation = async (channel: Channel): Promise<void> => {
+    const entry = await conversationEntry.retry(channel)
+    if (entry.state !== 'unknown') return
+    toast.danger({
+      titleKey: 'settings.channels.conversationUnreadableAgain',
+      resolveText: (key) => (key === 'settings.channels.conversationUnreadableAgain' ? labels.channelConversationUnreadableAgain : ''),
+      action: { labelKey: 'settings.channels.conversationRetry', onSelect: () => void retryConversation(channel) }
+    })
   }
 
   useEffect(() => {
@@ -414,6 +428,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                     onLogs={setLogsFor}
                     conversationEntry={conversationEntry.entryByChannel[channel.id]}
                     onOpenConversation={(channel) => void conversationEntry.open(channel)}
+                    onRetryConversation={(channel) => void retryConversation(channel)}
                     onSendTest={(channel) => void sendChannelTestMessage(channel, testDeps)}
                     onToggle={toggle}
                     testBusy={testBusyId === channel.id}
