@@ -55,7 +55,8 @@ import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
-import { attachModuleSignals } from '../signals/attachModuleSignals'
+import { attachModuleSignals, type SignalAnalysisReader } from '../signals/attachModuleSignals'
+import type { ModuleSignalAnalysisRead } from '../analysis/signalAnalysisRead'
 import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import type { ModuleSignalProducer } from '../signals/moduleSignalQuery'
@@ -113,6 +114,14 @@ export type MarketIntelligencePublicQueryService = {
   queryModuleSignals: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]>
   /** Late-bound for the same reason the other readers are: the leg's store is built in bootstrap. */
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
+  /**
+   * The analysis state of the signals above, mounted at assembly time for the same reason: the
+   * store is built in the bootstrap. A whole screenful costs two queries — the ledger once, the
+   * runs once — because a lookup per chip would put a query behind every card.
+   */
+  addSignalAnalysisReader: (reader: SignalAnalysisReader) => void
+  /** Signals and their states together, so the page reads one body. */
+  queryModuleSignalRead: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void

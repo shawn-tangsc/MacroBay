@@ -5,6 +5,7 @@ import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import type { MacroRouteQuery } from '../public-query/macroRouteQuery'
 import { normalizeMacroRouteMonths, queryMacroRoute } from '../public-query/macroRouteQuery'
 import { createCalendarSignalQuery, createEtfOutflowSignalQuery, createOpenInterestSignalQuery, type ModuleSignalProducer } from './moduleSignalQuery'
+import { assembleSignalAnalysisRead, type ModuleSignalAnalysisRead } from '../analysis/signalAnalysisRead'
 
 /**
  * The two readers behind `queryModuleSignals`, kept out of the public-query file.
@@ -21,7 +22,42 @@ export type ModuleSignalHost = {
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
 } & MacroRouteQuery
 
-export function attachModuleSignals(host: ModuleSignalHost): void {
+/**
+ * 「这条信号的分析到哪一步」的读取口，迟绑定。
+ *
+ * 与 `addModuleSignalProducer` 同一个理由：存储是 bootstrap 里才建出来的，服务层留挂载点、
+ * 装配时注入。IPC 那层永远不知道账本和运行表的存在。
+ *
+ * 整个屏幕**恒定两次查询**：账本一次、运行一次，不按行查。
+ */
+export type SignalAnalysisReader = Readonly<{
+  rows: (changeHashes: readonly string[]) => readonly { changeHash: string; decision: 'queued' | 'skipped' | 'recorded'; reasonCode: string; analysisRunId: string | null }[]
+  runs: (runIds: readonly string[]) => Readonly<Record<string, { status: string; failureCode: string | null }>>
+  analysisOffByReader: () => boolean
+}>
+
+export function attachModuleSignals(host: ModuleSignalHost & {
+  addSignalAnalysisReader: (reader: SignalAnalysisReader) => void
+  queryModuleSignalRead: (input: Readonly<{ asOf: string }>) => Promise<ModuleSignalAnalysisRead>
+}): void {
+  let analysisReader: SignalAnalysisReader | undefined
+  host.addSignalAnalysisReader = (reader) => { analysisReader = reader }
+  // A separate method, never a change to the old one: the callers switch together, later.
+  host.queryModuleSignalRead = async (queryInput) => {
+    const entries = await host.queryModuleSignals(queryInput)
+    // No reader mounted means the states are not available — they are not empty, and must not be
+    // read as "not triggered yet".
+    if (!analysisReader) return { state: 'available', signals: entries, droppedInvalid: 0, analysis: {} }
+    const changeHashes = [...new Set(entries.map(entry => entry.signal.dedupeKey))]
+    const rows = analysisReader.rows(changeHashes)
+    const runs = analysisReader.runs(rows.flatMap(row => row.analysisRunId ? [row.analysisRunId] : []))
+    return assembleSignalAnalysisRead({
+      signals: entries,
+      droppedInvalid: 0,
+      store: { listLatestSignalLedgerStates: () => rows, getRun: id => runs[id] },
+      analysisOffByReader: analysisReader.analysisOffByReader()
+    })
+  }
   // The legs that can answer a signal today, each an addition to this list rather than a second
   // read of its own: the ETF leg reads the snapshot the capital-conditions card already draws.
   const producers: ModuleSignalProducer[] = [
