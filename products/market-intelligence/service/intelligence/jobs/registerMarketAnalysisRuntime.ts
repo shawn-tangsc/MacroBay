@@ -37,6 +37,7 @@ import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
+import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
 import { isMarketAnalysisEnabled, isMarketAnalysisModelSet, type MarketAnalysisSettings, type MarketAnalysisSettingsPatch } from '../application/marketAnalysisSettings'
 import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
@@ -159,7 +160,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     structuredModelInvocation: input.structuredModelInvocation,
     now,
     idFactory: () => randomUUID(),
-    ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {})
+    ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
+    // 0′: a manual failure is always answered; the sentence is rendered in the reader's language.
+    notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification, getLanguage: input.getAppLanguage })
   })
   const predictionVerification = createPredictionVerificationService({
     repository,

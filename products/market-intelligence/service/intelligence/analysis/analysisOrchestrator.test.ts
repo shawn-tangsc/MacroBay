@@ -236,6 +236,39 @@ describe('analysisOrchestrator', () => {
     }
   })
 
+  it('answers a failure the reader asked for, and stays quiet for an automatic one', async () => {
+    const runWith = (triggerKey: string): AnalysisRun => ({
+      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
+      modelProviderId: null, modelId: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
+      skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
+      failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
+    })
+    const cases = [
+      ['manual.initial', 1],
+      ['manual.refresh', 1],
+      // Automatic failures have their own throttled levels; 0′ must not wake the reader for them.
+      ['macro.actual.first-confirmed', 0],
+      ['calendar.refresh', 0]
+    ] as const
+    for (const [triggerKey, expectedCalls] of cases) {
+      const invoke = vi.fn(async () => ({ ok: false as const, errorCode: 'provider-error' as const, trace: { taskId: 'mi-ar-1', durationMs: 60_700 } }))
+      const notifyManualFailure = vi.fn(async () => undefined)
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository({ getRun: () => runWith(triggerKey), updateRunStatus: vi.fn() }),
+        structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+        notifyManualFailure
+      })
+      await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+      expect(notifyManualFailure, triggerKey).toHaveBeenCalledTimes(expectedCalls)
+      if (expectedCalls === 1) {
+        expect(notifyManualFailure).toHaveBeenCalledWith({
+          runId: 'mi-ar-1', failureCode: 'analysis-provider-error', failureDetailCode: 'upstream-aborted', occurredAt: asOf
+        })
+      }
+    }
+  })
+
   it('does not spend a second call on a timeout or a cancellation', async () => {
     for (const [errorCode, expected] of [['timeout', 'analysis-timeout'], ['cancelled', 'analysis-cancelled']] as const) {
       const invoke = vi.fn(async () => ({ ok: false as const, errorCode, trace: { taskId: 'mi-ar-1', durationMs: 2 } }))

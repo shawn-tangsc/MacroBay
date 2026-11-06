@@ -27,6 +27,13 @@ export const analysisFailureDetailPolicy = Object.freeze({
    * Below this an attempt never got a usable answer: the connection, the DNS lookup or the TLS
    * handshake failed, or the upstream refused the request outright. It cannot tell those apart;
    * that is the limitation the module documents rather than hides.
+   *
+   * TODO(MI-1-R23): this code is *inferred from elapsed time*, not read from the failure. The
+   * platform invocation contract (`StructuredModelTaskResult`) keeps only an error code and drops
+   * the HTTP status, so a sub-second connection failure and an upstream 400 look identical here.
+   * When that contract carries the status, replace the duration rule with the status rule —
+   * `connect-failed` for "no response at all", a separate code for "an error response arrived" —
+   * and delete this TODO. Until then the label is an inference and the copy must not claim more.
    */
   connectFailureMaxMs: 5_000
 })

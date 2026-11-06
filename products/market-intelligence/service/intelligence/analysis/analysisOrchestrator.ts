@@ -9,6 +9,8 @@ import {
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
+import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
+import { isGateExempt } from './analysisTriggerSourcePolicy'
 import {
   formatUnsafeOutputRedaction,
   validateAnalysisModelOutput,
@@ -157,6 +159,14 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * 缺省（headless / 测试）按契约原语言处理。
    */
   getLanguage?: () => Promise<import('@platform/settings/schema/appSettings').AppLanguage>
+  /**
+   * 0′ notice for a failure the reader asked for.
+   *
+   * The reader pressed the button and is watching: this attempt always gets an answer. Only the
+   * attempt itself is notified (dedupe key is the run id), and a submission that fails must not
+   * change the run's outcome — the notifier swallows its own errors.
+   */
+  notifyManualFailure?: (input: Omit<AnalysisManualFailure, 'language'>) => Promise<void>
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
@@ -278,8 +288,15 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     return { status: 'cancelled', errorCode: MARKET_ANALYSIS_ERROR_CODES.cancelled }
   }
 
-  function fail(id: string, status: 'failed' | 'invalid-output', errorCode: string, failureDetailCode = errorCode): AnalysisOrchestratorResult {
-    deps.repository.updateRunStatus({ id, status, completedAt: deps.now(), failureCode: errorCode, failureDetailCode })
+  async function fail(id: string, status: 'failed' | 'invalid-output', errorCode: string, failureDetailCode = errorCode): Promise<AnalysisOrchestratorResult> {
+    const completedAt = deps.now()
+    deps.repository.updateRunStatus({ id, status, completedAt, failureCode: errorCode, failureDetailCode })
+    // 0′: the reader asked for this run and is waiting for an answer. Only the manual keys reach
+    // here; automatic failures are throttled by their own levels and must not wake the reader.
+    const run = deps.repository.getRun(id)
+    if (run && isGateExempt(run.triggerKey)) {
+      await deps.notifyManualFailure?.({ runId: id, failureCode: errorCode, failureDetailCode, occurredAt: completedAt })
+    }
     return { status, errorCode }
   }
 
