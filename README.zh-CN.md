@@ -45,12 +45,18 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 你可以自己核；没取到的会如实说成缺口，不会被悄悄填上。
 
 <p align="center">
-  <img src="./docs/assets/screenshots/dashboard-window-zh.png" alt="MacroBay 看板：AI 结论、市场状态、同起点收益率、市场情绪与资金面、永续持仓与资金费率、来源状态，以及右侧的利率路径与重点舆情" width="100%">
+  <img src="./docs/assets/screenshots/brief-hero-zh.png" alt="MacroBay 每日简报：一句结论、过去 24 小时要闻与宏观事件，以及支撑它们的数字，每个数字都带来源和截止时间" width="100%">
 </p>
 
 <p align="center">
-  <sub>一屏看完——AI 结论、市场状态、跨资产收益、资金面、情绪与资金费率，右栏是利率路径、日程与舆情。 <a href="./docs/assets/screenshots/demo-en.gif">看 38 秒演示</a>。</sub>
+  <sub>每天早上的一页。<a href="./docs/assets/screenshots/brief-page-zh.png">看完整一页</a>——每一条都带来源和截止时间。</sub>
 </p>
+
+### 凭什么信
+
+- **每个数字都指得回原处。** 一条结论带着它的来源记录和读取截止时间，你可以自己去核，不必凭信任接受一段话。
+- **缺口就报成缺口。** 没取到的会指名、分组，不会填一个看着像数据的中性值。
+- **先落本地，再推理。** 来源先采进本地库、冻结成快照，只对这份快照做分析——所以结论背后有记录可查，数字也留在你自己的机器上。
 
 ## 下载
 
@@ -106,6 +112,17 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 所以这张情报台有三个习惯：一屏看完，每条读数留时间，让 AI 交代它是怎么得出结论的。
 
 ## 看板上有什么
+
+看板是简报的证据层。在简报里点开任何一个结论，落到的就是这里：同一条读数、它的窗口、来源和截止时间，
+以及简报取数用的那些面板。
+
+<p align="center">
+  <img src="./docs/assets/screenshots/dashboard-window-zh.png" alt="MacroBay 看板：AI 结论、市场状态、同起点收益率、市场情绪与资金面、永续持仓与资金费率、来源状态，以及右侧的利率路径与重点舆情" width="100%">
+</p>
+
+<p align="center">
+  <sub>简报背后的工作台——AI 结论、市场状态、跨资产收益、资金面、情绪与资金费率，右栏是利率路径、日程与舆情。 <a href="./docs/assets/screenshots/demo-en.gif">看 38 秒演示</a>。</sub>
+</p>
 
 - **资金费率与持仓。** BTC、ETH 永续合约的资金费率，谁付钱给谁，以及今天这个数字背后的历史，
   而不是一个孤零零的报价。
