@@ -513,23 +513,33 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         })
     },
     /**
-     * 窄查询：按「智能体 + 描述」取一条会话。
+     * 窄查询：按「智能体 + 自动会话分组名」取一条会话（幂等键）。
      *
-     * 幂等键（例如 `market-analysis-run:<runId>`）是**产品在描述里约定的字符串**，不是新字段——
-     * 所以这里只有一次 `where agent_id = ? and description = ?` + `limit 1`，不新增表、不新增写入口。
-     * 存在的意义是别让调用方为了找一条记录把整张会话表读进内存：库里两千条时，这里只回一行。
+     * **键是 `origin_group`，不是 `description`**：描述是给人看的自由文本，它可选、可被
+     * `UpdateAgentSessionDto` 改、而且种子里的内置会话按语言各存一份——拿它当身份，
+     * 切一次语言或改一次描述就等于换了一条会话，幂等会静默失效。
+     * `originGroup` 只在创建时由调用方写入、平台不解释、也没有任何更新路径能改它。
+     *
+     * 命中多条时**不许静默取最旧**：两条同组说明数据已经不一致，这时要吵一声，
+     * 因为悄悄挑一条继续跑，会把「建重复了」这件事一直藏下去。
      */
-    findByDescription(agentId: string, description: string): AgentSessionEntity | null {
-      const row = db
+    findByAutomationGroup(agentId: string, originGroup: string): AgentSessionEntity | null {
+      const rows = db
         .prepare(
           `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, created_at, updated_at
            from agent_sessions
-           where agent_id = ? and description = ?
+           where agent_id = ? and origin_group = ?
            order by created_at asc, id asc
-           limit 1`
+           limit 2`
         )
-        .get(agentId, description) as SessionRow | undefined
-      if (!row) return null
+        .all(agentId, originGroup) as SessionRow[]
+      if (rows.length > 1) {
+        throw new Error(
+          `duplicate automation sessions for group "${originGroup}" on agent "${agentId}": ${rows.map((row) => row.id).join(', ')}`
+        )
+      }
+      const row = rows[0]
+      if (row === undefined) return null
       // 会话行要带上它所属的工作区才能成为实体；系统工作区也算（自动分析可能落在系统工作区）。
       const workspace = workspaces.getById(row.workspace_id, { includeSystem: true })
       return workspace ? mapSessionEntity(row, workspace) : null

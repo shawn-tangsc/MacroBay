@@ -113,9 +113,9 @@ describe('agent platform sqlite repositories', () => {
     expect(secondPage.items.map((item: { id: string }) => item.id)).toEqual(['session-3'])
   })
 
-  it('finds a session by its idempotency description reading one row out of two thousand', () => {
-    // 判据：库里 2000 条会话时，按 description 找一条只许读回 1 行会话。
-    // 这条不是为了测 SQL 写得快，是为了钉住「别为了找一条把整张表读进内存」。
+  it('finds an automation session by its group, reading one row out of two thousand', () => {
+    // 判据：库里 2000 条会话时，按自动会话分组找一条只许读回 1 行。
+    // 键用 `origin_group`：描述可改、内置会话还按语言各存一份，不能当身份。
     const db = createAgentPlatformDatabase(':memory:')
     const repos = createAgentPlatformRepositories(db)
     repos.workspaces.upsert(workspace)
@@ -127,7 +127,8 @@ describe('agent platform sqlite repositories', () => {
           updatedAt: '2026-01-01T00:00:00.000Z',
           name: `Filler ${index}`
         }),
-        description: `filler-${index}`
+        description: `filler-${index}`,
+        originGroup: `filler-group-${index}`
       })
     }
     repos.sessions.upsert({
@@ -137,7 +138,9 @@ describe('agent platform sqlite repositories', () => {
         updatedAt: '2026-01-02T00:00:00.000Z',
         name: 'Market analysis run'
       }),
-      description: 'market-analysis-run:run-42'
+      origin: 'automation',
+      originGroup: 'market-analysis-run:run-42',
+      description: 'Daily briefing analysis'
     })
 
     // 数会话表读回来的行：直接给 connection.prepare 套一层，只统计 `from agent_sessions` 的语句。
@@ -147,17 +150,17 @@ describe('agent platform sqlite repositories', () => {
     connection.prepare = (sql: string) => {
       const statement = prepare(sql)
       const counts = /from agent_sessions\b/.test(sql)
-      const get = statement.get.bind(statement)
       const all = statement.all.bind(statement)
-      statement.get = (...args: unknown[]) => {
-        const row = get(...args)
-        if (counts && row !== undefined) sessionRowsRead += 1
-        return row
-      }
       statement.all = (...args: unknown[]) => {
         const rows = all(...args)
         if (counts) sessionRowsRead += Array.isArray(rows) ? rows.length : 0
         return rows
+      }
+      const get = statement.get.bind(statement)
+      statement.get = (...args: unknown[]) => {
+        const row = get(...args)
+        if (counts && row !== undefined) sessionRowsRead += 1
+        return row
       }
       return statement
     }
@@ -169,13 +172,53 @@ describe('agent platform sqlite repositories', () => {
       return listAll(...args)
     }
 
-    const found = repos.sessions.findByDescription(agent.id, 'market-analysis-run:run-42')
+    const found = repos.sessions.findByAutomationGroup(agent.id, 'market-analysis-run:run-42')
 
     expect(found?.id).toBe('session-target')
     expect(sessionRowsRead).toBe(1)
     expect(listAllCalls).toBe(0)
     // 找不到时也只是一次空查询，不抛错。
-    expect(repos.sessions.findByDescription(agent.id, 'market-analysis-run:missing')).toBeNull()
+    expect(repos.sessions.findByAutomationGroup(agent.id, 'market-analysis-run:missing')).toBeNull()
+  })
+
+  it('keys on the group, not on the display description', () => {
+    // 两条会话描述一模一样、分组不同：按分组查必须各回各的。
+    // 如果哪天有人把键换回 `description`，这条会立刻红（要么命中错的那条，要么报重复）。
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    for (const [id, orderKey, group] of [
+      ['session-run-1', '0001', 'market-analysis-run:run-1'],
+      ['session-run-2', '0002', 'market-analysis-run:run-2']
+    ] as const) {
+      repos.sessions.upsert({
+        ...sessionFixture({ id, orderKey, updatedAt: '2026-01-01T00:00:00.000Z', name: id }),
+        origin: 'automation',
+        originGroup: group,
+        description: '每日简报分析'
+      })
+    }
+
+    expect(repos.sessions.findByAutomationGroup(agent.id, 'market-analysis-run:run-1')?.id).toBe('session-run-1')
+    expect(repos.sessions.findByAutomationGroup(agent.id, 'market-analysis-run:run-2')?.id).toBe('session-run-2')
+  })
+
+  it('refuses to pick one when two sessions share an automation group', () => {
+    // 同组两条说明数据已经不一致；悄悄挑一条继续跑，会把这件事一直藏下去。
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    for (const id of ['session-a', 'session-b']) {
+      repos.sessions.upsert({
+        ...sessionFixture({ id, orderKey: id, updatedAt: '2026-01-01T00:00:00.000Z', name: id }),
+        origin: 'automation',
+        originGroup: 'market-analysis-run:dup'
+      })
+    }
+
+    expect(() => repos.sessions.findByAutomationGroup(agent.id, 'market-analysis-run:dup')).toThrow(
+      /duplicate automation sessions for group "market-analysis-run:dup"/
+    )
   })
 
   it('keeps automation sessions out of the reader list, and their group with them', () => {
