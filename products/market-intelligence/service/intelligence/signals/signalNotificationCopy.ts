@@ -1,5 +1,10 @@
 import type { NotificationCopyParam } from '@platform/notifications/contracts/notificationCopyPort'
 
+import {
+  MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS,
+  notificationEventHeadlineKey
+} from '../../../contracts/notificationEventKeys'
+
 /**
  * 信号通知的参数装配（情报 v3.26 §十一）：**这里只放数与引用，不放句子**。
  *
@@ -13,10 +18,10 @@ const PRODUCT_ID = 'market-intelligence'
 
 /** 标题里的 headline 槽：一层产品引用（不带参数），按规则选一句。 */
 export const SIGNAL_HEADLINE_KEYS = Object.freeze({
-  etfOutflow: 'notification.event.market-intelligence.signal.triggered.headline.etfOutflow',
-  etfOutflowAggravated: 'notification.event.market-intelligence.signal.triggered.headline.etfOutflowAggravated',
-  oiDrop: 'notification.event.market-intelligence.signal.triggered.headline.oiDrop',
-  oiDropAggravated: 'notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated'
+  etfOutflow: notificationEventHeadlineKey(EVENT_IDS.signalTriggered, 'etfOutflow'),
+  etfOutflowAggravated: notificationEventHeadlineKey(EVENT_IDS.signalTriggered, 'etfOutflowAggravated'),
+  oiDrop: notificationEventHeadlineKey(EVENT_IDS.signalTriggered, 'oiDrop'),
+  oiDropAggravated: notificationEventHeadlineKey(EVENT_IDS.signalTriggered, 'oiDropAggravated')
 })
 
 /** 资产在通知里显示为符号：数据不翻译，但要保证是符号形状。 */

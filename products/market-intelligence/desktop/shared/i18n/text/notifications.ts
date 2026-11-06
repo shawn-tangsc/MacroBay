@@ -3,6 +3,7 @@ import type { NotificationCopyTableSet } from '@platform/notifications/contracts
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
   notificationEventBodyKey,
+  notificationEventHeadlineKey,
   notificationEventReasonKey,
   notificationEventTitleKey,
   notificationEventVariantKey
@@ -32,10 +33,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
 
     // 标题必须以资产名开头（情报 v3.26 §十一）：读者可能同时在盯几个资产。
     [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
-    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflow']: 'ETF 连续净流出',
-    ['notification.event.market-intelligence.signal.triggered.headline.oiDrop']: '持仓骤降',
-    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflowAggravated']: 'ETF 净流出加剧',
-    ['notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated']: '持仓骤降加剧',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflow')]: 'ETF 连续净流出',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: '持仓骤降',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: 'ETF 净流出加剧',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: '持仓骤降加剧',
     // 正文四个变体：规则 × 档位。数字一律数值参数，模板里不写任何阈值。
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '净流出 {amount}，超过 {threshold} 的阈值',
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '净流出 {amount}，是阈值的 {multiple}',
@@ -70,10 +71,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
 
     [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
-    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflow']: 'ETF outflows',
-    ['notification.event.market-intelligence.signal.triggered.headline.oiDrop']: 'open interest dropped',
-    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflowAggravated']: 'ETF outflows deepened',
-    ['notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated']: 'open interest fell further',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflow')]: 'ETF outflows',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: 'open interest dropped',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: 'ETF outflows deepened',
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: 'open interest fell further',
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '{amount} net outflow, past the {threshold} threshold',
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '{amount} net outflow, {multiple} the threshold',
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: 'Down {dropPct} in 15 min (threshold {thresholdPct}), volume {multiple}, about {notional}',

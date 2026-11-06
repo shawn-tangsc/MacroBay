@@ -18,6 +18,16 @@ export {
   notificationEventTitleKey
 } from '@platform/notifications/contracts/platformNotificationEvents'
 
+/**
+ * 标题变体的键：`notification.event.<id>.headline.<variant>`。
+ *
+ * 与标题/正文/理由同一套前缀、同一个生成地：事件改名时四句「加剧」标题跟着变，
+ * 不会因为手写全串而静默解析不到、悄悄降级成兜底句。
+ */
+export function notificationEventHeadlineKey(eventTypeId: string, variant: string): string {
+  return `notification.event.${eventTypeId}.headline.${variant}`
+}
+
 /** 一条事件有正文时用的键；带变体时是 `.body.<variant>`。 */
 export function notificationEventVariantKey(eventTypeId: string, variant: string): string {
   return notificationEventBodyKey(eventTypeId, variant)

@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { findMissingNotificationEventCopy } from '@platform/notifications/contracts/notificationEventCopyGate'
@@ -17,7 +20,29 @@ const lookup = (language: 'zh-CN' | 'en-US', key: string): string | undefined =>
 /** 2026-11-04 用户翻案恢复的完成类事件 id：它现在**在**表里，且默认不勾。 */
 const READY_EVENT_ID = 'market-intelligence.briefing.ready'
 
+function sourceFiles(dir: string, found: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === 'dist') continue
+      sourceFiles(full, found)
+      continue
+    }
+    if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) found.push(full)
+  }
+  return found
+}
+
 describe('market intelligence notification copy', () => {
+  it('builds every event key from the id: no hand-written `notification.event.` literal', () => {
+    // 手写全串的问题不是难看：事件改名时正文跟着变、标题不会，标题静默降级成兜底句而没人报错。
+    // 这条守卫把「同一类键两种造法」挡在提交前。
+    const offenders = sourceFiles(join(process.cwd(), 'products'))
+      .filter((file) => /'notification\.event\./.test(readFileSync(file, 'utf8')))
+      .map((file) => file.replace(`${process.cwd()}/`, ''))
+    expect(offenders).toEqual([])
+  })
+
   it('has every sentence the 8 declarations point at, in both languages', () => {
     // 缺键的界面直接把键名印给读者，而且不报错——所以这条断言按事件 id + 键 + 语言点名。
     expect(findMissingNotificationEventCopy(marketIntelligenceProductManifest.notificationEvents, lookup)).toEqual([])
