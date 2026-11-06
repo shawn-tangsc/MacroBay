@@ -75,7 +75,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
     </summary>
     {waiting
       ? <p className="mi-generation-trace__summary" data-generation-waiting="true">
-        {labels.notStartedYet} · {labels.waitingElapsed.replace('{seconds}', String(Math.round(waiting.waitedMs / 1_000))).replace('{polls}', String(waiting.polls))}
+        {labels.notStartedYet} · {labels.waitingElapsed.replace('{seconds}', String(Math.round(waiting.waitedMs / 1_000)))}
       </p>
       : trace
       ? <p className="mi-generation-trace__summary">

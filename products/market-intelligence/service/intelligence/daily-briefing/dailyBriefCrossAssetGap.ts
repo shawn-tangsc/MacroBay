@@ -31,6 +31,17 @@ export function withCrossAssetFailureGap(document: DailyBriefingDocument, failur
  * like an ordinary one: the sentence says the wait happened and how long it lasted, in the edition's
  * own language, in the same gap list the rest of the run uses.
  */
+/**
+ * 读者能看到的那一句：只说政策与后果，**不说我们问了几次**。
+ *
+ * 次数是内部机制（「探测 60 次」读者既看不懂、也不该由他判断我们的重试策略）；它留在
+ * `MI_DAILY_BRIEF_CORE_FACTS_NOT_READY` 的日志字段里。中文逐字由 Chief 2026-11-06 定。
+ */
+const NOT_READY_SENTENCE: Readonly<Record<DailyBriefingLocale, (minutes: number) => string>> = {
+  'zh-CN': (minutes) => `截止后 ${minutes} 分钟仍缺核心行情，本期按截止时点发布；之后的行情归下一期。`,
+  'en-US': (minutes) => `Core market data was still missing ${minutes} minutes after the cutoff; this edition is published as of its cutoff, and later data belongs to the next one.`
+}
+
 export function withCoreFactsNotReadyGap(
   document: DailyBriefingDocument,
   wait: Readonly<{ polls: number; waitedMs: number }>,
@@ -38,11 +49,8 @@ export function withCoreFactsNotReadyGap(
 ): DailyBriefingDocument {
   if (!document.conclusion) return document
   const minutes = Math.max(1, Math.round(wait.waitedMs / 60_000))
-  // The sentence names the policy, not just the wait: the reader has to know the edition was still
-  // published as of its cutoff, and that data arriving after that is a different edition's business.
-  const sentence = locale === 'en-US'
-    ? `Core market data still missing after the ${minutes}-minute late-data grace: published as of the cutoff (${wait.polls} probes).`
-    : `截止后 ${minutes} 分钟仍缺核心行情：按截止时点发布（探测 ${wait.polls} 次）。`
+  // 句子只讲政策与后果；`wait.polls` 不进文案（读者可见文字不许出现内部机制）。
+  const sentence = NOT_READY_SENTENCE[locale](minutes)
   const gaps = document.conclusion.dataGaps
   if (gaps.includes(sentence)) return document
   return Object.freeze({

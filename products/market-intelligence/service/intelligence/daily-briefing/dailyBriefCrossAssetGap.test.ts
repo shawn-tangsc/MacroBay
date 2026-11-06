@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
-import { withCrossAssetFailureGap } from './dailyBriefCrossAssetGap'
+import { withCoreFactsNotReadyGap, withCrossAssetFailureGap } from './dailyBriefCrossAssetGap'
 
 /**
  * One sentence in the conclusion's own gap list, in the edition's language.
@@ -35,5 +35,22 @@ describe('cross-asset failure in the gap list', () => {
     expect(withCrossAssetFailureGap(doc, undefined, 'zh-CN')).toBe(doc)
     const empty = document('zh-CN', null)
     expect(withCrossAssetFailureGap(empty, 'not-wired', 'zh-CN')).toBe(empty)
+  })
+})
+
+describe('the core-facts gap sentence speaks to the reader, not about our retries', () => {
+  const document = {
+    conclusion: { dataGaps: [] }
+  } as unknown as Parameters<typeof withCoreFactsNotReadyGap>[0]
+
+  it('says the policy and the consequence, and never the probe count', () => {
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const next = withCoreFactsNotReadyGap(document, { polls: 60, waitedMs: 30 * 60_000 }, locale)
+      const sentence = next.conclusion!.dataGaps[0]!
+      // 30 分钟照原样说出；「探测 60 次」是内部机制，读者可见文字里不许出现。
+      expect(sentence).toContain('30')
+      expect(sentence).not.toMatch(/探测|probes|polls|60/)
+      expect(sentence).toMatch(locale === 'zh-CN' ? /按截止时点发布/ : /as of its cutoff/i)
+    }
   })
 })
