@@ -256,11 +256,15 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
                   waiting for the source to publish, not stuck. The reader asked that after seeing
                   10-13 sit unchanged next to a chart timestamped 10-15.
                   It is one sentence, so it is a hint rather than a panel: the sentence rides on an icon
-                  beside the title (reader, 2026-11-06), the same `IconButton` the block titles above use,
-                  with the sentence as both its accessible name and its tooltip. The heading row keeps one
-                  line and the answer stays one hover — or one focus — away. */}
+                  beside the title (reader, 2026-11-06), with the sentence as both its accessible name and
+                  its tooltip. The heading row keeps one line and the answer stays one hover — or one
+                  focus — away.
+                  Size is the small档 on purpose: this heading is 9.5px, and the 24px step above made the
+                  icon read as a badge hanging over the table (reader, 2026-11-06). 22px is the smallest
+                  trigger the platform offers — it cannot be drawn at text size without a new档, and a new
+                 档 is the component's decision, not this call site's. */}
               <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} icon={Info} onSelect={() => undefined}
-                resolveText={resolveProductText} size="md" tooltipKey={crossAssetTextKeys.dailyCadence} variant="plain" /></th></tr>
+                resolveText={resolveProductText} size="sm" tooltipKey={crossAssetTextKeys.dailyCadence} variant="plain" /></th></tr>
             {dailyRows.map(renderStatusRow)}
           </tbody>
         </table>

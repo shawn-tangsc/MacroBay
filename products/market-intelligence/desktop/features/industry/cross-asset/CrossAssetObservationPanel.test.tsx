@@ -93,6 +93,9 @@ describe('cross-asset observation workspace', () => {
       expect(dailyHeading?.textContent).toBe(text.dailyFrequency)
       const cadenceTrigger = dailyHeading?.querySelector<HTMLButtonElement>('button')!
       expect(cadenceTrigger.getAttribute('aria-label')).toBe(text.dailyCadence)
+      // 尺寸钉成最小档：这一行标题 9.5px，24 那档挂上去像一枚徽章（读者 2026-11-06 现场）。
+      // 22 是平台最小的触发器，改回 24 必须是一次有理由的显式决定，不该被顺手改掉。
+      expect(cadenceTrigger.style.width).toBe('22px')
       // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的提示上，焦点到位也开，
       // 所以键盘用户与读屏拿到的是同一句，不是只有鼠标才看得到的装饰。
       await act(async () => { cadenceTrigger.focus() })
