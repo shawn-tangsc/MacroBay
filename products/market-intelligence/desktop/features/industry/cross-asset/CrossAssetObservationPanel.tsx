@@ -254,8 +254,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
               {/* The block's rhythm, on its heading rather than inside a figure cell: an official daily
                   close arrives once per trading day, so a row that has not moved for a day or two is
                   waiting for the source to publish, not stuck. The reader asked that after seeing
-                  10-13 sit unchanged next to a chart timestamped 10-15. */}
-              <small data-daily-cadence>{text.dailyCadence}</small></th></tr>
+                  10-13 sit unchanged next to a chart timestamped 10-15.
+                  It is one sentence, so it is a hint rather than a panel: the sentence rides on an icon
+                  beside the title (reader, 2026-11-06), the same `IconButton` the block titles above use,
+                  with the sentence as both its accessible name and its tooltip. The heading row keeps one
+                  line and the answer stays one hover — or one focus — away. */}
+              <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} icon={Info} onSelect={() => undefined}
+                resolveText={resolveProductText} size="md" tooltipKey={crossAssetTextKeys.dailyCadence} variant="plain" /></th></tr>
             {dailyRows.map(renderStatusRow)}
           </tbody>
         </table>

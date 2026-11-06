@@ -11,6 +11,7 @@ export const crossAssetTextKeys = Object.freeze({
   refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
   noData: 'pages.intelligence.portal.dashboard.crossAsset.noData',
   dailyFrequency: 'pages.intelligence.portal.dashboard.crossAsset.dailyFrequency',
+  dailyCadence: 'pages.intelligence.portal.dashboard.crossAsset.dailyCadence',
   dailyMixedDates: 'pages.intelligence.portal.dashboard.crossAsset.dailyMixedDates',
   dailyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.dailyCaveat',
   dailySpreadAndInflation: 'pages.intelligence.portal.dashboard.crossAsset.dailySpreadAndInflation',

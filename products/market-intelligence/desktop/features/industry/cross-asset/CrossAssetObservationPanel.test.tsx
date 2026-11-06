@@ -86,9 +86,19 @@ describe('cross-asset observation workspace', () => {
       // rather than showing the number a row with data would show.
       const missing = rows.filter(row => row.dataset.connected === 'false')
       expect(missing.map(row => row.dataset.statusRow)).toEqual(['dxy', 'gold', 'index', 'us10y', 'realRate'])
-      // The daily section announces itself instead of borrowing the window headings above it.
-      expect(host.querySelector('[data-status-section="daily"] .mi-cross-asset__section')?.textContent)
-        .toBe(`${text.dailyFrequency}${text.dailyCadence}`)
+      // The daily section announces itself instead of borrowing the window headings above it — and
+      // its rhythm sentence is now a hint on an icon beside the title (reader, 2026-11-06): the heading
+      // reads only 日频, the sentence is the icon's name, so a mouse and a keyboard both reach it.
+      const dailyHeading = host.querySelector('[data-status-section="daily"] .mi-cross-asset__section')
+      expect(dailyHeading?.textContent).toBe(text.dailyFrequency)
+      const cadenceTrigger = dailyHeading?.querySelector<HTMLButtonElement>('button')!
+      expect(cadenceTrigger.getAttribute('aria-label')).toBe(text.dailyCadence)
+      // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的提示上，焦点到位也开，
+      // 所以键盘用户与读屏拿到的是同一句，不是只有鼠标才看得到的装饰。
+      await act(async () => { cadenceTrigger.focus() })
+      await vi.waitFor(() => {
+        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(text.dailyCadence)
+      })
       for (const row of missing) {
         // The honesty guard, stated structurally: a planned row has no price and no return cell at
         // all, and its one value cell names the gap instead of filling it. A label may contain a
