@@ -15,9 +15,10 @@ import type { ChannelConversationEntryState } from './useChannelConversationEntr
  *   那等于给「部分可看」开一个口子，用户已经否了。
  * - 出错的行走**红点 + 行内一句话**，不弹面板、不弹原始错误串——错误是这一行的属性，不是一次弹窗。
  * - 行本身不可点：四个动作各自是一个控件，点空白不会连带做别的事。
- * - 「查看会话」三态（`ChannelConversationEntryState`）：有会话＝可点；**读不到＝按钮在但禁用、
- *   旁边一句「读不到」**（「没有」和「拿不到」必须分开，读失败不许让入口消失）；确实没有＝不出现
- *   （给一个点了跳空列表的按钮比不给更糟）。
+ * - 「查看会话」三态（`ChannelConversationEntryState`）：有会话＝会话图标可点；**读不到＝重试图标、
+ *   **可点**（点了重读；那句「读不到，点一下再试一次」只在悬停与读屏里，行内不留常驻文字）；
+ *   确实没有＝不画。三种处境靠**形状**分开，不靠灰字或透明度（「没有」和「拿不到」是两件事，
+ *   读失败不许让入口消失）。
  */
 export function ChannelRow(props: {
   channel: Channel

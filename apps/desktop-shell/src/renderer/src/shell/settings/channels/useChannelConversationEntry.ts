@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 
+import { useToast } from '@platform/ui/components/toast'
 import { openConversation } from '../../navigation/openConversation'
 
 import type { Channel } from './channelSettingsPresentation'
@@ -23,7 +24,7 @@ import type { Channel } from './channelSettingsPresentation'
 export type ChannelConversationEntryState =
   /** 真绑过会话：入口可点。 */
   | { state: 'bound'; conversationId: string }
-  /** 这次读不到：入口在、不可点，旁边一句「读不到」。 */
+  /** 这次读不到：入口换成**可点的重试图标**；那句「读不到，点一下再试一次」只在悬停与读屏里，行内不留常驻文字。 */
   | { state: 'unknown' }
   /** 读到了，确实没有会话：不给入口（给一个点了跳空列表的按钮比不给更糟）。 */
   | { state: 'none' }
@@ -32,6 +33,10 @@ export function useChannelConversationEntry(input: {
   /** 主进程给的原因码 → 留给读者的那一句（键由调用方解析，这里不写文案）。 */
   failureMessageFor: (code: string | null) => string
   onError: (message: string) => void
+  /** 重试还读不到时那一句（toast 标题）；文案仍由调用方给，这里不写句子。 */
+  stillUnreadableMessage: string
+  /** toast 上那个重试动作的名字。 */
+  retryActionLabel: string
 }): {
   entryByChannel: Readonly<Record<string, ChannelConversationEntryState>>
   readFlags: (channels: readonly Channel[]) => Promise<void>
@@ -41,6 +46,8 @@ export function useChannelConversationEntry(input: {
 } {
   /** channelId → 三态之一。对话 id 是公开的，会话 id 仍不进渲染层。 */
   const [byChannel, setByChannel] = useState<Readonly<Record<string, ChannelConversationEntryState>>>({})
+  // 重试仍读不到时的那一次提示归这里：重试路径与它的失败表达是一件事，不拆到两个文件。
+  const toast = useToast()
 
   const entryByChannel = useMemo(() => byChannel, [byChannel])
 
@@ -95,8 +102,16 @@ export function useChannelConversationEntry(input: {
     setByChannel((current) => ({ ...current, [channel.id]: entry }))
     // 重读成功分两条路：有会话才打开；确实没有就落回「不画」（别拿空列表冒充打开）。
     if (entry.state === 'bound') await openBound(channel.id, entry.conversationId)
+    if (entry.state === 'unknown') {
+      toast.danger({
+        titleKey: 'settings.channels.conversationUnreadableAgain',
+        resolveText: (key) => (key === 'settings.channels.conversationUnreadableAgain' ? input.stillUnreadableMessage : ''),
+        // toast 上的「再试一次」重走同一条路，入口保持可重试。
+        action: { labelKey: 'settings.channels.conversationRetry', onSelect: () => void retry(channel) }
+      })
+    }
     return entry
-  }, [openBound, readOne])
+  }, [input, openBound, readOne, toast])
 
   return { entryByChannel, readFlags, open, retry }
 }
