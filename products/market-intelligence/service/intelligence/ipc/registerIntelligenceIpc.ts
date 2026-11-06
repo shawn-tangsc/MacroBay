@@ -18,6 +18,8 @@ import type {
 } from '../application/intelligenceWorkspaceQueries'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import { enqueueIntelligencePipelineJobs } from '../jobs/enqueueIntelligencePipelineJobs'
+import { createNewsPushLedgerStore, newsPushLedgerPolicy } from '../news-sentiment/newsPushLedgerStore'
+import { createNewsPushOutletService } from '../news-sentiment/newsPushOutletService'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 
 const PRODUCT_ID = 'market-intelligence'
@@ -43,7 +45,47 @@ export function getIntelligenceService(intelligenceModule: IntelligenceModule) {
   return intelligenceService
 }
 
+let newsPushOutletService: ReturnType<typeof createNewsPushOutletService> | null = null
+
+/**
+ * 开关请求的校验：`enabled` 必须是布尔；水位缺省取服务端「现在」，给了就必须是可读的 ISO 时刻。
+ * 单独抽出来是因为这里**有判断**（而转发本身没有），能被用例证明。
+ */
+export function parseOutletSwitchPayload(payload: unknown): { enabled: boolean; at: string } {
+  const input = (payload ?? {}) as { enabled?: unknown; at?: unknown }
+  if (typeof input.enabled !== 'boolean') throw new Error('enabled must be a boolean.')
+  const at = typeof input.at === 'string' ? input.at : new Date().toISOString()
+  if (Number.isNaN(Date.parse(at))) throw new Error('at must be an ISO instant.')
+  return { enabled: input.enabled, at }
+}
+
+/**
+ * 「情报 × 设置 × 通知」第四条开关（舆情提醒）的服务侧入口。
+ *
+ * 两个通道只做转发：**基线由 `setEnabled` 内部算**，IPC 层不传 itemId、也不碰账本文件；
+ * 状态只有 `state()` 一个来源，页面不许缓存。
+ */
+function getNewsPushOutletService(module: IntelligenceModule) {
+  if (!newsPushOutletService) {
+    newsPushOutletService = createNewsPushOutletService({
+      ledger: createNewsPushLedgerStore(join(getProductDataDir(), newsPushLedgerPolicy.fileName)),
+      listItems: () =>
+        module.pipeline.listItems().map((item) => ({ itemId: item.itemId, publishedAt: item.publishedAt ?? '' }))
+    })
+  }
+  return newsPushOutletService
+}
+
 export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime, intelligenceModule: IntelligenceModule): void {
+  register(PRODUCT_ID, 'intelligence.getNewsPushOutletState', async () =>
+    getNewsPushOutletService(intelligenceModule).state()
+  )
+
+  register(PRODUCT_ID, 'intelligence.setNewsPushOutletEnabled', async (payload) => {
+    const { enabled, at } = parseOutletSwitchPayload(payload)
+    return getNewsPushOutletService(intelligenceModule).setEnabled(enabled, at)
+  })
+
   register(PRODUCT_ID, 'intelligence.getTimeline', async (payload) => {
     const query = (payload ?? {}) as { filter?: 'active-exposure' | 'watchlist' | 'both' | 'all'; limit?: number }
     return getIntelligenceService(intelligenceModule).getTimeline(query)
