@@ -33,7 +33,7 @@ export type AnalysisRunSessionDependencies = Readonly<{
    * 没有它就不建会话：`originRef` 是唯一的身份来源，读全量列表去重那条路已经删掉，
    * 在类型上也不可表达。
    */
-  findSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<SessionRef | null>
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<SessionRef | null>
 }>
 
 export const analysisRunSessionPolicy = Object.freeze({
@@ -55,9 +55,9 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
   }>): Promise<string | undefined> {
     // 只有窄查这一条路。没有它就不建会话——**不退回「读全量列表去重」**：过渡路径一旦成为默认，
     // 2000 条会话时每次分析就要读 2000 行，而且没人记得它只是过渡。
-    if (!deps.findSessionByAutomationRef || !deps.createAgentSession) return undefined
+    if (!deps.findAgentSessionByAutomationRef || !deps.createAgentSession) return undefined
     // 一条 SQL，与库里有多少条会话无关；标题改了也不影响身份（身份是 originRef）。
-    const found = await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
+    const found = await deps.findAgentSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
     if (found) return found.id
     // 描述只给人和老数据看；**身份是 originRef**，所以标题改了也不影响幂等。
     const description = `${analysisRunSessionPolicy.descriptionPrefix}${input.runId}`
@@ -111,8 +111,8 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
  */
 export function appendAnalysisRunSummary(deps: AnalysisRunSessionDependencies) {
   return async function appendRunSummary(input: Readonly<{ runId: string; summary: string }>): Promise<void> {
-    if (!deps.appendAgentSessionMessages || !deps.findSessionByAutomationRef) return
-    const session = await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
+    if (!deps.appendAgentSessionMessages || !deps.findAgentSessionByAutomationRef) return
+    const session = await deps.findAgentSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
     if (!session) return
     await deps.appendAgentSessionMessages({
       sessionId: session.id,

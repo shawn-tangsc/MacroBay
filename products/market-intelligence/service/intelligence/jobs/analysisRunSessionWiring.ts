@@ -12,7 +12,7 @@ type SessionDependencies = Parameters<typeof createAnalysisRunSession>[0]
  * 本身不是装配顺序的一部分。
  */
 export function createRunSessionPort(
-  input: Pick<SessionDependencies, 'findSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'> & Readonly<{
+  input: Pick<SessionDependencies, 'findAgentSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'> & Readonly<{
     /** 建会话那一刻的读者时区：标题落成文本后不再随设置变。 */
     timeZone: () => string
     /** 建会话那一刻的读者语言：同上，落成文本后不再变。 */
@@ -25,14 +25,14 @@ export function createRunSessionPort(
   return Object.freeze({
     ensure: createAnalysisRunSession({
       // 身份只走窄查：没有它就不建会话，不退回「读全量列表去重」。
-      findSessionByAutomationRef: input.findSessionByAutomationRef,
+      findAgentSessionByAutomationRef: input.findAgentSessionByAutomationRef,
       createAgentSession: input.createAgentSession,
       appendAgentSessionMessages: input.appendAgentSessionMessages,
       // 「时刻 · 模块名」，按建会话时的读者时区与语言落成文本；之后不再随设置变。
       titleFor: async queuedAt => formatRunSessionTitle(queuedAt, await input.language(), input.timeZone())
     }),
     appendSummary: appendAnalysisRunSummary({
-      findSessionByAutomationRef: input.findSessionByAutomationRef,
+      findAgentSessionByAutomationRef: input.findAgentSessionByAutomationRef,
       appendAgentSessionMessages: input.appendAgentSessionMessages
     })
   })
@@ -44,7 +44,7 @@ export function createRunSessionPort(
  * 这样 `bootstrap.ts` 只多一行调用，而不再为一个端口的装配长出六行——它是只减不增的基线文件。
  */
 export function createRunSessionPortFromDeps(
-  deps: Pick<SessionDependencies, 'findSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'>,
+  deps: Pick<SessionDependencies, 'findAgentSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'>,
   clock: Readonly<{ timeZone: () => string; language: () => Promise<'zh-CN' | 'en-US'> }>
 ): ReturnType<typeof createRunSessionPort> {
   return createRunSessionPort({ ...deps, timeZone: clock.timeZone, language: clock.language })
