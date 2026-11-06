@@ -23,6 +23,16 @@ import type {
   AgentRuntimeSessionChunk,
   ToolApprovalRequestInput
 } from './runtimeTypes'
+import {
+  boundRuntimeChunks,
+  createApprovalId,
+  createToolApprovalRequestChunk,
+  createToolApprovalResolvedChunk,
+  isApprovalChunk,
+  isApprovalResolvedChunk,
+  isAssistantTextUpdateChunk,
+  normalizeTerminalStatus
+} from './agentSessionRuntimeChunks'
 import { isRuntimeAbortError, throwRuntimeAbort } from './runtimeAbort'
 import { readPersistedSessionRuntimeState } from './sessionRuntimePersistence'
 import { DEFAULT_AGENT_TURN_TIMEOUT_MS } from './agentModelRequestBudget'
@@ -84,13 +94,6 @@ const runtimeDisposeStopReason: AgentRuntimeStopReason = {
 }
 
 /**
- * A reasoning model can stream thousands of deltas per turn. Every snapshot serializes the whole
- * retained list, so an unbounded list turns one thinking phase into quadratic IPC work. Keep a
- * bounded tail; approvals are never dropped because they need a user decision.
- */
-export const MAX_RUNTIME_CHUNKS_PER_SESSION = 400
-
-/**
  * A provider connection that never answers must not hold a turn open forever. The watchdog bounds
  * the driver dispatch phase, where the provider call actually happens; context resolution and
  * persistence keep their existing behavior.
@@ -106,6 +109,9 @@ export class AgentTurnTimeoutError extends Error {
     this.name = 'AgentTurnTimeoutError'
   }
 }
+
+/** The chunk budget lives with the chunk helpers; re-exported so callers keep this one import path. */
+export { MAX_RUNTIME_CHUNKS_PER_SESSION } from './agentSessionRuntimeChunks'
 
 export class AgentSessionRuntimeService {
   private readonly entries = new Map<string, RuntimeEntry>()
@@ -895,80 +901,6 @@ export class AgentSessionRuntimeService {
   }
 }
 
-function boundRuntimeChunks(chunks: AgentRuntimeSessionChunk[]): AgentRuntimeSessionChunk[] {
-  if (chunks.length <= MAX_RUNTIME_CHUNKS_PER_SESSION) return chunks
-  let excess = chunks.length - MAX_RUNTIME_CHUNKS_PER_SESSION
-  const kept: AgentRuntimeSessionChunk[] = []
-  for (const chunk of chunks) {
-    if (excess > 0 && !isApprovalChunk(chunk) && !isApprovalResolvedChunk(chunk)) {
-      excess -= 1
-      continue
-    }
-    kept.push(chunk)
-  }
-  return kept
-}
-
-function isApprovalChunk(chunk: AgentRuntimeSessionChunk): chunk is Extract<AgentRuntimeSessionChunk, { type: 'tool-approval-request' }> {
-  return chunk.type === 'tool-approval-request'
-}
-
-function isApprovalResolvedChunk(
-  chunk: AgentRuntimeSessionChunk
-): chunk is AgentRuntimeToolApprovalResolvedChunk {
-  return chunk.type === 'tool-approval-resolved'
-}
-
-function isAssistantTextUpdateChunk(
-  chunk: AgentRuntimeSessionChunk
-): chunk is AgentRuntimeAssistantTextUpdateChunk {
-  return chunk.type === 'assistant-text-update'
-}
-
-function normalizeTerminalStatus(status: AgentChatRuntimeResult['assistantMessage']['status']): AgentSessionRuntimeTerminalStatus {
-  if (status === 'paused') return 'paused'
-  if (status === 'error') return 'error'
-  return 'success'
-}
-
-function createToolApprovalRequestChunk(
-  input: ToolApprovalRequestInput
-): AgentRuntimeToolApprovalRequestChunk {
-  return {
-    type: 'tool-approval-request',
-    approvalId: input.approvalId ?? createApprovalId(),
-    sessionId: input.sessionId,
-    toolCallId: input.toolCallId,
-    providerMetadata: {
-      claudeAgent: {
-        transport: 'claude-agent',
-        toolName: input.toolName
-      }
-    }
-  }
-}
-
-function createToolApprovalResolvedChunk(
-  pending: Pick<AgentSessionRuntimeSnapshot['toolApprovals'][number], 'approvalId' | 'sessionId' | 'toolCallId' | 'toolName'>,
-  decision: ToolApprovalDecision
-): AgentRuntimeToolApprovalResolvedChunk {
-  return {
-    type: 'tool-approval-resolved',
-    approvalId: pending.approvalId,
-    sessionId: pending.sessionId,
-    toolCallId: pending.toolCallId,
-    toolName: pending.toolName,
-    decision: decision.behavior,
-    ...(decision.behavior === 'allow' && Object.prototype.hasOwnProperty.call(decision, 'updatedInput')
-      ? { updatedInput: decision.updatedInput }
-      : {}),
-    ...(decision.behavior === 'deny' ? { message: decision.message } : {})
-  }
-}
-
-function createApprovalId(): string {
-  return `tool-approval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
 
 function toSnapshotState(entry: RuntimeEntry): AgentSessionRuntimeState {
   return {
