@@ -8,6 +8,7 @@ import {
   type Prediction,
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
+import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
 import {
   formatUnsafeOutputRedaction,
   validateAnalysisModelOutput,
@@ -204,7 +205,9 @@ export function createAnalysisOrchestrator(deps: Readonly<{
           parse: value => value
         })
       } catch {
-        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+        // The invocation contract reports failures as results, so a throw here means the call never
+        // reached it. That is a provider fault we can name no further than "other".
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
       }
       // A cancelled invocation never spent its budget: the caller ended it (the window closed, the
       // job was cancelled, the app is shutting down). Recording that as a timeout told the reader the
@@ -213,7 +216,12 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         if (invocation.errorCode === 'cancelled') return cancel(runRecord.id)
         const repairable = invocation.errorCode === 'invalid-json'
         if (!repairable || attempt >= marketAnalysisInvocationPolicy.maxModelAttempts) {
-          return fail(runRecord.id, 'failed', mapInvocationError(invocation.errorCode))
+          const failureCode = mapInvocationError(invocation.errorCode)
+          // The detail is what tells a cut call apart from a rate limit or a dead connection; the
+          // coarse code alone made every provider fault read the same.
+          return fail(runRecord.id, 'failed', failureCode, resolveAnalysisRunFailureDetail({
+            failureCode, providerFailure: { errorCode: invocation.errorCode, durationMs: invocation.trace.durationMs }
+          }))
         }
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
@@ -223,7 +231,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       if (attempt >= marketAnalysisInvocationPolicy.maxModelAttempts || !repairableRejection.has(validated.errorCode)) break
       messages = [...messages, ...repairMessage(validated, invocation.output)]
     }
-    if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+    if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
 
     if (!validated.ok) {
       // The coarse code is what the reader sees; the rule is what the next investigation needs.
