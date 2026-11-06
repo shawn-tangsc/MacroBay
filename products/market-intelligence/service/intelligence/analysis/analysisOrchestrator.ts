@@ -14,6 +14,7 @@ import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, isGateExempt } from './analysisTriggerSourcePolicy'
 import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
+import { analysisUpstreamRetryPolicy, decideUpstreamRetry, waitForRetry } from './analysisUpstreamRetry'
 import {
   formatUnsafeOutputRedaction,
   validateAnalysisModelOutput,
@@ -33,6 +34,12 @@ type Repository = Readonly<{
   analysisIo?: AnalysisIoStore
   /** The recent runs, for the failure-notice decision. Absent in narrow test doubles. */
   listRuns?: () => readonly AnalysisRun[]
+  /** 断流重试的当日额度与占用；缺席时（窄测试替身）就不重试。 */
+  retry?: Readonly<{
+    usedOn: (triggerKey: string, nowIso: string) => string | null
+    claim: (runId: string, nowIso: string) => boolean
+    record: (runId: string, result: 'succeeded' | 'failed' | 'cancelled') => void
+  }>
   getSnapshot?: (id: string) => EvidenceSnapshot | undefined
   listSnapshots?: (eventGroupId: string) => readonly EvidenceSnapshot[]
   getEventGroup: (id: string) => { id: string; currentSummaryId: string | null } | undefined
@@ -220,13 +227,21 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // A model that answers outside the contract once is not a failed analysis: the previous
     // product required the reader to press "Analyze now" again (which is exactly what they did,
     // and the second answer was published). Asking again in place costs one call and no re-freeze.
-    for (let attempt = 1; attempt <= marketAnalysisInvocationPolicy.maxModelAttempts; attempt += 1) {
+    // 每次调用属于哪一类，显式给出：初次 / 修复 / 传输重试。用一个计数器兼顾三种，重试和修复
+    // 就会叠出第四次调用，而额度是按调用算的。
+    let callsSpent = 0
+    let nextCallKind: 'initial' | 'repair' | 'transport-retry' = 'initial'
+    let retried = false
+    let repaired = false
+    while (callsSpent < analysisUpstreamRetryPolicy.maximumCallsPerRun) {
       if (signal.aborted) return cancel(runRecord.id)
+      callsSpent += 1
+      const callKind = nextCallKind
       // 先写提示词再调用：进程在超时中被杀掉时，最该留的那份仍然在库里。
       const ioRecord = deps.repository.analysisIo?.begin({
         analysisRunId: runRecord.id,
-        callIndex: attempt,
-        callKind: attempt === 1 ? 'initial' : 'repair',
+        callIndex: callsSpent,
+        callKind,
         prompt: messages,
         modelProviderId: runRecord.modelProviderId,
         modelId: runRecord.modelId,
@@ -263,21 +278,44 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       // model was slow when nothing had gone wrong with the model at all.
       if (!invocation.ok) {
         if (invocation.errorCode === 'cancelled') return cancel(runRecord.id)
-        const repairable = invocation.errorCode === 'invalid-json'
-        if (!repairable || attempt >= marketAnalysisInvocationPolicy.maxModelAttempts) {
-          const failureCode = mapInvocationError(invocation.errorCode)
-          // The detail is what tells a cut call apart from a rate limit or a dead connection; the
-          // coarse code alone made every provider fault read the same.
-          return fail(runRecord.id, 'failed', failureCode, resolveAnalysisRunFailureDetail({
-            failureCode, providerFailure: { errorCode: invocation.errorCode, durationMs: invocation.trace.durationMs }
-          }))
+        const failureCode = mapInvocationError(invocation.errorCode)
+        // The detail is what tells a cut call apart from a rate limit or a dead connection; the
+        // coarse code alone made every provider fault read the same.
+        const failureDetailCode = resolveAnalysisRunFailureDetail({
+          failureCode, providerFailure: { errorCode: invocation.errorCode, durationMs: invocation.trace.durationMs }
+        })
+        // 断流重试：同一次运行内、先占后跑、每 UTC 日一次。取消就当场结束，认定这一次仍没成。
+        if (failureDetailCode === 'upstream-aborted' && !retried && deps.repository.retry) {
+          const decision = decideUpstreamRetry({
+            failureDetailCode,
+            callsSpent,
+            lastRetryAt: deps.repository.retry.usedOn(runRecord.triggerKey, deps.now()),
+            now: deps.now()
+          })
+          if (decision.retry && deps.repository.retry.claim(runRecord.id, deps.now())) {
+            retried = true
+            const waited = await waitForRetry(analysisUpstreamRetryPolicy.backoffMs, signal)
+            if (waited === 'cancelled') {
+              deps.repository.retry.record(runRecord.id, 'cancelled')
+              return cancel(runRecord.id)
+            }
+            if (!ioRecord) { /* 没有存档时也照常重试 */ }
+            nextCallKind = 'transport-retry'
+            continue
+          }
         }
+        const repairable = invocation.errorCode === 'invalid-json'
+        if (!repairable || repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun) {
+          if (retried) deps.repository.retry?.record(runRecord.id, 'failed')
+          return fail(runRecord.id, 'failed', failureCode, failureDetailCode)
+        }
+        repaired = true
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
       }
       validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
       if (validated.ok) break
-      if (attempt >= marketAnalysisInvocationPolicy.maxModelAttempts || !repairableRejection.has(validated.errorCode)) break
+      if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !repairableRejection.has(validated.errorCode)) break
       messages = [...messages, ...repairMessage(validated, invocation.output)]
     }
     if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
@@ -319,6 +357,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     } catch {
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
+    if (retried) deps.repository.retry?.record(runRecord.id, 'succeeded')
     // A success may end a failure episode; the decision is made once, from the same rows the notices
     // are judged from, so "recovered" and "still failing" can never both be true.
     await announceRunOutcome(runRecord.triggerKey)
