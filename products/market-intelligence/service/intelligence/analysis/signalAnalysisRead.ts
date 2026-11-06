@@ -57,10 +57,9 @@ export function assembleSignalAnalysisRead(input: Readonly<{
     state: 'available',
     signals: input.signals,
     analysis: projectSignalAnalysisStates({
-      changeHashes: hashes,
+      signals: input.signals.map(entry => ({ changeHash: entry.signal.dedupeKey, severity: entry.signal.severity })),
       rows,
       runs,
-      severities: Object.fromEntries(input.signals.map(entry => [entry.signal.dedupeKey, entry.signal.severity])),
       ...(input.analysisOffByReader === undefined ? {} : { analysisOffByReader: input.analysisOffByReader })
     }),
     droppedInvalid: input.droppedInvalid

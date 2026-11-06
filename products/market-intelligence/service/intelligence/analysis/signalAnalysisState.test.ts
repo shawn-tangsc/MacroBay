@@ -36,7 +36,10 @@ describe('signal analysis state', () => {
 
   it('projects a screenful in one pass, keyed by change hash, beside the signals', () => {
     const states = projectSignalAnalysisStates({
-      changeHashes: ['h-ok', 'h-failed', 'h-low', 'h-none'],
+      signals: [
+        { changeHash: 'h-ok', severity: 'high' }, { changeHash: 'h-failed', severity: 'high' },
+        { changeHash: 'h-low', severity: 'low' }, { changeHash: 'h-none', severity: 'medium' }
+      ],
       rows: [
         { changeHash: 'h-ok', decision: 'queued', reasonCode: 'signal-high-triggered', analysisRunId: 'run-1' },
         { changeHash: 'h-failed', decision: 'queued', reasonCode: 'signal-high-triggered', analysisRunId: 'run-2' }
@@ -45,7 +48,6 @@ describe('signal analysis state', () => {
         'run-1': { status: 'succeeded', failureCode: null },
         'run-2': { status: 'failed', failureCode: 'analysis-provider-error' }
       },
-      severities: { 'h-ok': 'high', 'h-failed': 'high', 'h-low': 'low', 'h-none': 'medium' }
     })
     expect(states['h-ok']).toMatchObject({ analysisState: 'published' })
     expect(states['h-failed']).toMatchObject({ analysisState: 'failed', analysisReason: 'analysis-provider-error' })

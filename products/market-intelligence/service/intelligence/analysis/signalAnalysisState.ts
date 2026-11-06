@@ -82,21 +82,26 @@ export function projectSignalAnalysisState(input: Readonly<{
  * "signals carry their runs" to the next person. One batch, one query, no per-chip lookup.
  */
 export function projectSignalAnalysisStates(input: Readonly<{
-  changeHashes: readonly string[]
+  /**
+   * One record per signal, hash and severity from the same source.
+   *
+   * Two parallel maps (`changeHashes` + `severities`) could disagree, and the default that covered a
+   * missing entry (`?? 'high'`) turned a caller's mistake into "not triggered" on the chip — the
+   * reader then waits for an analysis that was never going to come.
+   */
+  signals: readonly Readonly<{ changeHash: string; severity: SignalSeverity }>[]
   /** Latest ledger row per hash, from the one batch query. */
   rows: readonly SignalTriggerLedgerState[]
   /** The run each row points at, when it points at one. */
   runs: Readonly<Record<string, SignalAnalysisRunState>>
-  /** Each signal's own severity, because a low mark with no row is `skipped`, not "not yet". */
-  severities: Readonly<Record<string, SignalSeverity>>
   analysisOffByReader?: boolean
 }>): Readonly<Record<string, SignalAnalysisStateView>> {
   const byHash = new Map(input.rows.map(row => [row.changeHash, row]))
   const states: Record<string, SignalAnalysisStateView> = {}
-  for (const changeHash of input.changeHashes) {
+  for (const { changeHash, severity } of input.signals) {
     const row = byHash.get(changeHash)
     states[changeHash] = projectSignalAnalysisState({
-      severity: input.severities[changeHash] ?? 'high',
+      severity,
       row,
       run: row?.analysisRunId ? input.runs[row.analysisRunId] : undefined,
       ...(input.analysisOffByReader === undefined ? {} : { analysisOffByReader: input.analysisOffByReader })
