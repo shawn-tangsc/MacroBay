@@ -444,7 +444,8 @@ export function NewsSentimentDrawer(props: {
                   />
                   </div>
                 ) : null}
-                <p className="mi-news-drawer__bodytext">
+                {/* A div, not a p: the loading state renders a div, and a p cannot contain one. */}
+                <div className="mi-news-drawer__bodytext">
                   {activeTranslationState === 'translating' || activeTranslationState === 'waiting' ? (
                     <>
                       <span className="mi-news-drawer__translating" role="status">
@@ -464,7 +465,7 @@ export function NewsSentimentDrawer(props: {
                   ) : (
                     detail?.bodyExcerpt ?? text.drawer.detail.noBody
                   )}
-                </p>
+                </div>
                 <footer>
                   {detail?.promptVersion ? <span>{text.drawer.detail.prompt}: {detail.promptVersion}</span> : null}
                   {active.url ? <a href={active.url} rel="noreferrer" target="_blank">{text.drawer.detail.openOriginal} ↗</a> : null}
