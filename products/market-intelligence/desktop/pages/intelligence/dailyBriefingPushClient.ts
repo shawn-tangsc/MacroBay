@@ -39,7 +39,12 @@ export type BriefingPushFailure =
   | 'channel-not-configured'
   | 'channel-disconnected'
   | 'channel-rate-limited'
-  | 'runtime-unavailable'
+  /** 这个版本没有推送入口（产品桥没装配）——不是「服务没启动」，是能力不在。 */
+  | 'capability-missing'
+  /** 请求根本没发出去：桥抛了。原文进日志，界面只说事实。 */
+  | 'invoke-failed'
+  /** 回了一个我们不认识的结果（形状或 kind 对不上）。 */
+  | 'receipt-unknown'
   | 'push-paused'
   | 'record-missing'
   | 'edition-mismatch'
@@ -108,18 +113,18 @@ export async function readBriefingPushChannel(): Promise<BriefingPushChannel> {
  * no receipt came back, and calling that "sent" is what the copy forbids.
  */
 export async function redeliverBriefingPush(edition: BriefingPushEdition): Promise<BriefingPushOutcome> {
-  if (!briefingPushAvailable()) return { state: 'failed', reason: 'runtime-unavailable' }
+  if (!briefingPushAvailable()) return fail(edition, 'capability-missing', 'bridge-missing')
   let result: unknown
   try {
     // 主进程的两步：先按这一版写/更新完成记录（只记不发），再重投那条记录。库里有记录时第一步
     // 只是合并，不会多一行；库里没有时它就补上，读者不必先去别处「生成一条通知」。
     result = await dailyBriefingClient.publishToPhone({ date: edition.date, periodId: edition.periodId, locale: edition.locale })
-  } catch {
-    return { state: 'failed', reason: 'runtime-unavailable' }
+  } catch (error) {
+    return fail(edition, 'invoke-failed', errorText(error))
   }
-  if (!isRecord(result)) return { state: 'failed', reason: 'runtime-unavailable' }
-  if (result.kind === 'rejected') return { state: 'failed', reason: rejectionReason(result.reason) }
-  if (result.kind !== 'accepted') return { state: 'failed', reason: 'runtime-unavailable' }
+  if (!isRecord(result)) return fail(edition, 'receipt-unknown', `shape:${typeof result}`)
+  if (result.kind === 'rejected') return fail(edition, rejectionReason(result.reason), `rejected:${String(result.reason)}`)
+  if (result.kind !== 'accepted') return fail(edition, 'receipt-unknown', `kind:${String(result.kind)}`)
   const delivery = result.delivery as Partial<NotificationDeliveryState> | undefined
   // The success sentence reads the delivery state and nothing else — a port that answered "ok" without
   // a receipt is `sent-unconfirmed`, not a clean send.
@@ -138,10 +143,36 @@ function rejectionReason(code: unknown): BriefingPushFailure {
     case 'redeliver-surface-invalid': return 'surface-invalid'
     case 'push-paused': return 'push-paused'
     case 'channel-missing': return 'channel-not-configured'
-    default: return 'runtime-unavailable'
+    // 主进程说「重投入口没装配」＝这个版本没有这个能力，不是「服务没启动」。
+    case 'runtime-unavailable': return 'capability-missing'
+    // 认不出的拒绝码也是「回执不认识」，不冒充成「服务没启动」。
+    default: return 'receipt-unknown'
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 300)
+  return String(error).slice(0, 300)
+}
+
+/**
+ * 失败的分支互不冒充：能力不在／请求没发出／回执不认识，是三种不同的病，读者的话也不同。
+ *
+ * 诊断走渲染层 `console.error`——主进程的 `createRendererProcessLog` 会把它作为
+ * `console-message` 落进 app.log（实测过），所以这里不是「只打终端」。原文（异常、形状、
+ * 拒绝码）只进日志，不上界面：读者要的是一句人话，排障要的是原文。
+ */
+function fail(edition: BriefingPushEdition, reason: BriefingPushFailure, detail: string): BriefingPushOutcome {
+  console.error(JSON.stringify({
+    marker: 'MI_DAILY_BRIEF_PUSH_FAILED',
+    reason,
+    detail,
+    edition: { date: edition.date, periodId: edition.periodId, locale: edition.locale },
+    at: new Date().toISOString()
+  }))
+  return { state: 'failed', reason }
 }

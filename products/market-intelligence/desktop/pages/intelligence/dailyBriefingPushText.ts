@@ -27,7 +27,9 @@ export type BriefingPushFailureKey =
   | 'channel-not-configured'
   | 'channel-disconnected'
   | 'channel-rate-limited'
-  | 'runtime-unavailable'
+  | 'capability-missing'
+  | 'invoke-failed'
+  | 'receipt-unknown'
   | 'push-paused'
   | 'record-missing'
   | 'edition-mismatch'
@@ -48,7 +50,10 @@ const zh: BriefingPushText = {
     'channel-not-configured': '还没有可用的频道，先到「频道」启用一条',
     'channel-disconnected': '网络连不上 {channel}',
     'channel-rate-limited': '{channel} 限制了发送频率，过一会儿再试',
-    'runtime-unavailable': '推送服务还没启动',
+    // 三种失败各一句：能力不在、请求没发出、回执不认识。原文进日志，界面不复述技术原因。
+    'capability-missing': '这个版本还发不了手机推送',
+    'invoke-failed': '推送请求没发出去',
+    'receipt-unknown': '推送服务回了一个不认识的结果',
     // 暂时性，不是配置问题：会自己恢复，也可以当场重试。
     'push-paused': '推送暂停了：连续失败后会自己恢复，也可以现在重试',
     // 与版次不符同因同果：记录里没有读者眼前这一版。两句若分开写，读者会以为是两种毛病。
@@ -78,7 +83,9 @@ const en: BriefingPushText = {
     'channel-not-configured': 'No channel is available yet; enable one in Channels',
     'channel-disconnected': 'Cannot reach {channel} over the network',
     'channel-rate-limited': '{channel} is rate-limiting sends; try again shortly',
-    'runtime-unavailable': 'The push service is not running yet',
+    'capability-missing': 'This build cannot send to a phone yet',
+    'invoke-failed': 'The push request did not go out',
+    'receipt-unknown': 'The push service returned an unexpected answer',
     'push-paused': 'Push is paused: it comes back after repeated failures, or retry now',
     'record-missing': 'This edition is not in the notifications yet; generate it again first',
     'edition-mismatch': 'This edition is not in the notifications yet; generate it again first',

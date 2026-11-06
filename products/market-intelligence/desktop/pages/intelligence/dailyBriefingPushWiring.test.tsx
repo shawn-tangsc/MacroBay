@@ -13,7 +13,7 @@ import { briefingPushToastMs, useBriefingPush, type BriefingPushState } from './
  * phone. The three rules that matter — one send per tap even when the network is slow, a rejection that
  * names its reason, and two success sentences that stay different lengths — are all checkable here.
  */
-const edition = { date: '2026-11-04', periodId: 'default', locale: 'zh-CN' }
+const edition = { date: '2026-11-04', periodId: 'default', locale: 'zh-CN' as const }
 
 function mount(input: Parameters<typeof useBriefingPush>[0]) {
   const seen: { state: BriefingPushState; toast: 'accepted' | 'unconfirmed' | undefined }[] = []
@@ -131,7 +131,7 @@ describe('the push copy', () => {
     expect(briefingPushText['zh-CN'].failed['push-paused']).toContain('自己恢复')
     // 五个拒绝各有自己那句：不许一句通用失败盖住。
     const reasons: readonly BriefingPushFailureKey[] = [
-      'channel-not-configured', 'channel-disconnected', 'channel-rate-limited', 'runtime-unavailable', 'push-paused', 'record-missing', 'edition-mismatch', 'surface-invalid'
+      'channel-not-configured', 'channel-disconnected', 'channel-rate-limited', 'capability-missing', 'invoke-failed', 'receipt-unknown', 'push-paused', 'record-missing', 'edition-mismatch', 'surface-invalid'
     ]
     for (const reason of reasons) {
       expect(briefingPushText['zh-CN'].failed[reason].trim().length).toBeGreaterThan(0)

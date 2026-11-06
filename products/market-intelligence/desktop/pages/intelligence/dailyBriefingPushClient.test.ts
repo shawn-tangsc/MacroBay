@@ -49,7 +49,9 @@ describe('the push client', () => {
       ['channel-missing', 'channel-not-configured'],
       // 主进程先写后推之后，剩下的「记录不在」其实是「这一版还没生成」：读者要做的事一样，同一句。
       ['edition-missing', 'record-missing'],
-      ['runtime-unavailable', 'runtime-unavailable']
+      ['runtime-unavailable', 'capability-missing'],
+      // 认不出的拒绝码：不冒充任何具体原因，落「回执不认识」。
+      ['some-new-platform-code', 'receipt-unknown']
     ] as const) {
       stubBridge({ kind: 'rejected', reason: code })
       // The platform's code never reaches the screen; the card gets one of these names.
@@ -57,9 +59,30 @@ describe('the push client', () => {
     }
   })
 
-  it('is unavailable, not broken, in a build without the runtime', async () => {
-    vi.stubGlobal('window', {})
-    expect(briefingPushAvailable()).toBe(false)
-    expect(await redeliverBriefingPush(edition)).toEqual({ state: 'failed', reason: 'runtime-unavailable' })
+  it('tells three failures apart: no capability, request not sent, unrecognised receipt', async () => {
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((line: unknown) => { errors.push(String(line)) })
+    try {
+      // ① 能力不在：产品桥没装配——不是「服务没启动」。
+      vi.stubGlobal('window', {})
+      expect(briefingPushAvailable()).toBe(false)
+      expect(await redeliverBriefingPush(edition)).toEqual({ state: 'failed', reason: 'capability-missing' })
+
+      // ② 请求没发出去：桥抛了，原文进日志。
+      vi.stubGlobal('window', { platform: { products: { invoke: async () => { throw new Error('ipc-closed') } } } })
+      expect(await redeliverBriefingPush(edition)).toEqual({ state: 'failed', reason: 'invoke-failed' })
+
+      // ③ 回执形状不认识：不冒充任何一种具体原因。
+      stubBridge('not-a-receipt')
+      expect(await redeliverBriefingPush(edition)).toEqual({ state: 'failed', reason: 'receipt-unknown' })
+
+      const markers = errors.map((line) => JSON.parse(line) as Record<string, unknown>).filter((entry) => entry.marker === 'MI_DAILY_BRIEF_PUSH_FAILED')
+      expect(markers.map((entry) => entry.reason)).toEqual(['capability-missing', 'invoke-failed', 'receipt-unknown'])
+      // 原文留在日志里：异常名与消息、以及回执的形态。
+      expect(markers[1]?.detail).toContain('ipc-closed')
+      expect(markers[2]?.detail).toBe('shape:string')
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
