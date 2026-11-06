@@ -1,4 +1,4 @@
-import type { CreateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import type { CreateAgentSessionDto, CreateAgentSessionMessagesDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
 
 type SessionRef = { id: string; agentId: string | null; description?: string }
@@ -18,7 +18,7 @@ type SessionRef = { id: string; agentId: string | null; description?: string }
 export type AnalysisRunSessionDependencies = Readonly<{
   getAgentState?: () => Promise<{ sessions: readonly SessionRef[] }>
   createAgentSession?: (input: CreateAgentSessionDto) => Promise<SessionRef>
-  appendAgentSessionMessages?: (input: Readonly<{ sessionId: string; messages: readonly unknown[] }>) => Promise<unknown>
+  appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<unknown>
 }>
 
 export const analysisRunSessionPolicy = Object.freeze({
@@ -52,11 +52,33 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
     // model's raw answer — those live once, in the archive, and are read by this run id.
     if (deps.appendAgentSessionMessages) {
       const messages = [
-        { role: 'system', content: `market-analysis-run:${input.runId}` },
-        ...(input.summary ? [{ role: 'assistant', content: input.summary }] : [])
+        { role: 'system' as const, data: { parts: [{ type: 'text' as const, text: `market-analysis-run:${input.runId}` }] } },
+        ...(input.summary ? [{ role: 'assistant' as const, data: { parts: [{ type: 'text' as const, text: input.summary }] } }] : [])
       ]
       try { await deps.appendAgentSessionMessages({ sessionId: session.id, messages }) } catch { /* 会话是记录的附加物 */ }
     }
     return session.id
+  }
+}
+
+/**
+ * Appends the published summary to the run's conversation.
+ *
+ * The conversation is created before the model is called, so a run that fails still has one; the
+ * summary arrives only when a run publishes. Nothing else is appended: the prompt and the answer
+ * live once, in the archive, and are read by run id.
+ */
+export function appendAnalysisRunSummary(deps: AnalysisRunSessionDependencies) {
+  return async function appendRunSummary(input: Readonly<{ runId: string; summary: string }>): Promise<void> {
+    if (!deps.getAgentState || !deps.appendAgentSessionMessages) return
+    const description = `${analysisRunSessionPolicy.descriptionPrefix}${input.runId}`
+    const { sessions } = await deps.getAgentState()
+    const session = sessions.find(candidate =>
+      candidate.agentId === analysisRunSessionPolicy.agentId && candidate.description === description)
+    if (!session) return
+    await deps.appendAgentSessionMessages({
+      sessionId: session.id,
+      messages: [{ role: 'assistant', data: { parts: [{ type: 'text', text: input.summary }] } }]
+    })
   }
 }

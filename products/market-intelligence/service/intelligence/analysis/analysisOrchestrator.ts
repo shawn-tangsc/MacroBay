@@ -189,10 +189,22 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * `analysisFailureNotices`, not here.
    */
   notifyAnalysisNotice?: (input: Readonly<{ decision: AnalysisFailureNoticeDecision; occurredAt: string }>) => Promise<void>
+  /**
+   * One conversation per run, created once the run is claimed and before the first model call — so a
+   * run that fails still has a conversation the reader can open to find the archived prompt.
+   */
+  ensureRunSession?: (input: Readonly<{ runId: string }>) => Promise<string | undefined>
+  /** The summary, appended after the run published. Never the prompt or the model's answer. */
+  appendRunSummary?: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
     if (!runRecord || !deps.repository.claimRun(runRecord.id, deps.now())) return { status: 'failed', errorCode: 'analysis-run-not-available' }
+    // 会话在「认领成功、还没调模型」之间建：失败那次也要有会话，否则最需要查原文的那种恰好没有。
+    // 建会话失败不影响这次分析——它是记录的附加物，不是分析的前提。
+    if (deps.ensureRunSession) {
+      try { await deps.ensureRunSession({ runId: runRecord.id }) } catch { /* 会话是附加物 */ }
+    }
     if (input.signal?.aborted) return cancel(runRecord.id)
     const signal = input.signal ?? new AbortController().signal
 
@@ -358,6 +370,13 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
     if (retried) deps.repository.retry?.record(runRecord.id, 'succeeded')
+    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。
+    if (deps.appendRunSummary) {
+      const summaryText = summary.conclusion?.summary ?? summary.eventAssessment ?? ''
+      if (summaryText) {
+        try { await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText }) } catch { /* 会话是附加物 */ }
+      }
+    }
     // A success may end a failure episode; the decision is made once, from the same rows the notices
     // are judged from, so "recovered" and "still failing" can never both be true.
     await announceRunOutcome(runRecord.triggerKey)

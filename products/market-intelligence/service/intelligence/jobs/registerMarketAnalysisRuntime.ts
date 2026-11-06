@@ -59,6 +59,11 @@ export type MarketAnalysisRuntime = Readonly<{
   /** 最后一跳：规则线把一条模块信号交给它（见 `requestSignalAnalysis`）。 */
   requestSignalAnalysis: SignalAnalysisService
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
+  /** Mounted by the bootstrap: the session ports are injected there, not built here. */
+  setRunSessionPort: (port: Readonly<{
+    ensure: (input: Readonly<{ runId: string }>) => Promise<string | undefined>
+    appendSummary: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
+  }> | undefined) => void
   dispose: () => void
 }>
 
@@ -153,6 +158,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   // 期间就被调用，所以它在任何调用之前初始化。
   const releaseCoverage = createReleaseCoverageReader({ now, repository, pipeline: input.pipeline })
   const triggerPolicy = createAnalysisTriggerPolicy()
+  // 会话端口迟绑定：会话依赖由 bootstrap 注入（就是追问会话用的那一份），运行时不自己构造。
+  type RunSessionPort = Readonly<{
+    ensure: (input: Readonly<{ runId: string }>) => Promise<string | undefined>
+    appendSummary: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
+  }>
+  let runSessionPort: RunSessionPort | undefined
   const analysisOrchestrator = createAnalysisOrchestrator({
     repository,
     // 原文存档：每次模型调用一行，提示词在调用前落盘、回答在回来后回填。存储那半在
@@ -168,7 +179,10 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // 三档节流提醒：判定在 analysisFailureNotices，这里只把决策变成一次提交。平台文案没落时
     // 构造返回 undefined——不发半句话，也不因此把一次已完成的运行弄成失败。
     notifyAnalysisNotice: async ({ decision, occurredAt }) =>
-      submitAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) })
+      submitAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) }),
+    // 一次分析一条会话：认领之后建（失败那次也要能查原文），发布后补一句摘要。
+    ensureRunSession: async ({ runId }) => runSessionPort ? runSessionPort.ensure({ runId }) : undefined,
+    appendRunSummary: async ({ runId, summary }) => { if (runSessionPort) await runSessionPort.appendSummary({ runId, summary }) }
   })
   const predictionVerification = createPredictionVerificationService({
     repository,
@@ -410,6 +424,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     },
     requestInitialAnalysis,
     requestSignalAnalysis,
+    /** Mounted by the bootstrap, which is where the session ports are injected. */
+    setRunSessionPort(port) { runSessionPort = port },
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },

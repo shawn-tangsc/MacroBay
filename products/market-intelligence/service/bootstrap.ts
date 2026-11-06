@@ -36,6 +36,7 @@ import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerI
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
+import { appendAnalysisRunSummary, createAnalysisRunSession } from './intelligence/analysis/analysisRunSession'
 import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import type {
   CrossAssetOps,
@@ -548,6 +549,19 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     requestInitialAnalysis: intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis,
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
+  })
+  // 自动分析会话：与追问会话同一份注入端口，不另造第二个建会话的地方。建在固定智能体下、
+  // 按 runId 幂等，会话里只放 runId 与摘要，原文留在 mi_analysis_io。
+  intelligenceModule.marketAnalysisRuntime.setRunSessionPort({
+    ensure: createAnalysisRunSession({
+      getAgentState: deps.getAgentState,
+      createAgentSession: deps.createAgentSession,
+      appendAgentSessionMessages: deps.appendAgentSessionMessages
+    }),
+    appendSummary: appendAnalysisRunSummary({
+      getAgentState: deps.getAgentState,
+      appendAgentSessionMessages: deps.appendAgentSessionMessages
+    })
   })
   registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService, intelligenceModule.dailyBriefingAiSettings, intelligenceModule.deleteDailyBriefingPeriod, join(getIntelligenceProductDataDir(), 'daily-briefing-periods.json'))
   // Read-only startup diagnostic. The timeline renders the same empty state for "the

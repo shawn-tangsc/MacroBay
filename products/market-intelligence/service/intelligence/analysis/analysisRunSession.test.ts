@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createAnalysisRunSession } from './analysisRunSession'
+import { appendAnalysisRunSummary, createAnalysisRunSession } from './analysisRunSession'
 
 function harness() {
   const sessions: { id: string; agentId: string | null; description?: string }[] = []
@@ -15,7 +15,11 @@ function harness() {
     createAgentSession: createAgentSession as never,
     appendAgentSessionMessages: appendAgentSessionMessages as never
   })
-  return { ensure, createAgentSession, appendAgentSessionMessages, sessions }
+  const appendRunSummary = appendAnalysisRunSummary({
+    getAgentState: async () => ({ sessions: [...sessions] }),
+    appendAgentSessionMessages: appendAgentSessionMessages as never
+  })
+  return { ensure, appendRunSummary, createAgentSession, appendAgentSessionMessages, sessions }
 }
 
 describe('the analysis run session', () => {
@@ -39,9 +43,18 @@ describe('the analysis run session', () => {
     await ensure({ runId: 'mi-ar-2', summary: 'BTC 持仓骤降' })
     const call = appendAgentSessionMessages.mock.calls[0]![0] as unknown as { messages: { role: string; content: string }[] }
     expect(call.messages).toHaveLength(2)
-    expect(call.messages[0]!.content).toBe('market-analysis-run:mi-ar-2')
+    expect(call.messages[0]).toMatchObject({ role: 'system', data: { parts: [{ type: 'text', text: 'market-analysis-run:mi-ar-2' }] } })
     // 原文只存在 mi_analysis_io，会话只放 runId；这里不该出现提示词或模型原文。
-    expect(JSON.stringify(call.messages)).not.toContain('messages:')
+    expect(JSON.stringify(call.messages)).not.toContain('prompt')
+  })
+
+  it('appends the published summary to the run’s existing conversation', async () => {
+    const { ensure, appendRunSummary, appendAgentSessionMessages } = harness()
+    await ensure({ runId: 'mi-ar-4' })
+    await appendRunSummary({ runId: 'mi-ar-4', summary: 'BTC 持仓骤降，量放大 3.4 倍' })
+    const last = appendAgentSessionMessages.mock.calls.at(-1)![0] as unknown as { sessionId: string; messages: { role: string; content: string }[] }
+    expect(last.sessionId).toBe('s-1')
+    expect(last.messages).toEqual([{ role: 'assistant', data: { parts: [{ type: 'text', text: 'BTC 持仓骤降，量放大 3.4 倍' }] } }])
   })
 
   it('stays quiet when the port is not injected', async () => {
