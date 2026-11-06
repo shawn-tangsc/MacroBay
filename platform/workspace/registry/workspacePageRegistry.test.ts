@@ -152,4 +152,42 @@ describe('workspace page registry（P2-01 一级菜单统一注册）', () => {
     const plain = toProductWorkspacePage('legacy-addon', legacyContribution)
     expect('home' in plain).toBe(false)
   })
+
+  /**
+   * 上面那条只验了「构造出的注册对象带着 home」，**没让它真的进注册表** —— 2026-11-06 真机就撞在这个缺口上：
+   * 字段白名单（`WorkspaceRegistrationPolicy.pageFields`）里没有 `home`，`register()` 整条拒绝，而 Main 的
+   * 组合根对非法贡献是 fail-soft（只跳过那一页）。结果是那一页菜单上看得见、主进程注册表里不存在：
+   * 点它 → `registration-missing` → 页签开不出来，也没有一行日志。
+   *
+   * 所以这条必须走到 `register()` 与 `byMenuKey()` —— 主进程的 openTab 就是按菜单键解析页面的。
+   */
+  it('带 home 的注册项必须能真的注册进去，并按菜单键解析得到（否则整页在 Main 里凭空消失）', () => {
+    const page = toProductWorkspacePage('market-intelligence', {
+      ...legacyContribution,
+      id: 'intelligence',
+      title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
+      home: true
+    })
+    const registry = registryOf([page])
+
+    expect(registry.get('market-intelligence.intelligence')?.home).toBe(true)
+    expect(registry.byMenuKey('/market-intelligence/intelligence')?.pageId).toBe('market-intelligence.intelligence')
+  })
+
+  it('home 只接受 true：false 与其它值一样要拒（「没声明」必须长得像没声明）', () => {
+    const page = toProductWorkspacePage('market-intelligence', {
+      ...legacyContribution,
+      id: 'intelligence',
+      title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
+      home: true
+    })
+    const registry = createWorkspacePageRegistry({ moduleIds: [page.module], productIds: ['market-intelligence'] })
+
+    expect(() => registry.register({ ...page, home: false })).toThrowError(
+      new WorkspaceRegistrationError('invalid-registration', 'home')
+    )
+    expect(() => registry.register({ ...page, home: 'yes' })).toThrowError(
+      new WorkspaceRegistrationError('invalid-registration', 'home')
+    )
+  })
 })
