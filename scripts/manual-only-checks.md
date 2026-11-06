@@ -16,7 +16,7 @@
 | `pnpm check:boot-page` | 改动或审查启动失败页（`bootFailurePage`）的布局时 | 改这块的实现方 | 五条通过行（每行含卡片宽度与三个按钮高度）+ 退出码 0 |
 | `pnpm seed:briefing-history` | 需要造「那一次已清理」的门槛 5 证据时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用 | 取这部分证据的人 | 临时目录里的 `daily-briefings.sqlite` 与 `daily-brief-sessions.sqlite` + 指向该目录的截图 |
 | `pnpm seed:analysis-quota` | 需要造「今天的分析额度已用尽」来验 P3 时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用，然后触发一次自动分析（市场日历「Refresh now」或模块信号） | 验 P3 的这条线 | 脚本输出 `seeded <UTC 日>: event 48/48, calendar 9/9` 那一行 + 临时目录里的 `market-analysis.sqlite` + 中心出现一条 P3（正文含「今天已用 48 次 / 上限 48 次」），同一天再触发不新增 |
-| `pnpm typecheck:products` | 清产品侧类型债务时（每清一批跑一次）、发布前 | 产品侧实现方 | 退出码 0 + 错误数（当前 **861**，其中 `products/` 内 **858**）**只减不增**；数字变大就是债务在长 |
+| `pnpm typecheck:products` | 清产品侧类型债务时（每清一批跑一次）、发布前 | 产品侧实现方 | 退出码 0 + 错误数（当前 **791**，其中 `products/` 内 **788**；2026-11-06 第一批清完 `contracts/**` 后实测）**只减不增**；数字变大就是债务在长 |
 | `pnpm docs:event-ids` | 改动通知事件 id、或改文档里引用这些 id 的段落时 | 改这块的实现方 | 报告里 `197 篇文档 / N 个已声明事件 id / 零处对不上` 那一行 + 退出码 0（**不接受 `skipped`**） |
 
 ## `check:boot-page` 为什么不进 `verify`

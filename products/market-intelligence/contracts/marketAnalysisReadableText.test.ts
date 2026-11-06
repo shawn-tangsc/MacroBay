@@ -18,6 +18,7 @@ const names: MarketAnalysisReadableNames = Object.freeze({
   subject: Object.freeze({ stablecoins: '稳定币', BTC: 'BTC' }),
   eventName: Object.freeze({ 'core-cpi': '核心 CPI' }),
   lifecycleState: Object.freeze({ released: '已公布' }),
+  positioningState: Object.freeze({ deleveraging: '去杠杆 · 多头减仓', neutral: '中性' }),
   comparability: Object.freeze({ comparable: '可比' }),
   caveat: Object.freeze({ 'macro-calendar-consensus-unavailable': '缺少市场预期值' }),
   term: Object.freeze({ consensus: '市场预期值' })

@@ -36,7 +36,11 @@ describe('macro rates snapshot contract', () => {
       readings: [{ seriesId: 'T10YIE', metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.33, period: '2026-10-13' }]
     })
     expect(Object.isFrozen(parsed)).toBe(true)
-    const readings = (parsed as Extract<MacroRatesSnapshotView, { state: 'available' }>).readings
+    // parse 的返回可能是 undefined（拒收），且该变体的 state 本身是 'available' | 'empty'——
+    // 所以按行为逐层收窄，不用 Extract 那种体操（那是 never）。
+    if (parsed === undefined) throw new Error('expected a parsed snapshot')
+    if (parsed.state === 'unavailable') throw new Error('expected readings')
+    const readings = parsed.readings
     expect(Object.isFrozen(readings)).toBe(true)
     expect(readings[0]).not.toHaveProperty('previous')
   })

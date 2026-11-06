@@ -49,7 +49,8 @@ describe('divergence pairs', () => {
     }))
     expect(result.state).toBe('empty')
     if (result.state !== 'empty') return
-    expect(result.rows ?? []).toHaveLength(0)
+    // empty 变体不带 rows：断言字段本身不存在，比断言「空数组」更准
+    expect(result).not.toHaveProperty('rows')
     expect(result.withheld).toHaveLength(0)
   })
 
@@ -76,7 +77,8 @@ describe('window alignment', () => {
     const result = detectDivergences(inputs({ asOf: '2026-11-02T12:00:00.000Z', stablecoin: { change7dPercent: -1.2, observedAt: '2026-11-02T06:00:00.000Z' }, openInterest: { change24hPct: 3.4, observedAt: '2026-11-02T11:00:00.000Z' }, funding: { ratePercent: -0.0032, observedAt: '2026-11-02T11:00:00.000Z' }, price: { return24hPercent: 0.2, observedAt: '2026-11-02T11:00:00.000Z' } }))
     if (result.state === 'unavailable') throw new Error('unexpected')
     expect(result.withheld).toContainEqual(expect.objectContaining({ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' }))
-    expect(result.rows.some(row => row.pairId === 'flows-price')).toBe(false)
+    const rows = result.state === 'available' ? result.rows : []
+    expect(rows.some(row => row.pairId === 'flows-price')).toBe(false)
   })
 
   it('refuses instead of showing a half pair when a leg is missing', () => {

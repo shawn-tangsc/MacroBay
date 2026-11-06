@@ -6,7 +6,7 @@ async function contracts() {
   expect(existsSync(new URL('./marketCalendarQueryContracts.ts', import.meta.url))).toBe(true)
   return import('./marketCalendarQueryContracts')
 }
-const input = { month: '2026-09', locale: 'zh', asOf: '2026-09-10T00:00:00.000Z' }
+const input = { month: '2026-09', locale: 'zh', asOf: '2026-09-10T00:00:00.000Z' } as const
 const event = { eventKey: '00000000-0000-4000-8000-000000000001', title: 'Derived event', countryCode: null,
   eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-09-11T00:00:00.000Z',
   consensus: { displayValue: '0' }, providerPrevious: null, providerActual: { displayValue: '3' },
