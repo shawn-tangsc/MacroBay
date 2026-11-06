@@ -37,6 +37,8 @@ import { AppMenuBar } from './window/AppMenuBar'
 import { WindowControls } from './window/WindowControls'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
+import { builtInWorkspacePages } from '@platform/workspace/registry/builtInWorkspacePages'
+import { resolveHomeMenuKey, toProductHomeMenuCandidate } from './navigation/homeMenuKey'
 import './navigation/settingsNav.css'
 import { UpdateActionButton } from './updates/UpdateActionButton'
 import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
@@ -73,11 +75,7 @@ import { createShellWorkspacePageRegistry, type ShellWorkspacePage } from './nav
 import { WorkspacePageHost } from './workspace/WorkspacePageHost'
 import { createWorkspacePageContentProvider } from './workspace/workspacePageContentProvider'
 import { WorkspaceTabStrip, type WorkspaceTabDraftGuard } from './workspace/WorkspaceTabStrip'
-import {
-  createWorkspaceTabClient,
-  readWorkspaceTabsBridge,
-  type WorkspaceTabClient
-} from './workspace/workspaceClient'
+import { useWorkspaceTabSession } from './workspace/useWorkspaceTabSession'
 import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
 import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
@@ -225,9 +223,26 @@ export function AppShell(): React.ReactElement {
   )
 }
 
+/**
+ * 首次落点（口径 A）：**只在没有可恢复的活动页**（首次打开 / 布局被重置）时被问到。
+ * 有历史时下面 `.tabs.*` 的快照会接管（高亮跟随权威活动项），这个初始值压根不参与。
+ *
+ * 三层来源，逐层降级：菜单声明的 `home` → 菜单 `order` 第一项 → 常量 `'assistants'`。
+ * 那个常量现在的**唯一触发条件**是「菜单里一页都没有」（解析器返回 `null`）；正常构建里内置页总在，
+ * 所以它只是装配残缺时的最后兜底，不是「默认页」。判据见 `navigation/homeMenuKey.test.ts`。
+ */
+const LANDING_NAV_KEY_FALLBACK = 'assistants'
+
 /** 主窗 shell 内容：语言变化时回传给 AppShell，供面板窗 error-shell/准备期壳兜底使用（P1-06h / N2）。 */
 function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => void } = {}): React.ReactElement {
-  const [activeNavKey, setActiveNavKey] = useState('assistants')
+  // 默认首页的输入不依赖语言（只用菜单键、order、home 声明），所以放在 state 外面算一次即可：
+  // 它必须在这一行就有值，否则首帧会先画 `'assistants'` 再跳走——那就是「打开时闪一下别页」。
+  const landingNavKey = useMemo(
+    () => resolveHomeMenuKey(builtInWorkspacePages, productMenuEntries.map(toProductHomeMenuCandidate))
+      ?? LANDING_NAV_KEY_FALLBACK,
+    []
+  )
+  const [activeNavKey, setActiveNavKey] = useState(landingNavKey)
   const [settingsPanelKey, setSettingsPanelKey] = useState('models')
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
   // 装配与定位状态收在 `notificationDeeplinkWiring`：绑错 `navigate` 只换高亮不切页，那件事要有守卫盯着。
@@ -379,34 +394,17 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    * P2-03：**生产 Tab 宿主接线**（这是移除「单 active 页面销毁」旧路径的挂载点）。
    *
    * 唯一来源是受控 `.tabs.*` 桥：没有桥（例如既有 shell 单测注入的 platform 不含 workspace）时
-   * `tabClient` 为 null，本组件保持 P2-02 之前的直接切页行为 —— 绝不在 renderer 复制一份 Tab 权威。
+   * `tabClientRef.current` 为 null，本组件保持 P2-02 之前的直接切页行为 —— 绝不在 renderer 复制一份 Tab 权威。
    * 页面正文仍只来自 `builtInPageAdapters` / 产品 loader，Tab 宿主只是容器。
+   *
+   * 会话主体（桥 → client → 快照 state，含首次落点补开首页）收在 `useWorkspaceTabSession`：
+   * 这段只在「没有可恢复的活动页」时才补首页，而那个判定点只存在于它内部。
    */
-  const tabClientRef = useRef<WorkspaceTabClient | null>(null)
-  const [workspaceTabState, setWorkspaceTabState] = useState<WorkspaceTabState | null>(null)
-
-  useEffect(() => {
-    const bridge = readWorkspaceTabsBridge()
-    if (bridge === null) return
-    const client = createWorkspaceTabClient(bridge)
-    tabClientRef.current = client
-    let cancelled = false
-    const adopt = (next: WorkspaceTabState | null): void => {
-      if (cancelled || next === null) return
-      setWorkspaceTabState(next)
-      const active = next.tabs.find((tab) => tab.open && tab.workspaceInstanceKey === next.activeWorkspaceInstanceKey)
-      // 顶栏/侧栏高亮跟随权威活动项（menuKey 就是导航键），不在本层维护第二份「当前页」
-      if (active !== undefined) setActiveNavKey((previous) => (previous === active.menuKey ? previous : active.menuKey))
-    }
-    void client.load().then(adopt)
-    const stop = client.observe(adopt)
-    return () => {
-      cancelled = true
-      stop()
-      client.dispose()
-      tabClientRef.current = null
-    }
-  }, [])
+  const {
+    clientRef: tabClientRef,
+    state: workspaceTabState,
+    setState: setWorkspaceTabState
+  } = useWorkspaceTabSession({ landingNavKey, onActiveMenuKey: setActiveNavKey })
 
   /** 一级菜单点击：有 Tab 桥即走受控命令（打开/激活同一实例），否则保持既有直接切页（无桥兜底）。 */
   function activateNavKey(navKey: string): void {
