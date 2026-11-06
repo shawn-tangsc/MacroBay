@@ -9,6 +9,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 
 import { dailyBriefingGenerationPolicy, dailyBriefingGenerationTimes, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { briefingGenerationGridHint } from './dailyBriefingText'
@@ -149,7 +150,8 @@ export function BriefingManualRunDialog({ open, text, timeZone, defaultDate, lat
           allowClear={false}
           aria-label={copy.date}
           format="YYYY-MM-DD"
-          disabledDate={(value: Dayjs) => value.format('YYYY-MM-DD') > latestDate}
+          // 只允许**最近 3 天**（含今天）：超窗不给选，弹框下方写明原因（用户 2026-11-06）。
+          disabledDate={(value: Dayjs) => !isManualGenerationDateAllowed(value.format('YYYY-MM-DD'), latestDate ?? value.format('YYYY-MM-DD'))}
           id="mi-briefing-manual-date"
           onChange={(value: Dayjs | null) => {
             if (value === null) return
@@ -158,6 +160,8 @@ export function BriefingManualRunDialog({ open, text, timeZone, defaultDate, lat
           value={dayjs(draft.date)}
           style={{ width: 160 }}
         />
+        {/* 只能选最近 3 天：写出来，读者不用试才知道（用户 2026-11-06）。 */}
+        <small className="mi-briefing-period-dialog__note" data-manual-window-hint="true">{copy.windowDaysHint}</small>
       </div>
 
       <div className="mi-briefing-period-dialog__field">

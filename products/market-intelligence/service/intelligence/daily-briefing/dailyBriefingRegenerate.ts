@@ -1,6 +1,7 @@
 import { DEFAULT_PERIOD_ID, type DailyBriefingLocale, type DailyBriefingRunTrigger, type DailyBriefingWindowHours } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
-import { briefingWindow, briefingWindowAtCutoff, type DailyBriefingZoneSource } from './dailyBriefingWindow'
+import { briefingWindow, briefingWindowAtCutoff, localDate, type DailyBriefingZoneSource } from './dailyBriefingWindow'
+import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import type { DailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import type { DailyBriefingTodayResult } from './dailyBriefingService'
 
@@ -72,6 +73,12 @@ export function createDailyBriefingRegenerate(deps: Readonly<{
           ...(input.generation?.windowHours === undefined ? {} : { windowHours: input.generation.windowHours })
         })
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
+    // 服务端也校验手动生成的时间窗（用户 2026-11-06）：只靠界面挡不住 bug 与直接调接口，而每次生成
+    // 都是一次模型调用。今天是**读者设置时区**的今天；超窗拒收，理由由界面翻成人话。
+    const today = localDate(deps.now(), window.zoneSource === 'settings' ? input.timeZone : input.timeZone)
+    if (today !== undefined && !isManualGenerationDateAllowed(window.date, today)) {
+      return { state: 'unavailable', failureCode: 'date-out-of-window' }
+    }
     // 期自己写了语言就用它：定时/重跑的是一期，不是"界面现在是什么语言"。
     const locale = own?.language ?? input.locale
     // 这一版的截止：重跑时就是它自己的，弹框选的就是读者选的那一个，都没有就不写（旧调用点）。

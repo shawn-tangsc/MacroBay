@@ -31,6 +31,11 @@ export const dailyBriefingPolicy = Object.freeze({
   maximumGaps: 3,
   maximumCaveats: 3,
   retentionDays: 14,
+  /**
+   * 手动生成（含历史缺版页的重试、对已有这一版的重跑）只允许**今天往前 3 天内**（用户 2026-11-06）。
+   * 今天是读者设置时区的今天；超窗一律不生成——每次都是一次模型调用，界面挡不住 bug 与直接调接口。
+   */
+  manualGenerationWindowDays: 3,
   editionDatePattern: /^\d{4}-\d{2}-\d{2}$/
 })
 

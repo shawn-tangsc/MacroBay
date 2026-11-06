@@ -216,6 +216,8 @@ export type DailyBriefingTodayFailureCode =
   | 'provider-error' | 'invalid-json' | 'schema-validation-failed' | 'invalid-translation'
   | 'agent-turn-output-truncated' | 'direction-conflict' | 'row-set-mismatch' | 'model-unavailable'
   | 'not-generated' // Not a failure: a read-only open found nothing written for this issue yet.
+  // 手动生成只允许"今天往前 3 天内"（用户 2026-11-06）：超窗拒收，界面把它翻成一句人话。
+  | 'date-out-of-window'
 
 export type DailyBriefingTodayResult =
   | Readonly<{

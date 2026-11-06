@@ -12,6 +12,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
+import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
@@ -159,11 +160,11 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
       {bodyState === 'no-edition' && noEditionView !== undefined ? <DailyBriefingNoEditionPanel
         view={noEditionView}
         text={text} timeZone={timeZone} scheduledTime={scheduledTime} todayDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
-      {/* 失败面板现在只有这一个出口（空态组件不再自己画一遍）。历史日不支持补生成，
-          所以那颗重试是禁用的，并且写明原因。 */}
+      {/* 失败面板只有这一个出口。历史日的重试**在最近 3 天内是放开的**（用户 2026-11-06 定的新口径，
+          「这一版还不支持补生成历史日报」作废）；超出 3 天仍然禁用，理由换成"只能生成最近 3 天"。 */}
       {failure !== null && bodyState === 'failure' ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
-        {...('date' in view && typeof view.date === 'string' && view.date !== todayDate
-          ? { retryBlockedReason: text.history.backfillBlocked } : {})}
+        {...('date' in view && typeof view.date === 'string' && !isManualGenerationDateAllowed(view.date, todayDate)
+          ? { retryBlockedReason: text.history.generationWindowOnly } : {})}
         onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
       {/* Any editorial failure, not just "AI is off": when the editor could not produce its half, the
           edition still ships and says so here. A reader must never be told "no brief today" instead. */}

@@ -379,8 +379,9 @@ describe('daily briefing page', () => {
     expect(panel.querySelectorAll('[data-stage]')).toHaveLength(9)
     expect(panel.textContent).toContain(text.aiSettings.failure['model-unavailable']!)
     const retry = panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!
+    // 10 天前 → 超出"最近 3 天"窗口：重试禁用，理由换成新的那句（旧禁令已作废）。
     expect(retry.disabled).toBe(true)
-    expect(retry.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
+    expect(retry.getAttribute('aria-label')).toBe(text.history.generationWindowOnly)
 
     // 3. Selecting wrote nothing and started nothing: no open, no run, no attempt.
     expect(client.getToday).toHaveBeenCalledTimes(getTodayCalls)
@@ -1873,6 +1874,35 @@ it('never lets another issue\u2019s document stand in for the selected one', asy
   // 选中 B：A 的正文不许出现；B 在自己跑，所以正文是它的进度。
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
+})
+
+it('opens the newest row that has a body, not the default period of today', async () => {
+  // 用户 2026-11-06 拍板：打开/重载默认选**列表最上面那条有正文的行**。同一天多期时，最新那一期
+  // 可能是手动期，而 `getToday` 读的是默认期——所以不能按"今天默认期"选。
+  const today = '2026-10-30'
+  const listed = [
+    { date: today, periodId: 'manual-2000', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T12:00:00.000Z`, periodTime: `${today}T12:00:00.000Z`, windowEnd: `${today}T12:00:00.000Z`, readingsAvailable: 4, summaryLine: '最新那一期' },
+    { date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, periodTime: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4, summaryLine: '默认期那一版' }
+  ]
+  const get = vi.fn(async ({ periodId }: { periodId?: string }) => ({
+    state: 'available' as const,
+    document: {
+      ...briefingDocument(today),
+      edition: {
+        ...briefingDocument(today).edition,
+        locale: 'zh-CN' as const,
+        periodId: periodId ?? 'default'
+      }
+    }
+  }))
+  const client = fakeClient({ list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })), get })
+  const dom = await renderPage(client)
+  for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 最新那一行被选中并读出正文：期号是 manual-2000，不是 default。
+  const current = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[aria-current="true"]')
+  expect(current?.getAttribute('data-period-id')).toBe('manual-2000')
+  expect(get).toHaveBeenCalledWith(expect.objectContaining({ periodId: 'manual-2000' }))
 })
 
 it('reads the row it clicked, not the first issue of that day', async () => {

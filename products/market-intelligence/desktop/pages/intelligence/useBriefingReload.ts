@@ -135,6 +135,25 @@ export function useBriefingReload(deps: Readonly<{
       // 只回写**读到的那一行**（日期 + 期号 + 语言）：按日期整片替换会把同一天另一种语言的行
       // 也写成这一版，两行于是同键同语言，React 会把它们当同一行复用，右键与删除落到另一行上。
       rows = mergeEditionSummary(rows, today.document)
+      /**
+       * ① 打开/重载时默认选**列表最上面那条有正文的行**（用户 2026-11-06 拍板）：同一天有多期时，
+       * 最新那一期可能是手动期，而 `getToday` 读的是默认期。只认有正文的行——生成中的临时行、
+       * 失败行都不自动选（读者手点可以）；读者已经选过（`pinnedDate` 有值）就不动他的位置。
+       */
+      const newestWithBody = rows.find((row) => row.state !== 'missing' && row.availableLocales.includes(localeForLoad))
+      const todayPeriodId = today.document.edition.periodId ?? 'default'
+      if (pinnedDate === undefined && newestWithBody !== undefined
+        && (newestWithBody.date !== today.document.edition.date || newestWithBody.periodId !== todayPeriodId)) {
+        setPinnedDate(newestWithBody.date)
+        setPickedPeriodId(newestWithBody.periodId)
+        setPickedLocale(newestWithBody.locale)
+        const newestRead = await readEdition(newestWithBody.date, newestWithBody.locale, { fresh: true, periodId: newestWithBody.periodId })
+        if (!active) return
+        if (newestRead.kind === 'available') {
+          setRegenerateFailure(null)
+          return
+        }
+      }
       // 首屏就把身份记全（文档 → 这一版）：rail 按三项比，缺一项会一条都不亮或两条一起亮。
       setPinnedDate(today.document.edition.date)
       setPickedPeriodId(today.document.edition.periodId ?? 'default')

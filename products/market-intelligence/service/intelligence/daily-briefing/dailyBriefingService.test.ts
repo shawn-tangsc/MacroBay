@@ -939,6 +939,31 @@ describe('period run', () => {
     if (second.state === 'available') expect(second.document.edition.periodId).toBe('period_a')
   })
 
+  it('refuses a manual run outside the last three days, with a readable reason', async () => {
+    // 用户 2026-11-06：手动生成只允许最近 3 天（含今天）；服务端也要拒——界面挡不住 bug 与直接调接口，
+    // 而每次生成都是一次模型调用。
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
+    // `asOf` = 2026-10-30 08:30 本地；10 天前那一版 → 超窗。
+    const tooOld = await service.regenerate({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_old',
+      generation: { asOf: '2026-10-19T23:00:00.000Z', windowHours: 24 }
+    })
+    expect(tooOld).toMatchObject({ state: 'unavailable', failureCode: 'date-out-of-window' })
+    // 未来同理。
+    const future = await service.regenerate({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_future',
+      generation: { asOf: '2026-11-02T23:00:00.000Z', windowHours: 24 }
+    })
+    expect(future).toMatchObject({ state: 'unavailable', failureCode: 'date-out-of-window' })
+    // 窗口内的（2 天前）照常跑。
+    const inside = await service.regenerate({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_inside',
+      generation: { asOf: '2026-10-27T23:00:00.000Z', windowHours: 24 }
+    })
+    expect(inside.state).toBe('available')
+  })
+
   it('records a failed run when the source cannot be read', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     const failing: DailyBriefingSource = {
