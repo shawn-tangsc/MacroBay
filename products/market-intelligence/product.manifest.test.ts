@@ -204,3 +204,34 @@ describe('market-intelligence product IPC baseline', () => {
     expect(registered.filter((method) => !declared.has(method))).toEqual([])
   })
 })
+
+/**
+ * 源码守卫：这一族的字符串**只许在契约文件里出现一次**。
+ *
+ * 常量 + manifest spread 仍然能被绕过——下一个人写
+ * `register(PRODUCT_ID, 'intelligence.newThing', …)`，清单照样没有它，运行时比对也就
+ * 只在应用启动那一刻才红；这条让「注册了没登记」在写的当时就红。反向用例证明它真会红。
+ */
+describe('market-intelligence IPC method literals', () => {
+  const registrarPath = resolve(
+    process.cwd(),
+    'products/market-intelligence/service/intelligence/ipc/registerIntelligenceIpc.ts'
+  )
+
+  function handWrittenMethodNames(source: string): string[] {
+    return [...source.matchAll(/['"](intelligence\.[^'"]+)['"]/g)].map((match) => match[1]!)
+  }
+
+  it('keeps every method name in the contract table, not in the registrar', () => {
+    const source = readFileSync(registrarPath, 'utf8')
+    // 先证明读到的是那个真文件：它必须已经在用常量表，空文件或改名都过不了这一关。
+    expect(source).toContain('INTELLIGENCE_IPC_METHODS.getTimeline')
+    expect(handWrittenMethodNames(source)).toEqual([])
+  })
+
+  it('flags a handwritten name put back into the registrar (reverse case)', () => {
+    const source = readFileSync(registrarPath, 'utf8')
+    const withLiteral = `${source}\nregister(PRODUCT_ID, 'intelligence.rogueChannel', async () => undefined)\n`
+    expect(handWrittenMethodNames(withLiteral)).toEqual(['intelligence.rogueChannel'])
+  })
+})
