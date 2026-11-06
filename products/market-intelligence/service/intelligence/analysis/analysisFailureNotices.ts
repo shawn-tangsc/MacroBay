@@ -19,7 +19,16 @@ export const ANALYSIS_ATTEMPT_ABANDONED_EVENT_ID = 'platform.analysis.attempt-ab
 export const ANALYSIS_RECOVERED_EVENT_ID = 'platform.analysis.recovered'
 
 export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled'
-export type AnalysisRunOutcomeStatus = 'succeeded' | 'failed' | 'cancelled'
+/**
+ * Success, failure, or neutral.
+ *
+ * `cancelled` is neutral, not a failure: the reader closed the window or the app quit. Counting it as
+ * a failure would send "the model service may be having problems" for something we stopped ourselves.
+ */
+export type AnalysisRunOutcomeStatus = 'succeeded' | 'failed' | 'invalid-output' | 'cancelled' | 'stale' | 'superseded'
+
+const isFailure = (status: AnalysisRunOutcomeStatus): boolean => status === 'failed' || status === 'invalid-output'
+const isNeutral = (status: AnalysisRunOutcomeStatus): boolean => !isFailure(status) && status !== 'succeeded'
 
 /** One finished attempt, newest first when collected. */
 export type AnalysisRunOutcome = Readonly<{
@@ -55,6 +64,8 @@ export function failureEpisodeRunId(runs: readonly AnalysisRunOutcome[]): string
   let episode: string | undefined
   for (const run of runs) {
     if (run.status === 'succeeded') break
+    // Neutral runs neither open an episode nor close one: they are skipped, not treated as a gap.
+    if (isNeutral(run.status)) continue
     episode = run.id
   }
   return episode
@@ -101,8 +112,9 @@ export function decideAnalysisFailureNotice(input: Readonly<{
     return { kind: 'none' }
   }
 
-  const sample = runs.slice(0, analysisFailureNoticePolicy.repeatedFailureWindow)
-  const failures = sample.filter(run => run.status !== 'succeeded').length
+  // Neutral runs are not evidence either way: they stay out of both the sample and the count.
+  const sample = runs.filter(run => !isNeutral(run.status)).slice(0, analysisFailureNoticePolicy.repeatedFailureWindow)
+  const failures = sample.filter(run => isFailure(run.status)).length
   if (sample.length >= analysisFailureNoticePolicy.repeatedFailureMinimumFailures &&
     failures >= analysisFailureNoticePolicy.repeatedFailureMinimumFailures) {
     return { kind: 'repeated-failure', line: input.line, failures, sample: sample.length }

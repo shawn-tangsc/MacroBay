@@ -41,6 +41,17 @@ describe('the three failure notices', () => {
     expect(decision.kind).toBe('recovered')
   })
 
+  it('does not let a cancellation look like a failure or a recovery', () => {
+    // 读者关窗、任务取消、应用退出：这是我们把它停了，不是它坏了。
+    const cancels = Array.from({ length: 6 }, (_, index): AnalysisRunOutcome => ({ ...failed(index), status: 'cancelled', failureCode: null }))
+    expect(decideAnalysisFailureNotice({ line: 'event', runs: cancels })).toEqual({ kind: 'none' })
+    // 取消不打断已经开着的故障段：取消失败之间仍算同一段。
+    expect(failureEpisodeRunId([{ ...failed(0), status: 'cancelled' }, failed(1), failed(2)])).toBe('run-2')
+    // 取消夹在两次成功后面，不构成恢复。
+    expect(decideAnalysisFailureNotice({ line: 'event', runs: [ok(0), { ...failed(1), status: 'cancelled' }] }))
+      .toEqual({ kind: 'none' })
+  })
+
   it('keeps the lines apart: one line failing is not another line failing', () => {
     const calendar: AnalysisRunOutcome[] = Array.from({ length: 6 }, (_, index) => ({ ...failed(index), line: 'calendar' }))
     expect(decideAnalysisFailureNotice({ line: 'event', runs: calendar })).toEqual({ kind: 'none' })
