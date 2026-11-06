@@ -430,6 +430,20 @@ export type EvidenceSnapshot = Readonly<{
   policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
 }>
 
+/**
+ * Which criterion the trigger-focus rule used on this run (`missing-trigger-focus`).
+ *
+ * A pass rate that mixes these is not comparable: the degraded form only checks the citation, and
+ * a run where the rule never executed has no verdict at all. Passing runs still carry the mode,
+ * because the denominator needs to know which standard they were held to.
+ */
+export type AnalysisValidationMode =
+  | 'strict'
+  | 'reference-only'
+  | 'not-applicable:no-change'
+  | 'not-applicable:truncated'
+  | 'not-applicable:empty-set'
+
 export type AnalysisRun = Readonly<{
   id: string
   schemaVersion: 1
@@ -452,6 +466,8 @@ export type AnalysisRun = Readonly<{
   traceId: string | null
   failureCode: string | null
   failureDetailCode: string | null
+  /** Set at freeze time, before the model runs; null for runs written before this column existed. */
+  validationMode: AnalysisValidationMode | null
   queuedAt: string
   startedAt: string | null
   completedAt: string | null

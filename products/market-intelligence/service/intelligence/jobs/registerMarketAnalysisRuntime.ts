@@ -32,6 +32,7 @@ import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '.
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
+import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
 import { isMarketAnalysisEnabled, isMarketAnalysisModelSet, type MarketAnalysisSettings, type MarketAnalysisSettingsPatch } from '../application/marketAnalysisSettings'
 import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
@@ -539,7 +540,13 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // orchestrator) keeps "what was chosen" and "what was called" the same fact.
     const settings = await settingsService.getSettings()
     const model = isMarketAnalysisModelSet(settings) ? { providerId: settings.providerId, modelId: settings.modelId } : null
-    const result = runs.enqueue({ eventGroupId: value.eventGroupId, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: value.analysisPhase, triggerKey: value.triggerKey, model })
+    const result = runs.enqueue({
+      eventGroupId: value.eventGroupId, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisPhase: value.analysisPhase, triggerKey: value.triggerKey, model,
+      // Decided here, with the snapshot in hand: no change record / cut facts / degraded subject are
+      // all knowable now, so nothing needs a later write-back.
+      validationMode: resolveTriggerFocus(snapshot).mode
+    })
     // The attempt row was written before this run existed; now that it does, fill it in. The sweep
     // that decides whether a queued row is still waiting or was never claimed reads this column, so
     // leaving it null would make a row that does have a run look abandoned.

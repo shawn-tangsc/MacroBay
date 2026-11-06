@@ -49,6 +49,8 @@ export type AnalysisRunEnqueueInput = Readonly<{
   triggerKey: string
   /** Absent for a run queued before the model could be known; the invocation then follows the platform default. */
   model?: AnalysisRunModelRef | null
+  /** Which criterion the trigger-focus rule will use; decided at freeze, stored so passes can be grouped. */
+  validationMode?: AnalysisRun['validationMode']
 }>
 
 export type AnalysisRunService = Readonly<{
@@ -66,7 +68,7 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
       idempotencyKey: buildAnalysisIdempotencyKey(input), status: 'queued', attempt: 1, retryOfRunId: null,
       modelProviderId: input.model?.providerId ?? null, modelId: input.model?.modelId ?? null, policyVersion: analysisRunPolicy.version,
       promptVersion: analysisRunPolicy.promptVersion, skillVersion: analysisRunPolicy.skillVersion, outputSchemaVersion: MARKET_ANALYSIS_CONTRACT_POLICY.outputSchemaVersion,
-      jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, queuedAt, startedAt: null, completedAt: null
+      jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, validationMode: input.validationMode ?? null, queuedAt, startedAt: null, completedAt: null
     }
     return deps.repository.enqueueRun(run)
   }

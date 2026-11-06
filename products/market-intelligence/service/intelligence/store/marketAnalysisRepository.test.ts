@@ -43,7 +43,7 @@ function run(id: string, eventGroupId: string, snapshotId: string, idempotencyKe
   return {
     id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey,
     status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: 'provider', modelId: 'model', policyVersion: 'policy.v1', promptVersion: 'prompt.v1', skillVersion: 'skill.v1', outputSchemaVersion: 1,
-    jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
+    jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, validationMode: null, queuedAt: asOf, startedAt: null, completedAt: null
   }
 }
 
@@ -167,6 +167,34 @@ describe('marketAnalysisRepository', () => {
     const second = repository.enqueueRun(run('mi-ar-0002', 'mi-eg-0001', 'mi-es-A1', 'same-key'))
     expect(first.created).toBe(true)
     expect(second).toEqual({ created: false, run: first.run })
+    repository.close()
+  })
+
+  it('stores the criterion a run was judged by, and leaves older runs without one', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    const group: EventGroup = {
+      id: 'mi-eg-mode', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|official|US|2026-08|CPI',
+      firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['event-1'],
+      triggerCount: 0, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
+    }
+    repository.appendEventGroup(group)
+    const snapshotFor = (id: string) => ({
+      id, schemaVersion: 1 as const, eventGroupId: group.id, asOf, dataCutoff: asOf,
+      snapshotHash: buildAnalysisSnapshotHash({ profileId: 'crypto-market-analysis-v1', asOf, dataCutoff: asOf, facts: [], missingDomains: [], caveats: [], evidenceRefs: [] }),
+      profileId: 'crypto-market-analysis-v1' as const, facts: [], missingDomains: [], caveats: [], evidenceRefs: [], sourceHealth: [], createdAt: asOf,
+      policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1' as const
+    })
+    const withMode = snapshotFor('mi-es-mode-1')
+    const legacy = snapshotFor('mi-es-mode-2')
+    repository.appendSnapshot(withMode)
+    repository.appendSnapshot(legacy)
+    repository.enqueueRun({ ...run('mi-ar-mode', group.id, withMode.id, 'key-mode', withMode.snapshotHash), validationMode: 'reference-only' })
+    // A run written before the column existed has no mode; it must not be given one.
+    repository.enqueueRun(run('mi-ar-legacy', group.id, legacy.id, 'key-legacy', legacy.snapshotHash))
+
+    const stored = repository.listRuns()
+    expect(stored.find(candidate => candidate.validationMode === 'reference-only')).toBeDefined()
+    expect(stored.find(candidate => candidate.id === 'mi-ar-legacy')?.validationMode).toBeNull()
     repository.close()
   })
 

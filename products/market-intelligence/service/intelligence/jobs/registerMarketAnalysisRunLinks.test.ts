@@ -73,6 +73,9 @@ describe('market analysis run links', () => {
       // Both sides are written and they name the same run.
       expect(run!.jobRunId).toBe(`market-analysis:run:${run!.id}`)
       expect(runtime.repository.listTriggerLedger(group.id)[0]!.analysisRunId).toBe(run!.id)
+      // The criterion is recorded when the snapshot is frozen: the first snapshot of a group has no
+      // change record, so the trigger-focus rule never ran and the run carries that as its mode.
+      expect(run!.validationMode).toBe('not-applicable:no-change')
 
       // Job -> analysis: the dispatched run job carries the analysis id.
       const dispatched = enqueueDefinition.mock.calls.map(([definition]) => definition)
