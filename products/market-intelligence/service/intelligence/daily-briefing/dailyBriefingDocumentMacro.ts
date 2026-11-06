@@ -31,11 +31,28 @@ export function highImpactEventsInWindow(packet: DailyBriefingFactPacket): reado
     }))
 }
 
+/**
+ * 24 小时宏观栏暂时隐藏的两类事件（用户 2026-11-06：「所有央行活动和财经事件，暂时都不要显示」）。
+ *
+ * **按类别判，不按"有没有值"判**：以后这些事件补上数值也不许自己冒出来。类别来自日历源。
+ * 临时口径——要恢复就清空这个数组，一行改回来；判断只在这一处，页面与导出都读同一份结论。
+ */
+export const briefingHiddenMacroCategories: readonly DailyBriefingCalendarEvent['category'][] = [
+  'central-bank-activity',
+  'financial-event'
+]
+
+/** 一条日历事件该不该进 24h 宏观栏（正文、导出、分析素材三处共用这一个判断）。 */
+export function briefingMacroCategoryVisible(category: DailyBriefingCalendarEvent['category'] | undefined): boolean {
+  return category === undefined || !briefingHiddenMacroCategories.includes(category)
+}
+
 export function selectMacroCandidates(
   packet: DailyBriefingFactPacket,
   webValueKeys: ReadonlySet<string> = new Set()
 ): readonly BriefingMacroItem[] {
   return Object.freeze([...highImpactEventsInWindow(packet)]
+    .filter((event) => briefingMacroCategoryVisible(event.category))
     .sort((left, right) => surpriseMagnitude(right) - surpriseMagnitude(left) || right.scheduledAt.localeCompare(left.scheduledAt))
     .map((event) => toMacroItem(event, webValueKeys.has(event.eventKey))))
 }

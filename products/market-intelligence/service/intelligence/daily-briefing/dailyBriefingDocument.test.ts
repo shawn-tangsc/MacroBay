@@ -12,6 +12,7 @@ import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRates
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument, selectMacroFloorItem } from './dailyBriefingDocument'
+import { briefingMacroCategoryVisible } from './dailyBriefingDocumentMacro'
 import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
@@ -272,6 +273,39 @@ describe('daily briefing document', () => {
     expect(document.news.macro).toHaveLength(6)
     // 确定性兜底（最大意外值）仍排第一，其余按候选顺序。
     expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
+  })
+
+  // 用户 2026-11-06：「所有央行活动和财经事件，暂时都不要显示在 24h 宏观事件里面」。
+  // 按**类别**判，不按"有没有值"判——以后补上数值也不许自己冒出来；经济数据照常显示。
+  it('keeps central-bank and financial events out of the 24h macro block, and economic data in', () => {
+    const base = (eventKey: string, category: 'economic-indicator' | 'financial-event' | 'central-bank-activity') => ({
+      eventKey, title: eventKey, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
+      lifecycleState: 'released' as const, category,
+      actual: '3.4%', previous: '3.1%', consensus: '3.2%',
+      surprise: { direction: 'beat' as const, value: 0.2, unit: 'pp' as const }
+    })
+    const events = [
+      base('US.CPI', 'economic-indicator'),
+      base('US.CLAIMS', 'economic-indicator'),
+      base('US.FED.SPEECH', 'central-bank-activity'),
+      base('US.TREASURY.AUCTION', 'financial-event')
+    ]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+
+    // 正文/导出读的是这一份，分析素材也读它：两类事件一处过滤，三处一致。
+    expect(document.news.macro.map((item) => item.eventKey).sort()).toEqual(['US.CLAIMS', 'US.CPI'])
+    expect(document.news.macroCandidates?.map((item) => item.eventKey) ?? []).not.toContain('US.FED.SPEECH')
+    // 经济数据不受影响（对照组）。
+    expect(document.news.macro.some((item) => item.eventKey === 'US.CPI')).toBe(true)
+  })
+
+  it('decides by category, so a valued speech or auction stays hidden', () => {
+    // 判据是类别不是"有没有值"：这两个事件都带着实际值，仍然不许出现。
+    expect(briefingMacroCategoryVisible('central-bank-activity')).toBe(false)
+    expect(briefingMacroCategoryVisible('financial-event')).toBe(false)
+    expect(briefingMacroCategoryVisible('economic-indicator')).toBe(true)
+    // 老文档/旧日历没有类别时按"显示"处理，不许因为缺字段就吞掉一行。
+    expect(briefingMacroCategoryVisible(undefined)).toBe(true)
   })
 
   it('writes the period identity into the edition at the current schema', () => {
