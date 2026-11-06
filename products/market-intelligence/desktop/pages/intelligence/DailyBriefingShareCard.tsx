@@ -53,9 +53,6 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   // 正文不再印"窗口里共几条、几条没拿到"（用户 2026-11-06：这类话会让人觉得简报不可信）。
   // 「几条真摆出来了 / 几条没列」只在本栏有截断时说（`02` v2.125）：条数 = 本栏展示行数，
   // 候选总数不许当成事件条数——那是把"有限"说成"全部"。
-  const macroCandidateCount = (doc.news.macroCandidates ?? doc.news.macro).length
-  const macroShown = visibleMacro.length
-  const macroHidden = Math.max(0, macroCandidateCount - macroShown)
   // 宏观那一栏：有事件才有这一栏；**读不到或确实没有都不在正文里画**（用户 2026-11-06）。
   // 「读不到」进右列「数据缺口与限制」说（那里有原因与重试），正文里一个字都不提。
   const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
@@ -147,13 +144,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
-      {/* 截断时说清"摆出来的有几条、另几条没列"（`02` v2.125）：条数 = 上面真实画出的行数，
-          候选总数不许冒充事件条数。没截断就不写这一行。 */}
-      {macroHidden > 0 ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-coverage="true">
-        <span className="mi-brief-poster__macro-empty">{text.macroCoverage
-          .replace('{shown}', String(macroShown))
-          .replace('{hidden}', String(macroHidden))}</span>
-      </div> : null}
+      {/* 不再有"共 N 条（另 M 条未列出）"（用户 2026-11-06）：AI 判定有用的全部显示，
+          所以这句话在正文与导出里都不该存在——它描述的截断已经不存在了。 */}
       {/* 一行，正文段落样式：不是错误、不给图标、不给重试。「确实没有」那一档用另一句，
           由同一个推导决定，正文与限制清单说的是同一句话。
           **它是一个网格行**（`__macro` 那套两列），里面那格才跨两列：海报的网格是逐行的，

@@ -416,10 +416,11 @@ describe('daily brief agent turn copy', () => {
     expect(waitingItem?.why).toBeUndefined()
   })
 
-  it('caps the 24h macro section at four releases and audits the omitted ones with a reason', async () => {
+  it('shows every macro release the editor selected, with no cap (2026-11-06)', async () => {
     const source = withManyMacro()
     const candidates = source.news.macroCandidates!
-    const expected = candidates.slice(0, 4)
+    // 用户 2026-11-06：AI 判定有用的全部显示，四条上限取消。
+    const expected = candidates
     const selection = {
       stage: 'select', news: ['news:n1'], macro: candidates.map((item) => `macro:${item.eventKey}`), next: [],
       focus: 'US.FOMC',
@@ -439,11 +440,9 @@ describe('daily brief agent turn copy', () => {
     expect(result.state).toBe('accepted')
     if (result.state !== 'accepted') return
     expect(result.document.news.macro.map((item) => item.eventKey)).toEqual(expected.map((item) => item.eventKey))
+    // 没有"超出上限被藏起来"的条目：藏的理由里不再出现 cap。
     const hidden = result.document.provenance.selectionAudit?.hidden ?? []
-    for (const item of candidates.slice(4)) {
-      const entry = hidden.find((candidate) => candidate.factId === `macro:${item.eventKey}`)
-      expect(entry?.reason).toBe('macro display cap reached (at most 4)')
-    }
+    expect(hidden.some((entry) => /cap reached/.test(entry.reason))).toBe(false)
   })
 })
 

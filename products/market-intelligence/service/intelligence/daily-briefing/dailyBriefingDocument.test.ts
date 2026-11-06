@@ -255,7 +255,7 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.visibility).toBeUndefined()
   })
 
-  it('caps the 24h macro list at four and keeps the key floor event first', () => {
+  it('shows every candidate and keeps the key floor event first, with no cap (2026-11-06)', () => {
     const events = Array.from({ length: 6 }, (_, index) => ({
       eventKey: `US.EVENT_${index}`, title: `event ${index}`, scheduledAt: `2026-10-29T${String(12 + index).padStart(2, '0')}:30:00.000Z`,
       importance: 'high' as const, lifecycleState: 'released' as const, category: 'economic-indicator' as const,
@@ -268,7 +268,9 @@ describe('daily briefing document', () => {
     })
 
     expect(document.news.macroCandidates).toHaveLength(6)
-    expect(document.news.macro).toHaveLength(4)
+    // 不再截断：AI 判定有用的全部显示（用户 2026-11-06），没有"另 N 条未列出"这回事。
+    expect(document.news.macro).toHaveLength(6)
+    // 确定性兜底（最大意外值）仍排第一，其余按候选顺序。
     expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
   })
 

@@ -56,12 +56,13 @@ export function selectMacro(packet: DailyBriefingFactPacket, candidates: readonl
 }
 
 /**
- * The 24h macro section is a judgement, not a table: at most four releases reach the reader. The
- * deterministic floor stays first, the editor's selection follows in candidate order (largest
- * actual-vs-previous surprise first), and everything past the cap stays in `macroCandidates` for the
- * audit instead of being rendered as another row without an explanation.
+ * The 24h macro section shows **every** release the editor judged worth showing（用户 2026-11-06）：
+ * 以前这里卡死四条，读者看到「共 3 条（另 6 条未列出）」，等于把 AI 的判断又截了一半。
+ *
+ * 上限没有了；`maximumBriefingMacroItems` 仍导出，值是 `Number.POSITIVE_INFINITY`——**别改回数字**，
+ * 那是把截断悄悄装回来的最短路径。
  */
-export const maximumBriefingMacroItems = 4
+export const maximumBriefingMacroItems = Number.POSITIVE_INFINITY
 
 export function selectBriefingMacroItems(
   selected: readonly BriefingMacroItem[],
@@ -73,7 +74,6 @@ export function selectBriefingMacroItems(
     if (!item || seen.has(item.eventKey)) continue
     seen.add(item.eventKey)
     ordered.push(item)
-    if (ordered.length === maximumBriefingMacroItems) break
   }
   return Object.freeze(ordered)
 }

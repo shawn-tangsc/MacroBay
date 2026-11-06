@@ -264,15 +264,13 @@ describe('the macro section draws events, never a message about missing data (v2
     assertClean(rendered)
   })
 
-  it('states shown and hidden counts only when the section is truncated (v2.125)', async () => {
-    // 条数 = 本栏真实画出的行数：候选六个、摆出来四个，栏尾写「共 4 条（另 2 条未列出）」。
+  // 用户 2026-11-06：AI 判定有用的**全部显示**，所以「共 N 条（另 M 条未列出）」这句连同截断一起删。
+  it('never prints a shown/hidden count, whatever the candidate list holds', async () => {
     const doc = briefing()
     const candidates = Array.from({ length: 6 }, (_, index) => ({ ...doc.news.macro[0]!, eventKey: `EV.${index}`, title: `Event ${index}` }))
     const rendered = await render({ ...doc, news: { ...doc.news, macro: candidates.slice(0, 4), macroCandidates: candidates } })
-    const line = rendered.querySelector<HTMLElement>('[data-macro-coverage]')
-    expect(line?.textContent).toBe(text.macroCoverage.replace('{shown}', '4').replace('{hidden}', '2'))
-    // 没截断就不写这一行：多一句「另 0 条」只是噪音。
-    expect((await render(doc)).querySelector('[data-macro-coverage]')).toBeNull()
+    expect(rendered.querySelector('[data-macro-coverage]')).toBeNull()
+    expect(rendered.textContent).not.toMatch(/未列出|not listed/)
   })
 
   it('still renders an edition written at schema 13, before the lifecycle field existed', async () => {
