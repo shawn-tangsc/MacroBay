@@ -405,6 +405,20 @@ export type NotificationSubmitOutcome =
          * 单列一个原因，是为了让「你以为冷却生效了、其实每个桶都算一件事」当场可见。
          */
         | 'stale-signal-dedupe-vars'
+        /**
+         * 当日同类通知到了声明里的 `dailyLimit`（按 **UTC 自然日**算）。
+         *
+         * 单列一个原因，是为了让「今天为什么没提醒我」答得出话：没有这个码，被压掉的那条
+         * 在记录里什么都不留，读者和排障两边都只能看到「没发生」。
+         */
+        | 'daily-limit-reached'
+        /**
+         * 声明了 `minimumGapMs`，同类上一条还在冷却里。
+         *
+         * 与 `daily-limit-reached` 分开，是因为两者该给的解释不同：一个是「今天说满了」，
+         * 一个是「刚说过，等一下再说」。
+         */
+        | 'minimum-gap-active'
       message: string
     }
 

@@ -133,15 +133,20 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     dedupeUnit: 'occurrence',
     bodyVariants: ['network', 'proxy']
   }),
-  // P9 读者自己点的那次分析失败（2026-11-06 通用模块产品经理签；需求 r22 §2 档 0′）：
-  // **每次必回**，去重键就是那次运行——连点三次失败是三条，不是一条；不受任何条数上限。
+  // P9 读者自己点的那次分析失败（2026-11-06 通用模块产品经理签；需求 r23 档 0′）：
+  // **每次必回**，去重键就是那次运行——连点三次失败是三条，不是一条。
   // 正文只放人话（`{reason}` 由生产者按细分码映射、按读者语言取句），细分码只经深链进运行记录：
   // 原始报错里可能带 URL 或密钥片段，一个字都不许进正文。
+  //
+  // **故意不写 `dailyLimit`**：读者点了「立即分析」、等了几分钟、结果没成，这时候再用
+  // 「今天通知额度用完了」把他挡掉，比完全不通知更糟——他做了一次动作，等的是一个回执。
+  // 所以这条的豁免靠「声明里没写上限」（可选字段，没写就不判），不靠某个特判分支；
+  // 谁以后想给它「顺手统一」补一个数，先读上面这句。
   declaration('platform.analysis.manual-failed', {
     category: 'failure',
     requiresUserAction: true,
     requestedDisruptionLevels: ['desktop'],
     dedupeKeyTemplate: 'manual-failed:{runId}',
     dedupeUnit: 'occurrence'
-  })
+  }),
 ])

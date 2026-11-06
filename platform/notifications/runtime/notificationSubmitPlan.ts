@@ -55,6 +55,13 @@ export type NotificationSubmitPlanInput = {
   desktopSupported: boolean
   request: NotificationSubmitRequest
   duplicate?: NotificationRecord
+  /**
+   * 今天（**UTC 自然日**）这个事件已经落了几条、最近一条是什么时候。
+   *
+   * 由调用方从通知记录本身数出来（`countSameEventToday`），不是一个单独的计数器：
+   * 计数器和记录各说一套，就是两套账。缺省视为「今天还没有」。
+   */
+  sameEventToday?: Readonly<{ count: number; lastOccurredAt: string | null }>
   now: string
 }
 
@@ -127,6 +134,30 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     return rejected('cross-product-key', `dedupe key belongs to "${crossProduct}", not "${entry.productId}"`)
   }
   const dedupeKey = `${entry.productId}|${rawDedupeKey}`
+
+  // 当日上限与最小间隔：只在**会新建记录**的提交上判（合并进已有那一条不算新的一条）。
+  // 数从记录里来（`sameEventToday`），这一处只负责比大小——所以平台与生产者不会各有一套阈值。
+  // `dailyLimit` 是**可选**的：没写就不判。0′（读者手动点的那次失败）就是靠「没写」拿到豁免，
+  // 不是靠某个特判分支——特判会在下一次改造里被顺手删掉。
+  if (input.duplicate === undefined) {
+    const sentToday = input.sameEventToday?.count ?? 0
+    if (entry.dailyLimit !== undefined && sentToday >= entry.dailyLimit) {
+      return rejected(
+        'daily-limit-reached',
+        `notification event "${entry.id}" already sent ${sentToday} of ${entry.dailyLimit} today (UTC); this one is refused, not silently dropped`
+      )
+    }
+    const last = input.sameEventToday?.lastOccurredAt
+    if (entry.minimumGapMs !== undefined && typeof last === 'string') {
+      const elapsed = Date.parse(input.now) - Date.parse(last)
+      if (Number.isFinite(elapsed) && elapsed < entry.minimumGapMs) {
+        return rejected(
+          'minimum-gap-active',
+          `notification event "${entry.id}" sent ${elapsed}ms ago; the declared gap is ${entry.minimumGapMs}ms`
+        )
+      }
+    }
+  }
 
   const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported)
   const levels = effectiveLevels(entry, surfaces)

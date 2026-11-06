@@ -68,6 +68,61 @@ export function foldIntoAggregate(
   return { records: [aggregate, ...records], aggregate }
 }
 
+/**
+ * 今天（UTC 自然日）这个事件已经落了几条、最近一条什么时候。
+ *
+ * 从**记录本身**数，不另存计数器：一份配额只允许有一个账本，记录就是那个账本。
+ * 用 UTC 日而不是读者的「今天」——否则改一下时区就能多拿额度。
+ */
+export function countSameEventToday(
+  records: readonly NotificationRecord[],
+  eventTypeId: string,
+  now: string
+): { count: number; lastOccurredAt: string | null } {
+  const day = utcDayOf(now)
+  let count = 0
+  let lastOccurredAt: string | null = null
+  for (const record of records) {
+    if (record.eventTypeId !== eventTypeId) continue
+    if (utcDayOf(record.createdAt) !== day) continue
+    count += 1
+    if (lastOccurredAt === null || record.createdAt > lastOccurredAt) lastOccurredAt = record.createdAt
+  }
+  return { count, lastOccurredAt }
+}
+
+/**
+ * 当日上限（或最小间隔）拒了这一条时，把「今天还出过一次」记进最后那条同事件记录，
+ * 而不是让它彻底消失：读者看到的是「共 N 次」，排障在记录上能读到被压掉的原因。
+ *
+ * 这不新建记录、不重推，只更新计数与原因——所以它不会绕过上限，也不会多出一条。
+ */
+export function foldSuppressedIntoLatest(input: {
+  records: readonly NotificationRecord[]
+  eventTypeId: string
+  now: string
+  reason: 'daily-limit-reached' | 'minimum-gap-active'
+}): { records: NotificationRecord[]; record: NotificationRecord } | undefined {
+  const day = utcDayOf(input.now)
+  let latest: NotificationRecord | undefined
+  for (const record of input.records) {
+    if (record.eventTypeId !== input.eventTypeId) continue
+    if (utcDayOf(record.createdAt) !== day) continue
+    if (latest === undefined || record.createdAt > latest.createdAt) latest = record
+  }
+  if (latest === undefined) return undefined
+  const folded: NotificationRecord = {
+    ...latest,
+    occurrenceCount: latest.occurrenceCount + 1,
+    updatedAt: input.now,
+    safeMetadata: { ...latest.safeMetadata, lastSuppressedReason: input.reason, lastSuppressedAt: input.now }
+  }
+  return {
+    records: input.records.map((record) => (record.id === folded.id ? folded : record)),
+    record: folded
+  }
+}
+
 /** 4a「中心必达」：凡走打断式通道的通知，`channels` 恒含 `center`。 */
 export function withCenterForDisruptiveChannels(
   request: NotificationRequest,

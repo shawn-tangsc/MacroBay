@@ -157,4 +157,52 @@ describe('platform notification event declarations', () => {
       expect(notificationCopyText(language, 'notification.event.platform.analysis.manual-failed.open').length).toBeGreaterThan(0)
     }
   })
+
+  /**
+   * 每日上限与「每次必回」的豁免（r23 档 0′/1）。
+   *
+   * 豁免必须靠**声明里没写 `dailyLimit`**拿到，不能靠某个特判分支：特判会在下一次改造里被顺手删掉。
+   * 这里用两条构造声明验证能力本身——真实的三档事件随生产者一起登记，避免「登记了没人发」。
+   */
+  it('enforces a declared daily cap and leaves an undeclared one unlimited', () => {
+    const catalog = createNotificationEventCatalog({
+      sources: [{
+        productId: 'platform',
+        events: [
+          { id: 'platform.capped-probe', titleKey: 'notification.taskFailed.title', reasonKey: 'notification.taskFailed.body', category: 'failure', requiresUserAction: false, requestedDisruptionLevels: [], dedupeUnit: 'occurrence', dedupeKeyTemplate: 'probe:{slot}', dailyLimit: 2, minimumGapMs: 6 * 60 * 60 * 1_000 },
+          { id: 'platform.uncapped-probe', titleKey: 'notification.taskFailed.title', reasonKey: 'notification.taskFailed.body', category: 'failure', requiresUserAction: false, requestedDisruptionLevels: [], dedupeUnit: 'occurrence', dedupeKeyTemplate: 'uncapped:{slot}' }
+        ]
+      }],
+      policy: {}
+    })
+    const settings = {
+      desktopEnabled: true,
+      toastEnabled: true,
+      popupEnabled: false,
+      push: { channelId: null },
+      retentionDays: 30,
+      defaultSnoozeMinutes: 10
+    }
+    const plan = (eventTypeId: string, vars: Record<string, string>, sameEventToday?: { count: number; lastOccurredAt: string | null }) =>
+      planNotificationSubmit({
+        catalog,
+        settings,
+        desktopSupported: true,
+        now: '2026-11-06T12:00:00.000Z',
+        request: { eventTypeId, dedupeVars: { builder: 'template', vars }, actions: [], occurredAt: '2026-11-06T11:59:00.000Z' },
+        ...(sameEventToday === undefined ? {} : { sameEventToday })
+      })
+
+    const third = plan('platform.capped-probe', { slot: 'a' }, { count: 2, lastOccurredAt: null })
+    if (third.kind !== 'rejected') throw new Error('第 3 条应当被当日上限拒')
+    expect(third.outcome.reason).toBe('daily-limit-reached')
+
+    // 冷却：「刚说过」与「说满了」是两个原因，读者该听到的解释不一样。
+    const gap = plan('platform.capped-probe', { slot: 'a' }, { count: 1, lastOccurredAt: '2026-11-06T11:00:00.000Z' })
+    if (gap.kind !== 'rejected') throw new Error('冷却内的提交应当被拒')
+    expect(gap.outcome.reason).toBe('minimum-gap-active')
+
+    // 没写上限的事件不判：今天已经发过 5 条，第 6 次仍然要发出去。
+    expect(plan('platform.uncapped-probe', { slot: 'b' }, { count: 5, lastOccurredAt: '2026-11-06T11:59:59.000Z' }).kind).toBe('new')
+  })
 })

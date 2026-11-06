@@ -48,6 +48,20 @@ export type NotificationEventDeclaration = {
   dedupeUnit: 'occurrence' | 'condition'
   conditionWindowMs?: number
   requestedBypassQuietHours?: boolean
+  /**
+   * 每天最多发几条，按 **UTC 自然日**分桶。缺省＝不限。
+   *
+   * 判在提交计划器**一处**，计数由平台从通知记录本身数（`sameEventToday`），生产者不许自己数：
+   * 再数一遍就是第二套阈值，两边一漂，读到的条数和实际发出去的对不上。
+   * 用 UTC 日而不是读者的「今天」，否则改一下时区就能多拿额度。
+   */
+  dailyLimit?: number
+  /**
+   * 相邻两条之间至少隔多久（毫秒），与 `dailyLimit` 配套，缺省＝不限。
+   *
+   * 「6 小时冷却」这类要求走这里，不写进生产者的判断——同一条规矩只允许有一个执行者。
+   */
+  minimumGapMs?: number
   deprecated?: boolean
 }
 
@@ -103,6 +117,16 @@ export function createNotificationEventCatalog(input: {
       }
       if (byId.has(declaration.id)) {
         throw new Error(`notification-event-duplicate-id:${declaration.id}`)
+      }
+      // 数与冷却只接受正整数：0 会把「每天 0 条」变成永远静默，负数更没有意义。
+      // 校验放在登记时，坏声明不该等到某天有人提交才发现。
+      if (declaration.dailyLimit !== undefined &&
+        (!Number.isSafeInteger(declaration.dailyLimit) || declaration.dailyLimit < 1)) {
+        throw new Error(`notification-event-invalid-daily-limit:${declaration.id}:${String(declaration.dailyLimit)}`)
+      }
+      if (declaration.minimumGapMs !== undefined &&
+        (!Number.isSafeInteger(declaration.minimumGapMs) || declaration.minimumGapMs < 1)) {
+        throw new Error(`notification-event-invalid-minimum-gap:${declaration.id}:${String(declaration.minimumGapMs)}`)
       }
       for (const level of declaration.requestedDisruptionLevels) {
         if (!REQUESTED_LEVELS.includes(level)) {

@@ -40,7 +40,7 @@ import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
 import { pruneNotificationDailyCounters } from './notificationBreaker'
-import { decideDailyCap, withCenterForDisruptiveChannels } from './notificationAggregate'
+import { countSameEventToday, decideDailyCap, foldSuppressedIntoLatest, withCenterForDisruptiveChannels } from './notificationAggregate'
 import { evaluateProducerGate } from './notificationProducerGate'
 import { emitBackoffEvent } from './notificationBackoffEvents'
 import { reportProviderCredentialFlip } from './notificationCredentialHealth'
@@ -206,14 +206,40 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       }
     }
 
+    // 当日上限与最小间隔的**计数**：从记录里数（UTC 日），不是另一份计数器。
+    const sameEventToday = countSameEventToday(state.records, request.eventTypeId, now)
     const first = planNotificationSubmit({
       catalog: deps.catalog,
       settings,
       desktopSupported: deps.desktopSupported?.() ?? true,
       request,
+      sameEventToday,
       now
     })
-    if (first.kind === 'rejected') return first.outcome
+    if (first.kind === 'rejected') {
+      // 被上限/冷却拦下的那一条不能凭空消失：「今天还出过一次」要落到今天最后那条同事件记录上，
+      // 读者看到的是「共 N 次」，排障在记录里读到 `lastSuppressedReason`。
+      // 没有任何同事件记录可落（例：今天第一条就被冷却拦住）才原样返回拒收。
+      if (first.outcome.reason === 'daily-limit-reached' || first.outcome.reason === 'minimum-gap-active') {
+        const folded = foldSuppressedIntoLatest({
+          records: state.records,
+          eventTypeId: request.eventTypeId,
+          now,
+          reason: first.outcome.reason
+        })
+        if (folded !== undefined) {
+          await persistWithDiagnostics({ ...state, records: folded.records })
+          notifyChanged()
+          return {
+            kind: 'merged',
+            recordId: folded.record.id,
+            occurrenceCount: folded.record.occurrenceCount,
+            mergedEventTypes: folded.record.mergedEventTypes ?? [folded.record.eventTypeId]
+          }
+        }
+      }
+      return first.outcome
+    }
 
     // 合并目标要看窗口：`condition` 事件只在「最近一次更新还在窗口内」时合并，窗口外开新行。
     const duplicateEntry = deps.catalog?.get(request.eventTypeId)
@@ -229,6 +255,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
           settings,
           desktopSupported: deps.desktopSupported?.() ?? true,
           request,
+          sameEventToday,
           now,
           duplicate
         })
