@@ -47,6 +47,8 @@ export type MarketCalendarEvent = Readonly<{
    * it. Optional on the wire: a service that does not supply it keeps working.
    */
   observationKey?: string
+  /** 已注册指标的稳定标识（`cpi`、`nonfarm-payrolls`…）；0xRouter 的自由文本事件没有它。 */
+  eventNameKey?: string
   eventType: typeof marketCalendarPublicPolicy.kinds[number]; importance: typeof marketCalendarPublicPolicy.importance[number]
   scheduledAt: string; consensus: MarketCalendarValue; providerPrevious: MarketCalendarValue; providerActual: MarketCalendarValue
   source: '0xRouter'; sourceObservedAt: string; coverage: 'observed-unverified'

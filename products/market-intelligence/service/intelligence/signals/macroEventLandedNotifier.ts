@@ -4,6 +4,12 @@ import { assessMarketCalendarSurprise, exceedsSurpriseTrigger } from '../../../c
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { providerReleaseSurprisePolicy } from '../analysis/providerReleaseSurprisePolicy'
+import {
+  macroEventPeriodLabel,
+  macroEventTitleParams,
+  recognizePeriodicity,
+  type SurprisePeriodicity
+} from './macroEventCopy'
 import { firstSeenReleaseWindowMs } from '../analysis/significanceChangeMatcher'
 
 /**
@@ -25,7 +31,23 @@ import { firstSeenReleaseWindowMs } from '../analysis/significanceChangeMatcher'
 /** 稳定 handler id：换名字会让平台把它当成另一个生产者。 */
 export const MACRO_EVENT_LANDED_PRODUCER_ID = 'market-intelligence.calendar-refresh'
 
-export type MacroEventLanding = Readonly<{ eventId: string; releaseAt: string }>
+export type MacroEventLanding = Readonly<{
+  eventId: string
+  releaseAt: string
+  /** 规范化国家代码（`US` / `JP`…）；有表就翻，没表就显示代码。 */
+  countryCode: string
+  /** 已注册指标的稳定标识；0xRouter 那条路没有它，指标名用源站原文。 */
+  eventNameKey?: string
+  /** 源站标题原文（没有稳定标识时就是指标名本身）。 */
+  title: string
+  /** 源串原样，不拆数值、不补单位（`displayValue` 只有字符串）。 */
+  actual: string
+  consensus: string
+  /** 缺前值是今天唯一会出现的缺值；缺就不传。 */
+  previous?: string
+  comparison: 'above' | 'below'
+  periodicity?: SurprisePeriodicity
+}>
 
 export const macroEventLandedPolicy = Object.freeze({
   /**
@@ -97,7 +119,23 @@ export function selectLandedReleases(
     }
     const eventId = typeof event.observationKey === 'string' && event.observationKey.length > 0 ? event.observationKey : event.eventKey
     if (seen?.has(`${eventId}:${releaseAt}`) === true) continue
-    landings.push({ eventId, releaseAt: releaseAt! })
+    const actual = readDisplayValue(event.providerActual)
+    const consensus = readDisplayValue(event.consensus)
+    // 不可比的一对不会走到这里（`exceedsSurpriseTrigger` 已经判过）；再挡一次是为了类型与文本。
+    if (actual === undefined || consensus === undefined) { notComparable += 1; continue }
+    const comparison = assessment.direction === 'miss' ? 'below' : 'above'
+    landings.push({
+      eventId,
+      releaseAt: releaseAt!,
+      countryCode: event.countryCode!,
+      ...(event.eventNameKey === undefined ? {} : { eventNameKey: event.eventNameKey }),
+      title: event.title,
+      actual,
+      consensus,
+      ...(readDisplayValue(event.providerPrevious) === undefined ? {} : { previous: readDisplayValue(event.providerPrevious)! }),
+      comparison,
+      ...(recognizePeriodicity(event.title) === undefined ? {} : { periodicity: recognizePeriodicity(event.title)! })
+    })
     // 一批补采可能把窗口内好几条都读回来；上限让一次刷新不至于变成一串要人逐条划掉的推送。
     if (landings.length >= macroEventLandedPolicy.maximumPerRefresh) break
   }
@@ -112,6 +150,19 @@ export function buildMacroEventLandedRequest(landing: MacroEventLanding): Notifi
     eventTypeId: EVENT_IDS.macroEventLanded,
     producerId: MACRO_EVENT_LANDED_PRODUCER_ID,
     dedupeVars: { builder: 'template', vars: { eventId: landing.eventId, releaseAt: landing.releaseAt } },
+    titleParams: macroEventTitleParams({
+      countryCode: landing.countryCode,
+      ...(landing.eventNameKey === undefined ? {} : { eventNameKey: landing.eventNameKey }),
+      title: landing.title,
+      comparison: landing.comparison
+    }),
+    bodyVariant: landing.previous === undefined ? 'noPrevious' : 'values',
+    bodyParams: {
+      actual: landing.actual,
+      consensus: landing.consensus,
+      ...(landing.previous === undefined ? {} : { previous: landing.previous }),
+      periodLabel: macroEventPeriodLabel(landing.periodicity)
+    },
     actions: [],
     // 数据描述的那个时刻，不是我们发现的时刻：晚到的数据仍属于它自己那条发布。
     occurredAt: landing.releaseAt
@@ -154,4 +205,14 @@ export async function notifyMacroEventLandings(
     else console.warn(`[macro-calendar] ${failed} 条发布通知没有提交成功${lastError ? `：${lastError}` : ''}`)
   }
   return sent
+}
+
+
+/** 缺值天然是「没有这个键」：空串、占位符都算缺（解析层已丢过一轮，这里再兜一次）。 */
+function readDisplayValue(value: Readonly<{ displayValue: string }> | null | undefined): string | undefined {
+  const text = value?.displayValue.trim()
+  if (text === undefined || text === '' || text === '-' || text === '--' || text === '—' || text.toLowerCase() === 'n/a') {
+    return undefined
+  }
+  return text
 }

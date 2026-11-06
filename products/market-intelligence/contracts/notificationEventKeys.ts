@@ -19,6 +19,15 @@ export {
 } from '@platform/notifications/contracts/platformNotificationEvents'
 
 /**
+ * 事件下的任意一段文案键：`notification.event.<id>.<path>`（如 `country.US`、`indicator.cpi`）。
+ *
+ * 与其余几个生成函数同源：手写全串会在事件改名时静默失效，而这类键数量多、最容易手写。
+ */
+export function notificationEventNamedKey(eventTypeId: string, path: string): string {
+  return `notification.event.${eventTypeId}.${path}`
+}
+
+/**
  * 标题变体的键：`notification.event.<id>.headline.<variant>`。
  *
  * 与标题/正文/理由同一套前缀、同一个生成地：事件改名时四句「加剧」标题跟着变，

@@ -57,8 +57,8 @@ describe('macro event landed threshold usage', () => {
     // And the other direction: when the shared decision says yes, a release that landed exactly on
     // consensus goes out too. A copied 5%/0.2pp comparison would keep it silent here.
     trigger.mockReturnValue(true)
-    expect(selectLandedReleases([event({ providerActual: { displayValue: '2' } })], asOf).landings).toEqual([
-      { eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: '2026-09-10T10:00:00.000Z' }
+    expect(selectLandedReleases([event({ providerActual: { displayValue: '2' } })], asOf).landings).toMatchObject([
+      { eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: '2026-09-10T10:00:00.000Z', countryCode: 'US', actual: '2', consensus: '2' }
     ])
   })
 })

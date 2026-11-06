@@ -6,7 +6,8 @@ import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalenda
 import {
   buildMacroEventLandedRequest,
   notifyMacroEventLandings,
-  selectLandedReleases
+  selectLandedReleases,
+  type MacroEventLanding
 } from './macroEventLandedNotifier'
 
 const asOf = '2026-09-10T12:00:00.000Z'
@@ -32,9 +33,24 @@ function event(overrides: Partial<MarketCalendarEvent> = {}): MarketCalendarEven
   }
 }
 
+/** 选中的落地条目：除了 id 与时刻，还要带上读者能看懂的那几样。 */
+function landing(overrides: Partial<MacroEventLanding> = {}): MacroEventLanding {
+  return {
+    eventId: 'US.CPI.RELEASE.2026-M08',
+    releaseAt: released,
+    countryCode: 'US',
+    title: 'CPI',
+    actual: '3',
+    consensus: '2',
+    previous: '2',
+    comparison: 'above',
+    ...overrides
+  }
+}
+
 describe('macro event landed notifier', () => {
   it('names the release and the instant the data describes, and leaves the key to the platform', () => {
-    const request = buildMacroEventLandedRequest({ eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released })
+    const request = buildMacroEventLandedRequest(landing())
     expect(request).toMatchObject({
       eventTypeId: 'market-intelligence.macro.event-landed',
       producerId: 'market-intelligence.calendar-refresh',
@@ -45,7 +61,17 @@ describe('macro event landed notifier', () => {
     // No deeplink and no action: the shell resolves settings sections only, so an "open" button
     // would point nowhere. A button that cannot go anywhere is worse than no button.
     expect(request).not.toHaveProperty('deeplink')
-    for (const bad of [{ eventId: '', releaseAt: released }, { eventId: 'x', releaseAt: 'not-an-instant' }]) {
+    // 标题三个槽：国家（引用）、指标（无稳定标识 → 源站原文）、方向（引用）。
+    expect(request?.titleParams).toEqual({
+      country: { ref: { scope: 'product', productId: 'market-intelligence', key: 'notification.event.market-intelligence.macro.event-landed.country.US' } },
+      indicator: 'CPI',
+      direction: { ref: { scope: 'product', productId: 'market-intelligence', key: 'notification.event.market-intelligence.macro.event-landed.direction.above' } }
+    })
+    // 三个值原样传；缺前值换句子，不拼「—」。
+    expect(request?.bodyVariant).toBe('values')
+    expect(request?.bodyParams).toEqual({ actual: '3', consensus: '2', previous: '2', periodLabel: '' })
+    expect(buildMacroEventLandedRequest(landing({ previous: undefined }))?.bodyVariant).toBe('noPrevious')
+    for (const bad of [{ ...landing(), eventId: '' }, { ...landing(), releaseAt: 'not-an-instant' }]) {
       expect(buildMacroEventLandedRequest(bad)).toBeUndefined()
     }
   })
@@ -62,7 +88,7 @@ describe('macro event landed notifier', () => {
     const stale = event({ eventKey: 'batch-8', observationKey: 'US.ISM.RELEASE.2026-M07', scheduledAt: '2026-08-01T10:00:00.000Z' })
 
     const selection = selectLandedReleases([event(), routine, incomparable, foreign, lowImportance, notYetDue, noActual, stale], asOf)
-    expect(selection.landings).toEqual([{ eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released }])
+    expect(selection.landings).toEqual([landing()])
     // The two that were dropped for a reason worth counting are counted: "signed filter kept" and
     // "we read nothing" must not look the same in a log.
     expect(selection.suppressed).toEqual({ notComparable: 1, belowThreshold: 1 })
@@ -70,15 +96,13 @@ describe('macro event landed notifier', () => {
     expect(selectLandedReleases([event()], asOf, new Set(['US.CPI.RELEASE.2026-M08:2026-09-10T10:00:00.000Z'])).landings).toEqual([])
     // `eventKey` is a per-batch HMAC: two collections of one release carry different ones, so identity
     // has to be `observationKey` or every refresh would read as a new event.
-    expect(selectLandedReleases([event({ eventKey: 'another-hmac' })], asOf).landings).toEqual([
-      { eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released }
-    ])
+    expect(selectLandedReleases([event({ eventKey: 'another-hmac' })], asOf).landings).toEqual([landing()])
   })
 
   it('submits once, remembers what it said, and leaves a readable trace when a submit fails', async () => {
     const submit = vi.fn(async () => ({ kind: 'recorded' } as never))
     const seen = new Map<string, number>()
-    const landings = [{ eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released }]
+    const landings = [landing()]
     await expect(notifyMacroEventLandings(submit, landings, seen)).resolves.toBe(1)
     await expect(notifyMacroEventLandings(submit, landings, seen)).resolves.toBe(0)
     expect(submit).toHaveBeenCalledTimes(1)

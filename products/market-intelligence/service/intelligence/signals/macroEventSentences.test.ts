@@ -1,0 +1,96 @@
+import { describe, expect, it } from 'vitest'
+
+import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
+import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
+import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
+import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { notificationCopy } from '@platform/i18n/notificationCopy'
+
+import { marketIntelligenceNotificationCopy } from '../../../desktop/shared/i18n/text/notifications'
+import { marketIntelligenceProductManifest } from '../../../product.manifest'
+import { buildMacroEventLandedRequest, type MacroEventLanding } from './macroEventLandedNotifier'
+
+/**
+ * 宏观落地通知的**句子层**（情报需求 §十二）：哪个国家、哪个指标、高了还是低了，三个数并排。
+ *
+ * 判据全在这里：国家不许留空、不许印源站 `countryName`；已注册指标查表、自由文本用原文；
+ * 口径认得出才写、写不出就不加括号；数字照用源串、不重新格式化。
+ */
+const catalog = createNotificationEventCatalog({
+  policy: NOTIFICATION_EVENT_POLICY,
+  sources: [
+    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
+    { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+  ]
+})
+const port = createNotificationCopyPort({
+  platform: notificationCopy,
+  products: { 'market-intelligence': marketIntelligenceNotificationCopy }
+})
+const entry = catalog.get('market-intelligence.macro.event-landed')!
+
+function landing(overrides: Partial<MacroEventLanding> = {}): MacroEventLanding {
+  return {
+    eventId: 'US.CPI.RELEASE.2026-M08',
+    releaseAt: '2026-09-10T10:00:00.000Z',
+    countryCode: 'US',
+    title: 'CPI (YoY)',
+    actual: '3.1%',
+    consensus: '2.9%',
+    previous: '3.0%',
+    comparison: 'above',
+    periodicity: 'yoy',
+    ...overrides
+  }
+}
+
+function render(input: MacroEventLanding, language: 'zh-CN' | 'en-US'): { title: string | null; body: string | null } {
+  const request = buildMacroEventLandedRequest(input)!
+  const bodyKey = entry.bodyKeyByVariant?.[request.bodyVariant ?? '']
+  return {
+    title: port.resolve({ scope: 'product', productId: 'market-intelligence', key: entry.titleKey, params: request.titleParams }, language),
+    body: port.resolve({ scope: 'product', productId: 'market-intelligence', key: bodyKey!, params: request.bodyParams }, language)
+  }
+}
+
+describe('macro event landed sentences', () => {
+  it('names the country, the registered indicator and the direction, with three values in a row', () => {
+    const zh = render(landing({ eventNameKey: 'cpi' }), 'zh-CN')
+    expect(zh.title).toBe('美国 消费者物价指数（CPI） 高于预期')
+    expect(zh.body).toBe('实际 3.1%，预期 2.9%，前值 3.0%（同比）')
+
+    const en = render(landing({ eventNameKey: 'cpi' }), 'en-US')
+    expect(en.title).toBe('US CPI above forecast')
+    expect(en.body).toBe('Actual 3.1% vs 2.9% forecast; previous 3.0% (YoY)')
+  })
+
+  it('shows the code when the country is not in the table, and never leaves the country out', () => {
+    const zh = render(landing({ countryCode: 'JP', eventNameKey: undefined, title: 'Initial Jobless Claims', periodicity: undefined }), 'zh-CN')
+    // 自由文本走原文（中文界面出现英文指标名是已知欠账，不许用兜底句顶掉）。
+    expect(zh.title).toBe('JP Initial Jobless Claims 高于预期')
+    expect(zh.title).not.toContain('United States')
+    expect(zh.title?.startsWith('JP ')).toBe(true)
+  })
+
+  it('switches the sentence when the previous value is missing, with no dash and no empty brackets', () => {
+    const zh = render(landing({ previous: undefined }), 'zh-CN')
+    expect(zh.body).toBe('实际 3.1%，预期 2.9%，前值没有公布（同比）')
+    expect(zh.body).not.toContain('—')
+    expect(zh.body).not.toContain('（）')
+    expect(zh.body).not.toContain('前值 —')
+  })
+
+  it('writes the direction as a word, never as a difference in points', () => {
+    const zh = render(landing({ comparison: 'below', eventNameKey: 'cpi' }), 'zh-CN')
+    expect(zh.title).toBe('美国 消费者物价指数（CPI） 低于预期')
+    expect(zh.title).not.toContain('个百分点')
+    expect(zh.body).not.toContain('个百分点')
+  })
+
+  it('keeps the provider’s own string: no reformatting, no extra percent sign', () => {
+    const zh = render(landing({ actual: '3.4', consensus: '1.2M', previous: '250K', periodicity: undefined }), 'zh-CN')
+    expect(zh.body).toBe('实际 3.4，预期 1.2M，前值 250K')
+    expect(zh.body).not.toContain('%%')
+    expect(zh.body).not.toContain('3.40')
+  })
+})

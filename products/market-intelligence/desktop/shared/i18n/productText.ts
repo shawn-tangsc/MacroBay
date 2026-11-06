@@ -11,22 +11,11 @@
  * 改动这里之前先想清楚：模型侧词表与服务侧 `analysisModelVocabulary` 必须同时改，否则红了是对的。
  */
 import { miText } from './text/mi'
+import { registeredEventNames } from '../../../contracts/registeredEventNames'
 import { dailyBriefingText } from './text/pages/dailyBriefing'
 import { macroCalendarText } from './text/settings/macroCalendar'
 import { intelligenceSourcesText } from './text/settings/intelligenceSources'
 
-const registeredEventNames = {
-  'zh-CN': {
-    cpi: '消费者物价指数（CPI）', 'core-cpi': '核心 CPI', 'nonfarm-payrolls': '非农就业人数',
-    unemployment: '失业率', 'average-hourly-earnings': '平均时薪', pce: 'PCE 物价', 'core-pce': '核心 PCE',
-    gdp: 'GDP', fomc: '美联储议息会议'
-  },
-  'en-US': {
-    cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'Nonfarm payrolls',
-    unemployment: 'Unemployment rate', 'average-hourly-earnings': 'Average hourly earnings', pce: 'PCE', 'core-pce': 'Core PCE',
-    gdp: 'GDP', fomc: 'FOMC decision'
-  }
-} as const
 
 /**
  * Market Intelligence 产品文案（i18n）。

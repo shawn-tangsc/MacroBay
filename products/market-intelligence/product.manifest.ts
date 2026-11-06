@@ -339,7 +339,8 @@ export const marketIntelligenceProductManifest = {
     }),
     notificationEvent('market-intelligence.macro.event-landed', {
       category: 'reminder',
-      body: true,
+      // 三值齐 / 缺前值 / 缺预期（后者今天不可达，键留着等放宽筛选）。
+      bodyVariants: ['values', 'noPrevious', 'noForecast'],
       requiresUserAction: false,
       // 同上：信息类不申请桌面档。
       requestedDisruptionLevels: ['channel'],
