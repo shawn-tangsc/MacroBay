@@ -1650,7 +1650,7 @@ it('says the progress could not be read without falling back to "not generated"'
     // Today's row is a gap, which is the state the rail must not label "not generated" mid-run.
     list: vi.fn(async () => ({
       state: 'available' as const,
-      result: { editions: editions.map((edition) => (edition.date === '2026-10-30' ? { ...edition, state: 'missing' as const } : edition)) }
+      result: { editions: editions.map((edition) => (edition.date === '2026-10-30' ? { ...edition, state: 'missing' as const, languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] } : edition)) }
     })),
     getProgress: vi.fn(async () => ({ state: 'unavailable' as const }))
   })

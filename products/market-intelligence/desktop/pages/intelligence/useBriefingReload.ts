@@ -121,8 +121,11 @@ export function useBriefingReload(deps: Readonly<{
           if (read.kind === 'available') return
         }
       }
+      // 位置留在这一天，并把**这一行自己的身份**记全：rail 要三项齐全才点亮，缺一项就不亮。
+      const stayingRow = rows.find((row) => row.date === stayingDate)
       setPinnedDate(stayingDate)
-      setPickedPeriodId(undefined)
+      setPickedPeriodId(stayingRow?.periodId)
+      if (stayingRow !== undefined) setPickedLocale(stayingRow.locale)
       setView({ status: 'no-edition', date: stayingDate, failed: false })
       return
     }
@@ -132,6 +135,10 @@ export function useBriefingReload(deps: Readonly<{
       // 只回写**读到的那一行**（日期 + 期号 + 语言）：按日期整片替换会把同一天另一种语言的行
       // 也写成这一版，两行于是同键同语言，React 会把它们当同一行复用，右键与删除落到另一行上。
       rows = mergeEditionSummary(rows, today.document)
+      // 首屏就把身份记全（文档 → 这一版）：rail 按三项比，缺一项会一条都不亮或两条一起亮。
+      setPinnedDate(today.document.edition.date)
+      setPickedPeriodId(today.document.edition.periodId ?? 'default')
+      setPickedLocale(today.document.edition.locale)
       setView({
         status: 'ready',
         document: today.document,
@@ -209,6 +216,10 @@ export function useBriefingReload(deps: Readonly<{
           setRegenerating(false)
           return
         }
+        // 读者看的是"今天这一期没有生成"，那一行也该是选中的：身份取自今天这一行（有就记全）。
+        const periodRow = rows.find((row) => row.date === periodDate)
+        setPickedPeriodId(periodRow?.periodId)
+        if (periodRow !== undefined) setPickedLocale(periodRow.locale)
         setView({ status: 'no-edition', date: periodDate, failed: false })
       }
     } else if (false) {

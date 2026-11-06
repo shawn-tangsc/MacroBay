@@ -161,15 +161,15 @@ export function DailyBriefingHistoryRail({
     if (open) rowRefs.current.get(`${open.date}:${open.periodId}:${open.locale}`)?.focus()
   }
 
-  const rowSelected = (edition: DailyBriefingEditionSummary): boolean => {
-    if (selectedDate === undefined) return false
-    if (edition.date !== selectedDate) return false
-    // One row is one (period, language): without both in the test, every edition of the same period
-    // would light up as "the one on screen".
-    if (selectedPeriodId !== undefined && edition.periodId !== selectedPeriodId) return false
-    if (selectedLocale !== undefined && edition.locale !== selectedLocale) return false
-    return true
-  }
+  /**
+   * 一行 = 一个 (日期, 期号, 语言)。**三项齐全才可能选中**（用户 2026-11-06）。
+   *
+   * 以前期号/语言是"带了才比"的通配：首屏还拿不到期号时只剩日期在比，同一天两条一起亮。
+   * `undefined` 不是"全都匹配"，而是"没有任何一行被选中"。
+   */
+  const rowSelected = (edition: DailyBriefingEditionSummary): boolean =>
+    selectedDate !== undefined && selectedPeriodId !== undefined && selectedLocale !== undefined &&
+    edition.date === selectedDate && edition.periodId === selectedPeriodId && edition.locale === selectedLocale
 
   /**
    * One run, one row. The projection says which edition is in flight (`languages` carries the
