@@ -1,5 +1,5 @@
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
+import { briefingFailedNotice, briefingTimeLabel, notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import type { DailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import type { DailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
@@ -73,7 +73,8 @@ export async function publishDailyBriefingEdition(input: Readonly<{
   }
   await store.prune(cutoffDate(date)).catch(() => undefined)
   await notifyDailyBriefing(input.noticeSubmit, {
-    kind: 'ready', date, periodId, editionId: `${date}:${locale}:${periodId}`, locale, deliver: input.deliver
+    kind: 'ready', date, periodId, editionId: `${date}:${locale}:${periodId}`, locale, deliver: input.deliver,
+    timeLabel: briefingTimeLabel(traced.edition.windowEnd, traced.edition.timeZone)
   }, input.now())
   return { state: 'available', document: traced }
 }
@@ -93,13 +94,19 @@ export async function abandonDailyBriefingEditorial(input: Readonly<{
   noticeSubmit?: DailyBriefingNoticeSubmit
   date: string
   periodId: string
+  locale?: DailyBriefingLocale
+  /** 这一期的名义截止与它自己的时区：失败时也要点名到"哪一期"。 */
+  asOf?: string
+  timeZone?: string
 }>): Promise<DailyBriefingTodayResult> {
   const trace = input.recorder.complete('failed')
   await input.attempts.settle('failed', trace.finishedAt ?? input.now(), { failureCode: input.failureCode, trace })
   await input.run.settle('failed', 0)
-  await notifyDailyBriefing(input.noticeSubmit, {
-    kind: 'failed', variant: 'editorial-missing', date: input.date, periodId: input.periodId
-  }, input.now())
+  await notifyDailyBriefing(input.noticeSubmit, briefingFailedNotice({
+    variant: 'editorial-missing', date: input.date, periodId: input.periodId,
+    locale: input.locale ?? 'zh-CN',
+    asOf: input.asOf ?? input.now(), timeZone: input.timeZone ?? 'UTC'
+  }), input.now())
   return {
     state: 'unavailable',
     failureCode: input.failureCode as DailyBriefingTodayFailureCode,

@@ -55,7 +55,7 @@ function createRuntime(subscriptions: Record<string, unknown> = {}) {
 }
 
 describe('daily briefing notifier', () => {
-  it('declares the completion notice the reader asked back, keyed by edition, and no desktop request', () => {
+  it('declares the completion notice the reader asked back, keyed by edition, and allowed on the desktop', () => {
     // 声明在表里才是可提交的前提；键带日期、期号与语言——同一天两期各一条。
     // 版本号或生成时刻仍不许混进去，否则同一版次重新生成会被当成新事件重推。
     const ready = marketIntelligenceProductManifest.notificationEvents.find((event) => event.id === READY_EVENT_ID)
@@ -72,7 +72,7 @@ describe('daily briefing notifier', () => {
     })
     expect(catalog.has(READY_EVENT_ID)).toBe(true)
     expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).toContain('center')
-    expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).not.toContain('desktop')
+    expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).toContain('desktop')
   })
 
   it('accepts a completion submission and keeps one row a day, so a same-day regeneration does not repeat it', async () => {
@@ -231,7 +231,8 @@ describe('the completion notice names the edition date, never "today"', () => {
   it('passes the edition day to the copy and keeps the word "today" out of it', () => {
     const request = buildBriefingNoticeRequest(
       { kind: 'ready', date: '2026-11-06', periodId: 'default', editionId: '2026-11-06:zh-CN:default', locale: 'zh-CN' }, NOW)
-    expect(request.bodyParams).toEqual({ date: '11/06' })
+    // 日期 + 时刻 + 语言（`02` v2.137）：读者按这三样能在列表里精确找到那一版。
+    expect(request.bodyParams).toEqual({ date: '11/06', time: '', language: '中文' })
   })
 
   it('writes the day the way a reader reads a day', () => {

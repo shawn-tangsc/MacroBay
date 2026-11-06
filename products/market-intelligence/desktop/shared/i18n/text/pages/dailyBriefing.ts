@@ -363,7 +363,7 @@ export const dailyBriefingText = {
     amplitude: 'Amplitude {value}',
     rowCurrent: 'Current {value}',
     rows: { fearGreed: 'Fear & Greed', fundingBtc: 'Funding BTC', fundingEth: 'Funding ETH', stablecoin: 'Stablecoins', etfBtc: 'US spot bitcoin ETF', etfEth: 'US spot ether ETF', btc: 'BTC', eth: 'ETH', index: 'Nasdaq', dxy: 'Dollar', dxySynthetic: 'Dollar (synthetic)', gold: 'Gold', us10y: 'US 10Y nominal yield', us10yReal: 'US 10Y real yield' },
-    empty: { news: 'No directional news today', macro: 'No high-impact release in the past 24 hours', next: 'No high-impact event in the next 7 days', conclusion: 'No published conclusion yet' },
+    empty: { news: 'No directional news today', next: 'No high-impact event in the next 7 days', conclusion: 'No published conclusion yet' },
     newsEmptyCodes: { 'no-directional-news': 'No directional news today', 'news-unavailable': 'News sentiment is unavailable', 'news-source-disabled': 'News sources are disabled' },
     /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
     macroUnreadable: 'Not readable right now: ',

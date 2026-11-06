@@ -30,7 +30,7 @@ import { abandonDailyBriefingEditorial, publishDailyBriefingEdition } from './da
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { prepareMarketForRun } from './dailyBriefProgressWaiting'
 import { createDailyBriefingReads } from './dailyBriefingReads'
-import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
+import { notifyBriefingFailure, notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import type { DailyBriefReadiness } from './dailyBriefReadinessGate'
 export { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
@@ -468,7 +468,7 @@ export function createDailyBriefingService(deps: Readonly<{
       const generationTrace = recorder.complete('failed')
       await attempts.settle('failed', generationTrace.finishedAt, { failureCode, trace: generationTrace })
       await run.settle('failed', 0)
-      await notifyDailyBriefing(deps.noticeSubmit, { kind: 'failed', variant: 'not-generated', date: input.date, periodId: input.periodId }, now())
+      await notifyBriefingFailure(deps.noticeSubmit, { variant: 'not-generated', date: input.date, periodId: input.periodId, locale: input.locale, asOf: input.asOf, timeZone: input.timeZone }, now())
       return { state: 'unavailable', failureCode, generationTrace }
     }
     const onStage = (event: DailyBriefTurnStageEvent): void => {
@@ -636,6 +636,7 @@ export function createDailyBriefingService(deps: Readonly<{
     if (editorialFailure !== undefined && editorialFailure !== 'editorial-disabled') {
       return abandonDailyBriefingEditorial({
         failureCode: editorialFailure, attempts, run, recorder, now,
+        locale: input.locale, asOf: input.asOf, timeZone: input.timeZone,
         ...(deps.noticeSubmit ? { noticeSubmit: deps.noticeSubmit } : {}),
         date: input.date, periodId: input.periodId
       })

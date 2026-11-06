@@ -1,3 +1,4 @@
+import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
@@ -23,13 +24,13 @@ import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
  * 一条通知发不出去不能把生成判成失败（日报已经落库），所以这里吞掉提交异常、返回 null。
  */
 export type DailyBriefingNotice =
-  | Readonly<{ kind: 'failed'; variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string }>
+  | Readonly<{ kind: 'failed'; variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string; locale?: string; timeLabel?: string }>
   | Readonly<{ kind: 'timezone-invalid'; date: string }>
   /**
    * 完成类：一天一期。`edition` 是读者眼前那一版的身份，落库供「发布频道」核对；`deliver: false`
    * 用于手动重新生成——照常建/合并记录，但不投递任何表面，读者点按钮时才有东西可重投。
    */
-  | Readonly<{ kind: 'ready'; date: string; periodId: string; editionId: string; locale: string; deliver?: boolean }>
+  | Readonly<{ kind: 'ready'; date: string; periodId: string; editionId: string; locale: string; deliver?: boolean; timeLabel?: string }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
@@ -74,6 +75,44 @@ export async function notifyDailyBriefing(
   }
 }
 
+/**
+ * 这一期的**名义时刻**，按它自己的时区写成 `HH:mm`（`02` v2.137 A9.17：通知点名到哪一期）。
+ * 拿不到就返回空串——句子里的占位会连着空格一起消失，不印 `07:00` 这种编出来的时刻。
+ */
+export function briefingTimeLabel(instant: string, timeZone: string): string {
+  const parsed = Date.parse(instant)
+  if (!Number.isFinite(parsed)) return ''
+  try {
+    return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone }).format(new Date(parsed))
+  } catch {
+    return ''
+  }
+}
+
+/** 一次失败的提醒：点名到哪一期（日期 + 时刻 + 语言），变体句说人话原因。 */
+export function briefingFailedNotice(input: Readonly<{
+  variant: 'not-generated' | 'editorial-missing'
+  date: string
+  periodId: string
+  locale: DailyBriefingLocale
+  asOf: string
+  timeZone: string
+}>): DailyBriefingNotice {
+  return {
+    kind: 'failed', variant: input.variant, date: input.date, periodId: input.periodId,
+    locale: input.locale, timeLabel: briefingTimeLabel(input.asOf, input.timeZone)
+  }
+}
+
+/** 发一条失败提醒：点名哪一期 + 人话原因变体；没有通知端口时什么也不做。 */
+export async function notifyBriefingFailure(
+  submit: DailyBriefingNoticeSubmit | undefined,
+  input: Readonly<{ variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string; locale: DailyBriefingLocale; asOf: string; timeZone: string }>,
+  occurredAt: string
+): Promise<NotificationSubmitOutcome | null> {
+  return notifyDailyBriefing(submit, briefingFailedNotice(input), occurredAt)
+}
+
 /** 版次日期写成读者一眼能认的形状（`11/06`）：ISO 串在通知里太长，也太像机器。 */
 export function monthDay(date: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
@@ -110,9 +149,13 @@ export function buildBriefingNoticeRequest(
       // The record states which edition it carries, so a later manual push can check it is the one on
       // screen; a manual regeneration writes the record without delivering anything.
       edition: { editionId: notice.editionId, locale: notice.locale },
-      // 正文说的是**哪一期**，不说"今天"（`02` v2.129 G3）：凌晨收到"今天这一期"的读者，
-      // 按日历今天去列表里找 11/06，而这一版其实落在 11/05 或反过来。
-      bodyParams: { date: monthDay(notice.date) },
+      // 正文说的是**哪一期**，不说"今天"（`02` v2.129 G3 / v2.137 A9.17）：
+      // 日期 + 时刻 + 语言，读者按这三样能在列表里精确找到那一版。
+      bodyParams: {
+        date: monthDay(notice.date),
+        time: notice.timeLabel ?? '',
+        language: notice.locale === 'en-US' ? 'English' : '中文'
+      },
       ...(notice.deliver === false ? { deliver: false } : {}),
       dedupeVars: { builder: 'template', vars: { date: notice.date, periodId: notice.periodId, locale: notice.locale } },
       actions: [{ ...OPEN_BRIEFING_ACTION }],
@@ -127,6 +170,12 @@ export function buildBriefingNoticeRequest(
       producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
       dedupeVars: { builder: 'template', vars: { date: notice.date, period: notice.periodId } },
       bodyVariant: notice.variant,
+      // 失败也点名到哪一期：日期 + 时刻 + 语言，读者不用猜是哪一版没跑出来。
+      bodyParams: {
+        date: monthDay(notice.date),
+        time: notice.timeLabel ?? '',
+        language: (notice.locale ?? 'zh-CN') === 'en-US' ? 'English' : '中文'
+      },
       actions: [{ ...OPEN_BRIEFING_ACTION }],
       // 整行点开也落到日报页：读者从列表里点，和点按钮是同一件事。
       deeplink: { ...OPEN_BRIEFING_DEEPLINK },
