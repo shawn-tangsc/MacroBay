@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
 import {
   analysisReleaseCoalescingPolicy,
+  decideAnalysisReleaseCoverage,
   findCoveringReleaseAttempt,
   isSameAnalysisRelease,
   resolveAnalysisReleaseIdentity
@@ -91,5 +92,41 @@ describe('covering release attempt', () => {
         { identity, decidedAt: '2026-11-05T00:58:00.000Z' }
       ]
     })?.decidedAt).toBe('2026-11-05T00:58:00.000Z')
+  })
+})
+
+describe('release coverage', () => {
+  const identity = { key: 'fred-rates-liquidity|2026-11-05', releasedAt: '2026-11-05T00:00:00.000Z' }
+  const now = '2026-11-05T00:59:00.000Z'
+  const attempt = (status: string, decidedAt = '2026-11-05T00:58:00.000Z') =>
+    ({ identity, decidedAt, status: status as never })
+
+  it('covers the release while an attempt is live or has succeeded', () => {
+    for (const status of ['queued', 'running', 'succeeded', 'unknown']) {
+      expect(decideAnalysisReleaseCoverage({ identity, now, attempts: [attempt(status)] }).decision).toBe('covered')
+    }
+  })
+
+  it('lets one failed attempt be supplemented, and only one', () => {
+    expect(decideAnalysisReleaseCoverage({ identity, now, attempts: [attempt('failed')] }).decision).toBe('uncovered')
+    expect(decideAnalysisReleaseCoverage({ identity, now, attempts: [attempt('failed'), attempt('invalid-output', '2026-11-05T00:58:30.000Z')] }).decision)
+      .toBe('abandoned')
+  })
+
+  it('counts a cancelled attempt as spent, because it still produced nothing', () => {
+    expect(decideAnalysisReleaseCoverage({ identity, now, attempts: [attempt('cancelled'), attempt('failed', '2026-11-05T00:58:30.000Z')] }).decision)
+      .toBe('abandoned')
+  })
+
+  it('does not cover a release whose attempts all fell outside the window', () => {
+    const stale = { identity, decidedAt: '2026-11-05T00:30:00.000Z', status: 'failed' as const }
+    expect(decideAnalysisReleaseCoverage({ identity, now, attempts: [stale] }).decision).toBe('uncovered')
+  })
+
+  it('ignores another release and another publisher', () => {
+    expect(decideAnalysisReleaseCoverage({
+      identity, now,
+      attempts: [{ identity: { ...identity, key: 'fred-rates-liquidity|2026-10-05' }, decidedAt: '2026-11-05T00:58:30.000Z', status: 'failed' }]
+    }).decision).toBe('uncovered')
   })
 })
