@@ -776,7 +776,7 @@ describe('agent platform services', () => {
     expect(optionsSeen.filter((options) => JSON.stringify(options) === JSON.stringify({ taskRowsOnly: true }))).toHaveLength(3)
   })
 
-  it('routes compatibility task mutations through automation commands and materializes the default timezone', async () => {
+  it('routes compatibility task mutations through automation commands without stamping the reader timezone', async () => {
     const services = createAgentPlatformServices(
       createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
       { taskAutomation: { timeZone: () => 'Asia/Shanghai' } }
@@ -793,8 +793,27 @@ describe('agent platform services', () => {
       patch: { name: 'Updated review' }
     })
 
-    expect(created.trigger).toEqual({ kind: 'cron', expr: '0 9 * * *', timezone: 'Asia/Shanghai' })
+    // `2135055` 起：保存时**不再**把读者当前时区盖进 `trigger.timezone`。
+    // 空的时区表示「跟随设置」，由规划时按当时的设置解析；写死进任务里的只会是读者自己指定的那个。
+    expect(created.trigger).toEqual({ kind: 'cron', expr: '0 9 * * *' })
     expect(updated).toMatchObject({ name: 'Updated review', revision: 2 })
+
+    // 显式给了时区就是任务自己的承诺：保存后原样保留，不被读者设置改写。
+    const explicit = await services.tasks.create(agent.id, {
+      name: 'New York review',
+      prompt: 'Review in New York time',
+      trigger: { kind: 'cron', expr: '0 9 * * *', timezone: 'America/New_York' },
+      workspace: { type: 'system' }
+    })
+    expect(explicit.trigger).toEqual({ kind: 'cron', expr: '0 9 * * *', timezone: 'America/New_York' })
+
+    // 校验没有跟着一起丢：显式写了一个不存在的时区，保存时就该失败，而不是等到跑起来。
+    await expect(services.tasks.create(agent.id, {
+      name: 'Bad zone',
+      prompt: 'Review',
+      trigger: { kind: 'cron', expr: '0 9 * * *', timezone: 'Mars/Olympus' },
+      workspace: { type: 'system' }
+    })).rejects.toMatchObject({ code: 'task-timezone-invalid' })
   })
 
   it('applies the current platform task automation preset to future create and update commands', async () => {
