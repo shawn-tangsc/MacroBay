@@ -34,13 +34,19 @@ describe('product registry generator', () => {
       .map((entry) => entry.id)
     expect(intelligenceSettingsIds).toEqual([
       'market-intelligence.intelligence-sources',
+      // 运行日志夹在两者之间：它读的是采集结果，所以排在源设置之后、通知之前。
+      'market-intelligence.intelligence-run-log',
       'market-intelligence.intelligence-notification'
     ])
+    const intelligenceRunLogEntry = registry.settingsEntries.find(
+      (entry) => entry.id === 'market-intelligence.intelligence-run-log'
+    )
+    expect(intelligenceRunLogEntry).toMatchObject({ icon: 'scroll-text', order: 11 })
     const intelligenceNotificationEntry = registry.settingsEntries.find(
       (entry) => entry.id === 'market-intelligence.intelligence-notification'
     )
-    // 新面板用注册表里已有的图标，不新增图标；顺序 11 紧跟源面板。
-    expect(intelligenceNotificationEntry).toMatchObject({ icon: 'message-square-text', order: 11 })
+    // 新面板用注册表里已有的图标，不新增图标；通知顺延到 12，给运行日志腾出 11。
+    expect(intelligenceNotificationEntry).toMatchObject({ icon: 'message-square-text', order: 12 })
   })
 
   it('rejects manifest ids that do not match the product directory', () => {
