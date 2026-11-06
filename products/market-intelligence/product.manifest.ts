@@ -141,6 +141,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.queryOpenInterestHistory' },
     { method: 'intelligence.queryMarketDivergence' },
     { method: 'intelligence.queryModuleSignals' },
+    { method: 'intelligence.queryModuleSignalRead' },
     { method: 'intelligence.queryCapitalConditionsSnapshot' },
     { method: 'intelligence.queryFearGreedSnapshot' },
     { method: 'intelligence.dailyBriefing.getToday' },

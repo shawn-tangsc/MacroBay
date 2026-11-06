@@ -146,6 +146,25 @@ export function registerIntelligencePublicQueryIpc(
     }
   })
 
+  /**
+   * The same read, with each signal's analysis state beside it.
+   *
+   * A separate method while the callers switch together: the old one keeps answering until the page
+   * moves, so there is never a moment where one side expects the new shape and the other sends the
+   * old one. Registered here means it must also be in the startup baseline in the same change — a
+   * registered method missing from that list is an app that refuses to start.
+   */
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead, async (payload) => {
+    if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) {
+      return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
+    }
+    try {
+      return await publicQueryService().queryModuleSignalRead({ asOf: payload.asOf })
+    } catch {
+      return { state: 'unavailable', failureCode: 'query-failed' } satisfies ModuleSignalRead
+    }
+  })
+
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, async (payload) => {
     try {
       const input = asCapitalConditionsSnapshotInput(payload)
