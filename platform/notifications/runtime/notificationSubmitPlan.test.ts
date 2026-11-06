@@ -184,3 +184,67 @@ describe('notification submit planner', () => {
     if (known.kind === 'new') expect(known.record.bodyKey).toBe('notification.test.body')
   })
 })
+
+describe('「看原文」动作：外链只有一种写法（契约 §7.5 ⑫）', () => {
+  const external = (overrides: Record<string, unknown> = {}) => ({
+    id: 'read-original',
+    labelKey: 'notification.action.open-original' as const,
+    kind: 'open-external' as const,
+    url: 'https://example.com/news/42',
+    ...overrides
+  })
+
+  it('accepts one http(s) link and keeps it on the record, untouched', () => {
+    const plan = planNotificationSubmit({ ...base, request: request({ actions: [external()] }) })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 中心按钮与手机末尾那一行读的是**同一份**：记录里存原地址，不在正文里再放一份。
+    expect(plan.record.actions).toEqual([external()])
+  })
+
+  it('rejects open-external without a url: a button with nowhere to go', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({ actions: [external({ url: undefined })] })
+    })
+    expect(plan).toMatchObject({ kind: 'rejected', outcome: { reason: 'external-action-without-url' } })
+  })
+
+  it('rejects anything that is not an absolute http(s) address', () => {
+    // `http:example.com` 不在这张表里：WHATWG 把 http/https 当「特殊协议」，会把它规范化成
+    // `http://example.com/`——那确实是一个能打开的绝对地址，拒它反而会把合法写法挡掉。
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', '/news/42', 'ftp://example.com/a']) {
+      const plan = planNotificationSubmit({ ...base, request: request({ actions: [external({ url })] }) })
+      expect(plan, url).toMatchObject({ kind: 'rejected', outcome: { reason: 'external-action-bad-url' } })
+    }
+  })
+
+  it('rejects a url on any other kind: two notions of "outside" must not be mixed', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({ actions: [external({ kind: 'open', url: 'https://example.com/a' })] })
+    })
+    expect(plan).toMatchObject({ kind: 'rejected', outcome: { reason: 'url-without-external-action' } })
+  })
+
+  it('rejects open-external carrying an in-app deeplink: that cannot be opened on a phone', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({ actions: [external({ deeplink: { scope: 'platform' as const } })] })
+    })
+    expect(plan).toMatchObject({ kind: 'rejected', outcome: { reason: 'external-action-with-deeplink' } })
+  })
+
+  it('does not echo the whole url into the rejection message', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({ actions: [external({ url: 'ftp://secret.example.com/token=abc' })] })
+    })
+    expect(plan.kind).toBe('rejected')
+    if (plan.kind === 'rejected') {
+      // 只回协议名：正文里的一次性参数不该被日志再存一份。
+      expect(plan.outcome.message).toContain('ftp:')
+      expect(plan.outcome.message).not.toContain('token=abc')
+    }
+  })
+})

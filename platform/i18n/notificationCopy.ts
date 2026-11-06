@@ -73,6 +73,13 @@ export type NotificationCopyTable = {
   'notification.action.open-settings': string
   /** 日报失败事件的动作：打开日报。 */
   'notification.action.open-briefing': string
+  /**
+   * 打开**原文链接**（N10 舆情等「看原文」动作）。
+   *
+   * 为什么在平台表里而不是产品表：`NotificationAction.labelKey` 的类型是 `NotificationCopyKey`，
+   * 就是这张表的键；同族的 `open-settings` / `open-briefing` 也都在这里。产品表里的键过不了类型。
+   */
+  'notification.action.open-original': string
   /** 桌面 / 通道投递的五个原因句（P7 五种可显示事实；S15 逐键 grep）。 */
   'notification.deliveryReason.desktopDisabled': string
   'notification.deliveryReason.pushUnavailable': string
@@ -130,6 +137,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.channelCheck.action': '去设置检查',
     'notification.action.open-settings': '去设置',
     'notification.action.open-briefing': '打开日报',
+    'notification.action.open-original': '打开原文',
     'notification.deliveryReason.desktopDisabled': '桌面通知已在设置里关闭',
     'notification.deliveryReason.pushUnavailable': '这条没接通投递通道',
     'notification.deliveryReason.systemUnsupported': '这台系统不支持桌面通知',
@@ -180,6 +188,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.channelCheck.action': 'Check settings',
     'notification.action.open-settings': 'Open settings',
     'notification.action.open-briefing': 'Open briefing',
+    'notification.action.open-original': 'Open original',
     'notification.deliveryReason.desktopDisabled': 'Desktop notifications are turned off in settings.',
     'notification.deliveryReason.pushUnavailable': 'This notification has no delivery channel connected.',
     'notification.deliveryReason.systemUnsupported': 'This system does not support desktop notifications.',

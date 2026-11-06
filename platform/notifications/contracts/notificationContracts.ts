@@ -37,7 +37,21 @@ export type NotificationAction = {
   id: string
   /** 动作标签的键；调用点不写句子，句子在文案表里。 */
   labelKey: NotificationCopyKey
-  kind: 'open' | 'acknowledge' | 'dismiss' | 'snooze' | 'custom'
+  /**
+   * `open-external` = 「看原文」：打开一个**读者真能点的公开地址**（契约 §7.5 ⑫）。
+   *
+   * 它与 `open` 不是一回事：`open` 指的是应用内的一个落点（`deeplink`），手机上没有那个界面；
+   * `url` 是真链接，Telegram 自己会把它变成可点。两者混用会得到一句做不到的话
+   * （手机上点不动），所以提交期分四种情形拒收，见 `notificationSubmitPlan.ts`。
+   */
+  kind: 'open' | 'acknowledge' | 'dismiss' | 'snooze' | 'custom' | 'open-external'
+  /**
+   * 只在 `kind === 'open-external'` 时出现：**只收 http/https 绝对地址**。
+   *
+   * 中心那条按钮与手机推送末尾那一行用**同一个**地址（规范化后），两处不一致读者会以为推错了；
+   * 正文模板里不许出现副本（中心会被两行截断）。
+   */
+  url?: string
   deeplink?: NotificationDeeplink
 }
 
@@ -426,6 +440,20 @@ export type NotificationSubmitOutcome =
         | 'invalid-dedupe-vars'
         | 'unknown-body-variant'
         | 'missing-action'
+        /**
+         * `open-external` 动作没带 `url`：按钮点了没有地方可去。
+         * 具名而不是通用 `invalid-action`，是为了让「哪一条动作错在哪」不用解析消息文本。
+         */
+        | 'external-action-without-url'
+        /**
+         * `url` 不是 http/https 绝对地址（`javascript:`、`file:`、相对路径都在这里）。
+         * 打开一个本地路径或一段脚本，等于把一个点不动的按钮换成更糟的东西。
+         */
+        | 'external-action-bad-url'
+        /** 不是 `open-external` 却带了 `url`：两个「外链」概念混用，读者点哪一个是猜的。 */
+        | 'url-without-external-action'
+        /** `open-external` 带 `deeplink`：应用内落点在手机上点不动，写出来就是一句做不到的话。 */
+        | 'external-action-with-deeplink'
         | 'scope-mismatch'
         /**
          * `signalSeverity` 不在 `low|medium|high` 里（契约 v2.45）。

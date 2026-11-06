@@ -19,6 +19,7 @@ import {
   notificationDedupeBuilders
 } from '../contracts/notificationDedupeKeys'
 import type {
+  NotificationAction,
   NotificationChannel,
   NotificationDedupeVars,
   NotificationRecord,
@@ -98,6 +99,11 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   }
   if (entry.requiresUserAction && input.request.actions.length === 0) {
     return rejected('missing-action', `notification event "${entry.id}" requires at least one action`)
+  }
+  // 「看原文」动作的四条边界（契约 §7.5 ⑫）：各给一个具名原因，别让它落成「按钮有时在有时不在」。
+  const badExternalAction = invalidExternalAction(input.request.actions)
+  if (badExternalAction !== undefined) {
+    return rejected(badExternalAction.reason, `notification event "${entry.id}" ${badExternalAction.message}`)
   }
 
   // 信号严重度只认三档闭集：类型层挡得住编译期，运行期还要挡一次（IPC / 生产者 / JS 调用点）。
@@ -195,6 +201,56 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
 /** 运行期校验：值必须落在三档闭集里（不被 `as` 或 JS 调用点绕过去）。 */
 function isSignalSeverity(value: unknown): value is NotificationSignalSeverity {
   return value === 'low' || value === 'medium' || value === 'high'
+}
+
+/**
+ * `open-external` 的四条硬边界（契约 §7.5 ⑫）。
+ *
+ * 为什么在提交入口拒收而不是在渲染层兜底：静默丢掉一个动作，读者看到的是「按钮莫名其妙没了」；
+ * 而把 URL 塞进正文的替代办法会让中心那条被两行截断——两种都比当场拒收更难查。
+ * 消息里**只回协议名**不回整条 URL：正文里可能带一次性参数，日志不该多存一份。
+ */
+function invalidExternalAction(
+  actions: readonly NotificationAction[]
+): { reason: Extract<NotificationSubmitOutcome, { kind: 'rejected' }>['reason']; message: string } | undefined {
+  for (const action of actions) {
+    const url = typeof action.url === 'string' ? action.url.trim() : undefined
+    if (action.kind !== 'open-external') {
+      if (action.url !== undefined) {
+        return {
+          reason: 'url-without-external-action',
+          message: `action "${action.id}" carries a url but its kind is "${action.kind}"; only open-external points outside`
+        }
+      }
+      continue
+    }
+    if (url === undefined || url.length === 0) {
+      return { reason: 'external-action-without-url', message: `action "${action.id}" is open-external but has no url` }
+    }
+    if (!isPublicWebUrl(url)) {
+      return {
+        reason: 'external-action-bad-url',
+        message: `action "${action.id}" has a url that is not an absolute http(s) address (${url.split(':')[0] ?? ''}:)`
+      }
+    }
+    if (action.deeplink !== undefined) {
+      return {
+        reason: 'external-action-with-deeplink',
+        message: `action "${action.id}" is open-external and also carries a deeplink; an in-app landing cannot be opened on a phone`
+      }
+    }
+  }
+  return undefined
+}
+
+/** 只认 http/https 且必须带主机名：`javascript:`、`file:`、`http:foo`、相对路径一律不算。 */
+function isPublicWebUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname.length > 0
+  } catch {
+    return false
+  }
 }
 
 function rejected(
