@@ -3,6 +3,10 @@
  * 且只在出错时渲染——正常、加载中、「还没有分析」、「数据不齐」都不出这个图标。
  */
 .mi-signal-read-issue {
-  color: var(--danger);
+  /*
+   * 图标不是正文：图形门槛是 3:1，深色下 `--danger` 对 surface 是 3.94，够用；掺 15% `--text-strong`
+   * 再提一档对比，同时这条前景不再写成「状态色当正文」——它们门槛不同，不该走同一个写法。
+   */
+  color: color-mix(in srgb, var(--danger) 85%, var(--text-strong));
   flex: 0 0 auto;
 }
