@@ -129,10 +129,13 @@ describe('daily briefing notifier', () => {
     expect(notGenerated).toMatchObject({
       eventTypeId: 'market-intelligence.briefing.failed',
       producerId: 'market-intelligence.dailyBriefing',
-      dedupeVars: { builder: 'template', vars: { date: DATE, period: 'default' } },
-      bodyVariant: 'not-generated'
+      dedupeVars: { builder: 'template', vars: { date: DATE, period: 'default' } }
     })
-    expect(editorial.bodyVariant).toBe('editorial-missing')
+    // 成品句子（契约 v2.56）：变体体现在**正文文字**里，不再有 bodyVariant。
+    for (const request of [notGenerated, editorial]) expect(request).not.toHaveProperty('bodyVariant')
+    expect(notGenerated.rendered?.['zh-CN']?.body).toContain('这一期没有生成出来')
+    expect(editorial.rendered?.['zh-CN']?.body).toContain('这一期数据齐了')
+    expect(editorial.rendered?.['en-US']?.body).toContain('no interpretation')
     for (const request of [notGenerated, editorial]) {
       expect(request).not.toHaveProperty('dedupeKey')
       expect(request.actions).toEqual([
@@ -178,8 +181,8 @@ describe('daily briefing notifier', () => {
       eventTypeId: 'market-intelligence.briefing.failed',
       dedupeKey: 'market-intelligence|brief-failed:2026-11-03:default',
       occurrenceCount: 2,
-      // 正文取最新一次：合并后记录的键换成第二次提交的变体。
-      bodyKey: 'notification.event.market-intelligence.briefing.failed.body.editorial-missing'
+      // 正文取最新一次：合并后记录里的成品句子换成第二次提交的那一版。
+      rendered: { 'zh-CN': { body: expect.stringContaining('这一期数据齐了') } }
     })
   })
 
@@ -231,8 +234,12 @@ describe('the completion notice names the edition date, never "today"', () => {
   it('passes the edition day to the copy and keeps the word "today" out of it', () => {
     const request = buildBriefingNoticeRequest(
       { kind: 'ready', date: '2026-11-06', periodId: 'default', editionId: '2026-11-06:zh-CN:default', locale: 'zh-CN' }, NOW)
-    // 日期 + 时刻 + 语言（`02` v2.137）：读者按这三样能在列表里精确找到那一版。
-    expect(request.bodyParams).toEqual({ date: '11/06', time: '', language: '中文' })
+    // 日期 + 时刻 + 语言：读者按这三样能在列表里精确找到那一版。
+    expect(request.rendered?.['zh-CN']?.body).toContain('11/06')
+    expect(request.rendered?.['zh-CN']?.body).toContain('中文这一期已经生成')
+    // 只交这一期自己的语言一份（契约 v2.56 的例外）；平台按 edition.locale 挑。
+    expect(Object.keys(request.rendered ?? {})).toEqual(['zh-CN'])
+    expect(request).not.toHaveProperty('bodyParams')
   })
 
   it('writes the day the way a reader reads a day', () => {
@@ -250,5 +257,48 @@ describe('the completion notice names the edition date, never "today"', () => {
     expect(zh).not.toContain('今天')
     expect(en).toContain('{date}')
     expect(en).not.toContain('Today')
+  })
+})
+
+describe('the completion notice carries the edition’s own lede', () => {
+  const ready = (locale: 'zh-CN' | 'en-US', lede?: string) => buildBriefingNoticeRequest({
+    kind: 'ready', date: '2026-11-06', periodId: 'default',
+    editionId: `2026-11-06:${locale}:default`, locale, ...(lede === undefined ? {} : { lede })
+  }, NOW)
+
+  it('puts the lede after the fact sentence, in the edition’s language, with a blank line between', () => {
+    const zh = ready('zh-CN', '今天的主导事件是…')
+    expect(zh.rendered?.['zh-CN']?.body).toContain('这一期已经生成。\n\n今天的主导事件是…')
+    expect(Object.keys(zh.rendered ?? {})).toEqual(['zh-CN'])
+
+    const en = ready('en-US', 'Today is led by…')
+    expect(en.rendered?.['en-US']?.body).toContain('edition is ready.\n\nToday is led by…')
+    expect(Object.keys(en.rendered ?? {})).toEqual(['en-US'])
+  })
+
+  it('drops the whole paragraph when the lede is empty — no blank line and no placeholder', () => {
+    for (const lede of [undefined, '', '   ']) {
+      const body = ready('zh-CN', lede).rendered?.['zh-CN']?.body ?? ''
+      expect(body).not.toMatch(/\n\n$|暂无导读|无导读/)
+      expect(body.trim()).toBe(body)
+    }
+  })
+
+  it('withholds a lede that carries an action point, and records which sentence was dropped', async () => {
+    // 手机上没有可点的地方：命中就整段不发。判定用平台唯一词表。
+    const calls: Array<{ level: string; event: string; fields: Record<string, unknown> }> = []
+    const { runtime, records } = createRuntime()
+    const submit = (request: Parameters<typeof runtime.submit>[0]) => runtime.submit(request)
+    await notifyDailyBriefing(submit, {
+      kind: 'ready', date: DATE, periodId: 'default',
+      editionId: `${DATE}:zh-CN:default`, locale: 'zh-CN', lede: '数据齐了，点开看全文。'
+    }, NOW, (level, event, fields) => { calls.push({ level, event, fields: fields ?? {} }) })
+
+    const record = records()[0] as { rendered?: { 'zh-CN'?: { body: string } } } | undefined
+    expect(record?.rendered?.['zh-CN']?.body).not.toContain('点开看全文')
+    expect(record?.rendered?.['zh-CN']?.body).toContain('这一期已经生成')
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.event).toBe('MI_DAILY_BRIEF_LEDE_WITHHELD')
+    expect(calls[0]?.fields).toMatchObject({ hit: '点开', editionId: `${DATE}:zh-CN:default` })
   })
 })

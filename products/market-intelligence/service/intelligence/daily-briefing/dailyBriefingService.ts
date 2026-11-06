@@ -348,6 +348,8 @@ export function createDailyBriefingService(deps: Readonly<{
    */
   readPeriods?: () => Promise<readonly Readonly<{ id: string; generationTime: string; windowHours: 12 | 24 | 48; language?: DailyBriefingLocale }>[]>
   noticeSubmit?: DailyBriefingNoticeSubmit
+  /** 结构化诊断（appLog）：导读被扣时那条日志走它；缺省时只是不记。 */
+  log?: import('./dailyBriefReadinessGate').BriefingDiagnosticLog
   redeliverPush?: BriefingRedeliver
   /** Waits for the market the brief reads; absent means generate at once, as before. */
   readiness?: DailyBriefReadiness
@@ -666,6 +668,5 @@ export function createDailyBriefingService(deps: Readonly<{
     readGeneration: generation,
     progressOf: progressLookup(runs.progress, runs.key)
   })
-  const publishToPhone = createPublishToPhone({ store: deps.store, submit: deps.noticeSubmit, redeliver: deps.redeliverPush, now })
-  return { getToday, regenerate, publishToPhone, list, ...reads, getProgress }
+  return { getToday, regenerate, publishToPhone: createPublishToPhone({ store: deps.store, submit: deps.noticeSubmit, redeliver: deps.redeliverPush, log: deps.log, now }), list, ...reads, getProgress }
 }

@@ -4,6 +4,9 @@ import type {
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import { failureCopy, readyCopy, timezoneCopy } from './dailyBriefingNoticeSentences'
+import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
+import type { BriefingDiagnosticLog } from './dailyBriefReadinessGate'
 import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
 
 /**
@@ -30,7 +33,7 @@ export type DailyBriefingNotice =
    * 完成类：一天一期。`edition` 是读者眼前那一版的身份，落库供「发布频道」核对；`deliver: false`
    * 用于手动重新生成——照常建/合并记录，但不投递任何表面，读者点按钮时才有东西可重投。
    */
-  | Readonly<{ kind: 'ready'; date: string; periodId: string; editionId: string; locale: string; deliver?: boolean; timeLabel?: string }>
+  | Readonly<{ kind: 'ready'; date: string; periodId: string; editionId: string; locale: string; deliver?: boolean; timeLabel?: string; lede?: string }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
@@ -62,14 +65,30 @@ const TIME_ZONE_SETTINGS_DEEPLINK = Object.freeze({
  * 服务与 job 共用这一个入口：`submit` 缺省时什么也不做（未装配通知运行时的测试），
  * 提交失败也只返回 null——调用点不需要各自写 try/catch。
  */
+/**
+ * 导读里有没有**指向本条通知**的动作指令（契约 v2.57）：有就整段不拼——手机上没有可点的地方，
+ * 发出去就是一句做不到的承诺。判定用平台唯一那份词表，产品不另写。
+ */
+export function actionDirectiveInLede(lede: string | undefined): string | null {
+  const trimmed = lede?.trim()
+  return trimmed === undefined || trimmed === '' ? null : findActionDirective(trimmed)
+}
+
 export async function notifyDailyBriefing(
   submit: DailyBriefingNoticeSubmit | undefined,
   notice: DailyBriefingNotice,
-  occurredAt: string
+  occurredAt: string,
+  log?: BriefingDiagnosticLog
 ): Promise<NotificationSubmitOutcome | null> {
   if (!submit) return null
+  // 命中动作词：只交事实句，并把「因为哪句才没发」记进 appLog（平台建不了这个码，也看不见这段）。
+  const hit = notice.kind === 'ready' ? actionDirectiveInLede(notice.lede) : null
+  if (hit !== null) log?.('warn', 'MI_DAILY_BRIEF_LEDE_WITHHELD', { editionId: (notice as { editionId: string }).editionId, hit, at: occurredAt })
+  // 命中时只交事实句：把导读从这次通知里拿掉（不删词、不改写，整段不发）。
+  let outgoing: DailyBriefingNotice = notice
+  if (notice.kind === 'ready' && hit !== null) outgoing = { ...notice, lede: undefined }
   try {
-    return await submit(buildBriefingNoticeRequest(notice, occurredAt))
+    return await submit(buildBriefingNoticeRequest(outgoing, occurredAt))
   } catch {
     return null
   }
@@ -108,9 +127,10 @@ export function briefingFailedNotice(input: Readonly<{
 export async function notifyBriefingFailure(
   submit: DailyBriefingNoticeSubmit | undefined,
   input: Readonly<{ variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string; locale: DailyBriefingLocale; asOf: string; timeZone: string }>,
-  occurredAt: string
+  occurredAt: string,
+  log?: BriefingDiagnosticLog
 ): Promise<NotificationSubmitOutcome | null> {
-  return notifyDailyBriefing(submit, briefingFailedNotice(input), occurredAt)
+  return notifyDailyBriefing(submit, briefingFailedNotice(input), occurredAt, log)
 }
 
 /** 版次日期写成读者一眼能认的形状（`11/06`）：ISO 串在通知里太长，也太像机器。 */
@@ -128,6 +148,8 @@ export function buildBriefingNoticeRequest(
     return {
       eventTypeId: EVENT_IDS.timezoneInvalid,
       producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      // 源头拼成品（契约 v2.56）：平台只挑一份发，不再读文案表。
+      rendered: timezoneCopy(),
       dedupeVars: { builder: 'template', vars: { date: notice.date } },
       // 只进中心（声明里没申请桌面/通道）；动作是「去设置」，读者要做的事就在那里。
       actions: [{
@@ -149,13 +171,14 @@ export function buildBriefingNoticeRequest(
       // The record states which edition it carries, so a later manual push can check it is the one on
       // screen; a manual regeneration writes the record without delivering anything.
       edition: { editionId: notice.editionId, locale: notice.locale },
-      // 正文说的是**哪一期**，不说"今天"（`02` v2.129 G3 / v2.137 A9.17）：
-      // 日期 + 时刻 + 语言，读者按这三样能在列表里精确找到那一版。
-      bodyParams: {
-        date: monthDay(notice.date),
+      // 正文说的是**哪一期**，不说"今天"：日期 + 时刻 + 这一期的语言；导读接在同一段后面。
+      // 只交这一期自己的语言一份——平台按 `edition.locale` 挑，英文界面也整条中文。
+      rendered: readyCopy({
+        date: notice.date,
         time: notice.timeLabel ?? '',
-        language: notice.locale === 'en-US' ? 'English' : '中文'
-      },
+        locale: notice.locale === 'en-US' ? 'en-US' : 'zh-CN',
+        ...(notice.lede === undefined ? {} : { lede: notice.lede })
+      }),
       ...(notice.deliver === false ? { deliver: false } : {}),
       dedupeVars: { builder: 'template', vars: { date: notice.date, periodId: notice.periodId, locale: notice.locale } },
       actions: [{ ...OPEN_BRIEFING_ACTION }],
@@ -169,13 +192,13 @@ export function buildBriefingNoticeRequest(
       eventTypeId: EVENT_IDS.briefingFailed,
       producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
       dedupeVars: { builder: 'template', vars: { date: notice.date, period: notice.periodId } },
-      bodyVariant: notice.variant,
-      // 失败也点名到哪一期：日期 + 时刻 + 语言，读者不用猜是哪一版没跑出来。
-      bodyParams: {
-        date: monthDay(notice.date),
+      // 失败也点名到哪一期，两份语言都交（它没有期次，中心按读者语言挑）。
+      rendered: failureCopy({
+        variant: notice.variant,
+        date: notice.date,
         time: notice.timeLabel ?? '',
-        language: (notice.locale ?? 'zh-CN') === 'en-US' ? 'English' : '中文'
-      },
+        locale: (notice.locale ?? 'zh-CN') === 'en-US' ? 'en-US' : 'zh-CN'
+      }),
       actions: [{ ...OPEN_BRIEFING_ACTION }],
       // 整行点开也落到日报页：读者从列表里点，和点按钮是同一件事。
       deeplink: { ...OPEN_BRIEFING_DEEPLINK },

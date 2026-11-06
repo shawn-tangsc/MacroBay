@@ -4,6 +4,7 @@ import type {
 } from '@platform/notifications/contracts/notificationContracts'
 
 import type { BriefingRedeliver } from './dailyBriefingPublishToPhone'
+import type { BriefingDiagnosticLog } from './dailyBriefReadinessGate'
 
 /**
  * 日报这条线在装配根上被注入的端口，两个都收在这里：**日历补跑命令**与**通知两个入口**。
@@ -29,14 +30,21 @@ export function createBriefingCalendarCommands(): Readonly<{
 }
 
 /**
- * 通知两个入口的转发。缺省时不传这个键（而不是传 undefined），服务端据此区分「未装配」与「装配了但拒绝」。
+ * 装配根交给简报的端口：通知两个入口 + 一条结构化诊断出口。缺省时不传这个键（而不是传 undefined），
+ * 服务端据此区分「未装配」与「装配了但拒绝」。
  */
 export function briefingNotificationPorts(hooks: Readonly<{
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   redeliverPush?: BriefingRedeliver
-}> | undefined): Readonly<{ noticeSubmit?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>; redeliverPush?: BriefingRedeliver }> {
+  log?: BriefingDiagnosticLog
+}> | undefined): Readonly<{
+  noticeSubmit?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  redeliverPush?: BriefingRedeliver
+  log?: BriefingDiagnosticLog
+}> {
   return {
     ...(hooks?.submitNotification ? { noticeSubmit: hooks.submitNotification } : {}),
-    ...(hooks?.redeliverPush ? { redeliverPush: hooks.redeliverPush } : {})
+    ...(hooks?.redeliverPush ? { redeliverPush: hooks.redeliverPush } : {}),
+    ...(hooks?.log ? { log: hooks.log } : {})
   }
 }

@@ -71,7 +71,7 @@ describe('publish to phone: write the record first, then push it', () => {
   it('publishes from an empty library: one record appears and the phone receives it once', async () => {
     const runtime = runtimeWithPush()
     const outcome = await publishBriefingToPhone({
-      hasEdition: async () => true, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW
+      readEdition: async () => ({ document: { lede: { text: '今天的主导事件是…' } } }), submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW
     }, input)
 
     expect(outcome).toMatchObject({ kind: 'accepted', delivery: { state: 'sent-accepted' } })
@@ -80,13 +80,15 @@ describe('publish to phone: write the record first, then push it', () => {
     expect(runtime.records()[0]).toMatchObject({
       eventTypeId: 'market-intelligence.briefing.ready',
       dedupeKey: `market-intelligence|briefing-ready:${DATE}:default:zh-CN`,
-      edition: { editionId: `${DATE}:zh-CN:default`, locale: 'zh-CN' }
+      edition: { editionId: `${DATE}:zh-CN:default`, locale: 'zh-CN' },
+      // 手动那条也要带导读：从这一版的 document 取，不是只写一条空记录。
+      rendered: { 'zh-CN': { body: expect.stringContaining('今天的主导事件是…') } }
     })
   })
 
   it('pressing again keeps one row and pushes again', async () => {
     const runtime = runtimeWithPush()
-    const deps = { hasEdition: async () => true, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }
+    const deps = { readEdition: async () => ({ document: { lede: { text: '今天的主导事件是…' } } }), submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }
     await publishBriefingToPhone(deps, input)
     const first = runtime.records()[0]
     const again = await publishBriefingToPhone(deps, input)
@@ -105,7 +107,7 @@ describe('publish to phone: write the record first, then push it', () => {
   it('refuses an edition that is not generated: no record, no push', async () => {
     const runtime = runtimeWithPush()
     const outcome = await publishBriefingToPhone({
-      hasEdition: async () => false, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW
+      readEdition: async () => undefined, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW
     }, input)
 
     expect(outcome).toEqual({ kind: 'rejected', reason: 'edition-missing' })
@@ -116,7 +118,7 @@ describe('publish to phone: write the record first, then push it', () => {
   it('does not write a record when the platform cannot re-push it', async () => {
     const runtime = runtimeWithPush()
     const outcome = await publishBriefingToPhone({
-      hasEdition: async () => true, submit: runtime.submit, redeliver: undefined, now: () => NOW
+      readEdition: async () => ({ document: { lede: { text: '今天的主导事件是…' } } }), submit: runtime.submit, redeliver: undefined, now: () => NOW
     }, input)
 
     expect(outcome).toEqual({ kind: 'rejected', reason: 'runtime-unavailable' })
@@ -127,7 +129,7 @@ describe('publish to phone: write the record first, then push it', () => {
     // 没有回执就没有可推的东西：这一档必须落「没推出去」，不许假装推了（用户 11-05 的原症状）。
     const runtime = runtimeWithPush()
     const outcome = await publishBriefingToPhone({
-      hasEdition: async () => true, submit: undefined, redeliver: runtime.redeliver, now: () => NOW
+      readEdition: async () => ({ document: { lede: { text: '今天的主导事件是…' } } }), submit: undefined, redeliver: runtime.redeliver, now: () => NOW
     }, input)
 
     expect(outcome).toEqual({ kind: 'rejected', reason: 'runtime-unavailable' })

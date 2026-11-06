@@ -4,6 +4,7 @@ import type { RedeliverReasonCode } from '@platform/notifications/runtime/notifi
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { notifyDailyBriefing } from './dailyBriefingNotifier'
+import type { BriefingDiagnosticLog } from './dailyBriefReadinessGate'
 
 /**
  * 「把眼前这一版发布到手机」：**先把这一版写进通知记录，再用回执里的记录身份推那一条**。
@@ -25,11 +26,13 @@ export type BriefingPublishOutcome =
   | Readonly<{ kind: 'rejected'; reason: 'edition-missing' | 'runtime-unavailable' | RedeliverReasonCode }>
 
 export type BriefingPublishDeps = Readonly<{
-  /** 这一版是否真的在库里（只读；不存在就不该发布）。 */
-  hasEdition: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<boolean>
+  /** 这一版本体（只读）：不存在就不该发布；存在时它的 `document.lede.text` 要一起带上。 */
+  readEdition: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<Readonly<{ document: { lede: { text: string } } }> | undefined>
   /** 通知提交端口；未装配时无法先写记录。 */
   submit: DailyBriefingNoticeSubmit | undefined
   /** 平台「把这条已有记录再推一次手机」的入口；未装配时按钮落 runtime-unavailable。 */
+  /** 结构化诊断（appLog）：导读命中动作词时记一行。 */
+  log?: BriefingDiagnosticLog
   redeliver: ((input: Readonly<{ recordId: string; editionId: string; locale: string }>) => Promise<
     | Readonly<{ kind: 'accepted'; recordId: string; delivery: NotificationDeliveryState }>
     | Readonly<{ kind: 'rejected'; reason: RedeliverReasonCode }>
@@ -53,12 +56,14 @@ export function createPublishToPhone(deps: Readonly<{
   store: Pick<DailyBriefingStore, 'get'>
   submit: DailyBriefingNoticeSubmit | undefined
   redeliver: BriefingRedeliver | undefined
+  log?: BriefingDiagnosticLog
   now: () => string
 }>): (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<BriefingPublishOutcome> {
   return (input) => publishBriefingToPhone({
-    hasEdition: async (edition) => (await deps.store.get(edition.date, edition.locale, edition.periodId)) !== undefined,
+    readEdition: (edition) => deps.store.get(edition.date, edition.locale, edition.periodId),
     submit: deps.submit,
     redeliver: deps.redeliver,
+    ...(deps.log === undefined ? {} : { log: deps.log }),
     now: deps.now
   }, input)
 }
@@ -67,14 +72,16 @@ export async function publishBriefingToPhone(
   deps: BriefingPublishDeps,
   input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>
 ): Promise<BriefingPublishOutcome> {
-  const exists = await deps.hasEdition(input).catch(() => false)
-  if (!exists) return { kind: 'rejected', reason: 'edition-missing' }
+  const edition = await deps.readEdition(input).catch(() => undefined)
+  if (edition === undefined) return { kind: 'rejected', reason: 'edition-missing' }
   if (deps.redeliver === undefined) return { kind: 'rejected', reason: 'runtime-unavailable' }
   const editionId = briefingPushEditionId(input)
   // 先写/更新记录（deliver: false）：库里已有这一版的记录时这一步是合并，不会多一行。
   const receipt = await notifyDailyBriefing(deps.submit, {
-    kind: 'ready', date: input.date, periodId: input.periodId, editionId, locale: input.locale, deliver: false
-  }, deps.now())
+    kind: 'ready', date: input.date, periodId: input.periodId, editionId, locale: input.locale, deliver: false,
+    // 手动那条也带导读：从这一版的 document 取，和自动路径共用同一个拼句函数。
+    lede: edition.document.lede.text
+  }, deps.now(), deps.log)
   // 推的是**回执里那条记录**，不是自己拼出来的键：没有回执就没有可推的东西，不许假装推了。
   if (receipt === null || receipt.kind === 'rejected' || receipt.kind === 'delegated' || receipt.kind === 'collapsed') {
     return { kind: 'rejected', reason: 'runtime-unavailable' }

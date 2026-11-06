@@ -987,7 +987,7 @@ describe('briefing notices', () => {
     expect(notices).toHaveLength(1)
     expect(notices[0]).toMatchObject({
       eventTypeId: 'market-intelligence.briefing.failed',
-      bodyVariant: 'not-generated'
+      rendered: { 'zh-CN': { body: expect.stringContaining('这一期没有生成出来') } }
     })
   })
 
@@ -1016,6 +1016,9 @@ describe('briefing notices', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(result.state).toBe('unavailable')
     expect(notices).toHaveLength(1)
-    expect(notices[0]).toMatchObject({ eventTypeId: 'market-intelligence.briefing.failed', bodyVariant: 'editorial-missing' })
+    expect(notices[0]).toMatchObject({
+      eventTypeId: 'market-intelligence.briefing.failed',
+      rendered: { 'zh-CN': { body: expect.stringContaining('这一期数据齐了') } }
+    })
   })
 })
