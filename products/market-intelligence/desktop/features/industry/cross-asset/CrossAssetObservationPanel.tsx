@@ -264,7 +264,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
                   trigger the platform offers — it cannot be drawn at text size without a new档, and a new
                  档 is the component's decision, not this call site's. */}
               <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} icon={Info} onSelect={() => undefined}
-                resolveText={resolveProductText} size="sm" tooltipKey={crossAssetTextKeys.dailyCadence} variant="plain" /></th></tr>
+                resolveText={resolveProductText} size="sm" tooltipKey={crossAssetTextKeys.dailyCadence} variant="plain"
+                className="mi-cross-asset__section-hint" /></th></tr>
             {dailyRows.map(renderStatusRow)}
           </tbody>
         </table>

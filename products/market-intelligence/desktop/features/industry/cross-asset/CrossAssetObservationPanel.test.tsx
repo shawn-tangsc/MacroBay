@@ -64,6 +64,9 @@ describe('cross-asset observation workspace', () => {
     expect(css).toContain(".mi-cross-asset__status-table thead th + th, .mi-cross-asset__status-table tbody td + td { border-left: 1px solid")
     expect(css).toMatch(/\.mi-cross-asset__status-table tbody td \{[^}]*font-size: 9\.5px/)
     expect(css).toMatch(/\.mi-cross-asset__status-table th, \.mi-cross-asset__status-table td \{ padding: 3px 2px/)
+    // 说明图标与「日频」之间要留一格：22px 的按钮紧贴 9.5px 的标题会读成同一个词（读者 2026-11-06）。
+    expect(panel).toContain('className="mi-cross-asset__section-hint"')
+    expect(css).toMatch(/\.mi-cross-asset__section-hint \{[^}]*margin-left: 6px/)
   })
 
   it('prints the inputs it does not have as missing, with no figure anywhere in those rows', async () => {
