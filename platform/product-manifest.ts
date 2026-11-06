@@ -23,6 +23,16 @@ export interface ProductMenuPageContribution {
   order: number
   module: string
   workspace?: ProductMenuPageWorkspaceCapability
+  /**
+   * 声明「这一页是默认首页」。
+   *
+   * **标在菜单项上，不是写一个 `defaultHomePageId: 'x'` 字符串**：字符串形状让「指向一个不在菜单里的
+   * 页」成为可达状态，于是就得为它写回落、诊断和用例；标在项上，那个状态在结构上不存在——项不在了，
+   * 它的 `home` 自然也不在。
+   *
+   * 只有首次启动、或布局被重置（没有任何可恢复的活动页）时才会被用到；「接着上次看」优先。
+   */
+  home?: true
 }
 
 export interface ProductSettingsSectionContribution {

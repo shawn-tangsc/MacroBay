@@ -68,6 +68,8 @@ export function toProductWorkspacePage(productId: string, contribution: ProductM
     icon: contribution.icon,
     module: toWorkspacePageId(productId, contribution.id),
     productId,
+    // 只带着它，不解释它：谁来决定打开哪一页在壳层，这里只负责让声明一路活到注册表。
+    ...(contribution.home === undefined ? {} : { home: contribution.home }),
     supportsDetached: capability.supportsDetached,
     allowMultipleInstances: capability.allowMultipleInstances,
     binding: Object.freeze({

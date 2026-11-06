@@ -26,7 +26,9 @@ export function createComposedPageRegistry(
       try {
         registry.register(toProductWorkspacePage(manifest.id, {
           id: page.id, title: page.title, icon: page.icon, order: page.order, module: page.module,
-          ...(page.workspace === undefined ? {} : { workspace: page.workspace })
+          ...(page.workspace === undefined ? {} : { workspace: page.workspace }),
+          // 这里逐字段挑，所以漏一个不报错——`home` 要显式带上，否则声明在装配这一步就没了。
+          ...(page.home === undefined ? {} : { home: page.home })
         }))
       } catch { /* 非法页面贡献只跳过该页（与面板贡献同一姿态），`registrationFailures` 已在上层计数 */ }
     }

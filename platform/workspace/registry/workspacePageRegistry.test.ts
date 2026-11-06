@@ -135,4 +135,21 @@ describe('workspace page registry（P2-01 一级菜单统一注册）', () => {
     expect(Object.isFrozen(builtInWorkspacePages[0])).toBe(true)
     expect(Object.isFrozen(builtInWorkspacePages[0]?.binding)).toBe(true)
   })
+
+  it('carries a page-level home declaration through to the registration, and leaves it absent otherwise', () => {
+    // 第 1 步的验收只有一件事：**这个声明能写进去、并被带到注册表**。还不许有任何地方读它——
+    // 决定打开哪一页是第 3 步的事，提前读就会做出一个"先跳到 order 最小者"的中间态。
+    const declared = toProductWorkspacePage('market-intelligence', {
+      ...legacyContribution,
+      id: 'intelligence',
+      title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
+      home: true
+    })
+    expect(declared.home).toBe(true)
+
+    // 不声明时是**没有这个字段**，不是 `false`：与「没声明」和「声明了另一页」是两件事，
+    // 落成布尔会让两者在读取处长得一样。
+    const plain = toProductWorkspacePage('legacy-addon', legacyContribution)
+    expect('home' in plain).toBe(false)
+  })
 })
