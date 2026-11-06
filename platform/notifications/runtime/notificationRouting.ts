@@ -26,6 +26,8 @@ export type NotificationDeliveryContent = {
    * 解析不出标签的动作不出现在这张表里，界面据此不画那个按钮。
    */
   actionLabels: Readonly<Record<string, string>>
+  /** 只在合并过时给：单条记录的「共 1 次」是噪音，也是读者没见过的第二个东西。 */
+  occurrenceLabel?: string
   deeplink?: NotificationDeeplink
 }
 

@@ -49,6 +49,7 @@ export function toNotificationCenterItem(
     body: content.body,
     ...(content.reason.length === 0 ? {} : { reason: content.reason }),
     actions: labelled,
+    ...(content.occurrenceLabel === undefined ? {} : { occurrenceLabel: content.occurrenceLabel }),
     ...(category === undefined ? {} : { category })
   }
 }

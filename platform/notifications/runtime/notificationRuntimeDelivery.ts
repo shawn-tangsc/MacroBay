@@ -100,12 +100,17 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
         language: resolvedLanguage
       })
     }
+    // 「共 N 次」只在真的合并过时解析：单条记录不出现这句，否则读者会以为还有一条他没看到的。
+    const occurrenceLabel = record.occurrenceCount > 1
+      ? resolve('notification.occurrenceCount', { count: String(record.occurrenceCount) })
+      : null
     return {
       // 整条降级：标题没有可用句子时，正文也不许留半句。
       title: title ?? fallback,
       body: title === null ? '' : (body ?? ''),
       reason: title === null ? '' : (reason ?? ''),
       actionLabels: title === null ? {} : resolveActionLabels(record.actions, resolvedLanguage),
+      ...(occurrenceLabel === null ? {} : { occurrenceLabel }),
       ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
     }
 

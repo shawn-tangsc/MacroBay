@@ -151,6 +151,13 @@ export type NotificationCenterItem = Omit<
    * 界面不编一个，缺失本身是事实。
    */
   category?: NotificationCategory
+  /**
+   * 「今天一共发生过 N 次」那一句；**只在真的合并过时才有**（`occurrenceCount > 1`）。
+   *
+   * 恒出会让读者看到「共 1 次」——一个他没见过的第二个东西，比不显示更糟。
+   * 句子在主进程解析，渲染层拿到的就是这句话，不自己拼数。
+   */
+  occurrenceLabel?: string
 }
 
 export type NotificationRequest = {

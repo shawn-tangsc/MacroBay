@@ -15,6 +15,8 @@ export type NotificationCopyTable = {
   'notification.taskFailed.title': string
   'notification.taskFailed.body': string
   'notification.taskFailed.open': string
+  /** 「今天一共发生过 N 次」；只在合并过（次数 > 1）时出现。 */
+  'notification.occurrenceCount': string
   /** 熔断聚合记录的稳定标识；界面按 `collapsedCount` 出文案，不直接显示这句。 */
   'notification.aggregate.title': string
   /**
@@ -84,6 +86,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.taskFailed.title': '任务失败：{taskName}',
     'notification.taskFailed.body': '运行过程中出错，这一次没有完成。',
     'notification.taskFailed.open': '打开任务',
+    'notification.occurrenceCount': '共 {count} 次',
     'notification.aggregate.title': '同类通知较多',
     'notification.fallback.title': '有一条新通知，点开看详情',
     'notification.test.title': '测试通知',
@@ -133,6 +136,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.taskFailed.title': 'Task failed: {taskName}',
     'notification.taskFailed.body': 'It hit an error and did not finish this run.',
     'notification.taskFailed.open': 'Open task',
+    'notification.occurrenceCount': '{count} occurrences',
     'notification.aggregate.title': 'Many similar notifications',
     'notification.fallback.title': 'A new notification arrived — open it for details.',
     'notification.test.title': 'Test notification',

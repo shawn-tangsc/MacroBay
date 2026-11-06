@@ -61,6 +61,23 @@ function harness(language: 'zh-CN' | 'en-US' = 'zh-CN'): {
 }
 
 describe('渲染层看到的那一份', () => {
+  /**
+   * 「今天一共发生过 N 次」只在**真的合并过**时出现。
+   *
+   * 恒出会让每条单发的通知都挂一句「共 1 次」——读者会以为是另一个他没看到的东西。
+   * 这一句由主进程解析，渲染层不自己拼数。
+   */
+  it('只在合并过之后才说「共 N 次」', async () => {
+    const single = await harness().project(record({ occurrenceCount: 1 }))
+    expect(single.occurrenceLabel).toBeUndefined()
+
+    const merged = await harness().project(record({ occurrenceCount: 3 }))
+    expect(merged.occurrenceLabel).toBe('共 3 次')
+
+    const english = await harness('en-US').project(record({ occurrenceCount: 2 }))
+    expect(english.occurrenceLabel).toBe('2 occurrences')
+  })
+
   it('句子里没有键：载荷上不存在 titleKey / bodyKey / 参数表', async () => {
     const item = await harness().project(record())
 
