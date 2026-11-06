@@ -109,6 +109,15 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     )
   }
 
+  // 源头没拼完：成品缺语言或某段空串 → **拒收，不落库**（契约 v2.56）。
+  // 降级是「发出去了但少一句」，拒收是「根本不该发」；源头没拼完照发，读者拿到的就是半句话。
+  if (input.request.rendered !== undefined) {
+    const missing = missingRenderedField(input.request.rendered)
+    if (missing !== undefined) {
+      return rejected('copy-missing', `notification event "${entry.id}" submitted incomplete copy: ${missing}`)
+    }
+  }
+
   const bodyKey = resolveBodyKey(entry, input.request)
   if (bodyKey === null) {
     return rejected('unknown-body-variant', `notification event "${entry.id}" has no body variant "${input.request.bodyVariant ?? ''}"`)
@@ -199,6 +208,19 @@ function resolveBodyKey(entry: NotificationEventCatalogEntry, request: Notificat
   const variant = request.bodyVariant
   if (variant === undefined) return null
   return entry.bodyKeyByVariant[variant] ?? null
+}
+
+/** 成品三段、两语言都要非空；返回第一个缺口（给回执与排查用），完整则 `undefined`。 */
+function missingRenderedField(rendered: NonNullable<NotificationSubmitRequest['rendered']>): string | undefined {
+  for (const language of ['zh-CN', 'en-US'] as const) {
+    const entry = rendered[language]
+    if (entry === undefined) return `${language}.title`
+    for (const field of ['title', 'body', 'reason'] as const) {
+      const value = entry[field]
+      if (typeof value !== 'string' || value.trim().length === 0) return `${language}.${field}`
+    }
+  }
+  return undefined
 }
 
 /** 日内键不许带时间：带了就是旧口径残留，拒收并给具名原因。 */
@@ -322,7 +344,9 @@ function createRecord(
     sourceId: entry.id,
     eventTypeId: entry.id,
     delivery,
-    titleKey: entry.titleKey as NotificationCopyKey,
+    ...(request.rendered === undefined
+      ? { titleKey: entry.titleKey as NotificationCopyKey }
+      : { rendered: request.rendered }),
     ...(request.titleParams === undefined ? {} : { titleParams: request.titleParams }),
     ...(bodyKey === undefined ? {} : { bodyKey: bodyKey as NotificationCopyKey }),
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),

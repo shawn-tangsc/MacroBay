@@ -6,6 +6,7 @@ import {
   PRIORITY_RANK,
   SEVERITY_RANK,
   type NotificationChannel,
+  type NotificationContentByLanguage,
   type NotificationDeliveryState,
   type NotificationPriority,
   type NotificationPushBackoff,
@@ -74,9 +75,14 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
     eventTypeId: candidate.eventTypeId ? String(candidate.eventTypeId) : 'legacy.untyped',
     mergedEventTypes: normalizeStringList(candidate.mergedEventTypes),
     delivery: normalizeDelivery(candidate.delivery),
-    // 存储里读回来的键不做闭集校验（旧记录可能带已删除的键）；解析器解析不到会保留占位，
-    // 而不是把键名当句子显示。
-    titleKey: String(candidate.titleKey) as NotificationCopyKey,
+    // 双形状（契约 v2.56）：有成品就直接用；没有才读老形状的键。两者都没有的记录按老形状空键处理，
+    // 读取时落到兜底句——不认识就说不清，不假装读过。
+    ...(normalizeRendered(candidate.rendered) === undefined
+      ? {}
+      : { rendered: normalizeRendered(candidate.rendered) }),
+    ...(candidate.titleKey === undefined
+      ? {}
+      : { titleKey: String(candidate.titleKey) as NotificationCopyKey }),
     titleParams: normalizeTextParams(candidate.titleParams),
     bodyKey: candidate.bodyKey ? String(candidate.bodyKey) as NotificationCopyKey : undefined,
     bodyParams: normalizeTextParams(candidate.bodyParams),
@@ -213,6 +219,29 @@ function normalizeTextParams(value: unknown): Record<string, NotificationCopyPar
     if (ref !== undefined) params[key] = { ref }
   }
   return Object.keys(params).length > 0 ? params : undefined
+}
+
+/**
+ * 成品句子（契约 v2.56）：两种语言、三段都必须是**非空字符串**，否则整份丢弃——
+ * 半份成品比没有更危险：平台会以为读到了，读者却看到空句子。
+ */
+function normalizeRendered(value: unknown): NotificationContentByLanguage | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const candidate = value as Record<string, unknown>
+  const pick = (language: 'zh-CN' | 'en-US'): { title: string; body: string; reason: string } | undefined => {
+    const entry = candidate[language]
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return undefined
+    const parts = entry as Record<string, unknown>
+    const title = typeof parts.title === 'string' ? parts.title : undefined
+    const body = typeof parts.body === 'string' ? parts.body : undefined
+    const reason = typeof parts.reason === 'string' ? parts.reason : undefined
+    if (title === undefined || body === undefined || reason === undefined) return undefined
+    if (title.trim() === '' || body.trim() === '' || reason.trim() === '') return undefined
+    return { title, body, reason }
+  }
+  const zh = pick('zh-CN')
+  const en = pick('en-US')
+  return zh === undefined || en === undefined ? undefined : { 'zh-CN': zh, 'en-US': en }
 }
 
 /** 信号严重度：只认三档闭集（契约 v2.45）。其它值一律当作「没有这个状态」。 */

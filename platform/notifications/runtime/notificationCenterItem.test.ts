@@ -174,8 +174,9 @@ describe('渲染层看到的那一份', () => {
     // 分级降级（v2.48）：模板在、参数缺 → 只丢那一格，标题仍是「任务失败」。
     expect(item.title).toBe('任务失败')
     expect(item.title).not.toContain('{')
-    // 一行诊断：丢的是哪一格（不新增第三个码）。
-    expect(diagnostics.map((entry) => entry.code)).toContain('copy-param-missing')
+    // `copy-param-missing` 随「源头拼成品」退役（契约 v2.56）：老记录缺参数只丢那一格，
+    // 平台不再有「缺哪一格」的诊断——源头拼完才提交，缺了就是不该发（回执 `copy-missing`）。
+    expect(diagnostics).toEqual([])
     // 降级态不许是空承诺：时间与类型标签不参与文案解析，降级时照旧在。
     // 兜底句只说事实（v2.50）：手机上无法「点开」，原来那句承诺只有手机读者会当真。
     expect(item.category).toBe('needs-action')

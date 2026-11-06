@@ -71,6 +71,18 @@ export type NotificationPushBackoff = {
   pausedUntil: string | null
 }
 
+/**
+ * 成品句子（契约 v2.56）：源头用骨架 + 全部事实拼好，**平台只挑一份**。
+ *
+ * 三段都要：手机上 `formatPushText` 会合并 title + body + reason，`reason` 留键就等于
+ * 在推送路径上留一处读时拼装——那正是这次换模型要拆掉的东西。
+ * **动作标签不进来**：那是按钮文案，由界面按 `labelKey` 出。
+ */
+export type NotificationContentByLanguage = {
+  'zh-CN': { title: string; body: string; reason: string }
+  'en-US': { title: string; body: string; reason: string }
+}
+
 export type NotificationRecord = {
   id: string
   owner: 'platform' | 'product'
@@ -82,8 +94,13 @@ export type NotificationRecord = {
   mergedEventTypes?: string[]
   /** 每个表面的投递证据（契约 §8）。旧记录归一化为空对象。 */
   delivery: Partial<Record<'toast' | 'popup' | 'desktop' | 'push', NotificationDeliveryState>>
-  /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
-  titleKey: NotificationCopyKey
+  /**
+   * 老形状：标题文案键 + 参数，读取时按语言解析。**新记录不再写它**（写成品句子），
+   * 双形状兼容到「库里 `titleKey` 非空记录数 = 0」为止（契约 v2.56 §3.3）。
+   */
+  titleKey?: NotificationCopyKey
+  /** 新形状：源头拼好的成品句子，每种语言一份；平台只按当前语言挑，不拼不改。 */
+  rendered?: NotificationContentByLanguage
   titleParams?: Record<string, NotificationCopyParam>
   bodyKey?: NotificationCopyKey
   bodyParams?: Record<string, NotificationCopyParam>
@@ -372,6 +389,11 @@ export type NotificationSubmitRequest = {
    * 与 `severity` 是两个概念，不许互相顶替。不传＝这次不声明档位，也就不触发升级。
    */
   signalSeverity?: NotificationSignalSeverity
+  /**
+   * 源头拼好的成品句子（契约 v2.56）。给了它，平台**不再碰文案表**；
+   * 三段缺语言或某段空串 → `rejected: copy-missing`，不落库。
+   */
+  rendered?: NotificationContentByLanguage
   titleParams?: Readonly<Record<string, NotificationCopyParam>>
   bodyParams?: Readonly<Record<string, NotificationCopyParam>>
   bodyVariant?: string
@@ -407,6 +429,8 @@ export type NotificationSubmitOutcome =
          * 而表面上一切正常。宁可当场拒收，也不静默落成 `medium`。
          */
         | 'invalid-signal-severity'
+        /** 源头没拼完：成品缺语言或某段为空串（契约 v2.56）。**不落库**——降级是少一句，拒收是不该发。 */
+        | 'copy-missing'
         /**
          * 还在用旧的日内键形状（`moduleSignal` + `intraday` 却带着 `observedAt` / `bucketMs`）。
          * 单列一个原因，是为了让「你以为冷却生效了、其实每个桶都算一件事」当场可见。
@@ -435,9 +459,14 @@ export type NotificationDiagnosticsEntry = {
     | 'delegated'
     | 'unclaimed-producer'
     | 'claim-never-registered'
+    /**
+     * 这一侧**只剩一种文案失败**（契约 v2.56 收窄）：按挑选顺序挑不出可发的成品——
+     * 两份都没有、或选中的那一段里有裸键 / 花括号 / 内部 id / 指向本条通知的动作词（平台**只拦不改**）。
+     *
+     * **不建 `copy-action-withheld`**（Chief 2026-11-06 裁定）：源头没提交的那段平台根本看不见，
+     * 建一个永远没有实例的码比没有更糟；产品侧的留痕由产品自己打日志。
+     */
     | 'copy-unresolved'
-    /** 模板在、某个**参数**没解析到（v2.48）：只降级那一格，不整条兜底。同一记录的同一个参数只记一次。 */
-    | 'copy-param-missing'
     | 'persist-failed'
   eventTypeId?: string
   producerId?: string

@@ -45,8 +45,6 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
    * 真正「第一次坏掉」的那一刻反而被淹掉。
    */
   const reportedUnresolved = new Set<string>()
-  /** 同一条记录、同一个参数只报一次：翻页与切语言都会重读，重复刷日志等于没有日志。 */
-  const reportedMissingParams = new Set<string>()
   /**
    * 一条记录的文案，**在读者读到的那一刻**按当前语言解析一次（契约 §3.3）。
    *
@@ -61,6 +59,11 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
   ): Promise<NotificationDeliveryContent> {
     const resolvedLanguage = language ?? (await input.getLanguage?.()) ?? 'zh-CN'
     const fallback = notificationCopyText(resolvedLanguage, 'notification.fallback.title')
+
+    // 新形状（契约 v2.56）：源头已拼好成品，平台**只挑一份、只拦不改**。
+    if (record.rendered !== undefined) {
+      return renderedContent(record, resolvedLanguage, fallback)
+    }
     let unresolvedKey: string | undefined
     const resolve = (
       key: NotificationRecord['titleKey'] | undefined,
@@ -72,11 +75,6 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
         : { scope: 'product' as const, productId: record.productId, key, ...(params === undefined ? {} : { params }) }
       const detailed = input.copy?.resolveDetailed?.(ref, resolvedLanguage)
       const resolved = detailed === undefined ? input.copy?.resolve(ref, resolvedLanguage) : detailed.text
-      if (detailed !== undefined) {
-        for (const param of detailed.missingParams) {
-          reportMissingParam(record, key, param, resolvedLanguage)
-        }
-      }
       if (typeof resolved === 'string' && resolved.length > 0) return resolved
       // 没有端口、或端口解析不到时，退回平台闭集（产品键本来就不在闭集里，会落到兜底句）。
       const text = notificationCopyText(resolvedLanguage, key)
@@ -94,9 +92,8 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       return filled
     }
 
-    // 注意：可选段（`{taskName?}`）被丢掉时句子照常出，**目前不留诊断**——它不算解析失败。
-    // 代价是「为什么这一段少了」只能从记录参数看出来；要追因果时先看这条注释。
-    // 注意：可选段/参数被丢掉时句子照常出，靠 `copy-param-missing` 留痕（不整条降级）。
+    // 老形状（键+参数）：可选段/参数被丢掉时句子照常出。`copy-param-missing` 已随源头拼装退役
+    // （契约 v2.56）——源头拼完，平台手里不再有「缺哪一格」这件事。
     const title = resolve(record.titleKey, record.titleParams)
     const body = resolve(record.bodyKey, record.bodyParams)
     const reason = resolve(record.reasonKey, record.reasonParams)
@@ -124,6 +121,57 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       actionLabels: resolveActionLabels(record.actions, resolvedLanguage),
       ...(occurrenceLabel === null ? {} : { occurrenceLabel }),
       ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
+    }
+
+    /**
+     * 成品挑选（契约 v2.56 + Chief 2026-11-06 拍定的三条顺序）：
+     * ① 记录上有 `edition.locale` 且那一份在 → **用它**（中心与手机同一份，否则同一条通知两处说两种语言）；
+     * ② 否则用读者当前语言那一份；
+     * ③ 都没有 → 兜底句 + `copy-unresolved`，**不许拿另一种顶上**（顶上就是语言对不上）。
+     *
+     * 拿到之后**只拦不改**：裸键、花括号占位、内部 id、指向本条通知的动作词 → 整条按不可发处理。
+     * 「改成人话或删词」是替源头说话，越界（契约 §3.3 v2.55）。
+     */
+    function renderedContent(
+      record: NotificationRecord,
+      language: NotificationCopyLanguage,
+      fallbackTitle: string
+    ): NotificationDeliveryContent {
+      const editionLanguage = record.edition?.locale
+      const order: NotificationCopyLanguage[] = []
+      if (editionLanguage === 'zh-CN' || editionLanguage === 'en-US') order.push(editionLanguage)
+      if (!order.includes(language)) order.push(language)
+      const picked = order.map((candidate) => record.rendered?.[candidate]).find((entry) => entry !== undefined)
+
+      const blocked = picked !== undefined && [
+        picked.title, picked.body, picked.reason
+      ].some((text) => looksUnsendable(text))
+      if (picked === undefined || blocked) {
+        if (!reportedUnresolved.has(record.id)) {
+          reportedUnresolved.add(record.id)
+          input.diagnostics?.({
+            code: 'copy-unresolved',
+            at: input.now(),
+            recordId: record.id,
+            eventTypeId: record.eventTypeId,
+            language
+          })
+        }
+        return {
+          title: fallbackTitle,
+          body: '',
+          reason: '',
+          actionLabels: resolveActionLabels(record.actions, language),
+          ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
+        }
+      }
+      return {
+        title: picked.title,
+        body: picked.body,
+        reason: picked.reason,
+        actionLabels: resolveActionLabels(record.actions, language),
+        ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
+      }
     }
 
     /**
@@ -190,27 +238,6 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       desktopBlocked,
       ...(pushOutcome?.transition === undefined ? {} : { transition: pushOutcome.transition })
     }
-  }
-
-  /** 参数缺了：留一条 `copy-param-missing`（带键与参数名），同一条记录同一个参数只记一次。 */
-  function reportMissingParam(
-    record: NotificationRecord,
-    key: string,
-    param: string,
-    language: NotificationCopyLanguage
-  ): void {
-    const dedupe = `${record.id}|${param}`
-    if (reportedMissingParams.has(dedupe)) return
-    reportedMissingParams.add(dedupe)
-    input.diagnostics?.({
-      code: 'copy-param-missing',
-      at: input.now(),
-      recordId: record.id,
-      eventTypeId: record.eventTypeId,
-      key,
-      param,
-      language
-    })
   }
 
   /**
@@ -317,6 +344,40 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
 }
 
 export type NotificationDeliverySurface = ReturnType<typeof createNotificationDelivery>
+
+/**
+ * 成品里**平台不允许发出去**的三种东西（契约 v2.56：只拦不改）。
+ *
+ * 这里不判断「该说哪句话」——那是源头的事；只判断这句话里有没有暴露我们的内部形状，
+ * 或承诺一个当前表面做不到的动作。命中就整条按不可发处理（兜底句），**绝不替它改词**。
+ */
+function looksUnsendable(text: string): boolean {
+  if (text.trim().length === 0) return true
+  // 花括号占位符：`{taskName}` 这种没填完的骨架。
+  if (/\{\s*\w+\s*\}/u.test(text)) return true
+  // 裸键：`notification.event.…` / `ui.state.…` 这类 `a.b.c` 形态（点号分段、全小写）。
+  if (/\b[a-z][a-z0-9]*(?:[.-][a-z0-9]+){2,}\b/u.test(text) && !/\b[A-Z]/.test(text)) return true
+  // 指向本条通知的动作指令（契约 v2.50）。
+  return ACTION_DIRECTIVE.some((pattern) => pattern.test(text))
+}
+
+/** 与手机推送守卫同一份判据：挡指代本条通知的形态，不挡「去设置里…」与领域名词。 */
+const ACTION_DIRECTIVE: readonly RegExp[] = [
+  /点开/u,
+  /点一下/u,
+  /点这里/u,
+  /点击/u,
+  /点它/u,
+  /查看详情/u,
+  /打开详情/u,
+  /看全文/u,
+  /查看全文/u,
+  /打开全文/u,
+  /\bopen\s+(it|this|that)\b/iu,
+  /\btap\s+(it|this|that|here)\b/iu,
+  /\bclick\s+(it|this|that|here|to)\b/iu,
+  /\bview\s+details\b/iu
+]
 
 /**
  * 平台闭集兜底只认字面量：参数里只要有一个 `{ ref }`，这条就必须走端口解析；
