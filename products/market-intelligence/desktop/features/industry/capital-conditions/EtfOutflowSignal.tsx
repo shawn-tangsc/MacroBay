@@ -3,10 +3,8 @@ import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import { isModuleSignalReadRetryable, moduleSignalReadCopyKey } from '../../../../contracts/moduleSignalRead'
-import { moduleSignalReadCopyBase } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
-import { SignalDetail, type SignalDetailRow } from '../shared'
+import { SignalDetail, SignalReadIssue, type SignalDetailRow } from '../shared'
 import type { DashboardEtfSignalChip } from './capitalConditionsModel'
 
 /**
@@ -53,19 +51,12 @@ export function EtfOutflowChip({ chip, text, triggerProps, onToggle, onRetry }: 
   onToggle: () => void
   /** Re-reads the card; only a retryable failure offers it. */
   onRetry: () => void
-}>): React.ReactElement {
+}>): React.ReactElement | null {
   const resolveText = useProductTextKey()
 
-  // 读失败与「数据不齐」是两件事：前者能重试、后者只能等数据到。所以它自己一句话，不并进灰牌。
+  // 读不到只留一个标记：一句话在悬停/聚焦里，正面上没有那行字。
   if (chip.state === 'unreadable') {
-    return <span className="mi-capital-conditions__signal-unreadable" role="status">
-      {resolveText(moduleSignalReadCopyKey(moduleSignalReadCopyBase, chip.failureCode))}
-      {isModuleSignalReadRetryable(chip.failureCode)
-        ? <button type="button" className="mi-capital-conditions__signal-retry" onClick={onRetry}>
-            {resolveText(`${moduleSignalReadCopyBase}.retry`)}
-          </button>
-        : null}
-    </span>
+    return <SignalReadIssue failureCode={chip.failureCode} resolveText={resolveText} />
   }
 
   if (chip.state !== 'alert') {
@@ -108,15 +99,19 @@ export function EtfOutflowChip({ chip, text, triggerProps, onToggle, onRetry }: 
  * 这个组件只做共用组件不做的那件事——把数字格式成读者看的样子；行、标题、说明都交给共用块。
  * 数据不齐的牌子没有可展开的东西，本组件对它返回 `null`。
  */
-export function EtfOutflowSignalDetail({ chip, verifiedAt, text }: Readonly<{
+export function EtfOutflowSignalDetail({ chip, verifiedAt, text, analysis }: Readonly<{
   chip: DashboardEtfSignalChip
   /** 来源快照的校验时刻。快照不可用时没有它，就不写这一行，不编一个时间。 */
   verifiedAt?: string
   text: EtfSignalText
+  /** 「分析到哪一步」那一句，已由调用方按状态与原因投影成白话。 */
+  analysis?: string
 }>): React.ReactElement | null {
   const formatTime = useShellTimeFormat()
   if (chip.state !== 'alert') return null
   const rows: SignalDetailRow[] = [
+    // 第一行是「这条分析会不会来、到哪一步」，读者点开牌子最先想知道的就是它。
+    ...(analysis ? [{ labelKey: 'pages.intelligence.portal.dashboard.signalAnalysis.label', value: analysis }] : []),
     { labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailRule', value: text.signalRuleName },
     { labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailWindow', value: text.signalRuleWindow },
     { labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailCumulative', value: chip.cumulativeUsd },

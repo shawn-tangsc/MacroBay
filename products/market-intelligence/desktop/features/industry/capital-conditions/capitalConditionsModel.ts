@@ -1,6 +1,8 @@
 import { computeEtfCumulativeFlow, etfFlowPolicy, etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../../contracts/etfFlows'
 import type { ModuleSignal, SignalSeverity } from '../../../../contracts/moduleSignal'
 import type { ModuleSignalRead, ModuleSignalReadFailureCode } from '../../../../contracts/moduleSignalRead'
+import type { ModuleSignalAnalysisRead } from '../../../../service/intelligence/analysis/signalAnalysisRead'
+import type { SignalAnalysisStateView } from '../../../../service/intelligence/analysis/signalAnalysisState'
 import {
   capitalConditionsDailyFlowPolicy,
   capitalConditionsSnapshotPolicy,
@@ -87,6 +89,11 @@ export type DashboardCapitalConditionsState =
       etf: DashboardEtfFlow | 'unavailable'
       /** Absent when the card could not read at all; `hidden` when the rule had nothing to say. */
       etfSignal?: DashboardEtfSignalChip
+      /**
+       * 这条信号的分析到哪一步。**与信号并列**，不塞进 `etfSignal`：信号是规则的产物，分析状态
+       * 是运行的产物，嵌套进去以后信号一变这两处就得一起改。
+       */
+      etfSignalAnalysis?: SignalAnalysisStateView
       flowHistory?: DashboardFlowHistory
       observedAt: string
       currentUsd: string
@@ -242,6 +249,17 @@ const signalSeverityRank: Readonly<Record<SignalSeverity, number>> = Object.free
  * chip, because there is no outlet yet. A signal that could not judge is `insufficient` and carries
  * no number: "we could not look" is not "a small outflow".
  */
+/** The state that belongs to the chip this card draws: the loudest etf-flows signal, same rule as the chip. */
+export function etfChipAnalysisOf(read: ModuleSignalAnalysisRead | ModuleSignalRead | undefined): SignalAnalysisStateView | undefined {
+  if (!read || read.state !== 'available') return undefined
+  const mine = read.signals.filter(entry => entry.signal.moduleId === 'etf-flows')
+  if (mine.length === 0) return undefined
+  const loudest = mine.reduce((best, entry) =>
+    signalSeverityRank[entry.signal.severity] > signalSeverityRank[best.signal.severity] ? entry : best)
+  const analysis = (read as { analysis?: Readonly<Record<string, SignalAnalysisStateView>> }).analysis
+  return analysis?.[loudest.signal.dedupeKey]
+}
+
 export function projectEtfOutflowChip(
   read: ModuleSignalRead | undefined,
   switchState: EtfOutflowOutletSwitch = etfOutflowOutletPolicy

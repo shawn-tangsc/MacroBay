@@ -208,6 +208,29 @@ mi: miText['zh-CN'],
           analysisTimeline: {
             retryAnalysis: '重试分析', attemptFailed: '上次分析未发布',
             failureReasons: { 'analysis-invalid-output-schema': '模型输出格式不符合要求，请重试。', 'analysis-invalid-json': '模型返回的不是合法 JSON（可能被截断），本次未发布，请重试。', 'analysis-missing-evidence': '分析输出与冻结证据不一致，已拒绝发布，请重试；若持续失败请检查情报来源。', 'analysis-provider-not-ready': '模型未就绪，请检查模型服务配置。', 'analysis-provider-error': '模型调用失败，请检查连接后重试。', 'analysis-timeout': '模型调用超时，请重试。', 'analysis-cancelled': '分析被中断（应用关闭或任务取消），请重试。' },
+            /**
+             * 牌子上的「分析到哪一步」。状态只有六句，`skipped` / `failed` / `stopped` 各自再带原因：
+             * 前两个的原因来自两张不同的码表（账本的 signal-* / 运行的 analysis-*），第三个是中性
+             * 停下的三句。码本身不上屏，查不到才落「原因没记录」。
+             */
+            signalAnalysis: {
+              label: '分析到哪一步',
+              states: {
+                'not-triggered': '还没有轮到这条信号分析',
+                queued: '已排上队，正在分析',
+                published: '分析已出，可以在时间轴里看到',
+                skipped: '这次没有分析',
+                failed: '分析了但没成',
+                stopped: '这次运行提前结束了'
+              },
+              stoppedReasons: {
+                'run-cancelled': '这次运行被取消了',
+                'run-superseded': '这次已被更新的一次取代，不用等',
+                'run-unrecognized': '这次运行的状态读不出来'
+              },
+              reasonUnknown: '原因没记录',
+              separator: '：'
+            },
             triggerStatus: { label: '最近一次判定', since: '起', slotOpen: '开盘 ', slotDelayed: '延迟补跑', reasons: { 'significance-confirmed': '数据变化显著，已开始分析', 'significance-below-threshold': '数据无显著变化，本次未分析', 'provider-surprise-confirmed': 'provider 日历的发布显著偏离市场预期（非官方值），已开始分析', 'semantic-no-op': '数据与上次相同，本次未分析', 'interval-active': '距上次分析不足 30 分钟，已合并', 'same-release-coalesced': '同一次发布的其它指标已经分析过，这次不再重复', 'same-release-abandoned': '同一次发布的分析没成，补位次数已经用完，这条不再单独分析', 'hour-budget-exhausted': '本小时分析次数已达上限', 'day-budget-exhausted': '今天分析次数已达上限', 'schedule-reserve-exhausted': '今日盘口分析额度已用尽', 'session-slot-asia': '亚洲盘开盘分析（08:00）', 'session-slot-europe': '欧洲盘开盘分析（16:00）', 'session-slot-us': '美洲盘开盘分析（24:00）', 'invalid-significance-input': '判定输入异常，本次未分析', 'manual-request': '你在界面上手动触发', 'severity-confirmed': '这条情报达到高重要性门槛，已开始分析', 'medium-score-confirmed': '这条情报达到中等级别门槛，已开始分析', 'market-reaction-confirmed': '已确认出现可比行情反应，已开始复盘', 'restart-initial-compensated': '进程重启后补跑缺失的首次分析', 'restart-review-compensated': '进程重启后补跑缺失的复盘', 'signal-high-triggered': '规则触发，已开始分析', 'signal-medium-triggered': '规则触发，已开始分析', 'signal-cooldown-active': '同一规则刚分析过，这次不重复', 'signal-low-marker-only': '这类情况只在看板标注，不单独分析', 'signal-calendar-owned': '宏观日历已经在处理，不重复分析', 'signal-freeze-unavailable': '分析没排上队，这次没有执行' } },
             loadMore: '加载更多', selectEntry: '选择一个时间轴节点查看详情。',
             // 时间轴跨事件组：同一屏出现多个事件时，每行标出它属于哪条事件、在说什么，
@@ -281,11 +304,11 @@ mi: miText['zh-CN'],
             configureSources: '配置情报源',
             /** One sentence per failure code, shared by every card that reads module signals. */
             signalRead: {
-              'query-failed': '判定记录没拿到',
-              'invalid-as-of': '时间不对，读不了',
+              'query-failed': '这项数据这次没读到，下次刷新会自己再读一次',
+              'invalid-as-of': '这次的时间点读不了，下次刷新会自己再读一次',
               // 给读者看的是「读不到」，不是我们内部的判定原因：格式、契约这些词他既不懂也做不了。
-              'contract-invalid': '这项数据暂时读不到，不是你没有',
-              retry: '重试'
+              'contract-invalid': '这项数据这次没读到，不是你没有，下次刷新会自己再读一次',
+              ariaLabel: '这项数据读取失败',
             },
             crossAsset: {
               title: '纳斯达克 100 / QQQ 代理 × BTC × ETH 联动', subtitle: 'Binance QQQUSDT 代币化永续代理（24/7，默认，带「代理」标签）；该腿不可用时回落到真实纳斯达克 100 指数（USTEC · 美股现金时段）',
@@ -1502,7 +1525,25 @@ mi: miText['en-US'],
           analysisTimeline: {
             retryAnalysis: 'Retry analysis', attemptFailed: 'Last analysis was not published',
             failureReasons: { 'analysis-invalid-output-schema': 'Model output did not match the required format. Retry.', 'analysis-invalid-json': 'The model reply was not valid JSON (it may have been cut off), so it was not published. Retry.', 'analysis-missing-evidence': 'The analysis output did not match the frozen evidence, so it was not published. Retry; if it keeps failing, check sources.', 'analysis-provider-not-ready': 'Model is not ready. Check model settings.', 'analysis-provider-error': 'Model invocation failed. Check the connection and retry.', 'analysis-timeout': 'Model invocation timed out. Retry.', 'analysis-cancelled': 'The analysis was interrupted (app closed or task cancelled). Retry.' },
-                        triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'same-release-coalesced': 'Another indicator from the same release was already analysed; this one did not run again', 'same-release-abandoned': 'The analysis for this release did not succeed and its one retry is used up; this indicator was not analysed separately', 'hour-budget-exhausted': 'Hourly analysis limit reached', 'day-budget-exhausted': 'Daily analysis limit reached', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'High-importance intelligence; analysis started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart', 'signal-high-triggered': 'A rule fired; analysis started', 'signal-medium-triggered': 'A rule fired; analysis started', 'signal-cooldown-active': 'The same rule was just analysed; skipped this time', 'signal-low-marker-only': 'Marked on the panel only; no separate analysis', 'signal-calendar-owned': 'The macro calendar already covers this; not analysed twice', 'signal-freeze-unavailable': 'The analysis could not be queued; it did not run' } },
+                        signalAnalysis: {
+              label: 'Analysis progress',
+              states: {
+                'not-triggered': 'This signal has not been analysed yet',
+                queued: 'Queued; the analysis is running',
+                published: 'The analysis is out; read it in the timeline',
+                skipped: 'Not analysed this time',
+                failed: 'Analysed but did not succeed',
+                stopped: 'This run ended early'
+              },
+              stoppedReasons: {
+                'run-cancelled': 'This run was cancelled',
+                'run-superseded': 'A newer run replaced this one; nothing to wait for',
+                'run-unrecognized': 'The state of this run could not be read'
+              },
+              reasonUnknown: 'Reason not recorded',
+              separator: ': '
+            },
+            triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'same-release-coalesced': 'Another indicator from the same release was already analysed; this one did not run again', 'same-release-abandoned': 'The analysis for this release did not succeed and its one retry is used up; this indicator was not analysed separately', 'hour-budget-exhausted': 'Hourly analysis limit reached', 'day-budget-exhausted': 'Daily analysis limit reached', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'High-importance intelligence; analysis started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart', 'signal-high-triggered': 'A rule fired; analysis started', 'signal-medium-triggered': 'A rule fired; analysis started', 'signal-cooldown-active': 'The same rule was just analysed; skipped this time', 'signal-low-marker-only': 'Marked on the panel only; no separate analysis', 'signal-calendar-owned': 'The macro calendar already covers this; not analysed twice', 'signal-freeze-unavailable': 'The analysis could not be queued; it did not run' } },
 loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             // The list spans event groups: on one screen each row says which event it belongs to,
             // so two conclusions seconds apart do not read as the same one posted twice.
@@ -1572,10 +1613,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             backToAgents: 'Back to Agents',
             configureSources: 'Configure intelligence sources',
             signalRead: {
-              'query-failed': 'Analysis record not available',
-              'invalid-as-of': 'Cannot read at this time',
-              'contract-invalid': 'This data cannot be read right now; it is not missing',
-              retry: 'Retry'
+              'query-failed': 'This data was not read this time; the next refresh will read it again',
+              'invalid-as-of': 'This instant cannot be read; the next refresh will try again',
+              'contract-invalid': 'This data was not read this time; it is not missing, and the next refresh will read it again',
+              ariaLabel: 'This data could not be read',
             },
             crossAsset: {
               title: 'Nasdaq 100 / QQQ proxy × BTC × ETH', subtitle: 'Binance QQQUSDT, the tokenised perpetual proxy (24/7, default, labelled “Proxy”); the real Nasdaq 100 index (USTEC, US cash session) answers only when that leg cannot',

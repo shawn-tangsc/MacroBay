@@ -10,6 +10,8 @@ import {
 } from '../../../contracts/openInterestPositioning'
 import type { ModuleSignal, SignalSeverity } from '../../../contracts/moduleSignal'
 import type { ModuleSignalRead, ModuleSignalReadFailureCode } from '../../../contracts/moduleSignalRead'
+import type { ModuleSignalAnalysisRead } from '../../../service/intelligence/analysis/signalAnalysisRead'
+import type { SignalAnalysisStateView } from '../../../service/intelligence/analysis/signalAnalysisState'
 
 /**
  * The card's view of the positioning series.
@@ -34,6 +36,8 @@ export type DashboardPositioningViewState =
       staleSince?: string
       /** What the module's rule says right now. Hidden means "nothing to say" — no chip at all. */
       signal: DashboardSignalChip
+      /** 这条信号的分析到哪一步；与信号并列，不塞进 `signal`。 */
+      signalAnalysis?: SignalAnalysisStateView
       /**
        * Re-reads the card. Carried on the view state because the error surface needs a recovery
        * action and the panel is the component that draws it, not the page that owns the hook.
@@ -147,6 +151,19 @@ const severityRank: Readonly<Record<SignalSeverity, number>> = Object.freeze({ h
  *
  * The card reads its own module only. A signal from another module belongs to that module's card.
  */
+/** The state of the signal this card's chip draws: the loudest one, the same rule the chip uses. */
+export function chipAnalysisOf(
+  read: ModuleSignalAnalysisRead | ModuleSignalRead | undefined,
+  moduleId: ModuleSignal['moduleId'] = 'open-interest'
+): SignalAnalysisStateView | undefined {
+  if (!read || read.state !== 'available') return undefined
+  const mine = read.signals.filter(entry => entry.signal.moduleId === moduleId)
+  if (mine.length === 0) return undefined
+  const loudest = mine.reduce((best, entry) =>
+    severityRank[entry.signal.severity] > severityRank[best.signal.severity] ? entry : best)
+  return (read as { analysis?: Readonly<Record<string, SignalAnalysisStateView>> }).analysis?.[loudest.signal.dedupeKey]
+}
+
 export function projectModuleSignalChip(
   read: ModuleSignalRead | undefined,
   moduleId: ModuleSignal['moduleId'] = 'open-interest',

@@ -6,7 +6,7 @@ import { isCanonicalCapitalConditionsSnapshotTime } from '../../../../contracts/
 import { moduleSignalClient } from '../../../shared/ipc/moduleSignalClient'
 import type { ModuleSignalAnalysisRead } from '../../../../service/intelligence/analysis/signalAnalysisRead'
 
-import { projectDashboardCapitalConditionsSnapshot, projectEtfOutflowChip, type DashboardCapitalConditionsState } from './capitalConditionsModel'
+import { etfChipAnalysisOf, projectDashboardCapitalConditionsSnapshot, projectEtfOutflowChip, type DashboardCapitalConditionsState } from './capitalConditionsModel'
 
 type SignalClient = { query: (input: Readonly<{ asOf: string }>) => Promise<ModuleSignalAnalysisRead> }
 
@@ -60,9 +60,13 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
     const read = (attempt: number): void => {
       void queryClient.querySnapshot({ asOf }).then(async (result) => {
         const projected = projectDashboardCapitalConditionsSnapshot(result, asOf)
-        const chip = projectEtfOutflowChip(await signals)
+        const read = await signals
+        const chip = projectEtfOutflowChip(read)
+        const analysis = etfChipAnalysisOf(read)
         if (!active) return
-        apply(projected.state === 'available' ? { ...projected, etfSignal: chip } : projected)
+        apply(projected.state === 'available'
+          ? { ...projected, etfSignal: chip, ...(analysis ? { etfSignalAnalysis: analysis } : {}) }
+          : projected)
       }).catch(() => {
         if (!active) return
         // Readings already on screen outrank a failed refresh: keep them and say they are old.

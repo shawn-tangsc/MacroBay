@@ -45,7 +45,7 @@ export type SignalAnalysisRunState = Readonly<{
 export const signalAnalysisStatePolicy = Object.freeze({
   version: 'signalAnalysisState.v1',
   /** The low mark never writes a row, so its reason is a constant rather than a stored code. */
-  lowSeverityReason: 'signal-low-display-only' as const
+  lowSeverityReason: 'signal-low-marker-only' as const
 })
 
 export function projectSignalAnalysisState(input: Readonly<{

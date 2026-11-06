@@ -42,10 +42,14 @@ function render(state: DashboardPositioningViewState): string {
 }
 
 describe('a failed signal read on the positioning chip', () => {
-  it('says the record was not available and offers one retry', () => {
+  it('marks the failure with one icon instead of a line of text', () => {
     const markup = render(positioning({ state: 'unreadable', failureCode: 'query-failed', onReload: () => undefined }))
-    expect(markup).toContain('判定记录没拿到')
-    expect(markup).toContain('重试')
+    // 正面上只有标记：一句话在悬停/聚焦里。整行排障话不许上牌位。
+    expect(markup).toContain('mi-signal-read-issue')
+    expect(markup).toContain('这项数据读取失败')
+    expect(markup).not.toContain('判定记录没拿到')
+    // 一处一个：同一个失败在同一张卡上只挂一个。
+    expect(markup.split('mi-signal-read-issue').length - 1).toBe(1)
     // 牌子是「有这条信号」的陈述：读不到时一条都不许出现，连灰牌也不行。
     // 没有牌子本体：不是 alert 按钮，也不是灰牌。读不到就不许有「有这条信号」的陈述。
     expect(markup).not.toContain('data-state="alert"')
@@ -53,10 +57,11 @@ describe('a failed signal read on the positioning chip', () => {
     expect(markup).not.toContain('数据不齐')
   })
 
-  it('offers no retry where a retry cannot change the answer', () => {
+  it('never offers a retry: this is not something the reader can do', () => {
     const markup = render(positioning({ state: 'unreadable', failureCode: 'invalid-as-of', onReload: () => undefined }))
-    expect(markup).toContain('时间不对，读不了')
-    // 按一百次也不会好的按钮是假按钮。
-    expect(markup).not.toContain('>重试<')
+    // 标记仍在（我们确实出错了），但正面与浮层里都不许出现「重试」：这件事不用读者动手。
+    expect(markup).toContain('mi-signal-read-issue')
+    expect(markup).not.toContain('重试')
+    expect(markup).not.toContain('retry')
   })
 })

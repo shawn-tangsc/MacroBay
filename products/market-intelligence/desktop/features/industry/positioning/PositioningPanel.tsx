@@ -9,8 +9,6 @@ import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { OpenInterestWindow } from '../../../../contracts/openInterestHistory'
-import { isModuleSignalReadRetryable, moduleSignalReadCopyKey } from '../../../../contracts/moduleSignalRead'
-import { moduleSignalReadCopyBase } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
@@ -23,7 +21,8 @@ import {
   type DashboardPositioningViewState
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
-import { SignalDetail, useSignalDetail } from '../shared'
+import { SignalDetail, SignalReadIssue, useSignalDetail } from '../shared'
+import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import { PositioningChart, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
 
@@ -96,6 +95,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   // Opening the numbers spends nothing: no analysis call, no budget, no request. The paid action
   // is one level deeper and is not this button.
   const signalDetail = useSignalDetail('mi-positioning-signal-detail')
+  const analysisSentence = useSignalAnalysisSentence(positioning.state === 'available' ? positioning.signalAnalysis : undefined)
   // The long readings sit behind their own entry: closed by default, so the card stays a card.
   const [helpOpen, setHelpOpen] = useState(false)
   // The chip the module's rule produced, if any. A hidden chip renders nothing at all — no empty
@@ -119,17 +119,8 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             .replace('{multiple}', chip.volumeMultiple.toFixed(1))}
         </button>
       ) : chip.state === 'unreadable' ? (
-        // The read did not happen. Say exactly that and offer the only action that can help when it
-        // is retryable; an invalid instant gets no button, because pressing it cannot change the
-        // answer and a control that never works is worse than none.
-        <span className="mi-positioning-panel__signal-unreadable" role="status">
-          {resolveProductKey(moduleSignalReadCopyKey(moduleSignalReadCopyBase, chip.failureCode))}
-          {isModuleSignalReadRetryable(chip.failureCode) ? (
-            <button type="button" className="mi-positioning-panel__signal-retry" onClick={chip.onReload}>
-              {resolveProductKey(`${moduleSignalReadCopyBase}.retry`)}
-            </button>
-          ) : null}
-        </span>
+        // 读不到只留一个标记：一处一个、不占版面、悬停与聚焦都能读到人话。卡片正面没有那行字。
+        <SignalReadIssue failureCode={chip.failureCode} resolveText={resolveProductKey} />
       ) : (
         // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
         <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
@@ -188,6 +179,8 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           id="mi-positioning-signal-detail"
           titleKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
           rows={[
+            // 第一行回答「这次分析到哪一步」：读者点开牌子最先想知道的是分析会不会来。
+            ...(analysisSentence ? [{ labelKey: 'pages.intelligence.portal.dashboard.signalAnalysis.label', value: analysisSentence }] : []),
             // The rule's own words, never its internal id: the reader came to check the reading,
             // not to learn a code name.
             { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsRule', value: text.signalDetailsRuleName },

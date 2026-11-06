@@ -25,27 +25,32 @@ function render(chip: Parameters<typeof EtfOutflowChip>[0]['chip']): string {
 }
 
 describe('a failed signal read on the ETF chip', () => {
-  it('says the record was not available and offers one retry', () => {
+  it('marks the failure with one icon instead of a line of text', () => {
     const markup = render({ state: 'unreadable', failureCode: 'query-failed' })
-    expect(markup).toContain('判定记录没拿到')
-    expect(markup).toContain('重试')
+    expect(markup).toContain('mi-signal-read-issue')
+    expect(markup).toContain('这项数据读取失败')
+    // 正面上没有那行排障话，也没有独立的重试按钮。
+    expect(markup).not.toContain('判定记录没拿到')
+    expect(markup).not.toContain('重试')
+    // 一处一个。
+    expect(markup.split('mi-signal-read-issue').length - 1).toBe(1)
     // 牌子是「有这条信号」的陈述：读不到时一条都不许渲染，连灰牌也不行。
     expect(markup).not.toContain('数据不齐')
     expect(markup).not.toContain('mi-capital-conditions__signal"')
   })
 
-  it('says “cannot read right now” in the reader’s words, without the defect vocabulary', () => {
+  it('never puts the defect vocabulary on the card', () => {
     const markup = render({ state: 'unreadable', failureCode: 'contract-invalid' })
     // 读者看不懂「格式」「契约」，也做不了任何事；那句话是给我们排障的，不许上屏。
     expect(markup).not.toMatch(/格式|契约|contract|format/i)
-    expect(markup).toContain('数据暂时读不到')
-    // 重试不会好，所以一个按钮都不给——假按钮会教读者不再相信真按钮。
-    expect(markup).not.toContain('>重试<')
+    // 不给按钮：这件事不用读者动手，下一次刷新会自己再读。
+    expect(markup).not.toContain('重试')
   })
 
-  it('offers no retry where a retry cannot change the answer', () => {
+  it('never offers a retry: this is not something the reader can do', () => {
     const markup = render({ state: 'unreadable', failureCode: 'invalid-as-of' })
-    expect(markup).toContain('时间不对，读不了')
+    // 标记仍在（我们确实出错了），但浮层里不许有「重试」。
+    expect(markup).toContain('mi-signal-read-issue')
     // 按一百次也不会好的按钮是假按钮，它教读者不再相信真按钮。
     expect(markup).not.toContain('>重试<')
   })
