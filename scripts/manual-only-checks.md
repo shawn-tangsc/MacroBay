@@ -16,7 +16,7 @@
 | `pnpm check:boot-page` | 改动或审查启动失败页（`bootFailurePage`）的布局时 | 改这块的实现方 | 五条通过行（每行含卡片宽度与三个按钮高度）+ 退出码 0 |
 | `pnpm seed:briefing-history` | 需要造「那一次已清理」的门槛 5 证据时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用 | 取这部分证据的人 | 临时目录里的 `daily-briefings.sqlite` 与 `daily-brief-sessions.sqlite` + 指向该目录的截图 |
 | `pnpm seed:analysis-quota` | 需要造「今天的分析额度已用尽」来验 P3 时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用，然后触发一次自动分析（市场日历「Refresh now」或模块信号） | 验 P3 的这条线 | 脚本输出 `seeded <UTC 日>: event 48/48, calendar 9/9` 那一行 + 临时目录里的 `market-analysis.sqlite` + 中心出现一条 P3（正文含「今天已用 48 次 / 上限 48 次」），同一天再触发不新增 |
-| `pnpm typecheck:products` | 清产品侧类型债务时（每清一批跑一次）、发布前 | 产品侧实现方 | 退出码 0 + 错误数（当前 **758**，其中 `products/` 内 755；2026-11-06 第三批清完 `service/bootstrap.test.ts` 后实测）**只减不增**；数字变大就是债务在长 |
+| `pnpm typecheck:products` | 清产品侧类型债务时（每清一批跑一次）、发布前 | 产品侧实现方 | 退出码 0 + 错误数（**干净 HEAD `4e3dafe` 实测 759**）**只减不增**；数字变大就是债务在长。**读数必须来自干净副本**：共享工作区里别人的在途文件会让它浮动（同一时刻脏树读 762），脏树读数不作对照 |
 | `pnpm docs:event-ids` | 改动通知事件 id、或改文档里引用这些 id 的段落时 | 改这块的实现方 | 报告里 `197 篇文档 / N 个已声明事件 id / 零处对不上` 那一行 + 退出码 0（**不接受 `skipped`**） |
 
 ## `check:boot-page` 为什么不进 `verify`
@@ -52,6 +52,20 @@
 - 根 `tsconfig.json` 的 include 写的是 `products/**/*.{ts,tsx}`，而 **TypeScript 的 include 不支持花括号展开**，这一项匹配 **0 个文件**。主 typecheck 里那 845 个产品文件，是**被 import 图拽进去的**（`apps/` 真引用到的那些），`products/**/*.mts` 那条没有花括号，是有效的。
 - 所以 products 全量 **1563** 个文件里，**718 个从来没被主 typecheck 检查过**——今天在这一千多文件里能数出 **861 条真错**（`products/` 内 858 条），例如缺字段的对象字面量、字面量联合传错。**把它们塞进 `verify`，所有人下一次提交就一起红**，而那与提交内容无关。
 - 它的用途因此是**债务可见**，不是门禁：清一批、跑一次、看数字掉没掉。真正的修法另有一页（把根 include 拆成 `products/**/*.ts` 与 `products/**/*.tsx` 两行，再按目录分批清债），两件事必须一起排——只做第一步，主 typecheck 立刻红 861 条。
+
+**怎么复跑这个数（不动共享工作区）**
+
+```bash
+git worktree add --detach /tmp/ty HEAD
+ln -s "$PWD/node_modules" /tmp/ty/node_modules
+cp -R products/generated /tmp/ty/products/   # 生成物被 gitignore，缺了会多出十几条假错
+cd /tmp/ty && node_modules/.bin/tsc --noEmit -p tsconfig.products.json | grep -c "error TS"
+rm -rf /tmp/ty   # 收尾：git worktree remove --force /tmp/ty
+```
+
+**已有读数（都是干净副本，可复跑）**：`2b1f034` 三批前 **813** → `b801851` 三批后 **759** → `4e3dafe` 现 HEAD **759**。
+其中三批清掉的是 50 条（`contracts/**` 17、`desktop/shared`+`settings` 17、`service/bootstrap.test.ts` 16），
+另外 4 条是同期别线的提交清掉的，不是这三批的。
 
 **基线怎么用**：跑一次记下错误数，只许变小。数字变大时先看是哪一批新代码，别调基线。等它归零，这一行就该删掉、把这项并进 `verify` 的 `typecheck` 里，而不是长期挂在门外。
 
