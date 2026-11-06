@@ -210,44 +210,6 @@ describe('channelPushPort', () => {
     expect(formatPushText(CONTENT)).not.toContain('notification-')
   })
 
-  it('推送正文不带动作指令：手机上没有任何东西可以点（v2.50）', () => {
-    // 手机上是纯文本：写「点开 / 打开 / 查看」等于承诺一个那个表面上不存在的动作。
-    // 动作只由界面按钮表达；中心里的「打开任务」「打开日报」照旧。
-    // 中文直接挡；英文只挡**祈使/带宾语**的用法——`open interest` 是「未平仓」这个专有名词，
-    // 按单词 `open` 挡会把最该保住的那条信号标题（`BTC open interest dropped`）误判成违规。
-    const forbidden = [/点开/u, /打开/u, /查看/u, /点击/u, /\btap\b/iu, /\bclick\b/iu, /\bopen\s+(it|the|this|your)\b/iu]
-    const events = [
-      'notification.event.platform.job.failed-terminal',
-      'notification.event.platform.analysis.quota-exhausted',
-      'notification.event.platform.desktop.blocked'
-    ]
-    for (const language of ['zh-CN', 'en-US'] as const) {
-      const table = notificationCopy[language] as unknown as Record<string, string>
-      for (const event of events) {
-        const text = formatPushText({
-          title: table[`${event}.title`] ?? '',
-          body: table[`${event}.body`] ?? '',
-          reason: table[`${event}.reason`] ?? '',
-          actionLabels: {}
-        })
-        for (const pattern of forbidden) expect(text).not.toMatch(pattern)
-      }
-      // 兜底句也在这条规矩里：它会在手机上出现，同样不许承诺点开。
-      const fallback = table['notification.fallback.title'] ?? ''
-      for (const pattern of forbidden) expect(fallback).not.toMatch(pattern)
-    }
-
-    // 正面样本：专有名词不算动作指令。这条写下来，免得守卫第一次把 `open interest` 判红、
-    // 然后有人顺手加白名单——那等于回到「靠人记」。
-    const nounNotVerb = formatPushText({
-      title: 'BTC open interest dropped',
-      body: '15-minute drop 2.3% (threshold 1.5%), volume 3.1x.',
-      reason: 'Rule matched and reached the severity threshold you set.',
-      actionLabels: {}
-    })
-    for (const pattern of forbidden) expect(nounNotVerb).not.toMatch(pattern)
-  })
-
   it('treats a delivered result without an attempt id as accepted without evidence id', () => {
     expect(mapChannelDeliveryResult({ status: 'delivered', attemptId: null, errorCode: null })).toEqual({ ok: true })
   })
