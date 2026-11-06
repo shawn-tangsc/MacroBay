@@ -71,6 +71,21 @@ describe('history rows take incompleteness from the run', () => {
     expect(listed[0]?.scheduledTime).toBeUndefined()
   })
 
+  it('shows no row for a run that succeeded but left no edition', async () => {
+    // 用户 2026-11-06 的 5 个空壳行：同一天同槽位的后一版把前面几版的正文顶掉了，运行记录还在，
+    // 于是被画成「未运行 / 这一期没有生成过」——"跑了却说没生成过"。
+    // 跑成功却没有版次，只有两种可能：读者删了它，或同槽新版顶掉了它。两种都不出行。
+    const listed = await briefingHistorySummaries({
+      dates: ['2026-11-06'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      attemptRuns: [
+        { date: '2026-11-06', periodId: 'period_early', locale: 'zh-CN', state: 'succeeded' },
+        { date: '2026-11-06', periodId: 'period_late', locale: 'en-US', state: 'failed' }
+      ],
+      scheduledTime: () => undefined
+    })
+    expect(listed.map((row) => row.periodId)).toEqual(['period_late'])
+  })
+
   it('does not split one run into two rows once it publishes', async () => {
     // 失败后重试成功：仍是同一 (日期, 期号, 语言) 的一行，状态从"没有正文"变成版次行。
     const retried = await briefingHistorySummaries({

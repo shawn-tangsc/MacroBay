@@ -202,6 +202,11 @@ export async function briefingHistorySummaries(input: Readonly<{
     // 一次跑在冻结事实之前就挂掉时，只有 attempt、没有运行记录、更没有版次——那一行也不许消失。
     for (const attempt of input.attemptRuns ?? []) {
       if (attempt.date !== date || known.has(attempt.periodId)) continue
+      // **跑成功却没有版次 = 那一版不在库里**：要么读者删了它，要么同一个槽位的新版把正文顶掉了
+      // （一个 (日期, 截止, 语言) 只留一版）。两种情况都不该画成一行「这一期没有生成过」——
+      // 用户 2026-11-06 看到的 5 个空壳就是这种："跑了却说没生成过"。只有失败/还在跑的 attempt
+      // 才留行，那是"发生过的事"。
+      if (attempt.state === 'succeeded') continue
       known.add(attempt.periodId)
       periods.push({
         date, periodId: attempt.periodId, rows: new Map(), locales: [attempt.locale],
