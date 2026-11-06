@@ -13,7 +13,12 @@
  * 判定（断多久才算断线：满 30 秒，不按失败次数）在频道线 `channelConnectionOutage.ts`，这里只负责
  * 把一份已经成立的「这次断开了」翻成一条提交请求——两件事分开，判定才测得动。
  */
-import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../contracts/notificationContracts'
+import type {
+  NotificationContentByLanguage,
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '../contracts/notificationContracts'
+import { renderPlatformEventCopy } from './platformEventCopy'
 
 const CHANNEL_CONNECTION_LOST_EVENT_ID = 'platform.channel.connection-lost'
 
@@ -39,9 +44,12 @@ export function buildChannelConnectionLostRequest(input: ChannelConnectionLostIn
       builder: 'template',
       vars: { channelId: input.channelId, disconnectedAt: input.disconnectedAt }
     },
-    bodyParams: { channel: input.channelName },
-    // 原因两档就是正文变体名，与声明里的 `bodyKeyByVariant` 逐字对应；写错会被拒成 unknown-body-variant。
-    bodyVariant: input.cause,
+    // 成品句子在源头拼好（契约 v2.56）：频道名是读者自起的字，两种语言同一个；原因档位走正文变体。
+    rendered: renderPlatformEventCopy({
+      eventTypeId: CHANNEL_CONNECTION_LOST_EVENT_ID,
+      params: { channel: input.channelName },
+      bodyVariant: input.cause
+    }) as NotificationContentByLanguage,
     // 读者要动手（查网络或查代理），所以带一个「去设置检查」的落点——落频道页，不是通知设置。
     actions: [{ id: 'open-channel-settings', labelKey: 'notification.channelCheck.action', kind: 'open', deeplink }],
     deeplink,

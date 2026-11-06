@@ -58,6 +58,7 @@ import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
 import { decideSeverityUpgrade } from './notificationSeverityUpgrade'
+import { renderPlatformEventCopy } from '../producers/platformEventCopy'
 import {
   compareNotifications,
   notificationCursorKey,
@@ -329,13 +330,17 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     if (delivered.desktopBlocked) {
       // P7：桌面这一跳没弹出来。它是**唯一**的来源——`readPermission()` 读不到授权，不许拿它猜。
       // 这条自己只批了中心与提示（不含桌面），所以不会再产生下一次桌面失败，不会自激。
-      await submitEvent({
-        eventTypeId: 'platform.desktop.blocked',
-        producerId: 'platform',
-        dedupeVars: { builder: 'template', vars: { recordId: record.id } },
-        actions: [],
-        occurredAt: now
-      })
+      const blockedCopy = renderPlatformEventCopy({ eventTypeId: 'platform.desktop.blocked' })
+      if (blockedCopy !== undefined) {
+        await submitEvent({
+          eventTypeId: 'platform.desktop.blocked',
+          producerId: 'platform',
+          dedupeVars: { builder: 'template', vars: { recordId: record.id } },
+          rendered: blockedCopy,
+          actions: [],
+          occurredAt: now
+        })
+      }
     }
     return plan.outcome
   }

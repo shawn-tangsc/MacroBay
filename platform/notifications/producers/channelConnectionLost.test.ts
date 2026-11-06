@@ -27,15 +27,21 @@ describe('channel connection lost producer', () => {
       builder: 'template',
       vars: { channelId: 'channel-1', disconnectedAt: '2026-11-04T15:01:00.000Z' }
     })
-    // 变体名与声明里的 bodyKeyByVariant 逐字一致，写错会被拒成 unknown-body-variant。
-    expect(request.bodyVariant).toBe('proxy')
-    expect(request.bodyParams).toEqual({ channel: 'test' })
+    // 成品句子在源头拼好：两种语言各一份，频道名（读者自起的字）两份相同。
+    expect(request.rendered?.['zh-CN']?.body).toContain('test')
+    expect(request.rendered?.['en-US']?.body).toContain('test')
+    expect(request.bodyVariant).toBeUndefined()
+    expect(request.bodyParams).toBeUndefined()
   })
 
   it('carries the channel name and one of the two reasons, never a bare "connection failed"', () => {
     for (const cause of ['network', 'proxy'] as const) {
       const request = buildChannelConnectionLostRequest({ ...input, cause })
-      expect(request.bodyParams?.channel).toBe('test')
+      // 两种原因的正文各自成句，都点名是哪条频道——不许只写「连接失败」。
+      expect(request.rendered?.['zh-CN']?.body).toContain('test')
+      expect(request.rendered?.['zh-CN']?.body).not.toBe(
+        buildChannelConnectionLostRequest({ ...input, cause: cause === 'proxy' ? 'network' : 'proxy' }).rendered?.['zh-CN']?.body
+      )
       const key = `notification.event.platform.channel.connection-lost.body.${cause}`
       for (const language of ['zh-CN', 'en-US'] as const) {
         const sentence = (notificationCopy[language] as Readonly<Record<string, string>>)[key]
@@ -78,7 +84,9 @@ describe('channel connection lost producer', () => {
     if (plan.kind !== 'new') return
     // 归属前缀是平台加的（`<owner>|<template>`），键本体带频道 id 与断开起始时刻。
     expect(plan.record.dedupeKey).toBe('platform|channel-lost:channel-1:2026-11-04T15:01:00.000Z')
-    expect(plan.record.bodyKey).toBe('notification.event.platform.channel.connection-lost.body.proxy')
+    // 成品记录不挂任何文案键，正文就是那句成品。
+    expect(plan.record.bodyKey).toBeUndefined()
+    expect(plan.record.rendered?.['zh-CN']?.body).toContain('代理')
     // 桌面可用时只写桌面交付（桌面优先互斥），提示被顶掉；关掉桌面才轮到提示。
     expect(plan.levels).toEqual(['center', 'desktop'])
     expect(plan.record.channels).toEqual(['center', 'desktop'])

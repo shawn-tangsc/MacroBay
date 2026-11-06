@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { createDefaultNotificationStoreState } from '../store/notificationStore'
+import { notificationCopy } from '../../i18n/notificationCopy'
 import { createNotificationRuntime } from './notificationRuntime'
+
+const zhText = (key: keyof typeof notificationCopy['zh-CN']): string => notificationCopy['zh-CN'][key]
 
 /**
  * 熔断进入 / 解除这两条路必须有断言，因为它们**没有任何界面能证明自己发生过**：
@@ -107,7 +110,7 @@ function createHarness() {
       }
     }
   })
-  return { runtime, records: () => state.records as ReadonlyArray<{ titleKey: string; actions?: ReadonlyArray<{ labelKey: string }> }> }
+  return { runtime, records: () => state.records }
 }
 
 describe('push breaker announces both transitions', () => {
@@ -119,11 +122,15 @@ describe('push breaker announces both transitions', () => {
     await runtime.submit(request('first'))
     await runtime.submit(request('second'))
     // 前两次只是记下失败次数：读者不需要知道「一条失败了一次」。
-    expect(records().some((record) => record.titleKey === SUSPEND_TITLE)).toBe(false)
+    // 成品记录不再挂文案键：按事件 id 定位，再断言读者看得到的那句话。
+    expect(records().some((record) => record.eventTypeId === 'platform.channel.push-suspended')).toBe(false)
 
     await runtime.submit(request('third'))
-    const suspended = records().find((record) => record.titleKey === SUSPEND_TITLE)
+    const suspended = records().find((record) => record.eventTypeId === 'platform.channel.push-suspended')
     expect(suspended).toBeDefined()
+    // 源头拼好的成品：读者看到的是句子，不是键。
+    expect(suspended?.rendered?.['zh-CN']?.title).toBe('已暂停推送到手机')
+    expect(suspended?.titleKey).toBeUndefined()
     // 悬停句话要说「去哪儿看」，否则读者知道出了问题但不知道去哪。
     expect(suspended?.actions?.[0]?.labelKey).toBe('notification.channelCheck.action')
     expect(pushCalls).toBe(3)
@@ -138,16 +145,17 @@ describe('push breaker announces both transitions', () => {
     await runtime.submit(request('warm-1'))
     await runtime.submit(request('warm-2'))
     await runtime.submit(request('warm-3'))
-    expect(records().some((record) => record.titleKey === SUSPEND_TITLE)).toBe(true)
-    expect(records().some((record) => record.titleKey === RESUMED_TITLE)).toBe(false)
+    expect(records().some((record) => record.eventTypeId === 'platform.channel.push-suspended')).toBe(true)
+    expect(records().some((record) => record.eventTypeId === 'platform.channel.push-resumed')).toBe(false)
 
     // 越过 30 分钟窗口，下一次发送成功即恢复。
     nowMs += 31 * 60_000
     pushOk = true
     await runtime.submit(request('after-window'))
 
-    const resumed = records().find((record) => record.titleKey === RESUMED_TITLE)
+    const resumed = records().find((record) => record.eventTypeId === 'platform.channel.push-resumed')
     expect(resumed).toBeDefined()
+    expect(resumed?.rendered?.['zh-CN']?.title).toBe(zhText('notification.event.platform.channel.push-resumed.title'))
     // 恢复不需要读者做事，所以不带动作。
     expect(resumed?.actions ?? []).toHaveLength(0)
   })

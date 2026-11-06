@@ -6,6 +6,7 @@
  */
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import type { NotificationPushTransition } from './notificationRuntimeDelivery'
+import { renderPlatformEventCopy } from '../producers/platformEventCopy'
 
 export async function emitBackoffEvent(input: {
   transition: NotificationPushTransition
@@ -15,8 +16,11 @@ export async function emitBackoffEvent(input: {
   const channelId = input.transition.channelId
   const deeplink = { scope: 'platform' as const, settingsSectionId: 'notifications' }
   if (input.transition.kind === 'paused') {
+    const pausedCopy = renderPlatformEventCopy({ eventTypeId: 'platform.channel.push-suspended' })
+    if (pausedCopy === undefined) return
     await input.submit({
       eventTypeId: 'platform.channel.push-suspended',
+      rendered: pausedCopy,
       producerId: channelId,
       dedupeVars: { builder: 'template', vars: { channelId } },
       actions: [{
@@ -30,8 +34,11 @@ export async function emitBackoffEvent(input: {
     })
     return
   }
+  const resumedCopy = renderPlatformEventCopy({ eventTypeId: 'platform.channel.push-resumed' })
+  if (resumedCopy === undefined) return
   await input.submit({
     eventTypeId: 'platform.channel.push-resumed',
+    rendered: resumedCopy,
     producerId: channelId,
     dedupeVars: { builder: 'template', vars: { channelId, day: input.now.slice(0, 10) } },
     actions: [],
