@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { ModuleSignalRead } from '../../../../contracts/moduleSignalRead'
+import type { ModuleSignalAnalysisRead } from '../../../../service/intelligence/analysis/signalAnalysisRead'
 import { capitalConditionsReadRetryDelaysMs, useCapitalConditions } from './useCapitalConditions'
 
 const asOf = '2026-08-18T08:00:00.000Z'
@@ -188,7 +188,7 @@ describe('useCapitalConditions', () => {
 async function renderHook(
   client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> },
   now: () => Date,
-  signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> }
+  signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }
 ) {
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
@@ -201,7 +201,7 @@ async function renderHook(
   }
 }
 
-function Harness({ client, now, reloadKey, retryKey, signalClient }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number; retryKey?: number; signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> } }) {
+function Harness({ client, now, reloadKey, retryKey, signalClient }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number; retryKey?: number; signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> } }) {
   const state = useCapitalConditions({ client: client as never, ...(signalClient ? { signalClient } : {}), now, ...(reloadKey === undefined ? {} : { reloadKey }), ...(retryKey === undefined ? {} : { retryKey }) })
   const stale = state.state === 'available' && state.stale ? 'true' : 'false'
   const chip = state.state === 'available' && state.etfSignal ? state.etfSignal.state : ''
@@ -227,7 +227,7 @@ describe('useCapitalConditions · ETF signal chip', () => {
 
   it('asks the module signal read for the same instant as the snapshot, and draws its chip', async () => {
     const window = { unit: 'trading-days' as const, amount: 3, upperBoundMs: null }
-    const query = vi.fn(async (): Promise<ModuleSignalRead> => ({ state: 'available', signals: [{ signal, window }], droppedInvalid: 0 }))
+    const query = vi.fn(async (): Promise<ModuleSignalAnalysisRead> => ({ state: 'available', signals: [{ signal, window }], droppedInvalid: 0, analysis: { [signal.dedupeKey]: { analysisOffByReader: false, analysisState: 'not-triggered' } } }))
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 
@@ -237,7 +237,7 @@ describe('useCapitalConditions · ETF signal chip', () => {
 
   // 读不到 ≠ 没事：读取失败有自己的那一态（能重试），不能悄悄消失成「今天没有」。
   it('marks a failed signal read as unreadable instead of a quiet card', async () => {
-    const query = vi.fn(async (): Promise<ModuleSignalRead> => ({ state: 'unavailable', failureCode: 'query-failed' }))
+    const query = vi.fn(async (): Promise<ModuleSignalAnalysisRead> => ({ state: 'unavailable', failureCode: 'query-failed' }))
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 
@@ -246,7 +246,7 @@ describe('useCapitalConditions · ETF signal chip', () => {
   })
 
   it('draws no chip when the rule has nothing to say', async () => {
-    const query = vi.fn(async (): Promise<ModuleSignalRead> => ({ state: 'available', signals: [], droppedInvalid: 0 }))
+    const query = vi.fn(async (): Promise<ModuleSignalAnalysisRead> => ({ state: 'available', signals: [], droppedInvalid: 0, analysis: {} }))
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 

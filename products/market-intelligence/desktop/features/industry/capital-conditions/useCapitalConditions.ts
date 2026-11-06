@@ -4,11 +4,11 @@ import type { IntelligenceCapitalConditionsClient } from '../../../shared/ipc/in
 import type { ModuleSignal } from '../../../../contracts/moduleSignal'
 import { isCanonicalCapitalConditionsSnapshotTime } from '../../../../contracts/intelligenceQueryContracts'
 import { moduleSignalClient } from '../../../shared/ipc/moduleSignalClient'
-import type { ModuleSignalRead } from '../../../../contracts/moduleSignalRead'
+import type { ModuleSignalAnalysisRead } from '../../../../service/intelligence/analysis/signalAnalysisRead'
 
 import { projectDashboardCapitalConditionsSnapshot, projectEtfOutflowChip, type DashboardCapitalConditionsState } from './capitalConditionsModel'
 
-type SignalClient = { query: (input: Readonly<{ asOf: string }>) => Promise<ModuleSignalRead> }
+type SignalClient = { query: (input: Readonly<{ asOf: string }>) => Promise<ModuleSignalAnalysisRead> }
 
 type Input = {
   client?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>
@@ -86,7 +86,7 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
   return state
 }
 
-async function readSignals(client: SignalClient, asOf: string): Promise<ModuleSignalRead> {
+async function readSignals(client: SignalClient, asOf: string): Promise<ModuleSignalAnalysisRead> {
   try {
     // The window belongs to the chip too, but this hook only needs the signal to pick its state.
     return await client.query({ asOf })

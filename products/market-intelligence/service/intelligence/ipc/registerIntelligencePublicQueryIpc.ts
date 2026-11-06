@@ -31,7 +31,7 @@ import {
 } from '../../../contracts/intelligenceQueryContracts'
 import { divergenceUnavailable, isCanonicalDivergenceTime, isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { isCanonicalSignalTime } from '../../../contracts/moduleSignal'
-import { toModuleSignalRead, type ModuleSignalRead } from '../../../contracts/moduleSignalRead'
+import type { ModuleSignalRead } from '../../../contracts/moduleSignalRead'
 import {
   isCanonicalOpenInterestTime,
   isOpenInterestHistoryResult,
@@ -130,29 +130,13 @@ export function registerIntelligencePublicQueryIpc(
     } catch { return divergenceUnavailable('query-failed') }
   })
 
-  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals, async (payload) => {
-    // The page reads signals, so the payload is one instant and nothing else. A bad instant is
-    // reported as a bad instant, never as an empty answer: "nothing happened" is a statement the
-    // reader cannot act on, and it is not what this layer knows.
-    if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) {
-      return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
-    }
-    try {
-      // One filter for both sides of the bridge, so a shape this layer accepts cannot arrive as a
-      // chip with half its numbers on the other. Malformed entries are dropped and counted.
-      return toModuleSignalRead(await publicQueryService().queryModuleSignals({ asOf: payload.asOf }))
-    } catch {
-      return { state: 'unavailable', failureCode: 'query-failed' } satisfies ModuleSignalRead
-    }
-  })
-
   /**
-   * The same read, with each signal's analysis state beside it.
+   * The signals with each one's analysis state beside them — the one read the two cards use.
    *
-   * A separate method while the callers switch together: the old one keeps answering until the page
-   * moves, so there is never a moment where one side expects the new shape and the other sends the
-   * old one. Registered here means it must also be in the startup baseline in the same change — a
-   * registered method missing from that list is an app that refuses to start.
+   * It was a separate method while the callers switched over; the old plain-signal method is gone
+   * now, so there is exactly one door and no second shape to keep in step. Registered here means it
+   * must also be in the startup baseline in the same change — a registered method missing from that
+   * list is an app that refuses to start.
    */
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead, async (payload) => {
     if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) {

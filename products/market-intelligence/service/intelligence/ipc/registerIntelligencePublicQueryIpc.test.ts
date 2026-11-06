@@ -42,6 +42,27 @@ const mockPublicQueryService = {
       window: { unit: 'buckets', amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 }
     }
   ])),
+  queryModuleSignalRead: vi.fn(async (): Promise<unknown> => ({
+    state: 'available',
+    signals: [
+      {
+        signal: {
+          version: '1', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: 'btc',
+          severity: 'high', observedAt: '2026-07-08T10:15:00.000Z',
+          cadence: { kind: 'intraday', bucketMs: 15 * 60_000 },
+          values: { dropPct: -2.7, volumeMultiple: 3.1, notionalUsd: 7.4e9 },
+          dedupeKey: 'open-interest:oi-liquidation-proxy:btc:2026-07-08T10:15:00.000Z',
+          readiness: 'available', triggerOwner: 'module-signal'
+        },
+        window: { unit: 'buckets', amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 }
+      }
+    ],
+    // One explicit state per signal: absent would mean "could not read the states".
+    analysis: {
+      'open-interest:oi-liquidation-proxy:btc:2026-07-08T10:15:00.000Z': { analysisOffByReader: false, analysisState: 'not-triggered' }
+    },
+    droppedInvalid: 1
+  })),
   queryCapitalConditionsSnapshot: vi.fn(async (): Promise<unknown> => ({
     state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf: { state: 'unavailable' },
     coreStablecoins: { observedAt: '2026-08-06T10:00:00.000Z', verifiedAt: '2026-08-06T10:00:00.000Z', currentUsd: 310, change1dUsd: 10, change1dPercent: 3, change7dUsd: 10, change7dPercent: 3, change30dUsd: 30, change30dPercent: 10 }, conclusion: 'partial'
@@ -307,12 +328,15 @@ describe('module signals over IPC', () => {
       {} as JobRuntime,
       moduleUnderTest
     )
-    const answer = await handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals)?.({ asOf: '2026-07-08T10:30:00.000Z' })
-    expect(mockPublicQueryService.queryModuleSignals).toHaveBeenCalledWith({ asOf: '2026-07-08T10:30:00.000Z' })
+    const answer = await handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead)?.({ asOf: '2026-07-08T10:30:00.000Z' })
+    expect(mockPublicQueryService.queryModuleSignalRead).toHaveBeenCalledWith({ asOf: '2026-07-08T10:30:00.000Z' })
     expect(answer).toMatchObject({
       state: 'available',
       droppedInvalid: 1,
-      signals: [{ signal: { ruleId: 'oi-liquidation-proxy', readiness: 'available' } }]
+      signals: [{ signal: { ruleId: 'oi-liquidation-proxy', readiness: 'available' } }],
+      analysis: {
+        'open-interest:oi-liquidation-proxy:btc:2026-07-08T10:15:00.000Z': { analysisState: 'not-triggered' }
+      }
     })
   })
 
@@ -323,11 +347,11 @@ describe('module signals over IPC', () => {
       {} as JobRuntime,
       moduleUnderTest
     )
-    mockPublicQueryService.queryModuleSignals.mockClear()
-    const handler = handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals)!
+    mockPublicQueryService.queryModuleSignalRead.mockClear()
+    const handler = handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead)!
     const invalid = { state: 'unavailable', failureCode: 'invalid-as-of' }
     expect(await handler({ asOf: '2026-07-08 10:30' })).toEqual(invalid)
     expect(await handler({ asOf: '2026-07-08T10:30:00.000Z', extra: true })).toEqual(invalid)
-    expect(mockPublicQueryService.queryModuleSignals).not.toHaveBeenCalled()
+    expect(mockPublicQueryService.queryModuleSignalRead).not.toHaveBeenCalled()
   })
 })
