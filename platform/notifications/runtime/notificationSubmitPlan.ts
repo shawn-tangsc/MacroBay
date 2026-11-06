@@ -326,6 +326,7 @@ function toLegacyRequest(
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
     ...(request.rendered === undefined ? { reasonKey: entry.reasonKey as NotificationCopyKey } : {}),
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
+    ...(request.rendered === undefined ? {} : { rendered: request.rendered }),
     severity: request.severity ?? 'info',
     priority: 'normal',
     requestedChannels: localChannels.length > 0 ? [...localChannels] : ['center'],

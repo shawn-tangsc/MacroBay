@@ -318,44 +318,6 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
   }
 }
 
-/**
- * 合并的**四条唯一写法**（契约 §16.2，别处只许引用）：
- *  1. 标题取第一次提交；
- *  2. 动作取第一次提交；
- *  3. 正文取最新一次；最新一次没有正文时保留既有；
- *  4. 次数与最近发生时间跟着更新；跨类型合并不增次数。
- */
-export function mergeDuplicateNotification(
-  existing: NotificationRecord,
-  incoming: NotificationRequest,
-  now: string,
-  options: { incrementCount?: boolean } = {}
-): NotificationRecord {
-  const incomingEventTypeId = incoming.eventTypeId
-  const crossType = incomingEventTypeId !== undefined && incomingEventTypeId !== existing.eventTypeId
-  const mergedEventTypes = crossType
-    ? [...new Set([...(existing.mergedEventTypes ?? [existing.eventTypeId]), incomingEventTypeId])]
-    : existing.mergedEventTypes
-  return {
-    ...existing,
-    // 版次：**带了才覆盖成最新那次，没带就保持原样**——自动路径不带 edition，
-    // 不能让它把记录里已有的版次抹掉（否则按钮又会判「版次不符」）。
-    ...(incoming.edition === undefined ? {} : { edition: incoming.edition }),
-    // 标题与动作取第一次：读者靠标题认人，动作一变等于换了一条通知。
-    bodyKey: incoming.bodyKey ?? existing.bodyKey,
-    bodyParams: incoming.bodyKey !== undefined ? incoming.bodyParams : existing.bodyParams,
-    mergedEventTypes,
-    severity: strongerSeverity(existing.severity, incoming.severity),
-    priority: strongerPriority(existing.priority, incoming.priority),
-    channels: uniqueChannels([...existing.channels, ...incoming.requestedChannels]),
-    updatedAt: now,
-    occurrenceCount:
-      crossType || options.incrementCount === false ? existing.occurrenceCount : existing.occurrenceCount + 1,
-    expiresAt: incoming.expiresAt ?? existing.expiresAt,
-    safeMetadata: incoming.safeMetadata ?? existing.safeMetadata
-  }
-}
-
 export function markNotificationRead(record: NotificationRecord, now = new Date().toISOString()): NotificationRecord {
   if (record.state === 'dismissed' || record.state === 'expired') return record
   return {
@@ -459,20 +421,11 @@ function normalizeChannels(value: unknown): NotificationChannel[] {
   if (!Array.isArray(value)) return ['center']
   const allowed: NotificationChannel[] = ['center', 'toast', 'popup', 'desktop']
   const channels = value.filter((item): item is NotificationChannel => allowed.includes(item as NotificationChannel))
-  return channels.length > 0 ? uniqueChannels(channels) : ['center']
+  return channels.length > 0 ? [...new Set(channels)] : ['center']
 }
 
-function strongerSeverity(left: NotificationSeverity, right: NotificationSeverity): NotificationSeverity {
-  return SEVERITY_RANK[left] >= SEVERITY_RANK[right] ? left : right
-}
 
-function strongerPriority(left: NotificationPriority, right: NotificationPriority): NotificationPriority {
-  return PRIORITY_RANK[left] >= PRIORITY_RANK[right] ? left : right
-}
 
-function uniqueChannels(channels: NotificationChannel[]): NotificationChannel[] {
-  return [...new Set(channels)]
-}
 
 /** 只留 `ok` / `invalid` 两值；其余丢弃，不发明第三态。 */
 function normalizeCredentialHealth(
@@ -485,3 +438,9 @@ function normalizeCredentialHealth(
   }
   return out
 }
+
+/**
+ * 合并规则已抽到 `notificationMerge.ts`（store 只留读写；抽出去因为本文件超了体积线）。
+ * 这里**只转出口**，规则本身不在这份文件里——一处实现，别处引用。
+ */
+export { mergeDuplicateNotification } from './notificationMerge'

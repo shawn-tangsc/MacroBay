@@ -182,6 +182,8 @@ export type NotificationCenterItem = Omit<
 }
 
 export type NotificationRequest = {
+  /** 成品句子（新形状）：合并路径靠它把「正文取最新」也覆盖到成品记录上。 */
+  rendered?: NotificationContentByLanguage
   owner: 'platform' | 'product'
   productId?: string
   sourceId: string

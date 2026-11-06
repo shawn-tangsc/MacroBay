@@ -135,6 +135,58 @@ describe('平台只拦不改', () => {
   })
 })
 
+describe('合并成品记录：标题取第一次、正文取最新', () => {
+  it('同一键两次提交，正文换成第二版，标题与理由保持第一版', async () => {
+    const state = createDefaultNotificationStoreState()
+    const catalog = createNotificationEventCatalog({
+      policy: { 'platform.merge': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
+      sources: [{
+        productId: 'platform',
+        events: [{
+          id: 'platform.merge',
+          titleKey: 'notification.taskFailed.title',
+          reasonKey: 'notification.taskFailed.body',
+          requiresUserAction: false,
+          category: 'reminder',
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'merge:{id}',
+          dedupeUnit: 'condition',
+          conditionWindowMs: 86_400_000
+        }]
+      }]
+    })
+    const instance = createNotificationRuntime({
+      storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
+      catalog,
+      getSettings: async () => createDefaultNotificationRuntimeSettings(),
+      clock,
+      getLanguage: async () => 'zh-CN'
+    })
+    const submit = (body: string) => instance.submit({
+      eventTypeId: 'platform.merge',
+      producerId: 'platform',
+      dedupeVars: { builder: 'template', vars: { id: 'm1' } },
+      rendered: {
+        'zh-CN': { title: '标题第一次', body, reason: '理由第一次' },
+        'en-US': { title: 'First title', body, reason: 'First reason' }
+      },
+      actions: [],
+      occurredAt: '2026-11-06T11:00:00.000Z'
+    })
+
+    await submit('正文第一次')
+    await submit('正文第二次')
+
+    const stored = state.records[0]
+    expect(state.records).toHaveLength(1)
+    // 正文取最新
+    expect(stored?.rendered?.['zh-CN']?.body).toBe('正文第二次')
+    // 标题与理由取第一次（读者靠标题认人）
+    expect(stored?.rendered?.['zh-CN']?.title).toBe('标题第一次')
+    expect(stored?.rendered?.['zh-CN']?.reason).toBe('理由第一次')
+  })
+})
+
 describe('成品在手时不再读键', () => {
   function runtimeWithVariants() {
     const state = createDefaultNotificationStoreState()
