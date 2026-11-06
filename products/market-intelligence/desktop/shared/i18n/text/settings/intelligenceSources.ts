@@ -128,13 +128,15 @@ export const intelligenceSourcesText = {
     countsSkipped: '跳过 {skipped}',
     countsSeparator: '、',
     oldRecordNote: '旧记录，没有条数',
+    // 按平台真实闭集建，一条码一句：多一句就是一条永远不出现的文案，少一句读者看到空白。
     resultReasons: {
-      'translation.timeout': '模型服务超时了，这批没跑完',
-      'translation.rate-limited': '模型服务正在限流，有一些没翻成',
-      'translation.empty-content': '原文是空的，没有可翻的内容',
-      'translation.unsupported-language': '这个语言暂不支持',
-      'translation.model-not-configured': '还没有配置可用的翻译模型',
-      'translation.unknown': '这次没能判断原因'
+      'model.timeout': '这次超时了，没在时限内跑完',
+      'model.rate-limited': '模型服务正在限流，这批没跑成',
+      'model.not-configured': '还没有可用的模型，去「设置 → 模型服务」配一个',
+      'model.output-invalid': '模型这次的返回不合格式，这批没有采用',
+      'translation.undetermined': '这次没能判断原因',
+      // 跳过不是失败：这句话里不许出现「失败」，否则和计数里的「跳过 N 条」自相矛盾。
+      'translation.auto-off': '自动翻译关着，这批没翻'
     },
     resultReasonUnknown: '这次没能判断原因',
     aggregates: {
@@ -576,12 +578,12 @@ export const intelligenceSourcesText = {
     countsSeparator: ', ',
     oldRecordNote: 'Older record — no item count was stored',
     resultReasons: {
-      'translation.timeout': 'The model service timed out; this batch did not finish',
-      'translation.rate-limited': 'The model service was rate-limiting; some items were not translated',
-      'translation.empty-content': 'The source text was empty, so there was nothing to translate',
-      'translation.unsupported-language': 'This language is not supported yet',
-      'translation.model-not-configured': 'No translation model is configured yet',
-      'translation.unknown': 'We could not tell why this time'
+      'model.timeout': 'This timed out before it finished',
+      'model.rate-limited': 'The model service was rate-limiting, so this batch did not run',
+      'model.not-configured': 'No usable model is configured — set one up in Settings.',
+      'model.output-invalid': 'The model returned something that did not fit the expected format, so it was not used',
+      'translation.undetermined': 'We could not tell why this time',
+      'translation.auto-off': 'Automatic translation is off, so nothing was translated'
     },
     resultReasonUnknown: 'We could not tell why this time',
     aggregates: {

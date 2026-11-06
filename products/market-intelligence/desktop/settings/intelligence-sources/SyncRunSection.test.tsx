@@ -160,15 +160,15 @@ describe('sync run section', () => {
         taskLabel: '翻译任务', sources: [{ sourceId: 'coindesk-rss', label: 'CoinDesk' }],
         handlerId: 'market-intelligence.translateItems', action: 'other', outcome: 'succeeded', durationMs: 2_000,
         analysis: { state: 'not-applicable' as const },
-        counts: { total: 6, succeeded: 5, failed: 1, skipped: 0 }, resultReasonCode: 'translation.rate-limited'
+        counts: { total: 6, succeeded: 5, failed: 1, skipped: 0 }, resultReasonCode: 'model.rate-limited'
       }]
     })
     const dom = await render()
     expect(dom.textContent).toContain('6 条中成功 5')
     expect(dom.textContent).toContain('失败 1')
     // One sentence for the reason, never a breakdown the page would have to invent.
-    expect(dom.textContent).toContain(text.resultReasons['translation.rate-limited']!)
-    expect(dom.textContent).not.toContain('translation.rate-limited')
+    expect(dom.textContent).toContain(text.resultReasons['model.rate-limited']!)
+    expect(dom.textContent).not.toContain('model.rate-limited')
   })
 
   it('writes no numbers for a run that predates the tally, and says so once for the table', async () => {
