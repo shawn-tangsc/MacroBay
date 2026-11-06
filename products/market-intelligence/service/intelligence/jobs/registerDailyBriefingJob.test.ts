@@ -233,6 +233,36 @@ describe('the diff is the only way definitions change', () => {
   })
 })
 
+describe('a missing reader time zone at registration', () => {
+  it('reports it and registers nothing, instead of rejecting with nobody listening', async () => {
+    const { runtime: jobRuntime, definitions } = runtime()
+    const log = vi.fn()
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => { unhandled.push(reason) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      registerDailyBriefingJob(jobRuntime, {
+        service: { getToday: vi.fn() },
+        getLocale: async () => 'zh-CN',
+        // 装配缺钩子：这是可诊断的装配问题，不许变成没人接的拒绝，也不许静默排到 UTC。
+        timeZone: () => { throw new Error('reader-time-zone-hook-missing') },
+        getPeriods: async () => [period()],
+        log
+      })
+      await new Promise(resolve => setTimeout(resolve, 0))
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+    expect(unhandled).toEqual([])
+    // 一条明确的错误日志，指着缺的是时区钩子。
+    expect(log).toHaveBeenCalledWith('error', 'briefing.schedule.time-zone-missing', expect.objectContaining({
+      error: 'reader-time-zone-hook-missing'
+    }))
+    // 什么都不排：宁可没有排期，也不排到一个假时区上。
+    expect([...definitions.keys()]).toEqual([])
+  })
+})
+
 describe('paused periods', () => {
   it('reports only the periods whose own zone cannot be read', () => {
     const { runtime: jobRuntime } = runtime()

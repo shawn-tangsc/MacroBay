@@ -46,6 +46,8 @@ export function registerDailyBriefingJob(
     getPeriods: () => Promise<readonly (DailyBriefingPeriod & Readonly<{ language?: DailyBriefingLocale }>)[]>
     /** 期自己的时区读不出来、这一期因此不排期时调用；只在真的暂停了时才调。 */
     onPaused?: (paused: readonly string[]) => void
+    /** 平台的落盘日志；装配缺时区钩子时留一条指名道姓的错误。 */
+    log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   }>
 ): void {
   jobRuntime.registerHandler(INTELLIGENCE_DAILY_BRIEFING_JOB, async (payload) => {
@@ -74,12 +76,39 @@ export function registerDailyBriefingJob(
   // 注册时**必须**带上读者当前时区：期里没写时区时，排期就按读者的钟走（用户 2026-11-06：
   // "我配的是每天 7 点，换时区就该在新时区的 7 点跑"）。以前这里传 undefined，被 `?? 'UTC'`
   // 悄悄接住，于是 07:00 排成了 UTC 07:00 = 本地 15:00。
+  // 时区在**调用期**读，而且只读一次、读不到就明确降级：以前把 `deps.timeZone()` 放在 `.then`
+  // 和 `.catch` 两处，钩子缺失时 `.then` 里抛、`.catch` 里又抛一次——第二个抛就成了没人接的
+  // 未捕获拒绝。注册阶段拿不到时区是可诊断的装配问题，不是「排到 UTC 7 点」这种静默错误。
+  const readerTimeZone = readReaderTimeZoneForSchedule(deps)
+  if (readerTimeZone === undefined) return
   void deps.getPeriods()
-    .then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, deps.timeZone(), deps.onPaused))
-    .catch(() => applyDailyBriefingSchedules(jobRuntime, [createDefaultDailyBriefingPeriod()], deps.timeZone(), deps.onPaused))
+    .then(periods => applyDailyBriefingSchedules(jobRuntime, periods, readerTimeZone, deps.onPaused))
+    .catch(() => applyDailyBriefingSchedules(jobRuntime, [createDefaultDailyBriefingPeriod()], readerTimeZone, deps.onPaused))
+    // 排期同步本身失败也不许变成未捕获拒绝：它已经在 store 里报过，这里只落一条日志。
+    .catch(() => undefined)
 }
 
 /** Re-register the definitions that changed and remove the ones whose period is gone. */
+/**
+ * 注册期读一次读者时区；读不到就报一条明确的错误并放弃这次注册。
+ *
+ * 返回 `undefined` 表示「这一轮不排」——**不是**退回 UTC：把 07:00 排成 UTC 07:00（本地 15:00）
+ * 比不排更难发现。装配缺钩子在真实构建里不该出现，但出现时必须留得下一条日志。
+ */
+function readReaderTimeZoneForSchedule(deps: Readonly<{
+  timeZone: () => string
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+}>): string | undefined {
+  try {
+    return deps.timeZone()
+  } catch (error) {
+    deps.log?.('error', 'briefing.schedule.time-zone-missing', {
+      error: error instanceof Error ? error.message : String(error)
+    })
+    return undefined
+  }
+}
+
 export function applyDailyBriefingSchedules(
   jobRuntime: Pick<JobRuntime, 'setSchedule' | 'removeSchedule' | 'listSchedules'>,
   periods: readonly DailyBriefingPeriod[],
