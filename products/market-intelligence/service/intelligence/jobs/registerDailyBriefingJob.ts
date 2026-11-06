@@ -65,8 +65,11 @@ export function registerDailyBriefingJob(
   // The settings file is read asynchronously; until it answers, the fallback below is what a fresh
   // install gets. The fallback registers the period id too, so a fresh install has the same id
   // shape the saved periods produce.
+  // 注册时**必须**带上读者当前时区：期里没写时区时，排期就按读者的钟走（用户 2026-11-06：
+  // "我配的是每天 7 点，换时区就该在新时区的 7 点跑"）。以前这里传 undefined，被 `?? 'UTC'`
+  // 悄悄接住，于是 07:00 排成了 UTC 07:00 = 本地 15:00。
   void deps.getPeriods()
-    .then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, undefined, deps.onPaused))
+    .then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, deps.timeZone(), deps.onPaused))
     .catch(() => applyDailyBriefingSchedules(jobRuntime, [createDefaultDailyBriefingPeriod()], deps.timeZone(), deps.onPaused))
 }
 
@@ -74,10 +77,11 @@ export function registerDailyBriefingJob(
 export function applyDailyBriefingSchedules(
   jobRuntime: Pick<JobRuntime, 'setSchedule' | 'removeSchedule' | 'listSchedules'>,
   periods: readonly DailyBriefingPeriod[],
-  readerTimeZone?: string,
+  /** 读者当前时区；**不许有 'UTC' 这种静默默认**——那会把"每天 7 点"排成 UTC 7 点。 */
+  readerTimeZone: string,
   onPaused?: (paused: readonly string[]) => void
 ): DailyBriefingScheduleSync {
-  const sync = syncDailyBriefingSchedules(jobRuntime, periods, readerTimeZone ?? 'UTC', generationTimeZoneIssue)
+  const sync = syncDailyBriefingSchedules(jobRuntime, periods, readerTimeZone, generationTimeZoneIssue)
   // 暂停是读者会吃亏的状态（自动生成静默停了），所以在判决落地的这一处报出去，不在读路径上报。
   if (sync.paused.length > 0) onPaused?.(sync.paused)
   return sync
