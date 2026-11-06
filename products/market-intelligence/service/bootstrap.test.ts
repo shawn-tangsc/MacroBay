@@ -17,6 +17,7 @@ import { createEventBusRuntime } from '@platform/message-bus'
 import { createProductIpcRegistry } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { getBlsApiCompatibilityProbe, registerServices } from './bootstrap'
+import type { ProductBootstrapDependencies } from './bootstrap'
 import { getIntelligenceModule, resetIntelligenceModuleForTests } from './intelligence/intelligenceModule'
 import { marketIntelligenceProductManifest } from '../product.manifest'
 import { MACRO_ECONOMIC_CALENDAR_IPC_METHODS } from '../contracts/macro/economicCalendarQueryContracts'
@@ -25,6 +26,15 @@ import { DASHBOARD_SOURCE_CONNECTION_IPC_METHOD } from './intelligence/schema/in
 import { marketCalendarPublicPolicy } from '../contracts/macro/marketCalendarQueryContracts'
 import { crossAssetMethods } from '../contracts/crossAssetObservationContracts'
 import * as crossAssetStorage from './intelligence/cross-asset/crossAssetStore'
+
+/**
+ * 这个文件的每个用例都要一整套端口。`getTimeZone` 是**必填**的（排程与日界都据它），
+ * 而早先这些夹具是逐个手写的对象——加了这个必填项之后 15 处一起失真。
+ * 默认值集中在这一处，需要别的时区的用例显式传自己的 `getTimeZone` 覆盖。
+ */
+const bootServices = (
+  deps: Omit<ProductBootstrapDependencies, 'getTimeZone'> & Partial<Pick<ProductBootstrapDependencies, 'getTimeZone'>>
+): void => registerServices({ getTimeZone: () => 'Asia/Shanghai', ...deps })
 
 beforeEach(() => {
   // Each test bootstraps the product once, with its own platform fetch. The module is a process
@@ -46,7 +56,7 @@ describe('market-intelligence product bootstrap', () => {
     const registry = createProductIpcRegistry()
     const disposers: (() => Promise<void> | void)[] = []
     try {
-      expect(() => registerServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
+      expect(() => bootServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
         registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: vi.fn(),
         registerProductDisposer: handler => { disposers.push(handler); return () => undefined } })).not.toThrow()
       const methods = registry.seal().map(item => item.method)
@@ -59,7 +69,7 @@ describe('market-intelligence product bootstrap', () => {
     // the brief on UTC while the interface said otherwise. The case is red without the forwarding.
     rmSync(join(tmpdir(), 'market-intelligence-bootstrap-test'), { recursive: true, force: true })
     const registry = createProductIpcRegistry()
-    registerServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
+    bootServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
       registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: vi.fn(),
       getTimeZone: () => 'Asia/Shanghai' })
     try {
@@ -69,7 +79,8 @@ describe('market-intelligence product bootstrap', () => {
       // Nothing is stored for a fresh install, so the period means "the reader's zone".
       expect(view.generation.periods[0]?.generationTimeZone).toBe('Asia/Shanghai')
     } finally {
-      await getIntelligenceModule()?.dispose?.()
+      // 模块没有 dispose（历史上那行是可选的空调用）；清场用既有的测试重置入口。
+      resetIntelligenceModuleForTests()
     }
   })
 
@@ -77,7 +88,7 @@ describe('market-intelligence product bootstrap', () => {
     const registry = createProductIpcRegistry()
     const fetch = vi.fn()
     const dispose: (() => Promise<void> | void)[] = []
-    registerServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
+    bootServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
       registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: fetch,
       getNetworkSettings: async () => ({ proxyMode: 'none', proxyUrl: '', proxyBypassRules: '' }),
       registerProductDisposer: handler => { dispose.push(handler); return () => undefined } })
@@ -93,7 +104,7 @@ describe('market-intelligence product bootstrap', () => {
   it('registers manual market query and refresh without issuing a startup market request', () => {
     const fetch = vi.fn()
     const methods: string[] = []
-    registerServices({ register: (_id, method) => methods.push(method), jobRuntime: createJobRuntime(),
+    bootServices({ register: (_id, method) => methods.push(method), jobRuntime: createJobRuntime(),
       eventBusRuntime: createEventBusRuntime(), registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: fetch })
     expect(methods).toContain(marketCalendarPublicPolicy.methods.refresh)
     expect(methods).toContain(marketCalendarPublicPolicy.methods.query)
@@ -113,7 +124,7 @@ describe('market-intelligence product bootstrap', () => {
     const fetch = vi.fn()
     const registeredMethods: string[] = []
 
-    registerServices({
+    bootServices({
       register: (_productId, method) => registeredMethods.push(method),
       jobRuntime: createJobRuntime(),
       eventBusRuntime: createEventBusRuntime(),
@@ -130,7 +141,7 @@ describe('market-intelligence product bootstrap', () => {
   it('prepares the sealed BLS refresh route without invoking injected fetch at startup', () => {
     const fetch = vi.fn()
     const registeredMethods: string[] = []
-    registerServices({ register: (_id, method) => registeredMethods.push(method), jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(), registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: fetch })
+    bootServices({ register: (_id, method) => registeredMethods.push(method), jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(), registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: fetch })
     expect(registeredMethods).toContain(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.refreshBlsEmploymentRelease)
     expect(fetch).not.toHaveBeenCalled()
   })
@@ -140,7 +151,7 @@ describe('market-intelligence product bootstrap', () => {
     const registerProductAgentToolHandler = vi.fn()
     const registerProductCache = vi.fn()
 
-    registerServices({
+    bootServices({
       // The module no longer falls back to the global fetch: the composition root must inject one.
       platformFetch: vi.fn(),
       register,
@@ -166,7 +177,7 @@ describe('market-intelligence product bootstrap', () => {
       cacheId: string
       provider: { compact: (input: { dryRun?: boolean }) => Promise<Record<string, unknown>> }
     }> = []
-    registerServices({
+    bootServices({
       platformFetch: vi.fn(),
       register: vi.fn(),
       jobRuntime: createJobRuntime(),
@@ -231,7 +242,7 @@ describe('market-intelligence product bootstrap', () => {
   it('registers the static product IPC baseline before the registry becomes active', () => {
     const registry = createProductIpcRegistry()
 
-    registerServices({
+    bootServices({
       // The module no longer falls back to the global fetch: the composition root must inject one.
       platformFetch: vi.fn(),
       register: registry.register,
@@ -251,7 +262,7 @@ describe('market-intelligence product bootstrap', () => {
 
   it('declares the funding history query without retaining the superseded single-point funding route', () => {
     const registeredMethods: string[] = []
-    registerServices({
+    bootServices({
       // The module no longer falls back to the global fetch: the composition root must inject one.
       platformFetch: vi.fn(),
       register: (_productId, method) => registeredMethods.push(method),
@@ -277,7 +288,7 @@ describe('market-intelligence product bootstrap', () => {
     const fetch = vi.fn()
     const registeredMethods: string[] = []
 
-    registerServices({
+    bootServices({
       register: (_productId, method) => registeredMethods.push(method),
       jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
       registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: fetch
@@ -291,9 +302,10 @@ describe('market-intelligence product bootstrap', () => {
   })
 
   it('registers the fixed macro-calendar job handler and a product disposer', () => {
-    const registerProductDisposer = vi.fn(() => () => undefined)
+    const registeredDisposers: Array<() => void> = []
+    const registerProductDisposer = vi.fn((handler: () => void) => { registeredDisposers.push(handler); return () => undefined })
 
-    registerServices({
+    bootServices({
       // The module no longer falls back to the global fetch: the composition root must inject one.
       platformFetch: vi.fn(),
       register: vi.fn(),
@@ -306,13 +318,13 @@ describe('market-intelligence product bootstrap', () => {
 
     expect(marketIntelligenceProductManifest.jobHandlers).toContainEqual({ id: 'market-intelligence.refreshMacroCalendar' })
     expect(registerProductDisposer).toHaveBeenCalledOnce()
-    expect(registerProductDisposer.mock.calls[0][0]).not.toThrow()
+    expect(registeredDisposers[0]).not.toThrow()
   })
 
   it('declares and registers the calendar query and sealed official-value action IPC methods', () => {
     const registeredMethods: string[] = []
 
-    registerServices({
+    bootServices({
       // The module no longer falls back to the global fetch: the composition root must inject one.
       platformFetch: vi.fn(),
       register: (_productId, method) => registeredMethods.push(method),
@@ -365,7 +377,7 @@ describe('market-intelligence product bootstrap', () => {
 
   it('declares and registers the fixed Fed and BEA provider settings IPC methods', () => {
     const registeredMethods: string[] = []
-    registerServices({ register: (_productId, method) => registeredMethods.push(method), jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(), registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), secretVault: vault(), platformFetch: vi.fn() })
+    bootServices({ register: (_productId, method) => registeredMethods.push(method), jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(), registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), secretVault: vault(), platformFetch: vi.fn() })
 
     expect(registeredMethods).toEqual(expect.arrayContaining([
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getProviderPageState,
