@@ -9,10 +9,11 @@ import { parseCrossAssetSnapshot } from '../../../../contracts/crossAssetObserva
 import { createCrossAssetSnapshotQuery } from '../../../../service/intelligence/cross-asset/crossAssetSnapshotQuery'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { resolveStateViewText, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
 
 /**
  * 同一个面板，但**壳层语言**是英文。
@@ -21,8 +22,10 @@ const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObs
  * 所以「读者语言」由壳层语言决定，而不是由传入的 `text` 决定——写用例也得按这条来。
  */
 const EnglishScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellLanguageProvider, { language: 'en-US' },
-    createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props)))
+  createElement(ShellLanguageProvider, {
+    language: 'en-US',
+    children: createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
+  })
 
 /** The real daily closes: 5.24 after 5.22 on 10-09 (+2bp), 2.91 after 2.87 (+4bp), 2Y 4.80, breakeven 2.33. */
 function ratesView(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -186,9 +189,12 @@ describe('cross-asset observation workspace', () => {
       for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
       expect(host.textContent).toContain(text.contractMismatch)
       // 版本不一致时重试没有意义（重读同一份契约），所以这一态的出口是「重启应用」，不是「重试」。
+      // 比的是两条平台动作句，不是 `text.retry`——那个键在跨资产文案里根本不存在，比 undefined
+      // 永远成立，等于没断言（2026-11-06 预检钩子把它抓出来）。
       const action = host.querySelector('.state-view__action') as HTMLButtonElement
       expect(action).not.toBeNull()
-      expect(action.textContent).not.toBe(text.retry)
+      expect(action.textContent).toBe(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.restart_app))
+      expect(action.textContent).not.toBe(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
       await act(async () => { action.click() })
       expect(relaunch).toHaveBeenCalledTimes(1)
       // 反过来：点它不该去重读，那正是这一处被改掉的原因。
@@ -219,7 +225,7 @@ describe('cross-asset observation workspace', () => {
     // The licensed index leg has no history in this fixture, so the row is answered by the tokenised
     // proxy — which is the only leg that carries a live trade, and the one this test reads.
     const proxyBars = Array.from({ length: 289 }, (_, index) => ({
-      symbol: 'QQQUSDT', barOpenMs: now - (289 - index) * 300_000, barEndMs: now - (288 - index) * 300_000,
+      symbol: 'QQQUSDT' as const, barOpenMs: now - (289 - index) * 300_000, barEndMs: now - (288 - index) * 300_000,
       open: '700', high: '720', low: '690', close: String(700 + index / 100), volume: '1'
     }))
     const snapshot = createCrossAssetSnapshotQuery({ now: () => now,
