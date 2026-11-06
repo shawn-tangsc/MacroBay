@@ -136,11 +136,25 @@ export async function awaitDailyBriefReadiness(
  * operational marker when the wait expired. A timeout is not an error — the edition is still produced
  * — but it is the one line an operator needs to find when a morning looks thin.
  */
+/**
+ * 一条结构化诊断的落点：主进程的 `appLog`。`console` 只在终端里可见，没人会为了一次早报去开终端。
+ */
+export type BriefingDiagnosticLog = (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+
 export function createDailyBriefReadinessFor(reader: Readonly<{
   queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt: string }) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
   /** Why the last cross-asset read failed, when it did; the probe's own record of "not available". */
   getCrossAssetQueryFailure?: () => unknown
-}>): DailyBriefReadiness {
+}>, options: Readonly<{
+  /** 主进程落盘日志；缺省时退回 console（headless 与用例），字段形状一致。 */
+  log?: BriefingDiagnosticLog
+  pollMs?: number
+  budgetMs?: number
+}> = {}): DailyBriefReadiness {
+  const emit = (event: string, fields: Record<string, unknown>): void => {
+    if (options.log) options.log('info', event, fields)
+    else console.log(JSON.stringify({ marker: event, ...fields }))
+  }
   return createDailyBriefReadiness({
     // The cutoff is the caller's, never the clock's: same question, same instant as the generation.
     // Every probe says what it asked for and what came back: "waiting for the market" that nobody can
@@ -149,21 +163,28 @@ export function createDailyBriefReadinessFor(reader: Readonly<{
       // The body's own read, late-data grace included: the gate must ask exactly the question the
       // generation will ask, or it can report ready while the real read still fails.
       const snapshot = await readBriefingMarketSnapshot(reader, asOf)
-      console.log(JSON.stringify({
-        marker: 'MI_DAILY_BRIEF_READINESS_PROBE',
+      /** 一条腿的状态与**原因**：`missing`/`stale` 分开，否则「没数据」与「数据太旧」在日志里长得一样。 */
+      const leg = (asset: 'btc' | 'eth' | 'index'): Readonly<{ state: string; reason: string | null }> => {
+        const metric = snapshot?.closedReturns[asset]?.['24h'] as Readonly<{ state?: string; reason?: string }> | undefined
+        return { state: metric?.state ?? 'missing', reason: metric?.reason ?? null }
+      }
+      const btc = leg('btc'); const eth = leg('eth'); const index = leg('index')
+      emit('MI_DAILY_BRIEF_READINESS_PROBE', {
         asOf,
         snapshot: snapshot !== undefined,
-        btc: snapshot?.closedReturns.btc?.['24h']?.state ?? 'missing',
-        eth: snapshot?.closedReturns.eth?.['24h']?.state ?? 'missing',
-        index: snapshot?.closedReturns.index?.['24h']?.state ?? 'missing',
+        btc: btc.state, btcReason: btc.reason,
+        eth: eth.state, ethReason: eth.reason,
+        index: index.state, indexReason: index.reason,
         failure: reader.getCrossAssetQueryFailure?.() ?? null
-      }))
+      })
       return snapshot
     },
     onTimeout: (info) => {
-      console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_CORE_FACTS_NOT_READY', ...info }))
+      emit('MI_DAILY_BRIEF_CORE_FACTS_NOT_READY', { ...info })
       // How late the data actually is, so an operator can tell a slow source from a broken one.
-      console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_LATE_DATA_EXCEEDED', lateMinutes: Math.round(info.waitedMs / 60_000) }))
-    }
+      emit('MI_DAILY_BRIEF_LATE_DATA_EXCEEDED', { lateMinutes: Math.round(info.waitedMs / 60_000) })
+    },
+    ...(options.pollMs === undefined ? {} : { pollMs: options.pollMs }),
+    ...(options.budgetMs === undefined ? {} : { budgetMs: options.budgetMs })
   })
 }

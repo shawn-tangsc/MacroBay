@@ -184,7 +184,7 @@ describe('every probe says what it asked and what came back', () => {
           closedReturns: {
             btc: { '24h': { state: 'available' } },
             eth: { '24h': { state: 'available' } },
-            index: { '24h': { state: 'unavailable' } }
+            index: { '24h': { state: 'unavailable', reason: 'missing' } }
           }
         }) as never,
         getCrossAssetQueryFailure: () => ({ reason: 'shape' })
@@ -198,10 +198,46 @@ describe('every probe says what it asked and what came back', () => {
         btc: 'available',
         eth: 'available',
         index: 'unavailable',
+        // 「没数据」与「数据太旧」在日志里必须分得开：reason 是这两者的唯一区分。
+        indexReason: 'missing',
         failure: { reason: 'shape' }
       })
     } finally {
       log.mockRestore()
+    }
+  })
+})
+
+describe('the readiness markers land where an operator can find them', () => {
+  it('writes the probe and both timeout markers through the injected log, not stdout', async () => {
+    // 只在 console 里打，就等于「终端关掉后那十五分钟没有任何记录」。这里钉的是落点：
+    // 注入了日志就只走它，marker 名不变、字段不变。
+    const lines: Array<{ level: string; event: string; fields: Record<string, unknown> }> = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      const gate = createDailyBriefReadinessFor({
+        queryCrossAssetSnapshot: async () => ({
+          closedReturns: {
+            btc: { '24h': { state: 'unavailable', reason: 'missing' } },
+            eth: { '24h': { state: 'unavailable', reason: 'missing' } },
+            index: { '24h': { state: 'unavailable', reason: 'missing' } }
+          }
+        }) as never
+      }, { log: (level, event, fields) => { lines.push({ level, event, fields: fields ?? {} }) }, budgetMs: 0 })
+
+      await gate.wait(CUTOFF)
+      gate.onTimeout?.({ polls: 1, waitedMs: 0 })
+
+      expect(lines.map((line) => line.event)).toEqual([
+        'MI_DAILY_BRIEF_READINESS_PROBE',
+        'MI_DAILY_BRIEF_CORE_FACTS_NOT_READY',
+        'MI_DAILY_BRIEF_LATE_DATA_EXCEEDED'
+      ])
+      expect(lines[0]?.fields).toMatchObject({ btc: 'unavailable', btcReason: 'missing' })
+      // 走落盘日志时 console 一条都不该再出：两份记录会让排障时以哪份为准都说不清。
+      expect(consoleSpy).not.toHaveBeenCalled()
+    } finally {
+      consoleSpy.mockRestore()
     }
   })
 })

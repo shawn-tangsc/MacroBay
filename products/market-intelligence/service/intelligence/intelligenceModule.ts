@@ -948,7 +948,7 @@ export function getIntelligenceModule(
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
-      readiness: createDailyBriefReadinessFor(publicQueryService),
+      readiness: createDailyBriefReadinessFor(publicQueryService, hooks?.log ? { log: hooks.log } : {}),
       marketBackfill: currentBriefMarketBackfill,
       generationSettings: async () => (await briefingPeriodsSource.getPeriods())[0]!, readPeriods: () => briefingPeriodsSource.getPeriods(),
       backfillFactory,
