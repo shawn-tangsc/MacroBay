@@ -205,4 +205,43 @@ describe('platform notification event declarations', () => {
     // 没写上限的事件不判：今天已经发过 5 条，第 6 次仍然要发出去。
     expect(plan('platform.uncapped-probe', { slot: 'b' }, { count: 5, lastOccurredAt: '2026-11-06T11:59:59.000Z' }).kind).toBe('new')
   })
+
+  /**
+   * 0′ 的豁免用**真事件**再钉一次（r23 需求验收：当天各档都打满，读者手动点的那次仍要收到）。
+   *
+   * 构造样例只证明「能力是可选字段」，这条证明「那条真的没写上限」——两者缺一，
+   * 明天有人给它「顺手统一」补一个数，前一条照样绿。
+   */
+  it('never caps the manual-failure notice, even after five went out today', () => {
+    const catalog = createNotificationEventCatalog({
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
+      policy: NOTIFICATION_EVENT_POLICY
+    })
+    const declaration = PLATFORM_NOTIFICATION_EVENTS.find((event) => event.id === 'platform.analysis.manual-failed')
+    expect(declaration?.dailyLimit).toBeUndefined()
+    expect(declaration?.minimumGapMs).toBeUndefined()
+
+    const outcome = planNotificationSubmit({
+      catalog,
+      settings: {
+        desktopEnabled: true,
+        toastEnabled: true,
+        popupEnabled: false,
+        push: { channelId: null },
+        retentionDays: 30,
+        defaultSnoozeMinutes: 10
+      },
+      desktopSupported: true,
+      now: '2026-11-06T12:00:00.000Z',
+      sameEventToday: { count: 5, lastOccurredAt: '2026-11-06T11:58:00.000Z' },
+      request: {
+        eventTypeId: 'platform.analysis.manual-failed',
+        dedupeVars: { builder: 'template', vars: { runId: 'run-sixth' } },
+        bodyParams: { reason: '模型服务正在限流，没有接受这次请求' },
+        actions: [{ id: 'open-analysis-run', labelKey: 'notification.event.platform.analysis.manual-failed.open', kind: 'open' }],
+        occurredAt: '2026-11-06T11:59:00.000Z'
+      }
+    })
+    expect(outcome.kind).toBe('new')
+  })
 })
