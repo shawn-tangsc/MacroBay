@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
@@ -65,6 +68,16 @@ function signal(overrides: Partial<ModuleSignal> = {}): ModuleSignal {
 }
 
 describe('signal notification sentences', () => {
+  it('has exactly one way to vary a title: the headline parameter', () => {
+    // 标题分档只走 `headline` 参数（一层产品引用）。生产者若同时用平台标题变体，就会
+    // 出现两套机制、下次改标题漏一处——这条扫描把第二套挡在门外。
+    const dir = join(process.cwd(), 'products/market-intelligence/service/intelligence/signals')
+    const offenders = readdirSync(dir)
+      .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+      .filter((name) => /titleVariant|titleKeyByVariant/.test(readFileSync(join(dir, name), 'utf8')))
+    expect(offenders).toEqual([])
+  })
+
   it('formats money per language and puts the asset first in the title', () => {
     const request = buildOpenInterestSignalRequest(signal({ severity: 'high', values: { dropPct: -3.4, volumeMultiple: 4.2, notionalUsd: 1_200_000_000 } }))
     expect(resolveTitle(request, 'zh-CN')).toBe('BTC 持仓骤降加剧')

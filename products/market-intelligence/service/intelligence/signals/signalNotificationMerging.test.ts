@@ -83,6 +83,22 @@ describe('signal notification merging', () => {
     expect(String(records()[0].dedupeKey)).toBe('market-intelligence|module-signal:OI:oi-liquidation-proxy:BTC')
   })
 
+  it('opens a new record once the rolling window has passed (same runtime, clock advanced)', async () => {
+    const clock = { now: '2026-11-03T10:20:00.000Z' }
+    const { runtime, records } = createRuntime(clock)
+    const request = buildOpenInterestSignalRequest(signal())!
+
+    await runtime.submit(request)
+    // 同一条记录、同一个 runtime：只把时钟推过窗口（2 小时），不新建空库。
+    // 判据：删掉平台的窗口判定，这条必须红——那才是真的在验窗口。
+    clock.now = '2026-11-03T13:30:00.000Z'
+    await runtime.submit({ ...request, occurredAt: '2026-11-03T13:30:00.000Z' })
+
+    expect(records()).toHaveLength(2)
+    // 旧记录留在中心不动（次数仍是 1），新记录从 1 开始。
+    expect(records().map((record) => record.occurrenceCount)).toEqual([1, 1])
+  })
+
   it('never sends the retired time-bucketed shape: the platform would reject it', () => {
     const intraday = buildOpenInterestSignalRequest(signal())!
     expect('observedAt' in intraday.dedupeVars).toBe(false)
