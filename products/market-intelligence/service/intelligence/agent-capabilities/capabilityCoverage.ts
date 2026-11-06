@@ -100,6 +100,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // The chips the dashboard draws, with each signal's analysis state; the analysis reads its own
   // facts, not this panel view.
   'intelligence.queryModuleSignalRead': excluded('internal-view'),
+  'intelligence.getNewsPushOutletState': excluded('internal-view'),
+  'intelligence.setNewsPushOutletEnabled': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
   // The same panel's per-day counts: a reader-facing view with no agent tool behind it.
   'intelligence.syncRuns.aggregates': excluded('internal-view'),
