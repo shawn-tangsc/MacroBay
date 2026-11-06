@@ -1,3 +1,5 @@
+import { AGENT_MODEL_GATEWAY_FALLBACK_TIMEOUT_MS } from '../../../ai/agent-platform/runtime/agentModelRequestBudget'
+
 export type GatewayAbortTimeoutOptions = {
   timeoutMs?: number
   parentSignal?: AbortSignal
@@ -8,11 +10,12 @@ export type GatewayAbortTimeoutHandle = {
   clear: () => void
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000
-
 export function createGatewayAbortTimeout(options: GatewayAbortTimeoutOptions = {}): GatewayAbortTimeoutHandle {
   const controller = new AbortController()
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  // The fallback only covers a caller that declared nothing. A declared budget (the caller's own
+  // budget, read from the request header by the HTTP server) is what the request is timed against,
+  // so this constant is not a cap for everyone.
+  const timeoutMs = options.timeoutMs ?? AGENT_MODEL_GATEWAY_FALLBACK_TIMEOUT_MS
   const timeout = setTimeout(() => {
     controller.abort(new Error('gateway-timeout'))
   }, timeoutMs)

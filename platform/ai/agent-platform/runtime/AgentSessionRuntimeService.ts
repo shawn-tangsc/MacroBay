@@ -25,6 +25,7 @@ import type {
 } from './runtimeTypes'
 import { isRuntimeAbortError, throwRuntimeAbort } from './runtimeAbort'
 import { readPersistedSessionRuntimeState } from './sessionRuntimePersistence'
+import { DEFAULT_AGENT_TURN_TIMEOUT_MS } from './agentModelRequestBudget'
 
 type AgentSessionRuntimeServiceDependencies = {
   getAgentState: () => Promise<AgentStoreState>
@@ -93,8 +94,11 @@ export const MAX_RUNTIME_CHUNKS_PER_SESSION = 400
  * A provider connection that never answers must not hold a turn open forever. The watchdog bounds
  * the driver dispatch phase, where the provider call actually happens; context resolution and
  * persistence keep their existing behavior.
+ *
+ * The number itself lives in `agentModelRequestBudget`: the gateway route declares the same budget
+ * to the local gateway, and two copies of it would let one layer cut a turn the other still waits for.
  */
-export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 120_000
+export { DEFAULT_AGENT_TURN_TIMEOUT_MS }
 
 export class AgentTurnTimeoutError extends Error {
   constructor(readonly timeoutMs: number) {

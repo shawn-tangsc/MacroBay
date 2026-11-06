@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import {
+  AGENT_MODEL_REQUEST_TIMEOUT_HEADER,
+  DEFAULT_AGENT_TURN_TIMEOUT_MS
+} from '../../agentModelRequestBudget'
 import type { ProviderState } from '../../../../providers/modelProviderTypes'
 import { createClaudeCodeProviderEnvironment } from './ClaudeCodeProviderEnvironment'
 
@@ -464,7 +468,10 @@ describe('Claude Code provider environment', () => {
       ok: true,
       env: {
         ANTHROPIC_API_KEY: 'local-gateway-token',
-        ANTHROPIC_BASE_URL: 'http://127.0.0.1:18779/anthropic'
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:18779/anthropic',
+        // The gateway route declares the caller's budget; without it the gateway waits 60 seconds
+        // and cuts a turn the watchdog still allows.
+        ANTHROPIC_CUSTOM_HEADERS: `${AGENT_MODEL_REQUEST_TIMEOUT_HEADER}: ${DEFAULT_AGENT_TURN_TIMEOUT_MS}`
       },
       metadata: {
         route: 'gateway',
