@@ -590,6 +590,33 @@ describe('NewsSentimentFeature', () => {
     expect(container.textContent).toContain('中文：SEC Approves Spot Ethereum ETF Options')
   })
 
+  it('shows a queue progress bar only while a translation batch runs', async () => {
+    const resolvers: Array<(value: unknown) => void> = []
+    const translateBody = vi.fn(() => new Promise((resolve) => { resolvers.push(resolve) }))
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ translateBody: translateBody as never })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    // No batch, no bar.
+    expect(document.body.querySelector('[data-news-sentiment-translation-queue]')).toBeNull()
+
+    const translateAll = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.includes(text.settingsModal.translateAll))
+    expect(translateAll).toBeTruthy()
+    await act(async () => { translateAll?.click() })
+    await act(async () => {})
+    const queue = document.body.querySelector('[data-news-sentiment-translation-queue]')
+    expect(queue).not.toBeNull()
+    expect(queue?.textContent).toContain('正在翻译 0/2')
+    expect(queue?.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('0')
+    expect(queue?.textContent).toContain(text.settingsModal.cancelTranslate)
+
+    await act(async () => { for (const resolve of resolvers.splice(0)) resolve({ state: 'translated', body: '译文', title: '译名' }) })
+    await act(async () => {})
+    expect(document.body.querySelector('[data-news-sentiment-translation-queue]')).toBeNull()
+  })
+
   it('enables the four sources, collects once and re-reads when the reader asks', async () => {
     // The action says "enable", so it must switch the sources on and collect — not just open a page.
     const setEnabled = vi.fn(async () => ({ ok: true }))

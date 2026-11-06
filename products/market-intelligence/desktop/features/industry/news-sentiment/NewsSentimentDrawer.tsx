@@ -96,6 +96,7 @@ export function NewsSentimentDrawer(props: {
     translatedBodies,
     translatedTitles,
     translatingAll,
+    progress,
     translateItem,
     translateAll,
     cancelTranslation
@@ -164,8 +165,23 @@ export function NewsSentimentDrawer(props: {
       titleKey="pages.intelligence.portal.newsSentiment.drawer.title"
     >
       <div className="mi-news-drawer">
-        {translationEnabled ? (
-          <p className="mi-news-drawer__hint">{text.drawer.translationStatus?.waitingHint}</p>
+        {translationEnabled && progress ? (
+          // A running queue shows what it is doing (done/total) and the one control it needs.
+          // When no batch is running the row is not rendered at all: no task, no bar.
+          <div className="mi-news-drawer__queue" data-news-sentiment-translation-queue role="status">
+            <span>{text.drawer.translationStatus.queue.replace('{done}', String(progress.done)).replace('{total}', String(progress.total))}</span>
+            <span
+              aria-label={text.drawer.translationStatus.translating}
+              aria-valuemax={progress.total}
+              aria-valuemin={0}
+              aria-valuenow={progress.done}
+              className="mi-news-drawer__queue-track"
+              role="progressbar"
+            >
+              <i style={{ width: `${Math.round((progress.done / Math.max(1, progress.total)) * 100)}%` }} />
+            </span>
+            <Button onClick={cancelTranslation} size="small" type="link">{text.settingsModal.cancelTranslate}</Button>
+          </div>
         ) : null}
         <header className="mi-news-drawer__toolbar">
           <Select
@@ -199,15 +215,13 @@ export function NewsSentimentDrawer(props: {
           >
             {actionBusy === 'rescore' ? text.settingsModal.rescoring : text.settingsModal.rescore}
           </Button>
-          {translationEnabled ? (
+          {translationEnabled && !translatingAll ? (
             <Button
               className="mi-news-drawer__action"
-              onClick={() => { if (translatingAll) cancelTranslation(); else void translateAll(rows) }}
+              onClick={() => void translateAll(rows)}
               size="small"
             >
-              {translatingAll
-                ? text.settingsModal.cancelTranslate
-                : text.settingsModal.translateAll}
+              {text.settingsModal.translateAll}
             </Button>
           ) : null}
           <Button
