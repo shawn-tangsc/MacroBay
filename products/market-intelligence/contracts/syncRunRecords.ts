@@ -73,10 +73,25 @@ export type SyncRunRow = Readonly<{
    */
   analysis: SyncRunAnalysis
   durationMs?: number
+  /**
+   * What this batch concluded, in numbers rather than a sentence: how many items were attempted and
+   * how each one ended. `outcome` above answers "did the job finish"; this answers "did the work
+   * inside it land", and they are different facts — a completed translation batch can have five
+   * failures.
+   *
+   * Absent on runs that predate the field and on tasks that do not count items; the page must show
+   * nothing rather than zeroes, because "no tally" and "zero words translated" are different facts.
+   */
+  counts?: SyncRunCounts
+  /** The stable code behind the tally, when the batch recorded why it ended that way. */
+  resultReasonCode?: string
   /** The stable code a failure carries, when one can be read out of the error text. */
   failureCode?: string
   detail?: string
 }>
+
+/** Per-batch tally: totals that add up, so "partly failed" is arithmetic, not a phrase. */
+export type SyncRunCounts = Readonly<{ total: number; succeeded: number; failed: number; skipped: number }>
 
 /** One analysis run, as much as the run log needs to answer "did this produce anything". */
 export type SyncRunAnalysisResult = Readonly<{
@@ -124,6 +139,11 @@ export type SyncAuditEntry = Readonly<{
 export type SyncRunQuery = Readonly<{
   window: SyncRunWindow
   sourceId?: string
+  /**
+   * 把任务筛**交给服务端**：翻译一天 45 次、采集每 17 秒一条，先取最新 500 条再在客户端按任务
+   * 过滤，稀疏任务永远沉底——补了字段也看不见。
+   */
+  handlerId?: string
   outcome?: SyncRunOutcome
   limit: number
   /**
@@ -144,8 +164,21 @@ export function isAnalysisRunId(value: string): boolean {
 }
 
 export type SyncRunResult =
-  | Readonly<{ state: 'available'; rows: readonly SyncRunRow[] }>
+  | Readonly<{
+    state: 'available'
+    rows: readonly SyncRunRow[]
+    /**
+     * 窗口里还有没取回来的记录（触到装载上限时）。
+     *
+     * 页面上必须把它说出来——**「已经取了多少」和「窗口里一共有多少」是两件事**，
+     * 少说一句就是又一次「标签 24 小时、实际只给一段」。
+     */
+    truncated?: boolean
+  }>
   | Readonly<{ state: 'unavailable'; failureCode: string }>
+
+/** 一次读取最多装载多少条：再往上就是「页面不是翻页器」，要换形态而不是继续加。 */
+export const SYNC_RUN_LOAD_CAP = 20_000
 
 export const SYNC_RUN_LIMITS = {
   defaultLimit: 200,

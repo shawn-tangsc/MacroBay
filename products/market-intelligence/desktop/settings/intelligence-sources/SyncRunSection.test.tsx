@@ -81,6 +81,39 @@ function analysisRow(input: {
 }
 
 describe('sync run section', () => {
+  it('sends the task filter to the server and keeps the options from the catalogue', async () => {
+    // 选项从「已加载的行」生成的话，选完一个任务，其它任务就从下拉里消失——读者回不去。
+    const dom = await render()
+    const taskSelect = dom.querySelectorAll('select')[1] as HTMLSelectElement
+    expect(taskSelect.options.length).toBeGreaterThan(2)
+
+    // 选项来自目录（`text.tasks`），所以选一个真实的任务 id；用假 id 赋值会静默不生效。
+    const handlerId = 'market-intelligence.translateItems'
+    await act(async () => {
+      taskSelect.value = handlerId
+      taskSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    // 稀疏任务（翻译一天 45 次）必须由服务端筛，否则它永远排在采集记录之后、取不回来。
+    expect(vi.mocked(syncRunClient.list).mock.calls.at(-1)?.[0]).toMatchObject({ handlerId })
+  })
+
+  it('makes “no source” its own filter instead of letting the empty value stand for it', async () => {
+    const dom = await render()
+    const sourceSelect = dom.querySelectorAll('select')[2] as HTMLSelectElement
+    const noSource = [...sourceSelect.options].find((option) => option.textContent === text.sourceFilterNone)
+    expect(noSource).toBeDefined()
+    expect(noSource!.value).not.toBe('')
+
+    await act(async () => {
+      sourceSelect.value = noSource!.value
+      sourceSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    // 只剩没有来源的那条：有来源那行的失败码不再出现在页面上。
+    expect(dom.textContent).not.toContain(text.failureCodes['provider-disabled'])
+  })
+
   it('renders the failure in the reader own words, and keeps the code off the surface', async () => {
     const dom = await render()
     expect(dom.textContent).toContain('官方日历排期')

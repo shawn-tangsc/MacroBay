@@ -25,6 +25,9 @@ import './sync-run-section.css'
  * It exists because a source could look enabled while every collection was skipped, and no surface
  * in the product said so. Rows come from the platform's job runs; nothing here writes.
  */
+/** 来源筛的「无来源」档：一个不可能与真实 sourceId 相撞的值，替掉原来空串兼职的做法。 */
+const NO_SOURCE_FILTER = '__no-source__'
+
 export type SyncRunText = Readonly<{
   title: string; window: Record<SyncRunWindow, string>; outcome: Record<'any' | 'succeeded' | 'failed' | 'running', string>
   columns: Readonly<Record<'time' | 'task' | 'source' | 'action' | 'outcome' | 'analysis' | 'duration' | 'detail', string>>
@@ -69,6 +72,10 @@ export type SyncRunText = Readonly<{
   allSourcesNote: string
   noSourceHint: string
   allSources: string
+  /** 来源筛的第三档：**没有来源**的记录（翻译这类）自成一档，不再靠空串顺带放行。 */
+  sourceFilterNone: string
+  /** 触到装载上限时说实话：取回一些 ≠ 窗口里只有这些。 */
+  truncatedNotice: string
   showing: string
   retention: string
   page: string
@@ -116,6 +123,8 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
   const [window, setWindow] = useState<SyncRunWindow>(focusRequested ? 'all' : '24h')
   const [outcome, setOutcome] = useState<SyncRunQuery['outcome']>()
   const [state, setState] = useState<'loading' | 'available' | 'unavailable'>('loading')
+  /** 窗口里还有没取回来的记录（装载上限）。说过一句，才不算假装取全了。 */
+  const [truncated, setTruncated] = useState(false)
   const [rows, setRows] = useState<readonly SyncRunRow[]>([])
   const [taskFilter, setTaskFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
@@ -133,11 +142,18 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
   /** Scrolling and focusing happen once; later filter changes must not drag the reader back. */
   const focusAppliedRef = useRef(false)
   const retry = (): void => setReloadToken((current) => current + 1)
-  // The window is the server-side filter; outcome and source narrow what is already on screen so
-  // the source list can be built from the same fetch instead of a second round trip.
+  /**
+   * The window and the task are **server-side** filters: a page that fetches the newest 500 runs and
+   * then filters in the browser can never show a task that runs 45 times a day next to collectors
+   * that run every 17 seconds — that is how "翻译任务" ended up invisible.
+   *
+   * Source and outcome still narrow what is already on screen, so those lists come from the same
+   * fetch instead of a second round trip.
+   */
   const query: SyncRunQuery = {
     window,
     limit: 500,
+    ...(taskFilter === '' ? {} : { handlerId: taskFilter }),
     ...(focusRequested && focusAnalysisRunId ? { analysisRunId: focusAnalysisRunId } : {})
   }
 
@@ -153,10 +169,14 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     setState('loading')
     void syncRunClient.list(query).then((result) => {
       if (cancelled) return
-      if (result.state === 'available') { setRows(result.rows); setState('available') } else setState('unavailable')
+      if (result.state === 'available') {
+        setRows(result.rows)
+        setTruncated(result.truncated === true)
+        setState('available')
+      } else setState('unavailable')
     })
     return () => { cancelled = true }
-  }, [window, outcome, reloadToken, focusAnalysisRunId])
+  }, [window, taskFilter, reloadToken, focusAnalysisRunId])
 
   /**
    * Locate the run a notification pointed at, once the widest window has been read.
@@ -201,14 +221,27 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     text.tasks[row.handlerId] ?? auditTaskLabel(row.handlerId) ?? row.taskLabel
   const sourceLabelOf = (source: SyncRunRow['sources'][number]): string =>
     text.sourceNames?.[source.sourceId] ?? source.label
-  const tasks = [...new Set(rows.map(taskLabelOf))].sort()
+  /**
+   * Task options come from the catalogue, not from the rows on screen: once a task is selected the
+   * list collapses to that task, and building the options from it would leave the reader with no way
+   * back. It also matches the source filter's rule — a task that has not run lately is exactly the
+   * one someone opens this page to look for.
+   */
+  const tasks = Object.entries(text.tasks)
+    .map(([handlerId, label]) => ({ handlerId, label }))
+    .sort((left, right) => left.label.localeCompare(right.label))
   const sources = [...new Map([
     ...(knownSources ?? []).map((source) => [source.sourceId, source.label] as const),
     ...rows.flatMap((row) => row.sources).map((source) => [source.sourceId, sourceLabelOf(source)] as const)
   ]).entries()].sort((left, right) => left[1].localeCompare(right[1]))
+  // 三档显式：全部 / 无来源 / 某个来源。空串不再兼职表示「无来源也算」。
+  const sourceMatches = (row: SyncRunRow): boolean =>
+    sourceFilter === ''
+    || (sourceFilter === NO_SOURCE_FILTER ? row.sources.length === 0 : row.sources.some((source) => source.sourceId === sourceFilter))
   const filtered = rows
-    .filter((row) => taskFilter === '' || taskLabelOf(row) === taskFilter)
-    .filter((row) => sourceFilter === '' || row.sources.some((source) => source.sourceId === sourceFilter))
+    // The server already narrowed by task; this keeps the product-side (audit) rows in step.
+    .filter((row) => taskFilter === '' || row.handlerId === taskFilter)
+    .filter(sourceMatches)
     .filter((row) => outcome === undefined || row.outcome === outcome)
   const pageSize = SYNC_RUN_PAGE_SIZE
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -243,12 +276,13 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
         <label>{text.columns.task}
           <select value={taskFilter} onChange={(event) => { setTaskFilter(event.target.value); setPage(0) }}>
             <option value="">{text.allTasks}</option>
-            {tasks.map((task) => <option key={task} value={task}>{task}</option>)}
+            {tasks.map((task) => <option key={task.handlerId} value={task.handlerId}>{task.label}</option>)}
           </select>
         </label>
         <label>{text.columns.source}
           <select value={sourceFilter} onChange={(event) => { setSourceFilter(event.target.value); setPage(0) }}>
             <option value="">{text.allSources}</option>
+            <option value={NO_SOURCE_FILTER}>{text.sourceFilterNone}</option>
             {sources.map(([sourceId, label]) => <option key={sourceId} value={sourceId}>{label}</option>)}
           </select>
         </label>
@@ -391,6 +425,8 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     {state === 'available' && filtered.length > 0
       ? <footer className="mi-sync-run__foot">
         <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}{text.joiner}{text.retention}</span>
+        {/* 取回一部分就明说：读者要能分清「这段时间只有这些」和「这里还没取完」。 */}
+        {truncated ? <span role="status">{text.truncatedNotice.replace('{count}', String(rows.length))}</span> : null}
         {pageCount > 1 ? <span className="mi-sync-run__pager">
           <Button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} size="small">{text.previous}</Button>
           <span>{text.page.replace('{page}', String(currentPage + 1)).replace('{pages}', String(pageCount))}</span>

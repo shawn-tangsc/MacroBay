@@ -19,9 +19,25 @@ function harness(
 ) {
   const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
   const queries: unknown[] = []
+  /** Every list query, so a filter that must reach the store can be asserted where it is built. */
+  const runQueries: unknown[] = []
   const jobRuntime = {
     getRun: () => null,
+    /**
+     * 分页读取：把 `runs` 按每页 `query.limit`（最多 500）切开，用下标当游标——
+     * 只为验证「续取到窗口末尾」，不模拟存储层排序。
+     */
+    listRunPage: (query?: { limit?: number; cursor?: string }) => {
+      runQueries.push(query)
+      const all = options?.runs ?? []
+      const size = Math.min(query?.limit ?? 500, 500)
+      const start = query?.cursor === undefined ? 0 : Number(query.cursor)
+      const slice = all.slice(start, start + size)
+      const next = start + size < all.length ? String(start + size) : null
+      return { runs: slice, nextCursor: next }
+    },
     listRuns: (query?: { payload?: Record<string, unknown> }) => {
+      runQueries.push(query)
       if (query?.payload && options?.byPayload) {
         const hit = options.byPayload(query.payload)
         return hit ? [hit] : []
@@ -44,6 +60,7 @@ function harness(
   )
   return {
     queries,
+    runQueries,
     call: async (method: string, payload?: unknown) => handlers.get(method)?.(payload)
   }
 }
@@ -103,6 +120,60 @@ describe('sync run analysis column', () => {
     queuedAt: '2026-11-01T15:59:00.000Z', startedAt: '2026-11-01T15:59:02.000Z', completedAt: '2026-11-01T16:00:00.000Z',
     ...overrides
   } as AnalysisRun)
+
+  it('reads the whole window instead of the newest page, and says so when it had to stop', async () => {
+    // 24 小时 = 4,940 条：一页 500 条只覆盖 3.6 小时，所以窗口与服务端续取缺一不可。
+    const runs = Array.from({ length: 1_200 }, (_, index) => jobRun({
+      id: `run-${String(index).padStart(4, '0')}`,
+      createdAt: new Date(Date.parse(NOW) - index * 1_000).toISOString(),
+      startedAt: new Date(Date.parse(NOW) - index * 1_000).toISOString(),
+      completedAt: new Date(Date.parse(NOW) - index * 1_000).toISOString()
+    }))
+    const { call, runQueries } = harness(() => ({ state: 'available', rows: [] }), { runs })
+
+    const result = await call(SYNC_RUN_IPC_METHODS.list, { window: '24h', limit: 500 }) as {
+      rows: readonly unknown[]
+      truncated?: boolean
+    }
+    expect(result.rows).toHaveLength(1_200)
+    expect(result.truncated).toBeUndefined()
+    // 窗口交给存储层：24 小时档必须带 createdFrom，否则「标签与取数」还是两回事。
+    expect(runQueries[0]).toMatchObject({ createdFrom: new Date(Date.parse(NOW) - 24 * 60 * 60 * 1_000).toISOString() })
+
+    // 触到装载上限必须说出来，不许假装取全了。
+    const many = Array.from({ length: 20_600 }, (_, index) => jobRun({
+      id: `cap-${String(index).padStart(5, '0')}`,
+      createdAt: new Date(Date.parse(NOW) - index * 1_000).toISOString(),
+      startedAt: new Date(Date.parse(NOW) - index * 1_000).toISOString(),
+      completedAt: new Date(Date.parse(NOW) - index * 1_000).toISOString()
+    }))
+    const capped = await harness(() => ({ state: 'available', rows: [] }), { runs: many })
+      .call(SYNC_RUN_IPC_METHODS.list, { window: 'all', limit: 500 }) as { rows: readonly unknown[]; truncated?: boolean }
+    expect(capped.rows).toHaveLength(20_000)
+    expect(capped.truncated).toBe(true)
+  })
+
+  it('pushes the task filter down to the store instead of filtering the newest page', async () => {
+    // 稀疏任务的根因就是「先取最新 500 条再在客户端筛」：翻译一天 45 次，采集每 17 秒一条，
+    // 它永远沉底。所以 handlerId 必须出现在给存储层的查询上。
+    const { call, runQueries } = harness(() => ({ state: 'available', rows: [] }), { runs: [jobRun()] })
+
+    await call(SYNC_RUN_IPC_METHODS.list, {
+      window: '24h',
+      limit: 500,
+      handlerId: 'market-intelligence.translateItems'
+    })
+    expect(runQueries.at(-1)).toMatchObject({
+      productId: 'market-intelligence',
+      newestFirst: true,
+      limit: 500,
+      handlerId: 'market-intelligence.translateItems'
+    })
+
+    // 不选任务时不带这个键：空串条件等于给存储层加一个假过滤。
+    await call(SYNC_RUN_IPC_METHODS.list, { window: '24h', limit: 500 })
+    expect(runQueries.at(-1)).not.toHaveProperty('handlerId')
+  })
 
   it('joins a task row to the analysis run it produced', async () => {
     const { call } = harness(() => ({ state: 'available', rows: [] }), {

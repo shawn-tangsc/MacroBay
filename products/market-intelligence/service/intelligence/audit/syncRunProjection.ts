@@ -4,13 +4,14 @@ import type { AnalysisRun } from '../../../contracts/marketAnalysisContracts'
 import { getSource } from '../application/providerRegistry'
 
 import {
-  SYNC_RUN_LIMITS,
+  SYNC_RUN_LOAD_CAP, SYNC_RUN_LIMITS,
   type SyncAuditEntry,
   type SyncRunAction,
   type SyncRunAnalysis,
   type SyncRunAnalysisResult,
   type SyncRunOutcome,
   type SyncRunQuery,
+  type SyncRunCounts,
   type SyncRunRow,
   type SyncRunWindow
 } from '../../../contracts/syncRunRecords'
@@ -103,6 +104,8 @@ export function projectSyncRun(row: JobRunRecord, analysis?: SyncRunAnalysisLook
     action: entry?.action ?? 'other',
     outcome: outcomeOf(row.status),
     analysis: analysisOf(row, entry, analysis),
+    ...(countsOf(row) === undefined ? {} : { counts: countsOf(row) }),
+    ...(row.result?.reasonCode ? { resultReasonCode: row.result.reasonCode } : {}),
     ...(durationMs === undefined ? {} : { durationMs }),
     ...(failureCode === undefined ? {} : { failureCode }),
     ...(detail ? { detail } : {})
@@ -142,7 +145,8 @@ export function projectSyncRuns(
     .filter((row) => query.sourceId === undefined || row.sources.some((source) => source.sourceId === query.sourceId))
     .filter((row) => query.outcome === undefined || row.outcome === query.outcome)
     .sort((left, right) => right.at.localeCompare(left.at))
-    .slice(0, Math.min(Math.max(query.limit, 1), SYNC_RUN_LIMITS.maximumLimit))
+    // 上限是装载量，不是「一页」：存储层已经按游标分页取完整个窗口，这里再按一页截断就等于把它白取。
+    .slice(0, Math.min(Math.max(query.limit, 1), SYNC_RUN_LOAD_CAP))
 }
 
 /**
@@ -214,6 +218,22 @@ function withinWindow(at: string, window: SyncRunWindow, nowMs: number): boolean
   if (window === 'all') return true
   const parsed = Date.parse(at)
   return Number.isFinite(parsed) && nowMs - parsed <= SYNC_RUN_LIMITS.windowMs[window]
+}
+
+/**
+ * The batch tally, when the run recorded one that adds up.
+ *
+ * The platform refuses to write a tally whose parts do not sum, but this is a read path: a record
+ * from an older build, or a store written before that check existed, must not put four numbers on
+ * screen that contradict each other. A tally that does not add up is dropped, exactly like no tally.
+ */
+function countsOf(row: JobRunRecord): SyncRunCounts | undefined {
+  const counts = row.result?.counts
+  if (counts === undefined) return undefined
+  const { total, succeeded, failed, skipped } = counts
+  if (![total, succeeded, failed, skipped].every((value) => Number.isInteger(value) && value >= 0)) return undefined
+  if (succeeded + failed + skipped !== total) return undefined
+  return { total, succeeded, failed, skipped }
 }
 
 function outcomeOf(status: JobRunRecord['status']): SyncRunOutcome {
