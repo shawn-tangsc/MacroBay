@@ -19,3 +19,12 @@
 .mi-capital-conditions__header-band {
   position: relative;
 }
+
+/*
+ * 让角：标记绝对定位在右上角，而持仓卡头的分段控件（7d/24h）与资金面卡头的时间也在右端。
+ * 有标记时给头部留 24px，**只挪横向、不动高度**；没有标记时这条规则不生效，布局与原来完全一样。
+ */
+.mi-positioning-panel__head:has(.mi-signal-read-issue),
+.mi-capital-conditions__header-band:has(.mi-signal-read-issue) {
+  padding-inline-end: 24px;
+}

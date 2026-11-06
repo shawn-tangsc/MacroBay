@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
@@ -67,5 +69,13 @@ describe('a failed signal read on the positioning chip', () => {
     const sentence = markup.match(/aria-label="([^"]*没查到[^"]*)"/)?.[1] ?? ''
     expect(sentence).not.toMatch(/状态|记录|通道/)
     expect(markup).not.toContain('retry')
+  })
+})
+
+describe('making room for the marker', () => {
+  it('reserves a corner only while the marker is there', () => {
+    const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/shared/SignalReadIssue.css'), 'utf8')
+    // 有标记才让位：`:has(...)` 让这条规则在没有标记时不生效，布局与改动前完全一样；只挪横向。
+    expect(css).toMatch(/:has\(\.mi-signal-read-issue\)[\s\S]*padding-inline-end: 24px/)
   })
 })
