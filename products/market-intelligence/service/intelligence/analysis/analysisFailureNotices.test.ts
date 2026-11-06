@@ -4,6 +4,7 @@ import {
   analysisFailureNoticePolicy,
   analysisNoticeDeeplink,
   analysisRunOutcomesOf,
+  ANALYSIS_EVENT_ID_BY_KIND,
   analysisFailureNoticeDedupeVars,
   buildAnalysisFailureNoticeRequest,
   decideAnalysisFailureNotice,
@@ -94,9 +95,10 @@ describe('the three failure notices', () => {
       .toEqual({ line: 'event', date: '2026-11-06' })
     expect(analysisFailureNoticeDedupeVars({ kind: 'attempt-abandoned', line: 'event', runId: 'r', abandon: 'release' }, at(0)))
       .toEqual({ kind: 'release', date: '2026-11-06' })
-    // 文案行还没落进平台时，构造出来必须是 undefined：半句话比不说更糟。
-    expect(buildAnalysisFailureNoticeRequest({ kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 3 }, at(0)))
-      .toBeUndefined()
+    // 三个 id 由封闭表解析：门禁要能在提交点认出谁在发。
+    expect(Object.values(ANALYSIS_EVENT_ID_BY_KIND)).toEqual([
+      'platform.analysis.repeated-failure', 'platform.analysis.attempt-abandoned', 'platform.analysis.recovered'
+    ])
     expect(analysisFailureNoticePolicy.recoverySuccessStreak).toBe(2)
   })
 })

@@ -168,6 +168,13 @@ export function analysisNoticeDeeplink(runId: string, occurredAt: string) {
  * Exported for its test: the key string is the platform's to compose, and a second composer here
  * would produce a key its counter never sees.
  */
+/** One id per decision kind; the only place the three map to their events. */
+export const ANALYSIS_EVENT_ID_BY_KIND = Object.freeze({
+  'repeated-failure': ANALYSIS_NOTIFICATION_EVENT_IDS.repeatedFailure,
+  'attempt-abandoned': ANALYSIS_NOTIFICATION_EVENT_IDS.attemptAbandoned,
+  'recovered': ANALYSIS_NOTIFICATION_EVENT_IDS.recovered
+} as const)
+
 export function analysisFailureNoticeDedupeVars(
   decision: Exclude<AnalysisFailureNoticeDecision, { kind: 'none' }>,
   occurredAt: string
@@ -194,11 +201,9 @@ export function buildAnalysisFailureNoticeRequest(
 ): NotificationSubmitRequest | undefined {
   if (decision.kind === 'none') return undefined
   const vars = analysisFailureNoticeDedupeVars(decision, occurredAt)
-  const eventTypeId = decision.kind === 'repeated-failure'
-    ? ANALYSIS_REPEATED_FAILURE_EVENT_ID
-    : decision.kind === 'attempt-abandoned'
-      ? ANALYSIS_ATTEMPT_ABANDONED_EVENT_ID
-      : ANALYSIS_RECOVERED_EVENT_ID
+  // 封闭表查表，不是三元链：门禁要能在提交点认出「这条事件到底是谁在发」，三元挑出来的整
+  // request 在它眼里是个不透明变量。表里每个值都是 id，整张表就算可解析。
+  const eventTypeId = ANALYSIS_EVENT_ID_BY_KIND[decision.kind]
   const runId = decision.kind === 'attempt-abandoned' ? decision.runId : decision.kind === 'recovered' ? decision.episodeRunId : ''
   const deeplink = runId ? analysisNoticeDeeplink(runId, occurredAt) : undefined
   // Per language, never one bag for both: a shared `{kind}` value puts a Chinese word inside an
