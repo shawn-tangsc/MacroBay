@@ -1,6 +1,7 @@
 import type { ProductManifest } from '../../platform/product-manifest'
 import type { NotificationEventDeclaration } from '../../platform/notifications/contracts/notificationEventCatalog'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
+import { INTELLIGENCE_IPC_METHODS } from './contracts/intelligenceIpcMethods'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB } from './service/intelligence/jobs/marketAnalysisJobIds'
 import {
@@ -93,6 +94,8 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.demo.getState' },
     { method: 'intelligence.demo.setActive' },
     ...Object.values(MARKET_ANALYSIS_IPC_METHODS).map(method => ({ method })),
+    // 情报这一族与上面同形：方法名只在 contracts/intelligenceIpcMethods.ts 写一次，注册器与基线同源。
+    ...Object.values(INTELLIGENCE_IPC_METHODS).map(method => ({ method })),
     { method: 'intelligence.crossAsset.acquire' },
     { method: 'intelligence.crossAsset.renew' },
     { method: 'intelligence.crossAsset.release' },
@@ -110,27 +113,8 @@ export const marketIntelligenceProductManifest = {
     { method: macroRatesSnapshotPublicPolicy.method },
     // 口径查询（设计 144）：只读，agent 侧按需问"这个数从哪来"。
     { method: provenanceMethods.explainFigure },
-    { method: 'intelligence.getDetail' },
     { method: 'intelligence.getEvidenceExcerpt' },
-    { method: 'intelligence.getMonitoringScope' },
-    { method: 'intelligence.getOperationsHealth' },
-    { method: 'intelligence.getSentimentAggregates' },
-    { method: 'intelligence.getNewsSentiment' },
-    { method: 'intelligence.getNewsSentimentItem' },
-    { method: 'intelligence.getNewsSentimentSettings' },
-    { method: 'intelligence.saveNewsSentimentSettings' },
-    { method: 'intelligence.rescoreNewsSentiment' },
-    { method: 'intelligence.rebuildNewsSentiment' },
-    { method: 'intelligence.translateNewsSentimentBody' },
     { method: 'intelligence.getSourceHealth' },
-    // 舆情提醒：设置 → 通知第四条开关。`3224c49` 加接口时漏登记，启动自检拒绝启动过一次。
-    // 顺序跟着 `registerIntelligenceIpc` 走：这两条就在 `getTimeline` 之前注册。
-    { method: 'intelligence.getNewsPushOutletState' },
-    { method: 'intelligence.setNewsPushOutletEnabled' },
-    { method: 'intelligence.getTimeline' },
-    { method: 'intelligence.getWorkspaceState' },
-    { method: 'intelligence.getWorkspaceTimeline' },
-    { method: 'intelligence.ingestEvent' },
     { method: 'intelligence.macro.economicCalendar.getEventDetail' },
     { method: 'intelligence.macro.economicCalendar.getProviderHealth' },
     { method: 'intelligence.macro.economicCalendar.getProviderPageState' },
@@ -180,7 +164,6 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.queryRelatedEvents' },
     { method: 'intelligence.querySentimentSeries' },
     { method: 'intelligence.querySentimentSnapshot' },
-    { method: 'intelligence.retryItemAssessment' },
     { method: 'intelligenceSources.getFocusSettings' },
     { method: 'intelligenceSources.getHealth' },
     { method: 'intelligenceSources.getPageState' },
