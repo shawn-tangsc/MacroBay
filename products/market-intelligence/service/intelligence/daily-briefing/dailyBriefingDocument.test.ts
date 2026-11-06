@@ -60,32 +60,32 @@ const summary: AnalysisSummary = {
   id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
   conclusion: {
     direction: 'bearish',
-    summary: 'Stablecoin contraction and ETF redemptions pull bids away.',
-    change: 'No new comparable change this round.',
-    causalChain: 'Flows fall -> bids thin -> price pressure.',
-    conditions: ['Stablecoins keep contracting', 'ETFs do not show sustained inflows'],
+    summary: '稳定币持续收缩、ETF 赎回带走买盘。',
+    change: '本轮没有新的可比变化。',
+    causalChain: '资金流出 → 买盘变薄 → 价格承压。',
+    conditions: ['稳定币继续收缩', 'ETF 没有持续净流入'],
     macro: null,
-    evidenceStrength: 'Flow evidence is stronger than price evidence.',
-    dataGaps: ['No consensus', 'No cross-asset transmission']
+    evidenceStrength: '资金面证据强于价格证据。',
+    dataGaps: ['没有预期值', '没有跨资产传导']
   },
   knownFacts: [], transmissionHypotheses: [], marketReaction: [],
   supportingEvidence: [], counterEvidence: [
-    { statement: 'BTC ETF took in $110M.', evidenceRefId: 'ev-2' },
-    { statement: 'Fear and Greed sits at 48.', evidenceRefId: 'ev-3' }
+    { statement: 'BTC ETF 净流入 1.1 亿美元。', evidenceRefId: 'ev-2' },
+    { statement: '恐惧贪婪指数为 48。', evidenceRefId: 'ev-3' }
   ],
   scenarios: [], directions: [
-    { horizon: 'short', direction: 'bearish', rationale: 'Flows are still negative.', confidence: 'low', evidenceRefIds: ['ev-1'] },
-    { horizon: 'medium', direction: 'bearish', rationale: 'ETF flows confirm.', confidence: 'medium', evidenceRefIds: ['ev-2'] },
-    { horizon: 'long', direction: 'bearish', rationale: 'Real yield stays high.', confidence: 'medium', evidenceRefIds: ['ev-3'] }
+    { horizon: 'short', direction: 'bearish', rationale: '资金面仍为净流出。', confidence: 'low', evidenceRefIds: ['ev-1'] },
+    { horizon: 'medium', direction: 'bearish', rationale: 'ETF 资金流印证。', confidence: 'medium', evidenceRefIds: ['ev-2'] },
+    { horizon: 'long', direction: 'bearish', rationale: '实际利率仍高。', confidence: 'medium', evidenceRefIds: ['ev-3'] }
   ],
-  nextCatalysts: [], dataCaveats: ['Funding is not comparable across venues.'],
+  nextCatalysts: [], dataCaveats: ['资金费率跨交易所不可比。'],
   evidenceRefs: ['ev-1', 'ev-2', 'ev-3'], createdAt: '2026-10-30T00:00:00.000Z'
 }
 
 const predictions: readonly Prediction[] = [{
   id: 'mi-pr-1', schemaVersion: 1, summaryId: 'mi-as-1', asset: 'BTC',
   horizonStart: '2026-10-30T00:00:00.000Z', horizonEnd: '2026-10-31T00:00:00.000Z',
-  baseCase: 'BTC leans lower.', conditions: ['ETFs do not turn'], invalidation: 'Stablecoins turn positive and BTC ETFs take in two days.',
+  baseCase: 'BTC leans lower.', conditions: ['ETFs do not turn'], invalidation: '稳定币转正，且 BTC ETF 连续两天净流入。',
   nextCatalyst: null, status: 'pending', verificationDueAt: '2026-10-31T00:00:00.000Z', createdAt: '2026-10-30T00:00:00.000Z'
 }]
 
@@ -226,10 +226,35 @@ describe('daily briefing document', () => {
     expect(document.conclusion?.counterEvidence[0]?.citations).toEqual([1])
     expect(document.conclusion?.counterEvidence[1]?.citations).toEqual([2])
     expect(document.citations.map((entry) => entry.refId)).toEqual(['ev-2', 'ev-3'])
-    expect(document.citations[0]).toMatchObject({ sourceLabel: 'ETF flows', observedAt: '2026-10-28T00:00:00.000Z', statement: 'ETF flows confirm.' })
+    expect(document.citations[0]).toMatchObject({ sourceLabel: 'ETF flows', observedAt: '2026-10-28T00:00:00.000Z', statement: 'ETF 资金流印证。' })
     expect(document.conclusion?.invalidations).toHaveLength(1)
     expect(document.lede.source).toBe('template')
     expect(document.lede.text).toBe('')
+  })
+
+  it('never copies the analysis conclusion into an edition of another language (A0.9)', () => {
+    // 用户 2026-11-06 报的真库现象：英文版次的结论与引用整段是中文。分析摘要只有一种语言，
+    // 逐字复制进另一种语言的版次就是「英文外壳、中文正文」——这里一律不进；编辑模型随后用
+    // 自己写的同语言版本替代（`applyDailyBriefingEditorial`）。
+    const document = buildDailyBriefingDocument({ packet: packet({ locale: 'en-US' }), date: '2026-10-30' })
+
+    expect(document.edition.locale).toBe('en-US')
+    expect(document.conclusion?.summary).toBe('')
+    expect(document.conclusion?.conditions).toHaveLength(0)
+    expect(document.conclusion?.counterEvidence).toHaveLength(0)
+    expect(document.conclusion?.invalidations).toHaveLength(0)
+    expect(document.conclusion?.caveats).toHaveLength(0)
+    expect(document.conclusion?.topSignal).toBeNull()
+    expect(document.citations.every((entry) => entry.statement === undefined)).toBe(true)
+  })
+
+  it('keeps the analysis conclusion when it is in the edition’s own language', () => {
+    // 反证：同一份分析摘要、中文版次，结论与引用照旧在——不是把结论块整个扔掉。
+    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+
+    expect(document.conclusion?.summary).toBe('稳定币持续收缩、ETF 赎回带走买盘。')
+    expect(document.conclusion?.counterEvidence).toHaveLength(2)
+    expect(document.citations.some((entry) => entry.statement === 'ETF 资金流印证。')).toBe(true)
   })
 
   it('keeps a released high-impact event without consensus in the macro list', () => {

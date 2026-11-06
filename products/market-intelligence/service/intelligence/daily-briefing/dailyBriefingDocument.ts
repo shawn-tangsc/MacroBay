@@ -16,6 +16,7 @@ import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts'
 import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
 import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
+import { proseLanguageBreach } from './dailyBriefingProseLanguage'
 import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import {
@@ -329,6 +330,10 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
 }> {
   const input = packet.conclusion
   if (!input) return Object.freeze({ conclusion: null, citations: Object.freeze([]) })
+  // 分析摘要是一种语言写死的，这一期可以是另一种（`02` `A0.9` v2.148）。逐字复制进英文版次的
+  // 中文段落，读者会认定「英文版是假的」——所以复制时就按这一期的语言过一遍：不同语言的那一段
+  // 不进来（编辑模型之后用自己写的同语言版本替代，见 `applyDailyBriefingEditorial`）。
+  const inLocale = (text: string): boolean => !proseLanguageBreach(text, packet.locale)
   const summary = input.summary
   const structured = summary.conclusion
   const direction = structured?.direction ?? input.direction ?? 'undecided'
@@ -339,7 +344,7 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
   }))
   const top = selectTopSignal(structured ? summary.directions ?? [] : [])
   const citations = new CitationCollector(input.evidenceRefs ?? [])
-  const topSignal: BriefingTopSignal | null = top
+  const topSignal: BriefingTopSignal | null = top && inLocale(top.rationale)
     ? Object.freeze({
       horizon: top.horizon,
       direction: top.direction,
@@ -349,29 +354,33 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
     })
     : null
   const counterEvidence: readonly BriefingCounterEvidence[] = Object.freeze(summary.counterEvidence
+    .filter((claim) => inLocale(claim.statement))
     .slice(0, dailyBriefingPolicy.maximumCounterEvidence)
     .map((claim) => Object.freeze({
       statement: claim.statement,
       citations: Object.freeze(citations.cite([claim.evidenceRefId], claim.statement))
     })))
+  const summaryText = structured?.summary ?? summary.eventAssessment ?? ''
   const conclusion: BriefingConclusion = Object.freeze({
     summaryId: summary.id,
     publishedAt: summary.createdAt,
     direction,
     directions: Object.freeze(directions),
-    summary: structured?.summary ?? summary.eventAssessment ?? '',
-    ...(structured?.change ? { change: structured.change } : {}),
-    conditions: Object.freeze((structured?.conditions ?? []).slice(0, dailyBriefingPolicy.maximumConditions)),
-    invalidations: Object.freeze(input.predictions.slice(0, 4).map((prediction) => Object.freeze({
+    summary: inLocale(summaryText) ? summaryText : '',
+    ...(structured?.change && inLocale(structured.change) ? { change: structured.change } : {}),
+    conditions: Object.freeze((structured?.conditions ?? [])
+      .filter((entry) => inLocale(entry))
+      .slice(0, dailyBriefingPolicy.maximumConditions)),
+    invalidations: Object.freeze(input.predictions.filter((prediction) => inLocale(prediction.invalidation)).slice(0, 4).map((prediction) => Object.freeze({
       asset: prediction.asset,
       horizonEnd: prediction.horizonEnd,
       text: prediction.invalidation
     }))),
     counterEvidence,
     topSignal,
-    ...(structured?.evidenceStrength ? { evidenceStrength: structured.evidenceStrength } : {}),
-    dataGaps: Object.freeze((structured?.dataGaps ?? []).slice(0, dailyBriefingPolicy.maximumGaps)),
-    caveats: Object.freeze(summary.dataCaveats.slice(0, dailyBriefingPolicy.maximumCaveats)),
+    ...(structured?.evidenceStrength && inLocale(structured.evidenceStrength) ? { evidenceStrength: structured.evidenceStrength } : {}),
+    dataGaps: Object.freeze((structured?.dataGaps ?? []).filter((entry) => inLocale(entry)).slice(0, dailyBriefingPolicy.maximumGaps)),
+    caveats: Object.freeze(summary.dataCaveats.filter((entry) => inLocale(entry)).slice(0, dailyBriefingPolicy.maximumCaveats)),
     // The fact-layer conclusion is the fallback, never a synthesis: a failed or disabled editorial
     // turn must be readable as "this is the last analysis conclusion", not as an aggregation of the
     // window's AI views. The editorial pass upgrades this marker only when it actually synthesizes.
