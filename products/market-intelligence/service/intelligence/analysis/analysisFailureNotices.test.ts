@@ -52,9 +52,9 @@ describe('the three failure notices', () => {
   })
 
   it('treats an abandoned attempt as one fact, not a streak', () => {
-    expect(decideAttemptAbandoned({ line: 'event', runId: 'run-9', kindLabel: 'same-release-abandoned' }))
+    expect(decideAttemptAbandoned({ line: 'event', runId: 'run-9', abandon: 'release' }))
       .toMatchObject({ kind: 'attempt-abandoned', runId: 'run-9' })
-    expect(decideAttemptAbandoned({ line: 'event', runId: '', kindLabel: 'x' })).toEqual({ kind: 'none' })
+    expect(decideAttemptAbandoned({ line: 'event', runId: '', abandon: 'release' })).toEqual({ kind: 'none' })
   })
 
   it('passes only the declaration’s variables and lets the platform compose the key', () => {
@@ -63,8 +63,8 @@ describe('the three failure notices', () => {
       .toEqual({ episodeRunId: 'run-5' })
     expect(analysisFailureNoticeDedupeVars({ kind: 'repeated-failure', line: 'event', failures: 6, sample: 10 }))
       .toEqual({ line: 'event' })
-    expect(analysisFailureNoticeDedupeVars({ kind: 'attempt-abandoned', line: 'event', runId: 'r', kindLabel: 'same-release-abandoned' }))
-      .toEqual({ kind: 'same-release-abandoned' })
+    expect(analysisFailureNoticeDedupeVars({ kind: 'attempt-abandoned', line: 'event', runId: 'r', abandon: 'release' }))
+      .toEqual({ kind: 'release' })
     // 文案行还没落进平台时，构造出来必须是 undefined：半句话比不说更糟。
     expect(buildAnalysisFailureNoticeRequest({ kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 3 }, at(0)))
       .toBeUndefined()

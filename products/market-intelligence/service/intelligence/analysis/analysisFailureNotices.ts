@@ -60,9 +60,15 @@ export function failureEpisodeRunId(runs: readonly AnalysisRunOutcome[]): string
   return episode
 }
 
+/**
+ * Why a release was abandoned. A code, not a word: the sentence is written in the reader's language,
+ * and passing one word for both languages puts "发布" inside an English sentence.
+ */
+export type AnalysisAbandonKind = 'release' | 'slot' | 'signal'
+
 export type AnalysisFailureNoticeDecision =
   | Readonly<{ kind: 'repeated-failure'; line: AnalysisRunLine; failures: number; sample: number }>
-  | Readonly<{ kind: 'attempt-abandoned'; line: AnalysisRunLine; runId: string; kindLabel: string }>
+  | Readonly<{ kind: 'attempt-abandoned'; line: AnalysisRunLine; runId: string; abandon: AnalysisAbandonKind }>
   | Readonly<{ kind: 'recovered'; line: AnalysisRunLine; episodeRunId: string; missingCount: number }>
   | Readonly<{ kind: 'none' }>
 
@@ -111,10 +117,17 @@ export function decideAnalysisFailureNotice(input: Readonly<{
 export function decideAttemptAbandoned(input: Readonly<{
   line: AnalysisRunLine
   runId: string
-  kindLabel: string
+  abandon: AnalysisAbandonKind
 }>): AnalysisFailureNoticeDecision {
-  return input.runId ? { kind: 'attempt-abandoned', line: input.line, runId: input.runId, kindLabel: input.kindLabel } : { kind: 'none' }
+  return input.runId ? { kind: 'attempt-abandoned', line: input.line, runId: input.runId, abandon: input.abandon } : { kind: 'none' }
 }
+
+/** The word for the thing that did not get written, in each language. */
+const ABANDON_COPY: Readonly<Record<AnalysisAbandonKind, Readonly<{ 'zh-CN': string; 'en-US': string }>>> = Object.freeze({
+  release: { 'zh-CN': '发布', 'en-US': 'a release' },
+  slot: { 'zh-CN': '定时分析', 'en-US': 'a scheduled analysis' },
+  signal: { 'zh-CN': '信号解读', 'en-US': 'a signal reading' }
+})
 
 export function analysisNoticeDeeplink(runId: string) {
   return {
@@ -136,7 +149,7 @@ export function analysisFailureNoticeDedupeVars(
   decision: Exclude<AnalysisFailureNoticeDecision, { kind: 'none' }>
 ): Readonly<Record<string, string>> {
   if (decision.kind === 'repeated-failure') return { line: decision.line }
-  if (decision.kind === 'attempt-abandoned') return { kind: decision.kindLabel }
+  if (decision.kind === 'attempt-abandoned') return { kind: decision.abandon }
   return { episodeRunId: decision.episodeRunId }
 }
 
@@ -160,14 +173,22 @@ export function buildAnalysisFailureNoticeRequest(
       : ANALYSIS_RECOVERED_EVENT_ID
   const runId = decision.kind === 'attempt-abandoned' ? decision.runId : decision.kind === 'recovered' ? decision.episodeRunId : ''
   const deeplink = runId ? analysisNoticeDeeplink(runId) : undefined
-  const params: Record<string, string> = decision.kind === 'repeated-failure'
+  // Per language, never one bag for both: a shared `{kind}` value puts a Chinese word inside an
+  // English sentence. The abandoned body carries no count — the platform's shared sentence reports
+  // "共 N 次", and printing a second number in the body contradicts it on the same screen.
+  const zhParams: Record<string, string> = decision.kind === 'repeated-failure'
     ? { failures: String(decision.failures), sample: String(decision.sample) }
     : decision.kind === 'attempt-abandoned'
-      ? { kind: decision.kindLabel }
+      ? { kind: ABANDON_COPY[decision.abandon]['zh-CN'] }
+      : { missing: String(decision.missingCount) }
+  const enParams: Record<string, string> = decision.kind === 'repeated-failure'
+    ? { failures: String(decision.failures), sample: String(decision.sample) }
+    : decision.kind === 'attempt-abandoned'
+      ? { kind: ABANDON_COPY[decision.abandon]['en-US'] }
       : { missing: String(decision.missingCount) }
   const rendered = renderPlatformEventCopy({
     eventTypeId,
-    paramsByLanguage: { 'zh-CN': params, 'en-US': params }
+    paramsByLanguage: { 'zh-CN': zhParams, 'en-US': enParams }
   })
   if (rendered === undefined) return undefined
   // No action button yet: a button needs a signed copy key, and those land with the platform's
