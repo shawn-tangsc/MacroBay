@@ -45,9 +45,9 @@ export function attachModuleSignals(host: ModuleSignalHost & {
   // A separate method, never a change to the old one: the callers switch together, later.
   host.queryModuleSignalRead = async (queryInput) => {
     const entries = await host.queryModuleSignals(queryInput)
-    // No reader mounted means the states are not available — they are not empty, and must not be
-    // read as "not triggered yet".
-    if (!analysisReader) return { state: 'available', signals: entries, droppedInvalid: 0, analysis: {} }
+    // 没挂读口不是「读到了但没有状态」，而是这一版根本读不了状态：装配缺了（老进程、半更新）。
+    // 报 `contract-invalid`，句子说「这次没查到」——绝不说「下次刷新会再读」，那对装配缺失是不成立的承诺。
+    if (!analysisReader) return { state: 'unavailable', failureCode: 'contract-invalid' }
     const changeHashes = [...new Set(entries.map(entry => entry.signal.dedupeKey))]
     const rows = analysisReader.rows(changeHashes)
     const runs = analysisReader.runs(rows.flatMap(row => row.analysisRunId ? [row.analysisRunId] : []))

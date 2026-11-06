@@ -62,8 +62,10 @@ describe('a failed signal read on the positioning chip', () => {
     // 标记仍在（我们确实出错了），但正面与浮层里都不许出现「重试」：这件事不用读者动手。
     expect(markup).toContain('mi-signal-read-issue')
     expect(markup).not.toContain('重试')
-    // 内部词不上屏：读者只问「这条分析过没有」，不关心我们的「状态 / 记录 / 通道」。
-    expect(markup).not.toMatch(/状态|记录|通道/)
+    // 内部词不上屏——只对**那句话**断言，不对整块卡片跑宽泛正则：卡片别处正常出现「记录」
+    // 两个字（比如「上次更新记录」）时，宽断言会误红，然后有人为了变绿去删断言。
+    const sentence = markup.match(/aria-label="([^"]*没查到[^"]*)"/)?.[1] ?? ''
+    expect(sentence).not.toMatch(/状态|记录|通道/)
     expect(markup).not.toContain('retry')
   })
 })
