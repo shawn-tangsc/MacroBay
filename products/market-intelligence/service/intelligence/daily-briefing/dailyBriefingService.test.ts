@@ -47,15 +47,26 @@ function memoryStore(): DailyBriefingStore & {
   /** 运行记录：与版次分开存，「有运行没版次」和「有版次没运行」才构造得出来。 */
   runs: DailyBriefingPeriodRun[]
   pruned: string[]
+  /** 尝试记录：列表的"这一天有痕迹"以它为准，运行记录（审计）不参与。 */
+  attempts: Array<Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US'; state: 'running' | 'succeeded' | 'failed'; startedAt: string }>>
 } {
   const rows = new Map<string, DailyBriefingStoredEdition>()
   const runs: DailyBriefingPeriodRun[] = []
   const pruned: string[] = []
+  const attempts: Array<Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US'; state: 'running' | 'succeeded' | 'failed'; startedAt: string }>> = []
   const key = (date: string, locale: string) => `${date}:${locale}`
   return {
     rows,
     runs,
     pruned,
+    attempts,
+    async listAttempts(date, locale, periodId = 'default') {
+      return attempts.filter((attempt) => attempt.date === date && attempt.locale === locale && attempt.periodId === periodId)
+        .map((attempt, index) => ({ attemptNo: index + 1, state: attempt.state, startedAt: attempt.startedAt })) as never
+    },
+    async listAttemptRuns(from, to) {
+      return attempts.filter((attempt) => attempt.date >= from && attempt.date <= to)
+    },
     async get(date, locale) { return rows.get(key(date, locale)) },
     async put(edition) { rows.set(key(edition.date, edition.locale), edition) },
     async list(from, to, locale) {
@@ -585,7 +596,7 @@ describe('daily briefing service', () => {
     expect(source.calls).toBe(1)
   })
 
-  it('draws a day only where there is a trace: an edition, a run, or today', async () => {
+  it('draws a day only where there is a trace: an edition, an attempt, or today', async () => {
     // 三向规则（2026-11-05 定，`9456b52`）：有版次或有运行的日子出现，今天永远出现，**空着的过去日子不出现**。
     // 这条用例以前断言「固定铺满 14 天」，那是旧口径；现在按规则本身断言，两个来源各构造一次。
     const store = memoryStore()
@@ -594,8 +605,8 @@ describe('daily briefing service', () => {
 
     // 有版次、没有运行：这一版还在，日子必须出现。
     store.rows.set('2026-10-28:zh-CN', storedEdition('2026-10-28'))
-    // 有运行、版次已被删：天头仍要在（读者删过这一版，运行记录留着）。
-    store.runs.push(periodRun('2026-10-27'))
+    // 有尝试、版次已被删：天头仍要在（读者删过这一版，尝试记录留着——审计表不参与渲染）。
+    store.attempts.push({ date: '2026-10-27', periodId: 'default', locale: 'zh-CN', state: 'failed', startedAt: '2026-10-27T00:00:00.000Z' })
 
     const listed = await service.list({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(listed.state).toBe('available')
@@ -604,6 +615,34 @@ describe('daily briefing service', () => {
     expect(listed.result.dates).toEqual(['2026-10-30', '2026-10-28', '2026-10-27'])
     expect(listed.result.dates).not.toContain('2026-10-29')
     expect(listed.result.editions.map((edition) => edition.date)).toEqual(expect.arrayContaining(['2026-10-30', '2026-10-28']))
+  })
+
+  it('never lets an audit row change what the list shows', async () => {
+    // `A0.16`（`02` v2.154）：日志/审计表只回答"发生过什么"，不许参与"现在该显示什么"。
+    // 唯一例外是删除审计（读者意图，只影响补跑判断）。这条用例守的是正常路径：往运行记录里塞一行，
+    // 列表与天头逐字不变。
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const before = await service.list({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(before.state).toBe('available')
+    if (before.state !== 'available') return
+
+    // 一条只存在于审计表里的"运行"：它有日期、有期号，但没有任何版次与尝试。
+    await store.openPeriodRun!({
+      date: '2026-10-27', periodId: 'period_audit_only', expectedLocales: ['zh-CN'],
+      primaryRequested: 'zh-CN', primaryUsed: 'zh-CN', snapshotId: 'bs_audit', snapshotHash: 'h',
+      contentVersion: 1, writingRounds: 1, direction: 'bearish', editionRows: [], state: 'failed',
+      startedAt: '2026-10-27T00:00:00.000Z'
+    })
+
+    const after = await service.list({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(after.state).toBe('available')
+    if (after.state !== 'available') return
+    // 天头不多一天、行不多一行：审计表不参与渲染。
+    expect(after.result.dates).toEqual(before.result.dates)
+    expect(after.result.editions.map((edition) => edition.periodId))
+      .toEqual(before.result.editions.map((edition) => edition.periodId))
   })
 
   it('returns the stored edition and missing for an unknown date', async () => {

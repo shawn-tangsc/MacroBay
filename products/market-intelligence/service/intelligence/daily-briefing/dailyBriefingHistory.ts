@@ -9,7 +9,6 @@ import {
   type DailyBriefingRunTrigger
 } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPeriodRun, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
-import { readPeriodRuns } from './dailyBriefingPeriodRunJournal'
 
 /**
  * Whether a period still exists in the configuration.
@@ -23,7 +22,7 @@ export type DailyBriefingPeriodPresence = 'found' | 'absent' | 'unreadable'
 /**
  * 天头要画哪些日子（`02` v2.91）：
  *
- * **有版次 ∨ 有过运行记录（`period_runs` 任何状态）∨ 这一天是今天。**
+ * **有版次 ∨ 有过尝试记录（`daily_briefing_attempts`）∨ 这一天是今天。**
  * **仅"被排期覆盖"不算**——排期每天重复（07:00 天天都有），按它算等于每天都成立，14 天会全被铺出来。
  * 只放行"今天"一天，是把读者正看着的那一天放进来，不是把窗口放宽：其余无痕迹的日子照旧不出现。
  */
@@ -54,7 +53,7 @@ export function briefingScheduledTimeFor(
 }
 
 export async function readBriefingHistory(input: Readonly<{
-  store: Pick<DailyBriefingStore, 'list' | 'getPeriodRun' | 'listAttempts'> & Pick<Partial<DailyBriefingStore>, 'listPeriodRuns' | 'listAttemptRuns'>
+  store: Pick<DailyBriefingStore, 'list' | 'listAttempts'> & Pick<Partial<DailyBriefingStore>, 'listAttemptRuns'>
   locale: DailyBriefingLocale
   today: string
   retentionDays: number
@@ -88,10 +87,9 @@ export async function readBriefingHistory(input: Readonly<{
   const from = dates[0]!
   const to = dates[dates.length - 1]!
   const [primary, otherLocale] = input.locale === 'zh-CN' ? ['zh-CN', 'en-US'] as const : ['en-US', 'zh-CN'] as const
-  const [primaryRows, otherRows, runs, attemptRuns] = await Promise.all([
+  const [primaryRows, otherRows, attemptRuns] = await Promise.all([
     input.store.list(from, to, primary).catch(() => []),
     input.store.list(from, to, otherLocale).catch(() => []),
-    readPeriodRuns(input.store, from, to),
     input.store.listAttemptRuns ? input.store.listAttemptRuns(from, to).catch(() => []) : Promise.resolve([])
   ])
   const editions = await briefingHistorySummaries({
@@ -99,10 +97,10 @@ export async function readBriefingHistory(input: Readonly<{
     primary,
     primaryRows,
     otherRows,
-    runs,
     attemptRuns,
     ...(input.missedPeriods === undefined ? {} : { missedPeriods: input.missedPeriods }),
-    periodRun: (date, periodId) => input.store.getPeriodRun?.(date, periodId),
+    attemptState: (date, periodId, locale) => attemptRuns.find((attempt) => attempt.date === date
+      && attempt.periodId === periodId && attempt.locale === locale && attempt.state !== 'succeeded')?.state as 'failed' | 'running' | undefined,
     attemptCount: (date, periodId, locale) => {
       const read = input.store.listAttempts
       return read ? read(date, locale, periodId).then((attempts) => attempts.length) : Promise.resolve(0)
@@ -114,10 +112,11 @@ export async function readBriefingHistory(input: Readonly<{
   })
   return Object.freeze({
     editions,
+    // 天头出现集合只认**业务事实**：有版次、有尝试、是今天。运行记录不再参与（审计表不参与渲染）。
     dates: briefingRailDates({
       dates,
       editionDates: new Set(editions.map((edition) => edition.date)),
-      runDates: new Set(runs.map((run) => run.date)),
+      runDates: new Set(attemptRuns.map((attempt) => attempt.date)),
       today: input.today
     })
   })
@@ -141,8 +140,8 @@ type PeriodRows = Readonly<{
   rows: ReadonlyMap<DailyBriefingLocale, DailyBriefingStoredEdition>
   /** 这一期没有版次时，行属于哪些语言；缺省用界面语言。 */
   locales?: readonly DailyBriefingLocale[]
-  /** 只留下过失败 attempt、没有运行记录：原因照样是"这次失败"。 */
-  attemptFailed?: boolean
+  /** 这一期只留下了尝试记录时的状态：失败 → "这次失败"，停在 running → "上次没跑完"。 */
+  attemptState?: 'failed' | 'running'
   /** 排期过了点、今天该有却没有：第二行写「到点时没能生成」，不写内部原因、不带按钮。 */
   missedAtCutoff?: boolean
   /**
@@ -170,11 +169,9 @@ export async function briefingHistorySummaries(input: Readonly<{
   primary: DailyBriefingLocale
   primaryRows: readonly DailyBriefingStoredEdition[]
   otherRows: readonly DailyBriefingStoredEdition[]
-  periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
   attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
   scheduledTime?: (periodId: string) => string | undefined
-  /** Runs of the window; a run with no edition row is the only trace some periods leave. */
-  runs?: readonly DailyBriefingPeriodRun[]
+
   /** 今天「该有却没有」的排期期（甲案）：建一行说明，四种例外不建。 */
   missedPeriods?: readonly Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>[]
   /** Attempt rows of the window: a run that has not written its journal yet is still a row. */
@@ -187,6 +184,8 @@ export async function briefingHistorySummaries(input: Readonly<{
     trigger?: string
     windowHours?: number
   }>[]
+  /** 这一期这一天这一语言最后一次尝试的状态：没有版次的行据此说"失败"还是"没跑完"。 */
+  attemptState?: (date: string, periodId: string, locale: DailyBriefingLocale) => 'failed' | 'running' | undefined
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
@@ -202,16 +201,11 @@ export async function briefingHistorySummaries(input: Readonly<{
     byPeriod.set(key, entry)
   }
 
-  const runsByDate = new Map<string, Map<string, DailyBriefingPeriodRun>>()
-  for (const run of input.runs ?? []) {
-    const forDate = runsByDate.get(run.date) ?? new Map<string, DailyBriefingPeriodRun>()
-    forDate.set(run.periodId, run)
-    runsByDate.set(run.date, forDate)
-  }
-
   // 尝试的身份，按 (日期, 期号, 语言) 索引：运行记录行与只留下尝试的行都从这里取身份。
   const attemptByKey = new Map<string, NonNullable<PeriodRows['attemptIdentity']>>()
+  const attemptStateByKey = new Map<string, 'failed' | 'running'>()
   for (const attempt of input.attemptRuns ?? []) {
+    if (attempt.state !== 'succeeded') attemptStateByKey.set(`${attempt.date}:${attempt.periodId}:${attempt.locale}`, attempt.state)
     attemptByKey.set(`${attempt.date}:${attempt.periodId}:${attempt.locale}`, {
       startedAt: attempt.startedAt, locale: attempt.locale,
       ...(attempt.trigger === undefined ? {} : { trigger: attempt.trigger }),
@@ -227,27 +221,7 @@ export async function briefingHistorySummaries(input: Readonly<{
     // 一个期没有任何版次时，只有**运行记录说它失败或还在跑**才留一行——那是"发生过的事"；
     // 跑成功却没有版次 = 那一版被删了，**整行不显示**，不解释也不留位（`A9.13` 的占位口径作废）；
     // 从来没有运行记录 → 同样不显示（"今天 13:00 那期还没到点"不再占一行，排期去设置页看）。
-    const runsToday = runsByDate.get(date) ?? new Map<string, DailyBriefingPeriodRun>()
     const known = new Set(periods.map((period) => period.periodId))
-    for (const [periodId, run] of runsToday) {
-      if (known.has(periodId)) continue
-      if (run.state !== 'failed' && run.state !== 'running') continue
-      known.add(periodId)
-      // 这一行属于**它自己的语言**，不是界面语言：英文那一期失败，就要有一行英文，语言徽标也标英文
-      // （用户 2026-11-06：18:11 那次英文失败在中日文界面下看不见）。
-      const locale = run.expectedLocales[0]
-      periods.push({
-        date, periodId, rows: new Map(),
-        ...(run.expectedLocales.length > 0 ? { locales: run.expectedLocales } : {}),
-        // 运行记录自己不带"怎么发起、覆盖多长"；这些在**那一次尝试**里。运行记录先到（事实冻结时就
-        // 建）会把尝试行挡在后面，于是"进行中"那一行曾经显示「未记录 未记录 定时」——
-        // 来源还被猜成"定时"（用户 2026-11-06）。这里按 (日期, 期号, 语言) 把尝试的身份接上。
-        ...(locale === undefined ? {} : (() => {
-          const attempt = attemptByKey.get(`${date}:${periodId}:${locale}`)
-          return attempt === undefined ? {} : { attemptIdentity: attempt }
-        })())
-      })
-    }
     // 「到点时没能生成」：排期期今天该有却没有，也要留一行说明（甲案）。它排在建行之前，好让
     // 下面"有版次/有尝试就不再建"的判断优先——同一期已经有痕迹时，这一行不会被补出来。
     for (const missed of input.missedPeriods ?? []) {
@@ -271,14 +245,14 @@ export async function briefingHistorySummaries(input: Readonly<{
       periods.push({
         date, periodId: attempt.periodId, rows: new Map(), locales: [attempt.locale],
         attemptIdentity: attemptByKey.get(`${date}:${attempt.periodId}:${attempt.locale}`),
-        ...(attempt.state === 'failed' ? { attemptFailed: true } : {})
+        ...(attempt.state === 'running' ? { attemptState: 'running' as const } : { attemptState: 'failed' as const })
       })
     }
 
     const day: DailyBriefingEditionSummary[] = []
     for (const period of periods) {
       // 一个 (日期, 期号, 语言) 一行：同一期的中英两版是两行，各有自己的时刻与窗口。
-      day.push(...await summariesOfPeriod(period, input, runsToday.get(period.periodId)))
+      day.push(...await summariesOfPeriod(period, input))
     }
     // A5.1, the one definition: nominal cutoff ascending, same moment resolved by the period id.
     // Not by generatedAt and not by window, or the reader sees the list reshuffle between renders.
@@ -318,24 +292,30 @@ export async function briefingHistorySummaries(input: Readonly<{
  */
 async function summariesOfPeriod(
   period: PeriodRows,
-  input: Parameters<typeof summaryOfLocale>[1],
-  knownRun?: DailyBriefingPeriodRun
+  input: Parameters<typeof summaryOfLocale>[1]
 ): Promise<readonly DailyBriefingEditionSummary[]> {
   const locales = period.rows.size === 0 ? (period.locales && period.locales.length > 0 ? period.locales : [input.primary]) : [...period.rows.keys()]
   const rows: DailyBriefingEditionSummary[] = []
-  for (const locale of locales) rows.push(await summaryOfLocale(period, { ...input, primary: locale }, knownRun))
+  for (const locale of locales) rows.push(await summaryOfLocale(period, { ...input, primary: locale }))
   return rows
 }
 
 async function summaryOfLocale(period: PeriodRows, input: Readonly<{
   primary: DailyBriefingLocale
-  periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
   attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
   scheduledTime?: (periodId: string) => string | undefined
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
-}>, knownRun?: DailyBriefingPeriodRun): Promise<DailyBriefingEditionSummary> {
+  attemptState?: (date: string, periodId: string, locale: DailyBriefingLocale) => 'failed' | 'running' | undefined
+  /** 这一天的尝试记录：没有版次的行从它取状态（失败 / 没跑完），不问审计表。 */
+  attemptRuns?: readonly Readonly<{
+    date: string
+    periodId: string
+    locale: DailyBriefingLocale
+    state: 'running' | 'succeeded' | 'failed'
+  }>[]
+}>): Promise<DailyBriefingEditionSummary> {
   const { date, periodId, rows } = period
   // The row's face is the reader's language. Another language being published does not turn the
   // reader's own gap into a generated row — `languages` says what exists; `state` stays about the
@@ -371,20 +351,29 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
     } : {})
   }
 
-  const run = knownRun ?? (input.periodRun ? await input.periodRun(date, periodId) : undefined)
-  const expectedLocales = run?.expectedLocales
+  // 「这一期本来该有几种语言」问**期配置**；手动期没有配置，它就有那一次尝试的那一种语言。
+  // 运行记录（审计表）不参与——它只回答"这次是从哪份快照写出来的"。
+  const expectedLocales = input.configuredLanguages ? input.configuredLanguages(periodId) : undefined
+  // 没有版次行的状态一律问**尝试记录**（本就属于本行的那一条），不问审计表。
+  const attemptStateFor = (locale: DailyBriefingLocale): 'failed' | 'running' | undefined =>
+    period.attemptState ?? input.attemptState?.(date, periodId, locale)
+      ?? (() => {
+        const attempt = (input.attemptRuns ?? []).find((candidate) => candidate.date === date
+          && candidate.periodId === periodId && candidate.locale === locale && candidate.state !== 'succeeded')
+        return attempt?.state === 'failed' || attempt?.state === 'running' ? attempt.state : undefined
+      })()
+  const attemptState = attemptStateFor(input.primary)
   const completeness = briefingCompleteness({
     ...(expectedLocales ? { expectedLocales } : {}),
     publishedLocales: availableLocales,
     readingsAvailable: summary.readingsAvailable,
     readingsTotal: 4
   })
-  // An issue with nothing published is "not run" unless that run actually failed. Attempts the
-  // reader deleted the editions of are history, not a status: showing "generation failed" for a
-  // day that succeeded and was then emptied would blame the pipeline for the reader's action.
+  // 有版次的行直接数尝试；没有版次的行只有在**那一次尝试自己失败**时才数（`period.attemptFailed`）——
+  // 读者删掉版次之后，"这次失败"不该变成对流水线的指控。
   const published = availableLocales.length > 0
   let attempts: number | undefined
-  if (input.attemptCount && (summary.state === 'generated' || run?.state === 'failed')) {
+  if (input.attemptCount && (summary.state === 'generated' || attemptState === 'failed')) {
     const countAttempts = input.attemptCount
     try {
       attempts = await countAttempts(date, periodId, summary.locale)
@@ -395,10 +384,10 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
   const presence = input.periodPresence ? await input.periodPresence(periodId) : undefined
   return {
     ...summary,
-    languages: languagesOf(availableLocales, run, {
+    languages: languagesOf(availableLocales, {
       running: input.isRunning ? input.isRunning(date, periodId) : false,
-      configured: input.configuredLanguages ? input.configuredLanguages(periodId) : period.locales
-    }, period.attemptFailed),
+      configured: expectedLocales ?? period.locales
+    }, attemptStateFor),
     ...(expectedLocales ? { expectedLocales } : {}),
     ...(attempts === undefined ? {} : { attemptCount: attempts }),
     ...(input.scheduledTime?.(periodId) ? { scheduledTime: input.scheduledTime(periodId)! } : {}),
@@ -441,34 +430,25 @@ function identityOf(row: DailyBriefingStoredEdition | undefined): Readonly<{
  */
 function languagesOf(
   publishedLocales: readonly DailyBriefingLocale[],
-  run: DailyBriefingPeriodRun | undefined,
   live: Readonly<{ running: boolean; configured: readonly DailyBriefingLocale[] | undefined }>,
-  attemptFailed?: boolean
+  attemptStateOf?: (locale: DailyBriefingLocale) => 'failed' | 'running' | undefined
 ): readonly DailyBriefingEditionLanguage[] {
   const published = new Set(publishedLocales)
-  // The union of what published, what this run meant to publish, and (once configuration is the
-  // source) what the period is configured for. Never "every supported language": that would put a
-  // badge for a language the period never had on every row.
+  // 版次里有的 + **期配置**里有的（手动期就是那一次尝试的那一种）。不再问运行记录：
+  // 审计表只回答"发生过什么"，不参与"这一期该有哪几种语言"。
   const locales = [...new Set([
     ...publishedLocales,
-    ...(run?.expectedLocales ?? []),
     ...(live.configured ?? [])
   ])].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
   return locales.map((locale) => {
     if (published.has(locale)) return Object.freeze({ locale, state: 'published' as const })
-    // "Generating" comes from the process that is actually running the period, not from the stored
-    // run row: a process that died leaves that row `running` forever, and the row would spin.
     if (live.running) return Object.freeze({ locale, state: 'generating' as const })
-    // A run still marked `running` with nothing alive is a run the process died inside: the reader
-    // is told it never finished, not that it failed (a failure never happened).
-    const interrupted = run?.state === 'running'
+    // 停在 running 的尝试 = 进程死在里面的那一次：说"没跑完"，不说"失败"（失败没发生过）。
+    const state = attemptStateOf?.(locale)
     return Object.freeze({
       locale,
       state: 'missing' as const,
-      reason: interrupted
-        ? 'run-interrupted' as const
-        : run?.state === 'failed' || attemptFailed ? 'run-failed' as const
-        : 'not-published' as const
+      reason: state === 'running' ? 'run-interrupted' as const : state === 'failed' ? 'run-failed' as const : 'not-published' as const
     })
   })
 }

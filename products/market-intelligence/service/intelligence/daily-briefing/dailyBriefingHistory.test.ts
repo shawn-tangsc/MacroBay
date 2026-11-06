@@ -36,10 +36,11 @@ const run = (expectedLocales: readonly ('zh-CN' | 'en-US')[]): DailyBriefingPeri
   direction: 'undecided', editionRows: [], state: 'running', startedAt: '2026-11-02T00:00:00.000Z'
 })
 
+// 「这一期该有几种语言」现在问**期配置**，不再问运行记录（审计表不参与渲染）。
 const summaries = (rows: readonly DailyBriefingStoredEdition[], expected: readonly ('zh-CN' | 'en-US')[]) =>
   briefingHistorySummaries({
     dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
-    periodRun: vi.fn(async () => run(expected))
+    configuredLanguages: () => expected
   })
 
 describe('history rows take incompleteness from the run', () => {
@@ -71,14 +72,11 @@ describe('history rows take incompleteness from the run', () => {
     expect(listed[0]?.scheduledTime).toBeUndefined()
   })
 
-  it('gives a running row its identity from that attempt, not from the run record', async () => {
-    // 用户 2026-11-06：手动发起的那一行在进行中显示「未记录 未记录 定时」——运行记录先建、把尝试挡在了
-    // 后面，身份没接上，来源还被猜成"定时"。运行记录不带这三样，身份必须取那一次的尝试。
+  it('gives a running row its identity from that attempt', async () => {
+    // 用户 2026-11-06：手动发起的那一行在进行中显示「未记录 未记录 定时」——身份没接上、来源被猜成
+    // "定时"。身份只认那一次的尝试（运行记录已不参与渲染）。
     const [row] = await briefingHistorySummaries({
       dates: ['2026-11-06'], primary: 'zh-CN', primaryRows: [], otherRows: [],
-      runs: [{
-        ...run(['zh-CN']), periodId: 'period_running', state: 'running' as const, startedAt: '2026-11-06T13:46:20.000Z'
-      }],
       attemptRuns: [{
         date: '2026-11-06', periodId: 'period_running', locale: 'zh-CN', state: 'running',
         startedAt: '2026-11-06T13:46:18.302Z', trigger: 'manual', windowHours: 24
@@ -144,7 +142,6 @@ describe('history rows take incompleteness from the run', () => {
       dates: ['2026-11-02'], primary: 'zh-CN',
       primaryRows: [edition('zh-CN')], otherRows: [],
       attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'succeeded', startedAt: '2026-11-02T00:00:00.000Z' }],
-      periodRun: vi.fn(async () => ({ ...run(['zh-CN']), state: 'published' as const })),
       scheduledTime: () => '07:00'
     })
     expect(retried).toHaveLength(1)
@@ -167,8 +164,8 @@ describe('history rows take incompleteness from the run', () => {
       primary: 'zh-CN',
       primaryRows: [],
       otherRows: [],
-      runs: [{ ...run(['zh-CN', 'en-US']), state: 'published' as const }],
-      periodRun: vi.fn(async () => ({ ...run(['zh-CN', 'en-US']), state: 'published' as const })),
+      // 跑成功、版次被删：只有成功尝试，没有版次 → 整行不显示（审计表不参与）。
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'succeeded' as const, startedAt: '2026-11-02T00:00:00.000Z' }],
       attemptCount: vi.fn(async () => 5),
       scheduledTime: () => '07:00'
     })
@@ -183,8 +180,7 @@ describe('history rows take incompleteness from the run', () => {
       primary: 'zh-CN',
       primaryRows: [],
       otherRows: [],
-      runs: [{ ...run(['zh-CN']), state: 'failed' as const }],
-      periodRun: vi.fn(async () => ({ ...run(['zh-CN']), state: 'failed' as const })),
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'failed' as const, startedAt: '2026-11-02T00:00:00.000Z' }],
       attemptCount: vi.fn(async () => 2)
     })
 
@@ -217,13 +213,12 @@ describe('the list projection decides the row, once', () => {
     }
   }
 
-  const two = (rows: readonly DailyBriefingStoredEdition[], runs: Record<string, ReturnType<typeof run>>) =>
+  const two = (rows: readonly DailyBriefingStoredEdition[], _runs: Record<string, ReturnType<typeof run>> = {}) =>
     briefingHistorySummaries({
       dates: ['2026-11-02'],
       primary: 'zh-CN',
       primaryRows: rows.filter((row) => row.locale === 'zh-CN'),
-      otherRows: rows.filter((row) => row.locale === 'en-US'),
-      periodRun: vi.fn(async (_date: string, periodId: string) => runs[periodId])
+      otherRows: rows.filter((row) => row.locale === 'en-US')
     })
 
   it('sorts a day newest first, and resolves the same moment by periodId', async () => {
@@ -269,10 +264,11 @@ describe('the list projection decides the row, once', () => {
     const rows = [withPeriod('default', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })]
     // "Generating" follows the live registry: a stored run still marked running with no live process
     // is a dead run, and the row must not spin forever.
-    const settledRun = { ...run(['zh-CN', 'en-US']), state: 'partial' as const }
+    // 「该有中英两版」来自期配置；"在跑"来自活着的尝试 + 现场进度。
     const running = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
-      periodRun: vi.fn(async () => settledRun),
+      configuredLanguages: () => ['zh-CN', 'en-US'],
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'en-US', state: 'running' as const, startedAt: '2026-11-02T00:00:00.000Z' }],
       isRunning: () => true
     })
     expect(running[0]?.languages).toEqual([
@@ -282,7 +278,8 @@ describe('the list projection decides the row, once', () => {
 
     const dead = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
-      periodRun: vi.fn(async () => ({ ...run(['zh-CN', 'en-US']), state: 'running' as const })),
+      configuredLanguages: () => ['zh-CN', 'en-US'],
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'en-US', state: 'running' as const, startedAt: '2026-11-02T00:00:00.000Z' }],
       isRunning: () => false
     })
     expect(dead[0]?.languages).toEqual([
@@ -291,13 +288,20 @@ describe('the list projection decides the row, once', () => {
       { locale: 'zh-CN', state: 'published' }
     ])
 
-    const settled = await two(rows, { default: settledRun })
+    const settled = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      configuredLanguages: () => ['zh-CN', 'en-US']
+    })
     expect(settled[0]?.languages).toEqual([
       { locale: 'en-US', state: 'missing', reason: 'not-published' },
       { locale: 'zh-CN', state: 'published' }
     ])
 
-    const failed = await two(rows, { default: { ...run(['zh-CN', 'en-US']), state: 'failed' } })
+    const failed = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      configuredLanguages: () => ['zh-CN', 'en-US'],
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'en-US', state: 'failed' as const, startedAt: '2026-11-02T00:00:00.000Z' }]
+    })
     expect(failed[0]?.languages).toEqual([
       { locale: 'en-US', state: 'missing', reason: 'run-failed' },
       { locale: 'zh-CN', state: 'published' }
@@ -382,11 +386,18 @@ describe('a run that wrote no edition still gets a row', () => {
     state
   })
 
-  const onlyRuns = (runs: readonly DailyBriefingPeriodRun[], isRunning?: (date: string, periodId: string) => boolean) =>
-    briefingHistorySummaries({
-      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [], runs,
-      ...(isRunning ? { isRunning } : {})
-    })
+  // 没有版次的那一行由**尝试记录**驱动，运行记录（审计）不再参与。
+  const onlyAttempts = (
+    attempts: readonly Readonly<{ periodId: string; state: 'running' | 'failed' | 'succeeded'; locale?: 'zh-CN' | 'en-US'; startedAt?: string }>[],
+    isRunning?: (date: string, periodId: string) => boolean
+  ) => briefingHistorySummaries({
+    dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+    attemptRuns: attempts.map((attempt) => ({
+      date: '2026-11-02', periodId: attempt.periodId, locale: attempt.locale ?? 'zh-CN',
+      state: attempt.state, startedAt: attempt.startedAt ?? '2026-11-02T00:00:00.000Z'
+    })),
+    ...(isRunning ? { isRunning } : {})
+  })
 
   it('gives a row its own period\'s planned time, and no planned time to a period that has no schedule', async () => {
     // 用户 2026-11-06 看到的「07:00 未运行」：那是一期 18:11 失败的英文手动期，却被贴上了默认期的
@@ -394,14 +405,14 @@ describe('a run that wrote no edition still gets a row', () => {
     const at = '2026-11-02T00:00:00.000Z'
     const scheduled = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
-      runs: [{ ...run(['zh-CN']), periodId: 'default', state: 'failed' as const, startedAt: at }],
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'failed' as const, startedAt: at }],
       scheduledTime: (periodId) => periodId === 'default' ? '07:00' : undefined
     })
     expect(scheduled[0]?.scheduledTime).toBe('07:00')
 
     const manual = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
-      runs: [{ ...run(['en-US']), periodId: 'period_manual_uuid', state: 'failed' as const, startedAt: at }],
+      attemptRuns: [{ date: '2026-11-02', periodId: 'period_manual_uuid', locale: 'en-US', state: 'failed' as const, startedAt: at }],
       scheduledTime: (periodId) => periodId === 'default' ? '07:00' : undefined
     })
     // 没有计划时刻，就没有那枚借来的时钟；"这次失败"由原因自己说。
@@ -411,7 +422,7 @@ describe('a run that wrote no edition still gets a row', () => {
   })
 
   it('shows a failed run with a reason, and no body-derived number on the row', async () => {
-    const [summary] = await onlyRuns([emptyDayRun('failed')])
+    const [summary] = await onlyAttempts([{ periodId: 'period_crash', state: 'failed' }])
     expect(summary).toMatchObject({ periodId: 'period_crash', state: 'missing' })
     // A9.9: a row with no body may not carry any of the body's derived values. `startedAt` is not a
     // stand-in for `generatedAt`, and a nominal cutoff is not invented either.
@@ -420,39 +431,46 @@ describe('a run that wrote no edition still gets a row', () => {
     expect(summary?.direction).toBeUndefined()
     expect(summary?.readingsAvailable).toBeUndefined()
     expect(summary?.windowEnd).toBeUndefined()
-    expect(summary?.periodTime).toBeUndefined()
+    // 时刻来自**这次尝试自己的发起时刻**（不再借默认期的计划时刻），窗口没有就空着。
+    expect(summary?.periodTime).toBe('2026-11-02T00:00:00.000Z')
+    expect(summary?.windowHours).toBeUndefined()
+    expect(summary?.scheduledTime).toBeUndefined()
     expect(summary?.languages).toEqual([{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }])
   })
 
   it('says "generating" only while the run is alive, and "interrupted" once the process is gone', async () => {
-    const alive = await onlyRuns([emptyDayRun('running')], () => true)
+    const alive = await onlyAttempts([{ periodId: 'period_crash', state: 'running' }], () => true)
     expect(alive[0]?.languages).toEqual([{ locale: 'zh-CN', state: 'generating' }])
 
     // Same stored row after a crash and restart: nothing is running, so the row stops spinning and
     // says the run never finished — which is not the same statement as "it failed".
-    const crashed = await onlyRuns([emptyDayRun('running')], () => false)
+    const crashed = await onlyAttempts([{ periodId: 'period_crash', state: 'running' }], () => false)
     expect(crashed[0]?.languages).toEqual([{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }])
   })
 
   it('never marks a generating or missing row as the current edition', async () => {
     const rows = [edition('zh-CN')]
-    const [published, failed] = await briefingHistorySummaries({
+    const listed = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
-      runs: [emptyDayRun('failed')]
+      attemptRuns: [{ date: '2026-11-02', periodId: 'period_crash', locale: 'zh-CN', state: 'failed' as const, startedAt: '2026-11-02T00:00:00.000Z' }]
     })
+    // 按身份取行，不按数组顺序：没有版次的那一行同样参与日内排序。
+    const published = listed.find((row) => row.periodId === 'default')
+    const failed = listed.find((row) => row.periodId === 'period_crash')
     expect(published?.isCurrent).toBe(true)
     expect(failed?.isCurrent).toBeUndefined()
-    expect([published, failed].filter((summary) => summary?.isCurrent)).toHaveLength(1)
+    expect(listed.filter((summary) => summary.isCurrent)).toHaveLength(1)
   })
 
   it('keeps the day sorted by nominal cutoff, with the unknown-cutoff row last', async () => {
     const known = edition('zh-CN')
     const [first, second] = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [known], otherRows: [],
-      runs: [emptyDayRun('failed')]
+      // 没有时刻可排的那一行（该有却没有的排期期）排最后：它不能因为"时间不知道"冒充当天最早的一期。
+      missedPeriods: [{ date: '2026-11-02', periodId: 'period_missed', locale: 'zh-CN' }]
     })
     expect(first?.periodId).toBe('default')
-    expect(second?.periodId).toBe('period_crash')
+    expect(second?.periodId).toBe('period_missed')
   })
 })
 })
