@@ -4,11 +4,12 @@ import type { IntelligenceCapitalConditionsClient } from '../../../shared/ipc/in
 import type { ModuleSignal } from '../../../../contracts/moduleSignal'
 import { isCanonicalCapitalConditionsSnapshotTime } from '../../../../contracts/intelligenceQueryContracts'
 import { moduleSignalClient } from '../../../shared/ipc/moduleSignalClient'
-import type { SignalWithWindow } from '../../../../contracts/moduleSignalEvidence'
+import type { ModuleSignalRead } from '../../../../contracts/moduleSignalRead'
+import { moduleSignalsOf } from '../../../../contracts/moduleSignalRead'
 
 import { projectDashboardCapitalConditionsSnapshot, projectEtfOutflowChip, type DashboardCapitalConditionsState } from './capitalConditionsModel'
 
-type SignalClient = { query: (input: Readonly<{ asOf: string }>) => Promise<readonly SignalWithWindow[]> }
+type SignalClient = { query: (input: Readonly<{ asOf: string }>) => Promise<ModuleSignalRead> }
 
 type Input = {
   client?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>
@@ -60,7 +61,7 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
     const read = (attempt: number): void => {
       void queryClient.querySnapshot({ asOf }).then(async (result) => {
         const projected = projectDashboardCapitalConditionsSnapshot(result, asOf)
-        const chip = projectEtfOutflowChip(await signals)
+        const chip = projectEtfOutflowChip(moduleSignalsOf(await signals))
         if (!active) return
         apply(projected.state === 'available' ? { ...projected, etfSignal: chip } : projected)
       }).catch(() => {
@@ -86,13 +87,13 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
   return state
 }
 
-async function readSignals(client: SignalClient, asOf: string): Promise<readonly ModuleSignal[] | undefined> {
+async function readSignals(client: SignalClient, asOf: string): Promise<ModuleSignalRead> {
   try {
     // The window belongs to the chip too, but this hook only needs the signal to pick its state.
-    const entries = await client.query({ asOf })
-    return entries.map(entry => entry.signal)
+    return await client.query({ asOf })
   } catch {
-    return undefined
+    // One shape for "could not read", whether the client threw or answered in another shape.
+    return { state: 'unavailable', failureCode: 'query-failed' }
   }
 }
 

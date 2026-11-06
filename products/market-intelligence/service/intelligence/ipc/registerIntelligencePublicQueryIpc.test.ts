@@ -1,3 +1,4 @@
+import type { ProductIpcHandler } from '@platform/desktop/ipc/productIpcRegistry'
 import { describe, expect, it, vi } from 'vitest'
 
 
@@ -15,27 +16,33 @@ const mockPublicQueryService = {
   queryImpactTimeline: vi.fn(async () => ({ queryType: MARKET_INTELLIGENCE_QUERY_TYPES.impactTimeline })),
   getSourceHealth: vi.fn(async () => ({ queryType: MARKET_INTELLIGENCE_QUERY_TYPES.sourceHealth })),
   getEvidenceExcerpt: vi.fn(async () => ({ queryType: MARKET_INTELLIGENCE_QUERY_TYPES.evidenceExcerpt })),
-  queryFearGreedSnapshot: vi.fn(async () => ({
+  queryFearGreedSnapshot: vi.fn(async (): Promise<unknown> => ({
     state: 'available', asOf: '2026-08-06T12:00:00.000Z', score: 22, bucket: 'extreme-fear', observedAt: '2026-08-06T10:00:00.000Z'
   })),
-  queryFundingRateHistory: vi.fn(async () => ({
+  queryFundingRateHistory: vi.fn(async (): Promise<unknown> => ({
     state: 'available', asOf: '2026-08-06T12:00:00.000Z',
     btc: [{ observedAt: '2026-08-05T00:00:00.000Z', ratePercent: 0.01 }],
     eth: [{ observedAt: '2026-08-05T00:00:00.000Z', ratePercent: -0.02 }]
   })),
-  queryModuleSignals: vi.fn(async () => ([
+  queryModuleSignals: vi.fn(async (): Promise<unknown> => ([
     {
-      version: '1', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: 'btc',
-      severity: 'high', observedAt: '2026-07-08T10:15:00.000Z',
-      cadence: { kind: 'intraday', bucketMs: 15 * 60_000 },
-      values: { dropPct: -2.7, volumeMultiple: 3.1, notionalUsd: 7.4e9 },
-      dedupeKey: 'open-interest:oi-liquidation-proxy:btc:2026-07-08T10:15:00.000Z',
-      readiness: 'available', triggerOwner: 'module-signal'
+      signal: {
+        version: '1', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: 'btc',
+        severity: 'high', observedAt: '2026-07-08T10:15:00.000Z',
+        cadence: { kind: 'intraday', bucketMs: 15 * 60_000 },
+        values: { dropPct: -2.7, volumeMultiple: 3.1, notionalUsd: 7.4e9 },
+        dedupeKey: 'open-interest:oi-liquidation-proxy:btc:2026-07-08T10:15:00.000Z',
+        readiness: 'available', triggerOwner: 'module-signal'
+      },
+      window: { unit: 'buckets', amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 }
     },
-    // A rule bug: the handler must not hand this to a chip.
-    { version: '1', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: null, severity: 'high' }
+    // A rule bug: the handler must not hand this to a chip, and must count it.
+    {
+      signal: { version: '1', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: null, severity: 'high' },
+      window: { unit: 'buckets', amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 }
+    }
   ])),
-  queryCapitalConditionsSnapshot: vi.fn(async () => ({
+  queryCapitalConditionsSnapshot: vi.fn(async (): Promise<unknown> => ({
     state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf: { state: 'unavailable' },
     coreStablecoins: { observedAt: '2026-08-06T10:00:00.000Z', verifiedAt: '2026-08-06T10:00:00.000Z', currentUsd: 310, change1dUsd: 10, change1dPercent: 3, change7dUsd: 10, change7dPercent: 3, change30dUsd: 30, change30dPercent: 10 }, conclusion: 'partial'
   }))
@@ -46,8 +53,8 @@ const moduleUnderTest = { publicQueryService: mockPublicQueryService } as never
 
 describe('registerIntelligencePublicQueryIpc', () => {
   it('registers public query IPC methods that delegate to publicQueryService', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
-    const register = (_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+    const handlers = new Map<string, ProductIpcHandler>()
+    const register = (_productId: string, method: string, handler: ProductIpcHandler) => {
       handlers.set(method, handler)
     }
 
@@ -79,8 +86,8 @@ describe('registerIntelligencePublicQueryIpc', () => {
   })
 
   it('rejects time-bound queries without asOf', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
-    const register = (_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+    const handlers = new Map<string, ProductIpcHandler>()
+    const register = (_productId: string, method: string, handler: ProductIpcHandler) => {
       handlers.set(method, handler)
     }
 
@@ -92,8 +99,8 @@ describe('registerIntelligencePublicQueryIpc', () => {
   })
 
   it('rejects evidence excerpt queries without evidence identity', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
-    const register = (_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+    const handlers = new Map<string, ProductIpcHandler>()
+    const register = (_productId: string, method: string, handler: ProductIpcHandler) => {
       handlers.set(method, handler)
     }
 
@@ -107,7 +114,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
   })
 
   it('reconstructs only a valid fixed Fear & Greed snapshot result', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
 
     await expect(handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryFearGreedSnapshot)?.({
@@ -123,7 +130,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
     [{ asOf: '2026-08-06T12:00:00.000Z', sourceUrl: 'https://secret.example.test' }, 'input extension'],
     [{ asOf: '2026-08-06T12:00:00.000Z' }, 'invalid service result']
   ])('returns exact redacted unavailable for %s', async (payload, _name) => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     mockPublicQueryService.queryFearGreedSnapshot.mockResolvedValueOnce({ state: 'available', asOf: '2026-08-06T12:00:00.000Z', score: 22, bucket: 'fear', observedAt: '2026-08-06T10:00:00.000Z', sourceUrl: 'https://secret.example.test' })
 
@@ -140,7 +147,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
     ['an accessor payload', Object.defineProperty({}, 'asOf', { enumerable: true, get: () => '2026-08-06T12:00:00.000Z' })],
     ['a symbol-bearing payload', { asOf: '2026-08-06T12:00:00.000Z', [Symbol('secret')]: true }]
   ])('fails closed for %s without calling the service', async (_name, payload) => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     mockPublicQueryService.queryFearGreedSnapshot.mockClear()
 
@@ -157,7 +164,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
     ['a descriptor-trapping result', new Proxy({ state: 'unavailable' }, { getOwnPropertyDescriptor: () => { throw new Error('secret') } })],
     ['a getter-trapping result', new Proxy({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' }, { get: () => { throw new Error('secret') } })]
   ])('fails closed for %s without exposing a reflection failure', async (_name, result) => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     mockPublicQueryService.queryFearGreedSnapshot.mockResolvedValueOnce(result)
 
@@ -166,7 +173,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
     })
   })
   it('passes only the safe funding-rate history DTO through IPC', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
 
     await expect(handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryFundingRateHistory)?.({
@@ -181,7 +188,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
   })
 
   it('reconstructs a capital snapshot and rejects an extended input before service invocation', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     const expected = {
       state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf: { state: 'unavailable' },
@@ -198,7 +205,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
   })
 
   it('refuses a service result still carrying the removed background-supply key', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     mockPublicQueryService.queryCapitalConditionsSnapshot.mockResolvedValueOnce({
       state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf: { state: 'unavailable' },
@@ -212,7 +219,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
   })
 
   it('passes only the compact stablecoin history rows through IPC', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     const expected = {
       state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf: { state: 'unavailable' },
@@ -229,7 +236,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
     ['an ETF result with a non-finite flow', { ...safeEtfResult(), btc: { ...safeEtfResult().btc, rows: [{ ...safeEtfResult().btc.rows[0], netFlowUsd: Number.NaN }] } }],
     ['an ETF result older than the named 48-hour policy', { ...safeEtfResult(), verifiedAt: '2026-08-04T11:59:59.999Z' }]
   ])('only passes the exact safe %s through IPC', async (_name, etf) => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     mockPublicQueryService.queryCapitalConditionsSnapshot.mockResolvedValueOnce({
       state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf,
@@ -245,7 +252,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
   })
 
   it('passes a complete legal 30-row BTC/ETH ETF DTO through IPC within the named response budget', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
     mockPublicQueryService.queryCapitalConditionsSnapshot.mockResolvedValueOnce(capitalResultWithFullEtf())
 
@@ -294,29 +301,33 @@ describe('market divergence route', () => {
 
 describe('module signals over IPC', () => {
   it('answers the page path with the signals it can render', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc(
-      (_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => { handlers.set(method, handler) },
+      (_productId: string, method: string, handler: ProductIpcHandler) => { handlers.set(method, handler) },
       {} as JobRuntime,
       moduleUnderTest
     )
     const answer = await handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals)?.({ asOf: '2026-07-08T10:30:00.000Z' })
     expect(mockPublicQueryService.queryModuleSignals).toHaveBeenCalledWith({ asOf: '2026-07-08T10:30:00.000Z' })
-    expect(answer).toHaveLength(1)
-    expect(answer).toMatchObject([{ ruleId: 'oi-liquidation-proxy', readiness: 'available' }])
+    expect(answer).toMatchObject({
+      state: 'available',
+      droppedInvalid: 1,
+      signals: [{ signal: { ruleId: 'oi-liquidation-proxy', readiness: 'available' } }]
+    })
   })
 
   it('asks nothing for a payload the page should not be able to send', async () => {
-    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc(
-      (_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => { handlers.set(method, handler) },
+      (_productId: string, method: string, handler: ProductIpcHandler) => { handlers.set(method, handler) },
       {} as JobRuntime,
       moduleUnderTest
     )
     mockPublicQueryService.queryModuleSignals.mockClear()
     const handler = handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals)!
-    expect(await handler({ asOf: '2026-07-08 10:30' })).toEqual([])
-    expect(await handler({ asOf: '2026-07-08T10:30:00.000Z', extra: true })).toEqual([])
+    const invalid = { state: 'unavailable', failureCode: 'invalid-as-of' }
+    expect(await handler({ asOf: '2026-07-08 10:30' })).toEqual(invalid)
+    expect(await handler({ asOf: '2026-07-08T10:30:00.000Z', extra: true })).toEqual(invalid)
     expect(mockPublicQueryService.queryModuleSignals).not.toHaveBeenCalled()
   })
 })

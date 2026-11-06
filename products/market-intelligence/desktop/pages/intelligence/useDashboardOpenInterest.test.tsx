@@ -6,10 +6,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import type { ModuleSignal, SignalWindow } from '../../../contracts/moduleSignal'
+import type { ModuleSignalRead } from '../../../contracts/moduleSignalRead'
 import type { DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { useDashboardOpenInterest } from './useDashboardOpenInterest'
 
 const asOf = '2026-10-31T14:45:00.000Z'
+/** A successful read that holds nothing: the rule had nothing to say. */
+const emptyRead: ModuleSignalRead = { state: 'available', signals: [], droppedInvalid: 0 }
 const at = '2026-10-31T14:30:00.000Z'
 
 const history: OpenInterestHistoryResult = {
@@ -30,7 +33,7 @@ const signal: ModuleSignal = {
 
 let latest: DashboardPositioningViewState | undefined
 
-function Probe(props: Readonly<{ signalClient: { query: (input: { asOf: string }) => Promise<readonly Readonly<{ signal: ModuleSignal; window: SignalWindow }>[]> } }>) {
+function Probe(props: Readonly<{ signalClient: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> } }>) {
   latest = useDashboardOpenInterest({
     client: { query: async () => history },
     signalClient: props.signalClient,
@@ -46,7 +49,7 @@ afterEach(() => {
   latest = undefined
 })
 
-async function renderProbe(signalClient: { query: (input: { asOf: string }) => Promise<readonly Readonly<{ signal: ModuleSignal; window: SignalWindow }>[]> }) {
+async function renderProbe(signalClient: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> }) {
   const container = document.createElement('div')
   const root = createRoot(container)
   roots.push(root)
@@ -57,7 +60,7 @@ async function renderProbe(signalClient: { query: (input: { asOf: string }) => P
 function ReadProbe(props: Readonly<{ client: { query: (input: { asOf: string; window: '24h' | '7d' }) => Promise<OpenInterestHistoryResult> } }>) {
   latest = useDashboardOpenInterest({
     client: props.client,
-    signalClient: { query: async () => [] },
+    signalClient: { query: async () => emptyRead },
     now: () => new Date(asOf),
     window: '24h'
   })
@@ -93,14 +96,18 @@ describe('positioning hook first read', () => {
 
 describe('positioning hook signal wiring', () => {
   it('puts the rule’s chip on the card from the same read the panel already makes', async () => {
-    const query = vi.fn(async () => [{ signal, window: { unit: 'buckets' as const, amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 } }])
+    const query = vi.fn(async (): Promise<ModuleSignalRead> => ({
+      state: 'available',
+      signals: [{ signal, window: { unit: 'buckets' as const, amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 } }],
+      droppedInvalid: 0
+    }))
     const state = await renderProbe({ query })
     expect(query).toHaveBeenCalledWith({ asOf })
     expect(state).toMatchObject({ state: 'available', signal: { state: 'alert', dropPct: -2.7 } })
   })
 
   it('draws no chip when the rule says nothing', async () => {
-    const state = await renderProbe({ query: async () => [] })
+    const state = await renderProbe({ query: async () => emptyRead })
     expect(state).toMatchObject({ state: 'available', signal: { state: 'hidden' } })
   })
 

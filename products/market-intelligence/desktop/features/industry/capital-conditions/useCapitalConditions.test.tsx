@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { ModuleSignalRead } from '../../../../contracts/moduleSignalRead'
 import { capitalConditionsReadRetryDelaysMs, useCapitalConditions } from './useCapitalConditions'
 
 const asOf = '2026-08-18T08:00:00.000Z'
@@ -187,7 +188,7 @@ describe('useCapitalConditions', () => {
 async function renderHook(
   client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> },
   now: () => Date,
-  signalClient?: { query: (input: { asOf: string }) => Promise<readonly never[]> }
+  signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> }
 ) {
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
@@ -200,8 +201,8 @@ async function renderHook(
   }
 }
 
-function Harness({ client, now, reloadKey, retryKey, signalClient }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number; retryKey?: number; signalClient?: { query: (input: { asOf: string }) => Promise<readonly never[]> } }) {
-  const state = useCapitalConditions({ client: client as never, ...(signalClient ? { signalClient: signalClient as never } : {}), now, ...(reloadKey === undefined ? {} : { reloadKey }), ...(retryKey === undefined ? {} : { retryKey }) })
+function Harness({ client, now, reloadKey, retryKey, signalClient }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number; retryKey?: number; signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> } }) {
+  const state = useCapitalConditions({ client: client as never, ...(signalClient ? { signalClient } : {}), now, ...(reloadKey === undefined ? {} : { reloadKey }), ...(retryKey === undefined ? {} : { retryKey }) })
   const stale = state.state === 'available' && state.stale ? 'true' : 'false'
   const chip = state.state === 'available' && state.etfSignal ? state.etfSignal.state : ''
   return createElement('output', { 'data-state': state.state, 'data-stale': stale, 'data-chip': chip }, state.state === 'available' ? state.currentUsd : state.state)
@@ -226,7 +227,7 @@ describe('useCapitalConditions · ETF signal chip', () => {
 
   it('asks the module signal read for the same instant as the snapshot, and draws its chip', async () => {
     const window = { unit: 'trading-days' as const, amount: 3, upperBoundMs: null }
-    const query = vi.fn(async () => [{ signal, window }] as never)
+    const query = vi.fn(async (): Promise<ModuleSignalRead> => ({ state: 'available', signals: [{ signal, window }], droppedInvalid: 0 }))
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 
@@ -236,7 +237,7 @@ describe('useCapitalConditions · ETF signal chip', () => {
 
   // 读不到 ≠ 没事：信号读失败要出灰牌，不能悄悄消失成「今天没有」。
   it('marks a failed signal read as insufficient data instead of a quiet card', async () => {
-    const query = vi.fn(async () => { throw new Error('bridge down') })
+    const query = vi.fn(async (): Promise<ModuleSignalRead> => ({ state: 'unavailable', failureCode: 'query-failed' }))
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 
@@ -245,7 +246,7 @@ describe('useCapitalConditions · ETF signal chip', () => {
   })
 
   it('draws no chip when the rule has nothing to say', async () => {
-    const query = vi.fn(async () => [] as never)
+    const query = vi.fn(async (): Promise<ModuleSignalRead> => ({ state: 'available', signals: [], droppedInvalid: 0 }))
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 

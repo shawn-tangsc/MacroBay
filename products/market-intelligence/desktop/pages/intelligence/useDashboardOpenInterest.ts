@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { isCanonicalOpenInterestTime, type OpenInterestHistoryResult, type OpenInterestWindow } from '../../../contracts/openInterestHistory'
-import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
+import type { ModuleSignalRead } from '../../../contracts/moduleSignalRead'
+import { moduleSignalsOf } from '../../../contracts/moduleSignalRead'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { projectDashboardPositioning, projectModuleSignalChip, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { moduleSignalClient } from '../../shared/ipc/moduleSignalClient'
@@ -16,7 +17,7 @@ export function useDashboardOpenInterest(input: Readonly<{
   now: () => Date
   window: OpenInterestWindow
   /** Defaults to the real bridge; a test hands in its own reader. */
-  signalClient?: { query: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]> }
+  signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> }
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
@@ -39,7 +40,7 @@ export function useDashboardOpenInterest(input: Readonly<{
       .then(async (result) => {
         if (!active) return
         const projected = projectDashboardPositioning(result, asOf, window, reload)
-        const chip = projectModuleSignalChip(await signals)
+        const chip = projectModuleSignalChip(moduleSignalsOf(await signals))
         if (!active) return
         setState(projected.state === 'available'
           ? { ...projected, signal: chip }
@@ -55,15 +56,15 @@ export function useDashboardOpenInterest(input: Readonly<{
 
 /** A signal read that failed is no chip, not a fabricated one. */
 async function readSignals(
-  client: { query: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]> },
+  client: { query: (input: { asOf: string }) => Promise<ModuleSignalRead> },
   asOf: string
-): Promise<readonly ModuleSignal[]> {
+): Promise<ModuleSignalRead> {
   try {
     // The chip reads the signal; the window it was judged over travels beside it.
-    const entries = await client.query({ asOf })
-    return entries.map(entry => entry.signal)
+    return await client.query({ asOf })
   } catch {
-    return []
+    // A client that does not answer in the read shape is a failed read, not a quiet market.
+    return { state: 'unavailable', failureCode: 'query-failed' }
   }
 }
 

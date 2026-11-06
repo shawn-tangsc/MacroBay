@@ -1,27 +1,32 @@
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../../../contracts/intelligencePublicQueryMethods'
-import { isCanonicalSignalTime, isModuleSignal } from '../../../contracts/moduleSignal'
-import { isSignalWindow, type SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
+import { isCanonicalSignalTime } from '../../../contracts/moduleSignal'
+import { toModuleSignalRead, type ModuleSignalRead } from '../../../contracts/moduleSignalRead'
 
 /**
  * The renderer's door to the module signals the chips read.
  *
- * Same contract check as the IPC handler, so a shape one side accepts cannot become a chip with
- * half its numbers on the other. A signal that fails the check is dropped, never rendered partial:
- * a chip without its values is worse than no chip, because it still looks like a statement.
+ * It hands back a read, not an array: "we could not read" and "nothing happened" are different
+ * facts, and the chip above this door says something different for each. The check is the same
+ * `toModuleSignalRead` the IPC handler runs, so a shape one side accepts cannot become a chip with
+ * half its numbers on the other, and a malformed entry is dropped and counted rather than hidden.
  */
 export const moduleSignalClient = {
-  async query(input: Readonly<{ asOf: string }>): Promise<readonly SignalWithWindow[]> {
+  async query(input: Readonly<{ asOf: string }>): Promise<ModuleSignalRead> {
     try {
-      if (!isCanonicalSignalTime(input.asOf)) return []
-      const value = await window.platform?.products?.invoke(
+      if (!isCanonicalSignalTime(input.asOf)) return { state: 'unavailable', failureCode: 'invalid-as-of' }
+      // A missing bridge is a failed read, not a malformed answer: the two get different sentences
+      // and only the first one is worth a retry.
+      const products = window.platform?.products
+      if (!products || typeof products.invoke !== 'function') return { state: 'unavailable', failureCode: 'query-failed' }
+      const value = await products.invoke(
         'market-intelligence',
         INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals,
         { asOf: input.asOf }
       )
-      // The window now travels with the signal: a chip without it cannot say what period it read.
-      return Array.isArray(value) ? value.filter(entry => isModuleSignal(entry?.signal) && isSignalWindow(entry?.window)) : []
+      return toModuleSignalRead(value)
     } catch {
-      return []
+      // A bridge that is missing or threw is a failed read, not an empty market.
+      return { state: 'unavailable', failureCode: 'query-failed' }
     }
   }
 }

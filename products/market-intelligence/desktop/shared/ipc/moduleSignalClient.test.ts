@@ -28,27 +28,31 @@ afterEach(() => vi.unstubAllGlobals())
 describe('module signal renderer client', () => {
   it('reads the one IPC method and returns the signals it can trust', async () => {
     const products = bridge([entry])
-    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([entry])
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual({ state: 'available', signals: [entry], droppedInvalid: 0 })
     expect(products.invoke).toHaveBeenCalledWith('market-intelligence', INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals, { asOf })
   })
 
   it('drops a signal it cannot render instead of drawing half of it', async () => {
     bridge([entry, { signal: { ...signal, severity: 'critical' }, window }, { signal: { ...signal, asset: null }, window }, { signal, window: { unit: 'buckets' } }])
-    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([entry])
+    // The good entry is readable and the three bad ones are counted: dropping them silently is how
+    // a producer/contract disagreement hides behind a chip that simply never appeared.
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual({ state: 'available', signals: [entry], droppedInvalid: 3 })
   })
 
-  it('answers nothing when the bridge is missing or refuses the call', async () => {
+  it('reports an unreadable answer as one, instead of an empty market', async () => {
+    const failed = { state: 'unavailable', failureCode: 'query-failed' }
     vi.stubGlobal('window', { platform: undefined })
-    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([])
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual(failed)
     vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => { throw new Error('ipc down') }) } } })
-    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([])
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual(failed)
+    // An answer that is not a list at all is a contract defect, not a quiet market.
     vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => 'nonsense') } } })
-    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([])
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual({ state: 'unavailable', failureCode: 'contract-invalid' })
   })
 
   it('does not spend a call on an instant it cannot name', async () => {
     const products = bridge([signal])
-    await expect(moduleSignalClient.query({ asOf: '2026-10-31 14:45' })).resolves.toEqual([])
+    await expect(moduleSignalClient.query({ asOf: '2026-10-31 14:45' })).resolves.toEqual({ state: 'unavailable', failureCode: 'invalid-as-of' })
     expect(products.invoke).not.toHaveBeenCalled()
   })
 })
