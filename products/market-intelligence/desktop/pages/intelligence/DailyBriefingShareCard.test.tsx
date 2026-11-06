@@ -117,16 +117,14 @@ describe('a backfilled edition says which world it read', () => {
     }
   }
 
-  it('prints the cutoff and the read instant as two separate segments, each with its zone', async () => {
-    // `A0.10`：统计到哪一刻（截止）与哪一刻读的库（读取）是两个事实，并排两段、各带时区。
-    // 合并成一句就会让人以为数据只到读取那一刻。
+  it('prints the cutoff only, never when we read the store', async () => {
+    // 用户 2026-11-06：简报里**不显示具体生成时刻**——「本版读取 …」整段撤掉（正文/导出/复制同源）。
+    // 统计截止保留：那是这一版的窗口末端，读者要看。
     const host = await render(backfilled())
     const cutoff = host.querySelector<HTMLElement>('[data-meta-cutoff]')!
-    const read = host.querySelector<HTMLElement>('[data-meta-read-at]')!
     expect(cutoff.textContent).toBe(text.metaCutoff.replace('{time}', '2026-10-30 00:30').replace('{zone}', 'GMT'))
-    expect(read.textContent).toBe(text.metaReadAt.replace('{time}', '2026-10-30 12:20').replace('{zone}', 'GMT'))
-    // 不是一个值说两遍：两个时刻确实不同。
-    expect(cutoff.textContent).not.toBe(read.textContent)
+    expect(host.querySelector('[data-meta-read-at]')).toBeNull()
+    expect(host.textContent).not.toContain('本版读取')
   })
 
   it('puts the backfill sentence last on the meta line, without repeating a third time', async () => {
@@ -140,16 +138,14 @@ describe('a backfilled edition says which world it read', () => {
     expect(note.textContent?.trimStart().startsWith('·')).toBe(true)
   })
 
-  it('still says it was a backfill when no read instant was stamped', async () => {
-    // 残骸（只有标记、没有读取时刻）**不许整段消失**：补跑这件事读者必须知道；读取那一段退回
-    // 生成时刻，不编一个"现在"。
+  it('still says it was a backfill now that no read instant is printed at all', async () => {
+    // 读取时刻已经不上版面（用户 2026-11-06），但"补跑"这件事读者必须知道：那句状态照留。
     const base = briefing()
     const host = await render({ ...base, edition: { ...base.edition, isBackfill: true } })
     const note = host.querySelector('[data-backfill-note]')!
     expect(note).not.toBeNull()
     expect(note.textContent).toBe(` · ${text.backfillNoteNoTime}`)
-    const read = host.querySelector<HTMLElement>('[data-meta-read-at]')
-    expect(read?.textContent).toContain('2026-10-30 00:30')
+    expect(host.querySelector('[data-meta-read-at]')).toBeNull()
   })
 
   it('says nothing on a punctual edition', async () => {
