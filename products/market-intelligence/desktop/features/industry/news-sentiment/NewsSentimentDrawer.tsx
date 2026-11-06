@@ -168,8 +168,10 @@ export function NewsSentimentDrawer(props: {
         {translationEnabled && progress ? (
           // A running queue shows what it is doing (done/total) and the one control it needs.
           // When no batch is running the row is not rendered at all: no task, no bar.
-          <div className="mi-news-drawer__queue" data-news-sentiment-translation-queue role="status">
-            <span>{text.drawer.translationStatus.queue.replace('{done}', String(progress.done)).replace('{total}', String(progress.total))}</span>
+          <div className="mi-news-drawer__queue" data-news-sentiment-translation-queue>
+            <span className="mi-news-drawer__queue-label" role="status">
+              {text.drawer.translationStatus.queue.replace('{done}', String(progress.done)).replace('{total}', String(progress.total))}
+            </span>
             <span
               aria-label={text.drawer.translationStatus.translating}
               aria-valuemax={progress.total}
@@ -180,7 +182,10 @@ export function NewsSentimentDrawer(props: {
             >
               <i style={{ width: `${Math.round((progress.done / Math.max(1, progress.total)) * 100)}%` }} />
             </span>
-            <Button onClick={cancelTranslation} size="small" type="link">{text.settingsModal.cancelTranslate}</Button>
+            <span aria-hidden="true" className="mi-news-drawer__queue-percent">
+              {Math.round((progress.done / Math.max(1, progress.total)) * 100)}%
+            </span>
+            <Button className="mi-news-drawer__queue-cancel" onClick={cancelTranslation} size="small" type="link">{text.settingsModal.cancelTranslate}</Button>
           </div>
         ) : null}
         <header className="mi-news-drawer__toolbar">

@@ -203,9 +203,25 @@
 .mi-news-drawer__body-toggle { margin: 8px 0 6px; }
 /* The segmented control owns its own border and radii; the row only pins the label size. */
 
-.mi-news-drawer__queue { display: flex; align-items: center; gap: 10px; padding: 8px 14px 0; font-size: 10.5px; color: var(--muted, #93a196); }
-.mi-news-drawer__queue-track { position: relative; width: 132px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--border, #2a352b) 70%, transparent); overflow: hidden; }
-.mi-news-drawer__queue-track i { position: absolute; inset: 0 auto 0 0; background: var(--accent, #d9f67f); transition: width 160ms linear; }
+.mi-news-drawer__queue {
+  display: flex; align-items: center; gap: 10px; margin: 10px 14px 0; padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--border, #2a352b) 55%, transparent);
+  border-radius: 6px; background: color-mix(in srgb, var(--panel, #171d18) 60%, transparent);
+  font-size: 10.5px; color: var(--muted, #93a196);
+}
+.mi-news-drawer__queue-label { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.mi-news-drawer__queue-track {
+  position: relative; flex: 0 1 168px; height: 6px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in srgb, var(--border, #2a352b) 60%, transparent);
+}
+.mi-news-drawer__queue-track i {
+  position: absolute; inset: 0 auto 0 0; border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent, #d9f67f) 72%, transparent), var(--accent, #d9f67f));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent, #d9f67f) 28%, transparent);
+  transition: width 200ms ease;
+}
+.mi-news-drawer__queue-percent { min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+.mi-news-drawer__queue-cancel { margin-left: auto; }
 
 .mi-news-drawer__row-waiting { color: var(--muted, #93a196); font-size: 9.5px; border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 4px; }
 
