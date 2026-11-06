@@ -16,8 +16,18 @@ import { dueSessionSlots, type SessionSlotInstant } from './analysisSlotCoverage
  */
 
 export const analysisSlotTickPolicy = Object.freeze({
-  version: 'marketAnalysisSlotTickPolicy.v1',
-  intervalMs: analysisSchedulePolicy.tickIntervalMs
+  version: 'marketAnalysisSlotTickPolicy.v2',
+  intervalMs: analysisSchedulePolicy.tickIntervalMs,
+  /**
+   * Two attempts per open per day: the first, and one supplement.
+   *
+   * Observed without this: a failing provider was retried on every fifteen-minute tick for the
+   * whole two-hour coverage window — six calls for one open, none of them different from the first.
+   * The count is read from the run rows the attempts produced, so there is no second counter.
+   */
+  maxAttemptsPerPointPerDay: 2,
+  /** Ledger/log reason once the attempts are spent; the open is not retried again that day. */
+  attemptsExhaustedReasonCode: 'slot-attempts-exhausted'
 })
 
 /** The tick's only precondition: there is something to analyse at all. */
@@ -33,6 +43,8 @@ export type SlotTickResult = Readonly<{
   requested: readonly AnalysisSessionSlot[]
   /** Opens that were due but could not be requested; the next tick inside the window retries. */
   deferred: readonly AnalysisSessionSlot[]
+  /** Opens whose attempts for the day are spent: no further automatic retry. */
+  exhausted: readonly AnalysisSessionSlot[]
 }>
 
 export type SlotTickDependencies = Readonly<{
@@ -43,6 +55,8 @@ export type SlotTickDependencies = Readonly<{
   isDelivered: (instant: SessionSlotInstant) => boolean
   /** Whether the open tried inside its window, failed, and ran out of window: it is not retried. */
   isAbandoned?: (instant: SessionSlotInstant) => boolean
+  /** How many attempts this open has already had today, read from the runs those attempts wrote. */
+  attemptsToday?: (instant: SessionSlotInstant) => number
   hasEligibleAnchor: () => boolean
   /** Goes through the ordinary request path, so the gate's budget, interval and ledger apply. */
   requestSlotAnalysis: (instant: SessionSlotInstant) => Promise<void>
@@ -59,16 +73,27 @@ export function createAnalysisSlotTick(dependencies: SlotTickDependencies) {
         isDelivered: dependencies.isDelivered,
         isAbandoned: dependencies.isAbandoned
       })
-      if (due.length === 0) return { outcome: 'not-due', requested: [], deferred: [] }
+      if (due.length === 0) return { outcome: 'not-due', requested: [], deferred: [], exhausted: [] }
       if (!dependencies.hasEligibleAnchor()) {
         await dependencies.log('Market analysis session slot skipped: no eligible intelligence anchor.', { now, due: due.map(instant => instant.slot) })
-        return { outcome: 'no-anchor', requested: [], deferred: due.map(instant => instant.slot) }
+        return { outcome: 'no-anchor', requested: [], deferred: due.map(instant => instant.slot), exhausted: [] }
       }
       const requested: AnalysisSessionSlot[] = []
       const deferred: AnalysisSessionSlot[] = []
+      const exhausted: AnalysisSessionSlot[] = []
       // Oldest first, one at a time. A refusal (a run already in flight, the reserve spent) leaves
       // no ledger row, so the open stays owed and the next tick retries it inside its window.
       for (const instant of due) {
+        // Spent attempts end the day's automatic retries for this open. Checked before requesting
+        // so the exhausted tick spends no model call at all.
+        if ((dependencies.attemptsToday?.(instant) ?? 0) >= analysisSlotTickPolicy.maxAttemptsPerPointPerDay) {
+          exhausted.push(instant.slot)
+          await dependencies.log('Market analysis session slot skipped: attempts exhausted.', {
+            slot: instant.slot, reasonCode: analysisSlotTickPolicy.attemptsExhaustedReasonCode,
+            attempts: dependencies.attemptsToday?.(instant) ?? 0
+          })
+          continue
+        }
         try {
           await dependencies.requestSlotAnalysis(instant)
           requested.push(instant.slot)
@@ -78,6 +103,7 @@ export function createAnalysisSlotTick(dependencies: SlotTickDependencies) {
       }
       return {
         outcome: requested.length > 0 ? 'requested' : 'not-due',
+        exhausted,
         requested,
         deferred
       }

@@ -211,24 +211,37 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     return repository.listEventGroups().flatMap(group => repository.listTriggerLedger(group.id))
       .some(row => row.triggerKey === key && row.decision === 'queued' && Date.parse(row.createdAt) >= instant.atMs)
   }
+  // The tick's log line is the record a reader/operator can see for "no more retries today"; the
+  // job context that can write it only exists while the job runs.
+  let slotLog: ((message: string, metadata?: Record<string, unknown>) => Promise<void>) | undefined
   const slotTick = createAnalysisSlotTick({
     now,
     timeZone,
     isDelivered: isSlotDelivered,
     isAbandoned: isSlotAbandoned,
+    // Attempts are counted from the run rows they wrote: a retry re-freezes, the as-of moves, and
+    // a new run row exists. No second counter, and no "attempt row" that would break one run per call.
+    attemptsToday: instant => repository.listRuns().filter(run =>
+      run.triggerKey === triggerKeyForSlot(instant.slot) && Date.parse(run.queuedAt) >= instant.atMs).length,
     // The schedule only needs something to analyse; see `hasSlotAnchor` for why the analysis
     // anchor's eligibility rule must not gate it.
     hasEligibleAnchor: () => hasSlotAnchor(input.pipeline.listItems()),
     // Goes through the ordinary request path, so the gate's budget, interval and ledger apply.
     requestSlotAnalysis: instant => requestInitialAnalysis(undefined, undefined, 'refresh', 'session-slot', instant.slot).then(() => undefined),
-    log: () => undefined
+    log: (message, metadata) => slotLog?.(message, metadata) ?? Promise.resolve()
   })
   const analysisJobs = registerMarketAnalysisJobs(input.jobRuntime, {
     runSessionSlots: async (context) => {
       // The schedule is unarmed while the capability is off, and the handler still refuses: a run
       // queued before the switch was turned off must not spend a request either.
       if (!await isEnabled()) return
-      const result = await slotTick.run()
+      slotLog = async (message, metadata) => { await context.log({ level: 'info', message, ...(metadata ? { metadata } : {}) }) }
+      let result: Awaited<ReturnType<typeof slotTick.run>>
+      try {
+        result = await slotTick.run()
+      } finally {
+        slotLog = undefined
+      }
       await context.log({
         level: result.outcome === 'no-anchor' ? 'warn' : 'info',
         // The opens are named: "which session was this conclusion for" is the question the reader
