@@ -37,3 +37,15 @@ export function createRunSessionPort(
     })
   })
 }
+
+/**
+ * 组合根只交依赖与时钟：怎么建会话、标题怎么落成文本，都留在本文件里。
+ *
+ * 这样 `bootstrap.ts` 只多一行调用，而不再为一个端口的装配长出六行——它是只减不增的基线文件。
+ */
+export function createRunSessionPortFromDeps(
+  deps: Pick<SessionDependencies, 'findSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'>,
+  clock: Readonly<{ timeZone: () => string; language: () => Promise<'zh-CN' | 'en-US'> }>
+): ReturnType<typeof createRunSessionPort> {
+  return createRunSessionPort({ ...deps, timeZone: clock.timeZone, language: clock.language })
+}
