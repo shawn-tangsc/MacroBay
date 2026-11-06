@@ -47,6 +47,18 @@ export type AgentText = {
     emptyAgents: string
     agentSessionCount: (count: number) => string
     emptySessions: string
+    /**
+     * 自动会话那一块：默认收成一行，展开按天分节。条数与读者的会话各说各的。
+     */
+    automationSessions: {
+      title: string
+      collapsedMeta: (today: number, total: number) => string
+      today: string
+      yesterday: string
+      showAll: string
+      /** 只有自动会话、读者一条都没发起过时——不能说成「没有会话」。 */
+      readerOnlyEmpty: string
+    }
     /** 禁用原因：还没选助手。说处境，不说「按钮点了没用」。 */
     newSessionNeedsAgent: string
     /** 禁用原因：没有可删除的会话（注意按钮的动作是删除，不是清除筛选）。 */

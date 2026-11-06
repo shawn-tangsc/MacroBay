@@ -1,0 +1,89 @@
+/* 自动会话块：独立一块、左竖线 + 缩进、灰字。
+   不靠颜色区分——灰度下它仍然与正文列表分开，因为位置和结构不同（原型验收口径）。 */
+.agent-auto-sessions {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-auto-sessions__head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-auto-sessions__title { font-weight: 600; }
+.agent-auto-sessions__meta { color: var(--muted); font-size: 11px; }
+
+.agent-auto-sessions__day {
+  margin-left: 2px;
+  padding-left: 6px;
+  border-left: 2px solid var(--border);
+}
+
+.agent-auto-sessions__day-head {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 3px 0 3px 8px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-auto-sessions__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 0 3px 10px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-auto-sessions__item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-auto-sessions__item-meta {
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.agent-auto-sessions__all {
+  padding: 4px 0 0 16px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.agent-auto-sessions__head:focus-visible,
+.agent-auto-sessions__day-head:focus-visible,
+.agent-auto-sessions__item:focus-visible,
+.agent-auto-sessions__all:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

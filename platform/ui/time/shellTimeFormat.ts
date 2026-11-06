@@ -129,6 +129,31 @@ export function formatShellYearMonth(at: Date, timeZone: string): string {
 }
 
 /**
+ * 显示时区里的日键 `YYYY-MM-DD`：按天分组用。
+ *
+ * 不能拿 `toISOString().slice(0,10)` 顶替——那是 UTC 的日；东八区 07:00 的一条会被分到前一天，
+ * 于是「今天」那一节里出现昨天的会话，而昨天的会话又不在任何一节里。
+ */
+export function formatShellDay(instant: string, timeZone: string): string | null {
+  const parsed = Date.parse(instant)
+  if (!Number.isFinite(parsed)) return null
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date(parsed))
+    const read = (type: Intl.DateTimeFormatPartTypes): string =>
+      parts.find((part) => part.type === type)?.value ?? ''
+    const year = read('year')
+    const month = read('month')
+    const day = read('day')
+    return year && month && day ? `${year}-${month}-${day}` : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * 同一个显示口径下的**紧凑时刻**，用于消息行这类空间紧张的位置：
  * 同一显示日 → `HH:mm`；跨日 → `MM-DD HH:mm`。
  *

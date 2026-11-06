@@ -37,6 +37,14 @@ export const agentTextZh: AgentText = {
     emptyAgents: '还没有智能体，先创建一个。',
     agentSessionCount: (count) => `${count} 个会话`,
     emptySessions: '还没有会话，先创建一个。',
+    automationSessions: {
+      title: '自动会话',
+      collapsedMeta: (today, total) => `今天 ${today} 条 · 共 ${total} 条`,
+      today: '今天',
+      yesterday: '昨天',
+      showAll: '查看全部自动会话',
+      readerOnlyEmpty: '你还没有发起过会话。'
+    },
     newSessionNeedsAgent: '先选一个智能体，才能新建会话',
     deleteFilteredNeedsSessions: '没有可删除的会话',
     deleteFiltered: '删除筛选出的会话'

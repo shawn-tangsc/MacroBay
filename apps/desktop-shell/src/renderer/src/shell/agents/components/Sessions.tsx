@@ -15,10 +15,14 @@ import {
 } from '../agentSessionViewModel'
 import { useAgentText } from '../agentTextProvider'
 import { buildSessionChannelRuntimeBadgeBySessionId } from '../agentChannelRuntimeViewModel'
+import AutomationSessions from './AutomationSessions'
 import SessionItem from './SessionItem'
 
 type SessionsProps = {
+  /** 读者自己的会话（`origin` 非 automation）；自动会话走 `automationSessions`。 */
   sessions: AgentSessionEntity[]
+  /** 自动会话：单独一块，默认收起。空数组时那块整块不出现。 */
+  automationSessions: readonly AgentSessionEntity[]
   activeSessionId: string | null
   pinnedSessionIds: Set<string>
   messagesBySessionId: Record<string, AgentSessionMessageEntity[]>
@@ -33,6 +37,7 @@ type SessionsProps = {
 
 export default function Sessions({
   sessions,
+  automationSessions,
   activeSessionId,
   pinnedSessionIds,
   messagesBySessionId,
@@ -75,7 +80,14 @@ export default function Sessions({
   return (
     <section className="agent-sessions">
       <div className="agent-session-list">
-        {sessions.length === 0 ? <p className="agent-empty-copy">{t.sidePanel.emptySessions}</p> : null}
+        {/* 只有自动会话时，说明的是「你还没发起过」，不是「没有会话」——两件事的下一步不同。 */}
+        {sessions.length === 0 ? (
+          <p className="agent-empty-copy">
+            {automationSessions.length > 0
+              ? t.sidePanel.automationSessions.readerOnlyEmpty
+              : t.sidePanel.emptySessions}
+          </p>
+        ) : null}
         {groups.map((group) => (
           <div key={group.key} className="agent-session-group">
             <div className="agent-session-group-title">
@@ -107,6 +119,7 @@ export default function Sessions({
           </div>
         ))}
       </div>
+      <AutomationSessions onSelectSession={onSelectSession} sessions={automationSessions} />
     </section>
   )
 }
