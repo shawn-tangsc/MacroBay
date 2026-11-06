@@ -35,12 +35,14 @@ describe('notification event policy', () => {
     expect(ids).toContain('market-intelligence.briefing.ready')
   })
 
-  it('keeps desktop to the twelve failure / correction / system-status rows', () => {
-    // 桌面对「信息类」与「完成类」不开放（用户原话：没打开应用还被轰炸）。
-    // 12 = 平台 8（9 行里 P7 自己不走桌面）+ 情报 4（当地时间无效、来源连续失败、来源长时间无数据、日报没生成）。
+  it('keeps desktop to the rows the user approved, now including a finished briefing', () => {
+    // 桌面对「信息类」不开放（用户原话：没打开应用还被轰炸）。2026-11-06 用户追加一条：
+    // **日报生成成功**也要能弹（此前只有失败那档弹），所以这张名单多了一行、共 13 条。
+    // 12 = 平台 8（9 行里 P7 自己不走桌面）+ 情报 4；+1 = 日报完成。
     const rows = Object.entries(NOTIFICATION_EVENT_POLICY)
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('desktop')).map(([id]) => id).sort()).toEqual([
       'market-intelligence.briefing.failed',
+      'market-intelligence.briefing.ready',
       'market-intelligence.source.consecutive-failed',
       'market-intelligence.source.stale',
       'market-intelligence.timezone.invalid',
