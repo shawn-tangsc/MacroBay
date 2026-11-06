@@ -97,15 +97,21 @@ describe('market intelligence notification copy', () => {
   it('never tells the reader to tap something: the push surface has nothing to tap', () => {
     // 动作由界面按钮承担。手机那条是纯文本，写「点开…」就是一句做不到的承诺。
     // 扫的是**最终文案表**，不是模板写法——模板可以改，句子不能骗人。
-    const instructions = /点开|打开|查看|\b(open|click|tap)\b/i
-    // `open interest`（持仓量）是领域名词，不是让读者点东西；先摘掉再判，否则守卫会误伤。
-    const withoutDomainTerms = (sentence: string): string => sentence.replace(/open interest/gi, '')
+    // 中文直接挡动作词；英文只挡**祈使/带宾语**的用法：`open interest`、`open orders` 这类
+    // 「未平仓 / 未成交」是领域名词，按单词 `open` 挡会把最该保住的那条信号标题判红。
+    // 判据是「名词不受影响」，不是「某一句不受影响」——所以这里不摘任何固定短语，靠句法形态判。
+    const instructions = [/点开/u, /打开/u, /查看/u, /点击/u, /\btap\b/iu, /\bclick\b/iu, /\bopen\s+(it|this|that|the|your|these|those|them)\b/iu]
     const offenders = (['zh-CN', 'en-US'] as const).flatMap((language) =>
       Object.entries(marketIntelligenceNotificationCopy[language])
-        .filter(([, sentence]) => instructions.test(withoutDomainTerms(sentence)))
+        .filter(([, sentence]) => instructions.some((pattern) => pattern.test(sentence)))
         .map(([key, sentence]) => `${language} ${key}: ${sentence}`)
     )
     expect(offenders).toEqual([])
+
+    // 正面样本：专有名词不因这条守卫而需要改。以后出现别的名词（`open orders`）也照样通过。
+    for (const noun of ['BTC open interest dropped', 'BTC open orders rose', 'Open interest climbed']) {
+      for (const pattern of instructions) expect(noun).not.toMatch(pattern)
+    }
   })
 
   it('keeps the body variants in step with the declaration', () => {
