@@ -126,7 +126,22 @@ export type SyncRunQuery = Readonly<{
   sourceId?: string
   outcome?: SyncRunOutcome
   limit: number
+  /**
+   * A notification's target: the analysis run it points at.
+   *
+   * When present the read also returns the task row that produced that analysis, even when it is
+   * older than the newest `limit` runs — otherwise a link clicked an hour later would report "not
+   * found" about a record that exists.
+   */
+  analysisRunId?: string
 }>
+
+/** The only definition of what an analysis run id looks like (`mi-ar-` + uuid). */
+const ANALYSIS_RUN_ID = /^mi-ar-[0-9A-Za-z-]{1,80}$/
+
+export function isAnalysisRunId(value: string): boolean {
+  return ANALYSIS_RUN_ID.test(value)
+}
 
 export type SyncRunResult =
   | Readonly<{ state: 'available'; rows: readonly SyncRunRow[] }>

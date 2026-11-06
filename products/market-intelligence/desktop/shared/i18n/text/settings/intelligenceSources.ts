@@ -44,7 +44,7 @@ export const intelligenceSourcesText = {
      */
     focus: {
       missing: '没找到这条记录',
-      missingHint: '它可能已经超过保留期（更早的只保留每日汇总），或者这条链接不是本机生成的。'
+      missingHint: '它可能比这一页能读到的最近 500 条运行更早（更早的只保留每日汇总），或者这条链接不是本机生成的。'
     },
     /**
      * Failure codes reach this table as the first hyphenated token of a job's error text. A
@@ -477,7 +477,7 @@ export const intelligenceSourcesText = {
     },
     focus: {
       missing: 'That record was not found',
-      missingHint: 'It may be past the retention window (older runs are only kept as daily totals), or the link did not come from this machine.'
+      missingHint: 'It may be older than the newest 500 runs this page can read (older runs are only kept as daily totals), or the link did not come from this machine.'
     },
     /** The reader sees the sentence; the code itself stays in the element's title. */
     failureCodes: {

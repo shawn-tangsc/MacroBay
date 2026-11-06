@@ -10,12 +10,24 @@ const NOW = '2026-11-01T16:00:00.000Z'
 
 function harness(
   aggregates: (query: unknown) => JobRunAggregateResult,
-  options?: { runs?: readonly JobRunRecord[]; analysis?: SyncRunAnalysisSource }
+  options?: {
+    runs?: readonly JobRunRecord[]
+    analysis?: SyncRunAnalysisSource
+    /** The payload-filtered read the focused lookup uses. */
+    byPayload?: (payload: Record<string, unknown>) => JobRunRecord | undefined
+  }
 ) {
   const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
   const queries: unknown[] = []
   const jobRuntime = {
-    listRuns: () => options?.runs ?? [],
+    getRun: () => null,
+    listRuns: (query?: { payload?: Record<string, unknown> }) => {
+      if (query?.payload && options?.byPayload) {
+        const hit = options.byPayload(query.payload)
+        return hit ? [hit] : []
+      }
+      return options?.runs ?? []
+    },
     listRunAggregates: (query: unknown) => {
       queries.push(query)
       return aggregates(query)
@@ -108,6 +120,48 @@ describe('sync run analysis column', () => {
       state: 'linked',
       result: { runId: 'mi-ar-1', state: 'failed', failureDetailCode: 'upstream-aborted' }
     })
+  })
+
+  it('fetches the task row behind a notified analysis even when it is older than the page', async () => {
+    const older = jobRun({
+      id: 'run-old',
+      createdAt: '2026-11-01T00:00:00.000Z',
+      startedAt: '2026-11-01T00:00:00.000Z',
+      completedAt: '2026-11-01T00:01:00.000Z',
+      payload: { analysisRunId: 'mi-ar-old' }
+    })
+    const { call } = harness(() => ({ state: 'available', rows: [] }), {
+      runs: [],
+      analysis: { listRuns: () => [analysisRun({ id: 'mi-ar-old', jobRunId: null })] },
+      byPayload: (payload) => (payload.analysisRunId === 'mi-ar-old' ? older : undefined)
+    })
+
+    const result = await call(SYNC_RUN_IPC_METHODS.list, {
+      window: 'all',
+      limit: 50,
+      analysisRunId: 'mi-ar-old'
+    }) as { rows: readonly { runId: string; analysis: unknown }[] }
+
+    // The page's own list is empty of it (it is older than the newest runs), yet the link still
+    // resolves to the row — without this a notice clicked later would look "not found".
+    expect(result.rows.map((row) => row.runId)).toEqual(['run-old'])
+    expect(result.rows[0]?.analysis).toMatchObject({ state: 'linked', result: { runId: 'mi-ar-old' } })
+  })
+
+  it('adds nothing when the analysis run itself is unknown', async () => {
+    const { call } = harness(() => ({ state: 'available', rows: [] }), {
+      runs: [],
+      analysis: { listRuns: () => [] },
+      byPayload: () => undefined
+    })
+
+    const result = await call(SYNC_RUN_IPC_METHODS.list, {
+      window: 'all',
+      limit: 50,
+      analysisRunId: 'mi-ar-missing'
+    }) as { rows: readonly unknown[] }
+
+    expect(result.rows).toEqual([])
   })
 
   it('says unlinked when the store has no run for the task', async () => {

@@ -15,7 +15,7 @@ import type {
   SyncRunRow,
   SyncRunWindow
 } from '../../../contracts/syncRunRecords'
-import { syncRunsCsv } from '../../../contracts/syncRunRecords'
+import { isAnalysisRunId, syncRunsCsv } from '../../../contracts/syncRunRecords'
 import { syncRunClient } from '../../shared/ipc/syncRunClient'
 import './sync-run-section.css'
 
@@ -135,7 +135,11 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
   const retry = (): void => setReloadToken((current) => current + 1)
   // The window is the server-side filter; outcome and source narrow what is already on screen so
   // the source list can be built from the same fetch instead of a second round trip.
-  const query: SyncRunQuery = { window, limit: 500 }
+  const query: SyncRunQuery = {
+    window,
+    limit: 500,
+    ...(focusRequested && focusAnalysisRunId ? { analysisRunId: focusAnalysisRunId } : {})
+  }
 
   useEffect(() => {
     if (window !== 'all') { setAggregates(undefined); return }
@@ -147,12 +151,12 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
   useEffect(() => {
     let cancelled = false
     setState('loading')
-    void syncRunClient.list({ window, limit: 500 }).then((result) => {
+    void syncRunClient.list(query).then((result) => {
       if (cancelled) return
       if (result.state === 'available') { setRows(result.rows); setState('available') } else setState('unavailable')
     })
     return () => { cancelled = true }
-  }, [window, outcome, reloadToken])
+  }, [window, outcome, reloadToken, focusAnalysisRunId])
 
   /**
    * Locate the run a notification pointed at, once the widest window has been read.
@@ -441,18 +445,6 @@ function formatTime(at: string, timeZone: string): string {
   // 同一显示日只给时刻，跨日带日期；时区来自窗口级 provider，产品不再自己取本地时间。
   // 失败时原样返回原始值，宁可显示未格式化的串，也不猜一个时刻。
   return formatShellClock(at, { timeZone }) ?? at
-}
-
-/**
- * An analysis run id, as the notifier writes it (`mi-ar-` + uuid).
- *
- * Deliberately structural rather than a strict uuid match: a tampered or foreign value must be
- * rejected here, but an id from an older writer must not be called "not found" for its shape.
- */
-const ANALYSIS_RUN_ID = /^mi-ar-[0-9A-Za-z-]{1,80}$/
-
-function isAnalysisRunId(value: string): boolean {
-  return ANALYSIS_RUN_ID.test(value)
 }
 
 /** One id per analysis record, so the toggle and the panel it controls cannot drift apart. */
