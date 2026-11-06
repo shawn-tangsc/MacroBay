@@ -59,11 +59,15 @@ export function useNotificationNavigation(ports: {
 }
 
 /**
- * `openTab` 被主进程拒掉（例如 `registration-missing`：key 不在注册表里）时的诊断。
+ * `openTab` 没开出页面时的**唯一**诊断出口。
  *
- * 外壳随后会退回「只切侧栏高亮」——那看起来像跳了、其实页面没开，是今天最难查的一种形状。
- * 所以开发期必须吵一声；生产静默，读屏和界面不受影响。
+ * 三件事都在这里定死（2026-11-06 真机上付出过代价）：
+ *  1. **error 级**：应用日志只收 console.error，`console.warn` 在真机日志里一行都不留——那一晚
+ *     「点了没反应」查了三轮就是因为拒绝现场一个字都没有。
+ *  2. **拒绝也是一条诊断**：`openTab` 的拒绝是**返回值**（`status: 'rejected'` + `errorCode`），
+ *     不是异常，`catch` 永远接不到。所以调用方必须显式把拒绝结果交给这里，`errorCode` 就是根因。
+ *  3. **生产也记**：被拒意味着这一页根本打不开，不是开发期才有的噪声。它是给日志看的，不上界面。
  */
-export function reportNavFallback(navKey: string, error: unknown): void {
-  if (import.meta.env.DEV) console.warn('[nav] openTab failed, falling back to a highlight only:', navKey, error)
+export function reportNavFallback(navKey: string, detail: unknown): void {
+  console.error('[nav] openTab did not open a page, falling back to a highlight only:', navKey, detail)
 }

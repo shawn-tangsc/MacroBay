@@ -22,8 +22,13 @@ export interface WorkspaceTabSession {
   /** 受控桥存在时才有 client；壳层靠它区分「Tab 权威可用」与「直接切页兜底」。 */
   clientRef: RefObject<WorkspaceTabClient | null>
   state: WorkspaceTabState | null
-  /** 壳层自己发出的 Tab 命令回的权威快照也走这里写回（不维护第二份）。 */
-  setState: (next: WorkspaceTabState) => void
+  /**
+   * 打开/激活一个菜单页（壳层点菜单、通知深链都走它）。返回值就是「到底开没开」：
+   *  - `applied`  —— 已采用权威快照（页面真的打开了）；
+   *  - `rejected` —— **没有**打开；已按 error 级记下 `errorCode`，且**绝不采用**拒绝投影；
+   *  - `no-bridge`—— 这个渲染环境没有受控 `.tabs.*` 桥，调用方走既有的「只切高亮」兜底。
+   */
+  openMenuPage: (menuKey: string) => Promise<'applied' | 'rejected' | 'no-bridge'>
 }
 
 export function useWorkspaceTabSession(input: {
@@ -35,6 +40,32 @@ export function useWorkspaceTabSession(input: {
   const { landingNavKey, onActiveMenuKey } = input
   const clientRef = useRef<WorkspaceTabClient | null>(null)
   const [state, setState] = useState<WorkspaceTabState | null>(null)
+
+  /**
+   * Tab 命令的**唯一**出口：只有「真的 applied」才写回快照。
+   *
+   * 拒绝是**返回值**（`status: 'rejected'` + `errorCode`），不是异常 —— `catch` 一个字都接不到；而它带的
+   * snapshot 是「被拒那一刻的作用域投影」，未授权 sender 的那份是**空的**。把空投影写进 state，就会把已经
+   * 开着的页签从界面上抹掉：症状是「点一下菜单，整页变成『当前没有打开的页面』」（2026-11-06 真机踩过）。
+   * 所以这里只做两件事：applied 才采用快照；其余一律按 error 级留下 `errorCode`（应用日志只收 console.error）。
+   */
+  const openMenuPage = async (menuKey: string): Promise<'applied' | 'rejected' | 'no-bridge'> => {
+    const client = clientRef.current
+    if (client === null) return 'no-bridge'
+    try {
+      const result = await client.port.openTab({ menuKey })
+      if (result.status === 'rejected') {
+        reportNavFallback(menuKey, { status: result.status, errorCode: result.errorCode })
+        return 'rejected'
+      }
+      setState(result.snapshot)
+      return 'applied'
+    } catch (error: unknown) {
+      // 抛出（无权威 revision / 响应畸形 / 桥不在）同样是「没打开」，必须留下 error 级证据。
+      reportNavFallback(menuKey, error)
+      return 'rejected'
+    }
+  }
 
   useEffect(() => {
     const bridge = readWorkspaceTabsBridge()
@@ -67,10 +98,7 @@ export function useWorkspaceTabSession(input: {
        */
       if (landingDecided) return
       landingDecided = true
-      void client.port.openTab({ menuKey: landingNavKey })
-        .then((result) => { if (!cancelled) setState(result.snapshot) })
-        // 被拒（key 不在注册表）时目标页打不开：开发期必须吵一声，否则症状只剩「首次打开是空白」
-        .catch((error: unknown) => { reportNavFallback(landingNavKey, error) })
+      void openMenuPage(landingNavKey)
     }
     void client.load().then(adopt)
     const stop = client.observe(adopt)
@@ -83,5 +111,5 @@ export function useWorkspaceTabSession(input: {
     // `landingNavKey` 由菜单注册决定、不随会话变化；`onActiveMenuKey` 是 setter，引用稳定。
   }, [landingNavKey, onActiveMenuKey])
 
-  return { clientRef, state, setState }
+  return { clientRef, state, openMenuPage }
 }

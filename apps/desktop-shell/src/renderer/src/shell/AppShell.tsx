@@ -53,7 +53,7 @@ import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { NotificationBell } from './notifications/NotificationBell'
 import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
 import { NotificationBanner } from './notifications/NotificationBanner'
-import { reportNavFallback, useNotificationNavigation } from './notifications/notificationDeeplinkWiring'
+import { useNotificationNavigation } from './notifications/notificationDeeplinkWiring'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
@@ -401,24 +401,19 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    * 这段只在「没有可恢复的活动页」时才补首页，而那个判定点只存在于它内部。
    */
   const {
-    clientRef: tabClientRef,
-    state: workspaceTabState,
-    setState: setWorkspaceTabState
+    clientRef: tabClientRef, state: workspaceTabState, openMenuPage
   } = useWorkspaceTabSession({ landingNavKey, onActiveMenuKey: setActiveNavKey })
 
-  /** 一级菜单点击：有 Tab 桥即走受控命令（打开/激活同一实例），否则保持既有直接切页（无桥兜底）。 */
+  /**
+   * 一级菜单点击：有 Tab 桥即走受控命令（打开/激活同一实例），否则保持既有直接切页（无桥兜底）。
+   * 「开没开成」的判定与拒绝诊断都在 `openMenuPage` 里（一处实现）；这里只决定没开成时退到高亮。
+   */
   function activateNavKey(navKey: string): void {
-    const client = tabClientRef.current
-    if (client === null) {
+    if (tabClientRef.current === null) {
       setActiveNavKey(navKey)
       return
     }
-    void client.port.openTab({ menuKey: navKey })
-      .then((result) => {
-        setWorkspaceTabState(result.snapshot)
-      })
-      // 被拒（key 不在注册表）时会退回只切高亮：开发期必须吵一声，否则症状只剩「点了没反应」。
-      .catch((error: unknown) => { reportNavFallback(navKey, error); setActiveNavKey(navKey) })
+    void openMenuPage(navKey).then((outcome) => { if (outcome === 'rejected') setActiveNavKey(navKey) })
   }
 
   useEffect(() => {
@@ -1771,6 +1766,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
                 title={item.label}
                 aria-label={item.label}
+                // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
+                data-nav-key={item.key}
                 onClick={() => activateNavKey(item.key)}>
                 <Icon size={17} strokeWidth={1.8} />
                 <span>{item.label}</span>
@@ -1789,6 +1786,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
                 title={item.label}
                 aria-label={item.label}
+                // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
+                data-nav-key={item.key}
                 onClick={() => activateNavKey(item.key)}>
                 <Icon size={17} strokeWidth={1.8} />
                 <span>{item.label}</span>

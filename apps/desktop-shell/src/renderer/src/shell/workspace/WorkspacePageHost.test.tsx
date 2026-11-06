@@ -248,6 +248,15 @@ describe('临时双路由已由 P2-03 移除（反向 guard）', () => {
     resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/AppShell.tsx'),
     'utf8'
   )
+  /**
+   * Tab 会话（桥 → client → 快照，含首次落点补开首页）2026-11-06 从 `AppShell` 抽到这里的 hook：
+   * `AppShell` 有体积基线（只减不增），而这段逻辑必须在「采纳快照」的那一处。所以下面那条 guard
+   * 断言的是**两个文件的合起来**——外壳挂宿主，hook 建 client，缺一半都不算接线。
+   */
+  const tabSession = readFileSync(
+    resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/workspace/useWorkspaceTabSession.ts'),
+    'utf8'
+  )
   const adapters = readFileSync(
     resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/workspace/builtInPageAdapters.tsx'),
     'utf8'
@@ -264,8 +273,9 @@ describe('临时双路由已由 P2-03 移除（反向 guard）', () => {
     // 生产路径必须真正用上「非活动就地隐藏、不卸载」的 Tab 宿主，而不是只换菜单外观
     expect(appShell).toContain('WorkspaceTabStrip')
     expect(appShell).toContain('WorkspacePageHost')
-    expect(appShell).toContain('createWorkspaceTabClient')
-    expect(appShell).toContain('readWorkspaceTabsBridge')
+    expect(appShell).toContain('useWorkspaceTabSession')
+    expect(tabSession).toContain('createWorkspaceTabClient')
+    expect(tabSession).toContain('readWorkspaceTabsBridge')
     // 直接切页只作为「没有受控 Tab 桥」时的兜底，不再是被标注的长期临时路径
     expect(appShell).toContain('activateNavKey')
   })

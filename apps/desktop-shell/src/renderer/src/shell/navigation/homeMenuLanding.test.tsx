@@ -107,7 +107,7 @@ function mainContext(): unknown {
  * 受控面形状的 fake preload：与真 preload 逐方法同构。
  * `snapshot` 是 Main 侧的权威快照，用例可以随时换掉并发一条受控事件（模拟用户关掉最后一页）。
  */
-function createSurface(input: { initial: TabsSnapshot }) {
+function createSurface(input: { initial: TabsSnapshot; rejectCommands?: string }) {
   let snapshot: TabsSnapshot = input.initial
   const openTabRequests: { menuKey?: string }[] = []
   const listeners = new Set<(event: unknown) => void>()
@@ -127,6 +127,11 @@ function createSurface(input: { initial: TabsSnapshot }) {
         return { status: 'rejected', errorCode: 'invalid-request', snapshot }
       }
       openTabRequests.push({ menuKey: record.menuKey })
+      if (input.rejectCommands !== undefined) {
+        // 真机上的拒绝形态：**返回值**（不是异常）+ 一份和当前状态无关的投影。这里故意给空投影 ——
+        // 未授权 sender 的拒绝就是空的，采用它会把已经开着的页签从界面上抹掉。
+        return { status: 'rejected', errorCode: input.rejectCommands, snapshot: emptySnapshot() }
+      }
       // 应用后 Main 回的权威快照：这一页真的被打开（只换高亮的实现给不出这个快照）。
       snapshot = tabSnapshot(
         { key: 'workspace-tab-landing', pageId: 'landing', menuKey: record.menuKey ?? '' },
@@ -224,5 +229,48 @@ describe('默认首页接线（口径 A：只在没有历史时生效）', () =>
     await settle()
 
     expect(surface.openTabRequests.length).toBe(1)
+  })
+
+  it('自动落点开出的那一页必须**真的渲染出来**（不是只「调用过 openTab」）', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
+    const surface = createSurface({ initial: emptySnapshot() })
+    await renderShell(surface)
+
+    // 判据在 DOM 上：宿主进入 tabs 形态且有一个页签。只断言「发过命令」的话，一个发出命令却不采用快照的
+    // 实现也能过，而那种实现给用户的就是「当前没有打开的页面」。
+    await vi.waitFor(() => {
+      expect(container?.querySelector('[data-workspace-page-host="tabs"]')).not.toBeNull()
+    }, { timeout: CONDITION_TIMEOUT_MS })
+    expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
+  })
+
+  it('点菜单被拒 ⇒ error 级报出 errorCode，且原有页签不被抹掉', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const surface = createSurface({
+        initial: tabSnapshot({ key: 'workspace-tab-settings', pageId: 'settings', menuKey: 'settings' }, 2),
+        rejectCommands: 'registration-missing'
+      })
+      await renderShell(surface)
+      await vi.waitFor(() => {
+        expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
+      }, { timeout: CONDITION_TIMEOUT_MS })
+
+      const navButton = container?.querySelector<HTMLButtonElement>(`[data-nav-key="${declaredHomeKey}"]`)
+      expect(navButton).not.toBeNull()
+      await act(async () => { navButton?.click() })
+      await settle()
+
+      // ① 诊断：拒绝必须留下 error 级证据，而且带 errorCode（应用日志只收 console.error）。
+      await vi.waitFor(() => {
+        expect(errorSpy.mock.calls.some((call) => String(call[0]).includes('[nav] openTab did not open a page'))).toBe(true)
+      }, { timeout: CONDITION_TIMEOUT_MS })
+      const reported = errorSpy.mock.calls.find((call) => String(call[0]).includes('[nav] openTab did not open a page'))
+      expect(JSON.stringify(reported)).toContain('registration-missing')
+
+      // ② 不许采用拒绝快照：拒绝投影是空的，采用它会把「设置」这一页从界面上抹掉（真机症状）。
+      expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 })
