@@ -88,7 +88,7 @@ function signal(overrides: Partial<ModuleSignal> = {}): ModuleSignal {
 const window: SignalWindow = { unit: 'buckets', amount: 1, bucketMs: 15 * 60 * 1_000, upperBoundMs: 15 * 60 * 1_000 }
 
 function request(overrides: Partial<ModuleSignal> = {}, groupType: SignalAnalysisRequest['groupType'] = 'funding'): SignalAnalysisRequest {
-  return { signal: signal(overrides), window, groupType }
+  return { signals: [{ signal: signal(overrides), window }], groupType }
 }
 
 function entry(overrides: Readonly<{ inFlightFreeze?: boolean; fail?: boolean; enabled?: boolean }> = {}) {
@@ -163,6 +163,46 @@ it('anchors the signal on its own group, writes the attempt row, then queues the
       attemptLedgerId: ledger[0]?.id
     })
   })
+})
+
+it('carries a whole tick of one module in one row and one run, counted once', async () => {
+  const { service, ledger, enqueued, repository } = entry()
+  const batch: SignalAnalysisRequest = {
+    signals: [
+      { signal: signal({ severity: 'medium', dedupeKey: 'oi|low|BTC|bucket' }), window },
+      { signal: signal({ severity: 'high', asset: 'eth', dedupeKey: 'oi|high|ETH|bucket' }), window },
+      { signal: signal({ severity: 'medium', dedupeKey: 'oi|mid|BTC|bucket' }), window }
+    ],
+    groupType: 'funding'
+  }
+
+  const outcome = await service(batch)
+
+  expect(outcome.state).toBe('queued')
+  expect(ledger).toHaveLength(1)
+  const evidence = ledger[0]!.evidence as { signalCount: number; signals: readonly { asset: string; severity: string }[] }
+  expect(evidence.signalCount).toBe(3)
+  // Most severe first, the same order the prompt truncates in.
+  expect(evidence.signals.map(entry => entry.severity)).toEqual(['high', 'medium', 'medium'])
+  expect(evidence.signals[0]!.asset).toBe('eth')
+  // The row is named after the most severe member; mixing modules is refused below.
+  expect(ledger[0]!.triggerKey).toBe('signal.open-interest.oi-liquidation-proxy')
+  expect(ledger[0]!.changeHash).toBe('oi|high|ETH|bucket')
+  expect(enqueued).toHaveLength(1)
+  // Counting reads the ledger: one queued row is one event-line call, not three.
+  expect(countAnalysisRuns(repository as never, asOf).eventRunsToday).toBe(1)
+})
+
+it('refuses a batch that mixes modules, or one with no signals', async () => {
+  const { service } = entry()
+  await expect(service({
+    signals: [
+      { signal: signal(), window },
+      { signal: signal({ moduleId: 'etf-flows' }), window }
+    ],
+    groupType: 'funding'
+  })).rejects.toThrow('analysis-invalid-request')
+  await expect(service({ signals: [], groupType: 'funding' })).rejects.toThrow('analysis-invalid-request')
 })
 
 /**

@@ -141,10 +141,8 @@ export function analysisRequestFor(signal: ModuleSignal): SignalAnalysisRequest 
   const window = signalWindow(signal.cadence, 1)
   if (window === undefined) return undefined
   return {
-    // Hand over the signal itself: key, asset, severity, instant and dedupe key all come from it,
-    // so the entry cannot be told two different things about one reading.
-    signal,
-    window,
+    // One signal is a batch of one; the receiver's accounting unit is a run, not a signal.
+    signals: [{ signal, window }],
     // The open-interest board is the funding one; reusing the existing group type, not a new one.
     groupType: 'funding'
   }
@@ -181,13 +179,14 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
       // The same bucket stays "fresh" for two buckets; asking twice would queue a second run for a
       // reading the ledger already holds. The memory is per process; the ledger's unique key is
       // what carries across restarts.
-      if (deps.handed?.has(analysis.signal.dedupeKey) === true) continue
+      const handedSignal = analysis.signals[0]!.signal
+      if (deps.handed?.has(handedSignal.dedupeKey) === true) continue
       try {
         const outcome = await deps.requestAnalysis(analysis)
         // "Disabled" is not "handed": the switch may be turned on while this bucket is still fresh.
         if (outcome.state !== 'disabled') {
-          const observedMs = Date.parse(analysis.signal.observedAt)
-          deps.handed?.set(analysis.signal.dedupeKey, (Number.isFinite(observedMs) ? observedMs : asOfMs) + openInterestSignalNotificationPolicy.analysisHandoffMemoryMs)
+          const observedMs = Date.parse(handedSignal.observedAt)
+          deps.handed?.set(handedSignal.dedupeKey, (Number.isFinite(observedMs) ? observedMs : asOfMs) + openInterestSignalNotificationPolicy.analysisHandoffMemoryMs)
         }
       } catch {
         // One hand-off failing must not turn a stored bucket into a failed collection, and must

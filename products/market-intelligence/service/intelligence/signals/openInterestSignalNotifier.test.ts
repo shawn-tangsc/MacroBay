@@ -216,7 +216,7 @@ describe('handing a fired signal to the analysis entry', () => {
     // together, so the entry cannot be told two different things about one signal.
     const request = requestAnalysis.mock.calls[0]![0]
     expect(request.groupType).toBe('funding')
-    expect(request.signal).toMatchObject({
+    expect(request.signals[0]!.signal).toMatchObject({
       moduleId: 'open-interest',
       ruleId: 'oi-liquidation-proxy',
       asset: 'btc',
@@ -225,11 +225,11 @@ describe('handing a fired signal to the analysis entry', () => {
       readiness: 'available',
       values: { dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 7.4e9 }
     })
-    expect(request.signal.dedupeKey).toBe('open-interest:oi-liquidation-proxy:btc:2026-11-03T10:15:00.000Z')
+    expect(request.signals[0]!.signal.dedupeKey).toBe('open-interest:oi-liquidation-proxy:btc:2026-11-03T10:15:00.000Z')
     // The chip says "15 minutes": one closed bucket, never a 24-hour window borrowed from another rule.
-    expect(request.window).toEqual({ unit: 'buckets', amount: 1, bucketMs, upperBoundMs: bucketMs })
+    expect(request.signals[0]!.window).toEqual({ unit: 'buckets', amount: 1, bucketMs, upperBoundMs: bucketMs })
     // The key the budget recognises is built by the contract, not by this call site.
-    expect(signalTriggerKey(request.signal.moduleId, request.signal.ruleId)).toBe('signal.open-interest.oi-liquidation-proxy')
+    expect(signalTriggerKey(request.signals[0]!.signal.moduleId, request.signals[0]!.signal.ruleId)).toBe('signal.open-interest.oi-liquidation-proxy')
   })
 
   it('offers a bucket to the analysis entry once, not once per refresh', async () => {

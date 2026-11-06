@@ -134,16 +134,16 @@ describe('handing a signal to the analysis entry', () => {
 
     expect(requests).toHaveLength(2)
     for (const request of requests) {
-      expect(request.signal).toBe(request.signal)
+      expect(request.signals[0]!.signal).toBeDefined()
       expect(request.groupType).toBe('capital')
       // 窗口是规则的单位：三个交易日，不是 3×24 小时。
-      expect(request.window).toEqual({ unit: 'trading-days', amount: 3, upperBoundMs: null })
+      expect(request.signals[0]!.window).toEqual({ unit: 'trading-days', amount: 3, upperBoundMs: null })
       // 键仍是预算认得的那个形状，只是现在由接收端从信号拼。
-      expect(signalTriggerKey(request.signal.moduleId, request.signal.ruleId)).toBe('signal.etf-flows.etf-outflow-3d')
+      expect(signalTriggerKey(request.signals[0]!.signal.moduleId, request.signals[0]!.signal.ruleId)).toBe('signal.etf-flows.etf-outflow-3d')
       expect(isSignalTriggerKey('signal.etf-flows.etf-outflow-3d')).toBe(true)
     }
     // 同一天两个资产是两条读数，各自的去重键不同、交易日相同。
-    expect(requests.map(request => request.signal.dedupeKey).sort()).toEqual([
+    expect(requests.map(request => request.signals[0]!.signal.dedupeKey).sort()).toEqual([
       'etf-flows:etf-outflow-3d:btc:2026-10-28',
       'etf-flows:etf-outflow-3d:eth:2026-10-28'
     ])

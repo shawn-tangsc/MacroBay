@@ -25,14 +25,16 @@ import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
  * 调用不能算花掉（否则一次入队失败会白扣一次事件线额度）。
  */
 
+/**
+ * One batch of signals for one module group: one ledger row and one run carry all of them.
+ *
+ * The batch shape exists because the accounting unit is a run, not a signal: writing one row per
+ * signal would count three model calls for one, and the budget would inflate by exactly the number
+ * of signals that arrived together (r9 08 §8). A single signal is a batch of one.
+ */
 export type SignalAnalysisRequest = Readonly<{
-  /**
-   * 规则产出的那条信号本身。触发键、模块、规则、资产、严重度、数据时刻、去重键都从它取——
-   * 调用方不再各带一份，免得同一件事在两个字段里说两句话。
-   */
-  signal: ModuleSignal
-  /** 规则声明的窗口：账本读数要用它，`ModuleSignal` 故意不携窗口（窗口是规则自己的单位）。 */
-  window: SignalWindow
+  /** Same module, same tick; the trigger key and the dedupe key come from the most severe one. */
+  signals: readonly SignalWithWindow[]
   /** 牌子所属的板子；复用既有 `EventGroupType`，不新增枚举（OI→funding、ETF→capital）。 */
   groupType: EventGroupType
 }>
@@ -75,8 +77,9 @@ export function createSignalAnalysisRequest(deps: Readonly<{
   return async (request) => {
     assertSignalRequest(request)
     if (!await deps.isEnabled()) return { state: 'disabled' }
-    const group = findOrCreateGroup(request)
-    const triggerKey = requestTriggerKey(request)
+    const primary = primarySignal(request.signals)
+    const group = findOrCreateGroup(primary, request.groupType)
+    const triggerKey = requestTriggerKey(primary.signal)
     // 单飞必须在「抢行」之前：先抢到行再被判在飞退出，那一行会永远算作已花额度却没入队。
     // 信号每次采样都会重算一次，没有这道，同一个桶会进两次。
     const activeFreeze = deps.jobRuntime.listRuns({
@@ -89,13 +92,13 @@ export function createSignalAnalysisRequest(deps: Readonly<{
       run.eventGroupId === group.id && (run.status === 'queued' || run.status === 'running'))
     if (activeFreeze.length > 0 || inFlightRun) return { state: 'in-flight', groupId: group.id }
     // 一次动作同时判「新建还是已存在」：唯一键是判据，先查再写会在两步之间留下并发窗口。
-    const evidence = queuedSignalEvidence([{ signal: request.signal, window: request.window } as SignalWithWindow])
-    const reasonCode = signalAnalysisPolicy.queuedReasonCodes[request.signal.severity as 'medium' | 'high']
+    const evidence = queuedSignalEvidence(request.signals)
+    const reasonCode = signalAnalysisPolicy.queuedReasonCodes[primary.signal.severity as 'medium' | 'high']
     const claimed = deps.repository.appendSignalTrigger({
       id: `mi-ledger-${deps.idFactory()}`,
       eventGroupId: group.id,
       triggerKey,
-      changeHash: request.signal.dedupeKey,
+      changeHash: primary.signal.dedupeKey,
       reasonCode,
       evidence,
       createdAt: deps.now()
@@ -130,7 +133,7 @@ export function createSignalAnalysisRequest(deps: Readonly<{
           eventGroupId: group.id,
           triggerKey,
           analysisPhase: 'correction',
-          asOf: request.signal.observedAt,
+          asOf: primary.signal.observedAt,
           attemptLedgerId
         }
       })
@@ -142,8 +145,8 @@ export function createSignalAnalysisRequest(deps: Readonly<{
     }
   }
 
-  function findOrCreateGroup(request: SignalAnalysisRequest): EventGroup {
-    const mergeKey = signalGroupMergeKey(request.signal.moduleId, request.signal.observedAt)
+  function findOrCreateGroup(primary: SignalWithWindow, groupType: EventGroupType): EventGroup {
+    const mergeKey = signalGroupMergeKey(primary.signal.moduleId, primary.signal.observedAt)
     const existing = deps.repository.findEventGroupByMergeKey(mergeKey)
     if (existing) return existing
     // 信号不是条目：`eventRefs` 留空比塞一个假 itemId 诚实。组只当锚，`mergeKey` 带 UTC 日，
@@ -153,11 +156,11 @@ export function createSignalAnalysisRequest(deps: Readonly<{
       id: `mi-eg-${deps.idFactory()}`,
       schemaVersion: 1,
       status: 'open',
-      groupType: request.groupType,
+      groupType,
       mergeKey,
-      firstObservedAt: request.signal.observedAt,
-      lastObservedAt: request.signal.observedAt,
-      reviewDeadlineAt: new Date(Date.parse(request.signal.observedAt) + eventGroupPolicy.reviewWindowMs).toISOString(),
+      firstObservedAt: primary.signal.observedAt,
+      lastObservedAt: primary.signal.observedAt,
+      reviewDeadlineAt: new Date(Date.parse(primary.signal.observedAt) + eventGroupPolicy.reviewWindowMs).toISOString(),
       eventRefs: [],
       triggerCount: 0,
       reviewCount: 0,
@@ -184,19 +187,41 @@ export function signalGroupMergeKey(moduleId: string, observedAt: string): strin
  * 形状在这里直接拒绝；低档只显示牌子、不叫分析，进来就等于让「只展示」也花一次模型调用。
  */
 function assertSignalRequest(request: SignalAnalysisRequest): void {
-  requestTriggerKey(request)
-  if (request.signal.severity !== 'medium' && request.signal.severity !== 'high') throw new Error('analysis-invalid-request')
-  if (!Number.isFinite(Date.parse(request.signal.observedAt))) throw new Error('analysis-invalid-request')
-  // 两档读取失败与「事件已有别人的键接管」都不该叫分析：前者是数据没到，花一次调用只会得到
-  // 一份「我不知道」；后者由 `calendar.refresh` 那条线负责，再跑一次就是同一件事花两次钱。
-  // 扫描层本来会先滤掉这两种，这里是最后一道：漏一次就等于白花一次事件线额度。
-  if (request.signal.readiness !== 'available') throw new Error('analysis-invalid-request')
-  if (request.signal.triggerOwner !== 'module-signal') throw new Error('analysis-invalid-request')
+  if (request.signals.length === 0) throw new Error('analysis-invalid-request')
+  const moduleId = request.signals[0]!.signal.moduleId
+  for (const entry of request.signals) {
+    // One batch is one module group; mixing modules would make the trigger key and the group lie.
+    if (entry.signal.moduleId !== moduleId) throw new Error('analysis-invalid-request')
+    requestTriggerKey(entry.signal)
+    if (entry.signal.severity !== 'medium' && entry.signal.severity !== 'high') throw new Error('analysis-invalid-request')
+    if (!Number.isFinite(Date.parse(entry.signal.observedAt))) throw new Error('analysis-invalid-request')
+    // 两档读取失败与「事件已有别人的键接管」都不该叫分析：前者是数据没到，花一次调用只会得到
+    // 一份「我不知道」；后者由 `calendar.refresh` 那条线负责，再跑一次就是同一件事花两次钱。
+    if (entry.signal.readiness !== 'available') throw new Error('analysis-invalid-request')
+    if (entry.signal.triggerOwner !== 'module-signal') throw new Error('analysis-invalid-request')
+  }
+}
+
+/**
+ * The one signal the row and the run are named after: most severe, then earliest.
+ *
+ * The ledger keeps one row, so exactly one trigger key and one dedupe key can be stored. Choosing
+ * the most severe matches the prompt's own truncation order, so the "main" signal the panel shows
+ * is the one whose key the row carries.
+ */
+function primarySignal(signals: readonly SignalWithWindow[]): SignalWithWindow {
+  return [...signals].sort((left, right) =>
+    severityOrder(left.signal.severity) - severityOrder(right.signal.severity) ||
+    left.signal.observedAt.localeCompare(right.signal.observedAt))[0]!
+}
+
+function severityOrder(severity: ModuleSignal['severity']): number {
+  return severity === 'high' ? 0 : severity === 'medium' ? 1 : 2
 }
 
 /** The one key the signal is queued under; a signal without a complete key cannot be queued. */
-function requestTriggerKey(request: SignalAnalysisRequest): string {
-  const key = signalTriggerKey(request.signal.moduleId, request.signal.ruleId)
+function requestTriggerKey(signal: ModuleSignal): string {
+  const key = signalTriggerKey(signal.moduleId, signal.ruleId)
   if (!key) throw new Error('analysis-invalid-request')
   return key
 }

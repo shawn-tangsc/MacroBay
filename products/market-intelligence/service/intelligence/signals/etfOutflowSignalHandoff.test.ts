@@ -35,10 +35,10 @@ describe('the ETF signal hand-off', () => {
     expect(analyze).toHaveBeenCalledTimes(2)
     // 每条请求带的是信号本身与它自己的窗口，键由接收端从信号拼。
     const requests = analyze.mock.calls.map(([request]) => request)
-    expect(requests.map(request => signalTriggerKey(request.signal.moduleId, request.signal.ruleId)))
+    expect(requests.map(request => signalTriggerKey(request.signals[0]!.signal.moduleId, request.signals[0]!.signal.ruleId)))
       .toEqual(['signal.etf-flows.etf-outflow-3d', 'signal.etf-flows.etf-outflow-3d'])
     expect(requests.every(request => request.groupType === 'capital')).toBe(true)
-    expect(requests.every(request => request.window.unit === 'trading-days' && request.window.amount === 3)).toBe(true)
+    expect(requests.every(request => request.signals[0]!.window.unit === 'trading-days' && request.signals[0]!.window.amount === 3)).toBe(true)
   })
 
   // 刷新服务先于分析运行时建好：入口还没绑定时，通知照发、分析一条都不递，不假装做过。

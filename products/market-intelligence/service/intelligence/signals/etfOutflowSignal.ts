@@ -187,9 +187,8 @@ function canonicalTradingDayInstant(tradingDate: string): string | undefined {
  * 迟早会有一句落后。窗口也不由接收端推：三天是这条规则自己的单位。
  */
 export type EtfOutflowAnalysisRequest = Readonly<{
-  signal: ModuleSignal
-  /** 规则判的那三个交易日；`ModuleSignal` 故意不携窗口。 */
-  window: SignalWindow
+  /** 一条信号就是一批一条：接收端的会计单位是一次运行，不是一条信号。 */
+  signals: readonly Readonly<{ signal: ModuleSignal; window: SignalWindow }>[]
   /** 牌子所属的板子：现货是资金面。 */
   groupType: 'capital'
 }>
@@ -210,7 +209,7 @@ export function etfOutflowAnalysisRequests(signals: readonly ModuleSignal[]): re
     if (!signalTriggerKey(signal.moduleId, signal.ruleId)) continue
     const window = signalWindow(signal.cadence, etfFlowPolicy.signalWindowDays)
     if (!window) continue
-    requests.push(Object.freeze({ signal, window, groupType: 'capital' as const }))
+    requests.push(Object.freeze({ signals: [{ signal, window }], groupType: 'capital' as const }))
   }
   return Object.freeze(requests)
 }
