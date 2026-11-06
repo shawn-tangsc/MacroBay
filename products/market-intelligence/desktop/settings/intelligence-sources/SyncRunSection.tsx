@@ -17,6 +17,7 @@ import type {
 import { isAnalysisRunId, syncRunsCsv } from '../../../contracts/syncRunRecords'
 import { syncRunClient } from '../../shared/ipc/syncRunClient'
 import { AnalysisCell, AnalysisRecord, analysisRecordId, formatSyncRunTime } from './SyncRunAnalysisCell'
+import { syncRunSourceLabel, syncRunTaskLabel, syncRunTallyText } from './syncRunRowText'
 import './sync-run-section.css'
 
 /**
@@ -107,28 +108,6 @@ export type SyncRunText = Readonly<{
   /** Title text for the humanised failure, so the code stays available without being on screen. */
   failureCodeHint: string
 }>
-
-/**
- * The batch's tally, as one sentence, or nothing.
- *
- * Composed here rather than stored: the parts are numbers, and the separator is punctuation a
- * locale owns. A run without a tally gets no sentence at all — printing "0 of 0" would claim the
- * batch ran and found nothing, which is the opposite of "this record predates the count".
- */
-function tallyText(row: SyncRunRow, text: SyncRunText): string | undefined {
-  const counts = row.counts
-  if (counts === undefined) return undefined
-  const parts = [
-    text.counts.replace('{total}', String(counts.total)).replace('{succeeded}', String(counts.succeeded))
-  ]
-  if (counts.failed > 0) parts.push(text.countsFailed.replace('{failed}', String(counts.failed)))
-  if (counts.skipped > 0) parts.push(text.countsSkipped.replace('{skipped}', String(counts.skipped)))
-  const reason = row.resultReasonCode === undefined
-    ? undefined
-    : text.resultReasons[row.resultReasonCode] ?? text.resultReasonUnknown
-  const tally = parts.join(text.countsSeparator)
-  return reason === undefined ? tally : `${tally}${text.joiner}${reason}`
-}
 
 const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
 /** Thirty rows a page: one screen of recent history without a wall of scroll. */
@@ -244,17 +223,6 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     element?.querySelector<HTMLElement>('.mi-sync-run__analysis-button')?.focus()
   }, [focusAnalysisRunId, focusOutcome, page, rows])
 
-  // A run's task and source arrive as data. Product-side rows use their action as the handler id,
-  // so the audit actions are the fallback before the raw label — otherwise an English reader gets
-  // Chinese job names with no translation path at all.
-  const auditTaskLabel = (handlerId: string): string | undefined =>
-    Object.prototype.hasOwnProperty.call(text.actions, handlerId)
-      ? text.actions[handlerId as keyof SyncRunText['actions']]
-      : undefined
-  const taskLabelOf = (row: SyncRunRow): string =>
-    text.tasks[row.handlerId] ?? auditTaskLabel(row.handlerId) ?? row.taskLabel
-  const sourceLabelOf = (source: SyncRunRow['sources'][number]): string =>
-    text.sourceNames?.[source.sourceId] ?? source.label
   /**
    * Task options come from the catalogue, not from the rows on screen: once a task is selected the
    * list collapses to that task, and building the options from it would leave the reader with no way
@@ -266,7 +234,7 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     .sort((left, right) => left.label.localeCompare(right.label))
   const sources = [...new Map([
     ...(knownSources ?? []).map((source) => [source.sourceId, source.label] as const),
-    ...rows.flatMap((row) => row.sources).map((source) => [source.sourceId, sourceLabelOf(source)] as const)
+    ...rows.flatMap((row) => row.sources).map((source) => [source.sourceId, syncRunSourceLabel(source, text)] as const)
   ]).entries()].sort((left, right) => left[1].localeCompare(right[1]))
   // 三档显式：全部 / 无来源 / 某个来源。空串不再兼职表示「无来源也算」。
   const sourceMatches = (row: SyncRunRow): boolean =>
@@ -288,8 +256,8 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     // 页面上写着「还有更多」，导出却像是全量，那是最容易被当成丢数据的一种不一致。
     const csv = syncRunsCsv(filtered.map((row) => ({
       ...row,
-      taskLabel: taskLabelOf(row),
-      sources: row.sources.map((source) => ({ ...source, label: sourceLabelOf(source) }))
+      taskLabel: syncRunTaskLabel(row, text),
+      sources: row.sources.map((source) => ({ ...source, label: syncRunSourceLabel(source, text) }))
     })), text.csvHeader)
     try {
       await navigator.clipboard.writeText(csv)
@@ -407,25 +375,25 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
           role="row"
         >
         <span className="mi-sync-run__time" role="cell">{formatSyncRunTime(row.at, timeZone)}</span>
-        <span className="mi-sync-run__task" role="cell">{taskLabelOf(row)}</span>
+        <span className="mi-sync-run__task" role="cell">{syncRunTaskLabel(row, text)}</span>
         {/* Nothing here is hidden behind a hover: the count is visible text, and the full list is
             the cell's accessible name, so a keyboard or a screen reader gets the same facts. */}
         <span
-          aria-label={row.sources.length === 0 ? text.noSourceHint : row.sources.map(sourceLabelOf).join(text.joiner)}
+          aria-label={row.sources.length === 0 ? text.noSourceHint : row.sources.map((source) => syncRunSourceLabel(source, text)).join(text.joiner)}
           className="mi-sync-run__source"
           role="cell"
         >
           {row.sources.length === 0
             ? text.allSourcesNote
-            : row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}
+            : row.sources.slice(0, 2).map((source) => syncRunSourceLabel(source, text)).join(text.joiner)}
           {row.sources.length > 2 ? <span className="mi-sync-run__more">{` +${row.sources.length - 2}`}</span> : null}
         </span>
         <span role="cell">{text.actions[row.action]}</span>
         <span role="cell" data-outcome={row.outcome}>
           {text.outcomes[row.outcome]}
-          {tallyText(row, text) === undefined
+          {syncRunTallyText(row, text) === undefined
             ? null
-            : <span className="mi-sync-run__tally">{text.joiner}{tallyText(row, text)}</span>}
+            : <span className="mi-sync-run__tally">{text.joiner}{syncRunTallyText(row, text)}</span>}
         </span>
         {/* The second result. Never merged into the one above: "task completed, analysis not
             published" is exactly the state this column exists to make visible. */}
