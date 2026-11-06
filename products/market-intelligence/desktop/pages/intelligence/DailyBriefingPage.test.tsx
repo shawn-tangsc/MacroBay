@@ -2606,3 +2606,59 @@ describe('a day whose generation time has passed with no edition', () => {
     expect(pane.textContent).not.toContain('这一天还没有简报')
   })
 })
+
+describe('a fresh open lands on the first row the rail actually draws', () => {
+  const today = '2026-10-30'
+  const yesterday = '2026-10-29'
+  const rowOf = (date: string, state: 'missing' | 'generated' = 'generated') => ({
+    date, periodId: 'default', locale: 'zh-CN' as const,
+    availableLocales: state === 'generated' ? (['zh-CN'] as const) : ([] as const),
+    state, ...(state === 'generated' ? { generatedAt: `${date}T00:30:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, readingsAvailable: 4 } : {})
+  })
+
+  // 用户 2026-11-06：今天没有版次时，默认打开**列表第一个有行的天头下的第一行**，不是一屏空态。
+  it('opens yesterday’s edition when today has no edition', async () => {
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [rowOf(yesterday)], dates: [today, yesterday], today } })),
+      get: vi.fn(async ({ date }: { date: string }) => date === yesterday
+        ? { state: 'available' as const, document: briefingDocument(yesterday, '昨天的版次') }
+        : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    // 正文是昨天那一版，不是"这一天还没有简报"。
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('昨天的版次')
+    // 这两条一起证明选中项也落在昨天：纸只在**选中项与文档身份一致**时渲染（页面那道身份闸门），
+    // 所以"正文是昨天的版次"本身就排除了"选中项还在今天"。
+    expect(dom.querySelector('.mi-daily-briefing-page__content .state-view')).toBeNull()
+  })
+
+  it('keeps today when today has an edition', async () => {
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument(today, '今天这一版') })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [rowOf(today), rowOf(yesterday)], dates: [today, yesterday], today } }))
+    })
+    const dom = await renderPage(client)
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('今天这一版')
+  })
+
+  // 那一行没有正文（模板版/失败残留）也照样选中它，显示它自己的状态，不许跳到别的行。
+  it('stays on the first row even when that row has nothing to read', async () => {
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: [{ ...rowOf(today), state: 'missing' as const, availableLocales: [] as const }, rowOf(yesterday)], dates: [today, yesterday], today }
+      })),
+      get: vi.fn(async ({ date }: { date: string }) => date === yesterday
+        ? { state: 'available' as const, document: briefingDocument(yesterday, '昨天的版次') }
+        : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    // 今天那行没有版次 -> 落到昨天（第一个**有行**的天头），而不是今天的空态。
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('昨天的版次')
+    expect(dom.querySelector('.mi-daily-briefing-page__content .state-view')).toBeNull()
+  })
+})

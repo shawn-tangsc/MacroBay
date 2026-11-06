@@ -68,3 +68,21 @@ export function nextEditionAfterDelete(
   const first = sameDay.find((row) => !isDeleted(row))
   return first === undefined ? undefined : { date: first.date, periodId: first.periodId, locale: first.locale }
 }
+
+/**
+ * 列表里**第一个有行的天头下的第一行**（用户 2026-11-06）。
+ *
+ * 打开页面时，今天这一期若还没有版次，就默认打开这一行，而不是给一屏"今天还没有"。
+ * 天序用服务端给的 `dates`（缺省按版次出现顺序），行序沿用列表自己的顺序；没有行才返回 `undefined`。
+ */
+export function firstShownEdition(
+  editions: readonly DailyBriefingEditionSummary[],
+  dates?: readonly string[]
+): DailyBriefingEditionSummary | undefined {
+  const order = dates === undefined ? [...new Set(editions.map((edition) => edition.date))] : [...dates]
+  for (const date of order) {
+    const row = editions.find((edition) => edition.date === date)
+    if (row !== undefined) return row
+  }
+  return editions[0]
+}

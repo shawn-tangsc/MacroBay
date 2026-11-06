@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { mergeEditionSummary, withDeadline } from './dailyBriefingPageDerived'
-import { nextEditionAfterDelete } from './briefingEditionSelection'
+import { firstShownEdition, nextEditionAfterDelete } from './briefingEditionSelection'
 import { readGenerationTrace } from './dailyBriefingGenerationTrace'
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
 import type { GenerationTrace } from './dailyBriefingGenerationTrace'
@@ -163,7 +163,26 @@ export function useBriefingReload(deps: Readonly<{
         } else {
           setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
         }
-      } else setView({ status: 'no-edition', date: periodDate, failed: false })
+      } else {
+        /**
+         * 今天这一期没有版次：默认打开**列表里第一个有行的天头下的第一行**（用户 2026-11-06），
+         * 而不是给一屏"今天还没有"。整列都没有行才落到今天的空态。
+         * 只在这一档生效：读者点过、切过语言、删完重读都不走这里。
+         */
+        const withContent = rows.filter((row) => row.availableLocales.length > 0 || row.state !== 'missing')
+        const fallback = firstShownEdition(withContent, listed?.state === 'available' ? listed.result.dates : undefined)
+        if (fallback !== undefined && fallback.date !== periodDate) {
+          setPinnedDate(fallback.date)
+          setPickedPeriodId(fallback.periodId)
+          setPickedLocale(fallback.locale)
+          // 读它：没有正文（模板版/失败残留）也停在这一行，显示它自己的状态。
+          await readEdition(fallback.date, fallback.locale, { fresh: true, periodId: fallback.periodId })
+          if (!active) return
+          setRegenerating(false)
+          return
+        }
+        setView({ status: 'no-edition', date: periodDate, failed: false })
+      }
     } else if (false) {
       // Nothing is left for that day — same sentence as any day that never generated.
       setView({ status: 'no-edition', date: pinnedDate ?? periodDate, failed: false })
