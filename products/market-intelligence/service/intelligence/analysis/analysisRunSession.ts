@@ -6,17 +6,19 @@ type SessionRef = { id: string; agentId: string | null; description?: string }
 /**
  * One conversation per analysis run, so a reader can open the record of what was asked and answered.
  *
- * Built on the same injected port the follow-up conversation uses (`getAgentState` /
- * `createAgentSession` / `appendAgentSessionMessages`): one construction of "create a session" in the
- * product, not two. The agent is fixed — never "whatever is selected" — or the sidebar's automatic
- * group would be scattered across agents and never add up.
+ * Built on the injected ports the follow-up conversation uses (`createAgentSession` /
+ * `appendAgentSessionMessages`): one construction of "create a session" in the product, not two. The
+ * agent is fixed — never "whatever is selected" — or the sidebar's automatic group would be scattered
+ * across agents and never add up.
+ *
+ * Identity is `originRef` (the run id), read through a narrow lookup. `originGroup` groups (constant),
+ * `originRef` identifies; the title is display only and may be renamed by the reader.
  *
  * Idempotent by `description`, so a restart or a re-run of the same run finds the existing session
  * instead of growing a second one. Only the run id goes into the conversation; the prompt and the
  * model's answer stay in `mi_analysis_io` and are read by that id, never copied here.
  */
 export type AnalysisRunSessionDependencies = Readonly<{
-  getAgentState?: () => Promise<{ sessions: readonly SessionRef[] }>
   createAgentSession?: (input: CreateAgentSessionDto) => Promise<SessionRef>
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<unknown>
   /**
@@ -24,12 +26,12 @@ export type AnalysisRunSessionDependencies = Readonly<{
    *
    * 落成文本后不再随语言/时区变：历史会话是快照，和已发布结论保持发布时语言同一条规则。
    */
-  titleFor?: (queuedAt: string) => string
+  titleFor?: (queuedAt: string) => string | Promise<string>
   /**
    * 按 (agentId, originRef) 取一条，只读不建。
    *
-   * 有它就是窄查（一次查询、与库里会话总数无关）；没有时退回全量列表去重——那段是过渡，
-   * 平台 hook 一落地就删，不留两条路并存。
+   * 没有它就不建会话：`originRef` 是唯一的身份来源，读全量列表去重那条路已经删掉，
+   * 在类型上也不可表达。
    */
   findSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<SessionRef | null>
 }>
@@ -51,24 +53,19 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
     /** The one-line summary the card shows; absent while the run has not produced one. */
     summary?: string
   }>): Promise<string | undefined> {
-    // 窄查可用时不需要列表；两条都没有才什么都不做。
-    const canLookUp = deps.findSessionByAutomationRef || deps.getAgentState
-    if (!canLookUp || !deps.createAgentSession) return undefined
+    // 只有窄查这一条路。没有它就不建会话——**不退回「读全量列表去重」**：过渡路径一旦成为默认，
+    // 2000 条会话时每次分析就要读 2000 行，而且没人记得它只是过渡。
+    if (!deps.findSessionByAutomationRef || !deps.createAgentSession) return undefined
+    // 一条 SQL，与库里有多少条会话无关；标题改了也不影响身份（身份是 originRef）。
+    const found = await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
+    if (found) return found.id
+    // 描述只给人和老数据看；**身份是 originRef**，所以标题改了也不影响幂等。
     const description = `${analysisRunSessionPolicy.descriptionPrefix}${input.runId}`
-    if (deps.findSessionByAutomationRef) {
-      // 窄查：一条 SQL，与库里有多少条会话无关；标题改了也不影响身份。
-      const found = await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
-      if (found) return found.id
-    } else if (deps.getAgentState) {
-      const { sessions } = await deps.getAgentState()
-      const existing = sessions.find(session =>
-        session.agentId === analysisRunSessionPolicy.agentId && session.description === description)
-      if (existing) return existing.id
-    }
     const session = await deps.createAgentSession({
       agentId: analysisRunSessionPolicy.agentId,
       // 标题是「时刻 · 模块名」，绝不是 run id：读者在助手列表里不该看到我们的账本编号。
-      name: deps.titleFor?.(input.queuedAt ?? '') ?? analysisRunSessionPolicy.moduleName['zh-CN'],
+      name: (deps.titleFor ? await deps.titleFor(input.queuedAt ?? '') : undefined)
+        ?? analysisRunSessionPolicy.moduleName['zh-CN'],
       description,
       workspace: { type: 'system' },
       origin: analysisRunSessionPolicy.origin,
@@ -91,7 +88,8 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
               // 类型，`payload` 只带 runId——原始标识从不显示，也不会被当成正文念出来。
               type: 'agent-context' as const,
               kind: 'market-analysis-run',
-              label: deps.titleFor?.(input.queuedAt ?? '') ?? analysisRunSessionPolicy.moduleName['zh-CN'],
+              label: (deps.titleFor ? await deps.titleFor(input.queuedAt ?? '') : undefined)
+                ?? analysisRunSessionPolicy.moduleName['zh-CN'],
               payload: { runId: input.runId }
             }]
           }
@@ -113,12 +111,8 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
  */
 export function appendAnalysisRunSummary(deps: AnalysisRunSessionDependencies) {
   return async function appendRunSummary(input: Readonly<{ runId: string; summary: string }>): Promise<void> {
-    if (!deps.appendAgentSessionMessages) return
-    const description = `${analysisRunSessionPolicy.descriptionPrefix}${input.runId}`
-    const session = deps.findSessionByAutomationRef
-      ? await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
-      : (await deps.getAgentState?.() ?? { sessions: [] }).sessions.find(candidate =>
-        candidate.agentId === analysisRunSessionPolicy.agentId && candidate.description === description) ?? null
+    if (!deps.appendAgentSessionMessages || !deps.findSessionByAutomationRef) return
+    const session = await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
     if (!session) return
     await deps.appendAgentSessionMessages({
       sessionId: session.id,

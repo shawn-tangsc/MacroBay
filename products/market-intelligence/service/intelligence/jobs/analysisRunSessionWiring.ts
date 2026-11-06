@@ -12,9 +12,11 @@ type SessionDependencies = Parameters<typeof createAnalysisRunSession>[0]
  * 本身不是装配顺序的一部分。
  */
 export function createRunSessionPort(
-  input: Pick<SessionDependencies, 'getAgentState' | 'createAgentSession' | 'appendAgentSessionMessages'> & Readonly<{
+  input: Pick<SessionDependencies, 'findSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'> & Readonly<{
     /** 建会话那一刻的读者时区：标题落成文本后不再随设置变。 */
     timeZone: () => string
+    /** 建会话那一刻的读者语言：同上，落成文本后不再变。 */
+    language: () => Promise<'zh-CN' | 'en-US'>
   }>
 ): Readonly<{
   ensure: ReturnType<typeof createAnalysisRunSession>
@@ -22,14 +24,15 @@ export function createRunSessionPort(
 }> {
   return Object.freeze({
     ensure: createAnalysisRunSession({
-      getAgentState: input.getAgentState,
+      // 身份只走窄查：没有它就不建会话，不退回「读全量列表去重」。
+      findSessionByAutomationRef: input.findSessionByAutomationRef,
       createAgentSession: input.createAgentSession,
       appendAgentSessionMessages: input.appendAgentSessionMessages,
       // 「时刻 · 模块名」，按建会话时的读者时区与语言落成文本；之后不再随设置变。
-      titleFor: queuedAt => formatRunSessionTitle(queuedAt, 'zh-CN', input.timeZone())
+      titleFor: async queuedAt => formatRunSessionTitle(queuedAt, await input.language(), input.timeZone())
     }),
     appendSummary: appendAnalysisRunSummary({
-      getAgentState: input.getAgentState,
+      findSessionByAutomationRef: input.findSessionByAutomationRef,
       appendAgentSessionMessages: input.appendAgentSessionMessages
     })
   })

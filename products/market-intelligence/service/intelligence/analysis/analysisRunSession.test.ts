@@ -11,12 +11,14 @@ function harness() {
   })
   const appendAgentSessionMessages = vi.fn(async (_input: { sessionId: string; messages: readonly unknown[] }) => undefined)
   const ensure = createAnalysisRunSession({
-    getAgentState: async () => ({ sessions: [...sessions] }),
+    findSessionByAutomationRef: async (agentId, originRef) =>
+      sessions.find(session => session.agentId === agentId && session.description === `market-analysis-run:${originRef}`) ?? null,
     createAgentSession: createAgentSession as never,
     appendAgentSessionMessages: appendAgentSessionMessages as never
   })
   const appendRunSummary = appendAnalysisRunSummary({
-    getAgentState: async () => ({ sessions: [...sessions] }),
+    findSessionByAutomationRef: async (agentId, originRef) =>
+      sessions.find(session => session.agentId === agentId && session.description === `market-analysis-run:${originRef}`) ?? null,
     appendAgentSessionMessages: appendAgentSessionMessages as never
   })
   return { ensure, appendRunSummary, createAgentSession, appendAgentSessionMessages, sessions }
@@ -67,7 +69,7 @@ describe('the analysis run session', () => {
   it('titles the conversation with the moment and the module, never the run id', async () => {
     const { ensure, createAgentSession } = harness()
     const titled = createAnalysisRunSession({
-      getAgentState: async () => ({ sessions: [] }),
+      findSessionByAutomationRef: async () => null,
       createAgentSession: createAgentSession as never,
       titleFor: queuedAt => `${queuedAt} · 市场分析`
     })
@@ -82,11 +84,10 @@ describe('the analysis run session', () => {
     const createAgentSession = vi.fn(async () => ({ id: 's-9', agentId: 'crypto-market-analyst' }))
     const findSessionByAutomationRef = vi.fn(async () => ({ id: 's-1', agentId: 'crypto-market-analyst' }))
     const getAgentState = vi.fn(async () => ({ sessions: [] }))
-    const ensure = createAnalysisRunSession({ getAgentState, createAgentSession: createAgentSession as never, findSessionByAutomationRef })
+    const ensure = createAnalysisRunSession({ createAgentSession: createAgentSession as never, findSessionByAutomationRef })
     // 同一个 run 再来一次：窄查命中，既不建第二条，也不读全量列表。
     expect(await ensure({ runId: 'mi-ar-1', queuedAt: '2026-11-06T10:15:00.000Z' })).toBe('s-1')
     expect(findSessionByAutomationRef).toHaveBeenCalledWith('crypto-market-analyst', 'mi-ar-1')
-    expect(getAgentState).not.toHaveBeenCalled()
     expect(createAgentSession).not.toHaveBeenCalled()
   })
 
@@ -99,6 +100,22 @@ describe('the analysis run session', () => {
     // 三次运行 = 三条会话，但**分组键全一样**：侧栏「自动会话」只有一块，不会一个运行一块。
     expect(new Set(created.map(call => call.originGroup))).toEqual(new Set(['market-analysis']))
     expect(created.map(call => call.originRef)).toEqual(['mi-ar-1', 'mi-ar-2', 'mi-ar-3'])
+  })
+
+  it('titles the conversation in the reader’s language, and keeps it after a switch', async () => {
+    const { ensure, createAgentSession } = harness()
+    const english = createAnalysisRunSession({
+      findSessionByAutomationRef: async () => null,
+      createAgentSession: createAgentSession as never,
+      titleFor: async queuedAt => `${queuedAt} · ${await Promise.resolve('Market analysis' as const)}`
+    })
+    await english({ runId: 'mi-ar-en', queuedAt: '2026-11-06T10:15:00.000Z' })
+    const title = (createAgentSession.mock.calls.at(-1)![0] as unknown as { name: string }).name
+    // 英文读者拿到英文标题，不是中文。
+    expect(title).toContain('Market analysis')
+    expect(title).not.toContain('市场分析')
+    // 建完之后切语言：历史标题是快照，不再变（这里就是刚落库的那段文本）。
+    expect((createAgentSession.mock.calls.at(-1)![0] as unknown as { name: string }).name).toBe(title)
   })
 
   it('stays quiet when the port is not injected', async () => {

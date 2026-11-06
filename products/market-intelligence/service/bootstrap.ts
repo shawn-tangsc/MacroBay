@@ -98,12 +98,7 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   getNetworkSettings?: () => Promise<NetworkSettings>
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
-  /**
-   * 自动会话的幂等窄查：按 `(agentId, originRef)` 取一条，只读、不创建。
-   *
-   * 平台还没提供时可以是 `undefined`：那时按「没有就不建会话」处理，**不退回全量列表**——
-   * 过渡路径一旦变成默认，就没人记得它只是过渡。
-   */
+  /** 自动会话的幂等窄查：按 (agentId, originRef) 取一条，只读、不创建；缺席时不建会话，也不退回全量列表。 */
   findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<{ id: string; agentId: string | null; description?: string } | null>
   sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>
   cancelAgentSession?: (sessionId: string) => Promise<void> | void
@@ -561,8 +556,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // 自动分析会话：与追问会话同一份注入端口，不另造第二个建会话的地方。建在固定智能体下、
   // 按 runId 幂等，会话里只放 runId 与摘要，原文留在 mi_analysis_io。
   intelligenceModule.marketAnalysisRuntime.setRunSessionPort(createRunSessionPort({
-    getAgentState: deps.getAgentState, createAgentSession: deps.createAgentSession,
-    appendAgentSessionMessages: deps.appendAgentSessionMessages, timeZone: () => currentReaderTimeZone()
+    findSessionByAutomationRef: deps.findAgentSessionByAutomationRef,
+    createAgentSession: deps.createAgentSession,
+    appendAgentSessionMessages: deps.appendAgentSessionMessages, timeZone: () => currentReaderTimeZone(),
+    language: deps.getAppLanguage ?? (async () => 'zh-CN' as const)
   }))
   // 「这条信号分析过没有」的读口：装配层这里挂一次，卡片才有状态可显示。漏挂不会报错，只会
   // 让每张卡都显示「这次没查到」，所以这一处有专门的用例断言它真的被调用。
