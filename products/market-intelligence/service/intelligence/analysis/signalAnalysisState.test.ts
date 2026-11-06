@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { projectSignalAnalysisState, signalAnalysisStatePolicy } from './signalAnalysisState'
+import { projectSignalAnalysisState, projectSignalAnalysisStates, signalAnalysisStatePolicy } from './signalAnalysisState'
 
 const row = (overrides: Partial<Parameters<typeof projectSignalAnalysisState>[0]['row'] & object> = {}) => ({
   changeHash: 'h', decision: 'queued' as const, reasonCode: 'signal-high-triggered', analysisRunId: null, ...overrides
@@ -32,6 +32,26 @@ describe('signal analysis state', () => {
     // 同一张表里，高档没行才是「还没轮到」。
     expect(projectSignalAnalysisState({ severity: 'high', row: undefined, run: undefined }))
       .toMatchObject({ analysisState: 'not-triggered' })
+  })
+
+  it('projects a screenful in one pass, keyed by change hash, beside the signals', () => {
+    const states = projectSignalAnalysisStates({
+      changeHashes: ['h-ok', 'h-failed', 'h-low', 'h-none'],
+      rows: [
+        { changeHash: 'h-ok', decision: 'queued', reasonCode: 'signal-high-triggered', analysisRunId: 'run-1' },
+        { changeHash: 'h-failed', decision: 'queued', reasonCode: 'signal-high-triggered', analysisRunId: 'run-2' }
+      ],
+      runs: {
+        'run-1': { status: 'succeeded', failureCode: null },
+        'run-2': { status: 'failed', failureCode: 'analysis-provider-error' }
+      },
+      severities: { 'h-ok': 'high', 'h-failed': 'high', 'h-low': 'low', 'h-none': 'medium' }
+    })
+    expect(states['h-ok']).toMatchObject({ analysisState: 'published' })
+    expect(states['h-failed']).toMatchObject({ analysisState: 'failed', analysisReason: 'analysis-provider-error' })
+    // 低档没有行也必须是 skipped：等着一条永远不会来的分析，比直接说「这条不够格」坏。
+    expect(states['h-low']).toMatchObject({ analysisState: 'skipped' })
+    expect(states['h-none']).toMatchObject({ analysisState: 'not-triggered' })
   })
 
   it('answers the reader’s own switch without reading it out of the ledger', () => {

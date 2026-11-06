@@ -73,3 +73,34 @@ export function projectSignalAnalysisState(input: Readonly<{
   if (run.status === 'succeeded') return { analysisOffByReader, analysisState: 'published' }
   return { analysisOffByReader, analysisState: 'failed', analysisReason: run.failureCode ?? undefined }
 }
+
+/**
+ * The state for a whole screenful of signals, keyed by `changeHash`.
+ *
+ * Deliberately a map **beside** the signals, never a field inside one: a signal is the rule's
+ * product, the analysis state is the run's, and a field tucked into `SignalWithWindow` would read as
+ * "signals carry their runs" to the next person. One batch, one query, no per-chip lookup.
+ */
+export function projectSignalAnalysisStates(input: Readonly<{
+  changeHashes: readonly string[]
+  /** Latest ledger row per hash, from the one batch query. */
+  rows: readonly SignalTriggerLedgerState[]
+  /** The run each row points at, when it points at one. */
+  runs: Readonly<Record<string, SignalAnalysisRunState>>
+  /** Each signal's own severity, because a low mark with no row is `skipped`, not "not yet". */
+  severities: Readonly<Record<string, SignalSeverity>>
+  analysisOffByReader?: boolean
+}>): Readonly<Record<string, SignalAnalysisStateView>> {
+  const byHash = new Map(input.rows.map(row => [row.changeHash, row]))
+  const states: Record<string, SignalAnalysisStateView> = {}
+  for (const changeHash of input.changeHashes) {
+    const row = byHash.get(changeHash)
+    states[changeHash] = projectSignalAnalysisState({
+      severity: input.severities[changeHash] ?? 'high',
+      row,
+      run: row?.analysisRunId ? input.runs[row.analysisRunId] : undefined,
+      ...(input.analysisOffByReader === undefined ? {} : { analysisOffByReader: input.analysisOffByReader })
+    })
+  }
+  return states
+}
