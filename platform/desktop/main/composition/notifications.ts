@@ -113,6 +113,10 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     deliver: ports.deliver,
     settings: {
       pushChannelId: async () => (await ports.settingsStore.get()).notifications.push.channelId
+    },
+    // 至多一个「看原文」；多出来的取第一个照发，但留一行痕——静默取第一个等于让写错的人永远不知道。
+    diagnostics: (code, detail) => {
+      ports.log.log('warn', `notification.${code}`, { ...detail })
     }
   })
   composeNotificationRuntime({

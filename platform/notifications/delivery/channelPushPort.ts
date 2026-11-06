@@ -16,7 +16,7 @@ import type {
 } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { resolveDeliveryTarget } from '../../ai/agent-platform/channels/channelDeliveryTargetResolution'
 import type { ChannelDeliveryRequest, ChannelDeliveryResult } from '../../ai/agent-platform/channels/ChannelDeliveryContracts'
-import type { NotificationRecord } from '../contracts/notificationContracts'
+import type { NotificationAction, NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDeliveryContent } from '../runtime/notificationRouting'
 
 /**
@@ -54,22 +54,48 @@ export type ChannelPushPortDeps = {
   deliver(request: ChannelDeliveryRequest): Promise<ChannelDeliveryResult>
   /** 读读者选的通道；由组合根接到 runtime 设置（`push.channelId`）。 */
   settings: { pushChannelId(): Promise<string | null> }
+  /**
+   * 「多于一个外部链接」这件事的出口（契约 §7.5 ⑫）：取第一个照发，但**不许只在脑子里处理**。
+   * 两种外链是设计错误，留一行日志，第二次写错的人才查得到。
+   */
+  diagnostics?: (code: 'multiple-external-actions', detail: { recordId: string; count: number }) => void
 }
 
 /**
- * 手机推送的正文：标题 / 正文 / 「为什么推了」，去空去重。
+ * 手机推送的正文：标题 / 正文 / 「为什么推了」，去空去重；有原文链接时**它单独是最后一块**。
  *
  * **末尾不加编号。** 以前这里是 `#${content.shortId}`，而 `shortId` 取记录 id 前 8 位、记录 id
  * 又以 `notification-` 开头——于是每一条的结尾都是同一个 `#notifica`：既重复又像坏掉的标签，
  * 读者还需要自己猜那是什么。手机上读者要的是「什么事」，不是我们的内部编号（2026-11-06 用户截图）。
+ *
+ * **原文链接由这里附，不由产品拼进正文**（契约 §7.5 ⑫）：中心那条正文只有两行，
+ * URL 塞进去会被截成半截、读者点不到；中心和手机用的是**同一个地址**，正文里没有副本。
+ * 与某一段重复时只留一次——同一句话出现两遍在手机上是噪音。
  */
-export function formatPushText(content: NotificationDeliveryContent): string {
+export function formatPushText(content: NotificationDeliveryContent, externalUrl?: string): string {
   const lines: string[] = []
   for (const line of [content.title, content.body, content.reason]) {
     const trimmed = line.trim()
     if (trimmed.length > 0 && !lines.includes(trimmed)) lines.push(trimmed)
   }
+  const url = externalUrl?.trim()
+  if (url !== undefined && url.length > 0 && !lines.some((line) => line.includes(url))) lines.push(url)
   return lines.join('\n\n')
+}
+
+/**
+ * 记录里那一个「看原文」地址（契约 §7.5 ⑫）：**至多一个**。
+ *
+ * 多于一个时不挑「顺眼的」：取第一个照发，并把多余的数量交给调用点记一行——
+ * 静默取第一个，第二个会写错的人永远不会知道自己写错了。
+ * `deeplink` 不参与：那是应用内落点，手机上点不动。
+ */
+export function externalActionUrl(actions: readonly NotificationAction[] | undefined): { url?: string; extra: number } {
+  const external = (actions ?? []).filter(
+    (action) => action.kind === 'open-external' && typeof action.url === 'string' && action.url.trim().length > 0
+  )
+  const first = external[0]?.url?.trim()
+  return { ...(first === undefined || first.length === 0 ? {} : { url: first }), extra: Math.max(0, external.length - 1) }
 }
 
 /**
@@ -123,6 +149,10 @@ export function createChannelPushPort(deps: ChannelPushPortDeps) {
         }
       }
 
+      const external = externalActionUrl(record.actions)
+      if (external.extra > 0) {
+        deps.diagnostics?.('multiple-external-actions', { recordId: record.id, count: external.extra + 1 })
+      }
       const result = await deps.deliver({
         channelId: resolved.channelId,
         agentId: resolved.agentId,
@@ -130,7 +160,8 @@ export function createChannelPushPort(deps: ChannelPushPortDeps) {
         source: 'notification',
         // 幂等键 = 记录 id：同一条记录重发不会在通道侧变成两次（通道方案 §2.2）。
         sourceId: record.id,
-        text: formatPushText(content)
+        // 原文链接是**最后一块**：手机上它是唯一能点的东西，也是中心那个按钮的同一个地址。
+        text: formatPushText(content, external.url)
       })
       return mapChannelDeliveryResult(result)
     } catch {

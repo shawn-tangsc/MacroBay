@@ -76,6 +76,7 @@ function harness(options: {
   conversations?: readonly ChannelConversationSafeView[]
   result?: ChannelDeliveryResult
   throws?: boolean
+  diagnostics?: ChannelPushPortDeps['diagnostics']
 }) {
   const requests: ChannelDeliveryRequest[] = []
   const deps: ChannelPushPortDeps = {
@@ -89,7 +90,8 @@ function harness(options: {
       if (options.throws) throw new Error('transport exploded')
       return options.result ?? { status: 'delivered', attemptId: 'attempt-1', errorCode: null }
     },
-    settings: { pushChannelId: async () => (options.channelId === undefined ? 'channel-a' : options.channelId) }
+    settings: { pushChannelId: async () => (options.channelId === undefined ? 'channel-a' : options.channelId) },
+    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics })
   }
   return { push: createChannelPushPort(deps), requests }
 }
@@ -208,6 +210,68 @@ describe('channelPushPort', () => {
     // 末尾不是编号：以前这里跟着记录 id 前 8 位，而它每条都一样。
     expect(formatPushText(CONTENT).startsWith('#')).toBe(false)
     expect(formatPushText(CONTENT)).not.toContain('notification-')
+  })
+
+  it('puts the original link in the last block, and only once', () => {
+    const url = 'https://example.com/news/42'
+    const blocks = formatPushText(CONTENT, url).split('\n\n')
+    expect(blocks.at(-1)).toBe(url)
+    expect(formatPushText(CONTENT, url).split(url)).toHaveLength(2)
+    // 某一段里已经有这个地址时不重复追加：手机上看同一句两遍是噪音。
+    expect(formatPushText({ ...CONTENT, body: `原文：${url}` }, url).split(url)).toHaveLength(2)
+    // 没有外链就什么都不加，也不写「无链接」那种占位。
+    expect(formatPushText(CONTENT)).toBe('日报已生成\n\n10 月 31 日的情报日报已经生成。\n\n日报生成完成')
+  })
+
+  it('takes the link from the record actions, and appends nothing for a deeplink-only event', async () => {
+    const { push, requests } = harness({})
+    const withLink = {
+      ...RECORD,
+      actions: [{
+        id: 'read-original',
+        labelKey: 'notification.action.open-original' as const,
+        kind: 'open-external' as const,
+        url: 'https://example.com/news/42'
+      }]
+    }
+    await push(withLink, CONTENT)
+    // 链接是最后一块：手机上那是唯一能点的东西。
+    expect(requests[0]?.text.trimEnd().endsWith('\n\nhttps://example.com/news/42')).toBe(true)
+
+    const deeplinkOnly = {
+      ...RECORD,
+      id: 'notification-1793875279822-3',
+      deeplink: { scope: 'platform' as const },
+      actions: [{ id: 'open', labelKey: 'notification.taskFailed.open' as const, kind: 'open' as const, deeplink: { scope: 'platform' as const } }]
+    }
+    await push(deeplinkOnly, CONTENT)
+    // `deeplink` 是应用内落点，手机上点不动：推送里不许因此出现任何链接。
+    expect(requests[1]?.text).not.toContain('http')
+  })
+
+  it('sends the first of two external links and leaves a trace, instead of silently picking one', async () => {
+    const events: { code: string; detail: { recordId: string; count: number } }[] = []
+    const { push, requests } = harness({ diagnostics: (code, detail) => { events.push({ code, detail }) } })
+    const twoLinks = {
+      ...RECORD,
+      actions: [
+        { id: 'a', labelKey: 'notification.action.open-original' as const, kind: 'open-external' as const, url: 'https://example.com/first' },
+        { id: 'b', labelKey: 'notification.action.open-original' as const, kind: 'open-external' as const, url: 'https://example.com/second' }
+      ]
+    }
+    await push(twoLinks, CONTENT)
+
+    expect(requests[0]?.text.trimEnd().endsWith('https://example.com/first')).toBe(true)
+    expect(requests[0]?.text).not.toContain('https://example.com/second')
+    // 取第一个不等于「悄悄取第一个」：多出来的那一条要留痕。
+    expect(events).toEqual([{ code: 'multiple-external-actions', detail: { recordId: RECORD.id, count: 2 } }])
+  })
+
+  it('stays quiet when there is exactly one external link', async () => {
+    const events: unknown[] = []
+    const { push } = harness({ diagnostics: () => { events.push(1) } })
+    await push({ ...RECORD, actions: [{ id: 'a', labelKey: 'notification.action.open-original' as const, kind: 'open-external' as const, url: 'https://example.com/only' }] }, CONTENT)
+    expect(events).toEqual([])
   })
 
   it('treats a delivered result without an attempt id as accepted without evidence id', () => {
