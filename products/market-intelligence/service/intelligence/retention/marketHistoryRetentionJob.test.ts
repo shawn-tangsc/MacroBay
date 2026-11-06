@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { barRetentionCutoffs } from './barRetention'
-import { createMarketHistoryRetention, MARKET_HISTORY_RETENTION_JOB_ID, registerMarketHistoryRetentionJob } from './marketHistoryRetentionJob'
+import { createMarketHistoryRetention, MARKET_HISTORY_RETENTION_JOB_ID, registerMarketHistoryRetentionJob, type MarketHistoryRetentionResult } from './marketHistoryRetentionJob'
+import { registerMarketRetention } from './registerMarketRetention'
 
 const atMs = Date.UTC(2026, 9, 15, 12, 0, 0)
 
 /** A store that records what it was asked and what its ledger was told. */
-function storeFor(result: Readonly<{ thinned: number; deleted: number; ledgerDeleted?: number; oldestKeptAtMs: number | null }> | Error) {
+function storeFor(result: MarketHistoryRetentionResult | Error) {
   const notes = new Map<string, string>()
   return {
     notes,
@@ -41,8 +42,33 @@ describe('the market history retention pass', () => {
     expect(macro.notes.has('macro-market.retention.lastLedgerDeleted')).toBe(false)
   })
 
-  it('keeps going when one store refuses, and records the refusal as a code', async () => {
-    const macro = storeFor(new Error('database is locked'))
+  it('writes the call record occupancy on both sides of the pass and the signal ledger count', async () => {
+    const analysis = storeFor({ thinned: 0, deleted: 2, ledgerDeleted: 0, triggerLedgerDeleted: 5, oldestKeptAtMs: null })
+    const analysisIo = storeFor({ thinned: 0, deleted: 12, bytesBefore: 130 * 1024 * 1024, bytesAfter: 99 * 1024 * 1024, oldestKeptAtMs: null })
+    await createMarketHistoryRetention({ stores: { analysis, analysisIo }, now: () => atMs }).run()
+
+    expect(analysis.notes.get('analysis.retention.lastTriggerLedgerDeleted')).toBe('5')
+    // Both sides are recorded: a lone "deleted 12" cannot say how close the ceiling is, and a lone
+    // current size cannot say whether this pass ran at all.
+    expect(analysisIo.notes.get('analysis-io.retention.lastBytesBefore')).toBe(String(130 * 1024 * 1024))
+    expect(analysisIo.notes.get('analysis-io.retention.lastBytesAfter')).toBe(String(99 * 1024 * 1024))
+    expect(analysisIo.notes.get('analysis-io.retention.lastDeleted')).toBe('12')
+    expect(analysisIo.notes.get('analysis-io.retention.lastRunAtMs')).toBe(String(atMs))
+  })
+
+  it('does not mark the conclusion store failed when the call record store refuses', async () => {
+    const analysis = storeFor({ thinned: 0, deleted: 2, ledgerDeleted: 0, triggerLedgerDeleted: 0, oldestKeptAtMs: null })
+    const analysisIo = storeFor(new Error('database is locked'))
+    const summary = await createMarketHistoryRetention({ stores: { analysis, analysisIo }, now: () => atMs }).run()
+
+    expect(summary.results.analysis).toMatchObject({ deleted: 2, triggerLedgerDeleted: 0 })
+    // The machine proof of "one segment failing does not block another": the conclusion store's own
+    // failure key stays empty while the call record store carries its own.
+    expect(analysis.notes.has('analysis.retention.lastFailureCode')).toBe(false)
+    expect(analysisIo.notes.get('analysis-io.retention.lastFailureCode')).toBe('retention-failed')
+  })
+
+  it('keeps going when one store refuses, and records the refusal as a code', async () => {    const macro = storeFor(new Error('database is locked'))
     const crossAsset = storeFor({ thinned: 1, deleted: 2, oldestKeptAtMs: atMs - 1000 })
     const onError = vi.fn()
     const summary = await createMarketHistoryRetention({ stores: { macro, crossAsset, analysis: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }) }, now: () => atMs, onError }).run()
@@ -87,6 +113,34 @@ describe('the market history retention pass', () => {
     }).run()
     expect(Object.keys(summary.results)).not.toContain('news')
     expect(Object.values(summary.results).every((entry) => entry !== undefined && !('state' in entry))).toBe(true)
+  })
+
+  it('registers the analysis call record as its own store on the one daily pass', async () => {
+    const registered = new Map<string, () => Promise<unknown>>()
+    const notes = new Map<string, string>()
+    const barStore = { retention: () => ({ thinned: 0, deleted: 0, oldestKeptAtMs: null }), note: (key: string, value: string) => { notes.set(key, value) } }
+    await registerMarketRetention({
+      jobRuntime: {
+        registerHandler: (id: string, handler: () => Promise<unknown>) => { registered.set(id, handler) },
+        setSchedule: () => undefined,
+        enqueueDefinition: async () => ({ id: 'run-1' })
+      } as never,
+      macroStore: barStore,
+      crossAssetStore: barStore,
+      analysisRepository: {
+        retention: () => ({ deleted: 0, ledgerDeleted: 0, triggerLedgerDeleted: 4, oldestKeptAtMs: null }),
+        note: (key: string, value: string) => { notes.set(key, value) },
+        analysisIo: { retention: () => ({ deleted: 0, bytesBefore: 20, bytesAfter: 20, oldestKeptAtMs: null }) }
+      } as never
+    })
+
+    // The handler is the pass itself: running it proves both new segments are actually wired to the
+    // one job, not merely constructed somewhere.
+    await registered.get(MARKET_HISTORY_RETENTION_JOB_ID)!()
+    expect(notes.get('analysis.retention.lastTriggerLedgerDeleted')).toBe('4')
+    expect(notes.get('analysis-io.retention.lastBytesBefore')).toBe('20')
+    expect(notes.get('analysis-io.retention.lastBytesAfter')).toBe('20')
+    expect(notes.get('analysis-io.retention.lastDeleted')).toBe('0')
   })
 
   it('registers one daily job and looks at startup as well', () => {

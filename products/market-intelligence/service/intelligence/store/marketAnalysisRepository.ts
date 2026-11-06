@@ -17,9 +17,12 @@ import {
 } from '../../../contracts/moduleSignalEvidence'
 import { SignalLedgerError, signalLedgerErrorCodes } from '../../../contracts/signalLedgerErrors'
 import { canonicalizeMarketAnalysisJson } from '../analysis/analysisHash'
-import { analysisConclusionRetentionPolicy } from '../retention/analysisConclusionRetention'
-import { predictionLedgerRetentionPolicy } from '../retention/predictionLedgerRetention'
 import { createMarketAnalysisSqlite, type MarketAnalysisSqlite } from './marketAnalysisSqlite'
+import { createAnalysisIoStore, migrateAnalysisIo } from './marketAnalysisIoStore'
+import {
+  retainMarketAnalysis, writeAnalysisMetaNote,
+  type MarketAnalysisRetentionInput, type MarketAnalysisRetentionResult
+} from './marketAnalysisRetention'
 import { linkRunJobRun as attachRunJobRun, linkTriggerLedgerRun as attachTriggerLedgerRun } from './marketAnalysisRunLinks'
 import { listLatestSignalLedgerStates } from './marketAnalysisSignalLedger'
 import { ensureRunColumns } from './marketAnalysisColumns'
@@ -33,7 +36,7 @@ import {
 /** 归档元数据的形状与「怎么校验它」在同一处：行换算模块拥有它，这里只转出去。 */
 export type { MarketAnalysisArchiveMetadata } from './marketAnalysisRepositoryRows'
 
-const MARKET_ANALYSIS_SCHEMA_VERSION = 2
+const MARKET_ANALYSIS_SCHEMA_VERSION = 3
 const DEFAULT_TIMELINE_PAGE_SIZE = 50
 const MAX_TIMELINE_PAGE_SIZE = 50
 const CURSOR_TTL_MS = 15 * 60 * 1000
@@ -77,9 +80,14 @@ export function createMarketAnalysisRepository(input: RepositoryInput): MarketAn
 function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
   const cursors = new Map<string, Readonly<{ eventGroupId?: string; occurredAt: string; id: string; expiresAt: number }>>()
   migrate(sqlite.database)
+  // One row per model call, in the analysis database but with its own table and its own cleanup:
+  // a conclusion and the prompt that produced it age on different clocks, and a failed pass on one
+  // must not be recorded as a failure of the other.
+  const analysisIo = createAnalysisIoStore(sqlite.database)
 
   return {
     migrate() { migrate(sqlite.database) },
+    analysisIo,
     inspectSchema() {
       const tables = (sqlite.database.prepare("select name from sqlite_schema where type = 'table' and name like 'mi_analysis_%' order by name").all() as Row[]).map(row => String(row.name))
       const migrationRows = Number((sqlite.database.prepare('select count(*) as count from mi_analysis_migrations').get() as Row).count)
@@ -356,89 +364,15 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     },
     inspectStorage() { return { rowCount: Number((sqlite.database.prepare('select count(*) as count from mi_analysis_event_groups').get() as Row).count), databaseBytes: sqlite.filePath === ':memory:' ? 0 : statSync(sqlite.filePath).size } },
     /**
-     * Drop the conclusions that have outlived their window, and the graph hanging off each of them, then
-     * drop the verdicts that have outlived their own — longer — window.
-     *
-     * Rows leave in dependency order — verifications, then the predictions they verified, then the
-     * timeline entries that point at a conclusion, then the conclusion itself, then the run and snapshot
-     * it was built from, then the ledger lines and the event group once nothing is left under it — because
-     * every one of those edges is a foreign key the database enforces rather than a convention. The guard
-     * is the policy's own: a conclusion with a prediction **not yet due** for verification is skipped, so
-     * a verdict the product still intends to reach cannot lose the evidence it needs. One transaction,
-     * one batch of conclusions per pass, and a second pass finds nothing left to do.
-     *
-     * The verdict ledger is the exception to the cascade: it hangs off nothing, so deleting a conclusion
-     * leaves its verdicts behind until *their* cutoff. That is the whole point of the second cutoff —
-     * `mi_analysis_predictions` rows go after fourteen days, the verdicts about them after a hundred and
-     * eighty, and neither window can move the other.
+     * Drop everything that has outlived its window. The pass itself lives in
+     * `marketAnalysisRetention.ts` — four clocks, four segments, one transaction boundary each — so
+     * this file keeps only the database handle and delegates.
      */
-    retention(value: Readonly<{ conclusionCutoffIso: string; ledgerCutoffIso: string }>): Readonly<{ deleted: number; ledgerDeleted: number; oldestKeptAtMs: number | null }> {
-      const { conclusionCutoffIso: cutoffIso, ledgerCutoffIso } = value
-      const database = sqlite.database
-      const placeholders = (count: number) => Array.from({ length: count }, () => '?').join(',')
-      let deleted = 0
-      let ledgerDeleted = 0
-      database.exec('begin')
-      try {
-        for (;;) {
-          const eligible = database.prepare(`select id, analysis_run_id from mi_analysis_summaries
-            where created_at < ?
-              and not exists (select 1 from mi_analysis_predictions p
-                where p.summary_id = mi_analysis_summaries.id and p.verification_due_at > ?)
-            order by created_at limit ${analysisConclusionRetentionPolicy.batchSize}`).all(cutoffIso, cutoffIso) as Row[]
-          if (eligible.length === 0) break
-          const ids = eligible.map(row => String(row.id))
-          const list = placeholders(ids.length)
-          const runIds = [...new Set(eligible.map(row => row.analysis_run_id).filter((id): id is string => typeof id === 'string'))]
-          database.prepare(`delete from mi_analysis_prediction_verifications where prediction_id in (
-            select id from mi_analysis_predictions where summary_id in (${list}))`).run(...ids)
-          database.prepare(`delete from mi_analysis_predictions where summary_id in (${list})`).run(...ids)
-          database.prepare(`delete from mi_analysis_timeline where summary_ref in (${list})`).run(...ids)
-          database.prepare(`delete from mi_analysis_summaries where id in (${list})`).run(...ids)
-          if (runIds.length > 0) {
-            const runList = placeholders(runIds.length)
-            // A run another conclusion still cites stays: this deletes the run, not the history of it.
-            database.prepare(`delete from mi_analysis_runs where id in (${runList})
-              and id not in (select analysis_run_id from mi_analysis_timeline where analysis_run_id is not null)`).run(...runIds)
-            database.prepare('delete from mi_analysis_snapshots where id not in (select snapshot_id from mi_analysis_runs)').run()
-          }
-          // Ledger lines first, then the group — and the group only once nothing references it at all.
-          // A group with no conclusions left can still be named by a snapshot, by a surviving conclusion's
-          // timeline entry, or by a later group's `superseded_by_group_id`, and deleting it then is a
-          // foreign key violation: the over-eager predicate here failed exactly that way when the pass was
-          // replayed against a copy of the real database with a three-day window.
-          database.prepare(`delete from mi_analysis_trigger_ledger where event_group_id in (
-            select id from mi_analysis_event_groups g
-            where not exists (select 1 from mi_analysis_summaries s where s.event_group_id = g.id))`).run()
-          database.prepare(`delete from mi_analysis_event_groups
-            where not exists (select 1 from mi_analysis_summaries s where s.event_group_id = mi_analysis_event_groups.id)
-              and not exists (select 1 from mi_analysis_snapshots n where n.event_group_id = mi_analysis_event_groups.id)
-              and not exists (select 1 from mi_analysis_timeline t where t.event_group_id = mi_analysis_event_groups.id)
-              and not exists (select 1 from mi_analysis_trigger_ledger l where l.event_group_id = mi_analysis_event_groups.id)
-              and not exists (select 1 from mi_analysis_event_groups o where o.superseded_by_group_id = mi_analysis_event_groups.id)`).run()
-          deleted += ids.length
-          if (ids.length < analysisConclusionRetentionPolicy.batchSize) break
-        }
-        // The verdicts go on their own clock, in their own batches, inside the same transaction: a row whose
-        // prediction was just deleted is exactly the row this pass is asked to keep.
-        for (;;) {
-          const changes = Number(database.prepare(`delete from mi_analysis_prediction_ledger where prediction_id in (
-            select prediction_id from mi_analysis_prediction_ledger where evaluated_at < ?
-            order by evaluated_at limit ${predictionLedgerRetentionPolicy.batchSize})`).run(ledgerCutoffIso).changes)
-          ledgerDeleted += changes
-          if (changes < predictionLedgerRetentionPolicy.batchSize) break
-        }
-        database.exec('commit')
-      } catch (error) { database.exec('rollback'); throw error }
-      const oldest = database.prepare('select min(created_at) as created_at from mi_analysis_summaries').get() as Row | undefined
-      return Object.freeze({ deleted, ledgerDeleted, oldestKeptAtMs: oldest?.created_at == null ? null : Date.parse(String(oldest.created_at)) })
+    retention(value: MarketAnalysisRetentionInput): MarketAnalysisRetentionResult {
+      return retainMarketAnalysis(sqlite.database, value)
     },
     /** The retention pass's ledger, in this file's own meta table: additive, so no migration is needed. */
-    note(key: string, value: string) {
-      const db = sqlite.database
-      db.exec('create table if not exists mi_analysis_meta(key text primary key, value text not null)')
-      db.prepare('insert into mi_analysis_meta(key,value) values(?,?) on conflict(key) do update set value=excluded.value').run(key, value)
-    },
+    note(key: string, value: string) { writeAnalysisMetaNote(sqlite.database, key, value) },
     readNote(key: string): string | undefined {
       const db = sqlite.database
       db.exec('create table if not exists mi_analysis_meta(key text primary key, value text not null)')
@@ -466,6 +400,10 @@ function migrate(database: MarketAnalysisSqlite['database']): void {
     if (!ledgerColumns.includes('evidence_json')) database.exec('alter table mi_analysis_trigger_ledger add column evidence_json text')
     // Columns added after the first release; extras are nullable and never backfilled.
     ensureRunColumns(database)
+    // A new table, not a new column: the model's prompt and answer are one row per call, so they
+    // cannot ride on the snapshot's six archive columns (a repair or a retry would overwrite the
+    // first answer — the one a post-mortem needs). Purely additive, so old databases keep every row.
+    migrateAnalysisIo(database)
     database.exec('commit')
   } catch (error) {
     try { database.exec('rollback') } catch { /* preserve original failure */ }

@@ -14,10 +14,7 @@ import { app } from 'electron'
 import { createPlatformWebSocketFactory } from '@platform/network/platformWebSocket'
 import type { ModelDefaultsSettings, NetworkSettings } from '@platform/settings/schema/appSettings'
 import { createCrossAssetStore, crossAssetStoragePolicy } from './intelligence/cross-asset/crossAssetStore'
-import { analysisConclusionCutoffIso } from './intelligence/retention/analysisConclusionRetention'
-import { predictionLedgerCutoffIso } from './intelligence/retention/predictionLedgerRetention'
-import { createMarketHistoryRetention, registerMarketHistoryRetentionJob } from './intelligence/retention/marketHistoryRetentionJob'
-import { createNewsSentimentRetentionTarget } from './intelligence/news-sentiment/newsSentimentRetention'
+import { registerMarketRetention } from './intelligence/retention/registerMarketRetention'
 import { createCrossAssetRuntime } from './intelligence/cross-asset/crossAssetRuntime'
 import { createBinanceCrossAssetClient } from './intelligence/cross-asset/binanceCrossAssetClient'
 import { createBinanceCrossAssetStream } from './intelligence/cross-asset/binanceCrossAssetStream'
@@ -283,27 +280,14 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // that has been kept since the product shipped has months of folding to do, and waiting for the first
   // midnight would leave the reader's disk exactly as it was for a day.
   if (crossAssetStore) {
-    const macroStore = intelligenceModule.macroMarket.store
-    const analysisRepository = intelligenceModule.marketAnalysisRuntime.repository
-    registerMarketHistoryRetentionJob(deps.jobRuntime, createMarketHistoryRetention({
-      stores: {
-        macro: { retention: ({ cutoffs }) => macroStore.retention(cutoffs), note: (key, value) => macroStore.note(key, value) },
-        crossAsset: { retention: ({ cutoffs }) => crossAssetStore.retention(cutoffs), note: (key, value) => crossAssetStore.note(key, value) },
-        // The conclusions keep their own window: fourteen days, then the whole graph goes — except the
-        // verdicts, which keep theirs (a hundred and eighty days) on the same clock. The bar cutoffs are
-        // ignored rather than reinterpreted — several policies, one clock.
-        analysis: {
-          retention: ({ atMs }) => ({ thinned: 0, ...analysisRepository.retention({ conclusionCutoffIso: analysisConclusionCutoffIso(atMs), ledgerCutoffIso: predictionLedgerCutoffIso(atMs) }) }),
-          note: (key, value) => analysisRepository.note(key, value)
-        },
-        // The news store keeps its own two windows (30 days of bodies, 365 of judgments) on this same
-        // clock. It joins this job rather than owning a timer of its own: one daily pass, one startup
-        // look, and a store whose database failed to open is simply absent from the pass.
-        ...(intelligenceModule.newsSentiment.store
-          ? { news: createNewsSentimentRetentionTarget(intelligenceModule.newsSentiment.store) }
-          : {})
-      }
-    }).run)
+    const newsStore = intelligenceModule.newsSentiment.store
+    registerMarketRetention({
+      jobRuntime: deps.jobRuntime,
+      macroStore: intelligenceModule.macroMarket.store,
+      crossAssetStore,
+      analysisRepository: intelligenceModule.marketAnalysisRuntime.repository,
+      ...(newsStore ? { newsStore } : {})
+    })
   }
   // One cross-asset source, two readers with two shapes: the analysis context reads through the
   // public query method, which validates with the renderer's own parser, while the prediction
