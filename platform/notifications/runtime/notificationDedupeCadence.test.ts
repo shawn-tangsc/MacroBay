@@ -17,9 +17,13 @@ import { createNotificationEventCatalog } from '../contracts/notificationEventCa
 import { createDefaultNotificationStoreState } from '../store/notificationStore'
 import { createNotificationRuntime } from './notificationRuntime'
 
-/** 可拨的「现在」：跨窗口要真的把时钟往前拨，不能靠改请求假装。 */
+/** 可拨的「现在」：跨窗口要真的把**同一个 runtime 的时钟**往前拨，不能换一个空库假装。 */
 function clockAt(iso: string) {
-  return { now: () => new Date(iso), timeZone: () => 'UTC' }
+  let current = iso
+  return {
+    clock: { now: () => new Date(current), timeZone: () => 'UTC' },
+    advanceTo: (next: string): void => { current = next }
+  }
 }
 
 const catalog = createNotificationEventCatalog({
@@ -58,8 +62,15 @@ const catalog = createNotificationEventCatalog({
   ]
 })
 
+/**
+ * **一份 state、一个可推进的时钟**。
+ *
+ * 早先这里是「每次调用新建 runtime + 空 state」，于是「第二天开新行」那条用例永远绿：
+ * 第二个 runtime 的起点本来就是空库。假绿比没测更危险——它让人以为窗口判定已经生效。
+ */
 function runtimeAt(iso: string) {
   const state = createDefaultNotificationStoreState()
+  const { clock, advanceTo } = clockAt(iso)
   const runtime = createNotificationRuntime({
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
@@ -67,10 +78,10 @@ function runtimeAt(iso: string) {
     },
     catalog,
     getSettings: async () => createDefaultNotificationRuntimeSettings(),
-    clock: clockAt(iso),
+    clock,
     getLanguage: async () => 'zh-CN'
   })
-  return { runtime, records: () => state.records }
+  return { runtime, records: () => state.records, advanceTo }
 }
 
 const intraday = (occurredAt: string): NotificationSubmitRequest => ({
@@ -94,16 +105,22 @@ describe('日内键不带时间', () => {
   })
 
   it('窗口外必须开新行：第二天的新读数不许并进昨天那条', async () => {
-    const { runtime, records } = runtimeAt('2026-11-06T09:00:00.000Z')
+    // 同一个 runtime、同一份 state，只把时钟往前拨——换空库会让这条用例失去意义。
+    const { runtime, records, advanceTo } = runtimeAt('2026-11-06T09:00:00.000Z')
     await runtime.submit(intraday('2026-11-06T09:00:00.000Z'))
-
-    // 同一个键、但已经过去一天：窗口（2 小时）外 → 新行。
-    const next = runtimeAt('2026-11-07T09:00:00.000Z')
-    await next.runtime.submit(intraday('2026-11-07T09:00:00.000Z'))
-
-    expect(next.records()).toHaveLength(1)
-    expect(next.records()[0]?.occurrenceCount).toBe(1)
     expect(records()).toHaveLength(1)
+
+    // 窗口内（2 小时）再交一次：并进同一条，次数累加。
+    advanceTo('2026-11-06T10:30:00.000Z')
+    await runtime.submit(intraday('2026-11-06T10:30:00.000Z'))
+    expect(records()).toHaveLength(1)
+    expect(records()[0]?.occurrenceCount).toBe(2)
+
+    // 窗口外（再过一天）：同一个键，但必须开新行。
+    advanceTo('2026-11-07T09:00:00.000Z')
+    await runtime.submit(intraday('2026-11-07T09:00:00.000Z'))
+    expect(records()).toHaveLength(2)
+    expect(records()[0]?.occurrenceCount).toBe(1)
   })
 
   it('旧形状（日内带 observedAt / bucketMs）被拒，原因具名', async () => {

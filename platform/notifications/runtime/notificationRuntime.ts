@@ -215,7 +215,14 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     })
     if (first.kind === 'rejected') return first.outcome
 
-    const duplicate = findActiveDuplicate(state.records, first.incoming, now)
+    // 合并目标要看窗口：`condition` 事件只在「最近一次更新还在窗口内」时合并，窗口外开新行。
+    const duplicateEntry = deps.catalog?.get(request.eventTypeId)
+    const duplicate = findActiveDuplicate(
+      state.records,
+      first.incoming,
+      now,
+      duplicateEntry?.dedupeUnit === 'condition' ? duplicateEntry.conditionWindowMs : undefined
+    )
     const plan = duplicate
       ? planNotificationSubmit({
           catalog: deps.catalog,
