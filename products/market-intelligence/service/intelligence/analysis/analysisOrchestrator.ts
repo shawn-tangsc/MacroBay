@@ -234,15 +234,17 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
 
     if (!validated.ok) {
-      // The coarse code is what the reader sees; the rule is what the next investigation needs.
-      // Three different defects used to arrive as one "missing evidence" message.
+      // The coarse code is what the reader sees; the rule (and, for the probability rule, which
+      // part of it failed) is what the next investigation needs. Three different defects used to
+      // arrive as one "missing evidence" message.
       console.log(JSON.stringify({
         marker: 'MI_ANALYSIS_OUTPUT_REJECTED',
         analysisRunId: runRecord.id,
         errorCode: validated.errorCode,
-        rule: validated.rule ?? null
+        rule: validated.rule ?? null,
+        detail: validated.detail ?? null
       }))
-      return fail(runRecord.id, 'invalid-output', validated.errorCode, validated.rule ?? validated.errorCode)
+      return fail(runRecord.id, 'invalid-output', validated.errorCode, validated.detail ?? validated.rule ?? validated.errorCode)
     }
     // A removed prohibited value is recorded rather than silently dropped: the
     // conclusion stays usable, and the run says what was taken out and where.

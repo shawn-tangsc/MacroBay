@@ -73,10 +73,10 @@ describe('analysisOutputValidator', () => {
   it('names the rule that rejected the output, so one message stops meaning three defects', () => {
     // A fact claim that also cites a second, unrelated frozen evidence id. The evidence exists, so
     // this is not "missing evidence" in the reader's sense — it is this rule, and only this one.
-    const snapshot = frozenSnapshot()
-    snapshot.evidenceRefs = [...snapshot.evidenceRefs, { evidenceRefId: 'mi-ev-other' }]
+    const base = frozenSnapshot()
+    const snapshot = { ...base, evidenceRefs: [...base.evidenceRefs, { evidenceRefId: 'mi-ev-other' }] } as TestSnapshot
     const output = validOutput()
-    output.knownFacts[0]!.evidenceRefIds = [frozenSnapshot().facts[0]!.evidenceRefId, 'mi-ev-other']
+    output.knownFacts[0]!.evidenceRefIds = [base.facts[0]!.evidenceRefId!, 'mi-ev-other']
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
       ok: false, errorCode: 'analysis-missing-evidence', rule: 'fact-evidence-mismatch'
@@ -194,7 +194,8 @@ describe('analysisOutputValidator', () => {
     output.conclusion.macro = '政策与市场定价：市场定价 71%，SEP 中位 4.1%。'
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
-      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'policy-probability-citation'
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-missing-instant'
     })
   })
 
@@ -205,25 +206,96 @@ describe('analysisOutputValidator', () => {
     output.conclusion.macro = '政策与市场定价：市场定价 65%，截至 2026-10-30 15:00 UTC。'
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
-      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'policy-probability-citation'
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-frozen'
+    })
+  })
+
+  it('names a frozen probability the model rounded, separately from a fabricated one', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(65.5)]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 66%，截至 2026-10-30 15:00 UTC。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-rounded'
+    })
+  })
+
+  it('keeps a rounded value accepted when the frozen value is already whole', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(66)]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 66%，截至 2026-10-30 15:00 UTC。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+  })
+
+  it('does not judge the target range just because it sits after the word 定价', () => {
+    // The prompt itself asks for the target range in a paragraph that starts with 「政策与市场定价：」.
+    // A sixteen-character window swallowed 4.00% and rejected a correct conclusion for mentioning it.
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：目标区间 4.00%–4.25%，下次会议 2026-12-09，市场定价 71%，截至 10-30 15:00 UTC。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+  })
+
+  it('requires every mentioned meeting to carry its own as-of, not one shared instant', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(66, '2026-10-30T15:00:00.000Z'), policyProbabilityFact(48, '2026-12-09T15:00:00.000Z')]
+    const output = validOutput()
+    // Both values are frozen, but only one meeting's instant is written.
+    output.conclusion.macro = '政策与市场定价：12-09 那场概率 48%，01-27 那场概率 66%，截至 10-30 15:00 UTC。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-missing-instant'
+    })
+  })
+
+  it('accepts two meetings when each probability carries its own instant', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(66, '2026-10-30T15:00:00.000Z'), policyProbabilityFact(48, '2026-12-09T15:00:00.000Z')]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：12-09 那场概率 48%，截至 12-09 15:00 UTC；01-27 那场概率 66%，截至 10-30 15:00 UTC。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+  })
+
+  it('still rejects a probability phrased as an official expectation when the as-of is missing', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(66)]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：官方预期概率 66%。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-missing-instant'
     })
   })
 
 })
 
-function frozenSnapshot(): import('./analysisOutputValidator').FrozenAnalysisEvidence & { facts: import('../../../contracts/marketAnalysisContracts').AgentFact[] } {
+type TestSnapshot = import('./analysisOutputValidator').FrozenAnalysisEvidence & { facts: import('../../../contracts/marketAnalysisContracts').AgentFact[] }
+
+function frozenSnapshot(): TestSnapshot {
+  // The fixture is wider than the validator's read-only view (it carries source/unit/confidence for
+  // the prompt tests), so it is built as data and narrowed once here instead of casting at each use.
   return {
     facts: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', metric: 'price-return', comparability: 'comparable', freshness: 'fresh', domain: 'cross-asset', subject: 'BTC', value: 1, unit: '%', sourceId: 'source', sourceLabel: 'source', observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z', confidence: 1 }],
     evidenceRefs: [{ evidenceRefId: 'mi-ev-market-move' }]
-  }
+  } as unknown as TestSnapshot
 }
 
-function policyProbabilityFact(): import('../../../contracts/marketAnalysisContracts').AgentFact {
+function policyProbabilityFact(value = 71, observedAt = '2026-10-30T15:00:00.000Z'): import('../../../contracts/marketAnalysisContracts').AgentFact {
   return {
-    factId: 'mi-fact-macro-policy-implied-probability-hike-25-2026-11-04', evidenceRefId: 'mi-ev-policy',
-    metric: 'policy-implied-probability', domain: 'macro', subject: 'hike-25', value: 71, unit: '%',
+    factId: `mi-fact-macro-policy-implied-probability-${value}-${observedAt}`, evidenceRefId: 'mi-ev-policy',
+    metric: 'policy-implied-probability', domain: 'macro', subject: 'hike-25', value, unit: '%',
     sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
-    observedAt: '2026-10-30T15:00:00.000Z', asOf: '2026-10-30T15:05:00.000Z',
+    observedAt, asOf: observedAt,
     freshness: 'fresh', confidence: 1, comparability: 'comparable',
     sourceUrl: 'https://polymarket.com/'
   }
@@ -370,13 +442,13 @@ it('requires the conclusion to cite the key sentiment when the snapshot carries 
     unit: null, freshness: 'fresh' as const, comparability: 'not-comparable' as const
   }
   snapshot.facts = [...snapshot.facts, news]
-  snapshot.evidenceRefs = [...snapshot.evidenceRefs, { evidenceRefId: 'mi-ev-news' }]
+  const withNews = { ...snapshot, evidenceRefs: [...snapshot.evidenceRefs, { evidenceRefId: 'mi-ev-news' }] } as TestSnapshot
 
   // A conclusion that ignores the appended key sentiment cannot be said to have weighed it.
-  expect(validateAnalysisModelOutput(JSON.stringify(validOutput()), snapshot))
+  expect(validateAnalysisModelOutput(JSON.stringify(validOutput()), withNews))
     .toMatchObject({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'sentiment-not-weighed' })
 
   const cited = validOutput()
   cited.knownFacts.push({ factId: 'mi-fact-news-1', statement: '舆情偏空，支持谨慎判断。', evidenceRefIds: ['mi-ev-news'] })
-  expect(validateAnalysisModelOutput(JSON.stringify(cited), snapshot)).toMatchObject({ ok: true })
+  expect(validateAnalysisModelOutput(JSON.stringify(cited), withNews)).toMatchObject({ ok: true })
 })
