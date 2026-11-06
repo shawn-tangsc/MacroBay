@@ -98,6 +98,13 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   getNetworkSettings?: () => Promise<NetworkSettings>
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
+  /**
+   * 自动会话的幂等窄查：按 `(agentId, originRef)` 取一条，只读、不创建。
+   *
+   * 平台还没提供时可以是 `undefined`：那时按「没有就不建会话」处理，**不退回全量列表**——
+   * 过渡路径一旦变成默认，就没人记得它只是过渡。
+   */
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<{ id: string; agentId: string | null; description?: string } | null>
   sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>
   cancelAgentSession?: (sessionId: string) => Promise<void> | void
   appendAgentSessionMessages?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionMessagesDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionMessageEntity[]>
