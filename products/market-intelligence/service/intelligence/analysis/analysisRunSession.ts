@@ -25,6 +25,13 @@ export type AnalysisRunSessionDependencies = Readonly<{
    * 落成文本后不再随语言/时区变：历史会话是快照，和已发布结论保持发布时语言同一条规则。
    */
   titleFor?: (queuedAt: string) => string
+  /**
+   * 按 (agentId, originRef) 取一条，只读不建。
+   *
+   * 有它就是窄查（一次查询、与库里会话总数无关）；没有时退回全量列表去重——那段是过渡，
+   * 平台 hook 一落地就删，不留两条路并存。
+   */
+  findSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<SessionRef | null>
 }>
 
 export const analysisRunSessionPolicy = Object.freeze({
@@ -44,12 +51,20 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
     /** The one-line summary the card shows; absent while the run has not produced one. */
     summary?: string
   }>): Promise<string | undefined> {
-    if (!deps.getAgentState || !deps.createAgentSession) return undefined
+    // 窄查可用时不需要列表；两条都没有才什么都不做。
+    const canLookUp = deps.findSessionByAutomationRef || deps.getAgentState
+    if (!canLookUp || !deps.createAgentSession) return undefined
     const description = `${analysisRunSessionPolicy.descriptionPrefix}${input.runId}`
-    const { sessions } = await deps.getAgentState()
-    const existing = sessions.find(session =>
-      session.agentId === analysisRunSessionPolicy.agentId && session.description === description)
-    if (existing) return existing.id
+    if (deps.findSessionByAutomationRef) {
+      // 窄查：一条 SQL，与库里有多少条会话无关；标题改了也不影响身份。
+      const found = await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
+      if (found) return found.id
+    } else if (deps.getAgentState) {
+      const { sessions } = await deps.getAgentState()
+      const existing = sessions.find(session =>
+        session.agentId === analysisRunSessionPolicy.agentId && session.description === description)
+      if (existing) return existing.id
+    }
     const session = await deps.createAgentSession({
       agentId: analysisRunSessionPolicy.agentId,
       // 标题是「时刻 · 模块名」，绝不是 run id：读者在助手列表里不该看到我们的账本编号。
@@ -98,11 +113,12 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
  */
 export function appendAnalysisRunSummary(deps: AnalysisRunSessionDependencies) {
   return async function appendRunSummary(input: Readonly<{ runId: string; summary: string }>): Promise<void> {
-    if (!deps.getAgentState || !deps.appendAgentSessionMessages) return
+    if (!deps.appendAgentSessionMessages) return
     const description = `${analysisRunSessionPolicy.descriptionPrefix}${input.runId}`
-    const { sessions } = await deps.getAgentState()
-    const session = sessions.find(candidate =>
-      candidate.agentId === analysisRunSessionPolicy.agentId && candidate.description === description)
+    const session = deps.findSessionByAutomationRef
+      ? await deps.findSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
+      : (await deps.getAgentState?.() ?? { sessions: [] }).sessions.find(candidate =>
+        candidate.agentId === analysisRunSessionPolicy.agentId && candidate.description === description) ?? null
     if (!session) return
     await deps.appendAgentSessionMessages({
       sessionId: session.id,

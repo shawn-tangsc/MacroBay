@@ -78,6 +78,18 @@ describe('the analysis run session', () => {
     await ensure({ runId: 'mi-ar-10' })
   })
 
+  it('uses the narrow lookup when it is available, so the list is never read', async () => {
+    const createAgentSession = vi.fn(async () => ({ id: 's-9', agentId: 'crypto-market-analyst' }))
+    const findSessionByAutomationRef = vi.fn(async () => ({ id: 's-1', agentId: 'crypto-market-analyst' }))
+    const getAgentState = vi.fn(async () => ({ sessions: [] }))
+    const ensure = createAnalysisRunSession({ getAgentState, createAgentSession: createAgentSession as never, findSessionByAutomationRef })
+    // 同一个 run 再来一次：窄查命中，既不建第二条，也不读全量列表。
+    expect(await ensure({ runId: 'mi-ar-1', queuedAt: '2026-11-06T10:15:00.000Z' })).toBe('s-1')
+    expect(findSessionByAutomationRef).toHaveBeenCalledWith('crypto-market-analyst', 'mi-ar-1')
+    expect(getAgentState).not.toHaveBeenCalled()
+    expect(createAgentSession).not.toHaveBeenCalled()
+  })
+
   it('stays quiet when the port is not injected', async () => {
     const ensure = createAnalysisRunSession({})
     expect(await ensure({ runId: 'mi-ar-3' })).toBeUndefined()
