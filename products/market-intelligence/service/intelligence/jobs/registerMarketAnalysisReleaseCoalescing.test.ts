@@ -10,6 +10,8 @@ import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
+import { buildAnalysisSnapshotHash } from '../analysis/analysisHash'
+import { createAnalysisRunService } from '../analysis/analysisRunService'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, GROUP_MARKET_ANALYSIS_CHANGE_JOB } from './marketAnalysisJobIds'
 import { registerMarketAnalysisRuntime } from './registerMarketAnalysisRuntime'
 
@@ -96,6 +98,56 @@ async function createHarness(input: Readonly<{ withMetricEvents?: boolean }> = {
         await handlers.get(GROUP_MARKET_ANALYSIS_CHANGE_JOB)!({ changeId: item.itemId, eventRef: item.itemId }, context)
       }
     },
+    /**
+     * Puts an attempt into a terminal state, the way the orchestrator would.
+     *
+     * The grouping job only writes the ledger row and hands the freeze work on; in this harness the
+     * freeze step never runs, so the run and its status are created here. That is exactly what the
+     * coverage rule reads: a queued row whose run failed does not cover the release.
+     */
+    markAttempt(itemId: string, status: 'failed' | 'succeeded' | 'invalid-output') {
+      const group = runtime.repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
+      if (!group) throw new Error(`no group for ${itemId}`)
+      const row = [...runtime.repository.listTriggerLedger(group.id)].reverse().find(candidate => candidate.decision === 'queued')
+      if (!row) throw new Error(`no queued attempt for ${itemId}`)
+      if (row.analysisRunId) {
+        runtime.repository.updateRunStatus({ id: row.analysisRunId, status, completedAt: clock.now, failureCode: status === 'failed' ? 'analysis-provider-error' : undefined })
+        return
+      }
+      const snapshot = {
+        id: `mi-es-${itemId}`, schemaVersion: 1 as const, eventGroupId: group.id, asOf: clock.now, dataCutoff: clock.now,
+        profileId: 'crypto-market-analysis-v1' as const, facts: [], missingDomains: [], caveats: [], evidenceRefs: [],
+        sourceHealth: [], createdAt: clock.now, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1' as const
+      }
+      const snapshotHash = buildAnalysisSnapshotHash(snapshot)
+      runtime.repository.appendSnapshot({ ...snapshot, snapshotHash })
+      const enqueuedRun = createAnalysisRunService({ repository: runtime.repository, now: () => clock.now, idFactory: () => `mi-ar-${itemId}` })
+        .enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
+      runtime.repository.linkTriggerLedgerRun({ id: row.id, analysisRunId: enqueuedRun.run.id, snapshotHash })
+      if (status === 'succeeded') {
+        runtime.repository.claimRun(enqueuedRun.run.id, clock.now)
+        runtime.repository.commitSuccessfulAnalysis({
+          runId: enqueuedRun.run.id,
+          summary: {
+            id: `mi-as-${itemId}`, schemaVersion: 1, analysisRunId: enqueuedRun.run.id, eventGroupId: group.id, version: 1,
+            conclusion: {
+              direction: 'range', summary: '结论', change: '变化', causalChain: '机制', conditions: [],
+              macro: null, evidenceStrength: null, dataGaps: []
+            },
+            knownFacts: [], transmissionHypotheses: [], marketReaction: [], supportingEvidence: [], counterEvidence: [],
+            scenarios: [], directions: [], nextCatalysts: [], dataCaveats: [], evidenceRefs: [], createdAt: clock.now
+          },
+          predictions: [],
+          timeline: {
+            id: `mi-tl-${itemId}`, schemaVersion: 1, eventGroupId: group.id, analysisRunId: enqueuedRun.run.id,
+            kind: 'analysis', status: 'published', occurredAt: clock.now, summaryRef: `mi-as-${itemId}`,
+            safeTitle: '市场分析已生成', safeExcerpt: null, direction: null, version: 1
+          }
+        })
+        return
+      }
+      runtime.repository.updateRunStatus({ id: enqueuedRun.run.id, status, completedAt: clock.now, failureCode: status === 'failed' ? 'analysis-provider-error' : undefined })
+    },
     state(): { groups: number; freezes: readonly { handlerId: string; payload: Record<string, unknown> }[]; ledger: readonly LedgerRow[] } {
       const groups = runtime.repository.listEventGroups()
       return {
@@ -158,6 +210,45 @@ describe('market analysis same-release coalescing', () => {
       const state = harness.state()
       expect(state.freezes).toHaveLength(2)
       expect(state.ledger.filter(row => row.reasonCode === 'same-release-coalesced')).toHaveLength(1)
+    } finally {
+      await harness.dispose()
+    }
+  })
+
+  it('supplements a failed first attempt once, then abandons the rest of the release', async () => {
+    const harness = await createHarness()
+    try {
+      await harness.publish(oneRelease.slice(0, 1))
+      harness.markAttempt('item-2y', 'failed')
+      // One attempt failed: the next indicator may be the supplement.
+      await harness.publish([oneRelease[1]!])
+      harness.markAttempt('item-10y', 'failed')
+      // Both attempts are spent and neither succeeded: the rest are abandoned, not merged.
+      await harness.publish(oneRelease.slice(2))
+
+      const state = harness.state()
+      expect(state.freezes).toHaveLength(2)
+      expect(state.ledger.filter(row => row.decision === 'queued')).toHaveLength(2)
+      const abandoned = state.ledger.filter(row => row.reasonCode === 'same-release-abandoned')
+      expect(abandoned).toHaveLength(3)
+      expect(abandoned.every(row => row.decision === 'skipped')).toBe(true)
+      expect(state.ledger.filter(row => row.reasonCode === 'same-release-coalesced')).toHaveLength(0)
+    } finally {
+      await harness.dispose()
+    }
+  })
+
+  it('stops supplementing once the release succeeded', async () => {
+    const harness = await createHarness()
+    try {
+      await harness.publish(oneRelease.slice(0, 1))
+      harness.markAttempt('item-2y', 'succeeded')
+      await harness.publish(oneRelease.slice(1))
+
+      const state = harness.state()
+      expect(state.freezes).toHaveLength(1)
+      expect(state.ledger.filter(row => row.reasonCode === 'same-release-coalesced')).toHaveLength(4)
+      expect(state.ledger.filter(row => row.reasonCode === 'same-release-abandoned')).toHaveLength(0)
     } finally {
       await harness.dispose()
     }

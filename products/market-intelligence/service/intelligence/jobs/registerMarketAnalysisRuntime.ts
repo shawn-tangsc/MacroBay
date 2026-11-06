@@ -24,14 +24,8 @@ import type { SignificanceSignal } from '../analysis/significanceChangeMatcher'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
 import { createAnalysisTriggerPolicy, type TriggerHistoryEntry } from '../analysis/analysisTriggerPolicy'
 import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from '../analysis/eventGroupService'
-import {
-  analysisReleaseCoalescingPolicy,
-  findCoveringReleaseAttempt,
-  isSameAnalysisRelease,
-  resolveAnalysisReleaseIdentity,
-  type AnalysisReleaseAttempt,
-  type AnalysisReleaseIdentity
-} from '../analysis/analysisReleaseCoalescing'
+import { analysisReleaseCoalescingPolicy } from '../analysis/analysisReleaseCoalescing'
+import { findAnalysisReleaseCoverage } from '../analysis/analysisReleaseAttempts'
 import { createEvidenceSnapshotService } from '../analysis/evidenceSnapshotService'
 import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
@@ -406,44 +400,24 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   }
 
   /**
-   * True when another indicator of the same release was already allowed to run inside the window.
+   * Whether this indicator still has a chance: covered by an attempt that lives or succeeded,
+   * abandoned because both attempts are spent, or uncovered (its own trigger decides).
    *
-   * Reads the ledger rather than a second bookkeeping table: "this release was analysed" is exactly
-   * the queued decision row the trigger line already writes, so one source of truth survives a
-   * restart. Groups outside the window are dropped before their ledger is read, which keeps the scan
-   * proportional to the releases around this moment rather than to the whole history.
-   *
-   * Nothing here awaits. The read, the decision and the row the caller writes are one synchronous
-   * step, so two indicators of the same release cannot both pass the check.
+   * The scan and the decision live in `analysisReleaseAttempts`; the runtime only supplies the
+   * sources, so this step stays one call and the runtime file stays on its baseline.
    */
-  function coalescedIntoEarlierRelease(change: AnalysisChange, currentGroupId: string): boolean {
-    const nowValue = now()
-    const nowMs = Date.parse(nowValue)
-    if (!Number.isFinite(nowMs)) return false
-    const items = new Map(input.pipeline.listItems().map(item => [item.itemId, item]))
+  function releaseCoverage(change: AnalysisChange, currentGroupId: string) {
     // Older pipeline mocks do not carry metric events; without one the item has no release
     // identity and is left to its own trigger decision instead of being merged by guesswork.
     const readMetricEvents = input.pipeline.listMetricEvents
-    const metricEvents = new Map(
-      (typeof readMetricEvents === 'function' ? readMetricEvents.call(input.pipeline) : []).map(event => [event.itemId, event])
-    )
-    const item = items.get(change.eventRef)
-    const identity = item ? resolveAnalysisReleaseIdentity({ item, metricEvent: metricEvents.get(change.eventRef) }) : undefined
-    if (!identity) return false
-    const attempts: AnalysisReleaseAttempt[] = []
-    for (const group of repository.listEventGroups()) {
-      if (group.id === currentGroupId || group.groupType !== 'macro') continue
-      const observedAt = Date.parse(group.lastObservedAt)
-      if (!Number.isFinite(observedAt) || Math.abs(nowMs - observedAt) > analysisReleaseCoalescingPolicy.windowMs) continue
-      const itemRef = group.eventRefs[0]
-      const otherItem = itemRef ? items.get(itemRef) : undefined
-      if (!otherItem) continue
-      const other = resolveAnalysisReleaseIdentity({ item: otherItem, metricEvent: itemRef ? metricEvents.get(itemRef) : undefined })
-      if (!other || !isSameAnalysisRelease(identity, other)) continue
-      const queuedAt = repository.listTriggerLedger(group.id).filter(row => row.decision === 'queued').at(-1)?.createdAt
-      if (queuedAt) attempts.push({ identity: other, decidedAt: queuedAt })
-    }
-    return findCoveringReleaseAttempt({ identity, now: nowValue, attempts }) !== undefined
+    return findAnalysisReleaseCoverage({
+      change, currentGroupId, now: now(),
+      listEventGroups: () => repository.listEventGroups(),
+      listTriggerLedger: eventGroupId => repository.listTriggerLedger(eventGroupId),
+      getRun: runId => repository.getRun(runId),
+      listItems: () => input.pipeline.listItems(),
+      listMetricEvents: () => typeof readMetricEvents === 'function' ? readMetricEvents.call(input.pipeline) : []
+    })
   }
 
   async function groupChange(payload: unknown): Promise<Record<string, unknown> | void> {
@@ -480,10 +454,16 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // for an attempt that would otherwise be queued, because a skip recorded for another reason is
     // already explained and must not be relabelled.
     if (decision.decision === 'queued' && decision.phase) {
-      if (coalescedIntoEarlierRelease(change, result.group.id)) {
+      const coverage = releaseCoverage(change, result.group.id)
+      if (coverage.decision !== 'uncovered') {
         runs.recordDecision({
           eventGroupId: result.group.id, triggerKey: decision.triggerKey, changeHash: change.nextHash,
-          decision: 'skipped', reasonCode: analysisReleaseCoalescingPolicy.reasonCode
+          decision: 'skipped',
+          // Two codes, never one: merged-into-an-analysis and there-is-no-analysis are different
+          // facts, and collapsing them would report five failed attempts as one successful merge.
+          reasonCode: coverage.decision === 'covered'
+            ? analysisReleaseCoalescingPolicy.reasonCode
+            : analysisReleaseCoalescingPolicy.abandonedReasonCode
         })
         return
       }

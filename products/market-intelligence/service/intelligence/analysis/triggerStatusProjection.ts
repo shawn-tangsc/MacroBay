@@ -65,6 +65,11 @@ export const triggerStatusPolicy = Object.freeze({
      * "significant change" and could not tell it apart from a row nobody judged.
      */
     sameReleaseCoalesced: 'same-release-coalesced',
+    /**
+     * The release's attempts are all spent and none succeeded: there is no analysis to point at.
+     * The opposite of the code above, and the reason they must never be merged into one.
+     */
+    sameReleaseAbandoned: 'same-release-abandoned',
     hourBudgetExhausted: 'hour-budget-exhausted',
     dayBudgetExhausted: 'day-budget-exhausted',
     scheduleReserveExhausted: 'schedule-reserve-exhausted',

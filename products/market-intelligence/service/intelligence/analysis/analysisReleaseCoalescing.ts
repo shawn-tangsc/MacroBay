@@ -1,3 +1,4 @@
+import type { AnalysisRunStatus } from '../../../contracts/marketAnalysisContracts'
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
 
@@ -20,10 +21,24 @@ import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
  * one macro-calendar entry is one event even when a second entry is published in the same minute.
  */
 export const analysisReleaseCoalescingPolicy = Object.freeze({
-  version: 'marketAnalysisReleaseCoalescing.v1',
+  version: 'marketAnalysisReleaseCoalescing.v2',
   windowMs: 10 * 60 * 1_000,
   /** Ledger reason for an indicator that was not analysed because its release was already covered. */
-  reasonCode: 'same-release-coalesced'
+  reasonCode: 'same-release-coalesced',
+  /**
+   * Why the other indicators are not analysed when the release's attempts are all spent.
+   *
+   * A different sentence from `reasonCode` on purpose: "merged into the analysis that exists" and
+   * "there is no analysis and there will not be one" are different facts, and reporting the second
+   * as the first would make five failed attempts read as one successful merge.
+   */
+  abandonedReasonCode: 'same-release-abandoned',
+  /**
+   * First attempt plus one supplement, never more. A failed first call gets one more chance because
+   * the alternative is that a whole release goes unanalysed over one dropped connection; a third
+   * attempt is the retry storm this rule exists to stop.
+   */
+  maxAttemptsPerWindow: 2
 })
 
 /**
@@ -45,6 +60,19 @@ export type AnalysisReleaseIdentity = Readonly<{
 export type AnalysisReleaseAttempt = Readonly<{
   identity: AnalysisReleaseIdentity
   decidedAt: string
+  /**
+   * Where that attempt ended up. `unknown` is the honest state of a row written before the run was
+   * linked: it is treated as cover, because inventing a retry out of a missing link is worse than
+   * missing a supplement.
+   */
+  status?: AnalysisRunStatus | 'unknown'
+}>
+
+/** What the trigger line should do with one indicator of a release. */
+export type AnalysisReleaseCoverage = Readonly<{
+  decision: 'covered' | 'abandoned' | 'uncovered'
+  /** The attempt that covers it, or the last spent attempt; absent for `uncovered`. */
+  attempt?: AnalysisReleaseAttempt
 }>
 
 /**
@@ -100,4 +128,40 @@ export function findCoveringReleaseAttempt(input: Readonly<{
     if (!covering || decidedAt > Date.parse(covering.decidedAt)) covering = attempt
   }
   return covering
+}
+
+/**
+ * Whether this indicator still has a chance of an analysis.
+ *
+ * Order matters: a live or successful attempt covers the release; only when every attempt has
+ * ended unsuccessfully does the question of a supplement arise, and only the second unsuccessful
+ * attempt turns that into abandonment. Checking the attempt count first would mark the remaining
+ * indicators abandoned while the supplement is still running.
+ */
+export function decideAnalysisReleaseCoverage(input: Readonly<{
+  identity: AnalysisReleaseIdentity
+  now: string
+  attempts: readonly AnalysisReleaseAttempt[]
+  windowMs?: number
+  maxAttempts?: number
+}>): AnalysisReleaseCoverage {
+  const windowMs = input.windowMs ?? analysisReleaseCoalescingPolicy.windowMs
+  const maxAttempts = input.maxAttempts ?? analysisReleaseCoalescingPolicy.maxAttemptsPerWindow
+  const nowMs = Date.parse(input.now)
+  if (!Number.isFinite(nowMs)) return { decision: 'uncovered' }
+  const relevant = input.attempts.filter(attempt => {
+    if (!isSameAnalysisRelease(input.identity, attempt.identity, windowMs)) return false
+    const decidedAt = Date.parse(attempt.decidedAt)
+    return Number.isFinite(decidedAt) && Math.abs(nowMs - decidedAt) <= windowMs
+  })
+  if (relevant.length === 0) return { decision: 'uncovered' }
+  const newest = [...relevant].sort((left, right) => Date.parse(right.decidedAt) - Date.parse(left.decidedAt))[0]!
+  const live = relevant.some(attempt => {
+    const status = attempt.status
+    return status === undefined || status === 'queued' || status === 'running' || status === 'succeeded' || status === 'unknown'
+  })
+  if (live) return { decision: 'covered', attempt: newest }
+  if (relevant.length >= maxAttempts) return { decision: 'abandoned', attempt: newest }
+  // One failed attempt so far: let this indicator be the supplement.
+  return { decision: 'uncovered' }
 }
