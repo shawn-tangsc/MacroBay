@@ -1121,7 +1121,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {productSettingsEntry ? (
           <ProductContributionHost
             language={settings.language}
-            load={productSettingsEntry.load}
+            load={productSettingsEntry.load} focusEntityId={focusEntityId}
           />
         ) : null}
       </div>

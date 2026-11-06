@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 
 import { Button } from 'antd'
 
@@ -48,6 +48,11 @@ export type SyncRunText = Readonly<{
     fields: Readonly<Record<'runId' | 'started' | 'completed' | 'model' | 'reason' | 'code' | 'detailCode', string>>
     notRecorded: string
   }>
+  /**
+   * A notification can point at one analysis run. The page locates it, says so when it cannot, and
+   * never turns "the link is stale" into "there is no such analysis".
+   */
+  focus: Readonly<{ missing: string; missingHint: string }>
   /** The separator between two names on one line, so a locale can pick its own glyph. */
   joiner: string
   /** What is left of a task's history once its run details are dropped. */
@@ -90,8 +95,10 @@ const SYNC_RUN_PAGE_SIZE = 30
 /** A year of daily counts across every task would be a wall of rows; the newest days come first. */
 const SYNC_RUN_AGGREGATE_ROWS = 60
 
-export function SyncRunSection({ knownSources, text, analysisFailureReasons }: Readonly<{
+export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, knownSources, text }: Readonly<{
   text: SyncRunText
+  /** The analysis run a notification pointed at; absent means the reader opened the page normally. */
+  focusAnalysisRunId?: string | null
   /** Every registered source, so a source that has not run lately can still be filtered to. */
   knownSources?: readonly Readonly<{ sourceId: string; label: string }>[]
   /**
@@ -101,7 +108,12 @@ export function SyncRunSection({ knownSources, text, analysisFailureReasons }: R
   analysisFailureReasons?: Readonly<Record<string, string>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
-  const [window, setWindow] = useState<SyncRunWindow>('24h')
+  /**
+   * A located row may be older than the default window, so a focus request reads the widest window
+   * the contract allows from the start — one read, no second round trip, and page 5 is reachable.
+   */
+  const focusRequested = focusAnalysisRunId !== undefined && focusAnalysisRunId !== null && focusAnalysisRunId !== ''
+  const [window, setWindow] = useState<SyncRunWindow>(focusRequested ? 'all' : '24h')
   const [outcome, setOutcome] = useState<SyncRunQuery['outcome']>()
   const [state, setState] = useState<'loading' | 'available' | 'unavailable'>('loading')
   const [rows, setRows] = useState<readonly SyncRunRow[]>([])
@@ -114,6 +126,12 @@ export function SyncRunSection({ knownSources, text, analysisFailureReasons }: R
   const [reloadToken, setReloadToken] = useState(0)
   /** The analysis record the reader opened. One at a time: this page answers one question. */
   const [expandedAnalysisRunId, setExpandedAnalysisRunId] = useState<string>()
+  /** Where the notification's target stands: still being looked for, located, or not here. */
+  const [focusOutcome, setFocusOutcome] = useState<'idle' | 'pending' | 'found' | 'not-found'>(
+    focusRequested ? 'pending' : 'idle'
+  )
+  /** Scrolling and focusing happen once; later filter changes must not drag the reader back. */
+  const focusAppliedRef = useRef(false)
   const retry = (): void => setReloadToken((current) => current + 1)
   // The window is the server-side filter; outcome and source narrow what is already on screen so
   // the source list can be built from the same fetch instead of a second round trip.
@@ -135,6 +153,38 @@ export function SyncRunSection({ knownSources, text, analysisFailureReasons }: R
     })
     return () => { cancelled = true }
   }, [window, outcome, reloadToken])
+
+  /**
+   * Locate the run a notification pointed at, once the widest window has been read.
+   *
+   * A malformed id is treated exactly like a missing record: both mean "this link cannot show you
+   * the thing it promised", and the page must say that instead of stopping at the top of the list.
+   */
+  useEffect(() => {
+    if (focusOutcome !== 'pending' || state === 'loading') return
+    const id = focusAnalysisRunId ?? ''
+    const index = isAnalysisRunId(id) && state === 'available'
+      ? rows.findIndex((row) => row.analysis.state === 'linked' && row.analysis.result.runId === id)
+      : -1
+    if (index < 0) {
+      setFocusOutcome('not-found')
+      return
+    }
+    // The row lives on whichever page holds it: locating must not assume the first page.
+    setPage(Math.floor(index / SYNC_RUN_PAGE_SIZE))
+    setExpandedAnalysisRunId(id)
+    setFocusOutcome('found')
+  }, [focusAnalysisRunId, focusOutcome, rows, state])
+
+  // Once, after the located page has rendered: bring the row into view and put keyboard focus on
+  // the record's toggle. Without this the page "locates" a row the reader cannot see.
+  useEffect(() => {
+    if (focusOutcome !== 'found' || focusAppliedRef.current) return
+    focusAppliedRef.current = true
+    const element = document.querySelector<HTMLElement>(`[data-analysis-run-id="${focusAnalysisRunId}"]`)
+    element?.scrollIntoView?.({ block: 'center' })
+    element?.querySelector<HTMLElement>('.mi-sync-run__analysis-button')?.focus()
+  }, [focusAnalysisRunId, focusOutcome, page, rows])
 
   // A run's task and source arrive as data. Product-side rows use their action as the handler id,
   // so the audit actions are the fallback before the raw label — otherwise an English reader gets
@@ -208,6 +258,15 @@ export function SyncRunSection({ knownSources, text, analysisFailureReasons }: R
         {notice ? <span className="mi-sync-run__notice" role="status">{notice}</span> : null}
       </div>
     </header>
+    {/* A link that cannot be honoured says so above the list; it never silently leaves the reader
+        at the top of an unrelated page. */}
+    {focusOutcome === 'not-found'
+      ? <p className="mi-sync-run__focus-missing" role="status">
+        <strong>{text.focus.missing}</strong>
+        {text.joiner}
+        {text.focus.missingHint}
+      </p>
+      : null}
     {state === 'loading' ? <LoadingState label={text.loading} minHeight={160} /> : null}
     {state === 'unavailable'
       ? <StateView
@@ -254,7 +313,17 @@ export function SyncRunSection({ knownSources, text, analysisFailureReasons }: R
       </div>
       <p className="mi-sync-run__legend">{text.noSourceHint}</p>
       {visible.map((row) => <Fragment key={row.runId}>
-        <div className="mi-sync-run__grid" data-outcome={row.outcome} role="row">
+        <div
+          className="mi-sync-run__grid"
+          data-analysis-run-id={row.analysis.state === 'linked' ? row.analysis.result.runId : undefined}
+          data-focused={
+            focusOutcome === 'found' && row.analysis.state === 'linked' && row.analysis.result.runId === focusAnalysisRunId
+              ? 'true'
+              : undefined
+          }
+          data-outcome={row.outcome}
+          role="row"
+        >
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, timeZone)}</span>
         <span className="mi-sync-run__task" role="cell">{taskLabelOf(row)}</span>
         {/* Nothing here is hidden behind a hover: the count is visible text, and the full list is
@@ -372,6 +441,18 @@ function formatTime(at: string, timeZone: string): string {
   // 同一显示日只给时刻，跨日带日期；时区来自窗口级 provider，产品不再自己取本地时间。
   // 失败时原样返回原始值，宁可显示未格式化的串，也不猜一个时刻。
   return formatShellClock(at, { timeZone }) ?? at
+}
+
+/**
+ * An analysis run id, as the notifier writes it (`mi-ar-` + uuid).
+ *
+ * Deliberately structural rather than a strict uuid match: a tampered or foreign value must be
+ * rejected here, but an id from an older writer must not be called "not found" for its shape.
+ */
+const ANALYSIS_RUN_ID = /^mi-ar-[0-9A-Za-z-]{1,80}$/
+
+function isAnalysisRunId(value: string): boolean {
+  return ANALYSIS_RUN_ID.test(value)
 }
 
 /** One id per analysis record, so the toggle and the panel it controls cannot drift apart. */

@@ -36,6 +36,7 @@ const render = async (options?: {
   text?: typeof text
   knownSources?: readonly { sourceId: string; label: string }[]
   analysisFailureReasons?: Readonly<Record<string, string>>
+  focusAnalysisRunId?: string
 }) => {
   host = document.createElement('div')
   document.body.append(host)
@@ -43,7 +44,8 @@ const render = async (options?: {
   await act(async () => root!.render(createElement(SyncRunSection, {
     text: options?.text ?? text,
     analysisFailureReasons: options?.analysisFailureReasons ?? analysisReasons,
-    ...(options?.knownSources ? { knownSources: options.knownSources } : {})
+    ...(options?.knownSources ? { knownSources: options.knownSources } : {}),
+    ...(options?.focusAnalysisRunId === undefined ? {} : { focusAnalysisRunId: options.focusAnalysisRunId })
   })))
   await act(async () => { await Promise.resolve() })
   return host
@@ -57,6 +59,25 @@ async function selectAllWindow(host: HTMLElement) {
     select.dispatchEvent(new Event('change', { bubbles: true }))
     await Promise.resolve()
   })
+}
+
+function analysisRow(input: {
+  runId: string
+  at: string
+  analysisRunId: string
+}) {
+  return {
+    at: input.at, runId: input.runId, correlationId: input.runId, taskLabel: 'AI 分析',
+    sources: [], handlerId: 'market-intelligence.runMarketAnalysis', action: 'analysis' as const,
+    outcome: 'succeeded' as const,
+    analysis: {
+      state: 'linked' as const,
+      result: {
+        runId: input.analysisRunId, state: 'failed' as const, failureCode: 'analysis-provider-error',
+        startedAt: input.at, completedAt: input.at, modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017'
+      }
+    }
+  }
 }
 
 describe('sync run section', () => {
@@ -218,6 +239,72 @@ describe('sync run section', () => {
     const notes = [...dom.querySelectorAll('.mi-sync-run__analysis-note')]
     expect(notes.some((note) => note.textContent === text.analysis.notApplicable)).toBe(true)
     expect(notes.every((note) => note.getAttribute('aria-label') === text.analysis.notApplicableHint || note.getAttribute('aria-label') === text.analysis.unlinkedHint)).toBe(true)
+  })
+
+  it('locates the analysis a notification pointed at, opens its record and marks the row', async () => {
+    vi.spyOn(syncRunClient, 'list').mockResolvedValue({
+      state: 'available',
+      rows: [
+        analysisRow({ runId: 'run-2', at: '2026-11-06T10:10:00.000Z', analysisRunId: 'mi-ar-other' }),
+        analysisRow({ runId: 'run-1', at: '2026-11-06T10:05:00.000Z', analysisRunId: 'mi-ar-target' })
+      ]
+    })
+    const dom = await render({ focusAnalysisRunId: 'mi-ar-target' })
+
+    const focused = dom.querySelector('[data-focused="true"]')
+    expect(focused).not.toBeNull()
+    expect(focused?.getAttribute('data-analysis-run-id')).toBe('mi-ar-target')
+    // 定位同时打开那次的记录，并把键盘焦点放到它的展开按钮上。
+    const trigger = focused?.querySelector<HTMLButtonElement>('.mi-sync-run__analysis-button')
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(trigger)
+    expect(dom.querySelector('.mi-sync-run__focus-missing')).toBeNull()
+  })
+
+  it('finds the row even when it sits past the first page', async () => {
+    // 30 条一页；目标在第 31 条（第 2 页）。定位不能假设它在第一页。
+    const rows = Array.from({ length: 31 }, (_unused, index) =>
+      analysisRow({
+        runId: `run-${index}`,
+        at: new Date(Date.parse('2026-11-06T10:00:00.000Z') - index * 60_000).toISOString(),
+        analysisRunId: index === 30 ? 'mi-ar-last' : `mi-ar-${index}`
+      })
+    )
+    vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'available', rows })
+    const dom = await render({ focusAnalysisRunId: 'mi-ar-last' })
+
+    expect(dom.querySelector('[data-focused="true"]')?.getAttribute('data-analysis-run-id')).toBe('mi-ar-last')
+    // 分页在翻到那一页：第 2 页的页码文字。
+    expect(dom.textContent).toContain(text.page.replace('{page}', '2').replace('{pages}', '2'))
+  })
+
+  it('says the record was not found instead of stopping silently at the top', async () => {
+    vi.spyOn(syncRunClient, 'list').mockResolvedValue({
+      state: 'available',
+      rows: [analysisRow({ runId: 'run-1', at: '2026-11-06T10:05:00.000Z', analysisRunId: 'mi-ar-other' })]
+    })
+    const dom = await render({ focusAnalysisRunId: 'mi-ar-missing' })
+
+    const note = dom.querySelector('.mi-sync-run__focus-missing')
+    expect(note).not.toBeNull()
+    expect(note?.textContent).toContain(text.focus.missing)
+    expect(note?.textContent).toContain(text.focus.missingHint)
+    expect(note?.getAttribute('role')).toBe('status')
+    // The list is still there: "not found" must not replace "what is there".
+    expect(dom.querySelector('[data-analysis-run-id="mi-ar-other"]')).not.toBeNull()
+    expect(dom.querySelector('[data-focused="true"]')).toBeNull()
+  })
+
+  it('treats a malformed or tampered id as not found instead of crashing', async () => {
+    vi.spyOn(syncRunClient, 'list').mockResolvedValue({
+      state: 'available',
+      rows: [analysisRow({ runId: 'run-1', at: '2026-11-06T10:05:00.000Z', analysisRunId: 'mi-ar-other' })]
+    })
+    const dom = await render({ focusAnalysisRunId: '"><script>alert(1)</script>' })
+
+    expect(dom.querySelector('.mi-sync-run__focus-missing')?.textContent).toContain(text.focus.missing)
+    expect(dom.querySelector('[data-focused="true"]')).toBeNull()
+    expect(dom.querySelector('script')).toBeNull()
   })
 
   it('shows the empty sentence when the window has no runs', async () => {

@@ -39,6 +39,14 @@ export const intelligenceSourcesText = {
       notRecorded: '没有记录'
     },
     /**
+     * 通知按 id 找一条记录。找不到时要说出来，而且不能把它说成"这条分析就是没生成"——那两件事
+     * 对读者完全不同。
+     */
+    focus: {
+      missing: '没找到这条记录',
+      missingHint: '它可能已经超过保留期（更早的只保留每日汇总），或者这条链接不是本机生成的。'
+    },
+    /**
      * Failure codes reach this table as the first hyphenated token of a job's error text. A
      * reader sees the sentence; the code itself stays in the element's title, never on screen.
      */
@@ -466,6 +474,10 @@ export const intelligenceSourcesText = {
       recordTitle: 'Analysis record',
       fields: { runId: 'Record', started: 'Started', completed: 'Ended', model: 'Model', reason: 'Reason', code: 'Error code', detailCode: 'Detail code' },
       notRecorded: 'Not recorded'
+    },
+    focus: {
+      missing: 'That record was not found',
+      missingHint: 'It may be past the retention window (older runs are only kept as daily totals), or the link did not come from this machine.'
     },
     /** The reader sees the sentence; the code itself stays in the element's title. */
     failureCodes: {

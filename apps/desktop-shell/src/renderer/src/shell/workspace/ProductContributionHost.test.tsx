@@ -16,12 +16,16 @@ afterEach(async () => {
   reloadSpy = undefined
 })
 
-async function mount(load: () => Promise<unknown>): Promise<HTMLElement> {
+async function mount(load: () => Promise<unknown>, focusEntityId?: string): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(ProductContributionHost, { language: 'zh-CN', load }))
+    root?.render(createElement(ProductContributionHost, {
+      language: 'zh-CN',
+      load,
+      ...(focusEntityId === undefined ? {} : { focusEntityId })
+    }))
   })
   await act(async () => {
     await Promise.resolve()
@@ -97,5 +101,19 @@ describe('the product contribution host failure state', () => {
     // URL 的值脱敏：userinfo 与 query 的值都不留，键保留。
     expect(fold).not.toContain('SUPERSECRETTOKEN')
     expect(fold).toContain('https://***@example.com/api?key=***')
+  })
+})
+
+describe('the product contribution host focus id', () => {
+  it('passes the id a notification pointed at through to the panel', async () => {
+    let received: string | null | undefined
+    const Panel = (props: { focusEntityId?: string | null }): React.ReactElement => {
+      received = props.focusEntityId
+      return createElement('div', null, 'panel')
+    }
+    const container = await mount(async () => ({ default: Panel }), 'mi-ar-1')
+
+    expect(container.textContent).toBe('panel')
+    expect(received).toBe('mi-ar-1')
   })
 })

@@ -8,12 +8,17 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { platformText } from '../../i18n/platformText'
 
 type ContributionModule = {
-  default?: ComponentType
+  default?: ComponentType<{ focusEntityId?: string | null }>
 }
 
 interface ProductContributionHostProps {
   language: AppLanguage
   load: () => Promise<unknown>
+  /**
+   * 通知指向的那一条实体（目前只有分析运行）。面板自己决定要不要按它定位；不认这个参数的面板
+   * 行为不变，这也正是它能做成**可选**参数的原因——一个面板不认识，不该让另一个面板的跳转编不出来。
+   */
+  focusEntityId?: string | null
 }
 
 /**
@@ -30,7 +35,7 @@ interface ProductContributionHostProps {
  * 失败态是**内容区里的一个状态视图**，不另起整页：页面骨架（侧栏/顶栏）还在，读者能换页离开。
  */
 export function ProductContributionHost(props: ProductContributionHostProps): React.ReactElement {
-  const [Component, setComponent] = useState<ComponentType | null>(null)
+  const [Component, setComponent] = useState<ComponentType<{ focusEntityId?: string | null }> | null>(null)
   const [failure, setFailure] = useState<{ detail: string } | null>(null)
   const t = platformText[props.language]
 
@@ -92,7 +97,7 @@ export function ProductContributionHost(props: ProductContributionHostProps): Re
   return (
     <ShellLanguageProvider language={props.language}>
       <div className="settings-contribution-host">
-        <LoadedComponent />
+        <LoadedComponent focusEntityId={props.focusEntityId} />
       </div>
     </ShellLanguageProvider>
   )

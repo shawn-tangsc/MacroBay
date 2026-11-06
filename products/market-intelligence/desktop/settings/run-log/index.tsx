@@ -16,7 +16,13 @@ import './run-log.css'
  * question about the past, not a switch to flip, so the tab and the page have now converged into
  * this section and the sources page keeps only the configuration.
  */
-export default function IntelligenceRunLogSettingsSection(): React.ReactElement {
+export default function IntelligenceRunLogSettingsSection({ focusEntityId }: Readonly<{
+  /**
+   * Set when a notification asked for one record (the shell carries the entity id across). The page
+   * locates that analysis run and says so when it cannot — see `SyncRunSection`.
+   */
+  focusEntityId?: string | null
+}> = {}): React.ReactElement {
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
   const [knownSources, setKnownSources] = useState<readonly Readonly<{ sourceId: string; label: string }>[]>()
@@ -49,6 +55,7 @@ export default function IntelligenceRunLogSettingsSection(): React.ReactElement 
       <div className="intelligence-run-log-workspace__body">
         <SyncRunSection
           analysisFailureReasons={productText[language].pages.intelligence.portal.analysisTimeline.failureReasons}
+          focusAnalysisRunId={focusEntityId}
           knownSources={knownSources}
           text={{ ...t.syncRun, sourceNames: t.sourceNames }}
         />

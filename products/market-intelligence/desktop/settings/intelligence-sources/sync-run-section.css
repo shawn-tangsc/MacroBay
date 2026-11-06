@@ -104,3 +104,20 @@
 .mi-sync-run__analysis-record-fields div { display: flex; gap: 6px; min-width: 0; }
 .mi-sync-run__analysis-record-fields dt { color: var(--muted); }
 .mi-sync-run__analysis-record-fields dd { margin: 0; overflow-wrap: anywhere; }
+
+/* A notification pointed at one record. The accent bar + tinted row say "this one"; the expanded
+   record and the focused toggle carry the same fact without relying on colour alone. */
+.mi-sync-run__grid[data-focused='true'] {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* A link that could not be honoured: stated above the list, never a silent empty page. */
+.mi-sync-run__focus-missing {
+  margin: 4px 8px 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.mi-sync-run__focus-missing strong { color: inherit; }

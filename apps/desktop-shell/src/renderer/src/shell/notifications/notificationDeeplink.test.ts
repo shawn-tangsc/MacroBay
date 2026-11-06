@@ -27,6 +27,44 @@ describe('resolveNotificationNavigation', () => {
     })
   })
 
+  it('lands a failed analysis on the run log and points at that analysis run', () => {
+    // 分析失败的通知指向那次分析：面板是运行日志（已独立成面板，不是旧的 sources 分区），
+    // 而 focusEntityId 必须留到页面里——只到页面、不到那一条，读者还得自己找。
+    expect(resolveNotificationNavigation({ entityType: 'analysis-run', entityId: 'mi-ar-1' }, products)).toEqual({
+      navKey: 'settings',
+      settingsPanelKey: 'intelligence-run-log',
+      focusEntityId: 'mi-ar-1'
+    })
+  })
+
+  it('lets a registered entity beat a stale section name', () => {
+    // 旧生产者仍写着 intelligence-sources（运行日志已独立成面板）：实体 id 能真的定位到那一条，
+    // 分区只会把读者送到错的屏。没登记的实体（如 source）不受这条影响。
+    expect(
+      resolveNotificationNavigation(
+        {
+          settingsSectionId: 'intelligence-sources',
+          productId: 'market-intelligence',
+          entityType: 'analysis-run',
+          entityId: 'mi-ar-1'
+        },
+        products
+      )
+    ).toEqual({ navKey: 'settings', settingsPanelKey: 'intelligence-run-log', focusEntityId: 'mi-ar-1' })
+
+    expect(
+      resolveNotificationNavigation(
+        {
+          settingsSectionId: 'intelligence-sources',
+          productId: 'market-intelligence',
+          entityType: 'source',
+          entityId: 'coindesk-rss'
+        },
+        products
+      )
+    ).toEqual({ navKey: 'settings', settingsPanelKey: 'intelligence-sources' })
+  })
+
   it('sends an open-briefing action to the route path the registry actually publishes', () => {
     // 产品页的 navKey 是注册表的 routePath，不是 manifest 里的 pageId。
     expect(
