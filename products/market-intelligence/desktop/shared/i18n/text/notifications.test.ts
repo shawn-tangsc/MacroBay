@@ -94,6 +94,20 @@ describe('market intelligence notification copy', () => {
     ])
   })
 
+  it('never tells the reader to tap something: the push surface has nothing to tap', () => {
+    // 动作由界面按钮承担。手机那条是纯文本，写「点开…」就是一句做不到的承诺。
+    // 扫的是**最终文案表**，不是模板写法——模板可以改，句子不能骗人。
+    const instructions = /点开|打开|查看|\b(open|click|tap)\b/i
+    // `open interest`（持仓量）是领域名词，不是让读者点东西；先摘掉再判，否则守卫会误伤。
+    const withoutDomainTerms = (sentence: string): string => sentence.replace(/open interest/gi, '')
+    const offenders = (['zh-CN', 'en-US'] as const).flatMap((language) =>
+      Object.entries(marketIntelligenceNotificationCopy[language])
+        .filter(([, sentence]) => instructions.test(withoutDomainTerms(sentence)))
+        .map(([key, sentence]) => `${language} ${key}: ${sentence}`)
+    )
+    expect(offenders).toEqual([])
+  })
+
   it('keeps the body variants in step with the declaration', () => {
     const failed = marketIntelligenceProductManifest.notificationEvents.find(
       (event) => event.id === IDS.briefingFailed

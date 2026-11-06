@@ -29,8 +29,8 @@ const REASON = notificationEventReasonKey
 export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationCopy = Object.freeze({
   'zh-CN': Object.freeze({
     [TITLE(IDS.briefingFailed)]: '日报没生成出来',
-    [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '{date} {time} {language}这一期没有生成出来，点开可以重试。',
-    [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了但解读没出来，点开可以重试。',
+    [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '{date} {time} {language}这一期没有生成出来。',
+    [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了，但解读没出来。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
 
     // 标题必须以资产名开头（情报 v3.26 §十一）：读者可能同时在盯几个资产。
@@ -74,7 +74,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [REASON(IDS.sourceStale)]: '最后一次成功采集在窗口之前。',
 
     [TITLE(IDS.briefingReady)]: '日报已完成',
-    [BODY(IDS.briefingReady)]: '{date} {time} {language}这一期已经生成，点开可以看全文。',
+    [BODY(IDS.briefingReady)]: '{date} {time} {language}这一期已经生成。',
     [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
 
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
@@ -83,8 +83,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
   }),
   'en-US': Object.freeze({
     [TITLE(IDS.briefingFailed)]: 'The daily briefing did not generate',
-    [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'The {date} {time} {language} edition failed to generate. Open it to retry.',
-    [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation. Open it to retry.',
+    [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'The {date} {time} {language} edition failed to generate.',
+    [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
 
     [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
@@ -126,7 +126,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [REASON(IDS.sourceStale)]: 'The last successful collection was before the window.',
 
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
-    [BODY(IDS.briefingReady)]: 'The {date} {time} {language} edition is ready; open it for the full text.',
+    [BODY(IDS.briefingReady)]: 'The {date} {time} {language} edition is ready.',
     [REASON(IDS.briefingReady)]: 'You subscribed to briefing-ready notices.',
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
