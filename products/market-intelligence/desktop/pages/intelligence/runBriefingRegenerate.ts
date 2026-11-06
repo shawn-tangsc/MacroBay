@@ -19,12 +19,20 @@ export async function runBriefingRegenerate(deps: Readonly<{
   periodId?: string
   /** A one-off cutoff and window from the manual dialog; absent runs the period as scheduled. */
   generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  /**
+   * 重跑屏幕上那一版：它的截止时刻与统计窗口。
+   *
+   * 带上它，服务端就不必（也不许）从期配置列表里取默认值——那条路会把 07:00 这个初始化默认
+   * 当成"这一版的设置"，读者点了重新生成，时刻又变回 07:00（用户 2026-11-06）。
+   */
+  rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
 }>): Promise<Readonly<{ kind: 'available'; document: DailyBriefingDocument } | { kind: 'failed'; failure: BriefingRegenerateFailure }>> {
   try {
     const result = await deps.client.regenerate({
       locale: deps.locale, timeZone: deps.timeZone,
       ...(deps.periodId === undefined ? {} : { periodId: deps.periodId }),
-      ...(deps.generation === undefined ? {} : { generation: deps.generation })
+      ...(deps.generation === undefined ? {} : { generation: deps.generation }),
+      ...(deps.rerun === undefined ? {} : { rerun: deps.rerun })
     })
     if (result.state === 'available') return { kind: 'available', document: result.document }
     const generationTrace = readGenerationTrace((result as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)

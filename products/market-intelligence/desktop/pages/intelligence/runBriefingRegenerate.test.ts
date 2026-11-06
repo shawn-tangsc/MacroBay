@@ -32,3 +32,20 @@ describe('manual briefing regeneration', () => {
     expect(outcome).toEqual({ kind: 'failed', failure: {} })
   })
 })
+
+describe('a re-run of the edition on screen', () => {
+  it('carries that edition\'s own cutoff and window, so no default period can stand in', async () => {
+    const regenerate = vi.fn(async () => ({ state: 'available' as const, document }))
+
+    await runBriefingRegenerate({
+      client: { regenerate }, timeZone: 'Asia/Shanghai', locale: 'zh-CN', periodId: 'manual-0800',
+      rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 12 }
+    })
+
+    // 四样一起到服务端：期号、截止、窗口、语言。少任何一样，服务端就只剩"默认期配置"可回落。
+    expect(regenerate).toHaveBeenCalledWith({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'manual-0800',
+      rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 12 }
+    })
+  })
+})

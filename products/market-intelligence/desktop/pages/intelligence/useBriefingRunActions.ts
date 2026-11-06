@@ -100,17 +100,20 @@ export function useBriefingRunActions(input: Readonly<{
     date?: string
     locale: 'zh-CN' | 'en-US'
     generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+    /** 重跑已有那一版：它自己的截止与窗口，服务端据此不再问默认期配置。 */
+    rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
     /** 只决定文案与"这一次在做什么"，不决定跑哪一期——那是上面两样的职责。 */
     trigger: BriefingRunTrigger
   }>) => Promise<void>
 }> {
-  const run = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }> = {}): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({
+  const run = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>; rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }> }> = {}): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({
     client: input.client,
     locale: options.locale ?? input.locale,
     timeZone: input.zoneInvalid ? 'UTC' : input.timeZone,
     // 期号必须一路传到服务：没有它，这一跑会落到 `default` 那一期上，把别的期覆盖掉。
     ...(options.periodId === undefined ? {} : { periodId: options.periodId }),
-    ...(options.generation === undefined ? {} : { generation: options.generation })
+    ...(options.generation === undefined ? {} : { generation: options.generation }),
+    ...(options.rerun === undefined ? {} : { rerun: options.rerun })
   }).then((outcome) => {
     if (outcome.kind === 'available') return outcome.document
     input.setRegenerateFailure(outcome.failure)
@@ -126,8 +129,10 @@ export function useBriefingRunActions(input: Readonly<{
     periodId?: string
     date?: string
     generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+    rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
     trigger?: BriefingRunTrigger
   }> = {}): void => {
+    const runPeriodTime = options.rerun?.periodTime ?? options.generation?.asOf
     input.setRegenerateFailure(null)
     input.setRegenerating(true)
     // 手动期带自己的期号与截止；没有这两样的就是"重跑当前版"。两个入口在这里分叉，别在下游判。
@@ -136,7 +141,7 @@ export function useBriefingRunActions(input: Readonly<{
       date: options.date ?? input.todayDate ?? '',
       periodId: options.periodId ?? 'default',
       locale: options.locale ?? input.locale,
-      ...(options.generation?.asOf === undefined ? {} : { asOf: options.generation.asOf })
+      ...(runPeriodTime === undefined ? {} : { asOf: runPeriodTime })
     })
     const placeholderDate = options.date ?? input.todayDate
     if (placeholderDate === undefined) return
@@ -147,7 +152,7 @@ export function useBriefingRunActions(input: Readonly<{
       periodId: startedPeriodId,
       locale: options.locale ?? input.locale,
       manual: options.trigger === 'manual',
-      ...(options.generation?.asOf === undefined ? {} : { periodTime: options.generation.asOf })
+      ...(runPeriodTime === undefined ? {} : { periodTime: runPeriodTime })
     }))
   }
 

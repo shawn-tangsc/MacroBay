@@ -289,6 +289,14 @@ export type DailyBriefingService = Readonly<{
     timeZone: string
     periodId?: string
     generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+    /**
+     * 重跑屏幕上那一版：这一版自己的截止与窗口。
+     *
+     * 与 `generation` 分开是有意的：`generation` 是"读者在弹框里选的一次性截止"，而 `rerun` 是
+     * "这一版当初就是按这个截止和窗口生成的"——它必须盖过任何默认期配置（用户 2026-11-06：
+     * 07:00 只是初始化那第 1 期的默认值，不许在别处当默认）。
+     */
+    rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
   }>) => Promise<DailyBriefingTodayResult>
   publishToPhone: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<BriefingPublishOutcome>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>

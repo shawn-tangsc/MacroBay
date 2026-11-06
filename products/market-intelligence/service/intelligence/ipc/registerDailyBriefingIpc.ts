@@ -167,6 +167,7 @@ function readRegenerateQuery(payload: unknown): Readonly<{
   timeZone: string
   periodId?: string
   generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
 }> {
   const base = readQuery(payload)
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
@@ -190,10 +191,25 @@ function readRegenerateQuery(payload: unknown): Readonly<{
     }
     parsedGeneration = Object.freeze({ asOf, ...(windowHours === undefined ? {} : { windowHours }) }) as Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
   }
+  // 重跑屏幕上那一版：截止与窗口由那一版自己给。同样逐字段校验，读不懂就拒，不悄悄丢掉。
+  const rerun = payload.rerun
+  let parsedRerun: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }> | undefined
+  if (rerun !== undefined) {
+    if (!isRecord(rerun)) throw new Error('daily-briefing-invalid-request')
+    if (Object.keys(rerun).some((key) => key !== 'periodTime' && key !== 'windowHours')) throw new Error('daily-briefing-invalid-request')
+    const periodTime = rerun.periodTime
+    if (typeof periodTime !== 'string' || !Number.isFinite(Date.parse(periodTime)) || new Date(periodTime).toISOString() !== periodTime) {
+      throw new Error('daily-briefing-invalid-request')
+    }
+    const hours = rerun.windowHours
+    if (hours !== undefined && hours !== 12 && hours !== 24 && hours !== 48) throw new Error('daily-briefing-invalid-request')
+    parsedRerun = Object.freeze({ periodTime, ...(hours === undefined ? {} : { windowHours: hours }) })
+  }
   return {
     ...base,
     ...(typeof periodId === 'string' ? { periodId } : {}),
-    ...(parsedGeneration === undefined ? {} : { generation: parsedGeneration })
+    ...(parsedGeneration === undefined ? {} : { generation: parsedGeneration }),
+    ...(parsedRerun === undefined ? {} : { rerun: parsedRerun })
   }
 }
 

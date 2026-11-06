@@ -10,7 +10,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import { DEFAULT_PERIOD_ID, briefingEditionPeriod, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, briefingEditionPeriod, isDailyBriefingWindowHours, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { DAILY_BRIEFING_DOCUMENT_INVALID } from '../../shared/ipc/dailyBriefingFailureCodes'
@@ -240,6 +240,17 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     pickedPeriodId === intent.periodId && effectiveLocale === intent.locale)
   /** 屏幕上这一版的身份：正文里写着的那一期，取不到才退回当前选中/默认期。 */
   const onScreenPeriodId = screenDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
+  /**
+   * 重跑屏幕上这一版时，截止与窗口取它**自己**的（用户 2026-11-06）。
+   *
+   * 少了这两样，服务端只能回落到期配置列表第一项（初始化那第 1 期的 07:00），于是"点重新生成，
+   * 又变成 7 点"，还会在同一个截止上多插一版。没有正文可读时不给（那是"生成这一期"，不是重跑）。
+   */
+  const screenWindowHours = screenDocument?.edition.windowHours
+  const screenRerun = screenDocument === undefined ? undefined : {
+    periodTime: screenDocument.edition.windowEnd,
+    ...(isDailyBriefingWindowHours(screenWindowHours) ? { windowHours: screenWindowHours } : {})
+  }
   const { runBriefing } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions, todayDate,
@@ -439,7 +450,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           onCopy={() => void copy()}
           // 重跑的是**屏幕上这一版**：期号与语言取自它，不是服务端的默认期。
           // 以前这里不带期号，历史日点「重新生成」写的是今天那版（审计 #10/#23）。
-          onRegenerate={() => void runBriefing({ periodId: onScreenPeriodId, locale: effectiveLocale, trigger: 'regenerate' })}
+          onRegenerate={() => void runBriefing({ periodId: onScreenPeriodId, locale: screenDocument?.edition.locale ?? effectiveLocale, trigger: 'regenerate', ...(screenRerun === undefined ? {} : { rerun: screenRerun }) })}
           push={pushToPhone}
           pushText={briefingPushText[locale]}
         />,
@@ -448,7 +459,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         eventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null,
         // 正文失败面板的「重新生成」：跑的是屏幕上这一版，所以期号与语言取自它，不是全局默认期。
-        onRetry: () => void runBriefing({ periodId: onScreenPeriodId, locale: effectiveLocale, trigger: 'regenerate' }),
+        onRetry: () => void runBriefing({ periodId: onScreenPeriodId, locale: screenDocument?.edition.locale ?? effectiveLocale, trigger: 'regenerate', ...(screenRerun === undefined ? {} : { rerun: screenRerun }) }),
         // 读不到时的「重试」只重读：把读取重跑一遍，不起 run、不写版、不调模型。
         onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句

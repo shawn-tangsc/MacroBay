@@ -50,6 +50,11 @@ export type DailyBriefingClientInput = Readonly<{
   periodId?: string
   /** A manual run's own cutoff and window; never written back into a period. */
   generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  /**
+   * 重跑**屏幕上那一版**：截止时刻与统计窗口取自这一版自己（`periodTime` / `windowHours`），
+   * 不再去问期配置列表里第一项（用户 2026-11-06：07:00 只是初始化时第 1 期的默认值，不许在别处当默认）。
+   */
+  rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
 }>
 export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US'; periodId?: string }>
 

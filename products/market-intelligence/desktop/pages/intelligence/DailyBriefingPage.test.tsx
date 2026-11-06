@@ -574,6 +574,39 @@ describe('daily briefing page', () => {
     expect(request?.locale).toBe('zh-CN')
   })
 
+  it('re-runs the edition on screen with its own cutoff and window instead of the default period', async () => {
+    // 用户 2026-11-06：点「重新生成」，时刻又变回 07:00（初始化那第 1 期的默认值）。重跑的是屏幕上
+    // 这一版，所以四样都得取自它：期号、截止、窗口、语言。少任何一样，服务端就只剩默认期可回落。
+    const today = '2026-10-30'
+    const fixture = briefingDocument(today)
+    const onScreen = {
+      ...fixture,
+      edition: {
+        ...fixture.edition,
+        periodId: 'manual-0800',
+        periodTime: '2026-10-30T00:00:00.000Z',
+        windowEnd: '2026-10-30T00:00:00.000Z',
+        windowHours: 12
+      }
+    }
+    const listed = [{ date: today, periodId: 'manual-0800', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: '2026-10-30T00:00:00.000Z', windowHours: 12, readingsAvailable: 4 }]
+    const regenerate = vi.fn(async () => new Promise(() => undefined))
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: onScreen })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed } })),
+      regenerate
+    })
+    const dom = await renderPage(client)
+
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+    await act(async () => { await Promise.resolve() })
+
+    expect(regenerate).toHaveBeenCalledWith({
+      locale: 'zh-CN', timeZone: expect.any(String), periodId: 'manual-0800',
+      rerun: { periodTime: '2026-10-30T00:00:00.000Z', windowHours: 12 }
+    })
+  })
+
   it("keeps today's summary on the row after the document is read back", async () => {
     // 写回列表时按"同一行"合并，但新文档必须带上自己的摘要：整条替换且不带 summaryLine，今天那一
     // 行的第二行就空了（库里 lede 明明有这句话）。这条用例用真实数据形状钉住它。
@@ -1023,8 +1056,12 @@ describe('daily briefing page', () => {
       panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!.click()
       await Promise.resolve(); await Promise.resolve()
     })
-    // 重跑的是屏幕上这一版：期号必须跟着走，否则历史日一点就写今天那版（#10/#23）。
-    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String), periodId: 'default' })
+    // 重跑的是屏幕上这一版：期号与它自己的截止都要跟着走。少了 `rerun`，服务端只能回落到
+    // 期配置列表第一项（初始化那第 1 期的 07:00），于是"点重新生成，又变成 7 点"（用户 2026-11-06）。
+    expect(client.regenerate).toHaveBeenCalledWith({
+      locale: 'zh-CN', timeZone: expect.any(String), periodId: 'default',
+      rerun: { periodTime: '2026-10-30T00:30:00.000Z' }
+    })
     expect(dom.querySelector('[data-daily-brief-failure]')).toBeNull()
     expect(dom.textContent).toContain('重新生成版')
   })

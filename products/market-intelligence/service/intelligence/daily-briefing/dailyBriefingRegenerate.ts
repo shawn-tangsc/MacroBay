@@ -9,6 +9,14 @@ export type DailyBriefingRegenerateInput = Readonly<{
   timeZone: string
   periodId?: string
   generation?: Readonly<{ asOf: string; windowHours?: DailyBriefingWindowHours }>
+  /**
+   * 重跑已经存在的这一版：它的截止时刻与统计窗口。
+   *
+   * 有四样就够了——期号、截止、窗口、语言——都在那一版自己的文档里，一样都不需要问默认期配置。
+   * 上一版只对齐了期号，时刻与窗口还在取期列表第一项，于是"点重新生成，又变成 07:00"
+   * （用户 2026-11-06 两次报同一条）。
+   */
+  rerun?: Readonly<{ periodTime: string; windowHours?: DailyBriefingWindowHours }>
 }>
 
 /**
@@ -49,17 +57,27 @@ export function createDailyBriefingRegenerate(deps: Readonly<{
     const periodId = input.periodId ?? DEFAULT_PERIOD_ID
     const configured = await (deps.readPeriods?.().catch(() => []) ?? Promise.resolve([]))
     const own = configured.find((candidate) => candidate.id === periodId)
-    const settings = own ?? await deps.readGeneration()
-    const window = chosen === undefined
-      ? briefingWindow(deps.now(), input.timeZone, settings)
-      : briefingWindowAtCutoff(chosen, input.timeZone, {
-        ...settings,
-        ...(input.generation?.windowHours === undefined ? {} : { windowHours: input.generation.windowHours })
+    // 重跑这一版时**不读默认期配置**：它自己的截止与窗口就是全部依据。默认期配置（期列表第一项）
+    // 只服务"从来没有过的默认期"，比如今天第一次生成——那条路径仍走下面的 `readGeneration`。
+    const rerun = input.rerun
+    const settings = rerun !== undefined ? undefined : own ?? await deps.readGeneration()
+    const window = rerun !== undefined
+      ? briefingWindowAtCutoff(rerun.periodTime, input.timeZone, {
+        ...(rerun.windowHours === undefined ? {} : { windowHours: rerun.windowHours })
       })
+      : chosen === undefined
+        ? briefingWindow(deps.now(), input.timeZone, settings)
+        : briefingWindowAtCutoff(chosen, input.timeZone, {
+          ...settings,
+          ...(input.generation?.windowHours === undefined ? {} : { windowHours: input.generation.windowHours })
+        })
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
     // 期自己写了语言就用它：定时/重跑的是一期，不是"界面现在是什么语言"。
     const locale = own?.language ?? input.locale
-    return deps.withZone(await deps.runs.join(deps.runs.key(window.date, periodId, input.locale), async () =>
+    // 这一版的截止：重跑时就是它自己的，弹框选的就是读者选的那一个，都没有就不写（旧调用点）。
+    const periodTime = rerun?.periodTime ?? input.generation?.asOf
+    // 合并键用**真正要写的那个语言**：用界面语言会让同一版在两种界面语言下各起一次跑。
+    return deps.withZone(await deps.runs.join(deps.runs.key(window.date, periodId, locale), async () =>
       deps.resolve({
         asOf: window.windowEnd, date: window.date, periodId, locale, timeZone: input.timeZone, windowHours: window.windowHours,
         // **手动发起就是手动期**（`02` v2.134 G9）：期次类型不在这里传，由 `runTrigger` 在
@@ -67,7 +85,8 @@ export function createDailyBriefingRegenerate(deps: Readonly<{
         // 「periodKind=scheduled + runTrigger=manual」：一版两个身份，列表按后者显示成「定时」。
         runTrigger: 'manual',
         // Three values or none: the row's "cutoff · actual" pair and "current" both need them.
-        ...(input.generation === undefined ? {} : { periodTime: input.generation.asOf })
+        // 重跑那一版时用**它自己的**截止；弹框选的一次性截止仍是 `generation`。
+        ...(periodTime === undefined ? {} : { periodTime })
       }, true)), window.zoneSource)
   }
 }

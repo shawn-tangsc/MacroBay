@@ -41,6 +41,47 @@ describe('the regenerate payload keeps the run\'s identity', () => {
     })
   })
 
+  // 用户 2026-11-06：点「重新生成」又变回 07:00——服务端只能回落到期配置第一项。重跑这一版要
+  // 把它自己的截止与窗口带过去；这一层同样不许在半路弄丢。
+  it('passes the on-screen edition\'s own cutoff and window through unchanged', async () => {
+    const regenerate = vi.fn(async () => ({ state: 'available' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), regenerate } as never)
+    const handler = handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!
+
+    await handler({
+      locale: 'zh-CN',
+      timeZone: 'Asia/Shanghai',
+      periodId: 'manual-0800',
+      rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 12 }
+    })
+
+    expect(regenerate).toHaveBeenCalledWith({
+      locale: 'zh-CN',
+      timeZone: 'Asia/Shanghai',
+      periodId: 'manual-0800',
+      rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 12 }
+    })
+  })
+
+  it('refuses a rerun whose cutoff or window cannot be read', async () => {
+    const regenerate = vi.fn(async () => ({ state: 'available' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), regenerate } as never)
+    const handler = handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!
+
+    // 一个读不懂的截止如果被悄悄丢掉，服务端就会退回默认期——正是这次的事故形态。
+    await expect(handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', rerun: { periodTime: '2026-11-05 08:00' } }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 6 } }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+    expect(regenerate).not.toHaveBeenCalled()
+  })
+
   it('refuses a malformed cutoff instead of silently dropping it', async () => {
     const regenerate = vi.fn(async () => ({ state: 'available' }))
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
