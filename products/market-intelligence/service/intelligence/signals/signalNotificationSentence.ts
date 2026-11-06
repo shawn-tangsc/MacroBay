@@ -6,6 +6,11 @@ import {
   type SignalNotificationVariant
 } from '../../../contracts/signalNotificationSentences'
 import { thresholdMultiple } from './signalNotificationCopy'
+import {
+  composeBothLanguages,
+  fillTemplate,
+  type SentenceLanguage
+} from './notificationSentenceTemplate'
 
 /**
  * 源头拼信号通知的成品句子（契约 v2.56）：平台只按读者语言挑一份，不拼、不改。
@@ -22,37 +27,17 @@ import { thresholdMultiple } from './signalNotificationCopy'
  * 将来详情页要读数请回源里取，**不要反解析这些句子**。
  */
 
-type Language = 'zh-CN' | 'en-US'
-
-/** 把模板里的槽全部换掉；**任何一格空着就整条作废**，绝不留半句或花括号。 */
-function fill(template: string, values: Readonly<Record<string, string | null>>): string | undefined {
-  let missing = false
-  const text = template.replace(/\{(\w+)\}/gu, (_placeholder, name: string) => {
-    const value = values[name]
-    if (typeof value !== 'string' || value.trim().length === 0) {
-      missing = true
-      return ''
-    }
-    return value
-  })
-  return missing ? undefined : text
-}
-
 function compose(
   input: Readonly<{ asset: string; variant: SignalNotificationVariant }>,
-  bodyValues: (language: Language) => Readonly<Record<string, string | null>>
+  bodyValues: (language: SentenceLanguage) => Readonly<Record<string, string | null>>
 ): NotificationContentByLanguage | undefined {
-  const build = (language: Language) => {
+  return composeBothLanguages((language) => {
     const sheet = signalNotificationSentences[language]
-    const title = fill(sheet.title, { asset: input.asset, headline: sheet.headline[input.variant] })
-    const body = fill(sheet.body[input.variant], bodyValues(language))
+    const title = fillTemplate(sheet.title, { asset: input.asset, headline: sheet.headline[input.variant] })
+    const body = fillTemplate(sheet.body[input.variant], bodyValues(language))
     if (title === undefined || body === undefined) return undefined
     return { title, body, reason: sheet.reason }
-  }
-  const zh = build('zh-CN')
-  const en = build('en-US')
-  if (zh === undefined || en === undefined) return undefined
-  return { 'zh-CN': zh, 'en-US': en }
+  })
 }
 
 export type EtfOutflowSentenceInput = Readonly<{
