@@ -213,25 +213,6 @@ mi: miText['zh-CN'],
              * 前两个的原因来自两张不同的码表（账本的 signal-* / 运行的 analysis-*），第三个是中性
              * 停下的三句。码本身不上屏，查不到才落「原因没记录」。
              */
-            signalAnalysis: {
-              label: '分析到哪一步',
-              states: {
-                published: '分析已出，可以在时间轴里看到',
-                skipped: '这次没有分析',
-                failed: '分析了但没成',
-                stopped: '这次运行提前结束了'
-              },
-              /** 读者自己在设置里关了自动分析：这句优先于任何运行状态，且不给按钮（卡片没有设置路由）。 */
-              offByReader: '你关闭了自动分析，这条信号不会自动分析',
-              stoppedReasons: {
-                'run-cancelled': '这次运行被取消了',
-                'run-superseded': '这次已被更新的一次取代，不用等',
-                'run-unrecognized': '这次运行的状态读不出来',
-                'run-expired': '这次运行发生过，记录已经过了保存期'
-              },
-              reasonUnknown: '原因没记录',
-              separator: '：'
-            },
             triggerStatus: { label: '最近一次判定', since: '起', slotOpen: '开盘 ', slotDelayed: '延迟补跑', reasons: { 'significance-confirmed': '数据变化显著，已开始分析', 'significance-below-threshold': '数据无显著变化，本次未分析', 'provider-surprise-confirmed': 'provider 日历的发布显著偏离市场预期（非官方值），已开始分析', 'semantic-no-op': '数据与上次相同，本次未分析', 'interval-active': '距上次分析不足 30 分钟，已合并', 'same-release-coalesced': '同一次发布的其它指标已经分析过，这次不再重复', 'same-release-abandoned': '同一次发布的分析没成，补位次数已经用完，这条不再单独分析', 'hour-budget-exhausted': '本小时分析次数已达上限', 'day-budget-exhausted': '今天分析次数已达上限', 'schedule-reserve-exhausted': '今日盘口分析额度已用尽', 'session-slot-asia': '亚洲盘开盘分析（08:00）', 'session-slot-europe': '欧洲盘开盘分析（16:00）', 'session-slot-us': '美洲盘开盘分析（24:00）', 'invalid-significance-input': '判定输入异常，本次未分析', 'manual-request': '你在界面上手动触发', 'severity-confirmed': '这条情报达到高重要性门槛，已开始分析', 'medium-score-confirmed': '这条情报达到中等级别门槛，已开始分析', 'market-reaction-confirmed': '已确认出现可比行情反应，已开始复盘', 'restart-initial-compensated': '进程重启后补跑缺失的首次分析', 'restart-review-compensated': '进程重启后补跑缺失的复盘', 'signal-high-triggered': '规则触发，已开始分析', 'signal-medium-triggered': '规则触发，已开始分析', 'signal-cooldown-active': '同一规则刚分析过，这次不重复', 'signal-low-marker-only': '这类情况只在看板标注，不单独分析', 'signal-calendar-owned': '宏观日历已经在处理，不重复分析', 'signal-freeze-unavailable': '分析没排上队，这次没有执行' } },
             loadMore: '加载更多', selectEntry: '选择一个时间轴节点查看详情。',
             // 时间轴跨事件组：同一屏出现多个事件时，每行标出它属于哪条事件、在说什么，
@@ -298,6 +279,25 @@ mi: miText['zh-CN'],
           },
           analysisDrawer: { title: '分析时间轴', open: '分析时间轴', close: '关闭' },
           dashboard: {
+            signalAnalysis: {
+              label: '分析到哪一步',
+              states: {
+                published: '分析已出，可以在时间轴里看到',
+                skipped: '这次没有分析',
+                failed: '分析了但没成'
+                // 没有 `stopped` 这一行：这一支**直接返回原因句**，外层状态句永远不上屏。
+              },
+              /** 读者自己在设置里关了自动分析：这句优先于任何运行状态，且不给按钮（卡片没有设置路由）。 */
+              offByReader: '你关闭了自动分析，这条信号不会自动分析',
+              stoppedReasons: {
+                'run-cancelled': '这次运行被取消了',
+                'run-superseded': '这次已被更新的一次取代，不用等',
+                'run-unrecognized': '这次运行的状态读不出来',
+                'run-expired': '这次分析跑过，但已经超过保存期，看不到结果'
+              },
+              reasonUnknown: '原因没记录',
+              separator: '：'
+            },
             workspaceLabel: '— CRYPTO INTELLIGENCE',
             title: '数字货币市场检查表',
             description: '按资金、宏观、加密风险偏好、杠杆顺序阅读；没有覆盖时保留 partial，不以中性填补。',
@@ -1526,24 +1526,6 @@ mi: miText['en-US'],
           analysisTimeline: {
             retryAnalysis: 'Retry analysis', attemptFailed: 'Last analysis was not published',
             failureReasons: { 'analysis-invalid-output-schema': 'Model output did not match the required format. Retry.', 'analysis-invalid-json': 'The model reply was not valid JSON (it may have been cut off), so it was not published. Retry.', 'analysis-missing-evidence': 'The analysis output did not match the frozen evidence, so it was not published. Retry; if it keeps failing, check sources.', 'analysis-provider-not-ready': 'Model is not ready. Check model settings.', 'analysis-provider-error': 'Model invocation failed. Check the connection and retry.', 'analysis-timeout': 'Model invocation timed out. Retry.', 'analysis-cancelled': 'The analysis was interrupted (app closed or task cancelled). Retry.' },
-                        signalAnalysis: {
-              label: 'Analysis progress',
-              states: {
-                published: 'The analysis is out; read it in the timeline',
-                skipped: 'Not analysed this time',
-                failed: 'Analysed but did not succeed',
-                stopped: 'This run ended early'
-              },
-              offByReader: 'You turned auto-analysis off, so this signal will not be analysed automatically',
-              stoppedReasons: {
-                'run-cancelled': 'This run was cancelled',
-                'run-superseded': 'A newer run replaced this one; nothing to wait for',
-                'run-unrecognized': 'The state of this run could not be read',
-                'run-expired': 'This run happened; its record is past the retention period'
-              },
-              reasonUnknown: 'Reason not recorded',
-              separator: ': '
-            },
             triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'same-release-coalesced': 'Another indicator from the same release was already analysed; this one did not run again', 'same-release-abandoned': 'The analysis for this release did not succeed and its one retry is used up; this indicator was not analysed separately', 'hour-budget-exhausted': 'Hourly analysis limit reached', 'day-budget-exhausted': 'Daily analysis limit reached', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'High-importance intelligence; analysis started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart', 'signal-high-triggered': 'A rule fired; analysis started', 'signal-medium-triggered': 'A rule fired; analysis started', 'signal-cooldown-active': 'The same rule was just analysed; skipped this time', 'signal-low-marker-only': 'Marked on the panel only; no separate analysis', 'signal-calendar-owned': 'The macro calendar already covers this; not analysed twice', 'signal-freeze-unavailable': 'The analysis could not be queued; it did not run' } },
 loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             // The list spans event groups: on one screen each row says which event it belongs to,
@@ -1608,6 +1590,25 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           },
           analysisDrawer: { title: 'Analysis timeline', open: 'Analysis timeline', close: 'Close' },
           dashboard: {
+                        signalAnalysis: {
+              label: 'Analysis progress',
+              states: {
+                published: 'The analysis is out; read it in the timeline',
+                skipped: 'Not analysed this time',
+                failed: 'Analysed but did not succeed'
+                // No `stopped` line: that branch returns the reason sentence directly, so an outer
+                // status sentence would never reach the screen.
+              },
+              offByReader: 'You turned auto-analysis off, so this signal will not be analysed automatically',
+              stoppedReasons: {
+                'run-cancelled': 'This run was cancelled',
+                'run-superseded': 'A newer run replaced this one; nothing to wait for',
+                'run-unrecognized': 'The state of this run could not be read',
+                'run-expired': 'This analysis ran, but it is past the retention period, so the result cannot be seen'
+              },
+              reasonUnknown: 'Reason not recorded',
+              separator: ': '
+            },
             workspaceLabel: '— CRYPTO INTELLIGENCE',
             title: 'Crypto market checklist',
             description: 'Read capital, macro, crypto risk appetite, then leverage. Keep partial when coverage is missing; do not fill it as neutral.',
