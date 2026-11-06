@@ -38,6 +38,21 @@ export type NotificationCopyRef =
   | { scope: 'product'; productId: string; key: string; params?: Readonly<Record<string, NotificationCopyParam>> }
   | { scope: 'job-title'; definitionId: string }
 
+/**
+ * 可选段被丢弃时留下的记号。用不可见字符而不是空串，是为了在拼接后**精确删掉它前面的分隔符**：
+ * `任务失败：{taskName?}` → `任务失败`，而不是 `任务失败：`。
+ */
+const OPTIONAL_SLOT_DROP = '\u0000'
+
+/** 删掉「分隔符 + 可选段消失」留下的尾巴：冒号、逗号、顿号、中点与它们的空格。 */
+function dropOptionalSlots(text: string): string {
+  return text
+    .replace(/[：:，,、·]?\s*\u0000/gu, '')
+    .replace(/\u0000/gu, '')
+    // 段落在句首时，删掉它别留下一个前导空格。
+    .replace(/^\s+/u, '')
+}
+
 export type NotificationCopyPort = {
   resolve: (ref: NotificationCopyRef, language: NotificationCopyLanguage) => string | null
 }
@@ -84,9 +99,12 @@ export function createNotificationCopyPort(input: {
       if (template === null) return null
 
       let unresolved = false
-      const text = template.replace(/\{(\w+)\}/gu, (placeholder, name: string) => {
+      const text = template.replace(/\{(\w+)(\??)\}/gu, (placeholder, name: string, optional: string) => {
         const param = ref.params?.[name]
         if (param === undefined) {
+          // 可选段（`{taskName?}`）：拿不到就整段消失，**连同它前面的那个分隔符**。
+          // 一条通知的价值主要在「什么事」，参数是细节；细节缺了不该把整条变成兜底句。
+          if (optional === '?') return OPTIONAL_SLOT_DROP
           unresolved = true
           return placeholder
         }
@@ -94,6 +112,7 @@ export function createNotificationCopyPort(input: {
         if ('ref' in param) {
           const resolved = resolveParamRef(param.ref, language)
           if (resolved === null) {
+            if (optional === '?') return OPTIONAL_SLOT_DROP
             unresolved = true
             return placeholder
           }
@@ -101,13 +120,15 @@ export function createNotificationCopyPort(input: {
         }
         const formatted = formatNotificationNumber(param, language)
         if (formatted === null) {
+          if (optional === '?') return OPTIONAL_SLOT_DROP
           unresolved = true
           return placeholder
         }
         return formatted
       })
-      // 参数缺失、或引用解析不到时不许把 `{taskName}` 印到读者面前：整句判为解析不到，由调用方降级。
-      return unresolved || /\{\w+\}/.test(text) ? null : text
+      const settled = dropOptionalSlots(text)
+      // 必填参数缺失、或引用解析不到时不许把 `{taskName}` 印到读者面前：整句判为解析不到，由调用方降级。
+      return unresolved || /\{\w+\??\}/.test(settled) ? null : settled
     }
   }
 }

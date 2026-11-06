@@ -74,6 +74,31 @@ describe('数字参数：读的那一刻按语言格式化（契约 v2.42 第三
   })
 })
 
+describe('可选段：拿不到就整段消失，不整条降级', () => {
+  const key = 'notification.event.platform.job.failed-terminal.title'
+
+  it('作业名引用解析得到：照常拼进去', () => {
+    const params = { taskName: { ref: { scope: 'job-title' as const, definitionId: 'market-calendar.daily' } } }
+    expect(port().resolve({ scope: 'platform', key, params }, 'zh-CN')).toBe('任务失败：市场日历 · 经济数据')
+  })
+
+  it('解析不到：只丢这一格（连同冒号），标题仍然是「任务失败」', () => {
+    const params = { taskName: { ref: { scope: 'job-title' as const, definitionId: 'job-stopped-yesterday' } } }
+    // 整条降级等于把「什么事」也一起丢了——那才是用户截图里那句「有一条新通知」的来路。
+    expect(port().resolve({ scope: 'platform', key, params }, 'zh-CN')).toBe('任务失败')
+    expect(port().resolve({ scope: 'platform', key, params }, 'en-US')).toBe('Task failed')
+  })
+
+  it('必填参数缺失仍然整句解析不到（可选段才允许丢格子）', () => {
+    // 额度那句的 `{used}` / `{limit}` 是必填：少一个就整句判为解析不到，不印半个句子。
+    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
+    expect(port().resolve({ scope: 'platform', key: requiredKey }, 'zh-CN')).toBeNull()
+    expect(port().resolve({ scope: 'platform', key: requiredKey, params: { used: '3' } }, 'zh-CN')).toBeNull()
+    expect(port().resolve({ scope: 'platform', key: requiredKey, params: { used: '3', limit: '10' } }, 'zh-CN'))
+      .toContain('今天已用 3 次，上限 10 次')
+  })
+})
+
 describe('参数可以是引用（一层）', () => {
   const key = 'notification.event.platform.job.failed-terminal.title'
 
@@ -84,9 +109,13 @@ describe('参数可以是引用（一层）', () => {
       .toBe('Task failed: Market calendar · economic data')
   })
 
-  it('引用解析不到 → 整句判为解析不到，不把 {taskName} 印给读者', () => {
-    const params = { taskName: { ref: { scope: 'job-title' as const, definitionId: 'gone' } } }
-    expect(port().resolve({ scope: 'platform', key, params }, 'zh-CN')).toBeNull()
+  it('必填位置的引用解析不到 → 整句判为解析不到，不把占位符印给读者', () => {
+    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
+    const params = {
+      used: { ref: { scope: 'job-title' as const, definitionId: 'gone' } },
+      limit: '10'
+    }
+    expect(port().resolve({ scope: 'platform', key: requiredKey, params }, 'zh-CN')).toBeNull()
   })
 
   it('字面量参数照旧：日期、次数这类本来就与语言无关', () => {
@@ -94,7 +123,8 @@ describe('参数可以是引用（一层）', () => {
       .toBe('任务失败：手动任务')
   })
 
-  it('缺参数仍是整句解析不到，不许印占位符', () => {
-    expect(port().resolve({ scope: 'platform', key }, 'zh-CN')).toBeNull()
+  it('必填段缺参数仍是整句解析不到，不许印占位符', () => {
+    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
+    expect(port().resolve({ scope: 'platform', key: requiredKey }, 'zh-CN')).toBeNull()
   })
 })

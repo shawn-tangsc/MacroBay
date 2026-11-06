@@ -86,6 +86,8 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       return filled
     }
 
+    // 注意：可选段（`{taskName?}`）被丢掉时句子照常出，**目前不留诊断**——它不算解析失败。
+    // 代价是「为什么这一段少了」只能从记录参数看出来；要追因果时先看这条注释。
     const title = resolve(record.titleKey, record.titleParams)
     const body = resolve(record.bodyKey, record.bodyParams)
     const reason = resolve(record.reasonKey, record.reasonParams)
@@ -109,7 +111,8 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       title: title ?? fallback,
       body: title === null ? '' : (body ?? ''),
       reason: title === null ? '' : (reason ?? ''),
-      actionLabels: title === null ? {} : resolveActionLabels(record.actions, resolvedLanguage),
+      // 动作**不跟着文案走**：它是一条结构事实（点开去哪），文案缺了也不许把入口一起吞掉。
+      actionLabels: resolveActionLabels(record.actions, resolvedLanguage),
       ...(occurrenceLabel === null ? {} : { occurrenceLabel }),
       ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
     }

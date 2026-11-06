@@ -117,15 +117,18 @@ describe('任务失败通知里的作业名跟着语言走', () => {
     expect(zh === undefined ? [] : Object.keys(zh)).not.toContain('titleKey')
   })
 
-  it('定义找不到时整条降级成兜底句，诊断恰 1 条且不含 definitionId', async () => {
+  it('定义找不到时只丢作业名那一格：标题仍是「任务失败」，不整条降级', async () => {
     const { runtime, diagnostics } = harness({ definitions: [] })
     await submitFailure(runtime, 'market-calendar.daily')
 
     const item = (await runtime.list()).items[0]
-    expect(item?.title).toBe('有一条新通知，点开看详情')
-    expect(diagnostics).toHaveLength(1)
-    expect(diagnostics[0]?.code).toBe('copy-unresolved')
-    // 诊断给排查用，但它不该把内部标识抄出去：这里只留键与记录 id。
+    // 一条通知的价值主要在「什么事」：名字取不到时丢那一格，标题与正文照常在。
+    expect(item?.title).toBe('任务失败')
+    expect(item?.title).not.toContain('{')
+    expect(item?.title).not.toContain('notification.')
+    // 动作与入口是结构事实，不跟着文案消失（带 deeplink 的通知必须能点开）。
+    expect(item?.actions).toHaveLength(1)
+    // 诊断不该把内部标识抄出去。
     expect(JSON.stringify(diagnostics)).not.toContain('market-calendar.daily')
   })
 

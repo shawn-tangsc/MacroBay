@@ -14,6 +14,8 @@ import type {
   NotificationDiagnosticsEntry,
   NotificationRecord
 } from '../contracts/notificationContracts'
+import { notificationCopy } from '../../i18n/notificationCopy'
+import { createNotificationCopyPort } from '../contracts/notificationCopyPort'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { toNotificationCenterItem } from './notificationCenterItem'
 
@@ -51,7 +53,15 @@ function harness(language: 'zh-CN' | 'en-US' = 'zh-CN'): {
     clock,
     now: () => '2026-11-05T00:00:00.000Z',
     getLanguage: async () => language,
-    diagnostics: (entry) => diagnostics.push(entry)
+    diagnostics: (entry) => diagnostics.push(entry),
+    // 名字端口只认识一条作业定义：另一条（历史里那台已停的作业）故意解析不到。
+    copy: createNotificationCopyPort({
+      platform: notificationCopy,
+      jobTitle: (definitionId, target) =>
+        definitionId === 'market-calendar.daily'
+          ? (target === 'en-US' ? 'Market calendar · economic data' : '市场日历 · 经济数据')
+          : null
+    })
   })
   return {
     diagnostics,
@@ -138,6 +148,23 @@ describe('渲染层看到的那一份', () => {
     }))
 
     expect(item.title).toBe('A new notification arrived — open it for details.')
+  })
+
+  it('作业名解析不到：标题仍在，动作不被吞（带 deeplink 的通知必须能点开）', async () => {
+    const item = await harness().project(record({
+      titleKey: 'notification.event.platform.job.failed-terminal.title' as NotificationRecord['titleKey'],
+      titleParams: { taskName: { ref: { scope: 'job-title', definitionId: 'job-stopped-yesterday' } } },
+      deeplink: { scope: 'platform' },
+      actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink: { scope: 'platform' } }]
+    }))
+
+    // ① 参数缺了只丢那一格，不是整条变兜底句。
+    expect(item.title).toBe('任务失败')
+    // ③ 动作与 deeplink 是结构事实，不跟着文案一起消失。
+    expect(item.actions).toEqual([
+      { id: 'open-task', label: '打开任务', kind: 'open', deeplink: { scope: 'platform' } }
+    ])
+    expect(item.deeplink).toEqual({ scope: 'platform' })
   })
 
   it('缺参数不拿 `{taskName}` 顶上：整条降级，但结构字段照旧在', async () => {
