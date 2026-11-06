@@ -3,6 +3,22 @@ import type { NotificationCopyParam } from './notificationCopyPort'
 import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
+
+/**
+ * **信号自身的严重度**（契约 v2.45 §16.3.4）：只有「升级再投递」用它，与 `NotificationSeverity`
+ * （`info|success|warning|critical`，记录上的展示严重度）**是两个概念，不许混用**。
+ *
+ * 三档闭集来自产品声明（`SignalSeverity`）；平台只按 `low < medium < high` 排序并作为状态存下来，
+ * 不另造第二套值。拿 `NotificationSeverity` 比较会得出「永远不升级」——它在提交计划器里曾写死 `info`。
+ */
+export type NotificationSignalSeverity = 'low' | 'medium' | 'high'
+
+/** 升级比较的唯一顺序。三档 ⇒ 同一记录最多投递三次（首次 + 两次严格升级），不靠任何计数常量。 */
+export const SIGNAL_SEVERITY_RANK: Readonly<Record<NotificationSignalSeverity, number>> = Object.freeze({
+  low: 0,
+  medium: 1,
+  high: 2
+})
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type NotificationChannel = 'center' | 'toast' | 'popup' | 'desktop'
 export type NotificationState = 'unread' | 'read' | 'acknowledged' | 'dismissed' | 'snoozed' | 'expired'
@@ -38,6 +54,12 @@ export type NotificationDeliveryState = {
   at: string
   /** 「再推一次」用：这条记录的手机投递一共成功发起过几次（调试与瞬时回执用，界面不常驻）。 */
   pushCount?: number
+  /**
+   * **已经推送过的最高信号严重度**（契约 v2.45 §16.3.4）。它是状态、跟着记录走，
+   * 不是「一天 N 次」这种常量：只有新提交严格更高才再推一次，推完抬到这里。
+   * 缺省＝这条记录还没有成功推送过任何一档。
+   */
+  highestSeverity?: NotificationSignalSeverity
   /** 最近一次重投的时刻（UTC）。 */
   lastPushedAt?: string
 }
@@ -321,6 +343,16 @@ export type NotificationSubmitRequest = {
   /** 读者眼前那一版；落库供 `redeliverPush` 核对。 */
   edition?: { editionId: string; locale: string }
   dedupeVars: NotificationDedupeVars
+  /**
+   * 记录上的**展示严重度**（`NotificationSeverity`）。以前提交计划器把它写死成 `info`，
+   * 于是每一行的严重度都是常量——生产者传了也没用。缺省 `info` 只为历史调用方。
+   */
+  severity?: NotificationSeverity
+  /**
+   * 这次提交的**信号严重度**（契约 v2.45）：只参与 `condition` 事件的「升级再投递」判断。
+   * 与 `severity` 是两个概念，不许互相顶替。不传＝这次不声明档位，也就不触发升级。
+   */
+  signalSeverity?: NotificationSignalSeverity
   titleParams?: Readonly<Record<string, NotificationCopyParam>>
   bodyParams?: Readonly<Record<string, NotificationCopyParam>>
   bodyVariant?: string
@@ -348,6 +380,14 @@ export type NotificationSubmitOutcome =
         | 'unknown-body-variant'
         | 'missing-action'
         | 'scope-mismatch'
+        /**
+         * `signalSeverity` 不在 `low|medium|high` 里（契约 v2.45）。
+         *
+         * 单列一个原因，是为了不让「展示严重度」那套值混进来：`critical` 排在最上面，一旦被当成
+         * 最高档接受，第一次提交就把 `highestSeverity` 抬到顶，此后**再也不会有升级通知**，
+         * 而表面上一切正常。宁可当场拒收，也不静默落成 `medium`。
+         */
+        | 'invalid-signal-severity'
       message: string
     }
 

@@ -57,6 +57,7 @@ import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
+import { decideSeverityUpgrade } from './notificationSeverityUpgrade'
 import {
   compareNotifications,
   notificationCursorKey,
@@ -231,14 +232,31 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       const merged = mergeDuplicateNotification(plan.duplicate, plan.incoming, now, {
         incrementCount: plan.incrementCount
       })
-      const records = state.records.map((item: NotificationRecord) => (item.id === merged.id ? merged : item))
-      await persistWithDiagnostics({ ...state, records })
+      // 契约 §16.3.4：合并不重推，但「同一件事更严重了」是新事实——严格升级才再推一次手机。
+      // 只推手机这一面、不新建行、不动键；与 `redeliverPush` 是两条入口，互不调用。
+      const upgradeEvent = deps.catalog?.get(request.eventTypeId)
+      const upgrade = upgradeEvent === undefined
+        ? ({ kind: 'none', why: 'not-condition' } as const)
+        : decideSeverityUpgrade({ entry: upgradeEvent, duplicate: plan.duplicate, request })
+      const next = upgrade.kind === 'upgrade'
+        ? await delivery.deliverSeverityUpgrade(merged, settings, state.pushBackoff, upgrade.severity)
+        : undefined
+      const settled = next?.record ?? merged
+      const records = state.records.map((item: NotificationRecord) => (item.id === settled.id ? settled : item))
+      await persistWithDiagnostics({
+        ...state,
+        records,
+        ...(next === undefined ? {} : { pushBackoff: next.pushBackoff })
+      })
       notifyChanged()
+      if (next?.transition !== undefined) {
+        await emitBackoffEvent({ transition: next.transition, now, submit: submitEvent })
+      }
       return {
         kind: 'merged',
-        recordId: merged.id,
-        occurrenceCount: merged.occurrenceCount,
-        mergedEventTypes: merged.mergedEventTypes ?? [merged.eventTypeId]
+        recordId: settled.id,
+        occurrenceCount: settled.occurrenceCount,
+        mergedEventTypes: settled.mergedEventTypes ?? [settled.eventTypeId]
       }
     }
 
@@ -265,7 +283,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     const record = plan.record
     await persistWithDiagnostics({ ...state, records: [record, ...state.records], dailyCounters })
     notifyChanged()
-    const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff)
+    const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff, request.signalSeverity)
     if (delivered.record !== record || delivered.pushBackoff !== state.pushBackoff) {
       const records = [delivered.record, ...state.records]
       await persistWithDiagnostics({ ...state, records, pushBackoff: delivered.pushBackoff, dailyCounters })

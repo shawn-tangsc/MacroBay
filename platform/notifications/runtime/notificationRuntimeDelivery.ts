@@ -10,9 +10,11 @@ import {
   type NotificationCopyLanguage
 } from '../../i18n/notificationCopy'
 import type { NotificationCopyParam, NotificationCopyPort } from '../contracts/notificationCopyPort'
+import { SIGNAL_SEVERITY_RANK } from '../contracts/notificationContracts'
 import type {
   NotificationAction,
   NotificationDiagnosticsSink,
+  NotificationSignalSeverity,
   NotificationPushBackoff,
   NotificationRecord,
   NotificationRuntimeSettings
@@ -132,7 +134,9 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
   async function deliverNewRecord(
     record: NotificationRecord,
     settings: NotificationRuntimeSettings,
-    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>,
+    /** 这次提交声明的信号严重度：首次推送成功时记进 `delivery.push.highestSeverity`。 */
+    signalSeverity?: NotificationSignalSeverity
   ): Promise<{
     record: NotificationRecord
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
@@ -159,56 +163,119 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       }
     }
 
-    const nextBackoff: Record<string, NotificationPushBackoff> = { ...pushBackoff }
-    let backoffChanged = false
-    let transition: NotificationPushTransition | undefined
-    if (delivery.push?.state === 'queued') {
-      const at = input.now()
-      const channelId = settings.push.channelId
-      const current = channelId === null ? undefined : pushBackoff[channelId]
-      if (channelId === null || !input.deliveryHooks?.push) {
-        delivery.push = { state: 'failed', reason: 'push-unavailable', at }
-      } else if (shouldSkipPush(current, at)) {
-        // 熔断窗口内不发：写独立原因码，不调用端口（通道方案 §3）。
-        delivery.push = { state: 'failed', reason: 'push-backoff', at }
-      } else {
-        const result = await input.deliveryHooks.push({ ...record, delivery }, content)
-        const outcome: PushDeliveryOutcome = result.ok
-          ? 'sent-accepted'
-          : result.reason === 'unknown-after-send'
-            ? 'unknown-after-send'
-            : 'failed'
-        const decision = recordPushOutcome(current, outcome, at)
-        // `unknown-after-send` 与「本来就没失败过」返回原值：不写，保留「没有熔断记录」这个状态。
-        if (decision.changed) {
-          nextBackoff[channelId] = {
-            channelId,
-            failures: decision.failures,
-            pausedUntil: decision.pausedUntil
-          }
-          backoffChanged = true
-        }
-        if (decision.transition === 'suspended') transition = { kind: 'paused', channelId }
-        if (decision.transition === 'resumed') transition = { kind: 'resumed', channelId }
-        delivery.push = result.ok
-          ? {
-              state: 'sent-accepted',
-              at,
-              ...(result.messageId === undefined ? {} : { messageId: result.messageId })
-            }
-          : { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
-      }
-    }
+    const pushOutcome = delivery.push?.state === 'queued'
+      ? await attemptPush(record, delivery, settings, pushBackoff, content, signalSeverity)
+      : undefined
     const deliveryChanged = JSON.stringify(delivery) !== JSON.stringify(record.delivery)
     return {
       record: deliveryChanged ? { ...record, delivery } : record,
-      pushBackoff: backoffChanged ? nextBackoff : pushBackoff,
+      pushBackoff: pushOutcome?.pushBackoff ?? pushBackoff,
       desktopBlocked,
-      ...(transition === undefined ? {} : { transition })
+      ...(pushOutcome?.transition === undefined ? {} : { transition: pushOutcome.transition })
     }
   }
 
-  return { resolveContent, deliverNewRecord }
+  /**
+   * 手机这一档的一次投递（契约 §8/§16.3.4）：唯一写 `delivery.push` 的地方。
+   *
+   * `highestSeverity` 只在这里、且只在**真的发出去了**（受理或未确认）时抬——推失败不算「已经告诉过读者」。
+   * 比较用 `SIGNAL_SEVERITY_RANK`，跟展示用的 `NotificationSeverity` 不是一回事。
+   */
+  async function attemptPush(
+    record: NotificationRecord,
+    delivery: NotificationRecord['delivery'],
+    settings: NotificationRuntimeSettings,
+    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>,
+    content: NotificationDeliveryContent,
+    signalSeverity: NotificationSignalSeverity | undefined
+  ): Promise<{
+    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+    transition?: NotificationPushTransition
+  }> {
+    const nextBackoff: Record<string, NotificationPushBackoff> = { ...pushBackoff }
+    let changed = false
+    let transition: NotificationPushTransition | undefined
+    const at = input.now()
+    const channelId = settings.push.channelId
+    const current = channelId === null ? undefined : pushBackoff[channelId]
+    const previousHighest = delivery.push?.highestSeverity
+    const highest = (sent: boolean): NotificationSignalSeverity | undefined => {
+      if (!sent || signalSeverity === undefined) return previousHighest
+      if (previousHighest === undefined) return signalSeverity
+      return SIGNAL_SEVERITY_RANK[signalSeverity] > SIGNAL_SEVERITY_RANK[previousHighest]
+        ? signalSeverity
+        : previousHighest
+    }
+
+    if (channelId === null || !input.deliveryHooks?.push) {
+      delivery.push = { state: 'failed', reason: 'push-unavailable', at, ...(previousHighest === undefined ? {} : { highestSeverity: previousHighest }) }
+      return { pushBackoff }
+    }
+    if (shouldSkipPush(current, at)) {
+      // 熔断窗口内不发：写独立原因码，不调用端口（通道方案 §3）。
+      delivery.push = { state: 'failed', reason: 'push-backoff', at, ...(previousHighest === undefined ? {} : { highestSeverity: previousHighest }) }
+      return { pushBackoff }
+    }
+
+    const result = await input.deliveryHooks.push({ ...record, delivery }, content)
+    const outcome: PushDeliveryOutcome = result.ok
+      ? 'sent-accepted'
+      : result.reason === 'unknown-after-send'
+        ? 'unknown-after-send'
+        : 'failed'
+    const decision = recordPushOutcome(current, outcome, at)
+    // `unknown-after-send` 与「本来就没失败过」返回原值：不写，保留「没有熔断记录」这个状态。
+    if (decision.changed) {
+      nextBackoff[channelId] = {
+        channelId,
+        failures: decision.failures,
+        pausedUntil: decision.pausedUntil
+      }
+      changed = true
+    }
+    if (decision.transition === 'suspended') transition = { kind: 'paused', channelId }
+    if (decision.transition === 'resumed') transition = { kind: 'resumed', channelId }
+    const sent = outcome !== 'failed'
+    const nextHighest = highest(sent)
+    delivery.push = result.ok
+      ? {
+          state: 'sent-accepted',
+          at,
+          ...(result.messageId === undefined ? {} : { messageId: result.messageId }),
+          ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
+        }
+      : {
+          state: 'failed',
+          reason: result.reason ?? 'channel-rejected',
+          at,
+          ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
+        }
+    return { pushBackoff: changed ? nextBackoff : pushBackoff, ...(transition === undefined ? {} : { transition }) }
+  }
+
+  /**
+   * 严重度升级后的再投递（契约 v2.45 §16.3.4）：**只推手机这一面**，不新建行、不动键。
+   *
+   * 与 `redeliverPush` 是两条入口，互不调用：那条是读者点出来的，这条是自动路径上「这件事更严重了」。
+   * 哨兵：只有调用方已经判定「严格升级」，这里不做第二次判断。
+   */
+  async function deliverSeverityUpgrade(
+    record: NotificationRecord,
+    settings: NotificationRuntimeSettings,
+    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>,
+    severity: NotificationSignalSeverity
+  ): Promise<{
+    record: NotificationRecord
+    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+    transition?: NotificationPushTransition
+  }> {
+    const content = await resolveContent(record)
+    const delivery: NotificationRecord['delivery'] = { ...record.delivery }
+    const outcome = await attemptPush(record, delivery, settings, pushBackoff, content, severity)
+    return { record: { ...record, delivery }, pushBackoff: outcome.pushBackoff, ...(outcome.transition === undefined ? {} : { transition: outcome.transition }) }
+  }
+
+  return { resolveContent, deliverNewRecord, deliverSeverityUpgrade }
 }
 
 export type NotificationDeliverySurface = ReturnType<typeof createNotificationDelivery>

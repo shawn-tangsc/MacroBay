@@ -24,6 +24,7 @@ import type {
   NotificationRecord,
   NotificationRequest,
   NotificationRuntimeSettings,
+  NotificationSignalSeverity,
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '../contracts/notificationContracts'
@@ -92,6 +93,15 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     return rejected('missing-action', `notification event "${entry.id}" requires at least one action`)
   }
 
+  // 信号严重度只认三档闭集：类型层挡得住编译期，运行期还要挡一次（IPC / 生产者 / JS 调用点）。
+  // 放行 `critical` 会让 `highestSeverity` 一次抬到顶，之后永不再升级——而且看起来一切正常。
+  if (input.request.signalSeverity !== undefined && !isSignalSeverity(input.request.signalSeverity)) {
+    return rejected(
+      'invalid-signal-severity',
+      `notification event "${entry.id}" received signalSeverity "${String(input.request.signalSeverity)}"; expected low | medium | high`
+    )
+  }
+
   const bodyKey = resolveBodyKey(entry, input.request)
   if (bodyKey === null) {
     return rejected('unknown-body-variant', `notification event "${entry.id}" has no body variant "${input.request.bodyVariant ?? ''}"`)
@@ -130,6 +140,11 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     incoming,
     outcome: { kind: 'accepted', recordId: record.id, levels }
   }
+}
+
+/** 运行期校验：值必须落在三档闭集里（不被 `as` 或 JS 调用点绕过去）。 */
+function isSignalSeverity(value: unknown): value is NotificationSignalSeverity {
+  return value === 'low' || value === 'medium' || value === 'high'
 }
 
 function rejected(
@@ -223,7 +238,7 @@ function toLegacyRequest(
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
     reasonKey: entry.reasonKey as NotificationCopyKey,
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
-    severity: 'info',
+    severity: request.severity ?? 'info',
     priority: 'normal',
     requestedChannels: localChannels.length > 0 ? [...localChannels] : ['center'],
     ...(request.actions.length === 0 ? {} : { actions: [...request.actions] }),
@@ -268,7 +283,7 @@ function createRecord(
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
     reasonKey: entry.reasonKey as NotificationCopyKey,
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
-    severity: 'info',
+    severity: request.severity ?? 'info',
     priority: 'normal',
     channels: localChannels.length > 0 ? [...localChannels] : ['center'],
     state: 'unread',
