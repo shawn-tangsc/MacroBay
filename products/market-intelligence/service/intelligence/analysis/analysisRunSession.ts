@@ -57,7 +57,10 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
       description,
       workspace: { type: 'system' },
       origin: analysisRunSessionPolicy.origin,
-      originGroup: analysisRunSessionPolicy.originGroup
+      // 两个字段各管一件事：`originGroup` 是侧栏分组的键（永远是 `market-analysis`，一天几十条
+      // 也只占一块），`originRef` 是这一次运行的幂等键（只有它一个含义）。
+      originGroup: analysisRunSessionPolicy.originGroup,
+      originRef: input.runId
     } as CreateAgentSessionDto)
     // Two messages: the context card (which run this is) and the summary. Never the prompt or the
     // model's raw answer — those live once, in the archive, and are read by this run id.

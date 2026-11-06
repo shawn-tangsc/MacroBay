@@ -34,7 +34,9 @@ describe('the analysis run session', () => {
       agentId: 'crypto-market-analyst',
       description: 'market-analysis-run:mi-ar-1',
       origin: 'automation',
-      originGroup: 'market-analysis'
+      // 分组键恒定；幂等键是这一次运行，只有它一个含义。
+      originGroup: 'market-analysis',
+      originRef: 'mi-ar-1'
     }))
   })
 
