@@ -84,8 +84,7 @@ function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, 
 
 export function DailyBriefingHistoryRail({
   editions, dates, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
-  todayDate, locale, text, timeZone, generatingStage, generatingElapsedMs, resolveText, onSelect, onSelectLocale, onDeletePeriod,
-  onRegeneratePeriod
+  todayDate, locale, text, timeZone, generatingStage, generatingElapsedMs, resolveText, onSelect, onSelectLocale, onDeletePeriod
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /**
@@ -118,17 +117,7 @@ export function DailyBriefingHistoryRail({
   onSelectLocale?: (selection: BriefingRailSelection) => void
   /** 删这一版。`clock` 跟着一起来：成功那句要点名 `日期 · 时刻 · 语言`。 */
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; clock?: string }>) => void | Promise<void>
-  /** Run this period again. Absent when the host cannot spend a run (the menu item is then disabled). */
-  /**
-   * 重跑这一行。**带上它自己的时刻与窗口**：手动期没有期配置可依据，只给期号语言的话，
-   * 服务会按排期时刻重跑——读者看到的就不是他当初选的那一期。
-   */
-  onRegeneratePeriod?: (input: Readonly<{
-    date: string
-    periodId: string
-    locale: DailyBriefingLocale
-    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
-  }>) => void | Promise<void>
+  // 行上不放重试：重试只在正文失败面板与工具栏（用户 2026-11-06）。行只陈述事实。
 }>): React.ReactElement {
   const confirm = useConfirm()
   // 右键指向的是**你点中的那一行**，身份是 `(日期, 期号, 语言)` 三元组。少了语言，同一天的中英两行
@@ -281,17 +270,12 @@ export function DailyBriefingHistoryRail({
               : triggerKindOf(edition)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
-            // 「重试」不能放在行按钮里：`<button>` 里套 `<button>` 是无效 HTML，键盘用户在无障碍树里
-            // 会遇到一行两个按钮、焦点顺序说不清。它放在行按钮**之外**、同一条目内，视觉上仍落在行内。
-            // 中断过的那一行也可以再试：它的第二行写的就是「上次没跑完，可以再试一次」。
-            // 文案承诺了动作，就必须有那颗按钮——只有"失败"给重试，等于让中断行说完话没有下一句。
-            // 与失败同一道门：只给今天（历史日不支持补生成），正在跑的那一行不给。
+            // 行上**不放任何按钮**（用户 2026-11-06：list 上每个 item 都有重试按钮，太重）。
+            // 重试只在正文的失败面板与工具栏，行本身只陈述事实。
             const interrupted = runReasonOf(edition) === 'run-interrupted'
             const failedRun = runReasonOf(edition) === 'run-failed' || (!running && Boolean(edition.attemptCount))
-            const retryable = (failedRun || interrupted) && !running && edition.date === todayDate && onRegeneratePeriod !== undefined
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
               <button type="button"
-                {...(retryable ? { 'data-has-retry': 'true' } : {})}
                 aria-current={rowSelected(edition) ? 'true' : undefined}
                 // 生成中那一行**可以点**：点它打开这一期的生成界面（进度按它自己的期号取）。
                 // 以前这里写死"不可点"，读者点了没反应，只能右键或等它跑完。
@@ -363,30 +347,6 @@ export function DailyBriefingHistoryRail({
                         || (edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.railNoTitle)}
                     </span>}
               </button>
-              {retryable
-                ? <button type="button" className="mi-daily-briefing__rail-retry" data-rail-retry="true"
-                  onClick={() => {
-                    void onRegeneratePeriod?.({
-                      date: edition.date,
-                      periodId: edition.periodId,
-                      // 这一行自己的语言：失败的是英文那一版，重试也重试英文。
-                      locale: edition.locale,
-                      // 这一行自己的截止与窗口：手动期的 periodTime 就是读者当初选的时刻。
-                      ...(edition.periodTime === undefined
-                        ? {}
-                        : {
-                          generation: {
-                            asOf: edition.periodTime,
-                            ...(typeof edition.windowHours === 'number'
-                              ? { windowHours: edition.windowHours as 12 | 24 | 48 }
-                              : {})
-                          }
-                        })
-                    })
-                  }}>
-                  {text.history.retryOne}
-                </button>
-                : null}
             </div>
           })}
           {/* 这一天没有任何可显示的行时给**一个**兜底项（`02` v2.86）：它不是版次行（无时刻/窗口/

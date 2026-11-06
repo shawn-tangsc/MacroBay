@@ -282,18 +282,15 @@ describe('a collapsed day carries only day-level facts', () => {
 })
 
 describe('a row is never a button inside a button', () => {
-  it('keeps 重试 outside the row button, and the row holds no nested control', () => {
-    // `<button>` 里套 `<button>` 是无效标记：键盘用户在无障碍树里会遇到一行两个按钮，回车到底
-    // 触发"选中这一版"还是"重试"说不清。这一条断言就是那条说明的守卫。
+  it('puts no control on a row at all — retry lives in the failure panel and the toolbar', () => {
+    // 用户 2026-11-06：list 上每个 item 都有「重试」按钮，太重。行只陈述事实，不放任何按钮。
     render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })],
-      onRegeneratePeriod: vi.fn()
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })]
     })
-    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
-    expect(row.querySelectorAll('button')).toHaveLength(0)
-    const item = row.closest('.mi-daily-briefing__rail-item')!
-    expect(item.querySelector('[data-rail-retry]')).not.toBeNull()
-    expect(item.querySelector('[data-rail-retry]')?.closest('.mi-daily-briefing__rail-row')).toBeNull()
+    const item = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-item')!
+    expect(item.querySelectorAll('button')).toHaveLength(1)  // 只有行本身那颗（它是按钮）
+    expect(item.querySelector('[data-rail-retry]')).toBeNull()
+    expect(item.querySelector('[data-has-retry]')).toBeNull()
   })
 
   it('keeps the row free of a ⋯, and the right-click opens exactly one edition action', () => {
@@ -419,7 +416,7 @@ describe('the second line is never blank', () => {
       edition({ periodDeleted: true, summaryLine: '删排期之后仍在的那一版' })
     ]
     for (const row of rows) {
-      render({ editions: [row], onRegeneratePeriod: vi.fn() })
+      render({ editions: [row] })
       const title = host.querySelector('.mi-daily-briefing__rail-row-title')
       expect(title?.textContent?.trim(), row.summaryLine ?? row.state).not.toBe('')
     }
@@ -518,59 +515,6 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(deletedLine.textContent).toContain('删掉排期之后仍然能读的正文')
   })
 
-  it('runs the period again from the failed row, without opening it first', () => {
-    const onRegeneratePeriod = vi.fn()
-    render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })],
-      onRegeneratePeriod
-    })
-    const retry = host.querySelector<HTMLButtonElement>('[data-rail-retry]')!
-    expect(retry.textContent).toBe(text.history.retryOne)
-    act(() => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(onRegeneratePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
-  })
-
-  // 用户报的那条：中断行写着「可以再试一次」，行上却没有那颗按钮。
-  it('puts the retry on an interrupted row of today, next to the sentence that promises it', () => {
-    const onRegeneratePeriod = vi.fn()
-    render({
-      editions: [edition({
-        state: 'missing', availableLocales: [], generatedAt: undefined,
-        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }]
-      })],
-      onRegeneratePeriod
-    })
-    const item = host.querySelector<HTMLElement>('[data-period-id="default"]')!.closest('.mi-daily-briefing__rail-item') as HTMLElement
-    expect(item.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.runInterrupted)
-    const retry = item.querySelector<HTMLButtonElement>('[data-rail-retry]')!
-    // 文案承诺了"可以再试一次"，那颗按钮就必须在，而且用这一行自己的三样身份。
-    expect(retry.textContent).toBe(text.history.retryOne)
-    act(() => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(onRegeneratePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
-  })
-
-  it('withholds the retry from a past interrupted day and from a row that is running now', () => {
-    // 历史日不支持补生成：那句"可以再试一次"只对今天成立，按钮不能跟着过去。
-    render({
-      editions: [edition({
-        date: '2026-11-01', state: 'missing', availableLocales: [], generatedAt: undefined,
-        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }]
-      })],
-      onRegeneratePeriod: vi.fn()
-    })
-    expect(host.querySelector('[data-rail-retry]')).toBeNull()
-    // 正在跑的那一行也不给：它已经在做了，再给一颗重试就是两个入口改同一件事。
-    render({
-      editions: [edition({
-        state: 'missing', availableLocales: ['zh-CN'], generatedAt: undefined,
-        languages: [{ locale: 'zh-CN', state: 'generating' }]
-      })],
-      generatingStage: 'AI 选择',
-      onRegeneratePeriod: vi.fn()
-    })
-    expect(host.querySelector('[data-rail-retry]')).toBeNull()
-  })
-
   // 用户问的那一句：生成中的行不能只有一个「生成中」，得说清卡在哪、跑了多久。
   it('tells the running row its stage and how long it has been going', () => {
     render({
@@ -595,14 +539,12 @@ describe('a row is two lines: the facts, then what it says', () => {
 
   // 用户报的那条：右��是失败面板，左边列表却把那一行显示成「打开看正文」。
   // 失败的行必须说「这次没生成出来」，并给重试入口——它不是"没有内容"。
-  it('shows a failed run as a failure with a retry, not as a row with nothing to read', () => {
-    const onRegeneratePeriod = vi.fn()
+  it('shows a failed run as a failure, not as a row with nothing to read', () => {
     render({
       editions: [edition({
         state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 1,
         languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }]
-      })],
-      onRegeneratePeriod
+      })]
     })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
     // 用户 2026-11-06：「这次失败」不许占来源那一格——它退到第二行，来源位照旧说"怎么来的"。
@@ -610,7 +552,8 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('failed')
     expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.runFailed} ${text.history.railFailedReason}`)
     expect(row.textContent).not.toContain(text.history.railNoTitle)
-    expect(host.querySelector('[data-rail-retry]')).not.toBeNull()
+    // 行上不再有重试：重试在正文失败面板与工具栏（用户 2026-11-06）。
+    expect(host.querySelector('[data-rail-retry]')).toBeNull()
   })
 
   // 用户 2026-11-06 举着截图问「这个 07:00 未运行是啥意思」：那一行其实是 18:11 一次**英文手动期**
@@ -669,25 +612,6 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(row.textContent).toContain('07:00')
     expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.missingRun} ${text.history.railNotRun}`)
     expect(row.textContent).not.toContain(text.history.railFailedReason)
-  })
-
-  // #9：行内「重试」以前只交期号与语言，手动期没有期配置可依据，重跑会落回排期时刻。
-  it('retries a failed manual issue with its own cutoff and window', () => {
-    const onRegeneratePeriod = vi.fn()
-    render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 1,
-        periodKind: 'manual', periodTime: '2026-11-02T00:00:00.000Z', windowHours: 12 })],
-      onRegeneratePeriod
-    })
-    const retry = host.querySelector<HTMLButtonElement>('[data-rail-retry]')!
-    retry.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-
-    expect(onRegeneratePeriod).toHaveBeenCalledWith({
-      date: '2026-11-02',
-      periodId: 'default',
-      locale: 'zh-CN',
-      generation: { asOf: '2026-11-02T00:00:00.000Z', windowHours: 12 }
-    })
   })
 
   // 用户报的那条：生成中的行点了没反应。现在它可点，点它打开**这一期**的生成界面。

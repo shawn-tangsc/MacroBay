@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { briefingCatchUpDue, catchUpMissedDailyBriefings } from './dailyBriefingCatchUp'
 
 const ZONE = 'Asia/Shanghai'
-/** 11/06 08:30 本地：今天的 07:00 已经过了。 */
-const AFTER_CUTOFF = '2026-11-06T00:30:00.000Z'
+/** 11/06 07:30 本地：07:00 的截止刚过 30 分钟，在补跑窗口内。 */
+const AFTER_CUTOFF = '2026-11-05T23:30:00.000Z'
+/** 08:30 本地：过了 90 分钟，超窗——不再补。 */
+const BEYOND_WINDOW = '2026-11-06T00:30:00.000Z'
 /** 11/06 06:30 本地：还没到点。 */
 const BEFORE_CUTOFF = '2026-11-05T22:30:00.000Z'
 
@@ -83,22 +85,32 @@ describe('a missed period is caught up once, when the app starts', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('catches up each period in its own language and zone', async () => {
+  it('catches up the latest due period only, skipping an earlier one a later period has overtaken', async () => {
+    // 用户 2026-11-06：20:04 去补 07:00、而 20:00 那期 20:01 已经跑完——超过后面那次定时就不补了。
     const { catchUp, run } = harness({
-      periods: [
-        period(),
-        period({ id: 'period_evening', generationTime: '00:00', language: 'en-US', generationTimeZone: 'UTC' })
-      ]
+      // 07:45 本地：07:00 那期才过 45 分钟（还在窗口内），07:30 那期已到点且更晚。
+      now: '2026-11-05T23:45:00.000Z',
+      periods: [period(), period({ id: 'period_later', generationTime: '07:30', language: 'en-US' })]
     })
-    await catchUp()
-    expect(run).toHaveBeenCalledTimes(2)
-    expect(run.mock.calls[1]![0]).toMatchObject({ periodId: 'period_evening', locale: 'en-US', timeZone: 'UTC' })
+    const outcome = await catchUp()
+    expect(outcome.skipped).toContainEqual({ periodId: 'default', why: 'next-period-due' })
+    expect(outcome.ran).toEqual(['period_later'])
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('still catches up when the later period has not reached its own time yet', async () => {
+    const { catchUp, run } = harness({
+      periods: [period(), period({ id: 'period_late', generationTime: '20:00' })]
+    })
+    // 08:30 本地：20:00 那期还没到点 → 07:00 该补。
+    expect((await catchUp()).ran).toEqual(['default'])
+    expect(run).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('the cutoff of a period is the wall clock the reader configured', () => {
   it('is due only once the reader’s own clock has passed it', () => {
-    expect(briefingCatchUpDue(period(), ZONE, AFTER_CUTOFF)).toEqual({ date: '2026-11-06', cutoff: '2026-11-05T23:00:00.000Z' })
+    expect(briefingCatchUpDue(period(), ZONE, AFTER_CUTOFF)).toEqual({ date: '2026-11-06', cutoff: '2026-11-05T23:00:00.000Z', expired: false })
     expect(briefingCatchUpDue(period(), ZONE, BEFORE_CUTOFF)).toBeUndefined()
   })
 
@@ -109,9 +121,9 @@ describe('the cutoff of a period is the wall clock the reader configured', () =>
 
   it('reads the period’s own zone when it has one', () => {
     const utc = period({ generationTimeZone: 'UTC' })
-    // UTC 07:00 已过（此刻 UTC 00:30 还没到）——同一时刻在本地钟上是"过了"，在 UTC 钟上还没到。
-    expect(briefingCatchUpDue(utc, ZONE, AFTER_CUTOFF)).toBeUndefined()
-    expect(briefingCatchUpDue(utc, ZONE, '2026-11-06T07:30:00.000Z')).toEqual({ date: '2026-11-06', cutoff: '2026-11-06T07:00:00.000Z' })
+    // 按 UTC 的钟：此刻 UTC 23:30（11/05），UTC 07:00 已经过了 16 小时 → 早超出 1 小时窗口。
+    expect(briefingCatchUpDue(utc, ZONE, AFTER_CUTOFF)).toEqual({ date: '2026-11-05', cutoff: '2026-11-05T07:00:00.000Z', expired: true })
+    expect(briefingCatchUpDue(utc, ZONE, '2026-11-06T07:30:00.000Z')).toEqual({ date: '2026-11-06', cutoff: '2026-11-06T07:00:00.000Z', expired: false })
   })
 })
 
@@ -154,5 +166,63 @@ describe('a row the reader deleted is not generated again', () => {
     const outcome = await catchUp()
     expect(outcome.skipped).toEqual([{ periodId: 'default', why: 'deleted-by-reader' }])
     expect(run).not.toHaveBeenCalled()
+  })
+})
+
+describe('a check that cannot read the store is not "already generated"', () => {
+  it('reports unreadable instead of skipping silently', async () => {
+    // 2026-11-06 卡了两轮的根：读不到被当成"已有版次"，于是不补、也没有任何痕迹。
+    const outcome = await catchUpMissedDailyBriefings({
+      getPeriods: async () => [period()],
+      getLocale: async () => 'zh-CN' as const,
+      readerTimeZone: () => ZONE,
+      now: () => AFTER_CUTOFF,
+      hasEdition: async () => { throw new Error('sqlite-busy') },
+      attemptCount: async () => 0,
+      wasDeleted: async () => false,
+      run: async () => ({ state: 'available' })
+    })
+    expect(outcome.ran).toEqual([])
+    expect(outcome.unreadable).toEqual([{ periodId: 'default', checking: 'has-edition', error: 'sqlite-busy' }])
+  })
+
+  it('treats an unreadable attempt count the same way, and still never runs', async () => {
+    const outcome = await catchUpMissedDailyBriefings({
+      getPeriods: async () => [period()],
+      getLocale: async () => 'zh-CN' as const,
+      readerTimeZone: () => ZONE,
+      now: () => AFTER_CUTOFF,
+      hasEdition: async () => false,
+      attemptCount: async () => { throw new Error('locked') },
+      wasDeleted: async () => false,
+      run: async () => ({ state: 'available' })
+    })
+    expect(outcome.unreadable).toEqual([{ periodId: 'default', checking: 'attempt-count', error: 'locked' }])
+    expect(outcome.ran).toEqual([])
+  })
+})
+
+describe('the catch-up has a one-hour window and then gives up', () => {
+  it('catches up at cutoff + 59 minutes', async () => {
+    const { catchUp, run } = harness({ now: '2026-11-05T23:59:00.000Z' })
+    expect((await catchUp()).ran).toEqual(['default'])
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives up at cutoff + 61 minutes — no run, no retry later', async () => {
+    // 用户 2026-11-06：超过设置时间一个小时了，就不允许补跑了。不是顺延，是彻底放弃这一次。
+    const { catchUp, run } = harness({ now: '2026-11-06T00:01:00.000Z' })
+    const outcome = await catchUp()
+    expect(outcome.skipped).toEqual([{ periodId: 'default', why: 'window-expired' }])
+    expect(outcome.ran).toEqual([])
+    expect(run).not.toHaveBeenCalled()
+    // 再等一会儿也不会补（同一天、同一期，判定结果一样）。
+    expect((await catchUp()).ran).toEqual([])
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('treats exactly one hour as still inside the window', async () => {
+    const { catchUp } = harness({ now: '2026-11-06T00:00:00.000Z' })
+    expect((await catchUp()).ran).toEqual(['default'])
   })
 })

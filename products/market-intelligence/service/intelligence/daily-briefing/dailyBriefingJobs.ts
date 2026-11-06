@@ -80,8 +80,12 @@ export function wireDailyBriefingJobs(deps: Readonly<{
     }).then((outcome) => {
       // 留痕走平台日志（app.log），不是 console：console 只落在跑 dev 的那个终端里，事后查不到。
       // 补了谁、跳过了谁、谁补了没成，三样都要有出口——否则"没跑成"和"没跑"看起来一样。
-      const fields = { at: deps.now?.() ?? new Date().toISOString(), timeZone, ran: outcome.ran, skipped: outcome.skipped, failed: outcome.failed }
-      if (outcome.failed.length > 0) deps.log?.('error', 'briefing.catchup.failed', fields)
+      const fields = {
+        at: deps.now?.() ?? new Date().toISOString(), timeZone,
+        ran: outcome.ran, skipped: outcome.skipped, failed: outcome.failed, unreadable: outcome.unreadable
+      }
+      // 判不了（读库失败）也是 error：静默跳过就是 2026-11-06 卡两轮的那种"看起来随机"。
+      if (outcome.failed.length > 0 || outcome.unreadable.length > 0) deps.log?.('error', 'briefing.catchup.failed', fields)
       else deps.log?.('info', 'briefing.catchup', fields)
     }).catch((error: unknown) => {
       deps.log?.('error', 'briefing.catchup.error', {

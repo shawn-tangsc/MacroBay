@@ -15,7 +15,20 @@ import type { DailyBriefingPeriod } from './dailyBriefingGenerationSettings'
  *
  * 这一条**不是**"重跑历史上缺的天"：只补今天、只补到点的那一期，过去的日子不动（历史补生成是另一件事）。
  */
-export type BriefingCatchUpDue = Readonly<{ date: string; cutoff: string }> | undefined
+export type BriefingCatchUpDue = Readonly<{
+  date: string
+  cutoff: string
+  /** 计划时刻已经过了 1 小时以上：**彻底不补**（不是顺延，也不是下次启动再试）。 */
+  expired: boolean
+}> | undefined
+
+/**
+ * 补跑的硬窗口：计划时刻之后 **1 小时**内才允许补（用户 2026-11-06）。
+ *
+ * 边界按 `≤ 60 分钟` 算——正好一小时仍补，61 分钟起彻底放弃这一天这一次。窗口按**那一期自己的
+ * 时区**算（期带时区就按它）。
+ */
+export const briefingCatchUpWindowMs = 60 * 60 * 1_000
 
 /** 这一期今天到点了没有；到点了才谈得上补。 */
 export function briefingCatchUpDue(
@@ -30,7 +43,8 @@ export function briefingCatchUpDue(
   // 只问"今天这一期的计划时刻过去了没有"。补跑不回头补昨天：历史补生成是另一件事。
   const cutoff = briefingScheduledCutoff(today, period.generationTime, zone)
   if (cutoff === undefined || Date.parse(cutoff) > Date.parse(now)) return undefined
-  return Object.freeze({ date: today, cutoff })
+  const expired = Date.parse(now) - Date.parse(cutoff) > briefingCatchUpWindowMs
+  return Object.freeze({ date: today, cutoff, expired })
 }
 
 export type BriefingCatchUpDeps = Readonly<{
@@ -65,8 +79,13 @@ export type BriefingCatchUpDeps = Readonly<{
  */
 export type BriefingCatchUpOutcome = Readonly<{
   ran: readonly string[]
-  skipped: readonly Readonly<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' | 'deleted-by-reader' }>[]
+  skipped: readonly Readonly<{ periodId: string; why: 'not-due' | 'window-expired' | 'has-edition' | 'has-attempt' | 'deleted-by-reader' | 'next-period-due' }>[]
   failed: readonly Readonly<{ periodId: string; failureCode?: string }>[]
+  /**
+   * 判不了的那几期：读库失败之类。**不许当成"已经生成过"静默跳过**——那正是 2026-11-06
+   * 「补跑看起来随机」的根：读不到就被当成已有版次，于是不补，也没有任何记录。
+   */
+  unreadable: readonly Readonly<{ periodId: string; checking: 'has-edition' | 'attempt-count' | 'deleted'; error: string }>[]
 }>
 
 /** 补跑今天错过了的那期。失败不抛：启动与重排都不能被它挡住。 */
@@ -76,8 +95,9 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
     const now = deps.now()
     const fallbackLocale = await deps.getLocale().catch(() => 'zh-CN' as const)
     const ran: string[] = []
-    const skipped: Array<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' | 'deleted-by-reader' }> = []
+    const skipped: Array<{ periodId: string; why: 'not-due' | 'window-expired' | 'has-edition' | 'has-attempt' | 'deleted-by-reader' | 'next-period-due' }> = []
     const failed: Array<{ periodId: string; failureCode?: string }> = []
+    const unreadable: Array<{ periodId: string; checking: 'has-edition' | 'attempt-count' | 'deleted'; error: string }> = []
     for (const period of periods) {
       const id = period.id || DEFAULT_PERIOD_ID
       const due = briefingCatchUpDue(period, readerTimeZone, now)
@@ -85,19 +105,63 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
         skipped.push({ periodId: id, why: 'not-due' })
         continue
       }
+      // 过了 1 小时：不补，也不顺延——这条与"下一期已到点"并存，取更严的那个。
+      if (due.expired) {
+        skipped.push({ periodId: id, why: 'window-expired' })
+        continue
+      }
       const locale = period.language ?? fallbackLocale
+      // **后面那一期已经到点，就不补前面这一期**（用户 2026-11-06：20:04 去补 07:00、而 20:00 那期
+      // 20:01 已经跑完，没有意义）。判定用同一天所有期的计划时刻排序，不是只看当前这一期。
+      const cutoffMs = Date.parse(due.cutoff)
+      const laterDue = periods.some((other) => {
+        if (other.id === id) return false
+        const zone = other.generationTimeZone ?? readerTimeZone
+        const date = localDate(now, zone)
+        if (date === undefined) return false
+        const otherCutoff = briefingScheduledCutoff(date, other.generationTime, zone)
+        if (otherCutoff === undefined) return false
+        const otherMs = Date.parse(otherCutoff)
+        return Number.isFinite(otherMs) && otherMs > cutoffMs && otherMs <= Date.parse(now)
+      })
+      if (laterDue) {
+        skipped.push({ periodId: id, why: 'next-period-due' })
+        continue
+      }
       // 跑过的证据：有版次，或者留下过任何一条 attempt。两者都不必再跑一遍。
-      if (await deps.hasEdition({ date: due.date, locale, periodId: id }).catch(() => true)) {
+      // **读不到不是"已经有了"**：判不了就不补，并且把那件事说出来（见 unreadable）。
+      let hasEdition: boolean
+      try {
+        hasEdition = await deps.hasEdition({ date: due.date, locale, periodId: id })
+      } catch (error) {
+        unreadable.push({ periodId: id, checking: 'has-edition', error: describe(error) })
+        continue
+      }
+      if (hasEdition) {
         skipped.push({ periodId: id, why: 'has-edition' })
         continue
       }
-      if (await deps.attemptCount({ date: due.date, locale, periodId: id }).catch(() => 1) > 0) {
+      let attempts: number
+      try {
+        attempts = await deps.attemptCount({ date: due.date, locale, periodId: id })
+      } catch (error) {
+        unreadable.push({ periodId: id, checking: 'attempt-count', error: describe(error) })
+        continue
+      }
+      if (attempts > 0) {
         skipped.push({ periodId: id, why: 'has-attempt' })
         continue
       }
       // 读者删过这一行：删完之后「已过点 + 零 attempt + 零版次」三条全成立，不认这条的话，下次
       // 启动就会把它重新生成回来，读者只会认为删除没生效（用户 2026-11-06）。
-      if (await deps.wasDeleted({ date: due.date, locale, periodId: id }).catch(() => false)) {
+      let deleted: boolean
+      try {
+        deleted = await deps.wasDeleted({ date: due.date, locale, periodId: id })
+      } catch (error) {
+        unreadable.push({ periodId: id, checking: 'deleted', error: describe(error) })
+        continue
+      }
+      if (deleted) {
         skipped.push({ periodId: id, why: 'deleted-by-reader' })
         continue
       }
@@ -112,5 +176,11 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
       if (result.state === 'available') ran.push(id)
       else failed.push({ periodId: id, ...(result.failureCode === undefined ? {} : { failureCode: result.failureCode }) })
     }
-    return Object.freeze({ ran: Object.freeze(ran), skipped: Object.freeze(skipped), failed: Object.freeze(failed) })
+    return Object.freeze({ ran: Object.freeze(ran), skipped: Object.freeze(skipped), failed: Object.freeze(failed), unreadable: Object.freeze(unreadable) })
+}
+
+/** 异常 → 一句人能读的说明：日志里要能看出"卡在哪一步、为什么"。 */
+function describe(error: unknown): string {
+  if (error instanceof Error) return error.message || error.name
+  return typeof error === 'string' ? error : String(error)
 }
