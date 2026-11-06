@@ -5,6 +5,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import type { PlatformText } from '../../../i18n/platformText'
 
 import type { Channel } from './channelSettingsPresentation'
+import type { ChannelConversationEntryState } from './useChannelConversationEntry'
 
 /**
  * 频道列表的一行：**状态点 + 名称 + 掩码 Token + 右侧四个动作**（原型 A）。
@@ -14,8 +15,9 @@ import type { Channel } from './channelSettingsPresentation'
  *   那等于给「部分可看」开一个口子，用户已经否了。
  * - 出错的行走**红点 + 行内一句话**，不弹面板、不弹原始错误串——错误是这一行的属性，不是一次弹窗。
  * - 行本身不可点：四个动作各自是一个控件，点空白不会连带做别的事。
- * - 「查看会话」只在**这条频道已经有绑定的会话**时出现：没有会话时给一个点了会跳到空列表的按钮，
- *   比不给更糟。它跳到这条频道绑定的助手（手机会话就在那个助手的会话列表里）。
+ * - 「查看会话」三态（`ChannelConversationEntryState`）：有会话＝可点；**读不到＝按钮在但禁用、
+ *   旁边一句「读不到」**（「没有」和「拿不到」必须分开，读失败不许让入口消失）；确实没有＝不出现
+ *   （给一个点了跳空列表的按钮比不给更糟）。
  */
 export function ChannelRow(props: {
   channel: Channel
@@ -32,8 +34,8 @@ export function ChannelRow(props: {
   /** 上一次测试消息的回执（一句话 + 档位），同一位置替换。 */
   testReceipt?: { tone: 'muted' | 'bad'; text: string } | null
   onSendTest?: (channel: Channel) => void
-  /** 这条频道有没有绑定过会话：决定「查看会话」出不出来。 */
-  hasConversation?: boolean
+  /** 这条频道的会话入口三态：有会话 / 读不到 / 确实没有。 */
+  conversationEntry?: ChannelConversationEntryState
   onOpenConversation?: (channel: Channel) => void
 }): React.ReactElement {
   const { channel, labels } = props
@@ -89,14 +91,20 @@ export function ChannelRow(props: {
         >
           {labels.channelTestSend}
         </Button>
-        {props.hasConversation === true ? (
+        {props.conversationEntry === undefined || props.conversationEntry.state === 'none' ? null : (
+          // 读不到时按钮也在，只是点不动：静默消失会让读者以为「这条频道没有会话」。
           <Button
-            disabled={channel.state === 'deleting'}
+            disabled={channel.state === 'deleting' || props.conversationEntry.state === 'unknown'}
             onClick={() => props.onOpenConversation?.(channel)}
             size="small"
           >
             {labels.channelOpenConversation}
           </Button>
+        )}
+        {props.conversationEntry?.state === 'unknown' ? (
+          <span className="channel-row-error" data-conversation-unreadable role="note">
+            {labels.channelConversationUnreadable}
+          </span>
         ) : null}
         <IconButton
           ariaLabelKey="settings.channels.logs"

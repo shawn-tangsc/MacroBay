@@ -412,7 +412,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                     onDelete={setDeleting}
                     onEdit={(channel) => void openEditor(channel)}
                     onLogs={setLogsFor}
-                    hasConversation={conversationEntry.hasConversationByChannel[channel.id] === true}
+                    conversationEntry={conversationEntry.entryByChannel[channel.id]}
                     onOpenConversation={(channel) => void conversationEntry.open(channel)}
                     onSendTest={(channel) => void sendChannelTestMessage(channel, testDeps)}
                     onToggle={toggle}

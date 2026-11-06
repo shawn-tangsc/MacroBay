@@ -1228,6 +1228,32 @@ describe('opening the conversation a channel is bound to', () => {
     expect(conversationButton(bound)).toBeTruthy()
   })
 
+  it('keeps the entry visible when the conversation list cannot be read, and says which situation it is', async () => {
+    // 「没有」和「拿不到」是两件事：读失败时入口不许消失，也不许说成「没有会话」。
+    const channels = installPlatform({
+      listConversations: vi.fn(async () => { throw new Error('channel-input-invalid') })
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const container = await mountSettled()
+
+    const button = conversationButton(container)
+    expect(button).toBeTruthy()
+    expect(button?.disabled).toBe(true)
+    expect(container.querySelector('[data-conversation-unreadable]')?.textContent)
+      .toBe(labels.channelConversationUnreadable)
+    // 失败要留痕：一句话、单参数（第二个对象参数会被主进程丢掉）。
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('[channels] listConversations failed'))
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('channel-input-invalid'))
+    errorSpy.mockRestore()
+
+    // 确实没有会话时才是「不出现」。
+    installPlatform({ listConversations: vi.fn(async () => []) })
+    const none = await mountSettled()
+    expect(conversationButton(none)).toBeUndefined()
+    expect(none.querySelector('[data-conversation-unreadable]')).toBeNull()
+    void channels
+  })
+
   it('selects the agent the channel is bound to and lands on the agents page', async () => {
     const channels = installPlatform({
       listConversations: vi.fn(async () => [
