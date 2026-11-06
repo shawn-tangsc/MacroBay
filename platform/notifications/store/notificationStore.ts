@@ -1,5 +1,6 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import type { NotificationCopyParam, NotificationCopyParamRef } from '../contracts/notificationCopyPort'
+import type { NotificationCopyNumber } from '../contracts/notificationNumberFormat'
 import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
@@ -202,10 +203,30 @@ function normalizeTextParams(value: unknown): Record<string, NotificationCopyPar
       if (raw.length <= 200) params[key] = raw
       continue
     }
+    const number = normalizeParamNumber(raw)
+    if (number !== undefined) {
+      params[key] = number
+      continue
+    }
     const ref = normalizeParamRef(raw)
     if (ref !== undefined) params[key] = { ref }
   }
   return Object.keys(params).length > 0 ? params : undefined
+}
+
+/**
+ * 参数位置上的数字：只认 `{ number, kind }`，`kind` 落在闭集里、数值有限。
+ * 其它形状（少字段、多字段、单位自造）一律丢掉——半懂的引用比没有更危险。
+ */
+function normalizeParamNumber(value: unknown): NotificationCopyNumber | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const candidate = value as Record<string, unknown>
+  const keys = Object.keys(candidate)
+  if (keys.length !== 2 || !('number' in candidate) || !('kind' in candidate)) return undefined
+  const { number, kind } = candidate
+  if (typeof number !== 'number' || !Number.isFinite(number)) return undefined
+  if (kind !== 'usd' && kind !== 'pct' && kind !== 'multiple' && kind !== 'count') return undefined
+  return { number, kind }
 }
 
 /** 参数位置上的引用：只认 `{ ref: { scope, …标识 } }`，多一个字段都不要。 */

@@ -10,6 +10,7 @@
  * 解析不到**不许露键、不许露 `definitionId`**：回退平台兜底句，并由调用方记 `copy-unresolved`。
  */
 import type { NotificationCopyLanguage, NotificationCopyTable } from '../../i18n/notificationCopy'
+import { formatNotificationNumber, type NotificationCopyNumber } from './notificationNumberFormat'
 
 /**
  * 占位符的值：字面量，或一个**不带参数**的引用。
@@ -23,7 +24,13 @@ export type NotificationCopyParamRef =
   | { scope: 'product'; productId: string; key: string }
   | { scope: 'job-title'; definitionId: string }
 
-export type NotificationCopyParam = string | { ref: NotificationCopyParamRef }
+/**
+ * 参数值三种形态：字面串、一层引用、**数值+单位**（契约 v2.42 第三种）。
+ *
+ * 数值形态存在的原因：提交时把数字拼成句子，就把语言和格式一起拍死在数据里了。
+ * 传 `{ number, kind }`，由 `formatNotificationNumber` 在**读的那一刻**按语言出「4.2 亿 / $420M」。
+ */
+export type NotificationCopyParam = string | { ref: NotificationCopyParamRef } | NotificationCopyNumber
 
 /** 一句话的引用：平台键、产品键，或作业名（v2.40）。 */
 export type NotificationCopyRef =
@@ -84,12 +91,20 @@ export function createNotificationCopyPort(input: {
           return placeholder
         }
         if (typeof param === 'string') return param
-        const resolved = resolveParamRef(param.ref, language)
-        if (resolved === null) {
+        if ('ref' in param) {
+          const resolved = resolveParamRef(param.ref, language)
+          if (resolved === null) {
+            unresolved = true
+            return placeholder
+          }
+          return resolved
+        }
+        const formatted = formatNotificationNumber(param, language)
+        if (formatted === null) {
           unresolved = true
           return placeholder
         }
-        return resolved
+        return formatted
       })
       // 参数缺失、或引用解析不到时不许把 `{taskName}` 印到读者面前：整句判为解析不到，由调用方降级。
       return unresolved || /\{\w+\}/.test(text) ? null : text

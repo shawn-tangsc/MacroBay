@@ -47,6 +47,33 @@ describe('作业名这个 scope', () => {
   })
 })
 
+describe('数字参数：读的那一刻按语言格式化（契约 v2.42 第三种）', () => {
+  const key = 'notification.taskFailed.title'
+
+  it('中文按亿/万，英文按 M/B；符号不进正文', () => {
+    const params = { taskName: { number: -420_000_000, kind: 'usd' as const } }
+    expect(port().resolve({ scope: 'platform', key, params }, 'zh-CN')).toBe('任务失败：4.2 亿美元')
+    expect(port().resolve({ scope: 'platform', key, params }, 'en-US')).toBe('Task failed: $420M')
+  })
+
+  it('同一条记录切语言只换写法，数字与单位口径各自成立', () => {
+    const pct = { taskName: { number: 2.3, kind: 'pct' as const } }
+    const multiple = { taskName: { number: 3.1, kind: 'multiple' as const } }
+    const count = { taskName: { number: 3, kind: 'count' as const } }
+
+    expect(port().resolve({ scope: 'platform', key, params: pct }, 'zh-CN')).toBe('任务失败：2.3%')
+    expect(port().resolve({ scope: 'platform', key, params: multiple }, 'zh-CN')).toBe('任务失败：3.1 倍')
+    expect(port().resolve({ scope: 'platform', key, params: multiple }, 'en-US')).toBe('Task failed: 3.1×')
+    // 整数不拖 `.0`，「连续 3 日」不该写成「3.0」。
+    expect(port().resolve({ scope: 'platform', key, params: count }, 'zh-CN')).toBe('任务失败：3')
+  })
+
+  it('非法数值整句解析不到：不印 NaN，也不印半个单位', () => {
+    const params = { taskName: { number: Number.NaN, kind: 'usd' as const } }
+    expect(port().resolve({ scope: 'platform', key, params }, 'zh-CN')).toBeNull()
+  })
+})
+
 describe('参数可以是引用（一层）', () => {
   const key = 'notification.event.platform.job.failed-terminal.title'
 
