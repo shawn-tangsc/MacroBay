@@ -31,6 +31,32 @@ describe('sync run projection', () => {  it('reads the failure code and the dura
     expect(projectSyncRun(run({ handlerId: 'market-intelligence.runMarketAnalysis', payload: {} })).sources).toEqual([])
   })
 
+  it('carries the batch tally through, so "partly failed" can be read as numbers', () => {
+    const row = projectSyncRun(run({
+      handlerId: 'market-intelligence.translateItems',
+      payload: { sourceId: 'coindesk-rss' },
+      status: 'completed',
+      result: { counts: { total: 6, succeeded: 5, failed: 1, skipped: 0 }, reasonCode: 'model.rate-limited' }
+    }))
+    expect(row.counts).toEqual({ total: 6, succeeded: 5, failed: 1, skipped: 0 })
+    expect(row.resultReasonCode).toBe('model.rate-limited')
+    // A batch that partly failed is still a completed job: the two facts stay apart.
+    expect(row.outcome).toBe('succeeded')
+  })
+
+  it('drops a tally whose parts do not add up instead of showing four numbers that contradict', () => {
+    const row = projectSyncRun(run({
+      status: 'completed',
+      result: { counts: { total: 9, succeeded: 5, failed: 1, skipped: 0 } }
+    }))
+    expect(row.counts).toBeUndefined()
+  })
+
+  it('shows nothing for a run that predates the tally', () => {
+    // "no tally" and "zero translated" are different facts; zeroes would claim the second.
+    expect(projectSyncRun(run({ status: 'completed' })).counts).toBeUndefined()
+  })
+
   it('keeps an unregistered handler visible under its own id', () => {
     expect(projectSyncRun(run({ handlerId: 'market-intelligence.something-new', lastError: undefined }))).toMatchObject({
       taskLabel: 'market-intelligence.something-new', action: 'other', outcome: 'failed'
