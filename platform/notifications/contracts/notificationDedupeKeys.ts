@@ -43,15 +43,20 @@ export type ModuleSignalDedupeInput =
       moduleId: string
       ruleId: string
       asset: string | null
-      /** UTC、Z 结尾、整毫秒。桶由构造函数算，调用方不拼时间串。 */
-      observedAt: string
+      /**
+       * 日内规则：键 = 模块 + 规则 + 资产，**不含任何时间**（契约 v2.43 §7.4）。
+       *
+       * 时间桶从这根键上去掉了：桶在边界会多推（1:59 与 2:01 落两个桶 = 两次推送），
+       * 而「窗口内只推一条」由 `condition` + `conditionWindowMs` 的**滚动窗口**管，那是另一层的事。
+       * 记录上的发生时刻仍由 `occurredAt` 负责——**键和时间是两件事**，别因为键不要时间就把它也省了。
+       */
       cadence: 'intraday'
-      bucketMs: number
     }
   | {
       moduleId: string
       ruleId: string
       asset: string | null
+      /** 交易日规则：键里带交易日（由这个时刻折成 `YYYY-MM-DD`）。 */
       observedAt: string
       cadence: 'trading-day'
     }
@@ -60,10 +65,13 @@ export type SourceIssueDedupeInput = { sourceId: string }
 
 export const notificationDedupeBuilders = Object.freeze({
   /**
-   * 模块信号（含未来的 AI 解析）共用：键 = **一次发生**——哪个模块、哪条规则、哪个资产、哪一个桶。
+   * 模块信号（含未来的 AI 解析）共用，两种 cadence 各用该用的东西：
    *
-   * `cadence` 是判别式，不是一个数字：`intraday` 必须带 `bucketMs`，`trading-day` 不许带；
-   * 日线规则写个桶宽就是「一天」被写成毫秒。类型上就构造不出来，不靠运行时自觉。
+   * - **日内**：键 ＝ 模块 + 规则 + 资产，**不带时间**；同一规则当天怎么变都落在同一条记录上（合并、
+   *   次数累加），跨窗口才开新行——窗口由 `conditionWindowMs` 判，不由键判。
+   * - **交易日**：键里带交易日，一天一条天然成立（「一个交易日」是毫秒表达不了的）。
+   *
+   * 键构造器里**不出现任何时间常量**：窗口数只有 `signalCooldown(cadence)` 一个来源。
    *
    * **分析窗（24h / 7d）不进键**：键里带的是这次发生，不是分析范围；带窗会让每天都新开一条。
    */
@@ -74,13 +82,17 @@ export const notificationDedupeBuilders = Object.freeze({
     if (ruleId === undefined) return undefined
     const asset = normalizeAsset(input.asset)
     if (asset === undefined) return undefined
+    if (input.cadence === 'intraday') {
+      // 旧口径残留的字段传进来就是错的形状：不静默忽略，宁可构造不出键，由调用方报具名原因。
+      if ('observedAt' in input || 'bucketMs' in input) return undefined
+      return capped(`module-signal:${moduleId}:${ruleId}:${asset}`)
+    }
+
     const observedMs = parseUtcInstant(input.observedAt)
     if (observedMs === undefined) return undefined
-
-    const bucket = bucketToken(observedMs, input.cadence === 'intraday' ? input.bucketMs : DAY_MS)
-    if (bucket === undefined) return undefined
-
-    return capped(`module-signal:${moduleId}:${ruleId}:${asset}:${bucket}`)
+    const day = bucketToken(observedMs, DAY_MS)
+    if (day === undefined) return undefined
+    return capped(`module-signal:${moduleId}:${ruleId}:${asset}:${day}`)
   },
 
   /** 来源「连续失败」与「长时间没数据」共用：键 = 这个来源的持续状况。 */

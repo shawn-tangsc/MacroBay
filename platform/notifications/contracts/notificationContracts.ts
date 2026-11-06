@@ -323,8 +323,20 @@ export const PRIORITY_RANK: Record<NotificationPriority, number> = {
 
 /** 去重键的输入（契约 §3.2）：判别联合，不是自由字符串表。 */
 export type NotificationDedupeVars =
+  /**
+   * 日内：键 = 模块 + 规则 + 资产，**不带时间**（契约 v2.43 §7.4）。窗口由 `conditionWindowMs` 判。
+   *
+   * `observedAt` / `bucketMs` 已废弃：留着只是为了产品侧还没迁完的提交能编译。**运行时一律拒收**
+   * （`stale-signal-dedupe-vars`）——静默忽略就等于「你以为冷却生效了、其实每个桶都算一件事」。
+   * 产品侧改完那一天，这两个字段随之删除。
+   */
   | { builder: 'moduleSignal'; moduleId: string; ruleId: string; asset: string | null
-      observedAt: string; cadence: 'intraday'; bucketMs: number }
+      cadence: 'intraday'
+      /** @deprecated 日内键不带时间；传了会被拒收。 */
+      observedAt?: string
+      /** @deprecated 同上。 */
+      bucketMs?: number }
+  /** 交易日：键里带交易日（由 `observedAt` 折成日期），一天一条天然成立。 */
   | { builder: 'moduleSignal'; moduleId: string; ruleId: string; asset: string | null
       observedAt: string; cadence: 'trading-day' }
   | { builder: 'sourceIssue'; sourceId: string }
@@ -388,6 +400,11 @@ export type NotificationSubmitOutcome =
          * 而表面上一切正常。宁可当场拒收，也不静默落成 `medium`。
          */
         | 'invalid-signal-severity'
+        /**
+         * 还在用旧的日内键形状（`moduleSignal` + `intraday` 却带着 `observedAt` / `bucketMs`）。
+         * 单列一个原因，是为了让「你以为冷却生效了、其实每个桶都算一件事」当场可见。
+         */
+        | 'stale-signal-dedupe-vars'
       message: string
     }
 

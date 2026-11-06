@@ -13,6 +13,7 @@ import {
   type NotificationRequest,
   type NotificationRuntimeSettings,
   type NotificationSeverity,
+  type NotificationSignalSeverity,
   type NotificationState
 } from '../contracts/notificationContracts'
 
@@ -212,6 +213,11 @@ function normalizeTextParams(value: unknown): Record<string, NotificationCopyPar
     if (ref !== undefined) params[key] = { ref }
   }
   return Object.keys(params).length > 0 ? params : undefined
+}
+
+/** 信号严重度：只认三档闭集（契约 v2.45）。其它值一律当作「没有这个状态」。 */
+function normalizeSignalSeverity(value: unknown): NotificationSignalSeverity | undefined {
+  return value === 'low' || value === 'medium' || value === 'high' ? value : undefined
 }
 
 /**

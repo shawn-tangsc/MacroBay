@@ -107,6 +107,14 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     return rejected('unknown-body-variant', `notification event "${entry.id}" has no body variant "${input.request.bodyVariant ?? ''}"`)
   }
 
+  // 旧的日内键形状（带时间桶）现在构造不出键；单列一个原因，别让它落成「没有键」这种含糊说法。
+  if (usesStaleIntradayBucketShape(input.request.dedupeVars)) {
+    return rejected(
+      'stale-signal-dedupe-vars',
+      `notification event "${entry.id}" received a moduleSignal intraday key with observedAt/bucketMs; the intraday key carries no time (contract v2.43 §7.4)`
+    )
+  }
+
   const rawDedupeKey = resolveDedupeKey(entry, input.request.dedupeVars)
   if (rawDedupeKey === undefined) {
     return rejected('missing-dedupe-key', `notification event "${entry.id}" did not expand to a dedupe key`)
@@ -160,6 +168,12 @@ function resolveBodyKey(entry: NotificationEventCatalogEntry, request: Notificat
   const variant = request.bodyVariant
   if (variant === undefined) return null
   return entry.bodyKeyByVariant[variant] ?? null
+}
+
+/** 日内键不许带时间：带了就是旧口径残留，拒收并给具名原因。 */
+function usesStaleIntradayBucketShape(vars: NotificationDedupeVars): boolean {
+  if (vars.builder !== 'moduleSignal' || vars.cadence !== 'intraday') return false
+  return 'observedAt' in vars || 'bucketMs' in vars
 }
 
 function isInvalidDedupeVars(entry: NotificationEventCatalogEntry, vars: NotificationDedupeVars): boolean {
