@@ -313,6 +313,17 @@ function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunR
     params.push(...query.statuses)
   }
 
+  // Half-open on created_at: `since` inclusive, `until` exclusive. Text comparison is chronological
+  // because every stored instant is an ISO string.
+  if (query.createdFrom !== undefined) {
+    where.push('created_at >= ?')
+    params.push(query.createdFrom)
+  }
+  if (query.createdTo !== undefined) {
+    where.push('created_at < ?')
+    params.push(query.createdTo)
+  }
+
   if (query.payload) {
     where.push("json_type(payload_json) = 'object'")
     for (const [key, expected] of Object.entries(query.payload)) {

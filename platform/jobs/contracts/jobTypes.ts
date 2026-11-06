@@ -76,6 +76,25 @@ export type JobContext = {
   progress: (progress: JobProgress) => Promise<void>
 }
 
+/**
+ * 一次运行的**结论**（跟进度是两件事）。
+ *
+ * 为什么要有它：运行记录原来只存状态、时间、错误与日志。读者问的却是「这批多少条、成了多少、
+ * 失败几条、为什么」——那些数没有办法从自由日志里算出来，而「部分失败」若只能靠一句文案，
+ * 统计页和行内显示就会各算一遍，明天必然对不上。
+ *
+ * 三条硬规则（由 `assertJobRunOutcome` 在写入前校验，不合格直接拒写，不做兜底）：
+ * - **总数 = 成功 + 失败 + 跳过**：不相等就是写错了，宁可拒写也不要留下一个算不平的数；
+ * - **`reasonCode` 只收枚举、不收句子**：自由文本无法聚合，一收就会有人对着日志数条数；
+ *   六句人话由产品文案表映射，平台不理解含义；
+ * - **语言之类的任务参数不进结果**：那是 payload 的事，平台不该认识「语言」这个概念。
+ */
+export type JobRunOutcome = {
+  counts: { total: number; succeeded: number; failed: number; skipped: number }
+  /** 产品侧稳定枚举（点分小写），例如 `model.timeout`。平台只校验形状。 */
+  reasonCode?: string
+}
+
 export type JobCancelReasonKind = 'cancelled' | 'timeout' | 'shutdown'
 
 export type JobCancelReason = {
@@ -103,6 +122,8 @@ export type JobRunRecord = {
   completedAt?: string
   lastError?: string
   progress?: JobProgress
+  /** 这一批的结论；旧记录没有这一格（那时只存进度，不存结果）。 */
+  result?: JobRunOutcome
   logs: JobLogEntry[]
 }
 
@@ -114,6 +135,20 @@ export type JobRunQuery = {
   definitionId?: string
   definitionIdPrefix?: string
   payload?: Record<string, unknown>
+  /**
+   * Half-open time window over `createdAt`: `createdFrom` is inclusive, `createdTo` is exclusive.
+   *
+   * Why it exists: a caller that asks for "the last 24 hours" and then filters an
+   * already-capped page gets a silently narrower window than its label claims — 500 rows at
+   * this product's write rate cover a few hours, not a day. Filtering in the store is the
+   * only way the window can mean what the caller says.
+   *
+   * Both are ISO instants; the comparison is on `createdAt` (when the run was queued), not on
+   * `startedAt`/`completedAt`. With `cursor`, the window applies first and the cursor must itself
+   * fall inside the window, so pages never step across a window boundary.
+   */
+  createdFrom?: string
+  createdTo?: string
   cursor?: string | null
   /**
    * Order by time rather than by the run id as a string.

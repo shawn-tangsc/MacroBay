@@ -216,6 +216,10 @@ function queryRunRecords(runs: Map<string, JobRunRecord>, query: JobRunQuery): J
 }
 
 function matchesRunQuery(run: JobRunRecord, query: JobRunQuery): boolean {
+  // Half-open window over createdAt, same semantics as the SQLite store: `since` inclusive,
+  // `until` exclusive. ISO strings compare lexicographically, which is chronological.
+  if (query.createdFrom !== undefined && run.createdAt < query.createdFrom) return false
+  if (query.createdTo !== undefined && run.createdAt >= query.createdTo) return false
   if (query.owner && run.owner !== query.owner) return false
   if (query.productId && run.productId !== query.productId) return false
   if (query.handlerId && run.handlerId !== query.handlerId) return false

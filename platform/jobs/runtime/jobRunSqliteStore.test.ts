@@ -270,6 +270,57 @@ describe('jobRunSqliteStore', () => {
   })
 })
 
+describe('jobRunSqliteStore created-at window', () => {
+  afterEach(async () => {
+    for (const store of stores.splice(0)) store.close()
+    for (const dir of tempDirs.splice(0)) await rm(dir, { recursive: true, force: true })
+  })
+
+  it('filters by a half-open created-at window on the queue time', () => {
+    const store = createStore()
+    const run = store.createRun(baseInput('window'))
+
+    expect(store.queryRuns({ createdFrom: run.createdAt }).map((item) => item.id)).toEqual([run.id])
+    expect(store.queryRuns({ createdTo: run.createdAt }).map((item) => item.id)).toEqual([])
+    expect(store.queryRuns({ createdFrom: '2999-01-01T00:00:00.000Z' }).map((item) => item.id)).toEqual([])
+  })
+
+  it('pages a busy window with the cursor to the end without repeating or dropping a run', async () => {
+    // 600 runs across three pages: a fixture of a few rows never reaches the page cap, so a broken
+    // window/cursor combination would still look green.
+    const store = createStore(await createTempDatabasePath())
+    for (let index = 0; index < 600; index += 1) store.createRun(baseInput(`busy-${index}`))
+
+    const window = { createdFrom: '2000-01-01T00:00:00.000Z', createdTo: '2999-01-01T00:00:00.000Z', limit: 250 }
+    const seen = new Set<string>()
+    let cursor: string | null = null
+    let pages = 0
+    do {
+      const page = store.queryRunPage({ ...window, cursor })
+      for (const run of page.runs) seen.add(run.id)
+      cursor = page.nextCursor
+      pages += 1
+    } while (cursor !== null && pages < 10)
+
+    expect(pages).toBe(3)
+    expect(seen.size).toBe(600)
+  })
+
+  it('applies the window before the cursor, so a cursor cannot pull a run back across the boundary', () => {
+    const store = createStore()
+    const older = store.createRun(baseInput('older'))
+    const newer = store.createRun(baseInput('newer'))
+
+    const page = store.queryRunPage({ limit: 1 })
+    expect(page.runs.map((run) => run.id)).toEqual([newer.id])
+    expect(page.nextCursor).toBe(newer.id)
+
+    expect(store.queryRunPage({ createdFrom: '2999-01-01T00:00:00.000Z', cursor: page.nextCursor }).runs).toEqual([])
+    expect(store.queryRunPage({ createdTo: '2999-01-01T00:00:00.000Z', cursor: page.nextCursor }).runs.map((run) => run.id))
+      .toEqual([older.id])
+  })
+})
+
 function createStore(path = ':memory:'): ReturnType<typeof createJobRunSqliteStore> {
   const store = createJobRunSqliteStore(path)
   stores.push(store)

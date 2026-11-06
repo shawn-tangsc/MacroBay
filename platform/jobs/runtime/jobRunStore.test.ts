@@ -175,6 +175,56 @@ describe('jobRunStore', () => {
     expect(runs.map((run) => run.id)).toEqual([first.id])
   })
 
+  it('filters queried runs by a half-open created-at window', () => {
+    const store = createJobRunStore()
+    const run = store.createRun(baseInput('window'))
+
+    // `createdFrom` inclusive, `createdTo` exclusive: one boundary must land on exactly one side.
+    expect(store.queryRuns({ createdFrom: run.createdAt }).map((item) => item.id)).toEqual([run.id])
+    expect(store.queryRuns({ createdTo: run.createdAt }).map((item) => item.id)).toEqual([])
+    expect(store.queryRuns({ createdFrom: '2999-01-01T00:00:00.000Z' }).map((item) => item.id)).toEqual([])
+    expect(store.queryRuns({ createdTo: '2000-01-01T00:00:00.000Z' }).map((item) => item.id)).toEqual([])
+  })
+
+  it('pages a whole busy window with the cursor and never repeats or drops a run', () => {
+    // 3,000 runs is the order of magnitude a day of collection writes; a handful of fixture rows
+    // would never reach the page cap, so the window/cursor combination would look correct untested.
+    const store = createJobRunStore()
+    for (let index = 0; index < 3000; index += 1) store.createRun(baseInput(`busy-${index}`))
+
+    const window = { createdFrom: '2000-01-01T00:00:00.000Z', createdTo: '2999-01-01T00:00:00.000Z' }
+    const seen = new Set<string>()
+    let cursor: string | null = null
+    let pages = 0
+    do {
+      const page = store.queryRunPage({ ...window, limit: 500, cursor })
+      for (const run of page.runs) seen.add(run.id)
+      cursor = page.nextCursor
+      pages += 1
+    } while (cursor !== null && pages < 20)
+
+    expect(pages).toBe(6)
+    expect(seen.size).toBe(3000)
+  })
+
+  it('applies the window before the cursor, so a cursor cannot pull a run back across the boundary', () => {
+    const store = createJobRunStore()
+    const first = store.createRun(baseInput('first'))
+    const second = store.createRun(baseInput('second'))
+
+    // Page one shows the newest run and hands back its id as the cursor.
+    const page = store.queryRunPage({ limit: 1 })
+    expect(page.runs.map((run) => run.id)).toEqual([second.id])
+    expect(page.nextCursor).toBe(second.id)
+
+    // Same cursor, but a window that contains neither run: the window is applied first, so the
+    // cursor resolves to nothing and no out-of-window row leaks into the page.
+    expect(store.queryRunPage({ createdFrom: '2999-01-01T00:00:00.000Z', cursor: page.nextCursor }).runs).toEqual([])
+    // And the run the cursor points at is still reachable when the window does contain it.
+    expect(store.queryRunPage({ createdTo: '2999-01-01T00:00:00.000Z', cursor: page.nextCursor }).runs.map((run) => run.id))
+      .toEqual([first.id])
+  })
+
   it('paginates queried runs with a stable run id cursor', () => {
     const store = createJobRunStore()
     const first = store.createRun(baseInput('platform.agent.task.first'))
