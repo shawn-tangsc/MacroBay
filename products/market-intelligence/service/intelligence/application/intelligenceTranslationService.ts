@@ -44,7 +44,7 @@ import {
   parseTranslationModelOutput
 } from './intelligenceTranslationPrompt'
 import { resolveTranslationModel } from './intelligenceTranslationModel'
-import { INTELLIGENCE_TRANSLATE_ITEMS_JOB } from '../jobs/intelligenceJobIds'
+import { enqueueTranslationBatches } from './intelligenceTranslationQueue'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -209,7 +209,7 @@ export function createIntelligenceTranslationService(deps: {
     },
 
     async queueMissing(input: TranslateIntelligenceItemsJobInput): Promise<SafeTranslationJobSummary> {
-      const queuedCount = await enqueueTranslationJob(deps.jobRuntime, input)
+      const queuedCount = await enqueueTranslationBatches(deps.jobRuntime, input, deps.pipeline.listItems())
       lastJobAt = new Date().toISOString()
       lastJobSummary = `Queued ${queuedCount} translation work item(s).`
       return {
@@ -226,10 +226,10 @@ export function createIntelligenceTranslationService(deps: {
     async maybeEnqueueForNewItems(itemIds: string[]): Promise<void> {
       const settings = await deps.storage.readSettings()
       if (!settings.autoTranslateEnabled || itemIds.length === 0) return
-      await enqueueTranslationJob(deps.jobRuntime, {
+      await enqueueTranslationBatches(deps.jobRuntime, {
         itemIds,
         reason: 'new-item'
-      })
+      }, deps.pipeline.listItems())
     },
 
     async resolveDisplayText(input: {
@@ -502,23 +502,6 @@ function upsertRecord(
   const next = [...records]
   next[index] = record
   return next
-}
-
-async function enqueueTranslationJob(
-  jobRuntime: JobRuntime,
-  input: TranslateIntelligenceItemsJobInput
-): Promise<number> {
-  const itemCount = input.itemIds?.length ?? input.clusterIds?.length ?? input.translationIds?.length ?? 1
-  await jobRuntime.enqueueDefinition({
-    id: `${INTELLIGENCE_TRANSLATE_ITEMS_JOB}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-    owner: 'product',
-    productId: PRODUCT_ID,
-    handlerId: INTELLIGENCE_TRANSLATE_ITEMS_JOB,
-    title: 'Translate intelligence items',
-    trigger: { kind: 'manual' },
-    payload: input
-  })
-  return itemCount
 }
 
 type TranslationCandidate =
