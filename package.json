@@ -36,6 +36,7 @@
     "verify:sole": "tsx scripts/verify-run.mts --strict",
     "demo:verify": "tsx scripts/demo/verify-sample.mts",
     "release:bump": "tsx scripts/release/bump-version.mts",
+    "release:preflight": "tsx scripts/preflight-release.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
     "typecheck:products": "tsc --noEmit -p tsconfig.products.json",
