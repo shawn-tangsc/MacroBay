@@ -10,17 +10,20 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { intelligenceNotificationText } from './text'
 import {
   INTELLIGENCE_CHANNEL_EVENT_ROWS,
-  useChannelEventSettings,
-  type IntelligenceChannelEventRow
+  useChannelEventSettings
 } from './useChannelEventSettings'
+import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
 
 import './intelligence-notification.css'
 
 /**
  * 设置 → 情报 → 通知（界面规范 v2.27 §9d）。
  *
- * 只有三条：模块信号、宏观事件、日报完成，**默认全开**。这一屏只管「推不推手机」；
- * 应用内提示与桌面提醒在通用通知页，不搬到这里、也不在这里重复。
+ * 四条：模块信号、宏观事件、日报完成（**默认全开**）与舆情提醒（**默认关**）。这一屏只管
+ * 「推不推手机」；应用内提示与桌面提醒在通用通知页，不搬到这里、也不在这里重复。
+ *
+ * 第四条与前三条的来源不同：前三条是**事件级开关**，第四条是**推送出口开关**（水位 + 基线），
+ * 所以它自己读自己写，但长得和另外三条一样——读者不需要知道背后的区别。
  *
  * 频道没就绪时**不禁用**：勾选照常存，块头一行说明它会在频道可用后生效——
  * 禁用会让读者以为这条设置坏了，而实际上选择是有效的。
@@ -31,6 +34,7 @@ export default function IntelligenceNotificationSettingsSection(): React.ReactEl
   const resolveText = (key: string): string => text[key] ?? ''
   const { status, values, savingEventId, failedEventId, channelReady, reload, toggle } =
     useChannelEventSettings()
+  const outlet = useNewsPushOutletSwitch()
 
   if (status === 'loading') {
     return (
@@ -84,7 +88,8 @@ export default function IntelligenceNotificationSettingsSection(): React.ReactEl
           {INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => (
             <ChannelEventRow
               key={row.eventId}
-              row={row}
+              titleKey={row.titleKey}
+              infoKey={row.infoKey}
               text={text}
               resolveText={resolveText}
               enabled={values[row.eventId] ?? true}
@@ -93,6 +98,26 @@ export default function IntelligenceNotificationSettingsSection(): React.ReactEl
               onChange={(next) => toggle(row.eventId, next)}
             />
           ))}
+          {/* 第四条：值只从服务读，写完读回；读不到时不假装关着，而是就地说明读不到。 */}
+          {outlet.status === 'error'
+            ? <li className="intelligence-notification-row">
+              <span className="intelligence-notification-row-title">
+                {text['pages.intelligence.notification.rows.sentimentAlert.title']}
+              </span>
+              <span className="intelligence-notification-save-failed" role="status">
+                {text['pages.intelligence.notification.outletUnreadable']}
+              </span>
+            </li>
+            : <ChannelEventRow
+              titleKey="pages.intelligence.notification.rows.sentimentAlert.title"
+              infoKey="pages.intelligence.notification.rows.sentimentAlert.info"
+              text={text}
+              resolveText={resolveText}
+              enabled={outlet.enabled}
+              saving={outlet.saving || outlet.status === 'loading'}
+              saveFailed={outlet.saveFailed}
+              onChange={outlet.setEnabled}
+            />}
         </ul>
 
         <p className="intelligence-notification-footer">{text['pages.intelligence.notification.footer']}</p>
@@ -102,7 +127,8 @@ export default function IntelligenceNotificationSettingsSection(): React.ReactEl
 }
 
 function ChannelEventRow(props: {
-  row: IntelligenceChannelEventRow
+  titleKey: string
+  infoKey: string
   text: Readonly<Record<string, string>>
   resolveText: (key: string) => string
   enabled: boolean
@@ -110,13 +136,13 @@ function ChannelEventRow(props: {
   saveFailed: boolean
   onChange: (enabled: boolean) => void
 }): React.ReactElement {
-  const title = props.text[props.row.titleKey] ?? ''
+  const title = props.text[props.titleKey] ?? ''
   return (
     <li className="intelligence-notification-row">
       <div className="intelligence-notification-row-label">
         <span className="intelligence-notification-row-title">{title}</span>
         <Popover
-          labelKey={props.row.infoKey}
+          labelKey={props.infoKey}
           resolveText={props.resolveText}
           trigger={(triggerProps) => (
             <IconButton

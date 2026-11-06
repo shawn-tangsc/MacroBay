@@ -9,7 +9,7 @@ export type IntelligenceNotificationText = Readonly<Record<string, string>>
 
 const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.groupTitle': '情报通知',
-  'pages.intelligence.notification.groupInfo.1': '这三条会发到手机；其余情报只出现在应用内和通知中心。',
+  'pages.intelligence.notification.groupInfo.1': '这四条会发到手机；其余情报只出现在应用内和通知中心。',
   'pages.intelligence.notification.groupInfo.2': '四条同时成立才会推到手机：这里勾了、事件本身允许推手机、频道已启用、频道可用。',
 
   'pages.intelligence.notification.channelNotReady': '还没有可用频道，勾选会保留，等频道能用时生效。',
@@ -20,17 +20,20 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.rows.macroEventLanded.info': '事件实际发布、或读数偏差超过阈值时推一条。',
   'pages.intelligence.notification.rows.briefingReady.title': '日报已完成',
   'pages.intelligence.notification.rows.briefingReady.info': '每天最多一条；同一天重新生成不会再发。默认开着，不想收可以关掉。',
+  'pages.intelligence.notification.rows.sentimentAlert.title': '舆情提醒',
+  'pages.intelligence.notification.rows.sentimentAlert.info': '模型判出的强度到「中」以上、并且能归到同一件事时推一条；同一件事只推第一条。默认关着：打开那一刻之前发布的新闻不会补推。',
+  'pages.intelligence.notification.outletUnreadable': '这一项现在读不到，稍后再试。',
 
   'pages.intelligence.notification.saveFailed': '这次没存上，可以再试一次。',
-  'pages.intelligence.notification.footer': '只有这三条会发到手机；其余情报只出现在应用内和通知中心。',
+  'pages.intelligence.notification.footer': '只有这四条会发到手机；其余情报只出现在应用内和通知中心。',
 
-  'pages.intelligence.notification.infoAria': '这三条推送的生效条件',
+  'pages.intelligence.notification.infoAria': '这四条推送的生效条件',
   'pages.intelligence.notification.rowInfoAria': '这一条什么时候推'
 })
 
 const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.groupTitle': 'Intelligence notifications',
-  'pages.intelligence.notification.groupInfo.1': 'Only these three reach your phone; everything else stays in the app and the notification centre.',
+  'pages.intelligence.notification.groupInfo.1': 'Only these four reach your phone; everything else stays in the app and the notification centre.',
   'pages.intelligence.notification.groupInfo.2': 'All four must hold: switched on here, the event allows phone delivery, the channel is enabled, and the channel is available.',
 
   'pages.intelligence.notification.channelNotReady': 'No usable channel yet. Your choices are kept and take effect once a channel is available.',
@@ -41,11 +44,14 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.rows.macroEventLanded.info': 'Sends one notice when a release actually lands, or when a reading deviates beyond the threshold.',
   'pages.intelligence.notification.rows.briefingReady.title': 'Daily brief is ready',
   'pages.intelligence.notification.rows.briefingReady.info': 'At most one a day; regenerating the same day does not send another. On by default — switch it off if you do not want it.',
+  'pages.intelligence.notification.rows.sentimentAlert.title': 'Sentiment alerts',
+  'pages.intelligence.notification.rows.sentimentAlert.info': 'Sends one notice when the model rates an item medium or above and it groups with an existing story; one notice per story. Off by default: items published before you switch it on are not sent late.',
+  'pages.intelligence.notification.outletUnreadable': 'This one cannot be read right now. Try again later.',
 
   'pages.intelligence.notification.saveFailed': 'That did not save. You can try again.',
-  'pages.intelligence.notification.footer': 'Only these three reach your phone; the rest of the intelligence stays in the app and the notification centre.',
+  'pages.intelligence.notification.footer': 'Only these four reach your phone; the rest of the intelligence stays in the app and the notification centre.',
 
-  'pages.intelligence.notification.infoAria': 'When these three reach your phone',
+  'pages.intelligence.notification.infoAria': 'When these four reach your phone',
   'pages.intelligence.notification.rowInfoAria': 'When this one sends'
 })
 
