@@ -1,6 +1,6 @@
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../../../contracts/intelligencePublicQueryMethods'
 import { isCanonicalSignalTime } from '../../../contracts/moduleSignal'
-import { toModuleSignalRead, type ModuleSignalRead } from '../../../contracts/moduleSignalRead'
+import { isModuleSignalRead, toModuleSignalRead, type ModuleSignalRead } from '../../../contracts/moduleSignalRead'
 
 /**
  * The renderer's door to the module signals the chips read.
@@ -23,6 +23,14 @@ export const moduleSignalClient = {
         INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals,
         { asOf: input.asOf }
       )
+      // The handler answers with a read, not with bare entries: it already decided between
+      // "nothing happened" and "we could not read this", and its failure code is the one the
+      // reader is owed. Wrapping that answer again reads an object as a list of entries, which
+      // drops everything and reports `contract-invalid` on every read — the reader then sees
+      // "the format does not match" on a healthy card.
+      if (isModuleSignalRead(value)) return value
+      // Raw entries are the older bridge's answer (and a test's): keep reading them, so this
+      // client still works against a handler that has not been migrated.
       return toModuleSignalRead(value)
     } catch {
       // A bridge that is missing or threw is a failed read, not an empty market.

@@ -39,6 +39,19 @@ describe('module signal renderer client', () => {
     await expect(moduleSignalClient.query({ asOf })).resolves.toEqual({ state: 'available', signals: [entry], droppedInvalid: 3 })
   })
 
+  // 回归：IPC handler 现在回的是一个 read（对象），不是裸条目数组。把它再包一次，等于把对象
+  // 当列表读，全部条目被丢弃并报 `contract-invalid`——健康卡片上也会出现「读取格式对不上」。
+  it('passes a read-shaped answer through unchanged, keeping its own failure code', async () => {
+    const available = { state: 'available' as const, signals: [entry], droppedInvalid: 0 }
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => available) } } })
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual(available)
+
+    // 失败码也是 handler 判的，客户端不许把它改写成 `contract-invalid`。
+    const failedRead = { state: 'unavailable' as const, failureCode: 'invalid-as-of' as const }
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => failedRead) } } })
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual(failedRead)
+  })
+
   it('reports an unreadable answer as one, instead of an empty market', async () => {
     const failed = { state: 'unavailable', failureCode: 'query-failed' }
     vi.stubGlobal('window', { platform: undefined })
