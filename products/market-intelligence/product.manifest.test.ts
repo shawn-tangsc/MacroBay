@@ -22,6 +22,7 @@ describe('market-intelligence product manifest', () => {
         title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
         icon: 'radar',
         order: 10,
+        home: true,
         module: './desktop/pages/intelligence'
       }
     ])
