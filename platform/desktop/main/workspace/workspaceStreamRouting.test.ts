@@ -11,6 +11,7 @@ import { createPanelDetachedWindowHost } from './panelDetachedWindowHost'
 import { createAgentIpcHandlers } from '../agentIpcHandlers'
 import { createAssistantIpcHandlers } from '../assistantIpcHandlers'
 import { createWorkspaceClient } from '@renderer/shell/workspace/workspaceClient'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace。P2-03 流连续性（A-T03～A-T05、A-T09、A-T10）。
@@ -53,8 +54,8 @@ function createStreamHarness() {
     return handle
   }
   const sharedHost = createPanelDetachedWindowHost({
-    entryUrl: 'file:///app/renderer/index.html',
-    appRoot: 'file:///app/renderer',
+    entryUrl: ENTRY,
+    appRoot: APP_ROOT,
     createWindow,
     security: createSecureWindowSecurity({ preload: '/app/preload/index.js', openExternal: () => undefined }),
     registry,

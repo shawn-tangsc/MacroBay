@@ -70,15 +70,13 @@ import { resolveWindowChromeOptions } from '../../window/windowChrome'
 import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
 import { createPanelDetachedWindowHost, type DetachedHostEvent, type DetachedWindowFactoryInput } from './panelDetachedWindowHost'
 import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace。P1-06d focused 回归：electron-backed 独立窗工厂。
  * 用 `vi.mock('electron')` 的假 BrowserWindow 验收（不启动 Electron）：共享安全基线、受控 entry 双点校验、
  * windowOpenHandler 一律 deny、原生 X = 回停靠（preventDefault）、closed 回收、以及工厂「自行销毁再抛」契约。
  */
-
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 const PRELOAD = '/app/preload/index.js'
 
 type FakeWindow = {

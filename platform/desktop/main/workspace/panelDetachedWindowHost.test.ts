@@ -20,6 +20,7 @@ import {
   type DetachedWindowFactory,
   type DetachedWindowHandle
 } from './panelDetachedWindowHost'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace。回归 P1-04 事件/时序矩阵：
@@ -28,8 +29,6 @@ import {
  */
 
 const PRELOAD = '/app/preload/index.js'
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 
 function createHarness(overrides: {
   entryUrl?: string
@@ -688,15 +687,15 @@ describe('panel detached window host', () => {
     expect(isAllowedAppWindowEntryUrl(ENTRY, policy)).toBe(true)
     expect(isAllowedAppWindowEntryUrl(APP_ROOT, policy)).toBe(true)
     expect(isAllowedAppWindowEntryUrl('file:///etc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/../../etc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer-evil/index.html', policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${APP_ROOT}/../../etc/passwd`, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${APP_ROOT}-evil/index.html`, policy)).toBe(false)
     expect(isAllowedAppWindowEntryUrl(ENTRY, { appRoot: '' })).toBe(false)
     expect(isAllowedAppWindowEntryUrl('https://evil.example/app', policy)).toBe(false)
     expect(() => createHarness({ entryUrl: 'https://evil.example/app' })).toThrow(/entry/)
     expect(() => createHarness({ entryUrl: 'file:///etc/passwd' })).toThrow(/entry/)
     expect(() => createHarness({ entryUrl: 'file://evilhost/app/renderer/index.html' })).toThrow(/entry/)
-    expect(() => createHarness({ entryUrl: 'file:///app/renderer/..%2f..%2fetc/passwd' })).toThrow(/entry/)
-    expect(() => createHarness({ entryUrl: ENTRY, appRoot: 'file:///app/other' })).toThrow(/entry/)
+    expect(() => createHarness({ entryUrl: `${APP_ROOT}/..%2f..%2fetc/passwd` })).toThrow(/entry/)
+    expect(() => createHarness({ entryUrl: ENTRY, appRoot: `${APP_ROOT}-other` })).toThrow(/entry/)
     expect(() => createHarness({ entryUrl: 'http://127.0.0.1:5173/', devOrigins: ['http://127.0.0.1:5173'] })).not.toThrow()
     expect(() => createHarness({ entryUrl: 'http://127.0.0.1:5173/', devOrigins: [] })).toThrow(/entry/)
     // 故意注入被削弱的运行时配置：宿主必须 fail closed，而不是静默接受

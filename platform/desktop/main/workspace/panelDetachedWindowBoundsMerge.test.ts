@@ -11,6 +11,7 @@ import {
 import { createTabDetachedWindowHost } from './tabDetachedWindowHost'
 import type { WorkspaceDisplayInfo } from './workspaceWindowBounds'
 import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace（PLAT-04 focused）。权威：技术清单 PLAT-04
@@ -26,8 +27,6 @@ import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
  */
 
 const PRELOAD = '/app/preload/index.js'
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 const TAB_WINDOW = { windowInstanceId: 'detached-tab-1', hostEpoch: 2 }
 const WORKSPACE_KEY = 'ws-1'
 

@@ -20,6 +20,7 @@ import {
 } from './panelDetachedWindowHost'
 import { createTabDetachedWindowHost } from './tabDetachedWindowHost'
 import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace。P2-03 受控 Tab 页面窗生命周期矩阵。
@@ -33,8 +34,6 @@ import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
  */
 
 const PRELOAD = '/app/preload/index.js'
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 
 type FakeWindow = DetachedWindowHandle & { destroyed: boolean; focused: number }
 

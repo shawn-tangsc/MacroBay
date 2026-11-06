@@ -23,6 +23,7 @@ import {
   type DetachedWindowHandle
 } from './panelDetachedWindowHost'
 import { createWorkspaceWindowRegistry, type WorkspaceWindowRegistry } from './workspaceWindowRegistry'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace。P1-06d focused 回归：detach 编排的完整时序矩阵。
@@ -33,8 +34,6 @@ import { createWorkspaceWindowRegistry, type WorkspaceWindowRegistry } from './w
  */
 
 const PRELOAD = '/app/preload/index.js'
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 const PAGE_ID = 'sample.overview'
 const PANEL_ID = 'sample.inspector'
 const MAIN_WEBCONTENTS = 1

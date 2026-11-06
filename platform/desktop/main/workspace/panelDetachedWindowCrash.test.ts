@@ -17,6 +17,7 @@ import {
   type DetachedWindowHandle
 } from './panelDetachedWindowHost'
 import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace。P1-06l focused 回归：**崩溃监测**（A-P05a / A-P05b）。
@@ -32,8 +33,6 @@ import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
  */
 
 const PRELOAD = '/app/preload/index.js'
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 
 type FakeWindow = DetachedWindowHandle & {
   destroyed: boolean

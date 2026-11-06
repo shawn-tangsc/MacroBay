@@ -19,6 +19,7 @@ import {
   type DetachedWindowHandle
 } from './panelDetachedWindowHost'
 import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace（PLAT-04 focused）。权威：清单 PLAT-04 + 技术设计 §7（v2 单写）。
@@ -36,8 +37,6 @@ import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
  */
 
 const PRELOAD = '/app/preload/index.js'
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 const PAGE_ID = 'sample.overview'
 const MAIN_WEBCONTENTS = 1
 const PAGE_WEBCONTENTS = 100

@@ -9,9 +9,25 @@ const relaunch = vi.fn()
 const exit = vi.fn()
 const openPath = vi.fn(async () => '')
 
+/**
+ * 两平台都成立的真实 userData 形状。固定值不能只写 macOS 那一种：失败页上的日志路径是按
+ * `process.platform` 换形态的（macOS `~/Library/…`、Windows `%APPDATA%\…`），只写一种，
+ * 等于「家目录被折叠、用户名不出现」这条只在一种平台上被测过。
+ */
+const USER_DATA = process.platform === 'win32'
+  ? 'C:\\Users\\alice\\AppData\\Roaming\\MacroBay'
+  : '/Users/alice/Library/Application Support/MacroBay'
+
+/** 页面上应出现的日志路径：产品名取自 userData 倒数第二段，形态由平台决定。 */
+const DISPLAYED_LOG_PATH = process.platform === 'win32'
+  ? '%APPDATA%\\MacroBay\\logs\\app.log'
+  : process.platform === 'darwin'
+    ? '~/Library/Application Support/MacroBay/logs/app.log'
+    : '~/.config/MacroBay/logs/app.log'
+
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/Users/alice/Library/Application Support/MacroBay',
+    getPath: () => USER_DATA,
     getLocale: () => 'zh-CN',
     quit,
     relaunch,
@@ -57,9 +73,9 @@ describe('boot failure window wiring', () => {
     const html = decodeURIComponent(harness.loaded[0].slice('data:text/html;charset=utf-8,'.length))
     expect(html).toContain('product-bootstrap-failed')
     expect(html).toContain('market-intelligence')
-    // 屏幕上没有家目录：日志路径换成 ~ 形式。
-    expect(html).not.toContain('/Users/alice')
-    expect(html).toContain('~/Library/Application Support/MacroBay/logs/app.log')
+    // 屏幕上没有家目录、也没有用户名：日志路径换成 ~ / %APPDATA% 形式。
+    expect(html).not.toContain('alice')
+    expect(html).toContain(DISPLAYED_LOG_PATH)
   })
 
   it('routes the three page actions to the real ones and ignores foreign navigations', () => {
@@ -70,7 +86,8 @@ describe('boot failure window wiring', () => {
     expect(quit).toHaveBeenCalledTimes(1)
 
     harness.navigate('macrobay-boot:logs')
-    expect(openPath).toHaveBeenCalledWith('/Users/alice/Library/Application Support/MacroBay/logs')
+    // 生产侧是用 `/logs` 拼的（不是 path.join），所以这里照抄同一条拼接方式。
+    expect(openPath).toHaveBeenCalledWith(`${USER_DATA}/logs`)
 
     harness.navigate('https://example.com')
     // 不是我们的链接就原样交给窗口：这里只断言没有误触发任何动作。
