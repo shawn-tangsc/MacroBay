@@ -8,6 +8,7 @@ import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { BriefingDataArea } from './BriefingDataArea'
+import { policyGaugePaint, policyGaugePaints, policyGaugeTone } from './policyGaugePaint'
 import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 /**
@@ -738,6 +739,39 @@ describe('the dial has four colours and at most three arcs', () => {
     const arcs = [...cut.querySelectorAll('path[data-outcome]')]
     expect(arcs).toHaveLength(3)
     expect(arcs[0]?.getAttribute('class')).toBe('mi-brief-poster__gauge-cut')
+  })
+
+  it('paints the exported stroke from the very class that colours the page', async () => {
+    // 用户 2026-11-06：导出的环是灰蓝的，页面是橙的。根因是两处各判一次——类名按 `lead` 判，
+    // 内联描边按 `outcome` 判，`event` 于是落到灰那一档。现在两者是同一份判断的两个字段。
+    const cases = [
+      { outcome: 'event', lead: 'hike-25', tone: 'hike' as const },
+      { outcome: 'event', lead: 'cut-25', tone: 'cut' as const },
+      { outcome: 'event', lead: 'hold', tone: 'hold' as const },
+      { outcome: 'hold', lead: 'hold', tone: 'hold' as const },
+      { outcome: 'residual', lead: 'x', tone: 'other' as const }
+    ]
+    for (const item of cases) {
+      const paint = policyGaugePaint(item.outcome, item.lead)
+      expect(policyGaugeTone(item.outcome, item.lead)).toBe(item.tone)
+      // 导出件要的那一格，必须等于那个类名在样式表里对应的颜色（样式表那侧由 styles 用例逐条比对）。
+      expect(paint.stroke).toBe(policyGaugePaints[item.tone].stroke)
+      expect(paint.className).toBe(policyGaugePaints[item.tone].className)
+    }
+  })
+
+  it('gives an event arc the inline stroke of its own class, not the grey fallback', async () => {
+    // 边框级复现：这张卡的 event 弧是加息定价，类名是 hike，描边也必须是 hike 的橙。
+    const host = await renderPolicy(() => undefined)
+    const arcs = [...host.querySelectorAll('path[data-outcome]')]
+    for (const arc of arcs) {
+      const className = arc.getAttribute('class')!
+      const tone = (Object.keys(policyGaugePaints) as (keyof typeof policyGaugePaints)[])
+        .find((key) => policyGaugePaints[key].className === className)!
+      expect(arc.getAttribute('stroke'), `${className} 的描边`) .toBe(policyGaugePaints[tone].stroke)
+    }
+    // 底槽同一个来源。
+    expect(host.querySelector('.mi-brief-poster__gauge-track')?.getAttribute('stroke')).toBe('#a89f8d')
   })
 
   it('keys the foot with the same colours as the arcs it labels', async () => {

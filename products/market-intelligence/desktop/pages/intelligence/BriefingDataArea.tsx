@@ -10,6 +10,7 @@ import { changeArrowFor, paymentDirectionFor, type changeArrowWords, type fearGr
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { briefRowFigures } from '../../../contracts/dailyBriefingRowFigures'
 import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeLegend, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
+import { policyGaugePaint, policyGaugeTrackPaint } from './policyGaugePaint'
 
 /**
  * The data region, drawn once for the exported card.
@@ -224,8 +225,12 @@ function PolicyCard({ policy, text, locale, formatTime, words, windowEnd, editio
       <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" width={POLICY_GAUGE.width} height={POLICY_GAUGE.height} viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
         {/* 描边写 inline，不靠外部 CSS 类（用户 2026-11-06：导出图里环没画出来——`html-to-image`
             克隆节点时不保证把样式表里的 `stroke` 带上；同一张卡的 sparkline 同理）。 */}
-        <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" stroke="#a89f8d" strokeWidth={8} opacity={0.35} vectorEffect="non-scaling-stroke" />
-        {arcs.map((arc) => <path key={arc.outcome} className={gaugeClass(arc.outcome, policy.outcome)} d={arc.path} fill="none" stroke={gaugeStroke(arc.outcome)} strokeWidth={8} vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} data-inline-stroke="true" />)}
+        <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" stroke={policyGaugeTrackPaint.stroke} strokeWidth={8} opacity={policyGaugeTrackPaint.opacity} vectorEffect="non-scaling-stroke" />
+        {arcs.map((arc) => {
+          // 类名与描边取**同一个判断结果**：页面靠类名上色，导出靠这个色值，两边不可能再分叉。
+          const paint = policyGaugePaint(arc.outcome, policy.outcome)
+          return <path key={arc.outcome} className={paint.className} d={arc.path} fill="none" stroke={paint.stroke} strokeWidth={8} vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} data-inline-stroke="true" />
+        })}
       </svg>
       {/* The ring is the number's only home: "3.4% · 加息 25bp" is wider than the dial and wrapped across
           the copy, which is how it came to be printed as two broken lines. */}
@@ -248,7 +253,7 @@ function PolicyCard({ policy, text, locale, formatTime, words, windowEnd, editio
         reader can match the line to the dial without reading a legend. */}
     {legend.length > 0 ? <span className="mi-brief-poster__policy-bottom" data-briefing-policy-outcomes="true">
       {legend.map((segment) => <span className="mi-brief-poster__policy-outcome-item" key={segment.outcome} data-outcome={segment.outcome}>
-        <i aria-hidden="true" className={`mi-brief-poster__policy-swatch ${gaugeClass(segment.outcome, policy.outcome)}`} />
+        <i aria-hidden="true" className={`mi-brief-poster__policy-swatch ${policyGaugePaint(segment.outcome, policy.outcome).className}`} />
         {shareCopy(segment, words)}
       </span>).reduce<React.ReactNode[]>((joined, node, index) => (index === 0 ? [node] : [...joined, INDEX_SEPARATOR, node]), [])}
     </span> : null}
@@ -275,28 +280,6 @@ function countdownDays(editionDate: string, meetingDate: string): number | undef
   if (!Number.isFinite(from) || !Number.isFinite(to)) return undefined
   const days = Math.round((to - from) / 86_400_000)
   return days >= 0 ? days : undefined
-}
-
-/**
- * The arc's colour: four in the palette, at most three on the dial.
- *
- * The event is not always an increase — a meeting that is priced to cut gets the cut green, and one
- * priced to hold gets the hold blue — so its class follows the lead rather than the segment's name.
- * `other`/`residual` share the grey: both mean "everything not named above".
- */
-/** 与 `dailyBriefingShareCard.css` 里 `.mi-brief-poster__gauge-*` 同一组值；导出件必须自带描边。 */
-const GAUGE_STROKE: Readonly<Record<string, string>> = {
-  hike: '#c2410c', cut: '#1f5b32', hold: '#3f6d8f', other: '#8c8474'
-}
-const gaugeStroke = (outcome: string): string => GAUGE_STROKE[outcome] ?? GAUGE_STROKE.other!
-
-function gaugeClass(outcome: string, lead: string): string {
-  if (outcome === 'event') {
-    if (lead.startsWith('hike')) return 'mi-brief-poster__gauge-hike'
-    if (lead.startsWith('cut')) return 'mi-brief-poster__gauge-cut'
-    return 'mi-brief-poster__gauge-hold'
-  }
-  return outcome === 'hold' ? 'mi-brief-poster__gauge-hold' : 'mi-brief-poster__gauge-other'
 }
 
 /** The dial's own separator: the copy is a word plus a number, so the join is punctuation, not prose. */

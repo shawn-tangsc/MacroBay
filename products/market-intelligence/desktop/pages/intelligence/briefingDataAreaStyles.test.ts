@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { policyGaugePaints, policyGaugeTrackPaint } from './policyGaugePaint'
+
 /**
  * The data region's design values, read from the stylesheet itself.
  *
@@ -272,4 +274,25 @@ describe('the paper has one divider colour', () => {
     expect([...colours]).toEqual(['#c9bda3'])
   })
 
+})
+
+describe('the dial colour has one value on both sides', () => {
+  /**
+   * 用户 2026-11-06：导出图里那条弧是灰蓝的、页面是橙的——类名与内联描边各判一次，就必然分叉。
+   * 现在颜色只写在 `policyGaugePaints`，这里逐条比对样式表：改配色时只改一处，另一处漏改就红。
+   */
+  it('matches every paint entry against its stylesheet rule', () => {
+    for (const [tone, paint] of Object.entries(policyGaugePaints)) {
+      expect(declaration(rule(`.${paint.className}`), 'stroke'), `${tone} 的描边`).toBe(paint.stroke)
+      // Swatch（页面那侧的色块）也读同一个值：同一个类名，不许两种颜色说法。
+      expect(declaration(rule(`.mi-brief-poster__policy-swatch.${paint.className}`), 'background'), `${tone} 的色块`)
+        .toBe(paint.stroke)
+    }
+  })
+
+  it('matches the track against its stylesheet rule too', () => {
+    const track = rule('.mi-brief-poster__gauge-track')
+    expect(declaration(track, 'stroke')).toBe(policyGaugeTrackPaint.stroke)
+    expect(Number(declaration(track, 'opacity'))).toBe(policyGaugeTrackPaint.opacity)
+  })
 })
