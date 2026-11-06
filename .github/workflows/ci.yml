@@ -70,8 +70,10 @@ jobs:
         run: pnpm typecheck
 
       # 启动、存储、路径、脚本这四类是最容易带平台假设的，先只跑它们。
+      # `platform/desktop/window` 必须在这里：应用入口判定的唯一实现就在那儿，而「Windows 上整个
+      # 应用起不来」那次事故正是它——那次它的用例一条都没在 Windows 上跑过（2026-11-07 补）。
       - name: Platform-sensitive suites
-        run: pnpm exec vitest run platform/storage platform/desktop/main platform/desktop/ipc
+        run: pnpm exec vitest run platform/storage platform/desktop/main platform/desktop/ipc platform/desktop/window
 
       # 三个按路径查基线的门禁：它们的键一旦没归一化，在 Windows 上会整片假红，
       # 而在 macOS/Linux 上永远绿——必须在这台机器上真跑一次。
