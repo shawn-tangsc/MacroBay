@@ -34,6 +34,15 @@ describe('a failed signal read on the ETF chip', () => {
     expect(markup).not.toContain('mi-capital-conditions__signal"')
   })
 
+  it('says “cannot read right now” in the reader’s words, without the defect vocabulary', () => {
+    const markup = render({ state: 'unreadable', failureCode: 'contract-invalid' })
+    // 读者看不懂「格式」「契约」，也做不了任何事；那句话是给我们排障的，不许上屏。
+    expect(markup).not.toMatch(/格式|契约|contract|format/i)
+    expect(markup).toContain('数据暂时读不到')
+    // 重试不会好，所以一个按钮都不给——假按钮会教读者不再相信真按钮。
+    expect(markup).not.toContain('>重试<')
+  })
+
   it('offers no retry where a retry cannot change the answer', () => {
     const markup = render({ state: 'unreadable', failureCode: 'invalid-as-of' })
     expect(markup).toContain('时间不对，读不了')

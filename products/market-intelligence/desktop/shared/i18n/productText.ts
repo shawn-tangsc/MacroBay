@@ -285,7 +285,8 @@ mi: miText['zh-CN'],
             signalRead: {
               'query-failed': '判定记录没拿到',
               'invalid-as-of': '时间不对，读不了',
-              'contract-invalid': '读取格式对不上',
+              // 给读者看的是「读不到」，不是我们内部的判定原因：格式、契约这些词他既不懂也做不了。
+              'contract-invalid': '这项数据暂时读不到，不是你没有',
               retry: '重试'
             },
             crossAsset: {
@@ -1578,7 +1579,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             signalRead: {
               'query-failed': 'Analysis record not available',
               'invalid-as-of': 'Cannot read at this time',
-              'contract-invalid': 'Unreadable read format',
+              'contract-invalid': 'This data cannot be read right now; it is not missing',
               retry: 'Retry'
             },
             crossAsset: {
