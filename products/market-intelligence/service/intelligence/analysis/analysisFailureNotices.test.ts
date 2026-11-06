@@ -88,12 +88,12 @@ describe('the three failure notices', () => {
 
   it('passes only the declaration’s variables and lets the platform compose the key', () => {
     // 键字符串由平台按声明展开：这里只传声明点名的变量，不自己拼。
-    expect(analysisFailureNoticeDedupeVars({ kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 3 }))
+    expect(analysisFailureNoticeDedupeVars({ kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 3 }, at(0)))
       .toEqual({ episodeRunId: 'run-5' })
-    expect(analysisFailureNoticeDedupeVars({ kind: 'repeated-failure', line: 'event', failures: 6, sample: 10 }))
-      .toEqual({ line: 'event' })
-    expect(analysisFailureNoticeDedupeVars({ kind: 'attempt-abandoned', line: 'event', runId: 'r', abandon: 'release' }))
-      .toEqual({ kind: 'release' })
+    expect(analysisFailureNoticeDedupeVars({ kind: 'repeated-failure', line: 'event', failures: 6, sample: 10 }, at(0)))
+      .toEqual({ line: 'event', date: '2026-11-06' })
+    expect(analysisFailureNoticeDedupeVars({ kind: 'attempt-abandoned', line: 'event', runId: 'r', abandon: 'release' }, at(0)))
+      .toEqual({ kind: 'release', date: '2026-11-06' })
     // 文案行还没落进平台时，构造出来必须是 undefined：半句话比不说更糟。
     expect(buildAnalysisFailureNoticeRequest({ kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 3 }, at(0)))
       .toBeUndefined()

@@ -3,6 +3,7 @@ import { renderPlatformEventCopy } from '@platform/notifications/producers/platf
 
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 import { analysisRunLineOf } from './analysisTriggerSourcePolicy'
+import { ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 
 /**
  * 三档自动分析的提醒：连续失败、被放弃、恢复。
@@ -15,9 +16,9 @@ import { analysisRunLineOf } from './analysisTriggerSourcePolicy'
  * 不判额度（额度由平台按 UTC 日算），也不落任何状态——那三件事各有各的主人。
  */
 
-export const ANALYSIS_REPEATED_FAILURE_EVENT_ID = 'platform.analysis.repeated-failure'
-export const ANALYSIS_ATTEMPT_ABANDONED_EVENT_ID = 'platform.analysis.attempt-abandoned'
-export const ANALYSIS_RECOVERED_EVENT_ID = 'platform.analysis.recovered'
+export const ANALYSIS_REPEATED_FAILURE_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.repeatedFailure
+export const ANALYSIS_ATTEMPT_ABANDONED_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.attemptAbandoned
+export const ANALYSIS_RECOVERED_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.recovered
 
 export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled'
 /**
@@ -168,10 +169,15 @@ export function analysisNoticeDeeplink(runId: string, occurredAt: string) {
  * would produce a key its counter never sees.
  */
 export function analysisFailureNoticeDedupeVars(
-  decision: Exclude<AnalysisFailureNoticeDecision, { kind: 'none' }>
+  decision: Exclude<AnalysisFailureNoticeDecision, { kind: 'none' }>,
+  occurredAt: string
 ): Readonly<Record<string, string>> {
-  if (decision.kind === 'repeated-failure') return { line: decision.line }
-  if (decision.kind === 'attempt-abandoned') return { kind: decision.abandon }
+  // The UTC day is part of the key on purpose. Without it, yesterday's record is still "active"
+  // today, so today's notice would be merged into it: the reader would see an old record rewritten
+  // instead of a new reminder, and the daily cap would never come into play.
+  const date = occurredAt.slice(0, 10)
+  if (decision.kind === 'repeated-failure') return { line: decision.line, date }
+  if (decision.kind === 'attempt-abandoned') return { kind: decision.abandon, date }
   return { episodeRunId: decision.episodeRunId }
 }
 
@@ -187,7 +193,7 @@ export function buildAnalysisFailureNoticeRequest(
   occurredAt: string
 ): NotificationSubmitRequest | undefined {
   if (decision.kind === 'none') return undefined
-  const vars = analysisFailureNoticeDedupeVars(decision)
+  const vars = analysisFailureNoticeDedupeVars(decision, occurredAt)
   const eventTypeId = decision.kind === 'repeated-failure'
     ? ANALYSIS_REPEATED_FAILURE_EVENT_ID
     : decision.kind === 'attempt-abandoned'

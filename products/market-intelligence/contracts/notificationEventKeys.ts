@@ -43,6 +43,18 @@ export function notificationEventVariantKey(eventTypeId: string, variant: string
 }
 
 /** 本模块的通知事件 id：与 `notification-event-ownership.md`、批准表逐字一致。 */
+/**
+ * 平台分析事件的 id —— 本产品是它们的生产者，所以 id 从这里取，别处不再写一遍字面量。
+ *
+ * 与批准表逐字一致；生产者门禁只认这一处和平台声明表，写在别处它认不出「有没有人真的在发」。
+ */
+export const ANALYSIS_NOTIFICATION_EVENT_IDS = Object.freeze({
+  manualFailed: 'platform.analysis.manual-failed',
+  repeatedFailure: 'platform.analysis.repeated-failure',
+  attemptAbandoned: 'platform.analysis.attempt-abandoned',
+  recovered: 'platform.analysis.recovered'
+})
+
 export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   briefingFailed: 'market-intelligence.briefing.failed',
   briefingReady: 'market-intelligence.briefing.ready',
