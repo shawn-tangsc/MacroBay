@@ -183,6 +183,66 @@ describe('agent platform services', () => {
     expect(optionsSeen).toContainEqual({ activeSelectionRowOnly: true })
   })
 
+  it('finds a session by its idempotency description through the narrow adapter', async () => {
+    let state: AgentStoreState = createAgentStoreState({
+      agents: [agent],
+      sessions: [{ ...session, description: 'market-analysis-run:run-7' }],
+      workspaces: [workspace]
+    })
+    const store: AgentPlatformStateStore = {
+      getState: async () => {
+        throw new Error('the narrow adapter must answer without materialising the whole store')
+      },
+      update: async (updater) => {
+        state = updater(state)
+        return state
+      },
+      replace: async (nextState) => {
+        state = nextState
+        return state
+      }
+    }
+    const found = { ...session, id: 'session-from-adapter', description: 'market-analysis-run:run-7' }
+    const services = createAgentPlatformServices(store, {
+      queries: {
+        sessions: {
+          listByCursor: () => ({ items: [] }),
+          findByDescription: (agentId, description) =>
+            agentId === agent.id && description === found.description ? found : null
+        }
+      }
+    })
+
+    await expect(services.sessions.findByDescription(agent.id, found.description)).resolves.toMatchObject({
+      id: 'session-from-adapter'
+    })
+    await expect(services.sessions.findByDescription(agent.id, 'missing')).resolves.toBeNull()
+  })
+
+  it('falls back to the store when no narrow adapter is wired', async () => {
+    // 内存存储/测试桩没有窄查询；这时只能力所能及地扫一遍——组合根必须装上适配器，否则这条就是两千行的老路。
+    const state: AgentStoreState = createAgentStoreState({
+      agents: [agent],
+      sessions: [{ ...session, description: 'market-analysis-run:run-8' }],
+      workspaces: [workspace]
+    })
+    // 这条只读，不需要写回：给它一个不可变的状态源，写操作直接拒绝。
+    const store: AgentPlatformStateStore = {
+      getState: async () => state,
+      update: async () => {
+        throw new Error('not expected to write')
+      },
+      replace: async () => {
+        throw new Error('not expected to write')
+      }
+    }
+    const services = createAgentPlatformServices(store)
+
+    await expect(services.sessions.findByDescription(agent.id, 'market-analysis-run:run-8')).resolves.toMatchObject({
+      id: session.id
+    })
+  })
+
   it('selects a session through the same focused write the IPC path uses', async () => {
     // 「按会话选中」只能有一个入口：IPC handler 与频道入口都调这一个方法。
     // 这条用例钉住两件事：选中真的落到 activeSessionId，且写口仍是「只写选中那一行」。

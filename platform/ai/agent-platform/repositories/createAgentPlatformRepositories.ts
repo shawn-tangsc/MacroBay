@@ -512,6 +512,28 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
           return [mapSessionEntity(session, workspace)]
         })
     },
+    /**
+     * 窄查询：按「智能体 + 描述」取一条会话。
+     *
+     * 幂等键（例如 `market-analysis-run:<runId>`）是**产品在描述里约定的字符串**，不是新字段——
+     * 所以这里只有一次 `where agent_id = ? and description = ?` + `limit 1`，不新增表、不新增写入口。
+     * 存在的意义是别让调用方为了找一条记录把整张会话表读进内存：库里两千条时，这里只回一行。
+     */
+    findByDescription(agentId: string, description: string): AgentSessionEntity | null {
+      const row = db
+        .prepare(
+          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, created_at, updated_at
+           from agent_sessions
+           where agent_id = ? and description = ?
+           order by created_at asc, id asc
+           limit 1`
+        )
+        .get(agentId, description) as SessionRow | undefined
+      if (!row) return null
+      // 会话行要带上它所属的工作区才能成为实体；系统工作区也算（自动分析可能落在系统工作区）。
+      const workspace = workspaces.getById(row.workspace_id, { includeSystem: true })
+      return workspace ? mapSessionEntity(row, workspace) : null
+    },
     listByCursor(query: ListAgentSessionsQuery = {}): CursorPaginationResponse<Pick<AgentSessionEntity, 'id'>> {
       const limit = Math.max(1, Math.min(query.limit ?? 50, 200))
       const cursor = decodeSessionCursor(query.cursor)

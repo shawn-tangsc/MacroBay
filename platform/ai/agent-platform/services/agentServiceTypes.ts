@@ -88,6 +88,11 @@ export type AgentPlatformQueryAdapters = {
   }
   sessions?: {
     listByCursor: (query?: ListAgentSessionsQuery) => CursorPaginationResponse<Pick<AgentSessionEntity, 'id'>>
+    /**
+     * 幂等键查询：按「智能体 + 描述」取一条会话。**缺了它就只能全量读**，
+     * 所以 SQLite 仓储实现它，组合根整份传进来。
+     */
+    findByDescription?: (agentId: string, description: string) => AgentSessionEntity | null
   }
   messages?: {
     listByCursor: (

@@ -136,6 +136,19 @@ export class AgentSessionService {
     return this.store.update((state) => selectAgentSession(state, id), { activeSelectionRowOnly: true })
   }
 
+  /**
+   * 按「智能体 + 描述」取一条会话（幂等键查询，例如 `market-analysis-run:<runId>`）。
+   *
+   * 有窄查询适配器时只读一行；没有时退回扫内存状态——**那条路会把整张会话表读进来**，
+   * 只有 SQLite 之外的存储（内存桩、测试）才会走到它，组合根不该缺这个适配器。
+   */
+  async findByDescription(agentId: string, description: string): Promise<AgentSessionEntity | null> {
+    const narrow = this.queries.sessions?.findByDescription
+    if (narrow) return narrow(agentId, description)
+    const state = await this.store.getState()
+    return state.sessions.find((session) => session.agentId === agentId && session.description === description) ?? null
+  }
+
   async togglePin(id: string) {
     return this.store.update((state) => toggleSessionPin(state, id), { sessionPinRowsOnly: true })
   }

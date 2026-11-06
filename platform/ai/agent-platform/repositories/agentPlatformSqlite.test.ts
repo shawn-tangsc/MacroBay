@@ -113,6 +113,71 @@ describe('agent platform sqlite repositories', () => {
     expect(secondPage.items.map((item: { id: string }) => item.id)).toEqual(['session-3'])
   })
 
+  it('finds a session by its idempotency description reading one row out of two thousand', () => {
+    // 判据：库里 2000 条会话时，按 description 找一条只许读回 1 行会话。
+    // 这条不是为了测 SQL 写得快，是为了钉住「别为了找一条把整张表读进内存」。
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    for (let index = 0; index < 2000; index += 1) {
+      repos.sessions.upsert({
+        ...sessionFixture({
+          id: `session-${String(index).padStart(4, '0')}`,
+          orderKey: String(index).padStart(4, '0'),
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          name: `Filler ${index}`
+        }),
+        description: `filler-${index}`
+      })
+    }
+    repos.sessions.upsert({
+      ...sessionFixture({
+        id: 'session-target',
+        orderKey: 'zzzz-target',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+        name: 'Market analysis run'
+      }),
+      description: 'market-analysis-run:run-42'
+    })
+
+    // 数会话表读回来的行：直接给 connection.prepare 套一层，只统计 `from agent_sessions` 的语句。
+    let sessionRowsRead = 0
+    const connection = db.connection as unknown as { prepare: (sql: string) => Record<string, (...args: unknown[]) => unknown> }
+    const prepare = connection.prepare.bind(connection)
+    connection.prepare = (sql: string) => {
+      const statement = prepare(sql)
+      const counts = /from agent_sessions\b/.test(sql)
+      const get = statement.get.bind(statement)
+      const all = statement.all.bind(statement)
+      statement.get = (...args: unknown[]) => {
+        const row = get(...args)
+        if (counts && row !== undefined) sessionRowsRead += 1
+        return row
+      }
+      statement.all = (...args: unknown[]) => {
+        const rows = all(...args)
+        if (counts) sessionRowsRead += Array.isArray(rows) ? rows.length : 0
+        return rows
+      }
+      return statement
+    }
+    // 顺带钉住它没有走「全量列出来再筛」那条老路。
+    let listAllCalls = 0
+    const listAll = repos.sessions.listAll.bind(repos.sessions)
+    repos.sessions.listAll = (...args) => {
+      listAllCalls += 1
+      return listAll(...args)
+    }
+
+    const found = repos.sessions.findByDescription(agent.id, 'market-analysis-run:run-42')
+
+    expect(found?.id).toBe('session-target')
+    expect(sessionRowsRead).toBe(1)
+    expect(listAllCalls).toBe(0)
+    // 找不到时也只是一次空查询，不抛错。
+    expect(repos.sessions.findByDescription(agent.id, 'market-analysis-run:missing')).toBeNull()
+  })
+
   it('keeps automation sessions out of the reader list, and their group with them', () => {
     const db = createAgentPlatformDatabase(':memory:')
     const repos = createAgentPlatformRepositories(db)
