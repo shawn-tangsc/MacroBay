@@ -37,8 +37,13 @@ export function registerDailyBriefingJob(
     getLocale: () => Promise<DailyBriefingLocale>
     /** 主进程唯一的读者时区来源；只在期没有自己的时区时决定它的钟。 */
     timeZone: () => string
-    /** The saved periods, read at registration and again at every run. */
-    getPeriods: () => Promise<readonly DailyBriefingPeriod[]>
+    /**
+     * The saved periods, read at registration and again at every run.
+     *
+     * 带 `language`：一期配什么语言，就写什么语言的版次（用户 2026-11-06 报的 20:00 英文期跑出中文）。
+     * 旧数据没有这个字段时回落到界面语言，行为与此前一致。
+     */
+    getPeriods: () => Promise<readonly (DailyBriefingPeriod & Readonly<{ language?: DailyBriefingLocale }>)[]>
     /** 期自己的时区读不出来、这一期因此不排期时调用；只在真的暂停了时才调。 */
     onPaused?: (paused: readonly string[]) => void
   }>
@@ -48,7 +53,8 @@ export function registerDailyBriefingJob(
     const period = (await deps.getPeriods()).find((candidate) => candidate.id === periodId)
     if (!period) return
     if (generationTimeZoneIssue(period.generationTimeZone)) return
-    const locale = await deps.getLocale()
+    // 这一期自己的语言优先：定时触发的是"20:00 那一期（英文）"，不是"界面现在是什么语言"。
+    const locale = period.language ?? await deps.getLocale()
     const timeZone = period.generationTimeZone ?? deps.timeZone()
     const result = await deps.service.getToday({
       locale,

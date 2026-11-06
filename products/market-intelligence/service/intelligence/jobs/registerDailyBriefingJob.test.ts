@@ -23,7 +23,7 @@ function runtime() {
   return { runtime, definitions, run: (payload?: unknown) => handler!(payload) }
 }
 
-const period = (overrides: Partial<DailyBriefingPeriod> = {}): DailyBriefingPeriod => ({
+const period = (overrides: Partial<DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }>> = {}): DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }> => ({
   id: 'default',
   generationTime: '08:00',
   windowHours: 24 as never,
@@ -60,8 +60,8 @@ describe('daily briefing schedules', () => {
 
   it('removes the definition of a period that is gone and leaves the others alone', () => {
     const { runtime: jobRuntime, definitions } = runtime()
-    applyDailyBriefingSchedules(jobRuntime, [period(), period({ id: 'asia-open', generationTime: '12:30' })])
-    const result = applyDailyBriefingSchedules(jobRuntime, [period({ id: 'asia-open', generationTime: '12:30' })])
+    applyDailyBriefingSchedules(jobRuntime, [period(), period({ id: 'asia-open', generationTime: '12:30' })], 'Asia/Shanghai')
+    const result = applyDailyBriefingSchedules(jobRuntime, [period({ id: 'asia-open', generationTime: '12:30' })], 'Asia/Shanghai')
 
     expect(result.removed).toEqual(['default'])
     expect([...definitions.keys()]).toEqual([`${INTELLIGENCE_DAILY_BRIEFING_JOB}.asia-open`])
@@ -71,8 +71,8 @@ describe('daily briefing schedules', () => {
 
   it('re-registers the same id when a period time or zone moves', () => {
     const { runtime: jobRuntime, definitions } = runtime()
-    applyDailyBriefingSchedules(jobRuntime, [period()])
-    applyDailyBriefingSchedules(jobRuntime, [period({ generationTime: '09:30', generationTimeZone: 'Asia/Shanghai' })])
+    applyDailyBriefingSchedules(jobRuntime, [period()], 'Asia/Shanghai')
+    applyDailyBriefingSchedules(jobRuntime, [period({ generationTime: '09:30', generationTimeZone: 'Asia/Shanghai' })], 'Asia/Shanghai')
 
     expect([...definitions.keys()]).toEqual([`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`])
     expect(definitions.get(`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`)).toMatchObject({
@@ -84,11 +84,11 @@ describe('daily briefing schedules', () => {
     // Today one unreadable zone pauses every automatic run. With one definition per period that
     // would mean a typo in the second period silences the first as well, silently.
     const { runtime: jobRuntime, definitions } = runtime()
-    applyDailyBriefingSchedules(jobRuntime, [period(), period({ id: 'asia-open', generationTime: '12:30' })])
+    applyDailyBriefingSchedules(jobRuntime, [period(), period({ id: 'asia-open', generationTime: '12:30' })], 'Asia/Shanghai')
     const result = applyDailyBriefingSchedules(jobRuntime, [
       period(),
       period({ id: 'asia-open', generationTime: '12:30', generationTimeZone: 'Asia/Shangai' })
-    ])
+    ], 'Asia/Shanghai')
 
     expect(result.paused).toEqual(['asia-open'])
     expect(result.removed).toEqual(['asia-open'])
@@ -98,8 +98,8 @@ describe('daily briefing schedules', () => {
   it('is idempotent: the same periods twice schedule nothing new and remove nothing', () => {
     const { runtime: jobRuntime } = runtime()
     const periods = [period(), period({ id: 'asia-open', generationTime: '12:30' })]
-    applyDailyBriefingSchedules(jobRuntime, periods)
-    const second = applyDailyBriefingSchedules(jobRuntime, periods)
+    applyDailyBriefingSchedules(jobRuntime, periods, 'Asia/Shanghai')
+    const second = applyDailyBriefingSchedules(jobRuntime, periods, 'Asia/Shanghai')
 
     expect(second).toEqual({ scheduled: ['default', 'asia-open'], removed: [], paused: [] })
   })
@@ -128,6 +128,37 @@ describe('daily briefing job handler', () => {
       runTrigger: 'scheduled',
       generation: { generationTime: '12:30', windowHours: 48 }
     })
+  })
+
+  // 用户 2026-11-06：20:00 那期配的是英文，实际生成的是中文——触发时用的是界面语言。
+  it('writes the edition in the period’s own language, whatever the interface language is', async () => {
+    const { runtime: jobRuntime, run } = runtime()
+    const getToday = vi.fn(async () => available)
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday },
+      getLocale: async () => 'zh-CN',
+      timeZone: () => 'Asia/Shanghai',
+      getPeriods: async () => [period({ id: 'evening-en', generationTime: '20:00', language: 'en-US' as never })]
+    })
+
+    await run({ periodId: 'evening-en' })
+
+    expect(getToday).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en-US', periodId: 'evening-en' }))
+  })
+
+  it('falls back to the interface language only when the period names none', async () => {
+    const { runtime: jobRuntime, run } = runtime()
+    const getToday = vi.fn(async () => available)
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday },
+      getLocale: async () => 'zh-CN',
+      timeZone: () => 'Asia/Shanghai',
+      getPeriods: async () => [period({ id: 'default', generationTime: '07:00' })]
+    })
+
+    await run({ periodId: 'default' })
+
+    expect(getToday).toHaveBeenCalledWith(expect.objectContaining({ locale: 'zh-CN' }))
   })
 
   it('spends nothing on a run whose period is gone or whose zone no longer reads', async () => {
