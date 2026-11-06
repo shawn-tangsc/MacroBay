@@ -48,6 +48,16 @@ describe('module signal read', () => {
     expect(toModuleSignalRead('nonsense')).toEqual({ state: 'unavailable', failureCode: 'contract-invalid' })
   })
 
+  it('treats a batch of windowless entries as an unreadable answer, not a quiet market', () => {
+    // 旧版返回体没有窗口（窗口是后加的）。这不是「今天没事」，是两边的形状没对上——而形状没对上
+    // 时静默显示「没有」正是这套校验存在的理由。
+    expect(toModuleSignalRead([{ signal }]))
+      .toEqual({ state: 'unavailable', failureCode: 'contract-invalid' })
+    // 一条旧的混在好条里：好条照常显示，旧条计数，不把整批判死。
+    expect(toModuleSignalRead([good, { signal }]))
+      .toEqual({ state: 'available', signals: [good], droppedInvalid: 1 })
+  })
+
   it('accepts a genuinely empty read as a quiet market, not a failure', () => {
     expect(toModuleSignalRead([])).toEqual({ state: 'available', signals: [], droppedInvalid: 0 })
   })
