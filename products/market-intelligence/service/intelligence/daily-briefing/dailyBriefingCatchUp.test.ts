@@ -17,6 +17,7 @@ function harness(input: Readonly<{
   periods?: readonly ReturnType<typeof period>[]
   editions?: readonly string[]
   attempted?: readonly string[]
+  deleted?: readonly string[]
 }> = {}) {
   const run = vi.fn(async (_input: unknown) => ({ state: 'available' }))
   // 按**期**记：一期跑过不代表另一期跑过。
@@ -31,6 +32,7 @@ function harness(input: Readonly<{
     readerTimeZone: () => ZONE,
     now: () => input.now ?? AFTER_CUTOFF,
     hasEdition: async ({ periodId }) => state.editions.has(periodId),
+    wasDeleted: async ({ periodId }) => (input.deleted ?? []).includes(periodId),
     attemptCount: async ({ periodId }) => attempts.get(periodId) ?? 0,
     run: async (options) => {
       run(options)
@@ -123,6 +125,7 @@ describe('a catch-up that ran but did not succeed is reported, never swallowed',
       now: () => AFTER_CUTOFF,
       hasEdition: async () => false,
       attemptCount: async () => 0,
+      wasDeleted: async () => false,
       run: async () => ({ state: 'unavailable', failureCode: 'run-timeout' })
     })
     expect(outcome.ran).toEqual([])
@@ -137,8 +140,19 @@ describe('a catch-up that ran but did not succeed is reported, never swallowed',
       now: () => AFTER_CUTOFF,
       hasEdition: async () => false,
       attemptCount: async () => 0,
+      wasDeleted: async () => false,
       run: async () => { throw new Error('store-down') }
     })
     expect(outcome.failed).toEqual([{ periodId: 'default', failureCode: 'store-down' }])
+  })
+})
+
+describe('a row the reader deleted is not generated again', () => {
+  it('skips a period whose (date, period, language) was deleted', async () => {
+    // 删完之后「已过点 + 零 attempt + 零版次」三条全成立；不认删除的话，下次启动就又生成回来。
+    const { catchUp, run } = harness({ deleted: ['default'] })
+    const outcome = await catchUp()
+    expect(outcome.skipped).toEqual([{ periodId: 'default', why: 'deleted-by-reader' }])
+    expect(run).not.toHaveBeenCalled()
   })
 })

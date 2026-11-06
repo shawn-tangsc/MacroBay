@@ -303,12 +303,28 @@ describe('a row is never a button inside a button', () => {
     expect(items[0]!.textContent).toBe(text.history.deleteEditionCurrent)
   })
 
-  it('renders no menu at all for a row with no edition, instead of an empty floating panel', () => {
-    // 空白浮层盖住列表，读者看到的是"右键出来什么都没有"。0 项时连 open 都不许成立。
-    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
+  it('offers delete on a row that has no edition — a failed run is still deletable', () => {
+    // 用户 2026-11-06：失败的那一行右键删不掉。任何行都能删（正在跑的那行除外），删的是这一行的
+    // 记录：正文 + 运行记录 + 尝试记录。
+    const onDeletePeriod = vi.fn()
+    render({
+      // 一行的语言就是它自己那次跑的语言（英文那次失败 → 这一行是英文）。
+      editions: [edition({ locale: 'en-US', state: 'missing', availableLocales: [], generatedAt: undefined,
+        languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }] })],
+      onDeletePeriod,
+      resolveText: (key: string) => resolveProductTextKey('zh-CN', key)
+    })
     act(() => { host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    expect(document.querySelector('[data-context-menu]')).toBeNull()
-    expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(0)
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(items).toHaveLength(1)
+    expect(items[0]!.textContent).toContain(text.history.deleteEditionCurrent)
+    expect(items[0]!.getAttribute('aria-disabled')).not.toBe('true')
+    act(() => { items[0]!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // 确认框（与工具栏同一个）→ 确认后把这一行的身份交出去。
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteEditionConfirm.replace(/\s/g, ''))
+    act(() => { confirm?.click() })
+    expect(onDeletePeriod).toHaveBeenCalledWith(expect.objectContaining({ date: expect.any(String), locale: 'en-US' }))
   })
 
   it('offers one disabled reason on a generating row, never a blank panel', () => {

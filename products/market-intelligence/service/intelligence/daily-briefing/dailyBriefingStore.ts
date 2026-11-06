@@ -337,15 +337,34 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       statements.publishEdition(edition, edition.periodId ?? DEFAULT_PERIOD_ID, attempt)
     },
     async deletePeriod(date, periodId, locale) {
-      // One edition, one language. Attempts and period runs carry no language: they are the history
-      // of that day's runs, so deleting one edition must not erase why another language exists.
-      // The session links live in another database and are deleted separately.
+      // 删的是**这一行**的记录：版次 + 这一次尝试的所有记录（用户 2026-11-06 定 A 口径）。
+      // 运行记录按 (日期, 期号) 存、两种语言共用，所以只在这一期已经没有别的版次时才删它——
+      // 否则删中文版会顺手抹掉英文版那一行的运行记录。会话连接在另一个库，另删。
       const editions = db.prepare('delete from daily_briefings where edition_date = ? and period_id = ? and locale = ?').run(date, periodId, locale)
+      let attempts = 0
+      if (tableColumns(db, 'daily_briefing_attempts').includes('period_id')) {
+        attempts = Number(db.prepare('delete from daily_briefing_attempts where edition_date = ? and period_id = ? and locale = ?')
+          .run(date, periodId, locale).changes ?? 0)
+      }
+      let periodRuns = 0
+      const remaining = db.prepare('select count(*) as n from daily_briefings where edition_date = ? and period_id = ?')
+        .get(date, periodId) as { n?: unknown } | undefined
+      if (Number(remaining?.n ?? 0) === 0) {
+        periodRuns = Number(db.prepare('delete from daily_briefing_period_runs where edition_date = ? and period_id = ?')
+          .run(date, periodId).changes ?? 0)
+      }
       return Object.freeze({
         editions: Number(editions.changes ?? 0),
-        attempts: 0,
-        periodRuns: 0
+        attempts,
+        periodRuns
       })
+    },
+    async wasEditionDeleted(date, periodId, locale) {
+      // 读者删过这一行没有：只认**成功**那次（部分失败的删除不算删干净，补跑仍可补）。
+      const row = db.prepare(`select 1 as hit from daily_briefing_delete_audit
+        where edition_date = ? and period_id = ? and locale = ? and outcome = 'success' limit 1`)
+        .get(date, periodId, locale) as { hit?: unknown } | undefined
+      return row !== undefined
     },
     async recordDeleteAudit(entry: Parameters<NonNullable<DailyBriefingStore['recordDeleteAudit']>>[0]) {
       // append-only：一次删除写一条，写不进去不阻塞删除本身（删掉数据是读者的动作，日志是旁证）。

@@ -201,19 +201,17 @@ export function DailyBriefingHistoryRail({
    * 别的期在写，读者对自己看完的那一版连删除都点不了。
    */
   const blocked = menu !== null && waitingKey !== undefined && briefingRailKey(menu) === waitingKey
-  const hasEdition = menuRow !== undefined && menuRow.state !== 'missing'
   // 行菜单**恰一项**：删除这一版（正文 + 它的会话）。期级动作不在这张菜单里——重跑在工具栏与
   // 行内「重试」，删排期在设置页，两件事不混。
   // 0 项时**不渲染**：`ContextMenu` 只挡 `!open || anchor === null`，空数组会画出一块盖住列表的
   // 空白浮层——读者看到的就是"右键出来什么都没有"。
+  // 任何行都能删：有正文的、失败的、跑到一半崩的（用户 2026-11-06）。**唯一例外是正在跑的那一行**——
+  // 边写边删说不清。以前这里只在"有版次"时给删除，于是失败行连入口都没有。
   const menuItems: readonly MenuItem[] = blocked
     ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger', disabled: true }]
-    : hasEdition
+    : menu !== null
       ? [{ key: 'delete-edition', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent', tone: 'danger' }]
       : []
-  // 打开之前就问"这张菜单有没有东西"：正在跑的那一行弹一项禁用的原因，没有版次的行干脆不弹。
-  const canOpenMenu = (edition: DailyBriefingEditionSummary): boolean =>
-    edition.state !== 'missing' || briefingRailKey(edition) === waitingKey
 
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
@@ -299,11 +297,10 @@ export function DailyBriefingHistoryRail({
                 {...(edition.periodDeleted ? { 'data-period-deleted': 'true' } : {})}
                 className="mi-daily-briefing__rail-row"
                 ref={(node) => { if (node) rowRefs.current.set(key, node) }}
-                onContextMenu={(event) => { event.preventDefault(); if (canOpenMenu(edition)) openMenu(edition, { x: event.clientX, y: event.clientY }) }}
+                onContextMenu={(event) => { event.preventDefault(); openMenu(edition, { x: event.clientX, y: event.clientY }) }}
                 onKeyDown={(event) => {
                   if (!(event.shiftKey && event.key === 'F10') && event.key !== 'ContextMenu') return
                   event.preventDefault()
-                  if (!canOpenMenu(edition)) return
                   const rect = event.currentTarget.getBoundingClientRect()
                   openMenu(edition, { x: rect.left + 8, y: rect.top + 8 })
                 }}

@@ -640,6 +640,8 @@ export type DesktopAppBootstrapOptions = {
     getNetworkSettings: () => Promise<NetworkSettings>
     /** 主进程唯一的读者时区来源（产品侧的日报日界、日历月份）。 */
     getTimeZone: () => string
+    /** 平台落盘日志（app.log）：产品要留事后可查的后台事实（补跑、降级）走这条通道。 */
+    log: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
     onSettingsCommitted?: (listener: SettingsCommittedListener) => () => void
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
@@ -1055,6 +1057,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
                 const settings = await settingsStore.get()
                 return settings.network
               },
+              // 产品要留一条事后可查的事实（补跑、后台任务）就走平台日志：console 只落在终端里。
+              log: appLog.log,
               // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
               getTimeZone: () => shellTimeZone.get(),
               onSettingsCommitted: settingsStore.onCommitted,

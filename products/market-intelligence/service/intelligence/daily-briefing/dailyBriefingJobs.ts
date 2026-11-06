@@ -21,12 +21,14 @@ import { applyDailyBriefingSchedules, registerDailyBriefingJob } from '../jobs/r
  */
 export function wireDailyBriefingJobs(deps: Readonly<{
   jobRuntime: JobRuntime
-  service: Pick<DailyBriefingService, 'getToday' | 'listAttempts'>
+  service: Pick<DailyBriefingService, 'getToday' | 'listAttempts' | 'wasEditionDeleted'>
   /** 补跑时用的时钟；测试可注入。缺省取真实时间。 */
   now?: () => string
   getLocale: () => Promise<DailyBriefingLocale>
   timeZone: () => string
   periods: Pick<DailyBriefingGenerationSettingsService, 'getPeriods'>
+  /** 平台的落盘日志（app.log）。补跑是后台事实，必须留一条事后查得到的记录。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   links: DailyBriefSessionLinkStore
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   /** The attempt store's tombstone writer; absent in a build that has no attempt table. */
@@ -46,7 +48,15 @@ export function wireDailyBriefingJobs(deps: Readonly<{
    * 所以重复调用最多并进正在跑的那一次，不会再补第二遍。
    */
   const catchUp = (): void => {
-    const timeZone = deps.timeZone()
+    // 读者时区读不出来（装配缺这一钩子）也不许把启动打挂：记一条错误、这一轮补跑跳过。
+    // 生产一定接了这个钩子；这里守的是装配不全的构建与用例。
+    let timeZone: string
+    try {
+      timeZone = deps.timeZone()
+    } catch (error) {
+      deps.log?.('error', 'briefing.catchup.error', { error: error instanceof Error ? error.message : String(error) })
+      return
+    }
     void catchUpMissedDailyBriefings({
       getPeriods: () => deps.periods.getPeriods(),
       getLocale: deps.getLocale,
@@ -58,6 +68,7 @@ export function wireDailyBriefingJobs(deps: Readonly<{
         const listed = await deps.service.listAttempts(input)
         return listed.state === 'available' ? listed.attempts.length : 1
       },
+      wasDeleted: (input) => deps.service.wasEditionDeleted(input),
       run: async (input) => deps.service.getToday({
         locale: input.locale,
         timeZone: input.timeZone,
@@ -67,16 +78,17 @@ export function wireDailyBriefingJobs(deps: Readonly<{
         generation: { generationTime: input.generationTime, windowHours: input.windowHours }
       })
     }).then((outcome) => {
-      // 一行留痕：补了谁、跳过了谁、谁补了没成。用户 2026-11-06 那天"库里零尝试、日志无痕迹"，
-      // 就是因为跳过和失败都没有出口——不许再让它静默。
-      console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_CATCHUP', at: deps.now?.() ?? new Date().toISOString(), timeZone, ...outcome }))
+      // 留痕走平台日志（app.log），不是 console：console 只落在跑 dev 的那个终端里，事后查不到。
+      // 补了谁、跳过了谁、谁补了没成，三样都要有出口——否则"没跑成"和"没跑"看起来一样。
+      const fields = { at: deps.now?.() ?? new Date().toISOString(), timeZone, ran: outcome.ran, skipped: outcome.skipped, failed: outcome.failed }
+      if (outcome.failed.length > 0) deps.log?.('error', 'briefing.catchup.failed', fields)
+      else deps.log?.('info', 'briefing.catchup', fields)
     }).catch((error: unknown) => {
-      console.log(JSON.stringify({
-        marker: 'MI_DAILY_BRIEF_CATCHUP',
+      deps.log?.('error', 'briefing.catchup.error', {
         at: deps.now?.() ?? new Date().toISOString(),
         timeZone,
         error: error instanceof Error ? error.message : String(error)
-      }))
+      })
     })
   }
   registerDailyBriefingJob(deps.jobRuntime, {

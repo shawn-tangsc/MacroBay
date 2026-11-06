@@ -199,6 +199,11 @@ const intelligenceRawRecordStartupRecoveryPolicy = {
 } as const
 
 export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
+  /**
+   * 平台的落盘日志（app.log）。后台事实——补跑、降级、任务——必须走这条通道：console 只落在跑
+   * dev 的那个终端里，事后查不到（2026-11-06 补跑排查就卡在这上面）。
+   */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   getProviderState?: () => Promise<ProviderState>
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 模型服务页「默认模型」只读投影；翻译偏好跟随其中的默认翻译模型。 */
@@ -974,6 +979,7 @@ export function getIntelligenceModule(
     const markAttemptCleaned = dailyBriefingStore.markAttemptCleaned?.bind(dailyBriefingStore)
     const rescheduleBriefingForDisplayTimeZone = wireDailyBriefingJobs({
       jobRuntime,
+      ...(hooks?.log === undefined ? {} : { log: hooks.log }),
       service: dailyBriefingService,
       getLocale: getAppLanguage,
       timeZone: shellTimeZone,

@@ -26,6 +26,8 @@ export type DailyBriefingGetResult =
 
 export function createDailyBriefingReads(deps: Readonly<{ store: DailyBriefingStore }>): Readonly<{
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
+  /** 读者删过这一行没有（补跑据此跳过：删了的不许再自己长回来）。 */
+  wasEditionDeleted: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => Promise<boolean>
   listAttempts: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingAttemptsResult>
   getStorageState: () => DailyBriefingStorageState
   retryUpgrade: () => Promise<DailyBriefingStorageState>
@@ -47,6 +49,9 @@ export function createDailyBriefingReads(deps: Readonly<{ store: DailyBriefingSt
         failureCode: last.failureCode ?? 'build-failed',
         ...(generationTrace ? { generationTrace } : {})
       }
+    },
+    async wasEditionDeleted(input) {
+      return (await deps.store.wasEditionDeleted?.(input.date, input.periodId, input.locale).catch(() => false)) ?? false
     },
     async listAttempts(input) {
       if (!deps.store.listAttempts) return { state: 'unavailable', failureCode: 'attempts-unreadable' }

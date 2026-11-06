@@ -43,6 +43,8 @@ export type BriefingCatchUpDeps = Readonly<{
   hasEdition: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<boolean>
   /** 这一期今天留下过几条尝试记录（任何状态都算"跑过"）。 */
   attemptCount: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<number>
+  /** 读者今天亲手删过这一行（成功那次）→ 不许补，否则删了又长回来。 */
+  wasDeleted: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<boolean>
   /** 真的跑：与定时那条路同一个入口，只是把触发记成补跑。返回那一次的结果，好判成功还是失败。 */
   run: (input: Readonly<{
     date: string
@@ -63,7 +65,7 @@ export type BriefingCatchUpDeps = Readonly<{
  */
 export type BriefingCatchUpOutcome = Readonly<{
   ran: readonly string[]
-  skipped: readonly Readonly<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' }>[]
+  skipped: readonly Readonly<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' | 'deleted-by-reader' }>[]
   failed: readonly Readonly<{ periodId: string; failureCode?: string }>[]
 }>
 
@@ -74,7 +76,7 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
     const now = deps.now()
     const fallbackLocale = await deps.getLocale().catch(() => 'zh-CN' as const)
     const ran: string[] = []
-    const skipped: Array<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' }> = []
+    const skipped: Array<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' | 'deleted-by-reader' }> = []
     const failed: Array<{ periodId: string; failureCode?: string }> = []
     for (const period of periods) {
       const id = period.id || DEFAULT_PERIOD_ID
@@ -91,6 +93,12 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
       }
       if (await deps.attemptCount({ date: due.date, locale, periodId: id }).catch(() => 1) > 0) {
         skipped.push({ periodId: id, why: 'has-attempt' })
+        continue
+      }
+      // 读者删过这一行：删完之后「已过点 + 零 attempt + 零版次」三条全成立，不认这条的话，下次
+      // 启动就会把它重新生成回来，读者只会认为删除没生效（用户 2026-11-06）。
+      if (await deps.wasDeleted({ date: due.date, locale, periodId: id }).catch(() => false)) {
+        skipped.push({ periodId: id, why: 'deleted-by-reader' })
         continue
       }
       // 同一刻重复调用是安全的：服务端按 (日期, 期号, 语言) 合并，第二次会并进正在跑的那一次。

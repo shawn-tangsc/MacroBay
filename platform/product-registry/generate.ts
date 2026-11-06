@@ -262,6 +262,11 @@ export type ProductServiceDependencies = {
   /** The reader's display zone; a product's schedule and day boundary follow the setting. */
   getTimeZone: () => string
   getNetworkSettings: () => Promise<NetworkSettings>
+  /**
+   * 平台的落盘日志（app.log）。产品要留一条**事后可查**的事实（补跑、后台任务、降级），
+   * 就走这条通道——console.log 只落在跑 dev 的那个终端里，事后查不到。
+   */
+  log: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   platformFetch: typeof fetch
   secretVault: SecretVault
   registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void

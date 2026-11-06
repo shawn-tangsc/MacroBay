@@ -117,9 +117,9 @@ describe('daily briefing store', () => {
     await store.beginAttempt!({ date: '2026-10-30', locale: 'zh-CN', startedAt: '2026-10-30T00:00:00.000Z' })
 
     const removed = await store.deletePeriod!('2026-10-30', 'default', 'zh-CN')
-    // One edition goes. The attempt belongs to the issue, not to a language, so it stays — it is
-    // the record of what happened that day, and another language may still be readable.
-    expect(removed).toEqual({ editions: 1, attempts: 0, periodRuns: 0 })
+    // 删的是**这一行**的记录（用户 2026-11-06 定 A 口径）：中文版正文 + 它自己那条尝试一起走；
+    // 英文版还在，所以共用的大运行记录留着（删了它会把英文那行的运行信息也抹掉）。
+    expect(removed).toEqual({ editions: 1, attempts: 1, periodRuns: 0 })
     expect(await store.get('2026-10-30', 'zh-CN')).toBeUndefined()
     expect(await store.get('2026-10-30', 'en-US')).toBeDefined()
     // The other day is untouched, and a repeat delete returns zeros instead of throwing.
@@ -243,7 +243,7 @@ describe('writing attempts', () => {
 
 
 describe('deleting one language', () => {
-  it('leaves the attempt trail and the run count untouched, and keeps the other edition readable', async () => {
+  it('removes that language\'s attempts, keeps the other edition and the shared run readable', async () => {
     // The failure mode this catches: a delete that forgot `where ... and locale = ?` removes the
     // whole issue and still reports success. Only the other edition's absence would show it — so the
     // assertions below are counts before/after and a read of the edition that must survive.
@@ -273,8 +273,10 @@ describe('deleting one language', () => {
     expect(await store.get('2026-11-03', 'zh-CN')).toBeUndefined()
     // 2. The other edition is still there and still readable.
     expect((await store.get('2026-11-03', 'en-US'))?.document.edition.locale).toBe('en-US')
-    // 3. The attempt trail and the run are untouched — they belong to the issue, not to a language.
-    expect((await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length).toBe(attemptsBefore)
+    // 3. 中文版那条尝试跟着删掉；英文版那条还在；共用的大运行记录留着（英文版还读得到）。
+    expect(removed.attempts).toBe(1)
+    expect((await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length).toBe(attemptsBefore - 1)
+    expect((await store.listAttempts!('2026-11-03', 'en-US', 'default')).length).toBe(1)
     expect(await store.getPeriodRun!('2026-11-03', 'default')).toEqual(runBefore)
   })
 })

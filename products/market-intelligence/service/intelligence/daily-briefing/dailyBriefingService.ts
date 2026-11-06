@@ -187,6 +187,13 @@ export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunSt
    * was already deleted returns zeros instead of throwing, so the caller can simply retry.
    */
   deletePeriod?: (date: string, periodId: string, locale: 'zh-CN' | 'en-US') => Promise<Readonly<{ editions: number; attempts: number; periodRuns: number }>>
+  /**
+   * 读者删过这一行没有（`(日期, 期号, 语言)`，只认成功那次）。
+   *
+   * 补跑要问它：删完之后「今天已过点 + 零 attempt + 零版次」三条全成立，不认这条的话，读者删掉的
+   * 那一期下次启动就被补跑又生成回来，他会以为删除没生效（用户 2026-11-06）。
+   */
+  wasEditionDeleted?: (date: string, periodId: string, locale: 'zh-CN' | 'en-US') => Promise<boolean>
   /** 「删除这一版」的操作记录：只记录、不还原（用户 2026-11-06）。 */
   recordDeleteAudit?: DailyBriefingDeleteAuditWriter
   /** Whether the storage upgrade ran; `incomplete` means the old shape is still in use. */
@@ -289,6 +296,8 @@ export type DailyBriefingService = Readonly<{
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
   listAttempts: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingAttemptsResult>
+  /** 读者删过这一行没有（只认成功那次）：补跑据此不再把删掉的那期生成回来。 */
+  wasEditionDeleted: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => Promise<boolean>
   /**
    * Where the attempt that is running right now has got to.
    *
