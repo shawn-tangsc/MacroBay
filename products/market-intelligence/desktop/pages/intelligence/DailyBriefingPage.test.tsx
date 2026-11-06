@@ -1995,6 +1995,26 @@ it('writes into the day the reader is on, and says that day before the press', a
   expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')
 })
 
+it('re-reads the list as soon as a run started elsewhere begins', async () => {
+  // 用户 2026-11-06：只要开始跑了，列表里就得有那一行。定时/别的窗口发起的跑不是本页建的占位行，
+  // 所以进度一开始说"在跑"，页面就要重读一次列表——否则那一行要等它跑完才出现。
+  const progress = {
+    attemptId: 'attempt-1', startedAt: '2026-10-30T04:00:00.000Z', state: 'running' as const,
+    stages: traceStageIds.map((id, index) => ({
+      id, state: index === 0 ? 'success' as const : 'pending' as const,
+      startedAt: index === 1 ? '2026-10-30T04:00:05.000Z' : index === 0 ? '2026-10-30T04:00:00.000Z' : null,
+      finishedAt: index === 0 ? '2026-10-30T04:00:01.000Z' : null,
+      ...(index === 0 ? { durationMs: 1_000 } : {})
+    }))
+  }
+  const client = fakeClient({ getProgress: vi.fn(async () => ({ state: 'running' as const, progress })) })
+  const dom = await renderPage(client)
+  const reads = (): number => (client.list as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+  for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+  expect(reads()).toBeGreaterThan(1)
+  expect(dom.querySelector('.mi-daily-briefing__rail-day')).not.toBeNull()
+})
+
 it('reports a run that is already in flight in the right column, step by step', async () => {
   // A scheduled run (not this window's click): the edition stays readable in the body and the steps
   // report in the column, following the progress the service publishes.

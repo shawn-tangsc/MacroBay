@@ -67,6 +67,7 @@ import { DailyBriefingAppendix } from './DailyBriefingAppendix'
 import { useBriefingEditionReader } from './useBriefingEditionReader'
 import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoading, readyKind, readyZone, resolveBriefingMode } from './dailyBriefingMode'
 import { DailyBriefingContent } from './DailyBriefingContent'
+import { useBriefingBackgroundRunReload } from './useBriefingBackgroundRunReload'
 import { useBriefingRunActions, type BriefingRunIntent } from './useBriefingRunActions'
 import { formattedClock } from './dailyBriefingUnavailableRow'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
@@ -197,6 +198,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // says is running right now (a scheduled run, or one started in another window).
   const generating = busyLocally || progress?.state === 'running'
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
+  // 不是本页发起的跑（定时、别的窗口）一开始，就让列表重读一次，那一行才会立刻出现。
+  useBriefingBackgroundRunReload(progress?.state === 'running', () => setReloadKey((key) => key + 1))
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
   // must not pretend the run stopped either — the pipeline is still spending model calls.
   const progressUnreadable = generating && progress?.state === 'unavailable'
