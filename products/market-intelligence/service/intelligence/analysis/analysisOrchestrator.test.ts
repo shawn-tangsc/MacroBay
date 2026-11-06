@@ -82,7 +82,13 @@ describe('analysisOrchestrator', () => {
       // names and scaled values, never the machine encoding it would copy verbatim.
       expect(user.change).toContain('宏观 · 实际值：3.2 → 3.4')
       expect(user.change).not.toContain('~actual')
-      return { ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 1 } }
+      // The trigger rule now applies to this run (it has a change record): the answer must cite the
+      // triggering evidence in a reasoning section and name the fact. `validOutput()` does neither,
+      // so it would be rejected and this test would be measuring the rejection instead.
+      const output = validOutput()
+      output.conclusion.change = 'CPI 从 3.2 升到 3.4。'
+      output.supportingEvidence = [{ statement: 'CPI 实际上升，支持本判断。', evidenceRefId: 'evidence-1' }]
+      return { ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 1 } }
     })
     const repository = createRepository({
       getSnapshot: () => ({

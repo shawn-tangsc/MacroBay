@@ -14,6 +14,7 @@ import {
   type AnalysisConclusion
 } from '../../../contracts/marketAnalysisContracts'
 import { isMarketReactionFact, marketAnalysisUnsafeOutputPolicy, marketAnalysisValidationPolicy } from './analysisConstants'
+import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import { policyProbabilityDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 
@@ -68,7 +69,13 @@ export const analysisValidationRules = Object.freeze({
    * cited with that fact's own as-of at minute precision. A percentage near "概率/定价" that no
    * policy fact carries is a fabricated number, not a rounding difference.
    */
-  policyProbabilityCitation: 'policy-probability-citation'
+  policyProbabilityCitation: 'policy-probability-citation',
+  /**
+   * The conclusion never returned to the change that triggered the run: it cites something else and
+   * talks about the background. Coarse code stays `analysis-missing-evidence`, which is already in
+   * the repairable set, so the model gets its one rewrite; the detail names this rule.
+   */
+  triggerFocus: 'missing-trigger-focus'
 })
 
 export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof analysisValidationRules]
@@ -158,7 +165,7 @@ function topLevelShapeDefect(value: unknown): AnalysisShapeDefect | undefined {
   return `shape:top-level:${details.join(',') || 'unknown'}`
 }
 
-export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence): AnalysisOutputValidationResult {
+export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence, focus?: TriggerFocus): AnalysisOutputValidationResult {
   if (utf8Length(input) > marketAnalysisValidationPolicy.maximumOutputBytes) return invalidSchema('shape:too-large')
 
   let value: unknown
@@ -222,6 +229,9 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   }
   const probabilityDefect = policyProbabilityDefect(output.conclusion, snapshot)
   if (probabilityDefect) return missingEvidence(analysisValidationRules.policyProbabilityCitation, probabilityDefect)
+  // Only when the caller could resolve a trigger source; a snapshot with no change record never
+  // ran this rule and must not be judged by it.
+  if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
 
   return { ok: true, value: output, redactions }
 }

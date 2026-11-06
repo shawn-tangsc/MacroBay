@@ -67,6 +67,11 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     + directionKeys.join('、') + '；界面会按读者语言取标签，正文里不要再写任何方向标记或段落标签。',
     'conclusion.causalChain 必须按「起因事件 → 中间变量（美元、实际利率、流动性、杠杆或资金流）→ 对该资产的作用方向 → 因此本判断成立的条件」的顺序写清机制。因果链必须用现有证据说明当前最可能的机制与作用方向；不得只写「若…可能…」这类条件句而不给出机制本身，也不得把条件式假设当作唯一解释。',
     'conclusion.summary 必须先写结论（机制与作用方向的判断），conclusion.change 再写本次数据变化；只给方向、没有结论句的输出会被直接拒绝发布。',
+    // The run was triggered by a specific change; citing something else and narrating the backdrop
+    // is the failure mode this rule exists for. Stated in the first answer, not only on retry.
+    ...((snapshot.change?.facts ?? []).length > 0 ? [
+      '本次运行由输入 change 段里的变化触发：结论必须回到那条变化本身——在 supportingEvidence / marketReaction / directions 里引用它的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的原文，不要改写）。只引用不提、或改讲宏观背景，都会被判为「没回答触发的事件」并作废。'
+    ] : []),
     'conclusion.change 必须引用输入 change 段里的具体字段与数值；当 change 为 no-change 时，必须写明没有新变化，不得编造。event-excerpt 是历史消息，不代表当前市场值。没有可比行情时 marketReaction 为 []。',
     'conclusion.conditions 每条写一个成立条件；conclusion.dataGaps 每条写一个数据缺口并说明它如何影响置信度。macro 与 evidenceStrength 没有内容时写 null。当已有证据指向相反方向时，必须在 evidenceStrength 里明确哪一侧证据更强、为什么，不得用「信号冲突」或「置信度有限」笼统收尾。',
     'directions 必须为三个周期各给一条，一条一个周期：'

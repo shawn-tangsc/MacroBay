@@ -9,6 +9,7 @@ import {
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
+import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { isGateExempt } from './analysisTriggerSourcePolicy'
 import {
@@ -106,7 +107,9 @@ const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
   'fact-evidence-mismatch': '每条 knownFact 只能引用它自己的那一个 evidenceRef；marketReaction 的 evidenceRefIds 必须恰好覆盖它 factIds 对应的证据集合，多一个也会被拒绝。',
   'ineligible-market-reaction': 'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs；输入没有该字段或为空时写 []。',
   'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。',
-  'policy-probability-citation': '结论里的政策概率必须与快照同值，并在同一段写出该概率的截至时刻（例如「市场定价 71%，截至 2026-10-30 15:00 UTC」）；「概率/定价」附近的百分数只能取自输入里的概率事实，不得自行取整、换档或编造。'
+  'policy-probability-citation': '结论里的政策概率必须与快照同值，并在同一段写出该概率的截至时刻（例如「市场定价 71%，截至 2026-10-30 15:00 UTC」）；「概率/定价」附近的百分数只能取自输入里的概率事实，不得自行取整、换档或编造。',
+  // The answer must return to the change that triggered the run, not to a better-writable topic.
+  'missing-trigger-focus': '上一次结论没有回答触发它的那条变化：请在 supportingEvidence / marketReaction / directions 里引用那条变化的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的写法，不要改写）。不要换一个更好写的话题。'
 })
 
 function repairInstruction(defect: Readonly<{ errorCode: string; rule?: string }>): string {
@@ -183,6 +186,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const facts = withChange.facts.filter(fact => fact.evidenceRefId && evidenceIds.has(fact.evidenceRefId))
     if (!facts.length) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.missingEvidence)
     const frozenEvidence: FrozenAnalysisEvidence = { facts, evidenceRefs: withChange.evidenceRefs }
+    // Resolved from the frozen snapshot, so the rule judges the question the run actually held.
+    const triggerFocus: TriggerFocus = resolveTriggerFocus(withChange)
 
     // The run's own trigger key says which open it serves; recovery runs and manual runs keep the
     // prompt they had.
@@ -236,7 +241,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
       }
-      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence)
+      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
       if (validated.ok) break
       if (attempt >= marketAnalysisInvocationPolicy.maxModelAttempts || !repairableRejection.has(validated.errorCode)) break
       messages = [...messages, ...repairMessage(validated, invocation.output)]

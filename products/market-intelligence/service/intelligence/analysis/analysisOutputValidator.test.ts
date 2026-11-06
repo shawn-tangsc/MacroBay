@@ -351,6 +351,74 @@ function validOutput() {
   }
 }
 
+describe('trigger focus', () => {
+  const focus = {
+    mode: 'strict' as const,
+    triggers: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', subject: 'BTC' }]
+  }
+
+  it('accepts a conclusion that cites the trigger in a reasoning section and names it', () => {
+    const output = validOutput()
+    output.conclusion.change = 'BTC 在事件后十五分钟内上涨。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot(), focus)).toMatchObject({ ok: true })
+  })
+
+  it('rejects a conclusion that cites something else and talks about the backdrop', () => {
+    const base = frozenSnapshot()
+    const snapshot = { ...base, evidenceRefs: [...base.evidenceRefs, { evidenceRefId: 'mi-ev-other' }] } as TestSnapshot
+    const output = validOutput()
+    output.conclusion.change = 'BTC 在事件后十五分钟内上涨。'
+    // The evidence it reasons from is real, but it is not the change that triggered the run.
+    output.supportingEvidence = [{ statement: '资金费率变化可见。', evidenceRefId: 'mi-ev-other' }]
+    output.marketReaction = []
+    output.directions = output.directions.map(entry => ({ ...entry, evidenceRefIds: ['mi-ev-other'] }))
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot, focus)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'missing-trigger-focus'
+    })
+  })
+
+  it('does not count a registration in knownFacts as an answer', () => {
+    const base = frozenSnapshot()
+    const snapshot = { ...base, evidenceRefs: [...base.evidenceRefs, { evidenceRefId: 'mi-ev-other' }] } as TestSnapshot
+    const output = validOutput()
+    output.conclusion.change = 'BTC 在事件后十五分钟内上涨。'
+    // Only the inventory cites the trigger; the reasoning sections cite something else.
+    output.supportingEvidence = [{ statement: '资金费率变化可见。', evidenceRefId: 'mi-ev-other' }]
+    output.marketReaction = []
+    output.directions = output.directions.map(entry => ({ ...entry, evidenceRefIds: ['mi-ev-other'] }))
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot, focus))
+      .toMatchObject({ ok: false, rule: 'missing-trigger-focus' })
+  })
+
+  it('rejects a conclusion that cites the trigger but never says what it was', () => {
+    // validOutput cites mi-ev-market-move in a reasoning section, but neither change nor
+    // causalChain names BTC: exactly "I have the news, and I am still talking about macro".
+    expect(validateAnalysisModelOutput(JSON.stringify(validOutput()), frozenSnapshot(), focus))
+      .toMatchObject({ ok: false, rule: 'missing-trigger-focus' })
+  })
+
+  it('does not judge a run whose snapshot has no change record', () => {
+    const noChange = { mode: 'not-applicable:no-change' as const, triggers: [] }
+    expect(validateAnalysisModelOutput(JSON.stringify(validOutput()), frozenSnapshot(), noChange)).toMatchObject({ ok: true })
+  })
+
+  it('accepts any one of several simultaneous triggers', () => {
+    const output = validOutput()
+    output.conclusion.change = 'CPI 从 3.2 升到 3.4。'
+    output.supportingEvidence = [{ statement: 'CPI 实际上升。', evidenceRefId: 'mi-ev-market-move' }]
+    const multi = {
+      mode: 'strict' as const,
+      triggers: [
+        { factId: 'a', evidenceRefId: 'mi-ev-absent', subject: 'Greek tax news' },
+        { factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', subject: 'CPI' }
+      ]
+    }
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot(), multi)).toMatchObject({ ok: true })
+  })
+})
+
 it('requires one operation direction per horizon, and names the rule when one is missing', () => {
   const complete = validateAnalysisModelOutput(JSON.stringify(validOutput()), frozenSnapshot())
   expect(complete.ok).toBe(true)
