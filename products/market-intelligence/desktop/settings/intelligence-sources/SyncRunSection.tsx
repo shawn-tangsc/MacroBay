@@ -89,12 +89,14 @@ export type SyncRunText = Readonly<{
   /** The batch's own tally, filled in by the caller; the cell composes the parts. */
   counts: string
   countsFailed: string
+  countsReasons: string
   countsSkipped: string
   countsSeparator: string
   /** Shown instead of numbers for a run that predates them: never as zero. */
   oldRecordNote: string
   /** Stable `resultReasonCode` → the reader's sentence; the code itself never reaches the cell. */
   resultReasons: Readonly<Record<string, string>>
+  resultReasonTags: Readonly<Record<string, string>>
   resultReasonUnknown: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
   /** `handlerId` → the reader's name for that job; the service catalogue's own labels are data. */

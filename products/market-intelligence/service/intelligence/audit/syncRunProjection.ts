@@ -106,6 +106,8 @@ export function projectSyncRun(row: JobRunRecord, analysis?: SyncRunAnalysisLook
     analysis: analysisOf(row, entry, analysis),
     ...(countsOf(row) === undefined ? {} : { counts: countsOf(row) }),
     ...(row.result?.reasonCode ? { resultReasonCode: row.result.reasonCode } : {}),
+    ...(row.result?.reasons === undefined ? {} : { reasons: row.result.reasons }),
+    ...(languagesOf(row) === undefined ? {} : { languages: languagesOf(row) }),
     ...(durationMs === undefined ? {} : { durationMs }),
     ...(failureCode === undefined ? {} : { failureCode }),
     ...(detail ? { detail } : {})
@@ -234,6 +236,23 @@ function countsOf(row: JobRunRecord): SyncRunCounts | undefined {
   if (![total, succeeded, failed, skipped].every((value) => Number.isInteger(value) && value >= 0)) return undefined
   if (succeeded + failed + skipped !== total) return undefined
   return { total, succeeded, failed, skipped }
+}
+
+/**
+ * 这一批瞄准的语言，来自入队时写死的快照（`payload.targetLocale`）。
+ *
+ * 为什么读 payload 而不另存一份：语言是**任务参数**，平台已明确它不进运行结论
+ * （`JobRunOutcome` 里没有它的位置）；再存一份就有两处要同步。
+ */
+function languagesOf(row: JobRunRecord): readonly string[] | undefined {
+  if (!row.payload || typeof row.payload !== 'object') return undefined
+  const value = (row.payload as Record<string, unknown>).targetLocale
+  if (typeof value === 'string' && value.trim().length > 0) return [value]
+  if (Array.isArray(value)) {
+    const many = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    return many.length > 0 ? many : undefined
+  }
+  return undefined
 }
 
 function outcomeOf(status: JobRunRecord['status']): SyncRunOutcome {

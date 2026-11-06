@@ -22,13 +22,26 @@ export function syncRunTallyText(row: SyncRunRow, text: SyncRunText): string | u
   const parts = [
     text.counts.replace('{total}', String(counts.total)).replace('{succeeded}', String(counts.succeeded))
   ]
-  if (counts.failed > 0) parts.push(text.countsFailed.replace('{failed}', String(counts.failed)))
+  // 失败按原因拆开的条数：有分布就用分布，没有（旧记录只有主因码）才退回「失败 N」。
+  const reasons = Object.entries(row.reasons ?? {}).filter(([, count]) => count > 0)
+  if (reasons.length > 0) {
+    const list = reasons
+      .map(([code, count]) => `${text.resultReasonTags[code] ?? text.resultReasonUnknown} ${count}`)
+      .join(text.countsSeparator)
+    parts.push(text.countsReasons.replace('{failed}', String(counts.failed)).replace('{reasons}', list))
+  } else if (counts.failed > 0) {
+    parts.push(text.countsFailed.replace('{failed}', String(counts.failed)))
+  }
   if (counts.skipped > 0) parts.push(text.countsSkipped.replace('{skipped}', String(counts.skipped)))
-  const reason = row.resultReasonCode === undefined
+  // 分布已经在上面说过了，就不再重复主因那句——同一件事说两遍，读者会以为是两条原因。
+  const reason = reasons.length > 0 || row.resultReasonCode === undefined
     ? undefined
     : text.resultReasons[row.resultReasonCode] ?? text.resultReasonUnknown
   const tally = parts.join(text.countsSeparator)
-  return reason === undefined ? tally : `${tally}${text.joiner}${reason}`
+  const withReason = reason === undefined ? tally : `${tally}${text.joiner}${reason}`
+  // 语言是**这一批瞄准哪些**（入队快照），永远复数；没有快照的旧记录不编一个。
+  const languages = (row.languages ?? []).join(text.joiner)
+  return languages.length === 0 ? withReason : `${languages}${text.countsSeparator}${withReason}`
 }
 
 /** A product-side row uses its action as the handler id, so audit actions come before the raw label. */

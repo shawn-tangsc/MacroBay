@@ -80,6 +80,16 @@ function analysisRow(input: {
 }
 
 describe('sync run section', () => {
+  it('keeps the reason sentence table and the short tag table on the same keys', () => {
+    // 两张表服务同一批码：一张读成句子（单因），一张当标签（分布里）。
+    // 键集不相等时，新加一类原因会出现「句子有、标签没有」——界面上一格空白。
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      const run = productText[language].settings.intelligenceSources.syncRun
+      expect(Object.keys(run.resultReasonTags).sort()).toEqual(Object.keys(run.resultReasons).sort())
+    }
+  })
+
+
   it('sends the task filter to the server and keeps the options from the catalogue', async () => {
     // 选项从「已加载的行」生成的话，选完一个任务，其它任务就从下拉里消失——读者回不去。
     const dom = await render()
@@ -95,6 +105,62 @@ describe('sync run section', () => {
     })
     // 稀疏任务（翻译一天 45 次）必须由服务端筛，否则它永远排在采集记录之后、取不回来。
     expect(vi.mocked(syncRunClient.list).mock.calls.at(-1)?.[0]).toMatchObject({ handlerId })
+  })
+
+  it('renders the batch summary from the structured field when the detail is garbage', async () => {
+    // 判据要长得像它防的事故：日志/详情是乱码时，摘要仍要**逐项等于**结构化字段。
+    // 页面真去解析文本的话，这条必红；只断言「没崩」的话，摘要空着也能绿。
+    const batch = {
+      at: '2026-11-06T13:41:43.900Z',
+      runId: 'run-translate',
+      correlationId: 'run-translate',
+      taskLabel: '翻译任务',
+      sources: [],
+      handlerId: 'market-intelligence.translateItems',
+      action: 'other' as const,
+      outcome: 'succeeded' as const,
+      analysis: { state: 'not-applicable' as const },
+      counts: { total: 12, succeeded: 10, failed: 2, skipped: 0 },
+      languages: ['zh-CN'],
+      reasons: { 'model.timeout': 1, 'model.rate-limited': 1 },
+      detail: '\u0000{\u0000garbage\u0000}'
+    }
+    vi.mocked(syncRunClient.list).mockResolvedValue({ state: 'available', rows: [batch] })
+    const dom = await render()
+
+    const text = dom.textContent ?? ''
+    // 逐项相等，而不是「包含某个数」：12/10/0 任何一个走偏都红。
+    expect(text).toContain(String(batch.counts.total))
+    expect(text).toContain(String(batch.counts.succeeded))
+    expect(text).toContain(batch.languages[0]!)
+    const tags: Readonly<Record<string, string>> = productText['zh-CN'].settings.intelligenceSources.syncRun.resultReasonTags
+    for (const [code, count] of Object.entries(batch.reasons)) {
+      const tag = tags[code]
+      expect(text).toContain(`${tag} ${count}`)
+    }
+    // 失败总数来自分布之和，不另算一份。
+    const failedTotal = Object.values(batch.reasons).reduce((sum, count) => sum + count, 0)
+    expect(failedTotal).toBe(batch.counts.failed)
+    // 摘要那一格自己成一句：乱码只出现在「说明」列，不能渗进摘要。
+    const tally = dom.querySelector('.mi-sync-run__tally')?.textContent ?? ''
+    expect(tally).toContain('12 条中成功 10')
+    expect(tally).toContain('失败 2')
+    expect(tally).not.toContain('garbage')
+  })
+
+  it('keeps source-less rows out of a specific source filter, not just visible under “no source”', async () => {
+    const dom = await render()
+    const sourceSelect = dom.querySelectorAll('select')[2] as HTMLSelectElement
+    // 选一个**具体来源**：没有来源的那一行必须消失。老写法（空串兼职通配）在这里会留下它。
+    await act(async () => {
+      sourceSelect.value = 'macro-calendar-fed'
+      sourceSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const taskNames = [...dom.querySelectorAll('.mi-sync-run__task')].map((cell) => cell.textContent ?? '')
+    expect(taskNames.join(' ')).toContain('官方日历排期')
+    // 没有来源的那一行必须被**具体来源**筛掉：老写法（空串兼职通配）会把它留下。
+    expect(taskNames.join(' ')).not.toContain('AI 分析')
   })
 
   it('says how much of the window the CSV left out instead of exporting silently', async () => {

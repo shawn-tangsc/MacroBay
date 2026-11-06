@@ -85,6 +85,15 @@ export type SyncRunRow = Readonly<{
   counts?: SyncRunCounts
   /** The stable code behind the tally, when the batch recorded why it ended that way. */
   resultReasonCode?: string
+  /**
+   * 失败按原因拆开的条数（`'model.timeout': 1`），只在有失败时出现。
+   *
+   * 与 `counts.failed` 不同层：一个是总数，一个是分布。只给主因码就只能说「出现过」，
+   * 而读者要的是「超时 1 · 限流 1」。
+   */
+  reasons?: Readonly<Record<string, number>>
+  /** 这一批瞄准哪些语言，从 payload 的语言快照读——**不另存一份**。 */
+  languages?: readonly string[]
   /** The stable code a failure carries, when one can be read out of the error text. */
   failureCode?: string
   detail?: string

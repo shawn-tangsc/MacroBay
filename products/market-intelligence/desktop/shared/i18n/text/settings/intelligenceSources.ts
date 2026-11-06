@@ -125,6 +125,7 @@ export const intelligenceSourcesText = {
     // 每批自己的结论：这一行跑了几条、成了几条。没有计数时整格不写，写 0 会变成另一件事。
     counts: '{total} 条中成功 {succeeded}',
     countsFailed: '失败 {failed}',
+    countsReasons: '失败 {failed}（{reasons}）',
     countsSkipped: '跳过 {skipped}',
     countsSeparator: '、',
     oldRecordNote: '旧记录，没有条数',
@@ -137,6 +138,16 @@ export const intelligenceSourcesText = {
       'translation.undetermined': '这次没能判断原因',
       // 跳过不是失败：这句话里不许出现「失败」，否则和计数里的「跳过 N 条」自相矛盾。
       'translation.auto-off': '自动翻译关着，这批没翻'
+    },
+    // 分布需要短标签：上面那几句是「读给一个人听」的句子，塞进括号会读成半句话。
+    // 键与 `resultReasons` 必须一一对应（有用例断言两表键集相等，防一边加一边漏）。
+    resultReasonTags: {
+      'model.timeout': '超时',
+      'model.rate-limited': '限流',
+      'model.not-configured': '模型没配好',
+      'model.output-invalid': '输出不合法',
+      'translation.undetermined': '原因不明',
+      'translation.auto-off': '自动翻译关着'
     },
     resultReasonUnknown: '这次没能判断原因',
     aggregates: {
@@ -574,6 +585,7 @@ export const intelligenceSourcesText = {
     csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail', 'Total', 'Succeeded', 'Failed', 'Skipped'],
     counts: '{succeeded} of {total} succeeded',
     countsFailed: '{failed} failed',
+    countsReasons: '{failed} failed ({reasons})',
     countsSkipped: '{skipped} skipped',
     countsSeparator: ', ',
     oldRecordNote: 'Older record — no item count was stored',
@@ -584,6 +596,14 @@ export const intelligenceSourcesText = {
       'model.output-invalid': 'The model returned something that did not fit the expected format, so it was not used',
       'translation.undetermined': 'We could not tell why this time',
       'translation.auto-off': 'Automatic translation is off, so nothing was translated'
+    },
+    resultReasonTags: {
+      'model.timeout': 'timeout',
+      'model.rate-limited': 'rate limited',
+      'model.not-configured': 'model not configured',
+      'model.output-invalid': 'invalid output',
+      'translation.undetermined': 'cause unknown',
+      'translation.auto-off': 'auto-translation off'
     },
     resultReasonUnknown: 'We could not tell why this time',
     aggregates: {
