@@ -10,9 +10,11 @@ const sentences: BriefingFailureSentences = {
 }
 const formatDuration = (durationMs: number): string => `${Math.round(durationMs / 60_000)} 分钟`
 
+const fallback = { step: '生成', what: '这一期没能生成出来', next: '重新生成一次' }
 const compose = (input: Partial<Parameters<typeof briefingFailureSentence>[0]> = {}) => briefingFailureSentence({
   code: 'editorial-timeout',
   sentences,
+  fallback,
   templates: text.failureSentenceTemplates,
   formatDuration,
   ...input
@@ -39,10 +41,13 @@ describe('the failure reason is a sentence, not a code label', () => {
     expect(compose({})?.reason).toBe('这次在写稿就停下了：还没等到返回，这次没写完')
   })
 
-  it('says nothing at all for a code the table has no sentence for', () => {
-    // 宁可退回原来的标签，也不许拼出半句人话。
-    expect(compose({ code: 'rate-limited' })).toBeUndefined()
-    expect(compose({ code: undefined })).toBeUndefined()
+  it('falls back to one sentence for a code the table does not carry, never the code itself', () => {
+    // 表外码的唯一出口：兜底句。读者不会在这里看到内部代号。
+    expect(compose({ code: 'not-in-the-table' })).toEqual({
+      reason: '这次在生成就停下了：这一期没能生成出来',
+      next: '接下来：重新生成一次'
+    })
+    expect(compose({ code: undefined })?.reason).toContain('这一期没能生成出来')
   })
 })
 
@@ -53,7 +58,23 @@ describe('the failure sentence table is a closed set', () => {
     for (const code of Object.keys(text.failureSentences)) expect(failureKeys()).toContain(code)
   })
 
-  // `02` v2.143：每个失败码一条人话，新增码必须同笔补句子，缺一即红。表由产品逐条给；
-  // 表到齐后把这条从 todo 改成 it —— 它会在缺任何一个码时红。
-  it.todo('has exactly one sentence for every failure code the panel can show')
+  // `02` v2.143/v2.145：每个失败码一条人话，新增码必须同笔补句子，缺一即红——两个方向都断言。
+  it('has exactly one sentence for every failure code the panel can show', () => {
+    expect(Object.keys(text.failureSentences).sort()).toEqual(failureKeys().sort())
+  })
+
+  it('keeps the two languages on the same key set', () => {
+    const en = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing.failureSentences
+    expect(Object.keys(en).sort()).toEqual(Object.keys(text.failureSentences).sort())
+  })
+
+  it('never repeats the step name at the start of what happened, and never states the duration', () => {
+    // 否则会拼出「写稿没跑完：写稿等了两分钟（用了 2 分钟）」。句首重名是这条要防的形状；
+    // 句中顺带提到同一步（比如「译文没通过校验」）是自然中文，不改产品原话。
+    for (const [code, entry] of Object.entries(text.failureSentences)) {
+      expect(entry.what.startsWith(entry.step), code).toBe(false)
+      expect(entry.what, code).not.toMatch(/\d+\s*(分钟|秒|小时|分)/)
+      expect(entry.next.length, code).toBeGreaterThan(0)
+    }
+  })
 })

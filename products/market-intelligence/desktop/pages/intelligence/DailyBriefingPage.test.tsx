@@ -1046,10 +1046,13 @@ describe('daily briefing page', () => {
 
     expect(panel).not.toBeNull()
     expect(panel.textContent).toContain(text.failurePanel.editorialTitle)
-    expect(panel.querySelector('[data-failure-code-label]')?.textContent)
-      .toBe(`${text.failurePanel.codeLabel}${text.labelSeparator}${text.aiSettings.failure['editorial-timeout']}`)
+    // 原因是一句人话：哪一步停了、发生了什么、接下来怎么办（`02` v2.143/v2.145）。
+    // 码的标签那句退休了——它只是把码换个说法。
+    expect(panel.querySelector('[data-failure-reason]')?.textContent)
+      .toBe('这次在写稿就停下了：等到超时也没返回，这次没写完')
+    expect(panel.querySelector('[data-failure-next]')?.textContent).toBe('接下来：再试一次；反复出现就换一个模型或检查网络')
     expect(panel.textContent).not.toContain('editorial-timeout')
-    expect(panel.textContent).toContain(text.failurePanel.advice.retryOrModel)
+    expect(panel.querySelector('[data-failure-code-label]')).toBeNull()
     expect(panel.querySelector('[data-failure-action="retry"]')).not.toBeNull()
     // Two actions only: retry, and the same settings drawer the header opens. A third button per
     // advice code is what the reader saw as duplicated settings entries.
@@ -1441,9 +1444,10 @@ describe('daily briefing page', () => {
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
     const detail = panel.querySelector('[data-failure-detail]')
 
-    expect(panel.textContent).toContain(text.aiSettings.failure['model-unavailable'])
+    expect(panel.querySelector('[data-failure-reason]')?.textContent)
+      .toBe('这次在生成就停下了：当前默认模型不可用，稿子写不出来')
     expect(panel.textContent).toContain(text.failurePanel.detail['custom-unavailable'])
-    expect(panel.textContent).toContain(text.failurePanel.advice.model)
+    expect(panel.querySelector('[data-failure-next]')?.textContent).toBe('接下来：到「日报设置」选一个可用模型')
     expect(panel.textContent).not.toContain('model-unavailable')
     expect(panel.textContent).not.toContain('custom-unavailable')
     expect(detail?.textContent).toContain(text.failurePanel.detailLabel)
@@ -1458,8 +1462,9 @@ describe('daily briefing page', () => {
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
     const detail = panel.querySelector<HTMLElement>('[data-failure-detail]')!
 
-    expect(panel.textContent).toContain(text.aiSettings.failure['agent-turn-output-truncated'])
-    expect(panel.textContent).toContain(text.failurePanel.advice.retryOrModel)
+    expect(panel.querySelector('[data-failure-reason]')?.textContent)
+      .toBe('这次在写稿就停下了：单轮输出被截断，内容不完整')
+    expect(panel.querySelector('[data-failure-next]')?.textContent).toBe('接下来：重新生成一次')
     expect(detail.textContent).toContain('stop_reason=max_tokens')
     expect(detail.textContent).toContain('…')
     expect(detail.textContent!.length).toBeLessThan(220)
@@ -1472,9 +1477,10 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
 
-    expect(panel.textContent).toContain(text.aiSettings.failure['unknown-number'])
+    expect(panel.querySelector('[data-failure-reason]')?.textContent)
+      .toBe('这次在校验就停下了：写进了一个数据里没有的数字')
     expect(panel.querySelector('[data-failure-detail]')?.textContent).toContain('42000')
-    expect(panel.textContent).toContain(text.failurePanel.advice.retryOrSettings)
+    expect(panel.querySelector('[data-failure-next]')?.textContent).toBe('接下来：重新生成一次')
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
   })
 
@@ -1484,8 +1490,10 @@ describe('daily briefing page', () => {
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
 
     expect(panel.textContent).toContain(text.failurePanel.generationTitle)
-    expect(panel.textContent).toContain(text.aiSettings.failure['source-failed'])
-    expect(panel.textContent).toContain(text.failurePanel.advice.data)
+    expect(panel.querySelector('[data-failure-reason]')?.textContent)
+      .toBe('这次在数据采集就停下了：情报源采集失败，数据没到齐')
+    expect(panel.querySelector('[data-failure-next]')?.textContent)
+      .toBe('接下来：到「数据缺口与限制」看是哪一项，重试读取或检查来源')
     // The advice sentence names the source check; the buttons do not grow a third entry for it.
     expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
@@ -1521,9 +1529,11 @@ describe('daily briefing page', () => {
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
 
     expect(panel.textContent).toContain(englishText.failurePanel.editorialTitle)
-    expect(panel.textContent).toContain(englishText.aiSettings.failure['model-unavailable'])
+    // 英文也该是一句人话，而不是码的标签。
+    expect(panel.querySelector('[data-failure-reason]')?.textContent)
+      .toBe('This run stopped at Generate: the current default model is unavailable, so nothing could be written')
     expect(panel.textContent).toContain(englishText.failurePanel.detail['default-unavailable'])
-    expect(panel.textContent).toContain(englishText.failurePanel.advice.model)
+    expect(panel.querySelector('[data-failure-next]')?.textContent).toBe('Next: Pick a working model in Brief settings')
   })
 
   it('groups limitations into severity-ordered summaries and opens one group in a drawer', async () => {

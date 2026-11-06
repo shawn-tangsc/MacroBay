@@ -5,7 +5,7 @@ import type { GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingGenerationTimeline, formatDuration } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingStagePanel } from './DailyBriefingStagePanel'
 import { briefingFailureSentence } from './briefingFailureSentence'
-import { briefFailureCodeLabel, failureAdvice, readableFailureDetail } from './dailyBriefingFailureDetail'
+import { failureAdvice, readableFailureDetail } from './dailyBriefingFailureDetail'
 
 /** A generation or editorial attempt that did not produce a readable edition. */
 export type BriefFailure = Readonly<{
@@ -36,7 +36,6 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
   onOpenSettings: () => void
 }>): React.ReactElement {
   const advice = failureAdvice(failure.code)
-  const codeLabel = briefFailureCodeLabel(failure.code, { failure: text.aiSettings.failure, failurePanel: text.failurePanel })
   const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
   const separator = text.labelSeparator
   // 人话原因：**哪一步没跑完 + 发生了什么（用了多久）+ 接下来怎么办**，由文案表逐码拼出来。
@@ -47,6 +46,7 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
     ...(stalled === undefined ? {} : { failedStage: text.generationTrace.stages[stalled.id] ?? stalled.id }),
     ...(stalled?.durationMs === undefined ? {} : { durationMs: stalled.durationMs }),
     sentences: text.failureSentences,
+    fallback: text.failureSentenceFallback,
     templates: text.failureSentenceTemplates,
     formatDuration: (durationMs) => formatDuration(durationMs, text)
   })
@@ -60,17 +60,11 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
       ...(failure.code ? { 'data-failure-code': failure.code } : {})
     }}>
 
-    {sentence === undefined
-      ? <>
-        <p data-failure-code-label>{text.failurePanel.codeLabel}{separator}{codeLabel}</p>
-        {detail ? <p data-failure-detail>{text.failurePanel.detailLabel}{separator}{detail}</p> : null}
-        <p data-failure-advice-text>{text.failurePanel.suggestionLabel}{separator}{text.failurePanel.advice[advice]}</p>
-      </>
-      : <>
-        {/* 一句人话：哪一步没跑完、发生了什么、用了多久。内部码不上屏。 */}
-        <p data-failure-reason>{sentence.reason}</p>
-        <p data-failure-next>{sentence.next}</p>
-      </>}
+    {/* 一句人话：哪一步没跑完、发生了什么、用了多久，再接一句接下来怎么办。内部码不上屏；
+        原来那句码的标签退休了——它只是把码换个说法。原始细节（已脱敏）仍保留，排查时有用。 */}
+    <p data-failure-reason>{sentence.reason}</p>
+    <p data-failure-next>{sentence.next}</p>
+    {detail ? <p data-failure-detail>{text.failurePanel.detailLabel}{separator}{detail}</p> : null}
     <DailyBriefingGenerationTimeline trace={failure.generationTrace} text={text} formatTime={formatTime} />
     <div className="mi-daily-briefing-page__failure-actions">
       <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating || retryBlockedReason !== undefined}

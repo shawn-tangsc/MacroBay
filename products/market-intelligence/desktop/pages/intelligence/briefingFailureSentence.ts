@@ -11,8 +11,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
  * - 时长算不出来：用不带时长的那一句，**不留空括号**
  *
  * 三段（哪一步 / 发生了什么 / 接下来怎么办）逐码写在 `text.failureSentences` 里，是文案的事；
- * 这里只按句式拼。表里没有这个码就返回 `undefined`，调用方退回原来的标签——宁可少说一句，
- * 也不许拼出半句人话。
+ * 这里只按句式拼。表里没有这个码就走 `fallback` 那一句——**绝不把码印给读者**，也绝不半句。
  */
 export type BriefingFailureSentenceEntry = Readonly<{ step: string; what: string; next: string }>
 
@@ -25,15 +24,17 @@ export type BriefingFailureSentenceInput = Readonly<{
   /** 那一步用了多久；算不出来就不写时长。 */
   durationMs?: number
   sentences: BriefingFailureSentences
+  /** 表外码的唯一出口：走这一句，绝不印出码本身（`02` v2.145）。 */
+  fallback: BriefingFailureSentenceEntry
   templates: DailyBriefingText['failureSentenceTemplates']
   formatDuration: (durationMs: number) => string
 }>
 
 export function briefingFailureSentence(
   input: BriefingFailureSentenceInput
-): Readonly<{ reason: string; next: string }> | undefined {
-  const entry = input.code === undefined ? undefined : input.sentences[input.code]
-  if (entry === undefined) return undefined
+): Readonly<{ reason: string; next: string }> {
+  // 码没登记、或者根本没有码：走兜底句。读者不会在这里看到内部代号。
+  const entry = (input.code === undefined ? undefined : input.sentences[input.code]) ?? input.fallback
   const duration = input.durationMs !== undefined && Number.isFinite(input.durationMs) && input.durationMs >= 0
     ? input.formatDuration(input.durationMs)
     : undefined

@@ -31,25 +31,27 @@ async function render(text: DailyBriefingText, failure: Parameters<typeof DailyB
 describe('the failure panel says what happened in a sentence', () => {
   it('names the step that stopped, what happened and how long it took, with no internal code', async () => {
     // 用户 2026-11-06：只写「AI 编辑超时」看不出是写稿那一步卡了两分钟。表里有了这句就照表拼。
-    const text: DailyBriefingText = {
-      ...base,
-      failureSentences: { 'editorial-timeout': { step: '写稿', what: '还没等到返回，这次没写完', next: '重试一次，或换一个响应更快的模型' } }
-    }
-    const host = await render(text, { kind: 'editorial', code: 'editorial-timeout', generationTrace: trace })
+    const host = await render(base, { kind: 'editorial', code: 'editorial-timeout', generationTrace: trace })
 
     // 步骤名用**步骤清单里那一步的真名**（写作），不是表里的兜底名：两处必须同名，否则句子说
     // 写稿、清单写着写作，读者又要猜。
     expect(host.querySelector('[data-failure-reason]')?.textContent)
-      .toBe('写作没跑完：还没等到返回，这次没写完（用了 1 分 23 秒）')
-    expect(host.querySelector('[data-failure-next]')?.textContent).toBe('接下来：重试一次，或换一个响应更快的模型')
+      .toBe('写作没跑完：等到超时也没返回，这次没写完（用了 1 分 23 秒）')
+    expect(host.querySelector('[data-failure-next]')?.textContent).toBe('接下来：再试一次；反复出现就换一个模型或检查网络')
     expect(host.textContent).not.toContain('editorial-timeout')
     // 原来的码标签那句不再重复一遍：一句人话已经说了同一件事。
     expect(host.querySelector('[data-failure-code-label]')).toBeNull()
   })
 
-  it('falls back to the readable code label while the table has no sentence for the code', async () => {
-    const host = await render(base, { kind: 'editorial', code: 'editorial-timeout', generationTrace: trace })
-    expect(host.querySelector('[data-failure-code-label]')?.textContent).toContain(base.aiSettings.failure['editorial-timeout'])
-    expect(host.querySelector('[data-failure-reason]')).toBeNull()
+  it('uses the closed table for a real code, and the fallback sentence for one it does not carry', async () => {
+    // 表里的码：照表拼。
+    const known = await render(base, { kind: 'editorial', code: 'editorial-timeout', generationTrace: trace })
+    expect(known.querySelector('[data-failure-reason]')?.textContent)
+      .toBe('写作没跑完：等到超时也没返回，这次没写完（用了 1 分 23 秒）')
+
+    // 表外码：走兜底句，绝不把码印给读者。
+    const unknown = await render(base, { kind: 'generation', code: 'brand-new-reason' })
+    expect(unknown.querySelector('[data-failure-reason]')?.textContent).toBe('这次在生成就停下了：这一期没能生成出来')
+    expect(unknown.textContent).not.toContain('brand-new-reason')
   })
 })
