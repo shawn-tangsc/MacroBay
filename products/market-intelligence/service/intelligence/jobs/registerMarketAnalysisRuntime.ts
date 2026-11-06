@@ -31,7 +31,8 @@ import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '.
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
-import { buildAnalysisFailureNoticeRequest } from '../analysis/analysisFailureNotices'
+import { buildAnalysisFailureNoticeRequest, decideAttemptAbandoned } from '../analysis/analysisFailureNotices'
+import { analysisRunLineOf } from '../analysis/analysisTriggerSourcePolicy'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
@@ -486,6 +487,19 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
             ? analysisReleaseCoalescingPolicy.reasonCode
             : analysisReleaseCoalescingPolicy.abandonedReasonCode
         })
+        if (coverage.decision === 'abandoned') {
+          // 这篇不会再有了。能指的运行行是这次发布前几次尝试留下的那一行；**拿不到就不发**，
+          // 也不伪造一个 id——伪造出来的链接点开只能是「没找到」，那比不发更糟。
+          const abandoned = decideAttemptAbandoned({
+            line: analysisRunLineOf(decision.triggerKey),
+            runId: repository.listRuns().filter(run => run.eventGroupId === result.group!.id).at(-1)?.id ?? '',
+            abandon: 'release'
+          })
+          const request = buildAnalysisFailureNoticeRequest(abandoned, now())
+          if (request && input.submitNotification) {
+            try { await input.submitNotification(request) } catch { /* 通知是记录的附加物 */ }
+          }
+        }
         return
       }
     }
