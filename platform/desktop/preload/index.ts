@@ -59,6 +59,15 @@ function releaseProductEventBridgeIfIdle(): void {
   productEventBridgeListener = null
 }
 
+/**
+ * 通道 IPC 面上，通道 id 只有一个名字：`channelId`。
+ * 曾经调用方传 `channelId`、handler 读 `value.id`，于是每次调用都抛 `channel-input-invalid`，
+ * 又被调用方 catch 掉，表现成「那个入口永远不出现」——判别键写进类型，传错在编译期就红。
+ */
+type ChannelIdPayload = { channelId: string }
+type ChannelActionPayload = ChannelIdPayload & { actorId?: string }
+type ChannelPagePayload = ChannelIdPayload & { limit?: number; offset?: number }
+
 const api = {
   app: {
     getInfo: () => ipcRenderer.invoke(IpcChannels.appInfo),
@@ -114,34 +123,35 @@ const api = {
     /** 通知设置页的只读投影：可投递三档 + 绑定目标（0/1/多），不写任何通道配置。 */
     listDeliveryTargets: () => ipcRenderer.invoke(IpcChannels.channelsListDeliveryTargets) as Promise<{ channels: readonly ChannelDeliveryTargetView[] }>,
     get: (id: string) => ipcRenderer.invoke(IpcChannels.channelsGet, id) as Promise<ChannelManagementSafeView | null>,
+    // `create` / `update` 的载荷就是通道 DTO 本身（`id` 是 DTO 字段），其余一律 `channelId`。
     create: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCreate, input) as Promise<ChannelManagementResult>,
     update: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsUpdate, input) as Promise<ChannelManagementResult>,
-    disable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDisable, input) as Promise<ChannelManagementResult>,
-    requestEnable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRequestEnable, input) as Promise<ChannelManagementResult>,
-    restart: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRestart, input) as Promise<ChannelManagementResult>,
-    remove: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDelete, input) as Promise<ChannelManagementResult>,
-    beginCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialBegin, input) as Promise<SecureHandoffBegin>,
-    submitCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialSubmit, input) as Promise<ChannelManagementResult>,
-    rotateCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialRotate, input) as Promise<ChannelManagementResult>,
-    beginPolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsPolicyBegin, input) as Promise<SecureHandoffBegin>,
-    createPolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsPolicyCreate, input),
-    listAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListAudits, input) as Promise<readonly ChannelManagementAuditView[]>,
-    runtimeStatus: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRuntimeStatus, input) as Promise<ChannelRuntimeSafeView>,
-    listDeliveryAttempts: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAttempts, input) as Promise<readonly ChannelDeliveryAttemptSafeView[]>,
-    listDeliveryAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAudits, input) as Promise<readonly ChannelDeliveryAuditSafeView[]>,
-    /** 运行审计一页（只读）：`{ id, limit?, cursor? }`；游标形状 `{ createdAt, id }`。 */
-    listRuntimeAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input) as Promise<ChannelRuntimeAuditPage>,
-    /** 真发一条测试消息：`{ id, text }` → `{ state: 'accepted' | 'unconfirmed' | 'failed', … }`。 */
-    sendTestMessage: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input) as Promise<ChannelTestMessageReceipt>,
-    listPolicies: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input) as Promise<readonly ChannelPolicySafeView[]>,
-    deletePolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
-    listConversations: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input) as Promise<readonly ChannelConversationSafeView[]>,
+    disable: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsDisable, input) as Promise<ChannelManagementResult>,
+    requestEnable: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsRequestEnable, input) as Promise<ChannelManagementResult>,
+    restart: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsRestart, input) as Promise<ChannelManagementResult>,
+    remove: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsDelete, input) as Promise<ChannelManagementResult>,
+    beginCredential: (input: ChannelIdPayload) => ipcRenderer.invoke(IpcChannels.channelsCredentialBegin, input) as Promise<SecureHandoffBegin>,
+    submitCredential: (input: ChannelActionPayload & { handoff: unknown }) => ipcRenderer.invoke(IpcChannels.channelsCredentialSubmit, input) as Promise<ChannelManagementResult>,
+    rotateCredential: (input: ChannelActionPayload & { handoff: unknown }) => ipcRenderer.invoke(IpcChannels.channelsCredentialRotate, input) as Promise<ChannelManagementResult>,
+    beginPolicy: (input: ChannelIdPayload) => ipcRenderer.invoke(IpcChannels.channelsPolicyBegin, input) as Promise<SecureHandoffBegin>,
+    createPolicy: (input: ChannelActionPayload & { handoff: unknown }) => ipcRenderer.invoke(IpcChannels.channelsPolicyCreate, input),
+    listAudits: (input: ChannelPagePayload) => ipcRenderer.invoke(IpcChannels.channelsListAudits, input) as Promise<readonly ChannelManagementAuditView[]>,
+    runtimeStatus: (input: ChannelIdPayload) => ipcRenderer.invoke(IpcChannels.channelsRuntimeStatus, input) as Promise<ChannelRuntimeSafeView>,
+    listDeliveryAttempts: (input: ChannelPagePayload) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAttempts, input) as Promise<readonly ChannelDeliveryAttemptSafeView[]>,
+    listDeliveryAudits: (input: ChannelPagePayload) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAudits, input) as Promise<readonly ChannelDeliveryAuditSafeView[]>,
+    /** 运行审计一页（只读）：`{ channelId, limit?, cursor? }`；游标形状 `{ createdAt, id }`。 */
+    listRuntimeAudits: (input: ChannelIdPayload & { limit?: number; cursor?: unknown }) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input) as Promise<ChannelRuntimeAuditPage>,
+    /** 真发一条测试消息：`{ channelId, text }` → `{ state: 'accepted' | 'unconfirmed' | 'failed', … }`。 */
+    sendTestMessage: (input: ChannelIdPayload & { text: string }) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input) as Promise<ChannelTestMessageReceipt>,
+    listPolicies: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input) as Promise<readonly ChannelPolicySafeView[]>,
+    deletePolicy: (input: ChannelActionPayload & { policyId: string }) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
+    listConversations: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input) as Promise<readonly ChannelConversationSafeView[]>,
     // 只有频道 id + 对话 id；主进程用完会话 id 就丢，回的是成败与原因。
-    openConversation: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input) as Promise<{ ok: true } | { ok: false; code: string }>,
-    setTarget: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input),
-    listCandidates: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListCandidates, input) as Promise<readonly ChannelCandidateSafeView[]>,
-    allowCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsAllowCandidate, input),
-    ignoreCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsIgnoreCandidate, input)
+    openConversation: (input: ChannelIdPayload & { conversationId: string }) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input) as Promise<{ ok: true } | { ok: false; code: string }>,
+    setTarget: (input: ChannelActionPayload & { conversationId: string; enabled: boolean }) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input),
+    listCandidates: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListCandidates, input) as Promise<readonly ChannelCandidateSafeView[]>,
+    allowCandidate: (input: ChannelActionPayload & { candidateId: string; enableTarget: boolean }) => ipcRenderer.invoke(IpcChannels.channelsAllowCandidate, input),
+    ignoreCandidate: (input: ChannelIdPayload & { candidateId: string }) => ipcRenderer.invoke(IpcChannels.channelsIgnoreCandidate, input)
   },
   modelProviders: {
     list: () => ipcRenderer.invoke(IpcChannels.modelProvidersList),

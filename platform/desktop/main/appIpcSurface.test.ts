@@ -113,13 +113,14 @@ describe('desktop main IPC surface', () => {
     // 「发一条测试消息」必须真的走一次投递：只留 preload 方法或只留 handler，就是假按钮。
     expect(channelIpcSource).toContain('IpcChannels.channelsSendTestMessage')
     expect(channelIpcSource).toContain('channelManagementService.sendTestMessage(')
-    expect(preloadSource).toContain('sendTestMessage: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input)')
+    // 载荷是**有类型的**（`ChannelIdPayload & { text }`）：判别键写进类型，传错字段编译期就红。
+    expect(preloadSource).toContain('sendTestMessage: (input: ChannelIdPayload & { text: string }) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input)')
   })
   it('keeps the read-only runtime-audit page wired on both halves of the seam', () => {
     // 设置页日志面板的「运行异常」全靠这一条；两半缺一条，面板只会诚实地说「没读出来」。
     expect(channelIpcSource).toContain('IpcChannels.channelsListRuntimeAudits')
     expect(channelIpcSource).toContain('channelManagementService.listRuntimeAudits(')
-    expect(preloadSource).toContain('listRuntimeAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input)')
+    expect(preloadSource).toContain('listRuntimeAudits: (input: ChannelIdPayload & { limit?: number; cursor?: unknown }) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input)')
     // 只读：这条面不许出现写通道配置的调用。
     expect(preloadSource).not.toContain('channelsListRuntimeAudits, write')
   })
@@ -129,7 +130,7 @@ describe('desktop main IPC surface', () => {
     // 两半缺一条：只有 handler 渲染层调不到，只有 preload 调用会 reject。
     expect(channelIpcSource).toContain('IpcChannels.channelsOpenConversation')
     expect(channelIpcSource).toContain('channelInboundService.openConversation(')
-    expect(preloadSource).toContain('openConversation: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input)')
+    expect(preloadSource).toContain('openConversation: (input: ChannelIdPayload & { conversationId: string }) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input)')
     // 会话 id 不许从这里回给渲染层：会话 DTO 上那条「session IDs never leave this repository」还钉着。
     expect(channelIpcSource).not.toMatch(/channelsOpenConversation[\s\S]{0,400}sessionId/)
   })

@@ -139,7 +139,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     if (!next) {
       void runChannelAction(
         channel,
-        () => window.platform.channels.disable({ id: channel.id, actorId: 'settings-user' }),
+        () => window.platform.channels.disable({ channelId: channel.id, actorId: 'settings-user' }),
         actionDeps
       )
       return
@@ -153,7 +153,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     setEditor({ mode: 'edit', channel })
     setPolicyPresence('unknown')
     try {
-      const policies = await window.platform.channels.listPolicies({ id: channel.id, limit: 1 })
+      const policies = await window.platform.channels.listPolicies({ channelId: channel.id, limit: 1 })
       setPolicyPresence(policies.length > 0 ? 'present' : 'none')
     } catch {
       setPolicyPresence('unknown')
@@ -257,7 +257,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       // 空串＝不修改旧 Token；非空＝整串替换（旧值全程不可读，走同一套加密交接）。
       let tokenWrite: ChannelManagementResult | undefined
       if (tokenProvided) {
-        const begin = await window.platform.channels.beginCredential({ id: editor.channel.id })
+        const begin = await window.platform.channels.beginCredential({ channelId: editor.channel.id })
         const handoff = await encryptChannelHandoff(
           begin as Parameters<typeof encryptChannelHandoff>[0],
           editor.channel.id,
@@ -265,7 +265,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           { bot_token: input.token }
         )
         tokenWrite = await window.platform.channels.rotateCredential({
-          id: editor.channel.id,
+          channelId: editor.channel.id,
           actorId: 'settings-user',
           handoff
         })
@@ -307,7 +307,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     if (deleting === null) return
     const target = deleting
     setDeleting(null)
-    await runChannelAction(target, () => window.platform.channels.remove({ id: target.id, actorId: 'settings-user' }), actionDeps)
+    await runChannelAction(target, () => window.platform.channels.remove({ channelId: target.id, actorId: 'settings-user' }), actionDeps)
   }
 
   return (

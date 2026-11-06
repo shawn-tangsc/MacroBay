@@ -164,7 +164,7 @@ describe('a channel row', () => {
     const toggle = container.querySelector('[role="switch"]') as HTMLButtonElement | null
     expect(toggle).not.toBeNull()
     await act(async () => toggle?.click())
-    expect(on.disable).toHaveBeenCalledWith({ id: 'channel-1', actorId: 'settings-user' })
+    expect(on.disable).toHaveBeenCalledWith({ channelId: 'channel-1', actorId: 'settings-user' })
 
     // 另一棵树：这条频道现在不在跑，拨上去就该是 requestEnable——两个方向各走各的 IPC，不是同一个。
     await act(async () => root?.unmount())
@@ -173,7 +173,7 @@ describe('a channel row', () => {
     const second = await mount()
     const offToggle = second.querySelector('[role="switch"]') as HTMLButtonElement
     await act(async () => offToggle.click())
-    expect(off.requestEnable).toHaveBeenCalledWith({ id: 'channel-1', actorId: 'settings-user' })
+    expect(off.requestEnable).toHaveBeenCalledWith({ channelId: 'channel-1', actorId: 'settings-user' })
   })
 
   it('says a stored-but-unreadable credential is not the same as having none', async () => {
@@ -283,7 +283,7 @@ describe('replacing the token without revealing it', () => {
 
     // 真实加密要 WebCrypto（happy-dom 没有 subtle），所以这里证明「替换路径被走到」：
     // 一旦输入新值，页面就会去取交接材料；空值时不会（见下一条）。
-    expect(channels.beginCredential).toHaveBeenCalledWith({ id: 'channel-1' })
+    expect(channels.beginCredential).toHaveBeenCalledWith({ channelId: 'channel-1' })
     expect(channels.update).toHaveBeenCalled()
   })
 
@@ -475,7 +475,7 @@ describe('enabling a channel runs a live check', () => {
     await act(async () => toggle.click())
     await act(async () => {})
 
-    expect(channels.requestEnable).toHaveBeenCalledWith({ id: 'channel-1', actorId: 'settings-user' })
+    expect(channels.requestEnable).toHaveBeenCalledWith({ channelId: 'channel-1', actorId: 'settings-user' })
     const failure = container.querySelector('[data-enable-failure]')
     expect(failure?.textContent).toContain('另一个程序也在用这个机器人')
     // 不出现内部码，也不让开关假装打开。
@@ -841,7 +841,7 @@ describe('creating a channel reads the real result', () => {
     const container = await mount()
     await fillCreateDialog(container)
 
-    expect(channels.submitCredential).toHaveBeenCalledWith(expect.objectContaining({ id: 'channel-9' }))
+    expect(channels.submitCredential).toHaveBeenCalledWith(expect.objectContaining({ channelId: 'channel-9' }))
     // 建成了就不该出现「操作失败」。
     expect(container.textContent).not.toContain(labels.channelOperationFailed)
     expect(container.textContent).not.toContain(labels.channelOperationFailedUnknown)
@@ -1064,7 +1064,7 @@ describe('sending a test message from the row', () => {
     await act(async () => {})
 
     expect(channels.sendTestMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'channel-1', text: labels.channelTestMessageBody })
+      expect.objectContaining({ channelId: 'channel-1', text: labels.channelTestMessageBody })
     )
     // 整句完全相等：换了措辞必须回来改用例，不能放宽成「包含‘发给’」。
     expect(container.querySelector('[data-test-receipt]')?.textContent).toBe(

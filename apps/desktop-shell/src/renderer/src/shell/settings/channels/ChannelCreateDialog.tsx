@@ -106,12 +106,12 @@ export async function submitNewChannelCredential(
   channelId: string,
   token: string
 ): Promise<ChannelManagementResult> {
-  const begin = await window.platform.channels.beginCredential({ id: channelId })
+  const begin = await window.platform.channels.beginCredential({ channelId })
   const handoff = await encryptChannelHandoff(
     begin as Parameters<typeof encryptChannelHandoff>[0],
     channelId,
     'credential',
     { bot_token: token }
   )
-  return window.platform.channels.submitCredential({ id: channelId, actorId: 'settings-user', handoff })
+  return window.platform.channels.submitCredential({ channelId, actorId: 'settings-user', handoff })
 }

@@ -141,24 +141,24 @@ describe('channel ipc surface', () => {
       'platform:channels-get': 'channel-1',
       'platform:channels-create': { name: 'c' },
       'platform:channels-update': { id: 'channel-1' },
-      'platform:channels-disable': { id: 'channel-1' },
-      'platform:channels-request-enable': { id: 'channel-1' },
-      'platform:channels-restart': { id: 'channel-1' },
-      'platform:channels-delete': { id: 'channel-1' },
-      'platform:channels-credential-begin': { id: 'channel-1' },
-      'platform:channels-credential-submit': { id: 'channel-1', actorId: 'actor', handoff: HANDOFF },
-      'platform:channels-credential-rotate': { id: 'channel-1', actorId: 'actor', handoff: HANDOFF },
-      'platform:channels-policy-begin': { id: 'channel-1' },
-      'platform:channels-policy-create': { id: 'channel-1', actorId: 'actor', handoff: HANDOFF },
-      'platform:channels-list-audits': { id: 'channel-1', limit: 5, offset: 0 },
-      'platform:channels-runtime-status': { id: 'channel-1' },
-      'platform:channels-list-delivery-attempts': { id: 'channel-1' },
-      'platform:channels-list-delivery-audits': { id: 'channel-1' },
-      'platform:channels-list-runtime-audits': { id: 'channel-1', limit: 20, cursor: null },
-      'platform:channels-send-test-message': { id: 'channel-1', text: '测试消息' },
-      'platform:channels-list-policies': { id: 'channel-1', limit: 5 },
+      'platform:channels-disable': { channelId: 'channel-1' },
+      'platform:channels-request-enable': { channelId: 'channel-1' },
+      'platform:channels-restart': { channelId: 'channel-1' },
+      'platform:channels-delete': { channelId: 'channel-1' },
+      'platform:channels-credential-begin': { channelId: 'channel-1' },
+      'platform:channels-credential-submit': { channelId: 'channel-1', actorId: 'actor', handoff: HANDOFF },
+      'platform:channels-credential-rotate': { channelId: 'channel-1', actorId: 'actor', handoff: HANDOFF },
+      'platform:channels-policy-begin': { channelId: 'channel-1' },
+      'platform:channels-policy-create': { channelId: 'channel-1', actorId: 'actor', handoff: HANDOFF },
+      'platform:channels-list-audits': { channelId: 'channel-1', limit: 5, offset: 0 },
+      'platform:channels-runtime-status': { channelId: 'channel-1' },
+      'platform:channels-list-delivery-attempts': { channelId: 'channel-1' },
+      'platform:channels-list-delivery-audits': { channelId: 'channel-1' },
+      'platform:channels-list-runtime-audits': { channelId: 'channel-1', limit: 20, cursor: null },
+      'platform:channels-send-test-message': { channelId: 'channel-1', text: '测试消息' },
+      'platform:channels-list-policies': { channelId: 'channel-1', limit: 5 },
       'platform:channels-delete-policy': { channelId: 'channel-1', policyId: 'policy-1', actorId: 'actor' },
-      'platform:channels-list-conversations': { id: 'channel-1', limit: 5 },
+      'platform:channels-list-conversations': { channelId: 'channel-1', limit: 5 },
       'platform:channels-set-target': { channelId: 'channel-1', conversationId: 'conv-1', enabled: true, actorId: 'actor' }
     }
 
@@ -169,17 +169,30 @@ describe('channel ipc surface', () => {
     expect(management.calls.map((call) => call.method)).toEqual([...MANAGEMENT_METHODS])
   })
 
+  it('reads exactly one name for the channel id, and rejects the old one instead of passing undefined', async () => {
+    // 2026-11-06 那串 `channel-input-invalid`：调用方传 `channelId`、handler 读 `value.id`，
+    // `value.id` 恒为 undefined 并且被调用方 catch 掉，入口永远不出现。这里把名字钉死：
+    // 旧名字必须当场红，不许再静默变成 undefined。
+    const { listeners } = setup()
+    expect(() => listeners.get('platform:channels-list-conversations')!(event, { id: 'channel-1', limit: 5 }))
+      .toThrow('channel-input-invalid')
+    // 正确的名字照常走通（handler 是同步的，返回哨兵字符串）。
+    expect(listeners.get('platform:channels-list-conversations')!(event, { channelId: 'channel-1', limit: 5 }))
+      .toBe('management:listConversations')
+  })
+
   it('calls one inbound method per inbound channel, with the documented argument shaping', async () => {
     const { listeners, inbound } = setup()
 
-    await listeners.get('platform:channels-list-candidates')!(event, { id: 'channel-1', limit: 7 })
+    await listeners.get('platform:channels-list-candidates')!(event, { channelId: 'channel-1', limit: 7 })
     await listeners.get('platform:channels-allow-candidate')!(event, {
       channelId: 'channel-1',
       candidateId: 'cand-1',
       enableTarget: true
     })
-    // 历史调用点只给 `id`：入站侧的回退规则必须保留。
-    await listeners.get('platform:channels-ignore-candidate')!(event, { id: 'channel-1', candidateId: 'cand-2' })
+    // 通道 id 只有一个名字 `channelId`：以前这里读取 `id ?? channelId` 的回退，正是它让「两个名字」
+    // 长期并存（2026-11-06 那串 `channel-input-invalid` 的同类土壤），已经删掉。
+    await listeners.get('platform:channels-ignore-candidate')!(event, { channelId: 'channel-1', candidateId: 'cand-2' })
     // 「打开这条频道的会话」：只转发频道 id + 对话 id，会话 id 由服务自己查、自己用。
     await listeners.get('platform:channels-open-conversation')!(event, { channelId: 'channel-1', conversationId: 'conv-1' })
 
@@ -197,13 +210,13 @@ describe('channel ipc surface', () => {
     await listeners.get('platform:channels-create')!(event, { name: 'fresh' })
     expect(management.calls.at(-1)).toEqual({ method: 'create', args: [{ name: 'fresh' }] })
 
-    await listeners.get('platform:channels-credential-begin')!(event, { id: 'channel-1' })
+    await listeners.get('platform:channels-credential-begin')!(event, { channelId: 'channel-1' })
     expect(management.calls.at(-1)).toEqual({ method: 'beginCredential', args: [{ id: 'channel-1', senderId: 42 }] })
 
-    await listeners.get('platform:channels-policy-begin')!(event, { id: 'channel-1' })
+    await listeners.get('platform:channels-policy-begin')!(event, { channelId: 'channel-1' })
     expect(management.calls.at(-1)).toEqual({ method: 'beginPolicy', args: [{ id: 'channel-1', senderId: 42 }] })
 
-    await listeners.get('platform:channels-runtime-status')!(event, { id: 'channel-1', extra: 'ignored' })
+    await listeners.get('platform:channels-runtime-status')!(event, { channelId: 'channel-1', extra: 'ignored' })
     expect(management.calls.at(-1)).toEqual({ method: 'runtimeStatus', args: [{ id: 'channel-1' }] })
 
     // 不是普通对象的一律拒收（cast 之前的那道形状检查）。

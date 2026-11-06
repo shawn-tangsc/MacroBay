@@ -32,30 +32,32 @@ export function registerChannelIpc(
   ipcMain.handle(IpcChannels.channelsList, () => channelManagementService.listWithCredentialPreviews())
   // 只读投影：通知设置页的「发送到通道」一行读它，不缓存第二份通道状态。
   ipcMain.handle(IpcChannels.channelsListDeliveryTargets, () => channelManagementService.listDeliveryTargets())
+  // 位置参数（整条载荷就是通道 id），不存在字段名对不上的问题。
   ipcMain.handle(IpcChannels.channelsGet, (_event: IpcMainInvokeEvent, id: unknown) => channelManagementService.getWithCredentialPreviews(id))
+  // `create` / `update` 的载荷**就是通道 DTO 本身**（`id` 是 DTO 字段），不做改名，见 `channelIdOf` 的说明。
   ipcMain.handle(IpcChannels.channelsCreate, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.create(asChannelInput(input)))
   ipcMain.handle(IpcChannels.channelsUpdate, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.update(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsDisable, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.disable(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsRequestEnable, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.requestEnable(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsRestart, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.restart(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsDelete, async (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.delete(asChannelInput(input)))
+  ipcMain.handle(IpcChannels.channelsDisable, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.disable(asChannelAction(input)))
+  ipcMain.handle(IpcChannels.channelsRequestEnable, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.requestEnable(asChannelAction(input)))
+  ipcMain.handle(IpcChannels.channelsRestart, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.restart(asChannelAction(input)))
+  ipcMain.handle(IpcChannels.channelsDelete, async (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.delete(asChannelAction(input)))
   ipcMain.handle(IpcChannels.channelsCredentialBegin, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.beginCredential({ id: value.id, senderId: _event.sender.id })
+    return channelManagementService.beginCredential({ id: channelIdOf(value), senderId: _event.sender.id })
   })
   ipcMain.handle(IpcChannels.channelsCredentialSubmit, async (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.provision({ id: value.id, actorId: value.actorId, senderId: _event.sender.id, handoff: asChannelHandoff(value.handoff) })
+    return channelManagementService.provision({ id: channelIdOf(value), actorId: value.actorId, senderId: _event.sender.id, handoff: asChannelHandoff(value.handoff) })
   })
   ipcMain.handle(IpcChannels.channelsCredentialRotate, async (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.rotate({ id: value.id, actorId: value.actorId, senderId: _event.sender.id, handoff: asChannelHandoff(value.handoff) })
+    return channelManagementService.rotate({ id: channelIdOf(value), actorId: value.actorId, senderId: _event.sender.id, handoff: asChannelHandoff(value.handoff) })
   })
-  ipcMain.handle(IpcChannels.channelsPolicyBegin, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.beginPolicy({ id: asChannelInput(input).id, senderId: _event.sender.id }))
+  ipcMain.handle(IpcChannels.channelsPolicyBegin, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.beginPolicy({ id: channelIdOf(asChannelInput(input)), senderId: _event.sender.id }))
   ipcMain.handle(IpcChannels.channelsPolicyCreate, async (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
     return channelManagementService.createPolicy({
-      id: value.id,
+      id: channelIdOf(value),
       actorId: value.actorId,
       senderId: _event.sender.id,
       handoff: asChannelHandoff(value.handoff)
@@ -63,42 +65,42 @@ export function registerChannelIpc(
   })
   ipcMain.handle(IpcChannels.channelsListAudits, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.listAudits({ id: value.id, limit: value.limit, offset: value.offset })
+    return channelManagementService.listAudits({ id: channelIdOf(value), limit: value.limit, offset: value.offset })
   })
-  ipcMain.handle(IpcChannels.channelsRuntimeStatus, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.runtimeStatus({ id: asChannelInput(input).id }))
+  ipcMain.handle(IpcChannels.channelsRuntimeStatus, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.runtimeStatus({ id: channelIdOf(asChannelInput(input)) }))
   ipcMain.handle(IpcChannels.channelsListDeliveryAttempts, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.listDeliveryAttempts({ id: value.id, limit: value.limit, offset: value.offset })
+    return channelManagementService.listDeliveryAttempts({ id: channelIdOf(value), limit: value.limit, offset: value.offset })
   })
   ipcMain.handle(IpcChannels.channelsListDeliveryAudits, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.listDeliveryAudits({ id: value.id, limit: value.limit, offset: value.offset })
+    return channelManagementService.listDeliveryAudits({ id: channelIdOf(value), limit: value.limit, offset: value.offset })
   })
   // 只读：设置页日志面板的「运行异常」那一类。分页用 keyset 游标，服务端把 limit 夹到 200。
   ipcMain.handle(IpcChannels.channelsListRuntimeAudits, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.listRuntimeAudits({ id: value.id, limit: value.limit, cursor: value.cursor })
+    return channelManagementService.listRuntimeAudits({ id: channelIdOf(value), limit: value.limit, cursor: value.cursor })
   })
   ipcMain.handle(IpcChannels.channelsSendTestMessage, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.sendTestMessage({ id: value.id, text: value.text })
+    return channelManagementService.sendTestMessage({ id: channelIdOf(value), text: value.text })
   })
   ipcMain.handle(IpcChannels.channelsListPolicies, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.listPolicies({ id: value.id, limit: value.limit })
+    return channelManagementService.listPolicies({ id: channelIdOf(value), limit: value.limit })
   })
   ipcMain.handle(IpcChannels.channelsDeletePolicy, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.deletePolicy({ channelId: value.channelId, policyId: value.policyId, actorId: value.actorId })
+    return channelManagementService.deletePolicy({ channelId: channelIdOf(value), policyId: value.policyId, actorId: value.actorId })
   })
   ipcMain.handle(IpcChannels.channelsListConversations, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelManagementService.listConversations({ id: value.id, limit: value.limit })
+    return channelManagementService.listConversations({ id: channelIdOf(value), limit: value.limit })
   })
   ipcMain.handle(IpcChannels.channelsSetTarget, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
     return channelManagementService.setTarget({
-      channelId: value.channelId,
+      channelId: channelIdOf(value),
       conversationId: value.conversationId,
       enabled: assertBoolean(value.enabled),
       actorId: value.actorId
@@ -107,29 +109,53 @@ export function registerChannelIpc(
 
   ipcMain.handle(IpcChannels.channelsListCandidates, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelInboundService.listCandidates(String(value.id), typeof value.limit === 'number' ? value.limit : 100)
+    return channelInboundService.listCandidates(channelIdOf(value), typeof value.limit === 'number' ? value.limit : 100)
   })
   ipcMain.handle(IpcChannels.channelsAllowCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
     return channelInboundService.allowCandidate({
-      channelId: String(value.channelId ?? value.id),
+      channelId: channelIdOf(value),
       candidateId: String(value.candidateId),
       enableTarget: assertBoolean(value.enableTarget)
     })
   })
   ipcMain.handle(IpcChannels.channelsIgnoreCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
-    return channelInboundService.ignoreCandidate(String(value.channelId ?? value.id), String(value.candidateId))
+    return channelInboundService.ignoreCandidate(channelIdOf(value), String(value.candidateId))
   })
   ipcMain.handle(IpcChannels.channelsOpenConversation, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
     // 会话 id 不经过这里返回：主进程查出来、用掉，只回成败与原因。
     return channelInboundService.openConversation({
-      channelId: String(value.channelId ?? value.id),
+      channelId: channelIdOf(value),
       conversationId: String(value.conversationId)
     })
   })
+}
 
+/**
+ * 通道 id 在这条 IPC 面上的**唯一名字**：`channelId`。
+ *
+ * 为什么会写成这样：曾经调用方传 `channelId`、handler 读 `value.id`，于是 `value.id` 永远是
+ * `undefined`，`assertIdentifier` 每次都抛 `channel-input-invalid`；而调用方把它 catch 掉了，
+ * 表现成「频道页那个入口永远不出现，谁也不知道为什么」（2026-11-06 用户日志）。两个名字并存
+ * 就等于没有名字——这里只认一个，传错就当场红，不再静默变成 undefined。
+ *
+ * **唯二的例外是 `create` / `update`**：它们的载荷就是通道 DTO 本身（`id` 是 DTO 字段），
+ * 改名会让服务契约与 DTO 出现第二套叫法。
+ */
+function channelIdOf(value: Record<string, unknown>): string {
+  const channelId = value.channelId
+  if (typeof channelId !== 'string' || channelId.trim() === '') {
+    throw new Error('channel-input-invalid')
+  }
+  return channelId
+}
+
+/** 只有「频道 id + 动作人」的写入：服务要的是 `{ id, actorId }`，在边界上换一次名字。 */
+function asChannelAction(input: unknown): { id: string; actorId: unknown } {
+  const value = asChannelInput(input)
+  return { id: channelIdOf(value), actorId: value.actorId }
 }
 
 // Channel management re-validates every field at its own contract boundary, so the

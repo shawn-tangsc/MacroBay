@@ -37,9 +37,9 @@ export function ChannelLogsPanel(props: {
    * 不再写「数组或 { rows }」的兼容层——上游漂移就该在类型上红，不该在界面里被兼容掉。
    */
   client: {
-    listAudits?: (input: { id: string; limit: number; offset: number }) => Promise<{ rows: readonly ChannelLogOperationInput[] }>
-    listRuntimeAudits?: (input: { id: string; limit: number }) => Promise<{ rows: readonly ChannelLogCodeInput[] }>
-    listDeliveryAudits?: (input: { id: string; limit: number; offset: number }) => Promise<{ rows: readonly ChannelLogCodeInput[] }>
+    listAudits?: (input: { channelId: string; limit: number; offset: number }) => Promise<{ rows: readonly ChannelLogOperationInput[] }>
+    listRuntimeAudits?: (input: { channelId: string; limit: number }) => Promise<{ rows: readonly ChannelLogCodeInput[] }>
+    listDeliveryAudits?: (input: { channelId: string; limit: number; offset: number }) => Promise<{ rows: readonly ChannelLogCodeInput[] }>
   }
   onClose: () => void
 }): React.ReactElement {
@@ -54,9 +54,9 @@ export function ChannelLogsPanel(props: {
     setState({ status: 'loading' })
     try {
       const [operations, runtime, deliveries] = await Promise.all([
-        props.client.listAudits?.({ id: props.channelId, limit: 50, offset: 0 }) ?? { rows: [] },
-        props.client.listRuntimeAudits?.({ id: props.channelId, limit: 50 }) ?? { rows: [] },
-        props.client.listDeliveryAudits?.({ id: props.channelId, limit: 50, offset: 0 }) ?? { rows: [] }
+        props.client.listAudits?.({ channelId: props.channelId, limit: 50, offset: 0 }) ?? { rows: [] },
+        props.client.listRuntimeAudits?.({ channelId: props.channelId, limit: 50 }) ?? { rows: [] },
+        props.client.listDeliveryAudits?.({ channelId: props.channelId, limit: 50, offset: 0 }) ?? { rows: [] }
       ])
       const sources: ChannelLogSources = {
         operations: operations.rows,

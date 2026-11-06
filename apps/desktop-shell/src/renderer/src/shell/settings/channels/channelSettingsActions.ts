@@ -113,7 +113,7 @@ export async function sendChannelTestMessage(channel: Channel, deps: SendTestDep
   })
   try {
     const receipt = await window.platform.channels.sendTestMessage({
-      id: channel.id,
+      channelId: channel.id,
       text: deps.labels.channelTestMessageBody
     })
     deps.setTestReceipts((current) => ({
@@ -151,7 +151,7 @@ export async function enableChannelWithSelfCheck(channel: Channel, deps: EnableD
     return next
   })
   try {
-    const result = await window.platform.channels.requestEnable({ id: channel.id, actorId: 'settings-user' })
+    const result = await window.platform.channels.requestEnable({ channelId: channel.id, actorId: 'settings-user' })
     const sentence = enableFailureSentence(result, deps.labels)
     if (sentence !== null) deps.setEnableFailures((current) => ({ ...current, [channel.id]: sentence }))
     await deps.reload()
