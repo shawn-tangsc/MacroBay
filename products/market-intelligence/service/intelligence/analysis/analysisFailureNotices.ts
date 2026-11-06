@@ -2,6 +2,7 @@ import type { NotificationSubmitRequest } from '@platform/notifications/contract
 import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
+import { analysisRunLineOf } from './analysisTriggerSourcePolicy'
 
 /**
  * 三档自动分析的提醒：连续失败、被放弃、恢复。
@@ -214,4 +215,29 @@ export function buildAnalysisFailureNoticeRequest(
     ...(deeplink ? { deeplink } : {}),
     occurredAt
   } as NotificationSubmitRequest
+}
+
+/**
+ * The decision's input, read off stored run rows.
+ *
+ * The decision itself must not know where the history came from: keeping the mapping here makes the
+ * wiring a single call, and keeps `line` derived from `trigger_key` in one place instead of being
+ * stored a second time. Newest first, because the decision walks the history in that direction.
+ */
+export function analysisRunOutcomesOf(runs: readonly Readonly<{
+  id: string
+  triggerKey: string
+  status: string
+  failureCode: string | null
+  queuedAt: string
+}>[]): readonly AnalysisRunOutcome[] {
+  return [...runs]
+    .sort((left, right) => right.queuedAt.localeCompare(left.queuedAt) || right.id.localeCompare(left.id))
+    .map(run => ({
+      id: run.id,
+      line: analysisRunLineOf(run.triggerKey),
+      status: run.status as AnalysisRunOutcomeStatus,
+      failureCode: run.failureCode,
+      queuedAt: run.queuedAt
+    }))
 }
