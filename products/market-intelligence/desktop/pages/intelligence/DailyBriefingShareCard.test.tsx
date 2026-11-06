@@ -694,3 +694,35 @@ describe('news titles follow the edition language', () => {
     expect(titles[1]).toContain(SECOND)
   })
 })
+
+describe('the sheet lists newest first (user 2026-11-06)', () => {
+  it('draws news by publishedAt, latest on top, whatever order the document holds', async () => {
+    const doc = briefing()
+    const base = doc.news.items[0]!
+    const items = [
+      { ...base, itemId: 'older', title: 'Older', publishedAt: '2026-10-29T18:57:00.000Z' },
+      { ...base, itemId: 'newest', title: 'Newest', publishedAt: '2026-10-30T02:48:00.000Z' },
+      { ...base, itemId: 'middle', title: 'Middle', publishedAt: '2026-10-29T20:27:00.000Z' }
+    ]
+    const host = await render({ ...doc, news: { ...doc.news, items, notes: {} } })
+    const titles = [...host.querySelectorAll('.mi-brief-poster__news')].map((node) => node.textContent ?? '')
+    expect(titles[0]).toContain('Newest')
+    expect(titles[1]).toContain('Middle')
+    expect(titles[2]).toContain('Older')
+  })
+
+  it('draws macro events by scheduledAt, latest on top', async () => {
+    const doc = briefing()
+    const base = doc.news.macro[0]!
+    const macro = [
+      { ...base, eventKey: 'older', title: 'Older event', scheduledAt: '2026-10-29T13:30:00.000Z' },
+      { ...base, eventKey: 'newest', title: 'Newest event', scheduledAt: '2026-10-29T14:10:00.000Z' },
+      { ...base, eventKey: 'middle', title: 'Middle event', scheduledAt: '2026-10-29T13:50:00.000Z' }
+    ]
+    const host = await render({ ...doc, news: { ...doc.news, macro, notes: {} } })
+    const rows = [...host.querySelectorAll('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')].map((node) => node.textContent ?? '')
+    expect(rows[0]).toContain('Newest event')
+    expect(rows[1]).toContain('Middle event')
+    expect(rows[2]).toContain('Older event')
+  })
+})

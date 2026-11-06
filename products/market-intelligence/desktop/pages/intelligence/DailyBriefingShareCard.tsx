@@ -48,8 +48,16 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
   const support = rows.filter((row) => row.importance.tier === 'support')
   const conclusion = doc.conclusion
-  const visibleNews = doc.news.items.filter((item) => item.visibility !== 'hidden')
-  const visibleMacro = doc.news.macro.filter((item) => item.visibility !== 'hidden')
+  // 按**发生时间倒序**（用户 2026-11-06）：最新在上，同刻按 id/eventKey 稳定兜底，保证每次渲染一致。
+  // 只排渲染这一层：文档里的顺序不动（分析判定的次序另有用途）。
+  const newestFirst = <T extends Readonly<{ at: string; id: string }>>(items: readonly T[]): readonly T[] =>
+    [...items].sort((left, right) => right.at.localeCompare(left.at) || left.id.localeCompare(right.id))
+  const visibleNews = newestFirst(doc.news.items
+    .filter((item) => item.visibility !== 'hidden')
+    .map((item) => ({ item, at: item.publishedAt, id: item.itemId }))).map((entry) => entry.item)
+  const visibleMacro = newestFirst(doc.news.macro
+    .filter((item) => item.visibility !== 'hidden')
+    .map((item) => ({ item, at: item.scheduledAt, id: item.eventKey }))).map((entry) => entry.item)
   // 正文不再印"窗口里共几条、几条没拿到"（用户 2026-11-06：这类话会让人觉得简报不可信）。
   // 「几条真摆出来了 / 几条没列」只在本栏有截断时说（`02` v2.125）：条数 = 本栏展示行数，
   // 候选总数不许当成事件条数——那是把"有限"说成"全部"。
