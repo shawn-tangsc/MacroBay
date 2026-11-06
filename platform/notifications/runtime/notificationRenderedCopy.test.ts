@@ -184,6 +184,11 @@ describe('合并成品记录：标题取第一次、正文取最新', () => {
     // 标题与理由取第一次（读者靠标题认人）
     expect(stored?.rendered?.['zh-CN']?.title).toBe('标题第一次')
     expect(stored?.rendered?.['zh-CN']?.reason).toBe('理由第一次')
+    // 合并后一条记录只有一个正文来源：有 `rendered` 就不许同时挂着老形状的键。
+    expect(stored?.rendered).toBeDefined()
+    expect(stored?.bodyKey).toBeUndefined()
+    expect(stored?.titleKey).toBeUndefined()
+    expect(stored?.reasonKey).toBeUndefined()
   })
 })
 
