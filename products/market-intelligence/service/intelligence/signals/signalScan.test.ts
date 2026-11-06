@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ModuleSignal, SignalWindow } from '../../../contracts/moduleSignal'
+import { moduleSignalPolicy, type ModuleSignal, type SignalWindow } from '../../../contracts/moduleSignal'
 import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import { planSignalScan } from './signalScan'
 
@@ -44,12 +44,14 @@ describe('signal scan planning', () => {
       entry({ triggerOwner: 'calendar.refresh' })
     ])
     expect(plan.eligible).toBe(0)
-    expect(plan.skipped).toEqual({ low: 1, unreadable: 1, ownedElsewhere: 1, unknownModule: 0 })
+    expect(plan.skipped).toEqual({ low: 1, unreadable: 1, ownedElsewhere: 1 })
   })
 
-  it('drops a module it has no board for instead of guessing one', () => {
-    const plan = planSignalScan([entry({ moduleId: 'unknown-module' as never })])
-    expect(plan.eligible).toBe(0)
-    expect(plan.skipped.unknownModule).toBe(1)
+  it('gives every module in the closed set a board, so none can fall out of the scan', () => {
+    // The compile-time half is `satisfies Record<ModuleSignalModuleId, EventGroupType>`: a new module
+    // without a board stops `typecheck`. This asserts the two lists are the same list, which is what
+    // makes the lookup total rather than "probably found".
+    const boards: Record<string, string> = { ...moduleSignalPolicy.moduleBoards }
+    expect(Object.keys(boards).sort()).toEqual([...moduleSignalPolicy.modules].sort())
   })
 })

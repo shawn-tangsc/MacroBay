@@ -36,19 +36,28 @@ export function createSignalScanRunner(deps: SignalScanRunnerDependencies) {
     }
     const plan = planSignalScan(entries)
     let queued = 0
+    let refused = 0
     for (const batch of plan.batches) {
       try {
         const outcome = await deps.requestAnalysis({ signals: batch.signals, groupType: batch.groupType })
         if (outcome.state === 'queued') queued += 1
-      } catch {
-        // One batch failing must not take the others down; each batch owns its ledger row.
+      } catch (error) {
+        // One batch failing must not take the others down, but it must not vanish either: a batch
+        // that disappeared leaves `queued` short by one and nothing else, and the reader who later
+        // asks "why was this not analysed" would find no row, no reason and no hint that it was lost.
+        refused += 1
+        await deps.log({
+          level: 'warn',
+          message: 'Market analysis signal scan: batch refused',
+          metadata: { moduleId: batch.moduleId, signalCount: batch.signals.length, error: error instanceof Error ? error.message : String(error) }
+        })
       }
     }
     await deps.log({
       level: 'info',
       message: 'Market analysis signal scan',
       // Counts only: no readings, no full trigger keys. The ledger is where a row explains itself.
-      metadata: { scanned: plan.scanned, eligible: plan.eligible, queued, skipped: plan.skipped }
+      metadata: { scanned: plan.scanned, eligible: plan.eligible, queued, refused, skipped: plan.skipped }
     })
   }
 }

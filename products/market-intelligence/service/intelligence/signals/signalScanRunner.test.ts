@@ -81,7 +81,13 @@ describe('signal scan runner', () => {
 
     expect(requestAnalysis).toHaveBeenCalledTimes(2)
     expect(log).toHaveBeenLastCalledWith(expect.objectContaining({
-      metadata: expect.objectContaining({ queued: 1 })
+      metadata: expect.objectContaining({ queued: 1, refused: 1 })
+    }))
+    // The batch that vanished must leave a record: a shorter `queued` count alone is not a record.
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({
+      level: 'warn',
+      message: 'Market analysis signal scan: batch refused',
+      metadata: expect.objectContaining({ moduleId: 'open-interest', signalCount: 1 })
     }))
   })
 })

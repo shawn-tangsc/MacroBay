@@ -1,3 +1,5 @@
+import type { EventGroupType } from './marketAnalysisContracts'
+
 /**
  * The one shape a module rule speaks when it has something to say.
  *
@@ -17,9 +19,41 @@
  *   `windowMs` + `cooldownMs` the two can contradict each other, and a daily rule ends up written
  *   as `3 × 86_400_000`, which silently counts a weekend as three trading days.
  */
+
+/**
+ * The closed set of module ids, declared once and above the policy on purpose.
+ *
+ * `moduleBoards` below is checked against `ModuleSignalModuleId`, so deriving that type from
+ * `moduleSignalPolicy` would make the check reference the object it is part of — the compiler
+ * refuses that circle outright (`'moduleSignalPolicy' implicitly has type 'any'`). One list, read
+ * through the policy, and no second spelling of the module names.
+ */
+const moduleIds = Object.freeze(['open-interest', 'etf-flows', 'macro-calendar'] as const)
+export type ModuleSignalModuleId = (typeof moduleIds)[number]
+
+/** Board per module, exhaustive by type: a module without a board does not compile. */
+const moduleBoardsByModule = Object.freeze({
+  'open-interest': 'funding',
+  'etf-flows': 'capital',
+  'macro-calendar': 'macro'
+} satisfies Record<ModuleSignalModuleId, EventGroupType>)
+
 export const moduleSignalPolicy = Object.freeze({
   version: '1',
-  modules: Object.freeze(['open-interest', 'etf-flows', 'macro-calendar'] as const),
+  modules: moduleIds,
+  /**
+   * The board each module's analysis belongs to.
+   *
+   * This lives in the contract, not in the scan that reads it, because its key is exactly
+   * `moduleId`: it is an attribute of the module, like its severity or its cadence, and a caller
+   * reading it is reading a fact rather than making a decision. Kept anywhere else, adding a module
+   * means editing two lists, and the forgotten edit does not fail — it silently drops every signal
+   * of that module, which looks exactly like a quiet market.
+   *
+   * `satisfies Record<ModuleSignalModuleId, EventGroupType>` makes the map exhaustive: a new module
+   * without a board does not compile instead of disappearing at runtime.
+   */
+  moduleBoards: moduleBoardsByModule,
   /**
    * Rules that describe one asset, so `asset: null` is unreachable for them rather than unknown.
    *
@@ -60,7 +94,6 @@ export const moduleSignalPolicy = Object.freeze({
   minimumRequiredDays: 1
 })
 
-export type ModuleSignalModuleId = (typeof moduleSignalPolicy.modules)[number]
 export type SignalSeverity = (typeof moduleSignalPolicy.severities)[number]
 export type SignalReadiness = (typeof moduleSignalPolicy.readiness)[number]
 
