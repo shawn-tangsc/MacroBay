@@ -2,6 +2,7 @@ import type { NotificationCopyTableSet } from '@platform/notifications/contracts
 
 import { indicatorNames } from '../../../../contracts/indicatorNames'
 import { macroEventNotificationSentences } from '../../../../contracts/macroEventNotificationSentences'
+import { sentimentAlertTemplates } from '../../../../contracts/sentimentAlertSentences'
 import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
@@ -27,8 +28,8 @@ export type MarketIntelligenceNotificationCopy = NotificationCopyTableSet
 const TITLE = notificationEventTitleKey
 
 /** 两种语言各一个别名：表里每一行都短，读起来像一句话而不是一条寻址。 */
-const zh = { signal: signalNotificationSentences['zh-CN'], macro: macroEventNotificationSentences['zh-CN'] }
-const en = { signal: signalNotificationSentences['en-US'], macro: macroEventNotificationSentences['en-US'] }
+const zh = { signal: signalNotificationSentences['zh-CN'], macro: macroEventNotificationSentences['zh-CN'], alert: sentimentAlertTemplates['zh-CN'] }
+const en = { signal: signalNotificationSentences['en-US'], macro: macroEventNotificationSentences['en-US'], alert: sentimentAlertTemplates['en-US'] }
 const BODY = notificationEventBodyKey
 const REASON = notificationEventReasonKey
 
@@ -55,6 +56,12 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
 
     // 与源头拼成品**共用同一份字符串**（`contracts/macroEventNotificationSentences.ts`）；
     // 这几条只服务已落库的旧记录——新记录存的是成品，平台不再读这张表。
+    // N10 舆情：标题【强度】+ 原文标题、正文来源、理由是一句事实（不含任何动作指令）。
+    [TITLE(IDS.sentimentAlert)]: zh.alert.title,
+    [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: zh.alert.bodyWithSource,
+    [REASON(IDS.sentimentAlert)]: zh.alert.reason,
+    [notificationEventNamedKey(IDS.sentimentAlert, 'strength.high')]: zh.alert.strength.high,
+    [notificationEventNamedKey(IDS.sentimentAlert, 'strength.medium')]: zh.alert.strength.medium,
     [TITLE(IDS.macroEventLanded)]: zh.macro.title,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: zh.macro.direction.above,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: zh.macro.direction.below,
@@ -107,6 +114,11 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: en.signal.body.oiDropAggravated,
     [REASON(IDS.signalTriggered)]: en.signal.reason,
 
+    [TITLE(IDS.sentimentAlert)]: en.alert.title,
+    [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: en.alert.bodyWithSource,
+    [REASON(IDS.sentimentAlert)]: en.alert.reason,
+    [notificationEventNamedKey(IDS.sentimentAlert, 'strength.high')]: en.alert.strength.high,
+    [notificationEventNamedKey(IDS.sentimentAlert, 'strength.medium')]: en.alert.strength.medium,
     [TITLE(IDS.macroEventLanded)]: en.macro.title,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: en.macro.direction.above,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: en.macro.direction.below,

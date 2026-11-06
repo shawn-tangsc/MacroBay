@@ -20,38 +20,38 @@ function judgment(overrides: Record<string, unknown> = {}) {
 function harness(options: { enabledAt?: string; now?: string } = {}) {
   const ledger = createNewsPushLedgerStore(':memory:')
   if (options.enabledAt) ledger.enableOutlet({ at: options.enabledAt, baselineItemIds: [] })
-  const submit = vi.fn(async () => undefined)
+  const deliver = vi.fn(async () => undefined)
   const outlet = createNewsSentimentAlertOutlet({
     ledger,
-    submit,
+    deliver,
     now: () => options.now ?? NOW
   })
-  return { ledger, submit, outlet }
+  return { ledger, deliver, outlet }
 }
 
 describe('newsSentimentAlertOutlet', () => {
   it('sends nothing while the reader has not switched the outlet on', async () => {
-    const { submit, outlet } = harness()
+    const { deliver, outlet } = harness()
     // 默认关：没有水位就一条都不推，这是开关的默认值，不是失败态。
     expect(await outlet.onJudged(judgment())).toEqual({ outcome: 'skipped', reason: 'outlet-disabled' })
-    expect(submit).not.toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
   })
 
   it('sends nothing published before the reader switched it on', async () => {
-    const { submit, outlet } = harness({ enabledAt: NOW })
+    const { deliver, outlet } = harness({ enabledAt: NOW })
     expect(await outlet.onJudged(judgment())).toEqual({ outcome: 'skipped', reason: 'before-enable' })
-    expect(submit).not.toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
   })
 
   it('sends one qualifying judgement and records it in the ledger', async () => {
-    const { ledger, submit, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
+    const { ledger, deliver, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
     expect(await outlet.onJudged(judgment())).toEqual({ outcome: 'pushed', tier: 'high' })
-    expect(submit).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
     expect(ledger.has('item-a')).toBe(true)
   })
 
   it('never sends the same item twice, however often it is rescored or the outlet re-enabled', async () => {
-    const { ledger, submit, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
+    const { ledger, deliver, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
     await outlet.onJudged(judgment())
     // 重开开关：水位重置到新的一刻，账本不重置。
     ledger.enableOutlet({ at: '2026-11-06T21:45:00.000Z', baselineItemIds: [] })
@@ -59,26 +59,26 @@ describe('newsSentimentAlertOutlet', () => {
       outcome: 'skipped',
       reason: 'already-pushed'
     })
-    expect(submit).toHaveBeenCalledTimes(1)
+    expect(deliver).toHaveBeenCalledTimes(1)
   })
 
   it('does not send a rule hit even when it is loud', async () => {
-    const { submit, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
+    const { deliver, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
     expect(await outlet.onJudged(judgment({ engine: 'rules', strength: 5 }))).toEqual({
       outcome: 'skipped',
       reason: 'rules-engine'
     })
-    expect(submit).not.toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
   })
 
   it('resets the watermark on re-enable, so items between the two presses stay out', async () => {
-    const { ledger, submit, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
+    const { ledger, deliver, outlet } = harness({ enabledAt: '2026-11-06T20:00:00.000Z' })
     ledger.enableOutlet({ at: '2026-11-06T21:45:00.000Z', baselineItemIds: [] })
     expect(ledger.readWatermark()).toBe('2026-11-06T21:45:00.000Z')
     expect(await outlet.onJudged(judgment({ itemId: 'item-b' }))).toEqual({
       outcome: 'skipped',
       reason: 'before-enable'
     })
-    expect(submit).not.toHaveBeenCalled()
+    expect(deliver).not.toHaveBeenCalled()
   })
 })

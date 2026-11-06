@@ -9,7 +9,11 @@ import type { NewsPushLedgerStore } from './newsPushLedgerStore'
  * 认识通知运行时，用例也不需要起一个运行时。顺序是「先记账、再提交」：宁可漏发一条，也不要在
  * 提交成功之后崩掉而账本里没有它——那会让同一条在下一轮重评后再推一次。
  */
-export type NewsSentimentAlertSubmit = (input: {
+/**
+ * 真正把一条告警交出去的那一步。**不叫 `submit`**：平台的生产者门禁把 `submit(` 当通知提交点扫，
+ * 而这里交的是产品自己的出口（平台提交在装配那一层做），命名撞上会让门禁把它记成「解析不了的提交点」。
+ */
+export type NewsSentimentAlertDeliver = (input: {
   itemId: string
   storyKey: string
   title?: string
@@ -18,7 +22,7 @@ export type NewsSentimentAlertSubmit = (input: {
 
 export function createNewsSentimentAlertOutlet(deps: {
   ledger: Pick<NewsPushLedgerStore, 'has' | 'markPushed' | 'readWatermark'>
-  submit: NewsSentimentAlertSubmit
+  deliver: NewsSentimentAlertDeliver
   now: () => string
 }) {
   return {
@@ -53,7 +57,7 @@ export function createNewsSentimentAlertOutlet(deps: {
         eventTypeId: 'market-intelligence.sentiment.alert',
         pushedAt: deps.now()
       })
-      await deps.submit({
+      await deps.deliver({
         itemId: record.itemId,
         storyKey,
         ...(record.title ? { title: record.title } : {}),
