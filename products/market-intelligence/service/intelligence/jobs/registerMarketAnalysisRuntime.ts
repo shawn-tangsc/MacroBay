@@ -24,15 +24,13 @@ import { createAnalysisRunService } from '../analysis/analysisRunService'
 import { createAnalysisTriggerPolicy, type TriggerHistoryEntry } from '../analysis/analysisTriggerPolicy'
 import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from '../analysis/eventGroupService'
 import { analysisReleaseCoalescingPolicy } from '../analysis/analysisReleaseCoalescing'
-import { findAnalysisReleaseCoverage } from '../analysis/analysisReleaseAttempts'
 import { createEvidenceSnapshotService } from '../analysis/evidenceSnapshotService'
 import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
-import { buildAnalysisFailureNoticeRequest, decideAttemptAbandoned } from '../analysis/analysisFailureNotices'
-import { analysisRunLineOf } from '../analysis/analysisTriggerSourcePolicy'
+import { createReleaseCoverageReader, notifyAbandonedRelease, submitAnalysisFailureNotice } from './analysisReleaseNoticeWiring'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
@@ -151,6 +149,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const groups = createEventGroupService({ now, idFactory: () => `mi-eg-${randomUUID()}` })
   const snapshots = createEvidenceSnapshotService({ now, idFactory: () => `mi-es-${randomUUID()}` })
   const runs = createAnalysisRunService({ repository, now, idFactory: () => `mi-ar-${randomUUID()}` })
+  // 覆盖查询的接线（这次发布是不是已经有分析在管）：groupChange 是函数声明，可能在下面的装配
+  // 期间就被调用，所以它在任何调用之前初始化。
+  const releaseCoverage = createReleaseCoverageReader({ now, repository, pipeline: input.pipeline })
   const triggerPolicy = createAnalysisTriggerPolicy()
   const analysisOrchestrator = createAnalysisOrchestrator({
     repository,
@@ -163,11 +164,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification }),
     // 三档节流提醒：判定在 analysisFailureNotices，这里只把决策变成一次提交。平台文案没落时
     // 构造返回 undefined——不发半句话，也不因此把一次已完成的运行弄成失败。
-    notifyAnalysisNotice: async ({ decision, occurredAt }) => {
-      const request = buildAnalysisFailureNoticeRequest(decision, occurredAt)
-      if (!request || !input.submitNotification) return
-      try { await input.submitNotification(request) } catch { /* 通知是记录的附加物 */ }
-    }
+    notifyAnalysisNotice: async ({ decision, occurredAt }) =>
+      submitAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) })
   })
   const predictionVerification = createPredictionVerificationService({
     repository,
@@ -428,19 +426,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * The scan and the decision live in `analysisReleaseAttempts`; the runtime only supplies the
    * sources, so this step stays one call and the runtime file stays on its baseline.
    */
-  function releaseCoverage(change: AnalysisChange, currentGroupId: string) {
-    // Older pipeline mocks do not carry metric events; without one the item has no release
-    // identity and is left to its own trigger decision instead of being merged by guesswork.
-    const readMetricEvents = input.pipeline.listMetricEvents
-    return findAnalysisReleaseCoverage({
-      change, currentGroupId, now: now(),
-      listEventGroups: () => repository.listEventGroups(),
-      listTriggerLedger: eventGroupId => repository.listTriggerLedger(eventGroupId),
-      getRun: runId => repository.getRun(runId),
-      listItems: () => input.pipeline.listItems(),
-      listMetricEvents: () => typeof readMetricEvents === 'function' ? readMetricEvents.call(input.pipeline) : []
-    })
-  }
+
 
   async function groupChange(payload: unknown): Promise<Record<string, unknown> | void> {
     const change = resolveChange(payload)
@@ -488,17 +474,10 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
             : analysisReleaseCoalescingPolicy.abandonedReasonCode
         })
         if (coverage.decision === 'abandoned') {
-          // 这篇不会再有了。能指的运行行是这次发布前几次尝试留下的那一行；**拿不到就不发**，
-          // 也不伪造一个 id——伪造出来的链接点开只能是「没找到」，那比不发更糟。
-          const abandoned = decideAttemptAbandoned({
-            line: analysisRunLineOf(decision.triggerKey),
-            runId: repository.listRuns().filter(run => run.eventGroupId === result.group!.id).at(-1)?.id ?? '',
-            abandon: 'release'
+          await notifyAbandonedRelease({
+            triggerKey: decision.triggerKey, groupId: result.group.id, repository, occurredAt: now(),
+            ...(input.submitNotification ? { submit: input.submitNotification } : {})
           })
-          const request = buildAnalysisFailureNoticeRequest(abandoned, now())
-          if (request && input.submitNotification) {
-            try { await input.submitNotification(request) } catch { /* 通知是记录的附加物 */ }
-          }
         }
         return
       }
