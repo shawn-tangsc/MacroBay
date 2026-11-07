@@ -19,6 +19,7 @@ import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
 import { useNewsPushThreshold } from './useNewsPushThreshold'
 import { useNotificationLayout } from './useNarrowWindow'
 import { useSurfaceSelection } from './useSurfaceSelection'
+import { TestNotificationButton } from './testNotificationButton'
 
 import './intelligence-notification.css'
 
@@ -146,7 +147,26 @@ export default function IntelligenceNotificationSettingsSection(
         {/* 详情标题不再重复列表里的名字：同一个名字写两处，迟早有一处说法不同。 */}
         <div className="intelligence-notification-card">
           {selected === 'calendar'
-            ? <CalendarDetail reminder={reminder} resolveText={resolveText} surfaces={surfaces} text={text} />
+            ? <CalendarDetail
+              landedAction={<TestNotificationButton
+                channelReady={channelReady}
+                disabled={reminder.value === undefined}
+                kind="calendar-landed"
+                labelKey="pages.intelligence.notification.test.calendarLanded"
+                resolveText={resolveText}
+              />}
+              reminder={reminder}
+              resolveText={resolveText}
+              surfaces={surfaces}
+              text={text}
+              upcomingAction={<TestNotificationButton
+                channelReady={channelReady}
+                disabled={reminder.value === undefined || !reminder.value.enabled}
+                kind="calendar-upcoming"
+                labelKey="pages.intelligence.notification.test.calendarUpcoming"
+                resolveText={resolveText}
+              />}
+            />
             : <ContentDetail
               enabled={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true}
               failed={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saveFailed : failedEventId === ROW_BY_ITEM[selected].eventId}
@@ -157,6 +177,15 @@ export default function IntelligenceNotificationSettingsSection(
               }}
               saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
               saving={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saving : savingEventId === ROW_BY_ITEM[selected].eventId}
+              action={selected === 'sentiment'
+                ? <TestNotificationButton
+                  channelReady={channelReady}
+                  disabled={!(ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true)}
+                  kind="sentiment"
+                  labelKey="pages.intelligence.notification.test.sentiment"
+                  resolveText={resolveText}
+                />
+                : undefined}
             >
               {selected === 'sentiment'
                 ? <NewsPushThresholdRow

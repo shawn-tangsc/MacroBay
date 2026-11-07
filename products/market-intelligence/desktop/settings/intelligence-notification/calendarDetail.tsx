@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 
 import { Info } from 'lucide-react'
 import { Checkbox, Switch } from 'antd'
@@ -54,6 +54,9 @@ export function CalendarDetail(props: Readonly<{
   surfaces: SurfaceState
   text: Readonly<Record<string, string>>
   resolveText: (key: string) => string
+  /** 两个动作组：开始前那一行、落地那一行，各自贴在控件右侧。 */
+  upcomingAction?: ReactNode
+  landedAction?: ReactNode
 }>): ReactElement {
   const { reminder, surfaces, text } = props
 
@@ -153,6 +156,7 @@ export function CalendarDetail(props: Readonly<{
           disabled={reminder.saving}
           onChange={() => reminder.update({ enabled: !value.enabled })}
         />
+        {props.upcomingAction ?? null}
       </SettingsRow>
       {value.enabled
         ? <>
@@ -217,6 +221,7 @@ export function CalendarDetail(props: Readonly<{
           resolveText={props.resolveText}
           value={value.landedFilter}
         />
+        {props.landedAction ?? null}
       </SettingsRow>
       {/* 代价只在被选中时出现，而且留在选择发生的地方——塞进 ⓘ 就变成「选完才发现」。 */}
       {value.landedFilter === 'also-matched'

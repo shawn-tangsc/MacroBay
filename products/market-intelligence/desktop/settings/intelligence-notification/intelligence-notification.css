@@ -254,3 +254,74 @@
 .intelligence-notification-detail label {
   overflow-wrap: break-word;
 }
+
+/* 测试按钮：句子里的动作（虚线文字），不是第二个控件——一行里已经有开关/分段，
+   再摆一颗描边按钮会把「设置」和「动作」读成同一等重。 */
+.intelligence-notification-test-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+  flex-wrap: wrap;
+}
+
+.intelligence-notification-test-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11.5px;
+  text-decoration: underline dashed;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.intelligence-notification-test-button:hover:not(:disabled) {
+  color: var(--text-strong);
+}
+
+.intelligence-notification-test-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 禁用时颜色退到 muted，但仍然读得出来：这是「配置关着」，不是没有这个动作。 */
+.intelligence-notification-test-button:disabled {
+  color: var(--muted);
+  text-decoration: none;
+  cursor: not-allowed;
+}
+
+.intelligence-notification-test-info {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  cursor: help;
+}
+
+.intelligence-notification-test-info:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.intelligence-notification-test-note {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* 原因码只在这一条的折叠区里、默认收起：主句里一个码都没有。 */
+.intelligence-notification-test-reason {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.intelligence-notification-test-reason summary {
+  cursor: pointer;
+}

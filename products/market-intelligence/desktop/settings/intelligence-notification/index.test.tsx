@@ -30,6 +30,7 @@ type Stubs = {
   getDeliverySettings: ReturnType<typeof vi.fn>
   getSurfaceSelection: ReturnType<typeof vi.fn>
   setSurfaceSelection: ReturnType<typeof vi.fn>
+  sendTest: ReturnType<typeof vi.fn>
   productsInvoke: ReturnType<typeof vi.fn>
 }
 
@@ -40,9 +41,13 @@ function install(overrides: Partial<Stubs> = {}): Stubs {
     getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, desktopEnabled: false, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })),
     getSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
     setSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
+    sendTest: vi.fn(async () => ({ state: 'sent' as const, channelId: 'slack', channelName: 'Slack' })),
     productsInvoke: vi.fn(async (_productId: string, method: string) => {
       if (String(method).includes('getNewsPushThreshold') || String(method).includes('saveNewsPushThreshold')) {
         return { pushThreshold: 'medium' }
+      }
+      if (String(method).includes('getNewsPushOutletState') || String(method).includes('setNewsPushOutletEnabled')) {
+        return { enabled: true }
       }
       if (String(method).includes('getCalendarReminderSettings')) {
         return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
@@ -60,7 +65,8 @@ function install(overrides: Partial<Stubs> = {}): Stubs {
       setChannelEvent: stubs.setChannelEvent,
       getDeliverySettings: stubs.getDeliverySettings,
       getSurfaceSelection: stubs.getSurfaceSelection,
-      setSurfaceSelection: stubs.setSurfaceSelection
+      setSurfaceSelection: stubs.setSurfaceSelection,
+      sendTest: stubs.sendTest
     },
     products: { invoke: stubs.productsInvoke }
   }
@@ -472,5 +478,213 @@ describe('intelligence notification settings', () => {
     await render()
     await selectItem(3)
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.landed.cost'])
+  })
+})
+
+/** 有可用通道：`channelReady` 由投影的 `deliverable` 决定。 */
+const oneChannel = [{ id: 'slack', name: 'Slack', deliverable: true }]
+const twoChannels = [
+  { id: 'slack', name: 'Slack', deliverable: true },
+  { id: 'telegram', name: 'Telegram', deliverable: true }
+]
+
+function testButtons(): HTMLButtonElement[] {
+  return [...(container?.querySelectorAll<HTMLButtonElement>('[data-test-notification]') ?? [])]
+}
+
+async function clickTestButton(kind: string): Promise<void> {
+  const button = container?.querySelector<HTMLButtonElement>(`[data-test-notification="${kind}"]`)
+  if (!button) throw new Error(`Expected the ${kind} test button.`)
+  await act(async () => {
+    button.click()
+    await Promise.resolve()
+  })
+}
+
+describe('通知配置后的测试按钮（R201）', () => {
+  it('renders nothing at all when no channel can deliver — not a disabled button', async () => {
+    install({ getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })) })
+    await render()
+    expect(testButtons()).toHaveLength(0)
+    // 既有说明仍在：指路没有跟着按钮一起消失。
+    expect(container?.textContent).toContain(text['pages.intelligence.notification.channelNotReady'])
+  })
+
+  it('renders one button per config item with a per-row label, and names the channel on success', async () => {
+    const stubs = install({ getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })) })
+    await render()
+
+    // 舆情行 + 日历两行：三枚，各按行写「会发什么」。
+    await selectItem(2)
+    expect(container?.querySelector('[data-test-notification="sentiment"]')?.textContent).toContain(
+      text['pages.intelligence.notification.test.sentiment']
+    )
+    await clickTestButton('sentiment')
+    expect(stubs.sendTest).toHaveBeenCalledWith({ kind: 'sentiment' })
+    expect(container?.textContent).toContain('已发到 Slack（测试）')
+    // 成功句必须点名通道名，不能只写「已发送」。
+    expect(container?.textContent).not.toContain('已发送')
+  })
+
+  it('keeps the button when two channels are enabled, then refuses with the count the main process reported', async () => {
+    const stubs = install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: twoChannels, lastPushFailureAt: null, lastPushFailureReason: null })),
+      sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 2 }))
+    })
+    await render()
+
+    // 两行各一枚：日历行打开时两枚都在（开始前 / 落地），按钮在不在只取决于「有没有可用通道」，
+    // 不取决于「唯一不唯一」——两条通道时仍然渲染、可点。
+    await selectItem(3)
+    expect(testButtons().map((button) => button.dataset.testNotification).sort()).toEqual([
+      'calendar-landed',
+      'calendar-upcoming'
+    ])
+    // 舆情那一行走它自己那一枚。
+    await selectItem(2)
+    expect(testButtons()).toHaveLength(1)
+    await clickTestButton('sentiment')
+
+    expect(stubs.sendTest).toHaveBeenCalledWith({ kind: 'sentiment' })
+    const text_ = container?.textContent ?? ''
+    expect(text_).toContain('你启用了 2 条通道')
+    // 原因码只在折叠区：主句 0 次，展开后恰好 1 处。
+    const sentence = container?.querySelector('[data-test-result="failed"]')?.textContent ?? ''
+    expect(sentence).not.toContain('push-unavailable')
+    expect(text_.split('push-unavailable')).toHaveLength(2)
+  })
+
+  it('disables the button while sending, so a second click cannot produce a second message', async () => {
+    let release: (value: unknown) => void = () => undefined
+    const stubs = install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+      sendTest: vi.fn(() => new Promise((resolve) => { release = resolve }))
+    })
+    await render()
+    await selectItem(2)
+
+    const button = container?.querySelector<HTMLButtonElement>('[data-test-notification="sentiment"]')
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+    expect(button?.disabled).toBe(true)
+    expect(button?.textContent).toContain(text['pages.intelligence.notification.test.sending'])
+    // 真禁用：再点一次不会再发。
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+    expect(stubs.sendTest).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      release({ state: 'sent', channelId: 'slack', channelName: 'Slack' })
+      await Promise.resolve()
+    })
+    expect(button?.disabled).toBe(false)
+  })
+
+  it('says the per-row 「nothing to send」 sentence and never shows a reason code', async () => {
+    install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+      sendTest: vi.fn(async () => ({ state: 'no-data' as const, reasonCode: 'sentiment-none' }))
+    })
+    await render()
+    await selectItem(2)
+    await clickTestButton('sentiment')
+
+    expect(container?.textContent).toContain('最近 7 天没有符合条件的舆情')
+    expect(container?.textContent).not.toContain('sentiment-none')
+    expect(container?.querySelector('details')).toBeNull()
+  })
+
+  it('puts the failure reason code only in the collapsed area, never in the sentence', async () => {
+    install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+      sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'timezone-unreadable' }))
+    })
+    await render()
+    await selectItem(2)
+    await clickTestButton('sentiment')
+
+    const sentence = container?.querySelector('[data-test-result="failed"]')?.textContent ?? ''
+    expect(sentence).toContain('测试消息没发出去')
+    expect(sentence).not.toContain('timezone-unreadable')
+    const details = container?.querySelector('details')
+    expect(details?.open).toBe(false)
+    expect(details?.textContent).toContain('timezone-unreadable')
+  })
+
+  it('disables the button and says why when that config item is off', async () => {
+    install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+      getChannelEvents: vi.fn(async () => ({})),
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getNewsPushThreshold') || String(method).includes('saveNewsPushThreshold')) return { pushThreshold: 'medium' }
+        if (String(method).includes('getNewsPushOutletState')) return { enabled: false }
+        if (String(method).includes('getCalendarReminderSettings')) return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
+        return { enabled: false }
+      })
+    })
+    await render()
+    await selectItem(2)
+    const button = container?.querySelector<HTMLButtonElement>('[data-test-notification="sentiment"]')
+    expect(button?.disabled).toBe(true)
+    expect(container?.textContent).toContain(text['pages.intelligence.notification.test.needEnabled'])
+  })
+})
+
+describe('不动任何配置项（判据 ⑥）', () => {
+  it('keeps every config row where it was: same labels, same order, one control each', async () => {
+    install({ getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })) })
+    await render()
+
+    const signature = (): string[] => [...(container?.querySelectorAll('.intelligence-notification-form-row') ?? [])]
+      .map((row) => {
+        const label = row.querySelector('.intelligence-notification-form-label')?.textContent ?? ''
+        const control = row.querySelector('.intelligence-notification-form-control')
+        // 测试动作组不算「配置控件」：它必须与原有控件并列，而不是替代或挪动它们。
+        const controls = [...(control?.children ?? [])]
+          .filter((child) => !child.classList.contains('intelligence-notification-test-action'))
+          .map((child) => child.tagName.toLowerCase())
+        return `${label}:${controls.join('+')}`
+      })
+
+    await selectItem(2)
+    expect(signature()).toEqual(['舆情提醒:button', '最低强度:div+span'])
+
+    await selectItem(3)
+    expect(signature()).toEqual(['通知方式:div', '提前提醒:button+span', '通知条件:div'])
+  })
+})
+
+describe('超时（10 秒）', () => {
+  it('turns a send that never resolves into the failure sentence, without inventing a reason code', async () => {
+    vi.useFakeTimers()
+    try {
+      install({
+        getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+        sendTest: vi.fn(() => new Promise(() => undefined))
+      })
+      await render()
+      await selectItem(2)
+      const button = container?.querySelector<HTMLButtonElement>('[data-test-notification="sentiment"]')
+      await act(async () => {
+        button?.click()
+        await Promise.resolve()
+      })
+      expect(button?.disabled).toBe(true)
+      await act(async () => {
+        vi.advanceTimersByTime(10_000)
+        await Promise.resolve()
+      })
+      expect(container?.querySelector('[data-test-result="failed"]')?.textContent).toContain(
+        text['pages.intelligence.notification.test.failed']
+      )
+      // 超时不是主进程给的结论，所以**不编一个码**：折叠区不出现。
+      expect(container?.querySelector('details')).toBeNull()
+      expect(button?.disabled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

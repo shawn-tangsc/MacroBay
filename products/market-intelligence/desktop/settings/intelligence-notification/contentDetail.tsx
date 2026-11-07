@@ -12,6 +12,8 @@ export function ContentDetail(props: Readonly<{
   failed: boolean
   saveFailedText: string
   onChange: (enabled: boolean) => void
+  /** 控件右侧的动作组（测试按钮 + ⓘ）；同一行内、不新增列。 */
+  action?: ReactNode
   /** 追加在这一行下面的行（舆情那一项用它放「强度门槛」）。 */
   children?: ReactNode
 }>): ReactElement {
@@ -24,6 +26,7 @@ export function ContentDetail(props: Readonly<{
         loading={props.saving}
         onChange={props.onChange}
       />
+      {props.action ?? null}
     </SettingsRow>
     {props.children}
     {props.failed
