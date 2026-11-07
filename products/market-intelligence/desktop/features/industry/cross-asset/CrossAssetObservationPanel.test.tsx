@@ -99,12 +99,21 @@ describe('cross-asset observation workspace', () => {
       // 尺寸钉成最小档：这一行标题 9.5px，24 那档挂上去像一枚徽章（读者 2026-11-06 现场）。
       // 22 是平台最小的触发器，改回 24 必须是一次有理由的显式决定，不该被顺手改掉。
       expect(cadenceTrigger.style.width).toBe('22px')
-      // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的提示上，焦点到位也开，
+      // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的说明上，焦点到位也开，
       // 所以键盘用户与读屏拿到的是同一句，不是只有鼠标才看得到的装饰。
       await act(async () => { cadenceTrigger.focus() })
       await vi.waitFor(() => {
         expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(text.dailyCadence)
       })
+      // 点它不是空动作（界面设计 2026-11-07）：聚焦只是「看一眼」，离开就收；点一下是「钉住」，
+      // 离开还开着。长得像 ⓘ 却点了没反应，读者只会以为坏了——这三步就是那条判据。
+      expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true')
+      await act(async () => { cadenceTrigger.blur() })
+      await vi.waitFor(() => { expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('false') })
+      await act(async () => { cadenceTrigger.click() })
+      await vi.waitFor(() => { expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true') })
+      await act(async () => { cadenceTrigger.blur() })
+      expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true')
       for (const row of missing) {
         // The honesty guard, stated structurally: a planned row has no price and no return cell at
         // all, and its one value cell names the gap instead of filling it. A label may contain a

@@ -263,9 +263,18 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
                   icon read as a badge hanging over the table (reader, 2026-11-06). 22px is the smallest
                   trigger the platform offers — it cannot be drawn at text size without a new档, and a new
                  档 is the component's decision, not this call site's. */}
-              <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} icon={Info} onSelect={() => undefined}
-                resolveText={resolveProductText} size="sm" tooltipKey={crossAssetTextKeys.dailyCadence} variant="plain"
-                className="mi-cross-asset__section-hint" /></th></tr>
+              <FocusPopover labelKey={crossAssetTextKeys.dailyCadence} resolveText={resolveProductText}
+                trigger={(triggerProps) => (
+                  // 悬停/聚焦先看，点一下钉住：同一条说明的两种读法都在这颗按钮上，**不留空处理器**——
+                  // 长得像 ⓘ 却点了没反应，读者只会以为坏了（界面设计 2026-11-07，同行那颗图表的 ⓘ 就是这种形状）。
+                  // 点击只接 `onSelect` 一条：`IconButton` 的 `onClick` 之后仍会再调一次 `onSelect`，
+                  // 两条都接就是同一个动作跑两遍——钉住又被立刻取消，点了看着像没反应。
+                  <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} className="mi-cross-asset__section-hint"
+                    expanded={triggerProps.expanded} icon={Info} onBlur={triggerProps.onBlur}
+                    onFocus={triggerProps.onFocus} onMouseEnter={triggerProps.onMouseEnter}
+                    onMouseLeave={triggerProps.onMouseLeave} onSelect={triggerProps.onSelect}
+                    resolveText={resolveProductText} size="sm" variant="plain" />
+                )} /></th></tr>
             {dailyRows.map(renderStatusRow)}
           </tbody>
         </table>
