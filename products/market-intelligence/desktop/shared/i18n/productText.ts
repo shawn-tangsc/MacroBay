@@ -508,7 +508,7 @@ mi: miText['zh-CN'],
               liquidationNoteNoHit: '强平判定（近 24 小时）没有命中',
               liquidationNoteUnreadable: '强平判定暂时读不到',
               liquidationNoteInsufficient: '强平判定数据不齐，这次不下结论',
-              liquidationHiddenHits: '还有 {count} 次命中未标出',
+              liquidationHiddenHits: '图上还有 {count} 次疑似爆仓没有标出',
               signalHover: '{rule}｜窗口 {window}｜{kind}',
               signalKindInferred: '推断值',
               window15m: '15 分钟',
@@ -601,7 +601,19 @@ mi: miText['zh-CN'],
                 stablecoin: '稳定币 7 天', etf: 'ETF 3 日净流', 'open-interest': '持仓 24 小时',
                 funding: '费率', price: '价格 24 小时', sentiment: '舆情看空占比'
               },
-              directions: { bearish: '偏空', bullish: '偏强', unpriced: '未被计价' },
+              /** 卡面那一行摘要：五态逐字（界面设计 v2，2026-11-08）。都不带句末句号。 */
+              summary: {
+                divergence: '今天有一组数据方向相反',
+                quiet: '今天资金、杠杆与价格方向一致，没有背离',
+                divergenceWithheldOne: '今天有一组方向相反；另有 1 组暂时判不了：{reason}',
+                divergenceWithheldMany: '今天有一组方向相反；另有 {count} 组暂时判不了',
+                quietWithheldOne: '今天资金、杠杆与价格一致；另有 1 组暂时判不了：{reason}',
+                quietWithheldMany: '今天资金、杠杆与价格一致；另有 {count} 组暂时判不了',
+                allWithheld: '今天三组都暂时判不了'
+              },
+              directions: { bearish: '偏空', bullish: '偏强' },
+              /** 观察态的中性标签：消息偏空、价格没动。它不是方向色标签，所以单独一个键。 */
+              observedLabel: '消息偏空 · 价格没动',
               invalidationLabel: '失效条件',
               pairNames: { 'liquidity-leverage': '弹药 × 空头', 'flows-price': '现货 × 价格', 'narrative-price': '舆情 × 价格' },
               pairs: {
@@ -614,7 +626,8 @@ mi: miText['zh-CN'],
                   invalidation: 'ETF 转为净流入，或价格补跌 1% 以上。'
                 },
                 'narrative-price': {
-                  mechanism: '消息面偏空，但价格与持仓都没有反应：要么尚未计价，要么早已计价完毕。',
+                  // 机制句已删（界面设计 2026-11-08 §九）：观察态用中性标签 + 一句事实，不再写
+                  // 「要么…要么…」这种把两种可能并排放的句子。失效条件保留。
                   invalidation: '价格或持仓出现 1% 以上的方向性移动。'
                 }
               }
@@ -1811,7 +1824,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               liquidationNoteNoHit: 'Liquidation rule (last 24 hours): no hit.',
               liquidationNoteUnreadable: 'Liquidation read unavailable.',
               liquidationNoteInsufficient: 'Not enough data to judge liquidation this time.',
-              liquidationHiddenHits: '{count} more hits are not marked',
+              liquidationHiddenHits: '{count} more suspected liquidations are not marked on the chart',
               signalHover: '{rule} | window {window} | {kind}',
               signalKindInferred: 'inferred',
               window15m: '15 minutes',
@@ -1896,7 +1909,19 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 stablecoin: 'Stablecoins 7d', etf: 'ETF net flow 3d', 'open-interest': 'Open interest 24h',
                 funding: 'Funding', price: 'Price 24h', sentiment: 'Bearish share'
               },
-              directions: { bearish: 'Bearish', bullish: 'Bullish', unpriced: 'Unpriced' },
+              /** The one-line summary on the card: five states, verbatim (design v2, 2026-11-08). No final stop. */
+              summary: {
+                divergence: 'One pair points in opposite directions today',
+                quiet: 'Funding, leverage and price all point the same way today; no divergence',
+                divergenceWithheldOne: 'One pair points in opposite directions today; one pair could not be judged: {reason}',
+                divergenceWithheldMany: 'One pair points in opposite directions today; {count} pairs could not be judged',
+                quietWithheldOne: 'Funding, leverage and price all point the same way today; one pair could not be judged: {reason}',
+                quietWithheldMany: 'Funding, leverage and price all point the same way today; {count} pairs could not be judged',
+                allWithheld: 'None of the three pairs could be judged today'
+              },
+              directions: { bearish: 'Bearish', bullish: 'Bullish' },
+              /** The observed state's neutral label: bad news, price unmoved. Not a direction colour, so its own key. */
+              observedLabel: 'Bad news, price unmoved',
               invalidationLabel: 'Invalidated by',
               pairNames: { 'liquidity-leverage': 'Money × shorts', 'flows-price': 'Spot × price', 'narrative-price': 'Narrative × price' },
               pairs: {
@@ -1909,7 +1934,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   invalidation: 'ETF flows turn positive, or price falls through 1%.'
                 },
                 'narrative-price': {
-                  mechanism: 'The news was negative and neither price nor positioning moved: either not priced yet, or priced long ago.',
+                  // The mechanism sentence is gone (design 2026-11-08 §九): the observed state now
+                  // carries a neutral label and one fact, not a sentence that puts two possibilities
+                  // side by side. The invalidation sentence stays.
                   invalidation: 'Price or open interest moves more than 1% in either direction.'
                 }
               }

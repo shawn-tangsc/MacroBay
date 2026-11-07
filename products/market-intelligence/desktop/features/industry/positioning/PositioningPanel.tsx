@@ -254,7 +254,11 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           {available
             ? <>
                 <PositioningChart positioning={positioning} funding={funding} text={text} />
-                {/* 只在真的画不下时报数：命中 0 时这一行不存在，卡面不多一个字。 */}
+                {/*
+                  截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
+                  一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
+                  只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
+                */}
                 {positioning.hiddenHits > 0 ? (
                   <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
                     {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}

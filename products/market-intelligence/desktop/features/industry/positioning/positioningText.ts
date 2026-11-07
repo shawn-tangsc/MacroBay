@@ -36,7 +36,12 @@ export type PositioningPanelText = Readonly<{
   liquidationNoteNoHit: string
   liquidationNoteUnreadable: string
   liquidationNoteInsufficient: string
-  /** 图上画不下、只报个数的那一行；只在真的截断时出现（`{count}` 次未标出）。 */
+  /**
+   * 图上画不下、只报个数的那一行；只在真的截断时出现。
+   *
+   * 用「爆仓」不用「强平」：这张卡里「强平」是规则名（「强平判定…没有命中」），而牌子写的是
+   * 「疑似多头爆仓」——同一件事必须同一个名字。保留「疑似」：它只是计数，不该比牌子更肯定。
+   */
   liquidationHiddenHits: string
   /** The module rule's chip: what it says, and what its own hover line is made of. */
   signalHover: string

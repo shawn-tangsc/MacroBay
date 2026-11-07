@@ -326,8 +326,26 @@ describe('the truncated-hit count', () => {
   it('draws the eight marks the DTO carries and says how many it could not draw', () => {
     const markup = render({ positioning: { ...availablePositioning, hints: hits(8), hiddenHits: 2 } })
     expect(markup.split('data-hint="').length - 1).toBe(8)
-    expect(markup).toContain('还有 2 次命中未标出')
+    expect(markup).toContain('图上还有 2 次疑似爆仓没有标出')
     expect(markup.split('data-hidden-hits').length - 1).toBe(1)
+  })
+
+  it('keeps the two lines apart: the count says nothing about the verdict, the verdict carries no number', () => {
+    // 两处可以同时出现（图上有命中、而这次判定没读到），但各说各的：截断行不许提结论，判定行不许提数量。
+    const markup = render({
+      positioning: {
+        ...availablePositioning,
+        hints: hits(8),
+        hiddenHits: 2,
+        signal: { state: 'unreadable', failureCode: 'query-failed', onReload: () => undefined }
+      }
+    })
+    expect(markup).toContain('图上还有 2 次疑似爆仓没有标出')
+    expect(markup).toContain(text.liquidationNoteUnreadable)
+    const count = markup.match(/data-hidden-hits[^>]*>([^<]*)</)?.[1] ?? ''
+    expect(count).not.toMatch(/没有命中|读不到|不下结论/)
+    const verdict = markup.match(/<p class="mi-positioning-panel__liquidation-note"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? ''
+    expect(verdict).not.toMatch(/\d+ 次/)
   })
 
   it('says nothing at all when every hit fits', () => {
@@ -335,7 +353,7 @@ describe('the truncated-hit count', () => {
     const markup = render({ positioning: { ...availablePositioning, hints: hits(5), hiddenHits: 0 } })
     expect(markup.split('data-hint="').length - 1).toBe(5)
     expect(markup.split('data-hidden-hits').length - 1).toBe(0)
-    expect(markup).not.toContain('未标出')
+    expect(markup).not.toContain('没有标出')
   })
 })
 
