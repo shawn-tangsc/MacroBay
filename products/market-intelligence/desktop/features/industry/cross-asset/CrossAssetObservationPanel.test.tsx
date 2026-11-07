@@ -270,6 +270,17 @@ describe('cross-asset observation workspace', () => {
       expect(host.querySelector('.mi-cross-asset > header, .mi-cross-asset > footer')).toBeNull()
       const proxyInfo = host.querySelector<HTMLButtonElement>('.mi-cross-asset__quote button[aria-label]')
       expect(proxyInfo?.getAttribute('aria-label')).toBe(text.subtitle)
+      // 代理说明那颗 ⓘ 不是死按钮（界面设计 2026-11-07）：点一下钉住整段，再点或 Esc 收起。
+      // 它原来挂在 Tooltip 上、`onSelect` 是空的——一段远长于提示上限的话，配一颗点了没反应的按钮。
+      expect(proxyInfo?.getAttribute('aria-expanded')).not.toBe('true')
+      await act(async () => { proxyInfo?.click() })
+      await vi.waitFor(() => {
+        expect(proxyInfo?.getAttribute('aria-expanded')).toBe('true')
+        expect(document.querySelector('[data-popover-content]')?.textContent).toContain(text.subtitle)
+      })
+      // 收起它再继续：下面那颗图表 ⓘ 打开的是另一段说明，两层同时开着会让「读到哪一句」变成运气。
+      await act(async () => { proxyInfo?.click() })
+      await vi.waitFor(() => { expect(proxyInfo?.getAttribute('aria-expanded')).toBe('false') })
       const toolbar = host.querySelector('.mi-cross-asset__chart-toolbar')!
       const refresh = toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${text.refresh}"]`)
       expect(refresh).not.toBeNull()
@@ -277,9 +288,12 @@ describe('cross-asset observation workspace', () => {
       const info = toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${text.analysis}"]`)!
       expect(info).not.toBeNull()
       await act(async () => { info.click() })
+      // 收起的浮层节点还留在 DOM 里，所以按内容找这一个，而不是取「第一个 tooltip」。
       await vi.waitFor(() => {
-        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(text.coverage)
-        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('2026-09-14 12:00:00 GMT')
+        const bubble = [...document.querySelectorAll('[role="tooltip"]')]
+          .map(node => node.textContent ?? '').find(entry => entry.includes(text.coverage))
+        expect(bubble).toBeDefined()
+        expect(bubble).toContain('2026-09-14 12:00:00 GMT')
       })
     } finally { await act(async () => root.unmount()); host.remove() }
   })

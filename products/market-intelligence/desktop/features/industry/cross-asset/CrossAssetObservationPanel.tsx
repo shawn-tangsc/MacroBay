@@ -232,15 +232,26 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
         <div className="mi-cross-asset__quote-heading"><h3>{text.statusTitle}</h3>
-        <IconButton
-          ariaLabelKey={crossAssetTextKeys.subtitle}
-          icon={Info}
-          onSelect={() => undefined}
-          resolveText={resolveProductText}
-          size="md"
-          tooltipKey={crossAssetTextKeys.subtitle}
-          variant="plain"
-        /></div>
+        {/* 这段是代理说明，一段话而不是一句：走浮层（多行走浮层），点一下钉住。
+            原来它挂在 `Tooltip` 上、`onSelect` 是空的——一段远长于提示上限的话配一颗点了没反应的 ⓘ，
+            两处都不对（界面设计 2026-11-07：补充说明要么有真动作，要么不该长成按钮）。
+            没改成 dialog：dialog 是给成组的多行读数用的（那张表 8 行分三组），一段话说清的事用浮层就够。 */}
+        <FocusPopover labelKey={crossAssetTextKeys.subtitle} resolveText={resolveProductText}
+          trigger={(triggerProps) => (
+            <IconButton
+              ariaLabelKey={crossAssetTextKeys.subtitle}
+              expanded={triggerProps.expanded}
+              icon={Info}
+              onBlur={triggerProps.onBlur}
+              onFocus={triggerProps.onFocus}
+              onMouseEnter={triggerProps.onMouseEnter}
+              onMouseLeave={triggerProps.onMouseLeave}
+              onSelect={triggerProps.onSelect}
+              resolveText={resolveProductText}
+              size="md"
+              variant="plain"
+            />
+          )} /></div>
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
