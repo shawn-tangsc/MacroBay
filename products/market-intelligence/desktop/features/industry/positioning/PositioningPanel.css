@@ -50,7 +50,7 @@
 /* Width-driven: the viewBox keeps its aspect, so the drawing fills the card instead of being
    letterboxed by a fixed height (that is what left the empty sides on a wide window). */
 .mi-positioning-panel__chart svg { display: block; width: 100%; height: auto; cursor: crosshair; }
-.mi-positioning-panel__lane { fill: var(--mi-dashboard-muted); font-size: 9px; letter-spacing: .05em; }
+.mi-positioning-panel__lane { fill: var(--mi-dashboard-muted); font-size: var(--mi-chart-label-size); letter-spacing: .05em; }
 .mi-positioning-panel__rule { stroke: var(--mi-dashboard-line); stroke-width: 1; }
 .mi-positioning-panel__zero { stroke: var(--mi-dashboard-text); stroke-width: 1; opacity: .5; }
 .mi-positioning-panel__line { fill: none; stroke-width: 1.9; stroke-linejoin: round; stroke-linecap: round; }
@@ -58,24 +58,35 @@
 .mi-positioning-panel__line[data-series='eth'] { stroke: var(--mi-dashboard-etf-eth); }
 .mi-positioning-panel__bar[data-series='btc'] { fill: var(--mi-dashboard-etf-btc); opacity: .95; }
 .mi-positioning-panel__bar[data-series='eth'] { fill: var(--mi-dashboard-etf-eth); opacity: .5; }
-.mi-positioning-panel__hint line { stroke: var(--mi-dashboard-negative); stroke-width: 1; stroke-dasharray: 2 2; opacity: .9; }
-.mi-positioning-panel__hint circle { fill: var(--mi-dashboard-negative); }
+/* 一簇的方向决定这一簇的颜色：多头＝负向色，空头＝正向色（涨出来的那条画成红的就是反方向），
+   混向＝静音色。竖线、圆点、牌底、牌字全部走 `currentColor`，一处声明、四处跟着变。 */
+.mi-positioning-panel__hint { color: var(--mi-dashboard-negative); }
+.mi-positioning-panel__hint[data-hint-direction='short'] { color: var(--mi-dashboard-positive); }
+.mi-positioning-panel__hint[data-hint-direction='mixed'] { color: var(--mi-dashboard-muted); }
+.mi-positioning-panel__hint[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mi-positioning-panel__hint line { stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 2; opacity: .9; }
+.mi-positioning-panel__hint circle { fill: currentColor; }
 .mi-positioning-panel__end {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--mi-chart-label-size);
   /* A halo in the surface colour: the label sits where the line ends, and the line runs through
      it on the way there. */
   paint-order: stroke; stroke: var(--mi-dashboard-surface); stroke-width: 3px; stroke-linejoin: round;
 }
 .mi-positioning-panel__end[data-series='btc'] { fill: var(--mi-dashboard-etf-btc); }
 .mi-positioning-panel__end[data-series='eth'] { fill: var(--mi-dashboard-etf-eth); }
-.mi-positioning-panel__hint-chip {
-  fill: color-mix(in srgb, var(--mi-dashboard-negative) 16%, var(--mi-dashboard-surface));
-  stroke: color-mix(in srgb, var(--mi-dashboard-negative) 45%, transparent);
+/* 牌子就贴在图上那条带里：13 高、圆角 4、底片取方向色的 16% 薄底、描边 45%。 */
+.mi-positioning-panel__hint-chip rect {
+  fill: color-mix(in srgb, currentColor 16%, var(--mi-dashboard-surface));
+  stroke: color-mix(in srgb, currentColor 45%, transparent);
   stroke-width: 1;
 }
-.mi-positioning-panel__hint text { fill: var(--mi-dashboard-negative); font-size: 9px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* 牌字号与图内轴标签同一个 token：两处写死一个 9 就会各改各的。 */
+.mi-positioning-panel__hint-chip text {
+  fill: currentColor; font-size: var(--mi-chart-label-size);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .mi-positioning-panel__crosshair { stroke: var(--mi-dashboard-text); stroke-width: 1; stroke-dasharray: 3 3; opacity: .35; }
-.mi-positioning-panel__tick { fill: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+.mi-positioning-panel__tick { fill: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--mi-chart-label-size); }
 
 .mi-positioning-panel__tooltip {
   position: absolute; top: 30px; left: 12px; display: grid; gap: 2px; padding: 6px 8px;

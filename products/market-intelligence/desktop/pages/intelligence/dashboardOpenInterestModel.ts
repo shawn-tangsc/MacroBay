@@ -38,6 +38,8 @@ export type DashboardLiquidationMark = Readonly<{
   /** 判定那一格的持仓名义额：点就画在这个高度上。 */
   notionalUsd: number
   dropPct: number
+  /** 判定那一格的带符号涨跌；老读取没有就不带，牌上改用降幅。 */
+  pricePct?: number
   volumeMultiple: number
 }>
 
@@ -141,6 +143,7 @@ function mark(hint: Readonly<{
   observedAt: string
   notionalUsd: number
   dropPct: number
+  pricePct?: number
   volumeMultiple: number
 }>): DashboardLiquidationMark {
   return Object.freeze({
@@ -149,6 +152,7 @@ function mark(hint: Readonly<{
     observedAt: hint.observedAt,
     notionalUsd: hint.notionalUsd,
     dropPct: hint.dropPct,
+    ...(hint.pricePct === undefined ? {} : { pricePct: hint.pricePct }),
     volumeMultiple: hint.volumeMultiple
   })
 }

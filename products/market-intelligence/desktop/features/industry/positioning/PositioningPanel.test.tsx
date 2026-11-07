@@ -358,6 +358,81 @@ describe('the truncated-hit count', () => {
   })
 })
 
+describe('the mark chips', () => {
+  const mark = (overrides: Partial<{
+    asset: 'btc' | 'eth'
+    direction: 'long' | 'short'
+    observedAt: string
+    dropPct: number
+    pricePct: number
+    volumeMultiple: number
+  }> = {}) => ({
+    asset: 'btc' as const,
+    direction: 'long' as const,
+    observedAt: at(30),
+    notionalUsd: 8.9e9,
+    dropPct: -1.9,
+    volumeMultiple: 3.4,
+    ...overrides
+  })
+  const renderMarks = (hints: readonly ReturnType<typeof mark>[]) =>
+    render({ positioning: { ...availablePositioning, hints, hiddenHits: 0 } })
+  const chips = (markup: string) => [...markup.matchAll(/<rect x="([\d.]+)" y="3" width="([\d.]+)"/g)]
+    .map(match => ({ left: Number(match[1]), width: Number(match[2]) }))
+    .sort((first, second) => first.left - second.left)
+
+  it('never draws a line without a chip, and never a chip without a line', () => {
+    // 一簇一组：线、点、牌同组，所以「有竖线必须有牌」是结构保证，不是靠排版运气。
+    const markup = renderMarks([mark(), mark({ asset: 'eth', observedAt: at(29) }), mark({ observedAt: at(120) })])
+    const groups = markup.split('data-hint="').length - 1
+    expect(groups).toBeGreaterThan(0)
+    expect(markup.split('mi-positioning-panel__hint-chip').length - 1).toBe(groups)
+    expect(markup.split('data-hint-count="').length - 1).toBe(groups)
+  })
+
+  it('takes its size from the one chart-label token, the same one the axis uses', () => {
+    // 牌与轴标签同一档：写死一个 9 就会各改各的，两处对不齐也没人发现。
+    const token = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
+    expect(token).toContain('--mi-chart-label-size: 9px')
+    expect(styles).toMatch(/\.mi-positioning-panel__hint-chip text \{[^}]*font-size: var\(--mi-chart-label-size\)/)
+    expect(styles).toMatch(/\.mi-positioning-panel__tick \{[^}]*font-size: var\(--mi-chart-label-size\)/)
+    expect(styles).toMatch(/\.mi-positioning-panel__lane \{[^}]*font-size: var\(--mi-chart-label-size\)/)
+    // 这张卡里不再有裸 9px 的字号。
+    expect(styles).not.toMatch(/font-size:\s*9px/)
+  })
+
+  it('keeps at least 6px between two chips', () => {
+    const markup = renderMarks([mark(), mark({ observedAt: at(29) }), mark({ asset: 'eth', observedAt: at(120) }), mark({ observedAt: at(0) })])
+    const placed = chips(markup)
+    expect(placed.length).toBeGreaterThan(1)
+    for (let index = 1; index < placed.length; index += 1) {
+      const gap = placed[index]!.left - (placed[index - 1]!.left + placed[index - 1]!.width)
+      expect(gap).toBeGreaterThanOrEqual(6)
+    }
+  })
+
+  it('writes the direction for a cluster of one, and the count for a cluster of many', () => {
+    const single = renderMarks([mark({ direction: 'short', pricePct: 1.8 })])
+    expect(single).toContain('疑似空头爆仓 +1.8%')
+    // 同一刻两资产同向：牌放不下（< 6px），并成一簇，只写 ×2。
+    const same = renderMarks([mark(), mark({ asset: 'eth' })])
+    expect(same).toContain('疑似多头爆仓 ×2')
+  })
+
+  it('never names a direction on a mixed cluster', () => {
+    const mixed = renderMarks([mark(), mark({ asset: 'eth', direction: 'short', pricePct: 1.8 })])
+    expect(mixed).toContain('疑似爆仓 ×2')
+    expect(mixed).not.toContain('疑似多头爆仓 ×2')
+    expect(mixed).not.toContain('疑似空头爆仓 ×2')
+  })
+
+  it('keeps the truncation word off the chips: they count marks, the line under the chart counts the rest', () => {
+    const markup = renderMarks([mark(), mark({ asset: 'eth' })])
+    const chipText = [...markup.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map(match => match[1]).join(' ')
+    expect(chipText).not.toMatch(/未标出|共/)
+  })
+})
+
 describe('the liquidation note: three states, one line, never two', () => {
   const noteOf = (positioningState: DashboardPositioningViewState) => {
     const markup = render({ positioning: positioningState })

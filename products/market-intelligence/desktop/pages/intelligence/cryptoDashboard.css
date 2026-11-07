@@ -37,6 +37,11 @@
   --mi-reading-note-size: 11.5px;
   --mi-reading-note-line-height: 1.6;
   --mi-reading-note-max-height: 320px;
+  /**
+   * 图内标签字号（轴标签与标记牌同档）：9px。**等值迁移**，不是新造档位——此前这一档是
+   * 各处写死的 `font-size: 9px`，图表里谁改一处就和轴标签对不齐。
+   */
+  --mi-chart-label-size: 9px;
   /*
     同起点收益率那张图的五条线：这一份是**唯一 owner**（面板只命名它们，不就地写颜色）。
     五条线必须两两分得清，`crossAssetChartPalette.test.ts` 按色相/明度/饱和度断言——BTC 是饱和的

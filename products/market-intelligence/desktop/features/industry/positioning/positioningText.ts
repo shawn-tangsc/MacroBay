@@ -43,6 +43,12 @@ export type PositioningPanelText = Readonly<{
    * 「疑似多头爆仓」——同一件事必须同一个名字。保留「疑似」：它只是计数，不该比牌子更肯定。
    */
   liquidationHiddenHits: string
+  /** 图上的标记牌：一条写方向 + 价格变化；同向成簇写 ×N；混向不写方向。 */
+  markLong: string
+  markShort: string
+  markLongMany: string
+  markShortMany: string
+  markMixedMany: string
   /** The module rule's chip: what it says, and what its own hover line is made of. */
   signalHover: string
   signalKindInferred: string
