@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * 别人发起的跑一开始，就让列表重读一次；**跑完那一拍也重读一次**。
@@ -13,7 +13,8 @@ import { useEffect, useRef } from 'react'
  * 页面把 settle 次数传进来，同一次跑里有了它就不再重读。用"这次跑已经重读过"的标记判断，
  * 不用固定延时凑。
  */
-export function useBriefingBackgroundRunReload(running: boolean, reload: () => void, localSettles = 0): void {
+export function useBriefingBackgroundRunReload(running: boolean, reload: () => void): Readonly<{ markLocalSettled: () => void }> {
+  const [localSettles, setLocalSettles] = useState(0)
   const wasRunning = useRef(false)
   const settlesAtStart = useRef(0)
   // `reload` 每次渲染都是新函数：放进依赖会让 effect 每渲染一次跑一遍。用 ref 读最新那个。
@@ -33,4 +34,7 @@ export function useBriefingBackgroundRunReload(running: boolean, reload: () => v
     if (localSettles !== settlesAtStart.current) return
     reloadRef.current()
   }, [running, localSettles])
+  // 本页自己发起的那次跑落定时调一次：收尾由页面合并列表行，这里只记"这一次已处理过"。
+  const markLocalSettled = useCallback(() => setLocalSettles((count) => count + 1), [])
+  return { markLocalSettled }
 }
