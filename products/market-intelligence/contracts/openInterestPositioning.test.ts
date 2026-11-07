@@ -75,6 +75,9 @@ describe('liquidation marks', () => {
     expect(result.state).toBe('available')
     expect(result.hints).toHaveLength(1)
     expect(result.hints[0]).toMatchObject({ asset: 'btc', dropPct: -2, volumeMultiple: 3 })
+    // 判定当时那一格的收盘价与带符号涨跌：随判定一起存，之后不再回头算。
+    expect(result.hints[0]).toMatchObject({ pricePct: expect.any(Number), closePrice: expect.any(Number) })
+    expect(result.hints[0]!.pricePct!).toBeLessThan(0)
   })
 
   it('needs all three conditions, not two', () => {

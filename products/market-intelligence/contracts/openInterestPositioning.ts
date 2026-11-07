@@ -96,6 +96,24 @@ export type LiquidationHint = Readonly<{
    * beside a flat line with nothing to explain it.
    */
   notionalUsd: number
+  /**
+   * The price this bucket closed at.
+   *
+   * Carried for the same reason as the notional: a recorded hit has to show what the reader saw
+   * at the time. Recomputing it later would rewrite history every time a threshold moved, so the
+   * number travels with the judgement instead (2026-11-07, r29).
+   *
+   * Optional on purpose: reads built before this field existed do not carry it, and a missing
+   * price must stay missing instead of being stood in for by today's number.
+   */
+  closePrice?: number
+  /**
+   * 这一格的带符号价格变化（负=跌、正=涨）。
+   *
+   * 随判定一起记：详情要能说「当时跌了 1.2%」，而回头再看价格只会得到今天的答案。
+   * 两条反向规则各自记自己的符号，不复用对方的快照。
+   */
+  pricePct?: number
 }>
 
 export type LiquidationHintsResult = Readonly<{
@@ -169,7 +187,10 @@ export function detectLiquidationHints(input: Readonly<{
         asset,
         dropPct: round(dropPct),
         volumeMultiple: round(multiple),
-        notionalUsd: bar.notionalUsd
+        notionalUsd: bar.notionalUsd,
+        // 判定当时那一格的收盘价与涨跌：随判定一起存，之后不再回头算。
+        closePrice: bar.closePrice,
+        pricePct: round(pricePct)
       }))
     }
   }

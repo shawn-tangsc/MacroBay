@@ -100,7 +100,14 @@ function signalsFromHints(input: Readonly<{
       asset: input.asset,
       observedAt: hint.observedAt,
       severity,
-      values: { dropPct: hint.dropPct, volumeMultiple: hint.volumeMultiple, notionalUsd: hint.notionalUsd },
+      // 价格只加不改：老记录/旧读取缺这一格就不写，绝不拿别的数补上。
+      values: {
+        dropPct: hint.dropPct,
+        volumeMultiple: hint.volumeMultiple,
+        notionalUsd: hint.notionalUsd,
+        ...(Number.isFinite(hint.closePrice) ? { priceUsd: hint.closePrice } : {}),
+        ...(Number.isFinite(hint.pricePct) ? { priceChangePct: hint.pricePct } : {})
+      },
       ready: true
     })
     // A bucket whose instant cannot be read is not a signal: it cannot be deduplicated or placed.

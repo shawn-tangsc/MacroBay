@@ -117,3 +117,24 @@ describe('signals read from the panel query', () => {
     expect(signals.map(signal => signal.asset)).toEqual(['eth'])
   })
 })
+
+it('carries the hit’s own price and signed move into the reading, and invents neither', () => {
+  const bars = (count: number) => Array.from({ length: count }, (_, index) => ({
+    observedAt: new Date(Date.parse('2026-11-06T00:00:00.000Z') + index * 15 * 60_000).toISOString(),
+    notionalUsd: index === count - 1 ? 970_000_000 : 1_000_000_000,
+    volumeBase: index === count - 1 ? 2_500 : 1_000,
+    closePrice: index === count - 1 ? 68_500 : 70_000
+  }))
+  const [signal] = openInterestSignals({ asset: 'btc', bars: bars(120), asOf: '2026-11-06T23:59:00.000Z' })
+  expect(signal?.values).toMatchObject({ priceUsd: 68_500, priceChangePct: expect.any(Number) })
+  expect(signal!.values.priceChangePct!).toBeLessThan(0)
+
+  // 老读取没有价格这一格：不写、也不拿别的数补上。
+  const legacy = openInterestSignalsFromHistory({
+    state: 'available', asOf: '2026-11-06T23:59:00.000Z', window: '24h', btc: [], eth: [],
+    liquidationHints: [{ observedAt: '2026-11-06T22:00:00.000Z', asset: 'btc', dropPct: -2, volumeMultiple: 3, notionalUsd: 1 }],
+    liquidationHintsState: 'available'
+  }, '2026-11-06T23:59:00.000Z')
+  expect(legacy[0]!.values).not.toHaveProperty('priceUsd')
+  expect(legacy[0]!.values).not.toHaveProperty('priceChangePct')
+})
