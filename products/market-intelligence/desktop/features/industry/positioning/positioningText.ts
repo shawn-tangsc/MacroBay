@@ -26,6 +26,11 @@ export type PositioningPanelText = Readonly<{
   states: Readonly<Record<PositioningState, string>>
   stateWhy: string
   liquidationChip: string
+  /** 按方向分叉的牌子与脚注：“强平”分不出多头还是空头，读者会做反动作。 */
+  liquidationChipLong: string
+  liquidationChipShort: string
+  liquidationFootLong: string
+  liquidationFootShort: string
   /** The module rule's chip: what it says, and what its own hover line is made of. */
   signalInsufficient: string
   signalHover: string

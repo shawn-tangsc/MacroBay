@@ -67,7 +67,11 @@ export type DashboardSignalChip =
   | Readonly<{
       state: 'alert'
       asset: 'btc' | 'eth'
+      /** 哪一边被清：由规则 id 决定（方向是规则的属性），读者看到的词从它映射。 */
+      direction: 'long' | 'short'
       dropPct: number
+      /** 判定那一格的带符号涨跌；老记录没有就不带，牌子改用降幅。 */
+      pricePct?: number
       volumeMultiple: number
       observedAt: string
     }>
@@ -186,5 +190,12 @@ export function projectModuleSignalChip(
   if (asset === null || observedAt === undefined || dropPct === undefined || volumeMultiple === undefined) {
     return { state: 'insufficient' }
   }
-  return { state: 'alert', asset, dropPct, volumeMultiple, observedAt }
+  // 方向由规则 id 说死：两条规则各一个 id，不靠读数符号去猜。
+  const direction = loudest.ruleId === 'oi-short-liquidation-proxy' ? 'short' as const : 'long' as const
+  const pricePct = loudest.values.priceChangePct
+  return {
+    state: 'alert', asset, direction, dropPct,
+    ...(Number.isFinite(pricePct) ? { pricePct } : {}),
+    volumeMultiple, observedAt
+  }
 }

@@ -107,7 +107,7 @@ describe('positioning panel', () => {
     })
     // One mark, pinned to the signal's own bucket, and one chip naming it.
     expect(markup).toContain('data-signal-mark')
-    expect(markup).toContain('疑似强平 BTC -1.9% · 量 3.4×')
+    expect(markup).toContain('疑似多头爆仓 BTC -1.9% · 量 3.4×')
     // The query's own hint list is no longer drawn: one reading, one mark, one sentence.
     expect(markup).not.toContain('data-hint-list')
   })
@@ -331,13 +331,20 @@ describe('the module rule chip', () => {
     window: '7d' as const,
     btc: positioning.state === 'available' ? positioning.btc : [],
     eth: positioning.state === 'available' ? positioning.eth : [],
-    signal: { state: 'alert' as const, asset: 'btc' as const, dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) },
+    signal: { state: 'alert' as const, asset: 'btc' as const, direction: 'long' as const, dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) },
     ...overrides
+  })
+
+  it('names the side that was liquidated, and puts the sign in the sentence', () => {
+    const markup = render({ positioning: alert({ signal: { state: 'alert' as const, asset: 'btc' as const, direction: 'short' as const, dropPct: -2.4, pricePct: 1.8, volumeMultiple: 3.1, observedAt: at(15) } }) })
+    // 方向进词、符号进数：空头被清要写「涨」，不能拿「强平」把两头混成一句。
+    expect(markup).toContain('疑似空头爆仓 BTC +1.8%')
+    expect(markup).not.toContain('疑似强平')
   })
 
   it('draws the rule\'s own words and numbers when it fires', () => {
     const markup = render({ positioning: alert() })
-    expect(markup).toContain('疑似强平')
+    expect(markup).toContain('疑似多头爆仓')
     expect(markup).toContain('-1.9%')
     expect(markup).toContain('3.4×')
     // Severity never reaches the reader.

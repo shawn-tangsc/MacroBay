@@ -18,7 +18,8 @@ import {
   formatDashboardNotional,
   positioningStateFor,
   type DashboardPositioningPoint,
-  type DashboardPositioningViewState
+  type DashboardPositioningViewState,
+  type DashboardSignalChip
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
 import { SignalDetail, SignalReadIssue, useSignalDetail } from '../shared'
@@ -89,6 +90,16 @@ export type PositioningPanelProps = Readonly<{
 // very movement it was pointing at.
 // The viewBox is drawn at roughly the width the card is, so the svg scales ~1:1: text keeps its
 // nominal size and the drawing is 186 units tall instead of being blown up with the container.
+/** 牌子那一行：方向进词，符号进数——两条规则各写各的，正号配“空头”而不是配“强平”。 */
+function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip, { state: 'alert' }>): string {
+  const move = chip.pricePct !== undefined ? formatDashboardChange(chip.pricePct) : formatDashboardChange(chip.dropPct)
+  const template = chip.direction === 'short' ? text.liquidationChipShort : text.liquidationChipLong
+  return template
+    .replace('{asset}', text.assets[chip.asset])
+    .replace('{pct}', move)
+    .replace('{multiple}', chip.volumeMultiple.toFixed(1))
+}
+
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
@@ -108,15 +119,9 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       {chip ? (chip.state === 'alert' ? (
         <button type="button" className="mi-positioning-panel__signal" data-state="alert"
           {...signalDetail.triggerProps}
-          aria-label={`${text.liquidationChip
-            .replace('{asset}', text.assets[chip.asset])
-            .replace('{pct}', formatDashboardChange(chip.dropPct))
-            .replace('{multiple}', chip.volumeMultiple.toFixed(1))} · ${text.signalDetailsOpen}`}
+          aria-label={`${chipLabel(text, chip)} · ${text.signalDetailsOpen}`}
           onClick={signalDetail.toggle}>
-          {text.liquidationChip
-            .replace('{asset}', text.assets[chip.asset])
-            .replace('{pct}', formatDashboardChange(chip.dropPct))
-            .replace('{multiple}', chip.volumeMultiple.toFixed(1))}
+          {chipLabel(text, chip)}
         </button>
       ) : chip.state === 'unreadable' ? (
         // 读不到只留一个标记：一处一个、不占版面、悬停与聚焦都能读到人话。卡片正面没有那行字。
