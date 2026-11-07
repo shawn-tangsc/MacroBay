@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { HelpCircle, MoreHorizontal, RefreshCw, SlidersHorizontal } from 'lucide-react'
-import { act } from 'react'
+import { act, type MouseEvent as ReactMouseEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -245,7 +245,7 @@ describe('IconButton', () => {
   })
 
   it('hands the click event to the handler, so a row underneath does not also fire', () => {
-    const onSelect = vi.fn((event: MouseEvent) => event.stopPropagation())
+    const onSelect = vi.fn((event: ReactMouseEvent<HTMLElement>) => event.stopPropagation())
     const onRowClick = vi.fn()
     const row = document.createElement('div')
     document.body.append(row)
@@ -259,8 +259,8 @@ describe('IconButton', () => {
     // 底子是 antd 的 Button，事件是它包装过的合成事件；`currentTarget` 在分发结束后会被置空，
     // 所以判据落在「拿到了一个真事件」上，而不是它的字段。
     expect(event).toBeDefined()
-    expect((event as MouseEvent).type).toBe('click')
-    expect(typeof (event as MouseEvent).stopPropagation).toBe('function')
+    expect((event as ReactMouseEvent<HTMLElement>).type).toBe('click')
+    expect(typeof (event as ReactMouseEvent<HTMLElement>).stopPropagation).toBe('function')
     // 事件被按钮拿走之后，外层的行不该再收到一次——这正是「点图标连带选中整行」的判据。
     expect(onRowClick).not.toHaveBeenCalled()
   })
@@ -272,6 +272,15 @@ describe('IconButton', () => {
     act(() => button.click())
 
     expect(calls).toBe(1)
+  })
+
+  it('forwards an injected aria-describedby, and writes nothing when none is injected', () => {
+    // 浮层类组件（`Popover`）克隆触发器时挂上描述；这里不转发的话，读屏只念得到名字。
+    const described = markup({ 'aria-describedby': 'popover-content-id' })
+    expect(described).toContain('aria-describedby="popover-content-id"')
+
+    // 不传就不输出：`aria-describedby="undefined"` 会让读屏去找一个不存在的节点。
+    expect(markup()).not.toContain('aria-describedby')
   })
 
   it('says whether the region it controls is open, for the reader who cannot see it', () => {

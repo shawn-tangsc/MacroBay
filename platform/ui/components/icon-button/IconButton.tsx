@@ -223,6 +223,11 @@ type IconButtonCommon = {
    * 要么停在窗口左上角。2026-11-02 用户报的就是这个症状，所以这里收下并交给底层按钮。
    */
   ref?: Ref<HTMLButtonElement | HTMLAnchorElement>
+  /**
+   * 可访问描述（`aria-describedby`）。**由浮层类组件注入**（`Popover` 克隆触发器时挂上来）：
+   * 读屏先念名字、再念说明。不传就不输出——不能出现 `aria-describedby="undefined"`。
+   */
+  'aria-describedby'?: string
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
   resolveText: (key: string) => string
 }
@@ -256,6 +261,7 @@ export function IconButton({
   className,
   style,
   dataAttributes,
+  'aria-describedby': ariaDescribedBy,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -290,6 +296,7 @@ export function IconButton({
     <Button
       ref={ref}
       aria-label={ariaLabel}
+      {...(ariaDescribedBy === undefined ? {} : { 'aria-describedby': ariaDescribedBy })}
       onBlur={onBlur}
       onFocus={onFocus}
       onMouseEnter={onMouseEnter}
