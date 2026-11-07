@@ -380,6 +380,29 @@ describe('intelligence notification settings', () => {
       .toBe(text['pages.intelligence.notification.threshold.high'])
   })
 
+  it('says so when saving the tier fails, and keeps the value the service still reports', async () => {
+    // 用户 2026-11-07「点了没反应」那类缺陷的防线：写失败必须当场说，而且界面跟着服务的值走，
+    // 不许本地先翻过去再悄悄回滚。
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (String(method).includes('saveNewsPushThreshold')) throw new Error('write failed')
+      if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+      return { enabled: true }
+    })
+    install({ productsInvoke: invoke })
+    await render()
+    await selectItem(2)
+    const group = [...(container?.querySelectorAll('[role="group"]') ?? [])]
+      .find((node) => node.getAttribute('aria-label') === text['pages.intelligence.notification.threshold.row'])!
+    const strong = [...group.querySelectorAll('button')]
+      .find((button) => button.textContent === text['pages.intelligence.notification.threshold.high'])!
+    await act(async () => { strong.click(); await Promise.resolve() })
+    await act(async () => { await Promise.resolve() })
+
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.saveFailed'])
+    expect(group.querySelector('[aria-pressed="true"]')?.textContent)
+      .toBe(text['pages.intelligence.notification.threshold.medium'])
+  })
+
   it('shows the cost line only when "also matched" is chosen', async () => {
     install({
       productsInvoke: vi.fn(async (_productId: string, method: string) => {

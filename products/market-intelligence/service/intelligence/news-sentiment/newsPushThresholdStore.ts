@@ -14,6 +14,19 @@ import type { NewsSentimentTierThreshold } from '../../../contracts/newsSentimen
  *   同一笔把它登记进 `StoredShape`、`normalize`、`write` 三处，并补一条
  *   「写 → 换一个新的 store 实例读同一个文件 → 值还在」的用例。
  *   2026-11-07 通知设置那次的教训就是这个：字段没进归一化，写进去读回来就没了，而且不报错。
+ *
+ * ---
+ * **「新字段要进归一化白名单」这条规矩分两种，别照字面套**（Chief 2026-11-07 定）：
+ *
+ * - **平台设置字段**（`NotificationRuntimeSettings`、`AppSettings` 这类）→ 进平台自己的归一化，
+ *   并配「写 → 重建 → 读回」的用例；
+ * - **产品设置字段**（就是本文件这种，例如推送强度门槛）→ **进产品自己的存储**，
+ *   **同样要那条 round-trip 用例**，并做到「读坏回默认、写只收合法值」。
+ *
+ * 为什么不把产品字段塞进平台归一化：那份白名单的含义是「**平台认识的字段**」。把一个产品的
+ * 阈值放进去，等于让平台认识「舆情强度」这个产品概念——平台不认产品词是从第一天守的边界
+ * （删掉 `products/<id>` 之后平台还得是一个能用的通用桌面应用）。所以不是「少做了一步」，
+ * 而是这一步本来就不该在平台里做。
  */
 export const NEWS_PUSH_THRESHOLDS = ['low', 'medium', 'high'] as const satisfies readonly NewsSentimentTierThreshold[]
 
