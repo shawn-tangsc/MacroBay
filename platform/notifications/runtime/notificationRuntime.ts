@@ -39,6 +39,7 @@ import { toNotificationCenterItem } from './notificationCenterItem'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
+import { rejectionTraceLevel } from '../contracts/notificationSubmitRejection'
 import { pruneNotificationDailyCounters } from './notificationBreaker'
 import { countSameEventToday, decideDailyCap, foldSuppressedIntoLatest, withCenterForDisruptiveChannels } from './notificationAggregate'
 import { evaluateProducerGate } from './notificationProducerGate'
@@ -102,8 +103,14 @@ export type NotificationRuntimeDependencies = {
   deliveryHooks?: DeliveryHooks
   /** 事件目录（契约 §2）。装配层注入；没有目录时新提交路径一律 rejected: unknown-event-type。 */
   catalog?: NotificationEventCatalog
-  /** 诊断出口（runtime §2）：必传于装配层；这里可缺省是为了旧测试的迁移，缺省即无人接收。 */
-  diagnostics?: NotificationDiagnosticsSink
+  /**
+   * 诊断出口（runtime §2）：**必传**（2026-11-08 定）。
+   *
+   * 以前这里是可选的，理由是「旧测试迁移方便」——代价是装配漏传时运行时照样能记、但没人接，
+   * 与「根本没留痕」一模一样。提交被拒那一支就吃过这个亏：三处都查不到。宁可装配时编译不过，
+   * 也不要运行时静默降级。
+   */
+  diagnostics: NotificationDiagnosticsSink
   /** 生产者归属表（契约 §14）：未登记 → 平台发；让渡给产品 → 平台不发，只记诊断。 */
   producerOwnership?: NotificationProducerOwnership
   /** 已登记的产品 productId；producerId 前缀对不上任何产品即视为平台自有。 */
@@ -172,7 +179,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     try {
       await persist(state)
     } catch (error) {
-      deps.diagnostics?.({ code: 'persist-failed', at: nowIso() })
+      deps.diagnostics({ code: 'persist-failed', at: nowIso() })
       throw error
     }
   }
@@ -182,6 +189,21 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
    * 合并/跨类型/空正文等规则全部在 `planNotificationSubmit` + `mergeDuplicateNotification` 一处。
    */
   async function submitEvent(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
+    const outcome = await decideAndStoreSubmit(request)
+    // 被拒也要留一行痕（第 10 条同类问题的第二次，2026-11-08）：调用方普遍 `catch {}` 或丢弃返回值，
+    // 拒收原本在日志、记录、计数三处都查不到。**只留痕、不改行为**：不建记录、不动计数、不投递。
+    if (outcome.kind === 'rejected') {
+      deps.diagnostics({
+        code: outcome.reason,
+        level: rejectionTraceLevel(outcome.reason),
+        eventTypeId: request.eventTypeId,
+        at: nowIso()
+      })
+    }
+    return outcome
+  }
+
+  async function decideAndStoreSubmit(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
     const state = await load()
     const settings = await deps.getSettings()
     const now = nowIso()

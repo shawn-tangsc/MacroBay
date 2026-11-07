@@ -64,3 +64,15 @@ export type NotificationSubmitRejection = {
   message: string
 }
 
+/**
+ * 被拒留痕的级别：**按「谁的问题」分档，不按严重程度**（Chief 2026-11-08 定）。
+ *
+ * 读者侧的正常抑制——今天说满了（`daily-limit-reached`）、刚说过还在冷却（`minimum-gap-active`）——
+ * 是系统按读者自己声明的上限在正常工作，记 `info`；把它记成 `error` 会让真故障淹在狼来了里。
+ * 其余全部是**契约被写错**（未知事件、缺动作、成品不全、键或严重度非法……）正常永远不该出现，记 `error`。
+ * 缺省朝 `error` 倒：新增一个拒绝码忘了分档时宁可吵一次，也不要静默吞掉。
+ */
+export function rejectionTraceLevel(reason: NotificationSubmitRejectionReason): 'info' | 'error' {
+  return reason === 'daily-limit-reached' || reason === 'minimum-gap-active' ? 'info' : 'error'
+}
+

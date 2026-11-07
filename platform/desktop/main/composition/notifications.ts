@@ -34,8 +34,8 @@ export type NotificationCompositionPorts = Readonly<{
   manifests: readonly ProductManifest[]
   /** 写提示开关 / 通道选择；由 app.ts 接到设置 store。 */
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
-  /** 诊断出口（runtime §2）：装配层接到 AppLog，测试可给 recorder。 */
-  diagnostics?: NotificationDiagnosticsSink
+  /** 诊断出口（runtime §2）：**必传**，装配层接到 AppLog、测试给 recorder；缺了运行时一律编译不过。 */
+  diagnostics: NotificationDiagnosticsSink
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
   /**
@@ -82,7 +82,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
       ...(ports.jobTitle === undefined ? {} : { jobTitle: ports.jobTitle })
     }),
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
-    ...(ports.diagnostics === undefined ? {} : { diagnostics: ports.diagnostics }),
+    diagnostics: ports.diagnostics,
     ...(ports.push === undefined ? {} : { push: ports.push }),
     ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets })
   })
@@ -94,7 +94,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
  *
  * 适配器放这里而不是 app.ts：`app.ts` 是「只减不增」的基线文件，每加一行都要先抽离。
  */
-export type AppNotificationCompositionPorts = NotificationCompositionPorts & {
+export type AppNotificationCompositionPorts = Omit<NotificationCompositionPorts, 'diagnostics'> & {
   /** 通道侧的只读投影 + 投递入口；只有 app 组合根有这两样。 */
   channels: ChannelPushPortDeps['channels']
   deliver: ChannelPushPortDeps['deliver']
@@ -166,10 +166,13 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
       // 实测 5 天 204 条，全在 `platform.job.failed-terminal` 上（`market-intelligence.syncBls…`
       // 这类），每次启动每个 handler 一条。记成 warn 的代价不是「多了几行」，是**真的故障混在里面
       // 没人再看**。也不能靠给这些 handler 补 claim 消掉：claim 会让平台事件被让渡，P1/P2 就没人发了。
+      // 提交被拒自带档位（`rejectionTraceLevel` 一处定义：代码错 `error`、正常抑制 `info`），
+      // 这里只透传——档位规则不在这层重建第二份。
       const level =
-        entry.code === 'delegated' || entry.code === 'unclaimed-producer'
+        entry.level ??
+        (entry.code === 'delegated' || entry.code === 'unclaimed-producer'
           ? 'info'
-          : entry.code === 'persist-failed' ? 'error' : 'warn'
+          : entry.code === 'persist-failed' ? 'error' : 'warn')
       ports.log.log(level, `notification.${entry.code}`, {
         eventTypeId: entry.eventTypeId,
         producerId: entry.producerId,

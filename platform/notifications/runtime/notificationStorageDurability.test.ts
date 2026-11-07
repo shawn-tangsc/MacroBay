@@ -73,7 +73,7 @@ describe('notification storage durability', () => {
   it('keeps both records when two submissions run at the same time', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'notification-storage-'))
     const file = join(directory, 'notifications.json')
-    const runtime = createNotificationRuntime({ catalog, clock, getSettings: async () => settings, storage: createNotificationJsonStorage(file) })
+    const runtime = createNotificationRuntime({ diagnostics: () => undefined, catalog, clock, getSettings: async () => settings, storage: createNotificationJsonStorage(file) })
 
     await Promise.all([runtime.submit(request('platform.alpha', '2026-11-03')), runtime.submit(request('platform.beta', '2026-11-03'))])
 

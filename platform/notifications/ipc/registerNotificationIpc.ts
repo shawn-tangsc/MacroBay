@@ -29,7 +29,8 @@ export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
   catalog?: NotificationEventCatalog
   copy?: NotificationCopyPort
-  diagnostics?: NotificationDiagnosticsSink
+  /** 诊断出口：**必传**。漏传时运行时照样能记、但没人接，等于没留痕（2026-11-08 定）。 */
+  diagnostics: NotificationDiagnosticsSink
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
   push?: DeliveryHooks['push']
@@ -49,7 +50,7 @@ export function configureNotificationRuntime(deps: {
   getLanguage = deps.getLanguage ?? null
   notificationCatalog = deps.catalog ?? null
   notificationCopyPort = deps.copy ?? null
-  notificationDiagnostics = deps.diagnostics ?? null
+  notificationDiagnostics = deps.diagnostics
   updateNotificationSettings = deps.updateSettings ?? null
   getNotificationPushTargets = deps.getPushTargets ?? null
   notificationPushHook = deps.push ?? null
@@ -97,6 +98,10 @@ export function getNotificationRuntime() {
       // 装配顺序错误：宁可启动即失败，也不拿 UTC 顶替读者时区去判一次免打扰。
       throw new Error('notification-runtime-clock-not-configured')
     }
+    if (notificationDiagnostics === null) {
+      // 同样宁可启动即失败：能记却没人接，与实际没留痕无法区分。
+      throw new Error('notification-runtime-diagnostics-not-configured')
+    }
     const desktopAdapter = createDesktopNotificationAdapter()
     notificationRuntime = createNotificationRuntime({
       storage: createNotificationJsonStorage(join(app.getPath('userData'), 'platform', 'notifications.json')),
@@ -114,7 +119,7 @@ export function getNotificationRuntime() {
       getLanguage: () => getLanguage?.() ?? Promise.resolve('zh-CN'),
       catalog: notificationCatalog ?? undefined,
       copy: notificationCopyPort ?? undefined,
-      diagnostics: notificationDiagnostics ?? undefined,
+      diagnostics: notificationDiagnostics,
       updateSettings: updateNotificationSettings ?? undefined,
       getPushTargets: getNotificationPushTargets ?? undefined,
       producerOwnership: notificationProducerOwnership ?? undefined,

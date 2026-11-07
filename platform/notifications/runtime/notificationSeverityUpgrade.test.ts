@@ -61,6 +61,7 @@ function harness(options: {
   }
   let sequence = 0
   const runtime = createNotificationRuntime({
+    diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
       write: async (next) => { Object.assign(state, next) }

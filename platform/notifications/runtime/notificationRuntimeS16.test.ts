@@ -86,6 +86,7 @@ function createRuntime(records: readonly ReturnType<typeof record>[]) {
   }
   return {
     runtime: createNotificationRuntime({
+      diagnostics: () => undefined,
       storage,
       catalog,
       getSettings: async () => settings,

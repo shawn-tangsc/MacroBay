@@ -1,6 +1,6 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import type { NotificationSurfaceSelection } from './notificationSurfaceSelection'
-import type { NotificationSubmitRejection } from './notificationSubmitRejection'
+import type { NotificationSubmitRejection, NotificationSubmitRejectionReason } from './notificationSubmitRejection'
 import type { NotificationCopyParam } from './notificationCopyPort'
 import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
 
@@ -472,6 +472,8 @@ export type NotificationDiagnosticsEntry = {
      * 记这一行是因为「都关」看起来跟读者自己关掉一模一样——不记，就没人知道少了什么。
      */
     | 'surface-selection-conflict'
+    /** 提交被拒（`rejected`）**沿用拒绝码本身**，不发明第二个码：原因就是这行痕要回答的问题。 */
+    | NotificationSubmitRejectionReason
   eventTypeId?: string
   producerId?: string
   /**
@@ -486,6 +488,8 @@ export type NotificationDiagnosticsEntry = {
   reason?: string
   step?: 'surface' | 'target' | 'edition' | 'channel'
   language?: 'zh-CN' | 'en-US'
+  /** 只有「提交被拒」这一支自带档位（同一出口要记 `error` 与 `info`，规则见 `rejectionTraceLevel`）；其它码由装配层定。 */
+  level?: 'info' | 'warn' | 'error'
   at: string
 }
 export type NotificationDiagnosticsSink = (entry: NotificationDiagnosticsEntry) => void

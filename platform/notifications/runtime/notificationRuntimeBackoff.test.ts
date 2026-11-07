@@ -123,6 +123,7 @@ function createHarness() {
   // 出站推送要读者订阅了 channel 档才会排进投递表（`effectiveLevels` 第 186 行）。
   Object.assign(state, { subscriptions: { 'platform.push-probe': { record: true, channel: true } } })
   const runtime = createNotificationRuntime({
+    diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
       write: async (next) => { Object.assign(state, next) }
@@ -203,6 +204,7 @@ describe('P4a/P4b: credential health announces only flips', () => {
     const state = createDefaultNotificationStoreState()
     const make = (): ReturnType<typeof createNotificationRuntime> =>
       createNotificationRuntime({
+        diagnostics: () => undefined,
         storage: {
           read: async () => JSON.parse(JSON.stringify(state)),
           write: async (next) => { Object.assign(state, next) }
@@ -235,6 +237,7 @@ describe('P4a/P4b: credential health announces only flips', () => {
   it('never prints the provider id: no display name means no notice, and the flip is still recorded', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }
@@ -258,6 +261,7 @@ describe('P4a/P4b: credential health announces only flips', () => {
     const state = createDefaultNotificationStoreState()
     state.providerCredentialHealth = { silicon: 'invalid' }
     const runtime = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }

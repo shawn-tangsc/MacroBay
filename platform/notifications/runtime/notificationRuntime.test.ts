@@ -79,6 +79,7 @@ function createRuntime(overrides: {
 } = {}) {
   const state = createDefaultNotificationStoreState()
   return createNotificationRuntime({
+    diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
       write: async (next) => { Object.assign(state, next) }
@@ -353,6 +354,7 @@ describe('P7: the desktop blocked event has a producer', () => {
   it('submits platform.desktop.blocked when show() fails, and records it in the center', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }
@@ -377,6 +379,7 @@ describe('P7: the desktop blocked event has a producer', () => {
   it('does not submit it when the desktop switch is simply off', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }

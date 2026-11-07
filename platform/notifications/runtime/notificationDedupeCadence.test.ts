@@ -72,6 +72,7 @@ function runtimeAt(iso: string) {
   const state = createDefaultNotificationStoreState()
   const { clock, advanceTo } = clockAt(iso)
   const runtime = createNotificationRuntime({
+    diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
       write: async (next) => { Object.assign(state, next) }

@@ -156,6 +156,7 @@ describe('合并成品记录：标题取第一次、正文取最新', () => {
       }]
     })
     const instance = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
       catalog,
       getSettings: async () => createDefaultNotificationRuntimeSettings(),
@@ -213,6 +214,7 @@ describe('成品在手时不再读键', () => {
       }]
     })
     const instance = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
       catalog,
       getSettings: async () => createDefaultNotificationRuntimeSettings(),
@@ -312,6 +314,7 @@ describe('源头没拼完：拒收，不落库', () => {
       }]
     })
     const instance = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
       catalog,
       getSettings: async () => createDefaultNotificationRuntimeSettings(),

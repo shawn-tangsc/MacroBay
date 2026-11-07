@@ -95,6 +95,7 @@ function createRuntime(options: {
   }
   const updates: Partial<NotificationRuntimeSettings>[] = []
   const runtime = createNotificationRuntime({
+    diagnostics: () => undefined,
     storage,
     catalog,
     getSettings: async () => ({

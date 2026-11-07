@@ -56,6 +56,7 @@ function createRuntime(options: {
     }
   }
   const runtime = createNotificationRuntime({
+    diagnostics: () => undefined,
     storage,
     catalog,
     getSettings: async () => ({
