@@ -959,6 +959,17 @@ describe('notification surface selection surface', () => {
       .toContain('IpcChannels.notificationsGetSurfaceSelection')
   })
 
+  it('offers exactly one write channel for the selection: no batch, no delete, no reset', () => {
+    expect(IpcChannels.notificationsSetSurfaceSelection).toBe('platform:notifications-set-surface-selection')
+    const block = mainRegistrationBlock(notificationIpcSource, 'notificationsSetSurfaceSelection')
+    expect(block).toContain("typeof payload.eventTypeId !== 'string'")
+    expect(block).toContain('getNotificationRuntime().setSurfaceSelection(payload.eventTypeId, payload.surfaces)')
+    // 不预夹越权面：交给运行时按 `notification-surface-not-approved` 拒，页面才知道没存上。
+    expect(block).not.toContain('filter(')
+    expect(preloadMethodBlock(readSource('../preload/namespaces/notifications.ts'), 'setSurfaceSelection'))
+      .toContain('IpcChannels.notificationsSetSurfaceSelection')
+  })
+
   it('keeps every notification channel that existed before: adding one must not drop another', () => {
     // 受保护接缝的回归守卫：这份清单是**当时的全量**。少一条（改名/误删）就红；
     // 多一条则要在这里显式加一行——那正是「新增通道」必须被看见的地方。
@@ -984,6 +995,7 @@ describe('notification surface selection surface', () => {
       'platform:notifications-send-test',
       'platform:notifications-set-channel-event',
       'platform:notifications-set-desktop-enabled',
+      'platform:notifications-set-surface-selection',
       'platform:notifications-set-toast-enabled',
       'platform:notifications-snooze'
     ])

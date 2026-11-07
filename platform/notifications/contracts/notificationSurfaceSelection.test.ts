@@ -219,6 +219,14 @@ describe('writing one selection per group', () => {
       .rejects.toThrow(/notification-surface-not-approved: platform\.plain:desktop/)
   })
 
+  it('leaves the stored selection untouched when any surface is refused (no half write)', async () => {
+    const { surface, selections } = createSurface({ 'platform.plain': { toast: true } })
+    await expect(surface.setSurfaceSelection('platform.plain', { desktop: true, channel: false }))
+      .rejects.toThrow(/notification-surface-not-approved/)
+    // 拒绝必须整笔不算：留下「channel 写进去了、desktop 没写」就是半笔。
+    expect(selections()).toEqual({ 'platform.plain': { toast: true } })
+  })
+
   it('refuses an event it does not know', async () => {
     const { surface } = createSurface()
     await expect(surface.setSurfaceSelection('platform.nope', { toast: true }))

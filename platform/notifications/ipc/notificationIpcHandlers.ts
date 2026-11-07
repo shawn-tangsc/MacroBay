@@ -61,6 +61,22 @@ export function registerNotificationIpcHandlers(): void {
     }
     return getNotificationRuntime().getSurfaceSelection(payload.eventTypeId)
   })
+  /**
+   * 写一份表面选择（契约 §5.5）。**只有这一条写通道**：不做批量、不做删除、不做 reset。
+   *
+   * 越权（给没批的面写 `true`）由运行时按 `notification-surface-not-approved` 拒——这里不预先
+   * 夹掉：夹掉会让页面以为存上了，而读者看到的是一个勾在、实际不生效的配置。
+   */
+  ipcMain.handle(IpcChannels.notificationsSetSurfaceSelection, (_event, input) => {
+    const payload = (input ?? {}) as { eventTypeId?: string; surfaces?: unknown }
+    if (typeof payload.eventTypeId !== 'string' || payload.eventTypeId.length === 0) {
+      throw new Error('eventTypeId is required.')
+    }
+    if (typeof payload.surfaces !== 'object' || payload.surfaces === null || Array.isArray(payload.surfaces)) {
+      throw new Error('surfaces must be an object.')
+    }
+    return getNotificationRuntime().setSurfaceSelection(payload.eventTypeId, payload.surfaces)
+  })
   ipcMain.handle(IpcChannels.notificationsRedeliverPush, (_event, input) => {
     const payload = (input ?? {}) as { recordId?: string; editionId?: string; locale?: string; surface?: string }
     if (!payload.recordId || !payload.editionId || !payload.locale) {

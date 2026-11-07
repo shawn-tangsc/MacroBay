@@ -84,6 +84,7 @@ describe('notification producer boundary', () => {
       'sendTest',
       'setChannelEvent',
       'setDesktopEnabled',
+      'setSurfaceSelection',
       'setToastEnabled',
       'snooze'
     ])

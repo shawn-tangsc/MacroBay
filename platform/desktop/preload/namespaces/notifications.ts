@@ -67,6 +67,11 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
       ipcRenderer.invoke(IpcChannels.notificationsGetSurfaceSelection, { eventTypeId }) as Promise<
         Awaited<ReturnType<NotificationRuntime['getSurfaceSelection']>>
       >,
+    /** 写同一份选择。**唯一一条写通道**：没有批量、没有删除、没有 reset。 */
+    setSurfaceSelection: (eventTypeId: string, surfaces: { channel?: boolean; toast?: boolean; desktop?: boolean }) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSetSurfaceSelection, { eventTypeId, surfaces }) as Promise<
+        Awaited<ReturnType<NotificationRuntime['setSurfaceSelection']>>
+      >,
     setChannelEvent: (eventId: string, enabled: boolean) =>
       ipcRenderer.invoke(IpcChannels.notificationsSetChannelEvent, { eventId, enabled }) as Promise<
         Awaited<ReturnType<NotificationRuntime['setChannelEvent']>>
