@@ -37,10 +37,8 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, onOpenSet
   // 人话原因：**哪一步没跑完 + 发生了什么（用了多久）+ 接下来怎么办**，由文案表逐码拼出来。
   // 表里还没有这个码时退回原来的标签——不许在这里自己造句。
   const stalled = failure.generationTrace?.stages.find((stage) => stage.state === 'failed')
-  /**
-   * 时长只取**真正卡住的那一步**（`02` v2.156）：校验 1 毫秒就判死，说明卡住的不是它，
-   * 写成「（用了 1 毫秒）」只会让读者以为是超时。瞬间失败的那一步不带时长半句。
-   */
+  // 时长只给「可能真卡住」的步骤（`02` v2.156）：校验 1 毫秒就判死，说明卡住的不是它——
+  // 写成「（用了 1 毫秒）」正是当初那句「超时（用了 1 毫秒）」的来源。
   const stalledDuration = stalled?.durationMs !== undefined && stalled.durationMs >= MIN_REPORTED_DURATION_MS ? stalled.durationMs : undefined
   const sentence = briefingFailureSentence({
     code: failure.code,
