@@ -64,6 +64,10 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   // 时间点，读者只该勾一次。组里可用面取两条批准表的**交集**，所以两行的档位必须一致——
   // 只改其中一行，交集就会变，绿着一半却只对一条生效，那正是要拦的（`notificationEventPolicy.test` 钉住）。
   'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
+  // N11 日历「开始前」（契约 §4.1 已批，情报需求 v3.78 §十六）：**与 N5 同一个组键** `calendar-events`，
+  // 所以两行的档位形状必须一致——只改一行，组选择取的交集就变，勾了「应用内提示」会只闪一条。
+  // 桌面不批：读者要的话说一句，两条一起批。
+  'market-intelligence.calendar.event-upcoming': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
   'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
