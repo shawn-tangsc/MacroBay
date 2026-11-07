@@ -63,6 +63,8 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   macroEventLanded: 'market-intelligence.macro.event-landed',
   calendarEventUpcoming: 'market-intelligence.calendar.event-upcoming',
   sentimentAlert: 'market-intelligence.sentiment.alert',
+  /** N12：信号唤起的那次分析出结论了（只在这一条路径发）。 */
+  analysisConclusion: 'market-intelligence.analysis.conclusion',
   sourceConsecutiveFailed: 'market-intelligence.source.consecutive-failed',
   sourceStale: 'market-intelligence.source.stale',
   timezoneInvalid: 'market-intelligence.timezone.invalid'
