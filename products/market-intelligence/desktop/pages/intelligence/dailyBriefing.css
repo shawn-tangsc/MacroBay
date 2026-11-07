@@ -271,7 +271,7 @@
 /* The moment leads: bold and in the body ink, because it is what the reader scans the rail for.
    It never shrinks: a row that loses "07:00" to an ellipsis has lost its identity, which is worse
    than losing the window qualifier beside it. */
-.mi-daily-briefing__rail-fact:first-child { flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
+.mi-daily-briefing__rail-fact:first-child { flex: 0 1 auto; min-width: 0; overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
 /* The window is a qualifier of the moment, not a fact beside it: a chip keeps it from reading as one. */
 /* The window badge and the source badge are one shape: geometry is declared once, here, and the two
    only differ in colour. Two sizes of the same small marker side by side read as an accident. */

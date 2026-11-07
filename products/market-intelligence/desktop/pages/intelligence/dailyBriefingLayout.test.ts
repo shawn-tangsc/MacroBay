@@ -423,8 +423,10 @@ describe('the failure badge in the row', () => {
  * squeezed, and no width-based rule may hide any of them behind the renderer's back.
  */
 describe('the row never squeezes what a reader must see', () => {
-  it('keeps the moment, the source, the failure badge and the language unsqueezable', () => {
-    expect(rule('.mi-daily-briefing__rail-fact:first-child {')).toContain('flex: none;')
+  it('lets the facts give way and keeps everything outside them whole', () => {
+    // The moment may be the thing that gets cut when an enumerated case is wrong — it is inside the
+    // facts group. What must not be cut are the three outside it.
+    expect(rule('.mi-daily-briefing__rail-fact:first-child {')).toContain('flex: 0 1 auto;')
     // The source's flex lives in the rule it shares with the window chip, not in its colour rule.
     const chipRule = css.slice(css.indexOf('.mi-daily-briefing__rail-fact[data-window-hours],'))
     expect(chipRule.slice(0, chipRule.indexOf('}'))).toContain('flex: none;')
