@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 
 import type { JobRuntime } from '@platform/jobs'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
@@ -6,7 +5,7 @@ import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@plat
 import type { MarketCalendarPage, MarketCalendarQuery } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
 import { registerCalendarEventReminderJob } from './calendarEventReminderJob'
-import { createCalendarReminderSettingsStore } from './calendarEventReminderSettingsStore'
+import type { CalendarReminderSettingsStore } from './calendarEventReminderSettingsStore'
 
 /**
  * 「日历事件开始前」提醒的装配（技术方案 §3）。
@@ -14,6 +13,16 @@ import { createCalendarReminderSettingsStore } from './calendarEventReminderSett
  * 从 `bootstrap.ts` 抽出来，只为让那份文件的体积基线不再增长——接线本身没有变：
  * 一条开关一个 definition，注册时读一次设置（开着就排上，这就是「重启自行重建」）。
  */
+/** 「事件发生后也告诉我」那一行的读取器：缺省＝只推出乎意料的、只推「高」（与从前一致）。 */
+export function landedFilterReader(
+  settings: CalendarReminderSettingsStore
+): () => Readonly<{ includeMatched: boolean; importance: readonly ('high' | 'medium' | 'low')[] }> {
+  return () => {
+    const current = settings.read()
+    return { includeMatched: current.landedFilter === 'also-matched', importance: current.importance }
+  }
+}
+
 export type CalendarEventReminderWiring = Readonly<{
   read: () => CalendarReminderSettings
   write: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderSettings
@@ -22,14 +31,15 @@ export type CalendarEventReminderWiring = Readonly<{
 
 export function registerCalendarEventReminder(input: Readonly<{
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule'>
-  dataDir: string
+  /** 配置存储由装配处创建并共享（「发生后」那一行也读它），不在这里再建一份。 */
+  settings: CalendarReminderSettingsStore
   queryMonth: (query: MarketCalendarQuery) => MarketCalendarPage
   submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome | unknown>
   timeZone: () => string
   now?: () => string
 }>): CalendarEventReminderWiring {
-  const settings = createCalendarReminderSettingsStore(join(input.dataDir, 'calendar-event-reminder.json'))
   const now = input.now ?? (() => new Date().toISOString())
+  const settings = input.settings
 
   const job = registerCalendarEventReminderJob(input.jobRuntime, {
     readSettings: () => settings.read(),

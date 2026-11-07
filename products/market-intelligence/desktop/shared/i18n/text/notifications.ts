@@ -65,6 +65,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.macroEventLanded)]: zh.macro.title,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: zh.macro.direction.above,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: zh.macro.direction.below,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.matched')]: zh.macro.direction.matched,
     // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
     ...Object.fromEntries(
       Object.entries(indicatorNames).map(([id, name]) => [
@@ -77,6 +78,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: zh.macro.body.values,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: zh.macro.body.noPrevious,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: zh.macro.body.noForecast,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'matched')]: zh.macro.body.matched,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: zh.macro.periodicity.yoy,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: zh.macro.periodicity.mom,
     [REASON(IDS.macroEventLanded)]: zh.macro.reason,
@@ -122,6 +124,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.macroEventLanded)]: en.macro.title,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: en.macro.direction.above,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: en.macro.direction.below,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.matched')]: en.macro.direction.matched,
     // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
     ...Object.fromEntries(
       Object.entries(indicatorNames).map(([id, name]) => [
@@ -134,6 +137,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: en.macro.body.values,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: en.macro.body.noPrevious,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: en.macro.body.noForecast,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'matched')]: en.macro.body.matched,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: en.macro.periodicity.yoy,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: en.macro.periodicity.mom,
     [REASON(IDS.macroEventLanded)]: en.macro.reason,

@@ -25,7 +25,7 @@ export type MacroEventSentenceInput = Readonly<{
   actual: string
   consensus: string
   previous?: string
-  comparison: 'above' | 'below'
+  comparison: 'above' | 'below' | 'matched'
   periodicity?: SurprisePeriodicity
 }>
 
@@ -58,7 +58,13 @@ export function renderMacroEventSentence(
     })
     if (title === undefined) return undefined
     // 缺前值是今天唯一会出现的缺值：换句子，不拼「—」，也不留空括号。
-    const body = input.previous === undefined
+    const body = input.comparison === 'matched'
+      ? fillTemplate(sheet.body.matched, {
+          actual: input.actual,
+          consensus: input.consensus,
+          periodLabel: input.periodicity === undefined ? '' : sheet.periodicity[input.periodicity]
+        })
+      : input.previous === undefined
       ? fillTemplate(sheet.body.noPrevious, {
           actual: input.actual,
           consensus: input.consensus,

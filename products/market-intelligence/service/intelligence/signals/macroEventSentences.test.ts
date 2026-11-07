@@ -95,6 +95,17 @@ describe('macro event landed sentences', () => {
     expect(zh.body).not.toContain('前值 —')
   })
 
+  it('says "in line with forecast" for a matched release instead of borrowing a direction', () => {
+    // 读者勾了「符合预期也推」才会走到这里；句子不能说成高于/低于——那是另一件事。
+    const zh = render(landing({ comparison: 'matched', eventNameKey: 'cpi' }), 'zh-CN')
+    expect(zh.title).toContain('符合预期')
+    expect(zh.body).toContain('符合预期')
+    expect(zh.title).not.toContain('高于预期')
+    expect(zh.title).not.toContain('低于预期')
+    const en = render(landing({ comparison: 'matched', eventNameKey: 'cpi' }), 'en-US')
+    expect(en.title).toContain('in line with forecast')
+  })
+
   it('writes the direction as a word, never as a difference in points', () => {
     const zh = render(landing({ comparison: 'below', eventNameKey: 'cpi' }), 'zh-CN')
     expect(zh.title).toBe('美国 消费者物价指数（CPI） 低于预期')

@@ -339,7 +339,7 @@ export const marketIntelligenceProductManifest = {
     notificationEvent('market-intelligence.macro.event-landed', {
       category: 'reminder',
       // 三值齐 / 缺前值 / 缺预期（后者今天不可达，键留着等放宽筛选）。
-      bodyVariants: ['values', 'noPrevious', 'noForecast'],
+      bodyVariants: ['values', 'noPrevious', 'noForecast', 'matched'],
       requiresUserAction: false,
       // 批准表给 N5 批了 `center` + `toast` + `channel`，但声明过去只申请了手机——
       // 于是「日历事件」那份组选择里勾「应用内提示」只对「开始前」生效、对「发生后」无效，

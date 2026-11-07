@@ -45,7 +45,8 @@ import type {
   MacroCalendarOps
 } from './intelligence/agent-capabilities/operationFacades'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
-import { registerCalendarEventReminder } from './intelligence/macro-calendar/registerCalendarEventReminder'
+import { landedFilterReader, registerCalendarEventReminder } from './intelligence/macro-calendar/registerCalendarEventReminder'
+import { createCalendarReminderSettingsStore } from './intelligence/macro-calendar/calendarEventReminderSettingsStore'
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
@@ -314,10 +315,16 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const readEnabledCalendarFeeds = createEnabledCalendarFeeds({
     listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles()
   })
+  // 「事件发生后也告诉我」那一行要真的影响落地通知：配置只存一处，日历经这个读取器拿它。
+  const calendarReminderSettings = createCalendarReminderSettingsStore(
+    join(getIntelligenceProductDataDir(), 'calendar-event-reminder.json')
+  )
   const marketCalendar = composeStoredManualCalendar({ storage: macroCalendarBackend.storage,
     archive: intelligenceModule.macroCalendarEvidenceArchive, evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
     requestGovernanceQueue: intelligenceModule.requestGovernanceQueue,
     readEnabledFeeds: readEnabledCalendarFeeds,
+    // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
+    readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
@@ -329,7 +336,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
   const calendarReminder = registerCalendarEventReminder({
     jobRuntime: deps.jobRuntime,
-    dataDir: getIntelligenceProductDataDir(),
+    settings: calendarReminderSettings,
     queryMonth: marketCalendar.queryMonth,
     submit: (request) => getNotificationRuntime().submit(request),
     timeZone: () => currentReaderTimeZone()
