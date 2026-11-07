@@ -366,18 +366,20 @@ describe('CapitalConditionsPanel', () => {
     expect(info.className).toContain('icon-button--sm')
     expect(info.className).toContain('icon-button--plain')
     expect(info.getAttribute('aria-expanded')).toBe('false')
-    // NOTE(待补)：判据里「浮层文字用 aria-describedby 挂在触发件上」**当前不成立**，所以这里不断言。
-    // 平台 `Popover`（2026-11-08 版）只包了一层 `span.platform-popover__anchor`，不输出
-    // `aria-describedby`；DOM 上能看到的那个来自 antd 的触发层，值恒为 `test-id`，而
-    // `document.getElementById('test-id')` 是 null——它不指向任何说明节点。断言它「存在」会和
-    // 真实可用性无关地恒真。组件线补上 `PopoverTriggerProps` 的描述关系后，再加这条断言：
-    // 触发件 aria-describedby === 浮层节点 id，且该 id 能查到、文本就是那段说明。
 
     // 聚焦即展开，Esc 收起并回焦。
     await act(async () => { info.focus() })
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
     expect(info.getAttribute('aria-expanded')).toBe('true')
     expect(document.body.textContent).toContain(text.signalInsufficientReason)
+    // 说明关系是真的：触发件指到的那个 id 必须**查得到节点**、且节点里就是那段说明。
+    // 只断言「属性存在」会恒真（antd 触发层自己会挂一个指向 `test-id` 的值），所以查三层：
+    // 属性 → 节点 → 节点文本。触发器用的是真实 `IconButton`（props 收窄，不转发就静默丢掉）。
+    const describedBy = info.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    const described = document.getElementById(describedBy!)
+    expect(described).not.toBeNull()
+    expect(described!.textContent).toContain(text.signalInsufficientReason)
     await act(async () => {
       info.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
