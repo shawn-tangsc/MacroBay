@@ -83,7 +83,11 @@ async function selectItem(index: number): Promise<void> {
   await act(async () => { listItems()[index]?.click(); await Promise.resolve() })
 }
 
-beforeEach(() => { install() })
+beforeEach(() => {
+  // 宽窗是默认形态；只有那条窄窗用例会把它改小。
+  window.innerWidth = 1280
+  install()
+})
 afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
@@ -121,6 +125,26 @@ describe('intelligence notification settings', () => {
     // 桌面两条都没批 → 这一项的详情里根本不该出现桌面（页脚那句是另一件事）。
     const detail = container?.querySelector('.intelligence-notification-calendar')?.textContent ?? ''
     expect(detail).not.toContain('桌面')
+  })
+
+  it('turns the list into a dropdown on a narrow window, with the name and the state in the option text', async () => {
+    // 窄窗下换控件而不是压缩：列表 → 下拉；名字与状态都进选项文本（图标认不出是哪一条）。
+    window.innerWidth = 1000
+    await render()
+    expect(container?.querySelector('.intelligence-notification-list')).toBeNull()
+    const select = container?.querySelector('select')
+    expect(select).not.toBeNull()
+    const options = [...(select?.querySelectorAll('option') ?? [])]
+    expect(options).toHaveLength(4)
+    expect(options[3]?.textContent).toContain(text['pages.intelligence.notification.rows.calendar.title'])
+    expect(options[3]?.textContent).toContain(text['pages.intelligence.notification.status.off'])
+
+    await act(async () => {
+      if (select) { (select as HTMLSelectElement).value = 'calendar'; select.dispatchEvent(new Event('change', { bubbles: true })) }
+      await Promise.resolve()
+    })
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.timeline'])
+    window.innerWidth = 1280
   })
 
   it('collapses the lead and importance controls while the reminder is off and says what would happen', async () => {

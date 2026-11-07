@@ -14,6 +14,7 @@ import { intelligenceNotificationText } from './text'
 import { useCalendarReminderSettings, type CalendarReminderSettingsState } from './useCalendarReminderSettings'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS, useChannelEventSettings } from './useChannelEventSettings'
 import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
+import { useNarrowWindow } from './useNarrowWindow'
 import { useSurfaceSelection } from './useSurfaceSelection'
 
 import './intelligence-notification.css'
@@ -49,6 +50,7 @@ export default function IntelligenceNotificationSettingsSection(): React.ReactEl
   const reminder = useCalendarReminderSettings()
   const surfaces = useSurfaceSelection(CALENDAR_GROUP_EVENT_ID)
   const [selected, setSelected] = useState<ItemKey>('signal')
+  const narrow = useNarrowWindow()
 
   const itemName = (key: ItemKey): string =>
     text[`pages.intelligence.notification.rows.${key === 'calendar' ? 'calendar' : CONTENT_ITEMS[key].row}.title`] ?? ''
@@ -89,21 +91,37 @@ export default function IntelligenceNotificationSettingsSection(): React.ReactEl
   return (
     <section className="settings-workspace intelligence-notification-workspace">
       <div className="intelligence-notification-master-detail">
-        <ul className="intelligence-notification-list" aria-label={text['pages.intelligence.notification.groupTitle']}>
-          {ITEM_KEYS.map((key) => (
-            <li key={key}>
-              <button
-                aria-current={selected === key ? 'true' : undefined}
-                className="intelligence-notification-list-item"
-                onClick={() => setSelected(key)}
-                type="button"
+        {/* 窄窗：列表收成顶部下拉，**名字与状态都进选项文本**——图标认不出是哪一条。 */}
+        {narrow
+          ? <div className="intelligence-notification-narrow">
+            <label className="intelligence-notification-narrow-label">
+              {text['pages.intelligence.notification.groupTitle']}
+              <select
+                aria-label={text['pages.intelligence.notification.groupTitle']}
+                onChange={(event) => setSelected(event.target.value as ItemKey)}
+                value={selected}
               >
-                <span className="intelligence-notification-list-name">{itemName(key)}</span>
-                <span className="intelligence-notification-list-state">{itemState(key)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+                {ITEM_KEYS.map((key) => (
+                  <option key={key} value={key}>{`${itemName(key)} · ${itemState(key)}`}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          : <ul className="intelligence-notification-list" aria-label={text['pages.intelligence.notification.groupTitle']}>
+            {ITEM_KEYS.map((key) => (
+              <li key={key}>
+                <button
+                  aria-current={selected === key ? 'true' : undefined}
+                  className="intelligence-notification-list-item"
+                  onClick={() => setSelected(key)}
+                  type="button"
+                >
+                  <span className="intelligence-notification-list-name">{itemName(key)}</span>
+                  <span className="intelligence-notification-list-state">{itemState(key)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>}
 
         <div className="intelligence-notification-detail">
           <div className="intelligence-notification-detail-head">
