@@ -141,7 +141,7 @@ describe('daily briefing history rail', () => {
     expect(row.querySelector('[data-rail-title="reason"]')).not.toBeNull()
     expect(row.querySelector('.status-pill')).toBeNull()
     expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('not-run')
-    expect(row.textContent).not.toContain(text.history.runFailed)
+    expect(row.textContent).not.toContain('这次失败')
     expect(row.textContent).not.toMatch(/\d+\s*项|\d+\s*缺口/)
   })
 
@@ -149,7 +149,7 @@ describe('daily briefing history rail', () => {
     // 有正文 = 成了。尝试次数不是状态。
     render({ editions: [edition({ attemptCount: 3, languages: [{ locale: 'zh-CN', state: 'published' }] })] })
     expect(host.querySelector('.status-pill')).toBeNull()
-    expect(host.textContent).not.toContain(text.history.runFailed)
+    expect(host.textContent).not.toContain('这次失败')
   })
 
   it('prints one badge per row, and clicking a row selects that edition', () => {
@@ -600,7 +600,7 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('failed')
     // 失败标在第一行（`02` v2.156）：第二行只写原因，两个词不许同时出现。
     expect(row.querySelector('.status-pill')).not.toBeNull()
-    expect(row.textContent).not.toContain(text.history.runFailed)
+    expect(row.textContent).not.toContain('这次失败')
     expect(row.textContent).not.toContain(text.history.missingRun)
     expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(` ${text.history.railFailedReason}`)
   })
@@ -741,7 +741,7 @@ describe('a run that died is not the same sentence as a run that failed', () => 
     expect(row('p_int').querySelector('.status-pill')).toBeNull()
     // 失败那一行：状态词在第一行的红标里（`02` v2.156），第二行只写原因；两个词不许同时出现。
     expect(row('p_fail').querySelector('.status-pill')?.textContent).toBe(text.history.failureBadge)
-    expect(row('p_fail').textContent).not.toContain(text.history.runFailed)
+    expect(row('p_fail').textContent).not.toContain('这次失败')
     expect(row('p_fail').textContent).not.toContain(text.history.runInterrupted)
   })
 
@@ -753,7 +753,7 @@ describe('a run that died is not the same sentence as a run that failed', () => 
     const row = (periodId: string): HTMLElement => host.querySelector<HTMLElement>(`[data-period-id="${periodId}"]`)!
     expect(row('p_int').textContent).toContain(english.history.runInterrupted)
     expect(row('p_fail').querySelector('.status-pill')?.textContent).toBe(english.history.failureBadge)
-    expect(row('p_fail').textContent).not.toContain(english.history.runFailed)
+    expect(row('p_fail').textContent).not.toContain('This run failed')
     expect(row('p_fail').textContent).not.toContain(english.history.runInterrupted)
   })
 })
