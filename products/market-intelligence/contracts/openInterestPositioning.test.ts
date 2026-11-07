@@ -71,7 +71,7 @@ function withDrop(at: number, dropPct = -2, pricePct = -1.2, multiple = 3): Posi
 
 describe('liquidation marks', () => {
   it('marks a bucket where open interest, price and volume all moved together', () => {
-    const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120) })
+    const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120), direction: 'long' })
     expect(result.state).toBe('available')
     expect(result.hints).toHaveLength(1)
     expect(result.hints[0]).toMatchObject({ asset: 'btc', dropPct: -2, volumeMultiple: 3 })
@@ -81,33 +81,33 @@ describe('liquidation marks', () => {
   })
 
   it('needs all three conditions, not two', () => {
-    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -1.4) }).hints).toHaveLength(0)
-    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -2, -0.7) }).hints).toHaveLength(0)
-    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -2, -1.2, 1.9) }).hints).toHaveLength(0)
+    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -1.4), direction: 'long' }).hints).toHaveLength(0)
+    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -2, -0.7), direction: 'long' }).hints).toHaveLength(0)
+    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -2, -1.2, 1.9), direction: 'long' }).hints).toHaveLength(0)
   })
 
   it('includes the boundary values themselves', () => {
-    const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -1.5, -0.8, 2) })
+    const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120, -1.5, -0.8, 2), direction: 'long' })
     expect(result.hints).toHaveLength(1)
   })
 
   it('reports unavailable when too few closed buckets carry volume, instead of reporting nothing', () => {
     const missing = bars(200, (index, bar) => index < 21 ? { ...bar, volumeBase: null } : bar)
-    expect(detectLiquidationHints({ asset: 'btc', bars: missing })).toMatchObject({ state: 'unavailable', hints: [] })
+    expect(detectLiquidationHints({ asset: 'btc', bars: missing, direction: 'long' })).toMatchObject({ state: 'unavailable', hints: [] })
     const tolerant = bars(200, (index, bar) => index < 19 ? { ...bar, volumeBase: null } : bar)
-    expect(detectLiquidationHints({ asset: 'btc', bars: tolerant }).state).toBe('available')
+    expect(detectLiquidationHints({ asset: 'btc', bars: tolerant, direction: 'long' }).state).toBe('available')
   })
 
   it('cannot judge a bucket without a full window of volume behind it', () => {
-    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(40) }).hints).toHaveLength(0)
-    expect(detectLiquidationHints({ asset: 'btc', bars: [] })).toMatchObject({ state: 'available', hints: [] })
+    expect(detectLiquidationHints({ asset: 'btc', bars: withDrop(40), direction: 'long' }).hints).toHaveLength(0)
+    expect(detectLiquidationHints({ asset: 'btc', bars: [], direction: 'long' })).toMatchObject({ state: 'available', hints: [] })
   })
 
   it('keeps the most recent marks and says when it dropped older ones', () => {
     const many = bars(1_400, (index, bar) => index > 100 && index % 120 === 0
       ? { ...bar, notionalUsd: 7_840_000_000, closePrice: 79_000, volumeBase: 3_000 }
       : bar)
-    const result = detectLiquidationHints({ asset: 'eth', bars: many })
+    const result = detectLiquidationHints({ asset: 'eth', bars: many, direction: 'long' })
     expect(result.hints.length).toBe(liquidationHintPolicy.maximumHints)
     expect(result.truncated).toBe(true)
     expect(result.hints.at(-1)!.observedAt > result.hints[0]!.observedAt).toBe(true)
@@ -117,13 +117,13 @@ describe('liquidation marks', () => {
     const broken = bars(130, (index, bar) => index === 119 ? { ...bar, closePrice: null } : index === 120
       ? { ...bar, notionalUsd: 7_840_000_000, closePrice: 79_000, volumeBase: 3_000 }
       : bar)
-    expect(detectLiquidationHints({ asset: 'btc', bars: broken }).hints).toHaveLength(0)
+    expect(detectLiquidationHints({ asset: 'btc', bars: broken, direction: 'long' }).hints).toHaveLength(0)
   })
 })
 
 describe('liquidation mark anchoring', () => {
   it('carries the notional value of the bucket it marks', () => {
-    const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120) })
+    const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120), direction: 'long' })
     expect(result.hints[0]).toMatchObject({ notionalUsd: 8_000_000_000 * 0.98 })
   })
 })
@@ -137,5 +137,23 @@ describe('liquidation lookback', () => {
     expect(openInterestBucketPolicy.signalBucketMs).toBe(900_000)
     expect(Math.round(liquidationHintPolicy.lookbackMs / openInterestBucketPolicy.signalBucketMs)).toBe(96)
     expect(Math.round(liquidationHintPolicy.lookbackMs / 300_000)).toBe(288)
+  })
+})
+
+describe('short liquidation: the mirror of the same rule', () => {
+  // 价格涨 + 持仓骤降 + 成交放大 = 空头被清；方向由规则参数定，同一个函数、同一套门槛。
+  it('marks a bucket when price rises instead of falling', () => {
+    const bars = Array.from({ length: 100 }, (_, index) => ({
+      observedAt: new Date(Date.parse('2026-11-06T00:00:00.000Z') + index * 15 * 60_000).toISOString(),
+      notionalUsd: index === 99 ? 970_000_000 : 1_000_000_000,
+      volumeBase: index === 99 ? 2_500 : 1_000,
+      closePrice: index === 99 ? 71_500 : 70_000
+    }))
+    const long = detectLiquidationHints({ asset: 'btc', bars, direction: 'long' })
+    const short = detectLiquidationHints({ asset: 'btc', bars, direction: 'short' })
+    expect(long.hints).toEqual([])
+    expect(short.hints).toHaveLength(1)
+    expect(short.hints[0]).toMatchObject({ direction: 'short' })
+    expect(short.hints[0]!.pricePct!).toBeGreaterThan(0)
   })
 })

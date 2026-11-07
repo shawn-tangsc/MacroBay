@@ -81,9 +81,14 @@ export type PositioningBar = Readonly<{
   closePrice: number | null
 }>
 
+/** 哪一边被清掉：多头（价格跌）或空头（价格涨）。方向是规则自身的属性，不是信号字段。 */
+export type LiquidationDirection = 'long' | 'short'
+
 export type LiquidationHint = Readonly<{
   observedAt: string
   asset: 'btc' | 'eth'
+  /** 产出这条命中的规则方向：两条规则各判各的，快照不互相复用。 */
+  direction: LiquidationDirection
   /** Negative percent change of notional open interest across this one bucket. */
   dropPct: number
   /** Volume of this bucket divided by the mean of the previous `lookbackBars`. */
@@ -133,6 +138,8 @@ export const liquidationHintPolicy = Object.freeze({
   dropPct: -1.5,
   strongDropPct: -2.5,
   priceDropPct: -0.8,
+  /** 空头爆仓的价格条件是镜像：涨幅达到同一个门槛。两条规则同门槛，不另设。 */
+  priceRisePct: 0.8,
   volumeMultiple: 2,
   lookbackMs: LIQUIDATION_LOOKBACK_MS,
   lookbackBars: bucketsInSpan(LIQUIDATION_LOOKBACK_MS, openInterestBucketPolicy.signalBucketMs),
@@ -157,6 +164,11 @@ export const liquidationHintPolicy = Object.freeze({
 export function detectLiquidationHints(input: Readonly<{
   asset: 'btc' | 'eth'
   bars: readonly PositioningBar[]
+  /**
+   * 判哪一边：`long` 要价格跌（多头被清），`short` 要价格涨（空头被清）。必填，不给默认值——
+   * 方向写反了，读者会做反动作，这件事不能靠隐式默认蒙对。
+   */
+  direction: LiquidationDirection
 }>): LiquidationHintsResult {
   const { asset, bars } = input
   const policy = liquidationHintPolicy
@@ -181,10 +193,12 @@ export function detectLiquidationHints(input: Readonly<{
     const dropPct = percentChange(previous.notionalUsd, bar.notionalUsd)
     const pricePct = percentChange(previous.closePrice, bar.closePrice)
     const multiple = bar.volumeBase / mean
-    if (dropPct <= policy.dropPct && pricePct <= policy.priceDropPct && multiple >= policy.volumeMultiple) {
+    const priceMatches = input.direction === 'long' ? pricePct <= policy.priceDropPct : pricePct >= policy.priceRisePct
+    if (dropPct <= policy.dropPct && priceMatches && multiple >= policy.volumeMultiple) {
       found.push(Object.freeze({
         observedAt: bar.observedAt,
         asset,
+        direction: input.direction,
         dropPct: round(dropPct),
         volumeMultiple: round(multiple),
         notionalUsd: bar.notionalUsd,

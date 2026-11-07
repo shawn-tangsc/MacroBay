@@ -112,10 +112,15 @@ export type OpenInterestChange = Readonly<{ h1Pct?: number; h24Pct?: number }>
 export type OpenInterestLiquidationHint = Readonly<{
   observedAt: string
   asset: 'btc' | 'eth'
+  /** 哪一边被清：多头（价格跌）或空头（价格涨）。两条规则各判各的。 */
+  direction: 'long' | 'short'
   dropPct: number
   volumeMultiple: number
   /** The notional open interest of the marked bucket, so the mark can be drawn on the line. */
   notionalUsd: number
+  /** 判定那一格的收盘价与带符号涨跌；老读取没有就不带。 */
+  closePrice?: number
+  pricePct?: number
 }>
 
 export type OpenInterestHistoryResult =
