@@ -80,11 +80,7 @@ export async function notifyDailyBriefing(
   occurredAt: string,
   log?: BriefingDiagnosticLog
 ): Promise<NotificationSubmitOutcome | null> {
-  if (!submit) {
-    // 没装配端口就什么都没发生——以前这里静默返回，整条通知链"没发"和"不该发"分不出来。
-    log?.('warn', 'MI_DAILY_BRIEF_NOTICE_PORT_MISSING', { kind: notice.kind, at: occurredAt })
-    return null
-  }
+  if (!submit) return null
   // 命中动作词：只交事实句，并把「因为哪句才没发」记进 appLog（平台建不了这个码，也看不见这段）。
   const hit = notice.kind === 'ready' ? actionDirectiveInLede(notice.lede) : null
   if (hit !== null) log?.('warn', 'MI_DAILY_BRIEF_LEDE_WITHHELD', { editionId: (notice as { editionId: string }).editionId, hit, at: occurredAt })
@@ -92,23 +88,8 @@ export async function notifyDailyBriefing(
   let outgoing: DailyBriefingNotice = notice
   if (notice.kind === 'ready' && hit !== null) outgoing = { ...notice, lede: undefined }
   try {
-    const outcome = await submit(buildBriefingNoticeRequest(outgoing, occurredAt))
-    // 平台会静默拒收（未知事件类型、免打扰、上限、审批未通过…），这条以前也看不见。
-    // 判"发没发"以库里的记录为准，但"为什么没发"必须能从日志里读出来。
-    if (outcome.kind !== 'accepted' && outcome.kind !== 'merged') {
-      log?.('warn', 'MI_DAILY_BRIEF_NOTICE_NOT_DELIVERED', {
-        kind: notice.kind, outcome: outcome.kind,
-        ...('reason' in outcome && outcome.reason ? { reason: outcome.reason } : {}),
-        at: occurredAt
-      })
-    }
-    return outcome
-  } catch (error) {
-    log?.('error', 'MI_DAILY_BRIEF_NOTICE_SUBMIT_FAILED', {
-      kind: notice.kind,
-      message: error instanceof Error ? error.message : String(error),
-      at: occurredAt
-    })
+    return await submit(buildBriefingNoticeRequest(outgoing, occurredAt))
+  } catch {
     return null
   }
 }
