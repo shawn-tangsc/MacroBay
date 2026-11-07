@@ -214,22 +214,47 @@ if (timedOut(check)) {
 }
 
 const tscOutput = `${check.stdout ?? ''}${check.stderr ?? ''}`
-const errors = tscOutput
+const allErrors = tscOutput
   .split('\n')
   .filter((line) => line.includes('error TS'))
   .map((line) => line.trim())
 
-if (errors.length > 0) {
-  console.error(`[pre-commit] ✗ 这一笔提交的树里有 ${errors.length} 条类型错（含它依赖的、已进库的那一版）：`)
-  // tsc 是从临时树里报错的：路径有时是 `../../var/folders/…/macrobay-precommit-xxx/…`，有时是绝对路径。
-  // 两种都要剥成仓库相对形式，否则读者看到一串自己磁盘上没有的路径，只能靠猜这是哪个文件。
-  for (const line of errors.slice(0, 20)) {
-    console.error(`  ${line
-      .replace(/^(?:\.\.\/)+/, '')
-      .replace(treeRoot + '/', '')
-      .replace(/^var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')
-      .replace(/^private\/var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')}`)
-  }
+/**
+ * tsc 是从临时树里报错的：路径有时是 `../../var/folders/…/macrobay-precommit-xxx/…`，有时是绝对路径。
+ * 剥成仓库相对形式，既能给读者看，也是「这条错落在谁的文件上」的判据。
+ */
+const repoPathOf = (line: string): string | undefined =>
+  /^(.+?)\(\d+,\d+\): error TS\d+/u
+    .exec(line)?.[1]
+    ?.replace(/^(?:\.\.\/)+/, '')
+    .replace(treeRoot + '/', '')
+    .replace(/^var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')
+    .replace(/^private\/var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')
+    .replace(/^\.\//, '')
+
+/**
+ * **只有落在本笔文件上的错才拦**（用户 2026-11-07 拍板）。
+ *
+ * 钩子查的是「这一笔的树」，但作用域工程（按文件列出的临时 tsconfig）复现不出**整棵项目**才有的
+ * 环境类型：本地那份 `import.meta.glob` 声明比真实用法窄，于是会报「'query' 不存在」这类项目里
+ * 并不存在的错。按目录铺 `include` 又会把整目录的兄弟文件拉进来 —— 那正是 `products/**` 的 708 条
+ * 既有债，等于让每次提交替别人的历史错背锅。
+ *
+ * 所以判据落在归属上：报错在**本笔文件**里 → 拦（改 import/export 只带调用方的半条链就报在调用方上，
+ * 照旧红）；报错在别的文件里 → 只报数量、不拦。残留风险：把本笔之外的文件改坏不会被这道门拦住，
+ * 用户已知并接受（`products/**` 全量本来也看不到）。
+ */
+const located = allErrors.map((line) => ({ line, file: repoPathOf(line) }))
+const ownErrors = located.filter((entry) => entry.file !== undefined && codeStaged.includes(entry.file))
+const foreignErrors = located.filter((entry) => !ownErrors.includes(entry))
+
+if (foreignErrors.length > 0) {
+  say(`另有 ${foreignErrors.length} 条类型错在**本笔没动的文件**里（含作用域工程复现不出的环境类型差异），本次不拦截。`)
+}
+
+if (ownErrors.length > 0) {
+  console.error(`[pre-commit] ✗ 这一笔提交的树里，有 ${ownErrors.length} 条类型错落在本次提交的文件上：`)
+  for (const entry of ownErrors.slice(0, 20)) console.error(`  ${entry.file ?? entry.line}`)
   console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')
   dropTree()
