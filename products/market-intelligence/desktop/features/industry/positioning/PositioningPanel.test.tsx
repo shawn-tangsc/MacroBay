@@ -401,6 +401,21 @@ describe('the mark chips', () => {
     expect(styles).not.toMatch(/font-size:\s*9px/)
   })
 
+  it('keeps the chip inside the plot when the hit sits on the right edge', () => {
+    // 内收是「线不动、牌贴边」：最右那条的牌不许探出绘图区。
+    const placed = chips(renderMarks([mark({ observedAt: at(120) }), mark({ observedAt: at(0) })]))
+    expect(placed).toHaveLength(2)
+    for (const chip of placed) expect(chip.left + chip.width).toBeLessThanOrEqual(992)
+    expect(placed[1]!.left - (placed[0]!.left + placed[0]!.width)).toBeGreaterThanOrEqual(6)
+  })
+
+  it('merges a run of hits that cannot all fit into one chip', () => {
+    // 放不下就并：连续命中并到一张牌上，并告诉你一共几次；不是各画一张压在一起。
+    const packed = renderMarks([0, 1, 2, 3, 4, 5].map(minutes => mark({ observedAt: at(minutes) })))
+    expect(chips(packed)).toHaveLength(1)
+    expect(packed).toContain('疑似多头爆仓 ×6')
+  })
+
   it('keeps at least 6px between two chips', () => {
     const markup = renderMarks([mark(), mark({ observedAt: at(29) }), mark({ asset: 'eth', observedAt: at(120) }), mark({ observedAt: at(0) })])
     const placed = chips(markup)
