@@ -261,7 +261,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           {/* The daily block repeats the asset and latest headings but not the window columns: an
               observation per business day has nothing to say about the last fifteen minutes. */}
           <tbody data-status-section="daily">
-            <tr className="mi-cross-asset__section"><th scope="colgroup" colSpan={2 + crossAssetWindows.length}>{text.dailyFrequency}
+            <tr className="mi-cross-asset__section"><th scope="colgroup" colSpan={2 + crossAssetWindows.length}>
+              {/* 标题与 ⓘ 是一个 flex 容器里的两件东西，不是两个块级兄弟：块级流里 icon 会被挤到下一行，
+                  还会因为没吃到复位而画出浏览器默认的方框（读者 2026-11-08 截图）。 */}
+              <span className="mi-cross-asset__section-heading">{text.dailyFrequency}
               {/* The block's rhythm, on its heading rather than inside a figure cell: an official daily
                   close arrives once per trading day, so a row that has not moved for a day or two is
                   waiting for the source to publish, not stuck. The reader asked that after seeing
@@ -285,7 +288,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
                     onFocus={triggerProps.onFocus} onMouseEnter={triggerProps.onMouseEnter}
                     onMouseLeave={triggerProps.onMouseLeave} onSelect={triggerProps.onSelect}
                     resolveText={resolveProductText} size="sm" variant="plain" />
-                )} /></th></tr>
+                )} /></span></th></tr>
             {dailyRows.map(renderStatusRow)}
           </tbody>
         </table>

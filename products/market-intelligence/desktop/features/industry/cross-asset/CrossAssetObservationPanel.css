@@ -166,7 +166,15 @@
 /* The block's rhythm rides on the same line as its heading, as a hint behind an icon: one gap keeps
    the 22px trigger from reading as part of the 9.5px word beside it (reader, 2026-11-06), and the
    icon sits on the text's baseline rather than lifting the row's other cells. */
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-hint { margin-left: 6px; vertical-align: middle; }
+/* 标题与 ⓘ 在同一行：容器是 inline-flex，图标 `flex: none` 不许被压缩、也不许被挤到下一行。
+   之前它们是两个块级兄弟，窄一点 icon 就掉到第二行，还因为脱离行内流画出默认按钮的方框
+   （读者 2026-11-08 截图）。 */
+.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-heading {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-hint {
+  flex: none; margin-left: 0;
+}
 
 /* The daily cell carries two different statements: the move over the day, and the context that makes it
    readable (term spread, inflation expectation). Run together on one line they read as a single
