@@ -12,19 +12,28 @@
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
 .mi-divergence__lead { flex: none; display: flex; align-items: center; gap: 6px; padding-top: 0; }
 /* The rule's chip: the one thing on this line that says something happened. Same shape as the
-   other module chips; the block it opens is the shared `SignalDetail`, on its own row below. */
+   other module chips — and, since v2, the entry to its dialog: it is the conclusion itself, not a
+   second button beside it. The `›` is the only "there is something behind this" cue. */
 .mi-divergence__chip {
-  display: inline-flex; align-items: center;
+  display: inline-flex; align-items: center; gap: 2px;
   padding: 1px 6px; border-radius: 3px;
   border: 1px solid var(--mi-dashboard-line);
   background: none; color: var(--mi-dashboard-text); font: inherit;
   font-size: 10px; font-weight: 600;
   line-height: 16px; white-space: nowrap; cursor: pointer;
 }
+/* 悬停整颗加深一档：底色与边框各深一层，文字不动——负号与数字下面划一道会让它读起来像两个数，
+   所以**不加下划线**（界面设计 v2 §一）。 */
 .mi-divergence__chip:hover,
-.mi-divergence__chip:focus-visible,
-.mi-divergence__chip[aria-expanded='true'] { border-color: var(--mi-dashboard-text); }
-.mi-divergence__chip:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+.mi-divergence__chip:focus-visible {
+  border-color: var(--mi-dashboard-text);
+  background: color-mix(in srgb, var(--mi-dashboard-text) 8%, transparent);
+}
+/* 键盘聚焦用平台统一规格：2px 强调色 + offset 2，并且保留「加深一档」，让人看出停在一个可点的东西上。 */
+.mi-divergence__chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 6×6 的 `›`：不透明度 55%，悬停提到 95%。它不是第二颗按钮，所以尺寸只由图标本身定，不加点击区。 */
+.mi-divergence__chip-chevron { opacity: 0.55; }
+.mi-divergence__chip:hover .mi-divergence__chip-chevron { opacity: 0.95; }
 .mi-divergence > .mi-signal-detail { flex-basis: 100%; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
 /* A quiet day is one line, not a block: no icon, no heading, no vertical padding to fill. */
@@ -179,33 +188,15 @@
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
 
 
-/* The entry to the readings behind the numbers: a button, not a text link, and body-size copy —
-   never a chip. Hover brightens the word and draws nothing: a block behind a short entry reads as a
-   second button ring. Its label never changes with the state; only the arrows in `aria-expanded`
-   do, so a screen reader does not hear the state twice.
-   Type comes from the dashboard's reading-note tokens: the same shape exists on another card, and a
-   number written in two places drifts (these two cards already disagreed once, 10px against 11.5). */
-.mi-divergence__help-toggle {
-  padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit;
-  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  white-space: nowrap; cursor: pointer;
-}
-.mi-divergence__help-toggle:hover { color: var(--mi-dashboard-text); }
-.mi-divergence__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
-
-/* The notes that would not fit the bubble: opened on purpose, so they get their own row and their
-   own scroll instead of stretching the card.
- *
- * Same size as the entry that opened it. The entry says "come and read this"; shrinking the text once
- * the reader does is self-contradictory, and that argument survives a taste change better than "which
- * size looks nicer" — so both sides read the same dashboard tokens and neither card writes the
- * numbers down again. */
-.mi-divergence__help {
-  display: grid; gap: 6px; flex-basis: 100%; margin-top: 4px;
-  padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
+/* 弹层正文的下半段：牌子背后那几行读数之上，是这段口径说明。一条分隔线把它和读数分开，
+   免得读者把说明当成又一条读数（v1 §二 · 6 的同一条道理）。
+ * 三段各自成段：它们讲三件事（什么算不寻常 / 舆情口径 / 先对时间），拼成一整段读起来是一坨。
+ * 字号取看板的读数说明 token：同一副形状在别的卡上也有，数字写两处就会分叉。 */
+.mi-divergence__notes {
+  display: grid; gap: 10px;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line);
   color: var(--mi-dashboard-muted);
   font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  max-height: var(--mi-reading-note-max-height); overflow-y: auto;
 }
-.mi-divergence__help p { margin: 0; }
+.mi-divergence__notes-title { margin: 0; color: var(--mi-dashboard-text); font-size: var(--mi-reading-note-size); font-weight: 650; }
+.mi-divergence__notes p { margin: 0; }

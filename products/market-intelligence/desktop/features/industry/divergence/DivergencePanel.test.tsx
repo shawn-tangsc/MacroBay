@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act } from 'react-dom/test-utils'
@@ -10,9 +10,16 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
 import { DivergencePanel } from './DivergencePanel'
 
+/**
+ * 时区 provider 的 `children` 是**必填 prop**，不是 `createElement` 的第三个参数：
+ * 那种写法在运行期能跑、在类型上对不上——预检钩子把包含测试文件的那棵树查一遍就红了。
+ */
+const scoped = (child: ReactElement): ReactElement =>
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: child })
+
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.divergence
 const render = (state: Parameters<typeof DivergencePanel>[0]['state'], locale: 'zh-CN' | 'en-US' = 'zh-CN') =>
-  renderToStaticMarkup(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+  renderToStaticMarkup(scoped(createElement(DivergencePanel, {
     state, onRetry: () => undefined, text: productText[locale].pages.intelligence.portal.dashboard.divergence
   })))
 
@@ -40,15 +47,29 @@ const otherRow = {
 }
 
 describe('divergence panel', () => {
-  it('puts the explanation behind the help icon and leaves no judge badge behind', () => {
+  it('keeps the help icon, adds no second entry, and no judge badge behind', () => {
     const markup = render({ state: 'empty', withheld: [] })
     // No panel name and no pair list: the `?` leads the content and the badge names the judge.
     expect(markup).not.toContain('<h2')
-    expect(markup.indexOf('mi-divergence__help')).toBeLessThan(markup.indexOf('mi-divergence__content'))
+    expect(markup.indexOf('aria-label="' + text.helpLabel)).toBeLessThan(markup.indexOf('mi-divergence__content'))
     expect(markup).not.toContain('mi-divergence__judge')
     expect(markup).toContain(`aria-label="${text.helpLabel}"`)
     // The prose is not on the card; the badge is.
     expect(markup).not.toContain(text.helpBullets[0])
+  })
+
+  it('keeps the reading notes off the card entirely — no block, no foldable heading, no extra entry', () => {
+    // 「补充性说明不常驻，点开可关」，而且入口只有结论牌子本身（界面设计 v2 §一）：卡面上不再出现
+    // 「口径说明」这类文字入口。安静的一天没有牌子，也就没有任何入口——这是规格明写的取舍。
+    for (const state of [{ state: 'empty', withheld: [] } as const,
+      { state: 'available', rows: [row], withheld: [] } as const]) {
+      const markup = render(state)
+      expect(markup).not.toContain('data-divergence-notes')
+      for (const line of text.helpDetails) expect(markup).not.toContain(line)
+      expect(markup).not.toContain('mi-divergence__help-entry')
+      expect(markup).not.toContain(text.helpDetailsLabel)
+    }
+    expect(render({ state: 'empty', withheld: [] })).not.toContain('mi-divergence__chip')
   })
 
   it('shows a row with both readings, the mechanism and the invalidation', () => {
@@ -157,7 +178,6 @@ describe('states that must not be confused', () => {
     expect(markup).not.toContain('class="state-view')
     expect(markup).not.toContain('data-state="error"')
     expect(markup).not.toContain(text.empty)
-    expect(markup).not.toContain(text.nothingCompared)
   })
 
   it('draws nothing at all while nothing can be compared', () => {
@@ -202,7 +222,7 @@ describe('invalidation on focus', () => {
     document.body.append(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+      root.render(scoped(createElement(DivergencePanel, {
         state: { state: 'available', rows: [{ pairId: 'liquidity-leverage', direction: 'bearish', legs: row.legs }], withheld: [] },
         onRetry: () => undefined, text
       })))
@@ -225,7 +245,7 @@ describe('help on the shared popover', () => {
     document.body.append(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+      root.render(scoped(createElement(DivergencePanel, {
         state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
       })))
     })
@@ -254,7 +274,7 @@ describe('help on the shared popover', () => {
     document.body.append(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+      root.render(scoped(createElement(DivergencePanel, {
         state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
       })))
     })
@@ -266,6 +286,77 @@ describe('help on the shared popover', () => {
   })
 })
 
+describe('the reading notes dialog', () => {
+  const answer = (...rows: readonly (typeof row | typeof otherRow)[]) => ({ state: 'available' as const, rows, withheld: [] })
+  const mount = async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(scoped(createElement(DivergencePanel, {
+        state: answer(row), onRetry: () => undefined, text
+      })))
+    })
+    return { container, root, chip: container.querySelector<HTMLButtonElement>('button.mi-divergence__chip')! }
+  }
+  const settle = async (ms = 400): Promise<void> => { await act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) }) }
+
+  it('opens from the chip itself, and shows the readings above the notes', async () => {
+    const { root, chip } = await mount()
+    expect(document.querySelector('[data-divergence-notes]')).toBeNull()
+    await act(async () => { chip.click() })
+    const detail = document.querySelector('#mi-divergence-chip-detail')
+    expect(detail).not.toBeNull()
+    // 牌子背后那几行读数还在：哪两条腿、各自多新、为什么算背离。
+    expect(detail?.textContent).toContain(text.legs.stablecoin)
+    expect(detail?.textContent).toContain(text.legs['open-interest'])
+    expect(detail?.textContent).toContain(text.chipFresh)
+    expect(detail?.textContent).toContain(text.chipWhy)
+    // 说明在同一层里，一个块一段：三件事分开写，不拼成一整段。
+    const notes = document.querySelector('[data-divergence-notes]')
+    expect(notes?.querySelector('h3')?.textContent).toBe(text.helpDetailsLabel)
+    expect([...(notes?.querySelectorAll('p') ?? [])].map(line => line.textContent)).toEqual([...text.helpDetails])
+    // 内部标识不是读数。
+    expect(detail?.textContent).not.toContain('liquidity-leverage')
+    await act(async () => { root.unmount() })
+  })
+
+  it('closes on Esc, on the close button and on the overlay, and hands focus back to the chip', async () => {
+    // 三种关闭都由 antd 提供，一条一条走：关断看弹层自己的离场类（rc-motion 在没有过渡的测试环境里
+    // 永远跑不完，`display: none` 等不到），焦点归位直接读 `document.activeElement`。
+    const closed = (): boolean => {
+      const modal = document.querySelector('.ant-modal')
+      return modal === null || /leave/.test(modal.className)
+    }
+    for (const how of ['esc', 'close-button', 'overlay'] as const) {
+      const { container, root, chip } = await mount()
+      await act(async () => { chip.focus() })
+      await act(async () => { chip.click() })
+      expect(closed()).toBe(false)
+      if (how === 'esc') {
+        const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')!
+        await act(async () => {
+          // rc-dialog 判的是 `keyCode`（`Dialog/index.js:135`），只给 `key` 它收不到。
+          wrap.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true } as never))
+        })
+      } else if (how === 'close-button') {
+        const close = document.querySelector<HTMLElement>('.ant-modal-close')
+        expect(close).not.toBeNull()
+        await act(async () => { close?.dispatchEvent(new window.MouseEvent('click', { bubbles: true })) })
+      } else {
+        const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')!
+        await act(async () => { wrap.dispatchEvent(new window.MouseEvent('click', { bubbles: true })) })
+      }
+      await settle(50)
+      expect(closed()).toBe(true)
+      // 关掉以后焦点回到牌子：读者关的是「这段说明」，光标不该掉到页面顶上（v2 §二）。
+      // 静音会把牌子换成没有 `Tooltip` 的那一层（两种结构），所以比的是**当前那颗**牌子节点。
+      expect(document.activeElement).toBe(container.querySelector('button.mi-divergence__chip'))
+      await act(async () => { root.unmount() })
+    }
+  })
+})
+
 describe('the divergence chip', () => {
   const answer = (...rows: readonly (typeof row | typeof otherRow)[]) => ({ state: 'available' as const, rows, withheld: [] })
 
@@ -273,9 +364,9 @@ describe('the divergence chip', () => {
     const markup = render(answer(row, otherRow))
     expect(markup).toContain(text.chip)
     expect(markup.match(/class="mi-divergence__chip"/g)).toHaveLength(1)
-    // The readings stay on the rows, once: the chip itself carries no number.
-    const chip = markup.slice(markup.indexOf('mi-divergence__chip"'), markup.indexOf('</button>', markup.indexOf('mi-divergence__chip"')))
-    expect(chip).not.toMatch(/\d/)
+    // The readings stay on the rows, once: the chip itself carries no number（`›` 的图标路径里有数字，
+    // 所以断言的是牌子上的字，不是整段 HTML）。
+    expect(text.chip).not.toMatch(/\d/)
     expect(markup).toContain(row.legs[0]!.text)
     expect(markup).toContain(otherRow.legs[0]!.text)
   })
@@ -284,32 +375,27 @@ describe('the divergence chip', () => {
     expect(render(answer(otherRow))).not.toContain(text.chip)
   })
 
-  it('opens each leg freshness and the reason, and closes again on the same chip', async () => {
+  it('opens each leg freshness and the reason from the chip, as a dialog', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+      root.render(scoped(createElement(DivergencePanel, {
         state: answer(row), onRetry: () => undefined, text
       })))
     })
     const chip = container.querySelector('button.mi-divergence__chip') as HTMLButtonElement
-    expect(chip.getAttribute('aria-expanded')).toBe('false')
-    expect(chip.getAttribute('aria-controls')).toBe('mi-divergence-chip-detail')
+    // 牌子即入口（v2）：说清点开是 dialog，不报就地展开才有的 `aria-expanded` / `aria-controls`；
+    // 右侧那枚 6px 的 `›` 是唯一的「点开有东西」线索。
+    expect(chip.getAttribute('aria-haspopup')).toBe('dialog')
+    expect(chip.getAttribute('aria-expanded')).toBeNull()
+    expect(chip.getAttribute('aria-controls')).toBeNull()
+    expect(chip.getAttribute('aria-label')).toBe(`${text.chip} · ${text.chipDetailsOpen}`)
+    expect(chip.querySelector('svg')).not.toBeNull()
     await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(chip.getAttribute('aria-expanded')).toBe('true')
-    const detail = container.querySelector('#mi-divergence-chip-detail')!
-    // What the reader came for: which two legs, how fresh each is, and why the pair counts.
+    const detail = document.querySelector('#mi-divergence-chip-detail')!
     expect(detail.textContent).toContain(text.legs.stablecoin)
-    expect(detail.textContent).toContain(text.legs['open-interest'])
-    expect(detail.textContent).toContain(text.chipFresh)
     expect(detail.textContent).toContain(text.chipWhy)
-    expect(detail.textContent).toContain('截至')
-    // Internal identifiers are not readings.
-    expect(detail.textContent).not.toContain('liquidity-leverage')
-    expect(detail.textContent).not.toContain('ruleId')
-    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(container.querySelector('#mi-divergence-chip-detail')).toBeNull()
     await act(async () => { root.unmount() })
   })
 })
