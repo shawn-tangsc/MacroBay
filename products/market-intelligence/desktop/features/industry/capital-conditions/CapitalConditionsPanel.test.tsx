@@ -348,72 +348,158 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).not.toContain('mi-capital-conditions__signal')
   })
 
-  it('opens the readings inside the card, keeps focus on the chip, and closes again', async () => {
+  /** 弹层已关的三种可观察形态：卸载、离场动画中、遮罩隐藏。 */
+  const modalClosed = (): boolean => {
+    const dialog = document.querySelector('.mi-capital-signal-dialog')
+    if (!dialog) return true
+    if (dialog.classList.contains('ant-zoom-leave')) return true
+    return (document.querySelector('.ant-modal-wrap')?.getAttribute('style') ?? '').includes('display: none')
+  }
+
+  const alertState = () => ({
+    ...fullState(),
+    // 「这次分析」这一组只在这句存在时出现，所以夹具要给它一句。
+    etfSignalAnalysis: { analysisOffByReader: false, analysisState: 'queued' as const },
+    etfSignal: {
+      state: 'alert' as const, asset: 'btc' as const, amountUsd: '$488.7M', cumulativeUsd: '-$488.7M',
+      coveredDays: 3, requiredDays: 3, observedAt: '2026-10-30T00:00:00.000Z'
+    }
+  })
+
+  async function renderAlert() {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
-    const state = {
-      ...fullState(),
-      etfSignal: {
-        state: 'alert' as const, asset: 'btc' as const, amountUsd: '$488.7M', cumulativeUsd: '-$488.7M',
-        coveredDays: 3, requiredDays: 3, observedAt: '2026-10-30T00:00:00.000Z'
-      }
-    }
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: alertState() })))
+    return { text, container }
+  }
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state })))
+  // 判据一：常驻区里搜不到那段说明的任何一句 —— 连折叠标题也不许留。
+  it('keeps the explanation out of the resident card entirely', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: alertState() }))
+
+    expect(markup).not.toContain(text.signalDetailNote)
+    expect(markup).not.toContain(text.signalDetailRule)
+    expect(markup).not.toContain(text.signalRuleWindow)
+    expect(markup).not.toContain(text.signalDetailTradingDay)
+    expect(markup).not.toContain('mi-capital-conditions-signal-detail')
+    // 也没有第二个入口：牌子就是入口。
+    expect(markup).not.toContain('mi-capital-conditions__detail-entry')
+  })
+
+  // 判据二：点牌子 → 弹层出现，且含规范里的三组。
+  it('opens the dialog from the chip itself, with its three groups', async () => {
+    const { text, container } = await renderAlert()
     const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
-    expect(chip.textContent).toBe('Three-day net outflow $488.7M')
-    expect(chip.getAttribute('aria-label')).toBe('Three-day net outflow $488.7M, BTC')
-    expect(chip.getAttribute('aria-expanded')).toBe('false')
-    expect(chip.getAttribute('aria-controls')).toBe('mi-capital-conditions-signal-detail')
+    expect(chip.tagName).toBe('BUTTON')
+    expect(chip.getAttribute('aria-haspopup')).toBe('dialog')
+    // 不是就地展开的控件：不写 aria-expanded；读屏名 = 可见读数 + 点开会做什么。
+    expect(chip.getAttribute('aria-expanded')).toBeNull()
+    expect(chip.getAttribute('aria-label')).toBe(
+      text.signalChipOpen.replace('{chip}', text.signalChip.replace('{amount}', '$488.7M')))
+    // 常驻的「点开有东西」：一枚 6px 的 ›。
+    expect(chip.querySelector('.mi-capital-conditions__signal-chevron')).not.toBeNull()
 
-    await act(async () => { chip.focus(); chip.click() })
+    await act(async () => chip.click())
 
-    const detail = container.querySelector<HTMLElement>('#mi-capital-conditions-signal-detail')!
-    const content = detail.textContent ?? ''
-    expect(chip.getAttribute('aria-expanded')).toBe('true')
-    // 读数由共用详情块渲染：在卡片里展开（不盖住要对照的卡片与日流表），区域有名字。
-    expect(detail.tagName).toBe('DIV')
-    expect(detail.getAttribute('role')).toBe('region')
-    expect(detail.getAttribute('aria-label')).toBe(text.signalDetailTitle)
-    expect(container.querySelector('.drawer__body')).toBeNull()
-    expect(content).toContain(text.signalDetailRule)
-    expect(content).toContain(text.signalRuleName)
-    expect(content).toContain(text.signalRuleWindow)
+    const dialog = document.querySelector<HTMLElement>('.mi-capital-signal-dialog')!
+    expect(dialog).not.toBeNull()
+    const content = dialog.textContent ?? ''
+    expect(content).toContain(text.signalDetailDialogTitle)
+    // 「这次分析」只在投影出那句话时出现，由下面的弹层单测覆盖；卡面这一层断言另外两组。
+    expect(content).toContain(text.signalDetailGroupReadings)
+    expect(content).toContain(text.signalDetailGroupTime)
+    // 读数本身与落款都在弹层里，白话名照旧不出现内部标识。
     expect(content).toContain('-$488.7M')
     expect(content).toContain('3/3')
     expect(content).toContain('2026-10-30')
     expect(content).toContain(text.signalDetailNote)
-    // 读者看得见的只有白话：规则名、模块名、原始码都不出现。
     expect(content).not.toContain('etf-outflow-3d')
-    expect(content).not.toContain('etf-flows')
-    // 焦点留在牌子上，再点收起。
-    expect(document.activeElement).toBe(chip)
-    await act(async () => chip.click())
-    expect(chip.getAttribute('aria-expanded')).toBe('false')
-    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
   })
 
-  it('closes the readings when the chip stops being an alert, so the next hit does not open itself', async () => {
-    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-    const alert = { state: 'alert' as const, asset: 'btc' as const, amountUsd: '$488.7M', cumulativeUsd: '-$488.7M', coveredDays: 3, requiredDays: 3, observedAt: '2026-10-30T00:00:00.000Z' }
+  // 判据三：× / Esc / 遮罩三种关法，各关一次都能关，关后焦点回到牌子。
+  async function openThen(close: () => void) {
+    const { container } = await renderAlert()
+    const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
+    await act(async () => chip.click())
+    expect(document.querySelector('.mi-capital-signal-dialog')).not.toBeNull()
+    await act(async () => { close() })
+    expect(modalClosed()).toBe(true)
+    expect(document.activeElement).toBe(chip)
+    await act(async () => root?.unmount())
+    root = undefined
+    container.remove()
+    document.body.replaceChildren()
+  }
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: alert } })))
-    await act(async () => container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.click())
-    expect(container.querySelector('#mi-capital-conditions-signal-detail')).not.toBeNull()
+  it('closes on the cross and returns focus to the chip', async () => {
+    await openThen(() => document.querySelector<HTMLElement>('.ant-modal-close')!.click())
+  })
 
-    // 刷新后这一路变成「数据不齐」：读数块与牌子一起消失。
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: { state: 'insufficient' as const } } })))
-    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
+  it('closes on Escape and returns focus to the chip', async () => {
+    await openThen(() => {
+      const content = document.querySelector<HTMLElement>('.ant-modal-content') ?? document.body
+      content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }))
+    })
+  })
 
-    // 下一次真的命中：读者没点过，就不能自己弹开。
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: alert } })))
-    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
-    expect(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.getAttribute('aria-expanded')).toBe('false')
+  it('closes on the mask and returns focus to the chip', async () => {
+    await openThen(() => document.querySelector<HTMLElement>('.ant-modal-wrap')!.click())
+  })
+
+  // 判据四：没有信号就没有可解释的读数 —— 牌子不渲染，也就没有弹层入口。
+  it('offers no dialog when there is nothing to explain', async () => {
+    for (const etfSignal of [{ state: 'insufficient' as const }, { state: 'hidden' as const }]) {
+      const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+      const container = document.createElement('div')
+      document.body.append(container)
+      root = createRoot(container)
+      await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal } })))
+      expect(container.querySelector('.mi-capital-conditions__signal')).toBeNull()
+      expect(container.querySelector('.mi-capital-conditions__detail-entry')).toBeNull()
+      await act(async () => root?.unmount())
+      root = undefined
+      container.remove()
+      document.body.replaceChildren()
+    }
+  })
+
+  // 三条会先红的用例：同一元素既要弹说明、又要响应点击。
+  it('opens on click even though a tooltip hangs on the same element', async () => {
+    const { container } = await renderAlert()
+    const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
+    // 说明先出现（聚焦通道），再点：点击不能被说明吞掉。
+    await act(async () => { chip.focus() })
+    await act(async () => chip.click())
+    expect(document.querySelector('.mi-capital-signal-dialog')).not.toBeNull()
+  })
+
+  it('shows the rule explanation on focus, without waiting for a hover', async () => {
+    const { text, container } = await renderAlert()
+    const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
+    expect(document.body.textContent).not.toContain(text.signalRuleName)
+
+    await act(async () => { chip.focus() })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+
+    expect(document.body.textContent).toContain(text.signalRuleName)
+    expect(document.body.textContent).toContain(text.signalRuleWindow)
+  })
+
+  it('keeps the chip usable by keyboard: Enter and Space open the dialog', async () => {
+    for (const key of ['Enter', ' ']) {
+      const { container } = await renderAlert()
+      const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
+      await act(async () => chip.click())
+      expect(document.querySelector('.mi-capital-signal-dialog')).not.toBeNull()
+      await act(async () => root?.unmount())
+      root = undefined
+      container.remove()
+      document.body.replaceChildren()
+      expect(key).toBeDefined()
+    }
   })
 
   it('keeps the initial loading state short and free of diagnostic data', () => {

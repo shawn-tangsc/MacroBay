@@ -581,9 +581,9 @@
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
-  border: 1px solid var(--mi-dashboard-line);
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-negative) 40%, transparent);
   border-radius: 3px;
-  background: none;
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent);
   color: var(--mi-dashboard-text);
   font: inherit;
   font-size: 10px;
@@ -591,10 +591,25 @@
   line-height: 16px;
   white-space: nowrap;
   cursor: pointer;
+  /* 牌子就是入口，但不是按钮那种重量：它与旁边「观测时间」同一档，只多一枚箭头。 */
+  text-decoration: none;
 }
-.mi-capital-conditions__signal:hover,
-.mi-capital-conditions__signal:focus-visible { border-color: var(--mi-dashboard-text); }
-.mi-capital-conditions__signal:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+/* 常驻的「点开有东西」：6×6 的 ›，颜色跟文字走，只有 55% 实。 */
+.mi-capital-conditions__signal-chevron { flex: none; opacity: 0.55; }
+/* 悬停整颗加深一档：底色 10%→18%、边框 40%→60%；文字色不动（下划线会切断金额与负号）。 */
+.mi-capital-conditions__signal:hover {
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 18%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-negative) 60%, transparent);
+}
+.mi-capital-conditions__signal:hover .mi-capital-conditions__signal-chevron { opacity: 0.95; }
+/* 键盘聚焦：平台统一外框，并保留「加深一档」，让人看出停在一个可点的东西上。 */
+.mi-capital-conditions__signal:focus-visible {
+  outline: 2px solid var(--mi-dashboard-lime);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 18%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-negative) 60%, transparent);
+}
+.mi-capital-conditions__signal:focus-visible .mi-capital-conditions__signal-chevron { opacity: 0.95; }
 /* 数据不齐是陈述，不是控件；外层只负责把「缺哪一路」挂到悬停与聚焦上。 */
 .mi-capital-conditions__signal-statement { display: inline-flex; border-radius: 3px; }
 .mi-capital-conditions__signal-statement:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }

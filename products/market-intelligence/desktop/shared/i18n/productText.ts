@@ -724,10 +724,14 @@ mi: miText['zh-CN'],
               signalInsufficientReason: '数据不齐：三日累计拿不到',
               signalTooltip: '{rule}｜窗口 {window}｜{kind}', signalRuleName: 'ETF 净流出', signalRuleWindow: '3 个交易日', signalKindObserved: '来源报告的事实',
               signalAriaAlert: '{chip}，{asset}',
+              /* 牌子现在是入口：可见文字在前，后面说明点开会发生什么（label-in-name）。 */
+              signalChipOpen: '{chip}，打开口径与来源',
               signalDetailTitle: 'ETF 三日净流出', signalDetailRule: '规则', signalDetailWindow: '窗口',
               signalDetailCumulative: '三日累计', signalDetailCoverage: '覆盖', signalCoverage: '{covered}/{required} 个交易日',
               signalDetailTradingDay: '数据所属交易日（UTC）', signalDetailObservedAt: '观测时间',
-              signalDetailNote: '这是来源报告的净流事实，不是本机推算；数据所属交易日与观测时间不是同一件事。'
+              signalDetailNote: '这是来源报告的净流事实，不是本机推算；数据所属交易日与观测时间不是同一件事。',
+              signalDetailDialogTitle: 'ETF 三日净流出 · 口径与来源',
+              signalDetailGroupAnalysis: '这次分析', signalDetailGroupReadings: '读数', signalDetailGroupTime: '时间与来源'
             },
             sentiment: { title: '市场情绪', fearGreed: '恐惧与贪婪', observedAt: '观测时间', gaugeMarkers: { fear: '极恐', neutral: '中性', greed: '极贪' } },
             macroMarket: {
@@ -2014,10 +2018,13 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               signalInsufficientReason: 'Insufficient data: the three-day total is not available',
               signalTooltip: '{rule} | window {window} | {kind}', signalRuleName: 'ETF net outflow', signalRuleWindow: '3 trading days', signalKindObserved: 'fact reported by the source',
               signalAriaAlert: '{chip}, {asset}',
+              signalChipOpen: '{chip}, open scope and source',
               signalDetailTitle: 'ETF three-day net outflow', signalDetailRule: 'Rule', signalDetailWindow: 'Window',
               signalDetailCumulative: 'Three-day total', signalDetailCoverage: 'Coverage', signalCoverage: '{covered}/{required} trading days',
               signalDetailTradingDay: 'Trading day (UTC)', signalDetailObservedAt: 'Observed at',
-              signalDetailNote: 'This is a net flow the source reported, not a figure computed here; the trading day and the observation time are different things.'
+              signalDetailNote: 'This is a net flow the source reported, not a figure computed here; the trading day and the observation time are different things.',
+              signalDetailDialogTitle: 'ETF three-day net outflow · Scope and source',
+              signalDetailGroupAnalysis: 'This analysis', signalDetailGroupReadings: 'Readings', signalDetailGroupTime: 'Time and source'
             },
             sentiment: { title: 'Market sentiment', fearGreed: 'Fear & Greed', observedAt: 'Observed at', gaugeMarkers: { fear: 'Extreme fear', neutral: 'Neutral', greed: 'Extreme greed' } },
             macroMarket: {

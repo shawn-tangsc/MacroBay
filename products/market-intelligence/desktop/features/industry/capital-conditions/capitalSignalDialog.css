@@ -1,0 +1,42 @@
+/* 资金面 · 口径与来源（dialog）——2026-11-07 规范。
+   常驻区不留解释，点开给一个可关闭的弹层；这里只管弹层内部：正文自己滚、标签列 136px、
+   值比标签亮一档、落款与读数之间一条分隔线。颜色全部走看板 token，深浅两套与卡片同底同描边。 */
+
+/* 标题与关闭键不滚，正文自己滚：行数再多也不把窗口顶出去。 */
+.mi-capital-signal-dialog__body {
+  max-height: min(70vh, 560px);
+  overflow: auto;
+}
+
+/* 弹层里的详情块不再自带边框与内边距：它已经不是卡片里的一块脚注，而是弹层的正文。 */
+.mi-capital-signal-dialog__body .mi-signal-detail {
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  font-size: 11.5px;
+}
+
+.mi-capital-signal-dialog__body .mi-signal-detail__group { gap: 6px; }
+
+.mi-capital-signal-dialog__body .mi-signal-detail__group-title {
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.mi-capital-signal-dialog__body .mi-signal-detail__rows { gap: 6px; }
+
+/* 两列固定：标签 136px、值占其余；值列放得下最长那一行「数据所属交易日（UTC）」。 */
+.mi-capital-signal-dialog__body .mi-signal-detail__rows div {
+  display: grid;
+  grid-template-columns: 136px 1fr;
+  gap: 9px;
+}
+
+.mi-capital-signal-dialog__body .mi-signal-detail__rows dt { color: var(--mi-dashboard-muted); }
+.mi-capital-signal-dialog__body .mi-signal-detail__rows dd { font-size: 12px; }
+
+/* 落款不是第五条读数：一条分隔线把它和读数分开。 */
+.mi-capital-signal-dialog__body .mi-signal-detail__note {
+  border-top: 1px solid var(--mi-dashboard-line);
+  padding-top: 9px;
+}
