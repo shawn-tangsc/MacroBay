@@ -157,7 +157,7 @@ describe('intelligence notification settings', () => {
     expect(children).toHaveLength(2)
     expect(children[0]?.classList.contains('intelligence-notification-list')).toBe(true)
     expect(children[1]?.classList.contains('intelligence-notification-detail')).toBe(true)
-    const head = container?.querySelector('.intelligence-notification-list-head')
+    const head = container?.querySelector('.intelligence-notification-head')
     expect(head).not.toBeNull()
     expect(panes?.contains(head ?? null)).toBe(false)
   })
@@ -166,12 +166,16 @@ describe('intelligence notification settings', () => {
     await render()
     await selectItem(3)
     const body = container?.textContent ?? ''
-    expect(body).toContain(text['pages.intelligence.notification.calendar.timeline'])
+    // 自制时间线已删（装饰、零信息量）；两个小节标题本身就说顺序。
+    expect(body).not.toContain(text['pages.intelligence.notification.calendar.timeline'])
     expect(body).toContain(text['pages.intelligence.notification.calendar.surfaces'])
     expect(body).toContain(text['pages.intelligence.notification.surface.channel'])
     expect(body).toContain(text['pages.intelligence.notification.surface.toast'])
     expect(body).toContain(text['pages.intelligence.notification.calendar.before'])
     expect(body).toContain(text['pages.intelligence.notification.calendar.after'])
+    // 「发到哪些地方」是整项级，排在两段**之上**。
+    expect(body.indexOf(text['pages.intelligence.notification.calendar.surfaces']!))
+      .toBeLessThan(body.indexOf(text['pages.intelligence.notification.calendar.before']!))
     // 桌面两条都没批 → 这一项的详情里根本不该出现桌面（页脚那句是另一件事）。
     const detail = container?.querySelector('.intelligence-notification-calendar')?.textContent ?? ''
     expect(detail).not.toContain('桌面')
@@ -180,7 +184,7 @@ describe('intelligence notification settings', () => {
   it('lands on the matching item when the notification centre sends the reader here', async () => {
     // 从「去设置」进来：日历相关落「日历事件」，内容类落它自己那一项，认不出落第一项。
     await render('market-intelligence.calendar.event-upcoming')
-    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.timeline'])
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.surfaces'])
   })
 
   it('falls back to the first item when the target cannot be located', async () => {
@@ -206,7 +210,7 @@ describe('intelligence notification settings', () => {
       if (select) { (select as HTMLSelectElement).value = 'calendar'; select.dispatchEvent(new Event('change', { bubbles: true })) }
       await Promise.resolve()
     })
-    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.timeline'])
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.surfaces'])
   })
 
   it('keeps three columns at a 1000 container even though the window is wider', async () => {
@@ -221,19 +225,18 @@ describe('intelligence notification settings', () => {
   it('collapses the lead and importance controls while the reminder is off and says what would happen', async () => {
     await render()
     await selectItem(3)
-    const detail = container?.querySelector('.intelligence-notification-calendar')?.textContent ?? ''
+    const detail = container?.querySelector('.intelligence-notification-calendar-detail')?.textContent ?? ''
     expect(detail).toContain(text['pages.intelligence.notification.calendar.summary'].replace('{lead}', '1 小时').replace('{importance}', '高'))
-    // 关着不画禁用控件：提前量/重要性控件都不出现（文案里引用了「提前多久」这句不算）。
-    expect(container?.querySelectorAll('input[name="calendar-reminder-lead"]')).toHaveLength(0)
-    expect([...container!.querySelectorAll('legend')].some((legend) =>
-      legend.textContent === text['pages.intelligence.notification.calendar.importance'])).toBe(false)
+    // 关着靠收起：提前量与重要性整行都不出现（不画禁用控件）。
+    expect(detail).not.toContain(text['pages.intelligence.notification.calendar.lead'])
+    expect(detail).not.toContain(text['pages.intelligence.notification.calendar.importance'])
   })
 
   it('warns in place when a ticked surface has its master switch off, and never greys the checkbox', async () => {
     install({ getDeliverySettings: vi.fn(async () => ({ toastEnabled: false, desktopEnabled: false, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })) })
     await render()
     await selectItem(3)
-    const toastBox = [...container!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    const toastBox = [...container!.querySelectorAll<HTMLInputElement>('.intelligence-notification-form-check input[type="checkbox"]')]
       .find((input) => input.closest('label')?.textContent?.includes(text['pages.intelligence.notification.surface.toast']!))
     expect(toastBox?.checked).toBe(true)
     expect(toastBox?.disabled).toBe(false)

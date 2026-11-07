@@ -314,3 +314,118 @@
   align-items: center;
   gap: 4px;
 }
+
+/*
+ * ===== 设置页表单语法（界面规范 v1.9 §8）=====
+ * 一行一件事：标签固定 160 在左、控件紧接其右（**左缘对齐**，不是右对齐）、说明只占控件下方一行。
+ * 行高 44，带一行说明 64；组间距 24，非首组上方 1px 分隔线；组标题上 20 / 下 4。
+ * 这些数字与 ed80fca 那笔间距一致，只是换到新类名上（旧结构已拆成独立组件）。
+ */
+.intelligence-notification-workspace {
+  padding-top: 16px;
+}
+
+.intelligence-notification-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.intelligence-notification-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.intelligence-notification-detail-title {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.intelligence-notification-form-group + .intelligence-notification-form-group {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.intelligence-notification-form-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.intelligence-notification-form-group-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.intelligence-notification-form-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: center;
+  min-height: 44px;
+}
+
+.intelligence-notification-form-row.has-note {
+  min-height: 64px;
+}
+
+.intelligence-notification-form-row + .intelligence-notification-form-row,
+.intelligence-notification-form-checks + .intelligence-notification-form-row {
+  border-top: 1px solid var(--border);
+}
+
+.intelligence-notification-form-row.is-last {
+  border-bottom: 0;
+}
+
+.intelligence-notification-form-label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.intelligence-notification-form-control {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.intelligence-notification-form-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.intelligence-notification-form-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.intelligence-notification-form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 13px;
+}
+
+.intelligence-notification-form-check input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.intelligence-notification-content-detail {
+  max-width: 760px;
+}
