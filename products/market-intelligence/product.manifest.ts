@@ -394,6 +394,20 @@ export const marketIntelligenceProductManifest = {
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),
+    // N12：信号唤起的那次分析给出结论。只在这一条路径发，手动与日报都不发。
+    // 去重键只用触发键与截止时刻——同一份证据重跑会换 runId，带上它读者会收到两条同样的结论。
+    // 手机那一档要等平台加上按次收窄的字段（architect 已判，排在频道线之后单独一笔）：同向收窄到
+    // 只进中心，反向或新信息不传、按批准表全档。在那之前这里只声明、不投递。
+    notificationEvent('market-intelligence.analysis.conclusion', {
+      category: 'completed',
+      body: true,
+      requiresUserAction: false,
+      requestedDisruptionLevels: ['channel'],
+      dedupeKeyTemplate: 'analysis:{triggerKey}:{cutoff}',
+      dedupeUnit: 'occurrence',
+      // 不穿免打扰：这条说"结论出来了"，不是必须立刻打断读者的那种事。
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.timezone.invalid', {
       category: 'needs-action',
       body: true,
