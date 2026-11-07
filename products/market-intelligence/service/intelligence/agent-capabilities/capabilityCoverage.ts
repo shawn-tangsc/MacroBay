@@ -102,6 +102,9 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.queryModuleSignalRead': excluded('internal-view'),
   'intelligence.getNewsPushOutletState': excluded('internal-view'),
   'intelligence.setNewsPushOutletEnabled': excluded('internal-view'),
+  // 日历提醒的读写只服务这一屏的设置表单：agent 没有理由替读者改「提前多久」。
+  'intelligence.getCalendarReminderSettings': excluded('internal-view'),
+  'intelligence.setCalendarReminderSettings': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
   // The same panel's per-day counts: a reader-facing view with no agent tool behind it.
   'intelligence.syncRuns.aggregates': excluded('internal-view'),
