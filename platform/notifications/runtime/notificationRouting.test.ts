@@ -111,8 +111,15 @@ describe('notification quiet hours follow the reader time zone', () => {
 })
 
 describe('notification transient delivery wiring', () => {
-  // 桌面开关新装默认关（契约 §4.2）；这一组测的是「开关打开时」的接线，所以显式打开。
-  const settings = { ...createDefaultNotificationRuntimeSettings(), toastEnabled: true, desktopEnabled: true }
+  // 三个开关**全部显式写出来**，不靠默认值：这一组测的是「开关打开时」的接线，
+  // 断言里出现了哪个档位，那个档位就得由这条用例自己打开——否则把默认值一改，
+  // 断言会跟着变绿或变红，而它声称要测的那件事根本没被测到。
+  const settings = {
+    ...createDefaultNotificationRuntimeSettings(),
+    toastEnabled: true,
+    desktopEnabled: true,
+    popupEnabled: true
+  }
   const record = createNotificationFromRequest({
     owner: 'platform',
     sourceId: 'job-runtime',
