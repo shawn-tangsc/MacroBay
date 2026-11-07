@@ -45,7 +45,31 @@ export type CalendarUpcomingTestCandidate =
   | Readonly<{ kind: 'source-disabled' }>
   | Readonly<{ kind: 'unreadable' }>
 
-/** 「结果公布」样例需要的字段：它只认有实际值的事件，所以 `actual` 必须在这里。 */
+/**
+ * 「结果公布」样例需要的字段：它只认有实际值的事件，所以 `actual` 必须在这里。
+ *
+ * **调用方要提供的字段与来源**（本模块只从已读到的数组里挑一条，不取数、不猜字段）：
+ *
+ * - **数据源**：市场日历月查询的 `MarketCalendarPage.events`
+ *   （`contracts/macro/marketCalendarQueryContracts.ts:70` 的 `events`，元素类型在 `:38`），
+ *   就是 `registerCalendarEventReminder.ts:36` 注入的那一个 `queryMonth`。
+ *   **必须与真实「结果公布」推送同源**：那条通知由 `selectLandedReleases`
+ *   （`signals/macroEventLandedNotifier.ts:101`）从同一份 `MarketCalendarEvent[]` 里选，
+ *   `actual` 取的就是 `providerActual`（`:142`）。改用官方日历年月视图的 `actual`
+ *   会让测试样例演示一条读者真不会收到的链——测试就没意义了。
+ * - **字段映射**（`MarketCalendarEvent` → 本类型）：
+ *   `eventKey` ← `observationKey ?? eventKey`（稳定身份；`eventKey` 是每批采集的 HMAC，跨批会变）；
+ *   `title` ← `title`（查询已按 `locale` 定过语言，与提醒句同源）；
+ *   `scheduledAt` ← `scheduledAt`；`importance` ← `importance`；
+ *   `actual` ← `providerActual`（`MarketCalendarValue`，`:28`，只取 `displayValue`）。
+ * - **窗口**：**本月 + 上月各查一次**，`asOf` 用调用方的现在。跨月那一两天里「最近一条已落地」落在
+ *   上个月，只查本月会把它报成「没有已公布结果」。这里有**意不套**
+ *   `macroEventLandedPolicy.freshnessMs`——真实推送只报一天内的新发布，而测试按钮在安静的周末也必须
+ *   有一条能发，否则按钮等于废掉；这条窗口只属于测试样例，不改真实推送的筛选。
+ * - **`source`**：日历数据源未启用（`enabledCalendarFeeds.ts:13` 的 `createEnabledCalendarFeeds`
+ *   返回空）→ `disabled`；查询抛错、或 `state === 'unavailable'` → `unreadable`。
+ *   两者都不许拿空数组顶替——那是把「没查」写成「没有」。
+ */
 export type CalendarLandedTestEvent = Readonly<{
   eventKey: string
   title: string
@@ -74,8 +98,19 @@ export const CALENDAR_TEST_FALLBACK_WINDOW_MS = 12 * 3_600_000
 /**
  * 事前：提醒提前量之内最近的一条事件；没有就退到最近的未来一条并带真实时间；再没有就是没有。
  *
- * `events` 由调用方用现有的只读来源给出（`calendarEventReminderJob` 的 `readEvents`）。
- * 候选判定**复用** `selectCalendarReminderCandidates`：窗口、已开始、重要性都在那一处定义，
+ * **调用方要提供的字段与来源**（与真实提醒同源，别另取一份）：
+ *
+ * - `events`：`registerCalendarEventReminder.ts:52` 的 `readEvents` 给出的那段
+ *   （当前月 + 下月；字段 `eventKey` 取 `observationKey ?? eventKey`、`title`、`scheduledAt`、
+ *   `importance`）。**不要**自己去翻全年——提醒窗口最长 120 分钟，翻得越远越容易选中一条
+ *   「未来但不在提醒范围内」的事件当样例。
+ * - `settings`：`calendarEventReminderSettingsStore.read()` 当次读到的设置（提前量与重要性档位）。
+ * - `source`：日历数据源未启用（`createEnabledCalendarFeeds` 返回空）→ `disabled`；
+ *   `queryMonth` 抛错或 `state === 'unavailable'` → `unreadable`；都不许用空数组顶替。
+ * - `now`：调用方的现在，ISO 8601。本模块只按 UTC 比时刻，格式化由上层做。
+ *
+ * 候选判定**复用** `selectCalendarReminderCandidates`
+ * （`calendarEventReminderScan.ts:59`）：窗口、已开始、重要性都在那一处定义，
  * 这里不写第二份口径；`remainingMinutes` 也直接取它的结果。
  */
 export function calendarUpcomingTestCandidate(input: Readonly<{
