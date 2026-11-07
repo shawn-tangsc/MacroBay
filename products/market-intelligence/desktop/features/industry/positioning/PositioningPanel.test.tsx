@@ -5,12 +5,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { createElement } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
 import { PositioningPanel } from './PositioningPanel'
+import { positioningNoteKeys, resolvePositioningNote } from './positioningNotes'
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import type { DashboardPositioningViewState } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
@@ -48,7 +49,16 @@ const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
     funding, positioning, window: '7d', onWindowChange: () => undefined, text, ...props
   }) }))
 
-afterEach(() => { document.body.innerHTML = '' })
+/**
+ * 每张卡挂过的 root 都要卸掉：`document.body.innerHTML = ''` 只清 DOM，不卸 React 树，
+ * 而平台 `Popover` 的 Esc 监听挂在 `document` 上——留着，下一条用例的 Esc 会被它先吃掉。
+ */
+const mountedRoots: Root[] = []
+
+afterEach(async () => {
+  for (const root of mountedRoots.splice(0)) await act(async () => { root.unmount() })
+  document.body.innerHTML = ''
+})
 
 
 /** A card whose rule fired: the chip exists only then, and the chip is the entry to the dialog. */
@@ -62,6 +72,7 @@ async function mountPanel(renderProps: Partial<Parameters<typeof PositioningPane
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
+  mountedRoots.push(root)
   await act(async () => {
     root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(PositioningPanel, {
       funding, positioning, window: '7d', onWindowChange: () => undefined, text, ...renderProps
@@ -358,6 +369,31 @@ describe('the truncated-hit count', () => {
   })
 })
 
+describe('the one ⓘ on the reading dialog', () => {
+  const notes = resolvePositioningNote('zh-CN')
+
+  it('does not exist until the dialog is open, then carries every meta sentence', async () => {
+    const { host, entry } = await mountPanel({ positioning: alertPositioning })
+    // 弹层没开，就没有这颗 ⓘ。
+    expect(host.querySelector('button[aria-label="口径说明"]')).toBeNull()
+
+    await act(async () => { entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+    const icon = document.querySelector<HTMLButtonElement>('button[aria-label="口径说明"]')
+    expect(icon).not.toBeNull()
+    // 正文里一句都不许有；打开 ⓘ 之后四句逐句都在。
+    const body = document.querySelector('.mi-positioning-panel__help-dialog')!.textContent ?? ''
+    for (const key of positioningNoteKeys) {
+      expect(body).not.toContain(notes(key).slice(0, 12))
+    }
+    await act(async () => { icon!.focus() })
+    await flush()
+    for (const key of positioningNoteKeys) {
+      expect(document.body.textContent).toContain(notes(key).slice(0, 12))
+    }
+  })
+})
+
 describe('the mark chips', () => {
   const mark = (overrides: Partial<{
     asset: 'btc' | 'eth'
@@ -527,13 +563,12 @@ describe('the chip is the entry to the dialog', () => {
 
     const surface = dialog()
     expect(surface).not.toBeNull()
-    // 三组都在：这次读数、这张卡在读什么、口径上容易读错的地方。
+    // 正文只剩读数与证据：口径说明那几段一句都不许铺在正文里。
     expect(document.querySelector('#mi-positioning-signal-detail')?.getAttribute('aria-label')).toBe(text.signalDetailsTitle)
     expect(surface!.textContent).toContain(text.signalDetailsRuleName)
-    expect(surface!.textContent).toContain(text.helpBullets[0])
-    expect(surface!.textContent).toContain('六档判定')
-    expect(surface!.textContent).toContain('只标 15 分钟内的骤降')
-    expect(surface!.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+    for (const sentence of ['六档判定', '只标 15 分钟内的骤降', '相对过去 24 小时同长度桶均量的倍数', '两者都只代表']) {
+      expect(surface!.textContent).not.toContain(sentence)
+    }
     // 弹层归 portal：卡里始终没有那块常驻区域。
     expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
   })
@@ -652,9 +687,16 @@ describe('what the mark does not cover', () => {
 })
 
 describe('the liquidation multiple', () => {
-  it('names what the multiple measures, in the readings the reader can open', async () => {
-    // A bare "3.4×" said nothing about what was multiplied; the sentence lives in the readings.
-    await openReadings()
+  it('names what the multiple measures, behind the ⓘ', async () => {
+    // A bare "3.4×" said nothing about what was multiplied; the sentence is a definition, so it
+    // lives behind the one ⓘ rather than in the body.
+    const { entry } = await openReadings()
+    await act(async () => { entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+    const icon = document.querySelector<HTMLButtonElement>('button[aria-label="口径说明"]')!
+    expect(icon).not.toBeNull()
+    await act(async () => { icon.focus() })
+    await flush()
     expect(document.body.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
   })
 })

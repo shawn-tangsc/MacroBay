@@ -1,16 +1,20 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Info } from 'lucide-react'
 import { useState } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
+import { Popover } from '@platform/ui/components/popover'
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { OpenInterestWindow } from '../../../../contracts/openInterestHistory'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
@@ -28,38 +32,9 @@ import { SignalDetail } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import { PositioningChart, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
+import { positioningNoteKeys, resolvePositioningNote } from './positioningNotes'
 
 import './PositioningPanel.css'
-
-/**
- * The four one-look bullets that lead the readings region, one literal key per line.
- *
- * Literal on purpose: the guards check that a key exists and is spelled as a dotted path, which a
- * template string hides from them. A table also makes it obvious that the bullets and the text
- * table have the same number of lines.
- *
- * Four because they are a glance: a fifth bullet, or a paragraph where a bullet belongs, means the
- * sentence is a reading note and belongs in `positioningHelpDetailKeys` instead.
- */
-export const positioningHelpBulletKeys = Object.freeze([
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.0',
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.1',
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.2',
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.3'
-] as const)
-
-/**
- * The readings behind the numbers: thresholds, window folding, what a mark does not cover.
- *
- * These live in a region under the card that the reader opens on purpose. A bubble that covered
- * half the chart was the same prose in the wrong home.
- */
-export const positioningHelpDetailKeys = Object.freeze([
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.0',
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.1',
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.2',
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.3'
-] as const)
 
 /**
  * The six state labels, one literal key each.
@@ -105,6 +80,8 @@ function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
+  // 口径说明收在一颗 ⓘ 里（界面 2026-11-08）：正文只留读数与证据，元说明不占版面。
+  const resolveNote = resolvePositioningNote(useShellLanguage())
   // 重试那一枚的文案归平台（`ui.state.action.retry`）：这行不造句，也不新造第二个「重试」。
   const stateText = useStateViewText()
   const analysisSentence = useSignalAnalysisSentence(positioning.state === 'available' ? positioning.signalAnalysis : undefined)
@@ -213,6 +190,15 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           destroyOnHidden
           resolveText={resolveProductKey}>
           <div className="mi-positioning-panel__help-dialog">
+            {/* 标题行尾的一颗 ⓘ：卡片怎么来的、口径怎么定义，都在悬停/聚焦里；正文只留读数与证据。 */}
+            <div className="mi-positioning-panel__dialog-head">
+              <Popover lines={positioningNoteKeys.map(labelKey => ({ labelKey }))} resolveText={resolveNote}
+                trigger={triggerProps => (
+                  <IconButton {...triggerProps}
+                    ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpDetailsLabel"
+                    icon={Info} resolveText={resolveProductKey} size="sm" variant="plain" />
+                )} />
+            </div>
             <SignalDetail
               id="mi-positioning-signal-detail"
               titleKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
@@ -228,18 +214,6 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
                 { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsObservedAt', value: formatTime(alertChip.observedAt) }
               ]}
               noteKey="pages.intelligence.portal.dashboard.positioning.signalDetailsNote" />
-            <hr className="mi-positioning-panel__help-divider" />
-            <ul className="mi-positioning-panel__help-bullets">
-              {positioningHelpBulletKeys.map(labelKey => (
-                <li key={labelKey}>{resolveProductKey(labelKey)}</li>
-              ))}
-            </ul>
-            <hr className="mi-positioning-panel__help-divider" />
-            <div className="mi-positioning-panel__help-notes">
-              {positioningHelpDetailKeys.map(labelKey => (
-                <p key={labelKey}>{resolveProductKey(labelKey)}</p>
-              ))}
-            </div>
           </div>
         </Modal>
       ) : null}
@@ -332,6 +306,8 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
   state: PositioningState | undefined
 }>): React.ReactElement {
   const resolveProductKey = useProductTextKey()
+  // 口径说明收在一颗 ⓘ 里（界面 2026-11-08）：正文只留读数与证据，元说明不占版面。
+  const resolveNote = resolvePositioningNote(useShellLanguage())
   return (
     <div className="mi-positioning-panel__asset" data-asset={asset} data-funding-latest={asset}>
       <div className="mi-positioning-panel__asset-head">

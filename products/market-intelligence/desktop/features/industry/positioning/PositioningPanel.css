@@ -165,11 +165,8 @@ body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }
   color: var(--mi-dashboard-muted);
   font-size: 11.5px; line-height: 1.6;
 }
-.mi-positioning-panel__help-bullets { display: grid; gap: 6px; margin: 0; padding-left: 16px; }
-.mi-positioning-panel__help-bullets li { margin: 0; }
-.mi-positioning-panel__help-divider { margin: 0; border: 0; border-top: 1px solid var(--mi-dashboard-line); }
-.mi-positioning-panel__help-notes { display: grid; gap: 6px; }
-.mi-positioning-panel__help-notes p { margin: 0; }
+/* 标题行：只有一颗 ⓘ，靠右；正文里不再铺开任何口径段落。 */
+.mi-positioning-panel__dialog-head { display: flex; justify-content: flex-end; margin-bottom: -4px; }
 
 
 /* 强平判定的脚注：卡面最末一行，三句互斥、同位置只出现一句（没命中 / 读不到 / 数据不齐）。
