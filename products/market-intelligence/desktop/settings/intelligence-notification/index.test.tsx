@@ -348,10 +348,11 @@ describe('intelligence notification settings', () => {
       .find((node) => node.getAttribute('aria-label') === text['pages.intelligence.notification.threshold.row'])
     expect(group).not.toBeUndefined()
     const labels = [...(group?.querySelectorAll('button') ?? [])].map((button) => button.textContent)
+    // 顺序按界面设计签的「高 / 中 / 低」，与本页其他分级同向。
     expect(labels).toEqual([
-      text['pages.intelligence.notification.threshold.low'],
+      text['pages.intelligence.notification.threshold.high'],
       text['pages.intelligence.notification.threshold.medium'],
-      text['pages.intelligence.notification.threshold.high']
+      text['pages.intelligence.notification.threshold.low']
     ])
     expect(group?.querySelector('[aria-pressed="true"]')?.textContent)
       .toBe(text['pages.intelligence.notification.threshold.medium'])
@@ -378,6 +379,28 @@ describe('intelligence notification settings', () => {
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligence.saveNewsPushThreshold', { pushThreshold: 'high' })
     expect(group.querySelector('[aria-pressed="true"]')?.textContent)
       .toBe(text['pages.intelligence.notification.threshold.high'])
+  })
+
+  it('shows the cost line only once the lowest tier is chosen', async () => {
+    // 界面设计 2026-11-07：代价只给量级（「几十条」），且**只在选「低」时出现**；不写实测数字，
+    // 那会变成承诺，明天变多就是我们在撒谎。
+    const invoke = vi.fn(async (_productId: string, method: string, payload?: unknown) => {
+      if (String(method).includes('saveNewsPushThreshold')) return { pushThreshold: (payload as { pushThreshold?: string })?.pushThreshold }
+      if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+      return { enabled: true }
+    })
+    install({ productsInvoke: invoke })
+    await render()
+    await selectItem(2)
+    expect(container?.textContent ?? '').not.toContain(text['pages.intelligence.notification.threshold.cost'])
+
+    const group = [...(container?.querySelectorAll('[role="group"]') ?? [])]
+      .find((node) => node.getAttribute('aria-label') === text['pages.intelligence.notification.threshold.row'])!
+    const low = [...group.querySelectorAll('button')]
+      .find((button) => button.textContent === text['pages.intelligence.notification.threshold.low'])!
+    await act(async () => { low.click(); await Promise.resolve() })
+    await act(async () => { await Promise.resolve() })
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.threshold.cost'])
   })
 
   it('says so when saving the tier fails, and keeps the value the service still reports', async () => {

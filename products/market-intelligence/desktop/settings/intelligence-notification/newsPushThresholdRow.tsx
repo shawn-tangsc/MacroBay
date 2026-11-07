@@ -23,16 +23,20 @@ export function NewsPushThresholdRow(props: Readonly<{
   last?: boolean
 }>): ReactElement {
   const label = props.text['pages.intelligence.notification.threshold.row'] ?? ''
+  // 说明只放一行：**存不上比代价更急**，所以两者同时成立时先说存不上（代价那句在值没变回「低」时本来也不该出现）。
+  const note = props.state.saveFailed
+    ? props.text['pages.intelligence.notification.saveFailed'] ?? ''
+    : props.state.value === 'low'
+      ? props.text['pages.intelligence.notification.threshold.cost'] ?? ''
+      : undefined
   return <SettingsRow
     label={label}
     last={props.last}
-    {...(props.state.saveFailed
-      ? { note: props.text['pages.intelligence.notification.saveFailed'] ?? '', noteRole: 'status' as const }
-      : {})}
+    {...(note === undefined || note === '' ? {} : { note, noteRole: 'status' as const })}
   >
     <Segmented
       ariaLabelKey="pages.intelligence.notification.threshold.row"
-      items={(['low', 'medium', 'high'] as const).map((tier) => ({
+      items={(['high', 'medium', 'low'] as const).map((tier) => ({
         value: tier,
         labelKey: `pages.intelligence.notification.threshold.${tier}`
       }))}
