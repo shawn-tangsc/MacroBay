@@ -244,6 +244,19 @@
 /* 详情列：吃掉剩余宽度但绝不被内容撑破（没有 min-width: 0 会挤坏另一列）。 */
 .intelligence-notification-detail {
   min-width: 0;
+  /* 规范 v2.40：内边距 24，窗口 <1280 收 16。 */
+  padding: 24px;
+}
+
+/* 详情里的内容卡上限 760、左对齐——再宽只会把一行拉得太长，读起来更累。 */
+.intelligence-notification-detail > * {
+  max-width: 760px;
+}
+
+@media (max-width: 1279px) {
+  .intelligence-notification-detail {
+    padding: 16px;
+  }
 }
 
 /* 详情里的长句按词/按标点折行，不做逐字换行。 */
