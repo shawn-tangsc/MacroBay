@@ -117,7 +117,7 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   </div>
 }
 
-export function DailyBriefingEditionActions({ text, resolveText, exportable, exportState, copyState, deleteTarget, deleting, generating, runningLabel, onExport, onCopy, onDelete, onRegenerate, push, pushText }: Readonly<{
+export function DailyBriefingEditionActions({ text, resolveText, exportable, exportState, copyState, deleteTarget, deleting, generating, runningLabel, regenerateBlockedReason, onExport, onCopy, onDelete, onRegenerate, push, pushText }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   /** 有可读版次：五颗一起亮；没有就一起禁用，原因写在整组下面一句。 */
@@ -136,6 +136,8 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   onDelete?: (target: BriefingEditionDeleteTarget) => void
   /** 重跑当前这一版（期号 + 语言来自它自己），不是"重跑今天"。 */
   onRegenerate: () => void | Promise<void>
+  /** 这一天为什么不能重新生成（超出最近 3 天）。跑进行中时用 `runningLabel`，不走这里。 */
+  regenerateBlockedReason?: string
   push: BriefingPushToPhone
   pushText: BriefingPushText
 }>): React.ReactElement {
@@ -165,6 +167,9 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   // 没有可读版次时五颗一起禁用。**原因不在这条栏里另写一句**：正文的空态已经说明这一版为什么
   // 没有内容，栏上再写一遍就是同一件事两个出处，还会把吸顶栏撑高。
   const blocked = !exportable
+  // 「重新生成」与"有没有正文"**无关**：失败行正是它该用的时候（用户 2026-11-07）。
+  // 它只看两件事：这一期正在跑、或者这一天超出可生成窗口——后者要给看得见的理由。
+  const regenerateDisabledReason = generating ? (runningLabel ?? text.regenerating) : regenerateBlockedReason
   const deleteButton = <Button danger className="mi-briefing-tool__btn mi-briefing-tool__btn--danger" data-toolbar-action="delete-edition"
     disabled={blocked || deleteTarget === undefined || onDelete === undefined || deleting === true}
     icon={deleting === true ? <LoadingSpinner size="sm" /> : undefined}
@@ -187,8 +192,10 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   return <div className="mi-daily-briefing-page__report-bar" data-action-group="edition">
       {/* 第一颗是"这一版重跑一次"：它作用于当前打开的期号 + 语言，与页面顶部那颗"今天出不出"不是
           同一件事——两颗都在页面上，但管的是不同的东西。 */}
-      <Button className="mi-briefing-tool__btn" data-toolbar-action="regenerate-edition" disabled={blocked || generating}
+      <Button className="mi-briefing-tool__btn" data-toolbar-action="regenerate-edition"
+        disabled={generating || regenerateBlockedReason !== undefined}
         loading={generating}
+        {...(regenerateDisabledReason === undefined ? {} : { 'aria-label': regenerateDisabledReason, title: regenerateDisabledReason })}
         onClick={() => { void onRegenerate() }}>
         {/* 手动那一路不许退回「正在重新生成…」：写的是新的一期，不是读者眼前这一版（G4）。 */}
         {generating ? (runningLabel ?? text.regenerating) : text.regenerate}

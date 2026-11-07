@@ -378,10 +378,10 @@ describe('daily briefing page', () => {
     expect(panel.getAttribute('data-failure-code')).toBe('model-unavailable')
     expect(panel.querySelectorAll('[data-stage]')).toHaveLength(9)
     expect(panel.textContent).toContain(text.aiSettings.failure['model-unavailable']!)
-    const retry = panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!
-    // 10 天前 → 超出"最近 3 天"窗口：重试禁用，理由换成新的那句（旧禁令已作废）。
-    expect(retry.disabled).toBe(true)
-    expect(retry.getAttribute('aria-label')).toBe(text.history.generationWindowOnly)
+    // 10 天前 → 超出"最近 3 天"窗口：重跑入口禁用并给可见理由（旧禁令已作废）。
+    const regenerate = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!
+    expect(regenerate.disabled).toBe(true)
+    expect(regenerate.getAttribute('aria-label')).toBe(text.history.generationWindowOnly)
 
     // 3. Selecting wrote nothing and started nothing: no open, no run, no attempt.
     expect(client.getToday).toHaveBeenCalledTimes(getTodayCalls)
@@ -1054,11 +1054,12 @@ describe('daily briefing page', () => {
     expect(panel.querySelector('[data-failure-next]')?.textContent).toBe('接下来：再试一次；反复出现就换一个模型或检查网络')
     expect(panel.textContent).not.toContain('editorial-timeout')
     expect(panel.querySelector('[data-failure-code-label]')).toBeNull()
-    expect(panel.querySelector('[data-failure-action="retry"]')).not.toBeNull()
-    // Two actions only: retry, and the same settings drawer the header opens. A third button per
-    // advice code is what the reader saw as duplicated settings entries.
+    // 面板里不再有「重新生成」（用户 2026-11-07）：重跑这一期只走正文顶部工具栏那颗。
+    expect(panel.querySelector('[data-failure-action="retry"]')).toBeNull()
+    // 面板只留「日报设置」这一颗：一句建议一个入口，不再按建议码长出第三颗按钮。
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
-    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
+    // 面板里恰好一颗按钮（设置）；重跑在工具栏。
+    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(1)
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
     // The header action stays clickable in a failure too: only a run in flight disables it. It and
     // the panel's retry may both be clickable — that is the ask, not a duplicate to remove.
@@ -1066,10 +1067,11 @@ describe('daily briefing page', () => {
     expect(headerAction).not.toBeNull()
     expect(headerAction.disabled).toBe(false)
     expect(headerAction.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-30'))
-    expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
+    expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(0)
 
+    // 重跑这一期只有工具栏那颗入口（用户 2026-11-07）：失败行上它必须可点。
     await act(async () => {
-      panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!.click()
+      dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click()
       await Promise.resolve(); await Promise.resolve()
     })
     // 重跑的是屏幕上这一版：期号与它自己的截止都要跟着走。少了 `rerun`，服务端只能回落到
@@ -1495,8 +1497,8 @@ describe('daily briefing page', () => {
       .toBe('这次在数据采集就停下了：情报源采集失败，数据没到齐')
     expect(panel.querySelector('[data-failure-next]')?.textContent)
       .toBe('接下来：到「数据缺口与限制」看是哪一项，重试读取或检查来源')
-    // The advice sentence names the source check; the buttons do not grow a third entry for it.
-    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
+    // 面板只留一颗「日报设置」：建议句已经点名要检查什么，按钮不再跟着建议码长。
+    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(1)
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
   })
 

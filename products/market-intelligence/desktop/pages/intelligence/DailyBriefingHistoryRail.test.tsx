@@ -132,16 +132,24 @@ describe('daily briefing history rail', () => {
     expect(host.querySelector('[data-day="2026-10-27"]')).not.toBeNull()
   })
 
-  it('says a failed run on the row, without a count and without the reason', () => {
+  it('does not call a row failed just because it has attempts — only its own reason counts', () => {
+    // 用户 2026-11-07 的回归：成功行也有尝试记录，用"有没有跑过"判失败会把整列标红。
+    // 没有正文、也没有失败原因 → 落到「未运行」，不出失败标。
     render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })] })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
 
-    // 两行制：第二行是标题位，失败那行写一句原因（留白会被读成"还在加载"）；项数一律不进行。
     expect(row.querySelector('[data-rail-title="reason"]')).not.toBeNull()
-    // 失败标在第一行（`02` v2.156）：第二行只写原因，两个词不许同时出现。
-    expect(row.querySelector('.status-pill')).not.toBeNull()
+    expect(row.querySelector('.status-pill')).toBeNull()
+    expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('not-run')
     expect(row.textContent).not.toContain(text.history.runFailed)
     expect(row.textContent).not.toMatch(/\d+\s*项|\d+\s*缺口/)
+  })
+
+  it('never marks a row that has a body as failed, however many attempts it took', () => {
+    // 有正文 = 成了。尝试次数不是状态。
+    render({ editions: [edition({ attemptCount: 3, languages: [{ locale: 'zh-CN', state: 'published' }] })] })
+    expect(host.querySelector('.status-pill')).toBeNull()
+    expect(host.textContent).not.toContain(text.history.runFailed)
   })
 
   it('prints one badge per row, and clicking a row selects that edition', () => {

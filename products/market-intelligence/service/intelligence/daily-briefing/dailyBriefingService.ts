@@ -215,7 +215,7 @@ export type DailyBriefingTodayFailureCode =
   | 'model-not-ready' | 'provider-disabled' | 'missing-api-key' | 'cancelled' | 'rate-limited'
   | 'provider-error' | 'invalid-json' | 'schema-validation-failed' | 'invalid-translation'
   | 'agent-turn-output-truncated' | 'direction-conflict' | 'row-set-mismatch' | 'model-unavailable' | 'date-out-of-window'
-  | 'not-generated' // Not a failure: a read-only open found nothing written for this issue yet.
+  | 'run-interrupted' | 'not-generated' // 后者不是失败：只读打开时还没写过这一期。
 
 export type DailyBriefingTodayResult =
   | Readonly<{

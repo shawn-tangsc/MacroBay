@@ -68,6 +68,7 @@ import { useBriefingEditionReader } from './useBriefingEditionReader'
 import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoading, readyKind, readyZone, resolveBriefingMode } from './dailyBriefingMode'
 import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingBackgroundRunReload } from './useBriefingBackgroundRunReload'
+import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import { useBriefingRunActions, type BriefingRunIntent } from './useBriefingRunActions'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
@@ -248,6 +249,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
    * 少了这两样，服务端只能回落到期配置列表第一项（初始化那第 1 期的 07:00），于是"点重新生成，
    * 又变成 7 点"，还会在同一个截止上多插一版。没有正文可读时不给（那是"生成这一期"，不是重跑）。
    */
+  /**
+   * 「重新生成」作用在哪一天：有正文就是这一版那一天；**失败/缺版**的那一天没有正文，
+   * 日期在视图里（`view.date`），不许因为它没正文就没得判断。
+   */
+  const regenerateDay = screenDocument?.edition.date
+    ?? (view.status === 'no-edition' ? view.date : undefined)
   const screenWindowHours = screenDocument?.edition.windowHours
   const screenRerun = screenDocument === undefined ? undefined : {
     periodTime: screenDocument.edition.windowEnd,
@@ -445,6 +452,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           onCopy={() => void copy()}
           // 重跑的是**屏幕上这一版**：期号与语言取自它，不是服务端的默认期。
           // 以前这里不带期号，历史日点「重新生成」写的是今天那版（审计 #10/#23）。
+          // 重跑这一期只有这一个入口（用户 2026-11-07）：与"有没有正文"无关，只看是否在可生成窗口内。
+          // 超窗时禁用并给可见理由——那是唯一需要拦的情况，跑进行中由 `generating` 自己表达。
+          {...(regenerateDay === undefined || isManualGenerationDateAllowed(regenerateDay, todayDate)
+            ? {}
+            : { regenerateBlockedReason: text.history.generationWindowOnly })}
           onRegenerate={() => void runBriefing({ periodId: onScreenPeriodId, locale: screenDocument?.edition.locale ?? effectiveLocale, trigger: 'regenerate', ...(screenRerun === undefined ? {} : { rerun: screenRerun }) })}
           push={pushToPhone}
           pushText={briefingPushText[locale]}

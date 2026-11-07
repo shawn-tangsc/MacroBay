@@ -288,7 +288,13 @@ export function DailyBriefingHistoryRail({
             // 行上**不放任何按钮**（用户 2026-11-06：list 上每个 item 都有重试按钮，太重）。
             // 重试只在正文的失败面板与工具栏，行本身只陈述事实。
             const interrupted = runReasonOf(edition) === 'run-interrupted'
-            const failedRun = runReasonOf(edition) === 'run-failed' || (!running && Boolean(edition.attemptCount))
+            /**
+             * **失败只认这一行自己的原因**，不许用"有没有尝试过"去猜（用户 2026-11-07 的回归：成功行也
+             * 有尝试记录，于是整列都被标成「失败」）。
+             * - 有正文：正文在就说明成了，永远不出失败标；
+             * - 没有正文：只看这一行的 `reason`；`run-failed` 才是失败，中断是另一句，缺原因落到「未运行」。
+             */
+            const failedRun = !running && missing && runReasonOf(edition) === 'run-failed'
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
               <button type="button"
                 aria-current={rowSelected(edition) ? 'true' : undefined}

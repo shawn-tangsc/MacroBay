@@ -25,17 +25,10 @@ export type BriefFailure = Readonly<{
 /** 低到这一步就不可能"卡住"：1 毫秒的校验不是耗时，别把它写成时长。 */
 const MIN_REPORTED_DURATION_MS = 1_000
 
-export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, retryBlockedReason, onRetry, onOpenSettings }: Readonly<{
+export function DailyBriefingFailurePanel({ failure, text, formatTime, onOpenSettings }: Readonly<{
   failure: BriefFailure
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
-  regenerating: boolean
-  /**
-   * Retrying would write today's edition where a past one should be, so the action is disabled and
-   * this sentence becomes its accessible name. Absent means retry is a real action.
-   */
-  retryBlockedReason?: string
-  onRetry: () => void
   onOpenSettings: () => void
 }>): React.ReactElement {
   const advice = failureAdvice(failure.code)
@@ -75,13 +68,9 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
     {detail ? <p data-failure-detail>{text.failurePanel.detailLabel}{separator}{detail}</p> : null}
     <DailyBriefingGenerationTimeline trace={failure.generationTrace} text={text} formatTime={formatTime} />
     <div className="mi-daily-briefing-page__failure-actions">
-      <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating || retryBlockedReason !== undefined}
-        {...(retryBlockedReason !== undefined ? { 'aria-label': retryBlockedReason, title: retryBlockedReason } : {})}
-        onClick={onRetry}>
-        {regenerating ? text.regenerating : text.regenerate}
-      </Button>
-      {/* Two actions only: retry here, or the same settings drawer the header opens. The advice
-          paragraph above already names what to check, so a third button per advice would repeat it. */}
+      {/* 面板里**不再放「重新生成」**（用户 2026-11-07）：与正文顶部工具栏那颗重复，
+          而且那颗在失败行上还点不动。重跑这一期只有一个入口——工具栏。
+          这里只留"去设置看一眼"这一颗：面板说的是原因，读者下一步要改的往往是配置。 */}
       <Button data-failure-action="settings" data-open-settings-section="ai" onClick={onOpenSettings}>{text.settingsDrawer.open}</Button>
     </div>
   </DailyBriefingStagePanel>
