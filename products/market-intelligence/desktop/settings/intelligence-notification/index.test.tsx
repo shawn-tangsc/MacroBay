@@ -87,9 +87,20 @@ async function selectItem(index: number): Promise<void> {
   await act(async () => { listItems()[index]?.click(); await Promise.resolve() })
 }
 
+/**
+ * 断点量的是**这一页自己的宽度**（规范 §9f 的「容器宽」），不是窗口宽——外壳的三列里
+ * 这一页只占一块。测试直接驱动这个宽度：`clientWidth` 在 happy-dom 里恒为 0，不 stub 就
+ * 永远走「窗口宽」的兜底，量出来的不是被测对象。
+ */
+let sectionWidth = 1280
 beforeEach(() => {
-  // 宽窗是默认形态；只有那条窄窗用例会把它改小。
-  window.innerWidth = 1280
+  sectionWidth = 1280
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains('intelligence-notification-workspace') ? sectionWidth : 0
+    }
+  })
   install()
 })
 afterEach(async () => {
@@ -179,7 +190,7 @@ describe('intelligence notification settings', () => {
 
   it('turns the list into a dropdown on a narrow window, with the name and the state in the option text', async () => {
     // 窄窗下换控件而不是压缩：列表 → 下拉；名字与状态都进选项文本（图标认不出是哪一条）。
-    window.innerWidth = 1000
+    sectionWidth = 1000
     await render()
     // 宽度是挂载后量出来的：再走一个渲染轮次，等布局切换落定。
     await act(async () => { await Promise.resolve() })
@@ -196,7 +207,15 @@ describe('intelligence notification settings', () => {
       await Promise.resolve()
     })
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.timeline'])
-    window.innerWidth = 1280
+  })
+
+  it('keeps three columns at a 1100 container even though the window is wider', async () => {
+    // 专抓「按窗口宽度判断」那个错：容器 1100 排得下三列，不该切下拉。
+    sectionWidth = 1100
+    await render()
+    await act(async () => { await Promise.resolve() })
+    expect(container?.querySelector('.intelligence-notification-panes')).not.toBeNull()
+    expect(container?.querySelector('.intelligence-notification-list')).not.toBeNull()
   })
 
   it('collapses the lead and importance controls while the reminder is off and says what would happen', async () => {
