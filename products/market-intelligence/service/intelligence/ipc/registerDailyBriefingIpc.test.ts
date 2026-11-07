@@ -140,3 +140,48 @@ describe('daily briefing delete channel', () => {
     expect(deletePeriod).not.toHaveBeenCalled()
   })
 })
+
+describe('the publish-to-phone payload carries the edition identity, and nothing else', () => {
+  // 用户 2026-11-07 报「点发布频道发不出去」：这一层曾把推送交给删除的校验，而删除还要求一个
+  // `entry`（从哪点的），于是每一次推送都判 `daily-briefing-invalid-request`，请求到不了通道。
+  const handlersWithPush = (publishToPhone: (input: unknown) => Promise<unknown>) => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), publishToPhone } as never, undefined, undefined)
+    return handlers
+  }
+
+  it('accepts exactly { date, periodId, locale } — the request the renderer sends has no entry field', async () => {
+    const publishToPhone = vi.fn(async () => ({ state: 'sent' }))
+    const handler = handlersWithPush(publishToPhone).get(DAILY_BRIEFING_IPC_METHODS.publishToPhone)!
+    const payload = { date: '2026-11-07', periodId: 'period_18ce8fe5-781d-490a-a5e4-689390f1e6cf', locale: 'en-US' }
+
+    await expect(handler(payload)).resolves.toEqual({ state: 'sent' })
+    expect(publishToPhone).toHaveBeenCalledWith(payload)
+  })
+
+  it('still refuses a push request with a missing or invalid identity field', async () => {
+    const publishToPhone = vi.fn(async () => ({ state: 'sent' }))
+    const handler = handlersWithPush(publishToPhone).get(DAILY_BRIEFING_IPC_METHODS.publishToPhone)!
+    for (const payload of [
+      { periodId: 'default', locale: 'zh-CN' },
+      { date: '2026-11-07', locale: 'zh-CN' },
+      { date: '2026-11-07', periodId: '', locale: 'zh-CN' },
+      { date: '2026-11-07', periodId: 'default', locale: 'fr-FR' }
+    ]) {
+      await expect(handler(payload)).rejects.toThrow('daily-briefing-invalid-request')
+    }
+    expect(publishToPhone).not.toHaveBeenCalled()
+  })
+
+  it('keeps the delete rule: no entry means refused, even without a push request involved', async () => {
+    // 修推送不许顺手放松删除：`entry` 是删除的审计语义，缺了仍然拒。
+    const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 0, allDone: true }))
+    const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
+    await expect(handler({ date: '2026-11-07', periodId: 'default', locale: 'zh-CN' })).rejects.toThrow('daily-briefing-invalid-request')
+    expect(deletePeriod).not.toHaveBeenCalled()
+    await handler({ date: '2026-11-07', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' })
+    expect(deletePeriod).toHaveBeenCalledTimes(1)
+  })
+})

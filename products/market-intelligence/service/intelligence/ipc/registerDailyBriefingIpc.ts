@@ -78,9 +78,20 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
   })
 }
 
-/** 每条字段都必填且校验：缺一个就会去推别的版次或别的日子。 */
+/**
+ * 推送的输入：`{ date, periodId, locale }`，三条都必填且校验——缺一个就会推别的版次或别的日子。
+ *
+ * **不许复用删除的校验**：删除还要一个 `entry`（从工具栏还是行菜单删的），那是删除的审计语义；
+ * 推送没有"从哪点的"这件事。曾经把两者并成一条，于是每次推送都被要求带 `entry`、被判非法
+ * （`daily-briefing-invalid-request`），请求根本到不了通道那一步（用户 2026-11-07 报"发布频道发不出去"）。
+ */
 function readPushQuery(payload: unknown): Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }> {
-  return readDeleteQuery(payload)
+  if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
+  const { date, periodId, locale } = payload
+  if (typeof date !== 'string' || !isDailyBriefingEditionDate(date)) throw new Error('daily-briefing-invalid-request')
+  if (typeof periodId !== 'string' || periodId.trim().length === 0 || periodId.length > 64) throw new Error('daily-briefing-invalid-request')
+  if (!isDailyBriefingLocale(locale)) throw new Error('daily-briefing-invalid-request')
+  return { date, periodId, locale }
 }
 
 /** Every field is required and validated: a missing one would delete another issue's edition. */
