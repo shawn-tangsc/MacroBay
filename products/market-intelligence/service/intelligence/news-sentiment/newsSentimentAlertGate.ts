@@ -14,18 +14,23 @@
  *
  * 外加两条常被忘的资格条件：`engine='model'`（关键词命中不算分析）、强度中以上、有归并键。
  */
-import { tierOf, type NewsSentimentTier } from '../../../contracts/newsSentimentTiers'
+import {
+  meetsTierThreshold,
+  tierOf,
+  type NewsSentimentTier,
+  type NewsSentimentTierThreshold
+} from '../../../contracts/newsSentimentTiers'
 
 export type NewsSentimentAlertSkipReason =
   | 'rules-engine'
-  | 'below-medium'
+  | 'below-threshold'
   | 'no-story-key'
   | 'stale'
   | 'before-enable'
   | 'already-pushed'
 
 export type NewsSentimentAlertDecision =
-  | { push: true; tier: Exclude<NewsSentimentTier, 'low'> }
+  | { push: true; tier: NewsSentimentTier }
   | { push: false; reason: NewsSentimentAlertSkipReason }
 
 export const NEWS_SENTIMENT_ALERT_STALE_MS = 24 * 60 * 60 * 1000
@@ -33,6 +38,8 @@ export const NEWS_SENTIMENT_ALERT_STALE_MS = 24 * 60 * 60 * 1000
 export function decideAlert(input: {
   engine: 'model' | 'rules'
   strength: number
+  /** 读者设的门槛（弱/中/强）；闸门自己不读设置，由调用方传进来。 */
+  threshold: NewsSentimentTierThreshold
   storyKey?: string
   /** 新闻发布时间。**不是**入库时间，也**不是**评分时间。 */
   publishedAt: string
@@ -43,7 +50,9 @@ export function decideAlert(input: {
 }): NewsSentimentAlertDecision {
   if (input.engine !== 'model') return { push: false, reason: 'rules-engine' }
   const tier = tierOf(input.strength)
-  if (tier === 'low') return { push: false, reason: 'below-medium' }
+  // 可配门槛：档位 < 门槛就不推。原因码独立（`below-threshold`），因为「低于中」这句话
+  // 在门槛可配之后已经不成立了。
+  if (!meetsTierThreshold(tier, input.threshold)) return { push: false, reason: 'below-threshold' }
   if (!input.storyKey?.trim()) return { push: false, reason: 'no-story-key' }
   // 账本先判：推过的是永久事实，不该因为后来重开开关、跨了 24 小时而被改写成别的原因。
   if (input.alreadyPushed) return { push: false, reason: 'already-pushed' }

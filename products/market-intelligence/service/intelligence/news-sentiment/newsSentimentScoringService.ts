@@ -71,6 +71,8 @@ export function createNewsSentimentScoringService(deps: {
   alertDelivery?: {
     ledgerPath: string
     submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+    /** 读者设的强度门槛；缺省「中」。 */
+    threshold?: () => 'low' | 'medium' | 'high'
   }
 }) {
   /**
@@ -88,7 +90,8 @@ export function createNewsSentimentScoringService(deps: {
             ...request
           })
         },
-        now: deps.now
+        now: deps.now,
+        ...(deps.alertDelivery.threshold ? { threshold: deps.alertDelivery.threshold } : {})
       })
     : undefined
   return {
