@@ -65,20 +65,24 @@ describe('cross-asset observation workspace', () => {
     expect(css).toMatch(/\.mi-cross-asset__status-table tbody td \{[^}]*font-size: 9\.5px/)
     expect(css).toMatch(/\.mi-cross-asset__status-table th, \.mi-cross-asset__status-table td \{ padding: 3px 2px/)
     // 说明图标与「日频」之间要留一格：22px 的按钮紧贴 9.5px 的标题会读成同一个词（读者 2026-11-06）。
-    expect(panel).toContain('className="mi-cross-asset__section-hint"')
-    /**
-     * 「日频」与 ⓘ 必须待在同一条 flex 行里（读者 2026-11-08 截图：icon 换行、还画出默认方框）。
-     * 这三条一起钉住：容器是 inline-flex 且有间距、图标 `flex: none` 不许被压缩或挤走。
-     * 把容器改回 block、或删掉 `flex: none`，这条就红。
-     */
+
+  })
+
+  it('keeps the daily heading and its icon on one flex line, not two block siblings', () => {
+    // 读者 2026-11-08：icon 换行到第二行，还带默认按钮方框。判据三条一起钉住，
+    // 把容器改回 block、或删掉 `flex: none`，这条就红。
+    const css = readFileSync('products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css', 'utf8')
+    const panel = readFileSync('products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx', 'utf8')
     const heading = css.match(/\.mi-cross-asset__section-heading \{([^}]*)\}/)?.[1] ?? ''
     expect(heading).toContain('display: inline-flex')
     expect(heading).toContain('align-items: center')
     expect(heading).toContain('gap:')
+    expect(heading).toContain('white-space: nowrap')
     const hint = css.match(/\.mi-cross-asset__section-hint \{([^}]*)\}/)?.[1] ?? ''
     expect(hint).toContain('flex: none')
-    // 两者必须在**同一个父容器**里，不能是两个块级兄弟。
+    // 两者在同一个父容器里，不是两个块级兄弟。
     expect(panel).toContain('className="mi-cross-asset__section-heading">{text.dailyFrequency}')
+    expect(panel).toContain('className="mi-cross-asset__section-hint"')
   })
 
   it('prints the inputs it does not have as missing, with no figure anywhere in those rows', async () => {
