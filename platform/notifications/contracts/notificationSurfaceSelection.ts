@@ -13,7 +13,7 @@
  * **读的时候两条的值不一致 → 按「都关」保守处理并留痕**：历史数据或半次写入都会长成这样，
  * 宁可少发一条，也不要一半生效却看着正常。
  */
-import type { NotificationEventCatalogEntry } from './notificationEventCatalog'
+import type { NotificationEventCatalogEntry, NotificationEventPolicy } from './notificationEventCatalog'
 
 /** 可以逐事件选的三面。`popup` 不在这里：它不受读者逐事件控制（契约 §5.1）。 */
 export const SELECTABLE_SURFACES = ['channel', 'toast', 'desktop'] as const
@@ -97,6 +97,31 @@ export function resolveSurfaceSelection(input: {
     return { selection: clamp(perEvent[0], available), conflict: false }
   }
   return { selection: allOff(available), conflict: true }
+}
+
+/**
+ * 同一个组里，各成员批的**可逐事件选的面**不一致的组。
+ *
+ * 为什么要有这个函数：组选择的可用面取交集，**只改其中一行，交集就变**——勾了「应用内提示」，
+ * 结果一条闪、一条没闪，页面看起来一切正常。这条判据必须在批准表进代码那一刻就能红，
+ * 而不是等有人真机上发现「怎么只闪一条」。
+ *
+ * 返回组与它的成员 id（不返回差异细节：差异用两行的档位原文一比就看得见）。
+ */
+export function surfaceGroupMismatches(
+  policy: NotificationEventPolicy
+): { group: string; ids: string[] }[] {
+  const groups = new Map<string, string[]>()
+  for (const [id, row] of Object.entries(policy)) {
+    if (row.surfaceGroup === undefined) continue
+    groups.set(row.surfaceGroup, [...(groups.get(row.surfaceGroup) ?? []), id])
+  }
+  const mismatched: { group: string; ids: string[] }[] = []
+  for (const [group, ids] of groups) {
+    const shapes = new Set(ids.map((id) => SELECTABLE_SURFACES.filter((surface) => policy[id]!.approvedDisruptionLevels.includes(surface)).join(',')))
+    if (shapes.size > 1) mismatched.push({ group, ids })
+  }
+  return mismatched
 }
 
 /** 组里全部成员（按目录顺序）。写入口用它校验「一个面是不是每一行都批了」。 */

@@ -12,6 +12,7 @@ import { createNotificationSettingsSurface } from '../runtime/notificationRuntim
 import {
   resolveSurfaceSelection,
   surfaceGroupMembers,
+  surfaceGroupMismatches,
   type NotificationSurfaceSelection
 } from './notificationSurfaceSelection'
 
@@ -154,32 +155,57 @@ describe('one group, one selection', () => {
 })
 
 describe('the approval table keeps the group honest', () => {
-  /** 每个组里的成员必须批同样的可逐事件选的面——只改一行，交集就会变，勾了只对一条生效。 */
+  /**
+   * 每个组里的成员必须批同样的可逐事件选的面——只改一行，交集就会变，勾了只对一条生效。
+   *
+   * 这条判据今天还**裁定不了**任何东西：`calendar-events` 目前只有一个成员（N11 等提醒那笔才进代码）。
+   * 所以下面另有一条用**故意写歪的表**证明它真会红——否则它就是一条永远绿的注释。
+   */
   it('every member of a group approves the same selectable surfaces', () => {
-    const groups = new Map<string, string[]>()
-    for (const [id, row] of Object.entries(NOTIFICATION_EVENT_POLICY)) {
-      if (row.surfaceGroup === undefined) continue
-      groups.set(row.surfaceGroup, [...(groups.get(row.surfaceGroup) ?? []), id])
-    }
-    expect([...groups.keys()]).toContain('calendar-events')
-    for (const [group, ids] of groups) {
-      const surfaces = ids.map((id) =>
-        (['channel', 'toast', 'desktop'] as const)
-          .filter((surface) => NOTIFICATION_EVENT_POLICY[id]!.approvedDisruptionLevels.includes(surface))
-          .join(',')
-      )
-      expect(new Set(surfaces).size, `${group}: ${ids.join(' / ')}`).toBe(1)
-    }
+    expect(surfaceGroupMismatches(NOTIFICATION_EVENT_POLICY)).toEqual([])
   })
 
-  it('calendar-events is exactly the two calendar notifications', () => {
-    // N11（开始前）的批准行要等提醒开发那一笔才进代码；那条一落，这里自动要求两组档位一致。
+  it('goes red the moment one row of a group loses a surface (the N11 shape)', () => {
+    // 模拟 N11 进表那天最容易写错的一手：给开始前那条只批 center+channel，忘了 toast。
+    const broken = {
+      ...NOTIFICATION_EVENT_POLICY,
+      'market-intelligence.macro.event-landed': {
+        ...NOTIFICATION_EVENT_POLICY['market-intelligence.macro.event-landed']!,
+        approvedDisruptionLevels: ['center', 'toast', 'channel'] as const
+      },
+      'market-intelligence.calendar.event-upcoming': {
+        approvedDisruptionLevels: ['center', 'channel'] as const,
+        approvedBypassQuietHours: false,
+        surfaceGroup: 'calendar-events'
+      }
+    }
+    expect(surfaceGroupMismatches(broken)).toEqual([
+      { group: 'calendar-events', ids: ['market-intelligence.macro.event-landed', 'market-intelligence.calendar.event-upcoming'] }
+    ])
+    // 两行档位一样时立刻不再报——不是「一旦有组就永远红」。
+    expect(surfaceGroupMismatches({
+      ...broken,
+      'market-intelligence.calendar.event-upcoming': {
+        approvedDisruptionLevels: ['center', 'toast', 'channel'] as const,
+        approvedBypassQuietHours: false,
+        surfaceGroup: 'calendar-events'
+      }
+    })).toEqual([])
+  })
+
+  it('calendar-events only ever holds the two calendar notifications', () => {
+    // 写死成「今天就一条」的话，N11 一进表这条会因为**正确的改动**而红——那是最烦的一种红。
+    // 这里钉的是不变量：成员只可能是这两条，且至少一条；两行档位是否一致由上面那条判。
     const members = surfaceGroupMembers('calendar-events', () => catalog.list())
     expect(members.length).toBe(0) // 这个测试目录里没有真表，只验证函数本身
     const real = Object.entries(NOTIFICATION_EVENT_POLICY)
       .filter(([, row]) => row.surfaceGroup === 'calendar-events')
       .map(([id]) => id)
-    expect(real).toEqual(['market-intelligence.macro.event-landed'])
+    expect(real.length).toBeGreaterThanOrEqual(1)
+    expect(real.every((id) => [
+      'market-intelligence.calendar.event-upcoming',
+      'market-intelligence.macro.event-landed'
+    ].includes(id))).toBe(true)
   })
 })
 
