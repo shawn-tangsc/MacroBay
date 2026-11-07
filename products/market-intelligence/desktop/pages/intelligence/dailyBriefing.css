@@ -154,13 +154,14 @@
 .mi-daily-briefing__rail-direction[data-direction="range"], .mi-daily-briefing__rail-direction[data-direction="mixed"] { color: var(--mi-dashboard-caution); }
 
 .mi-daily-briefing__rail-missing { color: #5f686e; font-size: 9.5px; white-space: nowrap; }
-@media (max-width: 980px) {
+.mi-daily-briefing-page__body { grid-template-columns: 296px minmax(0, 1040px); justify-content: center; }
+/* 窄窗口堆叠：必须在**基础两列规则之后**。同特异性下谁在后面谁生效，这段写在前面时两列恒成立、
+   这条媒体查询一直是死的（960 窗口实际还是两列）。抬到 1084px：296 轨道 + 20 间距 + 正文 720 才装得下。 */
+@media (max-width: 1084px) {
   .mi-daily-briefing-page { padding: 10px; }
   .mi-daily-briefing-page__body { grid-template-columns: 1fr; gap: 10px; }
 }
 
-
-.mi-daily-briefing-page__body { grid-template-columns: 248px minmax(0, 1040px); justify-content: center; }
 .mi-daily-briefing-page__loading-hint { max-width: 420px; margin: 4px 0 0; color: #5f686e; font-size: 11px; line-height: 1.5; text-align: center; }
 
 
@@ -178,7 +179,7 @@
 .mi-daily-briefing-page__ai-failure { margin: 8px 0 0; padding: 6px 9px; border: 1px solid #4a3d24; border-radius: 6px; background: rgba(255, 196, 0, .05); color: var(--mi-dashboard-caution); font-size: 10px; }
 
 /* The rail is a stage-by-stage audit, so it gets a readable column and the report fills the rest. */
-.mi-daily-briefing-page__body--with-appendix { grid-template-columns: clamp(240px, 18vw, 320px) minmax(0, 1fr) clamp(240px, 18vw, 320px); justify-content: stretch; }
+.mi-daily-briefing-page__body--with-appendix { grid-template-columns: clamp(296px, 18vw, 320px) minmax(0, 1fr) clamp(240px, 18vw, 320px); justify-content: stretch; }
 .mi-daily-briefing-page__appendix { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 14px 0 0 16px; border-left: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); }
 .mi-daily-briefing-page__groups { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .mi-daily-briefing-page__group { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
@@ -202,7 +203,7 @@
 /* Three columns stay three columns on a desktop window. Collapsing at 1450px meant most real
    windows had no right-hand column at all: it fell below the report, full width and a few pixels
    tall — which reads as "the column is gone", not as a reuse. Only a genuinely narrow window stacks. */
-@media (max-width: 980px) { .mi-daily-briefing-page__body--with-appendix { grid-template-columns: minmax(0, 1fr); } .mi-daily-briefing-page__appendix { grid-column: 1 / -1; max-height: 240px; padding: 8px 0 0; border-left: 0; border-top: 1px solid var(--mi-dashboard-line); } }
+@media (max-width: 1084px) { .mi-daily-briefing-page__body--with-appendix { grid-template-columns: minmax(0, 1fr); } .mi-daily-briefing-page__appendix { grid-column: 1 / -1; max-height: 240px; padding: 8px 0 0; border-left: 0; border-top: 1px solid var(--mi-dashboard-line); } }
 
 .mi-generation-trace { margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-generation-trace__head { display: flex; align-items: center; gap: 6px; }
