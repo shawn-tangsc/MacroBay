@@ -138,7 +138,9 @@ describe('daily briefing history rail', () => {
 
     // 两行制：第二行是标题位，失败那行写一句原因（留白会被读成"还在加载"）；项数一律不进行。
     expect(row.querySelector('[data-rail-title="reason"]')).not.toBeNull()
-    expect(row.textContent).toContain(text.history.runFailed)
+    // 失败标在第一行（`02` v2.156）：第二行只写原因，两个词不许同时出现。
+    expect(row.querySelector('.status-pill')).not.toBeNull()
+    expect(row.textContent).not.toContain(text.history.runFailed)
     expect(row.textContent).not.toMatch(/\d+\s*项|\d+\s*缺口/)
   })
 
@@ -550,7 +552,7 @@ describe('a row is two lines: the facts, then what it says', () => {
     // 用户 2026-11-06：「这次失败」不许占来源那一格——它退到第二行，来源位照旧说"怎么来的"。
     expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-recorded')
     expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('failed')
-    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.runFailed} ${text.history.railFailedReason}`)
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(` ${text.history.railFailedReason}`)
     expect(row.textContent).not.toContain(text.history.railNoTitle)
     // 行上不再有重试：重试在正文失败面板与工具栏（用户 2026-11-06）。
     expect(host.querySelector('[data-rail-retry]')).toBeNull()
@@ -568,9 +570,11 @@ describe('a row is two lines: the facts, then what it says', () => {
     })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
     expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('failed')
-    expect(row.textContent).toContain(text.history.runFailed)
+    // 失败标在第一行（`02` v2.156）：第二行只写原因，两个词不许同时出现。
+    expect(row.querySelector('.status-pill')).not.toBeNull()
+    expect(row.textContent).not.toContain(text.history.runFailed)
     expect(row.textContent).not.toContain(text.history.missingRun)
-    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.runFailed} ${text.history.railFailedReason}`)
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(` ${text.history.railFailedReason}`)
   })
 
   it('says when a failed run started, over which window, and how it was triggered', () => {
@@ -706,8 +710,10 @@ describe('a run that died is not the same sentence as a run that failed', () => 
     render({ editions: [interrupted, failed] })
     const row = (periodId: string): HTMLElement => host.querySelector<HTMLElement>(`[data-period-id="${periodId}"]`)!
     expect(row('p_int').textContent).toContain(text.history.runInterrupted)
-    expect(row('p_int').textContent).not.toContain(text.history.runFailed)
-    expect(row('p_fail').textContent).toContain(text.history.runFailed)
+    expect(row('p_int').querySelector('.status-pill')).toBeNull()
+    // 失败那一行：状态词在第一行的红标里（`02` v2.156），第二行只写原因；两个词不许同时出现。
+    expect(row('p_fail').querySelector('.status-pill')?.textContent).toBe(text.history.failureBadge)
+    expect(row('p_fail').textContent).not.toContain(text.history.runFailed)
     expect(row('p_fail').textContent).not.toContain(text.history.runInterrupted)
   })
 
@@ -718,8 +724,8 @@ describe('a run that died is not the same sentence as a run that failed', () => 
     render({ editions: [interrupted, failed], text: english as never })
     const row = (periodId: string): HTMLElement => host.querySelector<HTMLElement>(`[data-period-id="${periodId}"]`)!
     expect(row('p_int').textContent).toContain(english.history.runInterrupted)
-    expect(row('p_fail').textContent).toContain(english.history.runFailed)
-    expect(row('p_int').textContent).not.toContain(english.history.runFailed)
+    expect(row('p_fail').querySelector('.status-pill')?.textContent).toBe(english.history.failureBadge)
+    expect(row('p_fail').textContent).not.toContain(english.history.runFailed)
     expect(row('p_fail').textContent).not.toContain(english.history.runInterrupted)
   })
 })

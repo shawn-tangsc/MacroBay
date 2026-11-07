@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
+import { StatusPill } from '@platform/ui/components/status-pill'
+
 import { ContextMenu, type MenuAnchor, type MenuItem } from '@platform/ui/components/menu'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
@@ -38,6 +40,9 @@ export function briefingRailKey(row: Readonly<{ date: string; periodId: string; 
 
 /** How this edition came to exist. Exactly one per row, five in total (`02` A5.4b). */
 type RailTriggerKind = 'scheduled' | 'manual' | 'retry' | 'catch-up'
+
+/** 失败标的文案键：平台药丸只收键，句子的来源仍是产品文案表。 */
+const failureBadgeKey = 'pages.intelligence.portal.dashboard.dailyBriefing.history.failureBadge'
 
 /**
  * 第一行的**来源**：定时 / 手动 / 重试 / 补跑，四档互斥（`02` A5.4b v2.147）。
@@ -326,6 +331,10 @@ export function DailyBriefingHistoryRail({
                       aria-label={edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion} />}
                   {/* 这一格只回答"这一行是怎么来的"：定时 / 手动 / 重试 / 补跑，缺记录写「未记录」。 */}
                   <span className="mi-daily-briefing__rail-source" data-run-source={triggerKind ?? 'not-recorded'}>{triggerLabelOf(triggerKind, text)}</span>
+                  {/* 失败那一行第一行就给一枚红标（用户 2026-11-06）：扫列表要一眼看出来，别只在第二行写。 */}
+                  {failedRun
+                    ? <StatusPill labelKey={failureBadgeKey} resolveText={(key) => key === failureBadgeKey ? text.history.failureBadge : (resolveText?.(key) ?? '')} tone="bad" />
+                    : null}
                   {/* 语言徽标贴右，一行只出现一次：一行就是"一期 + 一种语言"。 */}
                   <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
                 </span>
@@ -346,7 +355,8 @@ export function DailyBriefingHistoryRail({
                           ? <span data-rail-status="missed-at-cutoff">{text.history.missedAtCutoff}</span>
                         // 状态词在第二行：这次失败 / 上次没跑完；后面那句是它为什么没出来。
                         : <><span data-rail-status={failedRun ? 'failed' : interrupted ? 'interrupted' : 'not-run'}>
-                          {failedRun ? text.history.runFailed : interrupted ? text.history.runInterrupted : text.history.missingRun}
+                          {/* 失败行的状态词在第一行那枚标里；第二行只写原因，不许两个词都出现。 */}
+                          {failedRun ? null : interrupted ? text.history.runInterrupted : text.history.missingRun}
                         </span>{reasonSuffix(edition, text, failedRun, interrupted)}</>}
                     </span>
                     : <span className="mi-daily-briefing__rail-row-title" data-rail-title="summary" title={title === '' ? undefined : title}>
