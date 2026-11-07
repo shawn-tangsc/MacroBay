@@ -50,6 +50,14 @@ const MAX_HEIGHT = 320
 const PLACEMENT = 'bottom' as const
 
 /**
+ * 气泡不接受指针事件：鼠标移上去、点下去都穿到下面的控件上。
+ *
+ * 与 `Tooltip` 同一条理由、同一处实现：气泡是**说明**，不是控件，它挡住下面的东西，读者反而点不动
+ * 本来要点的。只给一个节点不够——antd 把浮层渲染成外层与内层两个元素，漏一个另一个仍会接住点击。
+ */
+const BUBBLE_POINTER_EVENTS = { pointerEvents: 'none' } as const
+
+/**
  * 浮层交给触发器的那组属性。
  *
  * **不再 `cloneElement` 往子组件里注入处理器**：那是「子组件必须愿意交出自己已绑的事件」的隐式约定，
@@ -223,6 +231,7 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
       }
       open={open}
       placement={PLACEMENT}
+      styles={{ root: BUBBLE_POINTER_EVENTS, body: BUBBLE_POINTER_EVENTS }}
       trigger={[]}>
       <span className="platform-popover__anchor">{props.trigger(triggerProps)}</span>
     </AntPopover>

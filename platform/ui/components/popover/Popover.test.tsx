@@ -228,6 +228,22 @@ describe('Popover', () => {
     expect(layer?.className).not.toContain('ant-popover-placement-top')
   })
 
+  it('never swallows the pointer: clicks pass through the bubble to the control below', async () => {
+    const trigger = await mount()
+    await act(async () => {
+      trigger.focus()
+    })
+    await tick()
+
+    // 读渲染值：antd 把浮层渲染成外层与内层两个元素，只给一个，另一个仍会接住点击。
+    const layer = document.querySelector<HTMLElement>('.ant-popover')
+    const inner = document.querySelector<HTMLElement>('.ant-popover-inner')
+    expect(layer).not.toBeNull()
+    expect(inner).not.toBeNull()
+    expect(layer?.style.pointerEvents).toBe('none')
+    expect(inner?.style.pointerEvents).toBe('none')
+  })
+
   it('renders one key per line, with the first line carrying the emphasis', async () => {
     await mountLines(['ui.test.line0', 'ui.test.line1', 'ui.test.line2'])
     const rendered = await waitForLines()
