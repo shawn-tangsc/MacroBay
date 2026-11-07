@@ -324,7 +324,6 @@ export const dailyBriefingText = {
     /** 表外码的唯一出口：走这一句，**绝不印出码本身**（`02` v2.145）。 */
     failureSentenceFallback: { step: '生成', what: '这一期没能生成出来', next: '重新生成一次；反复出现就查看「数据缺口与限制」' },
     failureSentenceTemplates: {
-      unfinished: '{stage}没跑完：{what}（用了 {duration}）',
       unfinishedNoDuration: '{stage}没跑完：{what}',
       stoppedAt: '这次在{step}就停下了：{what}',
       next: '接下来：{next}'
@@ -674,7 +673,6 @@ export const dailyBriefingText = {
     /** The only exit for a code the table does not carry: this sentence, and never the code. */
     failureSentenceFallback: { step: 'Generate', what: 'this issue could not be produced', next: 'Generate again; if it keeps happening, look under data gaps and limits' },
     failureSentenceTemplates: {
-      unfinished: '{stage} did not finish: {what} ({duration})',
       unfinishedNoDuration: '{stage} did not finish: {what}',
       stoppedAt: 'This run stopped at {step}: {what}',
       next: 'Next: {next}'

@@ -2,7 +2,7 @@ import { Button } from 'antd'
 
 import type { DailyBriefingText } from './dailyBriefingText'
 import type { GenerationTrace } from './dailyBriefingGenerationTrace'
-import { DailyBriefingGenerationTimeline, formatDuration } from './DailyBriefingGenerationTimeline'
+import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingStagePanel } from './DailyBriefingStagePanel'
 import { briefingFailureSentence } from './briefingFailureSentence'
 import { failureAdvice, readableFailureDetail } from './dailyBriefingFailureDetail'
@@ -22,9 +22,6 @@ export type BriefFailure = Readonly<{
  * Kept out of the page for the same reason the live steps are: the page decides which run to
  * display and what its actions do, not how a failure is laid out.
  */
-/** 低到这一步就不可能"卡住"：1 毫秒的校验不是耗时，别把它写成时长。 */
-const MIN_REPORTED_DURATION_MS = 1_000
-
 export function DailyBriefingFailurePanel({ failure, text, formatTime, onOpenSettings }: Readonly<{
   failure: BriefFailure
   text: DailyBriefingText
@@ -34,20 +31,15 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, onOpenSet
   const advice = failureAdvice(failure.code)
   const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
   const separator = text.labelSeparator
-  // 人话原因：**哪一步没跑完 + 发生了什么（用了多久）+ 接下来怎么办**，由文案表逐码拼出来。
+  // 人话原因：**哪一步没跑完 + 发生了什么 + 接下来怎么办**，由文案表逐码拼出来；用时在步骤清单里。
   // 表里还没有这个码时退回原来的标签——不许在这里自己造句。
   const stalled = failure.generationTrace?.stages.find((stage) => stage.state === 'failed')
-  // 时长只给「可能真卡住」的步骤（`02` v2.156）：校验 1 毫秒就判死，说明卡住的不是它——
-  // 写成「（用了 1 毫秒）」正是当初那句「超时（用了 1 毫秒）」的来源。
-  const stalledDuration = stalled?.durationMs !== undefined && stalled.durationMs >= MIN_REPORTED_DURATION_MS ? stalled.durationMs : undefined
   const sentence = briefingFailureSentence({
     code: failure.code,
     ...(stalled === undefined ? {} : { failedStage: text.generationTrace.stages[stalled.id] ?? stalled.id }),
-    ...(stalledDuration === undefined ? {} : { durationMs: stalledDuration }),
     sentences: text.failureSentences,
     fallback: text.failureSentenceFallback,
-    templates: text.failureSentenceTemplates,
-    formatDuration: (durationMs) => formatDuration(durationMs, text)
+    templates: text.failureSentenceTemplates
   })
   return <DailyBriefingStagePanel state="failed"
     title={failure.kind === 'editorial' ? text.failurePanel.editorialTitle : text.failurePanel.generationTitle}

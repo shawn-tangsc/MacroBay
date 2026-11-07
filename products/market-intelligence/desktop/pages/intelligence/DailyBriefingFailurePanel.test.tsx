@@ -23,8 +23,8 @@ async function render(text: DailyBriefingText, failure: Parameters<typeof DailyB
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
-  await act(async () => root.render(<DailyBriefingFailurePanel failure={failure} text={text} formatTime={(value) => value} regenerating={false}
-    onRetry={vi.fn()} onOpenSettings={vi.fn()} />))
+  await act(async () => root.render(<DailyBriefingFailurePanel failure={failure} text={text} formatTime={(value) => value}
+    onOpenSettings={vi.fn()} />))
   return host
 }
 
@@ -36,7 +36,7 @@ describe('the failure panel says what happened in a sentence', () => {
     // 步骤名用**步骤清单里那一步的真名**（写作），不是表里的兜底名：两处必须同名，否则句子说
     // 写稿、清单写着写作，读者又要猜。
     expect(host.querySelector('[data-failure-reason]')?.textContent)
-      .toBe('写作没跑完：等到超时也没返回，这次没写完（用了 1 分 23 秒）')
+      .toBe('写作没跑完：等到超时也没返回，这次没写完')
     expect(host.querySelector('[data-failure-next]')?.textContent).toBe('接下来：再试一次；反复出现就换一个模型或检查网络')
     expect(host.textContent).not.toContain('editorial-timeout')
     // 原来的码标签那句不再重复一遍：一句人话已经说了同一件事。
@@ -47,7 +47,7 @@ describe('the failure panel says what happened in a sentence', () => {
     // 表里的码：照表拼。
     const known = await render(base, { kind: 'editorial', code: 'editorial-timeout', generationTrace: trace })
     expect(known.querySelector('[data-failure-reason]')?.textContent)
-      .toBe('写作没跑完：等到超时也没返回，这次没写完（用了 1 分 23 秒）')
+      .toBe('写作没跑完：等到超时也没返回，这次没写完')
 
     // 表外码：走兜底句，绝不把码印给读者。
     const unknown = await render(base, { kind: 'generation', code: 'brand-new-reason' })

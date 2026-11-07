@@ -9,21 +9,24 @@ const sentences: BriefingFailureSentences = {
   'editorial-timeout': { step: '写稿', what: '还没等到返回，这次没写完', next: '重试一次，或换一个响应更快的模型' }
 }
 const fallback = { step: '生成', what: '这一期没能生成出来', next: '重新生成一次' }
-const formatDuration = (durationMs: number): string => `${Math.round(durationMs / 60_000)} 分钟`
 const compose = (input: Partial<Parameters<typeof briefingFailureSentence>[0]> = {}) => briefingFailureSentence({
   code: 'editorial-timeout',
   sentences,
   fallback,
   templates: text.failureSentenceTemplates,
-  formatDuration,
   ...input
 })
 
 describe('the failure reason is a sentence, not a code label', () => {
-  it('names the step that stopped, what happened and how long it took', () => {
+  // 同一事实只许一个出处：用时在步骤清单里逐条印着，句子不再重复（`02` v2.169 保留，v2.156 作废）。
+  const noDuration = (text: string): void => { expect(text).not.toContain('用了') }
+
+  it('names the step that stopped and what happened, with the duration left to the step list', () => {
     // 用户 2026-11-06：写稿那一步卡了两分钟，读者要能读到这件事本身。
-    expect(compose({ failedStage: '写稿', durationMs: 120_000 })).toEqual({
-      reason: '写稿没跑完：还没等到返回，这次没写完（用了 2 分钟）',
+    const sentence = compose({ failedStage: '写稿' })
+    noDuration(sentence.reason)
+    expect(sentence).toEqual({
+      reason: '写稿没跑完：还没等到返回，这次没写完',
       next: '接下来：重试一次，或换一个响应更快的模型'
     })
   })
