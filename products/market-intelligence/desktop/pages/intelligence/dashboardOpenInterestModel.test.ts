@@ -96,3 +96,22 @@ describe('the window projection', () => {
     expect(projectDashboardPositioning(dto(5, 5), at, '24h')).toMatchObject({ state: 'available', hiddenHits: 0 })
   })
 })
+
+describe('the direction on a mark', () => {
+  it('carries the rule\'s own direction, both sides, never inferred from the sign', () => {
+    // 空头那条判的是价格上涨，读数符号与多头相反；渲染层如果按跌幅正负猜，就把两头说反了。
+    const dto = {
+      state: 'available' as const, asOf: at, window: '24h' as const,
+      btc: [{ observedAt: at, notionalUsd: 8.9e9 }], eth: [],
+      liquidationHints: [
+        { observedAt: at, asset: 'btc' as const, direction: 'long' as const, dropPct: -2.1, pricePct: -1.4, volumeMultiple: 3, notionalUsd: 8.9e9 },
+        { observedAt: new Date(Date.parse(at) - 900_000).toISOString(), asset: 'eth' as const, direction: 'short' as const, dropPct: -1.8, pricePct: 1.2, volumeMultiple: 2.4, notionalUsd: 2.4e9 }
+      ],
+      liquidationHintsTotal: 2,
+      liquidationHintsState: 'available' as const
+    }
+    const projected = projectDashboardPositioning(dto, at, '24h')
+    if (projected.state !== 'available') throw new Error('expected available')
+    expect(projected.hints.map(mark => [mark.asset, mark.direction])).toEqual([['btc', 'long'], ['eth', 'short']])
+  })
+})

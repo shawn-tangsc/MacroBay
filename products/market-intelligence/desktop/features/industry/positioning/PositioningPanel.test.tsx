@@ -144,7 +144,7 @@ describe('positioning panel', () => {
     const markup = render({
       positioning: {
         ...availablePositioning,
-        hints: [{ asset: 'btc', observedAt: at(0), notionalUsd: 8.9e9, dropPct: -1.9, volumeMultiple: 3.4 }],
+        hints: [{ asset: 'btc', direction: 'long', observedAt: at(0), notionalUsd: 8.9e9, dropPct: -1.9, volumeMultiple: 3.4 }],
         signal: { state: 'alert', asset: 'btc', direction: 'long', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
       }
     })
@@ -158,8 +158,8 @@ describe('positioning panel', () => {
       positioning: {
         ...availablePositioning,
         hints: [
-          { asset: 'btc', observedAt: at(120), notionalUsd: 8.5e9, dropPct: -2.2, volumeMultiple: 5.1 },
-          { asset: 'eth', observedAt: at(30), notionalUsd: 2.4e9, dropPct: -1.9, volumeMultiple: 3.4 }
+          { asset: 'btc', direction: 'long', observedAt: at(120), notionalUsd: 8.5e9, dropPct: -2.2, volumeMultiple: 5.1 },
+          { asset: 'eth', direction: 'short', observedAt: at(30), notionalUsd: 2.4e9, dropPct: -1.9, volumeMultiple: 3.4 }
         ]
       }
     })
@@ -317,6 +317,7 @@ describe('combined readout', () => {
 describe('the truncated-hit count', () => {
   const hits = (count: number) => Array.from({ length: count }, (_, index) => ({
     asset: 'btc' as const,
+    direction: 'long' as const,
     observedAt: at(30 + index * 20),
     notionalUsd: 8.9e9,
     dropPct: -1.9,

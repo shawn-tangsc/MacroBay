@@ -29,6 +29,11 @@ export type DashboardPositioningPoint = Readonly<{ observedAt: string; notionalU
  */
 export type DashboardLiquidationMark = Readonly<{
   asset: 'btc' | 'eth'
+  /**
+   * 哪一边被清。**从 DTO 原样带过来，绝不由跌幅正负去猜**：方向是规则的属性，空头那条判的是
+   * 价格上涨；按读数符号反推，某天阈值或符号约定变一次就会把两头说反。
+   */
+  direction: 'long' | 'short'
   observedAt: string
   /** 判定那一格的持仓名义额：点就画在这个高度上。 */
   notionalUsd: number
@@ -130,8 +135,22 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
   }
 }
 
-function mark(hint: Readonly<{ asset: 'btc' | 'eth'; observedAt: string; notionalUsd: number; dropPct: number; volumeMultiple: number }>): DashboardLiquidationMark {
-  return Object.freeze({ asset: hint.asset, observedAt: hint.observedAt, notionalUsd: hint.notionalUsd, dropPct: hint.dropPct, volumeMultiple: hint.volumeMultiple })
+function mark(hint: Readonly<{
+  asset: 'btc' | 'eth'
+  direction: 'long' | 'short'
+  observedAt: string
+  notionalUsd: number
+  dropPct: number
+  volumeMultiple: number
+}>): DashboardLiquidationMark {
+  return Object.freeze({
+    asset: hint.asset,
+    direction: hint.direction,
+    observedAt: hint.observedAt,
+    notionalUsd: hint.notionalUsd,
+    dropPct: hint.dropPct,
+    volumeMultiple: hint.volumeMultiple
+  })
 }
 
 function toPoint(point: Readonly<{ observedAt: string; notionalUsd: number }>): DashboardPositioningPoint {
