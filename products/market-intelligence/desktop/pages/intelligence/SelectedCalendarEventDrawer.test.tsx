@@ -186,3 +186,52 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     expect(host.querySelector('[data-market-value="providerActual"]')?.textContent).toContain('0.8%')
   })
 })
+
+describe('the drawer pairs an official event with its admitted market observation', () => {
+  const linkedMarket = (consensus: unknown) => ({
+    state: 'available' as const, month: selection.month, locale: 'zh' as const, asOf, sources: [],
+    events: [{
+      eventKey: 'market:core-cpi', title: '美国核心CPI', countryCode: 'US', eventType: 'economic-indicator',
+      importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus, providerPrevious: null, providerActual: null,
+      source: '0xRouter', sourceObservedAt: asOf, coverage: 'observed-unverified',
+      officialLink: {
+        officialEventKey: selection.eventKey, officialPeriodKey: '2026-M09', officialScheduledDate: '2026-10-14',
+        officialScheduledAt: '2026-10-14T12:30:00.000Z', officialDetectedAt: asOf,
+        timeDisplaySource: 'official-scheduled', displayScheduledAt: '2026-10-14T12:30:00.000Z',
+        officialActual: null, officialPrevious: null
+      }
+    }]
+  })
+
+  it('reads the market month once and shows the market expectation with its source', async () => {
+    const readMarketMonth = vi.fn(async () => linkedMarket({ displayValue: '0.3%' }))
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    expect(readMarketMonth).toHaveBeenCalledTimes(1)
+    const row = host.querySelector('[data-consensus]')!
+    expect(row.getAttribute('data-consensus')).toBe('market')
+    expect(row.textContent).toContain('0.3%')
+    expect(row.textContent).toContain(text.details.consensusFromMarket)
+  })
+
+  it('says the expectation is missing when the paired observation has none either', async () => {
+    const readMarketMonth = vi.fn(async () => linkedMarket(null))
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    expect(host.querySelector('[data-consensus="missing"]')?.textContent).toContain(text.details.consensusMissing)
+  })
+
+  it('says the market read failed, which is not the same as no expectation', async () => {
+    const readMarketMonth = vi.fn(async () => { throw new Error('ipc down') })
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    const row = host.querySelector('[data-consensus]')!
+    expect(row.getAttribute('data-consensus')).toBe('unreadable')
+    expect(host.querySelector('[data-consensus-gap]')?.textContent).toBe(text.details.consensusReadFailedReason)
+  })
+
+  it('never pairs by timestamp: the source compares no scheduled time', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const source = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/SelectedCalendarEventDrawer.tsx'), 'utf8')
+    // B 的延伸：认成对只能走准入映射，时间比较一出现就是越界。
+    expect(source).not.toMatch(/scheduledAt\s*(===|!==|==|!=)/)
+  })
+})

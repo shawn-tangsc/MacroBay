@@ -15,9 +15,22 @@ import {
 } from '../../features/macro/economic-calendar'
 import type { SelectedCalendarEvent } from './selectedCalendarEvent'
 
+/**
+ * What the drawer learned about the market observation that carries this official event.
+ *
+ * The pair is decided by the admitted link (`officialLink.officialEventKey`), never by comparing
+ * timestamps: several indicators share one release minute, and matching on time would invent pairs
+ * the reader never asked for.
+ */
+type LinkedMarket =
+  | { state: 'value'; consensus: MarketCalendarEvent['consensus'] }
+  | { state: 'none' }
+  /** The market read itself failed — that is "could not read", not "there is no expectation". */
+  | { state: 'failed' }
+
 type DetailState =
   | { state: 'loading' }
-  | { state: 'available'; event: EconomicCalendarEventView }
+  | { state: 'available'; event: EconomicCalendarEventView; linkedMarket: LinkedMarket }
   /** A provider release, with the route's own status for the kind it belongs to. */
   | { state: 'provider'; event: MarketCalendarEvent; source?: MarketCalendarSource }
   | { state: 'unavailable'; failureCode: keyof EconomicCalendarText['failures'] }
@@ -58,6 +71,8 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
   const [reload, setReload] = useState(0)
   const [refreshState, setRefreshState] = useState<EconomicCalendarRefreshState>()
   const mounted = useRef(true)
+  /** One market read per opened event, reused when the same event re-reads after a refresh. */
+  const linkedMarketCache = useRef(new Map<string, LinkedMarket>())
   useEffect(() => {
     mounted.current = true
     return () => { mounted.current = false }
@@ -75,7 +90,23 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
         // calendar page names it, and an event is only in its own month.
         const events = createEconomicCalendarProjection({ month: result.event.scheduledDate.slice(0, 7), asOf, events: [result.event] }).events
         const event = events.find(candidate => candidate.eventKey === selection.eventKey)
-        if (event) { setDetail({ state: 'available', event }); return }
+        if (event) {
+          const cached = linkedMarketCache.current.get(selection.eventKey)
+          if (cached !== undefined) { setDetail({ state: 'available', event, linkedMarket: cached }); return }
+          // One query for the whole drawer, not one per event: the market month is read once and the
+          // pair is found inside it. Reading it again on every row is the N+1 this avoids.
+          let linkedMarket: LinkedMarket = { state: 'none' }
+          if (readMarketMonth) {
+            try {
+              const month = await readMarketMonth(selection.month, asOf)
+              const paired = month?.events.find(candidate => candidate.officialLink?.officialEventKey === event.eventKey)
+              linkedMarket = paired ? { state: 'value', consensus: paired.consensus } : { state: 'none' }
+            } catch { linkedMarket = { state: 'failed' } }
+          }
+          linkedMarketCache.current.set(selection.eventKey, linkedMarket)
+          if (active) setDetail({ state: 'available', event, linkedMarket })
+          return
+        }
       }
       const failureCode = result.state === 'unavailable' ? result.failureCode : 'calendar-query-unavailable'
       // Not an official row: the provider may be the route that carried it.
@@ -105,6 +136,10 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
     {detail.state === 'loading' ? <EconomicCalendarEventDetailState state="loading" text={text.status.loading} /> : null}
     {detail.state === 'available' ? <EconomicCalendarEventDetail
       event={detail.event}
+      // An observation that carries no expectation is "no expectation"; only a failed read is
+      // "could not read it". Passing `null` for the empty field would claim a read we never failed.
+      linkedConsensus={detail.linkedMarket.state === 'value' ? detail.linkedMarket.consensus ?? undefined : detail.linkedMarket.state === 'failed' ? null : undefined}
+      linkedConsensusFailure={detail.linkedMarket.state === 'failed'}
       now={now}
       onRefresh={refresh}
       // The reader's own release time is a fact about the event, so the detail is read again; the

@@ -82,7 +82,7 @@ function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalenda
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text }: {
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text }: {
   event: EconomicCalendarEventView
   /**
    * The official consensus, when the view carries one. The projection does not surface it today —
@@ -95,6 +95,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
    * possible source of an expectation here: the official three publish no consensus.
    */
   linkedConsensus?: CalendarConsensusValue | null
+  /**
+   * The market read itself failed, as opposed to finding an observation whose field is empty. The
+   * two produce different reasons: "we could not read it this time" is not "the field is empty".
+   */
+  linkedConsensusFailure?: boolean
   now: () => Date
   onRefresh: (operation: EconomicCalendarRefreshOperation, eventKey: string) => Promise<void>
   onReleaseTimeChanged: () => Promise<void>
@@ -144,7 +149,9 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
               : null}
           </div>
           {consensus.state === 'unreadable'
-            ? <p className="mi-economic-calendar__comparison-rule" data-consensus-gap>{text.details.consensusUnreadableReason}</p>
+            ? <p className="mi-economic-calendar__comparison-rule" data-consensus-gap>{linkedConsensusFailure === true
+              ? text.details.consensusReadFailedReason
+              : text.details.consensusUnreadableReason}</p>
             : null}
         </>
       })()}
