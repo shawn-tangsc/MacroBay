@@ -38,7 +38,7 @@ function wire(submit: (request: NotificationSubmitRequest) => Promise<unknown>) 
   return wireTaskFailureNotifier({
     submit,
     listDefinitions: () => [{ id: 'definition-1', title: '央行利率决议采集' }],
-    listDefinitionRuns: () => failedChain(),
+    listHandlerRuns: () => failedChain(),
     dayToken: (instant) => instant.slice(0, 10)
   })
 }

@@ -60,7 +60,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     category: 'failure',
     requiresUserAction: true,
     requestedDisruptionLevels: ['toast', 'desktop'],
-    dedupeKeyTemplate: 'job-failed:{definitionId}:{date}',
+    dedupeKeyTemplate: 'job-failed:{jobKey}:{date}',
     dedupeUnit: 'condition',
     conditionWindowMs: 86_400_000
   }),
@@ -69,7 +69,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     category: 'needs-action',
     requiresUserAction: true,
     requestedDisruptionLevels: ['desktop'],
-    dedupeKeyTemplate: 'job-repeated:{definitionId}:{date}',
+    dedupeKeyTemplate: 'job-repeated:{jobKey}:{date}',
     dedupeUnit: 'occurrence'
   }),
   // P3 分析额度用尽：同一天只发一次，不随每次被拒重复。

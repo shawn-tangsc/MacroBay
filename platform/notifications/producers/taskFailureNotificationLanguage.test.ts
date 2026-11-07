@@ -129,7 +129,7 @@ describe('任务失败通知里的作业名跟着语言走', () => {
     await runtime.submit({
       eventTypeId: 'platform.job.failed-terminal',
       producerId: 'market-calendar',
-      dedupeVars: { builder: 'template', vars: { definitionId: 'gone', date: '2026-11-05' } },
+      dedupeVars: { builder: 'template', vars: { jobKey: 'definition:gone', date: '2026-11-05' } },
       titleParams: { taskName: { snapshot: { 'zh-CN': '市场日历 · 经济数据', 'en-US': 'Market calendar · economic data' } } },
       deeplink: { scope: 'platform' },
       actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open' }],

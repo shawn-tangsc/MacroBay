@@ -18,11 +18,11 @@ export function wireTaskFailureNotifier(deps: {
   /** 任务定义（只用来判断有没有可读名字）；`run.title` 是标识，绝不使用。 */
   listDefinitions: () => readonly { id: string; title: JobTitle }[]
   /**
-   * 同一个任务定义的终态运行，**新到旧**。P2 的「连续 3 次」从这里数，不从内存计数器数
-   * （重启会清零，坏了两天的任务永远到不了阈值）。取不到就只发 P1：P2 宁可晚一条，
-   * 也不要为了它凭空造一个计数。
+   * 同一个 handler 的终态运行，**新到旧**。P2 的「连续 3 次」从这里数，再按任务身份过滤
+   * （一次性作业的 definitionId 每次都不同，按 id 数永远到不了阈值）。取不到就只发 P1：
+   * P2 宁可晚一条，也不要为了它凭空造一个计数。
    */
-  listDefinitionRuns: (definitionId: string) => readonly JobRunRecord[]
+  listHandlerRuns: (handlerId: string) => readonly JobRunRecord[]
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */
   dayToken: (instant: string) => string
 }): (input: JobRunTerminalHookInput) => void {
@@ -55,7 +55,7 @@ export function wireTaskFailureNotifier(deps: {
   const notifyRepeated = createRepeatedTaskFailureNotifier({
     submit: deps.submit,
     taskNameSnapshot,
-    listDefinitionRuns: deps.listDefinitionRuns,
+    listHandlerRuns: deps.listHandlerRuns,
     dayToken: deps.dayToken
   })
   // 钩子是同步 void：一次通知失败不能让调度停摆，也不能让调度等两次落库。

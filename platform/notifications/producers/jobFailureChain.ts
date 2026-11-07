@@ -1,5 +1,7 @@
 import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
 
+import { jobFailureIdentityOf } from './jobFailureIdentity'
+
 /**
  * P2「同一任务连续失败」的阈值：连续 **3** 次终态失败（平台需求 v2.4 §1 P2、契约 v2.11 §4.1）。
  *
@@ -20,9 +22,14 @@ export const JOB_REPEATED_FAILURE_THRESHOLD = 3
  * 5. 入参必须是**同一任务定义、新到旧**的终态序列；**不按时间间隔清零**——每天跑一次的
  *    任务连坏三天正是 P2 要报的形状，用「两次失败隔太久就作废」会让它永远不响。
  */
-export function countConsecutiveTerminalFailures(runs: readonly JobRunRecord[]): number {
+export function countConsecutiveTerminalFailures(
+  runs: readonly JobRunRecord[],
+  identity?: string
+): number {
   let count = 0
   for (const run of runs) {
+    // 只数「同一个任务」：一次性作业的 definitionId 每次都变，按 id 数会让连续失败永远到不了阈值。
+    if (identity !== undefined && jobFailureIdentityOf(run) !== identity) continue
     if (run.status === 'queued' || run.status === 'running' || run.status === 'cancelled') continue
     if (run.status === 'completed') break
     count += 1

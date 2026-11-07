@@ -1,5 +1,7 @@
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
+
+import { jobFailureIdentityOf } from './jobFailureIdentity'
 import { renderPlatformEventCopy } from './platformEventCopy'
 
 /**
@@ -72,7 +74,8 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
         producerId: run.handlerId,
         dedupeVars: {
           builder: 'template',
-          vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
+          // 身份不是 `definitionId`：一次性作业每次注册的 id 都不同，按 id 去重等于每次一条。
+          vars: { jobKey: jobFailureIdentityOf(run), date: deps.dayToken(completedAt) }
         },
         rendered,
         actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
