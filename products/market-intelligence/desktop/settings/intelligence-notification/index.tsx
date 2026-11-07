@@ -32,28 +32,25 @@ import './intelligence-notification.css'
  * 页面只读服务结果；三层「与」（批准 ∩ 总开关 ∩ 本处选择）由平台算。
  */
 
-type ItemKey = 'signal' | 'briefing' | 'sentiment' | 'calendar'
+type ItemKey = (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]['itemKey']
 
-const ITEM_KEYS: readonly ItemKey[] = ['signal', 'briefing', 'sentiment', 'calendar']
+const ITEM_KEYS: readonly ItemKey[] = INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => row.itemKey)
 
-const CONTENT_ITEMS: Readonly<Record<'signal' | 'briefing' | 'sentiment', { eventId: string; row: string }>> = {
-  signal: { eventId: INTELLIGENCE_CHANNEL_EVENT_ROWS[0]!.eventId, row: 'signalTriggered' },
-  briefing: { eventId: INTELLIGENCE_CHANNEL_EVENT_ROWS[2]!.eventId, row: 'briefingReady' },
-  sentiment: { eventId: INTELLIGENCE_CHANNEL_EVENT_ROWS[1]!.eventId, row: 'sentimentAlert' }
-}
+const ROW_BY_ITEM = Object.fromEntries(
+  INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => [row.itemKey, row])
+) as Readonly<Record<ItemKey, (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]>>
 
 const CALENDAR_GROUP_EVENT_ID = 'market-intelligence.calendar.event-upcoming'
 
 /** 从通知中心点「去设置」进来时落到对应那一项；定位不到落第一项，不猜。 */
-function itemForFocus(focusEntityId: string | null | undefined): ItemKey {
+export function itemForFocus(focusEntityId: string | null | undefined): ItemKey {
   if (!focusEntityId) return 'signal'
-  if (
-    focusEntityId.startsWith('market-intelligence.calendar.')
-    || focusEntityId === 'market-intelligence.macro.event-landed'
-  ) return 'calendar'
-  if (focusEntityId === CONTENT_ITEMS.signal.eventId) return 'signal'
-  if (focusEntityId === CONTENT_ITEMS.briefing.eventId) return 'briefing'
-  if (focusEntityId === CONTENT_ITEMS.sentiment.eventId) return 'sentiment'
+  // 每一行按自己的 id 命中自己：舆情通知必须落到舆情行，不许再借别的行的事件 id。
+  const row = INTELLIGENCE_CHANNEL_EVENT_ROWS.find((entry) => entry.eventId === focusEntityId)
+  if (row) return row.itemKey
+  // 宏观事件与日历「开始前」共用同一组表面选择（`calendar-events`），定位到日历行。
+  if (focusEntityId.startsWith('market-intelligence.calendar.')) return 'calendar'
+  if (focusEntityId === 'market-intelligence.macro.event-landed') return 'calendar'
   return 'signal'
 }
 
@@ -71,8 +68,7 @@ export default function IntelligenceNotificationSettingsSection(
   const [selected, setSelected] = useState<ItemKey>(() => itemForFocus(focusEntityId))
   const { setSectionRef, layout } = useNotificationLayout()
 
-  const rowName = (key: ItemKey): string => key === 'calendar' ? 'calendar' : CONTENT_ITEMS[key].row
-  const itemName = (key: ItemKey): string => text[`pages.intelligence.notification.rows.${rowName(key)}.title`] ?? ''
+  const itemName = (key: ItemKey): string => text[ROW_BY_ITEM[key].titleKey] ?? ''
 
   /** 状态词只在列表行出现一次（详情标题不重复同一句）。 */
   const itemState = (key: ItemKey): string => {
@@ -86,7 +82,12 @@ export default function IntelligenceNotificationSettingsSection(
         )
         : text['pages.intelligence.notification.status.off'] ?? ''
     }
-    const enabled = key === 'sentiment' ? outlet.enabled : values[CONTENT_ITEMS[key].eventId] ?? true
+    const row = ROW_BY_ITEM[key]
+    const enabled = row.control === 'outlet'
+      ? outlet.enabled
+      : row.control === 'surface-group'
+        ? reminder.value?.enabled === true
+        : values[row.eventId] ?? true
     return enabled
       ? text['pages.intelligence.notification.status.on'] ?? ''
       : text['pages.intelligence.notification.status.off'] ?? ''
@@ -147,15 +148,15 @@ export default function IntelligenceNotificationSettingsSection(
           {selected === 'calendar'
             ? <CalendarDetail reminder={reminder} resolveText={resolveText} surfaces={surfaces} text={text} />
             : <ContentDetail
-              enabled={selected === 'sentiment' ? outlet.enabled : values[CONTENT_ITEMS[selected].eventId] ?? true}
-              failed={selected === 'sentiment' ? outlet.saveFailed : failedEventId === CONTENT_ITEMS[selected].eventId}
+              enabled={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true}
+              failed={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saveFailed : failedEventId === ROW_BY_ITEM[selected].eventId}
               name={itemName(selected)}
               onChange={(next) => {
-                if (selected === 'sentiment') outlet.setEnabled(next)
-                else toggle(CONTENT_ITEMS[selected].eventId, next)
+                if (ROW_BY_ITEM[selected].control === 'outlet') outlet.setEnabled(next)
+                else toggle(ROW_BY_ITEM[selected].eventId, next)
               }}
               saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
-              saving={selected === 'sentiment' ? outlet.saving : savingEventId === CONTENT_ITEMS[selected].eventId}
+              saving={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saving : savingEventId === ROW_BY_ITEM[selected].eventId}
             >
               {selected === 'sentiment'
                 ? <NewsPushThresholdRow

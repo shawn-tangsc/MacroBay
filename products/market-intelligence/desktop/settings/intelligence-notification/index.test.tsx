@@ -8,7 +8,9 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { DEFAULT_CALENDAR_REMINDER_SETTINGS } from '../../../contracts/calendarEventReminder'
 import { intelligenceNotificationText } from './text'
-import IntelligenceNotificationSettingsSection from './index'
+import IntelligenceNotificationSettingsSection, { itemForFocus } from './index'
+import { marketIntelligenceProductManifest } from '../../../product.manifest'
+import { INTELLIGENCE_CHANNEL_EVENT_ROWS } from './useChannelEventSettings'
 
 /**
  * 这一页的判据（界面规范 §9d–§9f）：左列表四项、默认选中第一项、关着只写在状态词里；
@@ -121,6 +123,38 @@ afterEach(async () => {
   container = undefined
   delete (window as unknown as { platform?: unknown }).platform
   vi.restoreAllMocks()
+})
+
+describe('row-to-event binding', () => {
+  it('binds every row to its own event id, in page order', () => {
+    // 标题键 → 事件 id 的**有序**对照：补一行、删一行、换顺序都要红。
+    // 舆情行曾经借 `macro.event-landed`，所以这里按整表断言，而不是逐条查存在。
+    expect(INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => [row.titleKey, row.eventId])).toEqual([
+      ['pages.intelligence.notification.rows.signalTriggered.title', 'market-intelligence.signal.triggered'],
+      ['pages.intelligence.notification.rows.briefingReady.title', 'market-intelligence.briefing.ready'],
+      ['pages.intelligence.notification.rows.sentimentAlert.title', 'market-intelligence.sentiment.alert'],
+      ['pages.intelligence.notification.rows.calendar.title', 'market-intelligence.calendar.event-upcoming']
+    ])
+    // 每个 id 都必须在 manifest 里声明过——表里写一个拼错的 id，这里就红。
+    const declared = new Set(marketIntelligenceProductManifest.notificationEvents.map((event) => event.id))
+    for (const row of INTELLIGENCE_CHANNEL_EVENT_ROWS) expect(declared.has(row.eventId), row.itemKey).toBe(true)
+    // 走 `channelEvents` 的两行必须是平台批准过 `channel` 档的，否则开关存不进去。
+    const channelApproved = new Set(['market-intelligence.signal.triggered', 'market-intelligence.briefing.ready'])
+    for (const row of INTELLIGENCE_CHANNEL_EVENT_ROWS.filter((entry) => entry.control === 'channel-event')) {
+      expect(channelApproved.has(row.eventId), row.itemKey).toBe(true)
+    }
+  })
+
+  it('lands a deep link on the row that owns the event id', () => {
+    expect(itemForFocus('market-intelligence.signal.triggered')).toBe('signal')
+    expect(itemForFocus('market-intelligence.briefing.ready')).toBe('briefing')
+    // 舆情通知必须落到舆情行：这正是借用 id 时坏掉的一条。
+    expect(itemForFocus('market-intelligence.sentiment.alert')).toBe('sentiment')
+    expect(itemForFocus('market-intelligence.calendar.event-upcoming')).toBe('calendar')
+    // 宏观事件与日历共用一组表面选择，定位到日历行。
+    expect(itemForFocus('market-intelligence.macro.event-landed')).toBe('calendar')
+    expect(itemForFocus(undefined)).toBe('signal')
+  })
 })
 
 describe('intelligence notification settings', () => {
