@@ -32,7 +32,9 @@ export function calendarEventReminderDefinition(): Readonly<Record<string, unkno
     owner: 'product' as const,
     productId: 'market-intelligence',
     handlerId: CALENDAR_EVENT_REMINDER_JOB_ID,
-    title: 'Calendar event reminder',
+    // 作业名必须双语（`job-title-localization-contract.md`）：运行日志与定时任务页都直接显示它，
+    // 单写英文等于界面上出现内部名。
+    title: { 'zh-CN': '日历事件提醒', 'en-US': 'Calendar event reminder' },
     audience: 'user' as const,
     trigger: { kind: 'interval' as const, intervalMs: CALENDAR_EVENT_REMINDER_INTERVAL_MS, anchor: 'lastComplete' as const },
     payload: {}
