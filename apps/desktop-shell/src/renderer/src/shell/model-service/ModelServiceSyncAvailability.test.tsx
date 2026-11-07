@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import type { Root } from 'react-dom/client'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   pageLabels as labels,
@@ -15,13 +15,12 @@ import {
  * 不要求供应商已启用；停用状态同步成功后也不自动启用供应商。
  */
 
-beforeAll(() => {
-  // The page reports failed syncs through console.warn, and React may log act() warnings.
-  // Those messages can outlive the test and race the worker teardown, so keep both channels
-  // quiet for the whole file instead of restoring between tests.
-  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  vi.spyOn(console, 'error').mockImplementation(() => undefined)
-})
+/**
+ * 两个通道留作**守卫**用（不是拿来「静音了事」）：它们保留 spy 形态，收尾时用它断言
+ * 「拆卸之后没有新日志」。`e011cdc` 那次的教训是——静音只让症状看不见，竞态还在。
+ */
+const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
 /**
  * 每个用例渲染的是整页 `AppShell`，而共享 helper 只把 `root` 交回来、不负责卸载。
@@ -33,18 +32,40 @@ beforeAll(() => {
  */
 const mountedRoots: Root[] = []
 
+/** 一次宏任务 + 微任务：让排到队尾的续体落地。 */
+const flushTick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
 afterEach(async () => {
-  // 卸载要走 act()：不包一层，React 会报「更新没有包在 act 里」，这条噪音会盖住真错误。
-  act(() => {
+  // 1) 卸载**之前**，在 act 里把已经排队的续体跑完：`ModelServiceModelsSection` 的检测汇总、
+  //    antd `CSSMotion` 的动画帧都会在这些续体里 setState；跑在 act 外就是那条「not wrapped in act」。
+  await act(async () => {
+    await flushTick()
+  })
+
+  // 2) 卸载放进 act：清理函数（清定时器、退订）必须在 act 作用域里执行。
+  await act(async () => {
     for (const root of mountedRoots.splice(0)) root.unmount()
   })
+
+  // 3) 卸载后仍有动画帧/续体排着：仍在 act 里排空，让它们落在 act 作用域内，而不是落在 teardown 之后。
+  await act(async () => {
+    await flushTick()
+  })
+
   document.body.replaceChildren()
   window.localStorage.clear()
   Reflect.deleteProperty(window, 'platform')
-  // 排空一拍再让 worker 收尾：整棵 AppShell 卸载时还有一次异步续体在路上，运行器关 RPC
-  // 时它正好在飞，就被报成 `Closing rpc while "onUserConsoleLog" was pending` 这条未处理错误
-  // ——**断言全过、整次全量判红**（实测单跑约 1/5 命中）。这一拍让续体先落地。
-  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  // 4) 守卫：上面三步之后，任何新日志都说明还有东西活在用例之外。**红在这个文件里、带这条消息**，
+  //    而不是变成 worker 层的 `Closing rpc while "onUserConsoleLog" was pending` 把整次全量判红。
+  const before = warnSpy.mock.calls.length + errorSpy.mock.calls.length
+  await flushTick()
+  expect(
+    warnSpy.mock.calls.length + errorSpy.mock.calls.length,
+    `teardown 之后仍有日志：${JSON.stringify(
+      [...warnSpy.mock.calls, ...errorSpy.mock.calls].map((call) => String(call[0])).slice(before)
+    )}`
+  ).toBe(before)
 })
 
 describe('PLAT-61 模型同步可用性', () => {
