@@ -29,6 +29,9 @@ export type EtfSignalText = {
   signalKindObserved: string
   /** 牌子作为入口时的读屏名模板：可见文字在前，再说明点开会做什么。 */
   signalChipOpen: string
+  /** 说明图标的读屏名：它解释的那个东西 + 「说明」。 */
+  signalDetailHelpLabel: string
+  signalInsufficientHelpLabel: string
   signalDetailRule: string
   signalDetailWindow: string
   signalDetailCumulative: string
@@ -77,17 +80,26 @@ export function EtfOutflowChip({ chip, text, onToggle, triggerRef, onRetry }: Re
   }
 
   if (chip.state !== 'alert') {
-    return <Tooltip
-      resolveText={resolveText}
-      labelKey="pages.intelligence.portal.dashboard.capitalConditions.signalInsufficientReason">
-      {/* 标签是陈述，但要能被键盘聚焦：原因在悬停与聚焦时都要读得到，`title` 只能被鼠标拿到。 */}
-      <span className="mi-capital-conditions__signal-statement" tabIndex={0}>
-        <StatusPill
-          labelKey="pages.intelligence.portal.dashboard.capitalConditions.signalInsufficient"
-          resolveText={resolveText}
-          tone="warn" />
-      </span>
-    </Tooltip>
+    // 「数据不齐」本身是陈述，不做控件；解释它的那句话收进一颗 ⓘ（平台 IconButton + Popover，
+    // 与卡上其它说明同一实现）：Tooltip 没有钉住态，点了没反应就是「死按钮」。
+    return <>
+      <StatusPill
+        labelKey="pages.intelligence.portal.dashboard.capitalConditions.signalInsufficient"
+        resolveText={resolveText}
+        tone="warn" />
+      <Popover
+        lines={[{ labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalInsufficientReason' }]}
+        resolveText={resolveText}
+        trigger={triggerProps => (
+          <IconButton
+            {...triggerProps}
+            ariaLabelKey="pages.intelligence.portal.dashboard.capitalConditions.signalInsufficientHelpLabel"
+            icon={Info}
+            resolveText={resolveText}
+            size="sm"
+            variant="plain" />
+        )} />
+    </>
   }
 
   const label = fillLabelParams(text.signalChip, { amount: chip.amountUsd })
@@ -187,7 +199,7 @@ export function EtfSignalDetailDialog({ open, onClose, chip, verifiedAt, text, a
           trigger={triggerProps => (
             <IconButton
               {...triggerProps}
-              ariaLabelKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle"
+              ariaLabelKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailHelpLabel"
               icon={Info}
               resolveText={resolveText}
               size="sm"

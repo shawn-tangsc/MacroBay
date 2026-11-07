@@ -343,10 +343,46 @@ describe('CapitalConditionsPanel', () => {
     const pillLabel = markup.match(/status-pill__label">(.*?)<\/span>/)?.[1] ?? ''
     expect(pillLabel).toBe(text.signalInsufficient)
     expect(pillLabel).not.toMatch(/[\d$%]/)
-    // 陈述不是控件：牌位里没有按钮，也没有可展开的读数。
+    // 陈述不是控件：牌子本身不再是按钮，也没有可展开的读数；旁边的 ⓘ 才是控件（下一例断言）。
     const header = markup.slice(markup.indexOf('mi-capital-conditions__header-band'), markup.indexOf('</div>', markup.indexOf('mi-capital-conditions__header-band')))
-    expect(header).not.toContain('<button')
-    expect(markup).toMatch(new RegExp(`<h2>${text.title}</h2><span class="mi-capital-conditions__signal-statement"`))
+    expect(header).not.toContain('mi-capital-conditions__signal-statement')
+    expect(markup).toMatch(new RegExp(`<h2>${text.title}</h2><span class="status-pill`))
+  })
+
+  // 说明图标统一：IconButton(sm+plain) + Popover；读屏名 = 它解释的东西 + 「说明」；
+  // 浮层文字挂在触发件的 aria-describedby 上；Tooltip 不再用于这种独立说明图标。
+  it('explains the insufficient chip through one info button, not a tooltip', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: { state: 'insufficient' as const } } })))
+
+    const header = container.querySelector('.mi-capital-conditions__header-band')!
+    const info = header.querySelector<HTMLButtonElement>('button.icon-button')!
+    expect(info).not.toBeNull()
+    // 读屏名逐字：不念「更多信息」，也不把整段说明当名字。
+    expect(info.getAttribute('aria-label')).toBe(text.signalInsufficientHelpLabel)
+    expect(info.className).toContain('icon-button--sm')
+    expect(info.className).toContain('icon-button--plain')
+    expect(info.getAttribute('aria-expanded')).toBe('false')
+    // 浮层文字挂在触发件的 aria-describedby 上。
+    const describedBy = info.closest('[aria-describedby]')?.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+
+    // 聚焦即展开，Esc 收起并回焦。
+    await act(async () => { info.focus() })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+    expect(info.getAttribute('aria-expanded')).toBe('true')
+    expect(document.body.textContent).toContain(text.signalInsufficientReason)
+    await act(async () => {
+      info.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+    expect(info.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(info)
+    // 一处只有一颗：牌位里没有第二颗说明图标。
+    expect(header.querySelectorAll('button.icon-button').length).toBe(1)
   })
 
   it('draws no chip at all while the rule had nothing to say', () => {
