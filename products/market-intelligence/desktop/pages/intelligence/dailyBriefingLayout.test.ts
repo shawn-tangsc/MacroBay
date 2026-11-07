@@ -417,6 +417,36 @@ describe('the failure badge in the row', () => {
   })
 })
 
+/**
+ * Which of the six things a row shows may give way is a rendering decision (locale and row state), not a
+ * measurement. CSS's part is the invariant underneath it: the four that must never disappear cannot be
+ * squeezed, and no width-based rule may hide any of them behind the renderer's back.
+ */
+describe('the row never squeezes what a reader must see', () => {
+  it('keeps the moment, the source, the failure badge and the language unsqueezable', () => {
+    expect(rule('.mi-daily-briefing__rail-fact:first-child {')).toContain('flex: none;')
+    // The source's flex lives in the rule it shares with the window chip, not in its colour rule.
+    const chipRule = css.slice(css.indexOf('.mi-daily-briefing__rail-fact[data-window-hours],'))
+    expect(chipRule.slice(0, chipRule.indexOf('}'))).toContain('flex: none;')
+    expect(rule('.mi-daily-briefing__rail-line .status-pill {')).toContain('flex: none;')
+    expect(rule('.mi-daily-briefing__rail-lang {')).toContain('flex: 0 0 auto;')
+  })
+
+  it('hides none of them by width — the renderer decides, not a query', () => {
+    // A width query would make the same locale show different things at different widths, and the
+    // renderer's enumeration is what the acceptance criteria describe.
+    for (const selector of [
+      '.mi-daily-briefing__rail-line',
+      '.mi-daily-briefing__rail-source',
+      '.mi-daily-briefing__rail-lang',
+      '.mi-daily-briefing__rail-fact'
+    ]) {
+      const queryRule = new RegExp(`@(?:media|container)[^{]*\\{[^}]*${selector.replace(/\./g, '\\.')}`)
+      expect(queryRule.test(css)).toBe(false)
+    }
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)

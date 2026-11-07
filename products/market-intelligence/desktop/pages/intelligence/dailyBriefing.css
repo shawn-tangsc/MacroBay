@@ -143,7 +143,11 @@
    bordered box on a text baseline sits off the text it is not part of.
    `flex: none` for the same reason the other badges have it: the row gives up its own words before it
    gives up a state. */
-.mi-daily-briefing__rail-line .status-pill { align-self: center; flex: none; }
+/* 药丸是状态词，不是这一行的修饰：**盒高与邻居一致**，失败行与健康行并排时行高差为 0。
+   平台药丸默认 11px/1.5 + 上下内距 + 描边 = 20.5px，比这一行最高的邻居（语言徽标 16px）高 4.5px；
+   这里只在本行把行盒收到 14px、去掉上下内距 → 14 + 2 描边 = 16px，与语言徽标同高。字号仍是平台
+   那一档，不改尺寸档位（判据：失败行与健康行行高差 ≤2px，实测 0）。 */
+.mi-daily-briefing__rail-line .status-pill { align-self: center; flex: none; line-height: 14px; padding-block: 0; }
 .mi-daily-briefing__rail-direction { font-size: 9.5px; white-space: nowrap; }
 .mi-daily-briefing__rail-direction[data-direction="bullish"] { color: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-direction[data-direction="bearish"] { color: var(--mi-dashboard-negative); }
@@ -264,8 +268,10 @@
 /* Facts give way before the language does: `0 1 auto` lets the moment shorten with an ellipsis, so a
    long row loses characters of its own tail instead of pushing the language column out of line. */
 .mi-daily-briefing__rail-fact { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
-/* The moment leads: bold and in the body ink, because it is what the reader scans the rail for. */
-.mi-daily-briefing__rail-fact:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
+/* The moment leads: bold and in the body ink, because it is what the reader scans the rail for.
+   It never shrinks: a row that loses "07:00" to an ellipsis has lost its identity, which is worse
+   than losing the window qualifier beside it. */
+.mi-daily-briefing__rail-fact:first-child { flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
 /* The window is a qualifier of the moment, not a fact beside it: a chip keeps it from reading as one. */
 /* The window badge and the source badge are one shape: geometry is declared once, here, and the two
    only differ in colour. Two sizes of the same small marker side by side read as an accident. */
