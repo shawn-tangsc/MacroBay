@@ -93,7 +93,9 @@ export function renderOpenInterestSentence(
   const finite = [input.dropPct, input.volumeMultiple, input.notionalUsd, input.thresholdPct]
   if (!finite.every((value) => Number.isFinite(value))) return undefined
   // 空头那条的正文写「涨了多少」：缺这个数就不发，绝不拿跌幅顶替。
-  if (input.direction === 'short' && !Number.isFinite(input.pricePct)) return undefined
+  // 数字格式化只出绝对值、正负号由词承担，所以**符号必须在这里判**：把 -1.8 喂进来会印成
+  // 「涨 1.8%」，一句话把读者送到反方向去。方向错了就拼不出句子，由调用点放弃这次提交。
+  if (input.direction === 'short' && !(Number.isFinite(input.pricePct) && input.pricePct! > 0)) return undefined
   const short = input.direction === 'short'
   const variant: SignalNotificationVariant = short
     ? (input.aggravated ? 'oiShortAggravated' : 'oiShort')

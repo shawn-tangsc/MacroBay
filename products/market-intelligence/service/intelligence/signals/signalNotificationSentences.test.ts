@@ -103,6 +103,50 @@ describe('signal notification sentences', () => {
     }
   })
 
+  /** 空头那条：数字格式化只出绝对值，正负号由「涨」这个词承担。 */
+  const shortSignal = (overrides: Partial<ModuleSignal> = {}): ModuleSignal =>
+    signal({
+      ruleId: 'oi-short-liquidation-proxy',
+      values: { dropPct: -1.8, volumeMultiple: 3.1, notionalUsd: 850_000_000, priceChangePct: 1.8 },
+      ...overrides
+    })
+
+  it('names the short side in both languages, and quotes the rise rather than the fall', () => {
+    // 方向接反时字面上仍是一条通顺的句子——所以两侧各写一条，标题、动词、数字都要各自钉住。
+    const request = buildOpenInterestSignalRequest(shortSignal())
+    expect(request?.rendered?.['zh-CN']!.title).toBe('BTC 空头爆仓')
+    expect(request?.rendered?.['en-US']!.title).toBe('BTC short liquidations')
+    expect(request?.rendered?.['zh-CN']!.body).toContain('涨 1.8%')
+    expect(request?.rendered?.['zh-CN']!.body).not.toContain('跌')
+    expect(request?.rendered?.['en-US']!.body).toContain('up 1.8%')
+    expect(request?.rendered?.['en-US']!.body).not.toMatch(/down|fell/iu)
+  })
+
+  it('never lets the two sides share one sentence', () => {
+    const long = buildOpenInterestSignalRequest(signal())
+    const short = buildOpenInterestSignalRequest(shortSignal())
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      expect(short!.rendered![language]!.title).not.toBe(long!.rendered![language]!.title)
+      expect(short!.rendered![language]!.body).not.toBe(long!.rendered![language]!.body)
+    }
+  })
+
+  it('switches the short side to its aggravated wording too', () => {
+    const request = buildOpenInterestSignalRequest(shortSignal({
+      severity: 'high',
+      values: { dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 850_000_000, priceChangePct: 2.7 }
+    }))
+    expect(request?.rendered?.['zh-CN']!.title).toBe('BTC 空头爆仓加剧')
+    expect(request?.rendered?.['zh-CN']!.body).toContain('强阈值 2.5%')
+  })
+
+  it('refuses to build a short sentence out of a fall', () => {
+    // 绝对值格式化会把 -1.8 印成「涨 1.8%」——一句话把读者送到反方向。拼不出就不发。
+    expect(buildOpenInterestSignalRequest(shortSignal({
+      values: { dropPct: -1.8, volumeMultiple: 3.1, notionalUsd: 850_000_000, priceChangePct: -1.8 }
+    }))).toBeUndefined()
+  })
+
   it('switches the aggravated title and reads the threshold multiple from the signal’s own values', () => {
     const rows = [10, -200_000_000, -200_000_000, -200_000_000].map((netFlowUsd, index) => ({
       tradingDate: `2026-08-${String(25 + index).padStart(2, '0')}`,
