@@ -110,6 +110,10 @@ describe('divergence panel · the one summary line', () => {
     /**
      * 样式在外部表里，测试环境读不到计算样式（happy-dom 不加载 `.css`），所以这条查**规则本身**：
      * 删掉任何一条复位声明、或把字号写回像素值，这条就红。灰色实心块正是这些复位缺失时的默认外观。
+     *
+     * **这条的限制要写明白**：它证明的是「样式表里有这条规则」，**不证明界面上真的生效**——
+     * 打包产物过期、类名对不上、别的规则盖掉它，这条都照样绿。所以这个缺陷最终还得靠读者看
+     * 一眼才算关；用例只负责「别在下次重构里把复位删掉」。
      */
     const css = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.css', 'utf8')
     const rule = css.match(/\.mi-divergence__summary \{([^}]*)\}/)?.[1] ?? ''
