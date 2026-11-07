@@ -14,9 +14,20 @@
  * 壳（`.settings-workspace`）是 `318px + 1fr` 两列：本页自带「列表 | 详情」两列，
  * 必须先把壳的列定义关成单列，否则整页被塞进 318px 的那一格（列表名字裁成「模块…」）。
  *
- * 壳还给了一行 `minmax(0, 1fr)`：本页只有「标题 + 两列」两块，那个 1fr 行会把标题
- * 拉成一大片空白——用户说的「内容区域上边距那么大」就是它，不是某个 padding 数字。
- * 行也一并关掉，高度交给内容；父层 `.settings-contribution-host` 自己会滚。
+ * 壳同时还定义了 **一行** `grid-template-rows: minmax(0, 1fr)`。这条对「只有一块内容」的
+ * 页面没影响，但本页是**两块**（标题、两列），于是：
+ *
+ *   标题 → 那一行 1fr，拿走全部剩余高度；
+ *   两列 → 自动排出来的第二行（auto），落到页面底部。
+ *
+ * 标题块是 `display:flex; align-items:center`，所以它在那一片高里**垂直居中**——看上去
+ * 就是「内容区域上边距一大片空白」。用户 2026-11-07 连着四轮说的「挤」「丑」「上边距那么大」
+ * 里，这一条是根因，**不是某个 padding 数字**：去调 padding 只会把那块空白挪个位置。
+ *
+ * 所以这里把行定义也一起关掉（`grid-template-rows: none` + `align-content: start`），
+ * 高度交给内容，滚动交给父层 `.settings-contribution-host` 的 `overflow: auto`。
+ * ⚠️ 换写法（改成 flex / block）时也必须保证「标题不被拉高、页面不自己裁剪内容」，
+ *    否则同一个空白会以另一种形状回来。
  */
 .settings-workspace.intelligence-notification-workspace {
   grid-template-columns: minmax(0, 1fr);
