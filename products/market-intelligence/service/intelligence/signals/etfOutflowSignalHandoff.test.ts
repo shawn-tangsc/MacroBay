@@ -8,7 +8,8 @@ import { buildEtfOutflowSignal } from './etfOutflowSignal'
 import { etfOutflowSignalHandoff } from './etfOutflowSignalHandoff'
 import { createSignalScanRunner } from './signalScanRunner'
 
-const readingAt = '2026-10-28T12:00:00.000Z'
+// 判定的那一刻：三日都静置满一天（10-28 也要到 10-29 之后才算定稿）。
+const readingAt = '2026-10-30T12:00:00.000Z'
 
 function rows(values: readonly number[]) {
   return values.map((netFlowUsd, index) => {

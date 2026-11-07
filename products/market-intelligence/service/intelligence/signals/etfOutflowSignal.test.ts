@@ -4,6 +4,7 @@ import { isModuleSignal, signalCooldown, signalWindow } from '../../../contracts
 import { etfFlowPolicy } from '../../../contracts/etfFlows'
 import { buildEtfOutflowSignal, etfOutflowSignalPolicy } from './etfOutflowSignal'
 import { isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
+import { buildEtfOutflowSignalRequest } from './etfOutflowNotifier'
 import { signalTriggerKey } from '../../../contracts/moduleSignal'
 
 const threshold = etfFlowPolicy.signalOutflowUsd
@@ -120,5 +121,42 @@ describe('ETF outflow signal', () => {
   it('keeps the rule name independent of its module', () => {
     expect(etfOutflowSignalPolicy.ruleId).toBe('etf-outflow-3d')
     expect(etfOutflowSignalPolicy.moduleId).toBe('etf-flows')
+  })
+})
+
+describe('judging only settled trading days (2026-11-06 replay)', () => {
+  // 这一天的真实读数：11-05 在 11-06 早上读到 −$14M、四小时后变成 −$411.9M，发行商还在补报。
+  const rows = [
+    { tradingDate: '2026-11-04', netFlowUsd: 74_600_000, observedAt: '2026-11-04T00:00:00.000Z' },
+    { tradingDate: '2026-11-05', netFlowUsd: -430_200_000, observedAt: '2026-11-05T00:00:00.000Z' },
+    { tradingDate: '2026-11-06', netFlowUsd: -411_900_000, observedAt: '2026-11-06T00:00:00.000Z' }
+  ]
+
+  // 08:01 与 12:52（+08）都在 11-06 的 UTC 日里：11-06 还没定稿，只剩两天可判——
+  // 结论是「数据不齐」（牌子灰、不推通知、不叫分析），不是「三天净流出」。
+  it('judges only the settled days, so no alert fires while the newest day is still being revised', () => {
+    for (const asOf of ['2026-11-06T00:01:00.000Z', '2026-11-06T04:52:00.000Z']) {
+      const signal = buildEtfOutflowSignal({ asset: 'btc', rows, asOf })!
+      expect(signal.readiness).toBe('unavailable')
+      expect(signal.values).toMatchObject({ coveredDays: 2, requiredDays: 3 })
+      expect(buildEtfOutflowSignalRequest(signal)).toBeUndefined()
+    }
+  })
+
+  // 第二天（UTC 日）11-06 静置满一天，三天累计 = 74.6 − 430.2 − 411.9 = −767.5M：一条，且是定稿值。
+  it('speaks once the day has settled, with the final number and that trading day as the bucket', () => {
+    const signal = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-11-07T00:01:00.000Z' })!
+    expect(signal.readiness).toBe('available')
+    expect(signal.severity).toBe('high')
+    expect(signal.observedAt).toBe('2026-11-06T00:00:00.000Z')
+    expect(signal.values).toMatchObject({ cumulativeNetFlowUsd: -767_500_000, coveredDays: 3, requiredDays: 3 })
+  })
+
+  // 同一桶再读一次：去重键不变，平台按它合并，不会推第二次。
+  it('keeps one bucket for the settled day across later refreshes', () => {
+    const first = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-11-07T00:01:00.000Z' })!
+    const later = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-11-07T12:00:00.000Z' })!
+    expect(later.dedupeKey).toBe(first.dedupeKey)
+    expect(later.values.cumulativeNetFlowUsd).toBe(first.values.cumulativeNetFlowUsd)
   })
 })
