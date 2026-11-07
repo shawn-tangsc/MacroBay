@@ -33,8 +33,8 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
     markRead: (id: string) =>
       ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }) as Promise<NotificationCenterItem>,
     /** 发送一条测试通知：走真实 `submit()`，验证链路与系统放行；每次点击都是一条新记录。 */
-    sendTest: () =>
-      ipcRenderer.invoke(IpcChannels.notificationsSendTest) as Promise<NotificationSelfTestReceipt>,
+    sendTest: (input?: { kind?: string }) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSendTest, input) as Promise<NotificationSelfTestReceipt>,
     /** 清空 = 全部未读标为已读；返回 `{ unread, version }`，角标不必再查一次。 */
     markAllRead: (input?: { productId?: string }) =>
       ipcRenderer.invoke(IpcChannels.notificationsMarkAllRead, input) as Promise<NotificationUnreadState>,

@@ -28,7 +28,8 @@ export function registerNotificationIpcHandlers(): void {
     if (!payload.id || !payload.until) throw new Error('id and until are required.')
     return getNotificationRuntime().snooze(payload.id, payload.until)
   })
-  ipcMain.handle(IpcChannels.notificationsSendTest, () =>
+  // 入参只带 `kind`（设置页的三枚测试按钮）；主进程按当前配置重算强度/条数/时区，渲染层不传这些。
+  ipcMain.handle(IpcChannels.notificationsSendTest, (_event, _input?: { kind?: string }) =>
     getNotificationRuntime().submitSelfTest(buildTestNotificationRequest())
   )
   // 只读授权状态：主进程没有「申请授权」这个能力，真申请只能从渲染层走 Web Notification API。
