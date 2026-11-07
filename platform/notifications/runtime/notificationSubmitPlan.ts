@@ -150,6 +150,16 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   if (bodyKey === null) {
     return rejected('unknown-body-variant', `notification event "${entry.id}" has no body variant "${input.request.bodyVariant ?? ''}"`)
   }
+  // 标题与理由的变体：与正文同形、同一条规则（声明了变体表就必须给对名字，不退回默认键）。
+  // 退回默认键会印出一句措辞对不上情形的话（无预期值却写「高于预期」），那正是要修的缺陷。
+  const titleKey = resolveKeyByVariant(entry.titleKey, entry.titleKeyByVariant, input.request.titleVariant)
+  if (titleKey === null) {
+    return rejected('unknown-body-variant', `notification event "${entry.id}" has no title variant "${input.request.titleVariant ?? ''}"`)
+  }
+  const reasonKey = resolveKeyByVariant(entry.reasonKey, entry.reasonKeyByVariant, input.request.reasonVariant)
+  if (reasonKey === null) {
+    return rejected('unknown-body-variant', `notification event "${entry.id}" has no reason variant "${input.request.reasonVariant ?? ''}"`)
+  }
 
   // 旧的日内键形状（带时间桶）现在构造不出键；单列一个原因，别让它落成「没有键」这种含糊说法。
   if (usesStaleIntradayBucketShape(input.request.dedupeVars)) {
@@ -214,7 +224,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
-  const incoming = toLegacyRequest(entry, request, dedupeKey, levels, bodyKey)
+  const incoming = toLegacyRequest(entry, request, dedupeKey, levels, bodyKey, titleKey, reasonKey)
   if (input.duplicate) {
     return {
       kind: 'merge',
@@ -224,7 +234,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  const record = createRecord(entry, request, dedupeKey, levels, surfaces, bodyKey, input.now)
+  const record = createRecord(entry, request, dedupeKey, levels, surfaces, bodyKey, input.now, titleKey, reasonKey)
   return {
     kind: 'new',
     record,
@@ -303,6 +313,23 @@ function resolveBodyKey(entry: NotificationEventCatalogEntry, request: Notificat
   const variant = request.bodyVariant
   if (variant === undefined) return null
   return entry.bodyKeyByVariant[variant] ?? null
+}
+
+/**
+ * 标题与理由的变体解析，规则与 `bodyVariant` **完全同形**——三种键不许两套规则。
+ *
+ * 返回 `null` 表示「声明了变体表但请求没给、或给了不存在的名字」：**拒收，不退回默认键**。
+ * 退回默认键的后果是读者看到一句措辞对不上情形的话（无预期值却印「高于预期」），
+ * 而那正是这批改动要修的缺陷；宁可少发一条，也不发一句自相矛盾的。
+ */
+function resolveKeyByVariant(
+  base: string,
+  variants: Readonly<Record<string, string>> | undefined,
+  variant: string | undefined
+): string | null {
+  if (variants === undefined) return base
+  if (variant === undefined) return null
+  return variants[variant] ?? null
 }
 
 /**
@@ -420,7 +447,9 @@ function toLegacyRequest(
   request: NotificationSubmitRequest,
   dedupeKey: string,
   levels: readonly NotificationApprovedLevel[],
-  bodyKey: string | undefined
+  bodyKey: string | undefined,
+  titleKey: string,
+  reasonKey: string
 ): NotificationRequest {
   const localChannels = levels.filter((level): level is NotificationChannel =>
     level === 'center' || level === 'toast' || level === 'desktop'
@@ -430,11 +459,11 @@ function toLegacyRequest(
     ...(entry.productId === 'platform' ? {} : { productId: entry.productId }),
     sourceId: entry.id,
     eventTypeId: entry.id,
-    titleKey: entry.titleKey as NotificationCopyKey,
+    titleKey: titleKey as NotificationCopyKey,
     ...(request.titleParams === undefined ? {} : { titleParams: request.titleParams }),
     ...(bodyKey === undefined ? {} : { bodyKey: bodyKey as NotificationCopyKey }),
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
-    ...(request.rendered === undefined ? { reasonKey: entry.reasonKey as NotificationCopyKey } : {}),
+    ...(request.rendered === undefined ? { reasonKey: reasonKey as NotificationCopyKey } : {}),
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
     ...(request.rendered === undefined ? {} : { rendered: request.rendered }),
     severity: request.severity ?? 'info',
@@ -455,7 +484,9 @@ function createRecord(
   levels: readonly NotificationApprovedLevel[],
   surfaces: NotificationSurfacePlan,
   bodyKey: string | undefined,
-  now: string
+  now: string,
+  titleKey: string,
+  reasonKey: string
 ): NotificationRecord {
   // `deliver: false`：只落记录、不排任何投递面；记录内容与 `occurrenceCount` 照常。
   const deliver = request.deliver !== false
@@ -477,12 +508,12 @@ function createRecord(
     eventTypeId: entry.id,
     delivery,
     ...(request.rendered === undefined
-      ? { titleKey: entry.titleKey as NotificationCopyKey }
+      ? { titleKey: titleKey as NotificationCopyKey }
       : { rendered: request.rendered }),
     ...(request.titleParams === undefined ? {} : { titleParams: request.titleParams }),
     ...(bodyKey === undefined ? {} : { bodyKey: bodyKey as NotificationCopyKey }),
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
-    ...(request.rendered === undefined ? { reasonKey: entry.reasonKey as NotificationCopyKey } : {}),
+    ...(request.rendered === undefined ? { reasonKey: reasonKey as NotificationCopyKey } : {}),
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
     severity: request.severity ?? 'info',
     priority: 'normal',

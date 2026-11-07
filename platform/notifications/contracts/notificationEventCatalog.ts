@@ -26,6 +26,19 @@ export type NotificationEventDeclaration = {
   titleKey: string
   bodyKey?: string
   bodyKeyByVariant?: Readonly<Record<string, string>>
+  /**
+   * 标题与理由的**变体**（契约 §3.2，2026-11-07 与 `bodyKeyByVariant` 同形补齐）。
+   *
+   * 为什么标题也需要变体：同一个事件在不同情形下标题的**语法**就不一样，不是填个参数能解决的。
+   * 例如「美国 密歇根消费者信心初值 高于预期」在没有预期值时根本不成句——参数只有方向词的三个值，
+   * 没有「不适用」这一档，硬塞就印出一句自相矛盾的话。理由同理：按重要性推送却写「达到意外阈值」，
+   * 是一句假话。
+   *
+   * **不是 `rendered`**：那会把成品句子冻结进记录，以后改文案永远追不到历史。变体解析出的仍是
+   * **键 + 参数**，措辞照旧由文案表给，历史跟着一起变好。
+   */
+  titleKeyByVariant?: Readonly<Record<string, string>>
+  reasonKeyByVariant?: Readonly<Record<string, string>>
   /** 「为什么推了」那一句，必填：没有收据就没法解释。 */
   reasonKey: string
   /** 读者要不要动手：决定提交期 `actions` 能不能是空数组，不是「一定有动作」。 */

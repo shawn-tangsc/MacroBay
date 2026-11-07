@@ -9,6 +9,7 @@ const policy: NotificationEventPolicy = {
   'platform.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'platform.ready': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
   'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'platform.title-variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
   'platform.raw': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
   'other-product.thing': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
 }
@@ -60,6 +61,18 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'variant:{id}',
           dedupeUnit: 'occurrence',
+        },
+        {
+          id: 'platform.title-variant',
+          titleKey: 'notification.test.title',
+          titleKeyByVariant: { direction: 'notification.test.title', published: 'notification.test.body' },
+          reasonKey: 'notification.test.body',
+          reasonKeyByVariant: { threshold: 'notification.test.body', importance: 'notification.test.title' },
+          requiresUserAction: false,
+          category: 'reminder',
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'title-variant:{id}',
+          dedupeUnit: 'occurrence',
         }
       ]
     },
@@ -108,6 +121,42 @@ const base = {
 }
 
 describe('notification submit planner', () => {
+  it('resolves the title and reason variant the event declared, like the body variant', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({
+        eventTypeId: 'platform.title-variant',
+        dedupeVars: { builder: 'template', vars: { id: 'v1' } },
+        titleVariant: 'published',
+        reasonVariant: 'importance'
+      })
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 变体解析出的仍是**键**，不是句子：以后改文案历史跟着变好（这正是它不等于 `rendered` 的地方）。
+    expect(plan.record.titleKey).toBe('notification.test.body')
+    expect(plan.record.reasonKey).toBe('notification.test.title')
+  })
+
+  it('rejects a missing or unknown title/reason variant instead of falling back to the default key', () => {
+    const missing = planNotificationSubmit({
+      ...base,
+      request: request({ eventTypeId: 'platform.title-variant', dedupeVars: { builder: 'template', vars: { id: 'v2' } } })
+    })
+    expect(missing.kind).toBe('rejected')
+
+    const unknown = planNotificationSubmit({
+      ...base,
+      request: request({
+        eventTypeId: 'platform.title-variant',
+        dedupeVars: { builder: 'template', vars: { id: 'v3' } },
+        titleVariant: 'nope'
+      })
+    })
+    expect(unknown.kind).toBe('rejected')
+  })
+
   it('rejects an unregistered event type', () => {
     const plan = planNotificationSubmit({ ...base, request: request({ eventTypeId: 'platform.nope' }) })
     expect(plan.kind).toBe('rejected')

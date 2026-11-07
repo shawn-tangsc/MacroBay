@@ -427,6 +427,9 @@ export type NotificationSubmitRequest = {
   titleParams?: Readonly<Record<string, NotificationCopyParam>>
   bodyParams?: Readonly<Record<string, NotificationCopyParam>>
   bodyVariant?: string
+  /** 标题/理由的变体名（与 `bodyVariant` 同形）：事件声明了变体表就必须给，否则拒收。 */
+  titleVariant?: string
+  reasonVariant?: string
   reasonParams?: Readonly<Record<string, NotificationCopyParam>>
   actions: readonly NotificationAction[]
   deeplink?: NotificationDeeplink
