@@ -1,8 +1,5 @@
 import { Tooltip } from '@platform/ui/components/tooltip'
-import { IconButton } from '@platform/ui/components/icon-button'
-
-import { Popover } from '@platform/ui/components/popover'
-import { ChevronRight, Info } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { Modal } from '@platform/ui/components/modal'
@@ -23,20 +20,6 @@ import './DivergencePanel.css'
  * before the title, because a reader who came for the readings should not have to step over four
  * lines of explanation to reach them.
  */
-/**
- * The bubble's four one-look bullets, one literal key per line.
- *
- * Literal on purpose: a guard checks that each key is a dotted path, and a template string would
- * hide the spelling from it. Four is also the popover's cap — the notes that would not fit moved
- * behind their own entry below the card.
- */
-export const divergenceHelpBulletKeys = Object.freeze([
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.0',
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.1',
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.2',
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.3'
-])
-
 export function DivergencePanel({ state, text, onRetry }: Readonly<{
   state: DashboardDivergenceViewState
   text: DivergencePanelText
@@ -130,17 +113,6 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           : <Tooltip labelKey="pages.intelligence.portal.dashboard.divergence.chipTip" resolveText={resolveProductKey}>
             {chipButton}
           </Tooltip>) : null}
-        {/* Four lines are four keys, one per line: arrays are the semantic shape here, and a
-            joined sentence with newlines would be lost the first time the copy is translated. */}
-        <Popover
-          lines={divergenceHelpBulletKeys.map(labelKey => ({ labelKey }))}
-          resolveText={resolveProductKey}
-          trigger={(triggerProps) => (
-            <IconButton
-              {...triggerProps}
-              ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
-              icon={Info} size="sm" resolveText={resolveProductKey} variant="plain" />
-          )} />
       </div>
       <div className="mi-divergence__content">
         {/* state-ternary: reviewed — 这一枝只画「正在读」这一块，不藏任何内容；扫描窗口里看到的列表属于下面 available 分支，与它无关。 */}
@@ -196,9 +168,18 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           titleKey="pages.intelligence.portal.dashboard.divergence.chipDetailsTitle"
           groups={legGroups}
           rows={[{ labelKey: 'pages.intelligence.portal.dashboard.divergence.chipWhyLabel', value: text.chipWhy }]} /> : null}
+        {/* 两组，各自成块：上面那四句是「这张卡怎么来的」（规则与数据怎么算），下面三段是口径说明。
+            它们讲的是两件事——规则怎么判 vs 数字怎么读——所以并列而不是硬塞成一组；每组的句子原样照抄，
+            一条都不改写，也不合并（界面设计 2026-11-08：一张卡的解释入口最多一个，那四句并进这个 dialog）。 */}
         <div className="mi-divergence__notes" data-divergence-notes>
-          <h3 className="mi-divergence__notes-title">{text.helpDetailsLabel}</h3>
-          {text.helpDetails.map(line => <p key={line}>{line}</p>)}
+          <section className="mi-divergence__notes-group" data-divergence-rule>
+            <h3 className="mi-divergence__notes-title">{text.helpLabel}</h3>
+            {text.helpBullets.map(line => <p key={line}>{line}</p>)}
+          </section>
+          <section className="mi-divergence__notes-group" data-divergence-notes-detail>
+            <h3 className="mi-divergence__notes-title">{text.helpDetailsLabel}</h3>
+            {text.helpDetails.map(line => <p key={line}>{line}</p>)}
+          </section>
         </div>
       </Modal>
     </section>

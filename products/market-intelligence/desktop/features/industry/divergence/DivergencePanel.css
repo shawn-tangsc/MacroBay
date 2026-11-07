@@ -188,15 +188,16 @@
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
 
 
-/* 弹层正文的下半段：牌子背后那几行读数之上，是这段口径说明。一条分隔线把它和读数分开，
+/* 弹层正文的下半段：牌子背后那几行读数之上，是这卡的两组说明。一条分隔线把它和读数分开，
    免得读者把说明当成又一条读数（v1 §二 · 6 的同一条道理）。
- * 三段各自成段：它们讲三件事（什么算不寻常 / 舆情口径 / 先对时间），拼成一整段读起来是一坨。
+ * 两组各自成块、块内一行一段：上面是「这张卡怎么来的」（规则与数据怎么算），下面是口径说明。
  * 字号取看板的读数说明 token：同一副形状在别的卡上也有，数字写两处就会分叉。 */
 .mi-divergence__notes {
-  display: grid; gap: 10px;
+  display: grid; gap: 16px;
   margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line);
   color: var(--mi-dashboard-muted);
   font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
 }
+.mi-divergence__notes-group { display: grid; gap: 6px; }
 .mi-divergence__notes-title { margin: 0; color: var(--mi-dashboard-text); font-size: var(--mi-reading-note-size); font-weight: 650; }
 .mi-divergence__notes p { margin: 0; }

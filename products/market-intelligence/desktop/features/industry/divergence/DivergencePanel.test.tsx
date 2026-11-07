@@ -47,15 +47,18 @@ const otherRow = {
 }
 
 describe('divergence panel', () => {
-  it('keeps the help icon, adds no second entry, and no judge badge behind', () => {
-    const markup = render({ state: 'empty', withheld: [] })
-    // No panel name and no pair list: the `?` leads the content and the badge names the judge.
+  it('has exactly one explanation entry on the card — the chip — and no help icon', () => {
+    // 判据①（界面设计 2026-11-08）：卡级解释入口上限 1。牌子就是那一个；四句规则已并进它的 dialog，
+    // 所以卡面上 `helpLabel`、四句正文、口径说明都不该出现，命中的解释类控件只有牌子。
+    const markup = render({ state: 'available', rows: [row], withheld: [] })
     expect(markup).not.toContain('<h2')
-    expect(markup.indexOf('aria-label="' + text.helpLabel)).toBeLessThan(markup.indexOf('mi-divergence__content'))
     expect(markup).not.toContain('mi-divergence__judge')
-    expect(markup).toContain(`aria-label="${text.helpLabel}"`)
-    // The prose is not on the card; the badge is.
+    expect(markup.match(/class="mi-divergence__chip"/g)).toHaveLength(1)
+    expect(markup).not.toContain(`aria-label="${text.helpLabel}"`)
     expect(markup).not.toContain(text.helpBullets[0])
+    expect(markup).not.toContain(text.helpDetails[0])
+    // 读数照旧在卡上：牌子不是入口的替代品。
+    expect(markup).toContain(row.mechanism)
   })
 
   it('keeps the reading notes off the card entirely — no block, no foldable heading, no extra entry', () => {
@@ -237,55 +240,6 @@ describe('invalidation on focus', () => {
   })
 })
 
-describe('help on the shared popover', () => {
-  it('pins on a click and closes on the second one', async () => {
-    // The reason the shared button pair exists: the popover's handlers reach the trigger, so a
-    // click pins the layer and the next click lets it go. A hand-built button used to swallow them.
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-    await act(async () => {
-      root.render(scoped(createElement(DivergencePanel, {
-        state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
-      })))
-    })
-    const trigger = container.querySelector(`[aria-label="${text.helpLabel}"]`) as HTMLElement
-    // A closing layer keeps its node while it animates out, so "open" is read from its classes.
-    const layerState = (): 'none' | 'open' | 'closing' => {
-      const layer = document.querySelector('.ant-popover')
-      if (layer === null) return 'none'
-      return /leave|hidden/.test(layer.className) ? 'closing' : 'open'
-    }
-    await act(async () => { trigger.click() })
-    expect(layerState()).toBe('open')
-    // Pinned stays open with the pointer nowhere near it.
-    await act(async () => { trigger.dispatchEvent(new window.MouseEvent('mouseleave', { bubbles: true })) })
-    expect(layerState()).toBe('open')
-    await act(async () => { trigger.click() })
-    expect(layerState()).toBe('closing')
-    await act(async () => { root.unmount() })
-  })
-
-  it('opens the four one-look bullets a keyboard reader can reach', async () => {
-    // The bubble used to carry five lines; the longest moved behind the entry below the card. Four
-    // is also the popover's cap, so this asserts the count as well as every key resolving in order.
-    expect(text.helpBullets).toHaveLength(4)
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-    await act(async () => {
-      root.render(scoped(createElement(DivergencePanel, {
-        state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
-      })))
-    })
-    const trigger = container.querySelector(`button[aria-label="${text.helpLabel}"]`) as HTMLElement
-    await act(async () => { trigger.focus() })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
-    for (const line of text.helpBullets) expect(document.body.textContent).toContain(line)
-    await act(async () => { root.unmount() })
-  })
-})
-
 describe('the reading notes dialog', () => {
   const answer = (...rows: readonly (typeof row | typeof otherRow)[]) => ({ state: 'available' as const, rows, withheld: [] })
   const mount = async () => {
@@ -312,10 +266,16 @@ describe('the reading notes dialog', () => {
     expect(detail?.textContent).toContain(text.legs['open-interest'])
     expect(detail?.textContent).toContain(text.chipFresh)
     expect(detail?.textContent).toContain(text.chipWhy)
-    // 说明在同一层里，一个块一段：三件事分开写，不拼成一整段。
+    // 说明在同一层里、分成两组：上面四句是规则（逐条比，判据②），下面三段是口径说明。
+    // 先钉住句数：只断言「等于文案数组」的话，数组被删空也会绿。
+    expect(text.helpBullets).toHaveLength(4)
     const notes = document.querySelector('[data-divergence-notes]')
-    expect(notes?.querySelector('h3')?.textContent).toBe(text.helpDetailsLabel)
-    expect([...(notes?.querySelectorAll('p') ?? [])].map(line => line.textContent)).toEqual([...text.helpDetails])
+    expect(notes?.querySelector('[data-divergence-rule] h3')?.textContent).toBe(text.helpLabel)
+    expect([...(notes?.querySelectorAll('[data-divergence-rule] p') ?? [])].map(line => line.textContent))
+      .toEqual([...text.helpBullets])
+    expect(notes?.querySelector('[data-divergence-notes-detail] h3')?.textContent).toBe(text.helpDetailsLabel)
+    expect([...(notes?.querySelectorAll('[data-divergence-notes-detail] p') ?? [])].map(line => line.textContent))
+      .toEqual([...text.helpDetails])
     // 内部标识不是读数。
     expect(detail?.textContent).not.toContain('liquidity-leverage')
     await act(async () => { root.unmount() })
