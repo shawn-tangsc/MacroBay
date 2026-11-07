@@ -107,6 +107,32 @@ export type AppNotificationCompositionPorts = NotificationCompositionPorts & {
   }
 }
 
+/**
+ * 表面选择写失败时留一行痕（契约 §5.5），其余设置失败照旧往上抛。
+ *
+ * 为什么单独包一层：读者点了勾、页面弹回原样、一声不响——那正是「点了没反应」，而这一格
+ * 以前就是静默的。日志**只打组键与原因**：`surfaceSelections` 是读者自己的配置，整份打出来
+ * 等于把它抄进日志。错误照旧抛回去，页面才能当场说「这次没存上」。
+ */
+export function withSurfaceSaveDiagnostics(input: {
+  update: (patch: Partial<NotificationRuntimeSettings>) => Promise<unknown>
+  log: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+}): (patch: Partial<NotificationRuntimeSettings>) => Promise<void> {
+  return async (patch) => {
+    try {
+      await input.update(patch)
+    } catch (error) {
+      if (patch.surfaceSelections !== undefined) {
+        input.log('warn', 'notification.surface-selection-save-failed', {
+          key: Object.keys(patch.surfaceSelections)[0] ?? null,
+          reason: error instanceof Error ? error.message : String(error)
+        })
+      }
+      throw error
+    }
+  }
+}
+
 export function composeNotificationRuntimeForApp(ports: AppNotificationCompositionPorts): void {
   const push = createChannelPushPort({
     channels: ports.channels,
@@ -125,22 +151,13 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     manifests: ports.manifests,
     push,
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
-    updateSettings: async (patch) => {
-      const current = await ports.settingsStore.get()
-      try {
+    updateSettings: withSurfaceSaveDiagnostics({
+      update: async (patch) => {
+        const current = await ports.settingsStore.get()
         await ports.settingsStore.update({ notifications: { ...current.notifications, ...patch } })
-      } catch (error) {
-        // 写失败必须留痕（契约 §5.5）：读者点了勾、页面弹回去、一声不响——那正是「点了没反应」。
-        // 只打 **key 与原因**：`surfaceSelections` 是读者的配置，不是诊断信息，整份打出来等于把它抄进日志。
-        if (patch.surfaceSelections !== undefined) {
-          ports.log.log('warn', 'notification.surface-selection-save-failed', {
-            key: Object.keys(patch.surfaceSelections)[0] ?? null,
-            reason: error instanceof Error ? error.message : String(error)
-          })
-        }
-        throw error
-      }
-    },
+      },
+      log: (level, event, fields) => ports.log.log(level, event, fields)
+    }),
     diagnostics: (entry) => {
       // `unclaimed-producer` 记 `info`，不是 `warn`（2026-11-07 定）。
       //
