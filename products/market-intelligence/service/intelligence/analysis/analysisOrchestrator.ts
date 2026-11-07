@@ -102,7 +102,7 @@ const repairableRejection: ReadonlySet<string> = new Set([
  */
 const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
   'invalid-json': '上一次回复不是合法 JSON（可能被截断）。请重新输出完整、闭合的 JSON；必要时压缩各数组的条数。',
-  'shape:top-level': '上一次输出的顶层字段与契约不一致：顶层必须恰好是 conclusion、knownFacts、transmissionHypotheses、marketReaction、supportingEvidence、counterEvidence、scenarios、directions、nextCatalysts、dataCaveats、evidenceRefs，不增不减。',
+  'shape:top-level': '上一次输出的顶层字段与契约不一致：顶层必须恰好是 conclusion、knownFacts、transmissionHypotheses、marketReaction、supportingEvidence、counterEvidence、scenarios、directions、nextCatalysts、dataCaveats、evidenceRefs，加上**可选**的 divergences；其余不增不减。',
   'shape:conclusion': 'conclusion 必须恰好包含 direction、summary、change、causalChain、conditions、macro、evidenceStrength、dataGaps；direction 只能取五个 key，macro 与 evidenceStrength 没有内容时写 null。',
   'shape:directions': 'directions 必须恰好 short、medium、long 各一条；每条含 horizon、direction、rationale、confidence、evidenceRefIds，confidence 只能是 low、medium 或 high。',
   'shape:scenarios': '每个 scenario 必须恰好包含 asset、horizon、baseCase、conditions、invalidation、status；asset 只能是 BTC 或 ETH，status 只能是 pending。',
@@ -122,6 +122,8 @@ const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
   'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。',
   'policy-probability-citation': '结论里的政策概率必须与快照同值，并在同一段写出该概率的截至时刻（例如「市场定价 71%，截至 2026-10-30 15:00 UTC」）；「概率/定价」附近的百分数只能取自输入里的概率事实，不得自行取整、换档或编造。',
   // The answer must return to the change that triggered the run, not to a better-writable topic.
+  'divergence-contradiction': '上一次 `divergences` 里的立场与输入事实相反：输入里 `divergence-<pairId>` 事实存在，说明这一对的背离成立，`stance` 只能是 diverging；反过来，事实值是 none（查过、没背离）时不能写 diverging。与证据相反会被整份拒绝——**不写不算相反**，没意见就不要写这一项。',
+  'shape:divergences': '`divergences` 是可选数组；写的话每项必须恰好包含 pairId 与 stance 两个键，pairId 取输入里 `divergence-<pairId>` 的原文，stance 只能是 diverging 或 not-diverging。',
   'missing-trigger-focus': '上一次结论没有回答触发它的那条变化：请在 supportingEvidence / marketReaction / directions 里引用那条变化的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的写法，不要改写）。不要换一个更好写的话题。'
 })
 

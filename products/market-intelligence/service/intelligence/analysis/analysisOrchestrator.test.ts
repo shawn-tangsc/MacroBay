@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { AnalysisRun, EvidenceSnapshot, EventGroup } from '../../../contracts/marketAnalysisContracts'
 import { createAnalysisOrchestrator, marketAnalysisInvocationPolicy } from './analysisOrchestrator'
+import { analysisUpstreamRetryPolicy } from './analysisUpstreamRetry'
 
 const asOf = '2026-09-28T00:00:00.000Z'
 
@@ -246,7 +247,7 @@ describe('analysisOrchestrator', () => {
     const runWith = (triggerKey: string): AnalysisRun => ({
       id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
-      modelProviderId: null, modelId: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
+      modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
       skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
       failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
     })
@@ -367,6 +368,58 @@ describe('analysisOrchestrator', () => {
     }))
   })
 
+  it('fails the run with the rule and a marker when the retry still contradicts the evidence', async () => {
+    // 判据 A 的收尾：拒 → 重写一次 → 仍相反 → 整条 run 失败（`fail`），并留 `MI_ANALYSIS_OUTPUT_REJECTED`
+    // 与 rule 名；**不许**降级成"把句子删掉照常发布"。
+    const updateRunStatus = vi.fn()
+    const marker = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const repository = createRepository({
+      getSnapshot: () => ({
+        snapshotHash: 'snapshot-hash',
+        facts: [
+          { factId: 'mi-fact-1', evidenceRefId: 'mi-ev-1', metric: 'price-return', comparability: 'comparable', freshness: 'fresh' },
+          { factId: 'mi-fact-div', evidenceRefId: 'mi-ev-1', metric: 'divergence-narrative-price', comparability: 'comparable', freshness: 'fresh', value: 'bearish' }
+        ],
+        evidenceRefs: [{ evidenceRefId: 'mi-ev-1' }]
+      }),
+      updateRunStatus
+    })
+    // 引用全部落到这份快照的 mi-ev-1 上：这一条必须死在背离规则上，而不是死在引用规则上。
+    const base = validOutput()
+    const contradicting = {
+      ...base,
+      knownFacts: [{ factId: 'mi-fact-1', statement: '事实。', evidenceRefIds: ['mi-ev-1'] }],
+      transmissionHypotheses: [{ statement: '条件式传导。', evidenceRefIds: ['mi-ev-1'] }],
+      marketReaction: [],
+      supportingEvidence: [{ statement: '支撑。', evidenceRefId: 'mi-ev-1' }],
+      counterEvidence: [],
+      directions: base.directions.map((entry) => ({ ...entry, evidenceRefIds: ['mi-ev-1'] })),
+      nextCatalysts: [],
+      evidenceRefs: ['mi-ev-1'],
+      divergences: [{ pairId: 'narrative-price', stance: 'not-diverging' }]
+    }
+    const invoke = vi.fn(async () => ({ ok: true as const, output: contradicting, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+    const orchestrator = createAnalysisOrchestrator({
+      repository,
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory()
+    })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toMatchObject({ status: 'invalid-output', errorCode: 'analysis-missing-evidence' })
+    // 拒收后走重写，次数受 `maximumCallsPerRun` 上限：至少重写一次，绝不无限重试。
+    expect(invoke.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(invoke.mock.calls.length).toBeLessThanOrEqual(analysisUpstreamRetryPolicy.maximumCallsPerRun)
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'mi-ar-1', status: 'invalid-output', failureCode: 'analysis-missing-evidence', failureDetailCode: 'divergence-contradiction'
+    }))
+    const printed = marker.mock.calls.map(([line]) => String(line)).find((line) => line.includes('MI_ANALYSIS_OUTPUT_REJECTED'))
+    expect(printed).toBeDefined()
+    expect(JSON.parse(printed!)).toMatchObject({ marker: 'MI_ANALYSIS_OUTPUT_REJECTED', analysisRunId: 'mi-ar-1', rule: 'divergence-contradiction' })
+    marker.mockRestore()
+  })
+
   it('cancels before model invocation when the run signal is already aborted', async () => {
     const controller = new AbortController()
     controller.abort()
@@ -419,7 +472,7 @@ function createRepository(overrides: Record<string, unknown> = {}) {
   const run: AnalysisRun = {
     id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
     analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: 'key', status: 'queued', attempt: 1,
-    retryOfRunId: null, modelProviderId: null, modelId: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
+    retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
     skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
     failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
   }
