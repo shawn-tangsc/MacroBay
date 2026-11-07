@@ -45,6 +45,7 @@ import type {
   MacroCalendarOps
 } from './intelligence/agent-capabilities/operationFacades'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
+import { registerCalendarEventReminder } from './intelligence/macro-calendar/registerCalendarEventReminder'
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
@@ -324,6 +325,14 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   intelligenceModule.publicQueryService.setMarketCalendarQuery({
     queryMonth: marketCalendar.queryMonth,
     readCollectionFreshness: () => marketCalendar.readCollectionFreshness()
+  })
+  // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
+  registerCalendarEventReminder({
+    jobRuntime: deps.jobRuntime,
+    dataDir: getIntelligenceProductDataDir(),
+    queryMonth: marketCalendar.queryMonth,
+    submit: (request) => getNotificationRuntime().submit(request),
+    timeZone: () => currentReaderTimeZone()
   })
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected
