@@ -16,19 +16,17 @@ export function NotificationList(props: Readonly<{
   onSelect: (key: string) => void
 }>): ReactElement {
   if (props.narrow) {
+    // 只管读屏：页标题已经写着「情报通知」，再给一个可见标签就是同一句话说两遍。
     return <div className="intelligence-notification-narrow">
-      <label className="intelligence-notification-narrow-label">
-        {props.ariaLabel}
-        <select
-          aria-label={props.ariaLabel}
-          onChange={(event) => props.onSelect(event.target.value)}
-          value={props.selected}
-        >
-          {props.items.map((item) => (
-            <option key={item.key} value={item.key}>{`${item.name} · ${item.state}`}</option>
-          ))}
-        </select>
-      </label>
+      <select
+        aria-label={props.ariaLabel}
+        onChange={(event) => props.onSelect(event.target.value)}
+        value={props.selected}
+      >
+        {props.items.map((item) => (
+          <option key={item.key} value={item.key}>{`${item.name} · ${item.state}`}</option>
+        ))}
+      </select>
     </div>
   }
 

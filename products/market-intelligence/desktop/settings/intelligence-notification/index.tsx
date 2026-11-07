@@ -139,23 +139,25 @@ export default function IntelligenceNotificationSettingsSection(
         selected={selected}
       />
       <div className="intelligence-notification-detail">
-        <h3 className="intelligence-notification-detail-title">{itemName(selected)}</h3>
-        {selected === 'calendar'
-          ? <CalendarDetail reminder={reminder} resolveText={resolveText} surfaces={surfaces} text={text} />
-          : <ContentDetail
-            enabled={selected === 'sentiment' ? outlet.enabled : values[CONTENT_ITEMS[selected].eventId] ?? true}
-            failed={selected === 'sentiment' ? outlet.saveFailed : failedEventId === CONTENT_ITEMS[selected].eventId}
-            name={itemName(selected)}
-            onChange={(next) => {
-              if (selected === 'sentiment') outlet.setEnabled(next)
-              else toggle(CONTENT_ITEMS[selected].eventId, next)
-            }}
-            saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
-            saving={selected === 'sentiment' ? outlet.saving : savingEventId === CONTENT_ITEMS[selected].eventId}
-          />}
-        {channelReady ? null : <p className="intelligence-notification-form-note" role="status">
-          {text['pages.intelligence.notification.channelNotReady']}
-        </p>}
+        {/* 详情标题不再重复列表里的名字：同一个名字写两处，迟早有一处说法不同。 */}
+        <div className="intelligence-notification-card">
+          {selected === 'calendar'
+            ? <CalendarDetail reminder={reminder} resolveText={resolveText} surfaces={surfaces} text={text} />
+            : <ContentDetail
+              enabled={selected === 'sentiment' ? outlet.enabled : values[CONTENT_ITEMS[selected].eventId] ?? true}
+              failed={selected === 'sentiment' ? outlet.saveFailed : failedEventId === CONTENT_ITEMS[selected].eventId}
+              name={itemName(selected)}
+              onChange={(next) => {
+                if (selected === 'sentiment') outlet.setEnabled(next)
+                else toggle(CONTENT_ITEMS[selected].eventId, next)
+              }}
+              saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
+              saving={selected === 'sentiment' ? outlet.saving : savingEventId === CONTENT_ITEMS[selected].eventId}
+            />}
+          {channelReady ? null : <p className="intelligence-notification-form-note" role="status">
+            {text['pages.intelligence.notification.channelNotReady']}
+          </p>}
+        </div>
       </div>
     </div>
   </section>

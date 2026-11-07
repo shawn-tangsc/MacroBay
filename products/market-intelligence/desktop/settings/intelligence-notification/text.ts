@@ -21,18 +21,17 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.loading': '正在读取…',
   'pages.intelligence.notification.rows.calendar.title': '日历事件',
   'pages.intelligence.notification.rows.calendar.info': '一个事件在时间上的前后两段：开始前提醒、发生后通知。两者共用一处「发到哪些地方」。',
-  'pages.intelligence.notification.calendar.timeline': '开始前 —— 事件发生 —— 发生后',
-  'pages.intelligence.notification.calendar.types': '提醒的是日历里这三类：重要经济指标 · 央行活动 · 财经事件。',
   'pages.intelligence.notification.calendar.surfaces': '发到哪些地方',
+  'pages.intelligence.notification.calendar.surfaceRow': '通知方式',
   'pages.intelligence.notification.calendar.surfacesNote': '这一处管两条通知：开始前提醒与发生后通知。',
   'pages.intelligence.notification.calendar.before': '开始前',
-  'pages.intelligence.notification.calendar.beforeRow': '开始前提醒',
+  'pages.intelligence.notification.calendar.beforeRow': '提前提醒',
+  'pages.intelligence.notification.calendar.beforeNote': '提醒的是重要经济指标、央行活动、财经事件；提前量按事件本身的时间算，时区只影响显示。',
   'pages.intelligence.notification.calendar.lead': '提前多久',
   'pages.intelligence.notification.calendar.importance': '哪些重要性',
-  'pages.intelligence.notification.calendar.leadNote': '提前量按事件本身的时间算；你的时区只影响显示的那个时刻。',
   'pages.intelligence.notification.calendar.summary': '打开后：提前 {lead}，只推「{importance}」重要性。',
   'pages.intelligence.notification.calendar.after': '发生后',
-  'pages.intelligence.notification.calendar.landedRow': '事件发生后也告诉我',
+  'pages.intelligence.notification.calendar.landedRow': '通知条件',
   'pages.intelligence.notification.importance.high': '高',
   'pages.intelligence.notification.importance.medium': '中',
   'pages.intelligence.notification.importance.low': '低',
@@ -44,7 +43,6 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.landed.surprise-only': '只推出乎意料的',
   'pages.intelligence.notification.landed.also-matched': '符合预期也推',
   'pages.intelligence.notification.landed.cost': '选这一项，一天可能收到十几条；只推你在上面勾选的重要性档位。',
-  'pages.intelligence.notification.landed.note': '这一行管的是事件发生后的那条通知；和上面「提前多久」不是同一件事。',
   'pages.intelligence.notification.groupTitle': '情报通知',
   'pages.intelligence.notification.groupInfo.2': '四条同时成立才会推到手机：这里勾了、事件本身允许推手机、频道已启用、频道可用。',
 
@@ -64,7 +62,8 @@ const ZH: IntelligenceNotificationText = Object.freeze({
 
   'pages.intelligence.notification.infoAria': '这四条推送的生效条件',
   'pages.intelligence.notification.rowInfoAria': '这一条什么时候推',
-  'pages.intelligence.notification.calendar.aboutAria': '这一块的说明'
+  'pages.intelligence.notification.calendar.aboutAria': '这一块的说明',
+  'pages.intelligence.notification.calendar.beforeAria': '开始前这一段的说明'
 })
 
 const EN: IntelligenceNotificationText = Object.freeze({
@@ -81,18 +80,17 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.loading': 'Reading…',
   'pages.intelligence.notification.rows.calendar.title': 'Calendar events',
   'pages.intelligence.notification.rows.calendar.info': 'One event, two moments: a reminder before it starts and a notice after it lands. Both share one surface choice.',
-  'pages.intelligence.notification.calendar.timeline': 'before → event → after',
-  'pages.intelligence.notification.calendar.types': 'These three calendar types: major economic indicators · central-bank activity · financial events.',
   'pages.intelligence.notification.calendar.surfaces': 'Where it goes',
+  'pages.intelligence.notification.calendar.surfaceRow': 'Notice type',
   'pages.intelligence.notification.calendar.surfacesNote': 'One choice governs both notices: the reminder before the event and the notice after it.',
   'pages.intelligence.notification.calendar.before': 'Before it starts',
-  'pages.intelligence.notification.calendar.beforeRow': 'Remind me before it starts',
+  'pages.intelligence.notification.calendar.beforeRow': 'Remind me beforehand',
+  'pages.intelligence.notification.calendar.beforeNote': "Major economic indicators, central-bank activity and financial events; the lead time counts from the event's own time, your time zone only changes how it is shown.",
   'pages.intelligence.notification.calendar.lead': 'How early',
   'pages.intelligence.notification.calendar.importance': 'Importance',
-  'pages.intelligence.notification.calendar.leadNote': "The lead time counts from the event's own time; your time zone only changes how that moment is shown.",
   'pages.intelligence.notification.calendar.summary': 'When on: a reminder {lead} before, for {importance} importance only.',
   'pages.intelligence.notification.calendar.after': 'After it lands',
-  'pages.intelligence.notification.calendar.landedRow': 'Tell me after it lands',
+  'pages.intelligence.notification.calendar.landedRow': 'When to tell me',
   'pages.intelligence.notification.importance.high': 'High',
   'pages.intelligence.notification.importance.medium': 'Medium',
   'pages.intelligence.notification.importance.low': 'Low',
@@ -104,7 +102,6 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.landed.surprise-only': 'Only surprises',
   'pages.intelligence.notification.landed.also-matched': 'Also matched',
   'pages.intelligence.notification.landed.cost': 'With this on, expect a dozen or more notices a day; only the importance levels you tick above are sent.',
-  'pages.intelligence.notification.landed.note': 'This row governs the notice after an event lands; it is not the same thing as the lead time above.',
   'pages.intelligence.notification.groupTitle': 'Intelligence notifications',
   'pages.intelligence.notification.groupInfo.2': 'All four must hold: switched on here, the event allows phone delivery, the channel is enabled, and the channel is available.',
 
@@ -124,7 +121,8 @@ const EN: IntelligenceNotificationText = Object.freeze({
 
   'pages.intelligence.notification.infoAria': 'When these four reach your phone',
   'pages.intelligence.notification.rowInfoAria': 'When this one sends',
-  'pages.intelligence.notification.calendar.aboutAria': 'About this section'
+  'pages.intelligence.notification.calendar.aboutAria': 'About this section',
+  'pages.intelligence.notification.calendar.beforeAria': 'About the section before it starts'
 })
 
 export const intelligenceNotificationText: Readonly<Record<'zh-CN' | 'en-US', IntelligenceNotificationText>> =

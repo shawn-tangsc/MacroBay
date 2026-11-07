@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 
 import { Info } from 'lucide-react'
-import { Switch } from 'antd'
+import { Checkbox, Switch } from 'antd'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
@@ -16,12 +16,37 @@ import type { useSurfaceSelection } from './useSurfaceSelection'
 
 type SurfaceState = ReturnType<typeof useSurfaceSelection>
 
+/** 组标题旁的 ⓘ：整句说明只在这里，正文里只剩字段名、当前值和控件（§8.6）。 */
+function SectionInfo(props: Readonly<{
+  labelKey: string
+  ariaLabelKey: string
+  resolveText: (key: string) => string
+}>): ReactElement {
+  return <Popover
+    labelKey={props.labelKey}
+    resolveText={props.resolveText}
+    trigger={(triggerProps) => (
+      <IconButton
+        {...triggerProps}
+        ariaLabelKey={props.ariaLabelKey}
+        icon={Info}
+        resolveText={props.resolveText}
+        size="sm"
+        variant="plain"
+      />
+    )}
+  />
+}
+
 /**
- * 「日历事件」的详情（界面规范 v1.9 §8 / v2.41 §9f）。
+ * 「日历事件」的详情（界面规范 v1.10 §8，版式对齐定版预览稿）。
  *
- * 结构固定：**发到哪些地方（整项级，在最上）→ 开始前 → 发生后**。原来自制的
+ * 结构固定：**通知方式（整项级，在最上）→ 开始前 → 发生后**。原来自制的
  * 「开始前 —— 事件发生 —— 发生后」那行文字删掉了：两个小节标题本身就说顺序，
  * 那行是装饰、零信息量，还多出一级文字层级。
+ *
+ * 每块都是「组标题 + 若干行」，每行是「标签 160 + 控件 + 可选一行说明」；
+ * 整句解释全进组标题旁的 ⓘ，正文只留字段名、当前值和控件。
  */
 export function CalendarDetail(props: Readonly<{
   reminder: CalendarReminderSettingsState
@@ -44,66 +69,67 @@ export function CalendarDetail(props: Readonly<{
   const value = reminder.value
   const lead = (minutes: number): string =>
     text[`pages.intelligence.notification.leads.${minutes}`] ?? `${minutes}`
+  const notifyLabel = text['pages.intelligence.notification.calendar.surfaceRow'] ?? ''
 
   return <div className="intelligence-notification-calendar-detail">
     <SettingsGroup
-      aside={<Popover
+      aside={<SectionInfo
+        ariaLabelKey="pages.intelligence.notification.calendar.aboutAria"
         labelKey="pages.intelligence.notification.calendar.surfacesNote"
         resolveText={props.resolveText}
-        trigger={(triggerProps) => (
-          <IconButton
-            {...triggerProps}
-            ariaLabelKey="pages.intelligence.notification.calendar.aboutAria"
-            icon={Info}
-            size="sm"
-            variant="plain"
-            resolveText={props.resolveText}
-          />
-        )}
       />}
       title={text['pages.intelligence.notification.calendar.surfaces'] ?? ''}
     >
       {surfaces.status === 'error'
-        ? <p className="intelligence-notification-form-note" role="status">
-          {text['pages.intelligence.notification.surfacesUnreadable']}
-        </p>
+        ? <SettingsRow label={notifyLabel} last>
+          <span className="intelligence-notification-form-note" role="status">
+            {text['pages.intelligence.notification.surfacesUnreadable']}
+          </span>
+        </SettingsRow>
         : surfaces.status === 'loading'
           ? <LoadingState ariaLabel={text['pages.intelligence.notification.calendar.surfaces'] ?? ''} />
-          : <>
-            {surfaces.conflict
-              ? <p className="intelligence-notification-form-note" role="status">
-                {text['pages.intelligence.notification.surfacesConflict']}
-              </p>
-              : null}
-            <div className="intelligence-notification-form-checks" role="group" aria-label={text['pages.intelligence.notification.calendar.surfaces']}>
-              {surfaces.available.map((surface) => {
-                const checked = surfaces.selection[surface] ?? false
-                const blocked = surface === 'toast' && surfaces.toastMasterOff && checked
-                return <label className="intelligence-notification-form-check" key={surface}>
-                  <input
-                    checked={checked}
-                    disabled={surfaces.saving}
-                    onChange={() => surfaces.toggle(surface, !checked)}
-                    type="checkbox"
-                  />
-                  <span>{text[`pages.intelligence.notification.surface.${surface}`] ?? surface}</span>
-                  {/* 勾了却不会响：当场说清（「不许点了没反应」的同一件事），勾选框本身不灰。 */}
-                  {blocked
-                    ? <span className="intelligence-notification-form-note" role="status">
-                      {text[`pages.intelligence.notification.surfaceBlocked.${surface}`]}
-                    </span>
-                    : null}
-                </label>
-              })}
+          : <SettingsRow label={notifyLabel} last>
+            <div className="intelligence-notification-form-checks" role="group" aria-label={notifyLabel}>
+              {surfaces.available.map((surface) => (
+                <Checkbox
+                  checked={surfaces.selection[surface] ?? false}
+                  className="intelligence-notification-form-check"
+                  disabled={surfaces.saving}
+                  key={surface}
+                  onChange={() => surfaces.toggle(surface, !(surfaces.selection[surface] ?? false))}
+                >
+                  {text[`pages.intelligence.notification.surface.${surface}`] ?? surface}
+                </Checkbox>
+              ))}
             </div>
-          </>}
+            {/* 勾了却不会响：当场说清（「不许点了没反应」的同一件事），勾选框本身不灰。 */}
+            {surfaces.conflict
+              ? <span className="intelligence-notification-form-note" role="status">
+                {text['pages.intelligence.notification.surfacesConflict']}
+              </span>
+              : null}
+            {surfaces.available.some((surface) => surface === 'toast' && (surfaces.selection.toast ?? false) && surfaces.toastMasterOff)
+              ? <span className="intelligence-notification-form-note" role="status">
+                {text['pages.intelligence.notification.surfaceBlocked.toast']}
+              </span>
+              : null}
+          </SettingsRow>}
     </SettingsGroup>
 
-    <SettingsGroup title={text['pages.intelligence.notification.calendar.before'] ?? ''}>
+    <SettingsGroup
+      aside={<SectionInfo
+        ariaLabelKey="pages.intelligence.notification.calendar.beforeAria"
+        labelKey="pages.intelligence.notification.calendar.beforeNote"
+        resolveText={props.resolveText}
+      />}
+      title={text['pages.intelligence.notification.calendar.before'] ?? ''}
+    >
+      {/* 关着时只留一行状态摘要（提前量 + 重要性），不让两个控件看起来能用却不起作用。 */}
       <SettingsRow
         label={text['pages.intelligence.notification.calendar.beforeRow'] ?? ''}
+        last={!value.enabled}
         note={value.enabled
-          ? text['pages.intelligence.notification.calendar.leadNote']
+          ? undefined
           : (text['pages.intelligence.notification.calendar.summary'] ?? '')
             .replace('{lead}', lead(value.leadMinutes))
             .replace(
@@ -120,7 +146,6 @@ export function CalendarDetail(props: Readonly<{
           onChange={() => reminder.update({ enabled: !value.enabled })}
         />
       </SettingsRow>
-      {/* 提前量与重要性只在开关打开时出现（关着靠收起，不画禁用控件）。 */}
       {value.enabled
         ? <>
           <SettingsRow label={text['pages.intelligence.notification.calendar.lead'] ?? ''}>
@@ -136,35 +161,44 @@ export function CalendarDetail(props: Readonly<{
             />
           </SettingsRow>
           <SettingsRow label={text['pages.intelligence.notification.calendar.importance'] ?? ''} last>
-            <div className="intelligence-notification-form-checks" role="group" aria-label={text['pages.intelligence.notification.calendar.importance']}>
+            <div
+              aria-label={text['pages.intelligence.notification.calendar.importance']}
+              className="intelligence-notification-form-checks"
+              role="group"
+            >
               {(['high', 'medium', 'low'] as const).map((level) => (
-                <label className="intelligence-notification-form-check" key={level}>
-                  <input
-                    checked={value.importance.includes(level)}
-                    disabled={reminder.saving}
-                    onChange={() => reminder.update({
-                      importance: value.importance.includes(level)
-                        ? value.importance.filter((entry) => entry !== level)
-                        : [...value.importance, level]
-                    })}
-                    type="checkbox"
-                  />
-                  <span>{text[`pages.intelligence.notification.importance.${level}`] ?? level}</span>
-                </label>
+                <Checkbox
+                  checked={value.importance.includes(level)}
+                  className="intelligence-notification-form-check"
+                  disabled={reminder.saving}
+                  key={level}
+                  onChange={() => reminder.update({
+                    importance: value.importance.includes(level)
+                      ? value.importance.filter((entry) => entry !== level)
+                      : [...value.importance, level]
+                  })}
+                >
+                  {text[`pages.intelligence.notification.importance.${level}`] ?? level}
+                </Checkbox>
               ))}
             </div>
           </SettingsRow>
         </>
         : null}
       {reminder.saveFailed
-        ? <p className="intelligence-notification-form-note" role="status">
-          {text['pages.intelligence.notification.saveFailed']}
-        </p>
+        ? <SettingsRow label="" last>
+          <span className="intelligence-notification-form-note" role="status">
+            {text['pages.intelligence.notification.saveFailed']}
+          </span>
+        </SettingsRow>
         : null}
     </SettingsGroup>
 
     <SettingsGroup title={text['pages.intelligence.notification.calendar.after'] ?? ''}>
-      <SettingsRow label={text['pages.intelligence.notification.calendar.landedRow'] ?? ''} last>
+      <SettingsRow
+        label={text['pages.intelligence.notification.calendar.landedRow'] ?? ''}
+        last={value.landedFilter !== 'also-matched'}
+      >
         <Segmented
           ariaLabelKey="pages.intelligence.notification.calendar.landedRow"
           items={(['surprise-only', 'also-matched'] as const).map((filter) => ({
@@ -178,9 +212,7 @@ export function CalendarDetail(props: Readonly<{
       </SettingsRow>
       {/* 代价只在被选中时出现，而且留在选择发生的地方——塞进 ⓘ 就变成「选完才发现」。 */}
       {value.landedFilter === 'also-matched'
-        ? <p className="intelligence-notification-form-note" role="status">
-          {text['pages.intelligence.notification.landed.cost']}
-        </p>
+        ? <SettingsRow label="" last note={text['pages.intelligence.notification.landed.cost']} noteRole="status" />
         : null}
     </SettingsGroup>
   </div>

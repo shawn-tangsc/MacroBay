@@ -1,330 +1,40 @@
 /**
- * 情报 · 通知设置页（界面规范 v2.27 §9d）。
+ * 情报 · 通知设置页（界面规范 v1.10 §8「设置页与表单规范」）。
  *
- * 视觉沿用频道页那张卡：960 上限、行高 48、组标题小号、说明全进 ⓘ。
- * 颜色只用平台 token，不写十六进制、不给正文上状态色——失败提示用中性文字 + `role="alert"`。
+ * 数字与定版预览稿一一对应：
+ *   页标题 14 / 600 / 正常色，上内边距 16、标题下 12；
+ *   行：标签固定 160 + 控件（**左缘对齐**，不是右对齐）+ 可选一行说明（12px），行高 44；
+ *   组：非首组上方 1px 分隔线 + 上内边距 20，组间 24，组标题 13.5 / 600；
+ *   布局：列表 232 + 间隙 20 + 详情吃掉剩余；内容卡按内容定宽 **620**、左对齐。
+ *
+ * 颜色只用平台 token，不写十六进制，不给正文上状态色。
  */
+
 /*
- * 这一页**自带**「左列表 / 右详情」两列（`.intelligence-notification-panes`），
- * 所以必须把平台设置页壳的那个 `318px + 1fr` 左栏关掉。
+ * 壳（`.settings-workspace`）是 `318px + 1fr` 两列：本页自带「列表 | 详情」两列，
+ * 必须先把壳的列定义关成单列，否则整页被塞进 318px 的那一格（列表名字裁成「模块…」）。
  *
- * 关掉之前的样子：整页被放进平台壳的 **318px 那一格**，右边是空的——列表名字被裁成
- * 「模块…」、详情挤成一条窄带。2026-11-07 用户连着三次看到的就是这个。
- * 平台里同类页面（网页搜索、存储与缓存）早就用同一个办法覆盖，这里跟它们一致。
+ * 壳还给了一行 `minmax(0, 1fr)`：本页只有「标题 + 两列」两块，那个 1fr 行会把标题
+ * 拉成一大片空白——用户说的「内容区域上边距那么大」就是它，不是某个 padding 数字。
+ * 行也一并关掉，高度交给内容；父层 `.settings-contribution-host` 自己会滚。
  */
 .settings-workspace.intelligence-notification-workspace {
-  padding: 24px;
   grid-template-columns: minmax(0, 1fr);
-}
-
-.intelligence-notification-card {
-  width: min(100%, 960px);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 24px;
-}
-
-.intelligence-notification-heading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.intelligence-notification-title {
-  margin: 0;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--muted-strong);
-}
-
-.intelligence-notification-hint {
-  margin: 8px 0 0;
-  padding: 8px 10px;
-  border-left: 2px solid var(--caution);
-  background: var(--surface-2);
-  color: var(--text-primary);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.intelligence-notification-rows {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-}
-
-.intelligence-notification-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 48px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.intelligence-notification-row:first-child {
-  border-top: none;
-}
-
-.intelligence-notification-row-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.intelligence-notification-row-title {
-  font-size: 13px;
-  color: var(--text-primary);
-}
-
-.intelligence-notification-save-failed {
-  flex-basis: 100%;
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: var(--muted-strong);
-}
-
-.intelligence-notification-footer {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: var(--muted);
+  grid-template-rows: none;
+  align-content: start;
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  padding: 16px 24px 28px;
 }
 
 @media (max-width: 1280px) {
-  /* 与上面那条同为两段选择器，否则被它的 padding: 24 压住、窄窗反而不收。 */
   .settings-workspace.intelligence-notification-workspace {
     padding: 16px;
   }
-
-  .intelligence-notification-card {
-    padding: 16px;
-  }
 }
 
-/* 左列表 / 右详情（§9f）：列表固定宽度，详情占余下；窄屏在后续版本再做下拉。 */
-.intelligence-notification-master-detail {
-  /* 普通块：标题行整行在上，网格只在下面这一层。 */
-  display: block;
-}
-
-.intelligence-notification-panes {
-  display: grid;
-  /* 规范 v2.40：列表列 232 固定（最小 220），详情列吃掉剩余宽度且 min-width: 0。
-     **这一层只许有两个子元素**（列表、详情）——多一个就会掉进下一行的窄格。 */
-  grid-template-columns: 232px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-
-.intelligence-notification-list-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  min-width: 0;
-}
-
-.intelligence-notification-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.intelligence-notification-list-item {
-  display: flex;
-  width: 100%;
-  /* 行高固定 44：两行都不许因换行把行撑高。 */
-  height: 44px;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding: 0 10px;
-  min-width: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-/* 选中靠底色 + 文字提亮；「关着」只写在状态词里，不靠灰。 */
-.intelligence-notification-list-item[aria-current='true'] {
-  background: var(--surface-soft);
-}
-
-.intelligence-notification-list-name {
-  font-size: 13px;
-  /* 名字单行省略、不换行；完整名字在 title 里。 */
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.intelligence-notification-list-state {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  /* 状态行也单行省略——截的是状态尾部，名字已经单独一行，不会被截。 */
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.intelligence-notification-detail-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.intelligence-notification-calendar {
-  display: flex;
-  flex-direction: column;
-  /* 组间距 24（界面规范 v1.9 §8）：块与块之间靠分隔线 + 24 隔开，不靠挤在一起区分。 */
-  gap: 24px;
-}
-
-.intelligence-notification-timeline {
-  margin: 0;
-  font-size: 11.5px;
-  letter-spacing: 0.02em;
-  color: var(--text-secondary);
-}
-
-/*
- * 块标题：比字段名大一级（13 对 12.5），上 20 / 下 4；非首块上方一条分隔线。
- * 改之前是 12px + 下间距 8、块间只有 16——用户说的「表单挤在一起」就是这个。
- */
-.intelligence-notification-block h3 {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.intelligence-notification-calendar > .intelligence-notification-block + .intelligence-notification-block,
-.intelligence-notification-calendar > .intelligence-notification-fieldset + .intelligence-notification-block {
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-}
-
-.intelligence-notification-note {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.intelligence-notification-warn {
-  display: block;
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-
-/* 一行一件事：勾选行高 28、勾选框与文字 8 间距，不再靠 3px 的内边距硬挤。 */
-.intelligence-notification-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding: 0;
-  font-size: 13px;
-}
-
-.intelligence-notification-check-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.intelligence-notification-fieldset {
-  margin: 24px 0 0;
-  padding: 0;
-  border: 0;
-}
-
-/* 组标题与块标题同级：13px、正常色；说明性小字不进组标题。 */
-.intelligence-notification-fieldset legend {
-  padding: 0 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* 窄窗（< 1180）：列表位置留给下拉，详情占满。 */
-.intelligence-notification-narrow {
-  margin-bottom: 12px;
-}
-
-.intelligence-notification-narrow-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-
-.intelligence-notification-narrow select {
-  min-height: 30px;
-  padding: 2px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--surface-soft);
-  color: inherit;
-  font-size: 12.5px;
-}
-
-
-/* 详情列：吃掉剩余宽度但绝不被内容撑破（没有 min-width: 0 会挤坏另一列）。 */
-.intelligence-notification-detail {
-  min-width: 0;
-  /* 规范 v2.40：内边距 24，窗口 <1280 收 16。 */
-  padding: 24px;
-}
-
-/* 详情里的内容卡上限 760、左对齐——再宽只会把一行拉得太长，读起来更累。 */
-.intelligence-notification-detail > * {
-  max-width: 760px;
-}
-
-@media (max-width: 1279px) {
-  .intelligence-notification-detail {
-    padding: 16px;
-  }
-}
-
-/* 详情里的长句按词/按标点折行，不做逐字换行。 */
-.intelligence-notification-detail p,
-.intelligence-notification-detail label,
-.intelligence-notification-detail span {
-  word-break: normal;
-  overflow-wrap: break-word;
-}
-
-/* 标题旁挂 ⓘ：说明收进点开才看，不占正文（用户 2026-11-07：没用的说明性文字不直接展示）。 */
-.intelligence-notification-line {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/*
- * ===== 设置页表单语法（界面规范 v1.9 §8）=====
- * 一行一件事：标签固定 160 在左、控件紧接其右（**左缘对齐**，不是右对齐）、说明只占控件下方一行。
- * 行高 44，带一行说明 64；组间距 24，非首组上方 1px 分隔线；组标题上 20 / 下 4。
- * 这些数字与 ed80fca 那笔间距一致，只是换到新类名上（旧结构已拆成独立组件）。
- */
-.intelligence-notification-workspace {
-  padding-top: 16px;
-}
-
+/* 页标题一行：14 / 600 / 正常色，下边 12 才接第一行。ⓘ 跟在标题后，不在正文里讲道理。 */
 .intelligence-notification-head {
   display: flex;
   align-items: center;
@@ -334,55 +44,137 @@
 
 .intelligence-notification-title {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.intelligence-notification-detail-title {
-  margin: 0 0 12px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
+/* 主从：列表固定 232（内容再长也不挤它），详情吃掉剩余宽度。
+   **这一层只许有两个子元素**（列表、详情）——多一个就会掉进下一行的窄格。 */
+.intelligence-notification-panes {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
 }
 
+/* 列表：每项两行（名字 + 状态），行高 44。右边一条细分隔线把它和详情分开。 */
+.intelligence-notification-list {
+  margin: 0;
+  padding: 0 8px 0 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.intelligence-notification-list-item {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 8px;
+  min-width: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.intelligence-notification-list-item:hover {
+  background: color-mix(in srgb, var(--surface-soft) 55%, transparent);
+}
+
+/* 选中靠底色 + 文字提亮；「关着」只写在状态词里，不靠灰。 */
+.intelligence-notification-list-item[aria-current='true'] {
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+
+.intelligence-notification-list-name {
+  font-size: 13px;
+  font-weight: 500;
+  /* 名字单行省略、不换行；完整名字在 title 里。 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.intelligence-notification-list-state {
+  font-size: 11.5px;
+  color: var(--muted);
+  /* 状态行也单行省略——截的是状态尾部，名字已经单独一行，永远不会被截。 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.intelligence-notification-list-item[aria-current='true'] .intelligence-notification-list-state {
+  color: var(--text-secondary);
+}
+
+/* 详情列：吃掉剩余宽度但绝不被内容撑破（没有 min-width: 0 会挤坏另一列）。 */
+.intelligence-notification-detail {
+  min-width: 0;
+}
+
+/*
+ * 内容卡 620：160（标签）+ 360（控件上限）+ 16（间距）+ 48（内边距）≈ 584，留 36 给长标签。
+ * 用 760 会在卡内右侧空出一条，看着像没画完——这是「丑」的来源之一。
+ * 左对齐、不居中：切左边四项时内容宽度会变，居中会让整张卡左右跳。
+ */
+.intelligence-notification-card {
+  width: 100%;
+  max-width: 620px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+/* 组与组之间：24 间距 + 1px 分隔线；首组不带线（它就在卡的上沿）。 */
 .intelligence-notification-form-group + .intelligence-notification-form-group {
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .intelligence-notification-form-group-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
+/* 组标题比字段名大一级（13.5 对 13），正常色——不靠灰色小字当节标题。 */
 .intelligence-notification-form-group-title {
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
+/* 一行一件事：标签固定 160 在左，控件紧接其右（左缘对齐），说明只占下一行。 */
 .intelligence-notification-form-row {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
-  column-gap: 12px;
+  column-gap: 16px;
   align-items: center;
   min-height: 44px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .intelligence-notification-form-row.has-note {
   min-height: 64px;
 }
 
-.intelligence-notification-form-row + .intelligence-notification-form-row,
-.intelligence-notification-form-checks + .intelligence-notification-form-row {
-  border-top: 1px solid var(--border);
-}
-
+.intelligence-notification-form-row:last-child,
 .intelligence-notification-form-row.is-last {
   border-bottom: 0;
 }
@@ -394,38 +186,60 @@
 
 .intelligence-notification-form-control {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
+/* 说明：控件下方单独一行（占满控件列），不和控件抢同一行。 */
 .intelligence-notification-form-note {
-  margin: 0;
+  flex: 0 0 100%;
+  margin: 4px 0 0;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--muted);
+}
+
+/* 卡里直接挂的状态说明（例如「还没有可用频道」）没有行提供间距，补一点。 */
+.intelligence-notification-card > .intelligence-notification-form-note {
+  margin-top: 12px;
 }
 
 .intelligence-notification-form-checks {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px 16px;
 }
 
+/* 多选项：勾框 14 + 文字，间距 8；只有多选才用复选框。 */
 .intelligence-notification-form-check {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   min-height: 28px;
+  margin: 0;
   font-size: 13px;
 }
 
-.intelligence-notification-form-check input[type='checkbox'] {
-  width: 14px;
-  height: 14px;
-  margin: 0;
+/* 窄窗（页面自身宽度 < 860）：列表位置换成顶部下拉，详情占满整行。 */
+.intelligence-notification-narrow {
+  margin-bottom: 14px;
 }
 
-.intelligence-notification-content-detail {
-  max-width: 760px;
+.intelligence-notification-narrow select {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+/* 长句按词/按标点折行，不做逐字换行。 */
+.intelligence-notification-detail p,
+.intelligence-notification-detail span,
+.intelligence-notification-detail label {
+  overflow-wrap: break-word;
 }

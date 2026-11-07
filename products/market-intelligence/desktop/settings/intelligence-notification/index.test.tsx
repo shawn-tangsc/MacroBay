@@ -128,23 +128,45 @@ describe('intelligence notification settings', () => {
   })
 
   it('keeps explanatory prose off the page: field names, current values and controls only', async () => {
-    // 用户 2026-11-07：没用的说明性文字不要直接展示。页脚整句已删，四段解释都进了 ⓘ。
+    // 用户 2026-11-07：没用的说明性文字不要直接展示。页脚整句已删，解释都进了 ⓘ。
     await render()
     await selectItem(3)
     const body = container?.textContent ?? ''
-    for (const key of [
-      'pages.intelligence.notification.calendar.types',
-      'pages.intelligence.notification.calendar.leadNote',
-      'pages.intelligence.notification.landed.note'
-    ]) {
-      expect(body).not.toContain(text[key])
-    }
-    // 解释还在，只是要点开：ⓘ 的读屏名在。
-    const infoTriggers = container?.querySelectorAll('button[aria-label]') ?? []
-    expect([...infoTriggers].some((button) => button.getAttribute('aria-label') === text['pages.intelligence.notification.calendar.aboutAria']))
-      .toBe(true)
+    // 「提醒的是重要经济指标…」是整句解释，只许在 ⓘ 里，不许出现在正文。
+    expect(body).not.toContain(text['pages.intelligence.notification.calendar.beforeNote'])
+    // 解释还在，只是要点开：两个 ⓘ 的读屏名都在。
+    const labels = [...(container?.querySelectorAll('button[aria-label]') ?? [])]
+      .map((button) => button.getAttribute('aria-label'))
+    expect(labels).toContain(text['pages.intelligence.notification.calendar.aboutAria'])
+    expect(labels).toContain(text['pages.intelligence.notification.calendar.beforeAria'])
     // 页脚那句整句删掉了（它不是操作也不是状态）。
     expect(body).not.toContain('只有这四条会发到手机')
+  })
+
+  it('gives every row exactly two cells: the 160 label column and the control column', async () => {
+    // 行的语法（§8.2）：标签 + 控件。第三格会自动排到下一行，正是这次布局坏掉的那个形状；
+    // 所以断言「每行恰好两个子元素」，而不是只看「有没有渲染出这一行」。
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'also-matched' }
+        }
+        return { enabled: false }
+      })
+    })
+    await render()
+    await selectItem(3)
+    const rows = [...(container?.querySelectorAll('.intelligence-notification-form-row') ?? [])]
+    // 打开时完整形态：通知方式 / 开始前提醒 / 提前多久 / 哪些重要性 / 发生后 / 代价说明。
+    expect(rows).toHaveLength(6)
+    for (const row of rows) {
+      const cells = [...row.children]
+      expect(cells).toHaveLength(2)
+      expect(cells[0]?.classList.contains('intelligence-notification-form-label')).toBe(true)
+      expect(cells[1]?.classList.contains('intelligence-notification-form-control')).toBe(true)
+    }
+    // 整块详情放在一张卡里（620 上限、左对齐），不是一个带内边距的裸容器。
+    expect(container?.querySelectorAll('.intelligence-notification-card')).toHaveLength(1)
   })
 
   it('keeps the grid to exactly two children, with the head outside it', async () => {
@@ -162,23 +184,27 @@ describe('intelligence notification settings', () => {
     expect(panes?.contains(head ?? null)).toBe(false)
   })
 
-  it('shows the calendar detail with the timeline, one surface choice and both segments', async () => {
+  it('shows the calendar detail with one surface choice and both segments', async () => {
     await render()
     await selectItem(3)
     const body = container?.textContent ?? ''
     // 自制时间线已删（装饰、零信息量）；两个小节标题本身就说顺序。
-    expect(body).not.toContain(text['pages.intelligence.notification.calendar.timeline'])
-    expect(body).toContain(text['pages.intelligence.notification.calendar.surfaces'])
-    expect(body).toContain(text['pages.intelligence.notification.surface.channel'])
-    expect(body).toContain(text['pages.intelligence.notification.surface.toast'])
-    expect(body).toContain(text['pages.intelligence.notification.calendar.before'])
-    expect(body).toContain(text['pages.intelligence.notification.calendar.after'])
+    expect(body).not.toContain('开始前 ——')
+    expect(body).toContain(text['pages.intelligence.notification.calendar.surfaces']!)
+    // 字段名是「通知方式」，不是「发到哪里地方」。
+    expect(body).toContain(text['pages.intelligence.notification.calendar.surfaceRow']!)
+    expect(body).toContain(text['pages.intelligence.notification.surface.channel']!)
+    expect(body).toContain(text['pages.intelligence.notification.surface.toast']!)
+    expect(body).toContain(text['pages.intelligence.notification.calendar.before']!)
+    expect(body).toContain(text['pages.intelligence.notification.calendar.after']!)
     // 「发到哪些地方」是整项级，排在两段**之上**。
     expect(body.indexOf(text['pages.intelligence.notification.calendar.surfaces']!))
       .toBeLessThan(body.indexOf(text['pages.intelligence.notification.calendar.before']!))
     // 桌面两条都没批 → 这一项的详情里根本不该出现桌面（页脚那句是另一件事）。
-    const detail = container?.querySelector('.intelligence-notification-calendar')?.textContent ?? ''
+    const detail = container?.querySelector('.intelligence-notification-calendar-detail')?.textContent ?? ''
     expect(detail).not.toContain('桌面')
+    // 状态词只在列表里出现一次，详情标题不再重复同一个名字。
+    expect(container?.querySelector('.intelligence-notification-detail-title')).toBeNull()
   })
 
   it('lands on the matching item when the notification centre sends the reader here', async () => {
