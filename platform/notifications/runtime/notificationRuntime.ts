@@ -40,6 +40,7 @@ import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
 import { rejectionTraceLevel } from '../contracts/notificationSubmitRejection'
+import { reportPersistFailure, traceSubmitFailure } from './notificationSubmitFailureTrace'
 import { pruneNotificationDailyCounters } from './notificationBreaker'
 import { countSameEventToday, decideDailyCap, foldSuppressedIntoLatest, withCenterForDisruptiveChannels } from './notificationAggregate'
 import { evaluateProducerGate } from './notificationProducerGate'
@@ -179,7 +180,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     try {
       await persist(state)
     } catch (error) {
-      deps.diagnostics({ code: 'persist-failed', at: nowIso() })
+      reportPersistFailure({ error, diagnostics: deps.diagnostics, at: nowIso() })
       throw error
     }
   }
@@ -189,7 +190,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
    * 合并/跨类型/空正文等规则全部在 `planNotificationSubmit` + `mergeDuplicateNotification` 一处。
    */
   async function submitEvent(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
-    const outcome = await decideAndStoreSubmit(request)
+    const outcome = await traceSubmitFailure(() => decideAndStoreSubmit(request), { eventTypeId: request.eventTypeId, diagnostics: deps.diagnostics, at: nowIso })
     // 被拒也要留一行痕（第 10 条同类问题的第二次，2026-11-08）：调用方普遍 `catch {}` 或丢弃返回值，
     // 拒收原本在日志、记录、计数三处都查不到。**只留痕、不改行为**：不建记录、不动计数、不投递。
     if (outcome.kind === 'rejected') {

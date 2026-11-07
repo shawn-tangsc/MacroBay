@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
+import { createDefaultNotificationStoreState } from '../store/notificationStore'
 import type {
   NotificationDiagnosticsEntry,
   NotificationRuntimeSettings,
@@ -329,5 +330,49 @@ describe('notification runtime: a refusal leaves exactly one trace', () => {
     await runtime.submit(request({ eventTypeId: 'platform.nope' }))
     await runtime.submit(request({ eventTypeId: 'platform.nope' }))
     expect(diagnosticEntries.map((entry) => entry.code)).toEqual(['unknown-event-type', 'unknown-event-type'])
+  })
+})
+
+/**
+ * 提交**抛出**那一类（第 10 条同类问题的第二次的第二半）：调用方六处 `catch {}`，抛出来的东西
+ * 以前一个痕也留不下。两个码互斥——写盘失败记 `persist-failed`，其余记 `submit-failed`。
+ */
+describe('notification runtime: a thrown submission leaves exactly one line', () => {
+  function runtimeWith(storage: NotificationStorage) {
+    const entries: NotificationDiagnosticsEntry[] = []
+    const runtime = createNotificationRuntime({
+      storage,
+      catalog,
+      diagnostics: (entry) => entries.push(entry),
+      getSettings: async () => settings,
+      clock
+    })
+    return { runtime, entries }
+  }
+
+  it('S38①: a read failure is one submit-failed line, carrying the error type but not its message', async () => {
+    const failure = Object.assign(new Error('disk gone at /Users/someone'), { name: 'ReadFailure' })
+    const { runtime, entries } = runtimeWith({
+      read: async () => {
+        throw failure
+      },
+      write: async () => undefined
+    })
+    await expect(runtime.submit(request())).rejects.toThrow('disk gone')
+    expect(entries.map((entry) => entry.code)).toEqual(['submit-failed'])
+    expect(entries[0]).toMatchObject({ level: 'error', eventTypeId: 'platform.failed', reason: 'ReadFailure' })
+    // 消息里可能带路径或载荷片段，所以只记类型名。
+    expect(JSON.stringify(entries[0])).not.toContain('disk gone')
+  })
+
+  it('S38②: a write failure keeps exactly one line — persist-failed, never both', async () => {
+    const { runtime, entries } = runtimeWith({
+      read: async () => createDefaultNotificationStoreState(),
+      write: async () => {
+        throw new Error('read-only file system')
+      }
+    })
+    await expect(runtime.submit(request())).rejects.toThrow('read-only file system')
+    expect(entries.map((entry) => entry.code)).toEqual(['persist-failed'])
   })
 })

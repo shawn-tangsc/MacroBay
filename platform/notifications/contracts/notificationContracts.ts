@@ -461,6 +461,8 @@ export type NotificationDiagnosticsEntry = {
      */
     | 'copy-unresolved'
     | 'persist-failed'
+    /** 提交**抛出**（读回坏了 / 规划器炸了 / 目录实现抛错）：与 `persist-failed` 互斥，同一失败只记一条。 */
+    | 'submit-failed'
     /**
      * 读者点「推送到手机」在**判定阶段**被拒（记录不存在 / 版次不符 / 没通道 / 熔断中 / 表面非法）。
      * 这一支**不写记录**：`delivery.push` 只回答「推过没有」，没调用过通道就不该写。
@@ -484,7 +486,7 @@ export type NotificationDiagnosticsEntry = {
   key?: string
   /** `copy-param-missing` 用：消失的是哪一格参数（`taskName` 这类名字）。 */
   param?: string
-  /** `redeliver-rejected` 用：拒绝码与**哪一步**拒的（表面 / 找不到记录 / 版次 / 通道状态）。 */
+  /** `redeliver-rejected` 用：拒绝码与**哪一步**拒的；`submit-failed` 用：错误类型名（不带 message）。 */
   reason?: string
   step?: 'surface' | 'target' | 'edition' | 'channel'
   language?: 'zh-CN' | 'en-US'
