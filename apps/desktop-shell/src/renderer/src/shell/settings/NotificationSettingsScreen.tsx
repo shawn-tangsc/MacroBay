@@ -10,7 +10,6 @@ import { StateView } from '@platform/ui/components/state'
 
 import './notifications/notificationSettings.css'
 import { notificationSettingsText, type NotificationSettingsText } from './notifications/notificationSettingsText'
-import { describeTestReceipt } from './notifications/testReceipt'
 import { useNotificationSettingsData, type NotificationSettingsClient } from './notifications/useNotificationSettingsData'
 
 /** ⓘ 的读屏名：只收键（点分、无空白、无中文），句子由这一屏的解析器给出。 */
@@ -54,7 +53,8 @@ export function NotificationSettingsScreen(props: {
   const text = notificationSettingsText[props.language]
   const client = props.client ?? (window.platform?.notifications as NotificationSettingsClient)
   const { state, reload, setToast, setDesktop } = useNotificationSettingsData(client)
-  const [receipt, setReceipt] = useState<string | null>(null)
+  /** 回执：一句主句 + 可选的原因码。码只在折叠区，不进主句（界面规范 v2.27 §2）。 */
+  const [receipt, setReceipt] = useState<{ sentence: string; code?: string } | null>(null)
   /** 写失败只有一句、只在原地：不把开关自己点亮，也不给内部码。 */
   const [writeFailed, setWriteFailed] = useState(false)
 
@@ -65,18 +65,23 @@ export function NotificationSettingsScreen(props: {
 
   const runTest = async (): Promise<void> => {
     try {
-      // 类型由主进程标好：直接取字段，不再手写形状。
-      const result = await client.sendTest?.()
-      setReceipt(
-        describeTestReceipt({
-          delivery: result?.delivery ?? [],
-          toastEnabled: state.status === 'ready' && state.data.toastEnabled,
-          text
-        })
-      )
+      // `link` = 平台链路自检：走完整真实链路（含手机通道），样例固定、不绑任何情报事件。
+      const result = await client.sendTest?.({ kind: 'link' })
+      if (result === undefined) {
+        // 没有这个方法（旧构建 / preload 没接）：只说没发出去，不给码。
+        setReceipt({ sentence: text.testUnavailable })
+        return
+      }
+      if (result.state === 'sent') {
+        // 成功必须点名通道：「已发到 {通道名}（测试）」。
+        setReceipt({ sentence: text.testSentToChannel(result.channelName) })
+        return
+      }
+      // `link` 永远有样例，所以只剩「发不出去」；原因码进折叠区，不进主句。
+      setReceipt({ sentence: text.testUnavailable, code: result.reasonCode })
     } catch {
-      // 抛出来连「交给系统了」都没拿到：只说失败，并如实写「原因不明」。
-      setReceipt(text.desktopFailed(text.reasonUnknown))
+      // 连回执都没拿到：只说没发出去，不编一个码。
+      setReceipt({ sentence: text.testUnavailable })
     }
   }
 
@@ -154,9 +159,18 @@ export function NotificationSettingsScreen(props: {
             </div>
             {receipt === null ? null : (
               // aria-live：回执各播报一次，重复点击只更新同一处，不堆消息。
-              <p className="notification-settings-result" role="status" aria-live="polite" data-send-test-result>
-                {receipt}
-              </p>
+              <div data-send-test-result>
+                <p className="notification-settings-result" role="status" aria-live="polite">
+                  {receipt.sentence}
+                </p>
+                {receipt.code === undefined ? null : (
+                  // 原因码只在这里：默认收起、不进主句、不进 ⓘ。
+                  <details className="notification-settings-reason">
+                    <summary>{text.reasonCode}</summary>
+                    <code>{receipt.code}</code>
+                  </details>
+                )}
+              </div>
             )}
           </section>
 

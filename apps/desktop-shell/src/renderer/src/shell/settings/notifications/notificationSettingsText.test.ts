@@ -29,10 +29,11 @@ describe('notification settings copy covers both languages', () => {
     }
   })
 
-  it('keeps the receipt template able to carry a reason in both languages', () => {
+  it('keeps the success sentence able to name the channel in both languages', () => {
+    // 新回执只有三档：成功句必须能点名通道（「已发到 {通道名}（测试）」），不带名字等于没回答「发到哪」。
     for (const language of ['zh-CN', 'en-US'] as const) {
-      const sentence = notificationSettingsText[language].desktopFailed('PUSH-REASON-SENTINEL')
-      expect(sentence).toContain('PUSH-REASON-SENTINEL')
+      const sentence = notificationSettingsText[language].testSentToChannel('CHANNEL-SENTINEL')
+      expect(sentence).toContain('CHANNEL-SENTINEL')
       expect(sentence.trim()).not.toBe('')
     }
   })

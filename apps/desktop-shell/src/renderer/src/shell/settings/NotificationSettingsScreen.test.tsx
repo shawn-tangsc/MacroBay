@@ -3,7 +3,6 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { DeliveryAttempt } from '@platform/notifications/runtime/notificationRouting'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 
@@ -28,7 +27,7 @@ function client(overrides: Partial<NotificationSettingsClient> = {}): Notificati
     getDeliverySettings: async () => ({ toastEnabled: false, desktopEnabled: false }),
     setToastEnabled: async () => ({}),
     setDesktopEnabled: async () => ({}),
-    sendTest: async () => ({ record: undefined as never, delivery: [] }),
+    sendTest: async () => ({ state: 'sent' as const, channelId: 'slack', channelName: 'Slack' }),
     ...overrides
   }
 }
@@ -139,9 +138,9 @@ describe('notification settings is two switches, one test button and a footer', 
     expect(container.textContent).not.toContain('暂时无法确认')
   })
 
-  it('reports a test receipt without promising the reader saw anything', async () => {
+  it('names the channel on success and never promises the reader saw anything', async () => {
     const container = await mount(
-      client({ sendTest: async () => ({ record: undefined as never, delivery: [{ channel: 'toast', result: 'sent' } as DeliveryAttempt] }) })
+      client({ sendTest: async () => ({ state: 'sent' as const, channelId: 'slack', channelName: 'Slack' }) })
     )
     const button = container.querySelector('[data-send-test]') as HTMLElement
     await act(async () => {
@@ -152,7 +151,8 @@ describe('notification settings is two switches, one test button and a footer', 
     })
 
     const receipt = container.querySelector('[data-send-test-result]')
-    expect(receipt?.textContent).toContain(text.toastSent)
+    // 成功必须点名通道：只写「已发送」等于没回答读者「发到哪」。
+    expect(receipt?.textContent).toContain('已发到 Slack（测试）')
     expect(container.textContent).not.toContain('已送达')
     expect(container.textContent).not.toContain('已显示')
   })
@@ -196,5 +196,24 @@ describe('notification settings is two switches, one test button and a footer', 
     }
 
     expect(container.querySelectorAll('[data-notification-write-failed]')).toHaveLength(1)
+  })
+
+  it('says only 「没发出去」 in the sentence and puts the reason code in a collapsed area', async () => {
+    const container = await mount(
+      client({ sendTest: async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 0 }) })
+    )
+    const button = container.querySelector('[data-send-test]') as HTMLElement
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    const sentence = container.querySelector('[data-send-test-result] p')?.textContent ?? ''
+    expect(sentence).toContain(text.testUnavailable)
+    // 码只在折叠区：主句里 0 次，展开后恰 1 处，而且是返回值里的原码。
+    expect(sentence).not.toContain('push-unavailable')
+    const details = container.querySelector('[data-send-test-result] details')
+    expect(details?.hasAttribute('open')).toBe(false)
+    expect(details?.textContent).toContain('push-unavailable')
   })
 })

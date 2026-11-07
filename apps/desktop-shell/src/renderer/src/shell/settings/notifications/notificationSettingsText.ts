@@ -31,12 +31,16 @@ export type NotificationSettingsText = {
   centerDesc: string
   /** 页脚 ⓘ 第二段：内置规则、本机只打扰一次、系统层面不二次兜底、手机是另一个维度。 */
   footerHint: string
-  /** 测试回执：与屏幕同义，绝不写「已送达 / 已显示」。 */
-  toastSent: string
-  toastOff: string
-  desktopQueued: string
-  desktopFailed: (reason: string) => string
-  reasonUnknown: string
+  /**
+   * 测试回执（新三档 `TestNoticeReceipt`）：成功**必须点名通道**；失败只给一句人话，
+   * 原因码留在折叠区、不进主句；`link` 永远有样例，所以没有「无数据」那一句。
+   *
+   * 旧的「已推送到应用内 / 桌面已交给系统」两句随类型一起删掉：新回执里没有 `delivery`，
+   * 留着它们就是「句子还在说上一版」。
+   */
+  testSentToChannel: (channel: string) => string
+  testUnavailable: string
+  reasonCode: string
   /** 开关没存上：不点亮、不假装成功、不显示内部码。 */
   writeFailed: string
   retry: string
@@ -60,11 +64,9 @@ const zh: NotificationSettingsText = {
   centerDesc: '不能逐条关；读过的可以清掉，超过保留期的自动清理。',
   footerHint:
     '这些事件都由我们替你决定、不给开关。本机只打扰一次：桌面开着就弹桌面、不再在应用内重复；只有「桌面关着、这台机器不支持桌面通知、发送报错」这三种情况才改在应用内提示。系统里关掉通知这件事我们读不到，也不会因此重复弹一次。手机是另一回事——只有三条离开应用，跟这里的开关无关。',
-  toastSent: '已推送到应用内。',
-  toastOff: '应用内提示关着，这条没有闪出来。',
-  desktopQueued: '桌面通知已交给系统，未确认显示。',
-  desktopFailed: (reason) => `桌面通知发送失败：${reason}`,
-  reasonUnknown: '原因不明',
+  testSentToChannel: (channel) => `已发到 ${channel}（测试）`,
+  testUnavailable: '测试消息没发出去',
+  reasonCode: '原因码',
   writeFailed: '这次没有保存上。',
   retry: '重试',
   loading: '正在读取通知设置…'
@@ -89,11 +91,9 @@ const en: NotificationSettingsText = {
     'You cannot turn individual ones off; read ones can be cleared, and the rest age out of the retention window.',
   footerHint:
     'We decide which of these events notify you; there is no switch for them. On this device a notification disturbs you once: if desktop alerts are on it shows on the desktop and does not repeat in the app; only when desktop is off, the system does not support desktop notifications, or sending fails does it fall back to the in-app hint. We cannot read whether notifications are turned off in the system, so we do not fall back a second time and do not repeat the alert. The phone is a separate channel — only three events leave the app, and none of them depend on these switches.',
-  toastSent: 'Sent in the app.',
-  toastOff: 'In-app hints are off, so this one did not appear.',
-  desktopQueued: 'Handed to the system; whether it appeared is unconfirmed.',
-  desktopFailed: (reason) => `Sending the desktop notification failed: ${reason}`,
-  reasonUnknown: 'reason unknown',
+  testSentToChannel: (channel) => `Sent to ${channel} (test)`,
+  testUnavailable: 'The test message did not go out',
+  reasonCode: 'Reason code',
   writeFailed: 'That change was not saved.',
   retry: 'Retry',
   loading: 'Reading the notification settings…'
