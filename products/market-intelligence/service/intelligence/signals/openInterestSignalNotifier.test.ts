@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
-import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import type { OpenInterestHistoryResult, OpenInterestLiquidationHint } from '../../../contracts/openInterestHistory'
 import type { SignalAnalysisRequest } from '../jobs/requestSignalAnalysis'
 import { signalTriggerKey } from '../../../contracts/moduleSignal'
 import {
@@ -26,7 +26,7 @@ function reading(overrides: Partial<Extract<OpenInterestHistoryResult, { state: 
     window: '24h',
     btc: [{ observedAt: bucketAt, notionalUsd: 7.4e9 }],
     eth: [{ observedAt: bucketAt, notionalUsd: 2.4e9 }],
-    liquidationHints: [{ observedAt: bucketAt, asset: 'btc', dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 7.4e9 }],
+    liquidationHints: [{ observedAt: bucketAt, asset: 'btc', direction: 'long', dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 7.4e9 }],
     liquidationHintsState: 'available',
     ...overrides
   }
@@ -105,7 +105,7 @@ describe('open interest signal notification', () => {
   it('uses the base variant with the plain threshold when the drop is not the strong one', async () => {
     const { submit, notify } = notifier({
       history: reading({
-        liquidationHints: [{ observedAt: bucketAt, asset: 'btc', dropPct: -1.6, volumeMultiple: 2.2, notionalUsd: 7.4e9 }]
+        liquidationHints: [{ observedAt: bucketAt, asset: 'btc', direction: 'long', dropPct: -1.6, volumeMultiple: 2.2, notionalUsd: 7.4e9 }]
       })
     })
     await notify()
@@ -129,7 +129,7 @@ describe('open interest signal notification', () => {
     const { submit, notify } = notifier({
       history: reading({
         btc: [{ observedAt: stale, notionalUsd: 7.4e9 }],
-        liquidationHints: [{ observedAt: stale, asset: 'btc', dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 7.4e9 }]
+        liquidationHints: [{ observedAt: stale, asset: 'btc', direction: 'long', dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 7.4e9 }]
       })
     })
     await notify()
@@ -146,6 +146,85 @@ describe('open interest signal notification', () => {
     const { submit, notify } = notifier({
       history: { state: 'unavailable', failureCode: 'open-interest-history-query-unavailable' }
     })
+    await notify()
+    expect(submit).not.toHaveBeenCalled()
+  })
+})
+
+describe('the alert names the side that was liquidated', () => {
+  /**
+   * 一条空头读数：方向在 hint 上，价格涨、持仓降——「空头被清」的形状。
+   *
+   * 这里必须从**读到的 hint** 出发，而不是手搓一个 `ruleId`：上一层的
+   * `hint.direction → 规则 → signal.ruleId → 变体` 才是「方向」真正经过的那条链，
+   * 句子层的用例直接喂 ruleId，接反了也发现不了。
+   */
+  function shortReading(overrides: Partial<OpenInterestLiquidationHint> = {}): OpenInterestHistoryResult {
+    return reading({
+      liquidationHints: [{
+        observedAt: bucketAt,
+        asset: 'btc',
+        direction: 'short',
+        dropPct: -2.7,
+        pricePct: 1.8,
+        volumeMultiple: 3.4,
+        notionalUsd: 7.4e9,
+        ...overrides
+      }]
+    })
+  }
+
+  it('carries the short direction from the reading into both languages', async () => {
+    const { submit, notify } = notifier({ history: shortReading() })
+    await notify()
+    expect(submit).toHaveBeenCalledTimes(1)
+    const request = submit.mock.calls[0]![0]
+    // 方向由规则 id 说死，而这个 id 是从 hint 的 direction 映射来的，不是通知层猜的。
+    expect(request.dedupeVars).toMatchObject({ moduleId: 'open-interest', ruleId: 'oi-short-liquidation-proxy', cadence: 'intraday' })
+    expect(request.rendered?.['zh-CN']!.title).toBe('BTC 空头爆仓加剧')
+    expect(request.rendered?.['zh-CN']!.body).toContain('涨 1.8%')
+    // 正文取的是带符号的涨幅（+1.8），不是跌幅（−2.7）：两个数故意不同，取错就红。
+    expect(request.rendered?.['zh-CN']!.body).not.toContain('跌')
+    expect(request.rendered?.['zh-CN']!.body).not.toContain('2.7%')
+    expect(request.rendered?.['en-US']!.title).toBe('BTC short liquidations deepened')
+    expect(request.rendered?.['en-US']!.body).toContain('up 1.8%')
+    expect(request.rendered?.['en-US']!.body).not.toMatch(/down|fell/iu)
+    // 英文那份不许回落到中文：出现汉字就说明它读了另一张表。
+    expect(request.rendered!['en-US']!.title + request.rendered!['en-US']!.body).not.toMatch(/[\u4e00-\u9fff]/u)
+  })
+
+  it('uses the short headline with the plain threshold when the drop is not the strong one', async () => {
+    const { submit, notify } = notifier({
+      history: shortReading({ dropPct: -1.6, pricePct: 0.9, volumeMultiple: 2.2 })
+    })
+    await notify()
+    expect(submit.mock.calls[0]![0].signalSeverity).toBe('medium')
+    expect(submit.mock.calls[0]![0].rendered?.['zh-CN']!.title).toBe('BTC 空头爆仓')
+    expect(submit.mock.calls[0]![0].rendered?.['zh-CN']!.body).toContain('涨 0.9%（阈值 1.5%）')
+  })
+
+  it('never lets the two sides share one sentence', async () => {
+    const longSide = notifier()
+    await longSide.notify()
+    const shortSide = notifier({ history: shortReading() })
+    await shortSide.notify()
+    const long = longSide.submit.mock.calls[0]![0]
+    const short = shortSide.submit.mock.calls[0]![0]
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      expect(short.rendered![language]!.title).not.toBe(long.rendered![language]!.title)
+      expect(short.rendered![language]!.body).not.toBe(long.rendered![language]!.body)
+    }
+  })
+
+  it('stays silent instead of announcing a short squeeze whose price fell', async () => {
+    // 数字格式化只出绝对值：把 −1.8 喂进来会印成「涨 1.8%」，一句话把读者送到反方向去。
+    const { submit, notify } = notifier({ history: shortReading({ pricePct: -1.8 }) })
+    await notify()
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('stays silent when the short read has no price at all, never reusing the drop', async () => {
+    const { submit, notify } = notifier({ history: shortReading({ pricePct: undefined }) })
     await notify()
     expect(submit).not.toHaveBeenCalled()
   })
