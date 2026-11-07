@@ -113,6 +113,13 @@ export function CalendarDetail(props: Readonly<{
                 {text['pages.intelligence.notification.surfaceBlocked.toast']}
               </span>
               : null}
+            {/* 写失败必须当场说：以前这一格失败时页面一声不响、勾选回原样，
+                读者看到的就是「点了没反应」。中性文字，不上状态色。 */}
+            {surfaces.saveFailed
+              ? <span className="intelligence-notification-form-note" role="status">
+                {text['pages.intelligence.notification.saveFailed']}
+              </span>
+              : null}
           </SettingsRow>}
     </SettingsGroup>
 

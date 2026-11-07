@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
+import { DEFAULT_CALENDAR_REMINDER_SETTINGS } from '../../../contracts/calendarEventReminder'
 import { intelligenceNotificationText } from './text'
 import IntelligenceNotificationSettingsSection from './index'
 
@@ -85,6 +86,13 @@ function listItems(): HTMLButtonElement[] {
 
 async function selectItem(index: number): Promise<void> {
   await act(async () => { listItems()[index]?.click(); await Promise.resolve() })
+}
+
+/** 读一个分段控件当前选中的那一项（`Segmented` 是 group + aria-pressed，不是 tablist）。 */
+function pressedLabel(groupLabel: string): string | null {
+  const group = [...(container?.querySelectorAll('[role="group"]') ?? [])]
+    .find((node) => node.getAttribute('aria-label') === groupLabel)
+  return group?.querySelector('[aria-pressed="true"]')?.textContent ?? null
 }
 
 /**
@@ -268,6 +276,64 @@ describe('intelligence notification settings', () => {
     expect(toastBox?.disabled).toBe(false)
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.surfaceBlocked.toast'])
   })
+
+  it('says so in place when a surface tick fails to save, instead of silently reverting', async () => {
+    // 缺陷（用户 2026-11-07「通知方式这里不能改」）：写失败时页面一声不响、勾选回原样，
+    // 读者看到的就是「点了没反应」。这条钉住「失败必须当场说」。
+    install({ setSurfaceSelection: vi.fn(async () => { throw new Error('settings-write-failed') }) })
+    await render()
+    await selectItem(3)
+    const firstBox = container!.querySelector<HTMLInputElement>('.intelligence-notification-form-check input[type="checkbox"]')!
+    await act(async () => { firstBox.click(); await Promise.resolve() })
+    await act(async () => { await Promise.resolve() })
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.saveFailed'])
+  })
+
+  it('opens on the locked defaults: both notice types ticked, the reminder off, one hour, high only', async () => {
+    // 用户 2026-11-07 锁定（产品已写进需求 v3.79 / 验收 v2.94）：这些数不再讨论。
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) return DEFAULT_CALENDAR_REMINDER_SETTINGS
+        return { enabled: true }
+      })
+    })
+    await render()
+    await selectItem(3)
+    // 通知方式：两个面都勾着（平台契约「缺省＝允许」）。
+    const surfaceBoxes = [...container!.querySelectorAll<HTMLInputElement>('.intelligence-notification-form-check input[type="checkbox"]')]
+    expect(surfaceBoxes).toHaveLength(2)
+    expect(surfaceBoxes.every((box) => box.checked)).toBe(true)
+    // 提前提醒：关。
+    expect(container?.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('false')
+    // 关着时用一行摘要说清「打开后会怎样」，不是让两个控件看起来能用却不起作用。
+    expect(container?.textContent ?? '').toContain(
+      text['pages.intelligence.notification.calendar.summary']!.replace('{lead}', '1 小时').replace('{importance}', '高')
+    )
+    // 通知条件：默认只推出乎意料的。
+    expect(pressedLabel(text['pages.intelligence.notification.calendar.landedRow']!))
+      .toBe(text['pages.intelligence.notification.landed.surprise-only'])
+  })
+
+  it('opens the reminder on those same locked defaults: one hour, high only', async () => {
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { ...DEFAULT_CALENDAR_REMINDER_SETTINGS, enabled: true }
+        }
+        return { enabled: true }
+      })
+    })
+    await render()
+    await selectItem(3)
+    expect(pressedLabel(text['pages.intelligence.notification.calendar.lead']!))
+      .toBe(text['pages.intelligence.notification.leads.60'])
+    const importanceBoxes = [...(container?.querySelectorAll<HTMLInputElement>(
+      `[role="group"][aria-label="${text['pages.intelligence.notification.calendar.importance']}"] input[type="checkbox"]`
+    ) ?? [])]
+    expect(importanceBoxes).toHaveLength(3)
+    expect(importanceBoxes.map((box) => box.checked)).toEqual([true, false, false])
+  })
+
 
   it('shows the cost line only when "also matched" is chosen', async () => {
     install({

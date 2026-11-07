@@ -35,7 +35,7 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.importance.high': '高',
   'pages.intelligence.notification.importance.medium': '中',
   'pages.intelligence.notification.importance.low': '低',
-  'pages.intelligence.notification.surface.channel': '手机',
+  'pages.intelligence.notification.surface.channel': '频道',
   'pages.intelligence.notification.surface.toast': '应用内提示',
   'pages.intelligence.notification.surfaceBlocked.toast': '应用内提示总开关关着，勾了也不会闪。',
   'pages.intelligence.notification.surfacesUnreadable': '这一块现在读不到，稍后再试。',
@@ -44,7 +44,7 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.landed.also-matched': '符合预期也推',
   'pages.intelligence.notification.landed.cost': '选这一项，一天可能收到十几条；只推你在上面勾选的重要性档位。',
   'pages.intelligence.notification.groupTitle': '情报通知',
-  'pages.intelligence.notification.groupInfo.2': '四条同时成立才会推到手机：这里勾了、事件本身允许推手机、频道已启用、频道可用。',
+  'pages.intelligence.notification.groupInfo.2': '四条同时成立才会推到频道：这里勾了、事件本身允许推频道、频道已启用、频道可用。',
 
   'pages.intelligence.notification.channelNotReady': '还没有可用频道，勾选会保留，等频道能用时生效。',
 
@@ -94,7 +94,7 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.importance.high': 'High',
   'pages.intelligence.notification.importance.medium': 'Medium',
   'pages.intelligence.notification.importance.low': 'Low',
-  'pages.intelligence.notification.surface.channel': 'Phone',
+  'pages.intelligence.notification.surface.channel': 'Channel',
   'pages.intelligence.notification.surface.toast': 'In-app hints',
   'pages.intelligence.notification.surfaceBlocked.toast': 'In-app hints are off in Notifications — ticking this will not flash anything.',
   'pages.intelligence.notification.surfacesUnreadable': 'This part cannot be read right now. Try again later.',
@@ -103,7 +103,7 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.landed.also-matched': 'Also matched',
   'pages.intelligence.notification.landed.cost': 'With this on, expect a dozen or more notices a day; only the importance levels you tick above are sent.',
   'pages.intelligence.notification.groupTitle': 'Intelligence notifications',
-  'pages.intelligence.notification.groupInfo.2': 'All four must hold: switched on here, the event allows phone delivery, the channel is enabled, and the channel is available.',
+  'pages.intelligence.notification.groupInfo.2': 'All four must hold: switched on here, the event allows channel delivery, the channel is enabled, and the channel is available.',
 
   'pages.intelligence.notification.channelNotReady': 'No usable channel yet. Your choices are kept and take effect once a channel is available.',
 
