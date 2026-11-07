@@ -341,9 +341,24 @@ export const marketIntelligenceProductManifest = {
       // 三值齐 / 缺前值 / 缺预期（后者今天不可达，键留着等放宽筛选）。
       bodyVariants: ['values', 'noPrevious', 'noForecast'],
       requiresUserAction: false,
-      // 同上：信息类不申请桌面档。
-      requestedDisruptionLevels: ['channel'],
+      // 批准表给 N5 批了 `center` + `toast` + `channel`，但声明过去只申请了手机——
+      // 于是「日历事件」那份组选择里勾「应用内提示」只对「开始前」生效、对「发生后」无效，
+      // 正是「勾着却只对一半生效」。批准了不等于会发：三层（申请/批准/开关）缺一层都不出声。
+      requestedDisruptionLevels: ['toast', 'channel'],
       dedupeKeyTemplate: 'calendar:{eventId}:{releaseAt}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.calendar.event-upcoming', {
+      category: 'reminder',
+      // 一条：事件名 + 时区化时刻 + 重要性 + 距开始 N 分钟（N 取实际剩余，不取配置档位）。
+      body: true,
+      requiresUserAction: false,
+      // 批准表批的是 `center` + `toast` + `channel`；桌面不批，所以这里不申请。
+      requestedDisruptionLevels: ['toast', 'channel'],
+      // 键**不含提前量**：读者把 60 分钟改成 30 分钟，已提醒过的那条键相同→合并不重推，
+      // 还没到窗口的事件键还没被用过→照常发。事件改期会得到新键（时间变了必须再说一次）。
+      dedupeKeyTemplate: 'calendar-upcoming:{eventKey}:{scheduledAt}',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),
