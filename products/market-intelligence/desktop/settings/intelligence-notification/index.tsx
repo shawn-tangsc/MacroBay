@@ -115,6 +115,8 @@ export default function IntelligenceNotificationSettingsSection(
 
   return (
     <section className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>
+      {/* 结构写死：DOM 顺序 = 视觉顺序。标题行在网格之外；网格里**恰好两个**子元素。
+          上一版三个子元素塞进两列网格，自动排布把标题放窄格、详情挤到第二行——这就是那次崩坏。 */}
       <div className="intelligence-notification-master-detail">
         {/* 整页的说明收进 ⓘ：它不是操作也不是状态，正文只留字段名、当前值与控件。 */}
         <div className="intelligence-notification-list-head">
@@ -137,6 +139,7 @@ export default function IntelligenceNotificationSettingsSection(
           />
         </div>
 
+        <div className="intelligence-notification-panes">
         {/* 窄窗：列表收成顶部下拉，**名字与状态都进选项文本**——图标认不出是哪一条。 */}
         {narrow
           ? <div className="intelligence-notification-narrow">
@@ -213,6 +216,7 @@ export default function IntelligenceNotificationSettingsSection(
               {text['pages.intelligence.notification.channelNotReady']}
             </p>
           )}
+        </div>
         </div>
       </div>
     </section>

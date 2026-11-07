@@ -97,11 +97,25 @@
 
 /* 左列表 / 右详情（§9f）：列表固定宽度，详情占余下；窄屏在后续版本再做下拉。 */
 .intelligence-notification-master-detail {
+  /* 普通块：标题行整行在上，网格只在下面这一层。 */
+  display: block;
+}
+
+.intelligence-notification-panes {
   display: grid;
-  /* 规范 v2.40：列表列 232 固定（最小 220），详情列吃掉剩余宽度且 min-width: 0。 */
+  /* 规范 v2.40：列表列 232 固定（最小 220），详情列吃掉剩余宽度且 min-width: 0。
+     **这一层只许有两个子元素**（列表、详情）——多一个就会掉进下一行的窄格。 */
   grid-template-columns: 232px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
+}
+
+.intelligence-notification-list-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  min-width: 0;
 }
 
 .intelligence-notification-list {

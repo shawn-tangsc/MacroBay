@@ -136,6 +136,21 @@ describe('intelligence notification settings', () => {
     expect(body).not.toContain('只有这四条会发到手机')
   })
 
+  it('keeps the grid to exactly two children, with the head outside it', async () => {
+    // 上一版把 标题 / 列表 / 详情 三个块塞进两列网格：自动排布把标题放窄格、详情挤到第二行。
+    // 这条断言抓的就是那个形状——只量 resolveNotificationLayout() 的数字抓不到它。
+    await render()
+    const panes = container?.querySelector('.intelligence-notification-panes')
+    expect(panes).not.toBeNull()
+    const children = [...(panes?.children ?? [])]
+    expect(children).toHaveLength(2)
+    expect(children[0]?.classList.contains('intelligence-notification-list')).toBe(true)
+    expect(children[1]?.classList.contains('intelligence-notification-detail')).toBe(true)
+    const head = container?.querySelector('.intelligence-notification-list-head')
+    expect(head).not.toBeNull()
+    expect(panes?.contains(head ?? null)).toBe(false)
+  })
+
   it('shows the calendar detail with the timeline, one surface choice and both segments', async () => {
     await render()
     await selectItem(3)
