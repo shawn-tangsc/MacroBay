@@ -127,7 +127,19 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
     updateSettings: async (patch) => {
       const current = await ports.settingsStore.get()
-      await ports.settingsStore.update({ notifications: { ...current.notifications, ...patch } })
+      try {
+        await ports.settingsStore.update({ notifications: { ...current.notifications, ...patch } })
+      } catch (error) {
+        // 写失败必须留痕（契约 §5.5）：读者点了勾、页面弹回去、一声不响——那正是「点了没反应」。
+        // 只打 **key 与原因**：`surfaceSelections` 是读者的配置，不是诊断信息，整份打出来等于把它抄进日志。
+        if (patch.surfaceSelections !== undefined) {
+          ports.log.log('warn', 'notification.surface-selection-save-failed', {
+            key: Object.keys(patch.surfaceSelections)[0] ?? null,
+            reason: error instanceof Error ? error.message : String(error)
+          })
+        }
+        throw error
+      }
     },
     diagnostics: (entry) => {
       // `unclaimed-producer` 记 `info`，不是 `warn`（2026-11-07 定）。
