@@ -6,6 +6,9 @@
  * 2. **两个总开关**（总闸）：手机推送、应用内提示各自的总开关；
  * 3. **这一份选择**（最后一道）：读者在「日历事件」详情里勾的那两个勾。
  *
+ * 第三层**由平台存**（投递与两个总开关都在平台；产品再存一份必现「页面勾了、推送没按它走」）。
+ * 所以这份配置里**没有** `surfaces`：产品读平台给的组选择，只用它做判定。
+ *
  * **桌面不在这份类型里**：两条日历通知都没有批桌面，所以它不是「禁用」，而是**不存在**——
  * 给出一个灰着的勾，读者会以为「打开就能弹」。
  */
@@ -38,14 +41,12 @@ export type CalendarReminderSettings = Readonly<{
   leadMinutes: CalendarReminderLeadMinutes
   /** 默认只推「高」：只勾高时每天约 4–9 条。 */
   importance: readonly CalendarReminderImportance[]
-  surfaces: Readonly<Partial<Record<CalendarReminderSurface, boolean>>>
 }>
 
 export const DEFAULT_CALENDAR_REMINDER_SETTINGS: CalendarReminderSettings = Object.freeze({
   enabled: false,
   leadMinutes: 60,
-  importance: Object.freeze(['high'] as const),
-  surfaces: Object.freeze({ channel: true, toast: true })
+  importance: Object.freeze(['high'] as const)
 })
 
 export function isCalendarReminderLeadMinutes(value: unknown): value is CalendarReminderLeadMinutes {

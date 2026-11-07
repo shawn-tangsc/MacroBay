@@ -52,12 +52,6 @@ describe('calendar reminder settings store', () => {
     expect(store.read().importance).toEqual(['low', 'high'])
   })
 
-  it('keeps only the two reader-facing surfaces, so desktop can never be implied', () => {
-    const store = createCalendarReminderSettingsStore(file)
-    store.write({ surfaces: { channel: false, toast: true, desktop: true } as never })
-    expect(store.read().surfaces).toEqual({ channel: false, toast: true })
-  })
-
   it('falls back to the default settings when the file is missing or corrupt', () => {
     const store = createCalendarReminderSettingsStore(join(dir, 'missing.json'))
     expect(store.read()).toEqual(DEFAULT_CALENDAR_REMINDER_SETTINGS)

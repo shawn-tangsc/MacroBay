@@ -7,8 +7,7 @@ import {
   isCalendarReminderImportance,
   isCalendarReminderLeadMinutes,
   type CalendarReminderImportance,
-  type CalendarReminderSettings,
-  type CalendarReminderSurface
+  type CalendarReminderSettings
 } from '../../../contracts/calendarEventReminder'
 
 /**
@@ -19,8 +18,7 @@ import {
  *   所以「读不到」不会变成「悄悄替你打开」。
  * - **写只接受合法值**：提前量不在 15/30/60/120 里就保持原值；重要性去重、只留三档；
  *   非法输入不写入，也不静默替换成一个看起来合理的数。
- * - **表面只存读者勾过的那两个**（手机 / 应用内提示）；桌面不在这份配置里——两条日历通知都没批，
- *   存一个 `desktop: false` 就是在暗示「打开就能弹」。
+ * - **表面选择不在这里**：它由平台按组键存（同一件事不该有第二个落点），产品只读不算存。
  */
 
 export type CalendarReminderSettingsStore = Readonly<{
@@ -33,7 +31,6 @@ type StoredShape = Partial<{
   enabled: unknown
   leadMinutes: unknown
   importance: unknown
-  surfaces: unknown
 }>
 
 function normalizeImportance(value: unknown): readonly CalendarReminderImportance[] | undefined {
@@ -46,23 +43,13 @@ function normalizeImportance(value: unknown): readonly CalendarReminderImportanc
   return known.length > 0 ? known : undefined
 }
 
-function normalizeSurfaces(value: unknown): Readonly<Partial<Record<CalendarReminderSurface, boolean>>> | undefined {
-  if (!value || typeof value !== 'object') return undefined
-  const record = value as Record<string, unknown>
-  const surfaces: Partial<Record<CalendarReminderSurface, boolean>> = {}
-  if (typeof record.channel === 'boolean') surfaces.channel = record.channel
-  if (typeof record.toast === 'boolean') surfaces.toast = record.toast
-  return Object.keys(surfaces).length > 0 ? surfaces : undefined
-}
-
 function normalize(stored: StoredShape): CalendarReminderSettings {
   return {
     enabled: typeof stored.enabled === 'boolean' ? stored.enabled : DEFAULT_CALENDAR_REMINDER_SETTINGS.enabled,
     leadMinutes: isCalendarReminderLeadMinutes(stored.leadMinutes)
       ? stored.leadMinutes
       : DEFAULT_CALENDAR_REMINDER_SETTINGS.leadMinutes,
-    importance: normalizeImportance(stored.importance) ?? DEFAULT_CALENDAR_REMINDER_SETTINGS.importance,
-    surfaces: normalizeSurfaces(stored.surfaces) ?? DEFAULT_CALENDAR_REMINDER_SETTINGS.surfaces
+    importance: normalizeImportance(stored.importance) ?? DEFAULT_CALENDAR_REMINDER_SETTINGS.importance
   }
 }
 
@@ -85,8 +72,7 @@ export function createCalendarReminderSettingsStore(filePath: string): CalendarR
       const next: CalendarReminderSettings = {
         enabled: typeof patch.enabled === 'boolean' ? patch.enabled : current.enabled,
         leadMinutes: isCalendarReminderLeadMinutes(patch.leadMinutes) ? patch.leadMinutes : current.leadMinutes,
-        importance: patch.importance === undefined ? current.importance : normalizeImportance(patch.importance) ?? current.importance,
-        surfaces: patch.surfaces === undefined ? current.surfaces : normalizeSurfaces(patch.surfaces) ?? current.surfaces
+        importance: patch.importance === undefined ? current.importance : normalizeImportance(patch.importance) ?? current.importance
       }
       mkdirSync(dirname(filePath), { recursive: true })
       writeFileSync(filePath, JSON.stringify(next), 'utf8')
