@@ -11,6 +11,8 @@
 export const INTELLIGENCE_IPC_METHODS = Object.freeze({
   getNewsPushOutletState: 'intelligence.getNewsPushOutletState',
   setNewsPushOutletEnabled: 'intelligence.setNewsPushOutletEnabled',
+  getNewsPushThreshold: 'intelligence.getNewsPushThreshold',
+  saveNewsPushThreshold: 'intelligence.saveNewsPushThreshold',
   getCalendarReminderSettings: 'intelligence.getCalendarReminderSettings',
   setCalendarReminderSettings: 'intelligence.setCalendarReminderSettings',
   getTimeline: 'intelligence.getTimeline',

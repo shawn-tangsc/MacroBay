@@ -17,11 +17,10 @@ import { app } from 'electron'
 import { createIntelligenceFetchText, executeIntelligenceFetchTarget } from './adapters/intelligenceHttpFetch'
 import { createIntelligenceArchiveService } from './application/intelligenceArchiveService'
 import { createIntelligencePipeline } from './application/intelligencePipeline'
-import { silenceHoursBySource } from './application/sourceIssueNotifier'
+import { createSourceIssueWiring } from './application/sourceIssueWiring'
 import { createIntelligenceEventPublisher } from './application/intelligenceEventPublisher'
 import { createIntelligenceReplayService } from './application/intelligenceReplayService'
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
-import { createSourceIssueNotifier } from './application/sourceIssueNotifier'
 import { DEFAULT_SOURCE_FRESHNESS_MS } from './application/macroSourceHealth'
 import { createMarketIntelligencePublicQueryService } from './public-query/publicQueryService'
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
@@ -416,18 +415,9 @@ export function getIntelligenceModule(
     const eventPublisher = hooks?.eventBusRuntime
       ? createIntelligenceEventPublisher(hooks.eventBusRuntime)
       : undefined
-    // 判定「这个源静默了多久」要用读者时区（工作日 12h / 周末 24h），诊断里还要带上同一刻各源的静默时长；
-    // 两者都要读 pipeline 的运行时状态，而 pipeline 在下面才创建，所以先留一个引用。
-    let pipelineForSilence: ReturnType<typeof createIntelligencePipeline> | undefined
-    const sourceIssueNotifier = hooks?.submitNotification
-      ? createSourceIssueNotifier({
-          submit: hooks.submitNotification,
-          defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS,
-          timeZone: shellTimeZone,
-          ...(hooks.log === undefined ? {} : { log: hooks.log }),
-          silenceHours: () => silenceHoursBySource(pipelineForSilence?.listRuntimeStates() ?? [], new Date().toISOString())
-        })
-      : undefined
+    const sourceIssues = createSourceIssueWiring({ defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS, timeZone: shellTimeZone,
+      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }),
+      ...(hooks?.log === undefined ? {} : { log: hooks.log }) })
     const pipeline = createIntelligencePipeline({
       profileStore,
       rawRecordStore,
@@ -442,9 +432,9 @@ export function getIntelligenceModule(
       ),
       runtimeStateHistoryStorage,
       eventPublisher,
-      ...(sourceIssueNotifier === undefined ? {} : { sourceIssueNotifier })
+      ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier })
     })
-    pipelineForSilence = pipeline
+    sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
     const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
       storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))
     })
@@ -610,7 +600,7 @@ export function getIntelligenceModule(
           ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
           ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
           invoke: structuredModelInvocation.invoke,
-          ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), submit: hooks.submitNotification } } : {}),
+          ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), thresholdFilePath: join(dataDir, 'intelligence-news-push-threshold.json'), submit: hooks.submitNotification } } : {}),
           now: () => new Date().toISOString()
         })
       : undefined

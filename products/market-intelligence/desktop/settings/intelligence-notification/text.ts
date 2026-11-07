@@ -58,6 +58,12 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.rows.sentimentAlert.info': '模型判出的强度到「中」以上、并且能归到同一件事时推一条；同一件事只推第一条。默认关着：打开那一刻之前发布的新闻不会补推。',
   'pages.intelligence.notification.outletUnreadable': '这一项现在读不到，稍后再试。',
 
+  'pages.intelligence.notification.threshold.row': '强度门槛',
+  'pages.intelligence.notification.threshold.low': '弱',
+  'pages.intelligence.notification.threshold.medium': '中',
+  'pages.intelligence.notification.threshold.high': '强',
+  'pages.intelligence.notification.threshold.info': '选「中」就是中以上的才会推；选「弱」会把弱的那一档也推出去。',
+  'pages.intelligence.notification.threshold.aria': '强度门槛的说明',
   'pages.intelligence.notification.saveFailed': '这次没存上，可以再试一次。',
 
   'pages.intelligence.notification.infoAria': '这四条推送的生效条件',
@@ -117,6 +123,12 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.rows.sentimentAlert.info': 'Sends one notice when the model rates an item Medium or above and it groups with an existing story; one notice per story. Off by default: items published before you switch it on are not sent late.',
   'pages.intelligence.notification.outletUnreadable': 'This one cannot be read right now. Try again later.',
 
+  'pages.intelligence.notification.threshold.row': 'Intensity threshold',
+  'pages.intelligence.notification.threshold.low': 'Weak',
+  'pages.intelligence.notification.threshold.medium': 'Medium',
+  'pages.intelligence.notification.threshold.high': 'Strong',
+  'pages.intelligence.notification.threshold.info': 'Choose Medium and only items rated Medium or above are sent; Weak also sends the weakest tier.',
+  'pages.intelligence.notification.threshold.aria': 'About the intensity threshold',
   'pages.intelligence.notification.saveFailed': 'That did not save. You can try again.',
 
   'pages.intelligence.notification.infoAria': 'When these four reach your phone',

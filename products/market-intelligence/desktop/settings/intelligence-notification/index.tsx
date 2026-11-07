@@ -11,10 +11,12 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { intelligenceNotificationText } from './text'
 import { CalendarDetail } from './calendarDetail'
 import { ContentDetail } from './contentDetail'
+import { NewsPushThresholdRow } from './newsPushThresholdRow'
 import { NotificationList, type NotificationListItem } from './notificationList'
 import { useCalendarReminderSettings } from './useCalendarReminderSettings'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS, useChannelEventSettings } from './useChannelEventSettings'
 import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
+import { useNewsPushThreshold } from './useNewsPushThreshold'
 import { useNotificationLayout } from './useNarrowWindow'
 import { useSurfaceSelection } from './useSurfaceSelection'
 
@@ -63,6 +65,7 @@ export default function IntelligenceNotificationSettingsSection(
   const resolveText = (key: string): string => text[key] ?? ''
   const { status, values, savingEventId, failedEventId, channelReady, reload, toggle } = useChannelEventSettings()
   const outlet = useNewsPushOutletSwitch()
+  const threshold = useNewsPushThreshold()
   const reminder = useCalendarReminderSettings()
   const surfaces = useSurfaceSelection(CALENDAR_GROUP_EVENT_ID)
   const [selected, setSelected] = useState<ItemKey>(() => itemForFocus(focusEntityId))
@@ -153,7 +156,16 @@ export default function IntelligenceNotificationSettingsSection(
               }}
               saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
               saving={selected === 'sentiment' ? outlet.saving : savingEventId === CONTENT_ITEMS[selected].eventId}
-            />}
+            >
+              {selected === 'sentiment'
+                ? <NewsPushThresholdRow
+                  last
+                  resolveText={resolveText}
+                  state={threshold}
+                  text={text}
+                />
+                : null}
+            </ContentDetail>}
           {channelReady ? null : <p className="intelligence-notification-form-note" role="status">
             {text['pages.intelligence.notification.channelNotReady']}
           </p>}

@@ -108,6 +108,22 @@ export function registerIntelligenceIpc(
     return getNewsPushOutletService(intelligenceModule).setEnabled(enabled, at)
   })
 
+  // 强度门槛（弱/中/强）：读与写都只碰这一份存储。写只收三档之一，非法值原样退回原值，
+  // 页面读回的值说了算——不在这一层替读者「修」成看起来合理的档。
+  // 存储住在评分服务里（判定读的也是它那一份）：没有它就等于舆情不可用，报错而不是给个默认值。
+  const pushThresholdStore = () => {
+    const store = intelligenceModule.newsSentiment.scoring?.pushThreshold
+    if (!store) throw new Error('News sentiment is unavailable.')
+    return store
+  }
+
+  register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getNewsPushThreshold, async () => pushThresholdStore().read())
+
+  register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.saveNewsPushThreshold, async (payload) => {
+    const patch = (payload ?? {}) as { pushThreshold?: unknown }
+    return pushThresholdStore().write({ pushThreshold: patch.pushThreshold })
+  })
+
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getTimeline, async (payload) => {
     const query = (payload ?? {}) as { filter?: 'active-exposure' | 'watchlist' | 'both' | 'all'; limit?: number }
     return getIntelligenceService(intelligenceModule).getTimeline(query)

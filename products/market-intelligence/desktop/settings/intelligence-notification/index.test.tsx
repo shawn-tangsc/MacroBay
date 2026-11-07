@@ -39,6 +39,9 @@ function install(overrides: Partial<Stubs> = {}): Stubs {
     getSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
     setSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
     productsInvoke: vi.fn(async (_productId: string, method: string) => {
+      if (String(method).includes('getNewsPushThreshold') || String(method).includes('saveNewsPushThreshold')) {
+        return { pushThreshold: 'medium' }
+      }
       if (String(method).includes('getCalendarReminderSettings')) {
         return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
       }
@@ -334,6 +337,48 @@ describe('intelligence notification settings', () => {
     expect(importanceBoxes.map((box) => box.checked)).toEqual([true, false, false])
   })
 
+
+  it('offers the intensity threshold under the sentiment item, defaulting to Medium', async () => {
+    // 读者 2026-11-07：舆情推送要能设强度门槛（弱/中/强，选哪档就是该档以上）。默认「中」＝现状。
+    await render()
+    await selectItem(2)
+    const body = container?.textContent ?? ''
+    expect(body).toContain(text['pages.intelligence.notification.threshold.row'])
+    const group = [...(container?.querySelectorAll('[role="group"]') ?? [])]
+      .find((node) => node.getAttribute('aria-label') === text['pages.intelligence.notification.threshold.row'])
+    expect(group).not.toBeUndefined()
+    const labels = [...(group?.querySelectorAll('button') ?? [])].map((button) => button.textContent)
+    expect(labels).toEqual([
+      text['pages.intelligence.notification.threshold.low'],
+      text['pages.intelligence.notification.threshold.medium'],
+      text['pages.intelligence.notification.threshold.high']
+    ])
+    expect(group?.querySelector('[aria-pressed="true"]')?.textContent)
+      .toBe(text['pages.intelligence.notification.threshold.medium'])
+  })
+
+  it('saves the chosen tier and shows what the service read back', async () => {
+    const invoke = vi.fn(async (_productId: string, method: string, payload?: unknown) => {
+      if (String(method).includes('saveNewsPushThreshold')) {
+        return { pushThreshold: (payload as { pushThreshold?: string })?.pushThreshold }
+      }
+      if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+      return { enabled: true }
+    })
+    install({ productsInvoke: invoke })
+    await render()
+    await selectItem(2)
+    const group = [...(container?.querySelectorAll('[role="group"]') ?? [])]
+      .find((node) => node.getAttribute('aria-label') === text['pages.intelligence.notification.threshold.row'])!
+    const strong = [...group.querySelectorAll('button')]
+      .find((button) => button.textContent === text['pages.intelligence.notification.threshold.high'])!
+    await act(async () => { strong.click(); await Promise.resolve() })
+    await act(async () => { await Promise.resolve() })
+
+    expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligence.saveNewsPushThreshold', { pushThreshold: 'high' })
+    expect(group.querySelector('[aria-pressed="true"]')?.textContent)
+      .toBe(text['pages.intelligence.notification.threshold.high'])
+  })
 
   it('shows the cost line only when "also matched" is chosen', async () => {
     install({
