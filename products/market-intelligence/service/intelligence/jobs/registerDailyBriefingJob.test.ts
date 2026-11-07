@@ -13,14 +13,19 @@ const flush = async (): Promise<void> => {
 
 function runtime() {
   const definitions = new Map<string, Record<string, unknown>>()
-  let handler: ((payload?: unknown) => Promise<unknown>) | undefined
+  let handler: ((payload?: unknown, context?: unknown) => Promise<unknown>) | undefined
+  /** 平台每次运行都给一个可中止的信号；这里给真的 `AbortController`，不要拿假对象敷衍。 */
+  const controller = new AbortController()
   const runtime = {
-    registerHandler: (_id: string, next: (payload?: unknown) => Promise<unknown>) => { handler = next },
+    registerHandler: (_id: string, next: (payload?: unknown, context?: unknown) => Promise<unknown>) => { handler = next },
     setSchedule: (definition: Record<string, unknown>) => { definitions.set(String(definition.id), definition) },
     removeSchedule: (id: string) => { definitions.delete(id) },
     listSchedules: () => [...definitions.values()]
   } as unknown as JobRuntime
-  return { runtime, definitions, run: (payload?: unknown) => handler!(payload) }
+  return {
+    runtime, definitions, controller,
+    run: (payload?: unknown) => handler!(payload, { signal: controller.signal })
+  }
 }
 
 const period = (overrides: Partial<DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }>> = {}): DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }> => ({
@@ -126,6 +131,7 @@ describe('daily briefing job handler', () => {
       periodId: 'asia-open',
       periodKind: 'scheduled',
       runTrigger: 'scheduled',
+      signal: expect.any(AbortSignal),
       generation: { generationTime: '12:30', windowHours: 48 }
     })
   })
@@ -174,6 +180,22 @@ describe('daily briefing job handler', () => {
     await expect(run({ periodId: 'gone' })).resolves.toBeUndefined()
     await expect(run({ periodId: 'asia-open' })).resolves.toBeUndefined()
     expect(getToday).not.toHaveBeenCalled()
+  })
+
+  it('hands the job its own abort signal, so a closing app never starts a retry', async () => {
+    // 自动重试的活体判定读这个信号（`02` v2.165）：装配层漏传，就等于那条判据在真机上不存在。
+    const { runtime: jobRuntime, run, controller } = runtime()
+    const getToday = vi.fn(async () => ({ state: 'available' as const, document: {} }))
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday: getToday as never },
+      getLocale: async () => 'zh-CN',
+      timeZone: () => 'UTC',
+      getPeriods: async () => [period()]
+    })
+
+    await run({ periodId: 'default' })
+    const passed = (getToday.mock.calls[0] as unknown as readonly [Readonly<{ signal?: AbortSignal }>] | undefined)?.[0]
+    expect(passed?.signal).toBe(controller.signal)
   })
 
   it('surfaces a generation failure so the run is visible', async () => {
