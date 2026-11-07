@@ -8,7 +8,8 @@ import type {
 import type { DailyBriefingText } from './dailyBriefingText'
 import { formattedClock, unavailableRowCopy } from './dailyBriefingUnavailableRow'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
-import { coreMetricLabel, eventTitle, rowLabel, rowSource } from './dailyBriefingIssueLabels'
+import { coreMetricLabel, eventTitle, fillTemplate, rowLabel, rowSource } from './dailyBriefingIssueLabels'
+import { collectMacroIssues } from './briefingIssueMacro'
 
 /**
  * What limited this edition, derived from the document that was actually generated.
@@ -99,7 +100,7 @@ export function briefingIssues(input: BriefingIssueInput): readonly BriefingIssu
   }
   collectRows(input, add)
   collectNewsAndCalendar(input, add)
-  collectMacro(input, add)
+  collectMacroIssues(input, add)
   collectBackfill(input, add)
   collectEditorial(input, add)
   collectEvidence(input, add)
@@ -191,7 +192,7 @@ function collectRows(input: BriefingIssueInput, add: AddIssue): void {
     if (row.state === 'source-disabled') {
       add({
         id: `data:${row.id}:disabled`, severity: 'warning', category: 'data', template: 'row-disabled', source, at,
-        title: fill(text.limits.row.disabled, { row: label }), advice: text.limits.advice.enableSource
+        title: fillTemplate(text.limits.row.disabled, { row: label }), advice: text.limits.advice.enableSource
       })
       continue
     }
@@ -209,13 +210,13 @@ function collectRows(input: BriefingIssueInput, add: AddIssue): void {
     if (row.state === 'stale') {
       add({
         id: `data:${row.id}:stale`, severity: 'warning', category: 'data', template: 'row-stale', source, at,
-        title: fill(text.limits.row.stale, { row: label, time: input.formatTime(at, 'minute') }),
+        title: fillTemplate(text.limits.row.stale, { row: label, time: input.formatTime(at, 'minute') }),
         advice: text.limits.advice.checkSource
       })
     } else if (row.value === null) {
       add({
         id: `data:${row.id}:no-value`, severity: 'warning', category: 'data', template: 'row-no-value', source, at,
-        title: fill(text.limits.row.noValue, { row: label }), advice: text.limits.advice.waitCollection
+        title: fillTemplate(text.limits.row.noValue, { row: label }), advice: text.limits.advice.waitCollection
       })
     }
     if (row.changeReason) collectChangeReason(input, add, row, label, source)
@@ -234,12 +235,12 @@ function collectChangeReason(
   const at = row.observedAt ?? document.edition.generatedAt
   const insufficient = row.changeReason === 'insufficient-window'
   let template: BriefingIssueTemplate = insufficient ? 'insufficient-window' : 'no-baseline'
-  let title = fill(insufficient ? text.limits.row.insufficientWindow : text.limits.row.noBaseline, { row: label })
+  let title = fillTemplate(insufficient ? text.limits.row.insufficientWindow : text.limits.row.noBaseline, { row: label })
   if (!insufficient && row.id === 'fear-greed' && row.observedAt) {
     const elapsed = Date.parse(document.edition.windowEnd) - Date.parse(row.observedAt)
     if (Number.isFinite(elapsed) && elapsed > 0) {
       template = 'no-baseline-last-release'
-      title = fill(text.limits.row.noBaselineLastRelease, {
+      title = fillTemplate(text.limits.row.noBaselineLastRelease, {
         row: label,
         time: input.formatTime(row.observedAt, 'minute'),
         interval: intervalText(elapsed, text)
@@ -308,79 +309,6 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   }
 }
 
-function collectMacro(input: BriefingIssueInput, add: AddIssue): void {
-  for (const item of input.document.news.macro) macroItemIssues(input, add, item)
-  // 两个来源说两个数（`02` v2.128）：值格整格不渲染，右列**恰一条**冲突说明（按事件数合并）。
-  const conflicts = input.document.news.notes.macroValueConflicts ?? []
-  if (conflicts.length > 0) {
-    add({
-      id: 'data:macro:value-conflict', severity: 'warning', category: 'data', template: 'macro-value-conflict',
-      source: input.text.limits.sources.calendar, at: input.document.edition.generatedAt,
-      title: input.text.limits.macro.valueConflict, advice: input.text.limits.advice.checkCalendar
-    })
-  }
-  for (const item of [input.document.next.focus, ...input.document.next.items]) {
-    if (item) nextItemIssues(input, add, item)
-  }
-}
-
-/**
- * 讲话/声明类事件：**没有数值是设计如此，不是缺口**（`02` v2.133 B 案）。
- *
- * 判据放在数据上，不靠事件名：一条既没有实际值、也没有预期值、还没有前值的事件，不是一次数值发布
- * ——它是"某人在某时说了话"。这类行照常显示（时刻/国家/标题），不写解析，也**不进右列**：
- * 记成缺口会让读者和排查的人都以为坏了，而它本来就不会有数。
- */
-function isStatementOnly(item: BriefingMacroItem): boolean {
-  return !item.actual && !item.consensus && !item.previous
-}
-
-function macroItemIssues(input: BriefingIssueInput, add: AddIssue, item: BriefingMacroItem): void {
-  const { text } = input
-  if (isStatementOnly(item)) return
-  const name = eventTitle(item, input.eventTitles)
-  if (!item.consensus) {
-    add({
-      id: `data:macro:consensus:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-consensus',
-      source: text.limits.sources.calendar, at: item.scheduledAt,
-      title: fill(text.limits.macro.consensusMissing, { event: name }), advice: text.limits.advice.fillConsensus
-    })
-  }
-  if (!item.actual) {
-    add({
-      id: `data:macro:actual:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-actual',
-      source: text.limits.sources.calendar, at: item.scheduledAt,
-      title: fill(text.limits.macro.actualMissing, { event: name }), advice: text.limits.advice.waitCollection
-    })
-  }
-  if (!item.previous) {
-    add({
-      id: `data:macro:previous:${item.eventKey}`, severity: 'info', category: 'data', template: 'macro-previous',
-      source: text.limits.sources.calendar, at: item.scheduledAt,
-      title: fill(text.limits.macro.previousMissing, { event: name }), advice: text.limits.advice.waitCollection
-    })
-  }
-}
-
-function nextItemIssues(input: BriefingIssueInput, add: AddIssue, item: BriefingNextItem): void {
-  const { text } = input
-  const name = eventTitle(item, input.eventTitles)
-  if (!item.consensus) {
-    add({
-      id: `data:next:consensus:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-consensus',
-      source: text.limits.sources.calendar, at: item.at,
-      title: fill(text.limits.macro.consensusMissing, { event: name }), advice: text.limits.advice.fillConsensus
-    })
-  }
-  if (!item.previous) {
-    add({
-      id: `data:next:previous:${item.eventKey}`, severity: 'info', category: 'data', template: 'macro-previous',
-      source: text.limits.sources.calendar, at: item.at,
-      title: fill(text.limits.macro.previousMissing, { event: name }), advice: text.limits.advice.waitCollection
-    })
-  }
-}
-
 /** The successful core-fact backfill is recorded in `provenance.supplements`, so it is audited. */
 function collectBackfill(input: BriefingIssueInput, add: AddIssue): void {
   const { text } = input
@@ -397,7 +325,7 @@ function collectBackfill(input: BriefingIssueInput, add: AddIssue): void {
       source: text.limits.sources.backfill,
       at: supplement.at,
       title: parsed && rows.length > 0
-        ? fill(text.limits.backfill.done, { count: parsed[1] ?? String(rows.length), rows: rows.join(text.limits.listSeparator) })
+        ? fillTemplate(text.limits.backfill.done, { count: parsed[1] ?? String(rows.length), rows: rows.join(text.limits.listSeparator) })
         : text.limits.backfill.generic,
       advice: text.limits.advice.backfill
     })
@@ -433,8 +361,8 @@ function collectEditorial(input: BriefingIssueInput, add: AddIssue): void {
     source: category === 'data' ? text.limits.sources.collector : category === 'system' ? text.limits.sources.system : text.limits.sources.editorial,
     at: document.edition.generatedAt,
     title: category === 'system'
-      ? fill(text.limits.system.failure, { reason })
-      : category === 'data' ? reason : fill(text.limits.ai.failure, { reason }),
+      ? fillTemplate(text.limits.system.failure, { reason })
+      : category === 'data' ? reason : fillTemplate(text.limits.ai.failure, { reason }),
     advice: category === 'system'
       ? text.limits.advice.system
       : category === 'data' ? text.limits.advice.checkSource : text.limits.advice.retryAi
@@ -458,7 +386,7 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
     if (!value) continue
     add({
       id: `evidence:${value}`, severity: 'info', category: 'evidence', template: 'evidence-gap', source: text.limits.sources.analysis,
-      at: conclusion.publishedAt, title: fill(text.limits.evidence.gap, { text: value }), advice: text.limits.advice.evidence
+      at: conclusion.publishedAt, title: fillTemplate(text.limits.evidence.gap, { text: value }), advice: text.limits.advice.evidence
     })
   }
   for (const caveat of conclusion.caveats) {
@@ -466,7 +394,7 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
     if (!value) continue
     add({
       id: `evidence:${value}`, severity: 'info', category: 'evidence', template: 'evidence-caveat', source: text.limits.sources.analysis,
-      at: conclusion.publishedAt, title: fill(text.limits.evidence.caveat, { text: value }), advice: text.limits.advice.evidence
+      at: conclusion.publishedAt, title: fillTemplate(text.limits.evidence.caveat, { text: value }), advice: text.limits.advice.evidence
     })
   }
   for (const claim of conclusion.counterEvidence) {
@@ -474,7 +402,7 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
     add({
       id: `evidence:claim:${claim.statement}`, severity: 'warning', category: 'evidence', template: 'evidence-no-citation',
       source: text.limits.sources.analysis, at: conclusion.publishedAt,
-      title: fill(text.limits.evidence.noCitation, { text: clip(claim.statement) }),
+      title: fillTemplate(text.limits.evidence.noCitation, { text: clip(claim.statement) }),
       advice: text.limits.advice.citeEvidence
     })
   }
@@ -484,7 +412,7 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
     add({
       id: `evidence:conflict:${entry.index}`, severity: 'warning', category: 'evidence', template: 'evidence-conflict',
       source: text.limits.sources.webSearch, at: entry.observedAt ?? conclusion.publishedAt,
-      title: fill(text.limits.evidence.conflict, { text: clip(statement.replace(/\s*\(source conflict\)\s*/i, '')) }),
+      title: fillTemplate(text.limits.evidence.conflict, { text: clip(statement.replace(/\s*\(source conflict\)\s*/i, '')) }),
       advice: text.limits.advice.officialSource
     })
   }
@@ -506,17 +434,17 @@ function collectTiming(input: BriefingIssueInput, add: AddIssue): void {
   add({
     id: 'timing:late-generation', severity: 'info', category: 'timing', template: 'timing-late', source: text.limits.sources.settings,
     at: document.edition.generatedAt,
-    title: fill(text.limits.timing.late, { interval: intervalText(delay, text) }),
+    title: fillTemplate(text.limits.timing.late, { interval: intervalText(delay, text) }),
     advice: text.limits.advice.keepRunning
   })
 }
 
 function intervalText(elapsedMs: number, text: DailyBriefingText): string {
   const minutes = Math.max(1, Math.round(elapsedMs / 60_000))
-  if (minutes < 60) return fill(text.limits.interval.minutes, { count: String(minutes) })
+  if (minutes < 60) return fillTemplate(text.limits.interval.minutes, { count: String(minutes) })
   const hours = Math.round(minutes / 60)
-  if (hours < 48) return fill(text.limits.interval.hours, { count: String(hours) })
-  return fill(text.limits.interval.days, { count: String(Math.round(hours / 24)) })
+  if (hours < 48) return fillTemplate(text.limits.interval.hours, { count: String(hours) })
+  return fillTemplate(text.limits.interval.days, { count: String(Math.round(hours / 24)) })
 }
 
 function clip(value: string): string {
@@ -524,6 +452,4 @@ function clip(value: string): string {
   return trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed
 }
 
-function fill(template: string, values: Readonly<Record<string, string>>): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match)
-}
+
