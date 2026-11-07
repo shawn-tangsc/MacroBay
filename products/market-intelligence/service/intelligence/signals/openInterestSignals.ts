@@ -1,10 +1,5 @@
 import { openInterestBucketPolicy } from '../../../contracts/openInterestHistory'
-import {
-  detectLiquidationHints,
-  liquidationHintPolicy,
-  type LiquidationHint,
-  type PositioningBar
-} from '../../../contracts/openInterestPositioning'
+import { liquidationHintPolicy, type LiquidationHint } from '../../../contracts/openInterestPositioning'
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { buildSignalDedupeKey, moduleSignalPolicy, type ModuleSignal } from '../../../contracts/moduleSignal'
 
@@ -42,28 +37,6 @@ export const openInterestShortSignalRule = Object.freeze({
   bucketMs: openInterestBucketPolicy.signalBucketMs,
   triggerOwner: 'module-signal'
 })
-
-/**
- * Signals for one asset's closed buckets, oldest first.
- *
- * Returns one signal per marked bucket, or a single `unavailable` signal when the read could not be
- * made at all: an empty list means "nothing looked like a liquidation", which must not be how a
- * failed read looks.
- */
-export function openInterestSignals(input: Readonly<{
-  asset: 'btc' | 'eth'
-  bars: readonly PositioningBar[]
-  /** Used only when there is no bucket to date an `unavailable` signal by. */
-  asOf: string
-}>): readonly ModuleSignal[] {
-  const hints = detectLiquidationHints({ asset: input.asset, bars: input.bars, direction: 'long' })
-  return signalsFromHints({
-    asset: input.asset,
-    hints: hints.hints,
-    state: hints.state,
-    fallbackObservedAt: input.bars.at(-1)?.observedAt ?? input.asOf
-  })
-}
 
 /**
  * The same signals, read from the query the panel already made.
