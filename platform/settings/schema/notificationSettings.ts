@@ -12,20 +12,30 @@ import {
  */
 export type NotificationSettings = NotificationRuntimeSettings
 
-/** 通知设置里**类型认识**的字段。列表之外的键照旧保留（见下面的说明），但会回报一次。 */
-const NOTIFICATION_SETTING_FIELDS = [
-  'desktopEnabled',
-  'toastEnabled',
-  'popupEnabled',
-  'channelEvents',
-  'surfaceSelections',
-  'push',
-  'retentionDays',
-  'defaultSnoozeMinutes',
-  'quietHours',
-  'minimumDisruptivePriority',
-  'productPermissions'
-] as const
+/**
+ * 通知设置里**类型认识**的字段登记表。列表之外的键照旧保留（见下面的说明），但会回报一次。
+ *
+ * 为什么是对象而不是手写数组：这个白名单就是上次静默丢数据的根因——**每加一个字段都要人记得
+ * 回来加一行**，漏一次就读回来没有、还不报错。`satisfies Record<keyof NotificationSettings, true>`
+ * 把「登记是否齐全」交给编译器：类型里新增一个字段而这里没跟上，`tsc` 当场红（缺键）；
+ * 这里写了一个类型里没有的键，也当场红（多键）。字段清单由它的键派生，不存在第二处手抄。
+ */
+const NOTIFICATION_SETTING_FIELDS = {
+  desktopEnabled: true,
+  toastEnabled: true,
+  popupEnabled: true,
+  channelEvents: true,
+  surfaceSelections: true,
+  push: true,
+  retentionDays: true,
+  defaultSnoozeMinutes: true,
+  quietHours: true,
+  minimumDisruptivePriority: true,
+  productPermissions: true
+} as const satisfies Record<keyof NotificationSettings, true>
+
+/** 派生出来的成员判定表：归一化只查这一处，不再维护第二份清单。 */
+const KNOWN_NOTIFICATION_SETTING_FIELDS: ReadonlySet<string> = new Set(Object.keys(NOTIFICATION_SETTING_FIELDS))
 
 /**
  * 通知设置的归一化：**已知字段严格校验，未知字段原样保留**。
@@ -93,7 +103,7 @@ export function normalizeNotificationSettings(
   // 未知字段原样留下（深拷贝，别把读进来的引用直接交出去），并回报字段名。
   const preserved: Record<string, unknown> = {}
   for (const [field, raw] of Object.entries(candidate)) {
-    if ((NOTIFICATION_SETTING_FIELDS as readonly string[]).includes(field)) continue
+    if (KNOWN_NOTIFICATION_SETTING_FIELDS.has(field)) continue
     preserved[field] = cloneJsonValue(raw)
     onUnknownField?.(field)
   }

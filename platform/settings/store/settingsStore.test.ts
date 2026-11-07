@@ -628,6 +628,24 @@ describe('unknown notification fields: kept, but reported once', () => {
     }
   })
 
+  it('treats every field with a default as a known field (no unknown report)', async () => {
+    // 登记表由类型强制（`satisfies Record<keyof NotificationSettings, true>`）。这条是它的运行期补角：
+    // 「有默认值 = 一定被登记」——否则新加且带默认值的字段会被当成未知字段留一份副本、还报一次。
+    const directory = mkdtempSync(join(tmpdir(), 'settings-defaults-known-'))
+    try {
+      const storage = createJsonFileStorage(join(directory, 'settings.json'), createDefaultAppSettings())
+      const reported: string[] = []
+      const store = createSettingsStore(
+        { read: storage.read, write: storage.write },
+        { onUnknownNotificationField: (field) => reported.push(field) }
+      )
+      await store.get()
+      expect(reported).toEqual([])
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('still rejects a known field of the wrong type instead of preserving it', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'settings-wrong-type-'))
     try {
