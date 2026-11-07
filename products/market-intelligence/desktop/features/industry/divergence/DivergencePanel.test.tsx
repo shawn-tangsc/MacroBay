@@ -126,6 +126,34 @@ describe('divergence panel · the one summary line', () => {
     expect(rule).not.toMatch(/font-size:\s*\d/)
     expect(rule).not.toMatch(/caution|negative|warning/)
   })
+
+  it('gets the card body size and a transparent, borderless box in computed style too', async () => {
+    // 把这张卡自己的样式表注入文档再量**计算样式**：上面那条只证明「规则写对了」，
+    // 这条证明「这条规则真的落到了这颗按钮上」——删掉复位或丢掉 token，它会红。
+    const css = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.css', 'utf8')
+    const style = document.createElement('style')
+    style.textContent = css
+    document.head.append(style)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(scoped(createElement(DivergencePanel, { state: answer([row]), onRetry: () => undefined, text })))
+    })
+    const summary = container.querySelector<HTMLElement>('.mi-divergence__summary')!
+    const computed = getComputedStyle(summary)
+    // 灰底那半在这里量得到：这三条复位一旦缺失，浏览器就把它画成默认按钮。
+    expect(computed.backgroundColor).toBe('transparent')
+    expect(computed.borderTopWidth).toBe('0px')
+    expect(computed.paddingTop).toBe('0px')
+    /**
+     * 字号只能停在规则层，不能在这一层量：happy-dom 不解析 `var()`（它会把这格读成 `inherit`），
+     * 所以 `font-size` 的断言在上面那条规则用例里。**两条合起来才是完整判据**：
+     * 一条证复位真的落到按钮上，一条证字号引用的是既有 token、不是写死的 px。
+     */
+    await act(async () => { root.unmount() })
+    style.remove()
+  })
 })
 
 describe('divergence panel · the details behind the line', () => {
