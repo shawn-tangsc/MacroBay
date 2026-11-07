@@ -43,6 +43,7 @@ import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAtt
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { briefingScheduledTimeFor, readBriefingHistory } from './dailyBriefingHistory'
 import { missedScheduledPeriods } from './dailyBriefingMissedPeriods'
+import { createAutoRetryingResolve } from './dailyBriefingAutoRetry'
 export type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
 import type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRegenerate, type DailyBriefingRegenerateInput } from './dailyBriefingRegenerate'
@@ -343,10 +344,7 @@ export function createDailyBriefingService(deps: Readonly<{
    * cutoff.
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
-  /**
-   * 期配置列表：`regenerate` 按 `periodId` 取这一期自己的时刻、窗口与语言（用户 2026-11-06）。
-   * 缺省时退回 `generationSettings`，行为与旧版一致（只用于没装配期模型的测试装配）。
-   */
+  /** 期配置列表：`regenerate` 按 `periodId` 取这一期自己的时刻、窗口与语言（缺省退回旧口径）。 */
   readPeriods?: () => Promise<readonly Readonly<{ id: string; generationTime: string; windowHours: 12 | 24 | 48; language?: DailyBriefingLocale }>[]>
   noticeSubmit?: DailyBriefingNoticeSubmit
   /** 结构化诊断（appLog）：导读被扣时那条日志走它；缺省时只是不记。 */
@@ -394,6 +392,8 @@ export function createDailyBriefingService(deps: Readonly<{
    * `generation` is that period's own time and window, so a period never borrows another one's
    * cutoff; an unscheduled caller (the reader opening the page) means the period `default`.
    */
+  const resolveToday = createAutoRetryingResolve({ run: resolveAttempt, now })  // 环境类失败自动重试一次
+
   async function getToday(input: Readonly<{
     locale: DailyBriefingLocale
     timeZone: string
@@ -425,7 +425,7 @@ export function createDailyBriefingService(deps: Readonly<{
     ...(deps.readPeriods ? { readPeriods: deps.readPeriods } : {})
   })
 
-  async function resolveToday(rawInput: Readonly<{
+  async function resolveAttempt(rawInput: Readonly<{
     asOf: string
     date: string
     periodId: string
