@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 
 import { Info } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingSpinner } from '@platform/ui/components/loading'
-import { Tooltip } from '@platform/ui/components/tooltip'
+import { Popover } from '@platform/ui/components/popover'
 
 /**
  * 通知配置项后面的「发一条…」测试按钮（需求 v4 §5、技术方案 §3、原型 `2026-11-08-notification-test-buttons-v1`）。
@@ -113,19 +114,24 @@ export function TestNotificationButton(props: Readonly<{
       {sending ? <><LoadingSpinner size="sm" />{text('pages.intelligence.notification.test.sending')}</> : text(props.labelKey)}
     </button>
     {/*
-      * ⓘ 是**说明**，不是动作：原型给它的语义是「aria-label 是『这条测试做什么』、aria-describedby 指向
-      * 那句原文」。做成 IconButton 就必须挂一个 onSelect —— 一个点了什么都不发生的按钮，正是本线在清的
-      * 「死按钮」。所以这里用可聚焦的 `role="img"` + 平台 Tooltip：focus 就出提示，读屏念到的是说明本身。
+      * ⓘ 统一走 `IconButton` + `Popover`（界面 2026-11-08 定的规则：独立站着的说明图标一律按钮化）。
+      * 它**有真动作**——点击钉住说明、再点或 Esc 收起——所以不是死按钮；名字念「发送测试说明」，
+      * 说明本身由浮层通过 `aria-describedby` 挂在触发件上（读屏先念名字、再念说明）。
       */}
-    <Tooltip labelKey="pages.intelligence.notification.test.info" resolveText={props.resolveText}>
-      <span
-        aria-label={text('pages.intelligence.notification.test.infoAria')}
-        className="intelligence-notification-test-info"
-        role="img"
-        tabIndex={0}>
-        <Info aria-hidden="true" size={13} />
-      </span>
-    </Tooltip>
+    <Popover
+      labelKey="pages.intelligence.notification.test.info"
+      resolveText={props.resolveText}
+      trigger={(triggerProps) => (
+        <IconButton
+          {...triggerProps}
+          ariaLabelKey="pages.intelligence.notification.test.infoAria"
+          icon={Info}
+          resolveText={props.resolveText}
+          size="sm"
+          variant="plain"
+        />
+      )}
+    />
     {props.disabled
       ? <span className="intelligence-notification-test-note">{text('pages.intelligence.notification.test.needEnabled')}</span>
       : null}

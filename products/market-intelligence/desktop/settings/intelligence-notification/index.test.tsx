@@ -688,3 +688,38 @@ describe('超时（10 秒）', () => {
     }
   })
 })
+
+describe('ⓘ 是按钮，说明挂在 aria-describedby 上（界面 2026-11-08 规则）', () => {
+  it('is a button named 「发送测试说明」, opens on focus, describes itself, and Esc returns focus', async () => {
+    install({ getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })) })
+    await render()
+    await selectItem(2)
+
+    const control = container?.querySelector('[data-test-notification="sentiment"]')?.parentElement
+    const trigger = [...(control?.querySelectorAll('button') ?? [])]
+      .find((button) => button.getAttribute('aria-label') === text['pages.intelligence.notification.test.infoAria'])
+    expect(trigger, 'ⓘ 必须是一颗按钮，名字逐字是「发送测试说明」').toBeDefined()
+    expect(trigger?.tagName).toBe('BUTTON')
+
+    // 聚焦即展开：aria-expanded 变真，说明以 aria-describedby 挂在这个触发件上。
+    await act(async () => {
+      trigger?.focus()
+      trigger?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true')
+    // 说明本身在浮层里；`aria-describedby` 这一半等 Popover 组件支持（见提交说明的「缺口」一段）。
+    expect(document.querySelector('[data-popover-line="0"]')?.textContent).toBe(
+      text['pages.intelligence.notification.test.info']
+    )
+
+    // Esc 收起并把焦点还回触发件。
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+    expect(trigger?.getAttribute('aria-label')).not.toContain('更多')
+  })
+})
