@@ -21,13 +21,15 @@ export type BriefingFailureSentenceInput = Readonly<{
   code: string | undefined
   /** trace 里卡住那一步的名字；没有就用表里的 `step` 兜底。 */
   failedStage?: string
-  /** 那一步用了多久；算不出来就不写时长。 */
+  /**
+   * 保留但**不再使用**（`02` v2.169）：失败句不带时长——读者只问"为什么没出来""我还能做什么"，
+   * 一个秒数只会引出"为什么这么慢"这个我们答不了的问题。时长只在步骤明细里。
+   */
   durationMs?: number
   sentences: BriefingFailureSentences
   /** 表外码的唯一出口：走这一句，绝不印出码本身（`02` v2.145）。 */
   fallback: BriefingFailureSentenceEntry
   templates: DailyBriefingText['failureSentenceTemplates']
-  formatDuration: (durationMs: number) => string
 }>
 
 export function briefingFailureSentence(
@@ -35,13 +37,8 @@ export function briefingFailureSentence(
 ): Readonly<{ reason: string; next: string }> {
   // 码没登记、或者根本没有码：走兜底句。读者不会在这里看到内部代号。
   const entry = (input.code === undefined ? undefined : input.sentences[input.code]) ?? input.fallback
-  const duration = input.durationMs !== undefined && Number.isFinite(input.durationMs) && input.durationMs >= 0
-    ? input.formatDuration(input.durationMs)
-    : undefined
   const reason = input.failedStage === undefined
     ? input.templates.stoppedAt.replace('{step}', entry.step).replace('{what}', entry.what)
-    : duration === undefined
-      ? input.templates.unfinishedNoDuration.replace('{stage}', input.failedStage).replace('{what}', entry.what)
-      : input.templates.unfinished.replace('{stage}', input.failedStage).replace('{what}', entry.what).replace('{duration}', duration)
+    : input.templates.unfinishedNoDuration.replace('{stage}', input.failedStage).replace('{what}', entry.what)
   return Object.freeze({ reason, next: input.templates.next.replace('{next}', entry.next) })
 }
