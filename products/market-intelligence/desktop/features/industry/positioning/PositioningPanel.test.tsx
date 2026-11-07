@@ -152,10 +152,6 @@ describe('positioning panel', () => {
     expect(markup).not.toContain('data-hint-list')
   })
 
-  it('says the data is insufficient instead of implying nothing happened', () => {
-    const markup = render({ positioning: { ...availablePositioning, signal: { state: 'insufficient' } } })
-    expect(markup).toContain(text.signalInsufficient)
-  })
 
   it('keeps the funding half when the positioning half is missing, and marks which half failed', () => {
     const markup = render({ positioning: { state: 'empty', onReload: () => undefined } })
@@ -299,6 +295,61 @@ describe('combined readout', () => {
     // The platform tooltip waits 0.3s before it appears, so the assertion waits with it.
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)) })
     expect(document.body.textContent).toContain('+0.0121%')
+  })
+})
+
+describe('the liquidation note: three states, one line, never two', () => {
+  const noteOf = (positioningState: DashboardPositioningViewState) => {
+    const markup = render({ positioning: positioningState })
+    const line = markup.match(/<p class="mi-positioning-panel__liquidation-note"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? ''
+    return { markup, line, count: markup.split('data-liquidation-note').length - 1 }
+  }
+  const hidden = { ...availablePositioning, signal: { state: 'hidden' as const } }
+  const unreadable = { ...availablePositioning, signal: { state: 'unreadable' as const, failureCode: 'query-failed' as const, onReload: () => undefined } }
+  const insufficient = { ...availablePositioning, signal: { state: 'insufficient' as const } }
+
+  it('says nothing was hit when the rule ran and found nothing', () => {
+    const { line, count } = noteOf(hidden)
+    expect(count).toBe(1)
+    expect(line).toContain(text.liquidationNoteNoHit)
+    // 窗口必须是 24 小时：判定窗口不随页签变，写成 7 天，切到 7 天视图这句话就是假话。
+    expect(text.liquidationNoteNoHit).toContain('近 24 小时')
+    expect(text.liquidationNoteNoHit).not.toContain('7 天')
+  })
+
+  it('says the rule could not be read, and only that', () => {
+    const { line, count } = noteOf(unreadable)
+    expect(count).toBe(1)
+    expect(line).toContain(text.liquidationNoteUnreadable)
+    expect(line).not.toContain(text.liquidationNoteNoHit)
+    expect(line).not.toContain(text.liquidationNoteInsufficient)
+  })
+
+  it('says the data is not enough, and only that', () => {
+    const { line, count } = noteOf(insufficient)
+    expect(count).toBe(1)
+    expect(line).toContain(text.liquidationNoteInsufficient)
+    expect(line).not.toContain(text.liquidationNoteNoHit)
+    expect(line).not.toContain(text.liquidationNoteUnreadable)
+  })
+
+  it('never speaks on a card that is empty, failed or still loading', () => {
+    // 那是平台 `StateView` 的地盘：同一件事不许有两个出处，也不许两句话一起上屏。
+    for (const state of [
+      { state: 'empty' as const, onReload: () => undefined },
+      { state: 'unavailable' as const, onReload: () => undefined },
+      { state: 'loading' as const }
+    ]) {
+      expect(noteOf(state).count).toBe(0)
+    }
+  })
+
+  it('keeps the note a footnote: muted, one line, no icon, no alert tone', () => {
+    const { line } = noteOf(insufficient)
+    // 脚注语气：没有图标、没有告警色标记，只有一句话。
+    expect(line).not.toContain('<svg')
+    expect(line).not.toContain('data-tone')
+    expect(styles).toMatch(/\.mi-positioning-panel__liquidation-note \{[^}]*color: var\(--mi-dashboard-muted\)/)
   })
 })
 

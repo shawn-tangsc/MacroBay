@@ -6,7 +6,7 @@ import { Segmented } from '@platform/ui/components/segmented'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Modal } from '@platform/ui/components/modal'
 import { Tooltip } from '@platform/ui/components/tooltip'
-import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -24,7 +24,7 @@ import {
   type DashboardSignalChip
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
-import { SignalDetail, SignalReadIssue } from '../shared'
+import { SignalDetail } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import { PositioningChart, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
@@ -105,6 +105,8 @@ function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
+  // 重试那一枚的文案归平台（`ui.state.action.retry`）：这行不造句，也不新造第二个「重试」。
+  const stateText = useStateViewText()
   const analysisSentence = useSignalAnalysisSentence(positioning.state === 'available' ? positioning.signalAnalysis : undefined)
   // 牌子本身就是入口（界面设计 v2，2026-11-08）：没有再单独一颗「口径说明」。牌子只在规则命中时
   // 存在——没有读数就没有可解释的口径，给入口等于给空盒子。
@@ -117,6 +119,36 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const signal = positioning.state === 'available' ? positioning.signal : undefined
   const chip = signal && signal.state !== 'hidden' ? signal : undefined
   const alertChip = chip?.state === 'alert' ? chip : undefined
+  /**
+   * 强平判定的三种说法，卡面脚注区一行、互斥（产品 2026-11-08）。
+   *
+   * 判据全部来自同一份投影，不另算：牌子 `hidden` = 读到了、判完了、零命中；`unreadable` =
+   * 规则那次没读到；`insufficient` = 读到了但成交量腿不齐。第三种以前只给一枚「数据不齐」的
+   * 状态牌、第二种只给一个 16px 感叹号——两者都说不清「是没命中，还是没读到」。
+   *
+   * 整卡本身不可用时（空 / 读失败 / 加载中）这行不出现：那是平台 `StateView` 的地盘。
+   */
+  // 判据直接读投影里的牌子状态（不从上面那个只为「显示哪些牌子」过滤过的 `chip` 取：
+  // `hidden` 恰恰是被过滤掉的那一种，而「没命中」正是它）。
+  const liquidationNote: 'noHit' | 'unreadable' | 'insufficient' | undefined =
+    positioning.state !== 'available'
+      ? undefined
+      : positioning.signal.state === 'alert'
+        ? undefined
+        : positioning.signal.state === 'unreadable'
+          ? 'unreadable'
+          : positioning.signal.state === 'insufficient'
+            ? 'insufficient'
+            : 'noHit'
+  // 这行只在整卡可用时存在，但 JSX 里读不到那个收窄：把重读入口先取出来。
+  const reloadPositioning = positioning.state === 'available' ? positioning.onReload : undefined
+  const liquidationNoteText = liquidationNote === 'noHit'
+    ? text.liquidationNoteNoHit
+    : liquidationNote === 'unreadable'
+      ? text.liquidationNoteUnreadable
+      : liquidationNote === 'insufficient'
+        ? text.liquidationNoteInsufficient
+        : undefined
   const header = (extra?: React.ReactNode) => (
     <header className="mi-positioning-panel__head">
       <h2>{text.pairTitle}</h2>
@@ -137,12 +169,6 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             <ChevronRight aria-hidden="true" className="mi-positioning-panel__signal-chevron" size={6} strokeWidth={2} />
           </button>
         </Tooltip>
-      ) : chip?.state === 'unreadable' ? (
-        // 读不到只留一个标记：一处一个、不占版面、悬停与聚焦都能读到人话。卡片正面没有那行字。
-        <SignalReadIssue failureCode={chip.failureCode} resolveText={resolveProductKey} />
-      ) : chip ? (
-        // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
-        <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
       ) : null}
       {extra}
       <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
@@ -232,6 +258,17 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             : status}
         </div>
       </div>
+      {liquidationNoteText ? (
+        // 一行，muted，不是警报色：它说的是判定的结论，不是「我们出错了」。
+        <p className="mi-positioning-panel__liquidation-note" data-liquidation-note={liquidationNote} role="status">
+          {liquidationNoteText}
+          {liquidationNote === 'unreadable'
+            // 「读不到」后面跟那枚既有重试：读者在这行要的是一个动作和一个结论，不是诊断。
+            ? <button type="button" className="mi-positioning-panel__liquidation-retry"
+                onClick={reloadPositioning}>{stateText(STATE_VIEW_ACTION_KEYS.retry)}</button>
+            : null}
+        </p>
+      ) : null}
     </section>
   )
 }

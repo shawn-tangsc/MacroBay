@@ -120,7 +120,11 @@
 }
 /* 弹层打开时，牌子上那条说明必须让位：气泡挂到 `<body>`、层级 1070，比弹窗的 1000 高，留着就会浮在
    弹层之上（界面设计 v2 §二）。用 `:has()` 认「这一屏开着这张卡的弹层」，关掉即失效——不写 `<body>`
-   属性、也不去动全局 tooltip 样式。牌子本身不重建，所以焦点回位仍归 antd。 */
+   属性、也不去动全局 tooltip 样式。牌子本身不重建，所以焦点回位仍归 antd。
+
+   **这是一处 workaround，不是设计**：组件层已经修过「气泡挡点击」（`242020e`，tooltip 两侧节点都
+   `pointer-events: none`），但「气泡浮在弹窗上面」组件还没管。等平台 Tooltip 支持受控开合（或给
+   弹层场景一个开关），这条整块撤掉，调用点不再碰 `.ant-tooltip`。 */
 body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }
 
 /* 6×6 的 ›：只表示「点开有东西」，不是第二颗按钮。 */
@@ -156,3 +160,21 @@ body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }
 .mi-positioning-panel__help-notes { display: grid; gap: 6px; }
 .mi-positioning-panel__help-notes p { margin: 0; }
 
+
+/* 强平判定的脚注：卡面最末一行，三句互斥、同位置只出现一句（没命中 / 读不到 / 数据不齐）。
+   muted、单行、不加图标、不用告警色——它说的是判定的结论，不是「我们出错了」。
+   整卡本身空/读失败时这行不出现：那是平台 `StateView` 的地盘。 */
+.mi-positioning-panel__liquidation-note {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  margin: 0; color: var(--mi-dashboard-muted);
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+}
+/* 「读不到」后面那枚既有重试（`ui.state.action.retry`，不新造文案）：一行文字按钮，没有第二个框，
+   因为它是这行的动作，不是第二颗牌子。 */
+.mi-positioning-panel__liquidation-retry {
+  padding: 0; border: 0; background: none; color: var(--mi-dashboard-text);
+  font: inherit; font-size: var(--mi-reading-note-size); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.mi-positioning-panel__liquidation-retry:hover { color: var(--mi-dashboard-lime); }
+.mi-positioning-panel__liquidation-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
