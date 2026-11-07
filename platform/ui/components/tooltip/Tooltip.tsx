@@ -79,6 +79,17 @@ export type TooltipProps<K extends string = string> = {
 const BUBBLE_STYLE = { fontSize: 12 } as const
 
 /**
+ * 提示气泡不接受指针事件：鼠标移上去、点下去都穿到下面的控件上。
+ *
+ * 理由不是某三张卡：气泡是**说明**，不是控件，它一挡住下面的东西，读者反而点不动本来要点的。
+ * 这件事对整个应用都成立，所以只能在这里做——让调用方去写全局 `.ant-tooltip` 是越界：
+ * 一处组件的默认行为变成逐页的私有样式，下一个用提示的人还得再写一遍。
+ *
+ * 容器与内容都写上：antd 把 `root` 与 `body` 分成两个节点，只给一个，另一个仍会接住点击。
+ */
+const BUBBLE_POINTER_EVENTS = { pointerEvents: 'none' } as const
+
+/**
  * 定位不接受参数（契约 §6），但它**必须显式写死**：antd 的默认位置是 `top`，不是 `bottom`。
  * 直接把参数删掉，提示会跑到上方——那不是「没设置」，是设置错了。
  *
@@ -102,7 +113,7 @@ export function Tooltip<K extends string = string>(props: TooltipProps<K>): Reac
       getPopupContainer={overlayContainer}
       mouseEnterDelay={0.3}
       placement={PLACEMENT}
-      styles={{ body: BUBBLE_STYLE }}
+      styles={{ root: BUBBLE_POINTER_EVENTS, body: { ...BUBBLE_STYLE, ...BUBBLE_POINTER_EVENTS } }}
       title={text}
       trigger={['hover', 'focus']}>
       {children}
