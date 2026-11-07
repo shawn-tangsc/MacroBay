@@ -45,7 +45,6 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.landed.cost': '选这一项，一天可能收到十几条；只推你在上面勾选的重要性档位。',
   'pages.intelligence.notification.landed.note': '这一行管的是事件发生后的那条通知；和上面「提前多久」不是同一件事。',
   'pages.intelligence.notification.groupTitle': '情报通知',
-  'pages.intelligence.notification.groupInfo.1': '只有这四条会发到手机；其余情报不推手机，仍会按你的「应用内提示」「桌面提醒」开关提醒。',
   'pages.intelligence.notification.groupInfo.2': '四条同时成立才会推到手机：这里勾了、事件本身允许推手机、频道已启用、频道可用。',
 
   'pages.intelligence.notification.channelNotReady': '还没有可用频道，勾选会保留，等频道能用时生效。',
@@ -105,7 +104,6 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.landed.cost': 'With this on, expect a dozen or more notices a day; only the importance levels you tick above are sent.',
   'pages.intelligence.notification.landed.note': 'This row governs the notice after an event lands; it is not the same thing as the lead time above.',
   'pages.intelligence.notification.groupTitle': 'Intelligence notifications',
-  'pages.intelligence.notification.groupInfo.1': 'Only these four reach your phone. Everything else stays off your phone — those notices still follow your in-app and desktop switches.',
   'pages.intelligence.notification.groupInfo.2': 'All four must hold: switched on here, the event allows phone delivery, the channel is enabled, and the channel is available.',
 
   'pages.intelligence.notification.channelNotReady': 'No usable channel yet. Your choices are kept and take effect once a channel is available.',

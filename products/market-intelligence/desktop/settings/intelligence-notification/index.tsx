@@ -119,11 +119,10 @@ export default function IntelligenceNotificationSettingsSection(
         {/* 整页的说明收进 ⓘ：它不是操作也不是状态，正文只留字段名、当前值与控件。 */}
         <div className="intelligence-notification-list-head">
           <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
+          {/* 只留一句：它回答的是「勾了为什么不响」（批准 / 频道 / 开关三道），
+              而不是再复述一遍「其余通知去哪」。两句叠在一起读者要读两遍才懂。 */}
           <Popover
-            lines={[
-              { labelKey: 'pages.intelligence.notification.groupInfo.1' },
-              { labelKey: 'pages.intelligence.notification.groupInfo.2' }
-            ]}
+            labelKey="pages.intelligence.notification.groupInfo.2"
             resolveText={resolveText}
             trigger={(triggerProps) => (
               <IconButton
