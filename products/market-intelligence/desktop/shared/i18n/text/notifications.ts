@@ -111,6 +111,11 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.briefingReady)]: '{date} {time} {language}这一期已经生成。',
     [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
 
+    // N12：信号唤起的那次分析出结论。正文由源头拼成品（结论一句 + 半句理由），这张表只是旧记录的回退句。
+    [TITLE(IDS.analysisConclusion)]: '分析结论',
+    [BODY(IDS.analysisConclusion)]: '这次分析的结论已经出来了。',
+    [REASON(IDS.analysisConclusion)]: '你订阅了信号触发的分析结论提醒。',
+
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
     [BODY(IDS.timezoneInvalid)]: '去设置里改成有效的时区，日报会恢复自动生成。',
     [REASON(IDS.timezoneInvalid)]: '设置里的时区读不出来。'
@@ -182,6 +187,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
     [BODY(IDS.briefingReady)]: 'The {date} {time} {language} edition is ready.',
     [REASON(IDS.briefingReady)]: 'You subscribed to briefing-ready notices.',
+
+    [TITLE(IDS.analysisConclusion)]: 'Analysis conclusion',
+    [BODY(IDS.analysisConclusion)]: 'The conclusion from this analysis is ready.',
+    [REASON(IDS.analysisConclusion)]: 'You subscribed to signal-triggered analysis conclusions.',
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
     [BODY(IDS.timezoneInvalid)]: 'Set a valid time zone in settings and the briefing will generate automatically again.',
