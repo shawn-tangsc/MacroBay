@@ -1,6 +1,8 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Info } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
+import { Popover } from '@platform/ui/components/popover'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { Tooltip } from '@platform/ui/components/tooltip'
@@ -176,10 +178,25 @@ export function EtfSignalDetailDialog({ open, onClose, chip, verifiedAt, text, a
     width="standard">
     {/* 正文自己滚：标题与关闭键不动，8 行以上也不会把窗口顶出屏幕。 */}
     <div className="mi-capital-signal-dialog__body">
+      {/* 元说明只有一处：标题行尾的一颗 ⓘ，悬停/聚焦打开；正文只留读数、流水与时间。
+          这是用户的通用规则——说明性文字不许作为正文铺开（界面 2026-11-08，与背离卡同一形态）。 */}
+      <div className="mi-capital-signal-dialog__head">
+        <Popover
+          lines={[{ labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailNote' }]}
+          resolveText={resolveText}
+          trigger={triggerProps => (
+            <IconButton
+              {...triggerProps}
+              ariaLabelKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle"
+              icon={Info}
+              resolveText={resolveText}
+              size="sm"
+              variant="plain" />
+          )} />
+      </div>
       <SignalDetail
         groups={groups}
         id={ETF_SIGNAL_DETAIL_ID}
-        noteKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailNote"
         titleKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle" />
     </div>
   </Modal>

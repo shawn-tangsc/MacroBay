@@ -2,6 +2,13 @@
    常驻区不留解释，点开给一个可关闭的弹层；这里只管弹层内部：正文自己滚、标签列 136px、
    值比标签亮一档、落款与读数之间一条分隔线。颜色全部走看板 token，深浅两套与卡片同底同描边。 */
 
+/* 说明只有一颗 ⓘ，靠右坐在正文第一行：正文里不放解释性段落。 */
+.mi-capital-signal-dialog__head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 2px;
+}
+
 /* 标题与关闭键不滚，正文自己滚：行数再多也不把窗口顶出去。 */
 .mi-capital-signal-dialog__body {
   max-height: min(70vh, 560px);

@@ -422,8 +422,27 @@ describe('CapitalConditionsPanel', () => {
     expect(content).toContain('-$488.7M')
     expect(content).toContain('3/3')
     expect(content).toContain('2026-10-30')
-    expect(content).toContain(text.signalDetailNote)
+    // 说明性文字不再铺在正文里；读数、流水与时间照旧一行不动。
+    expect(content).not.toContain(text.signalDetailNote)
     expect(content).not.toContain('etf-outflow-3d')
+  })
+
+  // 说明收进一颗 ⓘ：正文命中 0，打开后逐句都在（与背离卡同一形态）。
+  it('keeps the meta explanation behind one info button, not in the body', async () => {
+    const { text, container } = await renderAlert()
+    await act(async () => container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.click())
+
+    const body = document.querySelector<HTMLElement>('.mi-capital-signal-dialog__body')!
+    expect(body.textContent).not.toContain(text.signalDetailNote)
+
+    const info = body.querySelector<HTMLButtonElement>('.icon-button')!
+    expect(info).not.toBeNull()
+    await act(async () => { info.focus() })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+
+    // 逐句：这句落款（含两个分句）在浮层里整句出现。
+    expect(document.body.textContent).toContain(text.signalDetailNote)
+    expect(document.querySelector('.mi-capital-signal-dialog')).not.toBeNull()
   })
 
   // 判据三：× / Esc / 遮罩三种关法，各关一次都能关，关后焦点回到牌子。
