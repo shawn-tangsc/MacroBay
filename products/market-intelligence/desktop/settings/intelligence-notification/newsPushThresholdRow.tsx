@@ -9,6 +9,7 @@ import { Segmented } from '@platform/ui/components/segmented'
 import type { NewsSentimentTierThreshold } from '../../../contracts/newsSentimentTiers'
 import { SettingsRow } from './settingsRow'
 import type { NewsPushThresholdRowState } from './useNewsPushThreshold'
+import { NEWS_PUSH_THRESHOLD_KEYS } from './notificationKeys'
 
 /**
  * 「舆情提醒」详情里的一行：**最低强度**（高 / 中 / 低，默认中；选哪档就是该档及以上都推）。
@@ -41,7 +42,7 @@ export function NewsPushThresholdRow(props: Readonly<{
       ariaLabelKey="pages.intelligence.notification.threshold.row"
       items={(['high', 'medium', 'low'] as const).map((tier) => ({
         value: tier,
-        labelKey: `pages.intelligence.notification.threshold.${tier}`
+        labelKey: NEWS_PUSH_THRESHOLD_KEYS[tier]
       }))}
       onChange={(next) => props.state.setThreshold(next as NewsSentimentTierThreshold)}
       resolveText={props.resolveText}

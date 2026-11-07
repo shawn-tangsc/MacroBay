@@ -13,6 +13,7 @@ import { CALENDAR_REMINDER_LEAD_MINUTES } from '../../../contracts/calendarEvent
 import { SettingsGroup, SettingsRow } from './settingsRow'
 import type { CalendarReminderSettingsState } from './useCalendarReminderSettings'
 import type { useSurfaceSelection } from './useSurfaceSelection'
+import { CALENDAR_LANDED_FILTER_KEYS, CALENDAR_REMINDER_LEAD_KEYS } from './notificationKeys'
 
 type SurfaceState = ReturnType<typeof useSurfaceSelection>
 
@@ -160,7 +161,7 @@ export function CalendarDetail(props: Readonly<{
               ariaLabelKey="pages.intelligence.notification.calendar.lead"
               items={CALENDAR_REMINDER_LEAD_MINUTES.map((minutes) => ({
                 value: String(minutes),
-                labelKey: `pages.intelligence.notification.leads.${minutes}`
+                labelKey: CALENDAR_REMINDER_LEAD_KEYS[minutes]
               }))}
               onChange={(next) => reminder.update({ leadMinutes: Number(next) as typeof value.leadMinutes })}
               resolveText={props.resolveText}
@@ -210,7 +211,7 @@ export function CalendarDetail(props: Readonly<{
           ariaLabelKey="pages.intelligence.notification.calendar.landedRow"
           items={(['surprise-only', 'also-matched'] as const).map((filter) => ({
             value: filter,
-            labelKey: `pages.intelligence.notification.landed.${filter}`
+            labelKey: CALENDAR_LANDED_FILTER_KEYS[filter]
           }))}
           onChange={(next) => reminder.update({ landedFilter: next as typeof value.landedFilter })}
           resolveText={props.resolveText}
