@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { ChevronRight } from 'lucide-react'
+import { useState } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
 
@@ -23,7 +24,7 @@ import {
   type DashboardSignalChip
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
-import { SignalDetail, SignalReadIssue, useSignalDetail } from '../shared'
+import { SignalDetail, SignalReadIssue } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import { PositioningChart, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
@@ -104,47 +105,45 @@ function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
-  // Opening the numbers spends nothing: no analysis call, no budget, no request. The paid action
-  // is one level deeper and is not this button.
-  const signalDetail = useSignalDetail('mi-positioning-signal-detail')
   const analysisSentence = useSignalAnalysisSentence(positioning.state === 'available' ? positioning.signalAnalysis : undefined)
-  // The long readings sit behind their own entry: closed by default, so the card stays a card.
-  const [helpOpen, setHelpOpen] = useState(false)
+  // 牌子本身就是入口（界面设计 v2，2026-11-08）：没有再单独一颗「口径说明」。牌子只在规则命中时
+  // 存在——没有读数就没有可解释的口径，给入口等于给空盒子。
+  // 牌子在弹层打开时**不重建**：焦点回位是 antd 在 afterClose 里把焦点送回「打开前的那个节点」，
+  // 牌子一旦换成另一个节点，回位就落到 `<body>`。所以说明气泡靠一条 CSS 让位（见 PositioningPanel.css），
+  // 而不是靠把 `Tooltip` 从树上摘掉。
+  const [dialogOpen, setDialogOpen] = useState(false)
   // The chip the module's rule produced, if any. A hidden chip renders nothing at all — no empty
   // container, no grey "normal": an always-present badge becomes background noise within a fortnight.
   const signal = positioning.state === 'available' ? positioning.signal : undefined
   const chip = signal && signal.state !== 'hidden' ? signal : undefined
+  const alertChip = chip?.state === 'alert' ? chip : undefined
   const header = (extra?: React.ReactNode) => (
     <header className="mi-positioning-panel__head">
       <h2>{text.pairTitle}</h2>
-      {chip ? (chip.state === 'alert' ? (
-        <button type="button" className="mi-positioning-panel__signal" data-state="alert"
-          {...signalDetail.triggerProps}
-          aria-label={`${chipLabel(text, chip)} · ${text.signalDetailsOpen}`}
-          onClick={signalDetail.toggle}>
-          {chipLabel(text, chip)}
-        </button>
-      ) : chip.state === 'unreadable' ? (
+      {alertChip ? (
+        // 说明与点击并存：说明是规则/窗口/「这是推断值」那一句，悬停与聚焦都能读到；气泡在下、
+        // 点在牌子上。牌子本身不重建（弹层打开时只让气泡让位），焦点回位才落得回它身上。
+        <Tooltip resolveText={resolveProductKey}
+          labelKey="pages.intelligence.portal.dashboard.positioning.signalHover"
+          labelParams={{ rule: text.signalDetailsRuleName, window: text.window15m, kind: text.signalKindInferred }}>
+          {/* 牌子即入口：可见文字就是读数，后面一句话说清点开会怎样（label-in-name 成立）。
+              没有 `aria-expanded`——弹层不是就地展开；回车与空格由原生 `button` 给。 */}
+          <button type="button" className="mi-positioning-panel__signal" data-state="alert"
+            aria-haspopup="dialog"
+            aria-label={`${chipLabel(text, alertChip)} · ${text.helpDetailsLabel}`}
+            onClick={() => setDialogOpen(true)}>
+            {chipLabel(text, alertChip)}
+            {/* 只表示「点开有东西」：不是第二颗按钮，也不抢读数本身的注意力。 */}
+            <ChevronRight aria-hidden="true" className="mi-positioning-panel__signal-chevron" size={6} strokeWidth={2} />
+          </button>
+        </Tooltip>
+      ) : chip?.state === 'unreadable' ? (
         // 读不到只留一个标记：一处一个、不占版面、悬停与聚焦都能读到人话。卡片正面没有那行字。
         <SignalReadIssue failureCode={chip.failureCode} resolveText={resolveProductKey} />
-      ) : (
+      ) : chip ? (
         // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
         <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
-      )) : null}
-      {/*
-        One entry, not two: the bullets lead the same readings the long notes sit in, so the reader
-        opens one place. The second trigger this card used to carry (an icon button over the four
-        bullets) made the reader choose between two explanations of one card.
-
-        The entry opens a dialog rather than growing the card (2026-11-08, user): the notes used to
-        push the chart down while reading, and closing them meant scrolling back to the card. The
-        trigger stays a button, and the platform `Modal` owns Escape, the backdrop and focus return.
-      */}
-      <button type="button" className="mi-positioning-panel__help-toggle"
-        aria-haspopup="dialog"
-        onClick={() => setHelpOpen(true)}>
-        {text.helpDetailsLabel}
-      </button>
+      ) : null}
       {extra}
       <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
     </header>
@@ -174,46 +173,49 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
         </>
       )}
       {/*
-        The dialog body carries `mi-sample-surface`: the modal portals to <body>, so the portal
-        palette declared on the page root never reaches it and every `--mi-dashboard-*` here would
-        resolve to nothing (the bars once came out transparent this way).
+        弹层里三组，讲的是同一件事的三个层次：这次读数是什么、这张卡在读什么、口径上哪里容易读错。
+        读数原先挂在牌子下面就地展开；牌子现在只开这一个弹层，那些数字跟着进来，否则它们没有第二个家。
+
+        `mi-sample-surface` 挂在弹层根上：弹窗 portal 到 `<body>`，页面根上的门户色板到不了这里，
+        不带它，`--mi-dashboard-*` 会全部解析成空（资金流那张卡的柱子就这样透明过一次）。
       */}
-      <Modal open={helpOpen} width="standard"
-        titleKey="pages.intelligence.portal.dashboard.positioning.helpDetailsLabel"
-        onClose={() => setHelpOpen(false)}
-        className="mi-sample-surface mi-positioning-panel__help-modal"
-        destroyOnHidden
-        resolveText={resolveProductKey}>
-        <div className="mi-positioning-panel__help-dialog">
-          <ul className="mi-positioning-panel__help-bullets">
-            {positioningHelpBulletKeys.map(labelKey => (
-              <li key={labelKey}>{resolveProductKey(labelKey)}</li>
-            ))}
-          </ul>
-          <hr className="mi-positioning-panel__help-divider" />
-          <div className="mi-positioning-panel__help-notes">
-            {positioningHelpDetailKeys.map(labelKey => (
-              <p key={labelKey}>{resolveProductKey(labelKey)}</p>
-            ))}
+      {alertChip ? (
+        <Modal open={dialogOpen} width="standard"
+          titleKey="pages.intelligence.portal.dashboard.positioning.helpDetailsLabel"
+          onClose={() => setDialogOpen(false)}
+          className="mi-sample-surface mi-positioning-panel__help-modal"
+          destroyOnHidden
+          resolveText={resolveProductKey}>
+          <div className="mi-positioning-panel__help-dialog">
+            <SignalDetail
+              id="mi-positioning-signal-detail"
+              titleKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
+              rows={[
+                // 第一行回答「这次分析到哪一步」：读者点开牌子最先想知道的是分析会不会来。
+                ...(analysisSentence ? [{ labelKey: 'pages.intelligence.portal.dashboard.signalAnalysis.label', value: analysisSentence }] : []),
+                // The rule's own words, never its internal id: the reader came to check the reading,
+                // not to learn a code name.
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsRule', value: text.signalDetailsRuleName },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsWindow', value: text.window15m },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsDrop', value: formatDashboardChange(alertChip.dropPct) },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsVolume', value: `${alertChip.volumeMultiple.toFixed(1)}×` },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsObservedAt', value: formatTime(alertChip.observedAt) }
+              ]}
+              noteKey="pages.intelligence.portal.dashboard.positioning.signalDetailsNote" />
+            <hr className="mi-positioning-panel__help-divider" />
+            <ul className="mi-positioning-panel__help-bullets">
+              {positioningHelpBulletKeys.map(labelKey => (
+                <li key={labelKey}>{resolveProductKey(labelKey)}</li>
+              ))}
+            </ul>
+            <hr className="mi-positioning-panel__help-divider" />
+            <div className="mi-positioning-panel__help-notes">
+              {positioningHelpDetailKeys.map(labelKey => (
+                <p key={labelKey}>{resolveProductKey(labelKey)}</p>
+              ))}
+            </div>
           </div>
-        </div>
-      </Modal>
-      {chip?.state === 'alert' && signalDetail.open ? (
-        <SignalDetail
-          id="mi-positioning-signal-detail"
-          titleKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
-          rows={[
-            // 第一行回答「这次分析到哪一步」：读者点开牌子最先想知道的是分析会不会来。
-            ...(analysisSentence ? [{ labelKey: 'pages.intelligence.portal.dashboard.signalAnalysis.label', value: analysisSentence }] : []),
-            // The rule's own words, never its internal id: the reader came to check the reading,
-            // not to learn a code name.
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsRule', value: text.signalDetailsRuleName },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsWindow', value: text.window15m },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsDrop', value: formatDashboardChange(chip.dropPct) },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsVolume', value: `${chip.volumeMultiple.toFixed(1)}×` },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsObservedAt', value: formatTime(chip.observedAt) }
-          ]}
-          noteKey="pages.intelligence.portal.dashboard.positioning.signalDetailsNote" />
+        </Modal>
       ) : null}
       <div className="mi-positioning-panel__body">
         <div className="mi-positioning-panel__summary">

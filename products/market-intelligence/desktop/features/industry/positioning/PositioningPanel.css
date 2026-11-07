@@ -98,33 +98,39 @@
 
 /* The module rule's chip: at most one per card, beside the title, never over a reading. */
 .mi-positioning-panel__signal {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
   padding: 1px 6px; border-radius: 3px;
   border: 1px solid var(--mi-dashboard-line);
   background: none; color: var(--mi-dashboard-text); font: inherit;
   font-size: 10px; font-weight: 600;
   line-height: 16px; white-space: nowrap; cursor: pointer;
 }
-.mi-positioning-panel__signal:hover,
-.mi-positioning-panel__signal:focus-visible { border-color: var(--mi-dashboard-text); }
+/* 牌子即入口（界面设计 v2 §一）：悬停整颗加深一档、不加下划线——读数下面的横线会把它切成两段。
+   这张卡的牌子是中性色，不是资金面那种带负向底色的牌子，所以「加深一档」落成一层文字色薄底
+   加一档更实的描边，而不是照抄那组负向配比。 */
+.mi-positioning-panel__signal:hover {
+  background: color-mix(in srgb, var(--mi-dashboard-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-text) 55%, var(--mi-dashboard-line));
+}
+/* 键盘聚焦用平台统一规格，并保留「加深一档」：读者要看出自己停在一个可点的东西上。 */
+.mi-positioning-panel__signal:focus-visible {
+  background: color-mix(in srgb, var(--mi-dashboard-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-text) 55%, var(--mi-dashboard-line));
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* 弹层打开时，牌子上那条说明必须让位：气泡挂到 `<body>`、层级 1070，比弹窗的 1000 高，留着就会浮在
+   弹层之上（界面设计 v2 §二）。用 `:has()` 认「这一屏开着这张卡的弹层」，关掉即失效——不写 `<body>`
+   属性、也不去动全局 tooltip 样式。牌子本身不重建，所以焦点回位仍归 antd。 */
+body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }
+
+/* 6×6 的 ›：只表示「点开有东西」，不是第二颗按钮。 */
+.mi-positioning-panel__signal-chevron { flex: none; opacity: .55; transition: opacity .12s; }
+.mi-positioning-panel__signal:hover .mi-positioning-panel__signal-chevron,
+.mi-positioning-panel__signal:focus-visible .mi-positioning-panel__signal-chevron { opacity: .95; }
 
 
 /* The block behind the chip is the shared `SignalDetail`; this card adds nothing to it, so there is
    no card-local rule here to drift from the shared one. */
-
-/* The entry to the readings behind the numbers: a word, not a chip. Body-level type, not the
-   footnote size of the chip row beside it; hover brightens the word and draws nothing — a block
-   behind a two-character entry reads as a second button ring. Type comes from the dashboard's
-   reading-note tokens: the same shape exists on another card, and a number written in two places
-   drifts (the two cards already disagreed once: 10px against 11.5px). */
-.mi-positioning-panel__help-toggle {
-  padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit;
-  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  white-space: nowrap; cursor: pointer;
-}
-.mi-positioning-panel__help-toggle:hover { color: var(--mi-dashboard-text); }
-.mi-positioning-panel__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 /* The readings now live in a dialog, not under the card: the region used to push the chart down
    while the reader was looking at it, and closing it meant scrolling back (user, 2026-11-08).

@@ -33,29 +33,39 @@ const positioning: DashboardPositioningViewState = {
   eth: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
   changeBtc: { h1Pct: -0.4, h24Pct: -6.5 },
   changeEth: { h1Pct: 0.2, h24Pct: 2.7 },
-  signal: { state: 'hidden' }
+  signal: { state: 'hidden' },
+  // 与钩子里的卡片状态同型：`onReload` 是每张卡都有的重读入口，不是某个状态的专属字段。
+  onReload: () => undefined
 }
 
+/** 需要改动「一半字段」的用例从这里展开：展开一个联合类型会丢掉 `state` 的判别力。 */
+const availablePositioning = positioning as Extract<DashboardPositioningViewState, { state: 'available' }>
+
 const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
-  renderToStaticMarkup(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+  renderToStaticMarkup(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(PositioningPanel, {
     funding, positioning, window: '7d', onWindowChange: () => undefined, text, ...props
-  })))
+  }) }))
 
 afterEach(() => { document.body.innerHTML = '' })
 
 
-/** Mounts the card. The dialog it opens portals to `<body>`, so assertions about it read there. */
-async function mountPanel(): Promise<{ host: HTMLElement; entry: HTMLButtonElement }> {
+/** A card whose rule fired: the chip exists only then, and the chip is the entry to the dialog. */
+const alertPositioning: DashboardPositioningViewState = {
+  ...positioning,
+  signal: { state: 'alert', asset: 'btc', direction: 'long', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) }
+}
+
+/** Mounts the card. The dialog portals to `<body>`, so assertions about it read there. */
+async function mountPanel(renderProps: Partial<Parameters<typeof PositioningPanel>[0]> = {}): Promise<{ host: HTMLElement; entry: HTMLButtonElement }> {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
   await act(async () => {
-    root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
-      funding, positioning, window: '7d', onWindowChange: () => undefined, text
-    })))
+    root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(PositioningPanel, {
+      funding, positioning, window: '7d', onWindowChange: () => undefined, text, ...renderProps
+    }) }))
   })
-  const entry = [...host.querySelectorAll('button')].find(button => button.textContent === text.helpDetailsLabel) as HTMLButtonElement
-  return { host, entry }
+  return { host, entry: host.querySelector<HTMLButtonElement>('.mi-positioning-panel__signal')! }
 }
 
 /** antd mounts a portal panel after `open` flips; these flushes run its effects and close timers. */
@@ -77,9 +87,8 @@ async function settleClose(): Promise<void> {
 }
 
 async function openReadings(): Promise<{ host: HTMLElement; entry: HTMLButtonElement }> {
-  const mounted = await mountPanel()
-  // 先聚焦再点开：antd 记下的是「打开前聚焦的元素」，关后往那里送回焦点。
-  // 浏览器点按钮本身就会聚焦，happy-dom 不会，所以这一步在这里显式做。
+  const mounted = await mountPanel({ positioning: alertPositioning })
+  // 先聚焦再点开：antd 记下的是「打开前聚焦的元素」。浏览器点按钮本身就会聚焦，happy-dom 不会。
   mounted.entry.focus()
   await act(async () => { mounted.entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   await flush()
@@ -119,9 +128,9 @@ describe('positioning panel', () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
-    act(() => { root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+    act(() => { root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(PositioningPanel, {
       funding, positioning, window: '7d', onWindowChange, text
-    }))) })
+    }) })) })
     const options = [...container.querySelectorAll('[role="group"] button')] as HTMLButtonElement[]
     expect(options).toHaveLength(2)
     act(() => { options[1]!.click() })
@@ -132,8 +141,8 @@ describe('positioning panel', () => {
   it('marks the bucket the rule reported and names it once, on the chip', () => {
     const markup = render({
       positioning: {
-        ...positioning,
-        signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
+        ...availablePositioning,
+        signal: { state: 'alert', asset: 'btc', direction: 'long', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
       }
     })
     // One mark, pinned to the signal's own bucket, and one chip naming it.
@@ -144,12 +153,12 @@ describe('positioning panel', () => {
   })
 
   it('says the data is insufficient instead of implying nothing happened', () => {
-    const markup = render({ positioning: { ...positioning, signal: { state: 'insufficient' } } })
+    const markup = render({ positioning: { ...availablePositioning, signal: { state: 'insufficient' } } })
     expect(markup).toContain(text.signalInsufficient)
   })
 
   it('keeps the funding half when the positioning half is missing, and marks which half failed', () => {
-    const markup = render({ positioning: { state: 'empty' } })
+    const markup = render({ positioning: { state: 'empty', onReload: () => undefined } })
     expect(markup).toContain('data-state="empty"')
     // An empty card is a state, and the shared StateView owns its sentence and shape now.
     expect(markup).toContain('class="state-view')
@@ -161,8 +170,8 @@ describe('positioning panel', () => {
   it('tells a failed read from an empty one', () => {
     // Nothing collected is `empty`; a read that could not answer is `error`. Mixing them is how
     // "we have nothing" and "we could not look" start reading alike.
-    expect(render({ positioning: { state: 'unavailable' } })).toContain('data-state="error"')
-    expect(render({ positioning: { state: 'empty' } })).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
+    expect(render({ positioning: { state: 'unavailable', onReload: () => undefined } })).toContain('data-state="error"')
+    expect(render({ positioning: { state: 'empty', onReload: () => undefined } })).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
   })
 
   it('shows the loading state through the shared component', () => {
@@ -183,7 +192,7 @@ describe('positioning panel', () => {
   })
 
   it('flags a stale reading without dropping it', () => {
-    const markup = render({ positioning: { ...positioning, staleSince: at(120) } })
+    const markup = render({ positioning: { ...availablePositioning, staleSince: at(120) } })
     expect(markup).toContain('data-stale="true"')
     expect(markup).toContain(text.stale)
     expect(markup).toMatch(/\$8\.8\dB/)
@@ -234,9 +243,9 @@ describe('hover readout', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(PositioningPanel, {
         funding, positioning, window: '7d', onWindowChange: () => undefined, text
-      })))
+      }) }))
     })
     // The help trigger is an SVG icon too; pick the chart, not the glyph.
     const svg = container.querySelector('.mi-positioning-panel__chart svg')!
@@ -276,9 +285,9 @@ describe('combined readout', () => {
     document.body.append(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(PositioningPanel, {
         funding, positioning, window: '7d', onWindowChange: () => undefined, text
-      })))
+      }) }))
     })
     expect(container.textContent).toContain(text.states.deleveraging)
     // The "why" line is a one-line tooltip: the numbers appear only once the reader asks for them.
@@ -293,13 +302,23 @@ describe('combined readout', () => {
   })
 })
 
-describe('the readings open in a dialog', () => {
-  it('puts the whole explanation in the dialog, and leaves nothing behind in the card', async () => {
-    // The card used to carry an icon button opening four bullets and a text entry opening the long
-    // notes: two explanations of one card, and the reader had to pick. Then it grew the notes
-    // inline, which pushed the chart down while reading.
-    const { host, entry } = await mountPanel()
-    expect(host.querySelector('#mi-positioning-help-details')).toBeNull()
+describe('the chip is the entry to the dialog', () => {
+  it('opens from the chip, and the chip says so three ways', async () => {
+    const { host, entry } = await mountPanel({ positioning: alertPositioning })
+    // 牌子上就是读数，不是第二颗按钮：`aria-haspopup` 说清点开是对话框；没有 `aria-expanded`，
+    // 因为这不是就地展开。
+    expect(entry.tagName).toBe('BUTTON')
+    expect(entry.getAttribute('aria-haspopup')).toBe('dialog')
+    expect(entry.hasAttribute('aria-expanded')).toBe(false)
+    // 可见文字在前（label-in-name），后面才说点开会怎样。
+    const label = entry.getAttribute('aria-label')!
+    expect(label.startsWith('疑似多头爆仓')).toBe(true)
+    expect(label).toContain(text.helpDetailsLabel)
+    // 常驻 6×6 的 ›：只表示「点开有东西」。
+    const chevron = entry.querySelector('.mi-positioning-panel__signal-chevron')
+    expect(chevron).not.toBeNull()
+    expect(chevron!.getAttribute('width')).toBe('6')
+    expect(chevron!.getAttribute('aria-hidden')).toBe('true')
     expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
 
     await act(async () => { entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
@@ -307,28 +326,61 @@ describe('the readings open in a dialog', () => {
 
     const surface = dialog()
     expect(surface).not.toBeNull()
+    // 三组都在：这次读数、这张卡在读什么、口径上容易读错的地方。
+    expect(document.querySelector('#mi-positioning-signal-detail')?.getAttribute('aria-label')).toBe(text.signalDetailsTitle)
+    expect(surface!.textContent).toContain(text.signalDetailsRuleName)
     expect(surface!.textContent).toContain(text.helpBullets[0])
     expect(surface!.textContent).toContain('六档判定')
     expect(surface!.textContent).toContain('只标 15 分钟内的骤降')
     expect(surface!.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
-    // 弹层归 portal：卡里始终没有那块常驻区域，「展开」是另一件事。
+    // 弹层归 portal：卡里始终没有那块常驻区域。
     expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
-    // Nothing else opens an explanation on this card: the icon button is gone, not hidden.
-    expect(host.querySelector(`button[aria-label="${text.helpLabel}"]`)).toBeNull()
   })
 
-  it('closes with its own close control and gives focus back to the entry', async () => {
-    const { entry } = await openReadings()
+  it('shows the explanation when the chip is focused, and opening the dialog takes it away', async () => {
+    const { entry } = await mountPanel({ positioning: alertPositioning })
+    await act(async () => { entry.dispatchEvent(new FocusEvent('focusin', { bubbles: true })) })
+    // 平台 Tooltip：聚焦立即出现（悬停才等 0.3s）。
+    await flush()
+    const bubbles = [...document.querySelectorAll<HTMLElement>('.ant-tooltip')]
+    expect(bubbles.length).toBeGreaterThan(0)
+    expect(bubbles.at(-1)!.textContent).toContain(`${text.signalDetailsRuleName}｜窗口 ${text.window15m}｜${text.signalKindInferred}`)
+
+    await act(async () => { entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+    expect(dialog()).not.toBeNull()
+    // 气泡挂在 `<body>` 下、层级比弹窗高，所以弹层开着时由一条 CSS 让它让位（牌子不重建，
+    // 焦点回位仍归 antd）。界面设计 v2 §二：打开瞬间气泡不在 dialog 之上。
+    expect(styles).toContain('body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }')
+  })
+
+  it('lets the click through the explanation and opens the dialog', async () => {
+    // 「说明不吞点击」：气泡在下、点在牌子上；按下时说明先收起，再开弹层。
+    const { entry } = await mountPanel({ positioning: alertPositioning })
+    await act(async () => {
+      entry.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+      entry.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+    })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)) })
+    expect(document.querySelectorAll('.ant-tooltip').length).toBeGreaterThan(0)
+
+    await act(async () => { entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+    expect(dialog()).not.toBeNull()
+  })
+
+  it('closes with its own close control and gives focus back to the chip', async () => {
+    await openReadings()
     const close = document.querySelector<HTMLButtonElement>('.ant-modal-close')
     expect(close).not.toBeNull()
     await act(async () => { close!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     await settleClose()
     expect(document.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
-    expect(document.activeElement).toBe(entry)
+    expect((document.activeElement as HTMLElement | null)?.className).toContain('mi-positioning-panel__signal')
   })
 
-  it('closes on Escape and gives focus back to the entry', async () => {
-    const { entry } = await openReadings()
+  it('closes on Escape and gives focus back to the chip', async () => {
+    await openReadings()
     // rc-dialog 判的是 `keyCode`，且监听落在弹层上（与平台 Modal 的用例同一条路径）。
     const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')!
     await act(async () => {
@@ -337,7 +389,7 @@ describe('the readings open in a dialog', () => {
     })
     await settleClose()
     expect(document.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
-    expect(document.activeElement).toBe(entry)
+    expect((document.activeElement as HTMLElement | null)?.className).toContain('mi-positioning-panel__signal')
   })
 
   it('closes when the reader clicks the backdrop', async () => {
@@ -350,19 +402,22 @@ describe('the readings open in a dialog', () => {
     expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
   })
 
+  it('renders no entry at all on a card with no signal', async () => {
+    // 没有读数就没有可解释的口径：连入口一起不渲染（不是禁用，也不是灰的）。
+    const { host } = await mountPanel()
+    expect(host.querySelector('[aria-haspopup="dialog"]')).toBeNull()
+    expect(host.textContent).not.toContain(text.helpDetailsLabel)
+    expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
+    const markup = render()
+    expect(markup).not.toContain('mi-positioning-panel__help-dialog')
+    expect(markup).not.toContain(text.helpDetailsLabel)
+  })
+
   it('still keeps the four bullets short enough to be a glance', () => {
     // The count and the length are the design's acceptance line; a fifth bullet or a long one means
     // the sentence belongs in the readings below them, not in the lead.
     expect(text.helpBullets).toHaveLength(4)
     for (const bullet of text.helpBullets) expect(bullet.length).toBeLessThanOrEqual(60)
-  })
-
-  it('keeps the card free of the region until the reader asks for it', () => {
-    // 常驻区里没有展开块：不是「收起来了」，是它不存在。
-    const markup = render()
-    expect(markup).not.toContain('mi-positioning-panel__help-details')
-    expect(markup).not.toContain('mi-positioning-panel__help-dialog')
-    expect(markup).toContain(text.helpDetailsLabel)
   })
 })
 
@@ -404,9 +459,10 @@ describe('the liquidation multiple', () => {
 })
 
 describe('the module rule chip', () => {
-  const alert = (overrides: Record<string, unknown> = {}) => ({
+  const alert = (overrides: Record<string, unknown> = {}): DashboardPositioningViewState => ({
     state: 'available' as const,
     window: '7d' as const,
+    onReload: () => undefined,
     btc: positioning.state === 'available' ? positioning.btc : [],
     eth: positioning.state === 'available' ? positioning.eth : [],
     signal: { state: 'alert' as const, asset: 'btc' as const, direction: 'long' as const, dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) },
@@ -454,36 +510,18 @@ describe('the module rule chip', () => {
 })
 
 describe('opening the reading', () => {
-  const alerting: DashboardPositioningViewState = {
-    state: 'available', window: '7d',
-    btc: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
-    eth: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
-    signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
-  }
-
-  async function mount() {
+  it('opens the numbers in a dialog, and opening them spends nothing', async () => {
     const invoke = vi.fn(async () => { throw new Error('the panel must not reach the bridge') })
-    // Keep the real window: the platform tooltip needs its animation frame APIs. Only the bridge is
-    // stubbed, which is also the thing this test watches.
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    await act(async () => {
-      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
-        funding, positioning: alerting, window: '7d', onWindowChange: () => undefined, text
-      })))
-    })
-    return { container, root, invoke }
-  }
-
-  it('opens the numbers behind the chip as plain words, and the chip is a keyboard-reachable button', async () => {
-    const { container, root, invoke } = await mount()
-    const chip = container.querySelector('button.mi-positioning-panel__signal')!
-    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    const { entry } = await mountPanel({ positioning: alertPositioning })
     // A native button: Tab reaches it and Enter/Space activate it, no key handler to invent.
-    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(chip.getAttribute('aria-expanded')).toBe('true')
-    const detail = container.querySelector('#mi-positioning-signal-detail')!
+    const chipNode = entry
+    await act(async () => { entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+    // 牌子不重建：`entry` 还是同一个节点，antd 的焦点回位才落得回它身上。
+    expect(document.querySelector('.mi-positioning-panel__signal')).toBe(chipNode)
+    expect(dialog()?.textContent).toContain(text.helpDetailsLabel)
+    const detail = document.querySelector('#mi-positioning-signal-detail')!
     // The rule is named in the reader's words. The internal id is not a reading and never shows.
     expect(detail.textContent).toContain(text.signalDetailsRuleName)
     expect(detail.textContent).not.toContain('oi-liquidation-proxy')
@@ -492,26 +530,5 @@ describe('opening the reading', () => {
     // Opening the numbers is free: nothing reaches the bridge, so no analysis or budget is spent.
     expect(invoke).not.toHaveBeenCalled()
     delete (window as unknown as { platform?: unknown }).platform
-    await act(async () => { root.unmount() })
-  })
-
-  it('names the block it opens, and closes it again with the focus still on the chip', async () => {
-    const { container, root } = await mount()
-    // focus() only works on a node inside the document; the other cases never need it.
-    document.body.append(container)
-    const chip = container.querySelector('button.mi-positioning-panel__signal') as HTMLButtonElement
-    const controls = chip.getAttribute('aria-controls')
-    expect(controls).toBe('mi-positioning-signal-detail')
-    await act(async () => { chip.focus() })
-    expect(document.activeElement).toBe(chip)
-    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(container.querySelector(`#${controls}`)).not.toBeNull()
-    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    // The trigger is not replaced, so closing returns the reader to it rather than to the document.
-    expect(container.querySelector(`#${controls}`)).toBeNull()
-    expect(document.activeElement).toBe(chip)
-    delete (window as unknown as { platform?: unknown }).platform
-    await act(async () => { root.unmount() })
-    container.remove()
   })
 })
