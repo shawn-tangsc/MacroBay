@@ -1,3 +1,7 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
@@ -314,5 +318,43 @@ describe('newsSentimentScoringService budget, retry and fallback', () => {
     // The pass ran out mid-item; the remaining judgments say why they have no model answer.
     const exhausted = ids.filter((id) => store.getLatestSentiment(`item-${id}`, '2026-10-24T13:00:00.000Z')?.caveats.includes('news-model-budget-exhausted'))
     expect(exhausted.length).toBeGreaterThan(0)
+  })
+})
+
+describe('the scoring service exposes the push threshold it judges with', () => {
+  function serviceWithThresholdFile(thresholdFilePath: string) {
+    return createNewsSentimentScoringService({
+      pipeline: { listItems: () => [item()] },
+      store: createNewsSentimentSqliteStore(':memory:'),
+      settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
+      invoke: vi.fn() as unknown as NewsSentimentInvoke,
+      now: () => '2026-10-24T13:00:00.000Z',
+      alertDelivery: {
+        ledgerPath: join(mkdtempSync(join(tmpdir(), 'news-ledger-')), 'ledger.sqlite'),
+        thresholdFilePath,
+        submit: async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'] })
+      }
+    })
+  }
+
+  it('reads the same instance the alert gate reads, so a saved threshold shows up at once', () => {
+    const thresholdFilePath = join(mkdtempSync(join(tmpdir(), 'news-threshold-')), 'threshold.json')
+    const service = serviceWithThresholdFile(thresholdFilePath)
+    // 文件还不存在：与判定同一个缺省（中），不是另编一个值。
+    expect(service.readPushThreshold()).toBe('medium')
+    service.pushThreshold!.write({ pushThreshold: 'low' })
+    expect(service.readPushThreshold()).toBe('low')
+  })
+
+  it('falls back to the gate’s default when no threshold storage is wired', () => {
+    const service = createNewsSentimentScoringService({
+      pipeline: { listItems: () => [item()] },
+      store: createNewsSentimentSqliteStore(':memory:'),
+      settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
+      invoke: vi.fn() as unknown as NewsSentimentInvoke,
+      now: () => '2026-10-24T13:00:00.000Z'
+    })
+    expect(service.readPushThreshold()).toBe('medium')
+    expect(service.pushThreshold).toBeUndefined()
   })
 })

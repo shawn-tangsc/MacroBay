@@ -27,6 +27,7 @@ import type {
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
 import { resolveNewsSentimentModel } from './newsSentimentSettings'
+import type { NewsSentimentTierThreshold } from '../../../contracts/newsSentimentTiers'
 import type { NewsSentimentSettingsStore } from './newsSentimentSettingsStore'
 import type { NewsSentimentStore } from './newsSentimentStore'
 
@@ -103,6 +104,13 @@ export function createNewsSentimentScoringService(deps: {
   return {
     /** 页面对「强度门槛」的读写入口：与判定读的是同一份存储。没给路径时没有这一项。 */
     ...(pushThresholdStore === undefined ? {} : { pushThreshold: pushThresholdStore }),
+    /**
+     * 只读取当前门槛档，与 `threshold:` 那个闭包读**同一个实例**（同一份文件、同一个刷新时机）。
+     * 「通知测试」按钮用它挑样例：门槛一改，样例跟着改。没接存储时回 `'medium'`——与判定缺省一致，
+     * 不另造一个 store。
+     */
+    readPushThreshold: (): NewsSentimentTierThreshold =>
+      pushThresholdStore?.read().pushThreshold ?? 'medium',
     async scoreItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentScoringResult> {
       const settings = await deps.settingsStore.getSettings()
       const [providerState, modelDefaults] = await Promise.all([
