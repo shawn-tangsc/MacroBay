@@ -187,7 +187,8 @@
 .intelligence-notification-calendar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  /* 组间距 24（界面规范 v1.9 §8）：块与块之间靠分隔线 + 24 隔开，不靠挤在一起区分。 */
+  gap: 24px;
 }
 
 .intelligence-notification-timeline {
@@ -197,15 +198,26 @@
   color: var(--text-secondary);
 }
 
+/*
+ * 块标题：比字段名大一级（13 对 12.5），上 20 / 下 4；非首块上方一条分隔线。
+ * 改之前是 12px + 下间距 8、块间只有 16——用户说的「表单挤在一起」就是这个。
+ */
 .intelligence-notification-block h3 {
-  margin: 0 0 8px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.intelligence-notification-calendar > .intelligence-notification-block + .intelligence-notification-block,
+.intelligence-notification-calendar > .intelligence-notification-fieldset + .intelligence-notification-block {
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
 }
 
 .intelligence-notification-note {
   margin: 6px 0 0;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -216,29 +228,34 @@
   color: var(--text-secondary);
 }
 
+/* 一行一件事：勾选行高 28、勾选框与文字 8 间距，不再靠 3px 的内边距硬挤。 */
 .intelligence-notification-check {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 0;
-  font-size: 12.5px;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0;
+  font-size: 13px;
 }
 
 .intelligence-notification-check-row {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .intelligence-notification-fieldset {
-  margin: 8px 0 0;
+  margin: 24px 0 0;
   padding: 0;
   border: 0;
 }
 
+/* 组标题与块标题同级：13px、正常色；说明性小字不进组标题。 */
 .intelligence-notification-fieldset legend {
-  padding: 0;
-  font-size: 11.5px;
-  color: var(--text-secondary);
+  padding: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* 窄窗（< 1180）：列表位置留给下拉，详情占满。 */
