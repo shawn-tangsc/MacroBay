@@ -357,6 +357,26 @@ describe('intelligencePipeline', () => {
     expect(second.queuedJobs).toEqual([])
   })
 
+  it('holds the counting identity even when the three numbers differ', async () => {
+    // 三个数各不相同才有意义：parsed=3 / appended=2 / duplicates=1（两条同 guid）。
+    // 现有夹具都是「2 = 2 + 0」或「2 = 0 + 2」，等式任一边写歪都不会红——这条专门防那个。
+    const threeWithOneRepeat = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<rss version="2.0"><channel><title>CoinDesk</title>',
+      '<item><guid>guid-1</guid><link>https://example.test/a</link><title>First</title><pubDate>Mon, 05 Jul 2026 10:00:00 GMT</pubDate></item>',
+      '<item><guid>guid-2</guid><link>https://example.test/b</link><title>Second</title><pubDate>Mon, 05 Jul 2026 11:00:00 GMT</pubDate></item>',
+      '<item><guid>guid-1</guid><link>https://example.test/a</link><title>First again</title><pubDate>Mon, 05 Jul 2026 12:00:00 GMT</pubDate></item>',
+      '</channel></rss>'
+    ].join('\n')
+    const pipeline = createPipeline()
+
+    const result = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-identity', fixtureText: threeWithOneRepeat })
+
+    expect(result.counts).toMatchObject({ parsed: 3, appended: 2, duplicates: 1 })
+    // The identity itself, on its own line: parsed = appended + duplicates（跳过/失败都不许混进来）。
+    expect(result.counts.parsed).toBe(result.counts.appended + result.counts.duplicates)
+  })
+
   it('hands the notifier the last new item, not the last successful fetch', async () => {
     // 接线这一层单测：`lastPublishedAt` 必须真的从检查点传到来源事件里。
     // 少了这一步，`decideSourceIssue` 改对了也不会生效（它有回落到 lastSuccessAt 的分支，会静默走老路）。
