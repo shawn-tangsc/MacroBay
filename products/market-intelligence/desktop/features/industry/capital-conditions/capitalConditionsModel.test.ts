@@ -298,6 +298,22 @@ describe('ETF signal chip', () => {
     expect(projectEtfOutflowChip(read([signal({ values: { coveredDays: 2, requiredDays: 3 } })]), OPEN)).toEqual({ state: 'insufficient' })
   })
 
+  // 方向：这条规则说的是「钱在撤」，净流入不是它的事。没有这条用例，符号写反也能全绿——
+  // 牌子会对一笔流入喊「净流出 $150M」，而卡上其他数字看起来都对。
+  it('keeps an inflow off the chip, whatever its size', () => {
+    expect(projectEtfOutflowChip(read([
+      signal({ values: { cumulativeNetFlowUsd: 150_000_000, coveredDays: 3, requiredDays: 3 } })
+    ]), OPEN)).toEqual({ state: 'insufficient' })
+    expect(projectEtfOutflowChip(read([
+      signal({ values: { cumulativeNetFlowUsd: 0, coveredDays: 3, requiredDays: 3 } })
+    ]), OPEN)).toEqual({ state: 'insufficient' })
+  })
+
+  // 逐资产的规则必须点名资产：说不清是哪个资产，就不能拿它的数画牌子。
+  it('refuses to name an amount without an asset', () => {
+    expect(projectEtfOutflowChip(read([signal({ asset: null })]), OPEN)).toEqual({ state: 'insufficient' })
+  })
+
   it('draws nothing when the rule has nothing to say', () => {
     expect(projectEtfOutflowChip(read([]), OPEN)).toEqual({ state: 'hidden' })
     expect(projectEtfOutflowChip(read([signal({ moduleId: 'open-interest' })]), OPEN)).toEqual({ state: 'hidden' })
