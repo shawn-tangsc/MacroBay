@@ -7,10 +7,15 @@ import type { DailyBriefSessionState } from './dailyBriefSessionLinks'
 /**
  * 一次回合为什么没写完——**三种**，不许合成一种（架构师 2026-11-07 退回项）。
  *
- * 运行时的终态是 `pending | success | paused | error`：
- * - `paused` 且**我们自己的中止信号**已触发 → `cancelled`：是这次运行的截止/取消，不是应用退出；
- * - `paused` 而我们的信号没触发 → `run-interrupted`：运行时被别人停的，应用正在关闭是最常见的那种；
- * - `error` → `failed`：模型/网关自己报的错，**必须保留它的真实失败码**，不许说成"应用被关闭了"。
+ * 运行时的终态是 `pending | success | paused | error`，而 `paused` 的**原因**由平台给出
+ * （`result.stopReason.kind`，`platform/…/runtimeTypes.ts` 的三档）：
+ * - `runtime-stop` → `run-interrupted`：运行时被停的，应用正在关闭是最常见的那种（系统侧）；
+ * - `user-stop` / `interrupt` → `cancelled`：读者自己取消、或被他自己的下一次点击顶掉；
+ * - 原因缺失 → `cancelled`：不知道原因但**不是故障**，不许猜成"应用被关闭"；
+ * - `error` → `failed`：模型/网关自己报的错，**必须保留它的真实失败码**。
+ *
+ * **不许**用"我们自己的中止信号有没有 abort"去推断原因：那个信号只说明"这次运行被我们自己
+ * 中止"，和"为什么暂停"不是一回事。读者连点两次的第二次会被猜成系统故障，今晚就会踩。
  *
  * 为什么不能只留一个 `stopped: true`：那样 `error` 会被写成"应用在这之前被关闭了"，正是这条
  * 判据要消灭的那种冒充，只是方向反过来。
@@ -47,12 +52,12 @@ export function createDailyBriefAgentRunner(deps: Readonly<{
       input.onSession?.(session.sessionId)
       cancelOnAbort(deps.port, input.signal, session.sessionId)
       const result = await deps.port.send(session.sessionId, { agentId: deps.agentId, sessionId: session.sessionId, text: input.prompt, displayText: input.displayText ?? dailyBriefSessionCopyText(dailyBriefSessionCopy(input.locale).startTask, { date: input.date }) })
-      return { ...session, assistantText: result.assistantMessage.searchableText, toolInvocations: result.toolInvocations ?? [], ...stoppedOf(result, input.signal) }
+      return { ...session, assistantText: result.assistantMessage.searchableText, toolInvocations: result.toolInvocations ?? [], ...stoppedOf(result) }
     },
     async continue(sessionId, text, displayText, signal) {
       cancelOnAbort(deps.port, signal, sessionId)
       const result = await deps.port.send(sessionId, { agentId: deps.agentId, sessionId, text, ...(displayText ? { displayText } : {}) })
-      return { assistantText: result.assistantMessage.searchableText, toolInvocations: result.toolInvocations ?? [], ...stoppedOf(result, signal) }
+      return { assistantText: result.assistantMessage.searchableText, toolInvocations: result.toolInvocations ?? [], ...stoppedOf(result) }
     },
     finish: (sessionId, state) => deps.port.state(sessionId, state)
   })
@@ -63,8 +68,10 @@ export function createDailyBriefAgentRunner(deps: Readonly<{
  * 不是应用退出。顺序不能反——先判 `error`（模型自己的错，带真实码），再判 paused 是谁停的。
  */
 function stoppedOf(
-  result: Readonly<{ assistantMessage: Readonly<{ status: string; data?: Readonly<{ parts?: readonly unknown[] }> }> }>,
-  signal: AbortSignal | undefined
+  result: Readonly<{
+    assistantMessage: Readonly<{ status: string; data?: Readonly<{ parts?: readonly unknown[] }> }>
+    stopReason?: Readonly<{ kind: string }>
+  }>
 ): DailyBriefTurnStopped {
   const status = result.assistantMessage.status
   if (status === 'success') return {}
@@ -77,10 +84,10 @@ function stoppedOf(
       ...(raw === undefined ? {} : { failureDetail: raw })
     })
   }
-  // paused：我们自己的信号触发了是取消；没触发就是被运行时（应用退出）停的。
-  return signal?.aborted === true
-    ? Object.freeze({ stopped: true, stoppedReason: 'cancelled' as const })
-    : Object.freeze({ stopped: true, stoppedReason: 'run-interrupted' as const })
+  // paused：原因**只认平台给的那一档**。缺席＝原因未知但不是故障，按读者侧处理。
+  return result.stopReason?.kind === 'runtime-stop'
+    ? Object.freeze({ stopped: true, stoppedReason: 'run-interrupted' as const })
+    : Object.freeze({ stopped: true, stoppedReason: 'cancelled' as const })
 }
 
 /** 错误消息里带着平台写的那个 code（`agent.runtime.<code>`），逐字读出来，不从文案猜。 */

@@ -388,13 +388,14 @@ describe('a run that wrote no edition still gets a row', () => {
 
   // 没有版次的那一行由**尝试记录**驱动，运行记录（审计）不再参与。
   const onlyAttempts = (
-    attempts: readonly Readonly<{ periodId: string; state: 'running' | 'failed' | 'succeeded'; locale?: 'zh-CN' | 'en-US'; startedAt?: string }>[],
+    attempts: readonly Readonly<{ periodId: string; state: 'running' | 'failed' | 'succeeded'; locale?: 'zh-CN' | 'en-US'; startedAt?: string; failureCode?: string }>[],
     isRunning?: (date: string, periodId: string) => boolean
   ) => briefingHistorySummaries({
     dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
     attemptRuns: attempts.map((attempt) => ({
       date: '2026-11-02', periodId: attempt.periodId, locale: attempt.locale ?? 'zh-CN',
-      state: attempt.state, startedAt: attempt.startedAt ?? '2026-11-02T00:00:00.000Z'
+      state: attempt.state, startedAt: attempt.startedAt ?? '2026-11-02T00:00:00.000Z',
+      ...(attempt.failureCode === undefined ? {} : { failureCode: attempt.failureCode })
     })),
     ...(isRunning ? { isRunning } : {})
   })
@@ -446,6 +447,35 @@ describe('a run that wrote no edition still gets a row', () => {
     // says the run never finished — which is not the same statement as "it failed".
     const crashed = await onlyAttempts([{ periodId: 'period_crash', state: 'running' }], () => false)
     expect(crashed[0]?.languages).toEqual([{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }])
+  })
+
+  it('builds no row at all for a run the reader cancelled, and keeps the interrupted one', async () => {
+    // `02` v2.176：读者取消 / 被自己连点顶掉 / 暂停原因缺失 —— 不是故障，**不建行**（A9.18 的唯一例外）；
+    // 应用中途关闭（`run-interrupted`）要留行：那是系统侧的问题，读者得知道那天为什么没有。
+    const [cancelled] = await onlyAttempts([{ periodId: 'period_cancelled', state: 'failed', failureCode: 'cancelled' }], undefined)
+    expect(cancelled, '取消那次不许留行').toBeUndefined()
+
+    const [interrupted] = await onlyAttempts([{ periodId: 'period_crash', state: 'running' }], () => false)
+    expect(interrupted?.periodId).toBe('period_crash')
+    expect(interrupted?.languages).toEqual([{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }])
+  })
+
+  it('says run-cancelled, not run-failed, when a cancelled run still has a row to explain', async () => {
+    // 有版次的那一期后来又跑了一次、被读者取消：那一行照常显示正文，但语言的"没有这一版"理由
+    // 必须是 `run-cancelled`——用 `run-failed` 顶替，就是把读者的动作写成故障。
+    const listed = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [edition('zh-CN')], otherRows: [],
+      attemptRuns: [{
+        date: '2026-11-02', periodId: 'default', locale: 'en-US', state: 'failed' as const,
+        startedAt: '2026-11-02T00:00:00.000Z', failureCode: 'cancelled'
+      }],
+      configuredLanguages: () => ['zh-CN', 'en-US']
+    })
+    const row = listed.find((summary) => summary.periodId === 'default')
+    expect(row?.languages).toEqual([
+      { locale: 'en-US', state: 'missing', reason: 'run-cancelled' },
+      { locale: 'zh-CN', state: 'published' }
+    ])
   })
 
   it('never marks a generating or missing row as the current edition', async () => {

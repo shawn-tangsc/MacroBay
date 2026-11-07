@@ -297,7 +297,9 @@ export function DailyBriefingHistoryRail({
              * **失败只认这一行自己的原因**，不许用"有没有尝试过"去猜（用户 2026-11-07 的回归：成功行也
              * 有尝试记录，于是整列都被标成「失败」）。
              * - 有正文：正文在就说明成了，永远不出失败标；
-             * - 没有正文：只看这一行的 `reason`；`run-failed` 才是失败，中断是另一句，缺原因落到「未运行」。
+             * - 没有正文：只看这一行的 `reason`；`run-failed` 才是失败，中断是另一句，缺原因落到「未运行」；
+             * - `run-cancelled` 不是故障（读者自己取消/被自己顶掉）：投影层已经不建这一行（`02` v2.176），
+             *   这里再守一道——万一到了渲染层，也**不出红标**，不把它说成失败。
              */
             const failedRun = !running && missing && runReasonOf(edition) === 'run-failed'
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
@@ -450,6 +452,8 @@ function reasonOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText)
   const reason = runReasonOf(edition)
   if (reason === 'run-interrupted') return text.history.runInterrupted
   if (reason === 'run-failed') return text.history.railFailedReason
+  // 读者自己的动作：不建行、也不编一句"没跑过"（`02` v2.176）。走到这里说明投影漏了，留空。
+  if (reason === 'run-cancelled') return ''
   return text.history.railNotRun
 }
 

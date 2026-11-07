@@ -253,6 +253,14 @@ describe('daily briefing client', () => {
     const unknown = await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })
     expect(unknown.state === 'available' && unknown.result.editions[0]?.runTrigger).toBeUndefined()
 
+    // 读者取消这一档必须能过线（`02` v2.176）：漏一个值会被解析成 `null`，整行直接消失——
+    // 看着像"不建行"，其实不是同一条规则，以后查不出来。
+    stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, languages: [{ locale: 'en-US', state: 'missing', reason: 'run-cancelled' }] }] } }))
+    const cancelled = await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(cancelled.state === 'available' && cancelled.result.editions[0]?.languages).toEqual([
+      { locale: 'en-US', state: 'missing', reason: 'run-cancelled' }
+    ])
+
     // A language list this build cannot read refuses the row with it: half a three-state is not shown.
     stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, languages: [{ locale: 'en-US', state: 'gone' }] }] } }))
     expect((await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')

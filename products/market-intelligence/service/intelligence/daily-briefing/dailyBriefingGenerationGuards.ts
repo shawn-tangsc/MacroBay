@@ -35,7 +35,9 @@ export async function withDeadline<T>(read: Promise<T>, milliseconds: number, on
           // The timeout is a cancellation, not just an abandoned wait: the work behind `read` is
           // told to stop before the caller is released with a failure.
           onTimeout?.()
-          reject(new Error('daily-briefing-generation-timeout'))
+          const timeout = new Error('daily-briefing-generation-timeout')
+          timeout.name = 'DailyBriefTimeoutError'
+          reject(timeout)
         }, milliseconds)
       })
     ])
@@ -50,29 +52,22 @@ export function cutoffDate(today: string): string {
 }
 
 /**
- * 一次抛出来的错误到底算什么：被停（应用退出/运行时释放）→ cancelled；输出被截断 → truncated；
- * 其余才是超时。三者混成一个，就会把「重写拿到已释放的运行时」记成超时。
+ * 一次**抛出来**的错误算什么——只认类型化的名字，不看报文。
+ *
+ * 三件事各自有名字：超时是 `AgentTurnTimeoutError`（平台）或我们自己的 `DailyBriefTimeoutError`；
+ * 取消是 `AbortError`；输出被截断是平台自己的类型。**其余一律 `provider-error`**：拿不到原因时
+ * 说"模型没有返回结果"，不替它断言"超时"——那是在写一件没发生的事。
+ *
+ * 这里**不再有**"运行时释放"这一档：释放只在 `paused` 的 `stopReason.kind === 'runtime-stop'`
+ * 上认（`dailyBriefAgentRunner.ts`），不在异常文本上认。拿提示语当协议，一个上游的
+ * `stream stopped` 就会被说成「应用被关闭了」。
  */
-/** 运行时释放时它自己抛的那一句（`AgentSessionRuntimeService` 的固定文案），逐字认，不做模糊匹配。 */
-export const RUNTIME_DISPOSED_MESSAGE = 'Agent session runtime is disposed.'
-
-/**
- * 这是不是"应用被关掉打断"：只认**运行时自己的类型化信号**——释放后那句固定文案，或调用方给的
- * 中止信号。**不拿 stopped/interrupted 这类宽泛词去猜**：一个上游 `stream stopped` 的网络错误
- * 会被说成「应用被关闭了」，那就是把"A 发生"写成"B 发生"（架构师保留项，2026-11-07）。
- */
-export function isRuntimeDisposed(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.trim() : String(error).trim()
-  return message === RUNTIME_DISPOSED_MESSAGE
-}
-
 export function turnFailureCode(error: unknown): string {
   const name = error instanceof Error ? error.name : ''
-  const message = error instanceof Error ? error.message : String(error)
-  if (isRuntimeDisposed(error)) return 'run-interrupted'
-  if (name === 'AbortError' || /\babort(ed)?\b/i.test(message)) return 'cancelled'
+  if (name === 'AgentTurnTimeoutError' || name === 'DailyBriefTimeoutError') return 'editorial-timeout'
+  if (name === 'AbortError') return 'cancelled'
   if (isOutputTruncation(error)) return 'agent-turn-output-truncated'
-  return 'editorial-timeout'
+  return 'provider-error'
 }
 
 /** A model round that ran out of output is a writing failure, not a generic timeout. */

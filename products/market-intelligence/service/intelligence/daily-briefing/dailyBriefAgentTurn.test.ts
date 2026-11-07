@@ -567,8 +567,11 @@ describe('the citable set (Chief 2026-11-06)', () => {
     expect(finish).toHaveBeenCalledWith('s1', 'abandoned')
   })
 
-  it('does not disguise a disposed runtime as a timeout', async () => {
-    // 真机那一笔：写作正常结束，重写时运行时已被释放，报的是固定那句。它既不是超时，也不是坏 JSON。
+  it('never reads a disposed runtime out of the error text — that sentence is not a protocol', async () => {
+    // 2026-11-07 改判：旧版逐字比对「Agent session runtime is disposed.」来认定"应用被关闭"，
+    // 那是拿提示语当协议。现在中断只在 `paused + stopReason.kind === 'runtime-stop'` 上认
+    // （见 `dailyBriefAgentRunner.test.ts` 的三支）；抛出来的错误按类型化名字归类。
+    // 于是这里不再冒充"应用被关闭"，也不再冒充超时：保留这一轮真正的失败码 `invalid-json`。
     let rounds = 0
     const stages: { id: string; state: string; failureCode?: string }[] = []
     const runner = {
@@ -590,9 +593,11 @@ describe('the citable set (Chief 2026-11-06)', () => {
 
     expect(result.state).toBe('failed')
     if (result.state !== 'failed') return
-    expect(result.failureCode).toBe('run-interrupted')
+    expect(result.failureCode).toBe('invalid-json')
+    expect(result.failureCode).not.toBe('run-interrupted')
     expect(result.failureCode).not.toBe('editorial-timeout')
-    expect(stages.find((stage) => stage.id === 'repair-1' && stage.state === 'failed')?.failureCode).toBe('run-interrupted')
+    expect(result.failureDetail).toContain('Agent session runtime is disposed.')
+    expect(stages.find((stage) => stage.id === 'repair-1' && stage.state === 'failed')?.failureCode).toBe('invalid-json')
   })
 
   it('keeps invalid-json when the repair fails for a reason that is not a cancellation', async () => {

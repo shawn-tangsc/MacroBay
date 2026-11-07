@@ -329,7 +329,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     async listAttemptRuns(from, to) {
       // 旧表没有 `period_id` 列：那一代一天一语言一版，没有"某一期跑了没跑"这回事。
       if (!tableColumns(db, 'daily_briefing_attempts').includes('period_id')) return Object.freeze([])
-      const rows = db.prepare(`select edition_date, period_id, locale, state, started_at, trigger, window_hours from daily_briefing_attempts
+      const rows = db.prepare(`select edition_date, period_id, locale, state, started_at, trigger, window_hours, failure_code from daily_briefing_attempts
         where edition_date between ? and ? order by edition_date asc, period_id asc, locale asc`)
         .all(from, to) as Array<Record<string, unknown>>
       return Object.freeze(rows.map((row) => Object.freeze({
@@ -339,7 +339,8 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
         state: row.state === 'succeeded' || row.state === 'running' ? row.state : 'failed' as const,
         startedAt: String(row.started_at),
         ...(typeof row.trigger === 'string' ? { trigger: row.trigger } : {}),
-        ...(typeof row.window_hours === 'number' ? { windowHours: row.window_hours } : {})
+        ...(typeof row.window_hours === 'number' ? { windowHours: row.window_hours } : {}),
+        ...(typeof row.failure_code === 'string' ? { failureCode: row.failure_code } : {})
       })))
     },
     async openPeriodRun(run) {

@@ -5,7 +5,7 @@ import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import type { AgentRuntimeToolInvocation } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { DailyBriefingEditorialOutput, DailyBriefingValidation } from './dailyBriefingValidation'
 import { describeFailures } from './dailyBriefingValidationFailures'
-import { isRuntimeDisposed } from './dailyBriefingGenerationGuards'
+import { turnFailureCode } from './dailyBriefingGenerationGuards'
 
 /**
  * 写完之后那一步：校验、必要时重写，直到通过或轮数用完。
@@ -102,17 +102,17 @@ export async function runEditorialGate(input: Readonly<{
       tools.push(...repair.toolInvocations)
       stage({ stage: repairStage, state: 'success' })
     } catch (error) {
-      const interrupted = isRuntimeDisposed(error)
-      const cancelled = isCancellation(error)
-      const code = interrupted ? 'run-interrupted' : cancelled ? 'cancelled' : failureCode
+      // 抛出来的错误只按**类型化名字**归类：取消 → cancelled；超时 → 超时码；其余 → provider-error。
+      // 不在报文里找"disposed/stopped"这类词（架构师保留项，2026-11-07）：那是把提示语当协议。
+      const code = turnFailureCode(error)
       const detail = error instanceof Error && error.message ? error.message : 'repair-failed'
-      stage({ stage: repairStage, state: 'failed', failureCode: code, failureDetail: detail })
-      // 取消就报取消；否则保留这一轮真正的失败码，把重写的错误接在明细后面（不许盖成超时）。
-      return code === 'run-interrupted'
-        ? { state: 'interrupted', failureDetail: detail, toolInvocations: Object.freeze(tools) }
-        : cancelled
+      // 取消报取消，超时报超时；**其余保留这一轮真正的失败码**（例如 `invalid-json`）——重写之所以
+      // 没成，不能把"这次输出不合法"这条更可行动的事实盖掉，错误原文接在明细后面。
+      const reported = code === 'cancelled' || code === 'editorial-timeout' ? code : failureCode
+      stage({ stage: repairStage, state: 'failed', failureCode: reported, failureDetail: detail })
+      return code === 'cancelled'
         ? { state: 'cancelled', failureDetail: detail, toolInvocations: Object.freeze(tools) }
-        : { state: 'failed', failureCode: code, failureDetail: [failureDetail, `repair: ${detail}`].filter(Boolean).join(' · '), toolInvocations: Object.freeze(tools) }
+        : { state: 'failed', failureCode: reported, failureDetail: [failureDetail, `repair: ${detail}`].filter(Boolean).join(' · '), toolInvocations: Object.freeze(tools) }
     }
   }
   const finalDetail = lastFailures ? describeFailures(lastFailures) ?? failureDetail : failureDetail
