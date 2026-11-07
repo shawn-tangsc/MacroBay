@@ -1,3 +1,4 @@
+import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import type { TestNoticeCandidate, TestNoticeCandidatePort, TestNoticeKind } from '@platform/notifications/contracts/notificationSelfTest'
 
 /**
@@ -22,4 +23,23 @@ export function createNotificationSelfTestCandidates(ports: SelfTestReaderPorts)
       return { ok: false, reasonCode: 'read-failed' }
     }
   }
+}
+
+/**
+ * 三条取数的结果 → 平台候选（口径映射按技术方案 §3，**不新增码**）：
+ * - 舆情 `none → sentiment-none`；`source-disabled → source-disabled`；
+ *   `unreadable / timezone-unreadable → read-failed`（平台的 surface 本来就先判过一次时区）。
+ * - 日历 `none-* → calendar-*-none`；`source-disabled → source-disabled`；`unreadable → read-failed`。
+ */
+export type SelfTestReadOutcome =
+  | { kind: 'candidate'; request: NotificationSubmitRequest }
+  | { kind: 'none'; reasonCode: 'sentiment-none' | 'calendar-upcoming-none' | 'calendar-landed-none' }
+  | { kind: 'source-disabled' }
+  | { kind: 'unreadable' }
+
+export function toTestNoticeCandidate(outcome: SelfTestReadOutcome): TestNoticeCandidate {
+  if (outcome.kind === 'candidate') return { ok: true, request: outcome.request }
+  if (outcome.kind === 'none') return { ok: false, reasonCode: outcome.reasonCode }
+  if (outcome.kind === 'source-disabled') return { ok: false, reasonCode: 'source-disabled' }
+  return { ok: false, reasonCode: 'read-failed' }
 }
