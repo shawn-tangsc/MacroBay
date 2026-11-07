@@ -79,6 +79,23 @@ describe('calendar reminder job', () => {
     })
   })
 
+  it('keeps the key stable across scans, so the same event is not reminded twice', async () => {
+    // 稳定身份来自上游约束：`observationKey` 稳定 → 落库的 `eventKey` 是它的摘要 → 没有稳定身份
+    // 的观察压根不入库。这条用例钉的就是这个前提：同一条事件扫两次，键必须相同；两条不同的事件
+    // 键必须不同。哪天上游放宽了「缺身份也给键」，这里会先红。
+    const first = harness({ events: [event({ eventKey: 'observation-1' })] })
+    const second = harness({ events: [event({ eventKey: 'observation-1' })] })
+    await first.job.runOnce()
+    await second.job.runOnce()
+    const varsOf = (submit: { mock: { calls: unknown[][] } }): unknown =>
+      (submit.mock.calls[0]![0] as { dedupeVars?: { vars?: Record<string, string> } }).dedupeVars?.vars
+    expect(varsOf(first.submit)).toEqual(varsOf(second.submit))
+
+    const other = harness({ events: [event({ eventKey: 'observation-2' })] })
+    await other.job.runOnce()
+    expect(varsOf(other.submit)).not.toEqual(varsOf(first.submit))
+  })
+
   it('writes "20 minutes" into the sentence, not the 60-minute lead', async () => {
     const { job, submit } = harness()
     await job.runOnce()

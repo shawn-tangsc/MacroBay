@@ -4,6 +4,7 @@ import type { JobRuntime } from '@platform/jobs'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { MarketCalendarPage, MarketCalendarQuery } from '../../../contracts/macro/marketCalendarQueryContracts'
+import type { CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
 import { registerCalendarEventReminderJob } from './calendarEventReminderJob'
 import { createCalendarReminderSettingsStore } from './calendarEventReminderSettingsStore'
 
@@ -13,6 +14,12 @@ import { createCalendarReminderSettingsStore } from './calendarEventReminderSett
  * 从 `bootstrap.ts` 抽出来，只为让那份文件的体积基线不再增长——接线本身没有变：
  * 一条开关一个 definition，注册时读一次设置（开着就排上，这就是「重启自行重建」）。
  */
+export type CalendarEventReminderWiring = Readonly<{
+  read: () => CalendarReminderSettings
+  write: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderSettings
+  applySchedule: (enabled: boolean) => void
+}>
+
 export function registerCalendarEventReminder(input: Readonly<{
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule'>
   dataDir: string
@@ -20,11 +27,11 @@ export function registerCalendarEventReminder(input: Readonly<{
   submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome | unknown>
   timeZone: () => string
   now?: () => string
-}>): void {
+}>): CalendarEventReminderWiring {
   const settings = createCalendarReminderSettingsStore(join(input.dataDir, 'calendar-event-reminder.json'))
   const now = input.now ?? (() => new Date().toISOString())
 
-  registerCalendarEventReminderJob(input.jobRuntime, {
+  const job = registerCalendarEventReminderJob(input.jobRuntime, {
     readSettings: () => settings.read(),
     /**
      * 只读当前月与下一个月：提醒窗口最多 120 分钟，跨月那几小时靠第二个月兜住。
@@ -55,4 +62,5 @@ export function registerCalendarEventReminder(input: Readonly<{
       console.log(JSON.stringify({ marker: 'MI_CALENDAR_REMINDER', ...line }))
     }
   })
+  return { read: () => settings.read(), write: (patch) => settings.write(patch), applySchedule: job.applySchedule }
 }

@@ -77,7 +77,28 @@ function getNewsPushOutletService(module: IntelligenceModule) {
   return newsPushOutletService
 }
 
-export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime, intelligenceModule: IntelligenceModule): void {
+export function registerIntelligenceIpc(
+  register: ProductIpcRegistrar,
+  jobRuntime: JobRuntime,
+  intelligenceModule: IntelligenceModule,
+  /** 「日历事件 · 开始前」的配置与排程接口；页面只读它、写它，不自己算。 */
+  calendarReminder?: Readonly<{
+    read: () => unknown
+    write: (patch: Readonly<Record<string, unknown>>) => unknown
+    applySchedule: (enabled: boolean) => void
+  }>
+): void {
+  if (calendarReminder) {
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getCalendarReminderSettings, async () => calendarReminder.read())
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.setCalendarReminderSettings, async (payload) => {
+      const patch = (payload ?? {}) as Readonly<Record<string, unknown>>
+      const next = calendarReminder.write(patch)
+      // 写设置的人就是让排程生效的人：不留「设置开了、作业没排上」的中间态。
+      calendarReminder.applySchedule((next as { enabled?: boolean }).enabled === true)
+      return next
+    })
+  }
+
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getNewsPushOutletState, async () =>
     getNewsPushOutletService(intelligenceModule).state()
   )

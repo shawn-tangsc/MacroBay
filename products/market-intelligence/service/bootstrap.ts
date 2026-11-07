@@ -327,7 +327,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     readCollectionFreshness: () => marketCalendar.readCollectionFreshness()
   })
   // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
-  registerCalendarEventReminder({
+  const calendarReminder = registerCalendarEventReminder({
     jobRuntime: deps.jobRuntime,
     dataDir: getIntelligenceProductDataDir(),
     queryMonth: marketCalendar.queryMonth,
@@ -544,7 +544,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // the failure, so no service has to grow a logging dependency for it.
   const auditedRegister = syncAudit ? withSyncAudit(register, syncAudit) : register
 
-  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule)
+  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule, calendarReminder)
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
   registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())
