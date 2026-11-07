@@ -153,8 +153,8 @@ describe('judging only settled trading days (2026-11-06 replay)', () => {
 
     // 提醒正文必须写明「截至哪天收盘」：读者就是被这一句缺了误导的。
     const request = buildEtfOutflowSignalRequest(signal)!
-    expect(request.rendered?.['zh-CN']!.body).toContain('截至 11-06 收盘')
-    expect(request.rendered?.['en-US']!.body).toContain('as of 11-06 close')
+    expect(request.rendered?.['zh-CN']!.body).toContain('截至 11-06 交易日')
+    expect(request.rendered?.['en-US']!.body).toContain('as of the 11-06 trading day')
   })
 
   // 同一桶再读一次：去重键不变，平台按它合并，不会推第二次。
