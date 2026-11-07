@@ -14,7 +14,7 @@ import { intelligenceNotificationText } from './text'
 import { useCalendarReminderSettings, type CalendarReminderSettingsState } from './useCalendarReminderSettings'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS, useChannelEventSettings } from './useChannelEventSettings'
 import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
-import { useNarrowWindow } from './useNarrowWindow'
+import { useNotificationLayout } from './useNarrowWindow'
 import { useSurfaceSelection } from './useSurfaceSelection'
 
 import './intelligence-notification.css'
@@ -71,13 +71,17 @@ export default function IntelligenceNotificationSettingsSection(
   const surfaces = useSurfaceSelection(CALENDAR_GROUP_EVENT_ID)
   // 初始项由入口决定：从「去设置」进来落到对应那一项，定位不到落第一项。
   const [selected, setSelected] = useState<ItemKey>(() => itemForFocus(focusEntityId))
-  const narrow = useNarrowWindow()
+  // 量的是这一页自己的宽度：三列布局里窗口宽不等于这一页宽，按窗口判会继续挤压。
+  const { setSectionRef, layout } = useNotificationLayout()
+  const narrow = layout.mode === 'dropdown'
 
   const itemName = (key: ItemKey): string =>
     text[`pages.intelligence.notification.rows.${key === 'calendar' ? 'calendar' : CONTENT_ITEMS[key].row}.title`] ?? ''
 
   const itemState = (key: ItemKey): string => {
     if (key === 'calendar') {
+      // 还在读的时候不是「读不到」：那会把一次正常的加载说成故障。
+      if (reminder.status === 'loading') return text['pages.intelligence.notification.status.loading'] ?? ''
       if (reminder.value === undefined) return text['pages.intelligence.notification.status.unreadable'] ?? ''
       return reminder.value.enabled
         ? (text['pages.intelligence.notification.status.calendarOn'] ?? '').replace(
@@ -92,7 +96,7 @@ export default function IntelligenceNotificationSettingsSection(
 
   if (status === 'loading') {
     return (
-      <section className="settings-workspace intelligence-notification-workspace" aria-busy="true">
+      <section className="settings-workspace intelligence-notification-workspace" aria-busy="true" ref={setSectionRef}>
         <LoadingState ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''} />
       </section>
     )
@@ -110,8 +114,30 @@ export default function IntelligenceNotificationSettingsSection(
   }
 
   return (
-    <section className="settings-workspace intelligence-notification-workspace">
+    <section className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>
       <div className="intelligence-notification-master-detail">
+        {/* 整页的说明收进 ⓘ：它不是操作也不是状态，正文只留字段名、当前值与控件。 */}
+        <div className="intelligence-notification-list-head">
+          <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
+          <Popover
+            lines={[
+              { labelKey: 'pages.intelligence.notification.groupInfo.1' },
+              { labelKey: 'pages.intelligence.notification.groupInfo.2' }
+            ]}
+            resolveText={resolveText}
+            trigger={(triggerProps) => (
+              <IconButton
+                {...triggerProps}
+                ariaLabelKey="pages.intelligence.notification.infoAria"
+                icon={Info}
+                size="sm"
+                variant="plain"
+                resolveText={resolveText}
+              />
+            )}
+          />
+        </div>
+
         {/* 窄窗：列表收成顶部下拉，**名字与状态都进选项文本**——图标认不出是哪一条。 */}
         {narrow
           ? <div className="intelligence-notification-narrow">
@@ -137,8 +163,8 @@ export default function IntelligenceNotificationSettingsSection(
                   onClick={() => setSelected(key)}
                   type="button"
                 >
-                  <span className="intelligence-notification-list-name">{itemName(key)}</span>
-                  <span className="intelligence-notification-list-state">{itemState(key)}</span>
+                  <span className="intelligence-notification-list-name" title={itemName(key)}>{itemName(key)}</span>
+                  <span className="intelligence-notification-list-state" title={itemState(key)}>{itemState(key)}</span>
                 </button>
               </li>
             ))}
@@ -164,7 +190,7 @@ export default function IntelligenceNotificationSettingsSection(
           </div>
 
           {selected === 'calendar'
-            ? <CalendarDetail reminder={reminder} surfaces={surfaces} text={text} />
+            ? <CalendarDetail reminder={reminder} resolveText={resolveText} surfaces={surfaces} text={text} />
             : selected === 'sentiment'
               ? <RowSwitch
                 enabled={outlet.enabled}
@@ -190,7 +216,6 @@ export default function IntelligenceNotificationSettingsSection(
           )}
         </div>
       </div>
-      <p className="intelligence-notification-footer">{text['pages.intelligence.notification.footer']}</p>
     </section>
   )
 }
@@ -226,10 +251,15 @@ function CalendarDetail(props: {
   reminder: CalendarReminderSettingsState
   surfaces: SurfaceState
   text: Readonly<Record<string, string>>
+  resolveText: (key: string) => string
 }): React.ReactElement {
   const { reminder, surfaces, text } = props
   const leadChoices = useMemo(() => CALENDAR_REMINDER_LEAD_MINUTES, [])
 
+  // **加载中先画加载**：以前这里把「还没读到」当成「读不到」，用户一进页面就看到「读取失败」。
+  if (reminder.status === 'loading') {
+    return <LoadingState ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''} />
+  }
   if (reminder.status === 'error' || reminder.value === undefined) {
     return <StateView
       state="error"
@@ -242,13 +272,46 @@ function CalendarDetail(props: {
     text[`pages.intelligence.notification.leads.${minutes}`] ?? `${minutes}`
 
   return <div className="intelligence-notification-calendar">
-    <p className="intelligence-notification-timeline">{text['pages.intelligence.notification.calendar.timeline']}</p>
-    <p className="intelligence-notification-note">{text['pages.intelligence.notification.calendar.types']}</p>
+    <div className="intelligence-notification-line">
+      <p className="intelligence-notification-timeline">{text['pages.intelligence.notification.calendar.timeline']}</p>
+      <Popover
+        lines={[
+          { labelKey: 'pages.intelligence.notification.calendar.types' },
+          { labelKey: 'pages.intelligence.notification.calendar.leadNote' }
+        ]}
+        resolveText={props.resolveText}
+        trigger={(triggerProps) => (
+          <IconButton
+            {...triggerProps}
+            ariaLabelKey="pages.intelligence.notification.calendar.aboutAria"
+            icon={Info}
+            size="sm"
+            variant="plain"
+            resolveText={props.resolveText}
+          />
+        )}
+      />
+    </div>
 
     {/* 一处选择管两条：开始前与发生后共用这一层（契约 §5.5）。 */}
     <section className="intelligence-notification-block">
-      <h3>{text['pages.intelligence.notification.calendar.surfaces']}</h3>
-      <p className="intelligence-notification-note">{text['pages.intelligence.notification.calendar.surfacesNote']}</p>
+      <div className="intelligence-notification-line">
+        <h3>{text['pages.intelligence.notification.calendar.surfaces']}</h3>
+        <Popover
+          labelKey="pages.intelligence.notification.calendar.surfacesNote"
+          resolveText={props.resolveText}
+          trigger={(triggerProps) => (
+            <IconButton
+              {...triggerProps}
+              ariaLabelKey="pages.intelligence.notification.calendar.aboutAria"
+              icon={Info}
+              size="sm"
+              variant="plain"
+              resolveText={props.resolveText}
+            />
+          )}
+        />
+      </div>
       {surfaces.status === 'error'
         ? <p className="intelligence-notification-hint" role="status">
           {text['pages.intelligence.notification.surfacesUnreadable']}
@@ -331,7 +394,6 @@ function CalendarDetail(props: {
               </label>
             ))}
           </fieldset>
-          <p className="intelligence-notification-note">{text['pages.intelligence.notification.calendar.leadNote']}</p>
         </>
         : <p className="intelligence-notification-note">
           {(text['pages.intelligence.notification.calendar.summary'] ?? '')
@@ -351,7 +413,23 @@ function CalendarDetail(props: {
     </section>
 
     <section className="intelligence-notification-block">
-      <h3>{text['pages.intelligence.notification.calendar.after']}</h3>
+      <div className="intelligence-notification-line">
+        <h3>{text['pages.intelligence.notification.calendar.after']}</h3>
+        <Popover
+          labelKey="pages.intelligence.notification.landed.note"
+          resolveText={props.resolveText}
+          trigger={(triggerProps) => (
+            <IconButton
+              {...triggerProps}
+              ariaLabelKey="pages.intelligence.notification.calendar.aboutAria"
+              icon={Info}
+              size="sm"
+              variant="plain"
+              resolveText={props.resolveText}
+            />
+          )}
+        />
+      </div>
       {(['surprise-only', 'also-matched'] as const).map((filter) => (
         <label className="intelligence-notification-check" key={filter}>
           <input
@@ -370,7 +448,6 @@ function CalendarDetail(props: {
           {text['pages.intelligence.notification.landed.cost']}
         </p>
         : null}
-      <p className="intelligence-notification-note">{text['pages.intelligence.notification.landed.note']}</p>
     </section>
   </div>
 }

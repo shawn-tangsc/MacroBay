@@ -116,6 +116,26 @@ describe('intelligence notification settings', () => {
     expect(listItems()[0]?.getAttribute('aria-current')).toBe('true')
   })
 
+  it('keeps explanatory prose off the page: field names, current values and controls only', async () => {
+    // 用户 2026-11-07：没用的说明性文字不要直接展示。页脚整句已删，四段解释都进了 ⓘ。
+    await render()
+    await selectItem(3)
+    const body = container?.textContent ?? ''
+    for (const key of [
+      'pages.intelligence.notification.calendar.types',
+      'pages.intelligence.notification.calendar.leadNote',
+      'pages.intelligence.notification.landed.note'
+    ]) {
+      expect(body).not.toContain(text[key])
+    }
+    // 解释还在，只是要点开：ⓘ 的读屏名在。
+    const infoTriggers = container?.querySelectorAll('button[aria-label]') ?? []
+    expect([...infoTriggers].some((button) => button.getAttribute('aria-label') === text['pages.intelligence.notification.calendar.aboutAria']))
+      .toBe(true)
+    // 页脚那句整句删掉了（它不是操作也不是状态）。
+    expect(body).not.toContain('只有这四条会发到手机')
+  })
+
   it('shows the calendar detail with the timeline, one surface choice and both segments', async () => {
     await render()
     await selectItem(3)
@@ -146,6 +166,8 @@ describe('intelligence notification settings', () => {
     // 窄窗下换控件而不是压缩：列表 → 下拉；名字与状态都进选项文本（图标认不出是哪一条）。
     window.innerWidth = 1000
     await render()
+    // 宽度是挂载后量出来的：再走一个渲染轮次，等布局切换落定。
+    await act(async () => { await Promise.resolve() })
     expect(container?.querySelector('.intelligence-notification-list')).toBeNull()
     const select = container?.querySelector('select')
     expect(select).not.toBeNull()

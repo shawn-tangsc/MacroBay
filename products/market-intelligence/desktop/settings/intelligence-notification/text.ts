@@ -12,6 +12,7 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.status.off': '关着',
   'pages.intelligence.notification.status.calendarOn': '已开 · 提前 {lead}',
   'pages.intelligence.notification.status.unreadable': '读不到',
+  'pages.intelligence.notification.status.loading': '读取中',
   'pages.intelligence.notification.leads.15': '15 分钟',
   'pages.intelligence.notification.leads.30': '30 分钟',
   'pages.intelligence.notification.leads.60': '1 小时',
@@ -60,10 +61,10 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.outletUnreadable': '这一项现在读不到，稍后再试。',
 
   'pages.intelligence.notification.saveFailed': '这次没存上，可以再试一次。',
-  'pages.intelligence.notification.footer': '只有这四条会发到手机；其余情报不推手机，仍会按你的「应用内提示」「桌面提醒」开关提醒。',
 
   'pages.intelligence.notification.infoAria': '这四条推送的生效条件',
-  'pages.intelligence.notification.rowInfoAria': '这一条什么时候推'
+  'pages.intelligence.notification.rowInfoAria': '这一条什么时候推',
+  'pages.intelligence.notification.calendar.aboutAria': '这一块的说明'
 })
 
 const EN: IntelligenceNotificationText = Object.freeze({
@@ -71,6 +72,7 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.status.off': 'Off',
   'pages.intelligence.notification.status.calendarOn': 'On · {lead} before',
   'pages.intelligence.notification.status.unreadable': 'Unreadable',
+  'pages.intelligence.notification.status.loading': 'Loading',
   'pages.intelligence.notification.leads.15': '15 min',
   'pages.intelligence.notification.leads.30': '30 min',
   'pages.intelligence.notification.leads.60': '1 hour',
@@ -119,10 +121,10 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.outletUnreadable': 'This one cannot be read right now. Try again later.',
 
   'pages.intelligence.notification.saveFailed': 'That did not save. You can try again.',
-  'pages.intelligence.notification.footer': 'Only these four reach your phone. Everything else stays off your phone — those notices still follow your in-app and desktop switches.',
 
   'pages.intelligence.notification.infoAria': 'When these four reach your phone',
-  'pages.intelligence.notification.rowInfoAria': 'When this one sends'
+  'pages.intelligence.notification.rowInfoAria': 'When this one sends',
+  'pages.intelligence.notification.calendar.aboutAria': 'About this section'
 })
 
 export const intelligenceNotificationText: Readonly<Record<'zh-CN' | 'en-US', IntelligenceNotificationText>> =
