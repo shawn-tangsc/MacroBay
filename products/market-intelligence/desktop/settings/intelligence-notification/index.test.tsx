@@ -190,7 +190,7 @@ describe('intelligence notification settings', () => {
 
   it('turns the list into a dropdown on a narrow window, with the name and the state in the option text', async () => {
     // 窄窗下换控件而不是压缩：列表 → 下拉；名字与状态都进选项文本（图标认不出是哪一条）。
-    sectionWidth = 1000
+    sectionWidth = 800
     await render()
     // 宽度是挂载后量出来的：再走一个渲染轮次，等布局切换落定。
     await act(async () => { await Promise.resolve() })
@@ -209,9 +209,9 @@ describe('intelligence notification settings', () => {
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.timeline'])
   })
 
-  it('keeps three columns at a 1100 container even though the window is wider', async () => {
-    // 专抓「按窗口宽度判断」那个错：容器 1100 排得下三列，不该切下拉。
-    sectionWidth = 1100
+  it('keeps three columns at a 1000 container even though the window is wider', async () => {
+    // 专抓「按窗口宽度判断」那个错：容器 1000 排得下三列（页面最小 860），不该切下拉。
+    sectionWidth = 1000
     await render()
     await act(async () => { await Promise.resolve() })
     expect(container?.querySelector('.intelligence-notification-panes')).not.toBeNull()
