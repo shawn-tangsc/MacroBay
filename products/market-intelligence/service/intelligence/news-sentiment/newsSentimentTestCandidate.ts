@@ -143,8 +143,13 @@ export function sentimentTestCandidate(input: Readonly<{
   const best = matched[0]
   if (!input.readComplete) {
     if (!best) return { kind: 'unreadable' }
-    const oldestRead = input.rows[input.rows.length - 1]
-    if (oldestRead && oldestRead.publishedAt === best.publishedAt) return { kind: 'unreadable' }
+    // 读满一页时，最老的那一行若与选中条目同一时刻，同刻更小的 id 可能还在未读到的部分。
+    // 取最小 `publishedAt` 而不是「数组最后一个」：不替调用方假设行序。
+    const oldestRead = input.rows.reduce<string | undefined>(
+      (oldest, row) => (oldest === undefined || row.publishedAt < oldest ? row.publishedAt : oldest),
+      undefined
+    )
+    if (oldestRead !== undefined && oldestRead === best.publishedAt) return { kind: 'unreadable' }
   }
   if (!best) return { kind: 'none' }
 

@@ -88,8 +88,8 @@ describe('the test button’s sentiment sample', () => {
     )
     expect(sentimentTestCandidate({ ...base, threshold: 'high', rows: full, readComplete: false }))
       .toEqual({ kind: 'unreadable' })
-    // 截断位置正好落在选中那一秒：同刻更小的 id 可能还没读到，也不许猜。
-    const cutAtBest = [row('newest', '2026-11-06T00:00:00.000Z', 5), ...full.slice(1)]
+    // 截断位置正好落在选中那一秒：同刻更小的 id 可能还没读到，也不许猜。行序也不参与判断。
+    const cutAtBest = [...full.slice(1), row('newest', '2026-11-06T00:00:00.000Z', 5)]
     expect(sentimentTestCandidate({ ...base, threshold: 'high', rows: cutAtBest, readComplete: false }))
       .toEqual({ kind: 'unreadable' })
   })
