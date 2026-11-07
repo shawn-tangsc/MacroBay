@@ -4,6 +4,7 @@ import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import type { AgentRuntimeToolInvocation } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { DailyBriefingEditorialOutput, DailyBriefingValidation } from './dailyBriefingValidation'
 import { describeFailures } from './dailyBriefingValidationFailures'
+import { isRuntimeDisposed } from './dailyBriefingGenerationGuards'
 
 /**
  * 写完之后那一步：校验、必要时重写，直到通过或轮数用完。
@@ -27,11 +28,11 @@ function detailOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** 只有真被停/被释放才算取消；其余错误一律照实传。 */
+/** 只有真被停才算取消；释放另算（见 `isRuntimeDisposed`），其余错误一律照实传。 */
 export function isCancellation(error: unknown): boolean {
   if (error instanceof Error && error.name === 'AbortError') return true
   const message = error instanceof Error ? error.message : String(error)
-  return /abort|disposed|cancelled|canceled|stopped/i.test(message)
+  return /\babort(ed)?\b|cancelled|canceled/i.test(message)
 }
 
 /** 解析不出来时留的那一小段：压平空白、截断，整份响应不进日志。 */
@@ -94,7 +95,7 @@ export async function runEditorialGate(input: Readonly<{
       tools.push(...repair.toolInvocations)
       stage({ stage: repairStage, state: 'success' })
     } catch (error) {
-      const interrupted = /disposed|stopped|interrupted/i.test(detailOf(error))
+      const interrupted = isRuntimeDisposed(error)
       const cancelled = isCancellation(error)
       const code = interrupted ? 'run-interrupted' : cancelled ? 'cancelled' : failureCode
       const detail = error instanceof Error && error.message ? error.message : 'repair-failed'

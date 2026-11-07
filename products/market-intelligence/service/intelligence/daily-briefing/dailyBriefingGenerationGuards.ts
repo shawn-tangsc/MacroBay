@@ -53,12 +53,24 @@ export function cutoffDate(today: string): string {
  * 一次抛出来的错误到底算什么：被停（应用退出/运行时释放）→ cancelled；输出被截断 → truncated；
  * 其余才是超时。三者混成一个，就会把「重写拿到已释放的运行时」记成超时。
  */
+/** 运行时释放时它自己抛的那一句（`AgentSessionRuntimeService` 的固定文案），逐字认，不做模糊匹配。 */
+export const RUNTIME_DISPOSED_MESSAGE = 'Agent session runtime is disposed.'
+
+/**
+ * 这是不是"应用被关掉打断"：只认**运行时自己的类型化信号**——释放后那句固定文案，或调用方给的
+ * 中止信号。**不拿 stopped/interrupted 这类宽泛词去猜**：一个上游 `stream stopped` 的网络错误
+ * 会被说成「应用被关闭了」，那就是把"A 发生"写成"B 发生"（架构师保留项，2026-11-07）。
+ */
+export function isRuntimeDisposed(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.trim() : String(error).trim()
+  return message === RUNTIME_DISPOSED_MESSAGE
+}
+
 export function turnFailureCode(error: unknown): string {
   const name = error instanceof Error ? error.name : ''
   const message = error instanceof Error ? error.message : String(error)
-  // 运行时被释放/回合被停 = 应用被关掉打断，不是超时也不是取消（`02` v2.156 `run-interrupted`）。
-  if (/disposed|stopped|interrupted/i.test(message)) return 'run-interrupted'
-  if (name === 'AbortError' || /abort|cancelled|canceled/i.test(message)) return 'cancelled'
+  if (isRuntimeDisposed(error)) return 'run-interrupted'
+  if (name === 'AbortError' || /\babort(ed)?\b/i.test(message)) return 'cancelled'
   if (isOutputTruncation(error)) return 'agent-turn-output-truncated'
   return 'editorial-timeout'
 }

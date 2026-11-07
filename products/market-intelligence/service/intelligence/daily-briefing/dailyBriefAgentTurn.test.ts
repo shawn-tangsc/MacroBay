@@ -618,4 +618,29 @@ describe('the citable set (Chief 2026-11-06)', () => {
     expect(result.failureDetail).toContain('unparsable: the model rambled')
     expect(result.failureDetail).toContain('provider returned 500')
   })
+
+  it('does not call an unrelated "stopped" error an app close', async () => {
+    // 架构师保留项：宽泛词（stopped/interrupted）会把上游网络错误说成「应用被关闭了」。
+    // 只有运行时自己那句固定文案才算中断；其余一律落回这一轮真正的失败码。
+    let rounds = 0
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async () => {
+        rounds += 1
+        if (rounds === 1) return { assistantText: 'not json at all', toolInvocations: [] }
+        throw new Error('upstream stream stopped by peer')
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('invalid-json')
+    expect(result.failureCode).not.toBe('run-interrupted')
+    expect(result.failureDetail).toContain('stopped by peer')
+  })
 })
