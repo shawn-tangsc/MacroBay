@@ -10,45 +10,53 @@ import { intelligenceNotificationText } from './text'
 import IntelligenceNotificationSettingsSection from './index'
 
 /**
- * 这一屏的判据都来自界面规范 §9d：三条默认全开、只管手机、频道没就绪不禁用但要说清、
- * 保存失败回滚并就地提示、读失败给「再试一次」而不是空清单。
+ * 这一页的判据（界面规范 §9d–§9f）：左列表四项、默认选中第一项、关着只写在状态词里；
+ * 「日历事件」一项里时间线 + 一处表面选择（管两条）+ 开始前 + 发生后。
  */
 
+const text = intelligenceNotificationText['zh-CN']
 const IDS = {
   signal: 'market-intelligence.signal.triggered',
   macro: 'market-intelligence.macro.event-landed',
   briefing: 'market-intelligence.briefing.ready'
 } as const
 
-const text = intelligenceNotificationText['zh-CN']
-
-type NotificationStubs = {
+type Stubs = {
   getChannelEvents: ReturnType<typeof vi.fn>
   setChannelEvent: ReturnType<typeof vi.fn>
   getDeliverySettings: ReturnType<typeof vi.fn>
+  getSurfaceSelection: ReturnType<typeof vi.fn>
+  setSurfaceSelection: ReturnType<typeof vi.fn>
+  productsInvoke: ReturnType<typeof vi.fn>
 }
 
-function installApi(overrides: Partial<NotificationStubs> = {}): NotificationStubs {
-  const stubs: NotificationStubs = {
-    getChannelEvents: vi.fn(async () => ({})),
+function install(overrides: Partial<Stubs> = {}): Stubs {
+  const stubs: Stubs = {
+    getChannelEvents: vi.fn(async () => ({ [IDS.signal]: true, [IDS.briefing]: true, [IDS.macro]: true })),
     setChannelEvent: vi.fn(async (eventId: string, enabled: boolean) => ({ eventId, enabled })),
-    getDeliverySettings: vi.fn(async () => ({
-      toastEnabled: false,
-      desktopEnabled: false,
-      pushWired: true,
-      channels: [{ id: 'c1', deliverable: true }],
-      lastPushFailureAt: null,
-      lastPushFailureReason: null
-    })),
+    getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, desktopEnabled: false, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })),
+    getSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
+    setSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
+    productsInvoke: vi.fn(async (_productId: string, method: string) => {
+      if (String(method).includes('getCalendarReminderSettings')) {
+        return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
+      }
+      if (String(method).includes('setCalendarReminderSettings')) {
+        return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
+      }
+      return { enabled: false }
+    }),
     ...overrides
   }
-  // 第四条走产品 IPC（出口开关），另外三条走通用通知 IPC；两套都要备好。
   ;(window as unknown as { platform: unknown }).platform = {
-    notifications: stubs,
-    products: {
-      invoke: vi.fn(async (_productId: string, method: string) =>
-        method.endsWith('getNewsPushOutletState') ? { enabled: false } : { enabled: false })
-    }
+    notifications: {
+      getChannelEvents: stubs.getChannelEvents,
+      setChannelEvent: stubs.setChannelEvent,
+      getDeliverySettings: stubs.getDeliverySettings,
+      getSurfaceSelection: stubs.getSurfaceSelection,
+      setSurfaceSelection: stubs.setSurfaceSelection
+    },
+    products: { invoke: stubs.productsInvoke }
   }
   return stubs
 }
@@ -56,185 +64,98 @@ function installApi(overrides: Partial<NotificationStubs> = {}): NotificationStu
 let root: Root | undefined
 let container: HTMLDivElement | undefined
 
-async function renderPage(): Promise<HTMLDivElement> {
+async function render(): Promise<HTMLDivElement> {
   container = document.createElement('div')
-  document.body.appendChild(container)
+  document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(
-      <ShellLanguageProvider language="zh-CN">
-        <IntelligenceNotificationSettingsSection />
-      </ShellLanguageProvider>
-    )
+    root?.render(<ShellLanguageProvider language="zh-CN"><IntelligenceNotificationSettingsSection /></ShellLanguageProvider>)
   })
+  await act(async () => { await Promise.resolve() })
   return container
 }
 
-function switches(): HTMLButtonElement[] {
-  return [...(container?.querySelectorAll<HTMLButtonElement>('button[role="switch"]') ?? [])]
+function listItems(): HTMLButtonElement[] {
+  return [...(container?.querySelectorAll<HTMLButtonElement>('.intelligence-notification-list-item') ?? [])]
 }
 
-function rowTitles(): string[] {
-  return [...(container?.querySelectorAll<HTMLElement>('.intelligence-notification-row-title') ?? [])].map(
-    (node) => node.textContent ?? ''
-  )
+async function selectItem(index: number): Promise<void> {
+  await act(async () => { listItems()[index]?.click(); await Promise.resolve() })
 }
 
-beforeEach(() => {
-  installApi()
-})
-
+beforeEach(() => { install() })
 afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
   container?.remove()
   container = undefined
   delete (window as unknown as { platform?: unknown }).platform
+  vi.restoreAllMocks()
 })
 
 describe('intelligence notification settings', () => {
-  it('reads the outlet switch from the service and follows it back when the service refused', async () => {
-    // 服务「拒了」时页面必须回到服务说的值：本地先翻转再回滚，会给读者看一个不存在的状态。
-    const state = vi.fn(async () => ({ enabled: true }))
-    const setEnabled = vi.fn(async () => ({ enabled: true }))
-    ;(window as unknown as { platform: unknown }).platform = {
-      ...(window as unknown as { platform: { notifications: unknown } }).platform,
-      products: {
-        invoke: vi.fn(async (_productId: string, method: string) => (method.endsWith('getNewsPushOutletState') ? state() : setEnabled()))
-      }
-    }
-    await renderPage()
-    expect(switches()[3]?.getAttribute('aria-checked')).toBe('true')
-
-    // 点一下：写请求里**不许带 `at`**（页面没有第二个时钟）。
-    await act(async () => { switches()[3]?.click(); await Promise.resolve(); await Promise.resolve() })
-    expect(setEnabled).toHaveBeenCalledTimes(1)
-    const invoke = (window as unknown as { platform: { products: { invoke: ReturnType<typeof vi.fn> } } }).platform.products.invoke
-    const writeCall = invoke.mock.calls.find((call) => String(call[1]).endsWith('setNewsPushOutletEnabled'))
-    expect(writeCall?.[2]).toEqual({ enabled: false })
-
-    // 写完之后重新读：服务仍说开着 → 界面必须仍是开（这就是「不本地缓存真值」）。
-    expect(state.mock.calls.length).toBeGreaterThanOrEqual(2)
-    expect(switches()[3]?.getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('never says the rest of the intelligence only shows in the app and the centre', async () => {
-    // 旧句把三种表面说成两种：失败类（日报没生成、来源连续失败、时区无效）照样弹桌面。
-    // 读者据旧句会以为「关掉桌面就不收失败提醒」，所以这句标成不许写回。
-    for (const language of ['zh-CN', 'en-US'] as const) {
-      const copy = intelligenceNotificationText[language]
-      const footer = copy['pages.intelligence.notification.footer'] ?? ''
-      const groupInfo = copy['pages.intelligence.notification.groupInfo.1'] ?? ''
-      expect(footer).not.toContain('只出现在应用内和通知中心')
-      expect(footer).not.toContain('stays in the app and the notification centre')
-      expect(groupInfo).not.toContain('只出现在应用内和通知中心')
-      expect(groupInfo).not.toContain('stays in the app and the notification centre')
-      // 新句必须说清「其余不推手机，但仍按那两个开关提醒」。
-      expect(`${footer}${groupInfo}`).toMatch(/不推手机|off your phone/u)
-    }
-  })
-
-  it('draws the off-by-default row exactly like an off row of the other three', async () => {
-    // 读者看到一条灰着/禁用/半透明的开关会直接判它坏了。所以「默认关」只由开关状态表达：
-    // 把所有行都关掉，第四条的类名与禁用属性必须与第一条**完全相同**。
-    installApi({
-      getChannelEvents: vi.fn(async () => ({
-        [IDS.signal]: false,
-        [IDS.macro]: false,
-        [IDS.briefing]: false
-      }))
-    })
-    await renderPage()
-    const all = switches()
-    expect(all).toHaveLength(4)
-    const reference = all[0]!
-    const fourth = all[3]!
-    expect(fourth.className).toBe(reference.className)
-    expect(fourth.disabled).toBe(reference.disabled)
-    expect(fourth.getAttribute('aria-disabled')).toBe(reference.getAttribute('aria-disabled'))
-    // 也不许给它挂一行「默认关」的常驻说明——那会变成一条永远挂在行内的文字。
-    expect(container?.textContent ?? '').not.toContain('默认关')
-  })
-
-  it('names the fourth row like the others: what triggered it, not the feature name', async () => {
-    await renderPage()
-    const title = text['pages.intelligence.notification.rows.sentimentAlert.title']
-    expect(title).toBe('舆情提醒')
-    expect(rowTitles()).toContain(title)
-    expect(container?.textContent ?? '').not.toContain('舆情推送')
-  })
-
-
-  it('shows exactly the four rows: three on by default and the outlet off', async () => {
-    await renderPage()
-    expect(rowTitles()).toEqual([
+  it('lists four items, selects the first, and folds the landed notice into the calendar item', async () => {
+    await render()
+    const names = listItems().map((item) => item.querySelector('.intelligence-notification-list-name')?.textContent)
+    expect(names).toEqual([
       text['pages.intelligence.notification.rows.signalTriggered.title'],
-      text['pages.intelligence.notification.rows.macroEventLanded.title'],
       text['pages.intelligence.notification.rows.briefingReady.title'],
-      text['pages.intelligence.notification.rows.sentimentAlert.title']
+      text['pages.intelligence.notification.rows.sentimentAlert.title'],
+      text['pages.intelligence.notification.rows.calendar.title']
     ])
-    const all = switches()
-    expect(all).toHaveLength(4)
-    for (const toggle of all.slice(0, 3)) expect(toggle.getAttribute('aria-checked')).toBe('true')
-    // **第四條默认关**：水位与基线只有读者按下那一刻才成立，不许因为别的三条开着就默认打开。
-    expect(all[3]?.getAttribute('aria-checked')).toBe('false')
-    // 页面上不写死条数、不出现「固定开启」。
-    expect(container?.textContent ?? '').not.toContain('固定开启')
+    // 「宏观事件落地」不再单独占一项——它就是「日历事件 → 发生后」。
+    expect(names).not.toContain(text['pages.intelligence.notification.rows.macroEventLanded.title'])
+    expect(listItems()[0]?.getAttribute('aria-current')).toBe('true')
   })
 
-  it('keeps a stored off value and writes the reader’s change through setChannelEvent', async () => {
-    const stubs = installApi({ getChannelEvents: vi.fn(async () => ({ [IDS.macro]: false })) })
-    await renderPage()
-    expect(switches()[1].getAttribute('aria-checked')).toBe('false')
-
-    await act(async () => switches()[0].click())
-    expect(stubs.setChannelEvent).toHaveBeenCalledWith(IDS.signal, false)
-    expect(switches()[0].getAttribute('aria-checked')).toBe('false')
+  it('shows the calendar detail with the timeline, one surface choice and both segments', async () => {
+    await render()
+    await selectItem(3)
+    const body = container?.textContent ?? ''
+    expect(body).toContain(text['pages.intelligence.notification.calendar.timeline'])
+    expect(body).toContain(text['pages.intelligence.notification.calendar.surfaces'])
+    expect(body).toContain(text['pages.intelligence.notification.surface.channel'])
+    expect(body).toContain(text['pages.intelligence.notification.surface.toast'])
+    expect(body).toContain(text['pages.intelligence.notification.calendar.before'])
+    expect(body).toContain(text['pages.intelligence.notification.calendar.after'])
+    // 桌面两条都没批 → 这一项的详情里根本不该出现桌面（页脚那句是另一件事）。
+    const detail = container?.querySelector('.intelligence-notification-calendar')?.textContent ?? ''
+    expect(detail).not.toContain('桌面')
   })
 
-  it('rolls the switch back and says so when the save fails', async () => {
-    installApi({ setChannelEvent: vi.fn(async () => Promise.reject(new Error('rejected'))) })
-    await renderPage()
-
-    await act(async () => switches()[2].click())
-    expect(switches()[2].getAttribute('aria-checked')).toBe('true')
-    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.saveFailed'])
+  it('collapses the lead and importance controls while the reminder is off and says what would happen', async () => {
+    await render()
+    await selectItem(3)
+    const detail = container?.querySelector('.intelligence-notification-calendar')?.textContent ?? ''
+    expect(detail).toContain(text['pages.intelligence.notification.calendar.summary'].replace('{lead}', '1 小时').replace('{importance}', '高'))
+    // 关着不画禁用控件：提前量/重要性控件都不出现（文案里引用了「提前多久」这句不算）。
+    expect(container?.querySelectorAll('input[name="calendar-reminder-lead"]')).toHaveLength(0)
+    expect([...container!.querySelectorAll('legend')].some((legend) =>
+      legend.textContent === text['pages.intelligence.notification.calendar.importance'])).toBe(false)
   })
 
-  it('keeps the switches usable and explains itself when no channel is ready', async () => {
-    installApi({
-      getDeliverySettings: vi.fn(async () => ({
-        toastEnabled: false,
-        desktopEnabled: false,
-        pushWired: true,
-        channels: [{ id: 'c1', deliverable: false, reason: 'no-enabled-target' }],
-        lastPushFailureAt: null,
-        lastPushFailureReason: null
-      }))
+  it('warns in place when a ticked surface has its master switch off, and never greys the checkbox', async () => {
+    install({ getDeliverySettings: vi.fn(async () => ({ toastEnabled: false, desktopEnabled: false, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })) })
+    await render()
+    await selectItem(3)
+    const toastBox = [...container!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .find((input) => input.closest('label')?.textContent?.includes(text['pages.intelligence.notification.surface.toast']!))
+    expect(toastBox?.checked).toBe(true)
+    expect(toastBox?.disabled).toBe(false)
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.surfaceBlocked.toast'])
+  })
+
+  it('shows the cost line only when "also matched" is chosen', async () => {
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'also-matched' }
+        }
+        return { enabled: false }
+      })
     })
-    await renderPage()
-
-    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.channelNotReady'])
-    for (const toggle of switches()) expect(toggle.hasAttribute('disabled')).toBe(false)
-  })
-
-  it('reports an unreadable page instead of drawing three blank rows, and can retry', async () => {
-    const getChannelEvents = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce({})
-    installApi({ getChannelEvents })
-    await renderPage()
-
-    expect(switches()).toHaveLength(0)
-    const retry = container?.querySelector<HTMLButtonElement>('.ui-state__action, [data-state-action]')
-    expect(container?.textContent ?? '').not.toContain(text['pages.intelligence.notification.footer'])
-
-    // 重试是同一个读入口：成功后四条才出现（第四条是出口开关，来源不同但同一屏）。
-    const action = container?.querySelector<HTMLElement>('button')
-    expect(retry ?? action).toBeTruthy()
-    await act(async () => (retry ?? action)?.click())
-    expect(getChannelEvents).toHaveBeenCalledTimes(2)
-    expect(switches()).toHaveLength(4)
+    await render()
+    await selectItem(3)
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.landed.cost'])
   })
 })

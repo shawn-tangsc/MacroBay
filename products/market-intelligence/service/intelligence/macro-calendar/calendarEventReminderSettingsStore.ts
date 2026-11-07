@@ -6,6 +6,7 @@ import {
   DEFAULT_CALENDAR_REMINDER_SETTINGS,
   isCalendarReminderImportance,
   isCalendarReminderLeadMinutes,
+  type CalendarLandedFilter,
   type CalendarReminderImportance,
   type CalendarReminderSettings
 } from '../../../contracts/calendarEventReminder'
@@ -31,6 +32,7 @@ type StoredShape = Partial<{
   enabled: unknown
   leadMinutes: unknown
   importance: unknown
+  landedFilter: unknown
 }>
 
 function normalizeImportance(value: unknown): readonly CalendarReminderImportance[] | undefined {
@@ -43,13 +45,18 @@ function normalizeImportance(value: unknown): readonly CalendarReminderImportanc
   return known.length > 0 ? known : undefined
 }
 
+function isCalendarLandedFilter(value: unknown): value is CalendarLandedFilter {
+  return value === 'surprise-only' || value === 'also-matched'
+}
+
 function normalize(stored: StoredShape): CalendarReminderSettings {
   return {
     enabled: typeof stored.enabled === 'boolean' ? stored.enabled : DEFAULT_CALENDAR_REMINDER_SETTINGS.enabled,
     leadMinutes: isCalendarReminderLeadMinutes(stored.leadMinutes)
       ? stored.leadMinutes
       : DEFAULT_CALENDAR_REMINDER_SETTINGS.leadMinutes,
-    importance: normalizeImportance(stored.importance) ?? DEFAULT_CALENDAR_REMINDER_SETTINGS.importance
+    importance: normalizeImportance(stored.importance) ?? DEFAULT_CALENDAR_REMINDER_SETTINGS.importance,
+    landedFilter: isCalendarLandedFilter(stored.landedFilter) ? stored.landedFilter : DEFAULT_CALENDAR_REMINDER_SETTINGS.landedFilter
   }
 }
 
@@ -72,7 +79,8 @@ export function createCalendarReminderSettingsStore(filePath: string): CalendarR
       const next: CalendarReminderSettings = {
         enabled: typeof patch.enabled === 'boolean' ? patch.enabled : current.enabled,
         leadMinutes: isCalendarReminderLeadMinutes(patch.leadMinutes) ? patch.leadMinutes : current.leadMinutes,
-        importance: patch.importance === undefined ? current.importance : normalizeImportance(patch.importance) ?? current.importance
+        importance: patch.importance === undefined ? current.importance : normalizeImportance(patch.importance) ?? current.importance,
+        landedFilter: isCalendarLandedFilter(patch.landedFilter) ? patch.landedFilter : current.landedFilter
       }
       mkdirSync(dirname(filePath), { recursive: true })
       writeFileSync(filePath, JSON.stringify(next), 'utf8')

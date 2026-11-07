@@ -94,3 +94,112 @@
     padding: 16px;
   }
 }
+
+/* 左列表 / 右详情（§9f）：列表固定宽度，详情占余下；窄屏在后续版本再做下拉。 */
+.intelligence-notification-master-detail {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.intelligence-notification-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.intelligence-notification-list-item {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 选中靠底色 + 文字提亮；「关着」只写在状态词里，不靠灰。 */
+.intelligence-notification-list-item[aria-current='true'] {
+  background: var(--surface-soft);
+}
+
+.intelligence-notification-list-name {
+  font-size: 13px;
+}
+
+.intelligence-notification-list-state {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.intelligence-notification-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.intelligence-notification-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.intelligence-notification-timeline {
+  margin: 0;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.intelligence-notification-block h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.intelligence-notification-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.intelligence-notification-warn {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.intelligence-notification-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+
+.intelligence-notification-check-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.intelligence-notification-fieldset {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.intelligence-notification-fieldset legend {
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}

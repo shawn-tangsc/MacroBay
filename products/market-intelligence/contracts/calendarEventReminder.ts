@@ -30,6 +30,12 @@ export type CalendarReminderLeadMinutes = (typeof CALENDAR_REMINDER_LEAD_MINUTES
 
 export type CalendarReminderImportance = 'high' | 'medium' | 'low'
 
+/**
+ * 「事件发生后也告诉我」的两档：**这一行管的是既有的落地通知（N5）**，不是事前提醒的子项。
+ * 事实必须发生在值之后才有比较，所以它永远在，不随开始前开关收起。
+ */
+export type CalendarLandedFilter = 'surprise-only' | 'also-matched'
+
 /** 读者能勾的表面。`center` 不在这里：通知中心恒收，不是可选项。 */
 export type CalendarReminderSurface = 'channel' | 'toast'
 
@@ -41,12 +47,15 @@ export type CalendarReminderSettings = Readonly<{
   leadMinutes: CalendarReminderLeadMinutes
   /** 默认只推「高」：只勾高时每天约 4–9 条。 */
   importance: readonly CalendarReminderImportance[]
+  /** 默认「只推出乎意料的」＝现状；「符合预期也推」会让一天十几条。 */
+  landedFilter: CalendarLandedFilter
 }>
 
 export const DEFAULT_CALENDAR_REMINDER_SETTINGS: CalendarReminderSettings = Object.freeze({
   enabled: false,
   leadMinutes: 60,
-  importance: Object.freeze(['high'] as const)
+  importance: Object.freeze(['high'] as const),
+  landedFilter: 'surprise-only'
 })
 
 export function isCalendarReminderLeadMinutes(value: unknown): value is CalendarReminderLeadMinutes {
