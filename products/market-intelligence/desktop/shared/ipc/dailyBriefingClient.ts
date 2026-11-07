@@ -456,7 +456,7 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
   })
 }
 
-const RUN_TRIGGERS = ['scheduled', 'catch-up', 'retry', 'manual'] as const
+const RUN_TRIGGERS = ['scheduled', 'catch-up', 'retry', 'auto-retry', 'manual'] as const
 
 /** The per-language three-state, or `null` when one entry is not a value this build understands. */
 function parseSummaryLanguages(value: unknown): readonly DailyBriefingEditionLanguage[] | null {

@@ -144,8 +144,12 @@ export type DailyBriefingPeriodKind = 'scheduled' | 'manual'
 /**
  * Why this run happened. A catch-up or retry is what the list calls "补跑": the run record only
  * lives 14 days, so the fact has to travel with the edition or an old row would silently lose it.
+ *
+ * `retry` is the reader pressing retry; `auto-retry` is this app retrying an environment failure by
+ * itself. They are two words on screen ("重试" / "自动重试"), so they are two values here: one value
+ * would read as the reader having pressed twice (`02` v2.158).
  */
-export type DailyBriefingRunTrigger = 'scheduled' | 'catch-up' | 'retry' | 'manual'
+export type DailyBriefingRunTrigger = 'scheduled' | 'catch-up' | 'retry' | 'auto-retry' | 'manual'
 
 export type DailyBriefingDocument = Readonly<{
   schemaVersion: DailyBriefingDocumentSchemaVersion

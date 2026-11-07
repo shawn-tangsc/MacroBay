@@ -1,15 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { autoRetryWindowMs, createAutoRetryingResolve, isEnvironmentFailure, shouldAutoRetry } from './dailyBriefingAutoRetry'
+import {
+  autoRetryTrigger, autoRetryWindowMs, createAutoRetryingResolve, environmentFailureCodes,
+  isEnvironmentFailure, shouldAutoRetry
+} from './dailyBriefingAutoRetry'
 
 const CUTOFF = '2026-11-07T23:00:00.000Z'
 
 describe('only environment failures are retried', () => {
-  // 用户 2026-11-06：应用被关、超时、返回不是合法 JSON —— 重试有意义；配置类重试只会再失败一次。
-  it('treats a closed app, a timeout and unreadable JSON as environment failures', () => {
-    for (const code of ['run-interrupted', 'editorial-timeout', 'run-timeout', 'invalid-json']) {
+  // 用户 2026-11-06：应用被关、超时、返回不合法或不合格式 —— 重试有意义；配置类重试只会再失败一次。
+  it('treats a closed app, a timeout and an unreadable reply as environment failures', () => {
+    for (const code of ['run-interrupted', 'editorial-timeout', 'run-timeout', 'invalid-json', 'invalid-shape', 'schema-validation-failed']) {
       expect(isEnvironmentFailure(code), code).toBe(true)
     }
+  })
+
+  it('is the closed set `02` v2.158 lists — one missing code is one retry the reader never gets', () => {
+    // 闭集：多一个会白烧调用，少一个读者就少一次自动重试。这张表就是判据本身。
+    expect([...environmentFailureCodes].sort()).toEqual([
+      'editorial-timeout', 'invalid-json', 'invalid-shape', 'run-interrupted',
+      'run-timeout', 'schema-validation-failed', 'timeout'
+    ])
   })
 
   it('never treats a configuration failure as retryable', () => {
@@ -25,8 +36,9 @@ describe('only environment failures are retried', () => {
     expect(shouldAutoRetry({ failureCode: 'invalid-json', cutoff: CUTOFF, now: at(autoRetryWindowMs + 1) })).toBe(false)
   })
 
-  it('never retries a run that is already the retry', () => {
+  it('never retries a run that is already a retry — manual or automatic', () => {
     expect(shouldAutoRetry({ failureCode: 'invalid-json', cutoff: CUTOFF, now: CUTOFF, runTrigger: 'retry' })).toBe(false)
+    expect(shouldAutoRetry({ failureCode: 'invalid-json', cutoff: CUTOFF, now: CUTOFF, runTrigger: autoRetryTrigger })).toBe(false)
   })
 })
 
@@ -41,13 +53,14 @@ describe('the retrying entry point', () => {
   }
   const failure = (failureCode: string) => ({ state: 'unavailable' as const, failureCode })
 
-  it('runs exactly twice after an environment failure, the second time as a retry', async () => {
+  it('runs exactly twice after an environment failure, the second time as an automatic retry', async () => {
     const { run, resolve } = harness([failure('invalid-json'), { state: 'available' }])
     const result = await resolve({ asOf: CUTOFF }, true)
     expect(result.state).toBe('available')
     expect(run).toHaveBeenCalledTimes(2)
-    // 留痕：第二次的触发是 `retry`，列表上来源写「重试」。
-    expect(run.mock.calls[1]![0]).toMatchObject({ runTrigger: 'retry' })
+    // 留痕：第二次的触发是 `auto-retry`，列表上来源写「自动重试」——与读者手点的「重试」不同词。
+    expect(run.mock.calls[1]![0]).toMatchObject({ runTrigger: autoRetryTrigger })
+    expect(autoRetryTrigger).not.toBe('retry')
   })
 
   it('does not retry a configuration failure', async () => {

@@ -59,7 +59,7 @@ describe('daily briefing document guard at schema 13', () => {
   it('accepts a 13 document that carries the full period identity', () => {
     expect(isDocument(document())).toBe(true)
     expect(isDocument(document({ periodKind: 'manual', periodId: 'period_01J8Z6Q4T3', runTrigger: 'manual' }))).toBe(true)
-    for (const trigger of ['scheduled', 'catch-up', 'retry', 'manual'] as const) {
+    for (const trigger of ['scheduled', 'catch-up', 'retry', 'auto-retry', 'manual'] as const) {
       expect(isDocument(document({ runTrigger: trigger })), trigger).toBe(true)
     }
   })

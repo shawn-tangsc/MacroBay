@@ -38,22 +38,26 @@ export function briefingRailKey(row: Readonly<{ date: string; periodId: string; 
  * groups by date and draws those conclusions, it never re-derives one.
  */
 
-/** How this edition came to exist. Exactly one per row, five in total (`02` A5.4b). */
-type RailTriggerKind = 'scheduled' | 'manual' | 'retry' | 'catch-up'
+/** How this edition came to exist. Exactly one per row, six in total (`02` A5.4b v2.158). */
+type RailTriggerKind = 'scheduled' | 'manual' | 'retry' | 'auto-retry' | 'catch-up'
 
 /** 失败标的文案键：平台药丸只收键，句子的来源仍是产品文案表。 */
 const failureBadgeKey = 'pages.intelligence.portal.dashboard.dailyBriefing.history.failureBadge'
 
 /**
- * 第一行的**来源**：定时 / 手动 / 重试 / 补跑，四档互斥（`02` A5.4b v2.147）。
+ * 第一行的**来源**：定时 / 手动 / 重试 / 自动重试 / 补跑，五档互斥（`02` A5.4b v2.158）。
  *
  * 用户 2026-11-06：「这次失败」以前占的就是这一格，把"手动还是定时"顶掉了，读者看不出这条记录是
  * 怎么来的。状态词退到第二行，来源位从此只回答这一件事。老记录没存触发方式 → `undefined`，
  * 界面写「未记录」，**不拿当前设置回填**。
+ *
+ * 「重试」是读者自己按的，「自动重试」是应用替环境类失败重跑的那一次（`02` v2.158：两种同词
+ * 即红，否则读者会以为自己点了两次）。
  */
 function triggerKindOf(edition: DailyBriefingEditionSummary): RailTriggerKind | undefined {
   const trigger = edition.runTrigger
   if (trigger === 'catch-up') return 'catch-up'
+  if (trigger === 'auto-retry') return 'auto-retry'
   if (trigger === 'retry') return 'retry'
   if (trigger === 'manual' || edition.periodKind === 'manual') return 'manual'
   if (trigger === 'scheduled') return 'scheduled'
@@ -64,6 +68,7 @@ function triggerKindOf(edition: DailyBriefingEditionSummary): RailTriggerKind | 
 
 function triggerLabelOf(kind: RailTriggerKind | undefined, text: DailyBriefingText): string {
   if (kind === 'manual') return text.history.runManual
+  if (kind === 'auto-retry') return text.history.runAutoRetry
   if (kind === 'retry') return text.history.runRetry
   if (kind === 'catch-up') return text.history.runCatchUp
   if (kind === 'scheduled') return text.history.runScheduled
@@ -278,11 +283,11 @@ export function DailyBriefingHistoryRail({
             const key = briefingRailKey(edition)
             const missing = edition.state === 'missing'
             const running = key === waitingKey
-            // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的"。
-            // 那一行此刻没有正文，但它的来源没变，所以不能借机写成「未运行」。
-            const triggerKind = running
-              ? (edition.periodKind === 'manual' ? 'manual' as const : edition.runTrigger === 'catch-up' ? 'catch-up' as const : 'scheduled' as const)
-              : triggerKindOf(edition)
+            // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的 / 应用替我重跑的"。
+            // 那一行此刻没有正文，但它的来源没变，所以不能借机写成「未运行」。来源照它自己的触发值
+            // 走（自动重试也是其中一档）；只有连触发值都没有、又在跑的时候，才回落到定时/手动。
+            const triggerKind = triggerKindOf(edition)
+              ?? (running ? (edition.periodKind === 'manual' ? 'manual' as const : 'scheduled' as const) : undefined)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
             // 行上**不放任何按钮**（用户 2026-11-06：list 上每个 item 都有重试按钮，太重）。
@@ -335,7 +340,7 @@ export function DailyBriefingHistoryRail({
                     ? null
                     : <i className="mi-daily-briefing__rail-dot" data-direction={edition.direction ?? 'none'} role="img"
                       aria-label={edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion} />}
-                  {/* 这一格只回答"这一行是怎么来的"：定时 / 手动 / 重试 / 补跑，缺记录写「未记录」。 */}
+                  {/* 这一格只回答"这一行是怎么来的"：定时 / 手动 / 重试 / 自动重试 / 补跑，缺记录写「未记录」。 */}
                   <span className="mi-daily-briefing__rail-source" data-run-source={triggerKind ?? 'not-recorded'}>{triggerLabelOf(triggerKind, text)}</span>
                   {/* 失败那一行第一行就给一枚红标（用户 2026-11-06）：扫列表要一眼看出来，别只在第二行写。 */}
                   {failedRun

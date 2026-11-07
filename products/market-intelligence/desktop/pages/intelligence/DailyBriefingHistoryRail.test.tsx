@@ -494,14 +494,15 @@ describe('the day head opens the latest edition of that day', () => {
 })
 
 describe('a row is two lines: the facts, then what it says', () => {
-  it('prints exactly one trigger word — 定时 / 手动 / 重试 / 补跑 — and never 本期', () => {
+  it('prints exactly one trigger word — 定时 / 手动 / 重试 / 自动重试 / 补跑 — and never 本期', () => {
     // 用户 2026-11-06：「这次失败」以前占的就是这一格，把来源顶掉了。现在这一格只回答"怎么来的"，
-    // 四档互斥；老记录没存触发方式 → 「未记录」，不拿当前设置回填。
+    // 五档互斥；老记录没存触发方式 → 「未记录」，不拿当前设置回填。
     const kinds = [
       { edition: edition({ runTrigger: 'scheduled' }), expected: 'scheduled' },
       { edition: edition({ periodKind: 'manual', runTrigger: 'manual' }), expected: 'manual' },
       { edition: edition({ runTrigger: 'catch-up' }), expected: 'catch-up' },
       { edition: edition({ runTrigger: 'retry' }), expected: 'retry' },
+      { edition: edition({ runTrigger: 'auto-retry' }), expected: 'auto-retry' },
       { edition: edition({ state: 'missing', availableLocales: [], generatedAt: undefined }), expected: 'not-recorded' }
     ] as const
     for (const { edition: row, expected } of kinds) {
@@ -511,6 +512,25 @@ describe('a row is two lines: the facts, then what it says', () => {
       expect(badges[0].getAttribute('data-run-source')).toBe(expected)
       expect(host.textContent).not.toContain(text.history.currentPeriod)
     }
+  })
+
+  it('says 自动重试 for the run this app retried itself, and 重试 only for the one the reader pressed', () => {
+    // `02` v2.158：两种同词即红。应用替环境类失败重跑的那一次不许写成「重试」，否则读者会以为
+    // 自己点了两次；两行并排看才看得出这一格确实分得开。
+    render({
+      editions: [
+        edition({ date: '2026-11-02', periodId: 'p_auto', periodTime: '2026-11-02T12:00:00.000Z', runTrigger: 'auto-retry' }),
+        edition({ date: '2026-11-02', periodId: 'p_manual_retry', periodTime: '2026-11-02T00:00:00.000Z', runTrigger: 'retry' })
+      ],
+      selectedDate: '2026-11-02'
+    })
+    const source = (periodId: string): string | null =>
+      [...host.querySelectorAll<HTMLElement>('[data-run-source]')]
+        .find((node) => node.closest('[data-period-id]')?.getAttribute('data-period-id') === periodId)!
+        .textContent
+    expect(source('p_auto')).toBe(text.history.runAutoRetry)
+    expect(source('p_manual_retry')).toBe(text.history.runRetry)
+    expect(text.history.runAutoRetry).not.toBe(text.history.runRetry)
   })
 
   it('puts the title on line two, and a deleted period keeps its mark there', () => {
