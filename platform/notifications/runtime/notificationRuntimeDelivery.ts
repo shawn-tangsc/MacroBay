@@ -273,6 +273,11 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
         : previousHighest
     }
 
+    // 事件级开关的兜底：规划层已经不排手机，但严重度升级与手动重投不经过规划。
+    // 明确关掉的事件在这里直接不发，也不写 `delivery.push`——「读者选择不推」不是一次失败。
+    if ((settings.channelEvents ?? {})[record.eventTypeId] === false) {
+      return { pushBackoff }
+    }
     if (channelId === null || !input.deliveryHooks?.push) {
       delivery.push = { state: 'failed', reason: 'push-unavailable', at, ...(previousHighest === undefined ? {} : { highestSeverity: previousHighest }) }
       return { pushBackoff }

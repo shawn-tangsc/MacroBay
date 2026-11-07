@@ -313,6 +313,65 @@ describe('「看原文」动作：外链只有一种写法（契约 §7.5 ⑫）
   })
 })
 
+describe('事件级频道开关（channelEvents）', () => {
+  // `platform.ready` 批准 center + desktop + channel；`platform.variant` 只批 center。
+  const readyRequest = request({
+    eventTypeId: 'platform.ready',
+    dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } },
+    actions: []
+  })
+
+  it('treats a missing key as on: 装上就推，不想收再去关', () => {
+    const plan = planNotificationSubmit({ ...base, request: readyRequest })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+    expect(plan.record.delivery.push).toEqual({ state: 'queued', at: base.now })
+  })
+
+  it('drops the phone when the reader turned this event off', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: { ...base.settings, channelEvents: { 'platform.ready': false } },
+      request: readyRequest
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 关掉只是不推手机：中心照旧留一条，且不排一次注定不发的 push。
+    expect(plan.outcome.levels).toContain('center')
+    expect(plan.outcome.levels).not.toContain('channel')
+    expect(plan.record.delivery.push).toBeUndefined()
+  })
+
+  it('keeps the phone when the key is explicitly true', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: { ...base.settings, channelEvents: { 'platform.ready': true } },
+      request: readyRequest
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+  })
+
+  // 否决位不是许可位：对没批 channel 的事件写 true，不能把它推上手机。
+  it('cannot grant a surface the approval table never gave', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: { ...base.settings, channelEvents: { 'platform.failed': true } },
+      request: request()
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).not.toContain('channel')
+    expect(plan.record.delivery.push).toBeUndefined()
+  })
+})
+
 describe('免打扰时段只进中心（验收 S6 / 测试单第 18 条）', () => {
   // 窗口 22:00–08:00（读者时区 UTC）；`platform.ready` 批准 center + channel。
   const quiet = {

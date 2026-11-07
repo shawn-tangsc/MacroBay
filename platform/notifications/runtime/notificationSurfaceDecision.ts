@@ -40,6 +40,13 @@ export function decideNotificationSurfaces(input: {
   desktopSupported: boolean
   /** 读者的第三层选择（契约 §5.5）：缺省＝允许，只有明确的 `false` 才收窄。 */
   selection?: NotificationSurfaceSelection
+  /**
+   * 事件级「推不推手机」（`settings.channelEvents[eventId]`）：缺省＝开（用户 2026-11-04
+   * 「装上就推，不想收再去关」），只有明确的 `false` 才否决。
+   *
+   * **是否决位，不是许可位**：它不能把没批 `channel` 的事件推上手机——批准表永远是上限。
+   */
+  eventChannelEnabled?: boolean
 }): NotificationSurfaceDecision {
   const selection = input.selection ?? {}
   const desktop =
@@ -51,7 +58,10 @@ export function decideNotificationSurfaces(input: {
   const toast = desktop
     ? false
     : input.approvedDisruptionLevels.includes('toast') && input.settings.toastEnabled && selection.toast !== false
-  const channel = input.approvedDisruptionLevels.includes('channel') && selection.channel !== false
+  const channel =
+    input.approvedDisruptionLevels.includes('channel') &&
+    selection.channel !== false &&
+    input.eventChannelEnabled !== false
   return Object.freeze({ desktop, toast, channel })
 }
 
@@ -77,7 +87,9 @@ export function resolveSubmitSurfaces(input: {
       approvedDisruptionLevels: input.entry.approvedDisruptionLevels,
       settings: input.settings,
       desktopSupported: input.desktopSupported,
-      selection: resolution.selection
+      selection: resolution.selection,
+      // 事件级开关：只读这一个键，缺省为开。日历那条走组选择，不受这里影响。
+      eventChannelEnabled: (input.settings.channelEvents ?? {})[input.entry.id]
     }),
     conflict: resolution.conflict
   }

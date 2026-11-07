@@ -47,12 +47,17 @@ function catalogFor(dedupeUnit: 'condition' | 'occurrence') {
   })
 }
 
-function harness(options: { dedupeUnit?: 'condition' | 'occurrence'; pushOk?: boolean } = {}) {
+function harness(options: {
+  dedupeUnit?: 'condition' | 'occurrence'
+  pushOk?: boolean
+  channelEvents?: Readonly<Record<string, boolean>>
+} = {}) {
   const pushes: { title: string; highestSeverity?: string }[] = []
   const state = createDefaultNotificationStoreState()
   const settings: NotificationRuntimeSettings = {
     ...createDefaultNotificationRuntimeSettings(),
-    push: { channelId: 'channel-a' }
+    push: { channelId: 'channel-a' },
+    ...(options.channelEvents === undefined ? {} : { channelEvents: options.channelEvents })
   }
   let sequence = 0
   const runtime = createNotificationRuntime({
@@ -71,7 +76,7 @@ function harness(options: { dedupeUnit?: 'condition' | 'occurrence'; pushOk?: bo
       }
     }
   })
-  return { runtime, pushes, records: () => state.records }
+  return { runtime, pushes, settings, records: () => state.records }
 }
 
 function submit(
@@ -107,6 +112,23 @@ describe('严重度升级再投递', () => {
     expect(record?.occurrenceCount).toBe(4)
     expect(record?.delivery.push?.highestSeverity).toBe('high')
     expect(record?.delivery.push?.state).toBe('sent-accepted')
+  })
+
+  // 事件级开关落在两个地方：规划层不排手机、投递层兜住升级与重投。这里验的是后者——
+  // 严重度升级不经过规划，若只在规划层判，读者关掉之后仍会被这条高等级再推一次。
+  it('等级再高也不越过读者关掉的事件开关', async () => {
+    const { runtime, pushes, settings, records } = harness()
+    await submit(runtime, { signalSeverity: 'medium' })
+    expect(pushes).toHaveLength(1)
+
+    // 读者把这条事件关掉，随后同一件事升级：这条升级不经过规划层。
+    settings.channelEvents = { 'platform.signal': false }
+    await submit(runtime, { signalSeverity: 'high' })
+
+    expect(pushes).toHaveLength(1)
+    expect(records()).toHaveLength(1)
+    // 「读者选择不推」不是一次失败：不写新的 push 状态，最高已推级也停在 medium。
+    expect(records()[0]?.delivery.push?.highestSeverity).toBe('medium')
   })
 
   it('同级第二次不推：medium 之后再 medium 没有新事实', async () => {
