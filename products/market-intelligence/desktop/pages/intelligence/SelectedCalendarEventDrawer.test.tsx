@@ -227,6 +227,27 @@ describe('the drawer pairs an official event with its admitted market observatio
     expect(host.querySelector('[data-consensus-gap]')?.textContent).toBe(text.details.consensusReadFailedReason)
   })
 
+  it('does not pair a different indicator that happens to share the release minute', async () => {
+    // 非农、失业率、时薪常常同一分钟发布。市场侧那条同一时刻的观测没有准入映射，
+    // 就不许被当成「这条官方事件的预期」——那是凭空造的一对。
+    const otherAtSameInstant = {
+      state: 'available' as const, month: selection.month, locale: 'zh' as const, asOf, sources: [],
+      events: [{
+        eventKey: 'market:unemployment', title: '美国失业率', countryCode: 'US', eventType: 'economic-indicator',
+        importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus: { displayValue: '4.1%' },
+        providerPrevious: null, providerActual: null, source: '0xRouter', sourceObservedAt: asOf,
+        coverage: 'observed-unverified'
+      }]
+    }
+    const readMarketMonth = vi.fn(async () => otherAtSameInstant)
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    // 没有映射 → 不配对：既不用那条 4.1%，也不说「未对上」（那同样是在断言两行同一件事）。
+    const row = host.querySelector('[data-consensus]')!
+    expect(row.getAttribute('data-consensus')).toBe('missing')
+    expect(row.textContent).not.toContain('4.1%')
+    expect(host.textContent).not.toContain('未对上')
+  })
+
   it('never pairs by timestamp: the source compares no scheduled time', async () => {
     const { readFileSync } = await import('node:fs')
     const { resolve } = await import('node:path')
