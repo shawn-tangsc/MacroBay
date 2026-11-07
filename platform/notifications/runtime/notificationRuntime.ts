@@ -58,6 +58,8 @@ import {
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushChannelResolution'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
+import { composeSelfTestSurface } from './notificationSelfTestSurface'
+import type { TestNoticeCandidatePort } from '../contracts/notificationSelfTest'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
 import { decideSeverityUpgrade } from './notificationSeverityUpgrade'
@@ -105,13 +107,7 @@ export type NotificationRuntimeDependencies = {
   deliveryHooks?: DeliveryHooks
   /** 事件目录（契约 §2）。装配层注入；没有目录时新提交路径一律 rejected: unknown-event-type。 */
   catalog?: NotificationEventCatalog
-  /**
-   * 诊断出口（runtime §2）：**必传**（2026-11-08 定）。
-   *
-   * 以前这里是可选的，理由是「旧测试迁移方便」——代价是装配漏传时运行时照样能记、但没人接，
-   * 与「根本没留痕」一模一样。提交被拒那一支就吃过这个亏：三处都查不到。宁可装配时编译不过，
-   * 也不要运行时静默降级。
-   */
+  /** 诊断出口（runtime §2）：**必传**。漏传时「能记但没人接」＝根本没留痕，宁可装配时编译红。 */
   diagnostics: NotificationDiagnosticsSink
   /** 生产者归属表（契约 §14）：未登记 → 平台发；让渡给产品 → 平台不发，只记诊断。 */
   producerOwnership?: NotificationProducerOwnership
@@ -127,6 +123,8 @@ export type NotificationRuntimeDependencies = {
   getPushTargets?: () => Promise<readonly unknown[]>
   /** 目标通道的**唯一派生**（技术方案 §1），主推送/升级/重投共用；缺省＝一条都没有，绝不回退读旧字段。 */
   resolvePushChannel?: () => Promise<PushChannelResolution>
+  /** 三枚测试按钮的**只读取数**端口（产品侧实现、组合根注入）；缺席＝诚实的 `read-failed`。 */
+  testNoticeCandidates?: TestNoticeCandidatePort
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
@@ -188,14 +186,10 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     }
   }
 
-  /**
-   * 新提交路径（契约 §3.2）。规划器只回答「变成什么」，这里负责落库、合并与投递；
-   * 合并/跨类型/空正文等规则全部在 `planNotificationSubmit` + `mergeDuplicateNotification` 一处。
-   */
+  /** 新提交路径（契约 §3.2）：规划器回答「变成什么」，这里落库、合并与投递。 */
   async function submitEvent(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
     const outcome = await traceSubmitFailure(() => decideAndStoreSubmit(request), { eventTypeId: request.eventTypeId, diagnostics: deps.diagnostics, at: nowIso })
-    // 被拒也要留一行痕（2026-11-08）：调用方普遍 `catch {}` 或丢弃返回值，拒收原本三处都查不到。
-    // **只留痕、不改行为**：不建记录、不动计数、不投递。
+    // 被拒也要留一行痕（2026-11-08）：调用方普遍 `catch {}`，拒收原本三处都查不到。只留痕、不改行为。
     if (outcome.kind === 'rejected') {
       deps.diagnostics({
         code: outcome.reason,
@@ -424,6 +418,10 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     toCenterItem: (record: NotificationRecord, content?: NotificationDeliveryContent): Promise<NotificationCenterItem> =>
       centerItem(record, content),
 
+    ...composeSelfTestSurface({ getTimezone: () => deps.clock.timeZone(),
+      resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
+      ...(deps.testNoticeCandidates === undefined ? {} : { candidates: deps.testNoticeCandidates }),
+      deliver: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
     reportProviderCredential,
 

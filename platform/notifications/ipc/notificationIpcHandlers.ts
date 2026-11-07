@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron'
 
 import { IpcChannels } from '../../desktop/ipc/channels'
-import { buildTestNotificationRequest } from '../producers/testNotification'
 import { getNotificationRuntime } from './registerNotificationIpc'
 
 export function registerNotificationIpcHandlers(): void {
@@ -28,10 +27,25 @@ export function registerNotificationIpcHandlers(): void {
     if (!payload.id || !payload.until) throw new Error('id and until are required.')
     return getNotificationRuntime().snooze(payload.id, payload.until)
   })
-  // 入参只带 `kind`（设置页的三枚测试按钮）；主进程按当前配置重算强度/条数/时区，渲染层不传这些。
-  ipcMain.handle(IpcChannels.notificationsSendTest, (_event, _input?: { kind?: string }) =>
-    getNotificationRuntime().submitSelfTest(buildTestNotificationRequest())
-  )
+  // 入参只带 `kind`（设置页的三枚测试按钮）；强度/条数/时区/通道全由主进程按当前配置重算。
+  // 测试与真实走同一个 `submit`，只多 `namespace: 'test'` 去重域与候选自带的【测试】前缀。
+  ipcMain.handle(IpcChannels.notificationsSendTest, async (_event, input?: { kind?: string }) => {
+    const kind = input?.kind
+    if (kind !== 'sentiment' && kind !== 'calendar-upcoming' && kind !== 'calendar-landed') {
+      throw new Error('notification-test-kind-invalid')
+    }
+    const receipt = await getNotificationRuntime().sendTestNotice(kind)
+    if (receipt.state !== 'sent') {
+      // 留痕只带 kind 与闭集码（`push-unavailable` 时带条数）：**不记强度、不记时区字符串、不记凭据**。
+      console.log(JSON.stringify({
+        marker: receipt.state === 'no-data' ? 'MI_TEST_NOTICE_NO_DATA' : 'MI_TEST_NOTICE_UNAVAILABLE',
+        kind,
+        reasonCode: receipt.reasonCode,
+        ...(receipt.state === 'unavailable' && receipt.enabledChannelCount !== undefined ? { enabledChannelCount: receipt.enabledChannelCount } : {})
+      }))
+    }
+    return receipt
+  })
   // 只读授权状态：主进程没有「申请授权」这个能力，真申请只能从渲染层走 Web Notification API。
   ipcMain.handle(IpcChannels.notificationsReadDesktopPermission, () => getNotificationRuntime().readDesktopPermission())
 

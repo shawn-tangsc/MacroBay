@@ -5,7 +5,8 @@ import type { NotificationCenterItem, NotificationUnreadState } from '../../../n
 import type { NotificationRuntime } from '../../../notifications/runtime/notificationRuntime'
 
 /** 测试通知的真实回执：一条记录 + 每一档投递的尝试结果。形状取自运行时签名，不在这里抄第二份。 */
-export type NotificationSelfTestReceipt = Awaited<ReturnType<NotificationRuntime['submitSelfTest']>>
+/** 三枚测试按钮的闭集回执（平台契约 `notificationSelfTest.ts`）：三档 + 闭集码。 */
+export type NotificationSelfTestReceipt = Awaited<ReturnType<NotificationRuntime['sendTestNotice']>>
 
 /**
  * 通知命名空间（从 `preload/index.ts` 抽出来的第一块）。

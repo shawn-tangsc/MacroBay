@@ -152,7 +152,8 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   if (crossProduct !== undefined) {
     return rejected('cross-product-key', `dedupe key belongs to "${crossProduct}", not "${entry.productId}"`)
   }
-  const dedupeKey = `${entry.productId}|${rawDedupeKey}`
+  // 测试与真实**永不互相吞掉**：同一个键、两个域（§2），前缀只在这一处加。
+  const dedupeKey = input.request.namespace === 'test' ? `test:${entry.productId}|${rawDedupeKey}` : `${entry.productId}|${rawDedupeKey}`
 
   // 当日上限与最小间隔：只在**会新建记录**的提交上判（合并进已有那一条不算新的一条）。
   // 数从记录里来（`sameEventToday`），这一处只负责比大小——所以平台与生产者不会各有一套阈值。

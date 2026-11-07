@@ -407,6 +407,13 @@ export type NotificationDedupeVars =
 /** 提交请求（契约 §3.2）：记录里存键与参数，不存句子。 */
 export type NotificationSubmitRequest = {
   eventTypeId: string
+  /**
+   * 去重键命名空间（技术方案 §2）：只允许 `'test'` 一个值，规划器把键拼成 `test:<product>|<原键>`。
+   *
+   * **不是** `dedupeKeyOverride`：那不是命名空间，而是让调用方直接写键——真实去重键会不会被占上，
+   * 就全凭调用方自觉了，而这正是「测试不吃真实通知」要防的。这里只有「同一个键、不同域」一件事。
+   */
+  namespace?: 'test'
   producerId?: string
   /**
    * 只记录不投递（契约 §16.3.3）：照常走提交与去重，但**不写任何表面的 delivery 条目**。
