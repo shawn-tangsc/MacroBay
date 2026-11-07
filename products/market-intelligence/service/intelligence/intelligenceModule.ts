@@ -17,6 +17,7 @@ import { app } from 'electron'
 import { createIntelligenceFetchText, executeIntelligenceFetchTarget } from './adapters/intelligenceHttpFetch'
 import { createIntelligenceArchiveService } from './application/intelligenceArchiveService'
 import { createIntelligencePipeline } from './application/intelligencePipeline'
+import { silenceHoursBySource } from './application/sourceIssueNotifier'
 import { createIntelligenceEventPublisher } from './application/intelligenceEventPublisher'
 import { createIntelligenceReplayService } from './application/intelligenceReplayService'
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
@@ -415,10 +416,16 @@ export function getIntelligenceModule(
     const eventPublisher = hooks?.eventBusRuntime
       ? createIntelligenceEventPublisher(hooks.eventBusRuntime)
       : undefined
+    // 判定「这个源静默了多久」要用读者时区（工作日 12h / 周末 24h），诊断里还要带上同一刻各源的静默时长；
+    // 两者都要读 pipeline 的运行时状态，而 pipeline 在下面才创建，所以先留一个引用。
+    let pipelineForSilence: ReturnType<typeof createIntelligencePipeline> | undefined
     const sourceIssueNotifier = hooks?.submitNotification
       ? createSourceIssueNotifier({
           submit: hooks.submitNotification,
-          defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS
+          defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS,
+          timeZone: shellTimeZone,
+          ...(hooks.log === undefined ? {} : { log: hooks.log }),
+          silenceHours: () => silenceHoursBySource(pipelineForSilence?.listRuntimeStates() ?? [], new Date().toISOString())
         })
       : undefined
     const pipeline = createIntelligencePipeline({
@@ -437,6 +444,7 @@ export function getIntelligenceModule(
       eventPublisher,
       ...(sourceIssueNotifier === undefined ? {} : { sourceIssueNotifier })
     })
+    pipelineForSilence = pipeline
     const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
       storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))
     })

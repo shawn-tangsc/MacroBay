@@ -102,8 +102,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceConsecutiveFailed)]: '这个来源一直取不到数据，去设置检查密钥或代理。',
     [REASON(IDS.sourceConsecutiveFailed)]: '同一个来源连续三次失败，提醒一次。',
 
-    [TITLE(IDS.sourceStale)]: '{sourceName} 很久没有新数据',
-    [BODY(IDS.sourceStale)]: '超过这个来源的新鲜度窗口仍没有新条目，可能是它停更了，去设置检查。',
+    [TITLE(IDS.sourceStale)]: '{sourceName} 这段时间没有新内容',
+    [BODY(IDS.sourceStale)]: '这个源在它的静默窗口内没有带来新条目。去设置里检查它的开关和连接。',
     [REASON(IDS.sourceStale)]: '最后一条新内容出现在这个窗口之前，之后的采集都没有带来新条目。',
 
     [TITLE(IDS.briefingReady)]: '日报已完成',
@@ -173,8 +173,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceConsecutiveFailed)]: 'This source keeps returning nothing. Check its key or proxy in settings.',
     [REASON(IDS.sourceConsecutiveFailed)]: 'The same source failed three times in a row, so it is mentioned once.',
 
-    [TITLE(IDS.sourceStale)]: '{sourceName} has no new data',
-    [BODY(IDS.sourceStale)]: 'No new items for longer than this source’s freshness window — it may have stopped publishing. Check it in settings.',
+    [TITLE(IDS.sourceStale)]: '{sourceName} has had no new items',
+    [BODY(IDS.sourceStale)]: 'This source brought no new items for longer than its silence window. Check its switch and connection in settings.',
     [REASON(IDS.sourceStale)]: 'The last new item arrived before this window; collections since then brought nothing new.',
 
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',

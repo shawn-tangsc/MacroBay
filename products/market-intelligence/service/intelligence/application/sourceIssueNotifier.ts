@@ -4,6 +4,8 @@ import type {
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import type { RuntimeStateRecord } from '@platform/jobs'
+
 import { isSourceStaleAsOf } from './macroSourceHealth'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 
@@ -20,6 +22,38 @@ import { getIntelligenceSourceDefinition } from './sourceCatalog'
  */
 export const SOURCE_ISSUE_FAILURE_THRESHOLD = 3
 
+/**
+ * 「静默多久算异常」的两档窗口（Chief 2026-11-07 按实测定）：
+ * 实测同一刻 CoinDesk 17.7h / Decrypt 16.7h / The Block 16.8h 都没新条目，而那天是**周六**；
+ * 三家一起安静更像周末低产，不是某一家坏了。所以工作日 12 小时、周末 24 小时。
+ */
+export const WEEKDAY_SILENCE_MS = 12 * 60 * 60 * 1000
+export const WEEKEND_SILENCE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 今天算不算周末——**按读者时区**判（这是给人看的判断，跟读者时区走；
+ * 「窗口多长」本身是时长，不随时区变化）。
+ */
+export function isWeekendIn(timeZone: string, now: string): boolean {
+  let weekday: string
+  try {
+    weekday = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(new Date(now))
+  } catch {
+    // 时区坏了不猜：按工作日判（窗口更短、更容易报），并让调用方在诊断里看到时区无效。
+    return false
+  }
+  return weekday === 'Sat' || weekday === 'Sun'
+}
+
+/** 这一次判定该用哪个窗口。`weekend` 同时进诊断——误报时一眼能看出是不是周末。 */
+export function resolveSilenceWindow(
+  now: string,
+  timeZone: string
+): Readonly<{ windowMs: number; weekend: boolean }> {
+  const weekend = isWeekendIn(timeZone, now)
+  return { windowMs: weekend ? WEEKEND_SILENCE_MS : WEEKDAY_SILENCE_MS, weekend }
+}
+
 export type SourceIssueKind = 'consecutive-failed' | 'stale'
 
 const SOURCE_ISSUE_EVENT_IDS: Readonly<Record<SourceIssueKind, string>> = Object.freeze({
@@ -29,6 +63,30 @@ const SOURCE_ISSUE_EVENT_IDS: Readonly<Record<SourceIssueKind, string>> = Object
 
 /** 来源采集 job 的 handler id：产品自己的 job 提交也要带它（契约 §3.2）。 */
 const SOURCE_COLLECTION_PRODUCER_ID = 'market-intelligence.collectSource'
+
+/**
+ * 同一刻各源静默了多少小时（诊断用，只写源 id 与小时数）。**不进通知正文**，也不做判定：
+ * 判定只看本来源。它的用处是误报时能一眼看出「今天三家都安静」还是「只有它在安静」。
+ *
+ * 静默的起点取检查点里的 `lastPublishedAt`（最后一次真的带来新条目），没有才退回 `lastSuccessAt`。
+ */
+export function silenceHoursBySource(
+  states: readonly RuntimeStateRecord[],
+  now: string
+): Readonly<Record<string, number>> {
+  const nowMs = Date.parse(now)
+  const out: Record<string, number> = {}
+  for (const state of states) {
+    const checkpoint = state.checkpoint as { lastPublishedAt?: unknown } | undefined
+    const lastPublishedAt = typeof checkpoint?.lastPublishedAt === 'string' ? checkpoint.lastPublishedAt : undefined
+    const lastEvidenceAt = lastPublishedAt ?? state.lastSuccessAt
+    if (lastEvidenceAt === undefined) continue
+    const hours = (nowMs - Date.parse(lastEvidenceAt)) / 3_600_000
+    if (!Number.isFinite(hours)) continue
+    out[state.resourceId] = Math.round(hours * 10) / 10
+  }
+  return out
+}
 
 export type SourceIssueSnapshot = {
   sourceId: string
@@ -102,8 +160,14 @@ export type SourceIssueNotifierDeps = {
   submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   /** 判定窗口的缺省值（毫秒）；调用方与来源覆盖视图用同一个默认。 */
   defaultFreshnessMs: number
+  /** 读者时区：只用来判「今天是不是周末」，不参与时长计算。 */
+  timeZone: () => string
   /** 来源的显示名；解析不出时退回 sourceId，不猜。 */
   resolveSourceName?: (sourceId: string) => string
+  /** 平台落盘日志（app.log）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  /** 同一刻各源的静默小时数（源 id → 小时），只进诊断，不进通知正文。 */
+  silenceHours?: () => Readonly<Record<string, number>>
 }
 
 /**
@@ -134,8 +198,23 @@ function sourceIssueDeeplink(sourceId: string) {
 
 export function createSourceIssueNotifier(deps: SourceIssueNotifierDeps) {
   return async function notifySourceIssue(input: SourceIssueSnapshot): Promise<NotificationSubmitOutcome | null> {
-    const kind = decideSourceIssue(input, deps.defaultFreshnessMs)
+    const window = resolveSilenceWindow(input.now, deps.timeZone())
+    const kind = decideSourceIssue(input, window.windowMs)
     if (kind === null) return null
+
+    // 诊断：这次为什么判成陈旧、当时各源各静默多久。误报时能一眼分开「周末低产」与「真异常」。
+    if (kind === 'stale' && deps.log) {
+      const lastNewItemAt = input.lastNewItemAt ?? input.lastSuccessAt
+      deps.log('info', 'intelligence.source.silence', {
+        sourceId: input.sourceId,
+        silentHours: lastNewItemAt === undefined
+          ? null
+          : Math.round((Date.parse(input.now) - Date.parse(lastNewItemAt)) / 3_600_000 * 10) / 10,
+        weekend: window.weekend,
+        windowHours: window.windowMs / 3_600_000,
+        ...(deps.silenceHours === undefined ? {} : { sources: deps.silenceHours() })
+      })
+    }
 
     const definition = getIntelligenceSourceDefinition(input.sourceId)
     const sourceName = deps.resolveSourceName?.(input.sourceId) ?? definition?.displayName ?? input.sourceId
