@@ -71,6 +71,11 @@ export type NotificationEventCatalogEntry = NotificationEventDeclaration & {
   productId: string
   approvedDisruptionLevels: readonly NotificationApprovedLevel[]
   approvedBypassQuietHours: boolean
+  /**
+   * 事件级表面选择的**组键**（契约 §5.5）：同一件事的两条通知共用一个键、共用一份选择。
+   * 只有一条成员时它等同于自己；两条时可用面取两条批准表的**交集**。
+   */
+  surfaceGroup?: string
 }
 
 export type NotificationEventCatalog = {
@@ -88,6 +93,11 @@ export type NotificationEventDeclarationSource = {
 export type NotificationEventPolicyEntry = {
   approvedDisruptionLevels: readonly NotificationApprovedLevel[]
   approvedBypassQuietHours: boolean
+  /**
+   * 事件级表面选择的组键（契约 §5.5）：同一件事的两条通知写**同一个值**，读者的选择就只有一份。
+   * 写在这里而不是另立一张组表：批准行是上限的唯一来源，组也属于上限，两处记必然漂移。
+   */
+  surfaceGroup?: string
 }
 
 export type NotificationEventPolicy = Readonly<Record<string, NotificationEventPolicyEntry>>
@@ -142,7 +152,8 @@ export function createNotificationEventCatalog(input: {
         ...declaration,
         productId: source.productId,
         approvedDisruptionLevels: Object.freeze([...approvedDisruptionLevels]),
-        approvedBypassQuietHours: policy?.approvedBypassQuietHours === true
+        approvedBypassQuietHours: policy?.approvedBypassQuietHours === true,
+        ...(policy?.surfaceGroup === undefined ? {} : { surfaceGroup: policy.surfaceGroup })
       })
       entries.push(entry)
       byId.set(entry.id, entry)

@@ -318,6 +318,16 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     }
 
     const record = plan.record
+    // 同组两条的存量选择对不上：三面已按「都关」处理，这里补一行诊断——
+    // 「都关」看起来跟读者自己关掉一模一样，不记就没人知道少了什么（契约 §5.5）。
+    if (plan.surfaceConflict) {
+      deps.diagnostics?.({
+        code: 'surface-selection-conflict',
+        at: now,
+        eventTypeId: record.eventTypeId,
+        recordId: record.id
+      })
+    }
     await persistWithDiagnostics({ ...state, records: [record, ...state.records], dailyCounters })
     notifyChanged()
     const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff, request.signalSeverity)

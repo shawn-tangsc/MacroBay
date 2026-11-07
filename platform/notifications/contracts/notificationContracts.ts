@@ -1,4 +1,5 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { NotificationSurfaceSelection } from './notificationSurfaceSelection'
 import type { NotificationSubmitRejection } from './notificationSubmitRejection'
 import type { NotificationCopyParam } from './notificationCopyPort'
 import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
@@ -264,6 +265,13 @@ export type NotificationRuntimeSettings = {
    */
   channelEvents?: Readonly<Record<string, boolean>>
   /**
+   * 事件级 / 组级的表面选择（契约 §5.5 第三层）：键是**组键**（同一件事的两条共用一个）或事件 id。
+   *
+   * 它是读者能选的**最后一道**，只能收窄：没批的面存进来也会被夹掉。缺省（没这个键）＝读者还没
+   * 表过态，按批准表允许的来——不是「全关」，否则刚打开提醒就会一条都收不到。
+   */
+  surfaceSelections?: Readonly<Record<string, NotificationSurfaceSelection>>
+  /**
    * 出站通道（**过渡字段**）：设置页已经不再读写它；投递端口在「取唯一启用频道」落地前
    * 仍按它取目标。第六组改完端口后，这个字段随 AppSettings 一并删除。
    */
@@ -301,6 +309,7 @@ export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeS
     popupEnabled: true,
     // 三条频道事件默认全开：「装上就推，不想收再去关」（契约 §5.4）。
     channelEvents: Object.freeze({}),
+    surfaceSelections: Object.freeze({}),
     // 过渡字段：设置页不再写它，第六组把端口改成「唯一启用频道」后删掉。
     push: { channelId: null },
     retentionDays: 30,
@@ -455,6 +464,11 @@ export type NotificationDiagnosticsEntry = {
      * 日志回答的是另一个问题——「这次操作发生了什么」，所以它必须是可查的一行。
      */
     | 'redeliver-rejected'
+    /**
+     * 同一组的两条通知，存量表面选择**不一致**（历史数据或半次写入）：读的时候按「都关」处理。
+     * 记这一行是因为「都关」看起来跟读者自己关掉一模一样——不记，就没人知道少了什么。
+     */
+    | 'surface-selection-conflict'
   eventTypeId?: string
   producerId?: string
   /**

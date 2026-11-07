@@ -60,7 +60,10 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'market-intelligence.briefing.ready': { approvedDisruptionLevels: ['center', 'channel', 'desktop'], approvedBypassQuietHours: false },
   // 信息类：桌面撤档（读者不想被「没打开应用还轰炸」）；通道是上限，读者在情报页勾了才推。
   'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
-  'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
+  // **组键 `calendar-events`**（契约 §5.5）：日历「开始前」（N11）与「发生后」（本条）是同一件事的两个
+  // 时间点，读者只该勾一次。组里可用面取两条批准表的**交集**，所以两行的档位必须一致——
+  // 只改其中一行，交集就会变，绿着一半却只对一条生效，那正是要拦的（`notificationEventPolicy.test` 钉住）。
+  'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
   'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },

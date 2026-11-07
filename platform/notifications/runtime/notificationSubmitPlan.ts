@@ -31,6 +31,7 @@ import type {
 } from '../contracts/notificationContracts'
 import { createNotificationId } from '../store/notificationStore'
 import { isInsideQuietHours } from './quietHours'
+import { resolveSurfaceSelection, type NotificationSurfaceSelection } from '../contracts/notificationSurfaceSelection'
 
 export type NotificationSubmitPlan =
   | { kind: 'rejected'; outcome: Extract<NotificationSubmitOutcome, { kind: 'rejected' }> }
@@ -38,6 +39,11 @@ export type NotificationSubmitPlan =
       kind: 'new'
       record: NotificationRecord
       levels: readonly NotificationApprovedLevel[]
+      /**
+       * 同一组两条通知的存量选择对不上（历史数据/半次写入）：三面已按「都关」处理，
+       * 调用方**必须**记一行诊断——否则「都关」看起来跟读者自己关掉一模一样。
+       */
+      surfaceConflict: boolean
       /** 旧提交形状，供 `mergeDuplicateNotification` 的字段读取（不用于标题/动作）。 */
       incoming: NotificationRequest
       outcome: Extract<NotificationSubmitOutcome, { kind: 'accepted' }>
@@ -88,13 +94,19 @@ export type NotificationSurfacePlan = Readonly<{ desktop: boolean; toast: boolea
 export function planNotificationSurfaces(
   entry: NotificationEventCatalogEntry,
   settings: NotificationRuntimeSettings,
-  desktopSupported: boolean
+  desktopSupported: boolean,
+  /**
+   * 读者的第三层选择（契约 §5.5）。**缺省不是关**：只有明确的 `false` 才收窄，
+   * 否则刚打开提醒的人会一条都收不到。缺省参数是为了让不关心这一层的调用点照旧。
+   */
+  selection: NotificationSurfaceSelection = {}
 ): NotificationSurfacePlan {
   const desktopApproved = entry.approvedDisruptionLevels.includes('desktop')
   const toastApproved = entry.approvedDisruptionLevels.includes('toast')
-  const desktop = desktopApproved && settings.desktopEnabled && desktopSupported
+  const desktop = desktopApproved && settings.desktopEnabled && desktopSupported && selection.desktop !== false
   // 桌面优先：桌面真能弹时，这条不再另外在应用内重复一次。
-  return Object.freeze({ desktop, toast: desktop ? false : toastApproved && settings.toastEnabled })
+  const toast = desktop ? false : toastApproved && settings.toastEnabled && selection.toast !== false
+  return Object.freeze({ desktop, toast })
 }
 
 export function planNotificationSubmit(input: NotificationSubmitPlanInput): NotificationSubmitPlan {
@@ -184,14 +196,21 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported)
+  // 第三层：读者能选的面（契约 §5.5）。同一组的两条共用一份选择，可用面取批准表的交集；
+  // 存量值对不上时按「都关」处理并把 `conflict` 交给调用方记一行——「都关」看起来和读者自己关掉一样。
+  const resolution = resolveSurfaceSelection({
+    entry,
+    list: () => input.catalog.list(),
+    selections: input.settings.surfaceSelections ?? {}
+  })
+  const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported, resolution.selection)
   // 免打扰时段**只进中心**：手机这一档在这里摘掉（验收 S6 / 用户测试单第 18 条
   // 「只进中心，不弹、不发手机」）。以前只静音本机三种打扰，手机照样推——那是缺陷，不是设计。
   const insideQuietHours = isInsideQuietHours(input.settings, {
     now: () => new Date(input.now),
     timeZone: () => input.timeZone
   })
-  const levels = effectiveLevels(entry, surfaces, !insideQuietHours)
+  const levels = effectiveLevels(entry, surfaces, !insideQuietHours, resolution.selection)
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
@@ -210,6 +229,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     kind: 'new',
     record,
     levels,
+    surfaceConflict: resolution.conflict,
     incoming,
     outcome: { kind: 'accepted', recordId: record.id, levels }
   }
@@ -371,12 +391,16 @@ function effectiveLevels(
   entry: NotificationEventCatalogEntry,
   surfaces: NotificationSurfacePlan,
   /** 免打扰之外才排手机：窗口内只进中心，这是 S6 的判据，不是本机开关的事。 */
-  channelAllowed: boolean
+  channelAllowed: boolean,
+  /** 读者的第三层选择（契约 §5.5）：缺省＝允许，只有明确的 `false` 才收窄。 */
+  selection: NotificationSurfaceSelection
 ): readonly NotificationApprovedLevel[] {
   const levels: NotificationApprovedLevel[] = ['center']
   if (surfaces.desktop) levels.push('desktop')
   if (surfaces.toast) levels.push('toast')
-  if (channelAllowed && entry.approvedDisruptionLevels.includes('channel')) levels.push('channel')
+  if (channelAllowed && selection.channel !== false && entry.approvedDisruptionLevels.includes('channel')) {
+    levels.push('channel')
+  }
   return Object.freeze(levels)
 }
 
