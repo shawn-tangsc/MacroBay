@@ -82,6 +82,8 @@ export function buildEtfOutflowSignalRequest(signal: ModuleSignal): Notification
     asset: signalAssetSymbol(signal.asset),
     flowUsd,
     thresholdUsd,
+    // 信号描述的那个交易日：三日累计判到哪天，正文就写哪天。
+    asOfDate: signal.observedAt.slice(0, 10),
     aggravated
   })
   if (rendered === undefined) return undefined

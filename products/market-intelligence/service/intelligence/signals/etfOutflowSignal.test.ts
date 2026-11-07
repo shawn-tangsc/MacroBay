@@ -150,6 +150,11 @@ describe('judging only settled trading days (2026-11-06 replay)', () => {
     expect(signal.severity).toBe('high')
     expect(signal.observedAt).toBe('2026-11-06T00:00:00.000Z')
     expect(signal.values).toMatchObject({ cumulativeNetFlowUsd: -767_500_000, coveredDays: 3, requiredDays: 3 })
+
+    // 提醒正文必须写明「截至哪天收盘」：读者就是被这一句缺了误导的。
+    const request = buildEtfOutflowSignalRequest(signal)!
+    expect(request.rendered?.['zh-CN']!.body).toContain('截至 11-06 收盘')
+    expect(request.rendered?.['en-US']!.body).toContain('as of 11-06 close')
   })
 
   // 同一桶再读一次：去重键不变，平台按它合并，不会推第二次。

@@ -6,7 +6,9 @@
  *
  * 骨架里的槽名是固定的，成品与旧记录都用同一批槽：
  * - 标题 `{asset} {headline}`：资产在前，读者可能同时在盯几个资产；
- * - 正文四个变体：规则 × 档位，模板里不写任何阈值（阈值由源头从规则常量填）。
+ * - 正文四个变体：规则 × 档位，模板里不写任何阈值（阈值由源头从规则常量填）；
+ *   ETF 两个变体带 `{asOf}`——三日累计判的是**定稿的那一天**，不写明读者就分不清
+ *   「半天数」和「定稿数」（2026-11-06 的原话：3.7 亿和 7.7 亿，不知道哪个算数）。
  */
 
 export type SignalNotificationVariant =
@@ -38,8 +40,8 @@ export const signalNotificationSentences: Readonly<
       oiDropAggravated: '持仓骤降加剧'
     }),
     body: Object.freeze({
-      etfOutflow: '净流出 {amount}，超过 {threshold}的阈值',
-      etfOutflowAggravated: '净流出 {amount}，是阈值的 {multiple}',
+      etfOutflow: '净流出 {amount}，超过 {threshold}的阈值（截至 {asOf} 收盘）',
+      etfOutflowAggravated: '净流出 {amount}，是阈值的 {multiple}（截至 {asOf} 收盘）',
       oiDrop: '15 分钟跌 {dropPct}（阈值 {thresholdPct}），成交放大 {multiple}，规模约 {notional}',
       oiDropAggravated: '15 分钟跌 {dropPct}（强阈值 {strongPct}），成交放大 {multiple}，规模约 {notional}'
     }),
@@ -54,8 +56,8 @@ export const signalNotificationSentences: Readonly<
       oiDropAggravated: 'open interest fell further'
     }),
     body: Object.freeze({
-      etfOutflow: '{amount} net outflow, past the {threshold} threshold',
-      etfOutflowAggravated: '{amount} net outflow, {multiple} the threshold',
+      etfOutflow: '{amount} net outflow, past the {threshold} threshold (as of {asOf} close)',
+      etfOutflowAggravated: '{amount} net outflow, {multiple} the threshold (as of {asOf} close)',
       oiDrop: 'Down {dropPct} in 15 min (threshold {thresholdPct}), volume {multiple}, about {notional}',
       oiDropAggravated: 'Down {dropPct} in 15 min (strong threshold {strongPct}), volume {multiple}, about {notional}'
     }),

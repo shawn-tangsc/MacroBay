@@ -47,6 +47,8 @@ export type EtfOutflowSentenceInput = Readonly<{
   flowUsd: number
   /** 规则常量本身，不是另算一遍的数。 */
   thresholdUsd: number
+  /** 三日累计判到的那一天（`YYYY-MM-DD`）：读者要知道「截至哪天收盘」。 */
+  asOfDate: string
   aggravated: boolean
 }>
 
@@ -54,14 +56,17 @@ export function renderEtfOutflowSentence(
   input: EtfOutflowSentenceInput
 ): NotificationContentByLanguage | undefined {
   if (!Number.isFinite(input.flowUsd) || !Number.isFinite(input.thresholdUsd)) return undefined
+  // 「截至哪天」是这条提醒的一半事实：缺了它，读者分不清半天数与定稿数。日期坏掉就不发。
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.asOfDate)) return undefined
+  const asOf = input.asOfDate.slice(5)
   const variant: SignalNotificationVariant = input.aggravated ? 'etfOutflowAggravated' : 'etfOutflow'
   return compose({ asset: input.asset, variant }, (language): Record<string, string | null> => {
     const amount = formatNotificationNumber({ number: input.flowUsd, kind: 'usd' }, language)
     if (!input.aggravated) {
-      return { amount, threshold: formatNotificationNumber({ number: input.thresholdUsd, kind: 'usd' }, language) }
+      return { amount, asOf, threshold: formatNotificationNumber({ number: input.thresholdUsd, kind: 'usd' }, language) }
     }
     const multiple = thresholdMultiple(input.flowUsd, input.thresholdUsd)
-    return { amount, multiple: formatNotificationNumber({ number: multiple, kind: 'multiple' }, language) }
+    return { amount, asOf, multiple: formatNotificationNumber({ number: multiple, kind: 'multiple' }, language) }
   })
 }
 

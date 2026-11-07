@@ -113,8 +113,8 @@ describe('signal notification sentences', () => {
     expect(etfSignal.severity).toBe('high')
     const request = buildEtfOutflowSignalRequest(etfSignal)
     expect(request?.rendered?.['zh-CN']!.title).toBe('BTC ETF 净流出加剧')
-    expect(request?.rendered?.['zh-CN']!.body).toBe('净流出 6 亿美元，是阈值的 6 倍')
-    expect(request?.rendered?.['en-US']!.body).toBe('$600M net outflow, 6× the threshold')
+    expect(request?.rendered?.['zh-CN']!.body).toBe('净流出 6 亿美元，是阈值的 6 倍（截至 08-28 收盘）')
+    expect(request?.rendered?.['en-US']!.body).toBe('$600M net outflow, 6× the threshold (as of 08-28 close)')
     expect(Math.abs(etfSignal.values.thresholdUsd)).toBe(Math.abs(etfFlowPolicy.signalOutflowUsd))
   })
 
