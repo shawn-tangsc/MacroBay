@@ -21,6 +21,21 @@ import type { SignalAnalysisStateView } from '../../../service/intelligence/anal
  */
 export type DashboardPositioningPoint = Readonly<{ observedAt: string; notionalUsd: number }>
 
+/**
+ * 图上的一个「疑似强平」点：账本里这一格命中了，就画一个。
+ *
+ * 它跟着**卡片的窗口**走（7 天视图画 7 天内的全部命中，24 小时画 24 小时内的），
+ * 与牌子同源、与通知不同源：通知永远只按 24 小时判。
+ */
+export type DashboardLiquidationMark = Readonly<{
+  asset: 'btc' | 'eth'
+  observedAt: string
+  /** 判定那一格的持仓名义额：点就画在这个高度上。 */
+  notionalUsd: number
+  dropPct: number
+  volumeMultiple: number
+}>
+
 export type DashboardPositioningViewState =
   | Readonly<{ state: 'loading' }>
   | Readonly<{ state: 'empty'; onReload: () => void }>
@@ -34,6 +49,8 @@ export type DashboardPositioningViewState =
       changeEth?: Readonly<{ h1Pct?: number; h24Pct?: number }>
       /** Set when the newest reading is older than the staleness bound. */
       staleSince?: string
+      /** 当前窗口内的全部命中，图上逐个画点（查询已按 window 裁剪）。 */
+      hints: readonly DashboardLiquidationMark[]
       /** What the module's rule says right now. Hidden means "nothing to say" — no chip at all. */
       signal: DashboardSignalChip
       /** 这条信号的分析到哪一步；与信号并列，不塞进 `signal`。 */
@@ -98,8 +115,8 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
       eth: value.eth.map(toPoint),
       ...(value.change?.btc ? { changeBtc: value.change.btc } : {}),
       ...(value.change?.eth ? { changeEth: value.change.eth } : {}),
-      // The card no longer carries the query's hint marks: the chip and the chart mark both come
-      // from the module rule, so one reading cannot be drawn as two different things.
+      // 点来自当前窗口的命中（账本），牌子来自同一套规则的窗口判定；两者同源、互不替代。
+      hints: (value.liquidationHintsState === 'available' ? value.liquidationHints ?? [] : []).map(mark),
       signal: { state: 'hidden' },
       onReload,
       ...(staleSince ? { staleSince } : {})
@@ -107,6 +124,10 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
   } catch {
     return { state: 'unavailable', onReload }
   }
+}
+
+function mark(hint: Readonly<{ asset: 'btc' | 'eth'; observedAt: string; notionalUsd: number; dropPct: number; volumeMultiple: number }>): DashboardLiquidationMark {
+  return Object.freeze({ asset: hint.asset, observedAt: hint.observedAt, notionalUsd: hint.notionalUsd, dropPct: hint.dropPct, volumeMultiple: hint.volumeMultiple })
 }
 
 function toPoint(point: Readonly<{ observedAt: string; notionalUsd: number }>): DashboardPositioningPoint {

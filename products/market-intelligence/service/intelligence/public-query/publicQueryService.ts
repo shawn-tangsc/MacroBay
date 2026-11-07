@@ -60,7 +60,7 @@ import {
 import { queryFearGreedSnapshot } from './fearGreedSnapshotQuery'
 import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
-import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import { openInterestUnavailable, type OpenInterestHistoryResult, type OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
 import { attachModuleSignals, type SignalAnalysisReader } from '../signals/attachModuleSignals'
@@ -119,7 +119,7 @@ export type MarketIntelligencePublicQueryService = {
    * A list, not a tree: a leg that can answer adds itself here when its wiring lands, so the page
    * reads one shape whether one rule or four can speak today.
    */
-  queryModuleSignals: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]>
+  queryModuleSignals: (input: { asOf: string; window?: OpenInterestWindow }) => Promise<readonly SignalWithWindow[]>
   /** Late-bound for the same reason the other readers are: the leg's store is built in bootstrap. */
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
   /**
@@ -129,7 +129,7 @@ export type MarketIntelligencePublicQueryService = {
    */
   addSignalAnalysisReader: (reader: SignalAnalysisReader) => void
   /** Signals and their states together, so the page reads one body. */
-  queryModuleSignalRead: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead>
+  queryModuleSignalRead: (input: { asOf: string; window?: OpenInterestWindow }) => Promise<ModuleSignalAnalysisRead>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void

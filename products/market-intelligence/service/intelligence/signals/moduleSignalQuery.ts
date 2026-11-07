@@ -18,7 +18,11 @@ import { openInterestSignalsFromHistory } from './openInterestSignals'
  * list of signals for one instant, not a per-module tree.
  */
 export type ModuleSignalQuery = Readonly<{
-  query: (input: Readonly<{ asOf: string }>) => Promise<readonly SignalWithWindow[]>
+  /**
+   * `window` 是**卡片正在看的窗口**：判定跟着页签走（7 天视图按 7 天判）。
+   * 通知不走这条路——它永远按 24 小时判，见 `openInterestSignalNotifier`。
+   */
+  query: (input: Readonly<{ asOf: string; window?: OpenInterestWindow }>) => Promise<readonly SignalWithWindow[]>
 }>
 
 /**
@@ -36,7 +40,8 @@ export function createOpenInterestSignalQuery(deps: Readonly<{
   return {
     async query(input) {
       try {
-        const reading = await deps.readHistory({ asOf: input.asOf, window: '24h' })
+        // 判定窗口跟着卡片走；没有窗口参数时按 24 小时（通知那条老口径）。
+        const reading = await deps.readHistory({ asOf: input.asOf, window: input.window ?? '24h' })
         return withRuleWindow(openInterestSignalsFromHistory(reading, input.asOf), 1)
       } catch {
         // A thrown read is a failed read, not a quiet market: it must reach the card as `unavailable`

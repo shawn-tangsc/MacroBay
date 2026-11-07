@@ -31,7 +31,7 @@ const funding: DashboardFundingRateHistoryState = {
 }
 
 function positioning(signal: Extract<DashboardPositioningViewState, { state: 'available' }>['signal']): DashboardPositioningViewState {
-  return { state: 'available', window: '7d', btc: [], eth: [], signal, onReload: () => undefined }
+  return { state: 'available', window: '7d', btc: [], eth: [], hints: [], signal, onReload: () => undefined }
 }
 
 function render(state: DashboardPositioningViewState): string {

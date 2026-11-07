@@ -139,11 +139,22 @@ export function registerIntelligencePublicQueryIpc(
    * list is an app that refuses to start.
    */
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead, async (payload) => {
-    if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) {
+    // 两种入参：老的 `{ asOf }`（判定按 24 小时）与带窗口的 `{ asOf, window }`（页签视图）。
+    // 键集是闭集：多传一个键就是形状不对，宁可报错也不猜。
+    const plain = isExactDataRecord(payload, ['asOf'])
+    const windowed = !plain && isExactDataRecord(payload, ['asOf', 'window'])
+    if ((!plain && !windowed) || !isCanonicalSignalTime((payload as { asOf: unknown }).asOf)) {
+      return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
+    }
+    const window = windowed ? (payload as { window: unknown }).window : undefined
+    if (window !== undefined && !isOpenInterestWindow(window)) {
       return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
     }
     try {
-      return await publicQueryService().queryModuleSignalRead({ asOf: payload.asOf })
+      return await publicQueryService().queryModuleSignalRead({
+        asOf: (payload as { asOf: string }).asOf,
+        ...(window === undefined ? {} : { window })
+      })
     } catch {
       return { state: 'unavailable', failureCode: 'query-failed' } satisfies ModuleSignalRead
     }

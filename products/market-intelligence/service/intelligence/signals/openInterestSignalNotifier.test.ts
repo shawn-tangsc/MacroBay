@@ -124,6 +124,14 @@ describe('open interest signal notification', () => {
     expect(submit.mock.calls[1]![0].dedupeVars).toEqual(submit.mock.calls[0]![0].dedupeVars)
   })
 
+  it('always judges the 24-hour window, whichever view the card is showing', async () => {
+    // 通知是打扰：换个页签不该多推一条。所以这里读的窗口写死 24 小时，跟视图无关。
+    const readHistory = vi.fn(async () => reading())
+    const notify = createOpenInterestSignalNotifier({ submit: async () => accepted, readHistory, now: () => asOf })
+    await notify()
+    expect(readHistory).toHaveBeenCalledWith({ asOf, window: '24h' })
+  })
+
   it('does not announce a bucket that is older than the freshness window', async () => {
     const stale = new Date(Date.parse(asOf) - openInterestSignalNotificationPolicy.freshnessMs - bucketMs).toISOString()
     const { submit, notify } = notifier({

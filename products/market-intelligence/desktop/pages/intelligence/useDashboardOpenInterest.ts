@@ -16,7 +16,7 @@ export function useDashboardOpenInterest(input: Readonly<{
   now: () => Date
   window: OpenInterestWindow
   /** Defaults to the real bridge; a test hands in its own reader. */
-  signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }
+  signalClient?: { query: (input: { asOf: string; window?: OpenInterestWindow }) => Promise<ModuleSignalAnalysisRead> }
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
@@ -34,7 +34,8 @@ export function useDashboardOpenInterest(input: Readonly<{
     setState({ state: 'loading' })
     // The chip comes from the module's rule, not from the series: the two reads answer different
     // questions and either may fail alone. A missing signal is no chip, never a made-up one.
-    const signals = readSignals(mountInput.signalClient ?? moduleSignalClient, asOf)
+    // 牌子的判定窗口跟着页签：7 天视图就按 7 天判。通知不走这条路，它固定 24 小时。
+    const signals = readSignals(mountInput.signalClient ?? moduleSignalClient, asOf, window)
     void mountInput.client.query({ asOf, window })
       .then(async (result) => {
         if (!active) return
@@ -57,12 +58,13 @@ export function useDashboardOpenInterest(input: Readonly<{
 
 /** A signal read that failed is no chip, not a fabricated one. */
 async function readSignals(
-  client: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> },
-  asOf: string
+  client: { query: (input: { asOf: string; window?: OpenInterestWindow }) => Promise<ModuleSignalAnalysisRead> },
+  asOf: string,
+  window: OpenInterestWindow
 ): Promise<ModuleSignalAnalysisRead> {
   try {
     // The chip reads the signal; the window it was judged over travels beside it.
-    return await client.query({ asOf })
+    return await client.query({ asOf, window })
   } catch {
     // A client that does not answer in the read shape is a failed read, not a quiet market.
     return { state: 'unavailable', failureCode: 'query-failed' }

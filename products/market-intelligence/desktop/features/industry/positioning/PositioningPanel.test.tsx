@@ -31,6 +31,7 @@ const positioning: DashboardPositioningViewState = {
   window: '7d',
   btc: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
   eth: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
+  hints: [],
   changeBtc: { h1Pct: -0.4, h24Pct: -6.5 },
   changeEth: { h1Pct: 0.2, h24Pct: 2.7 },
   signal: { state: 'hidden' },
@@ -138,18 +139,32 @@ describe('positioning panel', () => {
     act(() => root.unmount())
   })
 
-  it('marks the bucket the rule reported and names it once, on the chip', () => {
+  it('draws one mark per hit the window holds, and the chip names the loudest one', () => {
     const markup = render({
       positioning: {
         ...availablePositioning,
+        hints: [{ asset: 'btc', observedAt: at(0), notionalUsd: 8.9e9, dropPct: -1.9, volumeMultiple: 3.4 }],
         signal: { state: 'alert', asset: 'btc', direction: 'long', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
       }
     })
-    // One mark, pinned to the signal's own bucket, and one chip naming it.
-    expect(markup).toContain('data-signal-mark')
+    expect(markup).toContain('data-hint="btc"')
     expect(markup).toContain('疑似多头爆仓 BTC -1.9% · 量 3.4×')
-    // The query's own hint list is no longer drawn: one reading, one mark, one sentence.
-    expect(markup).not.toContain('data-hint-list')
+  })
+
+  it('draws every hit in the window, not only the newest one', () => {
+    // 7 天视图画 7 天内的全部命中；只看最新的那条会让旧命中凭空消失。
+    const markup = render({
+      positioning: {
+        ...availablePositioning,
+        hints: [
+          { asset: 'btc', observedAt: at(120), notionalUsd: 8.5e9, dropPct: -2.2, volumeMultiple: 5.1 },
+          { asset: 'eth', observedAt: at(30), notionalUsd: 2.4e9, dropPct: -1.9, volumeMultiple: 3.4 }
+        ]
+      }
+    })
+    expect(markup.split('data-hint="').length - 1).toBe(2)
+    expect(markup).toContain('data-hint="btc"')
+    expect(markup).toContain('data-hint="eth"')
   })
 
 
@@ -513,6 +528,7 @@ describe('the module rule chip', () => {
   const alert = (overrides: Record<string, unknown> = {}): DashboardPositioningViewState => ({
     state: 'available' as const,
     window: '7d' as const,
+    hints: [] as const,
     onReload: () => undefined,
     btc: positioning.state === 'available' ? positioning.btc : [],
     eth: positioning.state === 'available' ? positioning.eth : [],

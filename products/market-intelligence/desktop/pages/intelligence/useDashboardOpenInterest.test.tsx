@@ -33,7 +33,7 @@ const signal: ModuleSignal = {
 
 let latest: DashboardPositioningViewState | undefined
 
-function Probe(props: Readonly<{ signalClient: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> } }>) {
+function Probe(props: Readonly<{ signalClient: { query: (input: { asOf: string; window?: '24h' | '7d' }) => Promise<ModuleSignalAnalysisRead> } }>) {
   latest = useDashboardOpenInterest({
     client: { query: async () => history },
     signalClient: props.signalClient,
@@ -49,7 +49,7 @@ afterEach(() => {
   latest = undefined
 })
 
-async function renderProbe(signalClient: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }) {
+async function renderProbe(signalClient: { query: (input: { asOf: string; window?: '24h' | '7d' }) => Promise<ModuleSignalAnalysisRead> }) {
   const container = document.createElement('div')
   const root = createRoot(container)
   roots.push(root)
@@ -103,7 +103,8 @@ describe('positioning hook signal wiring', () => {
       analysis: { [signal.dedupeKey]: { analysisOffByReader: false, analysisState: 'not-triggered' } }
     }))
     const state = await renderProbe({ query })
-    expect(query).toHaveBeenCalledWith({ asOf })
+    // 牌子的判定窗口跟着页签一起送过去：7 天视图不是「24 小时的同一份读数」。
+    expect(query).toHaveBeenCalledWith({ asOf, window: '24h' })
     expect(state).toMatchObject({ state: 'available', signal: { state: 'alert', dropPct: -2.7 } })
   })
 

@@ -107,21 +107,21 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     })
   }
 
-  // The chart marks the one reading the card's rule reported, pinned to its own bucket. The mark
-  // is a dot and a rule only: the words live on the chip, once, in the header.
-  const signalMark = positioning.signal
-  const marker = signalMark.state === 'alert'
-    ? (() => {
-        const markMs = Date.parse(signalMark.observedAt)
-        if (!(markMs >= startMs && markMs <= endMs)) return undefined
-        const point = positioning[signalMark.asset].find(entry => entry.observedAt === signalMark.observedAt)
-        return {
-          x: x(markMs),
-          y: point ? upperY(point.notionalUsd, signalMark.asset === 'btc' ? btcScale : ethScale) : VIEW.upperBottom,
-          asset: signalMark.asset
-        }
-      })()
-    : undefined
+  // 点上画**当前窗口内的全部命中**（账本），每格一个：点与牌子同源、与通知不同源。
+  // 7 天视图就画 7 天内所有命中，不再固定只画「现在那一条」——那条只在 24 小时视图下才等于全部。
+  // 点只有圆点和竖线，话都在牌子上说一次。
+  const marks = positioning.hints
+    .map(hint => {
+      const markMs = Date.parse(hint.observedAt)
+      if (!(markMs >= startMs && markMs <= endMs)) return undefined
+      return {
+        key: `${hint.asset}-${hint.observedAt}`,
+        asset: hint.asset,
+        x: x(markMs),
+        y: upperY(hint.notionalUsd, hint.asset === 'btc' ? btcScale : ethScale)
+      }
+    })
+    .filter((entry): entry is { key: string; asset: 'btc' | 'eth'; x: number; y: number } => entry !== undefined)
 
   return (
     <div className="mi-positioning-panel__chart">
@@ -162,14 +162,13 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
               textAnchor={flip ? 'end' : 'start'}>{formatDashboardNotional(last.notionalUsd)}</text>
           )
         })}
-        {/* One mark per card, from the module rule's chip: the chart no longer draws the query's
-            hint list, because a chip and a dot describing the same reading must not disagree. */}
-        {marker ? (
-          <g className="mi-positioning-panel__hint" data-hint={marker.asset} data-signal-mark>
-            <line x1={marker.x} x2={marker.x} y1={VIEW.markerTop} y2={VIEW.height - 10} />
-            <circle cx={marker.x} cy={marker.y} r="3" />
+        {/* 窗口内每一条命中一个点：同一个 15 分钟桶只会有一条账本记录，所以一条线不会重影。 */}
+        {marks.map(mark => (
+          <g className="mi-positioning-panel__hint" data-hint={mark.asset} key={mark.key}>
+            <line x1={mark.x} x2={mark.x} y1={VIEW.markerTop} y2={VIEW.height - 10} />
+            <circle cx={mark.x} cy={mark.y} r="3" />
           </g>
-        ) : null}
+        ))}
         {hovered && hover ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover.index)} x2={xAt(hover.index)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
         {axisTicks(startMs, span, count).map(tick => (
           <text key={tick.at} x={x(tick.at)} y={VIEW.height - 1}
