@@ -567,20 +567,6 @@ mi: miText['zh-CN'],
               chipWhyLabel: '为什么算背离',
               chipWhy: '稳定币 7 天在减少、持仓 24 小时在增加，费率同时为负：三条同时成立才判为背离。',
               helpLabel: '这张卡怎么来的',
-              /** Four one-look bullets: the bubble is a glance, not a document. */
-              helpBullets: [
-                '只有两组数据指向相反方向时才会出现这一行；三对都没背离时只显示一句话。',
-                '这几行由固定阈值判定，没有模型参与：同一组数字每次读到的结论都相同。',
-                '不常规的组合会被标出来，交给页面右侧的 AI 总结说清为什么特殊，这张卡不解释。',
-                '「舆情」是模型给新闻标题打的标签，不是交易所数据；其余几组才是。'
-              ],
-              /** The longer notes: opened below the card, never inside the bubble. */
-              helpDetailsLabel: '口径说明',
-              helpDetails: [
-                '不常规的组合指：同时出现两对、方向互相冲突、某条腿正压在阈值上。',
-                '「舆情」的口径：24 小时内明确表态的新闻标题里，看空的占多少。',
-                '比对前先对时间：按天更新的数据超过 36 小时、或某条腿超过它自己节奏的允许滞后时，这一对不下结论，并在下方写明原因。'
-              ],
               withheldGroup: '（{count} 对）',
               /** Joiners and placeholders live here: a fullwidth colon on an English screen is a typo. */
               withheldListSep: '、',
@@ -626,6 +612,11 @@ mi: miText['zh-CN'],
                 '「舆情」是模型给标题打的标签（24 小时内明确表态的标题里看空的占比），不是交易所数据。',
                 '对时间：按天数据超 36 小时、或某腿滞后超自己节奏，就不下结论，并写明是哪条腿。'
               ],
+              /* 「截至」那一行只用短名：窗口（7 天 / 24 小时）腿行里已有；每条腿各带自己的日期。 */
+              legNames: {
+                stablecoin: '稳定币', etf: 'ETF', 'open-interest': '持仓',
+                funding: '费率', price: '价格', sentiment: '舆情'
+              },
               boundAtLeast: '规则 ≥ {threshold}',
               boundAtMostNegative: '规则 ≤ {threshold}',
               boundAtMostAbsolute: '规则 变动不超过 {threshold}',
@@ -1897,20 +1888,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               chipWhyLabel: 'Why this counts as a divergence',
               chipWhy: 'Stablecoins falling over 7 days, open interest rising over 24 hours, and funding negative: all three must hold.',
               helpLabel: 'How this card is produced',
-              /** Four one-look bullets: the bubble is a glance, not a document. */
-              helpBullets: [
-                'A line appears only when two readings point opposite ways; with none, the card is one sentence.',
-                'These lines come from fixed thresholds, with no model in the loop: the same readings always give the same answer.',
-                'Unusual combinations are flagged and handed to the written analysis on the right, which says why they are special.',
-                'Sentiment is the model labelling headlines; it is not an exchange reading. The other legs are.'
-              ],
-              /** The longer notes: opened below the card, never inside the bubble. */
-              helpDetailsLabel: 'Reading notes',
-              helpDetails: [
-                'Unusual means two pairs at once, directions that contradict each other, or a leg sitting on its threshold.',
-                'Sentiment counts the headlines that took a side in the last 24 hours: of those, how many were bearish.',
-                'Windows are checked first: data updated daily that is older than 36 hours, or any leg older than its own cadence allows, withholds the pair and names the reason.'
-              ],
               withheldGroup: ' ({count} pairs)',
               withheldListSep: ', ',
               labelSep: ': ',
@@ -1948,6 +1925,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 "Sentiment is a model's label on headlines (share of bearish among those that took a stance in 24h), not exchange data.",
                 'Readings are aligned first: a daily figure older than 36h, or a leg lagging its own cadence, gets no verdict — the row says which leg.'
               ],
+              legNames: {
+                stablecoin: 'Stablecoins', etf: 'ETF', 'open-interest': 'Open interest',
+                funding: 'Funding', price: 'Price', sentiment: 'Sentiment'
+              },
               boundAtLeast: 'rule ≥ {threshold}',
               boundAtMostNegative: 'rule ≤ {threshold}',
               boundAtMostAbsolute: 'rule: within {threshold}',

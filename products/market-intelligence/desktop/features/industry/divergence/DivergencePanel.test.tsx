@@ -196,8 +196,14 @@ describe('divergence panel · the details behind the line', () => {
     expect(summary.getAttribute('aria-expanded')).toBe('true')
     const detail = container.querySelector('[data-divergence-detail]')!
     // 每条腿各自的截至时刻：一条腿的「截至」不能替另一条腿作证。
-    expect(detail.textContent).toContain(`${text.legs.stablecoin} ${text.chipAsOf.replace('{at}', '2026-10-30 10:00 GMT')}`)
-    expect(detail.textContent).toContain(`${text.legs['open-interest']} ${text.chipAsOf.replace('{at}', '2026-10-30 11:00 GMT')}`)
+    const line = detail.querySelector('.mi-divergence__asof')!.textContent ?? ''
+    // 每条腿的日期跟着它自己（短名 + 截至 + 完整时刻 + 偏移），两腿日期不同就各写一遍。
+    expect(line).toContain(`${text.legNames.stablecoin} ${text.chipAsOf.replace('{at}', '2026-10-30 10:00 GMT')}`)
+    expect(line).toContain(`${text.legNames['open-interest']} ${text.chipAsOf.replace('{at}', '2026-10-30 11:00 GMT')}`)
+    // 窗口不在这行重复（腿行里已有），偏移必须在，且不许只留一个日期头。
+    expect(line).not.toContain('7 天')
+    expect(line).not.toContain('24 小时')
+    expect(line.match(/截至/g)).toHaveLength(3)
     // 方向标签与机制句也只在展开区。
     expect(detail.querySelector('[data-direction="bearish"]')?.textContent).toContain(text.directions.bearish)
     expect(detail.textContent).toContain(text.pairs['liquidity-leverage'].mechanism)
@@ -265,7 +271,7 @@ describe('divergence panel · the rule clause on the muted line', () => {
     const threshold = divergencePolicy.thresholds.openInterest24hUpPercent
     // 子句恰好一次，顺序固定：截至在前、规则在后。
     expect(line.match(new RegExp(text.boundAtLeast.split('{')[0]!.trim(), 'g'))).toHaveLength(1)
-    expect(line.indexOf(text.chipAsOf.split('{')[0]!.trim())).toBeLessThan(line.indexOf('规则'))
+    expect(line.indexOf('截至')).toBeLessThan(line.indexOf('规则'))
     // 阈值只能来自契约：写死 +3 之类的数字会在这里对不上。
     expect(line).toContain(`规则 ≥ +${threshold}%`)
     // 今天投影层没有「还差」，所以不显示——规则是已知事实，距离不是。

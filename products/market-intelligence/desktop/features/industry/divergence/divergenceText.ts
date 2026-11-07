@@ -14,6 +14,8 @@ export type DivergencePanelText = Readonly<{
   }>
   /** 观察态的中性标签：消息偏空、价格没动。方向色只给 bearish / bullish。 */
   observedLabel: string
+  /** 「截至」那一行用的短名：不带窗口，窗口在腿行里已经有了。 */
+  legNames: Readonly<Record<DivergenceLegId, string>>
   /** 「当前值 / 规则」那一行：三种写法，只在一处拼（`boundLine`）。 */
   boundAtLeast: string
   boundAtMostNegative: string
@@ -38,11 +40,6 @@ export type DivergencePanelText = Readonly<{
   chipWhy: string
   /** The word that marks the block as a conclusion rather than another section. */
   helpLabel: string
-  /** The popover's four one-look bullets, one point each: the bubble is a glance, not a document. */
-  helpBullets: readonly string[]
-  /** The entry beside the help icon that opens the longer notes below the card. */
-  helpDetailsLabel: string
-  helpDetails: readonly string[]
   /** Appended when several pairs were held back for the same reason. */
   withheldGroup: string
   /** What separates two withheld pairs, and what marks a missing instant. Per language. */

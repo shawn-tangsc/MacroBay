@@ -5,9 +5,11 @@ import { Info } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useId, useState } from 'react'
 
-import type { DivergenceBound } from '../../../../contracts/marketDivergence'
+import type { DivergenceBound, DivergenceLegId } from '../../../../contracts/marketDivergence'
 import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DivergencePanelText } from './divergenceText'
@@ -40,6 +42,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   onRetry: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  const zoneLabel = formatShellTimeZoneLabel(useShellTimeZone())
   const resolveProductKey = useProductTextKey()
   const detailId = useId()
   const [expanded, setExpanded] = useState(false)
@@ -129,10 +132,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
                       {/* 每条腿各自的截至时刻：一条腿的「截至」不能替另一条腿作证。 */}
                       {/* 顺序固定：截至 → 规则（→ 还差）。「还差」要投影层给，今天没有这一项就不显示，
                           不许拿规则反推一个距离。 */}
-                      <p className="mi-divergence__asof">{[
-                        row.legs.map(leg => `${text.legs[leg.id]} ${text.chipAsOf.replace('{at}', when(leg.observedAt))}`).join(' · '),
-                        row.bound === undefined ? undefined : boundRuleClause(text, row.bound)
-                      ].filter(part => part !== undefined).join(' · ')}</p>
+                      <p className="mi-divergence__asof">{factsLine({ text, row, when, zoneLabel })}</p>
                     </li>
                   </Tooltip>
                 )
@@ -176,6 +176,29 @@ function summaryLine(input: Readonly<{
   return reason === undefined
     ? fillLabelParams(text.summary.quietWithheldMany, { count: String(pairCount) })
     : fillLabelParams(text.summary.quietWithheldOne, { reason })
+}
+
+/**
+ * 该块最后那行小字：**截至 → 规则 → 还差**，全卡只在这里拼（界面规格 v3 §八）。
+ *
+ * 三条写死的规矩：
+ * - **每条腿的日期跟着它自己**：各腿的日期可能不同（按天腿与小时腿混着），合并成一个日期头会写成假话，
+ *   所以**不留「同一天就合并」的分支**——留一个分支就多一次写成假话的机会；
+ * - **不带窗口**（7 天 / 24 小时腿行里已有），但**必须带「截至」**，否则这行只剩一串时间；
+ * - 阈值只从契约读，不取绝对值、不做百分比换算；「还差」要投影层给，今天没有就不显示。
+ */
+export function factsLine(input: Readonly<{
+  text: DivergencePanelText
+  row: Readonly<{ legs: readonly Readonly<{ id: DivergenceLegId; observedAt: string }>[]; bound?: DivergenceBound }>
+  when: (value: string) => string
+  zoneLabel: string
+}>): string {
+  const { text, row, when, zoneLabel } = input
+  // `when()` 自带一个 `GMT` 尾巴；这里只保留一处偏移写法，所以先摘掉再补时区标签。
+  const stamp = (value: string): string => `${when(value).replace(/\s*GMT$/, '')} ${zoneLabel}`
+  const parts = row.legs.map(leg => `${text.legNames[leg.id]} ${text.chipAsOf.replace('{at}', stamp(leg.observedAt))}`)
+  if (row.bound !== undefined) parts.push(boundRuleClause(text, row.bound))
+  return parts.join(' · ')
 }
 
 /**
