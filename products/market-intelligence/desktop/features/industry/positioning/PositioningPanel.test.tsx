@@ -44,19 +44,50 @@ const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
 afterEach(() => { document.body.innerHTML = '' })
 
 
-/** Renders the panel and opens the readings region under the card, where every note lives. */
-async function mountAndOpenReadings(): Promise<HTMLElement> {
-  const container = document.createElement('div')
-  document.body.append(container)
-  const root = createRoot(container)
+/** Mounts the card. The dialog it opens portals to `<body>`, so assertions about it read there. */
+async function mountPanel(): Promise<{ host: HTMLElement; entry: HTMLButtonElement }> {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
   await act(async () => {
     root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
       funding, positioning, window: '7d', onWindowChange: () => undefined, text
     })))
   })
-  const toggle = [...container.querySelectorAll('button')].find(button => button.textContent === text.helpDetailsLabel)
-  await act(async () => { toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-  return container
+  const entry = [...host.querySelectorAll('button')].find(button => button.textContent === text.helpDetailsLabel) as HTMLButtonElement
+  return { host, entry }
+}
+
+/** antd mounts a portal panel after `open` flips; these flushes run its effects and close timers. */
+async function flush(): Promise<void> {
+  await act(async () => { await Promise.resolve() })
+}
+
+async function settleClose(): Promise<void> {
+  // 关闭走 antd 的离场动画：happy-dom 不会自己发 transitionend/animationend，于是 afterClose
+  // （卸载内容、把焦点送回入口）永远不来。这里补那一个浏览器事件，而不是替 antd 实现关闭。
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+  for (const node of document.querySelectorAll<HTMLElement>('.ant-modal, .ant-modal-wrap')) {
+    await act(async () => {
+      node.dispatchEvent(new Event('animationend', { bubbles: true }))
+      node.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    })
+  }
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+}
+
+async function openReadings(): Promise<{ host: HTMLElement; entry: HTMLButtonElement }> {
+  const mounted = await mountPanel()
+  // 先聚焦再点开：antd 记下的是「打开前聚焦的元素」，关后往那里送回焦点。
+  // 浏览器点按钮本身就会聚焦，happy-dom 不会，所以这一步在这里显式做。
+  mounted.entry.focus()
+  await act(async () => { mounted.entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+  await flush()
+  return mounted
+}
+
+function dialog(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[role="dialog"]')
 }
 
 describe('positioning panel', () => {
@@ -260,19 +291,63 @@ describe('combined readout', () => {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)) })
     expect(document.body.textContent).toContain('+0.0121%')
   })
+})
 
-  it('explains the card in one place, not two', async () => {
+describe('the readings open in a dialog', () => {
+  it('puts the whole explanation in the dialog, and leaves nothing behind in the card', async () => {
     // The card used to carry an icon button opening four bullets and a text entry opening the long
-    // notes: two explanations of one card, and the reader had to pick. The bullets now lead the
-    // notes inside the one region the visible entry opens.
-    const panel = await mountAndOpenReadings()
-    const region = panel.querySelector('#mi-positioning-help-details')!
-    expect(region.textContent).toContain(text.helpBullets[0])
-    expect(region.textContent).toContain('六档判定')
-    expect(region.textContent).toContain('只标 15 分钟内的骤降')
-    expect(region.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+    // notes: two explanations of one card, and the reader had to pick. Then it grew the notes
+    // inline, which pushed the chart down while reading.
+    const { host, entry } = await mountPanel()
+    expect(host.querySelector('#mi-positioning-help-details')).toBeNull()
+    expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
+
+    await act(async () => { entry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+
+    const surface = dialog()
+    expect(surface).not.toBeNull()
+    expect(surface!.textContent).toContain(text.helpBullets[0])
+    expect(surface!.textContent).toContain('六档判定')
+    expect(surface!.textContent).toContain('只标 15 分钟内的骤降')
+    expect(surface!.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+    // 弹层归 portal：卡里始终没有那块常驻区域，「展开」是另一件事。
+    expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
     // Nothing else opens an explanation on this card: the icon button is gone, not hidden.
-    expect(panel.querySelector(`button[aria-label="${text.helpLabel}"]`)).toBeNull()
+    expect(host.querySelector(`button[aria-label="${text.helpLabel}"]`)).toBeNull()
+  })
+
+  it('closes with its own close control and gives focus back to the entry', async () => {
+    const { entry } = await openReadings()
+    const close = document.querySelector<HTMLButtonElement>('.ant-modal-close')
+    expect(close).not.toBeNull()
+    await act(async () => { close!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settleClose()
+    expect(document.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
+    expect(document.activeElement).toBe(entry)
+  })
+
+  it('closes on Escape and gives focus back to the entry', async () => {
+    const { entry } = await openReadings()
+    // rc-dialog 判的是 `keyCode`，且监听落在弹层上（与平台 Modal 的用例同一条路径）。
+    const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')!
+    await act(async () => {
+      wrap.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true } as never))
+      wrap.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', keyCode: 27, bubbles: true } as never))
+    })
+    await settleClose()
+    expect(document.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
+    expect(document.activeElement).toBe(entry)
+  })
+
+  it('closes when the reader clicks the backdrop', async () => {
+    const { host } = await openReadings()
+    const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')
+    expect(wrap).not.toBeNull()
+    await act(async () => { wrap!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await settleClose()
+    expect(document.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
+    expect(host.querySelector('.mi-positioning-panel__help-dialog')).toBeNull()
   })
 
   it('still keeps the four bullets short enough to be a glance', () => {
@@ -282,9 +357,12 @@ describe('combined readout', () => {
     for (const bullet of text.helpBullets) expect(bullet.length).toBeLessThanOrEqual(60)
   })
 
-  it('keeps the readings closed until the reader asks for them', () => {
-    // The entry is always there; the region it controls is not. An always-open note is the defect.
-    expect(render()).not.toContain('class="mi-positioning-panel__help-details"')
+  it('keeps the card free of the region until the reader asks for it', () => {
+    // 常驻区里没有展开块：不是「收起来了」，是它不存在。
+    const markup = render()
+    expect(markup).not.toContain('mi-positioning-panel__help-details')
+    expect(markup).not.toContain('mi-positioning-panel__help-dialog')
+    expect(markup).toContain(text.helpDetailsLabel)
   })
 })
 
@@ -320,8 +398,8 @@ describe('what the mark does not cover', () => {
 describe('the liquidation multiple', () => {
   it('names what the multiple measures, in the readings the reader can open', async () => {
     // A bare "3.4×" said nothing about what was multiplied; the sentence lives in the readings.
-    const panel = await mountAndOpenReadings()
-    expect(panel.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+    await openReadings()
+    expect(document.body.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
   })
 })
 

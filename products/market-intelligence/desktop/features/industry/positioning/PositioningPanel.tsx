@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { Segmented } from '@platform/ui/components/segmented'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { Modal } from '@platform/ui/components/modal'
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
@@ -134,10 +135,14 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
         One entry, not two: the bullets lead the same readings the long notes sit in, so the reader
         opens one place. The second trigger this card used to carry (an icon button over the four
         bullets) made the reader choose between two explanations of one card.
+
+        The entry opens a dialog rather than growing the card (2026-11-08, user): the notes used to
+        push the chart down while reading, and closing them meant scrolling back to the card. The
+        trigger stays a button, and the platform `Modal` owns Escape, the backdrop and focus return.
       */}
       <button type="button" className="mi-positioning-panel__help-toggle"
-        aria-expanded={helpOpen} aria-controls="mi-positioning-help-details"
-        onClick={() => setHelpOpen(open => !open)}>
+        aria-haspopup="dialog"
+        onClick={() => setHelpOpen(true)}>
         {text.helpDetailsLabel}
       </button>
       {extra}
@@ -168,17 +173,31 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             : null}
         </>
       )}
-      {helpOpen ? (
-        <div id="mi-positioning-help-details" className="mi-positioning-panel__help-details"
-          role="region" aria-label={text.helpDetailsLabel}>
-          {positioningHelpBulletKeys.map(labelKey => (
-            <p key={labelKey}>{resolveProductKey(labelKey)}</p>
-          ))}
-          {positioningHelpDetailKeys.map(labelKey => (
-            <p key={labelKey}>{resolveProductKey(labelKey)}</p>
-          ))}
+      {/*
+        The dialog body carries `mi-sample-surface`: the modal portals to <body>, so the portal
+        palette declared on the page root never reaches it and every `--mi-dashboard-*` here would
+        resolve to nothing (the bars once came out transparent this way).
+      */}
+      <Modal open={helpOpen} width="standard"
+        titleKey="pages.intelligence.portal.dashboard.positioning.helpDetailsLabel"
+        onClose={() => setHelpOpen(false)}
+        className="mi-sample-surface mi-positioning-panel__help-modal"
+        destroyOnHidden
+        resolveText={resolveProductKey}>
+        <div className="mi-positioning-panel__help-dialog">
+          <ul className="mi-positioning-panel__help-bullets">
+            {positioningHelpBulletKeys.map(labelKey => (
+              <li key={labelKey}>{resolveProductKey(labelKey)}</li>
+            ))}
+          </ul>
+          <hr className="mi-positioning-panel__help-divider" />
+          <div className="mi-positioning-panel__help-notes">
+            {positioningHelpDetailKeys.map(labelKey => (
+              <p key={labelKey}>{resolveProductKey(labelKey)}</p>
+            ))}
+          </div>
         </div>
-      ) : null}
+      </Modal>
       {chip?.state === 'alert' && signalDetail.open ? (
         <SignalDetail
           id="mi-positioning-signal-detail"

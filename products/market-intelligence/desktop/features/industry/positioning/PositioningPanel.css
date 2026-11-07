@@ -114,10 +114,9 @@
 
 /* The entry to the readings behind the numbers: a word, not a chip. Body-level type, not the
    footnote size of the chip row beside it; hover brightens the word and draws nothing — a block
-   behind a two-character entry reads as a second button ring.
-   Type and the region's cap come from the dashboard's reading-note tokens: the same shape exists
-   on another card, and a number written in two places drifts (the two cards already disagreed
-   once: 10px against 11.5px). */
+   behind a two-character entry reads as a second button ring. Type comes from the dashboard's
+   reading-note tokens: the same shape exists on another card, and a number written in two places
+   drifts (the two cards already disagreed once: 10px against 11.5px). */
 .mi-positioning-panel__help-toggle {
   padding: 0; border: 0; background: none;
   color: var(--mi-dashboard-muted); font: inherit;
@@ -127,14 +126,27 @@
 .mi-positioning-panel__help-toggle:hover { color: var(--mi-dashboard-text); }
 .mi-positioning-panel__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-/* The long readings: opened on purpose, so they get room and their own scroll instead of
-   stretching the card. Body type matches the entry that opened them — "come and read", then a
-   smaller size, is a contradiction, which is why this is a token and not a number. */
-.mi-positioning-panel__help-details {
-  display: grid; gap: 6px; margin: 0;
-  padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  color: var(--mi-dashboard-muted);
-  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  max-height: var(--mi-reading-note-max-height); overflow-y: auto;
+/* The readings now live in a dialog, not under the card: the region used to push the chart down
+   while the reader was looking at it, and closing it meant scrolling back (user, 2026-11-08).
+
+   Two things about this block are not obvious:
+   - `mi-sample-surface` sits on the dialog root, so the palette resolves inside the portal. Without
+     it every `--mi-dashboard-*` here resolves to nothing and the text falls back to inherited colour.
+   - the type size is a literal, not the reading-note token: those tokens are declared on
+     `.mi-crypto-dashboard`, which is on the page side of the portal. The value is the token's own
+     11.5px/1.6, so the dialog and the card still read as one system. */
+.mi-positioning-panel__help-modal .ant-modal-content {
+  background: var(--mi-dashboard-surface);
+  border: 1px solid var(--mi-dashboard-line);
 }
-.mi-positioning-panel__help-details p { margin: 0; }
+.mi-positioning-panel__help-dialog {
+  display: grid; gap: 10px; min-width: 0; height: auto;
+  color: var(--mi-dashboard-muted);
+  font-size: 11.5px; line-height: 1.6;
+}
+.mi-positioning-panel__help-bullets { display: grid; gap: 6px; margin: 0; padding-left: 16px; }
+.mi-positioning-panel__help-bullets li { margin: 0; }
+.mi-positioning-panel__help-divider { margin: 0; border: 0; border-top: 1px solid var(--mi-dashboard-line); }
+.mi-positioning-panel__help-notes { display: grid; gap: 6px; }
+.mi-positioning-panel__help-notes p { margin: 0; }
+
