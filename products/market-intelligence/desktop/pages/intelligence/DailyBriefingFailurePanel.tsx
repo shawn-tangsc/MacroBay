@@ -22,6 +22,9 @@ export type BriefFailure = Readonly<{
  * Kept out of the page for the same reason the live steps are: the page decides which run to
  * display and what its actions do, not how a failure is laid out.
  */
+/** 低到这一步就不可能"卡住"：1 毫秒的校验不是耗时，别把它写成时长。 */
+const MIN_REPORTED_DURATION_MS = 1_000
+
 export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, retryBlockedReason, onRetry, onOpenSettings }: Readonly<{
   failure: BriefFailure
   text: DailyBriefingText
@@ -41,10 +44,15 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
   // 人话原因：**哪一步没跑完 + 发生了什么（用了多久）+ 接下来怎么办**，由文案表逐码拼出来。
   // 表里还没有这个码时退回原来的标签——不许在这里自己造句。
   const stalled = failure.generationTrace?.stages.find((stage) => stage.state === 'failed')
+  /**
+   * 时长只取**真正卡住的那一步**（`02` v2.156）：校验 1 毫秒就判死，说明卡住的不是它，
+   * 写成「（用了 1 毫秒）」只会让读者以为是超时。瞬间失败的那一步不带时长半句。
+   */
+  const stalledDuration = stalled?.durationMs !== undefined && stalled.durationMs >= MIN_REPORTED_DURATION_MS ? stalled.durationMs : undefined
   const sentence = briefingFailureSentence({
     code: failure.code,
     ...(stalled === undefined ? {} : { failedStage: text.generationTrace.stages[stalled.id] ?? stalled.id }),
-    ...(stalled?.durationMs === undefined ? {} : { durationMs: stalled.durationMs }),
+    ...(stalledDuration === undefined ? {} : { durationMs: stalledDuration }),
     sentences: text.failureSentences,
     fallback: text.failureSentenceFallback,
     templates: text.failureSentenceTemplates,

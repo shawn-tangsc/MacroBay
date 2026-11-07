@@ -560,8 +560,8 @@ describe('the citable set (Chief 2026-11-06)', () => {
       onStage: (event: { stage: string; state: string; failureCode?: string }) => { stages.push({ id: event.stage, state: event.state, ...(event.failureCode ? { failureCode: event.failureCode } : {}) }) }
     })
 
-    expect(result).toMatchObject({ state: 'failed', failureCode: 'cancelled' })
-    expect(stages.find((stage) => stage.id === 'writing' && stage.state === 'failed')?.failureCode).toBe('cancelled')
+    expect(result).toMatchObject({ state: 'failed', failureCode: 'run-interrupted' })
+    expect(stages.find((stage) => stage.id === 'writing' && stage.state === 'failed')?.failureCode).toBe('run-interrupted')
     expect(stages.some((stage) => stage.id === 'validation')).toBe(false)
     expect(continues.filter((text) => text.includes('failed validation'))).toHaveLength(0)
     expect(finish).toHaveBeenCalledWith('s1', 'abandoned')
@@ -590,9 +590,9 @@ describe('the citable set (Chief 2026-11-06)', () => {
 
     expect(result.state).toBe('failed')
     if (result.state !== 'failed') return
-    expect(result.failureCode).toBe('cancelled')
+    expect(result.failureCode).toBe('run-interrupted')
     expect(result.failureCode).not.toBe('editorial-timeout')
-    expect(stages.find((stage) => stage.id === 'repair-1' && stage.state === 'failed')?.failureCode).toBe('cancelled')
+    expect(stages.find((stage) => stage.id === 'repair-1' && stage.state === 'failed')?.failureCode).toBe('run-interrupted')
   })
 
   it('keeps invalid-json when the repair fails for a reason that is not a cancellation', async () => {

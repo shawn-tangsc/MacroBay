@@ -19,8 +19,13 @@ export type EditorialGateOutcome =
   | Readonly<{ state: 'accepted'; document: DailyBriefingDocument; toolInvocations: readonly AgentRuntimeToolInvocation[] }>
   | Readonly<{ state: 'failed'; failureCode: string; failureDetail?: string; toolInvocations: readonly AgentRuntimeToolInvocation[] }>
   | Readonly<{ state: 'cancelled'; failureDetail: string; toolInvocations: readonly AgentRuntimeToolInvocation[] }>
+  | Readonly<{ state: 'interrupted'; failureDetail: string; toolInvocations: readonly AgentRuntimeToolInvocation[] }>
 
 const stoppedDetail = 'runtime stopped mid-turn'
+
+function detailOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
 /** 只有真被停/被释放才算取消；其余错误一律照实传。 */
 export function isCancellation(error: unknown): boolean {
@@ -82,19 +87,22 @@ export async function runEditorialGate(input: Readonly<{
     try {
       const repair = await input.runner.continue(input.sessionId, input.repairPrompt(failureCode, failureDetail, lastFailures), undefined, input.signal)
       if (repair.stopped) {
-        stage({ stage: repairStage, state: 'failed', failureCode: 'cancelled', failureDetail: stoppedDetail })
-        return { state: 'cancelled', failureDetail: stoppedDetail, toolInvocations: Object.freeze(tools) }
+        stage({ stage: repairStage, state: 'failed', failureCode: 'run-interrupted', failureDetail: stoppedDetail })
+        return { state: 'interrupted', failureDetail: stoppedDetail, toolInvocations: Object.freeze(tools) }
       }
       response = repair.assistantText
       tools.push(...repair.toolInvocations)
       stage({ stage: repairStage, state: 'success' })
     } catch (error) {
+      const interrupted = /disposed|stopped|interrupted/i.test(detailOf(error))
       const cancelled = isCancellation(error)
-      const code = cancelled ? 'cancelled' : failureCode
+      const code = interrupted ? 'run-interrupted' : cancelled ? 'cancelled' : failureCode
       const detail = error instanceof Error && error.message ? error.message : 'repair-failed'
       stage({ stage: repairStage, state: 'failed', failureCode: code, failureDetail: detail })
       // 取消就报取消；否则保留这一轮真正的失败码，把重写的错误接在明细后面（不许盖成超时）。
-      return cancelled
+      return code === 'run-interrupted'
+        ? { state: 'interrupted', failureDetail: detail, toolInvocations: Object.freeze(tools) }
+        : cancelled
         ? { state: 'cancelled', failureDetail: detail, toolInvocations: Object.freeze(tools) }
         : { state: 'failed', failureCode: code, failureDetail: [failureDetail, `repair: ${detail}`].filter(Boolean).join(' · '), toolInvocations: Object.freeze(tools) }
     }

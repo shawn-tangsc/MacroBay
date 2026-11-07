@@ -193,9 +193,9 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   if (written.stopped) {
     // 运行时在写作中途被停（应用退出、会话被停）：这不是模型写坏了。当成 invalid-json 去重写，
     // 只会拿一个已经释放的运行时再失败一次，还把真实原因盖成「超时」。
-    stage({ stage: 'writing', state: 'failed', failureCode: 'cancelled', failureDetail: 'runtime stopped mid-turn' })
+    stage({ stage: 'writing', state: 'failed', failureCode: 'run-interrupted', failureDetail: 'runtime stopped mid-turn' })
     await input.runner.finish(started.sessionId, 'abandoned')
-    return { state: 'failed', failureCode: 'cancelled', failureDetail: 'runtime stopped mid-turn', sessionId: started.sessionId, toolInvocations }
+    return { state: 'failed', failureCode: 'run-interrupted', failureDetail: 'runtime stopped mid-turn', sessionId: started.sessionId, toolInvocations }
   }
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
@@ -216,9 +216,10 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     await input.runner.finish(started.sessionId, 'accepted')
     return { state: 'accepted', document: gate.document, sessionId: started.sessionId, toolInvocations: gate.toolInvocations }
   }
-  if (gate.state === 'cancelled') {
+  if (gate.state === 'cancelled' || gate.state === 'interrupted') {
     await input.runner.finish(started.sessionId, 'abandoned')
-    return { state: 'failed', failureCode: 'cancelled', failureDetail: gate.failureDetail, sessionId: started.sessionId, toolInvocations: gate.toolInvocations }
+    const failureCode = gate.state === 'interrupted' ? 'run-interrupted' : 'cancelled'
+    return { state: 'failed', failureCode, failureDetail: gate.failureDetail, sessionId: started.sessionId, toolInvocations: gate.toolInvocations }
   }
   await input.runner.finish(started.sessionId, 'failed')
   return { state: 'failed', failureCode: gate.failureCode, ...(gate.failureDetail ? { failureDetail: gate.failureDetail } : {}), sessionId: started.sessionId, toolInvocations: gate.toolInvocations }

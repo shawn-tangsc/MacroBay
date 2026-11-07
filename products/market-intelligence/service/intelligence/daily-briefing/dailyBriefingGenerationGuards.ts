@@ -54,9 +54,11 @@ export function cutoffDate(today: string): string {
  * 其余才是超时。三者混成一个，就会把「重写拿到已释放的运行时」记成超时。
  */
 export function turnFailureCode(error: unknown): string {
-  if (error instanceof Error && error.name === 'AbortError') return 'cancelled'
+  const name = error instanceof Error ? error.name : ''
   const message = error instanceof Error ? error.message : String(error)
-  if (/abort|disposed|cancelled|canceled|stopped/i.test(message)) return 'cancelled'
+  // 运行时被释放/回合被停 = 应用被关掉打断，不是超时也不是取消（`02` v2.156 `run-interrupted`）。
+  if (/disposed|stopped|interrupted/i.test(message)) return 'run-interrupted'
+  if (name === 'AbortError' || /abort|cancelled|canceled/i.test(message)) return 'cancelled'
   if (isOutputTruncation(error)) return 'agent-turn-output-truncated'
   return 'editorial-timeout'
 }
