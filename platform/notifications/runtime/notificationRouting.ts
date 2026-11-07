@@ -172,14 +172,15 @@ function applyQuietHoursAndPriority(
   }
 
   // 免打扰判别走 `quietHours.ts` 一处实现：`unknown`（时区取不到）**不静音**，只有确定在窗口内才静音。
-  // `urgent` 是否继续豁免、以及手机那一档要不要一起静音，是同一件待用户拍板的事
-  // （验收 S6 与现行为不一致，见 `notificationRouting.test.ts` 里那条 skip 用例），
-  // 拍板前这里保持现状，不为其中一半先动手。
+  // 窗口内**不留穿透**（Chief 2026-11-07 定）：`urgent` 也不再豁免。留一个例外，就等于替读者
+  // 决定「这一条算紧急」，而他从没同意把那个判断权交给我们；真要「必须叫醒」的事件，那是单独
+  // 设计一类、在界面上写明会穿透，不能靠一个悄悄标的 `priority` 绕过去。
+  // 手机那一档在 `notificationSubmitPlan.effectiveLevels` 里按同一份判定摘掉。
   const insideQuietHours = isInsideQuietHours(settings, clock)
   return channels.filter((channel) => {
     if (!disruptive.has(channel)) return true
+    if (insideQuietHours) return false
     if (minimumPriority && priorityRank[priority] < priorityRank[minimumPriority]) return false
-    if (insideQuietHours) return priority === 'urgent'
     return true
   })
 }

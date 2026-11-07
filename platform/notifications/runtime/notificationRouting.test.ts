@@ -43,7 +43,7 @@ describe('notification routing settings boundary', () => {
     expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center'])
   })
 
-  it('allows urgent notifications during quiet hours', () => {
+  it('does not let urgent pierce quiet hours: a silent window is silent for every local surface', () => {
     const request: NotificationRequest = {
       owner: 'product',
       productId: 'sample-product',
@@ -57,10 +57,13 @@ describe('notification routing settings boundary', () => {
 
     const settings = {
       ...createDefaultNotificationRuntimeSettings(),
+      popupEnabled: true,
       quietHours: { enabled: true, startLocalTime: '00:00', endLocalTime: '23:59' }
     }
 
-    expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center', 'popup'])
+    // Chief 2026-11-07 定：窗口内不留穿透。今天没有任何生产者发 `urgent`，所以这条改的是规则、
+    // 不是今天的观感——但留下例外，将来就有人靠「悄悄标个 urgent」绕开读者的免打扰。
+    expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center'])
   })
 })
 
