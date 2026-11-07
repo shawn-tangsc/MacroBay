@@ -55,6 +55,7 @@ import type {
   BriefingNewsPolarity,
   BriefingNewsItem,
   BriefingMacroItem,
+  BriefingNewsSource,
   BriefingNextRelevanceRole,
   BriefingNextRelevance,
   BriefingNextItem,
@@ -92,6 +93,7 @@ export type {
   BriefingNewsPolarity,
   BriefingNewsItem,
   BriefingMacroItem,
+  BriefingNewsSource,
   BriefingNextRelevanceRole,
   BriefingNextRelevance,
   BriefingNextItem,
@@ -225,6 +227,13 @@ export type DailyBriefingDocument = Readonly<{
     items: readonly BriefingNewsItem[]
     macro: readonly BriefingMacroItem[]
     macroCandidates?: readonly BriefingMacroItem[]
+    /**
+     * 今天有哪些新闻源出了问题（schema 15 / `02` v2.167）：静默、连续失败。
+     *
+     * 右列「数据缺口与限制」只读文档，所以这两件事必须冻结在文档里；正常的源不出现——
+     * 没有条目就是没有条目，不是"缺了什么"。静默与失败**永不共用一句话**。
+     */
+    sources?: readonly BriefingNewsSource[]
     /**
      * Why a section is empty, as a code the copy table resolves — never a sentence.
      *
@@ -381,15 +390,22 @@ export type DailyBriefingEditionLanguageState = 'published' | 'generating' | 'mi
  * Why a language has no edition to open. Closed on purpose: the rail prints the reason from this
  * code, it never infers one from the absence itself.
  */
-export type DailyBriefingEditionLanguageReason =
-  /** The run settled without this language (partial publication). */
-  | 'not-published'
-  /** A run is in flight right now, in this process. */
-  | 'run-running'
-  /** The run ended failed. */
-  | 'run-failed'
-  /** The run never finished: the process died and nothing is running now. Not the same as failed. */
-  | 'run-interrupted'
+/**
+ * 无正文那一档的理由，**只在这里列一次**：契约的类型、客户端解析白名单都读它。
+ * 客户端漏一个值会把整行解析成 `null`（行直接消失，看着像"不建行"，其实不是同一条规则）。
+ *
+ * `run-interrupted` = 进程死在里面（系统侧）；`run-cancelled` = 读者自己取消 / 被自己连点顶掉 /
+ * 暂停原因缺失（不是故障，列表不因此建行，`02` v2.176）；`run-failed` 才是"这次没生成出来"。
+ */
+export const dailyBriefingEditionLanguageReasons = [
+  'not-published', 'run-running', 'run-failed', 'run-interrupted', 'run-cancelled'
+] as const
+export type DailyBriefingEditionLanguageReason = (typeof dailyBriefingEditionLanguageReasons)[number]
+
+/** 契约里这一档的判定：客户端解析与投影共用，不许各自再列一遍字面量。 */
+export function isDailyBriefingEditionLanguageReason(value: unknown): value is DailyBriefingEditionLanguageReason {
+  return typeof value === 'string' && (dailyBriefingEditionLanguageReasons as readonly string[]).includes(value)
+}
 
 export type DailyBriefingEditionLanguage = Readonly<{
   locale: DailyBriefingLocale

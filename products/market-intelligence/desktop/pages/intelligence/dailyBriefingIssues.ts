@@ -29,7 +29,8 @@ export type BriefingIssueCategory = 'data' | 'baseline' | 'backfill' | 'ai' | 'e
 export type BriefingIssueTemplate =
   | 'row-disabled' | 'row-unavailable' | 'row-stale' | 'row-no-value' | 'etf-no-history' | 'capital-gate'
   | 'no-baseline' | 'no-baseline-last-release' | 'insufficient-window'
-  | 'news-disabled' | 'news-unavailable' | 'calendar-disabled' | 'calendar-unavailable'
+  | 'news-disabled' | 'news-unavailable' | 'news-source-silent' | 'news-source-failed'
+  | 'calendar-disabled' | 'calendar-unavailable'
   | 'macro-consensus' | 'macro-actual' | 'macro-previous' | 'macro-value-conflict'
   | 'backfill-done' | 'backfill-generic'
   | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure' | 'document-invalid'
@@ -42,6 +43,8 @@ export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, 
   'row-no-value': 'no-value', 'etf-no-history': 'etf-unavailable', 'capital-gate': 'capital-gate',
   'no-baseline': 'no-baseline', 'no-baseline-last-release': 'no-baseline', 'insufficient-window': 'insufficient-window',
   'news-disabled': 'source-disabled', 'news-unavailable': 'unavailable',
+  // 静默与连续失败**两个模板、两个码**：句子不许共用，分组也不许合并。
+  'news-source-silent': 'source-silent', 'news-source-failed': 'source-failed',
   'calendar-disabled': 'source-disabled', 'calendar-unavailable': 'unavailable',
   'macro-consensus': 'consensus-missing', 'macro-actual': 'actual-missing', 'macro-previous': 'previous-missing',
   'macro-value-conflict': 'value-conflict',
@@ -258,6 +261,33 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
     add({ id: 'data:news:disabled', severity: 'warning', category: 'data', template: 'news-disabled', source: text.limits.sources.news, at, title: text.limits.newsDisabled, advice: text.limits.advice.checkNews })
   } else if (news === 'unavailable') {
     add({ id: 'data:news:unavailable', severity: 'warning', category: 'data', template: 'news-unavailable', source: text.limits.sources.news, at, title: text.limits.newsUnavailable, advice: text.limits.advice.checkNews })
+  }
+  // 来源静默与来源失败（`02` v2.167）：都从冻结文档的 `news.sources` 派生，两件事两句话。
+  // 正常的源不进文档，也就不会出现在这里——没有条目不是"缺了什么"。
+  for (const source of document.news.sources ?? []) {
+    if (source.state === 'silent') {
+      add({
+        id: `data:news-source:silent:${source.sourceId}`,
+        severity: 'warning', category: 'data', template: 'news-source-silent',
+        source: source.name,
+        ...(source.lastNewItemAt === undefined ? {} : { at: source.lastNewItemAt }),
+        title: text.limits.newsSourceSilent
+          .replace('{source}', source.name)
+          .replace('{hours}', String(source.silentHours ?? ''))
+          .replace('{time}', source.lastNewItemAt === undefined ? '' : input.formatTime(source.lastNewItemAt, 'minute')),
+        advice: text.limits.advice.checkSource
+      })
+      continue
+    }
+    add({
+      id: `data:news-source:failed:${source.sourceId}`,
+      severity: 'warning', category: 'data', template: 'news-source-failed',
+      source: source.name,
+      title: text.limits.newsSourceFailed
+        .replace('{source}', source.name)
+        .replace('{count}', String(source.consecutiveFailures ?? 0)),
+      advice: text.limits.advice.checkSource
+    })
   }
   // 宏观那栏为什么空：**与正文共用同一个推导**（`briefingMacroEmptyCopy`），所以读者在两处
   // 读到的是同一句话。以前这里把六档原因码压成两句，过期/从未采集/采集失败全被静默吞掉。

@@ -79,6 +79,8 @@ export type DailyBriefingFactPacket = Readonly<{
     state: 'available' | 'empty' | 'unavailable' | 'source-disabled'
     items: readonly NewsSentimentItemView[]
   }>
+  /** 今天哪些新闻源静默/连续失败（schema 15）：冻结事实，右列只读它。 */
+  newsSources?: readonly import('../../../contracts/dailyBriefing').BriefingNewsSource[]
   calendar: Readonly<{
     state: DailyBriefingCalendarState
     events: readonly DailyBriefingCalendarEvent[]

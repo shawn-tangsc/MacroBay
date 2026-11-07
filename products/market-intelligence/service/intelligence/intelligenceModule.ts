@@ -938,6 +938,8 @@ export function getIntelligenceModule(
         briefEditions: dailyBriefingStore,
         news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
         profiles: profileStore,
+        // 来源静默/连续失败（`02` v2.167）：读采集运行状态，写进冻结的日报文档。
+        sourceStates: () => pipeline.listRuntimeStates(),
         calendarCommands: briefingCalendar.commands,
         macroWebRead: macroWebReadFromHooks(hooks, () => dailyBriefingAiSettings.getView()),
       }),

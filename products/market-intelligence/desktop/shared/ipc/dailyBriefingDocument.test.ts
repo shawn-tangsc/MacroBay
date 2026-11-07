@@ -112,6 +112,15 @@ describe('daily briefing document guard at schema 13', () => {
     expect(isDocument({ ...current, schemaVersion: 16 as unknown as 15 })).toBe(false)
   })
 
+  it('carries the news-source list a schema-15 edition froze, and refuses an unknown state', () => {
+    const current = { ...document(), schemaVersion: 15 as const, policyVersion: 'daily-briefing.v25' as const }
+    const silent = { sourceId: 'coindesk-rss', name: 'CoinDesk RSS', state: 'silent', lastNewItemAt: '2026-10-29T01:30:00.000Z', silentHours: 25 }
+    const withSources = { ...current, news: { ...current.news, sources: [silent] } }
+    expect(isDocument(withSources)).toBe(true)
+    // 状态是闭集：猜出来的第三种状态一律拒绝，不让它混进来。
+    expect(isDocument({ ...withSources, news: { ...withSources.news, sources: [{ ...silent, state: 'quiet' }] } })).toBe(false)
+  })
+
   it('ignores unknown fields instead of rejecting the whole document', () => {
     // `02` v2.129 `G5`：服务端加字段不许把"成功"显示成"失败"。未知字段一律忽略；
     // 只有版本号比当前更高才拒（那是真的读不懂）。

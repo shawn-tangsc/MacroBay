@@ -465,3 +465,49 @@ describe('issue grouping', () => {
     }
   })
 })
+
+describe('a news source that went quiet or kept failing (v2.167)', () => {
+  const sourcesIssues = (sources: readonly Readonly<{ sourceId: string; name: string; state: 'silent' | 'failed'; lastNewItemAt?: string; silentHours?: number; consecutiveFailures?: number }>[]) =>
+    briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: {}, sources } }),
+      text: zhText,
+      formatTime
+    })
+
+  it('writes one silent gap that names the last new item time', () => {
+    const issues = sourcesIssues([
+      { sourceId: 'coindesk-rss', name: 'CoinDesk RSS', state: 'silent', lastNewItemAt: '2026-10-29T01:30:00.000Z', silentHours: 25 }
+    ])
+    const gap = issues.filter((issue) => issue.template === 'news-source-silent')
+    expect(gap).toHaveLength(1)
+    expect(gap[0]!.title).toContain('CoinDesk RSS')
+    expect(gap[0]!.title).toContain('25')
+    // 最后一条新条目的时刻必须写出来（按页面现成的时刻格式，不自己拼）。
+    expect(gap[0]!.title).toContain('01:30')
+    expect(gap[0]!.at).toBe('2026-10-29T01:30:00.000Z')
+    expect(gap[0]!.code).toBe('source-silent')
+  })
+
+  it('says a different sentence for a source that keeps failing — never the same words', () => {
+    const silent = sourcesIssues([
+      { sourceId: 'coindesk-rss', name: 'CoinDesk RSS', state: 'silent', lastNewItemAt: '2026-10-29T01:30:00.000Z', silentHours: 25 }
+    ]).find((issue) => issue.template === 'news-source-silent')!
+    const failed = sourcesIssues([
+      { sourceId: 'cryptopanic', name: 'CryptoPanic', state: 'failed', consecutiveFailures: 3 }
+    ])
+    const failedGap = failed.find((issue) => issue.template === 'news-source-failed')
+    expect(failedGap).not.toBeUndefined()
+    expect(failed.some((issue) => issue.template === 'news-source-silent')).toBe(false)
+    // 同句即红：两句逐字不同，去掉来源名之后也不同——不许共用一句模板。
+    expect(failedGap!.title).not.toBe(silent.title)
+    expect(failedGap!.title.replace('CryptoPanic', '')).not.toBe(silent.title.replace('CoinDesk RSS', ''))
+    expect(failedGap!.code).toBe('source-failed')
+    expect(silent.code).not.toBe(failedGap!.code)
+  })
+
+  it('keeps every normal source out of the column', () => {
+    // 文档里没有来源条目 = 每个源都正常；右列不许凭空多出一条「缺什么」。
+    const issues = sourcesIssues([])
+    expect(issues.some((issue) => issue.template === 'news-source-silent' || issue.template === 'news-source-failed')).toBe(false)
+  })
+})

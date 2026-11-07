@@ -413,8 +413,8 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    // schema 14 起宏观事件带自己的 `lifecycleState`（`02` v2.125），当前文档就是 14。
-    expect(document.schemaVersion).toBe(14)
+    // 14 起宏观事件带自己的 `lifecycleState`，15 起新闻源静默/失败进文档（`02` v2.167）。
+    expect(document.schemaVersion).toBe(15)
     // The id is a name, not the clock: this version's single fixed period.
     expect(document.edition.periodId).toBe('default')
     // The nominal cutoff, not the (later) actual generation moment; ISO milliseconds like generatedAt.
@@ -929,6 +929,28 @@ describe('daily briefing document', () => {
     expect(document.news.notes.macroEmpty).toBeUndefined()
     // 分析素材里没有它：取消是"不会有了"，不是"我们没拿到"，模型更不该拿它讲故事。
     expect(selectMacroAnalysisCandidates(document.news.macroCandidates ?? [])).toHaveLength(0)
+  })
+
+  it('freezes which news sources were silent or failing (v2.167)', () => {
+    // 右列只读文档，所以来源状态必须冻在文档里；两件事分两个 state，永不共用一句话。
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        newsSources: [
+          { sourceId: 'coindesk-rss', name: 'CoinDesk RSS', state: 'silent' as const, lastNewItemAt: '2026-10-29T01:30:00.000Z', silentHours: 25 },
+          { sourceId: 'cryptopanic', name: 'CryptoPanic', state: 'failed' as const, consecutiveFailures: 3 }
+        ]
+      }),
+      date: '2026-10-30'
+    })
+    expect(document.news.sources).toHaveLength(2)
+    expect(document.news.sources?.[0]).toMatchObject({ sourceId: 'coindesk-rss', state: 'silent', lastNewItemAt: '2026-10-29T01:30:00.000Z', silentHours: 25 })
+    expect(document.news.sources?.[1]).toMatchObject({ sourceId: 'cryptopanic', state: 'failed', consecutiveFailures: 3 })
+  })
+
+  it('writes no source list when every source was fine', () => {
+    // 正常的源不进文档：没有条目就是没有，不是"缺了什么"。
+    const document = buildDailyBriefingDocument({ packet: packet({}), date: '2026-10-30' })
+    expect(document.news.sources).toBeUndefined()
   })
 
   it('does not let stale or unavailable readings look available', () => {
