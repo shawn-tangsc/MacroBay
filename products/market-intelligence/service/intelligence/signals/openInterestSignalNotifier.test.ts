@@ -278,6 +278,77 @@ describe('signals follow a successful collection', () => {
   })
 })
 
+describe('a failed read leaves exactly one trace, and no submission', () => {
+  /** 把被捕获的 console.log 行解析出来，只留这一种 marker。 */
+  function readFailureLines(spy: { mock: { calls: readonly (readonly unknown[])[] } }): Array<Record<string, unknown>> {
+    return spy.mock.calls
+      .map((call: readonly unknown[]): Record<string, unknown> | undefined => {
+        try { return JSON.parse(String(call[0])) as Record<string, unknown> } catch { return undefined }
+      })
+      .filter((row: Record<string, unknown> | undefined): row is Record<string, unknown> => row !== undefined && row.marker === 'MI_SIGNAL_READ_FAILED')
+  }
+
+  it('keeps the collection result, logs once, and submits nothing when the read throws', async () => {
+    const trace = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const submit = vi.fn(async () => accepted)
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => { throw Object.assign(new Error('ipc closed'), { reasonCode: 'ipc-closed' }) },
+      submit,
+      now: () => asOf
+    })
+    try {
+      // 采集结果不变：通知侧读不到，不是这次采集失败。
+      expect(await wrapped.refresh()).toEqual({ state: 'updated' })
+      expect(submit).not.toHaveBeenCalled()
+      const lines = readFailureLines(trace)
+      expect(lines).toHaveLength(1)
+      expect(lines[0]).toEqual({ marker: 'MI_SIGNAL_READ_FAILED', sourceId: 'binance-futures-positioning', reasonCode: 'ipc-closed' })
+      // 不带叙事文案：字段就这三个。
+      expect(Object.keys(lines[0]!).sort()).toEqual(['marker', 'reasonCode', 'sourceId'])
+    } finally {
+      trace.mockRestore()
+    }
+  })
+
+  it('logs the DTO failure code when the read answers unavailable instead of throwing', async () => {
+    const trace = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const submit = vi.fn(async () => accepted)
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => ({ state: 'unavailable' as const, failureCode: 'open-interest-history-query-unavailable' }),
+      submit,
+      now: () => asOf
+    })
+    try {
+      expect(await wrapped.refresh()).toEqual({ state: 'updated' })
+      expect(submit).not.toHaveBeenCalled()
+      const lines = readFailureLines(trace)
+      expect(lines).toHaveLength(1)
+      expect(lines[0]!.reasonCode).toBe('open-interest-history-query-unavailable')
+    } finally {
+      trace.mockRestore()
+    }
+  })
+
+  it('does not log the read marker for a submission failure: the runtime already records that one', async () => {
+    const trace = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => reading(),
+      submit: async () => { throw new Error('notification store down') },
+      now: () => asOf
+    })
+    try {
+      expect(await wrapped.refresh()).toEqual({ state: 'updated' })
+      // 提交侧留痕归运行时；这里再记一条就是同一件事的第二个出处。
+      expect(readFailureLines(trace)).toHaveLength(0)
+    } finally {
+      trace.mockRestore()
+    }
+  })
+})
+
 describe('the refresh path no longer calls analyses', () => {
   it('exposes only a refresh, because the tick scan is the single entry', async () => {
     const refresh = vi.fn(async () => ({ state: 'updated' as const }))
