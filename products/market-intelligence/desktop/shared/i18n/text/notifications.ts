@@ -57,6 +57,13 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     // 与源头拼成品**共用同一份字符串**（`contracts/macroEventNotificationSentences.ts`）；
     // 这几条只服务已落库的旧记录——新记录存的是成品，平台不再读这张表。
     // N10 舆情：标题【强度】+ 原文标题、正文来源、理由是一句事实（不含任何动作指令）。
+    // 日历事件的开始前提醒：实际发出的句子在源头按「哪一条事件 + 读者时区的时刻 +
+    // 还剩多少分钟」拼好（`renderCalendarReminderSentence`），这里必须也有三格——声明指着的
+    // 键一旦空缺，界面上印的就是键名，而且不会报错。三句都不含动作指令（手机推送不许带）。
+    [TITLE(IDS.calendarEventUpcoming)]: '日历事件即将开始',
+    [BODY(IDS.calendarEventUpcoming)]: '按你设定的提前量提醒：有一条日历事件快开始了。',
+    [REASON(IDS.calendarEventUpcoming)]: '你打开了日历事件的开始前提醒。',
+
     [TITLE(IDS.sentimentAlert)]: zh.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: zh.alert.bodyWithSource,
     [REASON(IDS.sentimentAlert)]: zh.alert.reason,
@@ -115,6 +122,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: en.signal.body.oiDrop,
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: en.signal.body.oiDropAggravated,
     [REASON(IDS.signalTriggered)]: en.signal.reason,
+
+    [TITLE(IDS.calendarEventUpcoming)]: 'A calendar event starts soon',
+    [BODY(IDS.calendarEventUpcoming)]: 'A reminder at the lead time you set: a calendar event is about to start.',
+    [REASON(IDS.calendarEventUpcoming)]: 'You turned on the reminder before calendar events start.',
 
     [TITLE(IDS.sentimentAlert)]: en.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: en.alert.bodyWithSource,

@@ -61,6 +61,7 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   briefingReady: 'market-intelligence.briefing.ready',
   signalTriggered: 'market-intelligence.signal.triggered',
   macroEventLanded: 'market-intelligence.macro.event-landed',
+  calendarEventUpcoming: 'market-intelligence.calendar.event-upcoming',
   sentimentAlert: 'market-intelligence.sentiment.alert',
   sourceConsecutiveFailed: 'market-intelligence.source.consecutive-failed',
   sourceStale: 'market-intelligence.source.stale',
