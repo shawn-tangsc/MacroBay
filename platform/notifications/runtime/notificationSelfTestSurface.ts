@@ -23,8 +23,11 @@ import type { PushChannelResolution } from '../delivery/pushChannelResolution'
  * 链路自检的固定样例（中英各一份，`rendered` 成品句）：**不取任何情报数据**，所以它不需要产品端口，
  * 也正是它与另外三个 kind 的区别。标题带【测试】、正文首行写明「这是测试消息」。
  *
- * 载体事件用既有那条已经批准 `channel` 的事件：今晚不新造事件与文案键（那要动文案表，
- * 与「productText 走排队」冲突）。平台专属的 `platform.notification-self-test` 事件列为后续一笔。
+ * **载体事件是临时借用的，不是设计如此**：`market-intelligence.briefing.ready` 是既有那条已批准
+ * `channel` 的事件，借它只为今晚能点（另造事件要加声明 + 中英文案键，而文案表在排队）。
+ * **后果**：通知中心里那条会显示成「简报已生成」，点开才是测试内容——看起来像某件事、其实不是。
+ * 欠账在 `docs-private/iterations/BACKLOG.md` 的 `MI-11-R215`（专属 `platform.notification-self-test`），
+ * 那条落地时把下面的 `eventTypeId` 换掉即可，其余不用动。
  */
 const LINK_SAMPLE_REQUEST: NotificationSubmitRequest = {
   eventTypeId: 'market-intelligence.briefing.ready',
