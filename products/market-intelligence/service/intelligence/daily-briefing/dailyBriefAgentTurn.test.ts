@@ -509,4 +509,113 @@ describe('the citable set (Chief 2026-11-06)', () => {
     const repair = continues.find((text) => text.includes('failed validation')) ?? ''
     expect(repair).toContain('news:dropped-1')
   })
+
+  it('really runs one repair after an unparsable reply, and accepts the repaired answer', async () => {
+    // 兜底必须真的跑起来：第一稿不是 JSON，重写一次给出合法 JSON，这一版就该成功。
+    let rounds = 0
+    const continues: string[] = []
+    const stages: { id: string; state: string; failureCode?: string }[] = []
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async (_sessionId: string, text: string) => {
+        continues.push(text)
+        rounds += 1
+        return { assistantText: rounds === 1 ? 'I could not finish that.' : JSON.stringify(editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.')), toolInvocations: [] }
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({
+      runner, document: withNextCandidates(), locale: 'en-US',
+      onStage: (event: { stage: string; state: string; failureCode?: string }) => { stages.push({ id: event.stage, state: event.state, ...(event.failureCode ? { failureCode: event.failureCode } : {}) }) }
+    })
+
+    expect(result.state).toBe('accepted')
+    expect(continues.filter((text) => text.includes('failed validation'))).toHaveLength(1)
+    const repair = stages.filter((stage) => stage.id === 'repair-1')
+    expect(repair.map((stage) => stage.state)).toEqual(['begin', 'success'])
+  })
+
+  it('records a stopped turn as cancelled, never as the model writing bad JSON', async () => {
+    // 真机：应用在写作中途被关，运行时把回合停成「已停止。」。它不是一个坏答案，
+    // 拿去解析只会得到 invalid-json，再去重写只会撞上已释放的运行时。
+    const stages: { id: string; state: string; failureCode?: string }[] = []
+    const continues: string[] = []
+    const finish = vi.fn(async () => undefined)
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async (_sessionId: string, text: string) => {
+        continues.push(text)
+        return { assistantText: '已停止。', toolInvocations: [], stopped: true }
+      }),
+      finish
+    }
+
+    const result = await runDailyBriefAgentTurn({
+      runner, document: withNextCandidates(), locale: 'en-US',
+      onStage: (event: { stage: string; state: string; failureCode?: string }) => { stages.push({ id: event.stage, state: event.state, ...(event.failureCode ? { failureCode: event.failureCode } : {}) }) }
+    })
+
+    expect(result).toMatchObject({ state: 'failed', failureCode: 'cancelled' })
+    expect(stages.find((stage) => stage.id === 'writing' && stage.state === 'failed')?.failureCode).toBe('cancelled')
+    expect(stages.some((stage) => stage.id === 'validation')).toBe(false)
+    expect(continues.filter((text) => text.includes('failed validation'))).toHaveLength(0)
+    expect(finish).toHaveBeenCalledWith('s1', 'abandoned')
+  })
+
+  it('does not disguise a disposed runtime as a timeout', async () => {
+    // 真机那一笔：写作正常结束，重写时运行时已被释放，报的是固定那句。它既不是超时，也不是坏 JSON。
+    let rounds = 0
+    const stages: { id: string; state: string; failureCode?: string }[] = []
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async () => {
+        rounds += 1
+        if (rounds === 1) return { assistantText: 'not json at all', toolInvocations: [] }
+        throw new Error('Agent session runtime is disposed.')
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({
+      runner, document: withNextCandidates(), locale: 'en-US',
+      onStage: (event: { stage: string; state: string; failureCode?: string }) => { stages.push({ id: event.stage, state: event.state, ...(event.failureCode ? { failureCode: event.failureCode } : {}) }) }
+    })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('cancelled')
+    expect(result.failureCode).not.toBe('editorial-timeout')
+    expect(stages.find((stage) => stage.id === 'repair-1' && stage.state === 'failed')?.failureCode).toBe('cancelled')
+  })
+
+  it('keeps invalid-json when the repair fails for a reason that is not a cancellation', async () => {
+    let rounds = 0
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async () => {
+        rounds += 1
+        if (rounds === 1) return { assistantText: 'the model rambled instead of answering', toolInvocations: [] }
+        throw new Error('provider returned 500')
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('invalid-json')
+    // 失败明细里要有它到底长什么样的一小段，下一次不必靠猜。
+    expect(result.failureDetail).toContain('unparsable: the model rambled')
+    expect(result.failureDetail).toContain('provider returned 500')
+  })
 })

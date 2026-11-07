@@ -1,8 +1,8 @@
 import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
 import { DEFAULT_PERIOD_ID, dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairPromptFor } from './dailyBriefingPrompt'
+import { runEditorialGate } from './dailyBriefAgentEditorialGate'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission } from './dailyBriefingValidation'
-import { describeFailures } from './dailyBriefingValidationFailures'
 import { validateEditorialForPeriod, type DailyBriefingPeriodFacts } from './dailyBriefingPeriodFactsValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
@@ -51,6 +51,7 @@ export type DailyBriefTurnStage = 'selection' | 'field-backfill' | 'writing' | '
  * the loop's bounds. One constant, and a case that counts them.
  */
 export const maximumRepairRounds = 3
+
 
 export type DailyBriefTurnStageEvent = Readonly<{
   stage: DailyBriefTurnStage
@@ -189,48 +190,38 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   throwIfAborted(input.signal)
   stage({ stage: 'writing', state: 'begin' })
   const written = await input.runner.continue(started.sessionId, prompt, `任务 2/2 · 写作\n\n${prompt}`, input.signal)
+  if (written.stopped) {
+    // 运行时在写作中途被停（应用退出、会话被停）：这不是模型写坏了。当成 invalid-json 去重写，
+    // 只会拿一个已经释放的运行时再失败一次，还把真实原因盖成「超时」。
+    stage({ stage: 'writing', state: 'failed', failureCode: 'cancelled', failureDetail: 'runtime stopped mid-turn' })
+    await input.runner.finish(started.sessionId, 'abandoned')
+    return { state: 'failed', failureCode: 'cancelled', failureDetail: 'runtime stopped mid-turn', sessionId: started.sessionId, toolInvocations }
+  }
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
   stage({ stage: 'writing', state: 'success' })
-  let failureCode = 'invalid-json'
-  let failureDetail: string | undefined
-  let lastFailures: readonly Readonly<{ code: string; detail?: string }>[] | undefined
-  for (let attempt = 0; attempt <= maximumRepairRounds; attempt++) {
-    // Each check times itself. A check that fails closes before the repair it triggers, so the repair
-    // row owns the seconds it spends and the validation row does not silently include them.
-    stage({ stage: 'validation', state: 'begin' })
-    let parsed: unknown
-    try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
-    if (parsed) {
-      const validation = validateEditorialForPeriod(selectedDocument, parsed, input.locale, toolInvocations, priorConclusions, input.periodFacts)
-      if (validation.ok) {
-        stage({ stage: 'validation', state: 'success' })
-        const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions)
-        await input.runner.finish(started.sessionId, 'accepted')
-        return { state: 'accepted', document, sessionId: started.sessionId, toolInvocations }
-      }
-      failureCode = validation.failureCode
-      failureDetail = validation.detail
-      lastFailures = validation.failures
-    }
-    // Every defect, not just the first: the code names the kind of problem, the detail names the fields,
-    // and a reader who only ever sees the kind cannot act on it.
-    const described = lastFailures ? describeFailures(lastFailures) : undefined
-    stage({ stage: 'validation', state: 'failed', failureCode, ...(described ? { failureDetail: described } : failureDetail ? { failureDetail } : {}) })
-    if (attempt < maximumRepairRounds) {
-      throwIfAborted(input.signal)
-      const repairStage = `repair-${attempt + 1}` as DailyBriefTurnStage
-      stage({ stage: repairStage, state: 'begin' })
-      const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail, lastFailures), undefined, input.signal)
-      response = repair.assistantText
-      toolInvocations.push(...repair.toolInvocations)
-      stage({ stage: repairStage, state: 'success' })
-    }
+  const gate = await runEditorialGate({
+    runner: input.runner,
+    sessionId: started.sessionId,
+    written: response,
+    maximumRounds: maximumRepairRounds,
+    toolInvocations,
+    stage,
+    repairPrompt: (code, detail, failures) => repairPromptFor(code, detail, failures),
+    validate: (parsed) => validateEditorialForPeriod(selectedDocument, parsed, input.locale, toolInvocations, priorConclusions, input.periodFacts),
+    apply: (value) => applyDailyBriefingEditorial(selectedDocument, value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions),
+    ...(input.signal ? { signal: input.signal } : {})
+  })
+  if (gate.state === 'accepted') {
+    await input.runner.finish(started.sessionId, 'accepted')
+    return { state: 'accepted', document: gate.document, sessionId: started.sessionId, toolInvocations: gate.toolInvocations }
   }
-  const finalDetail = lastFailures ? describeFailures(lastFailures) ?? failureDetail : failureDetail
-  stage({ stage: 'validation', state: 'failed', failureCode, ...(finalDetail ? { failureDetail: finalDetail } : {}) })
+  if (gate.state === 'cancelled') {
+    await input.runner.finish(started.sessionId, 'abandoned')
+    return { state: 'failed', failureCode: 'cancelled', failureDetail: gate.failureDetail, sessionId: started.sessionId, toolInvocations: gate.toolInvocations }
+  }
   await input.runner.finish(started.sessionId, 'failed')
-  return { state: 'failed', failureCode, ...(finalDetail ? { failureDetail: finalDetail } : {}), sessionId: started.sessionId, toolInvocations }
+  return { state: 'failed', failureCode: gate.failureCode, ...(gate.failureDetail ? { failureDetail: gate.failureDetail } : {}), sessionId: started.sessionId, toolInvocations: gate.toolInvocations }
 }
 
 /**

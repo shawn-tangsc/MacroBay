@@ -37,7 +37,7 @@ export { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
 import { withRunGaps } from './dailyBriefCrossAssetGap'
 import { previousEditionBefore } from './dailyBriefingPreviousEdition'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
-import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
+import { candidateOverflow, cutoffDate, isOutputTruncation, turnFailureCode, withDeadline } from './dailyBriefingGenerationGuards'
 import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
@@ -304,6 +304,7 @@ export type DailyBriefingService = Readonly<{
  * with `editorial-timeout` and its session is abandoned instead of running on.
  */
 export const DAILY_BRIEF_GENERATION_BUDGET_MS = 300_000
+
 
 /**
  * The deterministic core-fact pass runs after the packet/document is built and before any model
@@ -584,7 +585,7 @@ export function createDailyBriefingService(deps: Readonly<{
             onStage
           }), DAILY_BRIEF_GENERATION_BUDGET_MS, () => controller.abort())
         } catch (error) {
-          const failureCode = isOutputTruncation(error) ? 'agent-turn-output-truncated' : 'editorial-timeout'
+          const failureCode = turnFailureCode(error)
           const detail = error instanceof Error && error.message ? error.message : undefined
           if (activeStage) {
             recorder.end(activeStage, 'failed', { failureCode, ...(detail ? { failureDetail: detail } : {}) })

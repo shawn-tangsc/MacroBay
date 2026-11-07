@@ -49,6 +49,18 @@ export function cutoffDate(today: string): string {
   return new Date(start - (dailyBriefingPolicy.retentionDays - 1) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
 }
 
+/**
+ * 一次抛出来的错误到底算什么：被停（应用退出/运行时释放）→ cancelled；输出被截断 → truncated；
+ * 其余才是超时。三者混成一个，就会把「重写拿到已释放的运行时」记成超时。
+ */
+export function turnFailureCode(error: unknown): string {
+  if (error instanceof Error && error.name === 'AbortError') return 'cancelled'
+  const message = error instanceof Error ? error.message : String(error)
+  if (/abort|disposed|cancelled|canceled|stopped/i.test(message)) return 'cancelled'
+  if (isOutputTruncation(error)) return 'agent-turn-output-truncated'
+  return 'editorial-timeout'
+}
+
 /** A model round that ran out of output is a writing failure, not a generic timeout. */
 export function isOutputTruncation(error: unknown): boolean {
   if (!(error instanceof Error)) return false
