@@ -21,6 +21,7 @@ import type {
   NotificationRuntimeSettings
 } from '../contracts/notificationContracts'
 import { recordPushOutcome, shouldSkipPush, type PushDeliveryOutcome } from '../delivery/pushBackoffPolicy'
+import type { PushChannelResolution } from '../delivery/pushChannelResolution'
 import {
   routeTransientDelivery,
   type DeliveryHooks,
@@ -36,6 +37,8 @@ export type NotificationDeliveryInput = {
   getLanguage?: () => Promise<'zh-CN' | 'en-US'>
   copy?: NotificationCopyPort
   diagnostics?: NotificationDiagnosticsSink
+  /** 目标通道的唯一派生（技术方案 §1）；缺省视为「一条都没有」，绝不回退去读旧字段。 */
+  resolvePushChannel?: () => Promise<PushChannelResolution>
   now: () => string
 }
 
@@ -262,7 +265,13 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     let changed = false
     let transition: NotificationPushTransition | undefined
     const at = input.now()
-    const channelId = settings.push.channelId
+    // 目标通道由派生入口给出（`runtime-ready` 恰好一条），不再读 `settings.push.channelId`——
+    // 那个字段没有任何生产写入方，读它等于让推送目标悬空（技术方案 §1）。
+    const pushChannel = await (input.resolvePushChannel?.() ?? null) ?? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+    if (!pushChannel.ok && pushChannel.multiple) {
+      input.diagnostics?.({ code: 'push-multiple-enabled', count: pushChannel.enabledChannelCount, at })
+    }
+    const channelId = pushChannel.ok ? pushChannel.channelId : null
     const current = channelId === null ? undefined : pushBackoff[channelId]
     const previousHighest = delivery.push?.highestSeverity
     const highest = (sent: boolean): NotificationSignalSeverity | undefined => {

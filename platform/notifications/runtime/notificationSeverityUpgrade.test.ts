@@ -56,11 +56,18 @@ function harness(options: {
   const state = createDefaultNotificationStoreState()
   const settings: NotificationRuntimeSettings = {
     ...createDefaultNotificationRuntimeSettings(),
-    push: { channelId: 'channel-a' },
+    // 旧字段留空：升级路径必须走派生入口（技术方案 §1），读它就会一条也发不出去。
+    push: { channelId: null },
     ...(options.channelEvents === undefined ? {} : { channelEvents: options.channelEvents })
   }
   let sequence = 0
+  const resolvePushChannelFromSettings = async () => ({
+    ok: true as const,
+    channelId: 'channel-a',
+    channelName: 'channel-a'
+  })
   const runtime = createNotificationRuntime({
+    resolvePushChannel: resolvePushChannelFromSettings,
     diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),

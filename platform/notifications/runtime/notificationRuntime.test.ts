@@ -79,6 +79,7 @@ function createRuntime(overrides: {
 } = {}) {
   const state = createDefaultNotificationStoreState()
   return createNotificationRuntime({
+    resolvePushChannel: resolvePushChannelFromSettings,
     diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
@@ -109,6 +110,11 @@ function selfTestRequest(index: number): NotificationRequest {
     requestedChannels: ['center'],
     dedupeKey: `test-${index}`
   }
+}
+
+/** 这些夹具没有可用通道：派生入口按「一条都没有」处理（fail closed，不再读 `push.channelId`）。 */
+async function resolvePushChannelFromSettings() {
+  return { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
 }
 
 describe('notification list ordering and cursors', () => {
@@ -354,6 +360,7 @@ describe('P7: the desktop blocked event has a producer', () => {
   it('submits platform.desktop.blocked when show() fails, and records it in the center', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      resolvePushChannel: resolvePushChannelFromSettings,
       diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
@@ -379,6 +386,7 @@ describe('P7: the desktop blocked event has a producer', () => {
   it('does not submit it when the desktop switch is simply off', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      resolvePushChannel: resolvePushChannelFromSettings,
       diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),

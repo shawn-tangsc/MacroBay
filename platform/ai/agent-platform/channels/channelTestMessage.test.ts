@@ -83,12 +83,11 @@ describe('channel test message', () => {
       .toEqual({ state: 'accepted', messageId: 'attempt-1', targetName: null })
   })
 
-  it('names the recent conversation when several talked to the channel', async () => {
+  it('names the bound conversation when exactly one target is bound', async () => {
     const { deps } = harness({
       viewOptions: {
         conversations: [
-          { id: 'conversation-recent', targetEnabled: false, hasBoundSession: true, sessionTitle: 'Telegram · 张三' },
-          { id: 'conversation-older', targetEnabled: false, hasBoundSession: true, sessionTitle: 'Telegram · 8768' }
+          { id: 'conversation-bound', targetEnabled: true, hasBoundSession: true, sessionTitle: 'Telegram · 张三' }
         ]
       }
     })
@@ -102,7 +101,7 @@ describe('channel test message', () => {
       .toEqual({ state: 'failed', reason: 'no-target' })
     expect(none.requests).toHaveLength(0)
 
-    // 多个对话时**不让读者选**：发给最近活跃的那一个（用户 2026-11-04 的要求）。
+    // 多个目标时**拒绝**（兜底已按技术方案 §1 删除）：不许按「最近活跃」猜一条发出去。
     const many = harness({
       viewOptions: {
         conversations: [
@@ -112,8 +111,9 @@ describe('channel test message', () => {
       }
     })
     expect(await sendChannelTestMessage(many.deps, { channelId: 'channel-a', text: 't', sourceId: 'x' }))
-      .toMatchObject({ state: expect.any(String) })
-    expect(many.requests[0]?.conversationId).toBe('conversation-recent')
+      .toEqual({ state: 'failed', reason: 'ambiguous-target' })
+    // 一条都不许发出去：猜一条发成功，才是这个按钮最坏的答案。
+    expect(many.requests).toHaveLength(0)
   })
 
   it('separates an unbound channel from a channel that is not ready', async () => {

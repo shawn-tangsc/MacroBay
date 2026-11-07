@@ -12,6 +12,7 @@ import type {
 } from '@platform/notifications/contracts/notificationContracts'
 import { configureNotificationRuntime } from '@platform/notifications/ipc/registerNotificationIpc'
 import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
+import { resolvePushChannel, type PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { createNotificationProducerOwnership } from '@platform/notifications/contracts/notificationProducerOwnership'
 import type { DeliveryHooks } from '@platform/notifications/runtime/notificationRouting'
 
@@ -36,6 +37,8 @@ export type NotificationCompositionPorts = Readonly<{
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   /** 诊断出口（runtime §2）：**必传**，装配层接到 AppLog、测试给 recorder；缺了运行时一律编译不过。 */
   diagnostics: NotificationDiagnosticsSink
+  /** 目标通道的唯一派生；App 组合根按通道投影注入，低层组合根由调用方给。 */
+  resolvePushChannel?: () => Promise<PushChannelResolution>
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
   /**
@@ -84,7 +87,8 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
     diagnostics: ports.diagnostics,
     ...(ports.push === undefined ? {} : { push: ports.push }),
-    ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets })
+    ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
+    ...(ports.resolvePushChannel === undefined ? {} : { resolvePushChannel: ports.resolvePushChannel })
   })
 }
 
@@ -94,7 +98,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
  *
  * 适配器放这里而不是 app.ts：`app.ts` 是「只减不增」的基线文件，每加一行都要先抽离。
  */
-export type AppNotificationCompositionPorts = Omit<NotificationCompositionPorts, 'diagnostics'> & {
+export type AppNotificationCompositionPorts = Omit<NotificationCompositionPorts, 'diagnostics' | 'resolvePushChannel'> & {
   /** 通道侧的只读投影 + 投递入口；只有 app 组合根有这两样。 */
   channels: ChannelPushPortDeps['channels']
   deliver: ChannelPushPortDeps['deliver']
@@ -134,15 +138,20 @@ export function withSurfaceSaveDiagnostics(input: {
 }
 
 export function composeNotificationRuntimeForApp(ports: AppNotificationCompositionPorts): void {
+  /**
+   * 目标通道的唯一派生（技术方案 §1）：三处（主推送 / 严重度升级 / 手动重投）都读这一个函数，
+   * 因此「读者启用了两条」这件事在三条路上同时成立，不会主路径拒绝、升级路径照发。
+   */
+  const pushTarget = async () => resolvePushChannel(ports.channels.list(), (code, count) => {
+    ports.log.log('warn', code === 'push-multiple-enabled' ? 'MI_PUSH_MULTIPLE_ENABLED' : `notification.${code}`, { count })
+  })
   const push = createChannelPushPort({
     channels: ports.channels,
     deliver: ports.deliver,
-    settings: {
-      pushChannelId: async () => (await ports.settingsStore.get()).notifications.push.channelId
-    },
+    resolvePushChannel: pushTarget,
     // 至多一个「看原文」；多出来的取第一个照发，但留一行痕——静默取第一个等于让写错的人永远不知道。
     diagnostics: (code, detail) => {
-      ports.log.log('warn', `notification.${code}`, { ...detail })
+      ports.log.log('warn', code === 'push-multiple-enabled' ? 'MI_PUSH_MULTIPLE_ENABLED' : `notification.${code}`, { ...detail })
     }
   })
   composeNotificationRuntime({
@@ -150,6 +159,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     timeZone: ports.timeZone,
     manifests: ports.manifests,
     push,
+    resolvePushChannel: pushTarget,
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
     updateSettings: withSurfaceSaveDiagnostics({
       update: async (patch) => {
@@ -173,7 +183,9 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
         (entry.code === 'delegated' || entry.code === 'unclaimed-producer'
           ? 'info'
           : entry.code === 'persist-failed' ? 'error' : 'warn')
-      ports.log.log(level, `notification.${entry.code}`, {
+      const event = entry.code === 'push-multiple-enabled' ? 'MI_PUSH_MULTIPLE_ENABLED' : `notification.${entry.code}`
+      ports.log.log(level, event, {
+        ...(entry.count === undefined ? {} : { count: entry.count }),
         eventTypeId: entry.eventTypeId,
         producerId: entry.producerId,
         at: entry.at

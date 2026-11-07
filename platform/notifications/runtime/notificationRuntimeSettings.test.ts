@@ -94,7 +94,10 @@ function createRuntime(options: {
     write: async (next) => { state = JSON.parse(JSON.stringify(next)) }
   }
   const updates: Partial<NotificationRuntimeSettings>[] = []
+  // 目标通道由派生入口给出（技术方案 §1）：这个夹具要真的走到推送端口，所以给它一条 runtime-ready。
+  const resolvePushChannel = async () => ({ ok: true as const, channelId: 'telegram', channelName: 'Telegram · test' })
   const runtime = createNotificationRuntime({
+    resolvePushChannel,
     diagnostics: () => undefined,
     storage,
     catalog,

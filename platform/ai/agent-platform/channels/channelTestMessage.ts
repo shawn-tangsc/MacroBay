@@ -34,11 +34,9 @@ export async function sendChannelTestMessage(
   deps: { channels: ChannelTargetView; deliver: (request: ChannelDeliveryRequest) => Promise<ChannelDeliveryResult> },
   input: { channelId: string; text: string; sourceId: string }
 ): Promise<ChannelTestMessageReceipt> {
-  const resolved = resolveDeliveryTarget(deps.channels, input.channelId, { allowFallback: true })
-  if (resolved.ok && resolved.source === 'fallback') {
-    // 读者没绑定过：这次推断出来的目标**回写**成绑定，下次不必再推断。
-    try { deps.channels.bindDeliveryTarget?.({ channelId: resolved.channelId, conversationId: resolved.conversationId }) } catch {}
-  }
+  // 与真实推送同一条规则：多目标就拒（`ambiguous-target`），**不按「最近活跃」猜一条**。
+  // 猜出来的成功会把「真实推不出去」显示成「测试通过」，那是这个按钮最不该给出的答案。
+  const resolved = resolveDeliveryTarget(deps.channels, input.channelId)
   if (!resolved.ok) {
     return {
       state: 'failed',

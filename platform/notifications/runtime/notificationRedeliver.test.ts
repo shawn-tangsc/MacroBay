@@ -42,6 +42,8 @@ const clock = { now: () => new Date('2026-11-04T00:00:00.000Z'), timeZone: () =>
 
 function createRuntime(options: {
   settings?: Partial<NotificationRuntimeSettings>
+  /** 派生结果：默认一条可用通道；`null` 表示一条都没有（fail closed）。 */
+  resolveChannel?: 'telegram' | null
   push?: (record: unknown, content: unknown) => Promise<{ ok: boolean; reason?: string; messageId?: string }>
   pausedUntil?: string
 } = {}) {
@@ -56,6 +58,10 @@ function createRuntime(options: {
     }
   }
   const runtime = createNotificationRuntime({
+    resolvePushChannel: async () =>
+      options.resolveChannel === null
+        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+        : { ok: true as const, channelId: 'telegram', channelName: 'telegram' },
     diagnostics: () => undefined,
     storage,
     catalog,
@@ -161,9 +167,18 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     ).resolves.toEqual({ kind: 'rejected', reason: 'redeliver-surface-invalid' })
   })
 
+  it('redelivers to the derived channel even though the retired field is null', async () => {
+    const delivered = createRuntime({ settings: { push: { channelId: null } }, push: async () => ({ ok: true, messageId: 'm-1' }) })
+    await delivered.runtime.submit({ ...submitRequest, deliver: false })
+    const record = delivered.state().records[0]
+    await expect(
+      delivered.runtime.redeliverPush({ recordId: record.id, editionId: 'brief-2026-11-04-v2', locale: 'zh-CN' })
+    ).resolves.toMatchObject({ kind: 'accepted' })
+  })
+
   it('names the two channel reasons instead of a generic failure', async () => {
     const noChannel = createRuntime({
-      settings: { push: { channelId: null } },
+      resolveChannel: null,
       push: async () => ({ ok: true })
     })
     await noChannel.runtime.submit({ ...submitRequest, deliver: false })

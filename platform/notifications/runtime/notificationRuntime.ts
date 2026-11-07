@@ -56,6 +56,7 @@ import {
   type NotificationDeliveryContent
 } from '../runtime/notificationRouting'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
+import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushChannelResolution'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
@@ -124,6 +125,8 @@ export type NotificationRuntimeDependencies = {
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   /** 通道侧投影：可用通道 + 目标只读；没有通道线时为空数组。 */
   getPushTargets?: () => Promise<readonly unknown[]>
+  /** 目标通道的**唯一派生**（技术方案 §1），主推送/升级/重投共用；缺省＝一条都没有，绝不回退读旧字段。 */
+  resolvePushChannel?: () => Promise<PushChannelResolution>
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
@@ -191,8 +194,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
    */
   async function submitEvent(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
     const outcome = await traceSubmitFailure(() => decideAndStoreSubmit(request), { eventTypeId: request.eventTypeId, diagnostics: deps.diagnostics, at: nowIso })
-    // 被拒也要留一行痕（第 10 条同类问题的第二次，2026-11-08）：调用方普遍 `catch {}` 或丢弃返回值，
-    // 拒收原本在日志、记录、计数三处都查不到。**只留痕、不改行为**：不建记录、不动计数、不投递。
+    // 被拒也要留一行痕（2026-11-08）：调用方普遍 `catch {}` 或丢弃返回值，拒收原本三处都查不到。
+    // **只留痕、不改行为**：不建记录、不动计数、不投递。
     if (outcome.kind === 'rejected') {
       deps.diagnostics({
         code: outcome.reason,
@@ -381,8 +384,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   }
 
   /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */
-  const reportProviderCredential = (input: ProviderCredentialSignal) =>
-    reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
+  const reportProviderCredential = (input: ProviderCredentialSignal) => reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
   const settingsPorts = { catalog: deps.catalog, getSettings: deps.getSettings, updateSettings: deps.updateSettings, getPushTargets: deps.getPushTargets, pushWired: () => deps.deliveryHooks?.push !== undefined }
   const settingsSurface = composeNotificationSettingsSurface(settingsPorts, { load, exclusive, persistWithDiagnostics, notifyChanged })
@@ -392,6 +394,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     getLanguage: deps.getLanguage,
     copy: deps.copy,
     diagnostics: deps.diagnostics,
+    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
     now: nowIso
   })
 
@@ -424,7 +427,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     ...settingsSurface,
     reportProviderCredential,
 
-    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics }),
+    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics, resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL) }),
 
     async initialize(): Promise<void> {
       await load()
