@@ -31,7 +31,8 @@ import type {
 } from '../contracts/notificationContracts'
 import { createNotificationId } from '../store/notificationStore'
 import { isInsideQuietHours } from './quietHours'
-import { resolveSurfaceSelection, type NotificationSurfaceSelection } from '../contracts/notificationSurfaceSelection'
+import { resolveSubmitSurfaces, type NotificationSurfaceDecision } from './notificationSurfaceDecision'
+
 
 export type NotificationSubmitPlan =
   | { kind: 'rejected'; outcome: Extract<NotificationSubmitOutcome, { kind: 'rejected' }> }
@@ -78,35 +79,6 @@ export type NotificationSubmitPlanInput = {
    * 也不在错的钟点把提醒吞掉。手机那一档的判定也走这里，所以两处不会各说一套。
    */
   timeZone: string
-}
-
-/**
- * 一次提交会打扰哪些表面（契约 §5.1 / 设计 §2）。
- *
- * 中心恒真：它就是铃铛里那份记录。桌面与提示**互斥**，桌面优先——这条互斥只写在这里，
- * 投递层不许再写第二套（设计 §2 硬规矩 2）。
- *
- * 桌面「可用」这里只判两件能判的事实：开关开、平台支持。第三种（`show()` 抛错/返回
- * `ok:false`）只能投递时才知道，由投递层退回提示并记一条「桌面没有弹出来」——见 P7。
- */
-export type NotificationSurfacePlan = Readonly<{ desktop: boolean; toast: boolean }>
-
-export function planNotificationSurfaces(
-  entry: NotificationEventCatalogEntry,
-  settings: NotificationRuntimeSettings,
-  desktopSupported: boolean,
-  /**
-   * 读者的第三层选择（契约 §5.5）。**缺省不是关**：只有明确的 `false` 才收窄，
-   * 否则刚打开提醒的人会一条都收不到。缺省参数是为了让不关心这一层的调用点照旧。
-   */
-  selection: NotificationSurfaceSelection = {}
-): NotificationSurfacePlan {
-  const desktopApproved = entry.approvedDisruptionLevels.includes('desktop')
-  const toastApproved = entry.approvedDisruptionLevels.includes('toast')
-  const desktop = desktopApproved && settings.desktopEnabled && desktopSupported && selection.desktop !== false
-  // 桌面优先：桌面真能弹时，这条不再另外在应用内重复一次。
-  const toast = desktop ? false : toastApproved && settings.toastEnabled && selection.toast !== false
-  return Object.freeze({ desktop, toast })
 }
 
 export function planNotificationSubmit(input: NotificationSubmitPlanInput): NotificationSubmitPlan {
@@ -206,21 +178,20 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  // 第三层：读者能选的面（契约 §5.5）。同一组的两条共用一份选择，可用面取批准表的交集；
-  // 存量值对不上时按「都关」处理并把 `conflict` 交给调用方记一行——「都关」看起来和读者自己关掉一样。
-  const resolution = resolveSurfaceSelection({
+  // 读者选择 + 三个面：判定在 `notificationSurfaceDecision.ts`（契约 §5.1 / §5.5）。
+  const { surfaces, conflict: surfaceConflict } = resolveSubmitSurfaces({
     entry,
     list: () => input.catalog.list(),
-    selections: input.settings.surfaceSelections ?? {}
+    settings: input.settings,
+    desktopSupported: input.desktopSupported
   })
-  const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported, resolution.selection)
   // 免打扰时段**只进中心**：手机这一档在这里摘掉（验收 S6 / 用户测试单第 18 条
   // 「只进中心，不弹、不发手机」）。以前只静音本机三种打扰，手机照样推——那是缺陷，不是设计。
   const insideQuietHours = isInsideQuietHours(input.settings, {
     now: () => new Date(input.now),
     timeZone: () => input.timeZone
   })
-  const levels = effectiveLevels(entry, surfaces, !insideQuietHours, resolution.selection)
+  const levels = effectiveLevels(surfaces, !insideQuietHours)
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
@@ -239,7 +210,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     kind: 'new',
     record,
     levels,
-    surfaceConflict: resolution.conflict,
+    surfaceConflict,
     incoming,
     outcome: { kind: 'accepted', recordId: record.id, levels }
   }
@@ -415,19 +386,15 @@ function crossProductPrefix(
  * 「频道事件表勾了 ∩ 频道启用 ∩ 频道可用」，两处各判自己那一半，不在这里替它猜。
  */
 function effectiveLevels(
-  entry: NotificationEventCatalogEntry,
-  surfaces: NotificationSurfacePlan,
-  /** 免打扰之外才排手机：窗口内只进中心，这是 S6 的判据，不是本机开关的事。 */
-  channelAllowed: boolean,
-  /** 读者的第三层选择（契约 §5.5）：缺省＝允许，只有明确的 `false` 才收窄。 */
-  selection: NotificationSurfaceSelection
+  /** 三面判定结果（`decideNotificationSurfaces`）：批准 ∩ 开关 ∩ 选择已经算完。 */
+  surfaces: NotificationSurfaceDecision,
+  /** 免打扰之外才排手机：窗口内只进中心（S6），不是本机开关的事。 */
+  channelAllowed: boolean
 ): readonly NotificationApprovedLevel[] {
   const levels: NotificationApprovedLevel[] = ['center']
   if (surfaces.desktop) levels.push('desktop')
   if (surfaces.toast) levels.push('toast')
-  if (channelAllowed && selection.channel !== false && entry.approvedDisruptionLevels.includes('channel')) {
-    levels.push('channel')
-  }
+  if (channelAllowed && surfaces.channel) levels.push('channel')
   return Object.freeze(levels)
 }
 
@@ -482,7 +449,7 @@ function createRecord(
   request: NotificationSubmitRequest,
   dedupeKey: string,
   levels: readonly NotificationApprovedLevel[],
-  surfaces: NotificationSurfacePlan,
+  surfaces: Readonly<{ desktop: boolean; toast: boolean }>,
   bodyKey: string | undefined,
   now: string,
   titleKey: string,
