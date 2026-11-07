@@ -67,7 +67,10 @@ export const divergencePolicy = Object.freeze({
 
 export type DivergencePairId = (typeof divergencePolicy.pairs)[number]
 
-export type DivergenceLegId = 'stablecoin' | 'etf' | 'open-interest' | 'funding' | 'price' | 'sentiment'
+/** 六条腿只在一处列全：类型由它推导，`bound` 的校验也读它，不再第二份名单。 */
+export const divergenceLegIds = Object.freeze(['stablecoin', 'etf', 'open-interest', 'funding', 'price', 'sentiment'] as const)
+
+export type DivergenceLegId = (typeof divergenceLegIds)[number]
 
 /**
  * One leg as the reader sees it: a value, its unit, and the moment the value describes.
@@ -84,11 +87,59 @@ export type DivergenceLeg = Readonly<{
 
 export type DivergenceDirection = 'bearish' | 'bullish' | 'unpriced'
 
+/**
+ * The bound a pair's verdict turned on, written at the moment it was decided.
+ *
+ * `comparator` says which side of the threshold the leg had to be on, and that the comparison
+ * includes the number itself: every rule in the table is inclusive, so a separate `inclusive` flag
+ * would be a word for something that is always true. The value is **not** copied here —
+ * `DivergenceLeg` already carries `value` and `unit`, and a second copy would drift the day a
+ * threshold changed.
+ */
+export type DivergenceBound = Readonly<{
+  leg: DivergenceLegId
+  comparator: 'atMost' | 'atLeast'
+  threshold: number
+}>
+
 export type DivergenceRow = Readonly<{
   pairId: DivergencePairId
   direction: DivergenceDirection
   legs: readonly DivergenceLeg[]
+  /**
+   * Optional: only a row that actually fired carries it, because the row's own meaning is "why this
+   * counted as a divergence". A withheld pair never fills it — that pair could not be judged at
+   * all, and printing a threshold beside it would read as "nearly there".
+   *
+   * **If this result ever starts being persisted or frozen into an analysis snapshot, bump the
+   * schema and add a read-time fallback.** It is optional today only because nothing stores it —
+   * not because the field is inherently backward compatible.
+   */
+  bound?: DivergenceBound
 }>
+
+/**
+ * The bound each pair is judged on **now**, for the explanatory copy.
+ *
+ * It is deliberately not the same object as a row's `bound`: a row carries the bound that decided
+ * *that* reading, this table carries the rule as it stands. The two agree today by construction —
+ * `freezeRow` reads this table — and a test compares them pair by pair, which is the nail against
+ * "the rule changed and the copy did not".
+ *
+ * The three pairs are distinguished by open interest (design v2 §一: ≥ +3% / ≤ −3% / |OI| ≤ 1%),
+ * which is why all three bounds name that leg.
+ */
+export const divergencePairBounds: Readonly<Record<DivergencePairId, DivergenceBound>> = Object.freeze({
+  'liquidity-leverage': Object.freeze({
+    leg: 'open-interest', comparator: 'atLeast', threshold: divergencePolicy.thresholds.openInterest24hUpPercent
+  }),
+  'flows-price': Object.freeze({
+    leg: 'open-interest', comparator: 'atMost', threshold: divergencePolicy.thresholds.openInterest24hDownPercent
+  }),
+  'narrative-price': Object.freeze({
+    leg: 'open-interest', comparator: 'atMost', threshold: divergencePolicy.thresholds.openInterestFlatPercent
+  })
+})
 
 export type DivergenceWithheld = Readonly<{
   pairId: DivergencePairId
@@ -286,7 +337,11 @@ function fundingLeg(input: Readonly<{ ratePercent: number; observedAt: string }>
 function freezeRow(pairId: DivergencePairId, direction: DivergenceDirection, legs: readonly DivergenceLeg[]): DivergenceRow {
   // The pair id is the name: the card and the analysis both look their sentence up by it, so
   // there is no second identifier to keep in step.
-  return Object.freeze({ pairId, direction, legs: Object.freeze(legs.map(leg => Object.freeze(leg))) })
+  return Object.freeze({
+    pairId, direction, legs: Object.freeze(legs.map(leg => Object.freeze(leg))),
+    // 命中那一刻用的就是这张表里的界：行里存的是「当时为什么算背离」，表里是「规则现在是多少」。
+    bound: divergencePairBounds[pairId]
+  })
 }
 
 export function isCanonicalDivergenceTime(value: unknown): value is string {
@@ -323,7 +378,17 @@ function isRow(value: unknown): boolean {
   if (!divergencePolicy.pairs.includes(row.pairId as never)) return false
   if (row.direction !== 'bearish' && row.direction !== 'bullish' && row.direction !== 'unpriced') return false
   if (!Array.isArray(row.legs) || row.legs.length < 2 || row.legs.length > 3) return false
-  return row.legs.every(isLeg)
+  if (!row.legs.every(isLeg)) return false
+  // `bound` 可选：老格式（没有它）仍要通过，这是 IPC 边界上的兼容，不是字段天生可省。
+  return row.bound === undefined || isBound(row.bound)
+}
+
+function isBound(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const bound = value as Record<string, unknown>
+  if (!divergenceLegIds.includes(bound.leg as never)) return false
+  if (bound.comparator !== 'atMost' && bound.comparator !== 'atLeast') return false
+  return typeof bound.threshold === 'number' && Number.isFinite(bound.threshold)
 }
 
 function isLeg(value: unknown): boolean {
