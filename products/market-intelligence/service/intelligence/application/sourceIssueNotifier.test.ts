@@ -82,6 +82,18 @@ describe('source issue decision', () => {
     expect(decideSourceIssue(snapshot({ lastSuccessAt: fresh }), 6 * HOUR)).toBeNull()
   })
 
+  it('calls a source stale when collection keeps succeeding but brings nothing new', () => {
+    // 2026-11-07 的真实形状：coindesk-rss 每 15 分钟都 `completed`、`lastSuccessAt` 永远是刚才，
+    // 但最新条目停在 17 小时前。按 lastSuccessAt 判永远不会 stale —— 用户看到的是「今天没新闻」。
+    const oldItem = new Date(Date.parse(NOW) - 17 * HOUR).toISOString()
+    expect(decideSourceIssue(snapshot({ lastSuccessAt: NOW, lastNewItemAt: oldItem }), 6 * HOUR)).toBe('stale')
+  })
+
+  it('stays silent while new items keep arriving, even if a fetch failed in between', () => {
+    const recent = new Date(Date.parse(NOW) - 1 * HOUR).toISOString()
+    expect(decideSourceIssue(snapshot({ lastSuccessAt: NOW, lastNewItemAt: recent }), 6 * HOUR)).toBeNull()
+  })
+
   it('does not call a never-collected source stale: that is “waiting for first collection”', () => {
     expect(decideSourceIssue({ sourceId: SOURCE_ID, consecutiveFailures: 0, now: NOW }, 6 * HOUR)).toBeNull()
   })

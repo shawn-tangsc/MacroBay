@@ -357,6 +357,23 @@ describe('intelligencePipeline', () => {
     expect(second.queuedJobs).toEqual([])
   })
 
+  it('hands the notifier the last new item, not the last successful fetch', async () => {
+    // 接线这一层单测：`lastPublishedAt` 必须真的从检查点传到来源事件里。
+    // 少了这一步，`decideSourceIssue` 改对了也不会生效（它有回落到 lastSuccessAt 的分支，会静默走老路）。
+    const seen: Array<{ lastNewItemAt?: string; lastSuccessAt?: string }> = []
+    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
+    const pipeline = createIntelligencePipeline({
+      profileStore,
+      sourceIssueNotifier: async (input) => { seen.push(input) }
+    })
+
+    await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-1', fixtureText: loadFixture('rss-sample.xml') })
+    const health = pipeline.getHealth('coindesk-rss')
+    expect(health?.lastPublishedAt).toBeTruthy()
+    // 事件里带的是「最后一次新条目」，来源判陈旧用它；`lastSuccessAt` 是「刚才」，靠它会永远判不出陈旧。
+    expect(seen.at(-1)?.lastNewItemAt).toBe(health?.lastPublishedAt)
+  })
+
   it('marks a failed fetch as a different shape from a successful empty collection', async () => {
     // 判据：抓取失败必须能一眼区分出来——带原因码、四个计数归零，而不是又一个「完成、没数字」。
     const profileStore = createSourceProfileStore(createInMemoryProfileStorage())

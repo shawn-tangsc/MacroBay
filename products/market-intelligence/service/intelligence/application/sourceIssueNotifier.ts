@@ -34,6 +34,14 @@ export type SourceIssueSnapshot = {
   sourceId: string
   consecutiveFailures: number
   lastSuccessAt?: string
+  /**
+   * **最后一次真的带来新条目的时刻**（检查点里的 `lastPublishedAt`）。
+   *
+   * 为什么不看 `lastSuccessAt`：采集每 15 分钟都成功、抓回来 25 条全是被去重挡掉的旧条目时，
+   * `lastSuccessAt` 永远是「刚才」——陈旧判定就永远不触发，用户看到的是「今天没新闻」，
+   * 实际是「这个源停了」。2026-11-07 CoinDesk 就是这样：17 小时没有新条目，运行记录全绿。
+   */
+  lastNewItemAt?: string
   adapterConfig?: Readonly<Record<string, unknown>>
   /** 判定用的当前时刻（UTC）。 */
   now: string
@@ -48,11 +56,13 @@ export type SourceIssueSnapshot = {
  */
 export function decideSourceIssue(input: SourceIssueSnapshot, defaultFreshnessMs: number): SourceIssueKind | null {
   if (input.consecutiveFailures >= SOURCE_ISSUE_FAILURE_THRESHOLD) return 'consecutive-failed'
-  if (input.lastSuccessAt === undefined) return null
+  // 陈旧看的是「最后一次真的带来新条目」；没有这个数才退回「最后一次采集成功」（旧来源没有检查点）。
+  const lastEvidenceAt = input.lastNewItemAt ?? input.lastSuccessAt
+  if (lastEvidenceAt === undefined) return null
   return isSourceStaleAsOf({
     sourceId: input.sourceId,
     adapterConfig: input.adapterConfig as Record<string, unknown> | undefined,
-    lastSuccessAt: input.lastSuccessAt,
+    lastSuccessAt: lastEvidenceAt,
     asOf: input.now,
     defaultFreshnessMs
   })
@@ -69,7 +79,7 @@ export type SourceIssueNotifier = (input: SourceIssueSnapshot) => Promise<unknow
 export async function notifySourceIssueForSource(input: {
   notifier?: SourceIssueNotifier
   sourceId: string
-  health?: { consecutiveFailures: number; lastSuccessAt?: string }
+  health?: { consecutiveFailures: number; lastSuccessAt?: string; lastPublishedAt?: string }
   adapterConfig?: Readonly<Record<string, unknown>>
   now?: string
 }): Promise<void> {
@@ -79,6 +89,7 @@ export async function notifySourceIssueForSource(input: {
       sourceId: input.sourceId,
       consecutiveFailures: input.health.consecutiveFailures,
       ...(input.health.lastSuccessAt === undefined ? {} : { lastSuccessAt: input.health.lastSuccessAt }),
+      ...(input.health.lastPublishedAt === undefined ? {} : { lastNewItemAt: input.health.lastPublishedAt }),
       ...(input.adapterConfig === undefined ? {} : { adapterConfig: input.adapterConfig }),
       now: input.now ?? new Date().toISOString()
     })

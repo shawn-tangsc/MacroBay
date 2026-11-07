@@ -103,8 +103,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [REASON(IDS.sourceConsecutiveFailed)]: '同一个来源连续三次失败，提醒一次。',
 
     [TITLE(IDS.sourceStale)]: '{sourceName} 很久没有新数据',
-    [BODY(IDS.sourceStale)]: '超过这个来源的新鲜度窗口仍没有新数据，去设置检查。',
-    [REASON(IDS.sourceStale)]: '最后一次成功采集在窗口之前。',
+    [BODY(IDS.sourceStale)]: '超过这个来源的新鲜度窗口仍没有新条目，可能是它停更了，去设置检查。',
+    [REASON(IDS.sourceStale)]: '最后一条新内容出现在这个窗口之前，之后的采集都没有带来新条目。',
 
     [TITLE(IDS.briefingReady)]: '日报已完成',
     [BODY(IDS.briefingReady)]: '{date} {time} {language}这一期已经生成。',
@@ -174,8 +174,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [REASON(IDS.sourceConsecutiveFailed)]: 'The same source failed three times in a row, so it is mentioned once.',
 
     [TITLE(IDS.sourceStale)]: '{sourceName} has no new data',
-    [BODY(IDS.sourceStale)]: 'No new data for longer than this source’s freshness window. Check it in settings.',
-    [REASON(IDS.sourceStale)]: 'The last successful collection was before the window.',
+    [BODY(IDS.sourceStale)]: 'No new items for longer than this source’s freshness window — it may have stopped publishing. Check it in settings.',
+    [REASON(IDS.sourceStale)]: 'The last new item arrived before this window; collections since then brought nothing new.',
 
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
     [BODY(IDS.briefingReady)]: 'The {date} {time} {language} edition is ready.',
