@@ -137,6 +137,13 @@
 .mi-daily-briefing__rail-row-title[data-rail-title="running"] { display: flex; align-items: center; gap: 6px; }
 .mi-daily-briefing__rail-line em { color: var(--mi-dashboard-lime); font-size: 9px; font-style: normal; }
 .mi-daily-briefing__rail-line small { color: #5f686e; font-size: 9px; }
+/* The failure badge opens the row and is a state, not a qualifier. It keeps the platform's one status
+   pill at its one size — a second size for this row would break the rule that lets a reader recognise a
+   state word anywhere in the app — and it is centred on the line rather than baseline-aligned, because a
+   bordered box on a text baseline sits off the text it is not part of.
+   `flex: none` for the same reason the other badges have it: the row gives up its own words before it
+   gives up a state. */
+.mi-daily-briefing__rail-line .status-pill { align-self: center; flex: none; }
 .mi-daily-briefing__rail-direction { font-size: 9.5px; white-space: nowrap; }
 .mi-daily-briefing__rail-direction[data-direction="bullish"] { color: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-direction[data-direction="bearish"] { color: var(--mi-dashboard-negative); }

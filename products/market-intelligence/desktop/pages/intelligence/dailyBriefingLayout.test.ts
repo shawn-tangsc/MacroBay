@@ -396,6 +396,27 @@ describe('the fallback row for a day with no edition', () => {
   })
 })
 
+/**
+ * The failure badge opens the row. It is a status word, so it renders the platform's one pill at its one
+ * size; its place in the row is a layout question, and the row is baseline-aligned for text, not for a
+ * bordered box.
+ */
+describe('the failure badge in the row', () => {
+  it('is centred on the line and never shrinks', () => {
+    const pill = rule('.mi-daily-briefing__rail-line .status-pill {')
+    expect(pill).toContain('align-self: center;')
+    // A row gives up its own words before it gives up a state.
+    expect(pill).toContain('flex: none;')
+  })
+
+  it('does not invent a second size for it', () => {
+    // One status size is what lets a reader recognise a state word anywhere; a size here would be a
+    // second answer to that question.
+    const pill = rule('.mi-daily-briefing__rail-line .status-pill {')
+    expect(pill).not.toContain('font-size')
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)
