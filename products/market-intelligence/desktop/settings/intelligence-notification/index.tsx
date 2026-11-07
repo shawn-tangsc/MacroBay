@@ -41,7 +41,27 @@ const CONTENT_ITEMS: Readonly<Record<'signal' | 'briefing' | 'sentiment', { even
 
 const CALENDAR_GROUP_EVENT_ID = 'market-intelligence.calendar.event-upcoming'
 
-export default function IntelligenceNotificationSettingsSection(): React.ReactElement {
+/**
+ * 从通知中心点「去设置」进来时，壳层把目标 id 放在 `focusEntityId`（与运行日志页同一种传法）。
+ * 能定位就落到那条通知对应的一项；定位不到落第一项——**不猜**，也不留在上一页的位置上。
+ */
+function itemForFocus(focusEntityId: string | null | undefined): ItemKey {
+  if (!focusEntityId) return 'signal'
+  if (
+    focusEntityId.startsWith('market-intelligence.calendar.')
+    || focusEntityId === 'market-intelligence.macro.event-landed'
+  ) {
+    return 'calendar'
+  }
+  if (focusEntityId === CONTENT_ITEMS.signal.eventId) return 'signal'
+  if (focusEntityId === CONTENT_ITEMS.briefing.eventId) return 'briefing'
+  if (focusEntityId === CONTENT_ITEMS.sentiment.eventId) return 'sentiment'
+  return 'signal'
+}
+
+export default function IntelligenceNotificationSettingsSection(
+  { focusEntityId }: Readonly<{ focusEntityId?: string | null }> = {}
+): React.ReactElement {
   const language = useShellLanguage()
   const text = intelligenceNotificationText[language]
   const resolveText = (key: string): string => text[key] ?? ''
@@ -49,7 +69,8 @@ export default function IntelligenceNotificationSettingsSection(): React.ReactEl
   const outlet = useNewsPushOutletSwitch()
   const reminder = useCalendarReminderSettings()
   const surfaces = useSurfaceSelection(CALENDAR_GROUP_EVENT_ID)
-  const [selected, setSelected] = useState<ItemKey>('signal')
+  // 初始项由入口决定：从「去设置」进来落到对应那一项，定位不到落第一项。
+  const [selected, setSelected] = useState<ItemKey>(() => itemForFocus(focusEntityId))
   const narrow = useNarrowWindow()
 
   const itemName = (key: ItemKey): string =>

@@ -64,12 +64,16 @@ function install(overrides: Partial<Stubs> = {}): Stubs {
 let root: Root | undefined
 let container: HTMLDivElement | undefined
 
-async function render(): Promise<HTMLDivElement> {
+async function render(focusEntityId?: string): Promise<HTMLDivElement> {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<ShellLanguageProvider language="zh-CN"><IntelligenceNotificationSettingsSection /></ShellLanguageProvider>)
+    root?.render(
+      <ShellLanguageProvider language="zh-CN">
+        <IntelligenceNotificationSettingsSection {...(focusEntityId === undefined ? {} : { focusEntityId })} />
+      </ShellLanguageProvider>
+    )
   })
   await act(async () => { await Promise.resolve() })
   return container
@@ -125,6 +129,17 @@ describe('intelligence notification settings', () => {
     // 桌面两条都没批 → 这一项的详情里根本不该出现桌面（页脚那句是另一件事）。
     const detail = container?.querySelector('.intelligence-notification-calendar')?.textContent ?? ''
     expect(detail).not.toContain('桌面')
+  })
+
+  it('lands on the matching item when the notification centre sends the reader here', async () => {
+    // 从「去设置」进来：日历相关落「日历事件」，内容类落它自己那一项，认不出落第一项。
+    await render('market-intelligence.calendar.event-upcoming')
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.timeline'])
+  })
+
+  it('falls back to the first item when the target cannot be located', async () => {
+    await render('platform.something-else')
+    expect(listItems()[0]?.getAttribute('aria-current')).toBe('true')
   })
 
   it('turns the list into a dropdown on a narrow window, with the name and the state in the option text', async () => {
