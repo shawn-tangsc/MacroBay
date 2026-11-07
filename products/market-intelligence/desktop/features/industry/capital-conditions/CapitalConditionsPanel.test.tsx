@@ -366,9 +366,12 @@ describe('CapitalConditionsPanel', () => {
     expect(info.className).toContain('icon-button--sm')
     expect(info.className).toContain('icon-button--plain')
     expect(info.getAttribute('aria-expanded')).toBe('false')
-    // 浮层文字挂在触发件的 aria-describedby 上。
-    const describedBy = info.closest('[aria-describedby]')?.getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
+    // NOTE(待补)：判据里「浮层文字用 aria-describedby 挂在触发件上」**当前不成立**，所以这里不断言。
+    // 平台 `Popover`（2026-11-08 版）只包了一层 `span.platform-popover__anchor`，不输出
+    // `aria-describedby`；DOM 上能看到的那个来自 antd 的触发层，值恒为 `test-id`，而
+    // `document.getElementById('test-id')` 是 null——它不指向任何说明节点。断言它「存在」会和
+    // 真实可用性无关地恒真。组件线补上 `PopoverTriggerProps` 的描述关系后，再加这条断言：
+    // 触发件 aria-describedby === 浮层节点 id，且该 id 能查到、文本就是那段说明。
 
     // 聚焦即展开，Esc 收起并回焦。
     await act(async () => { info.focus() })
