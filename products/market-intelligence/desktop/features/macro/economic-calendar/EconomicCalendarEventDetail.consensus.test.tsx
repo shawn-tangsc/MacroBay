@@ -34,7 +34,12 @@ function event(overrides: Partial<EconomicCalendarEventView> = {}): EconomicCale
   }
 }
 
-const client = { setReleaseTime: vi.fn(async () => ({ state: 'saved' as const })), clearReleaseTime: vi.fn(async () => ({ state: 'saved' as const })) }
+// The stub returns the whole contract result, not just its `state`: a test fixture that is narrower
+// than the contract compiles where nothing imports the test and fails where something does.
+const client = {
+  setReleaseTime: vi.fn(async () => ({ state: 'saved' as const, scheduledAt: asOf, scheduledDate: '2026-11-06' })),
+  clearReleaseTime: vi.fn(async () => ({ state: 'cleared' as const }))
+}
 
 let root: Root | null = null
 afterEach(async () => {
