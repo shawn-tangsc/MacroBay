@@ -17,8 +17,15 @@ const englishCapitalConditions = productText['en-US'].pages.intelligence.portal.
 
 /** The app always has a language in context; the harness has to supply the one the fixture is written in. */
 const ScopedCapitalConditionsPanel = (props: Omit<Parameters<typeof CapitalConditionsPanel>[0], 'onRefresh'> & { onRefresh?: () => void }): React.ReactElement =>
-  createElement(ShellLanguageProvider, { language: props.text === englishCapitalConditions ? 'en-US' : 'zh-CN' },
-    createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props })))
+  createElement(ShellLanguageProvider, {
+    language: props.text === englishCapitalConditions ? 'en-US' : 'zh-CN',
+    // children 是必填 props，不是 createElement 的第三个参数：那个位置在类型上要求 props 先满足，
+    // 于是同一份代码在提交树里会报 TS2769。统一写成 props.children，两个测试文件一个写法。
+    children: createElement(ShellTimeZoneProvider, {
+      timeZone: 'UTC',
+      children: createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props })
+    })
+  })
 
 /** The platform state icon is inline SVG; its namespace is the one URL a clean panel may carry. */
 const withoutSvgNamespace = (markup: string): string => markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '')
@@ -608,7 +615,13 @@ function flowState(rows: readonly { tradingDate: string; funds: number; btc: num
 }
 
 function fullState() {
-  const rows = Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, direction: index === 29 ? 'zero' as const : 'inflow' as const, magnitudePercent: index === 29 ? 0 : index + 1 }))
+  // 每行都带净流金额：型号（`DashboardEtfFlowRow`）要求它，缺了这条夹具就是**过期的形状**。
+  const rows = Array.from({ length: 30 }, (_, index) => ({
+    tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`,
+    netFlowUsd: index === 29 ? 0 : (index + 1) * 1_000_000,
+    direction: index === 29 ? 'zero' as const : 'inflow' as const,
+    magnitudePercent: index === 29 ? 0 : index + 1
+  }))
   return {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
     // Mirrors the projection: it already cut the window to the last seven days before the panel sees it.
@@ -625,6 +638,7 @@ function fullState() {
 function streakState() {
   const btcRows = Array.from({ length: 5 }, (_, index) => ({
     tradingDate: `2026-08-${String(index + 26).padStart(2, '0')}`,
+    netFlowUsd: (index + 1) * 1_000_000,
     direction: index < 2 ? 'outflow' as const : 'inflow' as const,
     magnitudePercent: index + 1
   }))
