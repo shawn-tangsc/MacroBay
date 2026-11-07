@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
-import { createElement, type ReactElement } from 'react'
+import { readFileSync } from 'node:fs'
+
+import { act, createElement, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { act } from 'react-dom/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -26,8 +27,6 @@ const render = (state: Parameters<typeof DivergencePanel>[0]['state'], locale: '
 const row = {
   pairId: 'liquidity-leverage' as const,
   direction: 'bearish' as const,
-  mechanism: '可动用稳定币在减少，永续空头却仍在加仓；价格一旦反弹，空头回补会放大涨幅。',
-  invalidation: '稳定币 7 天转正，或持仓 24 小时内回落 3% 以上。',
   legs: [
     { id: 'stablecoin' as const, text: '−1.21%', observedAt: '2026-10-30T10:00:00.000Z' },
     { id: 'open-interest' as const, text: '+3.40%', observedAt: '2026-10-30T11:00:00.000Z' },
@@ -35,327 +34,163 @@ const row = {
   ]
 }
 
-/** Another pair in the same answer: it keeps its row and must never get a chip of its own. */
-const otherRow = {
-  pairId: 'flows-price' as const,
-  direction: 'bullish' as const,
+/** 观察态：方向是 `unpriced`，标签走中性那句，不挂方向色。 */
+const observedRow = {
+  pairId: 'narrative-price' as const,
+  direction: 'unpriced' as const,
   legs: [
-    { id: 'etf' as const, text: '−$150M', observedAt: '2026-10-29T21:00:00.000Z' },
-    { id: 'open-interest' as const, text: '−3.20%', observedAt: '2026-10-30T11:00:00.000Z' },
-    { id: 'price' as const, text: '+0.20%', observedAt: '2026-10-30T11:00:00.000Z' }
+    { id: 'sentiment' as const, text: '62%', observedAt: '2026-10-30T09:00:00.000Z' },
+    { id: 'price' as const, text: '+0.07%', observedAt: '2026-10-30T11:00:00.000Z' },
+    { id: 'open-interest' as const, text: '+0.4%', observedAt: '2026-10-30T11:00:00.000Z' }
   ]
 }
 
-describe('divergence panel', () => {
-  it('has exactly one explanation entry on the card — the chip — and no help icon', () => {
-    // 判据①（界面设计 2026-11-08）：卡级解释入口上限 1。牌子就是那一个；四句规则已并进它的 dialog，
-    // 所以卡面上 `helpLabel`、四句正文、口径说明都不该出现，命中的解释类控件只有牌子。
-    const markup = render({ state: 'available', rows: [row], withheld: [] })
-    expect(markup).not.toContain('<h2')
-    expect(markup).not.toContain('mi-divergence__judge')
-    expect(markup.match(/class="mi-divergence__chip"/g)).toHaveLength(1)
-    expect(markup).not.toContain(`aria-label="${text.helpLabel}"`)
-    expect(markup).not.toContain(text.helpBullets[0])
-    expect(markup).not.toContain(text.helpDetails[0])
-    // 读数照旧在卡上：牌子不是入口的替代品。
-    expect(markup).toContain(row.mechanism)
+type WithheldFixture = Parameters<typeof DivergencePanel>[0]['state'] extends infer _S ? Readonly<{
+  pairId: string; reason: 'leg-missing' | 'leg-stale'; leg: 'sentiment' | 'price' | 'etf' | 'stablecoin'
+}> : never
+
+const sentimentMissing: WithheldFixture = { pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' }
+const priceStale: WithheldFixture = { pairId: 'flows-price', reason: 'leg-stale', leg: 'price' }
+const etfMissing: WithheldFixture = { pairId: 'flows-price', reason: 'leg-missing', leg: 'etf' }
+const stablecoinMissing: WithheldFixture = { pairId: 'liquidity-leverage', reason: 'leg-missing', leg: 'stablecoin' }
+
+const answer = (rows: readonly (typeof row | typeof observedRow)[], withheld: readonly WithheldFixture[] = []) =>
+  ({ state: 'available' as const, rows, withheld })
+
+const sentimentReason = text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment)
+
+describe('divergence panel · the one summary line', () => {
+  it('A: one pair points opposite ways — and says only that', () => {
+    const markup = render(answer([row]))
+    expect(markup).toContain(text.summary.divergence)
+    expect(markup).not.toContain(text.summary.quiet)
+    expect(markup).not.toContain(text.summary.allWithheld)
+    // 读数不在卡面上：三个数字进展开区。
+    expect(markup).not.toContain(row.legs[0]!.text)
   })
 
-  it('keeps the reading notes off the card entirely — no block, no foldable heading, no extra entry', () => {
-    // 「补充性说明不常驻，点开可关」，而且入口只有结论牌子本身（界面设计 v2 §一）：卡面上不再出现
-    // 「口径说明」这类文字入口。安静的一天没有牌子，也就没有任何入口——这是规格明写的取舍。
-    for (const state of [{ state: 'empty', withheld: [] } as const,
-      { state: 'available', rows: [row], withheld: [] } as const]) {
-      const markup = render(state)
-      expect(markup).not.toContain('data-divergence-notes')
-      for (const line of text.helpDetails) expect(markup).not.toContain(line)
-      expect(markup).not.toContain('mi-divergence__help-entry')
-      expect(markup).not.toContain(text.helpDetailsLabel)
-    }
-    expect(render({ state: 'empty', withheld: [] })).not.toContain('mi-divergence__chip')
-  })
-
-  it('shows a row with both readings, the mechanism and the invalidation', () => {
-    const markup = render({ state: 'available', rows: [row], withheld: [] })
-    expect(markup).toContain('偏空')
-    expect(markup).toContain('−1.21%')
-    expect(markup).toContain('+3.40%')
-    expect(markup).toContain(row.mechanism)
-    // The invalidation is one hover away, not another paragraph.
-    // The invalidation is one hover or one Tab away, not a `title` the keyboard cannot reach.
-    expect(markup).not.toContain(`title="${text.invalidationLabel}：${row.invalidation}"`)
-    expect(markup).toContain('tabindex="0"')
-    expect(markup).not.toContain('mi-divergence__judge')
-  })
-
-  it('says plainly when nothing diverged instead of showing an empty card', () => {
+  it('B: a quiet day that compared everything — a paragraph, not a control', () => {
     const markup = render({ state: 'empty', withheld: [] })
-    expect(markup).toContain(text.empty)
-    expect(markup).not.toContain('mi-divergence__row"')
+    expect(markup).toContain(text.summary.quiet)
+    expect(markup).not.toContain(text.summary.divergence)
+    // 不可展开：不是按钮、没有 aria-expanded、没有箭头。
+    expect(markup).not.toContain('aria-expanded')
+    expect(markup).not.toContain('mi-divergence__summary-chevron')
   })
 
-  it('names every pair it refused and why, so "no divergence" cannot be confused with "not compared"', () => {
-    const markup = render({
-      state: 'available', rows: [row],
-      withheld: [
-        { pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf', observedAt: '2026-10-30T21:00:00.000Z' },
-        { pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' }
-      ]
-    })
-    expect(markup).toContain(text.withheldTitle)
-    expect(markup).toContain('ETF 3 日净流')
-    expect(markup).toContain('的时间对不上')
-    expect(markup).toContain(text.legs.sentiment)
+  it('C: the unjudged pair names its own leg and reason, not a fixed sentence', () => {
+    const sentimentCase = render(answer([row], [sentimentMissing]))
+    expect(sentimentCase).toContain(`${text.summary.divergenceWithheldOne.split('{')[0]}${sentimentReason}`)
+    // 换成另一组时整句跟着换：照抄成「舆情」就会在这里红。
+    const priceCase = render(answer([row], [priceStale]))
+    expect(priceCase).toContain(`${text.summary.divergenceWithheldOne.split('{')[0]}${text.withheldReasons['leg-stale'].replace('{leg}', text.legs.price).split('{at}')[0]!}`)
+    expect(priceCase).not.toContain(sentimentReason)
   })
 
-  it('never prints Chinese punctuation on an English card', () => {
-    // The joiners are punctuation, not layout: a fullwidth colon on an English screen is a typo,
-    // and it used to be written straight into the component.
-    const markup = render({
-      state: 'available', rows: [row],
-      withheld: [
-        { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'funding' },
-        { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' }
-      ]
-    }, 'en-US')
-    expect(markup).not.toContain('：')
-    expect(markup).not.toContain('、')
+  it('C with two unjudged, D with one, D with two, E with all three', () => {
+    expect(render(answer([row], [sentimentMissing, priceStale])))
+      .toContain(text.summary.divergenceWithheldMany.replace('{count}', '2'))
+    expect(render({ state: 'empty', withheld: [sentimentMissing] }))
+      .toContain(`${text.summary.quietWithheldOne.split('{')[0]}${sentimentReason}`)
+    expect(render({ state: 'empty', withheld: [sentimentMissing, priceStale] }))
+      .toContain(text.summary.quietWithheldMany.replace('{count}', '2'))
+    const allWithheld = render({ state: 'empty', withheld: [sentimentMissing, stablecoinMissing, priceStale] })
+    expect(allWithheld).toContain(text.summary.allWithheld)
+    // 五条互斥：E 里不许再出现「没有背离」。
+    expect(allWithheld).not.toContain(text.summary.quiet)
   })
 
-  it('never puts a space between a Chinese leg name and the particle after it', () => {
-    // The placeholder is substituted with a label such as 费率; a space in the template then reads
-    // 费率 太旧了, which is a typo in Chinese even though the English template needs the space.
-    const markup = render({
-      state: 'available', rows: [row],
-      withheld: [
-        { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'funding' },
-        { pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'price' }
-      ]
-    })
-    expect(markup).not.toContain('费率 太旧了')
-    expect(markup).not.toContain('价格 24 小时 读取失败')
-    for (const sentence of Object.values(text.withheldReasons)) {
-      expect(/^\{leg\}\s/.test(sentence) && /[\u4e00-\u9fff]/.test(sentence)).toBe(false)
-    }
-  })
-
-  it('reads a quiet news day and a failed read as two different sentences', () => {
-    const quiet = render({
-      state: 'available', rows: [row],
-      withheld: [{ pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' }]
-    })
-    const failed = render({
-      state: 'available', rows: [row],
-      withheld: [{ pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'sentiment' }]
-    })
-    // "No headline took a side" is a fact about the day; "the read failed" is a fault. A reader
-    // acts differently on each, so the card must not print one sentence for both.
-    expect(quiet).toContain(text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment))
-    expect(quiet).not.toContain(text.withheldReasons['leg-unavailable'].replace('{leg}', text.legs.sentiment))
-    expect(failed).toContain(text.withheldReasons['leg-unavailable'].replace('{leg}', text.legs.sentiment))
-    expect(failed).not.toContain(text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment))
+  it('is neutral and eats no default button look: transparent, borderless, one token size', () => {
+    const markup = render(answer([row]))
+    const summary = markup.slice(markup.indexOf('mi-divergence__summary"'), markup.indexOf('</button>'))
+    // 判据：摘要行里没有图标组件、没有语气标记——方向色只留在展开区。
+    expect(markup).toContain('class="mi-divergence__summary"')
+    expect(summary).not.toContain('<svg')
+    expect(summary).not.toContain('data-tone')
+    /**
+     * 样式在外部表里，测试环境读不到计算样式（happy-dom 不加载 `.css`），所以这条查**规则本身**：
+     * 删掉任何一条复位声明、或把字号写回像素值，这条就红。灰色实心块正是这些复位缺失时的默认外观。
+     */
+    const css = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.css', 'utf8')
+    const rule = css.match(/\.mi-divergence__summary \{([^}]*)\}/)?.[1] ?? ''
+    expect(rule).toContain('background: transparent')
+    expect(rule).toContain('border: 0')
+    expect(rule).toContain('padding: 0')
+    expect(rule).toContain('font: inherit')
+    expect(rule).toContain('font-size: var(--mi-reading-note-size)')
+    expect(rule).toContain('line-height: var(--mi-reading-note-line-height)')
+    expect(rule).not.toMatch(/font-size:\s*\d/)
+    expect(rule).not.toMatch(/caution|negative|warning/)
   })
 })
 
-describe('withheld grouping', () => {
-  it('reports one missing leg once, however many pairs it held back', () => {
-    const markup = render({
-      state: 'available', rows: [row],
-      withheld: [
-        { pairId: 'flows-price', reason: 'leg-missing', leg: 'price' },
-        { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' }
-      ]
+describe('divergence panel · the details behind the line', () => {
+  const mount = async (state: Parameters<typeof DivergencePanel>[0]['state']) => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(scoped(createElement(DivergencePanel, { state, onRetry: () => undefined, text })))
     })
-    const occurrences = markup.split('没有取到价格 24 小时').length - 1
-    expect(occurrences).toBe(1)
-    expect(markup).toContain('（2 对）')
+    return { container, root }
+  }
+
+  it('opens on the summary line and shows each pair’s own as-of instant', async () => {
+    const { container, root } = await mount(answer([row], [sentimentMissing, priceStale]))
+    const summary = container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-divergence-detail]')).toBeNull()
+    await act(async () => { summary.click() })
+    expect(summary.getAttribute('aria-expanded')).toBe('true')
+    const detail = container.querySelector('[data-divergence-detail]')!
+    // 每条腿各自的截至时刻：一条腿的「截至」不能替另一条腿作证。
+    expect(detail.textContent).toContain(`${text.legs.stablecoin} ${text.chipAsOf.replace('{at}', '2026-10-30 10:00 GMT')}`)
+    expect(detail.textContent).toContain(`${text.legs['open-interest']} ${text.chipAsOf.replace('{at}', '2026-10-30 11:00 GMT')}`)
+    // 方向标签与机制句也只在展开区。
+    expect(detail.querySelector('[data-direction="bearish"]')?.textContent).toContain(text.directions.bearish)
+    expect(detail.textContent).toContain(text.pairs['liquidity-leverage'].mechanism)
+    // 没判成的组排在最上面，组名 + 原因。
+    expect(detail.textContent).toContain(text.pairNames['narrative-price'])
+    expect(detail.textContent).toContain(sentimentReason)
+    // 收起：焦点还在摘要行上（展开/收起不移动焦点）。
+    await act(async () => { summary.click() })
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-divergence-detail]')).toBeNull()
+    await act(async () => { root.unmount() })
+  })
+
+  it('calls the observed state by its neutral label, and its old sentences are gone', async () => {
+    const { container, root } = await mount(answer([observedRow]))
+    const summary = container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!
+    await act(async () => { summary.click() })
+    const detail = container.querySelector('[data-divergence-detail]')!
+    // 观察态挂的是中性标签，不是方向标签（「偏空」二字只作为那句中性话的一部分出现）。
+    expect(detail.querySelector('[data-direction="unpriced"] .mi-divergence__direction')?.textContent).toBe(text.observedLabel)
+    // 界面设计 2026-11-08 §九：旧两句字随实现同笔删，别让两套说法并存。
+    expect(Object.keys(text.directions)).toEqual(['bearish', 'bullish'])
+    expect('mechanism' in text.pairs['narrative-price']).toBe(false)
+    await act(async () => { root.unmount() })
   })
 })
 
-describe('states that must not be confused', () => {
-  it('waits without drawing a failure or a verdict before the first read returns', () => {
-    // First paint: the read has not returned. Neither "could not read" nor "nothing diverged"
-    // is true yet, and both are claims the card would have to take back a moment later.
+describe('divergence panel · the states around the line', () => {
+  it('shows only the loading state before the first read, without a summary', () => {
     const markup = render({ state: 'loading' })
     expect(markup).toContain(text.loading)
-    expect(markup).not.toContain('class="state-view')
-    expect(markup).not.toContain('data-state="error"')
-    expect(markup).not.toContain(text.empty)
+    expect(markup).not.toContain('mi-divergence__summary')
+    expect(markup).not.toContain(text.summary.quiet)
   })
 
-  it('draws nothing at all while nothing can be compared', () => {
-    const markup = render({
-      state: 'empty',
-      withheld: [
-        { pairId: 'flows-price', reason: 'leg-missing', leg: 'price' },
-        { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' },
-        { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'stablecoin' }
-      ]
-    })
-    // The reader asked for this: a refusal that never changes is noise, and the card above already
-    // carries the stale-data badge. Nothing is drawn — not an empty block, not a container.
-    expect(markup).toBe('')
-    // The sentence for that block is gone with it: no unreferenced key is left behind.
-    expect(markup).not.toContain(text.unavailableTrace)
-  })
-
-  it('leaves one assertable line when the read itself failed', () => {
-    // A failed read must not pass for "nothing here": one line, no numbers, no block — and its
-    // evidence comes from this DTO, not from another badge that happens to agree.
+  it('keeps a failed read out of the summary line', () => {
     const markup = render({ state: 'unavailable', reason: 'query-failed', missing: [] })
-    expect(markup).toContain('data-divergence-unavailable')
-    expect(markup).toContain('role="status"')
     expect(markup).toContain(text.unavailableTrace)
-    // It is not the "nothing could be compared" sentence, and it draws no numbers.
-    expect(markup).not.toMatch(/\d/)
+    expect(markup).not.toContain('mi-divergence__summary')
   })
 
-  it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {
-    const markup = render({ state: 'empty', withheld: [] })
-    expect(markup).toContain(text.empty)
-    expect(markup).not.toContain('data-state="error"')
-  })
-})
-
-describe('invalidation on focus', () => {
-  it('opens the same sentence for a keyboard reader as for a pointer', async () => {
-    // A `title` was invisible to both the keyboard and the screen reader; the sentence now comes
-    // from the shared tooltip, and focusing the row must be enough to get it.
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-    await act(async () => {
-      root.render(scoped(createElement(DivergencePanel, {
-        state: { state: 'available', rows: [{ pairId: 'liquidity-leverage', direction: 'bearish', legs: row.legs }], withheld: [] },
-        onRetry: () => undefined, text
-      })))
-    })
-    const line = container.querySelector('[data-pair="liquidity-leverage"]') as HTMLElement
-    expect(line.tabIndex).toBe(0)
-    await act(async () => { line.focus() })
-    const described = line.getAttribute('aria-describedby')
-    expect(described).toBeTruthy()
-    expect(document.getElementById(described!)?.textContent).toContain(row.invalidation)
-    await act(async () => { root.unmount() })
-  })
-})
-
-describe('the reading notes dialog', () => {
-  const answer = (...rows: readonly (typeof row | typeof otherRow)[]) => ({ state: 'available' as const, rows, withheld: [] })
-  const mount = async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-    await act(async () => {
-      root.render(scoped(createElement(DivergencePanel, {
-        state: answer(row), onRetry: () => undefined, text
-      })))
-    })
-    return { container, root, chip: container.querySelector<HTMLButtonElement>('button.mi-divergence__chip')! }
-  }
-  const settle = async (ms = 400): Promise<void> => { await act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) }) }
-
-  it('opens from the chip itself, and shows the readings above the notes', async () => {
-    const { root, chip } = await mount()
-    expect(document.querySelector('[data-divergence-notes]')).toBeNull()
-    await act(async () => { chip.click() })
-    const detail = document.querySelector('#mi-divergence-chip-detail')
-    expect(detail).not.toBeNull()
-    // 牌子背后那几行读数还在：哪两条腿、各自多新、为什么算背离。
-    expect(detail?.textContent).toContain(text.legs.stablecoin)
-    expect(detail?.textContent).toContain(text.legs['open-interest'])
-    expect(detail?.textContent).toContain(text.chipFresh)
-    expect(detail?.textContent).toContain(text.chipWhy)
-    // 说明在同一层里、分成两组：上面四句是规则（逐条比，判据②），下面三段是口径说明。
-    // 先钉住句数：只断言「等于文案数组」的话，数组被删空也会绿。
-    expect(text.helpBullets).toHaveLength(4)
-    const notes = document.querySelector('[data-divergence-notes]')
-    expect(notes?.querySelector('[data-divergence-rule] h3')?.textContent).toBe(text.helpLabel)
-    expect([...(notes?.querySelectorAll('[data-divergence-rule] p') ?? [])].map(line => line.textContent))
-      .toEqual([...text.helpBullets])
-    expect(notes?.querySelector('[data-divergence-notes-detail] h3')?.textContent).toBe(text.helpDetailsLabel)
-    expect([...(notes?.querySelectorAll('[data-divergence-notes-detail] p') ?? [])].map(line => line.textContent))
-      .toEqual([...text.helpDetails])
-    // 内部标识不是读数。
-    expect(detail?.textContent).not.toContain('liquidity-leverage')
-    await act(async () => { root.unmount() })
-  })
-
-  it('closes on Esc, on the close button and on the overlay, and hands focus back to the chip', async () => {
-    // 三种关闭都由 antd 提供，一条一条走：关断看弹层自己的离场类（rc-motion 在没有过渡的测试环境里
-    // 永远跑不完，`display: none` 等不到），焦点归位直接读 `document.activeElement`。
-    const closed = (): boolean => {
-      const modal = document.querySelector('.ant-modal')
-      return modal === null || /leave/.test(modal.className)
-    }
-    for (const how of ['esc', 'close-button', 'overlay'] as const) {
-      const { container, root, chip } = await mount()
-      await act(async () => { chip.focus() })
-      await act(async () => { chip.click() })
-      expect(closed()).toBe(false)
-      if (how === 'esc') {
-        const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')!
-        await act(async () => {
-          // rc-dialog 判的是 `keyCode`（`Dialog/index.js:135`），只给 `key` 它收不到。
-          wrap.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true } as never))
-        })
-      } else if (how === 'close-button') {
-        const close = document.querySelector<HTMLElement>('.ant-modal-close')
-        expect(close).not.toBeNull()
-        await act(async () => { close?.dispatchEvent(new window.MouseEvent('click', { bubbles: true })) })
-      } else {
-        const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')!
-        await act(async () => { wrap.dispatchEvent(new window.MouseEvent('click', { bubbles: true })) })
-      }
-      await settle(50)
-      expect(closed()).toBe(true)
-      // 关掉以后焦点回到牌子：读者关的是「这段说明」，光标不该掉到页面顶上（v2 §二）。
-      // 静音会把牌子换成没有 `Tooltip` 的那一层（两种结构），所以比的是**当前那颗**牌子节点。
-      expect(document.activeElement).toBe(container.querySelector('button.mi-divergence__chip'))
-      await act(async () => { root.unmount() })
-    }
-  })
-})
-
-describe('the divergence chip', () => {
-  const answer = (...rows: readonly (typeof row | typeof otherRow)[]) => ({ state: 'available' as const, rows, withheld: [] })
-
-  it('gives the intraday pair one chip and leaves every pair its row', () => {
-    const markup = render(answer(row, otherRow))
-    expect(markup).toContain(text.chip)
-    expect(markup.match(/class="mi-divergence__chip"/g)).toHaveLength(1)
-    // The readings stay on the rows, once: the chip itself carries no number（`›` 的图标路径里有数字，
-    // 所以断言的是牌子上的字，不是整段 HTML）。
-    expect(text.chip).not.toMatch(/\d/)
-    expect(markup).toContain(row.legs[0]!.text)
-    expect(markup).toContain(otherRow.legs[0]!.text)
-  })
-
-  it('draws no chip when only another pair diverged', () => {
-    expect(render(answer(otherRow))).not.toContain(text.chip)
-  })
-
-  it('opens each leg freshness and the reason from the chip, as a dialog', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-    await act(async () => {
-      root.render(scoped(createElement(DivergencePanel, {
-        state: answer(row), onRetry: () => undefined, text
-      })))
-    })
-    const chip = container.querySelector('button.mi-divergence__chip') as HTMLButtonElement
-    // 牌子即入口（v2）：说清点开是 dialog，不报就地展开才有的 `aria-expanded` / `aria-controls`；
-    // 右侧那枚 6px 的 `›` 是唯一的「点开有东西」线索。
-    expect(chip.getAttribute('aria-haspopup')).toBe('dialog')
-    expect(chip.getAttribute('aria-expanded')).toBeNull()
-    expect(chip.getAttribute('aria-controls')).toBeNull()
-    expect(chip.getAttribute('aria-label')).toBe(`${text.chip} · ${text.chipDetailsOpen}`)
-    expect(chip.querySelector('svg')).not.toBeNull()
-    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    const detail = document.querySelector('#mi-divergence-chip-detail')!
-    expect(detail.textContent).toContain(text.legs.stablecoin)
-    expect(detail.textContent).toContain(text.chipWhy)
-    await act(async () => { root.unmount() })
+  it('renders the summary in the reader language', () => {
+    const english = productText['en-US'].pages.intelligence.portal.dashboard.divergence
+    const markup = render(answer([row]), 'en-US')
+    expect(markup).toContain(english.summary.divergence)
+    expect(markup).not.toContain(text.summary.divergence)
   })
 })

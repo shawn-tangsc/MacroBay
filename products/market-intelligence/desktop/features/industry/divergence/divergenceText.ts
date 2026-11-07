@@ -1,7 +1,19 @@
-import type { DivergenceDirection, DivergenceLegId, DivergencePairId } from '../../../../contracts/marketDivergence'
+import type { DivergenceLegId, DivergencePairId } from '../../../../contracts/marketDivergence'
 
 export type DivergencePanelText = Readonly<{
   title: string
+  /** 卡面那一行摘要（五态逐字，界面设计 v2）。卡面只剩它，读数进展开区。 */
+  summary: Readonly<{
+    divergence: string
+    quiet: string
+    divergenceWithheldOne: string
+    divergenceWithheldMany: string
+    quietWithheldOne: string
+    quietWithheldMany: string
+    allWithheld: string
+  }>
+  /** 观察态的中性标签：消息偏空、价格没动。方向色只给 bearish / bullish。 */
+  observedLabel: string
   /**
    * The rule's chip. Only the intraday pair gets one, and it carries no numbers: the readings stay
    * on the rows below, once.
@@ -54,8 +66,8 @@ export type DivergencePanelText = Readonly<{
    */
   sentimentNoScoredItems: string
   legs: Readonly<Record<DivergenceLegId, string>>
-  directions: Readonly<Record<DivergenceDirection, string>>
-  pairs: Readonly<Record<DivergencePairId, Readonly<{ mechanism: string; invalidation: string }>>>
+  directions: Readonly<Record<'bearish' | 'bullish', string>>
+  pairs: Readonly<Record<DivergencePairId, Readonly<{ mechanism?: string; invalidation: string }>>>
   /** Short name per pair, for lines that must say *which* comparison was skipped. */
   pairNames: Readonly<Record<DivergencePairId, string>>
   /** "{leg} 截至 {at}" — the instant a withheld leg stopped. */

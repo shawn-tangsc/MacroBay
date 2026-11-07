@@ -11,29 +11,28 @@
 .mi-divergence[data-state='empty'] { padding: 0; }
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
 .mi-divergence__lead { flex: none; display: flex; align-items: center; gap: 6px; padding-top: 0; }
-/* The rule's chip: the one thing on this line that says something happened. Same shape as the
-   other module chips — and, since v2, the entry to its dialog: it is the conclusion itself, not a
-   second button beside it. The `›` is the only "there is something behind this" cue. */
-.mi-divergence__chip {
-  display: inline-flex; align-items: center; gap: 2px;
-  padding: 1px 6px; border-radius: 3px;
-  border: 1px solid var(--mi-dashboard-line);
-  background: none; color: var(--mi-dashboard-text); font: inherit;
-  font-size: 10px; font-weight: 600;
-  line-height: 16px; white-space: nowrap; cursor: pointer;
+/* 卡面那一行摘要：一个索引，不是结论。所以它整行中性——不用琥珀、不用红、不铺底，
+   方向色只出现在展开区每组的标签上（两张牌方向相反时，摘要行着色必然错一半）。
+   右侧 8px 的 `›` 用字符画：摘要行里不许出现 `<svg>`（界面设计 v2 §四）。 */
+.mi-divergence__summary {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 0; border: 0; border-radius: 4px; background: transparent;
+  /* 字号只用同屏既有那一档：看板「口径说明」那条 `--mi-reading-note-size` / `-line-height`
+     （唯一 owner 在 `cryptoDashboard.css`）。摘要行是新加的常驻行，自成一套字号就是「融不进项目」。 */
+  color: var(--mi-dashboard-text); font: inherit;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  text-align: left; text-decoration: none; cursor: pointer;
 }
-/* 悬停整颗加深一档：底色与边框各深一层，文字不动——负号与数字下面划一道会让它读起来像两个数，
-   所以**不加下划线**（界面设计 v2 §一）。 */
-.mi-divergence__chip:hover,
-.mi-divergence__chip:focus-visible {
-  border-color: var(--mi-dashboard-text);
-  background: color-mix(in srgb, var(--mi-dashboard-text) 8%, transparent);
+/* 安静的一天不是控件：纯文本，没有箭头、没有悬停底、点了没反应。 */
+.mi-divergence__summary--static { cursor: default; }
+.mi-divergence__summary-text {
+  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-/* 键盘聚焦用平台统一规格：2px 强调色 + offset 2，并且保留「加深一档」，让人看出停在一个可点的东西上。 */
-.mi-divergence__chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* 6×6 的 `›`：不透明度 55%，悬停提到 95%。它不是第二颗按钮，所以尺寸只由图标本身定，不加点击区。 */
-.mi-divergence__chip-chevron { opacity: 0.55; }
-.mi-divergence__chip:hover .mi-divergence__chip-chevron { opacity: 0.95; }
+.mi-divergence__summary-chevron { flex: none; color: var(--mi-dashboard-muted); font-size: 0.85em; opacity: 0.55; }
+.mi-divergence__summary:hover { background: var(--mi-dashboard-surface); }
+.mi-divergence__summary:hover .mi-divergence__summary-chevron { opacity: 0.95; }
+.mi-divergence__summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mi-divergence__summary[aria-expanded='true'] .mi-divergence__summary-chevron { transform: rotate(90deg); }
 .mi-divergence > .mi-signal-detail { flex-basis: 100%; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
 /* A quiet day is one line, not a block: no icon, no heading, no vertical padding to fill. */
@@ -129,7 +128,8 @@
 }
 .mi-divergence__row[data-direction='bearish'] { border-left-color: var(--mi-dashboard-negative); }
 .mi-divergence__row[data-direction='bullish'] { border-left-color: var(--mi-dashboard-positive); }
-.mi-divergence__row[data-direction='unpriced'] { border-left-color: var(--mi-dashboard-caution); }
+/* 观察态不是警报：左边线与标签都用中性色，方向色只属于真的背离（界面设计 2026-11-08）。 */
+.mi-divergence__row[data-direction='unpriced'] { border-left-color: var(--mi-dashboard-line); }
 .mi-divergence__line {
   display: flex;
   flex-wrap: wrap;
@@ -140,7 +140,7 @@
 .mi-divergence__direction { font-size: 11px; font-weight: 650; }
 .mi-divergence__direction[data-direction='bearish'] { color: var(--mi-dashboard-negative); }
 .mi-divergence__direction[data-direction='bullish'] { color: var(--mi-dashboard-positive); }
-.mi-divergence__direction[data-direction='unpriced'] { color: var(--mi-dashboard-caution); }
+.mi-divergence__direction[data-direction='unpriced'] { color: var(--mi-dashboard-muted); }
 .mi-divergence__legs {
   display: flex;
   flex-wrap: wrap;
@@ -161,6 +161,7 @@
   font-size: 10px;
   line-height: 1.5;
 }
+.mi-divergence__asof { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height); }
 .mi-divergence__invalidation {
   margin: 0;
   color: var(--mi-dashboard-muted);
