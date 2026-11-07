@@ -63,4 +63,53 @@ describe('daily brief agent runner', () => {
     expect(sent[0]?.displayText).toContain('daily brief')
     expect(sent[0]?.displayText).not.toMatch(/[\u4e00-\u9fff]/)
   })
+
+  /**
+   * 终态三态分离（架构师 2026-11-07 退回项）：`error` 不是"应用被关"。
+   *
+   * 三种都要能红：pause + 自己的信号 = 取消；pause 而信号没动 = 运行时被停（应用在关）；
+   * error = 模型/网关自己报错，**保留平台写的那个码**，不许换成 run-interrupted。
+   */
+  describe('why a turn stopped', () => {
+    const runnerWith = async (message: Readonly<{ status: string; data?: unknown }>, signal?: AbortSignal) => {
+      const port = {
+        ensure: vi.fn(async () => ({ sessionId: 's1', created: true })),
+        send: vi.fn(async () => ({ assistantMessage: { searchableText: '', ...message }, toolInvocations: [] })),
+        cancel: vi.fn(async () => undefined),
+        state: vi.fn(async () => undefined)
+      }
+      const runner = createDailyBriefAgentRunner({ port: port as never, agentId: 'daily-brief-editor' })
+      return runner.continue('s1', 'task', undefined, signal)
+    }
+    const runtimeText = (code: string) => ({ parts: [{ type: 'runtime-text', key: `agent.runtime.${code}`, fallback: code, text: code }] })
+
+    it('calls a pause that our own deadline aborted a cancellation', async () => {
+      const controller = new AbortController()
+      controller.abort()
+      const result = await runnerWith({ status: 'paused' }, controller.signal)
+      expect(result).toMatchObject({ stopped: true, stoppedReason: 'cancelled' })
+    })
+
+    it('calls a pause the runtime stopped on its own an interrupted run, not a cancellation', async () => {
+      const result = await runnerWith({ status: 'paused' }, new AbortController().signal)
+      expect(result).toMatchObject({ stopped: true, stoppedReason: 'run-interrupted' })
+    })
+
+    it('keeps the provider code on an error, and never calls it an interrupted run', async () => {
+      const result = await runnerWith({ status: 'error', data: runtimeText('provider-request-failed') })
+      expect(result).toMatchObject({ stopped: true, stoppedReason: 'failed', failureCode: 'provider-error', failureDetail: 'provider-request-failed' })
+      expect(result.stoppedReason).not.toBe('run-interrupted')
+    })
+
+    it('maps a missing model to the model failure the brief already has', async () => {
+      const result = await runnerWith({ status: 'error', data: runtimeText('provider-model-not-found') })
+      expect(result).toMatchObject({ stoppedReason: 'failed', failureCode: 'model-unavailable', failureDetail: 'provider-model-not-found' })
+    })
+
+    it('invents no provider code when the message carries none', async () => {
+      const result = await runnerWith({ status: 'error' })
+      expect(result).toMatchObject({ stoppedReason: 'failed', failureCode: 'provider-error' })
+      expect(result.failureDetail).toBeUndefined()
+    })
+  })
 })

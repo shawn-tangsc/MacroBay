@@ -605,6 +605,33 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(` ${text.history.railFailedReason}`)
   })
 
+  it('puts the failure badge before every other readable element of the line (v2.163)', () => {
+    // 位置是判据的一部分：只改 DOM 顺序不算改完。失败标必须是这一行**第一个可读元素**，
+    // 排在时刻之前——扫列表先看到"这一行失败了"，再看到是哪一期。
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined,
+        languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }]
+      })]
+    })
+    const line = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-line')!
+    const badge = line.querySelector<HTMLElement>('.status-pill')
+    expect(badge).not.toBeNull()
+    // 1) 它是该行的第一个元素子节点。
+    expect(line.firstElementChild).toBe(badge)
+    // 2) 与时刻、窗口、来源、语言逐个比文档顺序：都在它之后。
+    for (const selector of ['[data-rail-clock]', '[data-window-hours]', '.mi-daily-briefing__rail-source', '.mi-daily-briefing__rail-lang']) {
+      const sibling = line.querySelector<HTMLElement>(selector)!
+      expect(sibling).not.toBeNull()
+      expect(badge!.compareDocumentPosition(sibling) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    // 3) 健康行没有这枚标，该行第一个元素仍是时刻（这条防止"永远第一个"的空断言）。
+    render({ editions: [edition({ state: 'generated' })] })
+    const healthy = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-line')!
+    expect(healthy.querySelector('.status-pill')).toBeNull()
+    expect(healthy.firstElementChild?.hasAttribute('data-rail-clock')).toBe(true)
+  })
+
   it('says when a failed run started, over which window, and how it was triggered', () => {
     // 用户 2026-11-06：一条「这次失败 英文」看不懂是哪一次。第一行必须自己说清：
     // 18:11 发起 · 12 小时 · 手动 · 英文（手动期没有截止，写「发起」）。
@@ -730,7 +757,7 @@ describe('a row is two lines: the facts, then what it says', () => {
 })
 
 describe('a run that died is not the same sentence as a run that failed', () => {
-  it('renders 上次没跑完 for a crash leftover and 这次失败 for a real failure, never both', () => {
+  it('renders 上次没跑完 for a crash leftover and the 「失败」 badge for a real failure, never both', () => {
     // `A9.11`：两种都是 `missing`，但读者要做的事不同——一个还能再试（上次没跑完），
     // 一个这次就没成。文案键是两条，这里断言的是**渲染出来**的那一句，不是键存在。
     const interrupted = edition({ periodId: 'p_int', state: 'missing', availableLocales: [], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }] })

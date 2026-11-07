@@ -643,4 +643,45 @@ describe('the citable set (Chief 2026-11-06)', () => {
     expect(result.failureCode).not.toBe('run-interrupted')
     expect(result.failureDetail).toContain('stopped by peer')
   })
+
+  it('keeps the provider’s own failure code when the model errors mid-writing (v2.166)', async () => {
+    // 架构师退回项：`error` 不是"应用被关"。三种终态分开后，provider 报错必须保留它自己的码，
+    // 明细里也不许出现"应用被关闭"那种说法（那是另一件事）。
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, toolInvocations: [], assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }) })),
+      continue: vi.fn(async () => ({ assistantText: '', toolInvocations: [], stopped: true, stoppedReason: 'failed' as const, failureCode: 'provider-error', failureDetail: 'provider-request-failed' })),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('provider-error')
+    expect(result.failureDetail).toContain('provider-request-failed')
+    expect(result.failureDetail).not.toContain('stopped mid-turn')
+    // 不是"没写完"那种中断：这一期按失败收，下一次不会再被当成应用退出。
+    expect(runner.finish).toHaveBeenCalledWith('s1', 'failed')
+  })
+
+  it('still calls a runtime stopped on its own an interrupted run (v2.166)', async () => {
+    // 另一半判据：应用正在关闭时仍然是 `run-interrupted`，不许因为上一处改动被一起吃成取消或失败。
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, toolInvocations: [], assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }) })),
+      continue: vi.fn(async () => ({ assistantText: '', toolInvocations: [], stopped: true, stoppedReason: 'run-interrupted' as const })),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('run-interrupted')
+    expect(result.failureDetail).toBe('runtime stopped mid-turn')
+    expect(runner.finish).toHaveBeenCalledWith('s1', 'abandoned')
+  })
 })

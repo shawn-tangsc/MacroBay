@@ -1,4 +1,5 @@
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
+import { stoppedOutcome } from './dailyBriefAgentRunner'
 import type { DailyBriefTurnStage, DailyBriefTurnStageEvent } from './dailyBriefAgentTurn'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import type { AgentRuntimeToolInvocation } from '@platform/ai/agent-platform/runtime/runtimeTypes'
@@ -88,8 +89,14 @@ export async function runEditorialGate(input: Readonly<{
     try {
       const repair = await input.runner.continue(input.sessionId, input.repairPrompt(failureCode, failureDetail, lastFailures), undefined, input.signal)
       if (repair.stopped) {
-        stage({ stage: repairStage, state: 'failed', failureCode: 'run-interrupted', failureDetail: stoppedDetail })
-        return { state: 'interrupted', failureDetail: stoppedDetail, toolInvocations: Object.freeze(tools) }
+        // 重写轮被停：三种分开，映射只有一处（`stoppedOutcome`）。只有"运行时被停"才算中断；
+        // 我们自己的信号是取消；模型/网关自己报错就保留它的真实码——不许写成"应用被关闭了"。
+        const stop = stoppedOutcome(repair)
+        stage({ stage: repairStage, state: 'failed', failureCode: stop.failureCode, failureDetail: stop.failureDetail })
+        if (stop.finish === 'failed') return { state: 'failed', failureCode: stop.failureCode, failureDetail: stop.failureDetail, toolInvocations: Object.freeze(tools) }
+        return stop.failureCode === 'cancelled'
+          ? { state: 'cancelled', failureDetail: stop.failureDetail, toolInvocations: Object.freeze(tools) }
+          : { state: 'interrupted', failureDetail: stop.failureDetail, toolInvocations: Object.freeze(tools) }
       }
       response = repair.assistantText
       tools.push(...repair.toolInvocations)

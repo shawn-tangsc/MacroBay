@@ -5,6 +5,7 @@ import { runEditorialGate } from './dailyBriefAgentEditorialGate'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission } from './dailyBriefingValidation'
 import { validateEditorialForPeriod, type DailyBriefingPeriodFacts } from './dailyBriefingPeriodFactsValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
+import { stoppedOutcome } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
 import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
@@ -191,11 +192,13 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   stage({ stage: 'writing', state: 'begin' })
   const written = await input.runner.continue(started.sessionId, prompt, `任务 2/2 · 写作\n\n${prompt}`, input.signal)
   if (written.stopped) {
-    // 运行时在写作中途被停（应用退出、会话被停）：这不是模型写坏了。当成 invalid-json 去重写，
-    // 只会拿一个已经释放的运行时再失败一次，还把真实原因盖成「超时」。
-    stage({ stage: 'writing', state: 'failed', failureCode: 'run-interrupted', failureDetail: 'runtime stopped mid-turn' })
-    await input.runner.finish(started.sessionId, 'abandoned')
-    return { state: 'failed', failureCode: 'run-interrupted', failureDetail: 'runtime stopped mid-turn', sessionId: started.sessionId, toolInvocations }
+    // 写作中途没回来：三种分开（`stoppedOutcome` 一处映射）。当成 invalid-json 去重写，只会拿一个
+    // 已经停掉的运行时再失败一次，还把真实原因盖成「超时」；把 provider 的错说成"应用被关闭了"
+    // 同样是假话，只是方向反了。
+    const stop = stoppedOutcome(written)
+    stage({ stage: 'writing', state: 'failed', failureCode: stop.failureCode, failureDetail: stop.failureDetail })
+    await input.runner.finish(started.sessionId, stop.finish)
+    return { state: 'failed', failureCode: stop.failureCode, failureDetail: stop.failureDetail, sessionId: started.sessionId, toolInvocations }
   }
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)

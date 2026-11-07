@@ -323,10 +323,15 @@ export function DailyBriefingHistoryRail({
                   if (onSelectLocale) onSelectLocale({ date: edition.date, periodId: edition.periodId, locale: edition.locale })
                   else onSelect(edition.date)
                 }}>
-                {/* 第一行 = 这一行的身份（`02` A5.4b v2.147）：时刻 · 窗口 · 来源 · 语言，
-                    分隔只用留白，行内没有 `·`。状态词退到第二行——它以前占的正是来源那一格，
-                    把"手动还是定时"顶掉了（用户 2026-11-06 看不出这条失败是怎么来的）。 */}
+                {/* 第一行 = 这一行的身份（`02` A5.4b v2.147）：**失败标 · 时刻 · 窗口 · 方向 · 来源 · 语言**，
+                    分隔只用留白，行内没有 `·`。
+                    失败标打头（`02` v2.163）：它是这一行**第一个可读元素**——扫列表时先看到"这一行失败了"，
+                    再看到是哪一期；排在来源徽标之后时，读者要跨过三个元素才知道这行失败。
+                    状态词仍只在第一行出现一次，第二行说这一期讲什么。 */}
                 <span className="mi-daily-briefing__rail-line">
+                  {failedRun
+                    ? <StatusPill labelKey={failureBadgeKey} resolveText={(key) => key === failureBadgeKey ? text.history.failureBadge : (resolveText?.(key) ?? '')} tone="bad" />
+                    : null}
                   <span className="mi-daily-briefing__rail-fact" data-rail-clock={clock === undefined ? 'not-recorded' : 'recorded'}>
                     {clock ?? text.history.notRecorded}
                   </span>
@@ -342,10 +347,6 @@ export function DailyBriefingHistoryRail({
                       aria-label={edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion} />}
                   {/* 这一格只回答"这一行是怎么来的"：定时 / 手动 / 重试 / 自动重试 / 补跑，缺记录写「未记录」。 */}
                   <span className="mi-daily-briefing__rail-source" data-run-source={triggerKind ?? 'not-recorded'}>{triggerLabelOf(triggerKind, text)}</span>
-                  {/* 失败那一行第一行就给一枚红标（用户 2026-11-06）：扫列表要一眼看出来，别只在第二行写。 */}
-                  {failedRun
-                    ? <StatusPill labelKey={failureBadgeKey} resolveText={(key) => key === failureBadgeKey ? text.history.failureBadge : (resolveText?.(key) ?? '')} tone="bad" />
-                    : null}
                   {/* 语言徽标贴右，一行只出现一次：一行就是"一期 + 一种语言"。 */}
                   <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
                 </span>

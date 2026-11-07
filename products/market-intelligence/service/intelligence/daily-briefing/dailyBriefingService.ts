@@ -269,6 +269,8 @@ export type DailyBriefingService = Readonly<{
     runTrigger?: DailyBriefingRunTrigger
     /** `false` opens the page as a read; no run. */
     generate?: boolean
+    /** 调用方的中止信号：job 被停/应用正在关闭时不再起第二次（自动重试的活体判定）。 */
+    signal?: AbortSignal
   }>) => Promise<DailyBriefingTodayResult>
   /**
    * 手动生成/重新生成**一次**。
@@ -386,13 +388,8 @@ export function createDailyBriefingService(deps: Readonly<{
     }
   }
 
-  /**
-   * Open today's edition — one named period's when the scheduler says which fired.
-   *
-   * `generation` is that period's own time and window, so a period never borrows another one's
-   * cutoff; an unscheduled caller (the reader opening the page) means the period `default`.
-   */
-  const resolveToday = createAutoRetryingResolve({ run: resolveAttempt, now })  // 环境类失败自动重试一次
+  /** One named period's edition when the scheduler fired it; an unscheduled caller means `default`. */
+  const resolveToday = createAutoRetryingResolve({ run: resolveAttempt, now })
 
   async function getToday(input: Readonly<{
     locale: DailyBriefingLocale
@@ -402,6 +399,7 @@ export function createDailyBriefingService(deps: Readonly<{
     periodKind?: DailyBriefingPeriodKind
     runTrigger?: DailyBriefingRunTrigger
     generate?: boolean
+    signal?: AbortSignal
   }>): Promise<DailyBriefingTodayResult> {
     const periodId = input.periodId ?? DEFAULT_PERIOD_ID
     const window = briefingWindow(now(), input.timeZone, input.generation ?? await generation())
@@ -414,7 +412,7 @@ export function createDailyBriefingService(deps: Readonly<{
     return runs.join(runs.key(window.date, periodId, input.locale), async () => {
       const result = await resolveToday({
         asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours,
-        ...(input.periodKind ? { periodKind: input.periodKind } : {}), ...(input.runTrigger ? { runTrigger: input.runTrigger } : {})
+        ...(input.periodKind ? { periodKind: input.periodKind } : {}), ...(input.runTrigger ? { runTrigger: input.runTrigger } : {}), ...(input.signal ? { signal: input.signal } : {})
       }, false)
       return withTimeZoneSource(await withStoredAttempt(deps.store, result, window.date, input.locale, periodId), window.zoneSource)
     })
@@ -434,6 +432,7 @@ export function createDailyBriefingService(deps: Readonly<{
     windowHours: number
     periodKind?: DailyBriefingPeriodKind
     runTrigger?: DailyBriefingRunTrigger
+    signal?: AbortSignal
   }>, force: boolean): Promise<DailyBriefingTodayResult> {
     // 一个 (日期, 截止, 语言) 只允许一版：槽被别的期占着就写进它，不另插一行。
     const slotPeriodId = await briefingEditionSlotPeriodId(deps.store, rawInput)
@@ -603,9 +602,8 @@ export function createDailyBriefingService(deps: Readonly<{
             sessionId: sessionId ?? 'unknown',
             toolInvocations: []
           }
-          // The answer is no longer awaited, but the runtime session must stop. The port only
-          // abandons a link that is still running, so a turn that finished at the deadline keeps its
-          // terminal state. A deadline that fires before any session exists has nothing to close.
+          // The answer is no longer awaited, but the runtime session must stop. The port only abandons
+          // a link that is still running, so a turn that finished at the deadline keeps its state.
           if (sessionId) await deps.agentRunner.finish(sessionId, 'abandoned').catch(() => undefined)
         }
         if (turn.state === 'accepted') {
