@@ -9,7 +9,7 @@ import { createJobRuntime } from '@platform/jobs'
 import { createEventBusJsonStorage, createEventBusRuntime } from '@platform/message-bus'
 import { createEventBusStore } from '@platform/message-bus/store/eventBusStore'
 
-import { createIntelligencePipeline } from './intelligencePipeline'
+import { createIntelligencePipeline, EMPTY_SOURCE_COLLECTION_COUNTS } from './intelligencePipeline'
 import { createRawRecordStore } from './rawRecordStore'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 import { createDefaultSourceProfile, resolveAndValidateRuntimeConfig } from './sourceRuntimeConfig'
@@ -39,7 +39,7 @@ describe('intelligencePipeline', () => {
       sourceId: 'defillama-stablecoins',
       runId: 'retired-source-run',
       fixtureText: '{"peggedAssets":[]}'
-    })).resolves.toEqual({ queuedJobs: [] })
+    })).resolves.toEqual({ queuedJobs: [], counts: EMPTY_SOURCE_COLLECTION_COUNTS })
 
     expect(rawRecordStore.inspectSnapshot().recordCount).toBe(0)
     expect(pipeline.getHealth('defillama-stablecoins')).toBeUndefined()
@@ -338,6 +338,38 @@ describe('intelligencePipeline', () => {
       })
       await rm(directory, { recursive: true, force: true })
     }
+  })
+
+  it('counts what it fetched, parsed and appended, so "nothing new" is not a blank run', async () => {
+    // 用户 2026-11-07：采集「完成」时 result 是空的，「今天真的没新文章」与「抓到了没写进去」
+    // 在运行记录里长得一模一样。这条钉住四个数：抓 / 解析 / 新增 / 重复。
+    const pipeline = createPipeline()
+    const fixture = loadFixture('rss-sample.xml')
+
+    const first = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-1', fixtureText: fixture })
+    expect(first.counts).toEqual({ httpCalls: 0, fetchedBytes: 0, parsed: 2, appended: 2, duplicates: 0 })
+    expect(first.reasonCode).toBeUndefined()
+
+    // 同一份 RSS 再采一次：全被判重复，但这是一次**成功**的采集，不是失败。
+    const second = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-2', fixtureText: fixture })
+    expect(second.counts).toEqual({ httpCalls: 0, fetchedBytes: 0, parsed: 2, appended: 0, duplicates: 2 })
+    expect(second.reasonCode).toBeUndefined()
+    expect(second.queuedJobs).toEqual([])
+  })
+
+  it('marks a failed fetch as a different shape from a successful empty collection', async () => {
+    // 判据：抓取失败必须能一眼区分出来——带原因码、四个计数归零，而不是又一个「完成、没数字」。
+    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
+    const pipeline = createIntelligencePipeline({
+      profileStore,
+      fetchText: async () => { throw new Error('feed unreachable') }
+    })
+
+    const failed = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-fail' })
+    expect(failed.reasonCode).toBe('collect-failed')
+    expect(failed.reason).toContain('feed unreachable')
+    expect(failed.counts).toEqual({ httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 })
+    expect(failed.queuedJobs).toEqual([])
   })
 
   it('creates clusters and revisions while queueing downstream work', async () => {

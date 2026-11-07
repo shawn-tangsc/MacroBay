@@ -16,6 +16,51 @@ import { registerIntelligenceJobs } from './registerIntelligenceJobs'
 import { zeroXRouterSourcePolicy } from '../application/zeroXRouterSourcePolicy'
 
 describe('registerIntelligenceJobs', () => {
+  it('writes the collection counts into the run result, so "nothing new" and "failed" differ', async () => {
+    // 判据（Chief 2026-11-07）：一次「抓到了但 0 条新」和一次「抓不到」，运行记录必须长得不一样。
+    // 平台的结论只有四个计数，所以映射成：总数=解析、成功=新增、跳过=重复；失败时 失败=1 + 原因码。
+    const handlers = new Map<string, JobHandler>()
+    const jobRuntime = {
+      registerHandler(handlerId: string, handler: JobHandler) { handlers.set(handlerId, handler) },
+      enqueueDefinition: vi.fn(async () => ({ id: 'run-x' }))
+    } as unknown as JobRuntime
+
+    const collectedNothing = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 1, fetchedBytes: 30_729, parsed: 25, appended: 0, duplicates: 25 }
+    }))
+    registerIntelligenceJobs(jobRuntime, { pipeline: { ...createPipelineStub(), collectSource: collectedNothing } as IntelligencePipeline })
+    const collectHandler = handlers.get(INTELLIGENCE_COLLECT_SOURCE_JOB)!
+    const okResult = vi.fn(async () => undefined)
+    await collectHandler({ sourceId: 'coindesk-rss' }, createContext('ok-run', { result: okResult }))
+    expect(okResult).toHaveBeenCalledWith({ counts: { total: 25, succeeded: 0, failed: 0, skipped: 25 } })
+
+    // 抓取失败：计数归零，但带原因码 —— 与上面那条一眼可分。
+    const failed = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 },
+      reasonCode: 'collect-failed' as const,
+      reason: 'feed unreachable'
+    }))
+    const handlers2 = new Map<string, JobHandler>()
+    registerIntelligenceJobs(
+      {
+        registerHandler(handlerId: string, handler: JobHandler) { handlers2.set(handlerId, handler) },
+        enqueueDefinition: vi.fn(async () => ({ id: 'run-y' }))
+      } as unknown as JobRuntime,
+      { pipeline: { ...createPipelineStub(), collectSource: failed } as IntelligencePipeline }
+    )
+    const failedResult = vi.fn(async () => undefined)
+    await handlers2.get(INTELLIGENCE_COLLECT_SOURCE_JOB)!(
+      { sourceId: 'coindesk-rss' },
+      createContext('fail-run', { result: failedResult })
+    )
+    expect(failedResult).toHaveBeenCalledWith({
+      counts: { total: 0, succeeded: 0, failed: 1, skipped: 0 },
+      reasonCode: 'collect-failed'
+    })
+  })
+
   it('enqueues downstream jobs returned by collect and normalize handlers', async () => {
     const handlers = new Map<string, JobHandler>()
     const enqueueDefinition = vi.fn(async () => ({ id: 'run-1' }))
@@ -229,7 +274,8 @@ function createContext(jobRunId: string, extra?: { result?: JobContext['result']
 function createPipelineStub(): IntelligencePipeline {
   return {
     collectSource: vi.fn(async () => ({
-      queuedJobs: [INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB]
+      queuedJobs: [INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB],
+      counts: { httpCalls: 1, fetchedBytes: 1024, parsed: 2, appended: 2, duplicates: 0 }
     })),
     normalizeRawRecords: vi.fn(async () => ({
       processedCount: 1,

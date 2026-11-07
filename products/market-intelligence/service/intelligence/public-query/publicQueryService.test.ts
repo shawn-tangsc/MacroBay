@@ -109,7 +109,7 @@ function createMockPipeline(input: {
   metrics?: MetricIntelligenceEvent[]
 }): IntelligencePipeline {
   return {
-    collectSource: async () => ({ queuedJobs: [] }),
+    collectSource: async () => ({ queuedJobs: [], counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 } }),
     normalizeRawRecords: async () => ({ processedCount: 0, queuedJobs: [], newItemIds: [] }),
     assessChangedItems: async () => ({ assessmentCount: 0, failedCount: 0 }),
     retryItemAssessment: async () => ({ assessmentCount: 0, failedCount: 0 }),
