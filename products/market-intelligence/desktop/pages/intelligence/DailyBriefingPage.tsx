@@ -133,6 +133,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // about whether this issue still has content.
   const [pinnedDate, setPinnedDate] = useState<string | undefined>(undefined)
   const [reloadKey, setReloadKey] = useState(0)
+  /**
+   * 本页自己发起的那次跑"已经落定"的次数：跑完的收尾（`useBriefingRunActions`）把它 +1，
+   * 列表那一行由页面按新文档合并；背景重读据此判断"这一次已经处理过"，不再整表刷第二遍。
+   */
+  const [localSettles, setLocalSettles] = useState(0)
   // One settings surface: the entry opens it at the top, the web-search banner and a failed attempt
   // open the same drawer aimed at its AI block. Two dialogs is what this replaces.
   const [settingsSection, setSettingsSection] = useState<BriefingSettingsSection | null>(null)
@@ -199,7 +204,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const generating = busyLocally || progress?.state === 'running'
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
   // 不是本页发起的跑（定时、别的窗口）一开始，就让列表重读一次，那一行才会立刻出现。
-  useBriefingBackgroundRunReload(progress?.state === 'running', () => setReloadKey((key) => key + 1))
+  useBriefingBackgroundRunReload(progress?.state === 'running', () => setReloadKey((key) => key + 1), localSettles)
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
   // must not pretend the run stopped either — the pipeline is still spending model calls.
   const progressUnreadable = generating && progress?.state === 'unavailable'
@@ -282,7 +287,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     },
     // 跑完不清任何"这一次的期号"了：进度只认选中那一版，没有"最后一次"这个概念可用。
     // 这里**不顺手整页重读**：重读走的是 `getToday`（默认期），会把刚跑出来的那一期正文顶掉——
-    // 列表那一行已由 runBriefing 自己按新文档合并。
+    // 列表那一行已由 runBriefing 自己按新文档合并；这里只记一笔"本页这一次已落定"，
+    // 让背景重读的收尾那一次不再重复刷新（v2.167）。
+    onSettled: () => setLocalSettles((count) => count + 1)
   })
   const runManual = useBriefingManualRun({
     timeZone,

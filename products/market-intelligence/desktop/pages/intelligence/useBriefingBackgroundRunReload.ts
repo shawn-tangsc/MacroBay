@@ -1,23 +1,36 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * 别人发起的跑一开始，就让列表重读一次。
+ * 别人发起的跑一开始，就让列表重读一次；**跑完那一拍也重读一次**。
  *
- * 本页发起的跑会先挂一行"生成中"占位行，所以它一定立刻有行；定时触发、或别的窗口发起的那一跑
- * 没有这一行——而列表只在跑完、删除、重试时重读，于是它要等跑完才出现在列表里。用户 2026-11-06
- * 的规则是"只要开始跑了，就要留在 list 里"，所以进度一开始说"在跑"，就重读一次。
+ * 两个时刻都要：
+ * - 开始时——定时触发、或别的窗口发起的那一跑，列表里还没有那一行（用户 2026-11-06：只要开始跑了，
+ *   就要留在 list 里）；
+ * - 结束时——列表只在"跑完"之后才知道那一期真正的身份（时刻 / 来源 / 窗口）。少了这一次，行会
+ *   一直停在前一次重读时的样子：9 步全跑完、右栏已经写完，左边还是「未记录」（用户 2026-11-07 报的）。
  *
- * 只在**从不在跑变成在跑**的那一下重读：一直重读会把列表刷得读者没法点行。
+ * **本页自己发起的跑不重读第二遍**：那条路跑完会把新文档合并进列表那一行（`mergeEditionSummary`），
+ * 页面把 settle 次数传进来，同一次跑里有了它就不再重读。用"这次跑已经重读过"的标记判断，
+ * 不用固定延时凑。
  */
-export function useBriefingBackgroundRunReload(running: boolean, reload: () => void): void {
-  const seenRef = useRef(false)
+export function useBriefingBackgroundRunReload(running: boolean, reload: () => void, localSettles = 0): void {
+  const wasRunning = useRef(false)
+  const settlesAtStart = useRef(0)
+  // `reload` 每次渲染都是新函数：放进依赖会让 effect 每渲染一次跑一遍。用 ref 读最新那个。
+  const reloadRef = useRef(reload)
+  reloadRef.current = reload
   useEffect(() => {
-    if (!running) {
-      seenRef.current = false
+    if (running) {
+      if (wasRunning.current) return
+      wasRunning.current = true
+      settlesAtStart.current = localSettles
+      reloadRef.current()
       return
     }
-    if (seenRef.current) return
-    seenRef.current = true
-    reload()
-  }, [running, reload])
+    if (!wasRunning.current) return
+    wasRunning.current = false
+    // 本页自己发起的那一次：列表那一行已经由页面合并过，不再整表重读。
+    if (localSettles !== settlesAtStart.current) return
+    reloadRef.current()
+  }, [running, localSettles])
 }
