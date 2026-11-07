@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
+import { reportSettledEtfRevisions } from './etfSettledRevision'
 import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, type EtfAsset, type EtfDailyFlow } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
@@ -50,12 +51,18 @@ export function createEtfCurrentStateRefreshService(deps: {
         if (!btc || !eth) return unavailable()
         const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate })
         if (!built) return unavailable()
+        // 写之前先留一份旧窗口：只有它知道「我们判过的那一天，这次变了没有」。
+        const priorWindow = deps.store.read
+          ? previous?.snapshot?.window ?? (await deps.store.read())?.snapshot?.window
+          : undefined
         // `replace` is async: the write's own verdict decides whether this round produced news.
         const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
         // made "did it go out?" depend on scheduling — the one thing a refresh result should not
         // depend on. The outlet swallows a failed submit, so this cannot turn into a failed read.
         if (replaced.state === 'updated') {
+          // 定稿后仍变的交易日记一条（30 小时余量够不够，靠这条数据回答，不靠再猜一次）。
+          reportSettledEtfRevisions({ previous: priorWindow, current: built, asOf: fetchedAt })
           const signals = judgeSignals(built, fetchedAt)
           // 一条成立的信号都没有时不去打扰出口：安静的一天不是「发了 0 条」，是「没有事发生」。
           if (signals.length > 0) await deps.handOffSignals?.(signals)
