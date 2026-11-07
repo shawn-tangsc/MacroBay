@@ -19,6 +19,11 @@ import { notifyDailyBriefing } from './daily-briefing/dailyBriefingNotifier'
  * 所以这里要证明的是两件事一起成立：**入口的返回值不变**，且**提交次数 == 留痕条数**。
  *
  * 夹具用「读盘就抛」的真运行时：这样每一笔提交都走 `catch {}` 那一支——正是要证明的那条路。
+ *
+ * **覆盖范围是 5/6，这是有意为之，不是漏项**：六处里五处有「从入口到留痕」的端到端夹具；第六处
+ * （`openInterestSignalNotifier`）的**提交侧**由同一运行时漏斗覆盖——它的提交异常从工厂冒到外层
+ * `catch {}`，走的是同一个 `traceSubmitFailure`，再造一份 `state:'available'` 的 OI 历史只是把同一条
+ * 断言重复一遍；它的**读失败**那一半另有 `MI_SIGNAL_READ_FAILED` 与其夹具覆盖。两半都盖住了。
  */
 const settings: NotificationRuntimeSettings = {
   desktopEnabled: true,
