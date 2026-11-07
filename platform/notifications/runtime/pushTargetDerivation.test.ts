@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
+import { createDefaultNotificationStoreState } from '../store/notificationStore'
 import { resolvePushChannel } from '../delivery/pushChannelResolution'
 
 /**
@@ -109,6 +110,25 @@ describe('resolvePushChannel', () => {
 })
 
 describe('the three read sites share one derivation', () => {
+  it('0 channels: the submission is refused with push-unavailable and nothing is pushed', async () => {
+    // 生产上就该这样 fail closed：没有 runtime-ready 通道时拒收，不猜一条、不静默落成成功。
+    const { runtime, pushed } = harness()
+    const bare = createNotificationRuntime({
+      storage: { read: async () => createDefaultNotificationStoreState(), write: async () => undefined },
+      catalog,
+      diagnostics: () => undefined,
+      resolvePushChannel: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false }),
+      getSettings: async () => settings,
+      clock,
+      deliveryHooks: { push: async (record) => { pushed.push(record.id); return { ok: true, messageId: record.id } } }
+    })
+    // 提交本身成立（中心要留这条），**手机那一档**写成失败并给 `push-unavailable`；一条也不许发出去。
+    const outcome = await bare.submit(request())
+    expect(outcome.kind).toBe('accepted')
+    expect((outcome as { recordId: string }).recordId).toBeTruthy()
+    expect(pushed).toEqual([])
+  })
+
   it('main push: pushes to the derived channel even though the retired field is null', async () => {
     const { runtime, state, pushed } = harness()
     await runtime.submit(request())
