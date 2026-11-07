@@ -33,7 +33,7 @@ beforeAll(() => {
  */
 const mountedRoots: Root[] = []
 
-afterEach(() => {
+afterEach(async () => {
   // 卸载要走 act()：不包一层，React 会报「更新没有包在 act 里」，这条噪音会盖住真错误。
   act(() => {
     for (const root of mountedRoots.splice(0)) root.unmount()
@@ -41,6 +41,10 @@ afterEach(() => {
   document.body.replaceChildren()
   window.localStorage.clear()
   Reflect.deleteProperty(window, 'platform')
+  // 排空一拍再让 worker 收尾：整棵 AppShell 卸载时还有一次异步续体在路上，运行器关 RPC
+  // 时它正好在飞，就被报成 `Closing rpc while "onUserConsoleLog" was pending` 这条未处理错误
+  // ——**断言全过、整次全量判红**（实测单跑约 1/5 命中）。这一拍让续体先落地。
+  await new Promise((resolve) => setTimeout(resolve, 0))
 })
 
 describe('PLAT-61 模型同步可用性', () => {
