@@ -14,6 +14,12 @@ export type DivergencePanelText = Readonly<{
   }>
   /** 观察态的中性标签：消息偏空、价格没动。方向色只给 bearish / bullish。 */
   observedLabel: string
+  /** 「当前值 / 规则」那一行：三种写法，只在一处拼（`boundLine`）。 */
+  boundAtLeast: string
+  boundAtMostNegative: string
+  boundAtMostAbsolute: string
+  /** 收进 ⓘ 的四句：这张卡怎么来的。 */
+  notes: readonly string[]
   /**
    * The rule's chip. Only the intraday pair gets one, and it carries no numbers: the readings stay
    * on the rows below, once.

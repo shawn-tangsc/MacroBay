@@ -4,10 +4,11 @@ import { readFileSync } from 'node:fs'
 import { act, createElement, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
+import { divergencePolicy } from '../../../../contracts/marketDivergence'
 import { productText } from '../../../shared/i18n/productText'
 import { DivergencePanel } from './DivergencePanel'
 
@@ -54,7 +55,26 @@ const priceStale: WithheldFixture = { pairId: 'flows-price', reason: 'leg-stale'
 const etfMissing: WithheldFixture = { pairId: 'flows-price', reason: 'leg-missing', leg: 'etf' }
 const stablecoinMissing: WithheldFixture = { pairId: 'liquidity-leverage', reason: 'leg-missing', leg: 'stablecoin' }
 
-const answer = (rows: readonly (typeof row | typeof observedRow)[], withheld: readonly WithheldFixture[] = []) =>
+/** 命中行带界：上界那一对，阈值从契约读，不在调用点写数字。 */
+const boundRow = {
+  ...row,
+  bound: {
+    leg: 'open-interest' as const,
+    comparator: 'atLeast' as const,
+    threshold: divergencePolicy.thresholds.openInterest24hUpPercent
+  }
+}
+/** 绝对值那一对：`atMost` 且阈值为正。 */
+const absoluteRow = {
+  ...observedRow,
+  bound: {
+    leg: 'open-interest' as const,
+    comparator: 'atMost' as const,
+    threshold: divergencePolicy.thresholds.openInterestFlatPercent
+  }
+}
+
+const answer = (rows: readonly (typeof row | typeof observedRow | typeof boundRow | typeof absoluteRow)[], withheld: readonly WithheldFixture[] = []) =>
   ({ state: 'available' as const, rows, withheld })
 
 const sentimentReason = text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment)
@@ -224,5 +244,99 @@ describe('divergence panel · the states around the line', () => {
     const markup = render(answer([row]), 'en-US')
     expect(markup).toContain(english.summary.divergence)
     expect(markup).not.toContain(text.summary.divergence)
+  })
+})
+
+describe('divergence panel · the rule clause on the muted line', () => {
+  const mount = async (state: Parameters<typeof DivergencePanel>[0]['state']) => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(scoped(createElement(DivergencePanel, { state, onRetry: () => undefined, text })))
+    })
+    await act(async () => { container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!.click() })
+    return { container, root }
+  }
+
+  it('writes the rule after the as-of instants, reading the threshold from the contract', async () => {
+    const { container, root } = await mount(answer([boundRow]))
+    const line = container.querySelector('.mi-divergence__asof')!.textContent ?? ''
+    const threshold = divergencePolicy.thresholds.openInterest24hUpPercent
+    // 子句恰好一次，顺序固定：截至在前、规则在后。
+    expect(line.match(new RegExp(text.boundAtLeast.split('{')[0]!.trim(), 'g'))).toHaveLength(1)
+    expect(line.indexOf(text.chipAsOf.split('{')[0]!.trim())).toBeLessThan(line.indexOf('规则'))
+    // 阈值只能来自契约：写死 +3 之类的数字会在这里对不上。
+    expect(line).toContain(`规则 ≥ +${threshold}%`)
+    // 今天投影层没有「还差」，所以不显示——规则是已知事实，距离不是。
+    expect(line).not.toContain('还差')
+    expect(line).not.toContain('|')
+    await act(async () => { root.unmount() })
+  })
+
+  it('says 变动不超过 for an absolute bound instead of drawing bars', async () => {
+    const { container, root } = await mount(answer([absoluteRow]))
+    const line = container.querySelector('.mi-divergence__asof')!.textContent ?? ''
+    const threshold = divergencePolicy.thresholds.openInterestFlatPercent
+    expect(line).toContain(`规则 变动不超过 ${threshold}%`)
+    // 判据：绝对值那条不出现 `|`，也不出现 abs(。
+    expect(line).not.toContain('|')
+    expect(line).not.toContain('abs(')
+    await act(async () => { root.unmount() })
+  })
+
+  it('keeps every threshold and distance decision out of the renderer', () => {
+    // 渲染层不许出现阈值字面量、也不许自己做百分比换算或取绝对值：那会变成规则的第二份实现。
+    const raw = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.tsx', 'utf8')
+    // 注释里的例子（「≥ +3%」）不算实现：只看真正会执行的代码。
+    const source = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(source).not.toMatch(/\+3|−3|\b1%/)
+    expect(source).not.toContain('toFixed')
+    expect(source).not.toContain('Math.abs')
+    expect(source).not.toMatch(/\*\s*100/)
+    // `|` 只在**文案**里禁：源码里的联合类型天生带竖线，那不是在给读者看记号。
+    expect(text.boundAtLeast).not.toContain('|')
+    expect(text.boundAtMostNegative).not.toContain('|')
+    expect(text.boundAtMostAbsolute).not.toContain('|')
+    expect(text.boundAtMostAbsolute).not.toContain('abs(')
+  })
+})
+
+describe('divergence panel · the explanation sits behind one icon', () => {
+  const mount = async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(scoped(createElement(DivergencePanel, { state: answer([boundRow]), onRetry: () => undefined, text })))
+    })
+    return { container, root }
+  }
+
+  it('renders the icon only while expanded, and keeps the four sentences out of the body', async () => {
+    const { container, root } = await mount()
+    const icon = () => container.querySelector(`button[aria-label="${text.helpLabel}"]`)
+    // 收起时 0 颗；正文里四句命中 0。
+    expect(icon()).toBeNull()
+    for (const sentence of text.notes) expect(container.textContent).not.toContain(sentence)
+    await act(async () => { container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!.click() })
+    // 展开时恰好 1 颗，正文里仍然 0 句。
+    expect(container.querySelectorAll(`button[aria-label="${text.helpLabel}"]`)).toHaveLength(1)
+    for (const sentence of text.notes) expect(container.textContent).not.toContain(sentence)
+    await act(async () => { root.unmount() })
+  })
+
+  it('holds all four sentences in the popover, one per line', async () => {
+    const { container, root } = await mount()
+    await act(async () => { container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!.click() })
+    const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.helpLabel}"]`)!
+    await act(async () => { trigger.focus() })
+    await vi.waitFor(() => {
+      const bubble = document.querySelector('[data-popover-content]')
+      expect(bubble).not.toBeNull()
+      expect([...(bubble?.querySelectorAll('[data-popover-line]') ?? [])].map(line => line.textContent))
+        .toEqual([...text.notes])
+    })
+    await act(async () => { root.unmount() })
   })
 })

@@ -509,6 +509,11 @@ mi: miText['zh-CN'],
               liquidationNoteUnreadable: '强平判定暂时读不到',
               liquidationNoteInsufficient: '强平判定数据不齐，这次不下结论',
               liquidationHiddenHits: '图上还有 {count} 次疑似爆仓没有标出',
+              markLong: '疑似多头爆仓 {pct}',
+              markShort: '疑似空头爆仓 {pct}',
+              markLongMany: '疑似多头爆仓 ×{count}',
+              markShortMany: '疑似空头爆仓 ×{count}',
+              markMixedMany: '疑似爆仓 ×{count}',
               signalHover: '{rule}｜窗口 {window}｜{kind}',
               signalKindInferred: '推断值',
               window15m: '15 分钟',
@@ -611,6 +616,19 @@ mi: miText['zh-CN'],
                 quietWithheldMany: '今天资金、杠杆与价格一致；另有 {count} 组暂时判不了',
                 allWithheld: '今天三组都暂时判不了'
               },
+              /* 「当前值 / 规则」那一行的三种写法。绝对值那条不写 `|OI|`——数学记号读者未必认，
+                 所以 atMost 且阈值为正时读作「不超过」。三种模板只在这一处拼，界面复核后改这里。 */
+              /* 收进 ⓘ 的四句（界面 2026-11-08 定稿逐字）。旧的两组说明（helpBullets / helpDetails）
+                 已被这四句取代，实现侧只渲染这里。 */
+              notes: [
+                '固定阈值判出，没有模型：同一组数字每次结论相同；只有两组数据方向相反才出现。',
+                '方向互冲、或某条腿贴着阈值，会被标出来交给右侧 AI 解释。',
+                '「舆情」是模型给标题打的标签（24 小时内明确表态的标题里看空的占比），不是交易所数据。',
+                '对时间：按天数据超 36 小时、或某腿滞后超自己节奏，就不下结论，并写明是哪条腿。'
+              ],
+              boundAtLeast: '规则 ≥ {threshold}',
+              boundAtMostNegative: '规则 ≤ {threshold}',
+              boundAtMostAbsolute: '规则 变动不超过 {threshold}',
               directions: { bearish: '偏空', bullish: '偏强' },
               /** 观察态的中性标签：消息偏空、价格没动。它不是方向色标签，所以单独一个键。 */
               observedLabel: '消息偏空 · 价格没动',
@@ -1825,6 +1843,11 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               liquidationNoteUnreadable: 'Liquidation read unavailable.',
               liquidationNoteInsufficient: 'Not enough data to judge liquidation this time.',
               liquidationHiddenHits: '{count} more suspected liquidations are not marked on the chart',
+              markLong: 'Suspected long liquidation {pct}',
+              markShort: 'Suspected short liquidation {pct}',
+              markLongMany: 'Suspected long liquidations ×{count}',
+              markShortMany: 'Suspected short liquidations ×{count}',
+              markMixedMany: 'Suspected liquidations ×{count}',
               signalHover: '{rule} | window {window} | {kind}',
               signalKindInferred: 'inferred',
               window15m: '15 minutes',
@@ -1919,6 +1942,15 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 quietWithheldMany: 'Funding, leverage and price all point the same way today; {count} pairs could not be judged',
                 allWithheld: 'None of the three pairs could be judged today'
               },
+              notes: [
+                'Fixed thresholds, no model: the same numbers always read the same way; a pair shows only when two readings point opposite ways.',
+                'Conflicting directions, or a leg right on its threshold, get marked and explained by the AI summary on the right.',
+                "Sentiment is a model's label on headlines (share of bearish among those that took a stance in 24h), not exchange data.",
+                'Readings are aligned first: a daily figure older than 36h, or a leg lagging its own cadence, gets no verdict — the row says which leg.'
+              ],
+              boundAtLeast: 'rule ≥ {threshold}',
+              boundAtMostNegative: 'rule ≤ {threshold}',
+              boundAtMostAbsolute: 'rule: within {threshold}',
               directions: { bearish: 'Bearish', bullish: 'Bullish' },
               /** The observed state's neutral label: bad news, price unmoved. Not a direction colour, so its own key. */
               observedLabel: 'Bad news, price unmoved',

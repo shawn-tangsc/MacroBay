@@ -1,4 +1,4 @@
-import type { DivergenceLeg, MarketDivergenceResult } from '../../../contracts/marketDivergence'
+import type { DivergenceBound, DivergenceLeg, MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 
 /** What the card renders: the rows it may show, and the pairs it had to refuse. */
@@ -21,6 +21,8 @@ export type DivergenceRowView = Readonly<{
   direction: 'bearish' | 'bullish' | 'unpriced'
   /** `observedAt` rides along so the chip's detail can say how fresh each leg is. */
   legs: readonly Readonly<{ id: DivergenceLeg['id']; text: string; observedAt: string }>[]
+  /** 判定那一刻用的界，只展示不推导（阈值与配对规则都在契约里）。 */
+  bound?: DivergenceBound
 }>
 
 /**
@@ -46,6 +48,7 @@ export function projectDashboardDivergence(value: unknown, asOf: string): Dashbo
       pairId: row.pairId,
       direction: row.direction,
       legs: row.legs.map(leg => ({ id: leg.id, text: formatLeg(leg), observedAt: leg.observedAt })),
+      ...(row.bound === undefined ? {} : { bound: row.bound })
     })),
     withheld
   }

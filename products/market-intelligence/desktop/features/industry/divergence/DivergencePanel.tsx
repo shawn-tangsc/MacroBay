@@ -1,14 +1,28 @@
 import { Tooltip } from '@platform/ui/components/tooltip'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
+import { Info } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useId, useState } from 'react'
 
+import type { DivergenceBound } from '../../../../contracts/marketDivergence'
 import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DivergencePanelText } from './divergenceText'
 
 import './DivergencePanel.css'
+
+/**
+ * 收进 ⓘ 的四句，逐句一个字面键（守卫要查点分形状，模板字符串会把拼写藏起来）。
+ */
+export const divergenceNoteKeys = Object.freeze([
+  'pages.intelligence.portal.dashboard.divergence.notes.0',
+  'pages.intelligence.portal.dashboard.divergence.notes.1',
+  'pages.intelligence.portal.dashboard.divergence.notes.2',
+  'pages.intelligence.portal.dashboard.divergence.notes.3'
+])
 
 /**
  * One line about the day, and the readings behind it when the reader asks.
@@ -75,6 +89,15 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
       )}
       {expandable && expanded ? (
         <div className="mi-divergence__content" data-divergence-detail id={detailId}>
+          {/* 说明只有一处：展开区标题行尾的一颗 ⓘ，悬停/聚焦打开，四句全在里面。
+              正文只留读数与证据——解释卡片本身怎么来的文字不占正文（界面 2026-11-08）。 */}
+          <div className="mi-divergence__detail-head">
+            <Popover lines={divergenceNoteKeys.map(labelKey => ({ labelKey }))} resolveText={resolveProductKey}
+              trigger={triggerProps => (
+                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
+                  icon={Info} resolveText={resolveProductKey} size="sm" variant="plain" />
+              )} />
+          </div>
           {/* 没判成的组放最上面：读者点开最常见的理由是「为什么这组没结论」。一组一条（按配对去重，
               不是按原因合并），原因用的就是卡片原来那几句，不另造。 */}
           {pairCount > 0 ? (
@@ -104,26 +127,18 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
                       </div>
                       {mechanism === undefined ? null : <p className="mi-divergence__mechanism">{mechanism}</p>}
                       {/* 每条腿各自的截至时刻：一条腿的「截至」不能替另一条腿作证。 */}
-                      <p className="mi-divergence__asof">{row.legs
-                        .map(leg => `${text.legs[leg.id]} ${text.chipAsOf.replace('{at}', when(leg.observedAt))}`)
-                        .join(text.withheldListSep)}</p>
+                      {/* 顺序固定：截至 → 规则（→ 还差）。「还差」要投影层给，今天没有这一项就不显示，
+                          不许拿规则反推一个距离。 */}
+                      <p className="mi-divergence__asof">{[
+                        row.legs.map(leg => `${text.legs[leg.id]} ${text.chipAsOf.replace('{at}', when(leg.observedAt))}`).join(' · '),
+                        row.bound === undefined ? undefined : boundRuleClause(text, row.bound)
+                      ].filter(part => part !== undefined).join(' · ')}</p>
                     </li>
                   </Tooltip>
                 )
               })}
             </ul>
           ) : null}
-          {/* 说明跟着详情走：卡面上零常驻解释，展开就等于「我在读这张卡」，规则与口径放在这一层末尾。 */}
-          <div className="mi-divergence__notes" data-divergence-notes>
-            <section className="mi-divergence__notes-group" data-divergence-rule>
-              <h3 className="mi-divergence__notes-title">{text.helpLabel}</h3>
-              {text.helpBullets.map(line => <p key={line}>{line}</p>)}
-            </section>
-            <section className="mi-divergence__notes-group" data-divergence-notes-detail>
-              <h3 className="mi-divergence__notes-title">{text.helpDetailsLabel}</h3>
-              {text.helpDetails.map(line => <p key={line}>{line}</p>)}
-            </section>
-          </div>
         </div>
       ) : null}
     </section>
@@ -161,6 +176,24 @@ function summaryLine(input: Readonly<{
   return reason === undefined
     ? fillLabelParams(text.summary.quietWithheldMany, { count: String(pairCount) })
     : fillLabelParams(text.summary.quietWithheldOne, { reason })
+}
+
+/**
+ * 「规则 ≥ +3%」这个子句——**全卡只在这里拼**（界面规格 v3 §八；复核后要改只改这一处）。
+ *
+ * 阈值只从契约读，不取绝对值、不做百分比换算；负号用排版减号。绝对值那条读作「变动不超过」——
+ * 它和「≤ −3%」是同一个 `atMost`，区别只在阈值是正是负，所以不新增第三个 comparator。
+ */
+export function boundRuleClause(text: DivergencePanelText, bound: DivergenceBound): string {
+  // 符号跟着句式走：`≥ +3%` 带正号（那是一个下界），`≤ −3%` 带排版减号，
+  // 绝对值那条写 `1%` 不带号（它说的是「变动不超过」，不是一个带方向的数）。
+  const absolute = bound.comparator === 'atMost' && bound.threshold > 0
+  const magnitude = bound.threshold < 0 ? `−${-bound.threshold}` : String(bound.threshold)
+  const threshold = absolute ? magnitude : bound.comparator === 'atLeast' && bound.threshold > 0 ? `+${magnitude}` : magnitude
+  const template = bound.comparator === 'atLeast'
+    ? text.boundAtLeast
+    : bound.threshold < 0 ? text.boundAtMostNegative : text.boundAtMostAbsolute
+  return fillLabelParams(template, { threshold: `${threshold}%` })
 }
 
 /**
