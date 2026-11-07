@@ -107,6 +107,7 @@ describe('platform notification event declarations', () => {
       catalog,
       settings,
       desktopSupported: true,
+      timeZone: 'UTC',
       now: '2026-11-06T12:00:00.000Z',
       request: {
         eventTypeId: 'platform.analysis.manual-failed',
@@ -133,6 +134,7 @@ describe('platform notification event declarations', () => {
       catalog,
       settings,
       desktopSupported: true,
+      timeZone: 'UTC',
       now: '2026-11-06T12:00:10.000Z',
       duplicate: first.record,
       request: {
@@ -188,6 +190,7 @@ describe('platform notification event declarations', () => {
         catalog,
         settings,
         desktopSupported: true,
+      timeZone: 'UTC',
         now: '2026-11-06T12:00:00.000Z',
         request: { eventTypeId, dedupeVars: { builder: 'template', vars }, actions: [], occurredAt: '2026-11-06T11:59:00.000Z' },
         ...(sameEventToday === undefined ? {} : { sameEventToday })
@@ -232,6 +235,7 @@ describe('platform notification event declarations', () => {
         defaultSnoozeMinutes: 10
       },
       desktopSupported: true,
+      timeZone: 'UTC',
       now: '2026-11-06T12:00:00.000Z',
       sameEventToday: { count: 5, lastOccurredAt: '2026-11-06T11:58:00.000Z' },
       request: {

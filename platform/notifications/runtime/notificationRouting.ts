@@ -1,4 +1,4 @@
-import { minutesOfDayInTimeZone } from '../../time/timeZoneClock'
+import { isInsideQuietHours } from './quietHours'
 import type { NotificationChannel, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDeeplink, NotificationRequest } from '../contracts/notificationContracts'
@@ -171,44 +171,19 @@ function applyQuietHoursAndPriority(
     urgent: 4
   }
 
+  // 免打扰判别走 `quietHours.ts` 一处实现：`unknown`（时区取不到）**不静音**，只有确定在窗口内才静音。
+  // `urgent` 是否继续豁免、以及手机那一档要不要一起静音，是同一件待用户拍板的事
+  // （验收 S6 与现行为不一致，见 `notificationRouting.test.ts` 里那条 skip 用例），
+  // 拍板前这里保持现状，不为其中一半先动手。
+  const insideQuietHours = isInsideQuietHours(settings, clock)
   return channels.filter((channel) => {
     if (!disruptive.has(channel)) return true
     if (minimumPriority && priorityRank[priority] < priorityRank[minimumPriority]) return false
-    if (settings.quietHours?.enabled && quietHoursVerdict(settings.quietHours, clock) === 'inside') {
-      return priority === 'urgent'
-    }
+    if (insideQuietHours) return priority === 'urgent'
     return true
   })
 }
 
-/**
- * 免打扰窗口的判定结果。`unknown` 与 `outside` 是两件事：前者是「拿不到现在几点」，
- * 后者是「拿得到，且不在窗口内」。混成一个布尔值，就等于把「不知道」当成「不在」。
- */
-type QuietHoursVerdict = 'inside' | 'outside' | 'unknown'
-
-function quietHoursVerdict(
-  quietHours: NonNullable<NotificationRuntimeSettings['quietHours']>,
-  clock: NotificationClock
-): QuietHoursVerdict {
-  // 免打扰窗口按设置的读者时区判断，不按运行这台机器的本地时间。
-  const currentMinutes = minutesOfDayInTimeZone(clock.now(), clock.timeZone())
-  // 时区用不了时不做判定：宁可多响一次，也不在错的钟点把提醒静音掉。
-  if (currentMinutes === null) return 'unknown'
-  const start = parseLocalMinutes(quietHours.startLocalTime)
-  const end = parseLocalMinutes(quietHours.endLocalTime)
-  if (start === end) return 'outside'
-  const inside = start < end
-    ? currentMinutes >= start && currentMinutes < end
-    : currentMinutes >= start || currentMinutes < end
-  return inside ? 'inside' : 'outside'
-}
-
-function parseLocalMinutes(value: string): number {
-  const [hours, minutes] = value.split(':').map((part) => Number.parseInt(part, 10))
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0
-  return hours * 60 + minutes
-}
 
 
 /** 旧的 `(record)` 调用点没有正文：用记录里的键兜底，保证端口永远拿到同一份形状。 */

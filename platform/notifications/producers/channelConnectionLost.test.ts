@@ -77,7 +77,7 @@ describe('channel connection lost producer', () => {
       push: { channelId: 'channel-1' }, retentionDays: 30, defaultSnoozeMinutes: 60
     }
     const plan = planNotificationSubmit({
-      catalog, settings, desktopSupported: true, now: input.occurredAt,
+      catalog, settings, desktopSupported: true, now: input.occurredAt, timeZone: 'UTC',
       request: buildChannelConnectionLostRequest(input)
     })
     expect(plan.kind).toBe('new')
@@ -93,7 +93,7 @@ describe('channel connection lost producer', () => {
 
     const withoutDesktop = planNotificationSubmit({
       catalog, settings: { ...settings, desktopEnabled: false }, desktopSupported: true,
-      now: input.occurredAt, request: buildChannelConnectionLostRequest(input)
+      now: input.occurredAt, timeZone: 'UTC', request: buildChannelConnectionLostRequest(input)
     })
     expect(withoutDesktop.kind).toBe('new')
     if (withoutDesktop.kind !== 'new') return

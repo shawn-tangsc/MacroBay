@@ -102,7 +102,9 @@ const base = {
     defaultSnoozeMinutes: 60
   },
   desktopSupported: true,
-  now: '2026-11-03T00:00:00.000Z'
+  now: '2026-11-03T00:00:00.000Z',
+  // 用例显式声明读者在哪个时区：免打扰窗口按它算，不再有「没传就按 UTC」的缺省。
+  timeZone: 'UTC'
 }
 
 describe('notification submit planner', () => {
@@ -259,5 +261,71 @@ describe('「看原文」动作：外链只有一种写法（契约 §7.5 ⑫）
       expect(plan.outcome.message).toContain('ftp:')
       expect(plan.outcome.message).not.toContain('token=abc')
     }
+  })
+})
+
+describe('免打扰时段只进中心（验收 S6 / 测试单第 18 条）', () => {
+  // 窗口 22:00–08:00（读者时区 UTC）；`platform.ready` 批准 center + channel。
+  const quiet = {
+    ...base.settings,
+    quietHours: { enabled: true, startLocalTime: '22:00', endLocalTime: '08:00' }
+  }
+  const channelRequest = request({
+    eventTypeId: 'platform.ready',
+    dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } },
+    actions: []
+  })
+
+  it('drops the phone inside the window and keeps the centre record', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: quiet,
+      now: '2026-11-03T23:30:00.000Z',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 手机这一档在窗口内根本不排：夜里推一条到读者身上，和弹一下没有区别。
+    expect(plan.outcome.levels).not.toContain('channel')
+    expect(plan.outcome.levels).toContain('center')
+    expect(plan.record.delivery.push).toBeUndefined()
+  })
+
+  it('keeps the phone outside the window', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: quiet,
+      now: '2026-11-03T12:30:00.000Z',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+  })
+
+  it('does not silence anything when the zone cannot be read', () => {
+    // S6 原话：时区判断不出来时不静音。`unknown` 不许折成 `inside`，也不许折成「不在」——
+    // 它是「不知道」，而「不知道」的默认动作是照常投递。
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: quiet,
+      now: '2026-11-03T23:30:00.000Z',
+      timeZone: 'Mars/Olympus_Mons',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+  })
+
+  it('behaves the same when quiet hours are switched off', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      now: '2026-11-03T23:30:00.000Z',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
   })
 })

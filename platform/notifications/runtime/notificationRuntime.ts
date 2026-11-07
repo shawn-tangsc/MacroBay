@@ -215,7 +215,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       desktopSupported: deps.desktopSupported?.() ?? true,
       request,
       sameEventToday,
-      now
+      now,
+      timeZone: deps.clock.timeZone()
     })
     if (first.kind === 'rejected') {
       // 被上限/冷却拦下的那一条不能凭空消失：「今天还出过一次」要落到今天最后那条同事件记录上，
@@ -258,6 +259,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
           request,
           sameEventToday,
           now,
+          timeZone: deps.clock.timeZone(),
           duplicate
         })
       : first

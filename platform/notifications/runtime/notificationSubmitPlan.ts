@@ -30,6 +30,7 @@ import type {
   NotificationSubmitRequest
 } from '../contracts/notificationContracts'
 import { createNotificationId } from '../store/notificationStore'
+import { isInsideQuietHours } from './quietHours'
 
 export type NotificationSubmitPlan =
   | { kind: 'rejected'; outcome: Extract<NotificationSubmitOutcome, { kind: 'rejected' }> }
@@ -64,6 +65,13 @@ export type NotificationSubmitPlanInput = {
    */
   sameEventToday?: Readonly<{ count: number; lastOccurredAt: string | null }>
   now: string
+  /**
+   * 读者时区（`clock.timeZone()`），免打扰窗口按它算，不按这台机器的本地时间。
+   *
+   * 拿不到/用不了时 `quietHours.ts` 判成 `unknown`，**不静音**（验收 S6 原话）——宁可多响一次，
+   * 也不在错的钟点把提醒吞掉。手机那一档的判定也走这里，所以两处不会各说一套。
+   */
+  timeZone: string
 }
 
 /**
@@ -177,7 +185,13 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   }
 
   const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported)
-  const levels = effectiveLevels(entry, surfaces)
+  // 免打扰时段**只进中心**：手机这一档在这里摘掉（验收 S6 / 用户测试单第 18 条
+  // 「只进中心，不弹、不发手机」）。以前只静音本机三种打扰，手机照样推——那是缺陷，不是设计。
+  const insideQuietHours = isInsideQuietHours(input.settings, {
+    now: () => new Date(input.now),
+    timeZone: () => input.timeZone
+  })
+  const levels = effectiveLevels(entry, surfaces, !insideQuietHours)
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
@@ -355,12 +369,14 @@ function crossProductPrefix(
  */
 function effectiveLevels(
   entry: NotificationEventCatalogEntry,
-  surfaces: NotificationSurfacePlan
+  surfaces: NotificationSurfacePlan,
+  /** 免打扰之外才排手机：窗口内只进中心，这是 S6 的判据，不是本机开关的事。 */
+  channelAllowed: boolean
 ): readonly NotificationApprovedLevel[] {
   const levels: NotificationApprovedLevel[] = ['center']
   if (surfaces.desktop) levels.push('desktop')
   if (surfaces.toast) levels.push('toast')
-  if (entry.approvedDisruptionLevels.includes('channel')) levels.push('channel')
+  if (channelAllowed && entry.approvedDisruptionLevels.includes('channel')) levels.push('channel')
   return Object.freeze(levels)
 }
 
