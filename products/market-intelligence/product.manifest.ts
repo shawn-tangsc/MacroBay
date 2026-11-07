@@ -313,8 +313,9 @@ export const marketIntelligenceProductManifest = {
     }),
     notificationEvent('market-intelligence.signal.triggered', {
       category: 'reminder',
-      // 正文按「规则 × 档位」四个变体；标题是 `{asset} {headline}`，资产名开头。
-      bodyVariants: ['etfOutflow', 'etfOutflowAggravated', 'oiDrop', 'oiDropAggravated'],
+      // 正文按「规则 × 档位」分变体；标题是 `{asset} {headline}`，资产名开头。
+      // `oiDrop*` 只服务已落库的旧记录；新记录按方向分成多头/空头四条（方向是读者做动作的前提）。
+      bodyVariants: ['etfOutflow', 'etfOutflowAggravated', 'oiDrop', 'oiDropAggravated', 'oiLong', 'oiLongAggravated', 'oiShort', 'oiShortAggravated'],
       requiresUserAction: false,
       // 信息类只走应用内与手机：桌面按「失败 / 需修正 / 系统状态」三类收口，不再申请桌面档。
       requestedDisruptionLevels: ['channel'],

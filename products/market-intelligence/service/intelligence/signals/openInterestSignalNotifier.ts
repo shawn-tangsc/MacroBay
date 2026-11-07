@@ -4,7 +4,7 @@ import type { OpenInterestHistoryResult } from '../../../contracts/openInterestH
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { liquidationHintPolicy } from '../../../contracts/openInterestPositioning'
-import { openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
+import { openInterestSignalsFromHistory, openInterestShortSignalRule, openInterestSignalRule } from './openInterestSignals'
 import { signalAssetSymbol } from './signalNotificationCopy'
 import { renderOpenInterestSentence } from './signalNotificationSentence'
 
@@ -92,12 +92,16 @@ export function buildOpenInterestSignalRequest(
 
   const aggravated = signal.severity === 'high'
   // 成品句子在源头拼好（契约 v2.56）；阈值取规则常量，句子跟着常量走，模板里没有第二个数。
+  // 方向由规则 id 决定（契约：方向是规则的属性，不是信号字段）；读数符号只是复核。
+  const direction = signal.ruleId === openInterestShortSignalRule.ruleId ? 'short' as const : 'long' as const
   const rendered = renderOpenInterestSentence({
     asset: signalAssetSymbol(signal.asset),
     dropPct,
     volumeMultiple,
     notionalUsd,
     thresholdPct: aggravated ? thresholds.strongDropPct : thresholds.dropPct,
+    direction,
+    ...(Number.isFinite(signal.values.priceChangePct) ? { pricePct: signal.values.priceChangePct } : {}),
     aggravated
   })
   if (rendered === undefined) return undefined

@@ -80,6 +80,10 @@ export type OpenInterestSentenceInput = Readonly<{
   notionalUsd: number
   /** 规则常量：常规阈值或强阈值，二选一。 */
   thresholdPct: number
+  /** 哪一边被清：词与句子都跟着它分叉，读者就不会把两头做反。 */
+  direction: 'long' | 'short'
+  /** 空头那条的带符号涨幅（正数）；多头那条不用。 */
+  pricePct?: number
   aggravated: boolean
 }>
 
@@ -88,12 +92,19 @@ export function renderOpenInterestSentence(
 ): NotificationContentByLanguage | undefined {
   const finite = [input.dropPct, input.volumeMultiple, input.notionalUsd, input.thresholdPct]
   if (!finite.every((value) => Number.isFinite(value))) return undefined
-  const variant: SignalNotificationVariant = input.aggravated ? 'oiDropAggravated' : 'oiDrop'
+  // 空头那条的正文写「涨了多少」：缺这个数就不发，绝不拿跌幅顶替。
+  if (input.direction === 'short' && !Number.isFinite(input.pricePct)) return undefined
+  const short = input.direction === 'short'
+  const variant: SignalNotificationVariant = short
+    ? (input.aggravated ? 'oiShortAggravated' : 'oiShort')
+    : (input.aggravated ? 'oiLongAggravated' : 'oiLong')
   return compose({ asset: input.asset, variant }, (language): Record<string, string | null> => {
     const dropPct = formatNotificationNumber({ number: input.dropPct, kind: 'pct' }, language)
     const thresholdPct = formatNotificationNumber({ number: input.thresholdPct, kind: 'pct' }, language)
+    const pricePct = short ? formatNotificationNumber({ number: input.pricePct!, kind: 'pct' }, language) : dropPct
     return {
       dropPct,
+      pricePct,
       ...(input.aggravated ? { strongPct: thresholdPct } : { thresholdPct }),
       multiple: formatNotificationNumber({ number: input.volumeMultiple, kind: 'multiple' }, language),
       notional: formatNotificationNumber({ number: input.notionalUsd, kind: 'usd' }, language)

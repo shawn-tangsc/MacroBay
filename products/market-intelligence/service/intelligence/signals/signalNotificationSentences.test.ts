@@ -91,8 +91,8 @@ describe('signal notification sentences', () => {
     const request = buildOpenInterestSignalRequest(signal())
     const rendered = request?.rendered
     expect(rendered).toBeDefined()
-    expect(rendered!['zh-CN']!.title).toBe('BTC 持仓骤降')
-    expect(rendered!['en-US']!.title).toBe('BTC open interest dropped')
+    expect(rendered!['zh-CN']!.title).toBe('BTC 多头爆仓')
+    expect(rendered!['en-US']!.title).toBe('BTC long liquidations')
     // 两份都在：只给一份就把语言钉死在提交那一刻，切语言后历史通知不会跟着变。
     expect(Object.keys(rendered!).sort()).toEqual(['en-US', 'zh-CN'])
     // 三段都要非空，`reason` 也走成品（手机上它与正文一起发）。
@@ -197,11 +197,11 @@ describe('signal notification sentences', () => {
             ref: {
               scope: 'product',
               productId: 'market-intelligence',
-              key: 'notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated'
+              key: 'notification.event.market-intelligence.signal.triggered.headline.oiLongAggravated'
             }
           }
         },
-        bodyVariant: 'oiDropAggravated',
+        bodyVariant: 'oiLongAggravated',
         bodyParams: {
           dropPct: { number: -3.4, kind: 'pct' },
           strongPct: { number: -2.5, kind: 'pct' },

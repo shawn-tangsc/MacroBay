@@ -68,13 +68,13 @@ describe('open interest signal notification', () => {
     expect(request.titleParams).toBeUndefined()
     expect(request.rendered).toEqual({
       'zh-CN': {
-        title: 'BTC 持仓骤降加剧',
-        body: '15 分钟跌 2.7%（强阈值 2.5%），成交放大 3.4 倍，规模约 74 亿美元',
+        title: 'BTC 多头爆仓加剧',
+        body: '多头被强制平仓：15 分钟跌 2.7%（强阈值 2.5%），成交放大 3.4 倍，规模约 74 亿美元',
         reason: '规则命中，且读数达到这条规则的阈值。'
       },
       'en-US': {
-        title: 'BTC open interest fell further',
-        body: 'Down 2.7% in 15 min (strong threshold 2.5%), volume 3.4×, about $7.4B',
+        title: 'BTC long liquidations deepened',
+        body: 'Longs forced out: down 2.7% in 15 min (strong threshold 2.5%), volume 3.4×, about $7.4B',
         reason: 'A rule matched and the reading reached its threshold.'
       }
     })
@@ -111,9 +111,9 @@ describe('open interest signal notification', () => {
     await notify()
     const request = submit.mock.calls[0]![0]
     expect(request.signalSeverity).toBe('medium')
-    expect(request.rendered?.['zh-CN']!.title).toBe('BTC 持仓骤降')
-    expect(request.rendered?.['zh-CN']!.body).toBe('15 分钟跌 1.6%（阈值 1.5%），成交放大 2.2 倍，规模约 74 亿美元')
-    expect(request.rendered?.['en-US']!.body).toBe('Down 1.6% in 15 min (threshold 1.5%), volume 2.2×, about $7.4B')
+    expect(request.rendered?.['zh-CN']!.title).toBe('BTC 多头爆仓')
+    expect(request.rendered?.['zh-CN']!.body).toBe('多头被强制平仓：15 分钟跌 1.6%（阈值 1.5%），成交放大 2.2 倍，规模约 74 亿美元')
+    expect(request.rendered?.['en-US']!.body).toBe('Longs forced out: down 1.6% in 15 min (threshold 1.5%), volume 2.2×, about $7.4B')
   })
 
   it('gives the same bucket the same vars on the next tick, so the platform merges instead of re-pushing', async () => {
