@@ -5,6 +5,7 @@ import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@plat
 import type { MarketCalendarPage, MarketCalendarQuery } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
 import { registerCalendarEventReminderJob } from './calendarEventReminderJob'
+import type { CalendarReminderEvent } from './calendarEventReminderScan'
 import type { CalendarReminderSettingsStore } from './calendarEventReminderSettingsStore'
 
 /**
@@ -27,6 +28,13 @@ export type CalendarEventReminderWiring = Readonly<{
   read: () => CalendarReminderSettings
   write: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderSettings
   applySchedule: (enabled: boolean) => void
+  /**
+   * 提醒作业实际使用的那一份事件读取（当前月 + 下月、身份 `observationKey ?? eventKey`）。
+   *
+   * **就是交给作业的同一个函数，原样暴露**，供「通知测试」选样例：测试样例必须与真实提醒同源，
+   * 在这里另写一份读取会让按钮演示一条读者不会收到的链。只读，不改作业的既有接线与行为。
+   */
+  readEvents: () => readonly CalendarReminderEvent[]
 }>
 
 export function registerCalendarEventReminder(input: Readonly<{
@@ -41,30 +49,35 @@ export function registerCalendarEventReminder(input: Readonly<{
   const now = input.now ?? (() => new Date().toISOString())
   const settings = input.settings
 
+  /**
+   * 只读当前月与下一个月：提醒窗口最多 120 分钟，跨月那几小时靠第二个月兜住。
+   *
+   * **身份用 `observationKey`（稳定）而不是 `eventKey`**：后者是每批采集的 HMAC，拿它做去重键
+   * 会让同一条事件每一轮都变成「新事件」——同一件事被反复提醒，而且不报错。
+   *
+   * 提到这里只为一件事：让 `readEvents` 能原样交给调用方（见 `CalendarEventReminderWiring`），
+   * 作业与测试样例因此读的是**同一个函数**，不是两份会各自漂移的实现。
+   */
+  const readEvents = (): readonly CalendarReminderEvent[] => {
+    const at = new Date(now())
+    const months = [at, new Date(at.getFullYear(), at.getMonth() + 1, 1)]
+    const asOf = at.toISOString()
+    const events = months.flatMap((month) => {
+      const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+      const page = input.queryMonth({ month: monthKey, locale: 'zh', asOf })
+      return page.state === 'available' ? [...page.events] : []
+    })
+    return events.map((event) => ({
+      eventKey: event.observationKey ?? event.eventKey,
+      title: event.title,
+      scheduledAt: event.scheduledAt,
+      importance: event.importance
+    }))
+  }
+
   const job = registerCalendarEventReminderJob(input.jobRuntime, {
     readSettings: () => settings.read(),
-    /**
-     * 只读当前月与下一个月：提醒窗口最多 120 分钟，跨月那几小时靠第二个月兜住。
-     *
-     * **身份用 `observationKey`（稳定）而不是 `eventKey`**：后者是每批采集的 HMAC，拿它做去重键
-     * 会让同一条事件每一轮都变成「新事件」——同一件事被反复提醒，而且不报错。
-     */
-    readEvents: () => {
-      const at = new Date(now())
-      const months = [at, new Date(at.getFullYear(), at.getMonth() + 1, 1)]
-      const asOf = at.toISOString()
-      const events = months.flatMap((month) => {
-        const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
-        const page = input.queryMonth({ month: monthKey, locale: 'zh', asOf })
-        return page.state === 'available' ? [...page.events] : []
-      })
-      return events.map((event) => ({
-        eventKey: event.observationKey ?? event.eventKey,
-        title: event.title,
-        scheduledAt: event.scheduledAt,
-        importance: event.importance
-      }))
-    },
+    readEvents,
     submit: input.submit as never,
     now,
     timeZone: input.timeZone,
@@ -72,5 +85,5 @@ export function registerCalendarEventReminder(input: Readonly<{
       console.log(JSON.stringify({ marker: 'MI_CALENDAR_REMINDER', ...line }))
     }
   })
-  return { read: () => settings.read(), write: (patch) => settings.write(patch), applySchedule: job.applySchedule }
+  return { read: () => settings.read(), write: (patch) => settings.write(patch), applySchedule: job.applySchedule, readEvents }
 }
