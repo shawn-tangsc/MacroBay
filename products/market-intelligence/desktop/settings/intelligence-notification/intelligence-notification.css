@@ -4,8 +4,17 @@
  * 视觉沿用频道页那张卡：960 上限、行高 48、组标题小号、说明全进 ⓘ。
  * 颜色只用平台 token，不写十六进制、不给正文上状态色——失败提示用中性文字 + `role="alert"`。
  */
-.intelligence-notification-workspace {
+/*
+ * 这一页**自带**「左列表 / 右详情」两列（`.intelligence-notification-panes`），
+ * 所以必须把平台设置页壳的那个 `318px + 1fr` 左栏关掉。
+ *
+ * 关掉之前的样子：整页被放进平台壳的 **318px 那一格**，右边是空的——列表名字被裁成
+ * 「模块…」、详情挤成一条窄带。2026-11-07 用户连着三次看到的就是这个。
+ * 平台里同类页面（网页搜索、存储与缓存）早就用同一个办法覆盖，这里跟它们一致。
+ */
+.settings-workspace.intelligence-notification-workspace {
   padding: 24px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .intelligence-notification-card {
@@ -86,7 +95,8 @@
 }
 
 @media (max-width: 1280px) {
-  .intelligence-notification-workspace {
+  /* 与上面那条同为两段选择器，否则被它的 padding: 24 压住、窄窗反而不收。 */
+  .settings-workspace.intelligence-notification-workspace {
     padding: 16px;
   }
 
