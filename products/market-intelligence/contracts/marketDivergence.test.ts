@@ -216,3 +216,37 @@ describe('the bound a pair was judged on', () => {
     expect(isMarketDivergenceResult(malformed, asOf)).toBe(false)
   })
 })
+
+describe('why escalation cannot fire today — and why the branches stay', () => {
+  /**
+   * 三对共用同一条 OI 腿，三条条件把它切成互不相交的区间：≥ +3% / ≤ −3% / |·| ≤ 1%。
+   * 因此同一时刻最多一行，`minimumPairs` 与「方向互冲」两条分支今天都不可达。
+   *
+   * 这条用例把「不可达」变成被检查的事实，而不是删掉一段保险：
+   * - 谁放宽任一档 → 区间相交 → 红，红的信息就是「这两条升格触发从此可达，保留它们是对的」；
+   * - 谁把三条改成不再共用同一条腿 → 第一条断言红。
+   */
+  it('keeps the three open-interest bands disjoint', () => {
+    const entries = Object.entries(divergencePairBounds)
+    expect(entries).toHaveLength(3)
+    // 三条界必须共用同一条腿：换成别的腿，下面的区间推理就不再成立。
+    expect(new Set(entries.map(([, bound]) => bound.leg))).toEqual(new Set(['open-interest']))
+    const intervalOf = (bound: { comparator: 'atMost' | 'atLeast'; threshold: number }): Readonly<{ lo: number; hi: number }> =>
+      bound.comparator === 'atLeast'
+        ? { lo: bound.threshold, hi: Number.POSITIVE_INFINITY }
+        : bound.threshold > 0
+          // 绝对值那条：|x| ≤ t 读作 [−t, +t]。
+          ? { lo: -bound.threshold, hi: bound.threshold }
+          : { lo: Number.NEGATIVE_INFINITY, hi: bound.threshold }
+    const intervals = entries.map(([pairId, bound]) => ({ pairId, ...intervalOf(bound) }))
+    for (let left = 0; left < intervals.length; left += 1) {
+      for (let right = left + 1; right < intervals.length; right += 1) {
+        const a = intervals[left]!
+        const b = intervals[right]!
+        const overlap = Math.max(a.lo, b.lo) <= Math.min(a.hi, b.hi)
+        // 相交即红：那时两行可能同时成立，`minimumPairs` 与「方向互冲」不再是死代码。
+        expect({ pair: [a.pairId, b.pairId], overlap }).toEqual({ pair: [a.pairId, b.pairId], overlap: false })
+      }
+    }
+  })
+})

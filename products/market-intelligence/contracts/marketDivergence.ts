@@ -53,6 +53,15 @@ export const divergencePolicy = Object.freeze({
    * The rules are the product; the model only reads the cases a threshold table cannot phrase
    * well. Two pairs at once, opposite directions, or a leg sitting on its threshold are the
    * shapes where a table's answer reads either arbitrary or mechanical.
+   *
+   * **Both of the first two are unreachable under today's thresholds, and that is not a reason to
+   * delete them.** The three pairs all read the same open-interest leg, and their conditions cut
+   * that leg into disjoint bands (≥ +3% / ≤ −3% / |·| ≤ 1%), so at most one row can exist at a
+   * time — which makes both `minimumPairs` and the "directions contradict each other" branch
+   * impossible today. They are the insurance for the day someone widens a band: with two rows
+   * possible, two readings pointing the same way would otherwise silently lose the one shape that
+   * means "two things happened at once". `marketDivergence.test.ts` asserts the bands stay
+   * disjoint; widening one turns that test red and names this decision.
    */
   escalation: Object.freeze({
     /** A second pair disagreeing at the same time is rare enough to deserve a written reading. */
