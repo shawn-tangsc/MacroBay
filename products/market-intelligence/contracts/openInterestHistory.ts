@@ -132,6 +132,11 @@ export type OpenInterestHistoryResult =
       eth: readonly OpenInterestPoint[]
       change?: Readonly<Record<'btc' | 'eth', OpenInterestChange>>
       liquidationHints?: readonly OpenInterestLiquidationHint[]
+      /**
+       * 窗口内命中总数（**截断前**）。`liquidationHints` 只带最近 8 条，卡上要靠这个数说
+       * 「还有 N 次未标出」——只给一个布尔，读者会把截断当成全部。
+       */
+      liquidationHintsTotal?: number
       liquidationHintsTruncated?: boolean
       /**
        * `unavailable` means the volume leg could not answer, so an empty `liquidationHints`
@@ -220,6 +225,13 @@ export function isOpenInterestHistoryResult(value: unknown, asOf: string, window
     }
   }
 
+  if (record.liquidationHintsTotal !== undefined) {
+    const total = record.liquidationHintsTotal
+    if (!Number.isSafeInteger(total) || (total as number) < 0) return false
+    // 计数不可能少于已经返回的那些：少了就是两个数各说各的。
+    const shown = Array.isArray(record.liquidationHints) ? record.liquidationHints.length : 0
+    if ((total as number) < shown) return false
+  }
   if (record.liquidationHintsTruncated !== undefined && typeof record.liquidationHintsTruncated !== 'boolean') return false
   if (record.liquidationHintsState !== 'available' && record.liquidationHintsState !== 'unavailable') return false
   return true

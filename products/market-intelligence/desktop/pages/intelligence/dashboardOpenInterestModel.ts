@@ -51,6 +51,8 @@ export type DashboardPositioningViewState =
       staleSince?: string
       /** 当前窗口内的全部命中，图上逐个画点（查询已按 window 裁剪）。 */
       hints: readonly DashboardLiquidationMark[]
+      /** 窗口内有、但没画出来的命中数（查询只给最近 8 条）。0 表示「都画出来了」。 */
+      hiddenHits: number
       /** What the module's rule says right now. Hidden means "nothing to say" — no chip at all. */
       signal: DashboardSignalChip
       /** 这条信号的分析到哪一步；与信号并列，不塞进 `signal`。 */
@@ -117,6 +119,8 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
       ...(value.change?.eth ? { changeEth: value.change.eth } : {}),
       // 点来自当前窗口的命中（账本），牌子来自同一套规则的窗口判定；两者同源、互不替代。
       hints: (value.liquidationHintsState === 'available' ? value.liquidationHints ?? [] : []).map(mark),
+      // 截断才报数：不截断时读者不需要知道「一共有几条」，卡面也不多写一个字。
+      hiddenHits: Math.max(0, (value.liquidationHintsTotal ?? value.liquidationHints?.length ?? 0) - (value.liquidationHints?.length ?? 0)),
       signal: { state: 'hidden' },
       onReload,
       ...(staleSince ? { staleSince } : {})

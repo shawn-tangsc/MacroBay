@@ -32,6 +32,7 @@ const positioning: DashboardPositioningViewState = {
   btc: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
   eth: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
   hints: [],
+  hiddenHits: 0,
   changeBtc: { h1Pct: -0.4, h24Pct: -6.5 },
   changeEth: { h1Pct: 0.2, h24Pct: 2.7 },
   signal: { state: 'hidden' },
@@ -313,6 +314,31 @@ describe('combined readout', () => {
   })
 })
 
+describe('the truncated-hit count', () => {
+  const hits = (count: number) => Array.from({ length: count }, (_, index) => ({
+    asset: 'btc' as const,
+    observedAt: at(30 + index * 20),
+    notionalUsd: 8.9e9,
+    dropPct: -1.9,
+    volumeMultiple: 3
+  }))
+
+  it('draws the eight marks the DTO carries and says how many it could not draw', () => {
+    const markup = render({ positioning: { ...availablePositioning, hints: hits(8), hiddenHits: 2 } })
+    expect(markup.split('data-hint="').length - 1).toBe(8)
+    expect(markup).toContain('还有 2 次命中未标出')
+    expect(markup.split('data-hidden-hits').length - 1).toBe(1)
+  })
+
+  it('says nothing at all when every hit fits', () => {
+    // 不截断时这一行**不渲染**——不是空着，也不许常驻：用户要的卡面是干净的。
+    const markup = render({ positioning: { ...availablePositioning, hints: hits(5), hiddenHits: 0 } })
+    expect(markup.split('data-hint="').length - 1).toBe(5)
+    expect(markup.split('data-hidden-hits').length - 1).toBe(0)
+    expect(markup).not.toContain('未标出')
+  })
+})
+
 describe('the liquidation note: three states, one line, never two', () => {
   const noteOf = (positioningState: DashboardPositioningViewState) => {
     const markup = render({ positioning: positioningState })
@@ -529,6 +555,7 @@ describe('the module rule chip', () => {
     state: 'available' as const,
     window: '7d' as const,
     hints: [] as const,
+    hiddenHits: 0 as const,
     onReload: () => undefined,
     btc: positioning.state === 'available' ? positioning.btc : [],
     eth: positioning.state === 'available' ? positioning.eth : [],

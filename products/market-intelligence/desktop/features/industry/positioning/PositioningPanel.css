@@ -178,3 +178,10 @@ body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }
 }
 .mi-positioning-panel__liquidation-retry:hover { color: var(--mi-dashboard-lime); }
 .mi-positioning-panel__liquidation-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 截断时才出现的一行：图上只画最近 8 条，剩下的只报个数。与脚注同语气（muted、单行、无图标），
+   但位置在图上、靠近它解释的那些点。命中数不超上限时这一行**不存在**——不是空着，是不渲染。 */
+.mi-positioning-panel__hidden-hits {
+  margin: 4px 0 0; color: var(--mi-dashboard-muted);
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+}

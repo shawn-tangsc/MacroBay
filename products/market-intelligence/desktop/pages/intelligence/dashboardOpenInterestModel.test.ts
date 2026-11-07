@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import type { ModuleSignalRead } from '../../../contracts/moduleSignalRead'
-import { projectModuleSignalChip } from './dashboardOpenInterestModel'
+import { projectDashboardPositioning, projectModuleSignalChip } from './dashboardOpenInterestModel'
 
 const at = '2026-10-31T14:30:00.000Z'
 
@@ -75,5 +75,24 @@ describe('module signal chip', () => {
     const chip = projectModuleSignalChip(read([signal({ severity: 'high' })]))
     expect(JSON.stringify(chip)).not.toContain('severity')
     expect(JSON.stringify(chip)).not.toContain('high')
+  })
+})
+
+describe('the window projection', () => {
+  const dto = (shown: number, total: number) => ({
+    state: 'available' as const, asOf: at, window: '24h' as const,
+    btc: [{ observedAt: at, notionalUsd: 8.9e9 }], eth: [],
+    liquidationHints: Array.from({ length: shown }, (_, index) => ({
+      observedAt: new Date(Date.parse(at) - index * 900_000).toISOString(),
+      asset: 'btc' as const, direction: 'long' as const, dropPct: -1.9, volumeMultiple: 3, notionalUsd: 8.9e9
+    })),
+    liquidationHintsTotal: total,
+    liquidationHintsState: 'available' as const
+  })
+
+  it('reports the hits it could not draw, and reports zero when none were cut', () => {
+    // 只给布尔的话，读者会把「画了 8 个」当成「窗口里就 8 次」——把截断说成全部。
+    expect(projectDashboardPositioning(dto(8, 10), at, '24h')).toMatchObject({ state: 'available', hiddenHits: 2 })
+    expect(projectDashboardPositioning(dto(5, 5), at, '24h')).toMatchObject({ state: 'available', hiddenHits: 0 })
   })
 })

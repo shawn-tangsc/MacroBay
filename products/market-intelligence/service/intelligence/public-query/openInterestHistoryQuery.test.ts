@@ -77,6 +77,26 @@ describe('open interest query', () => {
     expect(daily.liquidationHints).toBeUndefined()
   })
 
+  it('counts every hit in the window, not just the eight it draws', async () => {
+    // 5 桶 × 2 资产 = 10 次命中；DTO 只带最近 8 条，但必须把总数说出来，否则读者会把截断当全部。
+    const collapsing = (count: number): PositioningStoredBar[] => rows(count, (index, bar) => {
+      const age = count - 1 - index
+      if (age >= 5) return bar
+      const step = 5 - age
+      return {
+        ...bar,
+        notionalUsd: 8_000_000_000 * Math.pow(0.974, step),
+        volumeBase: 2_500,
+        closePrice: 79_000 * Math.pow(0.99, step)
+      }
+    })
+    const result = await queryOpenInterestHistoryAsync({ asOf, window: '24h', store: store(collapsing(120)) })
+    if (result.state !== 'available') throw new Error('expected available')
+    expect(result.liquidationHints).toHaveLength(8)
+    expect(result.liquidationHintsTotal).toBe(10)
+    expect(result.liquidationHintsTruncated).toBe(true)
+  })
+
   it('reports marks unavailable when the volume leg is missing, without blanking the series', async () => {
     const halfVolume = rows(672, (index, bar) => index % 2 === 0 ? { ...bar, volumeBase: null, closePrice: null } : bar)
     const result = await queryOpenInterestHistoryAsync({ asOf, window: '7d', store: store(halfVolume) })

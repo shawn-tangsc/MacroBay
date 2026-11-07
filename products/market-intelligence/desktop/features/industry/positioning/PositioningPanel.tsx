@@ -254,6 +254,12 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           {available
             ? <>
                 <PositioningChart positioning={positioning} funding={funding} text={text} />
+                {/* 只在真的画不下时报数：命中 0 时这一行不存在，卡面不多一个字。 */}
+                {positioning.hiddenHits > 0 ? (
+                  <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
+                    {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
+                  </p>
+                ) : null}
               </>
             : status}
         </div>

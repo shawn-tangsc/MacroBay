@@ -36,6 +36,8 @@ export type PositioningPanelText = Readonly<{
   liquidationNoteNoHit: string
   liquidationNoteUnreadable: string
   liquidationNoteInsufficient: string
+  /** 图上画不下、只报个数的那一行；只在真的截断时出现（`{count}` 次未标出）。 */
+  liquidationHiddenHits: string
   /** The module rule's chip: what it says, and what its own hover line is made of. */
   signalHover: string
   signalKindInferred: string

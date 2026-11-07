@@ -69,6 +69,8 @@ export async function queryOpenInterestHistoryAsync(input: Readonly<{
       eth: eth.points,
       ...(change ? { change } : {}),
       ...(usableHints.length > 0 ? { liquidationHints: Object.freeze(usableHints.slice(-openInterestHistoryPolicy.maximumLiquidationHints)) } : {}),
+      // 计数是「判定产出的全部命中」，不是「画出来的那几个」：截断时卡上要靠它说还差多少。
+      ...(usableHints.length > 0 ? { liquidationHintsTotal: usableHints.length } : {}),
       ...(truncated || usableHints.length > openInterestHistoryPolicy.maximumLiquidationHints ? { liquidationHintsTruncated: true } : {}),
       liquidationHintsState: hintsState
     }
