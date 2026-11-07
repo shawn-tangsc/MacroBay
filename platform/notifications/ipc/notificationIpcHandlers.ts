@@ -31,7 +31,7 @@ export function registerNotificationIpcHandlers(): void {
   // 测试与真实走同一个 `submit`，只多 `namespace: 'test'` 去重域与候选自带的【测试】前缀。
   ipcMain.handle(IpcChannels.notificationsSendTest, async (_event, input?: { kind?: string }) => {
     const kind = input?.kind
-    if (kind !== 'sentiment' && kind !== 'calendar-upcoming' && kind !== 'calendar-landed') {
+    if (kind !== 'sentiment' && kind !== 'calendar-upcoming' && kind !== 'calendar-landed' && kind !== 'link') {
       throw new Error('notification-test-kind-invalid')
     }
     const receipt = await getNotificationRuntime().sendTestNotice(kind)

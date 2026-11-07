@@ -86,6 +86,18 @@ describe('sendTestNotice', () => {
     expect(submitted).toEqual([])
   })
 
+  it('link: sends the fixed sample through the same submit without any data port, and names the channel', async () => {
+    const { surface, submitted } = harness()
+    await expect(surface.sendTestNotice('link')).resolves.toEqual({
+      state: 'sent', channelId: 'channel-a', channelName: 'Telegram · test'
+    })
+    // 没有取数端口也能发：这正是它与另外三个 kind 的区别。
+    const sent = submitted[0] as { namespace?: string; eventTypeId: string; rendered?: Record<string, { title: string }> }
+    expect(sent.namespace).toBe('test')
+    expect(sent.rendered?.['zh-CN']?.title).toContain('【测试】')
+    expect(sent.rendered?.['en-US']?.title).toContain('[Test]')
+  })
+
   it('keeps the three "nothing" answers apart instead of merging them', async () => {
     for (const reasonCode of ['sentiment-none', 'calendar-upcoming-none', 'calendar-landed-none'] as const) {
       const { surface } = harness({ candidates: async () => ({ ok: false, reasonCode }) })

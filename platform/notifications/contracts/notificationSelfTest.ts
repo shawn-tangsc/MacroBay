@@ -11,6 +11,8 @@ import type { NotificationSubmitRequest } from './notificationContracts'
  * 由组合根注入；端口缺席时一律 `read-failed`——诚实的「读不到」，不是静默的空。
  */
 export type TestNoticeKind = 'sentiment' | 'calendar-upcoming' | 'calendar-landed'
+/** 平台链路自检：不取情报数据，固定样例，走完整链路（含手机通道）。 */
+export type LinkSelfTestKind = 'link'
 
 export type TestNoticeNoDataReason = 'sentiment-none' | 'calendar-upcoming-none' | 'calendar-landed-none'
 
