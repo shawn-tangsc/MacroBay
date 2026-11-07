@@ -59,6 +59,7 @@ import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushChannelResolution'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeSelfTestSurface } from './notificationSelfTestSurface'
+import { readTestNoticeCandidates } from './testNoticeCandidatesSlot'
 import type { TestNoticeCandidatePort } from '../contracts/notificationSelfTest'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
@@ -420,7 +421,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
 
     ...composeSelfTestSurface({ getTimezone: () => deps.clock.timeZone(),
       resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
-      ...(deps.testNoticeCandidates === undefined ? {} : { candidates: deps.testNoticeCandidates }),
+      candidates: (kind) => (deps.testNoticeCandidates ?? readTestNoticeCandidates())?.(kind)
+        ?? Promise.resolve({ ok: false as const, reasonCode: 'read-failed' as const }),
       deliver: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
     reportProviderCredential,
