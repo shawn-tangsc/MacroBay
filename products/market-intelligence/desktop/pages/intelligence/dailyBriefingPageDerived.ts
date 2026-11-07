@@ -199,7 +199,11 @@ function mergeLanguages<T extends Readonly<{ locale: string; state: string; reas
   previous: readonly T[] | undefined,
   fresh: readonly T[] | undefined
 ): readonly T[] | undefined {
-  if (fresh === undefined) return undefined
+  // 新读到的文档**不知道**这一门语言在不在跑，它对语言状态是"没有意见"，不是"已经跑完"。
+  // 以前这里返回 undefined 把临时标记清掉：重跑期间读上一版时，那一行会瞬间变成"已发布"，
+  // 于是「上一版 · 正在重新生成」这一档判不出来（v2.167）。跑完之后的清理由**列表重读**负责：
+  // 那时服务给出的语言状态才是真的（见 `useBriefingBackgroundRunReload` 的收尾重读）。
+  if (fresh === undefined) return previous
   const byLocale = new Map<string, T>()
   for (const language of previous ?? []) byLocale.set(language.locale, language)
   for (const language of fresh) byLocale.set(language.locale, language)

@@ -2924,3 +2924,71 @@ describe('a run in flight never steals the row the reader is reading', () => {
     expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).toBeNull()
   })
 })
+
+describe('a re-run over an existing edition says the body is the previous issue (v2.167)', () => {
+  const runningToday = (state: 'generating' | 'published') => ({
+    state: 'available' as const,
+    result: {
+      editions: editions.map((edition) => edition.date === '2026-10-30'
+        ? { ...edition, languages: [{ locale: 'zh-CN' as const, state }] }
+        : edition)
+    }
+  })
+
+  it('keeps the body readable and marks it, instead of passing the old edition off as the new one', async () => {
+    const client = fakeClient({ list: vi.fn(async () => runningToday('generating')) })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    for (let round = 0; round < 5; round += 1) await act(async () => { await Promise.resolve() })
+
+    // 正文照常可读（不抢屏），内容就是库里那一版——不是空的、也不是别的期。
+    expect(dom.textContent).toContain('CPI 超预期 · Ripple 获批')
+    const note = dom.querySelector('[data-briefing-previous-version]')
+    expect(note).not.toBeNull()
+    expect(note!.getAttribute('role')).toBe('status')
+    expect(note!.textContent).toBe(text.previousUnderRegenerate)
+  })
+
+  it('drops the note the moment the run is no longer running', async () => {
+    const client = fakeClient({ list: vi.fn(async () => runningToday('published')) })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(dom.querySelector('[data-briefing-previous-version]')).toBeNull()
+    // 正文还是那一版，只是不再叫"上一版"。
+    expect(dom.textContent).toContain('CPI 超预期 · Ripple 获批')
+  })
+
+  it('keeps a run of another issue from marking this one', async () => {
+    // 别的日期在跑：本期没有上一版这回事，正文正常、没有说明。
+    const client = fakeClient({
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: editions.map((edition) => edition.date === '2026-10-29'
+          ? { ...edition, languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] }
+          : edition) }
+      }))
+    })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(dom.querySelector('[data-briefing-previous-version]')).toBeNull()
+  })
+
+  it('shows no body at all when this issue has never produced one', async () => {
+    // 之前失败过、从来没有版次：继续只显示进度，正文区不许出现任何旧内容。
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'missing' as const })),
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: editions.map((edition) => edition.date === '2026-10-30'
+          ? { ...edition, state: 'missing' as const, availableLocales: [], languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] }
+          : edition) }
+      }))
+    })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(dom.querySelector('[data-briefing-previous-version]')).toBeNull()
+    expect(dom.textContent).not.toContain('CPI 超预期 · Ripple 获批')
+  })
+})

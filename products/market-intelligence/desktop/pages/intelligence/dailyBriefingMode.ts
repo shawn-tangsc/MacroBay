@@ -12,7 +12,7 @@ import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
  * Six values, no booleans: a boolean could only answer one question, and the rest would stay spread
  * over the callers — which is exactly the shape this function replaces.
  */
-export type DailyBriefingMode = 'generating' | 'failed' | 'no-edition' | 'ready' | 'ready-with-failure' | 'locale-missing'
+export type DailyBriefingMode = 'generating' | 'failed' | 'no-edition' | 'ready' | 'ready-with-failure' | 'ready-replacing' | 'locale-missing'
 
 /** The row's own state, as the rail reports it. `published` means it has an edition. */
 export type DailyBriefingRowState = 'idle' | 'running' | 'failed' | 'published'
@@ -28,7 +28,13 @@ export function resolveBriefingMode(input: Readonly<{
   // and in the right column, while the pane keeps whatever edition the reader asked for. That is the
   // whole point of switching language during a generation — the two facts ("an issue is running" and
   // "which version am I reading") must not lock each other out.
-  if (input.viewStatus === 'ready') return input.rowState === 'failed' ? 'ready-with-failure' : 'ready'
+  // 同一期同一语言正在重新生成、而库里已有上一版：**正文照常可读**（不抢屏的设计保留），
+  // 但内容顶上是上一版——这一档专门让正文说出"你看的是上一版"，不许静默拿旧内容顶新的一期
+  // （`02` v2.167）。没有上一版的期不会走到这里：那时 `viewStatus` 不是 `ready`，只会显示进度。
+  if (input.viewStatus === 'ready') {
+    if (input.rowState === 'running') return 'ready-replacing'
+    return input.rowState === 'failed' ? 'ready-with-failure' : 'ready'
+  }
   // The reader asked for a version this issue does not have. That answer is about what they asked for,
   // so it survives a run in flight too: the pane says it, the steps keep reporting beside it. A failed
   // attempt still speaks first, because its retry is the reader's next move.

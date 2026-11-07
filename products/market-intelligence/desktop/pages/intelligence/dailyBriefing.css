@@ -176,6 +176,8 @@
 .mi-daily-briefing-page__paper { position: relative; width: 100%; border: 0; border-radius: 10px; overflow: hidden; box-shadow: 0 18px 60px rgba(0, 0, 0, .28); }
 .mi-daily-briefing-page__paper-scale { position: absolute; top: 0; left: 0; width: 1080px; transform-origin: top left; will-change: transform; }
 
+/* 上一版 · 正在重新生成：状态说明，不是错误。次级墨色 + 一条细边，正文照常可读。 */
+.mi-daily-briefing-page__replacing-note { margin: 0 0 8px; padding: 5px 9px; border: 1px solid var(--mi-dashboard-line); border-radius: 6px; background: rgba(255, 255, 255, .03); color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.5; }
 .mi-daily-briefing-page__ai-failure { margin: 8px 0 0; padding: 6px 9px; border: 1px solid #4a3d24; border-radius: 6px; background: rgba(255, 196, 0, .05); color: var(--mi-dashboard-caution); font-size: 10px; }
 
 /* The rail is a stage-by-stage audit, so it gets a readable column and the report fills the rest. */

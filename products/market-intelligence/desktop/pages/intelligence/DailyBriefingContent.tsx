@@ -188,6 +188,10 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
           scales the whole sheet down. Stretching it to the column width is what re-flowed the three cards
           and wrapped the rate card's number across its dial. */}
       {/* `showingEdition` 同时是类型收窄：纸里的 `view.document` 只有它成立时存在。 */}
+      {/* 重跑期间正文照常可读（不抢屏），但**必须自己说是上一版**：静默拿旧内容顶新的一期，
+          读者会把上一次的数当成这次的结果（`02` v2.167）。跑完 `rowState` 不再是 running，
+          这一档消失，说明随之消失。 */}
+      {mode === 'ready-replacing' ? <p className="mi-daily-briefing-page__replacing-note" role="status" data-briefing-previous-version="true">{text.previousUnderRegenerate}</p> : null}
       {showingEdition && bodyState === 'paper' ? <div className="mi-daily-briefing-page__paper" ref={paperHostRef} style={paperHostHeight ? { height: paperHostHeight } : undefined}>
         <div className="mi-daily-briefing-page__paper-scale" style={{ left: paperOffsetX, transform: `scale(${paperScale})` }}>
           <div ref={paperSheetRef} style={{ width: BRIEFING_PAPER_WIDTH }}>
