@@ -71,6 +71,33 @@ describe('resolving the third layer', () => {
   })
 })
 
+  it('derives the default from the approval table, not from a hard-coded "all on"', () => {
+    // 默认不是写死的三面全开：某一行撤批一面，缺省就跟着收窄。
+    // 而且这是**合法状态**，不是配置坏了——不报错，只是那一面不出现。
+    const shrunk = createNotificationEventCatalog({
+      policy: {
+        'platform.shrunk': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
+      },
+      sources: [{
+        productId: 'platform',
+        events: [{
+          id: 'platform.shrunk',
+          titleKey: 'notification.test.title',
+          reasonKey: 'notification.test.body',
+          requiresUserAction: false,
+          category: 'reminder',
+          requestedDisruptionLevels: ['channel'],
+          dedupeKeyTemplate: 'shrunk:{id}',
+          dedupeUnit: 'occurrence'
+        }]
+      }]
+    })
+    const resolved = resolveSurfaceSelection({ entry: shrunk.get('platform.shrunk')!, list: () => shrunk.list(), selections: {} })
+    expect(resolved.conflict).toBe(false)
+    expect(resolved.selection).toEqual({ channel: true })
+    expect(Object.keys(resolved.selection)).not.toContain('toast')
+  })
+
 describe('one group, one selection', () => {
   it('one stored key rules both members', () => {
     const selections: Record<string, NotificationSurfaceSelection> = { demo: { channel: true, toast: false } }

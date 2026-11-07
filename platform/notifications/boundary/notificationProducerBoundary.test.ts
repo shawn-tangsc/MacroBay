@@ -68,6 +68,8 @@ describe('notification producer boundary', () => {
       // 订阅层撤销后只剩两个总开关 + 情报三条的频道开关（契约 §5.1 / §5.4）。
       'getChannelEvents',
       'getDeliverySettings',
+      // 第三层的**只读**入口（契约 §5.5）：页面据此画勾，写选择仍走主进程那一个入口。
+      'getSurfaceSelection',
       'getUnreadState',
       'list',
       'listEventCatalog',

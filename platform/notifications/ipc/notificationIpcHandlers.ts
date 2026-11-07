@@ -50,6 +50,17 @@ export function registerNotificationIpcHandlers(): void {
     if (!payload.eventId) throw new Error('eventId is required.')
     return getNotificationRuntime().setChannelEvent(payload.eventId, payload.enabled === true)
   })
+  /**
+   * 表面选择**只露读**（契约 §5.5）：页面据此画能画的勾、并说明「为什么今天不发」。
+   * 写入仍走主进程那一个入口（`setSurfaceSelection`），不为读多开一条写通道。
+   */
+  ipcMain.handle(IpcChannels.notificationsGetSurfaceSelection, (_event, input) => {
+    const payload = (input ?? {}) as { eventTypeId?: string }
+    if (typeof payload.eventTypeId !== 'string' || payload.eventTypeId.length === 0) {
+      throw new Error('eventTypeId is required.')
+    }
+    return getNotificationRuntime().getSurfaceSelection(payload.eventTypeId)
+  })
   ipcMain.handle(IpcChannels.notificationsRedeliverPush, (_event, input) => {
     const payload = (input ?? {}) as { recordId?: string; editionId?: string; locale?: string; surface?: string }
     if (!payload.recordId || !payload.editionId || !payload.locale) {
