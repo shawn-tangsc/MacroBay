@@ -4,6 +4,7 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { Pencil, RefreshCw } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
+import { resolveCalendarConsensus, type CalendarConsensusValue } from '../../../../contracts/macro/calendarConsensus'
 import { useConfirm } from '@platform/ui/components/confirm'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
@@ -81,8 +82,20 @@ function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalenda
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text }: {
-  event: EconomicCalendarEventView; now: () => Date
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text }: {
+  event: EconomicCalendarEventView
+  /**
+   * The official consensus, when the view carries one. The projection does not surface it today —
+   * the three official sources publish none — but the resolver's order is official first, and the
+   * caller decides what it has rather than this component assuming a source.
+   */
+  officialConsensus?: CalendarConsensusValue | null
+  /**
+   * The market observation linked to this official event, when the page has one. It is the only
+   * possible source of an expectation here: the official three publish no consensus.
+   */
+  linkedConsensus?: CalendarConsensusValue | null
+  now: () => Date
   onRefresh: (operation: EconomicCalendarRefreshOperation, eventKey: string) => Promise<void>
   onReleaseTimeChanged: () => Promise<void>
   releaseTimeClient: Pick<MacroEconomicCalendarClient, 'setReleaseTime' | 'clearReleaseTime'>
@@ -114,8 +127,27 @@ export function EconomicCalendarEventDetail({ event, now, onRefresh, onReleaseTi
     </dl>
     <div className="mi-economic-calendar__values">
       {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? text.details.unavailable}</strong></div>)}
-      {/* 官方三源（Fed/BLS/BEA）不提供市场预期；这里说明字段缺失，不计算、不显示任何差值。 */}
-      <div data-official-consensus="unavailable"><span>{text.market.consensus}</span><strong>{text.details.consensusUnavailable}</strong></div>
+      {/* 官方三源（Fed/BLS/BEA）不提供预期；能用的只有挂着的那条市场观测，所以标出来源。
+          两边都没有时写「预期值未提供」——不是「没有超预期」，那会把未知说成结论。 */}
+      {(() => {
+        const consensus = resolveCalendarConsensus(officialConsensus, linkedConsensus)
+        // 「没有观测」与「有观测但读不出来」必须是两句话：后者是数据缺口，不是「没有预期」。
+        const shown = consensus.state === 'value' ? consensus.value
+          : consensus.state === 'unreadable' ? text.details.consensusUnreadable
+            : text.details.consensusMissing
+        return <>
+          <div data-consensus={consensus.state === 'value' ? consensus.source : consensus.state}>
+            <span>{text.market.consensus}</span>
+            <strong>{shown}</strong>
+            {consensus.state === 'value' && consensus.source === 'market'
+              ? <em className="mi-economic-calendar__consensus-source">{text.details.consensusFromMarket}</em>
+              : null}
+          </div>
+          {consensus.state === 'unreadable'
+            ? <p className="mi-economic-calendar__comparison-rule" data-consensus-gap>{text.details.consensusUnreadableReason}</p>
+            : null}
+        </>
+      })()}
     </div>
     {isBlsRefreshEligible(event, now()) ? <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} /> : null}
     {isFedFomcRefreshEligible(event, now()) ? <FedFomcRefreshAction disabled={fomcRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={fomcRefreshAction.pending} text={text} /> : null}
