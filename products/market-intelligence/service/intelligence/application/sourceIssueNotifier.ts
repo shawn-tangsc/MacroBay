@@ -31,6 +31,18 @@ export const WEEKDAY_SILENCE_MS = 12 * 60 * 60 * 1000
 export const WEEKEND_SILENCE_MS = 24 * 60 * 60 * 1000
 
 /**
+ * 新闻源（`category === 'mainstream-news'`）的静默窗口：**24 小时**，不分工作日与周末。
+ *
+ * 为什么是 24：新闻源 15 分钟一轮，24 小时 = **96 轮连续抓到但 0 条新增**；一个还在发稿的
+ * 新闻站不可能连续 96 轮没有一条新 URL，所以这个长度不能用「今天本来就没新闻」解释。
+ * 工作日 12 小时那档是给定期发布的数据源留的（周末低产），新闻源不适用。
+ *
+ * **「源静默」不是「采集失败」**：采集成功、只是没有新条目时走 `stale`，与 `consecutive-failed`
+ * 是两条独立事件，文案与动作都不同。
+ */
+export const NEWS_SILENCE_MS = 24 * 60 * 60 * 1000
+
+/**
  * 今天算不算周末——**按读者时区**判（这是给人看的判断，跟读者时区走；
  * 「窗口多长」本身是时长，不随时区变化）。
  */
@@ -52,6 +64,16 @@ export function resolveSilenceWindow(
 ): Readonly<{ windowMs: number; weekend: boolean }> {
   const weekend = isWeekendIn(timeZone, now)
   return { windowMs: weekend ? WEEKEND_SILENCE_MS : WEEKDAY_SILENCE_MS, weekend }
+}
+
+/**
+ * 这一次该用多长的静默窗口：新闻源固定 24 小时，其余按工作日 / 周末两档。
+ * 只看来源自己的类别，不看同刻别家安静多久——「三家一起安静」是诊断，不是判据。
+ */
+export function silenceWindowFor(sourceId: string, now: string, timeZone: string): number {
+  return getIntelligenceSourceDefinition(sourceId)?.category === 'mainstream-news'
+    ? NEWS_SILENCE_MS
+    : resolveSilenceWindow(now, timeZone).windowMs
 }
 
 export type SourceIssueKind = 'consecutive-failed' | 'stale'
@@ -198,8 +220,9 @@ function sourceIssueDeeplink(sourceId: string) {
 
 export function createSourceIssueNotifier(deps: SourceIssueNotifierDeps) {
   return async function notifySourceIssue(input: SourceIssueSnapshot): Promise<NotificationSubmitOutcome | null> {
-    const window = resolveSilenceWindow(input.now, deps.timeZone())
-    const kind = decideSourceIssue(input, window.windowMs)
+    const weekend = isWeekendIn(deps.timeZone(), input.now)
+    const windowMs = silenceWindowFor(input.sourceId, input.now, deps.timeZone())
+    const kind = decideSourceIssue(input, windowMs)
     if (kind === null) return null
 
     // 诊断：这次为什么判成陈旧、当时各源各静默多久。误报时能一眼分开「周末低产」与「真异常」。
@@ -210,8 +233,8 @@ export function createSourceIssueNotifier(deps: SourceIssueNotifierDeps) {
         silentHours: lastNewItemAt === undefined
           ? null
           : Math.round((Date.parse(input.now) - Date.parse(lastNewItemAt)) / 3_600_000 * 10) / 10,
-        weekend: window.weekend,
-        windowHours: window.windowMs / 3_600_000,
+        weekend,
+        windowHours: windowMs / 3_600_000,
         ...(deps.silenceHours === undefined ? {} : { sources: deps.silenceHours() })
       })
     }

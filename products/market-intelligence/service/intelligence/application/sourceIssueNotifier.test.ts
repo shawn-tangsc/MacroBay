@@ -11,7 +11,9 @@ import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import {
   createSourceIssueNotifier,
   decideSourceIssue,
+  NEWS_SILENCE_MS,
   resolveSilenceWindow,
+  silenceWindowFor,
   SOURCE_ISSUE_FAILURE_THRESHOLD,
   WEEKDAY_SILENCE_MS
 } from './sourceIssueNotifier'
@@ -94,6 +96,21 @@ describe('source issue decision', () => {
   it('stays silent while new items keep arriving, even if a fetch failed in between', () => {
     const recent = new Date(Date.parse(NOW) - 1 * HOUR).toISOString()
     expect(decideSourceIssue(snapshot({ lastSuccessAt: NOW, lastNewItemAt: recent }), 6 * HOUR)).toBeNull()
+  })
+
+  it('gives a news source 24 hours of silence before calling it stale', () => {
+    // 新闻源 15 分钟一轮：24 小时 = 96 轮全部抓到但 0 条新增，不可能用「今天没新闻」解释。
+    expect(NEWS_SILENCE_MS).toBe(96 * 15 * 60 * 1000)
+    expect(silenceWindowFor('coindesk-rss', NOW, 'UTC')).toBe(NEWS_SILENCE_MS)
+    expect(silenceWindowFor('fred-rates-liquidity', NOW, 'UTC')).toBe(WEEKDAY_SILENCE_MS)
+    const window = silenceWindowFor('coindesk-rss', NOW, 'UTC')
+
+    // 工作日 12 小时那档不适用于新闻源：13 小时安静还算正常。
+    const thirteen = new Date(Date.parse(NOW) - 13 * HOUR).toISOString()
+    expect(decideSourceIssue({ sourceId: 'coindesk-rss', consecutiveFailures: 0, lastSuccessAt: NOW, lastNewItemAt: thirteen, now: NOW }, window)).toBeNull()
+    // 越过 24 小时才报，且报的是「静默」，不是失败。
+    const twentyFive = new Date(Date.parse(NOW) - 25 * HOUR).toISOString()
+    expect(decideSourceIssue({ sourceId: 'coindesk-rss', consecutiveFailures: 0, lastSuccessAt: NOW, lastNewItemAt: twentyFive, now: NOW }, window)).toBe('stale')
   })
 
   it('gives the weekend a longer window: 20 hours of silence on a Sunday is not an alert', () => {
