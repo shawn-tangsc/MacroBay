@@ -29,7 +29,7 @@ function detailOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** 只有真被停才算取消；释放另算（见 `isRuntimeDisposed`），其余错误一律照实传。 */
+/** 只有 `AbortError` 才算取消；其余抛出来的错误按类型化名字归类（见 `turnFailureCode`）。 */
 export function isCancellation(error: unknown): boolean {
   if (error instanceof Error && error.name === 'AbortError') return true
   const message = error instanceof Error ? error.message : String(error)
