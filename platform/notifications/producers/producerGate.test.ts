@@ -70,8 +70,27 @@ function sources(): ProducerGateSource[] {
  * 「同一段构建函数里出现两个 id ⇒ 无法判定」误伤真实提交点。常量表的用途只有一处——把
  * `SOME_TABLE.name` 解析成受管事件，别的 id 本来就不该参与。
  */
+/**
+ * 常量名 → 事件 id 的准入集**来自声明期，不来自批准表**。
+ *
+ * 曾经只收平台批准表的 key：批准值一搬进产品声明，这些 id 就从集合里消失，提交点写的是
+ * `EVENT_IDS.xxx` 这种常量成员 → 映射查不到 → 判成「没有提交点」。门禁**少报**时是绿的，
+ * 所以这条必须跟着搬迁同笔改。
+ */
+function declaredEventIds(list: readonly ProducerGateSource[]): Set<string> {
+  const ids = new Set(Object.keys(NOTIFICATION_EVENT_POLICY))
+  for (const source of list) {
+    const code = stripComments(source.content)
+    for (const match of code.matchAll(/(?:notificationEvent|declaration)\(\s*'([a-z0-9-]+\.[a-z0-9.-]+)'/gu)) {
+      const id = match[1]
+      if (id !== undefined) ids.add(id)
+    }
+  }
+  return ids
+}
+
 function idConstants(list: readonly ProducerGateSource[]): Record<string, string> {
-  const approved = new Set(Object.keys(NOTIFICATION_EVENT_POLICY))
+  const approved = declaredEventIds(list)
   const map: Record<string, string> = {}
   for (const source of list) {
     const code = stripComments(source.content)
