@@ -1,6 +1,7 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
+import { normalizeCalendarLandedCountries } from '../../../contracts/calendarLandedCountries'
 import {
   CALENDAR_REMINDER_LEAD_MINUTES,
   DEFAULT_CALENDAR_REMINDER_SETTINGS,
@@ -22,10 +23,26 @@ import {
  * - **表面选择不在这里**：它由平台按组键存（同一件事不该有第二个落点），产品只读不算存。
  */
 
+/**
+ * 「没读到」与「没存上」是两个结果，不是两个异常：
+ * - 读：文件不存在（首次运行）＝**可读 + 默认值**；文件坏了/没权限＝`unreadable`。
+ * - 写：失败时磁盘上的旧值原样生效，`not-saved` 告诉调用方"这次没存上"，界面据此保留读者刚选的值。
+ * `read` / `write` 保留给既有调用方（失败仍抛/回默认），新的两个 `*WithStatus` 供设置页与 IPC 用。
+ */
+export type CalendarReminderReadResult =
+  | Readonly<{ state: 'readable'; settings: CalendarReminderSettings }>
+  | Readonly<{ state: 'unreadable' }>
+
+export type CalendarReminderWriteResult =
+  | Readonly<{ state: 'saved'; settings: CalendarReminderSettings }>
+  | Readonly<{ state: 'not-saved'; settings: CalendarReminderSettings }>
+
 export type CalendarReminderSettingsStore = Readonly<{
   read: () => CalendarReminderSettings
   /** 局部更新：只改传进来的字段，其余保持。返回写入后的完整设置。 */
   write: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderSettings
+  readWithStatus: () => CalendarReminderReadResult
+  writeWithStatus: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderWriteResult
 }>
 
 type StoredShape = Partial<{
@@ -33,6 +50,7 @@ type StoredShape = Partial<{
   leadMinutes: unknown
   importance: unknown
   landedFilter: unknown
+  landedCountries: unknown
 }>
 
 function normalizeImportance(value: unknown): readonly CalendarReminderImportance[] | undefined {
@@ -56,36 +74,64 @@ function normalize(stored: StoredShape): CalendarReminderSettings {
       ? stored.leadMinutes
       : DEFAULT_CALENDAR_REMINDER_SETTINGS.leadMinutes,
     importance: normalizeImportance(stored.importance) ?? DEFAULT_CALENDAR_REMINDER_SETTINGS.importance,
-    landedFilter: isCalendarLandedFilter(stored.landedFilter) ? stored.landedFilter : DEFAULT_CALENDAR_REMINDER_SETTINGS.landedFilter
+    landedFilter: isCalendarLandedFilter(stored.landedFilter) ? stored.landedFilter : DEFAULT_CALENDAR_REMINDER_SETTINGS.landedFilter,
+    // 缺键（老文件没有这一项）= 可读 + 默认「只美国」，不是读失败，也不迁移。
+    landedCountries: normalizeCalendarLandedCountries(stored.landedCountries)
   }
 }
 
 export function createCalendarReminderSettingsStore(filePath: string): CalendarReminderSettingsStore {
-  const read = (): CalendarReminderSettings => {
+  const readWithStatus = (): CalendarReminderReadResult => {
     try {
       const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
-      if (!parsed || typeof parsed !== 'object') return DEFAULT_CALENDAR_REMINDER_SETTINGS
-      return normalize(parsed as StoredShape)
+      if (!parsed || typeof parsed !== 'object') return { state: 'unreadable' }
+      return { state: 'readable', settings: normalize(parsed as StoredShape) }
+    } catch (error) {
+      // 首次运行没有这个文件＝可读 + 默认值；其余（坏 JSON、没权限）才是真的读不到。
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { state: 'readable', settings: DEFAULT_CALENDAR_REMINDER_SETTINGS }
+      }
+      return { state: 'unreadable' }
+    }
+  }
+
+  // 既有调用方要的是「总能拿到一份可用设置」：读不到也回默认（默认是关，不会悄悄打开）。
+  const read = (): CalendarReminderSettings => {
+    const result = readWithStatus()
+    return result.state === 'readable' ? result.settings : DEFAULT_CALENDAR_REMINDER_SETTINGS
+  }
+
+  const writeWithStatus = (patch: Readonly<Partial<CalendarReminderSettings>>): CalendarReminderWriteResult => {
+    const current = read()
+    const next: CalendarReminderSettings = {
+      enabled: typeof patch.enabled === 'boolean' ? patch.enabled : current.enabled,
+      leadMinutes: isCalendarReminderLeadMinutes(patch.leadMinutes) ? patch.leadMinutes : current.leadMinutes,
+      importance: patch.importance === undefined ? current.importance : normalizeImportance(patch.importance) ?? current.importance,
+      landedFilter: isCalendarLandedFilter(patch.landedFilter) ? patch.landedFilter : current.landedFilter,
+      // 未知档位/未知国家码回默认（可读、不迁移），而不是把非法值写进文件。
+      landedCountries: patch.landedCountries === undefined
+        ? current.landedCountries
+        : normalizeCalendarLandedCountries(patch.landedCountries)
+    }
+    try {
+      mkdirSync(dirname(filePath), { recursive: true })
+      writeFileSync(filePath, JSON.stringify(next), 'utf8')
+      return { state: 'saved', settings: next }
     } catch {
-      // 不存在 / 读坏 / 不是 JSON：都回默认（关），不抛、也不猜。
-      return DEFAULT_CALENDAR_REMINDER_SETTINGS
+      // 写失败：磁盘上的旧值原样生效，明确告诉调用方"没存上"，不假装成功。
+      return { state: 'not-saved', settings: current }
     }
   }
 
   return {
     read,
     write(patch) {
-      const current = read()
-      const next: CalendarReminderSettings = {
-        enabled: typeof patch.enabled === 'boolean' ? patch.enabled : current.enabled,
-        leadMinutes: isCalendarReminderLeadMinutes(patch.leadMinutes) ? patch.leadMinutes : current.leadMinutes,
-        importance: patch.importance === undefined ? current.importance : normalizeImportance(patch.importance) ?? current.importance,
-        landedFilter: isCalendarLandedFilter(patch.landedFilter) ? patch.landedFilter : current.landedFilter
-      }
-      mkdirSync(dirname(filePath), { recursive: true })
-      writeFileSync(filePath, JSON.stringify(next), 'utf8')
-      return next
-    }
+      const result = writeWithStatus(patch)
+      if (result.state === 'not-saved') throw new Error('calendar-reminder-settings-not-saved')
+      return result.settings
+    },
+    readWithStatus,
+    writeWithStatus
   }
 }
 

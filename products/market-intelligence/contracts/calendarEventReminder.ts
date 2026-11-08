@@ -13,6 +13,8 @@
  * 给出一个灰着的勾，读者会以为「打开就能弹」。
  */
 
+import { DEFAULT_CALENDAR_LANDED_COUNTRIES, type CalendarLandedCountrySelection } from './calendarLandedCountries'
+
 /** 组键用语义、不用产品名；一份选择同时管「开始前」与「发生后」两条通知。 */
 export const CALENDAR_REMINDER_GROUP_KEY = 'calendar-events'
 
@@ -42,6 +44,11 @@ export type CalendarReminderSurface = 'channel' | 'toast'
 export const CALENDAR_REMINDER_SURFACES = Object.freeze(['channel', 'toast'] as const)
 
 export type CalendarReminderSettings = Readonly<{
+  /**
+   * 「哪些国家的数据」：`us`（默认，保持今天的行为）/ `all` / `custom`。
+   * 只影响「发生后」这条落地通知；「开始前」不看国家。
+   */
+  landedCountries: CalendarLandedCountrySelection
   /** 默认关：打开之前不落记录也不推，这一下必须由读者自己按。 */
   enabled: boolean
   leadMinutes: CalendarReminderLeadMinutes
@@ -52,6 +59,7 @@ export type CalendarReminderSettings = Readonly<{
 }>
 
 export const DEFAULT_CALENDAR_REMINDER_SETTINGS: CalendarReminderSettings = Object.freeze({
+  landedCountries: DEFAULT_CALENDAR_LANDED_COUNTRIES,
   enabled: false,
   leadMinutes: 60,
   importance: Object.freeze(['high'] as const),
