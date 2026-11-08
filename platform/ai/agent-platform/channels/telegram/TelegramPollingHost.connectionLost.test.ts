@@ -42,13 +42,21 @@ function createHarness() {
     updates,
     lost,
     advance(ms: number) { clock += ms },
-    /** 放行排着的那一次尝试，并等它的 await 链跑完。 */
+    /**
+     * 放行排着的那一次尝试，并等它的 await 链跑完。
+     *
+     * 等的是**事实**——循环又排上了下一次尝试（`timers` 多了一项）；不是等两个 `setTimeout(0)`。
+     * 后者只是「把事件循环推两轮」，属于用时间当同步手段：慢机器上两轮不够就假红，而快机器上
+     * 两轮又可能掩盖「这一拍根本没跑完」。纯 microtask 推进加一个有界轮数，跑完即返回。
+     */
     async pump() {
       const next = timers.shift()
       expect(next, '轮询循环没有排下一次尝试').toBeDefined()
       next?.()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      const queuedBefore = timers.length
+      for (let turn = 0; turn < 50 && timers.length === queuedBefore; turn += 1) {
+        await Promise.resolve()
+      }
     }
   }
 }
