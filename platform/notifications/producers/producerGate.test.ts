@@ -117,7 +117,8 @@ describe('生产者门禁：登记了就必须有人发', () => {
       approvedIds: Object.keys(NOTIFICATION_EVENT_POLICY),
       dormantIds: [],
       sources: scanned,
-      idConstants: idConstants(scanned)
+      idConstants: idConstants(scanned),
+      admittedIds: [...declaredEventIds(scanned)]
     })
 
     // 未证清单只减不增：新增一条就必须在这里写出原因与归属（见上面注释）。
@@ -162,6 +163,50 @@ describe('门禁自己的有效性（契约 §12.2）', () => {
     expect(result.produced).toEqual(['platform.job.failed-terminal'])
     // 只写在注释里的那条**不能**被算成生产者：这正是前两次假通过的形状。
     expect(result.missing).toEqual(['platform.job.repeated-failed'])
+  })
+
+  it('常量成员只有被声明过才算提交点（形状像不算）', () => {
+    // 源码里有个错误码，形状和事件 id 一样、也走常量表成员。它没有在任何声明里出现过，
+    // 所以**不能**被算成生产点：门禁「少报」时是绿的，比红更危险。这条用例在准入集被放宽成
+    // 「只要长得像就收」时会变红——它钉的是判据，不是当前实现。
+    const content = `
+      const ERROR_CODES = { rateLimited: 'sample.error.rate-limited' }
+      submit({ eventTypeId: ERROR_CODES.rateLimited })
+    `
+    const scanned = [{ path: 'x.ts', content }]
+    const result = evaluateProducerGate({
+      approvedIds: ['sample.error.rate-limited'],
+      dormantIds: [],
+      sources: scanned,
+      idConstants: idConstants(scanned),
+      admittedIds: [...declaredEventIds(scanned)]
+    })
+
+    expect(result.produced).toEqual([])
+    expect(result.missing).toEqual(['sample.error.rate-limited'])
+  })
+
+  it('同一个串一旦被声明，同一个提交点就能解析（准入集来自声明，不是形状）', () => {
+    const scanned = [
+      { path: 'declaration.ts', content: "declaration('sample.error.rate-limited', {})" },
+      {
+        path: 'x.ts',
+        content: `
+          const ERROR_CODES = { rateLimited: 'sample.error.rate-limited' }
+          submit({ eventTypeId: ERROR_CODES.rateLimited })
+        `
+      }
+    ]
+    const result = evaluateProducerGate({
+      approvedIds: ['sample.error.rate-limited'],
+      dormantIds: [],
+      sources: scanned,
+      idConstants: idConstants(scanned),
+      admittedIds: [...declaredEventIds(scanned)]
+    })
+
+    expect(result.produced).toEqual(['sample.error.rate-limited'])
+    expect(result.missing).toEqual([])
   })
 
   it('认常量表成员：`EVENT_IDS.xxx` 解析成事件 id', () => {
