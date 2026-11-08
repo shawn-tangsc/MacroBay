@@ -229,7 +229,7 @@ describe('managedWorkerRuntime', () => {
     runtime.registerHandler('live-worker', async (_payload, context) => {
       started = true
       await context.markLive()
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await waitForAbort(context.signal)
     })
 
     const record = await runtime.setDesiredWorker(workerDefinition('worker-live', 'live-worker'))
@@ -250,7 +250,7 @@ describe('managedWorkerRuntime', () => {
     runtime.registerHandler('counter', async (_payload, context) => {
       startCount += 1
       await context.markLive()
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await waitForAbort(context.signal)
     })
 
     const definition = workerDefinition('worker-counter', 'counter')
@@ -272,7 +272,7 @@ describe('managedWorkerRuntime', () => {
     runtime.registerHandler('restartable', async (_payload, context) => {
       startCount += 1
       await context.markLive()
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      await waitForAbort(context.signal)
     })
 
     const definition = workerDefinition('worker-restart', 'restartable', {
@@ -303,7 +303,7 @@ describe('managedWorkerRuntime', () => {
     runtime.registerHandler('removable', async (_payload, context) => {
       await context.markLive()
       while (running) {
-        await new Promise((resolve) => setTimeout(resolve, 20))
+        await waitForAbort(context.signal)
       }
     })
 
@@ -328,7 +328,7 @@ describe('managedWorkerRuntime', () => {
     runtime.registerHandler('recoverable', async (_payload, context) => {
       recoveredStarts += 1
       await context.markLive()
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await waitForAbort(context.signal)
     })
 
     await runtime.setDesiredWorker(workerDefinition('worker-recover', 'recoverable'))
@@ -361,7 +361,7 @@ describe('managedWorkerRuntime', () => {
     runtime.registerHandler('heartbeat-only', async (_payload, context) => {
       contextRef = context
       await context.markLive()
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await waitForAbort(context.signal)
     })
 
     await runtime.setDesiredWorker(workerDefinition('worker-heartbeat', 'heartbeat-only'))
@@ -405,4 +405,17 @@ function workerDefinition(
     payload: { id },
     restartPolicy
   }
+}
+
+/**
+ * 处理器「保持运行」的正确写法：等取消信号，不 sleep 一个毫秒数。
+ *
+ * 原来用 `setTimeout(50/100/200)` 让 worker 停在 live 上，实际是把「跑多久」交给了机器速度；
+ * 换成等 abort 之后，它停在 live 上是因为**真的还没结束**，停止也由信号驱动。
+ */
+function waitForAbort(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    signal.addEventListener('abort', () => resolve(), { once: true })
+  })
 }
