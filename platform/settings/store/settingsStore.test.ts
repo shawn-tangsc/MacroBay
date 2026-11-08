@@ -563,14 +563,16 @@ describe('every notification setting survives a reload (2026-11-07)', () => {
     desktopEnabled: true,
     toastEnabled: true,
     popupEnabled: false,
-    channelEvents: { 'market-intelligence.signal.triggered': false },
+    // 夹具里的产品名与事件 id 用中性 id：这里断言的是「字段存得住、读得回」，
+    // 不依赖任何真实产品的存在——用真名会让平台侧看起来在认识某个产品。
+    channelEvents: { 'sample-product.signal.triggered': false },
     surfaceSelections: { 'calendar-events': { channel: true, toast: false } },
     push: { channelId: 'channel-a' },
     retentionDays: 14,
     defaultSnoozeMinutes: 30,
     quietHours: { enabled: true, startLocalTime: '23:00', endLocalTime: '07:00' },
     minimumDisruptivePriority: 'high',
-    productPermissions: { 'market-intelligence': { enabled: true, allowDesktop: false, allowToast: true, allowPopup: false } }
+    productPermissions: { 'sample-product': { enabled: true, allowDesktop: false, allowToast: true, allowPopup: false } }
   }
 
   it('keeps every field the type declares, across a fresh store', async () => {
