@@ -113,8 +113,9 @@ describe('TelegramRuntimeManager', () => {
     await expect(manager.start('channel-a', 1, 'owner-a')).resolves.toEqual({ ok: true })
     // 启动成功之后才失去资格（例如被停用/换代），宿主下一拍必须退出并留痕。
     valid = false
-    await new Promise<void>((resolve) => { setTimeout(resolve, 20) })
-    expect(exits).toEqual(['channel-stale-generation'])
+    // 等的是「退出留痕这件事发生了」，不是等 20 毫秒：固定时长在慢机器上假红，
+    // 在快机器上会把「没退出」暴露成后面那条 stop 里的另一个症状。上限只兜底。
+    await vi.waitFor(() => expect(exits).toEqual(['channel-stale-generation']), { timeout: 2_000, interval: 10 })
     manager.stop('channel-a')
   })
 
