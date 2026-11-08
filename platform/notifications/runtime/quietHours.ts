@@ -14,6 +14,14 @@ import type { NotificationRuntimeSettings } from '../contracts/notificationContr
 
 export type QuietHoursVerdict = 'inside' | 'outside' | 'unknown'
 
+/**
+ * 一次提交只算**一次**免打扰决定，规划器算完传给投递路由（2026-11-08，Chief 定）。
+ *
+ * 两处各判的后果是「一处放过手机、另一处筛掉桌面，回执却说桌面没到」——那是假事实。
+ * `bypassed` 只给「读者亲手点的诊断 + 已批穿透 + 测试命名空间」这一种情况。
+ */
+export type QuietHoursDecision = Readonly<{ inside: boolean; bypassed: boolean }>
+
 export function quietHoursVerdict(
   quietHours: NonNullable<NotificationRuntimeSettings['quietHours']>,
   clock: { now: () => Date; timeZone: () => string }

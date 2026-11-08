@@ -6,7 +6,7 @@ import { composeSelfTestSurface } from './notificationSelfTestSurface'
 /**
  * 平台只剩一种测试：`link`（链路自检）。产品的三种取数在各自产品里拼请求，不属于这份契约。
  */
-function harness(options: { channel?: unknown; outcome?: string } = {}) {
+function harness(options: { channel?: unknown; outcome?: string; suppressed?: { level: 'push' | 'desktop'; reason: 'quiet-hours' | 'desktop-disabled' }[] } = {}) {
   const submitted: { eventTypeId: string; namespace?: string; rendered?: Record<string, { title: string }>; deeplink?: unknown; dedupeVars?: { vars?: Record<string, string> } }[] = []
   const surface = composeSelfTestSurface({
     resolvePushChannel: async () => (options.channel ?? { ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }) as never,
@@ -16,7 +16,7 @@ function harness(options: { channel?: unknown; outcome?: string } = {}) {
       if (options.outcome === 'collapsed') return { kind: 'collapsed', aggregateRecordId: 'a1', collapsedCount: 2 } as never
       if (options.outcome === 'merged') return { kind: 'merged', recordId: 'r1', occurrenceCount: 2, mergedEventTypes: [] } as never
       if (options.outcome === 'delegated') return { kind: 'delegated', eventTypeId: 'x', producerId: 'p', ownerProductId: 'o' } as never
-      return { kind: 'accepted', recordId: 'r1', levels: ['channel'] } as never
+      return { kind: 'accepted', recordId: 'r1', levels: ['channel'], suppressedLevels: options.suppressed ?? [] } as never
     },
     now: () => '2026-11-08T00:00:00.000Z'
   })
@@ -43,6 +43,12 @@ describe('sendTestNotice (link only)', () => {
     expect(submitted[0]?.rendered).toBeUndefined()
     // 点开回到设置页那枚按钮。
     expect(submitted[0]?.deeplink).toEqual({ scope: 'platform' })
+  })
+
+  it('says the test was not run when a surface was never attempted, instead of claiming it arrived', async () => {
+    // 免打扰或开关关着时那一档根本没试过：回「已发到」就是把「没测」说成「到了」。
+    const { surface } = harness({ suppressed: [{ level: 'desktop', reason: 'quiet-hours' }] })
+    await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'suppressed' })
   })
 
   it('never reports "sent" when the submission was folded, merged or delegated', async () => {

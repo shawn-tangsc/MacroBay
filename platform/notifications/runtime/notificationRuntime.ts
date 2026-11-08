@@ -23,6 +23,7 @@ import type {
   NotificationRuntimeSettings,
   NotificationSubmitOutcome,
   NotificationSubmitRequest,
+  NotificationSuppressedLevel,
   NotificationUnreadState,
   NotificationCenterItem
 } from '../contracts/notificationContracts'
@@ -324,7 +325,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     }
     await persistWithDiagnostics({ ...state, records: [record, ...state.records], dailyCounters })
     notifyChanged()
-    const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff, request.signalSeverity)
+    const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff, request.signalSeverity, plan.quietHours)
     if (delivered.record !== record || delivered.pushBackoff !== state.pushBackoff) {
       const records = [delivered.record, ...state.records]
       await persistWithDiagnostics({ ...state, records, pushBackoff: delivered.pushBackoff, dailyCounters })
@@ -348,7 +349,28 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
         })
       }
     }
-    return plan.outcome
+    // 手机那一档若被免打扰摘掉，路由表里没有它（它不在 record.channels 里），
+    // 所以「没被尝试」要在这一层补齐：已批 channel、却没排上，且决定是免打扰。
+    const narrowedByQuietHours = plan.quietHours.inside && !plan.quietHours.bypassed &&
+      !(record.appliedLevels ?? []).includes('channel') &&
+      (deps.catalog?.get(record.eventTypeId)?.approvedDisruptionLevels.includes('channel') ?? false)
+    // 被本机开关挡在门外的档也一样要说清：「没测」不是「没到」。只在事件确实批过这一档时才算，
+    // 且提示那一档要看是不是被「桌面优先」挤掉的（那不是读者的开关）。
+    const declared = deps.catalog?.get(record.eventTypeId)?.approvedDisruptionLevels ?? []
+    const applied = record.appliedLevels ?? []
+    const switchedOff: NotificationSuppressedLevel[] = []
+    if (!applied.includes('desktop') && declared.includes('desktop') && !settings.desktopEnabled) {
+      switchedOff.push({ level: 'desktop', reason: 'desktop-disabled' })
+    }
+    if (!applied.includes('desktop') && !applied.includes('toast') && declared.includes('toast') && !settings.toastEnabled) {
+      switchedOff.push({ level: 'toast', reason: 'toast-disabled' })
+    }
+    const suppressedLevels: readonly NotificationSuppressedLevel[] = [
+      ...delivered.suppressedLevels,
+      ...switchedOff,
+      ...(narrowedByQuietHours ? [{ level: 'push', reason: 'quiet-hours' } as const] : [])
+    ]
+    return { ...plan.outcome, suppressedLevels }
   }
 
   /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */

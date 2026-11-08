@@ -17,8 +17,9 @@ export type TestNoticeReceipt =
     /**
      * `collapsed` / `merged` / `delegated` 是**结果**，不是失败：读者点的那一下没产生投递，
      * 就不许回「已发到 X」。三条各自报，别默认落进 sent。
+     * `suppressed` = 这一档**根本没被尝试**（免打扰或开关关着）：回执说「没测」，不说「没到」。
      */
-    reasonCode: 'push-unavailable' | 'read-failed' | 'collapsed' | 'merged' | 'delegated'
+    reasonCode: 'push-unavailable' | 'read-failed' | 'collapsed' | 'merged' | 'delegated' | 'suppressed'
     /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（0 或 ≥2）。 */
     enabledChannelCount?: number
   }

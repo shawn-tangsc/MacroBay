@@ -51,7 +51,12 @@ export function routeTransientDelivery(
   settings: NotificationRuntimeSettings,
   hooks: DeliveryHooks,
   clock: NotificationClock,
-  content: NotificationDeliveryContent = buildDeliveryContent(record)
+  content: NotificationDeliveryContent = buildDeliveryContent(record),
+  /**
+   * 规划器算好的**免打扰决定**：同一份决定两处共用（2026-11-08）。缺省时按当前时钟算一次，
+   * 只服务还没有规划器决策的旧调用点（读者手动重投）。
+   */
+  quietHours?: { inside: boolean; bypassed: boolean }
 ): Promise<DeliveryAttempt[]> {
   const attempts: DeliveryAttempt[] = []
   // 编译期已经要求必传；这里再挡一次 `as never` 之类的绕过，并给出可读原因，
@@ -59,8 +64,14 @@ export function routeTransientDelivery(
   if (!clock || typeof clock.now !== 'function') throw new Error('notification-clock-required')
   const now = clock.now().toISOString()
   const transientChannels = record.channels.filter((channel) => channel !== 'center')
+  // 免打扰内**一档都不试**（S6）：跳过要留证据，不能让它看起来像「试了没到」。
+  const quietHoursSuppress = (quietHours?.inside ?? isInsideQuietHours(settings, clock)) && quietHours?.bypassed !== true
 
   for (const channel of transientChannels) {
+    if (quietHoursSuppress) {
+      attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'quiet-hours' })
+      continue
+    }
     if (channel === 'toast') {
       if (!settings.toastEnabled) {
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'toast-disabled' })
@@ -92,6 +103,11 @@ export function routeTransientDelivery(
 
   const desktopChannel = transientChannels.includes('desktop')
   if (!desktopChannel) return Promise.resolve(attempts)
+
+  if (quietHoursSuppress) {
+    // 已在循环里记过一跳 `quiet-hours`（桌面也在 transientChannels 里），这里不再重复。
+    return Promise.resolve(attempts)
+  }
 
   if (!settings.desktopEnabled) {
     attempts.push({ channel: 'desktop', attemptedAt: now, result: 'skipped', reason: 'desktop-disabled' })

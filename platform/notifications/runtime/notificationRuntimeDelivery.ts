@@ -15,6 +15,7 @@ import { SIGNAL_SEVERITY_RANK } from '../contracts/notificationContracts'
 import type {
   NotificationAction,
   NotificationDiagnosticsSink,
+  NotificationSuppressedLevel,
   NotificationSignalSeverity,
   NotificationPushBackoff,
   NotificationRecord,
@@ -243,21 +244,28 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     settings: NotificationRuntimeSettings,
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>,
     /** 这次提交声明的信号严重度：首次推送成功时记进 `delivery.push.highestSeverity`。 */
-    signalSeverity?: NotificationSignalSeverity
+    signalSeverity?: NotificationSignalSeverity,
+    /** 规划器算好的免打扰决定：路由拿它，不再自己重算（同一决定两处共用）。 */
+    quietHours?: { inside: boolean; bypassed: boolean }
   ): Promise<{
     record: NotificationRecord
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
     /** 桌面这一跳没弹出来（`show()` 返回 `ok:false` 或平台不支持）：P7 的唯一来源。 */
     desktopBlocked: boolean
+    /** 这次**没被尝试**的表面（免打扰 / 开关关着）：回执据此说「没测」而不是「没到」。 */
+    suppressedLevels: readonly NotificationSuppressedLevel[]
     transition?: NotificationPushTransition
   }> {
     const content = await resolveContent(record)
-    const attempts = await routeTransientDelivery(record, settings, input.deliveryHooks ?? {}, input.clock, content)
+    const attempts = await routeTransientDelivery(record, settings, input.deliveryHooks ?? {}, input.clock, content, quietHours)
     const delivery: NotificationRecord['delivery'] = { ...record.delivery }
+    const suppressedLevels: NotificationSuppressedLevel[] = []
     let desktopBlocked = false
     for (const attempt of attempts) {
       if (attempt.channel !== 'toast' && attempt.channel !== 'popup' && attempt.channel !== 'desktop') continue
       if (attempt.result === 'skipped') {
+        const reason = suppressionReason(attempt.reason)
+        if (reason !== undefined) suppressedLevels.push({ level: attempt.channel, reason })
         delete delivery[attempt.channel]
         continue
       }
@@ -278,8 +286,18 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       record: deliveryChanged ? { ...record, delivery } : record,
       pushBackoff: pushOutcome?.pushBackoff ?? pushBackoff,
       desktopBlocked,
+      suppressedLevels,
       ...(pushOutcome?.transition === undefined ? {} : { transition: pushOutcome.transition })
     }
+  }
+
+  /** `skipped` 的原因里哪几种属于「根本没试」：其余（`*-unavailable`）是「想试但没有入口」。 */
+  function suppressionReason(reason: string | undefined): NotificationSuppressedLevel['reason'] | undefined {
+    if (reason === 'quiet-hours') return 'quiet-hours'
+    if (reason === 'toast-disabled') return 'toast-disabled'
+    if (reason === 'popup-disabled') return 'popup-disabled'
+    if (reason === 'desktop-disabled') return 'desktop-disabled'
+    return undefined
   }
 
   /**

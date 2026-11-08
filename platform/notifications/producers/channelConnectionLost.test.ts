@@ -104,7 +104,7 @@ describe('channel connection lost producer', () => {
   })
 
   it('submits and swallows failures: a lost notification must not turn a fact into a fault', async () => {
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'r1', levels: [] }))
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'r1', levels: [], suppressedLevels: [] }))
     await expect(notifyChannelConnectionLost(submit, input)).resolves.toMatchObject({ kind: 'accepted' })
     expect(submit).toHaveBeenCalledTimes(1)
 

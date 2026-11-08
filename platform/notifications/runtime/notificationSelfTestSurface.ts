@@ -53,6 +53,9 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
       if (outcome.kind === 'collapsed') return finish({ state: 'unavailable', reasonCode: 'collapsed' })
       if (outcome.kind === 'merged') return finish({ state: 'unavailable', reasonCode: 'merged' })
       if (outcome.kind === 'delegated') return finish({ state: 'unavailable', reasonCode: 'delegated' })
+      // 有表面**根本没被尝试**（免打扰 / 开关关着）：那一下测不到它，回「已发到」就是假事实。
+      // 回执只说「没测」，原因码留在折叠区——「没测」和「没到」是两件事。
+      if (outcome.suppressedLevels.length > 0) return finish({ state: 'unavailable', reasonCode: 'suppressed' })
       return finish({ state: 'sent', channelId: channel.channelId, channelName: channel.channelName })
     }
   }
