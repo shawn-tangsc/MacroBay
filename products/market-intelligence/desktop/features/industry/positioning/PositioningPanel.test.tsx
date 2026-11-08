@@ -151,18 +151,6 @@ describe('positioning panel', () => {
     act(() => root.unmount())
   })
 
-  it('draws one mark per hit the window holds, and the chip names the loudest one', () => {
-    const markup = render({
-      positioning: {
-        ...availablePositioning,
-        hints: [{ asset: 'btc', direction: 'long', observedAt: at(0), notionalUsd: 8.9e9, dropPct: -1.9, volumeMultiple: 3.4 }],
-        signal: { state: 'alert', asset: 'btc', direction: 'long', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
-      }
-    })
-    expect(markup).toContain('data-hint="btc"')
-    expect(markup).toContain('疑似多头爆仓 BTC -1.9% · 量 3.4×')
-  })
-
   it('draws every hit in the window, not only the newest one', () => {
     // 7 天视图画 7 天内的全部命中；只看最新的那条会让旧命中凭空消失。
     const markup = render({
@@ -197,12 +185,6 @@ describe('positioning panel', () => {
     expect(render({ positioning: { state: 'empty', onReload: () => undefined } })).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
   })
 
-  it('shows the loading state through the shared component', () => {
-    const markup = render({ positioning: { state: 'loading' } })
-    expect(markup).toContain(text.loading)
-    expect(markup).not.toContain('class="mi-positioning-panel__chart"')
-  })
-
   it('waits without drawing a failure or an empty card before the first read returns', () => {
     // First paint: neither half has answered. Waiting is its own state — "could not read" and
     // "nothing collected" are both claims about a read that has not happened yet.
@@ -212,6 +194,8 @@ describe('positioning panel', () => {
     expect(markup).not.toContain('class="state-view')
     expect(markup).not.toContain('data-state="error"')
     expect(markup).not.toContain(text.empty)
+    // 也不许先画一个空图表框：那同样是「已经有东西」的暗示。
+    expect(markup).not.toContain('class="mi-positioning-panel__chart"')
   })
 
   it('flags a stale reading without dropping it', () => {

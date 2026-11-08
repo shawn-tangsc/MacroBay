@@ -17,7 +17,8 @@ const bucketMs = 15 * 60_000
 const bucketAt = '2026-11-03T10:15:00.000Z'
 const asOf = '2026-11-03T10:30:00.000Z'
 
-const accepted: NotificationSubmitOutcome = { kind: 'accepted', recordId: 'record-1', levels: ['center'] }
+// 契约 2026-11-09：accepted 还带上「没被尝试的表面」——空数组表示每一档都真的试了。
+const accepted: NotificationSubmitOutcome = { kind: 'accepted', recordId: 'record-1', levels: ['center'], suppressedLevels: [] }
 
 function reading(overrides: Partial<Extract<OpenInterestHistoryResult, { state: 'available' }>> = {}): OpenInterestHistoryResult {
   return {
@@ -150,13 +151,6 @@ describe('open interest signal notification', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it('stays silent when the whole read failed', async () => {
-    const { submit, notify } = notifier({
-      history: { state: 'unavailable', failureCode: 'open-interest-history-query-unavailable' }
-    })
-    await notify()
-    expect(submit).not.toHaveBeenCalled()
-  })
 })
 
 describe('the alert names the side that was liquidated', () => {
@@ -360,7 +354,7 @@ describe('a failed read leaves exactly one trace, and no submission', () => {
 describe('the refresh path no longer calls analyses', () => {
   it('exposes only a refresh, because the tick scan is the single entry', async () => {
     const refresh = vi.fn(async () => ({ state: 'updated' as const }))
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'r', levels: [] }))
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'r', levels: [], suppressedLevels: [] }))
     const wrapped = createSignalledOpenInterestRefresh({
       refresh,
       readHistory: async () => reading(),
