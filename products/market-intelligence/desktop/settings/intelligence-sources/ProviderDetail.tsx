@@ -292,16 +292,20 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
       {sources.map((source) => {
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0
+        const unavailable = source.unavailable
         const tags = [
           unused || source.visibility === 'pending'
             ? labels.badges.pending
             : source.visibility === 'advanced'
               ? labels.badges.advanced
-              : source.enabled ? labels.status.enabled : labels.status.disabled,
+              : unavailable
+                // 「不可用」时不打「已启用／已停用」：那个词说的是启用开关的位置，读者要判断的是
+                // 这个源现在能不能用。三个状态词并排（已启用 + 未安排 + 不可用）没人知道哪个说了算。
+                ? null
+                : source.enabled ? labels.status.enabled : labels.status.disabled,
           isCalendar(source) ? labels.badges.calendar : null,
           ...source.panels.map((panel) => labels.panelNames[panel] ?? panel)
         ].filter((tag): tag is string => Boolean(tag))
-        const unavailable = source.unavailable
         return <div key={source.sourceId}>
           <div className="source-provider-detail__row">
           <button className="source-provider-detail__main" type="button" onClick={() => onSelectSource(source.sourceId, isCalendar(source))}>

@@ -5,8 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { DEFAULT_CALENDAR_LANDED_COUNTRIES, type CalendarLandedCountrySelection } from '../../../contracts/calendarLandedCountries'
+import type { CalendarReminderClient, CalendarReminderSettingsView } from '../../shared/ipc/intelligenceReminderClient'
 import { CalendarLandedCountriesRow } from './calendarLandedCountriesRow'
 import { intelligenceNotificationText } from './text'
+import { useCalendarReminderSettings } from './useCalendarReminderSettings'
 
 const zh = intelligenceNotificationText['zh-CN'] as unknown as Readonly<Record<string, string>>
 const en = intelligenceNotificationText['en-US'] as unknown as Readonly<Record<string, string>>
@@ -26,6 +28,11 @@ afterEach(() => {
 
 function mount(element: React.ReactElement): void {
   act(() => root.render(element))
+}
+
+/** 让挂起的 promise（读、写回调）落地。 */
+async function flush(): Promise<void> {
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 }
 
 /** 只渲染、不写：用来走各选择态。 */
@@ -56,6 +63,49 @@ function FailingHarness(props: Readonly<{ initial: CalendarLandedCountrySelectio
 }
 
 const selectText = (): string => container.querySelector('.ant-select-selection-item')?.textContent ?? ''
+
+/** 服务端每次回的都是**新对象**（真实链路每次过一遍 IPC 反序列化），引用一定会变。 */
+function freshCopy(view: CalendarReminderSettingsView): CalendarReminderSettingsView {
+  return {
+    ...view,
+    importance: [...view.importance],
+    landedCountries: { codes: [...view.landedCountries.codes], scope: view.landedCountries.scope }
+  }
+}
+
+/** 真接线：页面用的那个 hook + 那一行，写失败/写成功都按真实链路回（含新对象）。 */
+function HookHarness(props: Readonly<{ client: CalendarReminderClient }>): React.ReactElement | null {
+  const reminder = useCalendarReminderSettings(props.client)
+  const [text] = useState(zh)
+  if (reminder.status !== 'ready' || reminder.value === undefined) return null
+  return <>
+    <button onClick={() => reminder.update({ leadMinutes: 30 })} type="button">改提前量</button>
+    <CalendarLandedCountriesRow
+      onChange={(next) => reminder.update({ landedCountries: next })}
+      resolveText={(key) => text[key] ?? ''}
+      saveFailedField={reminder.saveFailedField}
+      saving={reminder.saving}
+      selection={reminder.value.landedCountries}
+      text={text}
+    />
+  </>
+}
+
+/**
+ * 一条只让「国家」写失败的假服务端：别的字段照常存上并回一个新对象。
+ * 这正是缺陷的形状——国家没存上，读者去改别的字段，那一次成功会把国家草稿抹掉。
+ */
+function clientWhereCountriesFailToSave(initial: CalendarReminderSettingsView): CalendarReminderClient {
+  let held = initial
+  return {
+    read: async () => freshCopy(held),
+    write: async (patch) => {
+      if ('landedCountries' in patch) return { settings: freshCopy(held), state: 'not-saved' }
+      held = { ...held, ...patch }
+      return { settings: freshCopy(held), state: 'saved' }
+    }
+  }
+}
 
 describe('calendar landed countries row', () => {
   it('opens on US only and shows no country list', () => {
@@ -126,6 +176,48 @@ describe('calendar landed countries row', () => {
     />)
     expect(container.querySelector('.ant-select-disabled')).not.toBeNull()
     expect([...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every((input) => input.disabled)).toBe(true)
+  })
+
+  it('keeps the country draft when another field saves afterwards', async () => {
+    // 缺陷（界面自查退回 ①）：国家没存上 → 读者改另一个字段并保存成功 → 服务端回新对象 →
+    // 旧写法按**引用**重置草稿，读者刚选的三个国家被无声抹掉，失败提示也在下一次写入开头被清掉。
+    mount(<HookHarness client={clientWhereCountriesFailToSave({
+      enabled: true,
+      importance: ['high'],
+      landedCountries: { codes: [], scope: 'custom' },
+      landedFilter: 'surprise-only',
+      leadMinutes: 60
+    })} />)
+    await flush()
+
+    const boxes = (): HTMLInputElement[] => [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    expect(boxes()).toHaveLength(8)
+    for (const index of [0, 1, 2]) {
+      const input = boxes()[index]!
+      act(() => input.click())
+      await flush()
+    }
+    expect(container.textContent).toContain('3 / 8')
+    expect(container.textContent).toContain(zh['pages.intelligence.notification.countries.saveFailed'])
+
+    // 改「提前多久」并保存成功——这一次不碰国家，草稿与失败提示都必须留着。
+    act(() => {
+      const changeLead = [...container.querySelectorAll('button')]
+        .find((button) => button.textContent === '改提前量')
+      changeLead!.click()
+    })
+    await flush()
+
+    expect(boxes().filter((input) => input.checked)).toHaveLength(3)
+    expect(container.textContent).toContain('3 / 8')
+    expect(container.textContent).toContain(zh['pages.intelligence.notification.countries.saveFailed'])
+  })
+
+  it('names the country checkbox group for screen readers', () => {
+    // 缺陷（界面自查退回 ②）：role="group" 没有可访问名，读屏只念「组」。
+    mount(staticRow({ codes: ['CN', 'US'], scope: 'custom' }))
+    const group = container.querySelector('[role="group"].intelligence-notification-form-checks')
+    expect(group?.getAttribute('aria-label')).toBe(zh['pages.intelligence.notification.countries.customTitle'])
   })
 
   it('speaks both languages from the same keys', () => {

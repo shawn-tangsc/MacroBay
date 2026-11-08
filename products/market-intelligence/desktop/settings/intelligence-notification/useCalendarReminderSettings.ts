@@ -57,9 +57,11 @@ export function useCalendarReminderSettings(
   const reload = useCallback(() => setToken((current) => current + 1), [])
 
   const update = useCallback((patch: Parameters<CalendarReminderSettingsState['update']>[0]) => {
-    setSaving(true)
-    setSaveFailedField(undefined)
     const field = Object.keys(patch)[0]
+    setSaving(true)
+    // 只清**这一处自己**的旧失败提示。别处保存不该把「国家没存上」擦掉——那处的读者草稿还没存上，
+    // 提示消失等于告诉读者「已经好了」。
+    setSaveFailedField((current) => (current === field ? undefined : current))
     void client.write(patch).then(
       (outcome) => {
         setSaving(false)

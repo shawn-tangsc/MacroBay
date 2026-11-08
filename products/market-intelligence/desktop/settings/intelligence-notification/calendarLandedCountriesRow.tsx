@@ -33,8 +33,13 @@ export function CalendarLandedCountriesRow(props: Readonly<{
 }>): ReactElement {
   const { selection, saving, saveFailedField, text } = props
   // 草稿：服务端确认前先显示读者刚选的；存失败也不回退。
+  //
+  // **重置只看这个字段自己的值有没有变，不看对象引用**：服务端每次保存成功后回的都是新对象，
+  // 引用一变就 `setDraft` 等于「别的字段存成功」也会把这里没存上的草稿悄悄抹掉——读者刚选的
+  // 国家就这么没了，而且没有任何提示。用内容做键，别的字段保存（本字段内容不变）就不动草稿。
+  const confirmedKey = `${selection.scope}:${selection.codes.join(',')}`
   const [draft, setDraft] = useState(selection)
-  useEffect(() => { setDraft(selection) }, [selection])
+  useEffect(() => { setDraft(selection) }, [confirmedKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const label = text['pages.intelligence.notification.countries.row'] ?? ''
   const scopeNote = text['pages.intelligence.notification.countries.scopeNote'] ?? ''
@@ -81,7 +86,11 @@ export function CalendarLandedCountriesRow(props: Readonly<{
         : null}
     {draft.scope === 'custom'
       ? <SettingsRow label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}>
-        <div className="intelligence-notification-form-checks" role="group">
+        <div
+          aria-label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}
+          className="intelligence-notification-form-checks"
+          role="group"
+        >
           {CALENDAR_LANDED_COUNTRY_CODES.map((code) => {
             const checked = draft.codes.includes(code)
             return <Checkbox
