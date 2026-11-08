@@ -2,9 +2,8 @@ import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@plat
 
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import {
-  analysisConclusionPushPolicy,
   analysisConclusionPushesPhone,
-  buildAnalysisConclusionBody,
+  buildAnalysisConclusionRequest,
   type AnalysisPushLanguage
 } from './analysisConclusionPush'
 
@@ -76,26 +75,19 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
         sentToday
       })
       const centerOnly = delivery.centerOnly
-      const body = buildAnalysisConclusionBody({
-        summary: notice.summary,
-        citedCount: notice.citedCount,
-        withContext: !centerOnly
-      })
-      const rendered = {
-        'zh-CN': { ...analysisConclusionPushPolicy.renderedCopy['zh-CN'], body: body.text },
-        'en-US': { ...analysisConclusionPushPolicy.renderedCopy['en-US'], body: body.text }
-      }
+      // 请求由**共用构造器**拼：手动发送那条也走它，两条路径只差去重分量与收窄。
       const request: NotificationSubmitRequest = {
-        // 直接引事件 id 常量，不写成「策略对象的字段」：生产者门禁只认能静态看见的形态
-        // （字面量、事件 id 常量成员、封闭表查表），冻结对象的字段它证明不了——一旦写成那样，
-        // 这条通知在门禁眼里就是「没人发」。
+        // 事件 id 写在提交点：生产者门禁只认能静态看见的形态（常量成员、字面量、封闭表查表）。
         eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisConclusion,
-        dedupeVars: { builder: 'template', vars: { triggerKey: notice.triggerKey, cutoff: notice.cutoff } },
-        // 同向：收窄到中心，手机不响。`center` 平台必达，所以这里传的就是「只剩中心」。
-        ...(centerOnly ? { narrowedDisruptionLevels: ['center'] as const } : {}),
-        rendered,
-        actions: [],
-        occurredAt: notice.occurredAt
+        ...buildAnalysisConclusionRequest({
+          summary: notice.summary,
+          citedCount: notice.citedCount,
+          triggerKey: notice.triggerKey,
+          cutoff: notice.cutoff,
+          occurredAt: notice.occurredAt,
+          // 同向：收窄到中心，手机不响。`center` 平台必达，所以这里传的就是「只剩中心」。
+          centerOnly
+        })
       }
       await deps.submit(request)
       bucket.module += 1

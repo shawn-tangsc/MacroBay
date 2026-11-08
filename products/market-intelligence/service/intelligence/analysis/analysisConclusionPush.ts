@@ -12,10 +12,6 @@ import type { AnalysisConclusionDirection } from '../../../contracts/marketAnaly
  * - **同向不推手机**：信号方向与结论方向相同 → 只进中心；反向、或结论引用了信号没带的事实才算"新信息"。
  * - **第二条带上下文**：标题沿用「资产 + 规则」，正文带结论摘要与证据引用条数。
  * - **句子只有一句**：结论 + 半句理由，中文 ≤40 字 / 英文 ≤90 字符；超了**截到句末**，绝不截半句。
- *
- * 事件 id 不在这里：它在提交点直接引 `MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisConclusion`。
- * 这里写一份「策略对象的字段」，生产者门禁就证明不了这条通知有人在发（它只认能静态看见的形态），
- * 于是同一个事件会有第二个名字。
  */
 export const analysisConclusionPushPolicy = Object.freeze({
   version: 'analysisConclusionPush.v1',
@@ -150,4 +146,41 @@ export function analysisConclusionPushesPhone(input: Readonly<{
   if (!worthPhone) return Object.freeze({ phone: false, centerOnly: true, reason: 'same-direction' })
   if (quotaHit !== undefined) return Object.freeze({ phone: false, centerOnly: true, reason: quotaHit })
   return Object.freeze({ phone: true, centerOnly: false })
+}
+
+/**
+ * 一条结论 → 一次提交通知。**自动推送与手动发送共用这一个构造器**。
+ *
+ * 两条路径的差别只有两个入参：去重键的第二个分量（手动那条带点击时刻，所以每次点击都是新键）
+ * 与要不要收窄到中心（自动推送同向时收窄，读者点名的那次不收窄）。分成两份的话，
+ * 标题与正文规则会慢慢长歪——而读者看到的是同一条通知。
+ *
+ * **事件 id 不在这里**：它由提交点写（`eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisConclusion`），
+ * 因为生产者门禁要能在提交点附近静态看见它；写成构造器里的一行，门禁就只能报「无法判定」。
+ */
+export function buildAnalysisConclusionRequest(input: Readonly<{
+  summary: string
+  citedCount: number
+  triggerKey: string
+  /** 去重键 `analysis:{triggerKey}:{cutoff}` 的第二个分量；手动发送是 `${截止时刻}:${点击时刻}`。 */
+  cutoff: string
+  occurredAt: string
+  centerOnly: boolean
+}>): Omit<NotificationSubmitRequest, 'eventTypeId'> {
+  const body = buildAnalysisConclusionBody({
+    summary: input.summary,
+    citedCount: input.citedCount,
+    // 推手机时才追「证据 N 条」：只进中心的那条不该在通知中心里写着「· 证据 2 条」而手机没响。
+    withContext: !input.centerOnly
+  })
+  return {
+    dedupeVars: { builder: 'template', vars: { triggerKey: input.triggerKey, cutoff: input.cutoff } },
+    ...(input.centerOnly ? { narrowedDisruptionLevels: ['center'] as const } : {}),
+    rendered: {
+      'zh-CN': { ...analysisConclusionPushPolicy.renderedCopy['zh-CN'], body: body.text },
+      'en-US': { ...analysisConclusionPushPolicy.renderedCopy['en-US'], body: body.text }
+    },
+    actions: [],
+    occurredAt: input.occurredAt
+  }
 }

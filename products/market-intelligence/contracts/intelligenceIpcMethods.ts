@@ -16,6 +16,8 @@ export const INTELLIGENCE_IPC_METHODS = Object.freeze({
   getCalendarReminderSettings: 'intelligence.getCalendarReminderSettings',
   setCalendarReminderSettings: 'intelligence.setCalendarReminderSettings',
   getTimeline: 'intelligence.getTimeline',
+  /** 抽屉里那枚「发送到频道」：入参只有运行 id，结论与文案由主进程按 id 取。 */
+  sendAnalysisConclusion: 'intelligence.sendAnalysisConclusion',
   getMonitoringScope: 'intelligence.getMonitoringScope',
   ingestEvent: 'intelligence.ingestEvent',
   getWorkspaceState: 'intelligence.getWorkspaceState',

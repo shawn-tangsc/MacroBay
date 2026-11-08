@@ -129,6 +129,19 @@ export function registerIntelligenceIpc(
     return getIntelligenceService(intelligenceModule).getTimeline(query)
   })
 
+  /**
+   * 「发送到频道」的载荷校验：**只有运行 id 一个字段**，写在这里而不是复用别人的读取器
+   * （推送请求被拿去按删除规矩校验过一次，那条 bug 就是复用造成的）。
+   * 结论句、去重键、通道全部由主进程按 id 现取，渲染层传不了内容。
+   */
+  register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.sendAnalysisConclusion, async (payload) => {
+    const analysisRunId = (payload as { analysisRunId?: unknown } | undefined)?.analysisRunId
+    if (typeof analysisRunId !== 'string' || analysisRunId.trim().length === 0 || analysisRunId.length > 200) {
+      throw new Error('analysisRunId must be a non-empty string of at most 200 characters.')
+    }
+    return intelligenceModule.marketAnalysisRuntime.sendConclusion({ analysisRunId })
+  })
+
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getMonitoringScope, async () =>
     getIntelligenceService(intelligenceModule).getMonitoringScope()
   )

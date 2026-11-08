@@ -79,6 +79,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.translateNewsSentimentBody': excluded('internal-view'),
   'intelligence.getSourceHealth': exposed('get_source_health'),
   'intelligence.getTimeline': exposed('get_intelligence_timeline'),
+  // 读者点按钮发通知：读的是他的结论、发的是他的通道，不对代理人开放。
+  'intelligence.sendAnalysisConclusion': excluded('internal-view'),
   'intelligence.getWorkspaceState': excluded('internal-view'),
   'intelligence.getWorkspaceTimeline': exposed('get_intelligence_timeline'),
   'intelligence.ingestEvent': excluded('destructive'),
