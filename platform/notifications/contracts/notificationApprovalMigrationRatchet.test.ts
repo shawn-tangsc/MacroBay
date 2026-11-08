@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
  *
  * 41 = 当前仍传 `policy` 的**调用点数**（不是文件数）。已迁：`notificationRedeliver`、`pushTargetDerivation`、`notificationDedupeCadence`、`notificationNarrowedSurface`、`notificationRuntimeBackoff`、`notificationRuntimeRetention`、`notificationSeverityUpgrade` 各 1 处、`notificationRuntime` 2 处（同形，一笔 -2）。
  */
-const BASELINE: number = 8
+const BASELINE: number = 7
 
 function callSites(): string[] {
   const found: string[] = []
