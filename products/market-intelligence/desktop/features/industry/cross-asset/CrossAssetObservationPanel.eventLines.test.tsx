@@ -16,8 +16,9 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
  * 所以断言月份来自**取回它的那个月份页**，而不是从发布时间反推。
  */
 const crossAssetText = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+// `children` 是 provider 的必填 prop，不是 `createElement` 的第三个参数（那种写法运行期能跑、类型上对不上）。
 const ScopedPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
 
 const windowStart = '2026-09-30T12:00:00.000Z'
 const windowEnd = '2026-10-01T12:00:00.000Z'
@@ -50,7 +51,10 @@ async function render(panel: Partial<Parameters<typeof CrossAssetObservationPane
   document.body.append(host)
   const root = createRoot(host)
   let queried = 0
-  const client = { acquire: async () => ({ state: 'active', leaseId: 'test-lease', expiresAt: Date.now() + 30_000 }), query: async () => snapshots[Math.min(queried++, snapshots.length - 1)], release: vi.fn(async () => ({ state: 'released' })) }
+  // 租约到期的基准也是一个固定时刻：夹具不需要「现在」，摸系统时钟只会让同一提交的两次结果不可比。
+const FIXED_NOW = Date.parse('2026-11-09T00:00:00.000Z')
+
+const client = { acquire: async () => ({ state: 'active', leaseId: 'test-lease', expiresAt: FIXED_NOW + 30_000 }), query: async () => snapshots[Math.min(queried++, snapshots.length - 1)], release: vi.fn(async () => ({ state: 'released' })) }
   await act(async () => root.render(createElement(ScopedPanel, { client: client as never, text: crossAssetText, ...panel })))
   await act(async () => {})
   return { host, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
