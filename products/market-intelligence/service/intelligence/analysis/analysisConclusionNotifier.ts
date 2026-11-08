@@ -1,5 +1,6 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
+import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import {
   analysisConclusionPushPolicy,
   analysisConclusionPushesPhone,
@@ -85,7 +86,10 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
         'en-US': { ...analysisConclusionPushPolicy.renderedCopy['en-US'], body: body.text }
       }
       const request: NotificationSubmitRequest = {
-        eventTypeId: analysisConclusionPushPolicy.eventTypeId,
+        // 直接引事件 id 常量，不写成「策略对象的字段」：生产者门禁只认能静态看见的形态
+        // （字面量、事件 id 常量成员、封闭表查表），冻结对象的字段它证明不了——一旦写成那样，
+        // 这条通知在门禁眼里就是「没人发」。
+        eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisConclusion,
         dedupeVars: { builder: 'template', vars: { triggerKey: notice.triggerKey, cutoff: notice.cutoff } },
         // 同向：收窄到中心，手机不响。`center` 平台必达，所以这里传的就是「只剩中心」。
         ...(centerOnly ? { narrowedDisruptionLevels: ['center'] as const } : {}),
