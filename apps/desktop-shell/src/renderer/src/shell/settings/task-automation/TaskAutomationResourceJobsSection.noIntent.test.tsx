@@ -43,7 +43,7 @@ describe('TaskAutomationResourceJobsSection without an intent page', () => {
             error: false,
             errorReason: null,
             items: [],
-            productNames: { 'market-intelligence': 'Market Intelligence' } as Record<string, string>,
+            productNames: { 'sample-product': 'Sample Product' } as Record<string, string>,
             reload: vi.fn()
           }
         })))
