@@ -84,4 +84,38 @@ describe('notification storage durability', () => {
 
     await rm(directory, { recursive: true, force: true })
   })
+  it('keeps a rendered-only record through a load and a save: dropping it once deleted real data', async () => {
+    // 0.4.0 的事故形状（`fba533c` 修）：新格式记录只带成品句、没有 `titleKey`，加载时被整条判成
+    // 「没有文案」丢掉，**丢掉之后还会被回写**——于是记录永久消失，id 序号出现跳号。
+    // 这条用例只证明 HEAD 已经不会丢：加载 → 保存 → 再加载，记录仍在，成品句一字未改。
+    const directory = await mkdtemp(join(tmpdir(), 'notification-storage-'))
+    const file = join(directory, 'notifications.json')
+    const renderedOnly = {
+      id: 'notification-rendered-1',
+      owner: 'product',
+      productId: 'market-intelligence',
+      sourceId: 'market-intelligence.briefing.ready',
+      eventTypeId: 'market-intelligence.briefing.ready',
+      rendered: {
+        'zh-CN': { title: '日报已生成', body: '今日简报已经生成。', reason: '到时间了' },
+        'en-US': { title: 'Daily briefing is ready', body: "Today's briefing is ready.", reason: 'Scheduled' }
+      },
+      channels: ['center'],
+      state: 'unread',
+      createdAt: '2026-11-08T11:01:07.000Z',
+      updatedAt: '2026-11-08T11:01:07.000Z'
+    }
+    await writeFile(file, JSON.stringify({ records: [renderedOnly], subscriptions: {}, dailyCounters: {}, pushBackoff: {} }), 'utf8')
+
+    const storage = createNotificationJsonStorage(file)
+    const loaded = await storage.read()
+    expect(loaded.records.map((record) => record.id)).toEqual(['notification-rendered-1'])
+
+    await storage.write(loaded)
+    const reloaded = await storage.read()
+    expect(reloaded.records.map((record) => record.id)).toEqual(['notification-rendered-1'])
+    expect(reloaded.records[0]?.rendered?.['en-US']?.title).toBe('Daily briefing is ready')
+
+    await rm(directory, { recursive: true, force: true })
+  })
 })
