@@ -93,12 +93,13 @@ describe('notification storage durability', () => {
     const renderedOnly = {
       id: 'notification-rendered-1',
       owner: 'product',
-      productId: 'market-intelligence',
-      sourceId: 'market-intelligence.briefing.ready',
-      eventTypeId: 'market-intelligence.briefing.ready',
+      // 中性构造：这里判的是「只带成品句的记录会不会被丢」，与任何具体产品无关。
+      productId: 'sample-product',
+      sourceId: 'sample-product.report-ready',
+      eventTypeId: 'sample-product.report-ready',
       rendered: {
-        'zh-CN': { title: '日报已生成', body: '今日简报已经生成。', reason: '到时间了' },
-        'en-US': { title: 'Daily briefing is ready', body: "Today's briefing is ready.", reason: 'Scheduled' }
+        'zh-CN': { title: '报告已生成', body: '今天的报告已经生成。', reason: '到时间了' },
+        'en-US': { title: 'Report is ready', body: 'Today\'s report is ready.', reason: 'Scheduled' }
       },
       channels: ['center'],
       state: 'unread',
@@ -114,7 +115,7 @@ describe('notification storage durability', () => {
     await storage.write(loaded)
     const reloaded = await storage.read()
     expect(reloaded.records.map((record) => record.id)).toEqual(['notification-rendered-1'])
-    expect(reloaded.records[0]?.rendered?.['en-US']?.title).toBe('Daily briefing is ready')
+    expect(reloaded.records[0]?.rendered?.['en-US']?.title).toBe('Report is ready')
 
     await rm(directory, { recursive: true, force: true })
   })

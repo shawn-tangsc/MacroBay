@@ -9,10 +9,12 @@
  * - **解析不到就报「无法判定」并算未通过**，不许沉默地算过——沉默通过比没有门禁更糟，
  *   它会给「已经接好了」发一张假证书。
  *
- * **为什么放在 `apps/desktop-shell/src`（b3-1 从 platform 搬来）**：门禁的范围是「平台 + 产品」整棵树，
- * 而「全部已批准事件」现在只能从各来源自己的批准合成——平台不许 import 产品代码（契约 N1）。
- * 这里是装配根那一侧（`src/main.ts` 同样 import `@products/generated`），才可能一处覆盖两边。
- * 搬过来只换「批准从哪来」与文件位置，**断言与期望值逐字未改**。
+ * **为什么放在 `tools/audits`**：门禁的范围是「平台 + 产品」**整棵树**，而「全部已批准事件」
+ * 只能从各来源自己的批准合成——平台不许 import 产品代码（契约 N1），所以它不能住在 platform；
+ * 它读的是**每个**产品的声明，也不是某一个产品能拥有的测试。这是仓库级的契约审计：与运行中的应用
+ * 同一条判据，但不是随包发布的平台行为。产品词门禁判的是**随包发布的平台与 shell** 里不许出现
+ * 产品概念，装配根里那个合法接缝只有 `src/main.ts` 一处。
+ * 断言与期望值逐字未改，只换了住址与根路径。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -28,7 +30,7 @@ import {
   type ProducerGateSource
 } from '@platform/notifications/producers/producerGateScan'
 
-const root = join(__dirname, '..', '..', '..')
+const root = join(__dirname, '..', '..')
 
 /** 「全部已批准事件」= 合并批准视图（唯一实现）：平台一份 + 每个产品自己一份。 */
 const approvedIds = Object.keys(mergeApprovalView([
