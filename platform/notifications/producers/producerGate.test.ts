@@ -60,31 +60,45 @@ function sources(): ProducerGateSource[] {
   return found
 }
 
-/** 事件 id 常量表：从定义处读一遍，不手抄第二份（手抄必然与定义漂移）。 */
-function idConstants(): Record<string, string> {
+/**
+ * 事件常量表：「常量名 → 事件 id」。
+ *
+ * **从门禁本来就在扫的这批源码里现算**，不认识任何产品路径、也不额外读产品文件：谁把常量定义在
+ * 哪个文件里，平台不需要知道。
+ *
+ * 只收**批准表里有的 id**：源码里还有大量长得像事件 id 的键（文案键、指标名），把它们收进来会让
+ * 「同一段构建函数里出现两个 id ⇒ 无法判定」误伤真实提交点。常量表的用途只有一处——把
+ * `SOME_TABLE.name` 解析成受管事件，别的 id 本来就不该参与。
+ */
+function idConstants(list: readonly ProducerGateSource[]): Record<string, string> {
+  const approved = new Set(Object.keys(NOTIFICATION_EVENT_POLICY))
   const map: Record<string, string> = {}
-  const files = [
-    'products/market-intelligence/contracts/notificationEventKeys.ts',
-    'platform/notifications/contracts/platformNotificationEvents.ts'
-  ]
-  for (const relative of files) {
-    const code = stripComments(readFileSync(join(root, relative), 'utf8'))
+  for (const source of list) {
+    const code = stripComments(source.content)
     for (const match of code.matchAll(/([A-Za-z_$][\w$]*):\s*'([a-z0-9-]+\.[a-z0-9.-]+)'/gu)) {
       const name = match[1]
       const id = match[2]
-      if (name !== undefined && id !== undefined) map[name] = id
+      if (name !== undefined && id !== undefined && approved.has(id)) map[name] = id
     }
   }
   return map
 }
 
 describe('生产者门禁：登记了就必须有人发', () => {
+  it('resolves event constants from declarations, not from product source files', () => {
+    // 空集会让下面那条门禁「因为没有解析到提交点而空过」——这正是今晚抓过的坑，先在这里拦住。
+    const constants = idConstants(sources())
+    expect(Object.keys(constants).length).toBeGreaterThan(0)
+    expect(Object.values(constants).some((id) => id.startsWith('platform.'))).toBe(true)
+  })
+
   it('批准表里每一条事件都有可证明的提交点，或已在已知未证清单里写明原因', () => {
+    const scanned = sources()
     const result = evaluateProducerGate({
       approvedIds: Object.keys(NOTIFICATION_EVENT_POLICY),
       dormantIds: [],
-      sources: sources(),
-      idConstants: idConstants()
+      sources: scanned,
+      idConstants: idConstants(scanned)
     })
 
     // 未证清单只减不增：新增一条就必须在这里写出原因与归属（见上面注释）。
@@ -106,6 +120,19 @@ describe('门禁自己的有效性（契约 §12.2）', () => {
       sources: [{ path: 'x.ts', content }],
       idConstants
     })
+
+  it('中间段叫 notification 的合法事件 id 必须能解析出提交点', () => {
+    // 文案键以 `notification.` 开头；事件 id 只是**中间**含这个词。用 `includes` 会把后者误伤。
+    const result = evaluateProducerGate({ approvedIds: ['platform.notification.self-test'], dormantIds: [], sources: [{ path: 'x.ts', content: "submit({ eventTypeId: 'platform.notification.self-test' })" }], idConstants: {} })
+    expect(result.produced).toEqual(['platform.notification.self-test'])
+    expect(result.missing).toEqual([])
+  })
+
+  it('文案键仍然不是事件 id：`notification.` 开头的串一律不算', () => {
+    const result = evaluateProducerGate({ approvedIds: ['platform.job.failed-terminal'], dormantIds: [], sources: [{ path: 'x.ts', content: "submit({ titleKey: 'notification.event.platform.job.failed-terminal.title' })" }], idConstants: {} })
+    expect(result.produced).toEqual([])
+    expect(result.missing).toEqual(['platform.job.failed-terminal'])
+  })
 
   it('认字面量：注释里的同一个串不算（先剥注释）', () => {
     const code = `

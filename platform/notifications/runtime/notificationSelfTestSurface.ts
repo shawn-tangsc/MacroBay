@@ -41,7 +41,7 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
       // 每次点击都是新键（`seq` 用点击时刻），所以连点是多条测试记录，且不占任何真实键。
       // 实参写平：事件 id 就在提交调用里，生产者门禁第一层就能读到（不靠名字猜、也不靠再跟一层）。
       const outcome = await input.submitRequest({
-        eventTypeId: 'platform.notification-self-test',
+        eventTypeId: 'platform.notification.self-test',
         rendered: LINK_SAMPLE_COPY.rendered,
         actions: [],
         dedupeVars: { builder: 'template', vars: { date: at.slice(0, 10), seq: String(Date.parse(at)) } },

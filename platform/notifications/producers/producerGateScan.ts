@@ -443,7 +443,10 @@ function sliceStatement(code: string, start: number): string {
 }
 
 function isEventIdShape(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/u.test(value) && !value.includes('notification.')
+  // 要躲的是**文案键**（`notification.event.*` / `notification.action.*`）：那些键**统统以这个前缀开头**。
+  // 用 `includes` 会把「中间段叫 notification」的合法事件 id 一起误伤（`platform.notification.self-test`），
+  // 于是提交点被判成「看不见」。这里换成精确前缀判定：对文案键的严格程度没降，只是不再误伤。
+  return /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/u.test(value) && !value.startsWith('notification.')
 }
 
 function lineOf(code: string, index: number): number {
