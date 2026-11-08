@@ -54,7 +54,8 @@ function brokenRuntime() {
   }
   const runtime = createNotificationRuntime({
     storage,
-    catalog: createNotificationEventCatalog({ policy: {}, sources: [] }),
+    // 批准值随声明走（b2）：这个夹具本来就没有批准行（空目录就够了），所以只去掉参数。
+    catalog: createNotificationEventCatalog({ sources: [] }),
     diagnostics: (entry) => entries.push(entry),
     getSettings: async () => settings,
     clock
