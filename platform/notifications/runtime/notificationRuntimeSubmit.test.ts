@@ -19,18 +19,7 @@ const settings: NotificationRuntimeSettings = {
 }
 const clock = { now: () => new Date('2026-11-03T00:00:00.000Z'), timeZone: () => 'UTC' }
 
-const policy: NotificationEventPolicy = {
-  'platform.failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
-  'platform.done': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
-  'platform.merge-a': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.merge-b': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.merge-c': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.capped': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
-
 const catalog = createNotificationEventCatalog({
-  policy,
   sources: [
     {
       productId: 'market-intelligence',
@@ -49,6 +38,16 @@ const catalog = createNotificationEventCatalog({
     },
     {
       productId: 'platform',
+    // 批准值随声明走（b2）：值原样。
+    approval: {
+  'platform.failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
+  'platform.done': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
+  'platform.merge-a': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'platform.merge-b': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'platform.merge-c': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'platform.capped': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+},
       events: [
         {
           id: 'platform.failed',
