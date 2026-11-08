@@ -25,12 +25,18 @@ describe('platform notification event declarations', () => {
     }
   })
 
-  it('merges into a catalog whose approval is the upper bound of every request', () => {
+  it('every platform declaration reaches the catalog, and approval is the upper bound of every request', () => {
     const catalog = createNotificationEventCatalog({
       sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
       policy: NOTIFICATION_EVENT_POLICY
     })
-    expect(catalog.list()).toHaveLength(14)
+    // **双向覆盖**，不是计数：只做正向会漏掉「目录里凭空多出几条」——那正是前面用双向覆盖堵过的洞。
+    const declared = new Set(PLATFORM_NOTIFICATION_EVENTS.map((event) => event.id))
+    const inCatalog = new Set(catalog.list().map((entry) => entry.id))
+    const missingFromCatalog = [...declared].filter((id) => !inCatalog.has(id))
+    const unexpectedInCatalog = [...inCatalog].filter((id) => !declared.has(id))
+    // 逐条列出差异，不用 `toEqual` 一把盖掉：能被说清的差异比一个绿勾有用。
+    expect({ missingFromCatalog, unexpectedInCatalog }).toEqual({ missingFromCatalog: [], unexpectedInCatalog: [] })
     for (const entry of catalog.list()) {
       for (const level of entry.requestedDisruptionLevels) {
         // channel 例外：没批按未批准处理，不报错（契约 §4）。
