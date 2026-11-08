@@ -24,14 +24,17 @@ import {
  */
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.plain': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
-    'platform.grouped-a': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'demo' },
-    'platform.grouped-b': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'demo' }
-  },
+  // 批准值随声明走（b3 前的最后一处）：值原样，来源自带。
+
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.plain': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
+        'platform.grouped-a': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'demo' },
+        'platform.grouped-b': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'demo' }
+      },
+
       events: [
         { id: 'platform.plain', titleKey: 'notification.test.title', reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder', requestedDisruptionLevels: ['toast', 'channel'], dedupeKeyTemplate: 'plain:{id}', dedupeUnit: 'occurrence' },
         { id: 'platform.grouped-a', titleKey: 'notification.test.title', reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder', requestedDisruptionLevels: ['toast', 'channel'], dedupeKeyTemplate: 'ga:{id}', dedupeUnit: 'occurrence' },
@@ -76,11 +79,12 @@ describe('resolving the third layer', () => {
     // 默认不是写死的三面全开：某一行撤批一面，缺省就跟着收窄。
     // 而且这是**合法状态**，不是配置坏了——不报错，只是那一面不出现。
     const shrunk = createNotificationEventCatalog({
-      policy: {
-        'platform.shrunk': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
-      },
       sources: [{
         productId: 'platform',
+      approval: {
+        'platform.shrunk': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
+      },
+
         events: [{
           id: 'platform.shrunk',
           titleKey: 'notification.test.title',
@@ -111,12 +115,13 @@ describe('one group, one selection', () => {
   it('uses the intersection of the members, never the union', () => {
     // B 不批提示：共享选择里就不能有提示，否则勾了只有 A 会闪——那是假配置。
     const skewed = createNotificationEventCatalog({
-      policy: {
+      sources: [{
+        productId: 'platform',
+      approval: {
         'platform.grouped-a': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'demo' },
         'platform.grouped-b': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'demo' }
       },
-      sources: [{
-        productId: 'platform',
+
         events: [
           { id: 'platform.grouped-a', titleKey: 'notification.test.title', reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder', requestedDisruptionLevels: ['toast', 'channel'], dedupeKeyTemplate: 'ga:{id}', dedupeUnit: 'occurrence' },
           { id: 'platform.grouped-b', titleKey: 'notification.test.title', reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder', requestedDisruptionLevels: ['channel'], dedupeKeyTemplate: 'gb:{id}', dedupeUnit: 'occurrence' }
