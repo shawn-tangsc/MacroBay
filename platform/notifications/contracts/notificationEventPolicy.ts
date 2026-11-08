@@ -38,7 +38,7 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'platform.channel.push-resumed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   // 桌面自己失败时不再投桌面：见文件头第 2 条。
-  'platform.notification.self-test': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+  'platform.notification-self-test': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
   'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false },
   // P8 频道连不上（2026-11-04 用户拍板新增；通用 PM 需求 v2.17 §11 签字）：
   // 系统状态类，与该表其它系统状态同档；**不含 channel**——本机状态不该再推到手机。

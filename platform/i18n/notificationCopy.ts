@@ -31,9 +31,9 @@ export type NotificationCopyTable = {
   /** 发送测试通知：只用来验证链路，不描述任何业务事实。 */
   'notification.test.title': string
   'notification.test.body': string
-  'notification.event.platform.notification.self-test.title': string
-  'notification.event.platform.notification.self-test.body': string
-  'notification.event.platform.notification.self-test.reason': string
+  'notification.event.platform.notification-self-test.title': string
+  'notification.event.platform.notification-self-test.body': string
+  'notification.event.platform.notification-self-test.reason': string
   'notification.event.platform.job.failed-terminal.title': string
   'notification.event.platform.job.failed-terminal.body': string,
   'notification.event.platform.job.failed-terminal.reason': string
@@ -114,9 +114,9 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.fallback.title': '有一条新通知',
     'notification.test.title': '测试通知',
     'notification.test.body': '如果你看到这条，说明通知管道是通的；桌面通知没弹出，多半是系统没有放行。',
-    'notification.event.platform.notification.self-test.title': '通知链路自检',
-    'notification.event.platform.notification.self-test.body': '这是测试消息，不是真实提醒。',
-    'notification.event.platform.notification.self-test.reason': '你在设置页点了「发送测试通知」。',
+    'notification.event.platform.notification-self-test.title': '通知链路自检',
+    'notification.event.platform.notification-self-test.body': '这是测试消息，不是真实提醒。',
+    'notification.event.platform.notification-self-test.reason': '你在设置页点了「发送测试通知」。',
     'notification.event.platform.job.failed-terminal.title': "任务失败：{taskName?}",
     'notification.event.platform.job.failed-terminal.body': "这一次没有跑完。",
     'notification.event.platform.job.failed-terminal.reason': '这个任务不会再自动重试。',
@@ -177,9 +177,9 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.fallback.title': 'A new notification arrived.',
     'notification.test.title': 'Test notification',
     'notification.test.body': 'If you can see this, the pipeline works; if no desktop banner appeared, the system is probably blocking it.',
-    'notification.event.platform.notification.self-test.title': 'Notification link check',
-    'notification.event.platform.notification.self-test.body': 'This is a test message, not a real alert.',
-    'notification.event.platform.notification.self-test.reason': 'You pressed "Send test notification" in settings.',
+    'notification.event.platform.notification-self-test.title': 'Notification link check',
+    'notification.event.platform.notification-self-test.body': 'This is a test message, not a real alert.',
+    'notification.event.platform.notification-self-test.reason': 'You pressed "Send test notification" in settings.',
     'notification.event.platform.job.failed-terminal.title': "Task failed: {taskName?}",
     'notification.event.platform.job.failed-terminal.body': "This run did not finish.",
     'notification.event.platform.job.failed-terminal.reason': 'This task will not retry on its own.',

@@ -70,7 +70,7 @@ describe('notification event policy', () => {
       'market-intelligence.macro.event-landed',
       'market-intelligence.sentiment.alert',
       'market-intelligence.signal.triggered',
-      'platform.notification.self-test'
+      'platform.notification-self-test'
     ])
     // 提示默认开：关掉桌面时它是唯一的本机提醒。唯一例外是 P9——读者刚点过、人就在面板前，
     // 桌面优先，同一次失败不在应用内再吵第二遍（P7 反过来：它只有 center + toast，不走桌面）。
@@ -82,7 +82,7 @@ describe('notification event policy', () => {
     // - 分析结论：完成类，用户要的是「结论到了」这一声，反过来只在手机与中心（同向时由调用方收窄到中心）。
     // 顺序就是表里的顺序（平台几行在前），别按字母排。
     expect(rows.filter(([, row]) => !row.approvedDisruptionLevels.includes('toast')).map(([id]) => id)).toEqual([
-      'platform.notification.self-test',
+      'platform.notification-self-test',
       'platform.analysis.manual-failed',
       'market-intelligence.briefing.ready',
       'market-intelligence.sentiment.alert',

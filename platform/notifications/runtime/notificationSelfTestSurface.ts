@@ -21,20 +21,9 @@ export type SelfTestSurfaceInput = {
   resolvePushChannel: () => Promise<PushChannelResolution>
   /** 交给运行时的**同一个**提交入口；名字以 `submit` 开头，生产者门禁才看得见这件事由谁发。 */
   submitRequest: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
-  /** 每次点击留一行可查记录（`MI_TEST_NOTICE_*`）：只带闭集码与条数。 */
+  /** 每次点击留一行可查记录（`notification.*`）：只带闭集码与条数。 */
   report?: (entry: { receipt: TestNoticeReceipt }) => void
   now: () => string
-}
-
-/** 固定样例的请求构造器：门禁顺着「构造实参的那个函数」解析事件 id（别藏在变量或配置里）。 */
-function buildLinkSelfTestRequest(at: string): NotificationSubmitRequest {
-  return {
-    eventTypeId: 'platform.notification.self-test',
-    ...LINK_SAMPLE_COPY,
-    dedupeVars: { builder: 'template', vars: { date: at.slice(0, 10), seq: String(Date.parse(at)) } },
-    occurredAt: at,
-    namespace: 'test'
-  }
 }
 
 export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
@@ -49,9 +38,16 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
         return finish({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: channel.enabledChannelCount })
       }
       const at = input.now()
-      void LINK_SAMPLE_COPY
       // 每次点击都是新键（`seq` 用点击时刻），所以连点是多条测试记录，且不占任何真实键。
-      const outcome = await input.submitRequest(buildLinkSelfTestRequest(at))
+      // 实参写平：事件 id 就在提交调用里，生产者门禁第一层就能读到（不靠名字猜、也不靠再跟一层）。
+      const outcome = await input.submitRequest({
+        eventTypeId: 'platform.notification-self-test',
+        rendered: LINK_SAMPLE_COPY.rendered,
+        actions: [],
+        dedupeVars: { builder: 'template', vars: { date: at.slice(0, 10), seq: String(Date.parse(at)) } },
+        occurredAt: at,
+        namespace: 'test'
+      })
       // 提交被拒也是「没发出去」：按闭集里最接近的一档回，不新造码。
       if (outcome.kind === 'rejected') return finish({ state: 'unavailable', reasonCode: 'read-failed' })
       return finish({ state: 'sent', channelId: channel.channelId, channelName: channel.channelName })
