@@ -52,6 +52,9 @@ const catalog = createNotificationEventCatalog({
       ]
     },
     {
+      // **合成夹具，与任何真实产品无关**：这个文件要两个不同 productId 的来源，才能测「跨产品」
+      // 那条规则（同一 id 两个声明者、以及事件前缀归属）。改成平台前缀会把这个场景本身抹掉，
+      // 所以名字保持非平台——它不是在冒充某个产品，它就是一个假产品。
       productId: 'other-product',
       events: [
         {
