@@ -23,15 +23,15 @@ const settings: NotificationRuntimeSettings = {
 }
 const clock = { now: () => new Date('2026-11-03T00:00:00.000Z'), timeZone: () => 'UTC' }
 
-const policy: NotificationEventPolicy = {
-  'platform.alpha': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.beta': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
 const catalog = createNotificationEventCatalog({
-  policy,
+  // 批准值随声明走（b2）：两条批准原样挪到来源上，值逐字不变。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.alpha': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        'platform.beta': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+      },
       events: ['platform.alpha', 'platform.beta'].map((id) => ({
         id,
         titleKey: 'notification.test.title',
