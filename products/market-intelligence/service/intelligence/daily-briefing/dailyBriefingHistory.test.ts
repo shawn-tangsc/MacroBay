@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingPeriodRun, DailyBriefingStoredEdition } from './dailyBriefingService'
-import { briefingHistorySummaries, briefingRailDates, readBriefingHistory } from './dailyBriefingHistory'
+import { briefingAttemptPeriodTime, briefingHistorySummaries, briefingRailDates, readBriefingHistory } from './dailyBriefingHistory'
 
 /**
  * Guard: "incomplete" comes from the run's intent, not from counting the rows that exist.
@@ -388,13 +388,14 @@ describe('a run that wrote no edition still gets a row', () => {
 
   // 没有版次的那一行由**尝试记录**驱动，运行记录（审计）不再参与。
   const onlyAttempts = (
-    attempts: readonly Readonly<{ periodId: string; state: 'running' | 'failed' | 'succeeded'; locale?: 'zh-CN' | 'en-US'; startedAt?: string; failureCode?: string }>[],
+    attempts: readonly Readonly<{ periodId: string; state: 'running' | 'failed' | 'succeeded'; locale?: 'zh-CN' | 'en-US'; startedAt?: string; nominalAt?: string; failureCode?: string }>[],
     isRunning?: (date: string, periodId: string) => boolean
   ) => briefingHistorySummaries({
     dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
     attemptRuns: attempts.map((attempt) => ({
       date: '2026-11-02', periodId: attempt.periodId, locale: attempt.locale ?? 'zh-CN',
       state: attempt.state, startedAt: attempt.startedAt ?? '2026-11-02T00:00:00.000Z',
+      ...(attempt.nominalAt === undefined ? {} : { nominalAt: attempt.nominalAt }),
       ...(attempt.failureCode === undefined ? {} : { failureCode: attempt.failureCode })
     })),
     ...(isRunning ? { isRunning } : {})
@@ -437,6 +438,26 @@ describe('a run that wrote no edition still gets a row', () => {
     expect(summary?.windowHours).toBeUndefined()
     expect(summary?.scheduledTime).toBeUndefined()
     expect(summary?.languages).toEqual([{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }])
+  })
+
+  it('takes the row moment from the nominal cutoff, falls back to the start, then leaves it unrecorded', async () => {
+    // 0.4.2 #19：09:30 重跑一个 07:00 的期，失败行以前把「发起 09:30」印成「截止 09:30」。
+    const [rerun] = await onlyAttempts([{
+      periodId: 'period_rerun', state: 'failed',
+      startedAt: '2026-11-02T09:30:00.000Z', nominalAt: '2026-11-02T07:00:00.000Z'
+    }])
+    expect(rerun?.periodTime).toBe('2026-11-02T07:00:00.000Z')
+
+    // 老记录没有名义截止这一列：回退发起时刻，不把一个真实存在的时刻丢掉。
+    const [legacy] = await onlyAttempts([{
+      periodId: 'period_legacy', state: 'failed', startedAt: '2026-11-02T09:30:00.000Z'
+    }])
+    expect(legacy?.periodTime).toBe('2026-11-02T09:30:00.000Z')
+
+    // 两样都没有：不给时刻，界面写「未记录」，绝不拿当前设置回填。三档回退的唯一实现就在这里判。
+    expect(briefingAttemptPeriodTime({})).toBeUndefined()
+    expect(briefingAttemptPeriodTime({ nominalAt: 'nominal' })).toBe('nominal')
+    expect(briefingAttemptPeriodTime({ startedAt: 'started' })).toBe('started')
   })
 
   it('says "generating" only while the run is alive, and "interrupted" once the process is gone', async () => {

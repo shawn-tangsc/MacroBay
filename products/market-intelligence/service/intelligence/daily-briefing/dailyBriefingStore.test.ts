@@ -127,12 +127,14 @@ describe('daily briefing store', () => {
     expect(await store.deletePeriod!('2026-10-30', 'default', 'zh-CN')).toEqual({ editions: 0, attempts: 0, periodRuns: 0 })
   })
 
-  it('records how each attempt was triggered and how long its window was', async () => {
-    // 用户 2026-11-06：列表那一行要自己说清"哪一次、怎么来的、覆盖多长"。
+  it('records how each attempt was triggered, how long its window was, and its nominal cutoff', async () => {
+    // 用户 2026-11-06：列表那一行要自己说清"哪一次、怎么来的、覆盖多长"；
+    // 0.4.2 #19：还要说清"截止是哪一刻"——没有版次的失败行没有正文，只能从这里取。
     const store = createDailyBriefingSqliteStore(':memory:')
     await store.beginAttempt!({ date: '2026-11-06', periodId: 'p_catchup', locale: 'zh-CN',
-      startedAt: '2026-11-06T00:00:00.000Z', trigger: 'catch-up', windowHours: 12 })
-    // 老调用点不给这两样：写空，读出来就是"未记录"，绝不拿当前设置回填。
+      startedAt: '2026-11-06T00:00:00.000Z', trigger: 'catch-up', windowHours: 12,
+      nominalAt: '2026-11-06T12:00:00.000Z' })
+    // 老调用点不给这三样：写空，读出来就是"未记录"，绝不拿当前设置回填。
     await store.beginAttempt!({ date: '2026-11-06', periodId: 'p_legacy', locale: 'zh-CN',
       startedAt: '2026-11-06T00:01:00.000Z' })
 
@@ -141,6 +143,14 @@ describe('daily briefing store', () => {
     const [legacy] = await store.listAttempts!('2026-11-06', 'zh-CN', 'p_legacy')
     expect(legacy?.trigger).toBeUndefined()
     expect(legacy?.windowHours).toBeUndefined()
+
+    // 列表要分得开「发起时刻」与「名义截止」：09:30 重跑一个 07:00 的期，两个值都得在。
+    const runs = await store.listAttemptRuns!('2026-11-06', '2026-11-06')
+    expect(runs.find((run) => run.periodId === 'p_catchup')).toMatchObject({
+      startedAt: '2026-11-06T00:00:00.000Z',
+      nominalAt: '2026-11-06T12:00:00.000Z'
+    })
+    expect(runs.find((run) => run.periodId === 'p_legacy')?.nominalAt).toBeUndefined()
   })
 
   it('replaces the same day rather than stacking editions', async () => {

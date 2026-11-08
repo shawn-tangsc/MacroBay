@@ -56,9 +56,10 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       db.exec(`alter table daily_briefing_period_runs add column ${column} ${ddl};`)
     }
   }
-  // 尝试记录补两列：这一次跑的触发方式与统计窗口（用户 2026-11-06：列表每一行要自己说清身份）。
-  // 可空——今天之前的记录没有这两样，界面上写「未记录」，绝不拿当前设置回填。
-  for (const [column, ddl] of [['trigger', 'text'], ['window_hours', 'integer']] as const) {
+  // 尝试记录补三列：这一次跑的触发方式、统计窗口与名义截止（用户 2026-11-06：列表每一行要自己说清身份；
+  // 0.4.2 #19：没有版次的行以前拿发起时刻当截止显示）。可空——今天之前的记录没有这几样，界面上写
+  // 「未记录」，绝不拿当前设置回填。**只追加列，不动已发布的 v2→v3 迁移**。
+  for (const [column, ddl] of [['trigger', 'text'], ['window_hours', 'integer'], ['nominal_at', 'text']] as const) {
     if (!tableColumns(db, 'daily_briefing_attempts').includes(column)) {
       db.exec(`alter table daily_briefing_attempts add column ${column} ${ddl};`)
     }
@@ -114,17 +115,18 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
           const periodId = attempt.periodId ?? DEFAULT_PERIOD_ID
           const next = db.prepare(`select coalesce(max(attempt_no), 0) + 1 as next from daily_briefing_attempts
             where edition_date = ? and period_id = ? and locale = ?`)
-          // 触发方式与窗口一起写下：列表要能就着这一行说清"这一次是怎么来的、覆盖多长"。
-          // 老记录这两列是空的，界面写「未记录」，不回填。
+          // 触发方式、窗口与名义截止一起写下：列表要能就着这一行说清"这一次是怎么来的、覆盖多长、
+          // 截止是哪一刻"（`nominal_at` 是 0.4.2 #19 补的：以前没有版次的失败行拿发起时刻当截止）。
+          // 老记录这三列是空的，界面写「未记录」，不回填。
           const insert = db.prepare(`insert into daily_briefing_attempts
-            (edition_date, period_id, locale, attempt_no, state, failure_code, started_at, finished_at, trace_json, cleaned_at, trigger, window_hours)
-            values (?, ?, ?, ?, 'running', null, ?, null, null, null, ?, ?)`)
+            (edition_date, period_id, locale, attempt_no, state, failure_code, started_at, finished_at, trace_json, cleaned_at, trigger, window_hours, nominal_at)
+            values (?, ?, ?, ?, 'running', null, ?, null, null, null, ?, ?, ?)`)
           db.exec('begin immediate')
           try {
             const row = next.get(attempt.date, periodId, attempt.locale) as { next?: number } | undefined
             const attemptNo = Number(row?.next ?? 1)
             insert.run(attempt.date, periodId, attempt.locale, attemptNo, attempt.startedAt,
-              attempt.trigger ?? null, attempt.windowHours ?? null)
+              attempt.trigger ?? null, attempt.windowHours ?? null, attempt.nominalAt ?? null)
             db.exec('commit')
             return attemptNo
           } catch (error) {
@@ -329,7 +331,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     async listAttemptRuns(from, to) {
       // 旧表没有 `period_id` 列：那一代一天一语言一版，没有"某一期跑了没跑"这回事。
       if (!tableColumns(db, 'daily_briefing_attempts').includes('period_id')) return Object.freeze([])
-      const rows = db.prepare(`select edition_date, period_id, locale, state, started_at, trigger, window_hours, failure_code from daily_briefing_attempts
+      const rows = db.prepare(`select edition_date, period_id, locale, state, started_at, trigger, window_hours, nominal_at, failure_code from daily_briefing_attempts
         where edition_date between ? and ? order by edition_date asc, period_id asc, locale asc`)
         .all(from, to) as Array<Record<string, unknown>>
       return Object.freeze(rows.map((row) => Object.freeze({
@@ -338,6 +340,8 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
         locale: String(row.locale) as 'zh-CN' | 'en-US',
         state: row.state === 'succeeded' || row.state === 'running' ? row.state : 'failed' as const,
         startedAt: String(row.started_at),
+        // 老记录没有这一列，读出来是 `undefined`：投影回退发起时刻，界面写「未记录」，不回填。
+        ...(typeof row.nominal_at === 'string' ? { nominalAt: row.nominal_at } : {}),
         ...(typeof row.trigger === 'string' ? { trigger: row.trigger } : {}),
         ...(typeof row.window_hours === 'number' ? { windowHours: row.window_hours } : {}),
         ...(typeof row.failure_code === 'string' ? { failureCode: row.failure_code } : {})

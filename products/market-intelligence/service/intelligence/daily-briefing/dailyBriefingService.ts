@@ -445,10 +445,11 @@ export function createDailyBriefingService(deps: Readonly<{
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
     const market = await prepareMarketForRun({ backfill: deps.marketBackfill?.(), readiness: deps.readiness, asOf: input.asOf, manual: force, publish: (progress) => runs.progress.set(progressKey, progress), now })
-    // 尝试记录写下这一次的**来源与窗口**：列表要就着这一行说清"这是哪一次、覆盖多长"。
+    // 尝试记录写下这一次的**来源、窗口与名义截止**：列表要就着这一行说清"这是哪一次、覆盖多长、
+    // 截止是哪一刻"（`asOf` 只影响这一次运行，不写回任何期配置）。
     const attempts = createDailyBriefingAttemptJournal(deps.store, {
       date: input.date, periodId: input.periodId, locale: input.locale, now,
-      trigger: input.runTrigger ?? 'scheduled', windowHours: input.windowHours
+      trigger: input.runTrigger ?? 'scheduled', windowHours: input.windowHours, nominalAt: input.asOf
     })
     if (!await attempts.open()) return { state: 'unavailable', failureCode: 'attempt-not-recorded' }
     const recorder = createDailyBriefingGenerationRecorder({
