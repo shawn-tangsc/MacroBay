@@ -21,6 +21,8 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CalendarDetailSurface, type CalendarDetailState } from './CalendarDetailSurface'
+import { useBlsAvailability, useBlsYearSync } from './useBlsAvailability'
+import type { BlsScheduleFeedback } from './blsAvailability'
 import { type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
 import { CalendarMonthBoard } from './CalendarMonthBoard'
 import { CalendarEventRow } from './CalendarEventRow'
@@ -59,7 +61,6 @@ const economicCalendarMonthPickerPolicy = {
   format: 'YYYY-MM',
   picker: 'month'
 } as const
-type BlsScheduleFeedback = { year: string; schedule: 'updated' | 'unchanged'; cpi: 'updated' | 'current' | 'not-required' | 'unavailable'; employment: 'updated' | 'current' | 'not-required' | 'unavailable' }
 
 export const blsScheduleAndValuesAggregateUpdatePolicy = Object.freeze({
   changed: (result: Awaited<ReturnType<MacroEconomicCalendarClient['syncBlsEmploymentSchedule']>>): boolean => result.state === 'completed' &&
@@ -163,17 +164,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const loadedInitialRef = useRef(false)
   const syncedYearsRef = useRef(new Set<string>())
 
-  const syncBlsYear = useCallback(async (year: string): Promise<boolean> => {
-    if (typeof client.syncBlsEmploymentSchedule !== 'function') return false
-    if (syncedYearsRef.current.has(year)) return false
-    syncedYearsRef.current.add(year)
-    const result = await client.syncBlsEmploymentSchedule({ year: year as `${number}` })
-    if (result.state === 'unavailable') syncedYearsRef.current.delete(year)
-    if (result.state === 'completed' && mountedRef.current && selectedMonthRef.current.slice(0, 4) === year) {
-      setBlsScheduleFeedback({ year, schedule: result.schedule, cpi: result.values.cpi, employment: result.values.employment })
-    }
-    return blsScheduleAndValuesAggregateUpdatePolicy.changed(result)
-  }, [client])
+  const blsAvailability = useBlsAvailability(text)
+  const syncBlsYear = useBlsYearSync({
+    client, unavailable: blsAvailability.unavailable, mountedRef, selectedMonthRef, syncedYearsRef,
+    onFeedback: setBlsScheduleFeedback, changed: blsScheduleAndValuesAggregateUpdatePolicy.changed
+  })
 
   useEffect(() => {
     mountedRef.current = true
@@ -415,6 +410,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       </div>
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />
       <CalendarDetailSurface
+        blsUnavailableNotice={blsAvailability.notice}
         client={client}
         contentId={detailContentId}
         detailState={detailState}

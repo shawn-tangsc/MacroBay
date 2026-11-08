@@ -82,7 +82,7 @@ function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalenda
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text }: {
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice }: {
   event: EconomicCalendarEventView
   /**
    * The official consensus, when the view carries one. The projection does not surface it today —
@@ -105,6 +105,8 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   onReleaseTimeChanged: () => Promise<void>
   releaseTimeClient: Pick<MacroEconomicCalendarClient, 'setReleaseTime' | 'clearReleaseTime'>
   refreshState: EconomicCalendarRefreshState | undefined; text: EconomicCalendarText
+  /** 官方日历已停用时那一句说明；有它就把 BLS 刷新置灰，不再发请求。 */
+  blsUnavailableNotice?: string
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
@@ -112,7 +114,8 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   const valueRows: { id: 'actual' | 'previous'; label: string }[] = [
     { id: 'actual', label: text.details.actual }, { id: 'previous', label: text.details.previous }
   ]
-  const blsRefreshAction = refreshActionPresentation(refreshState, event.eventKey, 'bls')
+  // 停用是现状，不是这次点击失败：按钮置灰、点不动，也不发请求（服务侧也已立刻回 unavailable）。
+  const blsRefreshAction = refreshActionPresentation(refreshState, event.eventKey, 'bls', blsUnavailableNotice !== undefined)
   const fomcRefreshAction = refreshActionPresentation(refreshState, event.eventKey, 'fomc')
   const period = economicCalendarCaveats(event).includes('official-period-not-published-in-ics')
     ? text.periods.officialNotPublished
@@ -156,6 +159,7 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
         </>
       })()}
     </div>
+    {blsUnavailableNotice ? <p className="mi-economic-calendar__comparison-rule" data-bls-unavailable role="status">{blsUnavailableNotice}</p> : null}
     {isBlsRefreshEligible(event, now()) ? <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} /> : null}
     {isFedFomcRefreshEligible(event, now()) ? <FedFomcRefreshAction disabled={fomcRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={fomcRefreshAction.pending} text={text} /> : null}
     {refreshState?.feedback && isRefreshStateFor(refreshState, event.eventKey, 'bls') ? <p className="mi-economic-calendar__comparison-rule" role="status">{text.blsRefresh[refreshState.feedback]}</p> : null}
@@ -327,9 +331,9 @@ function isRefreshStateFor(state: EconomicCalendarRefreshState, eventKey: string
   return state.eventKey === eventKey && state.operation === operation
 }
 
-function refreshActionPresentation(state: EconomicCalendarRefreshState | undefined, eventKey: string, operation: EconomicCalendarRefreshOperation): { disabled: boolean; pending: boolean } {
+function refreshActionPresentation(state: EconomicCalendarRefreshState | undefined, eventKey: string, operation: EconomicCalendarRefreshOperation, unavailable = false): { disabled: boolean; pending: boolean } {
   return {
-    disabled: Boolean(state?.pending),
+    disabled: unavailable || Boolean(state?.pending),
     pending: Boolean(state?.pending && isRefreshStateFor(state, eventKey, operation))
   }
 }

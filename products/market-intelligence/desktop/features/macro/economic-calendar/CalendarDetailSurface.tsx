@@ -23,7 +23,7 @@ export type CalendarDetailState =
  * this file only decides what the reader sees for a market event, a loading read, a failed read, or
  * the official event itself, in that order.
  */
-export function CalendarDetailSurface({ contentId, when, selectedMarket, selectedLinkedMarket, sourceAdvanced, marketSources, detailState, refreshState, client, text, now, onClose, onRefresh, onReleaseTimeChanged, onRetry }: {
+export function CalendarDetailSurface({ contentId, when, selectedMarket, selectedLinkedMarket, sourceAdvanced, marketSources, detailState, refreshState, client, text, now, onClose, onRefresh, onReleaseTimeChanged, onRetry, blsUnavailableNotice }: {
   contentId: string | undefined
   when: string | undefined
   selectedMarket: MarketCalendarEvent | undefined
@@ -39,6 +39,8 @@ export function CalendarDetailSurface({ contentId, when, selectedMarket, selecte
   onRefresh: (operation: EconomicCalendarRefreshOperation, eventKey: string) => Promise<void>
   onReleaseTimeChanged: () => Promise<void>
   onRetry: () => void
+  /** 官方日历已停用时那一句；原样交给详情，置灰与否在那里决定。 */
+  blsUnavailableNotice?: string
 }): ReactElement {
   return (
     <CalendarInspector contentId={contentId} onClose={onClose} open={contentId !== undefined} when={when}>
@@ -48,7 +50,7 @@ export function CalendarDetailSurface({ contentId, when, selectedMarket, selecte
       {!selectedMarket && detailState.state === 'loading' ? <EventDetailState state="loading" text={text.status.loading} /> : null}
       {!selectedMarket && detailState.state === 'available' ? <EventDetail event={detailState.event}
         linkedConsensus={selectedLinkedMarket?.consensus}
-        now={now} onRefresh={onRefresh} onReleaseTimeChanged={onReleaseTimeChanged} releaseTimeClient={client} refreshState={refreshState} text={text} /> : null}
+        now={now} onRefresh={onRefresh} onReleaseTimeChanged={onReleaseTimeChanged} releaseTimeClient={client} refreshState={refreshState} text={text} blsUnavailableNotice={blsUnavailableNotice} /> : null}
       {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState state="error"
         text={text.failures[detailState.failureCode]} onRetry={onRetry} /> : null}
     </CalendarInspector>

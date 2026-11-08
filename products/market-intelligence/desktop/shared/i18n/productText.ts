@@ -813,6 +813,9 @@ mi: miText['zh-CN'],
             dailyBriefing: dailyBriefingText['zh-CN']
           },
           calendar: {
+            /* 架构师定的停用说明（逐字，改字要先过情报模块产品经理）。{date} 来自源注册表的
+               `lastSuccessfulSyncAt`，不是另抄一份日期。 */
+            blsUnavailableNotice: 'BLS 官方日历：当前网络环境无法自动获取（官方站点返回 403），自动同步已停止；库里的 BLS 事件来自上次成功同步（{date}），发布时间未知。',
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '读取范围：{months}（UTC 月，含网格相邻月）；官方每月最多 200 条' },
             calendarSettings: '配置日历',
             calendarPanel: { title: '日历源', configure: '在数据源中配置', loading: '正在加载日历源…', unavailable: '当前面板没有可配置的日历源。', pending: '待接入', enabled: '已启用', disabled: '未启用' },
@@ -2124,6 +2127,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             dailyBriefing: dailyBriefingText['en-US']
           },
           calendar: {
+            blsUnavailableNotice: 'BLS official calendar: this network cannot fetch it automatically (the official site returns 403) and automatic sync has stopped; the BLS events in the database come from the last successful sync ({date}), and their release times are unknown.',
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Reading {months} (UTC months, including the grid\'s neighbouring months); up to 200 official events per month' },
             calendarSettings: 'Configure calendar',
             calendarPanel: { title: 'Calendar sources', configure: 'Configure in data sources', loading: 'Loading calendar sources…', unavailable: 'No calendar sources are available for this panel.', pending: 'Pending', enabled: 'Enabled', disabled: 'Disabled' },
