@@ -1,12 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
+import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import { createAnalysisConclusionNotifier } from './analysisConclusionNotifier'
 
 /**
- * 出站层：判定层给的结论翻成一次提交。三条看结果——**同向收窄到只进中心**（字段落地后就是手机不响）、
- * **反向不收窄**、**去重分量只有触发键与截止时刻**。配额只影响收窄，不影响提交。
+ * 出站层：判定层给的结论翻成一次提交。三条看结果——**同向收窄到只进中心**（手机腿不排）、
+ * **反向不收窄**（按批准表全档，含 `channel`）、**去重分量只有触发键与截止时刻**。配额只影响收窄，不影响提交。
+ *
+ * 收窄字段是平台提交契约自己的键（`NotificationApprovedLevel[]`），这里不做任何类型断言；
+ * 「`['center']` → 记录 `channels` 只有 center、`delivery.push` 为空」由平台的
+ * `notificationNarrowedSurface.test.ts` 用这同一个事件钉住——两边合起来才是「手机不响」。
  */
+const approvedLevels = NOTIFICATION_EVENT_POLICY['market-intelligence.analysis.conclusion'].approvedDisruptionLevels
+
 const notice = (overrides: Partial<Parameters<ReturnType<typeof createAnalysisConclusionNotifier>>[0]> = {}) => ({
   runId: 'mi-ar-1',
   triggerKey: 'signal.open-interest.oi-liquidation-proxy',
@@ -21,8 +28,7 @@ const notice = (overrides: Partial<Parameters<ReturnType<typeof createAnalysisCo
   ...overrides
 })
 
-const narrowOf = (request: NotificationSubmitRequest): unknown =>
-  (request as unknown as { narrowedDisruptionLevels?: unknown }).narrowedDisruptionLevels
+const narrowOf = (request: NotificationSubmitRequest) => request.narrowedDisruptionLevels
 
 describe('the analysis conclusion submit', () => {
   it('submits once with the trigger key and the cutoff, and no run id in the vars', async () => {
@@ -37,18 +43,23 @@ describe('the analysis conclusion submit', () => {
   })
 
   it('does not narrow when the conclusion goes the other way', async () => {
-    // 反向（信号说跌、结论说涨）**不传**收窄字段 = 按批准表全档。
+    // 反向（信号说跌、结论说涨）**不传**收窄字段 = 按批准表全档，也就是手机那一档照常排上。
     const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [] }))
     const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
     await send(notice())
     expect(narrowOf(submit.mock.calls[0]![0] as NotificationSubmitRequest)).toBeUndefined()
+    expect(approvedLevels).toContain('channel')
   })
 
   it('narrows to the centre when the conclusion agrees with the signal', async () => {
     const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [] }))
     const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
     await send(notice({ conclusionDirection: 'bearish', citedFactIds: ['mi-fact-oi'] }))
-    expect(narrowOf(submit.mock.calls[0]![0] as NotificationSubmitRequest)).toEqual(['center'])
+    const narrowed = narrowOf(submit.mock.calls[0]![0] as NotificationSubmitRequest)
+    expect(narrowed).toEqual(['center'])
+    // 批准表里本来有 `channel`（手机）；收窄值里没有它，所以这一条只落中心。
+    expect(approvedLevels).toContain('channel')
+    expect(narrowed).not.toContain('channel')
   })
 
   it('narrows once the day or module cap is reached, but still submits', async () => {

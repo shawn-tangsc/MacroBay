@@ -1,4 +1,3 @@
-import type { NotificationRequestedLevel } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import {
@@ -14,23 +13,9 @@ import {
  * 只在这一个地方拼请求：提交点只有一个（`analysisOrchestrator` 写入记录之后），句子、去重分量、
  * 「只进中心」的收窄值都在这里一次算清。它不读库、不判平台开关、失败不影响这次运行。
  *
- * 手机那一档等平台加上按次收窄字段（architect 已判、排在频道线之后）：字段没到时这里**不传**，
- * 提交照常——收窄只是少叫醒一次，不是把通知吞掉。
+ * 「手机那一档」用平台提交契约里的 `narrowedDisruptionLevels` 控制（只能收窄、`center` 不可排除）：
+ * 同向时传 `['center']`，于是这条提交只落中心、不排手机；反向时不传，就按批准表全档（含 `channel`）。
  */
-
-/**
- * 平台字段落地前的前向声明。
- *
- * `platform/notifications` 的提交契约里还没有这个字段（频道线在同一片文件里改，等它落完再单独一笔）。
- * 先把值按将来的形状传出去、用这里兜住类型：字段到了就只剩删掉这个类型、把 `as` 去掉。
- */
-type NarrowableSubmitRequest = NotificationSubmitRequest & Readonly<{
-  /**
-   * 收窄后的落点集合。`center` 也在里面：architect 给的口径是「收窄后必须仍含 center」，
-   * 而申请的档位集合本身不含 center——字段落地时以平台那侧的类型为准，这里先按口径写。
-   */
-  narrowedDisruptionLevels?: readonly (NotificationRequestedLevel | 'center')[]
-}>
 
 export type AnalysisConclusionNotice = Readonly<{
   runId: string
@@ -99,11 +84,10 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
         'zh-CN': { ...analysisConclusionPushPolicy.renderedCopy['zh-CN'], body: body.text },
         'en-US': { ...analysisConclusionPushPolicy.renderedCopy['en-US'], body: body.text }
       }
-      const request: NarrowableSubmitRequest = {
+      const request: NotificationSubmitRequest = {
         eventTypeId: analysisConclusionPushPolicy.eventTypeId,
         dedupeVars: { builder: 'template', vars: { triggerKey: notice.triggerKey, cutoff: notice.cutoff } },
-        // 收窄只传 center：字段没到之前这一项会被平台忽略（未知键不是本次提交的校验项），
-        // 到了之后就是"只进中心"。
+        // 同向：收窄到中心，手机不响。`center` 平台必达，所以这里传的就是「只剩中心」。
         ...(centerOnly ? { narrowedDisruptionLevels: ['center'] as const } : {}),
         rendered,
         actions: [],
