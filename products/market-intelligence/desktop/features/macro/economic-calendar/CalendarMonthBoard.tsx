@@ -51,11 +51,38 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
    */
   const surface = monthSurface({ officialUnavailable: officialUnavailable !== undefined, officialCount: events.length, marketCount: marketEvents.length })
   if (surface === 'official-unavailable') return <CalendarState month={month} text={officialUnavailable!} loading={false} unavailable />
-  // 说明行是**常驻注解**，不是状态变更：用 `role="note"`，别用活区（`status` 会被读屏当成「刚刚变了」念出来）。
-  const note = surface === 'note' ? officialUnavailable : undefined
+  /**
+   * 说明行是**常驻注解**，不是状态变更：用 `role="note"`，别用活区。
+   * 且两行说同一件事时只留一行——`note` 在、状态又是 `unavailable`（BLS 停用 + 当月查询也失败 + 市场侧有行，
+   * 这条组合可达）时，`unavailable` 那句与注解讲的是同一件事；`loading` 那句要说「正在读」，保留。
+   */
+  const { note, status: statusLine } = monthStatusLines({
+    note: surface === 'note' ? officialUnavailable : undefined,
+    state: state.state,
+    status
+  })
   if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{note ? <p className="mi-economic-calendar__comparison-rule" role="note">{note}</p> : null}{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+  return <div className="mi-calendar-month-scroll">{note ? <p className="mi-economic-calendar__comparison-rule" role="note">{note}</p> : null}{statusLine ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={statusLine} /> : <p role="status">{statusLine}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+}
+
+/**
+ * 这一个月要显示的说明/状态行——两条会不会重复，只在这里判一次。
+ *
+ * - 说明行（官方源拿不到）与 `unavailable` 那句讲的是同一件事（那条组合可达：停用 + 当月查询失败 + 市场有行），
+ *   所以说明在时压掉 `unavailable`，只留一行；
+ * - `loading` 那句必须留：它说的是「正在读」，和「拿不到」不是同一句。
+ */
+export function monthStatusLines(input: Readonly<{
+  note?: string
+  state: 'loading' | 'unavailable' | 'available'
+  status?: string
+}>): Readonly<{ note?: string; status?: string }> {
+  const suppressStatus = input.note !== undefined && input.state === 'unavailable'
+  return {
+    ...(input.note === undefined ? {} : { note: input.note }),
+    ...(input.status === undefined || suppressStatus ? {} : { status: input.status })
+  }
 }
 
 /**

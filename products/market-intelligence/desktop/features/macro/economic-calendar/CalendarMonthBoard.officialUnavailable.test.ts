@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
-import { monthSurface } from './CalendarMonthBoard'
+import { monthStatusLines, monthSurface } from './CalendarMonthBoard'
 
 const zh = productText['zh-CN'].pages.intelligence.portal.calendar
 const en = productText['en-US'].pages.intelligence.portal.calendar
@@ -26,6 +26,18 @@ describe('a month the official source could not be read for', () => {
   it('still says「本月没有」when both sources were read and both are empty', () => {
     // 两个来源都读到了、都为空 → 既有空态，不动。
     expect(monthSurface({ officialUnavailable: false, officialCount: 0, marketCount: 0 })).toBe('board')
+  })
+
+  it('shows one line, not two, when the note and the unavailable status would say the same thing', () => {
+    // 组合可达：BLS 停用 + 当月查询也失败 + 市场侧有行 → 注解与 `unavailable` 讲的是同一件事。
+    const lines = monthStatusLines({ note: zh.officialUnavailableNote, state: 'unavailable', status: '经济日历暂时不可用。' })
+    expect(lines.note).toBe(zh.officialUnavailableNote)
+    expect(lines.status).toBeUndefined()
+    // 「正在读」不是重复：那行必须留下。
+    expect(monthStatusLines({ note: zh.officialUnavailableNote, state: 'loading', status: '正在加载经济日历…' }).status)
+      .toBe('正在加载经济日历…')
+    // 没有注解时，状态行照旧显示。
+    expect(monthStatusLines({ state: 'unavailable', status: '经济日历暂时不可用。' }).status).toBe('经济日历暂时不可用。')
   })
 
   it('hangs the note on role="note", not on a live region', () => {
