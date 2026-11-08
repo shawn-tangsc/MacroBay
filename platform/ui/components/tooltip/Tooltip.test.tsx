@@ -101,6 +101,21 @@ async function waitForPopup(): Promise<HTMLElement | null> {
   return null
 }
 
+/**
+ * 等一个条件真的成立，而不是等一个固定时长：条件一成立就返回，上限用完才红。
+ * 上限按「次数 × 10ms」算，不读系统时钟。
+ */
+async function waitUntil(condition: () => boolean, what: string, attempts = 100): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (condition()) return
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  if (condition()) return
+  throw new Error(`timed out waiting for ${what}`)
+}
+
 describe('Tooltip', () => {
   it('shows on focus, because a title tooltip never does', async () => {
     const trigger = await mount()
@@ -156,20 +171,22 @@ describe('Tooltip', () => {
 
     await act(async () => {
       trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-      await new Promise((resolve) => setTimeout(resolve, 20))
     })
 
     // 焦点不回跳是这条的契约；弹层本身要处于「非打开」态（antd 关闭后加 hidden 类）。
-    expect(document.activeElement).toBe(trigger)
     // 弹层节点会留着做动画，但关闭后会被挪到屏幕外（antd 用 `-1000vw/-1000vh` 表示不可见）；
     // 真正的可见性由界面设计的真机 Esc 验收兜底，这里只钉「不再显示」与「焦点不回跳」。
-    const popup = document.querySelector('.ant-tooltip')
-    const hidden =
-      popup === null ||
-      popup.className.includes('hidden') ||
-      popup.getAttribute('aria-hidden') === 'true' ||
-      (popup.getAttribute('style') ?? '').includes('-1000')
-    expect(hidden).toBe(true)
+    const hidden = (): boolean => {
+      const popup = document.querySelector('.ant-tooltip')
+      return popup === null ||
+        popup.className.includes('hidden') ||
+        popup.getAttribute('aria-hidden') === 'true' ||
+        (popup.getAttribute('style') ?? '').includes('-1000')
+    }
+    // 关闭是异步的：等「不再可见」这个条件成立，不睡固定 20ms。
+    await waitUntil(hidden, 'the tooltip to stop being visible')
+    expect(document.activeElement).toBe(trigger)
+    expect(hidden()).toBe(true)
   })
 
   it('renders the trigger untouched and adds no wrapper of its own', async () => {
