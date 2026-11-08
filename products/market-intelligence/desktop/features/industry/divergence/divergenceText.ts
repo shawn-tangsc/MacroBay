@@ -12,6 +12,8 @@ export type DivergencePanelText = Readonly<{
     quietWithheldMany: string
     allWithheld: string
   }>
+  /** 展开区标题（「本次读数」）：ⓘ 紧跟其后，卡面因此没有第二个控件。 */
+  detailTitle: string
   /** 观察态的中性标签：消息偏空、价格没动。方向色只给 bearish / bullish。 */
   observedLabel: string
   /** 「截至」那一行用的短名：不带窗口，窗口在腿行里已经有了。 */

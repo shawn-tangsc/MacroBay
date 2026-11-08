@@ -613,6 +613,9 @@ mi: miText['zh-CN'],
                 '对时间：按天数据超 36 小时、或某腿滞后超自己节奏，就不下结论，并写明是哪条腿。'
               ],
               /* 「截至」那一行只用短名：窗口（7 天 / 24 小时）腿行里已有；每条腿各带自己的日期。 */
+              /* 展开区标题。为什么用「本次读数」而不是「三组读数」/「本次判读」：展开区里既有判出来的读数，
+                 也有「没判成、所以没有读数」的组——「三组」会错（有时不是三组），「判读」像内部说法。 */
+              detailTitle: '本次读数',
               legNames: {
                 stablecoin: '稳定币', etf: 'ETF', 'open-interest': '持仓',
                 funding: '费率', price: '价格', sentiment: '舆情'
@@ -1927,6 +1930,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 "Sentiment is a model's label on headlines (share of bearish among those that took a stance in 24h), not exchange data.",
                 'Readings are aligned first: a daily figure older than 36h, or a leg lagging its own cadence, gets no verdict — the row says which leg.'
               ],
+              detailTitle: 'This reading',
               legNames: {
                 stablecoin: 'Stablecoins', etf: 'ETF', 'open-interest': 'Open interest',
                 funding: 'Funding', price: 'Price', sentiment: 'Sentiment'

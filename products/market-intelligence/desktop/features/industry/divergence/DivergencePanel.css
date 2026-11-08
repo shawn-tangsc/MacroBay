@@ -189,5 +189,11 @@
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
 
 
-/* 展开区标题行：只在展开时存在，右侧那颗 ⓘ 是这张卡唯一的解释入口（四句都在它的浮层里）。 */
-.mi-divergence__detail-head { display: flex; justify-content: flex-end; }
+/* 展开区标题行：标题文字在前、ⓘ 紧跟其后，同一行、间距 4px、不换行（界面 2026-11-08）。
+   **不许**推到行尾（`justify-content: flex-end` / `margin-left: auto`）、**不许**放进一行没有文字的行里——
+   那两种写法正是用户在别的卡上连着提两次的毛病：图标与内容脱钩。 */
+.mi-divergence__detail-head { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.mi-divergence__detail-title {
+  margin: 0; color: var(--mi-dashboard-muted); font-weight: 650;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+}

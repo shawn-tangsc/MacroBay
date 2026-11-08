@@ -332,6 +332,31 @@ describe('divergence panel · the explanation sits behind one icon', () => {
     await act(async () => { root.unmount() })
   })
 
+  it('puts the icon right after a title, never at the row end and never on a bare row', () => {
+    // 界面 2026-11-08：展开区的 ⓘ 必须紧跟一行有文字的标题；推到行尾或放进没有文字的行都判红。
+    const css = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.css', 'utf8')
+    const head = css.match(/\.mi-divergence__detail-head \{([^}]*)\}/)?.[1] ?? ''
+    expect(head).toContain('display: flex')
+    expect(head).toContain('gap: 4px')
+    expect(head).toContain('flex-wrap: nowrap')
+    // 两种被否掉的写法一个都不许出现。
+    expect(head).not.toContain('flex-end')
+    expect(head).not.toContain('margin-left: auto')
+    const title = css.match(/\.mi-divergence__detail-title \{([^}]*)\}/)?.[1] ?? ''
+    expect(title).toContain('font-size: var(--mi-reading-note-size)')
+    expect(title).not.toMatch(/font-size:\s*\d/)
+  })
+
+  it('renders the title text in the same row as the icon', async () => {
+    const { container, root } = await mount()
+    await act(async () => { container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!.click() })
+    const head = container.querySelector('.mi-divergence__detail-head')!
+    // 同一个父容器里既有标题文字、也有那颗 ⓘ——不是两个块级兄弟。
+    expect(head.querySelector('.mi-divergence__detail-title')?.textContent).toBe(text.detailTitle)
+    expect(head.querySelector(`button[aria-label="${text.helpLabel}"]`)).not.toBeNull()
+    await act(async () => { root.unmount() })
+  })
+
   it('holds all four sentences in the popover, one per line', async () => {
     const { container, root } = await mount()
     await act(async () => { container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!.click() })

@@ -95,6 +95,9 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           {/* 说明只有一处：展开区标题行尾的一颗 ⓘ，悬停/聚焦打开，四句全在里面。
               正文只留读数与证据——解释卡片本身怎么来的文字不占正文（界面 2026-11-08）。 */}
           <div className="mi-divergence__detail-head">
+            {/* 标题先说这是哪一屏的东西，ⓘ 紧跟它——不推到行尾、也不单独占一行。
+                「本次读数」而不是「三组读数」：展开区里还有没判成、因而没有读数的组，三组会错。 */}
+            <h3 className="mi-divergence__detail-title">{text.detailTitle}</h3>
             <Popover lines={divergenceNoteKeys.map(labelKey => ({ labelKey }))} resolveText={resolveProductKey}
               trigger={triggerProps => (
                 <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
