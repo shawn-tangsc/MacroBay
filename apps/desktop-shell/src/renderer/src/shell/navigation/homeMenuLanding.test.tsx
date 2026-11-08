@@ -15,7 +15,6 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
 const MAIN_WINDOW_ID = 'main'
 const HOST_EPOCH = 1
@@ -33,6 +32,13 @@ const FLUSH_TURNS = 16
  * initialization` —— 本机永远复现不出来。所以改成每个用例重置模块后再取。
  */
 let declaredHomeKey: string | undefined
+/**
+ * 与注册表同理：设置工厂也必须在 `vi.resetModules()` **之后**再取。
+ * 静态 import 会留下 reset 之前那套图里的绑定，而 `await import('../AppShell')` 拿的是新图；
+ * 两套图混用会在慢环境（CI 并行跑全量）里抛
+ * `Cannot access '__vite_ssr_import_N__' before initialization`——本机复现不出来。
+ */
+let freshDefaultSettings: (typeof import('@platform/settings/schema/appSettings'))['createDefaultAppSettings']
 
 let root: Root | undefined
 let container: HTMLDivElement | undefined
@@ -42,6 +48,8 @@ beforeEach(async () => {
   vi.resetModules()
   // 重置之后再读生成注册表，保证与下面的 `await import('../AppShell')` 用同一套模块图。
   const { productMenuEntries } = await import('@products/generated/shellRegistry')
+  // 同一套图里取设置工厂：不要用文件顶部静态 import 的那份（见上面的说明）。
+  ;({ createDefaultAppSettings: freshDefaultSettings } = await import('@platform/settings/schema/appSettings'))
   declaredHomeKey = productMenuEntries
     .map((entry) => entry as { routePath: string; home?: true })
     .find((entry) => entry.home === true)?.routePath
@@ -171,7 +179,7 @@ function installShellPlatform(surface: ReturnType<typeof createSurface>): void {
       getProductSummaries: vi.fn(async () => []),
       openExternal: vi.fn(async () => undefined)
     },
-    settings: { get: vi.fn(async () => ({ ...createDefaultAppSettings(), language: 'en-US' })) },
+    settings: { get: vi.fn(async () => ({ ...freshDefaultSettings(), language: 'en-US' })) },
     modelProviders: { list: vi.fn(async () => []), upsert: vi.fn(async () => undefined) },
     assistants: {
       list: vi.fn(async () => []),
