@@ -112,9 +112,10 @@ describe('narrowedDisruptionLevels', () => {
   it('refuses a narrowed level the approval table never approved, instead of silently intersecting', async () => {
     // 真实事件的档位以后还会变，所以这里**自己造一份合成声明**：只批 center，收窄到 desktop 必须被拒。
     const synthetic = createNotificationEventCatalog({
-      policy: { 'platform.narrow.synthetic': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
       sources: [{
         productId: 'platform',
+        // 批准值随声明走（b2）：合成事件自己的批准，值原样。
+        approval: { 'platform.narrow.synthetic': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
         events: [{
           id: 'platform.narrow.synthetic', titleKey: 'notification.test.title', bodyKey: 'notification.test.body',
           reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder',
