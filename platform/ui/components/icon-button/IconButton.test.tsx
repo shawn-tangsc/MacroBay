@@ -16,6 +16,21 @@ const css = readFileSync(join(__dirname, 'iconButton.css'), 'utf8')
 /** 断言只看规则，不看注释：注释里写「不许 outline:none」不该让守卫自己变红。 */
 const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
 
+/**
+ * 等一个条件真的成立，而不是等一个固定时长：条件一成立就立刻返回，上限用完才红。
+ * 上限按「次数 × 10ms」算，不读系统时钟；超时的失败信息说明等的是哪件事。
+ */
+async function waitUntil(condition: () => boolean, what: string, attempts = 100): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (condition()) return
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  if (condition()) return
+  throw new Error(`timed out waiting for ${what}`)
+}
+
 /** 测试只证明「键被解析」，不替调用方造句。 */
 const shirts = (value: string): string => value
 
@@ -376,21 +391,19 @@ describe('IconButton', () => {
       button.focus()
     })
 
-    // antd 把弹层挂在传送门里，一帧后才进 DOM；这里轮询而不是靠固定 sleep。
-    let described: string | null = null
-    for (let attempt = 0; attempt < 40 && described === null; attempt += 1) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10))
-      })
+    // antd 把弹层挂在传送门里，一帧后才进 DOM：等「描述的 id 指向了真节点、且节点里就是那句提示」
+    // 这个真条件成立，而不是轮固定次数、睡固定时长。
+    await waitUntil(() => {
       const id = button.getAttribute('aria-describedby')
-      if (id === null) continue
+      if (id === null) return false
       const target = document.getElementById(id)
-      if (target === null) continue
-      if (target.textContent === 'ui.test.hint') described = target.textContent
-    }
+      return target?.textContent === 'ui.test.hint'
+    }, 'the tooltip text to be attached as the accessible description')
 
     // 键盘用户 Tab 到它时，提示文字必须已经挂在可访问描述上；这是「禁用 + Tooltip」被禁掉的前提。
-    expect(described).toBe('ui.test.hint')
+    const describedId = button.getAttribute('aria-describedby')
+    expect(describedId).not.toBeNull()
+    expect(document.getElementById(describedId!)?.textContent).toBe('ui.test.hint')
   })
 
   it('refuses a tooltip on a disabled button — keyboard users could never reach it', () => {
