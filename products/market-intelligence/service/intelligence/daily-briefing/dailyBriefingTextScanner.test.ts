@@ -81,6 +81,23 @@ describe('the briefing text scanner', () => {
     expect(breaches.map((leaf) => leaf.path)).toContain('conclusion.summary')
   })
 
+  it('lets a registered identifier through and scans one that is not registered', () => {
+    // 放行靠**登记事实**，不靠形状：两个串长得一模一样，一个在登记表里、一个不在。
+    // 两个串形状完全一样（都是纯拉丁的点分串，按中文版次都会被当成英文段落）；差别只在登记与否。
+    const registered = 'dailyBriefing.row.etfBtc'
+    const unregistered = 'dailyBriefing.row.unregisteredKey'
+    const document = documentFixture()
+    ;(document.data as { market: { label: string }[] }).market[0]!.label = registered
+    // 夹具本身是英文文档、按中文版次扫会命中其它叶子；这里只看**这个位置**放不放行。
+    const withRegistered = briefingTextBreaches({ document, locale: 'zh-CN', identifiers: new Set([registered]) })
+    expect(withRegistered.map((leaf) => leaf.path)).not.toContain('data.market[0].label')
+
+    ;(document.data as { market: { label: string }[] }).market[0]!.label = unregistered
+    // 同一个位置、同样像键，但没登记 → 必须当正文被扫出来（放行靠登记事实，不靠形状）。
+    const breaches = briefingTextBreaches({ document, locale: 'zh-CN', identifiers: new Set([registered]) })
+    expect(breaches.map((leaf) => leaf.path)).toContain('data.market[0].label')
+  })
+
   it('covers every leaf by construction: injecting foreign text into each one is always caught', () => {
     // 逐叶子注入：把每个字符串换成一段明显是他种语言的文字，断言每一条都被点名。
     const injected = documentFixture()

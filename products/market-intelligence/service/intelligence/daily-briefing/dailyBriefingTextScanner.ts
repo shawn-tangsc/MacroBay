@@ -24,6 +24,14 @@ export type BriefingTextScanInput = Readonly<{
   locale: BriefingProseLocale
   /** 本次输入里原样存在的数据串；与被扫文本互为子串即视为引用，放行。 */
   sourceTexts?: readonly string[]
+  /**
+   * **已登记的标识符**：真实的 i18n 键与闭集码（由调用方从唯一实现读出来，不在这里抄）。
+   *
+   * 命中它 → 这个串是标识符（读者看不到它，会被文案表解析），跳过；
+   * **不在其中 → 一律当正文扫**（fail closed）。**不按字段名、不按形状判断**：
+   * 一个长得像 key 但没登记的串，就是正文，必须被扫到。
+   */
+  identifiers?: ReadonlySet<string> | undefined
 }>
 
 /** 递归收集每一个字符串叶子，按路径记录。数组用下标、对象用键名，路径不含类型前缀。 */
@@ -54,6 +62,8 @@ export function briefingTextBreaches(input: BriefingTextScanInput): readonly Bri
   return briefingTextLeaves(input.document).filter((leaf) => {
     const text = leaf.text.trim()
     if (text.length === 0) return false
+    // 登记过的标识符跳过；没登记的一律当正文（fail closed）。
+    if (input.identifiers?.has(text) === true) return false
     if (!proseLanguageBreach(text, input.locale)) return false
     // 引用放行：与来源数据互为子串（新闻原文可能带着引号/前后缀出现在正文里）。
     return !sourceTexts.some((source) => source.includes(text) || text.includes(source))
