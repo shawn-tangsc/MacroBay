@@ -108,10 +108,10 @@ describe('结论写进存储', () => {
     const { createJobRunStore } = await import('../runtime/jobRunStore')
     const store = createJobRunStore()
     const run = store.createRun({
-      definitionId: 'market-intelligence.translateItems.coindesk-rss',
-      handlerId: 'market-intelligence.translateItems',
+      definitionId: 'sample-product.syncItems.feed-a',
+      handlerId: 'sample-product.syncItems',
       owner: 'product',
-      productId: 'market-intelligence',
+      productId: 'sample-product',
       title: '翻译任务',
       payload: {},
       trigger: { kind: 'manual' },

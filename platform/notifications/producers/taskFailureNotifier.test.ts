@@ -76,16 +76,16 @@ describe('task failure notifier', () => {
     const { submit, notify } = notifier()
     await notify({
       run: run({
-        definitionId: 'market-intelligence.scoreNewsSentiment:global:1794052912321:jg9wly',
-        payload: { sourceId: 'coindesk' }
+        definitionId: 'sample-product.handler:global:1794052912321:jg9wly',
+        payload: { sourceId: 'sample-source' }
       }),
       cause: 'executed'
     })
     await notify({
       run: run({
         id: 'run-2',
-        definitionId: 'market-intelligence.scoreNewsSentiment:global:1794052955999:abcd12',
-        payload: { sourceId: 'coindesk' }
+        definitionId: 'sample-product.handler:global:1794052955999:abcd12',
+        payload: { sourceId: 'sample-source' }
       }),
       cause: 'executed'
     })
@@ -93,7 +93,7 @@ describe('task failure notifier', () => {
     const first = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
     const second = submit.mock.calls[1]?.[0] as NotificationSubmitRequest
     expect(first.dedupeVars).toEqual(second.dedupeVars)
-    expect(JSON.stringify(first.dedupeVars)).toContain('handler:handler-1:coindesk')
+    expect(JSON.stringify(first.dedupeVars)).toContain('handler:handler-1:sample-source')
   })
 
   it('stays silent when the run succeeded: a quiet day produces nothing', async () => {
@@ -128,7 +128,7 @@ describe('task failure notifier', () => {
 
   it('uses the handler id as producerId: the ownership table claims handlers, not period-bearing definition ids', async () => {
     const { submit, notify } = notifier()
-    await notify({ run: run({ owner: 'product', productId: 'market-intelligence' }), cause: 'executed' })
+    await notify({ run: run({ owner: 'product', productId: 'sample-product' }), cause: 'executed' })
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
     // 让渡表是 manifest 里的静态表：definitionId 天天新一期就 claim 不上，handler 才稳定。
     expect(request.producerId).toBe('handler-1')
