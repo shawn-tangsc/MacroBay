@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import { createAnalysisConclusionNotifier } from './analysisConclusionNotifier'
+import { MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS } from '../../../contracts/notificationApprovals'
 
 /**
  * 出站层：判定层给的结论翻成一次提交。三条看结果——**同向收窄到只进中心**（手机腿不排）、
@@ -12,7 +12,7 @@ import { createAnalysisConclusionNotifier } from './analysisConclusionNotifier'
  * 「`['center']` → 记录 `channels` 只有 center、`delivery.push` 为空」由平台的
  * `notificationNarrowedSurface.test.ts` 用这同一个事件钉住——两边合起来才是「手机不响」。
  */
-const approvedLevels = NOTIFICATION_EVENT_POLICY['market-intelligence.analysis.conclusion'].approvedDisruptionLevels
+const approvedLevels = MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS['market-intelligence.analysis.conclusion']!.approvedDisruptionLevels
 
 const notice = (overrides: Partial<Parameters<ReturnType<typeof createAnalysisConclusionNotifier>>[0]> = {}) => ({
   runId: 'mi-ar-1',

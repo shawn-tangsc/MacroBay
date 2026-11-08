@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { notificationCopy, notificationCopyText } from '../../i18n/notificationCopy'
 import { findMissingNotificationEventCopy } from './notificationEventCopyGate'
 import { createNotificationEventCatalog } from './notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from './notificationEventPolicy'
 import { planNotificationSubmit } from '../runtime/notificationSubmitPlan'
 import {
   notificationEventReasonKey,
@@ -13,16 +12,17 @@ import {
 } from './platformNotificationEvents'
 
 /**
- * 平台 13 条声明（契约 §2）。这批声明的批准值不在这里——生效表面只读批准表，所以这里判的是：
- * 13 条 id 与批准表对得上、申请档位没越过批准、去重键形状可构造、文案键由 id 机械生成。
+ * 平台声明（契约 §2）。这批声明的批准值随声明自己走（`PLATFORM_NOTIFICATION_APPROVALS`），所以这里判的是：
+ * 每条声明 id 都有对应的批准、申请档位没越过批准、去重键形状可构造、文案键由 id 机械生成。
  */
 describe('platform notification event declarations', () => {
-  it('declares the ten platform events the policy table signs', () => {
+  it('every platform declaration has an approval of its own', () => {
     const ids = PLATFORM_NOTIFICATION_EVENTS.map((event) => event.id)
     expect(ids).toHaveLength(14)
     for (const id of ids) {
       expect(id.startsWith('platform.'), id).toBe(true)
-      expect(NOTIFICATION_EVENT_POLICY[id], `${id} 缺批准表行`).toBeDefined()
+      // 遍历声明去查批准，不数字数：数字对不上时它不再证明任何事（架构师口径）。
+      expect(PLATFORM_NOTIFICATION_APPROVALS[id], `${id} 缺批准`).toBeDefined()
     }
   })
 

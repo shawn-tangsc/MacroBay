@@ -4,11 +4,11 @@ import {
   createNotificationEventCatalog,
   type NotificationEventDeclaration
 } from './notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY, NOTIFICATION_EVENT_POLICY_ROW_COUNT } from './notificationEventPolicy'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from './platformNotificationEvents'
 
 /**
- * 目录与批准表（契约 §4、§4.1）。这张表是产品签过的上限，界面按它把未批准的格子画成灰色「—」；
- * 数量对不上，界面就会多画或少画一格 —— 所以行数与批准面在这里钉死。
+ * 目录与批准（契约 §4、§4.1）：批准是签过的上限，界面按它把未批准的格子画成灰色「—」。
+ * 这里只断**平台自己**签了什么；产品那几条的档位由产品侧自己的用例守——平台没资格替产品作证。
  */
 const declaration = (overrides: Partial<NotificationEventDeclaration>): NotificationEventDeclaration => ({
   id: 'platform.job.failed-terminal',
@@ -21,88 +21,67 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
   ...overrides
 })
 
-describe('notification event policy', () => {
-  it('is the signed 24-row table (14 platform + 10 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(24)
-    const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
-    expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(14)
-    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(10)
-    // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
-    expect(ids).not.toContain('market-intelligence.signal.interpreted')
-    // N8 calibration.result 2026-11-04 撤回：编号不复用，行也不留（留着就是静默复活的口子）。
-    expect(ids).not.toContain('market-intelligence.calibration.result')
-    // 完成类仍在表里：读者在情报页可以关掉它的手机推送。
-    expect(ids).toContain('market-intelligence.briefing.ready')
+describe('platform approvals', () => {
+  const approved = PLATFORM_NOTIFICATION_APPROVALS
+  const ids = Object.keys(approved)
+
+  it('signs exactly the events it declares, checked in both directions', () => {
+    const declared = PLATFORM_NOTIFICATION_EVENTS.map((event) => event.id)
+    // 双向：签了没声明 = 死配置；声明了没签 = 读者看不见的窟窿。逐条列出，不用计数替代。
+    expect({
+      signedWithoutDeclaration: ids.filter((id) => !declared.includes(id)),
+      declaredWithoutSignature: declared.filter((id) => !ids.includes(id))
+    }).toEqual({ signedWithoutDeclaration: [], declaredWithoutSignature: [] })
   })
 
-  it('keeps desktop to the rows the user approved, now including a finished briefing', () => {
-    // 桌面对「信息类」不开放（用户原话：没打开应用还被轰炸）。2026-11-06 用户追加一条：
-    // **日报生成成功**也要能弹（此前只有失败那档弹）；同一天摘掉它的 `toast`——用户只说了桌面，
-    // 「不弹应用内提示」是 11-04 的原话。同日加入 P9 手动分析失败（失败类，读者刚点过）。
-    // 17 = 平台 14（P7 不走桌面；自检是诊断，四档全批）+ 情报 4 + 日报完成 1（含在情报 4 里，别重算）。
-    const rows = Object.entries(NOTIFICATION_EVENT_POLICY)
-    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('desktop')).map(([id]) => id).sort()).toEqual([
-      'market-intelligence.briefing.failed',
-      'market-intelligence.briefing.ready',
-      'market-intelligence.source.consecutive-failed',
-      'market-intelligence.source.stale',
-      'market-intelligence.timezone.invalid',
-      'platform.analysis.attempt-abandoned',
-      'platform.analysis.manual-failed',
-      'platform.analysis.quota-exhausted',
-      'platform.analysis.repeated-failure',
-      'platform.channel.connection-lost',
-      'platform.channel.push-resumed',
-      'platform.channel.push-suspended',
+  it('keeps desktop to the platform events the user approved', () => {
+    // 桌面对「信息类」不开放（用户原话：没打开应用还被轰炸）。平台这一侧批了桌面的就是下面这些，
+    // 顺序即批准文件里的顺序；用户新增或摘掉一条必须在这里显式改，不靠数字对上蒙过去。
+    expect(ids.filter((id) => approved[id]!.approvedDisruptionLevels.includes('desktop'))).toEqual([
       'platform.job.failed-terminal',
       'platform.job.repeated-failed',
-      // 自检是读者亲手点的诊断，四档全批（2026-11-08 用户拍板），所以它也在桌面这一格里；
-      // 它和「真实事件」不是同一类，别因为它在表里就以为桌面又要对所有事件开放。
-      'platform.notification.self-test',
+      'platform.analysis.quota-exhausted',
       'platform.provider.credential-invalid',
-      'platform.provider.credential-recovered'
+      'platform.provider.credential-recovered',
+      'platform.channel.push-suspended',
+      'platform.channel.push-resumed',
+      // 自检是读者亲手点的诊断，四档全批（2026-11-08 用户拍板），所以它也在桌面这一格里；
+      // 它和「真实事件」不是同一类，别因为它在里面就以为桌面又要对所有事件开放。
+      'platform.notification.self-test',
+      'platform.channel.connection-lost',
+      // P9 手动分析失败：失败类，读者刚点过。它走桌面、**不批提示**（见下面那条用例）。
+      'platform.analysis.manual-failed',
+      'platform.analysis.repeated-failure',
+      'platform.analysis.attempt-abandoned'
     ])
     // P7 不投桌面，否则「桌面失败 → P7 → 投桌面 → 再失败」自激。
-    expect(NOTIFICATION_EVENT_POLICY['platform.desktop.blocked'].approvedDisruptionLevels).not.toContain('desktop')
-    // 手机四条：N2 日报完成、N3 信号、N5 宏观事件、N10 舆情。N10 是 2026-11-06 新增的
-    // （契约 §4.1 / 情报需求 v3.58 §十四），它只批 center + channel——桌面与提示两档明确不加。
-    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('channel')).map(([id]) => id).sort()).toEqual([
-      'market-intelligence.analysis.conclusion',
-      'market-intelligence.briefing.ready',
-      'market-intelligence.calendar.event-upcoming',
-      'market-intelligence.macro.event-landed',
-      'market-intelligence.sentiment.alert',
-      'market-intelligence.signal.triggered',
+    expect(approved['platform.desktop.blocked']!.approvedDisruptionLevels).not.toContain('desktop')
+    // 恢复类只留中心 + 提示：事情已经过去了，不必再占一块桌面。
+    expect(approved['platform.analysis.recovered']!.approvedDisruptionLevels).not.toContain('desktop')
+  })
+
+  it('keeps the phone leg to the self-test alone', () => {
+    // 读者亲手点的诊断要能到手机；其余平台事件在这一侧都没有手机档。
+    expect(ids.filter((id) => approved[id]!.approvedDisruptionLevels.includes('channel'))).toEqual([
       'platform.notification.self-test'
     ])
-    // 提示默认开：关掉桌面时它是唯一的本机提醒。唯一例外是 P9——读者刚点过、人就在面板前，
-    // 桌面优先，同一次失败不在应用内再吵第二遍（P7 反过来：它只有 center + toast，不走桌面）。
-    // 不批提示的三行：
-    // - P9：读者刚点过、人就在面板前，桌面优先，同一次失败不在应用内再吵一遍；
-    // - 日报完成：**桌面批准、提示不批**——11-04 用户原话「不弹提示」，11-06 只要求桌面通知，
-    //   两格不是一回事，留着提示就是替他多要一次打扰（不是漏配，别顺手补回来）；
-    // - N10 舆情：信息类，手机与中心就够；
-    // - 分析结论：完成类，用户要的是「结论到了」这一声，反过来只在手机与中心（同向时由调用方收窄到中心）。
-    // 顺序就是表里的顺序（平台几行在前），别按字母排。
-    expect(rows.filter(([, row]) => !row.approvedDisruptionLevels.includes('toast')).map(([id]) => id)).toEqual([
-      'platform.analysis.manual-failed',
-      'market-intelligence.briefing.ready',
-      'market-intelligence.sentiment.alert',
-      'market-intelligence.analysis.conclusion'
+  })
+
+  it('leaves exactly one platform event without a toast', () => {
+    // P9：读者刚点过、人就在面板前，桌面优先，同一次失败不在应用内再吵第二遍。
+    expect(ids.filter((id) => !approved[id]!.approvedDisruptionLevels.includes('toast'))).toEqual([
+      'platform.analysis.manual-failed'
     ])
   })
 
   it('approves a quiet-hours bypass only for the self-test, and always keeps center', () => {
     // 2026-11-08 用户拍板：读者亲手点的诊断不算系统打扰，只有自检一行可穿透。
-    // 这条用例是「谁能穿透」的唯一定义处——多放一行进去，等于替读者多批了一次打扰。
-    const bypassing = Object.entries(NOTIFICATION_EVENT_POLICY)
-      .filter(([, row]) => row.approvedBypassQuietHours)
-      .map(([id]) => id)
-    expect(bypassing).toEqual(['platform.notification.self-test'])
-    for (const [id, row] of Object.entries(NOTIFICATION_EVENT_POLICY)) {
-      expect(row.approvedDisruptionLevels, `${id} 必须含 center`).toContain('center')
+    // 这条用例是平台这一侧「谁能穿透」的唯一定义处——多放一行进去，等于替读者多批了一次打扰。
+    expect(ids.filter((id) => approved[id]!.approvedBypassQuietHours)).toEqual(['platform.notification.self-test'])
+    for (const id of ids) {
+      expect(approved[id]!.approvedDisruptionLevels, `${id} 必须含 center`).toContain('center')
       if (id !== 'platform.notification.self-test') {
-        expect(row.approvedBypassQuietHours, `${id} 不应批准穿透免打扰`).toBe(false)
+        expect(approved[id]!.approvedBypassQuietHours, `${id} 不应批准穿透免打扰`).toBe(false)
       }
     }
   })
@@ -158,7 +137,8 @@ describe('notification event catalog', () => {
     })).toThrow(/duplicate-id/)
 
     expect(() => createNotificationEventCatalog({
-      sources: [{ productId: 'market-intelligence', events: [declaration({ id: 'platform.job.failed-terminal' })] }],
+      // 合成产品 id：这条断的是「声明前缀必须属于自己」，与任何真实产品无关。
+      sources: [{ productId: 'sample-product', events: [declaration({ id: 'platform.job.failed-terminal' })] }],
     })).toThrow(/prefix-mismatch/)
   })
 })

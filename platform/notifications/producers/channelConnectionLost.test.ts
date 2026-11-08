@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { notificationCopy } from '../../i18n/notificationCopy'
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '../contracts/notificationEventPolicy'
 import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '../contracts/platformNotificationEvents'
 import { planNotificationSubmit } from '../runtime/notificationSubmitPlan'
 import { buildChannelConnectionLostRequest, notifyChannelConnectionLost } from './channelConnectionLost'
@@ -61,7 +60,8 @@ describe('channel connection lost producer', () => {
   })
 
   it('is never approved for the phone: this is a local state, not a push', () => {
-    const row = NOTIFICATION_EVENT_POLICY['platform.channel.connection-lost']
+    // 批准值读平台自己的声明（b3-1），不再读那张共享表；断言的事实与原来相同。
+    const row = PLATFORM_NOTIFICATION_APPROVALS['platform.channel.connection-lost']!
     expect(row.approvedDisruptionLevels).toEqual(['center', 'toast', 'desktop'])
     expect(row.approvedDisruptionLevels).not.toContain('channel')
   })
