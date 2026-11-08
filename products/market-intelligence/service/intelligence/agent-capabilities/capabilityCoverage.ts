@@ -80,7 +80,10 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.getSourceHealth': exposed('get_source_health'),
   'intelligence.getTimeline': exposed('get_intelligence_timeline'),
   // 读者点按钮发通知：读的是他的结论、发的是他的通道，不对代理人开放。
+  // 下面那条是同一件事的另一半：**点击前**读「有没有可用通道」（0 条不摆按钮、多条点了才拒绝），
+  // 只回答配置事实、不带通道名。一条读一条发，都不对代理人开放。
   'intelligence.sendAnalysisConclusion': excluded('internal-view'),
+  'intelligence.getAnalysisConclusionSendChannel': excluded('internal-view'),
   // 同类：设置页那三枚「发一条…」读产品数据、发读者通道，是读者动作，不对代理人开放。
   'intelligence.sendTestNotification': excluded('internal-view'),
   'intelligence.getWorkspaceState': excluded('internal-view'),
