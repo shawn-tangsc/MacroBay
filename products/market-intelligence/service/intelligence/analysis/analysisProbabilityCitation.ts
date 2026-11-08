@@ -1,6 +1,5 @@
 import type { AgentFact, AnalysisConclusion } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_ANALYSIS_POLICY_PATH_METRICS } from '../../../contracts/marketAnalysisContracts'
-import { concreteReadingPattern } from '../../../contracts/concreteAnchorPattern'
 
 /**
  * How a conclusion cites policy probabilities.
@@ -32,15 +31,7 @@ export const analysisProbabilityDefects = Object.freeze({
   absent: 'policy-probability-absent',
   missingInstant: 'policy-probability-missing-instant',
   notFrozen: 'policy-probability-not-frozen',
-  /**
-   * 正文写了变化值，但快照没有这条变化事实（`policy-implied-probability-change-24h`）。
-   * 按 `04` §3.4.1，变化缺失应写「24 小时变化尚未可得」，**不许自己算一个**。
-   */
-  changeNotFrozen: 'policy-probability-change-not-frozen',
-  /**
-   * 正文写的变化值与快照的变化事实**不同值**。变化**不取整**：事实是 +0.3，正文写 +0 也是另一个谎。
-   */
-  changeMismatch: 'policy-probability-change-mismatch'
+
 })
 
 export type AnalysisProbabilityDefect = (typeof analysisProbabilityDefects)[keyof typeof analysisProbabilityDefects]
@@ -81,18 +72,8 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
       return analysisProbabilityDefects.missingInstant
     }
   }
-  // 变化值只许来自事实：快照没有这条变化事实时，正文写「较上一日 +x 个百分点」就是自己算的。
-  const carriesChange = snapshot.facts.some(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.probabilityChange24h)
-  if (!carriesChange && POLICY_CHANGE_CLAIM.test(prose) && !POLICY_CHANGE_UNAVAILABLE.test(prose)) {
-    return analysisProbabilityDefects.changeNotFrozen
-  }
   return undefined
 }
-
-/** 「较上一日/24 小时变化 + 一个带符号数字」：这是对变化的断言。 */
-const POLICY_CHANGE_CLAIM = /(?:较上一(?:日|个交易日)|24\s*(?:小时|h)\s*(?:变化|变动))[^。；;\n]{0,12}[-+＋−]?\s*\d+(?:\.\d+)?/u
-/** 明确的「还没有这条变化」：允许写，不算断言。 */
-const POLICY_CHANGE_UNAVAILABLE = /(?:尚未可得|暂不可得|未提供|没有变化数据)/u
 
 /**
  * Percentages that actually claim to be a probability.
@@ -149,110 +130,3 @@ function conclusionProse(conclusion: AnalysisConclusion): string {
  * 2. 同一子句里有变化/比较标记（变化、较、环比、同比、上升下降、上调下调、走高走低、回落）；
  * 3. 无符号概率 + 独立变化句（`市场定价 76%；较上一日 +3 个百分点`）——两个子句各自成立。
  */
-export const analysisPercentageBindingRules = Object.freeze({
-  probabilityIsALevel: 'probability-is-a-level',
-  ambiguousSignedPercentage: 'ambiguous-signed-percentage',
-  /** 正文写了变化值，但快照没有这条变化事实（不许自己算）。 */
-  changeNotFrozen: 'policy-probability-change-not-frozen',
-  /** 正文写的变化值与快照的变化事实**不同值**（变化不取整，0.3 写成 0 也是另一个谎）。 */
-  changeMismatch: 'policy-probability-change-mismatch'
-})
-
-export type AnalysisPercentageBindingRule =
-  (typeof analysisPercentageBindingRules)[keyof typeof analysisPercentageBindingRules]
-
-/** 任何带符号或变化标记绑定的数字：`+76.65%` / `-0.3 个百分点` / `+6bp` / `3 个百分点`。 */
-const PERCENTAGE_NUMBER = /[-+＋−－]?\s*\d+(?:\.\d+)?\s*(?:%|\uFF05|个百分点|百分点|bp|基点)/gu
-/** 变化/比较标记：有它才是「变化量」，否则是没头没尾的带符号数。**全仓只有这一份词表**。 */
-const CHANGE_MARKER = /(?:变化|变动|较|环比|同比|上升|下降|上调|下调|走高|走低|回落|收窄|扩大)/u
-/** 增量单位：`bp` / `基点` 本身就是增量，不需要「变化」二字。 */
-const INCREMENT_UNIT = /(?:bp|基点)\s*$/u
-
-/**
- * 概率/定价位置上的带符号值（两种语序）。**只在确认「不是变化量」之后才用它**——
- * 顺序反了会误杀 `较上一日定价变化 +0.3 个百分点` 这种正确写法（架构师实测）。
- */
-function signedAtProbability(clause: string): boolean {
-  // 概率/定价，以及**政策动作词直接接带符号百分比**（`降息 +5%`）——那同样是概率语境。
-  const keyword = '(?:概率|定价|降息|加息)'
-  const after = new RegExp(`${keyword}[^\\d%。；;\\n]{0,4}[-+＋−－]\\s*\\d`, 'u')
-  const before = new RegExp(`[-+＋−－]\\s*\\d+(?:\\.\\d+)?\\s*(?:%|\\uFF05)[^\\d%。；;\\n]{0,4}${keyword}`, 'u')
-  return after.test(clause) || before.test(clause)
-}
-
-/**
- * 概率/定价位置上用**变化量单位**（`个百分点`）冒充水平值：`降息概率 3 个百分点`。
- * **逐子句判，且关键字与数字之间不许有变化标记**——`概率变化 3 个百分点` 是变化量，不是冒充。
- */
-function percentPointAtProbability(clause: string): boolean {
-  const match = /(?:概率|定价)([^\d%。；;\n]{0,8})\d+(?:\.\d+)?\s*(?:个百分点|百分点)/u.exec(clause)
-  return match !== null && !CHANGE_MARKER.test(match[1] ?? '')
-}
-
-/**
- * 结论里有一句在说「概率/定价的变化」，且句中的数字。变化值必须来自事实且**同值**
- * （`04` §3.4.1：变化缺失写「24 小时变化尚未可得」，不许自己算；`0.3` 取整成 `0` 也是另一个谎）。
- */
-function probabilityChangeMention(clause: string, prose: string): number | undefined {
-  // 概率语境可能在**同一段的前一句**里（`…市场定价 77%，截至…；较上一日变化 +9 个百分点`），
-  // 所以看整段；但数字只取当前子句里的那一个。
-  if (!/(?:概率|定价)/u.test(prose)) return undefined
-  if (!CHANGE_MARKER.test(clause)) return undefined
-  const number = /([-+]?\s*\d+(?:\.\d+)?)\s*(?:%|\uFF05|个百分点|百分点|bp|基点)/u.exec(clause)
-  if (number === null) return undefined
-  const value = Number(number[1]!.replace(/\s+/gu, ''))
-  return Number.isFinite(value) ? value : undefined
-}
-
-export function percentageBindingDefect(
-  conclusion: AnalysisConclusion,
-  /** 快照里的 24 小时变化事实值；没有这条事实就是 `undefined`。 */
-  snapshot?: ProbabilityEvidence
-): AnalysisPercentageBindingRule | undefined {
-  const prose = conclusionProse(conclusion)
-  const changeFact = changeFactOf(snapshot)
-  // 正文已经明说「变化拿不到」时，不做任何变化断言判定（那句话本身就是要的写法）。
-  const admitsNoChange = /(?:尚未可得|暂不可得|未提供|没有变化数据)/u.test(prose)
-
-  for (const match of prose.matchAll(PERCENTAGE_NUMBER)) {
-    const clause = clauseOf(prose, match.index ?? 0)
-    // ① 增量单位：`收益率 +6bp` 是对的，不需要「变化」二字。
-    if (INCREMENT_UNIT.test(match[0])) continue
-    // ② 同一子句有变化/比较标记：明确的变化量（先判它，才不会误杀 `定价变化 +0.3 个百分点`）。
-    if (CHANGE_MARKER.test(clause)) {
-      const mentioned = probabilityChangeMention(clause, prose)
-      if (mentioned === undefined || admitsNoChange) continue
-      if (changeFact === undefined) return analysisPercentageBindingRules.changeNotFrozen
-      if (Math.abs(mentioned - changeFact) > 0.001) return analysisPercentageBindingRules.changeMismatch
-      continue
-    }
-    // ③ 概率/定价位置上的带符号值，或该位置用变化量单位冒充水平值：概率是水平值，不许带符号。
-    if (signedAtProbability(clause) || percentPointAtProbability(clause)) {
-      return analysisPercentageBindingRules.probabilityIsALevel
-    }
-    // ④ 绑到了**可命名的被变读数**（`BTC 24 小时 -3.2%`、`市场情绪 +5%`）：这是允许的写法。
-    //    读数是词表里除政策动作与机构名之外的那部分，与日报共用 `contracts/concreteAnchorPattern`，
-    //    **不在这里另写一份**。注意：概率/定价在第 ③ 步已经先判过——顺序不能反。
-    if (concreteReadingPattern.test(clause)) continue
-    // ⑤ 其余带符号数字：既绑不到读数、也不在概率语境，读者分不清是水平还是变化 → 歧义拒。
-    if (/^[-+＋−－]/u.test(match[0].trim())) return analysisPercentageBindingRules.ambiguousSignedPercentage
-  }
-  return undefined
-}
-
-/** 快照里的 24 小时变化事实值；没有就是 `undefined`（不是 0——0 是一个真实的取值）。 */
-function changeFactOf(snapshot: ProbabilityEvidence | undefined): number | undefined {
-  const fact = snapshot?.facts.find(entry => entry.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.probabilityChange24h)
-  return typeof fact?.value === 'number' && Number.isFinite(fact.value) ? fact.value : undefined
-}
-
-/** 命中所属的那一句（按中文句读与换行切），只用来判上下文。 */
-function clauseOf(prose: string, index: number): string {
-  const before = prose.slice(0, index)
-  const start = Math.max(
-    before.lastIndexOf('。'), before.lastIndexOf('；'), before.lastIndexOf(';'), before.lastIndexOf('\n')
-  ) + 1
-  const after = prose.slice(index)
-  const end = after.search(/[。；;\n]/u)
-  return prose.slice(start, end < 0 ? prose.length : index + end)
-}

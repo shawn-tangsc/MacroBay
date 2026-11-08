@@ -209,8 +209,8 @@ describe('policy path prompt rules', () => {
     // 前三句都曾只活在修复提示里，模型要等被拒一次才知道——第一次的钱白花了。
     const system = systemPrompt(snapshot({ facts: [policyFact] }))
     expect(system).toContain('约数')
-    expect(system).toContain('不带正负号')
-    expect(system).toContain('单位本身是增量')
+    expect(system).toContain('不要和变化量混在一句里')
+    expect(system).toContain('24 小时变化尚未可得')
     expect(system).toContain('不得换档或编造')
     expect(system).toContain('各自写出那条概率自己的截至时刻')
     // The target range is not a probability and must not be handed a market-pricing citation.

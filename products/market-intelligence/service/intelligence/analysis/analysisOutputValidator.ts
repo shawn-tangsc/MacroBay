@@ -15,7 +15,7 @@ import {
 } from '../../../contracts/marketAnalysisContracts'
 import { isMarketReactionFact, marketAnalysisUnsafeOutputPolicy, marketAnalysisValidationPolicy } from './analysisConstants'
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
-import { percentageBindingDefect, policyProbabilityDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
+import { policyProbabilityDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 import {
   divergenceDefectOf,
@@ -80,13 +80,6 @@ export const analysisValidationRules = Object.freeze({
    * policy fact carries is a fabricated number, not a rounding difference.
    */
   policyProbabilityCitation: 'policy-probability-citation',
-  /** 概率/定价位置上写了带符号的值：水平值被写成了变化量（`04` §3.4.1）。 */
-  probabilityIsALevel: 'probability-is-a-level',
-  /**
-   * 带符号的百分比，既不是增量单位、同一子句也没有变化/比较标记：读者分不清是水平还是变化。
-   * 按歧义拒，不猜（`04` §3.4.1）。
-   */
-  ambiguousSignedPercentage: 'ambiguous-signed-percentage',
   /**
    * The conclusion never returned to the change that triggered the run: it cites something else and
    * talks about the background. Coarse code stays `analysis-missing-evidence`, which is already in
@@ -273,13 +266,6 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   const divergenceDefect = divergenceDefectOf(output.divergences, snapshot.facts)
   if (divergenceDefect === 'unknown-pair') return missingEvidence(analysisValidationRules.unknownReference)
   if (divergenceDefect === 'contradiction') return missingEvidence(analysisValidationRules.divergenceContradiction)
-  // 先判「数字绑在谁身上」（带符号的两条），再判概率引用的同值与截至时刻（`04` §3.4.1 的顺序）。
-  const bindingDefect = percentageBindingDefect(output.conclusion, snapshot)
-  if (bindingDefect === 'policy-probability-change-not-frozen' || bindingDefect === 'policy-probability-change-mismatch') {
-    // 变化值的两条缺陷挂在既有粗码下（规则闭集不变），detail 说清是哪一种。
-    return missingEvidence(analysisValidationRules.policyProbabilityCitation, bindingDefect)
-  }
-  if (bindingDefect !== undefined) return missingEvidence(bindingDefect)
   const probabilityDefect = policyProbabilityDefect(output.conclusion, snapshot)
   if (probabilityDefect) return missingEvidence(analysisValidationRules.policyProbabilityCitation, probabilityDefect)
   // Only when the caller could resolve a trigger source; a snapshot with no change record never
