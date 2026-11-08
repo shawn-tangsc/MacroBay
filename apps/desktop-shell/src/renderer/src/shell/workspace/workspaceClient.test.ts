@@ -8,7 +8,7 @@
  * `panelWorkspaceStore.keyFor` 的 `requestScope:requestId` 幂等缓存（旧语义＝同 key 直接回放；新语义＝
  * 方法/参数不同即 fail closed）。
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { WorkspaceSnapshot } from '@platform/workspace/contracts'
 import { WorkspaceOwnershipPolicy } from '@platform/workspace/policies'
@@ -317,9 +317,10 @@ describe('workspace tab client (P2-03)', () => {
     expect(harness.listenerCount()).toBe(1)
 
     harness.emit({ type: 'container-changed', layoutRevision: 9, scope: { workspaceInstanceKey: 'ws-1' } })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(seen).toContain(3)
-    // 白名单外的事件类型被丢弃（不触发重取，也绝不报错）
+    // 事件触发一次异步重取：等新状态真的被观察到，不等一个宏任务。
+    await vi.waitFor(() => { expect(seen).toContain(3) })
+    // 白名单外的事件类型被丢弃（不触发重取，也绝不报错）。
+    // 这条是负向断言：没有可成立的条件可等，只让出一圈宏任务，让「不该发生的重取」有机会露头。
     harness.emit({ type: 'not-an-event', layoutRevision: 10, scope: {} })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(harness.listenerCount()).toBe(1)
