@@ -27,6 +27,13 @@ the adapters that have a runtime implementation. No adapter is enabled in this r
 offers no way to enable one, so a channel created here sends and receives nothing. Treat channels as
 unavailable until an adapter is deliberately enabled.
 
+### Official BLS calendar
+
+The official BLS release calendar cannot be fetched from this network: `www.bls.gov` and
+`api.bls.gov` return 403 at the CDN edge, with or without the proxy. Automatic BLS schedule and value
+sync is therefore disabled. Stored BLS events come from the last successful sync and carry no release
+time. The Fed and BEA calendars and the market-sourced calendar are unaffected.
+
 ### Packaged installers
 
 `pnpm build` produces Electron bundles under `out/`. A macOS `.dmg` can be built from source with
