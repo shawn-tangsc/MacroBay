@@ -378,7 +378,8 @@ it('says its own window when nothing was released, instead of leaving the sectio
   const props = { projection, onOpenCalendar: () => undefined, onRefresh: () => undefined }
   const zh = await render(<MarketCalendarCard {...props} text={text} />)
   expect(zh.textContent).toContain('最近 3 天内没有已公布的事件')
-  await act(async () => {})
+  // 这里原来有一次空的 `await act(async () => {})`：它不等待任何条件，只让 React 刷一次微任务。
+  // 渲染本身已经在 `act` 里做完了，那次空转只是噪音，删掉后两条断言照旧。
   const en = await render(<MarketCalendarCard {...props} text={calendarText('en-US')} />, 'en-US')
   expect(en.textContent).toContain('No released events in the last 3 days.')
 })
