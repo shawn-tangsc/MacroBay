@@ -1,8 +1,6 @@
-import { Info } from 'lucide-react'
 import type { ReactElement, ReactNode } from 'react'
 
-import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
+import { SettingsInfo, type SettingsInfoSpec } from '../settingsInfo'
 
 /**
  * 设置页的一行（界面规范 v1.10 §8.2）：**一行一件事**。
@@ -36,36 +34,9 @@ export function SettingsRow(props: Readonly<{
   </div>
 }
 
-export type SettingsRowInfo = Readonly<{
-  /** ⓘ 自己的读屏名（它只说明，不继承字段名，否则读屏会念两遍同一个词）。 */
-  ariaLabelKey: string
-  /** 要说的句子；一行一条，按顺序进浮层。 */
-  labelKeys: readonly string[]
-  resolveText: (key: string) => string
-}>
+export type SettingsRowInfo = SettingsInfoSpec
 
-/**
- * 整句说明的唯一去处：字段名或组标题旁的 ⓘ。
- *
- * 与 `Tooltip` 的分工由平台组件定死：要读一段、要钉住对照就用 `Popover`；这里只负责把
- * 「说明文字」翻译成一颗 `IconButton` 触发器，句子本身仍走调用方的文案表。
- */
-export function SettingsInfo(props: SettingsRowInfo): ReactElement {
-  return <Popover
-    lines={props.labelKeys.map((labelKey) => ({ labelKey }))}
-    resolveText={props.resolveText}
-    trigger={(triggerProps) => (
-      <IconButton
-        {...triggerProps}
-        ariaLabelKey={props.ariaLabelKey}
-        icon={Info}
-        resolveText={props.resolveText}
-        size="sm"
-        variant="plain"
-      />
-    )}
-  />
-}
+export { SettingsInfo }
 
 /** 一组字段：组标题 + 行；组与组之间靠 24 间距 + 1px 分隔线分开（首组不带线）。 */
 export function SettingsGroup(props: Readonly<{

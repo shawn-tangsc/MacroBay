@@ -4,6 +4,8 @@ import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
+import { SettingsInfo } from '../settingsInfo'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import type {
@@ -81,6 +83,8 @@ export type SyncRunText = Readonly<{
   exportTruncated: string
   showing: string
   retention: string
+  /** 标题旁那颗 ⓘ 的读屏名。 */
+  infoAria: string
   page: string
   previous: string
   next: string
@@ -130,6 +134,15 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
   analysisFailureReasons?: Readonly<Record<string, string>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
+  // 这一页手里是**解好的**文案（`text`），而 ⓘ 与平台控件只收键——这里把那四条键映射回这一页
+  // 的字。只给 ⓘ 用，不是第二套文案表。
+  const infoCopy: Readonly<Record<string, string>> = {
+    'settings.intelligenceSources.syncRun.infoAria': text.infoAria,
+    'settings.intelligenceSources.syncRun.noSourceHint': text.noSourceHint,
+    'settings.intelligenceSources.syncRun.oldRecordNote': text.oldRecordNote,
+    'settings.intelligenceSources.syncRun.retention': text.retention
+  }
+  const resolveInfoText = (key: string): string => infoCopy[key] ?? ''
   /**
    * A located row may be older than the default window, so a focus request reads the widest window
    * the contract allows from the start — one read, no second round trip, and page 5 is reachable.
@@ -274,7 +287,20 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
 
   return <section className="mi-sync-run" aria-label={text.title}>
     <header className="mi-sync-run__head">
-      <h2>{text.title}</h2>
+      <div className="mi-sync-run__title">
+        <h2>{text.title}</h2>
+        {/* 三句说明（来源列为什么是空的 / 旧记录为什么没有条数 / 明细与汇总的保留期）都住在这里：
+            正文只留字段名、当前值和状态。 */}
+        <SettingsInfo
+          ariaLabelKey="settings.intelligenceSources.syncRun.infoAria"
+          labelKeys={[
+            'settings.intelligenceSources.syncRun.noSourceHint',
+            'settings.intelligenceSources.syncRun.oldRecordNote',
+            'settings.intelligenceSources.syncRun.retention'
+          ]}
+          resolveText={resolveInfoText}
+        />
+      </div>
       <div className="mi-sync-run__filters">
         <label>{text.columns.time}
           <select value={window} onChange={(event) => { setWindow(event.target.value as SyncRunWindow); setPage(0) }}>
@@ -357,13 +383,6 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
         <span role="columnheader">{text.columns.duration}</span>
         <span role="columnheader">{text.columns.detail}</span>
       </div>
-      <p className="mi-sync-run__legend">{text.noSourceHint}</p>
-      {/* One line for the whole table, not one per row: a run that predates the tally shows no
-          numbers, and without this the empty spot reads as "zero items". Only shown when such a row
-          is actually on screen — a legend for an absent case is noise. */}
-      {visible.some((row) => row.counts === undefined)
-        ? <p className="mi-sync-run__legend mi-sync-run__legend--tally">{text.oldRecordNote}</p>
-        : null}
       {visible.map((row) => <Fragment key={row.runId}>
         <div
           className="mi-sync-run__grid"
@@ -443,7 +462,7 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     </div> : null}
     {state === 'available' && filtered.length > 0
       ? <footer className="mi-sync-run__foot">
-        <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}{text.joiner}{text.retention}</span>
+        <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}</span>
         {/* 取回一部分就明说：读者要能分清「这段时间只有这些」和「这里还没取完」。 */}
         {truncated ? <span role="status">{text.truncatedNotice.replace('{count}', String(rows.length))}</span> : null}
         {pageCount > 1 ? <span className="mi-sync-run__pager">

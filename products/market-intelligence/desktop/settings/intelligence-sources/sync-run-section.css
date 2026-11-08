@@ -1,6 +1,8 @@
 .mi-sync-run { display: flex; flex-direction: column; min-height: 0; height: 100%; padding: 12px 16px; gap: 10px; }
 .mi-sync-run__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mi-sync-run__head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+/* 标题 + ⓘ 一组：说明只在这颗图标里，标题不跟着它的浮层位移。 */
+.mi-sync-run__title { display: flex; align-items: center; gap: 2px; }
 .mi-sync-run__filters { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-secondary); }
 .mi-sync-run__filters label { display: inline-flex; align-items: center; gap: 6px; }
 .mi-sync-run__filters select { background: var(--surface-2, #14171e); color: inherit; border: 1px solid var(--border, #22252d); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
@@ -63,9 +65,6 @@
 .mi-sync-run__grid--aggregate { grid-template-columns: 92px minmax(0, 1fr) 56px 56px; }
 .mi-sync-run__grid--aggregate span[data-has-failures='true'] { color: var(--danger); }
 
-/* The dash's meaning is one line under the headers: a per-cell bubble repeated it and hid it from
-   anyone without a mouse. */
-.mi-sync-run__legend { color: var(--muted); font-size: 11px; margin: 4px 8px 0; }
 /* How many more sources a row touched, as visible text rather than a tooltip. */
 .mi-sync-run__more { color: var(--muted); }
 
