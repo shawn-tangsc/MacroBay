@@ -46,12 +46,28 @@ const effective = (id: string) => {
   }
 }
 
+/**
+ * 漂移要**点名到字段**（b3-4 的判据）：只说「这条不对」帮不了判断影响面，
+ * 得说出读者能感知的那一项变了多少——`levels` 旧→新、手机档 `reachesPhone` true→false。
+ * 快照字段名叫 `channel`（手机腿），报告里按读者能懂的名字写。
+ */
+const FIELD_LABEL = { levels: 'levels', group: 'group', bypass: 'bypass', channel: 'reachesPhone' } as const
+
+const driftOf = (id: string): string | undefined => {
+  const before = snapshot[id]!
+  const now = effective(id)
+  if (now === undefined) return `${id}: 从目录里消失了（声明还在、批准没了）`
+  const changed = (Object.keys(FIELD_LABEL) as (keyof typeof FIELD_LABEL)[])
+    .filter((field) => JSON.stringify(before[field]) !== JSON.stringify(now[field]))
+  if (changed.length === 0) return undefined
+  return `${id}: ${changed.map((field) => `${FIELD_LABEL[field]} ${JSON.stringify(before[field])} → ${JSON.stringify(now[field])}`).join('; ')}`
+}
+
 describe('批准值搬迁：读者拿到的行为不变', () => {
   it('every snapshotted event still resolves to the same approved faces, group and phone leg', () => {
-    const drifted: string[] = []
-    for (const id of Object.keys(snapshot)) {
-      if (JSON.stringify(effective(id)) !== JSON.stringify(snapshot[id])) drifted.push(id)
-    }
+    const drifted = Object.keys(snapshot)
+      .map(driftOf)
+      .filter((line): line is string => line !== undefined)
     expect(drifted).toEqual([])
   })
 
@@ -60,7 +76,8 @@ describe('批准值搬迁：读者拿到的行为不变', () => {
     // （删掉产品，产品侧的证人会跟着消失，那不是平台事件的证人）。
     const drifted = Object.keys(snapshot)
       .filter((id) => id.startsWith(`${manifest.id}.`))
-      .filter((id) => JSON.stringify(effective(id)) !== JSON.stringify(snapshot[id]))
+      .map(driftOf)
+      .filter((line): line is string => line !== undefined)
     expect(drifted).toEqual([])
     // 自检事件尚未定稿（裁定未出），**不进期望、也不断言它存在**：把一条被驳回的事件固化成
     // 事实，比不写更坏。
