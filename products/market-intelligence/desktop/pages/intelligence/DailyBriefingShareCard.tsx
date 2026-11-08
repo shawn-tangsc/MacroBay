@@ -50,8 +50,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const conclusion = doc.conclusion
   // 按**发生时间倒序**（用户 2026-11-06）：最新在上，同刻按 id/eventKey 稳定兜底，保证每次渲染一致。
   // 只排渲染这一层：文档里的顺序不动（分析判定的次序另有用途）。
-  const newestFirst = <T extends Readonly<{ at: string; id: string }>>(items: readonly T[]): readonly T[] =>
-    [...items].sort((left, right) => right.at.localeCompare(left.at) || left.id.localeCompare(right.id))
+  const newestFirst = <T extends Readonly<{ at?: string | undefined; id: string }>>(items: readonly T[]): readonly T[] =>
+    [...items].sort((left, right) => (right.at ?? '').localeCompare(left.at ?? '') || left.id.localeCompare(right.id))
   const visibleNews = newestFirst(doc.news.items
     .filter((item) => item.visibility !== 'hidden')
     .map((item) => ({ item, at: item.publishedAt, id: item.itemId }))).map((entry) => entry.item)
@@ -134,7 +134,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
           `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
-        <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
+        <span data-polarity="macro">{macroTime(item.scheduledAt ?? item.scheduledDate, formatTime)}</span>
         <div>
           <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}{item.lifecycleState === 'cancelled' ? <span className="mi-brief-poster__macro-cancelled">{text.macro.cancelled}</span> : null}</p>
           {/* 没有实际值就**整格不渲染**（用户 2026-11-06）：不占位、不写破折号、不写「未拿到」——
@@ -210,7 +210,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
             {text.next.watchInline}{text.labelSeparator}{watchBaseline.implication}
           </p> : null}
         </div> : null}
-        <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
+        {/* 时间未知的事件（v16 起 `at` 可缺席）没有"还有几天"可算的锚点：不印这句，也不编一个。 */}
+        {focusEvent.at === undefined ? null : <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>}
       </div> : null}
       {otherEvents.length > 0 ? <div className="mi-brief-poster__next-rows">
         {otherEvents.map((item) => <div className="mi-brief-poster__next-row" key={item.eventKey}>
@@ -243,7 +244,9 @@ function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTi
   return shortenEventTitle(raw, locale)
 }
 
-function nextTime(value: string, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
+function nextTime(value: string | undefined, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
+  // 时间未知的行不印时刻（v16）：返回空串，由行上的日期片段负责说"是哪一天"。
+  if (value === undefined) return ''
   const [date, time, ...zone] = formatTime(value, 'minute').split(' ')
   return [date.slice(5), time, ...zone].filter(Boolean).join(' ')
 }
@@ -355,7 +358,12 @@ function watchLabel(condition: string, text: DailyBriefingText): Readonly<{ kind
   return { kind: 'other', label: /[a-z]/i.test(condition) ? text.next.watchOther : condition.trim() }
 }
 
-function macroTime(value: string, formatTime: (value: string, precision: 'minute') => string): React.ReactNode {
+/**
+ * 宏观行的时间格。**时刻未知**（v16 起 `scheduledAt` 可缺席）时只有日期：
+ * 不补零点、也不印一个假的时分。
+ */
+function macroTime(value: string | undefined, formatTime: (value: string, precision: 'minute') => string): React.ReactNode {
+  if (value === undefined) return null
   const [date, ...rest] = formatTime(value, 'minute').split(' ')
   return <>{date}<br />{rest.join(' ')}</>
 }

@@ -7,8 +7,8 @@
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24' | 'daily-briefing.v25'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24' | 'daily-briefing.v25' | 'daily-briefing.v26'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -295,7 +295,19 @@ export type BriefingMacroItem = Readonly<{
   eventKey: string
   title: string
   titleKey?: string
-  scheduledAt: string
+  /**
+   * 事件时刻。**缺席＝源没有给过时刻**（`releaseTimeSource: 'date-only'`，如 BLS 存量那 60 条），
+   * 不是"零点发布"：v16 起不再用 `T00:00:00.000Z` 冒充它。时间未知的行按 `scheduledDate` 进版面、
+   * 排在同日有时刻的行之后，**不参与任何按时刻的筛选与计数**。
+   *
+   * v15 及以前的文档里这个字段总是在的（当年补的假时刻无法与真实零点区分，不追溯）。
+   */
+  scheduledAt?: string
+  /**
+   * 事件日期（`YYYY-MM-DD`）。v16 起每行都写：时间未知的行只有它能把日子印出来。
+   * 读 v15 及以前的文档时可能缺席（那时没有这个字段），渲染层据此不印日期，不补一个。
+   */
+  scheduledDate?: string
   importance: 'high' | 'medium' | 'low'
   countryCode?: string
   countryName?: string
@@ -381,7 +393,13 @@ export type BriefingNextItem = Readonly<{
   eventKey: string
   title: string
   titleKey?: string
-  at: string
+  /**
+   * 事件时刻。**缺席＝时间未知**（同 `BriefingMacroItem.scheduledAt`）：这时不印「距开始 N 分钟」，
+   * 只按 `scheduledDate` 印日期。v15 及以前的文档里总是在的。
+   */
+  at?: string
+  /** 事件日期（`YYYY-MM-DD`）；v16 起每行都写。读旧文档时可能缺席，渲染层不补。 */
+  scheduledDate?: string
   importance: 'high' | 'medium' | 'low'
   category: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   countryCode?: string

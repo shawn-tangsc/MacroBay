@@ -18,8 +18,8 @@
  * validates an incoming document, which keeps the client and the builder from drifting apart.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 15,
-  policyVersion: 'daily-briefing.v25',
+  schemaVersion: 16,
+  policyVersion: 'daily-briefing.v26',
   /** The default statistical window. The reader's generation settings may override it per edition. */
   windowHours: 24,
   maximumBytes: 256 * 1024,

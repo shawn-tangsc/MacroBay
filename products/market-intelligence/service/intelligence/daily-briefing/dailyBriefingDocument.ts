@@ -283,7 +283,7 @@ function classifyNextEvent(text: string, countryCode: string | undefined): Brief
 export function compareBriefingNextRelevance(left: BriefingNextItem, right: BriefingNextItem): number {
   const score = (right.relevance?.score ?? 0) - (left.relevance?.score ?? 0)
   if (score !== 0) return score
-  return left.at.localeCompare(right.at) || left.eventKey.localeCompare(right.eventKey)
+  return (left.at ?? left.scheduledDate ?? '').localeCompare(right.at ?? right.scheduledDate ?? '') || left.eventKey.localeCompare(right.eventKey)
 }
 
 /** 注册指标按标识取英文名；自由文本事件只能用源站原文。中文原文不算英文名。 */
@@ -312,6 +312,8 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
       title: event.title,
       ...(event.titleKey ? { titleKey: event.titleKey } : {}),
       at: event.scheduledAt,
+      // v16 起每行都带日期：时间未知的行（`at` 缺席）只有它能印出日子。今天 `at` 一定在，显示不变。
+      scheduledDate: localDate(event.scheduledAt, packet.timeZone),
       importance: event.importance,
       category: event.category,
       ...(event.countryCode ? { countryCode: event.countryCode } : {}),
