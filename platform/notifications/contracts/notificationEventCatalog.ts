@@ -39,10 +39,33 @@ export type NotificationEventDeclaration = {
    */
   titleKeyByVariant?: Readonly<Record<string, string>>
   reasonKeyByVariant?: Readonly<Record<string, string>>
+  /**
+   * 声明者在源码里给这条事件起的**常量名**（如 `briefingFailed`）。
+   *
+   * 生产者门禁要靠它把源码里的 `SOME_TABLE.briefingFailed` 解析成事件 id。这份映射以前由平台
+   * 去读产品的常量表文件获得——那等于平台认识产品的文件结构，产品挪一个文件平台就红。
+   * 名字随声明走之后，平台只读声明，不读任何产品源码。
+   */
+  constantName?: string
   /** 「为什么推了」那一句，必填：没有收据就没法解释。 */
   reasonKey: string
   /** 读者要不要动手：决定提交期 `actions` 能不能是空数组，不是「一定有动作」。 */
   requiresUserAction: boolean
+  /**
+   * 这条事件的**批准档位与归组**——最终归声明者（`notification-event-declaration-shape.md` §1）。
+   *
+   * **今天平台还不读它**：生效值仍来自 `notificationEventPolicy.ts` 那张表，等产品把 10 条补齐、
+   * catalog 改成读声明之后，那张表才会被删掉。这一笔只让字段先存在，所以**行为零变化**——
+   * 现在把它删掉，没有任何测试会红，这正是「平台还没读」的机械证据。
+   *
+   * 为什么不新开一节放它：`id` 已经在这个声明里出现一次，档位放到第二处就又是「同一件事两个
+   * 声明处」，而平台那张表今天正是那个第二处。
+   */
+  policy?: {
+    approvedDisruptionLevels: readonly NotificationApprovedLevel[]
+    approvedBypassQuietHours: boolean
+    surfaceGroup?: string
+  }
   /**
    * 读者面向的类型标签（契约 v2.38）：**只能声明、不许推导**。
    *
@@ -101,6 +124,13 @@ export type NotificationEventDeclarationSource = {
   /** `platform` 或产品的 productId（必须等于声明 id 的前缀）。 */
   productId: string
   events: readonly NotificationEventDeclaration[]
+  /**
+   * 这份来源自己的批准值（契约 §7.1b，2026-11-08）：**批准随声明走**，同一个 `productId` 只写一处。
+   *
+   * 迁移期它可以是 `undefined`——那样每条声明都会被 `notificationApprovalCoverage` 报成 `missing`，
+   * 报数降到 0 之后才允许删平台表里的兜底。之后它改为必填（漏写编译期红）。
+   */
+  approval?: Readonly<Record<string, NotificationEventPolicyEntry>>
 }
 
 export type NotificationEventPolicyEntry = {
