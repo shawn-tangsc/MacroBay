@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 
 import { sendAnalysisConclusion as defaultSend, type AnalysisConclusionSendReceipt } from '../../shared/ipc/analysisConclusionSendClient'
-import { describeSendStatus, type ChannelAvailability, type SendStatusCopy } from './analysisConclusionSendCopy'
+import { describeSendStatus, type SendChannelFacts, type SendStatusCopy } from './analysisConclusionSendCopy'
 import { classifySendReceipt } from './analysisConclusionSendState'
 import type { AnalysisConclusionSendText } from './analysisConclusionSendText'
 
@@ -22,8 +22,8 @@ export function useAnalysisConclusionSend(input: Readonly<{
   text: AnalysisConclusionSendText
   /** 这一条分析运行的 id；没有它就没有可发的东西（按钮应当已按此禁用）。 */
   analysisRunId?: string | undefined
-  /** 这次会发给哪条通道（`resolvePushChannel` 的派生）；读不到就省略。 */
-  channel?: ChannelAvailability | undefined
+  /** 点击前的通道事实（0 条 / 多条）；只影响「没发到手机」那句话的指路。 */
+  channel?: SendChannelFacts | undefined
   /** 台面注入：默认走产品 IPC，用例里换成桩。 */
   send?: ((analysisRunId: string) => Promise<AnalysisConclusionSendReceipt>) | undefined
   /** 结果行里的时刻（读者时区，已格式化）。 */

@@ -23,6 +23,11 @@ export const INTELLIGENCE_IPC_METHODS = Object.freeze({
   sendTestNotification: 'intelligence.sendTestNotification',
   /** 抽屉里那枚「发送到频道」：入参只有运行 id，结论与文案由主进程按 id 取。 */
   sendAnalysisConclusion: 'intelligence.sendAnalysisConclusion',
+  /**
+   * **点击前**那一问：现在有没有可用的推送通道（0 条 → 按钮整个不渲染；≥2 条 → 按钮在、点了才拒绝）。
+   * 只回答「能不能发」，**不回答发到哪条通道**——那句话只认这次提交的回执。
+   */
+  getAnalysisConclusionSendChannel: 'intelligence.getAnalysisConclusionSendChannel',
   getMonitoringScope: 'intelligence.getMonitoringScope',
   ingestEvent: 'intelligence.ingestEvent',
   getWorkspaceState: 'intelligence.getWorkspaceState',

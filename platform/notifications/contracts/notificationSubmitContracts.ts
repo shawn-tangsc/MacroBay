@@ -11,6 +11,7 @@ import type {
   NotificationAction,
   NotificationContentByLanguage,
   NotificationDeeplink,
+  NotificationDeliveryState,
   NotificationSeverity,
   NotificationSignalSeverity
 } from './notificationContracts'
@@ -104,6 +105,16 @@ export type NotificationSuppressedLevel = {
   reason: 'quiet-hours' | 'toast-disabled' | 'popup-disabled' | 'desktop-disabled'
 }
 
+/**
+ * 这一次提交**真实产生**的投递证据：哪些表面、什么状态（四档照抄记录上的词）。
+ *
+ * 只有「这次真的试过」才有：`merged` 里旧记录的投递是历史，不是这次的结果，所以不带；
+ * 严重度升级那次例外——它确实又推了一次手机，带且只带 `push`。
+ */
+export type NotificationSubmitDelivery = Partial<
+  Record<'toast' | 'popup' | 'desktop' | 'push', NotificationDeliveryState>
+>
+
 export type NotificationSubmitOutcome =
   | {
       kind: 'accepted'
@@ -111,8 +122,17 @@ export type NotificationSubmitOutcome =
       levels: readonly NotificationApprovedLevel[]
       /** 没被尝试的表面（免打扰 / 开关关着）。空数组＝每一档都真的试了。 */
       suppressedLevels: readonly NotificationSuppressedLevel[]
+      /** 这条记录这一次的投递证据（与记录同源，不从别处反推）。 */
+      delivery?: NotificationSubmitDelivery
     }
-  | { kind: 'merged'; recordId: string; occurrenceCount: number; mergedEventTypes: string[] }
+  | {
+      kind: 'merged'
+      recordId: string
+      occurrenceCount: number
+      mergedEventTypes: string[]
+      /** **只有真发生了严重度升级**才带：那一次确实又推了手机；普通合并不带（旧投递是历史）。 */
+      delivery?: NotificationSubmitDelivery
+    }
   | { kind: 'collapsed'; aggregateRecordId: string; collapsedCount: number }
   /** 让渡给了产品：平台不落库、不投递，只记一条 `delegated` 诊断（契约 §14）。 */
   | { kind: 'delegated'; eventTypeId: string; producerId: string; ownerProductId: string }

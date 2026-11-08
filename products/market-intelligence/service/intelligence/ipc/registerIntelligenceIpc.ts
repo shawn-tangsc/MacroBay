@@ -22,6 +22,7 @@ import { createNewsPushLedgerStore, newsPushLedgerPolicy } from '../news-sentime
 import { createNewsPushOutletService } from '../news-sentiment/newsPushOutletService'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
+import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNotificationTest'
 import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
 import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
@@ -99,7 +100,12 @@ export function registerIntelligenceIpc(
    * 由装配处（`bootstrap.ts`）注入，不在这里 import：注册器保持纯转发，用例可以只喂这几个函数。
    * 缺它是允许的（某些装配不接通知），但那时**这个方法不注册**——不会留下一个点了报错的入口。
    */
-  notificationTest?: IntelligenceNotificationTestWiring & Readonly<{ now?: () => string }>
+  notificationTest?: IntelligenceNotificationTestWiring & Readonly<{ now?: () => string }>,
+  /**
+   * 点击前的通道可用性：平台唯一那一份派生（`resolvePushChannel`），由装配处注射。
+   * 这里只**去掉通道名**再交出去——渲染层拿不到名字，就不会拿它去拼「已发到 X」。
+   */
+  readPushChannel?: () => Promise<PushChannelResolution>
 ): void {
   if (notificationTest && calendarReminder) {
     // 注册器这一侧的 `read` 只声明成 `unknown`（它给设置页读整份视图）；测试样例要的是**类型化**的
@@ -122,6 +128,15 @@ export function registerIntelligenceIpc(
       // 写设置的人就是让排程生效的人：不留「设置开了、作业没排上」的中间态。
       calendarReminder.applySchedule((next as { enabled?: boolean }).enabled === true)
       return next
+    })
+  }
+
+  if (readPushChannel !== undefined) {
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getAnalysisConclusionSendChannel, async () => {
+      const resolved = await readPushChannel()
+      return resolved.ok
+        ? { state: 'ready' as const }
+        : { state: 'unavailable' as const, enabledChannelCount: resolved.enabledChannelCount, multiple: resolved.multiple }
     })
   }
 

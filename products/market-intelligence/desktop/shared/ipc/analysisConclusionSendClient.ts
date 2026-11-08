@@ -28,7 +28,7 @@ export type AnalysisConclusionSendReceipt = SendReceiptView
  */
 export type ReceiptCarriesDelivery = 'delivery' extends keyof Extract<NotificationSubmitOutcome, { kind: 'accepted' }> ? true : false
 
-export const SEND_ACTION_READY: ReceiptCarriesDelivery = false
+export const SEND_ACTION_READY: ReceiptCarriesDelivery = true
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -78,6 +78,27 @@ export function readSendReceipt(value: unknown): AnalysisConclusionSendReceipt {
     return { kind: 'accepted', delivery: { ...(push === undefined ? {} : { push }), ...(suppressed === undefined ? {} : { suppressed }) } }
   }
   throw new Error('analysis-conclusion-send-unreadable')
+}
+
+/**
+ * **点击前**那一问：现在能不能发。0 条 → 按钮整个不渲染；≥2 条 → 按钮在、点了才拒绝。
+ * 只回答「能不能发」；**不带通道名**，所以拿不到名字去拼「已发到 X」。
+ */
+export type SendChannelReadiness =
+  | Readonly<{ state: 'ready' }>
+  | Readonly<{ state: 'unavailable'; enabledChannelCount: number; multiple: boolean }>
+
+export function readChannelReadiness(value: unknown): SendChannelReadiness {
+  if (!isRecord(value)) throw new Error('analysis-conclusion-channel-unreadable')
+  if (value.state === 'ready') return { state: 'ready' }
+  if (value.state === 'unavailable' && typeof value.enabledChannelCount === 'number') {
+    return { state: 'unavailable', enabledChannelCount: value.enabledChannelCount, multiple: value.multiple === true }
+  }
+  throw new Error('analysis-conclusion-channel-unreadable')
+}
+
+export async function readAnalysisConclusionSendChannel(): Promise<SendChannelReadiness> {
+  return readChannelReadiness(await window.platform.products.invoke(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getAnalysisConclusionSendChannel, {}))
 }
 
 export async function sendAnalysisConclusion(analysisRunId: string): Promise<AnalysisConclusionSendReceipt> {

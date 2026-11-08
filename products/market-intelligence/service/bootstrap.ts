@@ -550,7 +550,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // 装配细节在 `ipc/notificationTestWiring.ts`：这个文件每涨一行都要有人问「为什么必须在这里」。
   registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule, calendarReminder, createNotificationTestWiring({
     readEnabledCalendarFeeds, readTimeZone: currentReaderTimeZone, getAppLanguage: deps.getAppLanguage
-  }))
+  }), () => getNotificationRuntime().resolvePushChannel())
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
   registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())

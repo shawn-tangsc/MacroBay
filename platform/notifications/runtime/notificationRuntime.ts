@@ -288,7 +288,9 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
         kind: 'merged',
         recordId: settled.id,
         occurrenceCount: settled.occurrenceCount,
-        mergedEventTypes: settled.mergedEventTypes ?? [settled.eventTypeId]
+        mergedEventTypes: settled.mergedEventTypes ?? [settled.eventTypeId],
+        // 只有严重度升级那一次真的又推了手机；普通合并里旧记录的投递是历史，不是这次的结果。
+        ...(next?.record.delivery.push === undefined ? {} : { delivery: { push: next.record.delivery.push } })
       }
     }
 
@@ -370,7 +372,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       ...switchedOff,
       ...(narrowedByQuietHours ? [{ level: 'push', reason: 'quiet-hours' } as const] : [])
     ]
-    return { ...plan.outcome, suppressedLevels }
+    // 投递证据与记录**同源**：四档原样抄记录上的那几条，不从别处反推。
+    return { ...plan.outcome, suppressedLevels, delivery: delivered.record.delivery }
   }
 
   /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */

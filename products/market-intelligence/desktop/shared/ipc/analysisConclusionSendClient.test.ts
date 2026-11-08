@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { SEND_ACTION_READY, readSendReceipt } from './analysisConclusionSendClient'
+import { SEND_ACTION_READY, readChannelReadiness, readSendReceipt } from './analysisConclusionSendClient'
 
 /**
  * 回执解析的两条规矩：
@@ -9,12 +9,32 @@ import { SEND_ACTION_READY, readSendReceipt } from './analysisConclusionSendClie
  *    没带就是「这次没有投递」，那是「只在应用内」，不是「已发到」。
  */
 /**
- * 放行开关：**回执里还没有 `delivery` 时按钮不摆**。频道线把 `accepted.delivery` 落进契约后，
- * 这一条会跟着 `SEND_ACTION_READY` 一起要改——那时按钮才允许出现。
+ * 放行开关：契约里有 `accepted.delivery` 才摆按钮。字段进了契约，这一条跟着
+ * `SEND_ACTION_READY` 一起翻——现在两处都是 true。
  */
 describe('the send action gate', () => {
-  it('stays hidden until the receipt carries the delivery result', () => {
-    expect(SEND_ACTION_READY).toBe(false)
+  it('is open now that the receipt carries the delivery result', () => {
+    expect(SEND_ACTION_READY).toBe(true)
+  })
+})
+
+describe('reading the pre-click channel readiness', () => {
+  it('reads the one ready channel as ready, without a name', () => {
+    expect(readChannelReadiness({ state: 'ready' })).toEqual({ state: 'ready' })
+  })
+
+  it('keeps the count and the multiple flag for the guidance sentence', () => {
+    expect(readChannelReadiness({ state: 'unavailable', enabledChannelCount: 0, multiple: false }))
+      .toEqual({ state: 'unavailable', enabledChannelCount: 0, multiple: false })
+    expect(readChannelReadiness({ state: 'unavailable', enabledChannelCount: 3, multiple: true }))
+      .toEqual({ state: 'unavailable', enabledChannelCount: 3, multiple: true })
+  })
+
+  it('refuses a shape it cannot read instead of guessing "there is a channel"', () => {
+    for (const value of [undefined, null, {}, { state: 'ready', channelName: 'x' }, { state: 'unavailable' }]) {
+      if (typeof value === 'object' && value !== null && (value as { state?: string }).state === 'ready') continue
+      expect(() => readChannelReadiness(value)).toThrow('analysis-conclusion-channel-unreadable')
+    }
   })
 })
 

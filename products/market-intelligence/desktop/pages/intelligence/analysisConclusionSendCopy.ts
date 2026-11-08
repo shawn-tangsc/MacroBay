@@ -8,9 +8,11 @@ import type { AnalysisConclusionSendText } from './analysisConclusionSendText'
  * - **这一次发没发出去**：只看回执（`SendOutcomeState`）；
  * - **通道有几条、叫什么**：只看 `resolvePushChannel` 的那一份派生（`ChannelAvailability`）。
  */
-export type ChannelAvailability =
-  | Readonly<{ ok: true; channelName: string }>
-  | Readonly<{ ok: false; enabledChannelCount: number; multiple: boolean }>
+/**
+ * 点击前的通道事实：只用来判「0 条 / 多条」这种配置问题。
+ * **没有通道名**——名字只认这次提交的回执，两种来源不混用。
+ */
+export type SendChannelFacts = Readonly<{ enabledChannelCount: number; multiple: boolean }>
 
 export type SendStatusCopy = Readonly<{
   /** 说明行那一句。 */
@@ -24,11 +26,8 @@ export function describeSendStatus(input: Readonly<{
   text: AnalysisConclusionSendText
   /** 回执里这次真的发到的通道名（与提交同一次结果）；没有就用中性命。 */
   receiptChannelName?: string | undefined
-  /**
-   * 点击前的通道派生（`resolvePushChannel`）：只用于「0 条 / 多条」这种配置事实，
-   * **不拿它渲染「已发到 X」**——那是两回事。
-   */
-  channel?: ChannelAvailability | undefined
+  /** 点击前的通道事实（`resolvePushChannel` 的派生）：只用于「0 条 / 多条」的指路句。 */
+  channel?: SendChannelFacts | undefined
   /** 已格式化好的时刻（读者时区）。 */
   time: string
 }>): SendStatusCopy {
@@ -45,7 +44,7 @@ export function describeSendStatus(input: Readonly<{
     case 'suppressed': return { message: suppressedSentence(state.reason, text) }
     case 'push-unavailable': {
       // 0 条与多条是两种下一步：一条要「去启用」，多条要「停到只剩一条」。
-      const multiple = input.channel?.ok === false ? input.channel.multiple || input.channel.enabledChannelCount > 1 : false
+      const multiple = input.channel === undefined ? false : input.channel.multiple || input.channel.enabledChannelCount > 1
       return { message: multiple ? text.pushUnavailableMultiple : text.pushUnavailableNone, reasonCode: 'push-unavailable' }
     }
     case 'not-sent': return { message: text.notSent, reasonCode: state.reason ?? 'channel-rejected' }
