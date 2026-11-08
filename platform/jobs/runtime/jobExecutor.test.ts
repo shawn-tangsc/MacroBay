@@ -5,6 +5,21 @@ import { createHandlerRegistry } from '../registry/handlerRegistry'
 import { createJobRunStore } from './jobRunStore'
 import { createJobExecutor } from './jobExecutor'
 
+/**
+ * 有界冲刷微任务：等一个**事实**成立，不用固定毫秒。
+ *
+ * 在假时钟下不能 `await setTimeout(0)`（假时钟不推进就永远不返回），所以这里用 `advanceTimersByTimeAsync(0)`
+ * 让出并冲刷微任务队列，最多 50 圈；超过就抛——那说明状态根本没在变，报错比继续猜更有用。
+ */
+async function flushMicrotasksUntil(condition: () => boolean): Promise<void> {
+  for (let round = 0; round < 50; round += 1) {
+    if (condition()) return
+    await vi.advanceTimersByTimeAsync(0)
+  }
+  if (condition()) return
+  throw new Error('condition did not settle within bounded microtask flushes')
+}
+
 describe('jobExecutor', () => {
   it('executes a registered handler and marks the run completed', async () => {
     const registry = createHandlerRegistry()
@@ -33,11 +48,18 @@ describe('jobExecutor', () => {
     const registry = createHandlerRegistry()
     const store = createJobRunStore()
     const executor = createJobExecutor({ registry, store })
+    /** 处理器**真的进去了**再取消：等一个事实，不等一个毫秒数。 */
+    let markStarted: () => void = () => undefined
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
 
     registry.register('slow', async (_payload, context) => {
-      if (context.signal.aborted) throw new Error('aborted early')
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      if (context.signal.aborted) throw new Error('aborted late')
+      markStarted()
+      // 取消是一个事件：等它发生，不 sleep 一个「大概够久」的时间。
+      await new Promise<void>((resolve) => {
+        if (context.signal.aborted) { resolve(); return }
+        context.signal.addEventListener('abort', () => resolve(), { once: true })
+      })
+      throw new Error('aborted by cancel')
     })
 
     const run = store.createRun({
@@ -55,6 +77,7 @@ describe('jobExecutor', () => {
       payload: {},
       retryPolicy: DEFAULT_RETRY_POLICY
     })
+    await started
     executor.cancelRun(run.id)
     await executePromise
 
@@ -70,6 +93,7 @@ describe('jobExecutor', () => {
       let observedAbort = false
 
       registry.register('timeout', async (_payload, context) => {
+        handlerStarted = true
         await new Promise<void>((resolve) => {
           context.signal.addEventListener(
             'abort',
@@ -82,6 +106,7 @@ describe('jobExecutor', () => {
         })
       })
 
+      let handlerStarted = false
       const run = store.createRun({
         definitionId: 'job-timeout',
         handlerId: 'timeout',
@@ -99,6 +124,10 @@ describe('jobExecutor', () => {
         timeoutMs: 1000
       })
 
+      // 先让处理器进入（微任务），再推进假时钟：避免「时钟先到、监听器还没挂上」这种顺序依赖。
+      await flushMicrotasksUntil(() => handlerStarted)
+      expect(handlerStarted).toBe(true)
+
       await vi.advanceTimersByTimeAsync(1000)
       await executePromise
 
@@ -114,43 +143,49 @@ describe('jobExecutor', () => {
 
   it('retries failed handlers according to retry policy', async () => {
     vi.useFakeTimers()
-    const registry = createHandlerRegistry()
-    const store = createJobRunStore()
-    const executor = createJobExecutor({ registry, store })
-    let attempts = 0
+    try {
+      const registry = createHandlerRegistry()
+      const store = createJobRunStore()
+      const executor = createJobExecutor({ registry, store })
+      let attempts = 0
 
-    registry.register('flaky', async () => {
-      attempts += 1
-      if (attempts < 2) throw new Error('temporary')
-    })
+      registry.register('flaky', async () => {
+        attempts += 1
+        if (attempts < 2) throw new Error('temporary')
+      })
 
-    const run = store.createRun({
-      definitionId: 'job-3',
-      handlerId: 'flaky',
-      owner: 'platform',
-      title: 'Flaky',
-      trigger: { kind: 'manual' },
-      payload: {},
-      maxAttempts: 2
-    })
+      const run = store.createRun({
+        definitionId: 'job-3',
+        handlerId: 'flaky',
+        owner: 'platform',
+        title: 'Flaky',
+        trigger: { kind: 'manual' },
+        payload: {},
+        maxAttempts: 2
+      })
 
-    const executePromise = executor.executeRun(run.id, {
-      handlerId: 'flaky',
-      payload: {},
-      retryPolicy: {
-        maxAttempts: 2,
-        backoff: 'fixed',
-        baseDelayMs: 1000,
-        maxDelayMs: 1000
-      }
-    })
+      const executePromise = executor.executeRun(run.id, {
+        handlerId: 'flaky',
+        payload: {},
+        retryPolicy: {
+          maxAttempts: 2,
+          backoff: 'fixed',
+          baseDelayMs: 1000,
+          maxDelayMs: 1000
+        }
+      })
 
-    await vi.runAllTimersAsync()
-    await executePromise
+      // 第一次失败之后的一次退避：推进**恰好**这段假时间，不用 runAll（那会把任何将来的定时器一起跑掉）。
+      await flushMicrotasksUntil(() => attempts === 1)
+      await vi.advanceTimersByTimeAsync(1000)
+      await executePromise
 
-    expect(attempts).toBe(2)
-    expect(store.getRun(run.id)?.status).toBe('completed')
-    vi.useRealTimers()
+      expect(attempts).toBe(2)
+      expect(store.getRun(run.id)?.status).toBe('completed')
+    } finally {
+      // 必须在 finally 里还原：一红就把假时间留给后面的用例，红点会变成假证据。
+      vi.useRealTimers()
+    }
   })
 
   it('finalizes timeout during retry backoff without waiting for the full retry delay', async () => {
@@ -188,7 +223,7 @@ describe('jobExecutor', () => {
         timeoutMs: 100
       })
 
-      await vi.advanceTimersByTimeAsync(0)
+      await flushMicrotasksUntil(() => store.getRun(run.id)?.attempt === 2)
       expect(store.getRun(run.id)).toMatchObject({
         attempt: 2,
         status: 'running'
