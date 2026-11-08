@@ -99,8 +99,18 @@ if (guard.error !== undefined && guard.error !== null && (guard.error as NodeJS.
 
 if (guard.status !== 0) {
   const guardOutput = `${guard.stdout ?? ''}${guard.stderr ?? ''}`
-  // 守卫红在别人的文件上时同样不拦：它扫的是目录，不是「这一笔」。
-  const blamesStaged = codeStaged.some((path) => guardOutput.includes(path))
+  /**
+   * 守卫红在别人的文件上时同样不拦：它扫的是目录，不是「这一笔」。
+   *
+   * 判据是「**失败行**里有没有本次提交的文件」。以前直接拿整段输出做 `includes`，于是通过用例那几行
+   * （`✓ … 某守卫.test.ts`）也会算证据：提交里只要有任何一个文件碰巧被列进测试清单，就会被别人的红拦住，
+   * 而绕过去只能用 `SKIP_PRE_COMMIT=1`——2026-11-08 真机上撞到，正是「红在别处、却要跳过整道检查」。
+   */
+  const failureText = guardOutput
+    .split('\n')
+    .filter((line) => !/^\s*✓/.test(line))
+    .join('\n')
+  const blamesStaged = codeStaged.some((path) => failureText.includes(path))
   if (blamesStaged) {
     console.error('[pre-commit] ✗ 四条守卫有红，且命中了本次提交的文件：')
     console.error(guardOutput.split('\n').filter((line) => line.includes('FAIL') || line.includes('×')).slice(0, 20).join('\n'))
