@@ -18,7 +18,7 @@ const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalCon
 function render(chip: Parameters<typeof EtfOutflowChip>[0]['chip']): string {
   return renderToStaticMarkup(createElement(ShellLanguageProvider, {
     language: 'zh-CN',
-    children: createElement(EtfOutflowChip, { chip, text, onRetry: () => undefined })
+    children: createElement(EtfOutflowChip, { chip, text, onRetry: () => undefined, onToggle: () => undefined })
   }))
 }
 
@@ -47,13 +47,5 @@ describe('a failed signal read on the ETF chip', () => {
     expect(markup).not.toMatch(/格式|契约|contract|format/i)
     // 不给按钮：这件事不用读者动手，下一次刷新会自己再读。
     expect(markup).not.toContain('重试')
-  })
-
-  it('never offers a retry: this is not something the reader can do', () => {
-    const markup = render({ state: 'unreadable', failureCode: 'invalid-as-of' })
-    // 标记仍在（我们确实出错了），但浮层里不许有「重试」。
-    expect(markup).toContain('mi-signal-read-issue')
-    // 按一百次也不会好的按钮是假按钮，它教读者不再相信真按钮。
-    expect(markup).not.toContain('>重试<')
   })
 })
