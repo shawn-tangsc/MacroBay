@@ -17,21 +17,19 @@ const zhText = (key: keyof typeof notificationCopy['zh-CN']): string => notifica
 const SUSPEND_TITLE = 'notification.event.platform.channel.push-suspended.title'
 const RESUMED_TITLE = 'notification.event.platform.channel.push-resumed.title'
 
-const policy: NotificationEventPolicy = {
-  'platform.push-probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
-  'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  // 凭据翻转两条也要在目录里：不在目录里的提交会被拒成「事件没登记」，
-  // 那就测不到「句子拼没拼出来」这件事本身。
-  'platform.provider.credential-invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.provider.credential-recovered': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
-
 const catalog = createNotificationEventCatalog({
-  policy,
+  // 批准值随声明走（b2）：五条批准原样挪到来源上，值逐字不变。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.push-probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+        'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+        'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        // 凭据翻转两条也要在目录里：不在目录里的提交会被拒成「事件没登记」。
+        'platform.provider.credential-invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+        'platform.provider.credential-recovered': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.push-probe',
