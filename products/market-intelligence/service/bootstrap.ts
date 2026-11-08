@@ -27,6 +27,7 @@ import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossA
 
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
+import { createNotificationTestWiring } from './intelligence/ipc/notificationTestWiring'
 import { translationRecordsBytes } from './intelligence/application/intelligenceTranslationCache'
 import { createEnabledCalendarFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
@@ -546,15 +547,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // the failure, so no service has to grow a logging dependency for it.
   const auditedRegister = syncAudit ? withSyncAudit(register, syncAudit) : register
 
-  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule, calendarReminder, {
-    readEnabledCalendarFeeds,
-    // 读者时区：窗口、日界一律按它算（取不到时由各读取器报「读不到时区」，不拿 UTC 顶）。
-    getTimeZone: () => currentReaderTimeZone(),
-    getAppLanguage: deps.getAppLanguage,
-    // 通道与提交都走平台**同一个**派生与入口：产品侧不写第二份「恰好一条通道」的判断。
-    resolvePushChannel: () => getNotificationRuntime().resolvePushChannel(),
-    submit: (request) => getNotificationRuntime().submit(request)
-  })
+  // 装配细节在 `ipc/notificationTestWiring.ts`：这个文件每涨一行都要有人问「为什么必须在这里」。
+  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule, calendarReminder, createNotificationTestWiring({
+    readEnabledCalendarFeeds, readTimeZone: currentReaderTimeZone, getAppLanguage: deps.getAppLanguage
+  }))
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
   registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())

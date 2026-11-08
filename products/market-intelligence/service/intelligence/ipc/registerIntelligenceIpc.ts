@@ -25,8 +25,7 @@ import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMeth
 import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNotificationTest'
 import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
 import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
-import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
-import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import type { IntelligenceNotificationTestWiring } from './notificationTestWiring'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -100,14 +99,7 @@ export function registerIntelligenceIpc(
    * 由装配处（`bootstrap.ts`）注入，不在这里 import：注册器保持纯转发，用例可以只喂这几个函数。
    * 缺它是允许的（某些装配不接通知），但那时**这个方法不注册**——不会留下一个点了报错的入口。
    */
-  notificationTest?: Readonly<{
-    readEnabledCalendarFeeds: () => Promise<readonly string[]>
-    getTimeZone: () => string
-    getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
-    resolvePushChannel: () => Promise<PushChannelResolution>
-    submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
-    now?: () => string
-  }>
+  notificationTest?: IntelligenceNotificationTestWiring & Readonly<{ now?: () => string }>
 ): void {
   if (notificationTest && calendarReminder) {
     // 注册器这一侧的 `read` 只声明成 `unknown`（它给设置页读整份视图）；测试样例要的是**类型化**的
