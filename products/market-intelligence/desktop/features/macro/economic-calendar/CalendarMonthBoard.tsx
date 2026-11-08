@@ -51,10 +51,11 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
    */
   const surface = monthSurface({ officialUnavailable: officialUnavailable !== undefined, officialCount: events.length, marketCount: marketEvents.length })
   if (surface === 'official-unavailable') return <CalendarState month={month} text={officialUnavailable!} loading={false} unavailable />
-  if (surface === 'note') status ??= officialUnavailable
+  // 说明行是**常驻注解**，不是状态变更：用 `role="note"`，别用活区（`status` 会被读屏当成「刚刚变了」念出来）。
+  const note = surface === 'note' ? officialUnavailable : undefined
   if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+  return <div className="mi-calendar-month-scroll">{note ? <p className="mi-economic-calendar__comparison-rule" role="note">{note}</p> : null}{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
 }
 
 /**

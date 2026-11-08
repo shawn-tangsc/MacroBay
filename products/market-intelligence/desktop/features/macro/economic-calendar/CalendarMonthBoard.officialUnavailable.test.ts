@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
@@ -24,6 +26,14 @@ describe('a month the official source could not be read for', () => {
   it('still says「本月没有」when both sources were read and both are empty', () => {
     // 两个来源都读到了、都为空 → 既有空态，不动。
     expect(monthSurface({ officialUnavailable: false, officialCount: 0, marketCount: 0 })).toBe('board')
+  })
+
+  it('hangs the note on role="note", not on a live region', () => {
+    // 界面自查 2026-11-08：`role="status"` 是活区，读屏会把常驻注解念成「刚刚发生了变化」。
+    const source = readFileSync('products/market-intelligence/desktop/features/macro/economic-calendar/CalendarMonthBoard.tsx', 'utf8')
+    expect(source).toContain('role="note"')
+    // 说明行不许再被塞进 `status`（那条路径渲染的是活区）。
+    expect(source).not.toContain("status ??= officialUnavailable")
   })
 
   it('uses the final sentence verbatim in both languages, "temporarily" included', () => {
