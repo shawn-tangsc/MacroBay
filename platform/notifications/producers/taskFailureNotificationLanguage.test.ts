@@ -12,7 +12,7 @@ import type { LocalizedText } from '../../product-manifest'
 import { notificationCopy } from '../../i18n/notificationCopy'
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import { NOTIFICATION_EVENT_POLICY } from '../contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '../contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '../contracts/platformNotificationEvents'
 import { createNotificationCopyPort } from '../contracts/notificationCopyPort'
 import { createDefaultNotificationStoreState } from '../store/notificationStore'
 import { createNotificationRuntime } from '../runtime/notificationRuntime'
@@ -31,8 +31,7 @@ function harness(input: { definitions?: readonly { id: string; title: LocalizedT
   const diagnostics: { code: string }[] = []
   let language: AppLanguage = 'zh-CN'
   const catalog = createNotificationEventCatalog({
-    sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
-    policy: NOTIFICATION_EVENT_POLICY
+    sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS }]
   })
   const state = createDefaultNotificationStoreState()
   const runtime = createNotificationRuntime({

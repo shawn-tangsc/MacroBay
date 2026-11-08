@@ -4,16 +4,16 @@ import { createNotificationEventCatalog, type NotificationEventPolicy } from '..
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
 
-const policy: NotificationEventPolicy = {
-  'platform.done': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
-  'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
 const catalog = createNotificationEventCatalog({
-  policy,
   sources: [
     {
       productId: 'platform',
+      // 批准值随声明走（b2）：值原样。
+      approval: {
+        'platform.done': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+        'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+        'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.channel.push-suspended',
