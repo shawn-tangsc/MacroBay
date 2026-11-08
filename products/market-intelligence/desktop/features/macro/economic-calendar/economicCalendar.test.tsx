@@ -1904,8 +1904,9 @@ describe('macro economic calendar', () => {
 const asOf = '2026-08-05T00:00:00.000Z'
 
 async function renderCalendar(client: {
-  queryMonth: () => unknown
-  getEventDetail: () => unknown
+  // 带参数的类型才容得下调用点写的 `(input) => …`：`() => unknown` 会让每个带参数夹具都报错。
+  queryMonth: (input: { month: string; asOf: string }) => unknown
+  getEventDetail: (input: { eventKey: string; asOf: string }) => unknown
   previewManualBlsIcs?: () => unknown
   importManualBlsIcs?: () => unknown
     refreshBlsEmploymentRelease?: () => unknown
@@ -1941,13 +1942,17 @@ async function renderCalendar(client: {
  * 所以它经 portal 挂在 `document.body` 上，并且要点下之后一个 tick 才挂得上。
  */
 async function acceptConfirm(): Promise<void> {
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-  const ok = document.querySelector<HTMLButtonElement>('.ant-modal-confirm-btns .ant-btn-primary')
-  if (!ok) throw new Error('Expected the refresh confirmation dialog.')
-  await act(async () => {
-    ok.click()
-    await new Promise((resolve) => setTimeout(resolve, 20))
+  // 条件是「确认键挂上了」，不是「等 20ms 再说」：轮询一成立就继续，上限由 `vi.waitFor` 兜住。
+  // 固定 sleep 在慢机器上会红、在快机器上白等，也是「同一提交两次跑结果不一致」的来源。
+  const ok = await vi.waitFor(() => {
+    const button = document.querySelector<HTMLButtonElement>('.ant-modal-confirm-btns .ant-btn-primary')
+    if (button === null) throw new Error('Expected the refresh confirmation dialog.')
+    return button
   })
+  await act(async () => { ok.click() })
+  // 点完之后走既有的微任务 flush（`flush()` 在同一文件里已经定义）：确认回调与随后的重读都是 Promise 链，
+  // 没有定时器参与，所以不需要等待时长。
+  await flush()
 }
 
 async function flush(): Promise<void> {
