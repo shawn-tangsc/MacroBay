@@ -12,6 +12,20 @@
  * 也会全绿——那正是这类「字段能写、没人读」最容易混过去的形状。
  */
 import { act, createElement } from 'react'
+/**
+ * 产品页换成一个轻组件：这条用例要验的是**壳层**把快照落成「带页签的宿主」，
+ * 不是产品页内部长什么样。挂真实页面会把它变成两百个模块的加载时序测试——
+ * 2026-11-08 它在 CI 上抛 `Cannot access '__vite_ssr_import_N__' before initialization`，
+ * 本机与 CI 各自绿/红、改两次都没修死。菜单项本身仍用生成物里的真实数据（`home` 声明要真）。
+ */
+vi.mock('@products/generated/shellRegistry', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@products/generated/shellRegistry')>()
+  const StubPage = (): ReturnType<typeof createElement> => createElement('div', { 'data-test-page': 'stub' })
+  return {
+    ...real,
+    productMenuEntries: real.productMenuEntries.map((entry) => ({ ...entry, load: async () => ({ default: StubPage }) }))
+  }
+})
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -222,6 +236,10 @@ describe('默认首页接线（口径 A：只在没有历史时生效）', () =>
       expect(container?.querySelector('[data-workspace-page-host="tabs"]')).not.toBeNull()
     }, { timeout: CONDITION_TIMEOUT_MS })
     expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
+    // 页签有了还不算「真的渲染」：路由到的页面组件必须真的被挂上（桩页面留了这个标记）。
+    await vi.waitFor(() => {
+      expect(container?.querySelector('[data-test-page="stub"]')).not.toBeNull()
+    }, { timeout: CONDITION_TIMEOUT_MS })
   })
 
   it('首次打开（快照里没有活动页）⇒ 真的打开声明了 home 的那一页', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
