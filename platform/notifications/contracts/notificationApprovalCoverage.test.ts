@@ -1,3 +1,4 @@
+import { approvalCoverageCounts } from './notificationApprovalCoverage'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -50,10 +51,10 @@ describe('notification approval coverage', () => {
     }])
     expect(coverage).toMatchObject({ declared: 1, approved: 0 })
     expect(coverage.gaps).toEqual([{ kind: 'missing', productId: 'acme.demo', eventId: 'acme.demo.render' }])
-    // 一行结论要能直接贴进提交说明。
-    expect(formatApprovalCoverage(coverage)).toBe(
-      'declared=1 approved=0 missing=1 orphaned=0 requested-not-approved=0'
-    )
+    // 断结构，不断一整行文本；单体 id 逐条点名另有用例。
+    expect(approvalCoverageCounts(coverage)).toEqual({
+      declared: 1, approved: 0, missing: 1, pending: 1, orphaned: 0, requestedNotApproved: 0
+    })
     expect(formatApprovalGaps(coverage)).toEqual(['missing acme.demo.render'])
   })
 
@@ -97,8 +98,8 @@ describe('notification approval coverage', () => {
       ]
     }])
     expect(coverage.gaps).toEqual([])
-    expect(formatApprovalCoverage(coverage)).toBe(
-      'declared=2 approved=2 missing=0 orphaned=0 requested-not-approved=0'
-    )
+    expect(approvalCoverageCounts(coverage)).toEqual({
+      declared: 2, approved: 2, missing: 0, pending: 0, orphaned: 0, requestedNotApproved: 0
+    })
   })
 })

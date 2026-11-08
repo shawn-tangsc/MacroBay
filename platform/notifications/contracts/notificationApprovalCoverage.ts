@@ -93,15 +93,42 @@ export function inspectApprovalCoverage(
 }
 
 /** 一行能贴进提交说明的结论：`declared=17 approved=17 missing=0 orphaned=0`。 */
-export function formatApprovalCoverage(coverage: NotificationApprovalCoverage): string {
+/** 结构化计数：用例断结构，不断一整行文本（加一列不该把守卫改弱）。 */
+export type NotificationApprovalCounts = Readonly<{
+  declared: number
+  approved: number
+  missing: number
+  /**
+   * **待批**：声明在、批准条目缺。今天与 `missing` 是同一批 id（还没人签），语义不同——
+   * 它是一条**合法状态**（产品还没签），不是写错；等 `pending` 允许存在时，两者才会分开。
+   */
+  pending: number
+  orphaned: number
+  requestedNotApproved: number
+}>
+
+export function approvalCoverageCounts(coverage: NotificationApprovalCoverage): NotificationApprovalCounts {
   const count = (kind: NotificationApprovalGap['kind']): number =>
     coverage.gaps.filter((gap) => gap.kind === kind).length
+  return {
+    declared: coverage.declared,
+    approved: coverage.approved,
+    missing: count('missing'),
+    pending: count('missing'),
+    orphaned: count('orphaned'),
+    requestedNotApproved: count('requested-not-approved')
+  }
+}
+
+export function formatApprovalCoverage(coverage: NotificationApprovalCoverage): string {
+  const counts = approvalCoverageCounts(coverage)
   return [
-    `declared=${coverage.declared}`,
-    `approved=${coverage.approved}`,
-    `missing=${count('missing')}`,
-    `orphaned=${count('orphaned')}`,
-    `requested-not-approved=${count('requested-not-approved')}`
+    `declared=${counts.declared}`,
+    `approved=${counts.approved}`,
+    `missing=${counts.missing}`,
+    `pending=${counts.pending}`,
+    `orphaned=${counts.orphaned}`,
+    `requested-not-approved=${counts.requestedNotApproved}`
   ].join(' ')
 }
 
