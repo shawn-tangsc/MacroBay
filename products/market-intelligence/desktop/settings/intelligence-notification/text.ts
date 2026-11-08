@@ -48,7 +48,8 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.countries.allNote': '选「全部国家」时，包括日历源没有给出国家的条目。',
   'pages.intelligence.notification.countries.customCost': '只对日历给出国家的条目生效——没给出国家的不会提醒。',
   'pages.intelligence.notification.countries.customTitle': '具名国家（多选）',
-  'pages.intelligence.notification.countries.emptyHint': '还没有选任何国家。只有选中的国家会推「发生后」提醒。',
+  'pages.intelligence.notification.countries.emptyHintState': '还没有选任何国家',
+  'pages.intelligence.notification.countries.emptyHint': '只有选中的国家会推「发生后」提醒。',
   'pages.intelligence.notification.countries.fullHint': '最多选 8 个',
   'pages.intelligence.notification.countries.count': '{count} / {max}',
   'pages.intelligence.notification.countries.saveFailed': '这次没存上，请重试',
@@ -67,6 +68,7 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.groupInfo.2': '四条同时成立才会推到频道：这里勾了、事件本身允许推频道、频道已启用、频道可用。',
 
   'pages.intelligence.notification.channelNotReady': '还没有可用频道，勾选会保留，等频道能用时生效。',
+  'pages.intelligence.notification.channelNotReadyState': '还没有可用频道',
 
   'pages.intelligence.notification.rows.signalTriggered.title': '模块信号触发',
   'pages.intelligence.notification.rows.signalTriggered.info': '规则命中且达到严重度门槛时推一条；同一个信号在合并窗口内只算一次。',
@@ -104,7 +106,10 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.infoAria': '这四条推送的生效条件',
   'pages.intelligence.notification.rowInfoAria': '这一条什么时候推',
   'pages.intelligence.notification.calendar.aboutAria': '这一块的说明',
-  'pages.intelligence.notification.calendar.beforeAria': '开始前这一段的说明'
+  'pages.intelligence.notification.calendar.beforeAria': '开始前这一段的说明',
+  'pages.intelligence.notification.calendar.landedInfoAria': '通知条件这一项的说明',
+  'pages.intelligence.notification.countries.rowInfoAria': '哪些国家的数据这一项的说明',
+  'pages.intelligence.notification.countries.customInfoAria': '自选国家这一项的说明',
 })
 
 const EN: IntelligenceNotificationText = Object.freeze({
@@ -148,7 +153,8 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.countries.allNote': '"All countries" also includes events whose country the calendar source does not name.',
   'pages.intelligence.notification.countries.customCost': 'Works only for events whose country the calendar source names — events with no country never alert.',
   'pages.intelligence.notification.countries.customTitle': 'Named countries (multi-select)',
-  'pages.intelligence.notification.countries.emptyHint': 'No country chosen yet. Only the countries you pick get "after it lands" alerts.',
+  'pages.intelligence.notification.countries.emptyHintState': 'No country chosen yet',
+  'pages.intelligence.notification.countries.emptyHint': 'Only the countries you pick get "after it lands" alerts.',
   'pages.intelligence.notification.countries.fullHint': 'Up to 8 countries',
   'pages.intelligence.notification.countries.count': '{count} / {max}',
   'pages.intelligence.notification.countries.saveFailed': 'This did not save. Try again.',
@@ -167,6 +173,7 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.groupInfo.2': 'All four must hold: switched on here, the event allows channel delivery, the channel is enabled, and the channel is available.',
 
   'pages.intelligence.notification.channelNotReady': 'No usable channel yet. Your choices are kept and take effect once a channel is available.',
+  'pages.intelligence.notification.channelNotReadyState': 'No usable channel yet',
 
   'pages.intelligence.notification.rows.signalTriggered.title': 'Module signal triggers',
   'pages.intelligence.notification.rows.signalTriggered.info': 'Sends one notice when a rule fires above the severity threshold; the same signal counts once inside the merge window.',
@@ -204,7 +211,10 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.infoAria': 'When these four reach your phone',
   'pages.intelligence.notification.rowInfoAria': 'When this one sends',
   'pages.intelligence.notification.calendar.aboutAria': 'About this section',
-  'pages.intelligence.notification.calendar.beforeAria': 'About the section before it starts'
+  'pages.intelligence.notification.calendar.beforeAria': 'About the section before it starts',
+  'pages.intelligence.notification.calendar.landedInfoAria': 'About the alert condition',
+  'pages.intelligence.notification.countries.rowInfoAria': 'About which countries alert',
+  'pages.intelligence.notification.countries.customInfoAria': 'About the chosen countries',
 })
 
 export const intelligenceNotificationText: Readonly<Record<'zh-CN' | 'en-US', IntelligenceNotificationText>> =

@@ -64,6 +64,18 @@ function FailingHarness(props: Readonly<{ initial: CalendarLandedCountrySelectio
 
 const selectText = (): string => container.querySelector('.ant-select-selection-item')?.textContent ?? ''
 
+/** 点开这一行上的 ⓘ，读它自己指向的浮层内容（关着的浮层也留在文档里，所以按 id 取）。 */
+async function rowInfo(ariaLabel: string): Promise<string> {
+  const trigger = [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .find((button) => button.getAttribute('aria-label') === ariaLabel)
+  expect(trigger).toBeDefined()
+  await act(async () => { trigger!.click() })
+  await act(async () => { await Promise.resolve() })
+  const describedBy = trigger!.getAttribute('aria-describedby') ?? ''
+  const node = describedBy.split(' ').map((id) => document.getElementById(id)).find((each) => each !== null)
+  return node?.textContent ?? ''
+}
+
 /** 服务端每次回的都是**新对象**（真实链路每次过一遍 IPC 反序列化），引用一定会变。 */
 function freshCopy(view: CalendarReminderSettingsView): CalendarReminderSettingsView {
   return {
@@ -117,22 +129,29 @@ describe('calendar landed countries row', () => {
     expect(en['pages.intelligence.notification.countries.major']).toBeUndefined()
   })
 
-  it('adds the unknown-country sentence only when "all" is chosen', () => {
+  it('keeps the scope and "all countries" explanation inside the ⓘ, never in the body', async () => {
+    // 2026-11-08 用户第三次发火后改的口径：正文只留字段名、当前值、控件；说明一律进 ⓘ。
     mount(staticRow({ scope: 'all', codes: [] }))
-    expect(container.textContent?.split(zh['pages.intelligence.notification.countries.allNote'])).toHaveLength(2)
+    expect(container.textContent).not.toContain(zh['pages.intelligence.notification.countries.scopeNote'])
+    expect(container.textContent).not.toContain(zh['pages.intelligence.notification.countries.allNote'])
     expect(container.textContent).not.toContain(zh['pages.intelligence.notification.countries.customCost'])
+
+    const info = await rowInfo(zh['pages.intelligence.notification.countries.rowInfoAria']!)
+    expect(info).toContain(zh['pages.intelligence.notification.countries.scopeNote'])
+    expect(info).toContain(zh['pages.intelligence.notification.countries.allNote'])
   })
 
-  it('shows the custom cost sentence only for a custom selection, exactly once', () => {
+  it('keeps the chosen-countries cost inside the ⓘ of the list', async () => {
     mount(staticRow({ scope: 'custom', codes: [] }))
-    expect(container.textContent?.split(zh['pages.intelligence.notification.countries.customCost'])).toHaveLength(2)
-    expect(container.textContent).not.toContain(zh['pages.intelligence.notification.countries.allNote'])
+    expect(container.textContent).not.toContain(zh['pages.intelligence.notification.countries.customCost'])
+    expect(await rowInfo(zh['pages.intelligence.notification.countries.customInfoAria']!))
+      .toContain(zh['pages.intelligence.notification.countries.customCost'])
   })
 
   it('never leaves an empty custom box: count and guidance appear together', () => {
     mount(staticRow({ scope: 'custom', codes: [] }))
     expect(container.textContent).toContain('0 / 8')
-    expect(container.textContent).toContain(zh['pages.intelligence.notification.countries.emptyHint'])
+    expect(container.textContent).toContain(zh['pages.intelligence.notification.countries.emptyHintState'])
     // 判据 5：只有计数没有指路句即红。
     expect(container.querySelector('[data-count="0/8"]')).not.toBeNull()
   })
@@ -220,9 +239,10 @@ describe('calendar landed countries row', () => {
     expect(group?.getAttribute('aria-label')).toBe(zh['pages.intelligence.notification.countries.customTitle'])
   })
 
-  it('speaks both languages from the same keys', () => {
+  it('speaks both languages from the same keys', async () => {
     mount(staticRow({ scope: 'all', codes: [] }, en))
     expect(selectText()).toBe(en['pages.intelligence.notification.countries.all'])
-    expect(container.textContent).toContain(en['pages.intelligence.notification.countries.allNote'])
+    expect(await rowInfo(en['pages.intelligence.notification.countries.rowInfoAria']!))
+      .toContain(en['pages.intelligence.notification.countries.scopeNote'])
   })
 })

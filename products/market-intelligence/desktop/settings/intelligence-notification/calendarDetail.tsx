@@ -1,44 +1,19 @@
 import type { ReactElement, ReactNode } from 'react'
 
-import { Info } from 'lucide-react'
 import { Checkbox, Switch } from 'antd'
 
-import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
-import { Popover } from '@platform/ui/components/popover'
 import { Segmented } from '@platform/ui/components/segmented'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { CALENDAR_REMINDER_LEAD_MINUTES } from '../../../contracts/calendarEventReminder'
 import { CalendarLandedCountriesRow } from './calendarLandedCountriesRow'
-import { SettingsGroup, SettingsRow } from './settingsRow'
+import { SettingsGroup, SettingsInfo, SettingsRow } from './settingsRow'
 import type { CalendarReminderSettingsState } from './useCalendarReminderSettings'
 import type { useSurfaceSelection } from './useSurfaceSelection'
 import { CALENDAR_LANDED_FILTER_KEYS, CALENDAR_REMINDER_LEAD_KEYS } from './notificationKeys'
 
 type SurfaceState = ReturnType<typeof useSurfaceSelection>
-
-/** 组标题旁的 ⓘ：整句说明只在这里，正文里只剩字段名、当前值和控件（§8.6）。 */
-function SectionInfo(props: Readonly<{
-  labelKey: string
-  ariaLabelKey: string
-  resolveText: (key: string) => string
-}>): ReactElement {
-  return <Popover
-    labelKey={props.labelKey}
-    resolveText={props.resolveText}
-    trigger={(triggerProps) => (
-      <IconButton
-        {...triggerProps}
-        ariaLabelKey={props.ariaLabelKey}
-        icon={Info}
-        resolveText={props.resolveText}
-        size="sm"
-        variant="plain"
-      />
-    )}
-  />
-}
 
 /**
  * 「日历事件」的详情（界面规范 v1.10 §8，版式对齐定版预览稿）。
@@ -78,9 +53,9 @@ export function CalendarDetail(props: Readonly<{
 
   return <div className="intelligence-notification-calendar-detail">
     <SettingsGroup
-      aside={<SectionInfo
+      aside={<SettingsInfo
         ariaLabelKey="pages.intelligence.notification.calendar.aboutAria"
-        labelKey="pages.intelligence.notification.calendar.surfacesNote"
+        labelKeys={['pages.intelligence.notification.calendar.surfacesNote']}
         resolveText={props.resolveText}
       />}
       title={text['pages.intelligence.notification.calendar.surfaces'] ?? ''}
@@ -129,9 +104,9 @@ export function CalendarDetail(props: Readonly<{
     </SettingsGroup>
 
     <SettingsGroup
-      aside={<SectionInfo
+      aside={<SettingsInfo
         ariaLabelKey="pages.intelligence.notification.calendar.beforeAria"
-        labelKey="pages.intelligence.notification.calendar.beforeNote"
+        labelKeys={['pages.intelligence.notification.calendar.beforeNote']}
         resolveText={props.resolveText}
       />}
       title={text['pages.intelligence.notification.calendar.before'] ?? ''}
@@ -140,16 +115,6 @@ export function CalendarDetail(props: Readonly<{
       <SettingsRow
         label={text['pages.intelligence.notification.calendar.beforeRow'] ?? ''}
         last={!value.enabled}
-        note={value.enabled
-          ? undefined
-          : (text['pages.intelligence.notification.calendar.summary'] ?? '')
-            .replace('{lead}', lead(value.leadMinutes))
-            .replace(
-              '{importance}',
-              value.importance
-                .map((level) => text[`pages.intelligence.notification.importance.${level}`] ?? level)
-                .join(text['pages.intelligence.notification.joiner'] ?? ' / ')
-            )}
       >
         <Switch
           aria-label={text['pages.intelligence.notification.calendar.beforeRow'] ?? ''}
@@ -157,6 +122,19 @@ export function CalendarDetail(props: Readonly<{
           disabled={reminder.saving}
           onChange={() => reminder.update({ enabled: !value.enabled })}
         />
+        {/* 关着时把**已存的值**摆出来（状态 + 提前量 + 重要性），不是一句话：
+            正文只允许字段名、当前值、控件。 */}
+        {value.enabled
+          ? null
+          : <span className="intelligence-notification-form-note">
+            {[
+              text['pages.intelligence.notification.status.off'] ?? '',
+              lead(value.leadMinutes),
+              value.importance
+                .map((level) => text[`pages.intelligence.notification.importance.${level}`] ?? level)
+                .join(text['pages.intelligence.notification.joiner'] ?? ' / ')
+            ].join(text['pages.intelligence.notification.joiner'] ?? ' / ')}
+          </span>}
         {props.upcomingAction ?? null}
       </SettingsRow>
       {value.enabled
@@ -209,6 +187,11 @@ export function CalendarDetail(props: Readonly<{
 
     <SettingsGroup title={text['pages.intelligence.notification.calendar.after'] ?? ''}>
       <SettingsRow
+        info={{
+          ariaLabelKey: 'pages.intelligence.notification.calendar.landedInfoAria',
+          labelKeys: ['pages.intelligence.notification.landed.cost'],
+          resolveText: props.resolveText
+        }}
         label={text['pages.intelligence.notification.calendar.landedRow'] ?? ''}
         last={false}
       >
@@ -224,10 +207,6 @@ export function CalendarDetail(props: Readonly<{
         />
         {props.landedAction ?? null}
       </SettingsRow>
-      {/* 代价只在被选中时出现，而且留在选择发生的地方——塞进 ⓘ 就变成「选完才发现」。 */}
-      {value.landedFilter === 'also-matched'
-        ? <SettingsRow label="" note={text['pages.intelligence.notification.landed.cost']} noteRole="status" />
-        : null}
       <CalendarLandedCountriesRow
         last
         onChange={(next) => reminder.update({ landedCountries: next })}

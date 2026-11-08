@@ -181,16 +181,15 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.intelligence-notification-form-row.has-note {
-  min-height: 64px;
-}
-
 .intelligence-notification-form-row:last-child,
 .intelligence-notification-form-row.is-last {
   border-bottom: 0;
 }
 
 .intelligence-notification-form-label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   font-size: 13px;
   color: var(--text-primary);
 }

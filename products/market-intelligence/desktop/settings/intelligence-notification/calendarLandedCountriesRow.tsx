@@ -42,7 +42,6 @@ export function CalendarLandedCountriesRow(props: Readonly<{
   useEffect(() => { setDraft(selection) }, [confirmedKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const label = text['pages.intelligence.notification.countries.row'] ?? ''
-  const scopeNote = text['pages.intelligence.notification.countries.scopeNote'] ?? ''
   const count = draft.codes.length
   const full = count >= MAX_CALENDAR_LANDED_COUNTRIES
 
@@ -67,7 +66,18 @@ export function CalendarLandedCountriesRow(props: Readonly<{
   }))
 
   return <>
-    <SettingsRow label={label} note={scopeNote}>
+    <SettingsRow
+      info={{
+        ariaLabelKey: 'pages.intelligence.notification.countries.rowInfoAria',
+        // 这一项的说明与「全部国家」那一档的含义，都在 ⓘ 里；正文只剩字段名、当前值和控件。
+        labelKeys: [
+          'pages.intelligence.notification.countries.scopeNote',
+          'pages.intelligence.notification.countries.allNote'
+        ],
+        resolveText: props.resolveText
+      }}
+      label={label}
+    >
       <Select<CalendarLandedCountryScope>
         aria-label={label}
         disabled={saving}
@@ -78,14 +88,18 @@ export function CalendarLandedCountriesRow(props: Readonly<{
         value={draft.scope}
       />
     </SettingsRow>
-    {/* 第二句最多一句：全选含未知 / 自选的代价；其余范围不出现。 */}
-    {draft.scope === 'all'
-      ? <SettingsRow label="" note={text['pages.intelligence.notification.countries.allNote']} noteRole="status" />
-      : draft.scope === 'custom'
-        ? <SettingsRow label="" note={text['pages.intelligence.notification.countries.customCost']} noteRole="status" />
-        : null}
     {draft.scope === 'custom'
-      ? <SettingsRow label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}>
+      ? <SettingsRow
+        info={{
+          ariaLabelKey: 'pages.intelligence.notification.countries.customInfoAria',
+          labelKeys: [
+            'pages.intelligence.notification.countries.customCost',
+            'pages.intelligence.notification.countries.emptyHint'
+          ],
+          resolveText: props.resolveText
+        }}
+        label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}
+      >
         <div
           aria-label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}
           className="intelligence-notification-form-checks"
@@ -114,7 +128,7 @@ export function CalendarLandedCountriesRow(props: Readonly<{
         {/* 空选不是空态：给指路句，不留一个只有计数的空框。 */}
         {count === 0
           ? <span className="intelligence-notification-form-note" role="status">
-            {text['pages.intelligence.notification.countries.emptyHint']}
+            {text['pages.intelligence.notification.countries.emptyHintState']}
           </span>
           : null}
         {full
@@ -125,7 +139,11 @@ export function CalendarLandedCountriesRow(props: Readonly<{
       </SettingsRow>
       : null}
     {saveFailedField === 'landedCountries'
-      ? <SettingsRow label="" note={text['pages.intelligence.notification.countries.saveFailed']} noteRole="status" last={props.last} />
+      ? <SettingsRow label="" last={props.last}>
+        <span className="intelligence-notification-form-note" role="status">
+          {text['pages.intelligence.notification.countries.saveFailed']}
+        </span>
+      </SettingsRow>
       : null}
   </>
 }
