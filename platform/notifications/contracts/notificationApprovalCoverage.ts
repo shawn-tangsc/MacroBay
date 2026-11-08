@@ -28,37 +28,12 @@ export type NotificationApprovalCoverage = {
 }
 
 /**
- * 算覆盖。`approval` 是迁移后的唯一批准来源（声明与批准同一份文件，缺一行只可能是写错）；
- * 迁移未完成时它是 `undefined`，于是每条声明都会被报成 `missing` —— 这正是我们要看到的数字。
+ * 算覆盖。`approval` 是**唯一**批准来源（批准随声明走，缺一行只可能是写错）；
+ * 来源没带 `approval` 时，它下面的每条声明都会被报成 `missing` —— 这正是我们要看到的数字。
  */
-/**
- * 批准视图**由声明派生**，不手写第二份（Chief 2026-11-08 定）：产品在每条声明上带 `policy`，
- * 这里只把它读成 `{ eventId → 批准 }` 供覆盖率检查用。三处写同一件事必然漂，平台表 / 声明 /
- * 手写映射三条里必须只剩一条——现在它们是「声明 → 派生视图」这一条链。
- */
-export function deriveApprovalView(
-  sources: readonly NotificationEventDeclarationSource[]
-): readonly NotificationEventDeclarationSource[] {
-  return sources.map((source) => {
-    if (source.approval !== undefined) return source
-    const approval: Record<string, NotificationEventPolicyEntry> = {}
-    for (const declaration of source.events) {
-      const policy = declaration.policy
-      if (policy === undefined) continue
-      approval[declaration.id] = {
-        approvedDisruptionLevels: policy.approvedDisruptionLevels,
-        approvedBypassQuietHours: policy.approvedBypassQuietHours,
-        ...(policy.surfaceGroup === undefined ? {} : { surfaceGroup: policy.surfaceGroup })
-      }
-    }
-    return { ...source, approval }
-  })
-}
-
 export function inspectApprovalCoverage(
-  inputSources: readonly NotificationEventDeclarationSource[]
+  sources: readonly NotificationEventDeclarationSource[]
 ): NotificationApprovalCoverage {
-  const sources = deriveApprovalView(inputSources)
   const declaredIds = new Set<string>()
   const gaps: NotificationApprovalGap[] = []
   let declared = 0

@@ -52,20 +52,6 @@ export type NotificationEventDeclaration = {
   /** 读者要不要动手：决定提交期 `actions` 能不能是空数组，不是「一定有动作」。 */
   requiresUserAction: boolean
   /**
-   * 这条事件的**批准档位与归组**——最终归声明者（`notification-event-declaration-shape.md` §1）。
-   *
-   * **迁移期的兜底形参，平台已经不读它**：生效值只来自各来源自己的 `approval`（契约 §7.1b）。
-   * 留着它是为了让「删掉它必须红」这条反向验证有对象——b3-5 会连同兜底分支一起删。
-   *
-   * 为什么不新开一节放批准：`id` 已经在这个声明里出现一次，档位放到第二处就又是「同一件事两个
-   * 声明处」，平台那张表曾经正是那个第二处（b3-3 已删）。
-   */
-  policy?: {
-    approvedDisruptionLevels: readonly NotificationApprovedLevel[]
-    approvedBypassQuietHours: boolean
-    surfaceGroup?: string
-  }
-  /**
    * 读者面向的类型标签（契约 v2.38）：**只能声明、不许推导**。
    *
    * 判据只有一条：**一次性（failure）还是一直不对劲（needs-action）**；`completed` 是"好了/做完了"，
@@ -114,11 +100,6 @@ export type NotificationEventCatalogEntry = NotificationEventDeclaration & {
 }
 
 export type NotificationEventCatalog = {
-  /**
-   * b2 观测点：这次装配里哪些条目**落到了平台表兜底**（来源没给 `approval`）。
-   * 棘轮减到 0 时，连同 `policy` 参数与平台表一起删。
-   */
-  policyFallbacks?: () => readonly string[]
   has: (id: string) => boolean
   get: (id: string) => NotificationEventCatalogEntry | undefined
   list: () => readonly NotificationEventCatalogEntry[]
@@ -162,15 +143,9 @@ const REQUESTED_LEVELS: readonly NotificationRequestedLevel[] = ['toast', 'popup
  */
 export function createNotificationEventCatalog(input: {
   sources: readonly NotificationEventDeclarationSource[]
-  /**
-   * **迁移期兜底**（契约 §7.1b）：来源没给某条 `approval` 时才读它。棘轮减到 0 时连同这个参数一起删。
-   */
-  policy?: NotificationEventPolicy
 }): NotificationEventCatalog {
   const entries: NotificationEventCatalogEntry[] = []
   const byId = new Map<string, NotificationEventCatalogEntry>()
-  /** 落到 `policy` 兜底的事件 id（b2 期间的观测点；棘轮减到 0 时连同兜底一起删）。 */
-  const usedPolicyFallback: string[] = []
 
   for (const source of input.sources) {
     for (const declaration of source.events) {
@@ -195,22 +170,19 @@ export function createNotificationEventCatalog(input: {
           throw new Error(`notification-event-invalid-requested-level:${declaration.id}:${String(level)}`)
         }
       }
-      // **来源优先**（契约 §7.1b 的 b2）：声明自己带的 `approval` 就是生效值；平台表降级成**兜底**，
-      // 只在来源没给这一条时被读。兜底不是静默的：`usedPolicyFallback` 记下用的是哪几条，
-      // 由调用方决定怎么报——静默兜底是这个项目反复踩的坑。
-      const fromSource = source.approval?.[declaration.id]
-      const policy = fromSource ?? input.policy?.[declaration.id]
-      if (fromSource === undefined && policy !== undefined) usedPolicyFallback.push(declaration.id)
+      // 生效值只来自**这条声明所属来源自己的 `approval`**（契约 §7.1b）：
+      // 平台一份、每个产品各一份，装配时不设兜底——没有第二个地方能批一条事件。
+      const approval = source.approval?.[declaration.id]
       // 没有批准记录 = 只进中心（契约 §4 第二句）：**不报错**，因为「还没批」是合法状态。
       // 只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
-      const approvedDisruptionLevels = policy?.approvedDisruptionLevels ?? ['center']
-      if (policy !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
+      const approvedDisruptionLevels = approval?.approvedDisruptionLevels ?? ['center']
+      if (approval !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
       const entry: NotificationEventCatalogEntry = Object.freeze({
         ...declaration,
         productId: source.productId,
         approvedDisruptionLevels: Object.freeze([...approvedDisruptionLevels]),
-        approvedBypassQuietHours: policy?.approvedBypassQuietHours === true,
-        ...(policy?.surfaceGroup === undefined ? {} : { surfaceGroup: policy.surfaceGroup })
+        approvedBypassQuietHours: approval?.approvedBypassQuietHours === true,
+        ...(approval?.surfaceGroup === undefined ? {} : { surfaceGroup: approval.surfaceGroup })
       })
       entries.push(entry)
       byId.set(entry.id, entry)
@@ -220,9 +192,7 @@ export function createNotificationEventCatalog(input: {
   return Object.freeze({
     has: (id: string) => byId.has(id),
     get: (id: string) => byId.get(id),
-    list: () => entries,
-    /** b2 观测点：这次装配里哪些条目落到了平台表兜底（来源没给 `approval`）。不静默。 */
-    policyFallbacks: () => Object.freeze([...usedPolicyFallback])
+    list: () => entries
   })
 }
 

@@ -8,7 +8,7 @@
  * 为什么它是搬迁的前置证据：兜底删了、用例全绿，都不能证明「删之前一条不缺」——只有这份输出能。
  * 读法（b3-2）：三条来源各读**自己那份**批准——平台读 `PLATFORM_NOTIFICATION_APPROVALS`，
  * 产品读自己 manifest 里的 `notificationApproval`；三个数都从这一份 `sources` 算，没有第二个口径。
- * 迁移期的 `declaration.policy` 派生视图仍在（b3-5 才删），但只在来源没带 `approval` 时兜底。
+ * 没有兜底：来源没带 `approval` 就是 `missing`，不再从别处派生（b3-5 已删兜底与派生视图）。
  */
 import { execSync } from 'node:child_process'
 
