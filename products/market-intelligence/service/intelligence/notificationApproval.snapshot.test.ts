@@ -4,8 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 
 import { marketIntelligenceProductManifest as manifest } from '../../product.manifest'
 
@@ -25,9 +24,9 @@ const snapshot = JSON.parse(
 ) as Record<string, { levels: string[]; group: string | null; bypass: boolean; channel: boolean }>
 
 const catalog = createNotificationEventCatalog({
-  policy: NOTIFICATION_EVENT_POLICY,
+  // 批准值随声明走（b2/b3）：平台读平台、产品读自己。
   sources: [
-    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
+    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
     {
       productId: manifest.id,
       events: manifest.notificationEvents ?? [],
