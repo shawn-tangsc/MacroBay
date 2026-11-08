@@ -1,11 +1,23 @@
 import type { WorkspacePanelRegistration } from './workspace/contracts'
 import type { NotificationEventDeclaration } from './notifications/contracts/notificationEventCatalog'
+import type { NotificationEventPolicyEntry } from './notifications/contracts/notificationEventCatalog'
 import type { NotificationCopyTableSet } from './notifications/contracts/notificationCopyPort'
 
 export interface LocalizedText {
   'zh-CN': string
   'en-US': string
 }
+
+/**
+ * 产品**声明**的工具审批字段文案：`工具名 → 字段名 → 两种语言的一句话`。
+ *
+ * 为什么不在壳层写：那些字段名（情报源、采集节奏、目标语言……）是产品业务概念，
+ * 平台删掉产品包之后不该还留着它们的名字与文案。壳层只提供「把请求参数画成字段行」的能力，
+ * 词由产品给——取不到就不画字段行，退回原来的 JSON 摘要，而不是编一个名字。
+ */
+export type ProductApprovalFieldLabelTable = Readonly<
+  Record<string, Readonly<Record<string, LocalizedText>>>
+>
 
 /**
  * P2-01 additive：一级菜单页的 workspace 能力声明。**可选**——缺省时由
@@ -35,12 +47,27 @@ export interface ProductMenuPageContribution {
   home?: true
 }
 
+/**
+ * 设置分区能被壳层按**业务意图**找见的名字（闭集），而不是让壳层记住某个产品的面板 id。
+ *
+ * 壳层有一类入口不属于平台：「配置任务要用的数据源在哪一页」只有产品说得清，可壳层不许认识任何
+ * 具体产品——认识了，删掉那个产品包之后壳里还留着一个指向不存在页面的按钮。所以产品在自己的设置
+ * 分区上标一个意图，壳层按意图找：**找到就带路，找不到就不出这个入口**（与
+ * `ProductApprovalFieldLabelTable` 同一条规矩）。
+ *
+ * 新增一个意图之前先问：壳层真的有一个「带路」场景吗？不是给每个分区都标一遍。
+ * `resource-sources` = 产品里那页「任务/自动工作用到的数据源在哪配、怎么启用」。
+ */
+export type ProductSettingsNavIntent = 'resource-sources'
+
 export interface ProductSettingsSectionContribution {
   id: string
   title: LocalizedText
   icon: string
   order: number
   module: string
+  /** 见 `ProductSettingsNavIntent`：壳层按它找这一页，而不是按面板 id。 */
+  navIntent?: ProductSettingsNavIntent
 }
 
 export interface ProductShellContributions {
@@ -205,11 +232,19 @@ export interface ProductManifest {
   /**
    * 该产品**声明**的通知事件（契约 §3）。目录由平台汇总注入，平台不 import 产品代码。
    *
-   * 每条声明只写一次性的事实（id、标题/理由键、申请档位、去重键的输入形状）；批准值不在这里——
-   * 生效表面只读 `platform/notifications/contracts/notificationEventPolicy.ts` 的批准表。
+   * 每条声明可以带 `policy`（批准档位与归组）。**过渡期**里生效值仍来自
+   * `platform/notifications/contracts/notificationEventPolicy.ts` 那张表，平台还不读声明里的
+   * `policy`；等产品全部补齐、catalog 改读声明之后，那张表才删。
    * 形状错误在生成期报（`validate.ts`），不等到读者勾了订阅才发现永远不响。
    */
   notificationEvents?: readonly NotificationEventDeclaration[]
+  /**
+   * 该产品**声明**的批准值（契约 §7.1b，2026-11-08）：`{ '<eventTypeId>': 批准行 }`，**值由产品自己签**。
+   *
+   * 迁移期与平台那张批准表**并存**：装配先把这张表合进目录，平台表仍在原处、兜底未删，行为不变。
+   * 声明里的 id 必须出现在本产品的 `notificationEvents` 里（目录装配时校验）。可选，之后改必填。
+   */
+  notificationApproval?: Readonly<Record<string, NotificationEventPolicyEntry>>
   /**
    * 该产品**声明**的通知文案表（契约 §3.3）：`{ 'zh-CN': {...}, 'en-US': {...} }`。
    *
@@ -225,6 +260,13 @@ export interface ProductManifest {
   notificationProducerClaims?: readonly string[]
   productAgentTools?: readonly ProductAgentToolRegistration[]
   assistantTemplates?: readonly ProductAssistantTemplateRegistration[]
+  /**
+   * 该产品**声明**的工具审批字段文案（契约见 `ProductApprovalFieldLabelTable`）。
+   *
+   * 生成物 `products/generated/shellRegistry.ts` 把它汇总成一张表交给壳层；同一个工具名
+   * 只能由一个产品声明（生成期校验），否则同一个字段会有两种叫法。
+   */
+  agentApprovalFieldLabels?: ProductApprovalFieldLabelTable
   migrations: readonly unknown[]
 }
 
