@@ -80,44 +80,89 @@ const answer = (rows: readonly (typeof row | typeof observedRow | typeof boundRo
 const sentimentReason = text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment)
 
 describe('divergence panel · the one summary line', () => {
-  it('A: one pair points opposite ways — and says only that', () => {
-    const markup = render(answer([row]))
-    expect(markup).toContain(text.summary.divergence)
-    expect(markup).not.toContain(text.summary.quiet)
-    expect(markup).not.toContain(text.summary.allWithheld)
-    // 读数不在卡面上：三个数字进展开区。
-    expect(markup).not.toContain(row.legs[0]!.text)
-  })
+  /**
+   * 五态一张表（界面设计 v2 §二）：每一行给「输入 + 该出现的那句 + 该缺席的几句」。
+   *
+   * 为什么并成表：原来每条用例各自 mount 一次、只差输入与那一句文案；分开写时，新增一态就要复制一遍
+   * 挂载与断言骨架，删一句也看不出是哪一态少了判据。表里每行仍逐条断言（出现的那句 + 缺席的几句），
+   * 断言数不减：合并的是骨架，不是判据。
+   */
+  const summaryStates = [
+    {
+      name: 'A 有背离：只说这一句，且读数不上卡面',
+      state: answer([row]),
+      expected: text.summary.divergence,
+      absent: [text.summary.quiet, text.summary.allWithheld],
+      alsoAbsent: [row.legs[0]!.text],
+      expandable: true
+    },
+    {
+      name: 'B 没背离、也没有没判成的组：一句说明，不是控件',
+      state: { state: 'empty', withheld: [] } as const,
+      expected: text.summary.quiet,
+      absent: [text.summary.divergence, text.summary.allWithheld],
+      expandable: false
+    },
+    {
+      name: 'C 有背离 + 1 组没判成（舆情腿）：冒号后是这一组的原因',
+      state: answer([row], [sentimentMissing]),
+      expected: `${text.summary.divergenceWithheldOne.split('{')[0]}${sentimentReason}`,
+      absent: [text.summary.quiet, text.summary.divergence],
+      expandable: true
+    },
+    {
+      name: 'C 换成另一组（价格太旧）时整句跟着换，不许照抄舆情',
+      state: answer([row], [priceStale]),
+      expected: `${text.summary.divergenceWithheldOne.split('{')[0]}${text.withheldReasons['leg-stale'].replace('{leg}', text.legs.price).split('{at}')[0]!}`,
+      absent: [sentimentReason, text.summary.quiet],
+      expandable: true
+    },
+    {
+      name: 'C 有背离 + 2 组没判成：只报数，不报原因',
+      state: answer([row], [sentimentMissing, priceStale]),
+      expected: text.summary.divergenceWithheldMany.replace('{count}', '2'),
+      absent: [sentimentReason, text.summary.divergence],
+      expandable: true
+    },
+    {
+      name: 'D 没背离 + 1 组没判成：原因跟在后面',
+      state: { state: 'empty', withheld: [sentimentMissing] } as const,
+      expected: `${text.summary.quietWithheldOne.split('{')[0]}${sentimentReason}`,
+      absent: [text.summary.quiet, text.summary.divergence],
+      expandable: true
+    },
+    {
+      name: 'D 没背离 + 2 组没判成：只报数',
+      state: { state: 'empty', withheld: [sentimentMissing, priceStale] } as const,
+      expected: text.summary.quietWithheldMany.replace('{count}', '2'),
+      absent: [sentimentReason, text.summary.quiet],
+      expandable: true
+    },
+    {
+      name: 'E 三组全判不了：独立一态，不许并进「没有背离」',
+      state: { state: 'empty', withheld: [sentimentMissing, stablecoinMissing, priceStale] } as const,
+      expected: text.summary.allWithheld,
+      absent: [text.summary.quiet, text.summary.divergence],
+      expandable: true
+    }
+  ] as const
 
-  it('B: a quiet day that compared everything — a paragraph, not a control', () => {
-    const markup = render({ state: 'empty', withheld: [] })
-    expect(markup).toContain(text.summary.quiet)
-    expect(markup).not.toContain(text.summary.divergence)
-    // 不可展开：不是按钮、没有 aria-expanded、没有箭头。
-    expect(markup).not.toContain('aria-expanded')
-    expect(markup).not.toContain('mi-divergence__summary-chevron')
-  })
-
-  it('C: the unjudged pair names its own leg and reason, not a fixed sentence', () => {
-    const sentimentCase = render(answer([row], [sentimentMissing]))
-    expect(sentimentCase).toContain(`${text.summary.divergenceWithheldOne.split('{')[0]}${sentimentReason}`)
-    // 换成另一组时整句跟着换：照抄成「舆情」就会在这里红。
-    const priceCase = render(answer([row], [priceStale]))
-    expect(priceCase).toContain(`${text.summary.divergenceWithheldOne.split('{')[0]}${text.withheldReasons['leg-stale'].replace('{leg}', text.legs.price).split('{at}')[0]!}`)
-    expect(priceCase).not.toContain(sentimentReason)
-  })
-
-  it('C with two unjudged, D with one, D with two, E with all three', () => {
-    expect(render(answer([row], [sentimentMissing, priceStale])))
-      .toContain(text.summary.divergenceWithheldMany.replace('{count}', '2'))
-    expect(render({ state: 'empty', withheld: [sentimentMissing] }))
-      .toContain(`${text.summary.quietWithheldOne.split('{')[0]}${sentimentReason}`)
-    expect(render({ state: 'empty', withheld: [sentimentMissing, priceStale] }))
-      .toContain(text.summary.quietWithheldMany.replace('{count}', '2'))
-    const allWithheld = render({ state: 'empty', withheld: [sentimentMissing, stablecoinMissing, priceStale] })
-    expect(allWithheld).toContain(text.summary.allWithheld)
-    // 五条互斥：E 里不许再出现「没有背离」。
-    expect(allWithheld).not.toContain(text.summary.quiet)
+  it('says exactly one of the five sentences, and only the one its state calls for', () => {
+    // 一条用例跑完五行：每行的断言各自带行名，失败时知道是哪一态（vitest 的消息参数会印出来）。
+    for (const row of summaryStates) {
+      const markup = render(row.state as never)
+      // 该出现的那一句在。
+      expect(markup, `${row.name} · 该出现的句子`).toContain(row.expected)
+      // 其余几句一个都不许出现（逐条，不是一条近似检查）。
+      for (const other of row.absent) expect(markup, `${row.name} · 不该出现：${other}`).not.toContain(other)
+      if ('alsoAbsent' in row) for (const other of row.alsoAbsent) expect(markup, `${row.name} · 不该出现：${other}`).not.toContain(other)
+      // 可展开的那几态是按钮；静默的一天不是控件（无 aria-expanded、无箭头）。
+      if (row.expandable) expect(markup, `${row.name} · 应是可展开的按钮`).toContain('aria-expanded="false"')
+      else {
+        expect(markup, `${row.name} · 不该是控件`).not.toContain('aria-expanded')
+        expect(markup, `${row.name} · 不该有箭头`).not.toContain('mi-divergence__summary-chevron')
+      }
+    }
   })
 
   it('is neutral and eats no default button look: transparent, borderless, one token size', () => {
