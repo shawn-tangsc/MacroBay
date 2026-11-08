@@ -212,6 +212,18 @@ describe('默认首页接线（口径 A：只在没有历史时生效）', () =>
     expect(declaredHomeKey).not.toBe('assistants')
   })
 
+  it('自动落点开出的那一页必须**真的渲染出来**（不是只「调用过 openTab」）', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
+    const surface = createSurface({ initial: emptySnapshot() })
+    await renderShell(surface)
+
+    // 判据在 DOM 上：宿主进入 tabs 形态且有一个页签。只断言「发过命令」的话，一个发出命令却不采用快照的
+    // 实现也能过，而那种实现给用户的就是「当前没有打开的页面」。
+    await vi.waitFor(() => {
+      expect(container?.querySelector('[data-workspace-page-host="tabs"]')).not.toBeNull()
+    }, { timeout: CONDITION_TIMEOUT_MS })
+    expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
+  })
+
   it('首次打开（快照里没有活动页）⇒ 真的打开声明了 home 的那一页', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
     const surface = createSurface({ initial: emptySnapshot() })
     await renderShell(surface)
@@ -246,18 +258,6 @@ describe('默认首页接线（口径 A：只在没有历史时生效）', () =>
     await settle()
 
     expect(surface.openTabRequests.length).toBe(1)
-  })
-
-  it('自动落点开出的那一页必须**真的渲染出来**（不是只「调用过 openTab」）', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
-    const surface = createSurface({ initial: emptySnapshot() })
-    await renderShell(surface)
-
-    // 判据在 DOM 上：宿主进入 tabs 形态且有一个页签。只断言「发过命令」的话，一个发出命令却不采用快照的
-    // 实现也能过，而那种实现给用户的就是「当前没有打开的页面」。
-    await vi.waitFor(() => {
-      expect(container?.querySelector('[data-workspace-page-host="tabs"]')).not.toBeNull()
-    }, { timeout: CONDITION_TIMEOUT_MS })
-    expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
   })
 
   it('点菜单被拒 ⇒ error 级报出 errorCode，且原有页签不被抹掉', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
