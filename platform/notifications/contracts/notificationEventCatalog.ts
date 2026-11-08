@@ -52,6 +52,13 @@ export type NotificationEventDeclaration = {
   /** 读者要不要动手：决定提交期 `actions` 能不能是空数组，不是「一定有动作」。 */
   requiresUserAction: boolean
   /**
+   * **诊断事件**：读者亲手点出来的那一下（今天只有通知链路自检）。
+   *
+   * 它是「可以批免打扰穿透」的**唯一**资格。判据不能靠 id、来源或提交请求上的 `namespace: 'test'`
+   * ——那些都不说明「这是读者主动要的一次测试」。批准里写了穿透、声明却没这个标记，装配期就红。
+   */
+  diagnostic?: boolean
+  /**
    * 读者面向的类型标签（契约 v2.38）：**只能声明、不许推导**。
    *
    * 判据只有一条：**一次性（failure）还是一直不对劲（needs-action）**；`completed` 是"好了/做完了"，
@@ -177,6 +184,11 @@ export function createNotificationEventCatalog(input: {
       // 只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
       const approvedDisruptionLevels = approval?.approvedDisruptionLevels ?? ['center']
       if (approval !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
+      // 免打扰穿透只给**诊断**事件（读者亲手点的那一下）：批准里写了穿透、声明却不是诊断事件
+      // → 装配期红，点名 id。否则「谁能穿透」就退化成批准文件里的一行字，没有代码依据。
+      if (approval?.approvedBypassQuietHours === true && declaration.diagnostic !== true) {
+        throw new Error(`notification-event-bypass-not-diagnostic:${declaration.id}`)
+      }
       const entry: NotificationEventCatalogEntry = Object.freeze({
         ...declaration,
         productId: source.productId,

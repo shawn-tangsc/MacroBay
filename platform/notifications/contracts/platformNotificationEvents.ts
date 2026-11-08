@@ -60,6 +60,8 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   declaration('platform.notification.self-test', {
     category: 'reminder',
     requiresUserAction: false,
+    // 诊断事件：读者亲手点的那一下，是「已批的免打扰穿透」唯一的代码依据。
+    diagnostic: true,
     requestedDisruptionLevels: ['channel'],
     dedupeKeyTemplate: 'self-test:{date}:{seq}',
     dedupeUnit: 'occurrence'

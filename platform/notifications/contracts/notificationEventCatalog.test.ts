@@ -87,6 +87,40 @@ describe('platform approvals', () => {
   })
 })
 
+describe('quiet-hours bypass belongs to diagnostic events alone', () => {
+  it('refuses a bypass approval on an event that is not declared diagnostic, by id', () => {
+    expect(() => createNotificationEventCatalog({
+      sources: [{
+        productId: 'platform',
+        events: [declaration({ id: 'platform.synthetic-alert', requestedDisruptionLevels: [] })],
+        approval: { 'platform.synthetic-alert': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: true } }
+      }]
+    })).toThrow(/notification-event-bypass-not-diagnostic:platform\.synthetic-alert/)
+  })
+
+  it('does not take a test submission for a diagnostic qualification: only the declaration flag counts', () => {
+    // 提交请求上的 `namespace: 'test'` 只换去重域，不换资格；id 叫什么、谁来发都不算资格。
+    const baseline = {
+      productId: 'platform',
+      approval: { 'platform.notification.self-test': { approvedDisruptionLevels: ['center', 'channel'] as const, approvedBypassQuietHours: true } }
+    }
+    expect(() => createNotificationEventCatalog({
+      sources: [{
+        ...baseline,
+        events: [declaration({ id: 'platform.notification.self-test', requestedDisruptionLevels: ['channel'] })]
+      }]
+    })).toThrow(/notification-event-bypass-not-diagnostic:platform\.notification\.self-test/)
+
+    const catalog = createNotificationEventCatalog({
+      sources: [{
+        ...baseline,
+        events: [declaration({ id: 'platform.notification.self-test', requestedDisruptionLevels: ['channel'], diagnostic: true })]
+      }]
+    })
+    expect(catalog.get('platform.notification.self-test')?.approvedBypassQuietHours).toBe(true)
+  })
+})
+
 describe('notification event catalog', () => {
   it('merges declarations with the approval table: approval is the upper bound, not the request', () => {
     const catalog = createNotificationEventCatalog({
