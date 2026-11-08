@@ -308,17 +308,22 @@ describe('macroCalendarHttpClient', () => {
   })
 
   it('maps the one bounded provider probe deadline to the coarse timeout result', async () => {
+    // 假计时器必须在 `try` 里还原：断言一红就把假时间留给同一个文件后面的用例，
+    // 那时它们会以完全无关的方式失败——红点变成了假证据。
     vi.useFakeTimers()
-    const request = vi.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
-      options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
-    }))
-    platformFetch.mockReturnValue(request)
-    const result = createMacroCalendarHttpClient().testProviderConnection('macro-calendar-fed')
+    try {
+      const request = vi.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
+        options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      }))
+      platformFetch.mockReturnValue(request)
+      const result = createMacroCalendarHttpClient().testProviderConnection('macro-calendar-fed')
 
-    await vi.advanceTimersByTimeAsync(macroCalendarTransportPolicy.requestTimeoutMs)
-    await expect(result).resolves.toEqual({ state: 'failed', failureCode: 'request-timeout' })
-    expect(request).toHaveBeenCalledOnce()
-    vi.useRealTimers()
+      await vi.advanceTimersByTimeAsync(macroCalendarTransportPolicy.requestTimeoutMs)
+      await expect(result).resolves.toEqual({ state: 'failed', failureCode: 'request-timeout' })
+      expect(request).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('rejects the fixed manual BLS ICS descriptor before resolving platform fetch', async () => {
@@ -412,14 +417,17 @@ describe('macroCalendarHttpClient', () => {
 
   it('aborts each transport attempt at the named deadline', async () => {
     vi.useFakeTimers()
-    const request = vi.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
-      options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
-    }))
-    platformFetch.mockReturnValue(request)
-    const result = createMacroCalendarHttpClient().request(descriptor(), runAt)
-    await vi.advanceTimersByTimeAsync(macroCalendarTransportPolicy.requestTimeoutMs * macroCalendarTransportPolicy.maxAttempts)
-    await expect(result).resolves.toMatchObject({ ok: false, failureCode: 'request-timeout' })
-    expect(request).toHaveBeenCalledTimes(macroCalendarTransportPolicy.maxAttempts)
-    vi.useRealTimers()
+    try {
+      const request = vi.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
+        options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      }))
+      platformFetch.mockReturnValue(request)
+      const result = createMacroCalendarHttpClient().request(descriptor(), runAt)
+      await vi.advanceTimersByTimeAsync(macroCalendarTransportPolicy.requestTimeoutMs * macroCalendarTransportPolicy.maxAttempts)
+      await expect(result).resolves.toMatchObject({ ok: false, failureCode: 'request-timeout' })
+      expect(request).toHaveBeenCalledTimes(macroCalendarTransportPolicy.maxAttempts)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
