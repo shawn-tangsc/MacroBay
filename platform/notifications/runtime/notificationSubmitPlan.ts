@@ -196,6 +196,15 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   // 按次收窄（`narrowedDisruptionLevels`）：**只许收窄、不许放大**；`center` 是平台必达，传的数组里
   // 没有它也保留。不传＝与今天逐字一致（下面那行不会改变任何东西）。
   const narrowed = input.request.narrowedDisruptionLevels
+  if (narrowed !== undefined) {
+    // 收窄只能**变少**、不能**变出**：出现批准表没批的档位就是生产者写错了，**拒收**，
+    // 不静默求交（那会让生产者以为那一档发出去了）。与「申请了未批准的档位」同一个处理。
+    const unapproved = narrowed.filter((level) => !approved.includes(level))
+    if (unapproved.length > 0) {
+      return rejected('surface-not-approved', `notification event "${entry.id}" narrowed to an unapproved level: ${unapproved.join(', ')}`)
+    }
+  }
+  // `center` 不是可被收窄的面，是必达记录：传不传它都在，所以 `['channel']` 的含义就是「channel + center」。
   const levels = narrowed === undefined
     ? approved
     : approved.filter((level) => level === 'center' || narrowed.includes(level))

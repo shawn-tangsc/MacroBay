@@ -66,11 +66,14 @@ describe('narrowedDisruptionLevels', () => {
     expect(state().records[0].channels).toContain('center')
   })
 
-  it('cannot widen beyond the approval table', async () => {
+  it('refuses a narrowed level the approval table never approved, instead of silently intersecting', async () => {
     const { runtime, state } = harness()
-    // 这条事件只批了 center + channel；要桌面也拿不到。
-    await runtime.submit(request({ narrowedDisruptionLevels: ['center', 'desktop', 'toast'] }))
-    expect(new Set(state().records[0].channels)).toEqual(new Set(['center']))
+    // 这条事件只批了 center + channel；要桌面就是生产者写错了——**拒收**，不静默求交。
+    await expect(runtime.submit(request({ narrowedDisruptionLevels: ['center', 'desktop'] }))).resolves.toMatchObject({
+      kind: 'rejected',
+      reason: 'surface-not-approved'
+    })
+    expect(state().records).toHaveLength(0)
   })
 
   it('absent means exactly today: the approved levels go out unchanged', async () => {

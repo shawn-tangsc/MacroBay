@@ -56,6 +56,14 @@ export type NotificationSubmitRejectionReason =
          * 一个是「刚说过，等一下再说」。
          */
         | 'minimum-gap-active'
+        /**
+         * `narrowedDisruptionLevels` 里出现**批准表没有批**的档位。
+         *
+         * 收窄只能**变少**，不能**变出**。「传了却发不出去」如果按「与批准求交」静默处理，
+         * 生产者会以为那一档发出去了——那正是今晚一直在清的静默失败。所以当场拒收，
+         * 与 `assertRequestedWithinApproved` 对「申请了未批准的档位」的处理保持一致。
+         */
+        | 'surface-not-approved'
 
 /** 这一条提交被拒的回执：码给机器、句子给人（诊断与日志用，不进读者界面）。 */
 export type NotificationSubmitRejection = {
