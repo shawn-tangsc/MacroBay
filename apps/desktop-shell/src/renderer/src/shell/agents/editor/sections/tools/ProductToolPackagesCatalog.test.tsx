@@ -32,14 +32,14 @@ function packageFixture(
   overrides: Partial<ProductAgentToolPackageEditorView> = {}
 ): ProductAgentToolPackageEditorView {
   return {
-    productId: 'market-intelligence',
+    productId: 'sample-product',
     status: 'available',
     permissionMode: 'disabled',
     staleBinding: false,
     diagnostics: [],
     tools: [
-      tool('get_market_analysis_context', '市场分析上下文', { asOf: true }),
-      tool('configure_intelligence_source', '修改情报源配置', { readOnly: false }),
+      tool('get_context_sample', '示例上下文', { asOf: true }),
+      tool('configure_sample_source', '修改示例来源配置', { readOnly: false }),
       ...Array.from({ length: 8 }, (_, index) =>
         tool(`get_sample_${index}`, `示例工具 ${index}`, { asOf: index === 0 })
       )
@@ -62,11 +62,11 @@ describe('ProductToolPackagesCatalog', () => {
     stubPlatform([packageFixture()])
     const container = await mount({ search: '' })
 
-    expect(container.textContent).toContain('情报模块')
-    expect(container.textContent).toContain('market-intelligence')
-    expect(container.textContent).toContain('市场分析上下文')
-    expect(container.textContent).toContain('get_market_analysis_context')
-    expect(container.textContent).toContain('修改情报源配置')
+    expect(container.textContent).toContain('示例产品')
+    expect(container.textContent).toContain('sample-product')
+    expect(container.textContent).toContain('示例上下文')
+    expect(container.textContent).toContain('get_context_sample')
+    expect(container.textContent).toContain('修改示例来源配置')
     expect(container.textContent).toContain('可写')
     expect(container.textContent).toContain('可用')
   })
@@ -111,17 +111,17 @@ describe('ProductToolPackagesCatalog', () => {
 
   it('finds a tool by its raw name even when the product does not match', async () => {
     stubPlatform([packageFixture()])
-    const container = await mount({ search: 'configure_intelligence_source' })
+    const container = await mount({ search: 'configure_sample_source' })
 
     expect(rows(container)).toHaveLength(1)
-    expect(container.textContent).toContain('修改情报源配置')
+    expect(container.textContent).toContain('修改示例来源配置')
   })
 
   it('falls back to the product id when no product summary is available', async () => {
     stubPlatform([packageFixture()], { withProductSummaries: false })
     const container = await mount({ search: '' })
 
-    expect(container.querySelector('.agent-product-package-name')?.textContent).toContain('market-intelligence')
+    expect(container.querySelector('.agent-product-package-name')?.textContent).toContain('sample-product')
     expect(container.querySelector('.agent-product-package-id')).toBeNull()
   })
 })
@@ -163,7 +163,7 @@ function stubPlatform(
       app: withProductSummaries
         ? {
             getProductSummaries: vi.fn(async () => [
-              { id: 'market-intelligence', name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' } }
+              { id: 'sample-product', name: { 'zh-CN': '示例产品', 'en-US': 'Sample product' } }
             ])
           }
         : {}

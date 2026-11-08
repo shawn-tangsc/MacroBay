@@ -74,7 +74,7 @@ describe('AgentRuntimeActivityPanel', () => {
             kind: 'tool',
             title: 'Bash',
             status: 'error',
-            subtitle: 'pnpm test --filter market-intelligence',
+            subtitle: 'pnpm test --filter sample-product',
             detail: 'Command failed: exit code 1\nstack trace follows',
             approvalId: null,
             toolCallId: 'tool-bash',
@@ -86,7 +86,7 @@ describe('AgentRuntimeActivityPanel', () => {
     )
 
     // The command sits on the row itself; the failure reason gets one line; the payload folds.
-    expect(markup).toContain('>pnpm test --filter market-intelligence<')
+    expect(markup).toContain('>pnpm test --filter sample-product<')
     expect(markup).toContain('agent-runtime-activity-error')
     expect(markup).toContain('Command failed: exit code 1')
     expect(markup).toContain('>输入<')

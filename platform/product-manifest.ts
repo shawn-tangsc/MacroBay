@@ -11,9 +11,9 @@ export interface LocalizedText {
 /**
  * 产品**声明**的工具审批字段文案：`工具名 → 字段名 → 两种语言的一句话`。
  *
- * 为什么不在壳层写：那些字段名（情报源、采集节奏、目标语言……）是产品业务概念，
- * 平台删掉产品包之后不该还留着它们的名字与文案。壳层只提供「把请求参数画成字段行」的能力，
- * 词由产品给——取不到就不画字段行，退回原来的 JSON 摘要，而不是编一个名字。
+ * 为什么不在壳层写：那些字段名是产品的业务概念，平台删掉产品包之后不该还留着它们的名字与文案。
+ * 壳层只提供「把请求参数画成字段行」的能力，词由产品给——取不到就不画字段行，退回原来的
+ * JSON 摘要，而不是编一个名字。
  */
 export type ProductApprovalFieldLabelTable = Readonly<
   Record<string, Readonly<Record<string, LocalizedText>>>

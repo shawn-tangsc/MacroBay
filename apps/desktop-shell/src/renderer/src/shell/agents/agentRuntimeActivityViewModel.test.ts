@@ -37,7 +37,8 @@ describe('agent runtime activity view model', () => {
           ]
         },
         toolApprovals: [],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -80,7 +81,8 @@ describe('agent runtime activity view model', () => {
         sessionId: 'session-1',
         chunksBySessionId: { 'session-1': chunks },
         toolApprovals: [approval],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -123,7 +125,8 @@ describe('agent runtime activity view model', () => {
           ]
         },
         toolApprovals: [],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -167,7 +170,8 @@ describe('agent runtime activity view model', () => {
             resolutionSource: 'runtime-dispose'
           }
         ],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -218,7 +222,8 @@ describe('agent runtime activity view model', () => {
             toolName: 'Bash'
           }
         ],
-        text: t
+        text: t,
+        language: 'en-US'
       }).find((card) => card.kind === 'approval')
     ).toMatchObject({
       key: 'approval:approval-1',
@@ -264,7 +269,8 @@ describe('agent runtime activity view model', () => {
           ]
         },
         toolApprovals: [],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -318,7 +324,8 @@ describe('agent runtime activity view model', () => {
           ]
         },
         toolApprovals: [],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -367,7 +374,8 @@ describe('agent runtime activity view model', () => {
           ]
         },
         toolApprovals: [],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -424,7 +432,8 @@ describe('agent runtime activity view model', () => {
           ]
         },
         toolApprovals: [],
-        text: t
+        text: t,
+        language: 'en-US'
       })
     ).toEqual([
       {
@@ -440,7 +449,7 @@ describe('agent runtime activity view model', () => {
     ])
   })
 
-  it('renders a known product write as labelled request parameters', () => {
+  it('renders a declared capability as labelled request parameters', () => {
     const card = buildAgentRuntimeActivityCards({
       sessionId: 'session-1',
       chunksBySessionId: {
@@ -449,10 +458,10 @@ describe('agent runtime activity view model', () => {
             type: 'tool-input-available',
             sessionId: 'session-1',
             toolCallId: 'tool-1',
-            toolName: 'mcp__market-intelligence__configure_intelligence_source',
+            toolName: 'write_widget',
             input: {
               action: 'set-enabled',
-              sourceId: 'coingecko-trending',
+              sourceId: 'example-source',
               enabled: true
             }
           },
@@ -464,14 +473,22 @@ describe('agent runtime activity view model', () => {
             providerMetadata: {
               claudeAgent: {
                 transport: 'claude-agent',
-                toolName: 'mcp__market-intelligence__configure_intelligence_source'
+                toolName: 'write_widget'
               }
             }
           }
         ]
       },
       toolApprovals: [],
-      text: t
+      text: t,
+      language: 'en-US',
+      declaredApprovalLabels: {
+        write_widget: {
+          action: { 'zh-CN': '动作', 'en-US': 'Action' },
+          sourceId: { 'zh-CN': '来源', 'en-US': 'Source' },
+          enabled: { 'zh-CN': '启用', 'en-US': 'Enabled' }
+        }
+      }
     }).find((entry) => entry.kind === 'approval')
 
     expect(card).toMatchObject({
@@ -479,14 +496,14 @@ describe('agent runtime activity view model', () => {
       approvalNotice: t.approvalRequestParamsNotice,
       approvalFields: [
         { label: 'Action', value: 'set-enabled' },
-        { label: 'Source', value: 'coingecko-trending' },
+        { label: 'Source', value: 'example-source' },
         { label: 'Enabled', value: 'true' }
       ]
     })
-    expect(card?.approvalInputText).toContain('"sourceId": "coingecko-trending"')
+    expect(card?.approvalInputText).toContain('"sourceId": "example-source"')
   })
 
-  it('falls back to the existing summary when a known capability carries an unlabelled field', () => {
+  it('falls back to the existing summary when a declared capability carries an unlabelled field', () => {
     const card = buildAgentRuntimeActivityCards({
       sessionId: 'session-1',
       chunksBySessionId: {
@@ -495,7 +512,7 @@ describe('agent runtime activity view model', () => {
             type: 'tool-input-available',
             sessionId: 'session-1',
             toolCallId: 'tool-1',
-            toolName: 'mcp__market-intelligence__configure_intelligence_source',
+            toolName: 'write_widget',
             input: { action: 'set-enabled', mysteryField: 'kept' }
           },
           {
@@ -506,14 +523,18 @@ describe('agent runtime activity view model', () => {
             providerMetadata: {
               claudeAgent: {
                 transport: 'claude-agent',
-                toolName: 'mcp__market-intelligence__configure_intelligence_source'
+                toolName: 'write_widget'
               }
             }
           }
         ]
       },
       toolApprovals: [],
-      text: t
+      text: t,
+      language: 'en-US',
+      declaredApprovalLabels: {
+        write_widget: { action: { 'zh-CN': '动作', 'en-US': 'Action' } }
+      }
     }).find((entry) => entry.kind === 'approval')
 
     expect(card?.approvalFields).toBeUndefined()
@@ -548,7 +569,9 @@ describe('agent runtime activity view model', () => {
         ]
       },
       toolApprovals: [],
-      text: t
+      text: t,
+      language: 'en-US',
+      declaredApprovalLabels: {}
     }).find((entry) => entry.kind === 'approval')
 
     expect(card?.approvalFields).toBeUndefined()

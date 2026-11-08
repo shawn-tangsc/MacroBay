@@ -1,4 +1,4 @@
-import type { LocalizedText } from '../product-manifest'
+import type { LocalizedText, ProductSettingsNavIntent } from '../product-manifest'
 import type { WorkspacePanelRegistration } from '../workspace/contracts'
 
 export interface GeneratedProductPanelEntry {
@@ -41,6 +41,11 @@ export interface GeneratedProductSettingsEntry {
   title: LocalizedText
   icon: string
   order: number
+  /**
+   * 产品声明的业务意图（见 `ProductSettingsNavIntent`）：壳层按它找「该带用户去配置哪一页」，
+   * 而不是在壳里写死某个产品的面板 id。未声明时字段不存在——这页不承担任何带路场景。
+   */
+  navIntent?: ProductSettingsNavIntent
   load: () => Promise<unknown>
 }
 
@@ -57,4 +62,9 @@ export interface GeneratedProductRegistry {
   menuEntries: readonly PreparedProductMenuEntry[]
   settingsEntries: readonly PreparedProductSettingsEntry[]
   panelEntries: readonly PreparedProductPanelEntry[]
+  /**
+   * 工具名 → 字段名 → 两种语言的一句话，由各产品在自己的 manifest 里声明、生成期汇总。
+   * 壳层只读这张表：它不写任何产品字段名，取不到就退回 JSON 摘要。
+   */
+  approvalFieldLabels: Readonly<Record<string, Readonly<Record<string, LocalizedText>>>>
 }

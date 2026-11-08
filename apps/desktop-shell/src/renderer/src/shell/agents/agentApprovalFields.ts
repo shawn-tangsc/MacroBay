@@ -1,29 +1,38 @@
+import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { productApprovalFieldLabels } from '@products/generated/shellRegistry'
+
 import type { AgentText } from './agentText'
 import { resolveToolDisplayName } from './agentToolCallSummary'
 
 export type AgentApprovalField = Readonly<{ label: string; value: string }>
 
-/** The product write tools whose request parameters the approval card can label. */
-const LABELLED_APPROVAL_CAPABILITIES = new Set([
-  'configure_intelligence_source',
-  'operate_intelligence_source',
-  'operate_macro_calendar',
-  'configure_translation',
-  'configure_cross_asset_interface'
-])
+/** 产品声明的标签表形状（工具名 → 字段名 → 两种语言）。生成物与测试都用这一份。 */
+export type AgentApprovalLabelTable = Readonly<
+  Record<string, Readonly<Record<string, { 'zh-CN': string; 'en-US': string }>>>
+>
+
 const APPROVAL_VALUE_LIMIT = 160
 
 /**
- * Known product write capability -> its input as field/value rows. The values are what the model
- * asked for, never what the write produced. An unknown capability or an unlabelled field returns
- * null so the card keeps its existing summary rather than inventing a name or dropping a field.
+ * 请求参数 → 字段行。
+ *
+ * 壳层**不认识任何产品字段名**：哪张表能画、字段叫什么，都由产品在自己的 manifest 里声明
+ * （`agentApprovalFieldLabels`），生成物汇总成一张表。所以：
+ * - 这个工具没人声明 → null，卡片保留原来的 JSON 摘要；
+ * - 某个字段没人声明 → 也返回 null：画一半字段等于把剩下的悄悄藏起来，比不画更糟。
+ *
+ * 值的含义也不变：是模型请求的参数，不是写成功后的结果。
  */
 export function structuredApprovalInput(
   toolName: string,
   input: unknown,
-  text: AgentText['runtimeActivity']
+  language: AppLanguage,
+  text: AgentText['runtimeActivity'],
+  /** 默认取产品声明汇总表；测试传自己的表，壳层因此不需要认识任何产品工具名。 */
+  declaredLabels: AgentApprovalLabelTable = productApprovalFieldLabels
 ): readonly AgentApprovalField[] | null {
-  if (!LABELLED_APPROVAL_CAPABILITIES.has(resolveToolDisplayName(toolName))) return null
+  const labelTable = declaredLabels[resolveToolDisplayName(toolName)]
+  if (!labelTable) return null
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null
   const entries = Object.entries(input as Record<string, unknown>).filter(
     ([, value]) => value !== undefined
@@ -31,7 +40,7 @@ export function structuredApprovalInput(
   if (entries.length === 0) return null
   const fields: AgentApprovalField[] = []
   for (const [field, value] of entries) {
-    const label = text.approvalFieldLabels[field]
+    const label = labelTable[field]?.[language]
     // An unlabelled field means this card cannot be explained field by field; falling back to
     // the existing JSON summary is safer than inventing a label or dropping the field.
     if (!label) return null
@@ -64,7 +73,7 @@ function truncateApprovalValue(value: string): string {
 }
 
 /**
- * Attach the raw editor text and, for a listed capability, the labelled request rows. A card
+ * Attach the raw editor text and, for a declared capability, the labelled request rows. A card
  * without matching tool input is left untouched so an unknown tool keeps its current rendering.
  */
 export function attachApprovalInputs<
@@ -77,13 +86,15 @@ export function attachApprovalInputs<
 >(
   cards: Map<string, TCard>,
   approvalInputByToolCallId: Map<string, { text: string; input: unknown }>,
-  text: AgentText['runtimeActivity']
+  language: AppLanguage,
+  text: AgentText['runtimeActivity'],
+  declaredLabels: AgentApprovalLabelTable = productApprovalFieldLabels
 ): void {
   for (const [key, card] of cards.entries()) {
     if (card.kind !== 'approval' || !card.toolCallId) continue
     const approvalInput = approvalInputByToolCallId.get(card.toolCallId)
     if (!approvalInput) continue
-    const fields = structuredApprovalInput(card.title, approvalInput.input, text)
+    const fields = structuredApprovalInput(card.title, approvalInput.input, language, text, declaredLabels)
     cards.set(key, {
       ...card,
       ...(card.approvalInputText ? {} : { approvalInputText: approvalInput.text }),

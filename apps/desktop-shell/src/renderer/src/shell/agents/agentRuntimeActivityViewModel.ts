@@ -1,5 +1,7 @@
 import type { AgentRuntimeSessionChunk, AgentSessionRuntimeSnapshot, AgentSessionToolApproval } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 
+import type { AppLanguage } from '@platform/settings/schema/appSettings'
+
 import type { AgentText } from './agentText'
 import { serializeApprovalInput } from './agentRuntimeApprovalInput'
 import {
@@ -9,7 +11,7 @@ import {
   summarizeRuntimeValue
 } from './agentRuntimeActivityFormat'
 import { resolveToolDisplayName, summarizeToolCallInput } from './agentToolCallSummary'
-import { attachApprovalInputs } from './agentApprovalFields'
+import { attachApprovalInputs, type AgentApprovalLabelTable } from './agentApprovalFields'
 
 export type AgentRuntimeActivityStatus = 'pending' | 'running' | 'done' | 'error' | 'denied'
 
@@ -37,6 +39,10 @@ type BuildAgentRuntimeActivityCardsInput = {
   toolApprovals: AgentSessionToolApproval[]
   toolApprovalHistory?: AgentSessionRuntimeSnapshot['toolApprovalHistory']
   text: AgentText['runtimeActivity']
+  /** 审批字段的名字由产品声明；壳层只按当前语言取，取不到就不画字段行。 */
+  language: AppLanguage
+  /** 仅测试用：覆盖产品声明汇总表；不给就用生成物里那张。 */
+  declaredApprovalLabels?: AgentApprovalLabelTable
 }
 
 type ToolCardDraft = AgentRuntimeActivityCard & { inputText: string; toolSummary: string | null }
@@ -88,7 +94,7 @@ export function buildAgentRuntimeActivityCards(input: BuildAgentRuntimeActivityC
     })
   }
 
-  attachApprovalInputs(cards, approvalInputByToolCallId, input.text)
+  attachApprovalInputs(cards, approvalInputByToolCallId, input.language, input.text, input.declaredApprovalLabels)
   return [...cards.values()].map(stripDraftFields)
 }
 
