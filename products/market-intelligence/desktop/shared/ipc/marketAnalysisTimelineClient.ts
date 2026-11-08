@@ -311,12 +311,36 @@ function sanitizeRun(value: unknown): MarketAnalysisTimelineDetail['run'] | unde
   return { id: value.id, eventGroupId: value.eventGroupId, analysisPhase: value.analysisPhase as MarketAnalysisTimelineDetail['run']['analysisPhase'], status: value.status as MarketAnalysisTimelineDetail['run']['status'], asOf: value.asOf, dataCutoff: value.dataCutoff, evidenceCount: value.evidenceCount, change: change ?? null }
 }
 
+/**
+ * 摘要载荷**必须**有的顶层键（信封字段 + 模型必填段）。
+ *
+ * 与可选键一起提成常量，是为了让「服务侧能持久化的键」与这里的白名单能被一条用例逐字对齐：
+ * 少认一个键，整条详情就变「暂不可用」——2026-11-08 就是这么坏的（`divergences` 不在白名单里）。
+ */
+export const SUMMARY_REQUIRED_FIELDS = [
+  'id', 'schemaVersion', 'analysisRunId', 'eventGroupId', 'version', 'knownFacts', 'transmissionHypotheses',
+  'marketReaction', 'supportingEvidence', 'counterEvidence', 'scenarios', 'nextCatalysts', 'dataCaveats',
+  'evidenceRefs', 'createdAt'
+] as const
+
+/**
+ * 摘要在服务侧**可以不出现**的顶层键：`directions` / `eventAssessment`（旧版自由文本）/
+ * `conclusion`（结构化结论）/ `divergences`（背离自我声明）。
+ *
+ * `divergences` 的口径（产品 2026-11-08，写死在这里免得下一个人当漏项补上）：
+ * **该字段进入分析结果，不进入详情渲染**——模型对某一对的判断与卡片上那条确定性判定是同一条事实的
+ * 两个判断，详情再列一遍就是第二套说法；真要解释"这条背离不影响判断"，由结论正文那句话负责。
+ * 「模型说无背离、事实里有背离」由分析侧硬校验拒收，界面不并列两种说法。
+ *
+ * 但**读取端必须认得这个键**：它不在白名单里的那天，整条详情被判成不可用（2026-11-08 的事故）。
+ * 认得 ≠ 渲染：这里只做到"有它不整条拒"。
+ */
+export const SUMMARY_OPTIONAL_FIELDS = ['directions', 'eventAssessment', 'conclusion', 'divergences'] as const
+
 function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'] | undefined {
-  const fields = ['id', 'schemaVersion', 'analysisRunId', 'eventGroupId', 'version', 'knownFacts', 'transmissionHypotheses', 'marketReaction', 'supportingEvidence', 'counterEvidence', 'scenarios', 'nextCatalysts', 'dataCaveats', 'evidenceRefs', 'createdAt']
-  // `directions`, `eventAssessment` (legacy) and `conclusion` (structured) are all optional: a
-  // summary from either contract generation must render, and a missing optional field must never
-  // turn the detail into "unavailable".
-  if (!isExactRecordWithOptionals(value, fields, ['directions', 'eventAssessment', 'conclusion']) || value.schemaVersion !== 1 ||
+  const fields = SUMMARY_REQUIRED_FIELDS
+  // 可选键缺席一律不判错：两种契约世代的摘要都要能渲染，少一个可选字段不许把详情变成「读不到」。
+  if (!isExactRecordWithOptionals(value, fields, SUMMARY_OPTIONAL_FIELDS) || value.schemaVersion !== 1 ||
     !isText(value.id) || typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1 ||
     !isCanonicalTime(value.createdAt)) return undefined
   // Caveats are rendered, so an over-long list is truncated; the evidence references are only
