@@ -30,8 +30,9 @@ export type PushDeliveryReading = Readonly<{
 export type SuppressionReason =
   | 'quiet-hours'
   | 'daily-limit'
-  | 'cooldown'
+  | 'minimum-gap'
   | 'surface-off'
+  | 'not-subscribed'
   | 'not-approved'
   | 'desktop-unsupported'
 
@@ -61,8 +62,9 @@ export type SendOutcomeState =
   | Readonly<{ state: 'failed'; reason: string }>
 
 /** 认得的压下原因闭集：认不出的一律按「没排上」处理，不编一个原因给读者。 */
+/** 闭集就这七个，映射表按这七个出人话；要加第八种先问产品，不许自己造一个码。 */
 const SUPPRESSION_REASONS: readonly SuppressionReason[] = [
-  'quiet-hours', 'daily-limit', 'cooldown', 'surface-off', 'not-approved', 'desktop-unsupported'
+  'quiet-hours', 'daily-limit', 'minimum-gap', 'surface-off', 'not-subscribed', 'not-approved', 'desktop-unsupported'
 ]
 
 export function classifySendReceipt(receipt: SendReceiptView): SendOutcomeState {

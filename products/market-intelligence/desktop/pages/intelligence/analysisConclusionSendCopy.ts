@@ -51,8 +51,9 @@ function suppressedSentence(reason: Extract<SendOutcomeState, { state: 'suppress
   switch (reason) {
     case 'quiet-hours': return text.quietHours
     case 'daily-limit': return text.dailyLimit
-    case 'cooldown': return text.cooldown
+    case 'minimum-gap': return text.minimumGap
     case 'surface-off': return text.surfaceOff
+    case 'not-subscribed': return text.notSubscribed
     case 'not-approved': return text.notApproved
     case 'desktop-unsupported': return text.desktopUnsupported
   }

@@ -36,9 +36,9 @@ describe('reading one send receipt', () => {
     })
     expect(state).toEqual({ state: 'suppressed', reason: 'quiet-hours' })
     const copy = describeSendStatus({ state, text: zh, time })
-    expect(copy.message).toContain('免打扰时段')
-    // 这是「没真的发出去」，不是通道故障：句子不许落到那句上，也不给原因码。
-    expect(copy.message).not.toContain('没发到手机')
+    // 免打扰是「筛掉」不是「顺延」：句子既要说明不会补发，也要给出此刻能做的那一步。
+    expect(copy.message).toContain('不会自动补发')
+    expect(copy.message).toContain('关掉免打扰再点一次')
     expect(copy.reasonCode).toBeUndefined()
   })
 

@@ -3,20 +3,34 @@ import { describe, expect, it } from 'vitest'
 import { readSendReceipt } from './analysisConclusionSendClient'
 
 /**
- * 回执解析只有一条规矩：**认不出形状就报错，不许猜成成功、也不许猜成某一种失败**。
- * 猜成成功会让界面在没发出去的时候说「已发出」；猜成失败会把「没配通道」和「今天到上限」混成一句。
+ * 回执解析的两条规矩：
+ * 1. **认不出形状就报错**——不猜成成功，也不猜成某一种失败；
+ * 2. **投递结果就在回执里**（`delivery.push` / `delivery.suppressed`），不再去读一次记录；
+ *    没带就是「这次没有投递」，那是「只在应用内」，不是「已发到」。
  */
 describe('reading the send receipt', () => {
-  it('keeps an accepted record and its levels', () => {
-    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1', levels: ['center', 'channel'] }))
-      .toEqual({ kind: 'accepted', recordId: 'n-1', levels: ['center', 'channel'] })
+  it('keeps the delivery the platform reported for this submit', () => {
+    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1', delivery: { push: { state: 'sent-accepted' } } }))
+      .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-accepted' } } })
+    // 「没拿到回执」也是一档，原样带过来，界面负责说得准。
+    expect(readSendReceipt({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } }))
+      .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } })
   })
 
-  it('drops levels it cannot read instead of guessing them', () => {
-    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1', levels: ['center', 7] }))
-      .toEqual({ kind: 'accepted', recordId: 'n-1', levels: ['center'] })
-    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1' }))
-      .toEqual({ kind: 'accepted', recordId: 'n-1', levels: [] })
+  it('keeps the suppression reason, and ignores a reason the closed set does not have', () => {
+    expect(readSendReceipt({ kind: 'accepted', delivery: { suppressed: [{ level: 'channel', reason: 'quiet-hours' }] } }))
+      .toEqual({ kind: 'accepted', delivery: { suppressed: [{ level: 'channel', reason: 'quiet-hours' }] } })
+    // 认不出的码不当成某一种原因：整条压下信息丢掉，于是判成「没排上」，绝不当成功。
+    expect(readSendReceipt({ kind: 'accepted', delivery: { suppressed: [{ level: 'channel', reason: 'brand-new-reason' }] } }))
+      .toEqual({ kind: 'accepted' })
+  })
+
+  it('treats an accepted submit without a delivery result as "no delivery this time"', () => {
+    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1' })).toEqual({ kind: 'accepted' })
+    // merged 只在真升级时带投递结果；不带就是没有这次投递。
+    expect(readSendReceipt({ kind: 'merged', recordId: 'n-1', occurrenceCount: 2 })).toEqual({ kind: 'accepted' })
+    expect(readSendReceipt({ kind: 'merged', recordId: 'n-1', delivery: { push: { state: 'failed', reason: 'push-unavailable' } } }))
+      .toEqual({ kind: 'accepted', delivery: { push: { state: 'failed', reason: 'push-unavailable' } } })
   })
 
   it('hands a rejection reason through untouched', () => {
@@ -25,7 +39,7 @@ describe('reading the send receipt', () => {
   })
 
   it('refuses a receipt it cannot read, rather than calling it a success', () => {
-    for (const value of [undefined, null, 'ok', {}, { kind: 'accepted' }, { kind: 'rejected' }]) {
+    for (const value of [undefined, null, 'ok', {}, { kind: 'rejected' }, { kind: 'collapsed' }]) {
       expect(() => readSendReceipt(value)).toThrow('analysis-conclusion-send-unreadable')
     }
   })

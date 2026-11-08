@@ -25,12 +25,17 @@ export type AnalysisConclusionSendText = Readonly<{
   sentUnconfirmed: string
   /** 记录在、中心有条，手机那一档没排上（没给原因）。 */
   appOnly: string
-  /** 被压下：设备在免打扰时段。下一步是关勿扰或明天再试，不是查通道。 */
+  /**
+   * 被压下：设备在免打扰时段。**免打扰是「筛掉」不是「顺延」**——平台摘掉手机档之后没有任何补发路径，
+   * 所以句子必须说「不会自动补发」，并给出现在就能做的那一步（关掉免打扰再点一次）。
+   */
   quietHours: string
   /** 被压下：平台每日上限。下一步是等明天。 */
   dailyLimit: string
-  /** 被压下：冷却中（同类通知刚发过不久）。 */
-  cooldown: string
+  /** 被压下：同一触发键的最小间隔内（同类通知刚发过）。 */
+  minimumGap: string
+  /** 被压下：读者没有订阅这条事件的手机档。 */
+  notSubscribed: string
   /** 被压下：读者自己关了这条事件的手机档。 */
   surfaceOff: string
   /** 被压下：该档没有批准（代码与批准表不一致，属缺陷，但界面不许装成成功）。 */
@@ -58,9 +63,10 @@ const zh: AnalysisConclusionSendText = {
   sentAccepted: '已发到 {channel} · {time}',
   sentUnconfirmed: '已交给 {channel}，没拿到回执 · {time}',
   appOnly: '只留在应用内，没到手机 · {time}',
-  quietHours: '这次没有真的发出去：设备在免打扰时段，关掉勿扰或明天再试',
+  quietHours: '这次没发到手机：现在是免打扰时段，不会自动补发。要现在验通道，关掉免打扰再点一次。',
   dailyLimit: '今天的上限到了（每天 4 条），明天再发',
-  cooldown: '同类通知刚发过，这一条被合并了；稍后可以再发一次',
+  minimumGap: '这次没发到手机：同类通知刚发过，还在最小间隔内，过一会儿再点一次',
+  notSubscribed: '你没订阅这条通知的手机档，这次只留在应用内',
   surfaceOff: '你关掉了这条通知的手机档，这次只留在应用内',
   notApproved: '这个版本没有批准这一档，没发出去',
   desktopUnsupported: '这台设备收不了这类通知',
@@ -80,9 +86,10 @@ const en: AnalysisConclusionSendText = {
   sentAccepted: 'Sent to {channel} · {time}',
   sentUnconfirmed: 'Handed to {channel}, no receipt yet · {time}',
   appOnly: 'Stayed in the app, not sent to your phone · {time}',
-  quietHours: 'Not actually sent this time: your device is in quiet hours — turn it off or try tomorrow',
+  quietHours: 'Not sent to your phone this time: it is quiet hours now, and nothing is resent later. To test the channel, turn quiet hours off and send again.',
   dailyLimit: 'Today’s limit is reached (4 a day) — try again tomorrow',
-  cooldown: 'A notification like this one just went out, so this one was merged; you can send again later',
+  minimumGap: 'Not sent to your phone: a notification like this one just went out, so it is inside the minimum gap — send again shortly',
+  notSubscribed: 'You have the phone leg turned off for this notification, so it stayed in the app',
   surfaceOff: 'You turned off the phone leg for this notification, so it stayed in the app',
   notApproved: 'This build has not approved that leg, so nothing was sent',
   desktopUnsupported: 'This device cannot receive this kind of notification',
