@@ -54,12 +54,11 @@ export type NotificationEventDeclaration = {
   /**
    * 这条事件的**批准档位与归组**——最终归声明者（`notification-event-declaration-shape.md` §1）。
    *
-   * **今天平台还不读它**：生效值仍来自 `notificationEventPolicy.ts` 那张表，等产品把 10 条补齐、
-   * catalog 改成读声明之后，那张表才会被删掉。这一笔只让字段先存在，所以**行为零变化**——
-   * 现在把它删掉，没有任何测试会红，这正是「平台还没读」的机械证据。
+   * **迁移期的兜底形参，平台已经不读它**：生效值只来自各来源自己的 `approval`（契约 §7.1b）。
+   * 留着它是为了让「删掉它必须红」这条反向验证有对象——b3-5 会连同兜底分支一起删。
    *
-   * 为什么不新开一节放它：`id` 已经在这个声明里出现一次，档位放到第二处就又是「同一件事两个
-   * 声明处」，而平台那张表今天正是那个第二处。
+   * 为什么不新开一节放批准：`id` 已经在这个声明里出现一次，档位放到第二处就又是「同一件事两个
+   * 声明处」，平台那张表曾经正是那个第二处（b3-3 已删）。
    */
   policy?: {
     approvedDisruptionLevels: readonly NotificationApprovedLevel[]

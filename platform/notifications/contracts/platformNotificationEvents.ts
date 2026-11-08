@@ -1,8 +1,8 @@
 /**
  * 平台事件声明表（契约 §2）：平台自己产生的 13 条通知事件（P8 于 2026-11-04 新增；P9–P12 于 2026-11-06 签）。
  *
- * 与产品 manifest 里的声明**同形**，只是声明者固定为 `platform`；批准值不在这里——
- * 生效表面只读 `notificationEventPolicy.ts` 的批准表（契约 §4：「生效值只读批准表」）。
+ * 与产品 manifest 里的声明**同形**，只是声明者固定为 `platform`；批准值在同文件的
+ * `PLATFORM_NOTIFICATION_APPROVALS` 里——批准随声明走，装配时与各产品那份合成批准视图。
  *
  * 键名由事件 id 机械生成（`notificationEventTitleKey` / `notificationEventReasonKey`），
  * 句子归文案表；这里一条句子都不写，免得两处都能改。

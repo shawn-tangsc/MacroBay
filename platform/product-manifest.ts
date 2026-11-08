@@ -232,17 +232,16 @@ export interface ProductManifest {
   /**
    * 该产品**声明**的通知事件（契约 §3）。目录由平台汇总注入，平台不 import 产品代码。
    *
-   * 每条声明可以带 `policy`（批准档位与归组）。**过渡期**里生效值仍来自
-   * `platform/notifications/contracts/notificationEventPolicy.ts` 那张表，平台还不读声明里的
-   * `policy`；等产品全部补齐、catalog 改读声明之后，那张表才删。
+   * 生效的批准值来自下面同侧的 `notificationApproval`（契约 §7.1b），**不在这里**：
+   * 声明写「申请」，批准写「批准」，装配时 `requested ⊆ approved` 才有意义。
    * 形状错误在生成期报（`validate.ts`），不等到读者勾了订阅才发现永远不响。
    */
   notificationEvents?: readonly NotificationEventDeclaration[]
   /**
    * 该产品**声明**的批准值（契约 §7.1b，2026-11-08）：`{ '<eventTypeId>': 批准行 }`，**值由产品自己签**。
    *
-   * 迁移期与平台那张批准表**并存**：装配先把这张表合进目录，平台表仍在原处、兜底未删，行为不变。
-   * 声明里的 id 必须出现在本产品的 `notificationEvents` 里（目录装配时校验）。可选，之后改必填。
+   * 平台与产品各带自己那份，装配时合成一份批准视图（`mergeApprovalView`）；同一 id 出现在
+   * 两个来源即为装配错误。声明里的 id 必须出现在本产品的 `notificationEvents` 里（装配时校验）。
    */
   notificationApproval?: Readonly<Record<string, NotificationEventPolicyEntry>>
   /**
