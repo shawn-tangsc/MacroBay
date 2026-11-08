@@ -4,7 +4,6 @@ import { notificationCopy } from '@platform/i18n/notificationCopy'
 import { createNotificationCopyPort, type JobTitleResolver } from '@platform/notifications/contracts/notificationCopyPort'
 import { productNotificationCopyTables } from './notificationCopyTables'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import type {
   NotificationDiagnosticsSink,
@@ -69,8 +68,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
           // 批准值随声明走（契约 §7.1b）：迁移期与平台表并存，兜底仍在，行为不变。
           ...(manifest.notificationApproval === undefined ? {} : { approval: manifest.notificationApproval })
         }))
-    ],
-    policy: NOTIFICATION_EVENT_POLICY
+    ]
   })
 
   const producerOwnership = createNotificationProducerOwnership({ manifests: ports.manifests })

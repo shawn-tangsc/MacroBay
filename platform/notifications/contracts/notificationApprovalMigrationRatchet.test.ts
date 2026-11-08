@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  * 所以把处数写成基线，每迁一批改小一次；**减到 0 时，这条用例自己要求删参数、删表、删自己**，
  * 终点由代码说，不靠谁记着。静默兜底是这个项目反复踩的坑，这里也一样：数字不降就是在原地。
  */
-const BASELINE: number = 30
+const BASELINE: number = 29
 
 function callSites(): string[] {
   const found: string[] = []

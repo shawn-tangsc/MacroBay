@@ -163,7 +163,10 @@ const REQUESTED_LEVELS: readonly NotificationRequestedLevel[] = ['toast', 'popup
  */
 export function createNotificationEventCatalog(input: {
   sources: readonly NotificationEventDeclarationSource[]
-  policy: NotificationEventPolicy
+  /**
+   * **迁移期兜底**（契约 §7.1b）：来源没给某条 `approval` 时才读它。棘轮减到 0 时连同这个参数一起删。
+   */
+  policy?: NotificationEventPolicy
 }): NotificationEventCatalog {
   const entries: NotificationEventCatalogEntry[] = []
   const byId = new Map<string, NotificationEventCatalogEntry>()
@@ -197,7 +200,7 @@ export function createNotificationEventCatalog(input: {
       // 只在来源没给这一条时被读。兜底不是静默的：`usedPolicyFallback` 记下用的是哪几条，
       // 由调用方决定怎么报——静默兜底是这个项目反复踩的坑。
       const fromSource = source.approval?.[declaration.id]
-      const policy = fromSource ?? input.policy[declaration.id]
+      const policy = fromSource ?? input.policy?.[declaration.id]
       if (fromSource === undefined && policy !== undefined) usedPolicyFallback.push(declaration.id)
       // 没有批准记录 = 只进中心（契约 §4 第二句）：**不报错**，因为「还没批」是合法状态。
       // 只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
