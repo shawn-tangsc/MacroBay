@@ -6,6 +6,12 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingSpinner } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 
+import type {
+  IntelligenceTestKind,
+  IntelligenceTestReceipt
+} from '../../../contracts/intelligenceNotificationTest'
+import { sendIntelligenceTestNotification } from '../../shared/ipc/intelligenceNotificationTestClient'
+
 /**
  * 通知配置项后面的「发一条…」测试按钮（需求 v4 §5、技术方案 §3、原型 `2026-11-08-notification-test-buttons-v1`）。
  *
@@ -19,16 +25,8 @@ import { Popover } from '@platform/ui/components/popover'
  * 超时（10 秒）按失败处理，但**不编一个码**：超时不是主进程返回的结论，硬塞 `read-failed` 之类就是把
  * 「没拿到」写成「读失败」。这条失败句只有人话，没有折叠区。
  */
-export type TestNotificationKind = 'sentiment' | 'calendar-upcoming' | 'calendar-landed'
-
-type SendTestResult =
-  | { state: 'sent'; channelId: string; channelName: string }
-  | { state: 'no-data'; reasonCode: string }
-  | { state: 'unavailable'; reasonCode: string; enabledChannelCount?: number }
-
-type TestNotificationApi = {
-  sendTest?: (input: { kind: TestNotificationKind }) => Promise<SendTestResult>
-}
+/** kind 与回执都来自产品自己的契约（`contracts/intelligenceNotificationTest.ts`），本组件不另定义一份。 */
+export type TestNotificationKind = IntelligenceTestKind
 
 const TEST_TIMEOUT_MS = 10_000
 
@@ -64,18 +62,14 @@ export function TestNotificationButton(props: Readonly<{
   async function run(): Promise<void> {
     if (sending || props.disabled) return
     setPhase({ kind: 'sending' })
-    const api = (window.platform?.notifications ?? undefined) as unknown as TestNotificationApi | undefined
-    const call = api?.sendTest?.({ kind: props.kind })
-    if (!call) {
-      setPhase({ kind: 'failed', reasonCode: null, channelCount: null })
-      return
-    }
     // 超时只给「失败 + 人话」，不给码：码必须来自主进程的结论。
     const timeout = new Promise<null>((resolve) => {
       timerRef.current = setTimeout(() => resolve(null), TEST_TIMEOUT_MS)
     })
     try {
-      const result = await Promise.race([call, timeout])
+      // 调的是**产品自己的 IPC**（`intelligence.sendTestNotification`），不是平台的链路自检：
+      // 取数、拼句、去重键都在主进程，渲染层只交 kind。
+      const result: IntelligenceTestReceipt | null = await Promise.race([sendIntelligenceTestNotification(props.kind), timeout])
       if (result === null) {
         setPhase({ kind: 'failed', reasonCode: null, channelCount: null })
         return

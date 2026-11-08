@@ -22,6 +22,11 @@ import { createNewsPushLedgerStore, newsPushLedgerPolicy } from '../news-sentime
 import { createNewsPushOutletService } from '../news-sentiment/newsPushOutletService'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
+import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNotificationTest'
+import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
+import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
+import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
+import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -86,8 +91,37 @@ export function registerIntelligenceIpc(
     read: () => unknown
     write: (patch: Readonly<Record<string, unknown>>) => unknown
     applySchedule: (enabled: boolean) => void
+    /** 提醒作业**原样暴露**的那一份事件读取：测试样例必须与真实提醒同源。 */
+    readEvents: CalendarEventReminderWiring['readEvents']
+  }>,
+  /**
+   * 三枚测试按钮要的平台侧接缝：通道解析、提交入口、数据源状态、读者时区。
+   *
+   * 由装配处（`bootstrap.ts`）注入，不在这里 import：注册器保持纯转发，用例可以只喂这几个函数。
+   * 缺它是允许的（某些装配不接通知），但那时**这个方法不注册**——不会留下一个点了报错的入口。
+   */
+  notificationTest?: Readonly<{
+    readEnabledCalendarFeeds: () => Promise<readonly string[]>
+    getTimeZone: () => string
+    getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
+    resolvePushChannel: () => Promise<PushChannelResolution>
+    submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+    now?: () => string
   }>
 ): void {
+  if (notificationTest && calendarReminder) {
+    // 注册器这一侧的 `read` 只声明成 `unknown`（它给设置页读整份视图）；测试样例要的是**类型化**的
+    // 那一份。两者是同一个存储的同一次读取——这里按契约收窄，不另读一次。
+    const testDeps = {
+      ...notificationTest,
+      intelligence: intelligenceModule,
+      calendarReminder: calendarReminder as unknown as Pick<CalendarEventReminderWiring, 'read' | 'readEvents'>
+    }
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.sendTestNotification, async (payload) =>
+      sendIntelligenceTestNotification(parseIntelligenceTestRequest(payload), testDeps)
+    )
+  }
+
   if (calendarReminder) {
     register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getCalendarReminderSettings, async () => calendarReminder.read())
     register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.setCalendarReminderSettings, async (payload) => {

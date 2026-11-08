@@ -16,6 +16,11 @@ export const INTELLIGENCE_IPC_METHODS = Object.freeze({
   getCalendarReminderSettings: 'intelligence.getCalendarReminderSettings',
   setCalendarReminderSettings: 'intelligence.setCalendarReminderSettings',
   getTimeline: 'intelligence.getTimeline',
+  /**
+   * 设置页那三枚「发一条…」：入参只有 `{ kind }`，候选数据、成品句、去重键都在主进程拼。
+   * 渲染层传不了内容，也就不会出现「屏幕上这条」与「实际发出去那条」不是同一条。
+   */
+  sendTestNotification: 'intelligence.sendTestNotification',
   /** 抽屉里那枚「发送到频道」：入参只有运行 id，结论与文案由主进程按 id 取。 */
   sendAnalysisConclusion: 'intelligence.sendAnalysisConclusion',
   getMonitoringScope: 'intelligence.getMonitoringScope',

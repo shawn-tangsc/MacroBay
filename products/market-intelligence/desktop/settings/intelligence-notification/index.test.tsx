@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
@@ -30,34 +30,43 @@ type Stubs = {
   getDeliverySettings: ReturnType<typeof vi.fn>
   getSurfaceSelection: ReturnType<typeof vi.fn>
   setSurfaceSelection: ReturnType<typeof vi.fn>
-  sendTest: ReturnType<typeof vi.fn>
+  sendTest: Mock<(payload?: unknown) => Promise<unknown>>
   productsInvoke: ReturnType<typeof vi.fn>
 }
 
 function install(overrides: Partial<Stubs> = {}): Stubs {
+  // 三枚按钮走**产品自己的 IPC**（`intelligence.sendTestNotification`），不再调平台的链路自检。
+  const sendTest = overrides.sendTest
+    ?? vi.fn(async (_payload: unknown) => ({ state: 'sent' as const, channelId: 'slack', channelName: 'Slack' }))
+  const productsInvoke = overrides.productsInvoke ?? vi.fn(async (_productId: string, method: string, payload?: unknown) => {
+    if (String(method).includes('sendTestNotification')) return sendTest(payload)
+    if (String(method).includes('getNewsPushThreshold') || String(method).includes('saveNewsPushThreshold')) {
+      return { pushThreshold: 'medium' }
+    }
+    if (String(method).includes('getNewsPushOutletState') || String(method).includes('setNewsPushOutletEnabled')) {
+      return { enabled: true }
+    }
+    if (String(method).includes('getCalendarReminderSettings')) {
+      return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
+    }
+    if (String(method).includes('setCalendarReminderSettings')) {
+      return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
+    }
+    return { enabled: false }
+  })
   const stubs: Stubs = {
-    getChannelEvents: vi.fn(async () => ({ [IDS.signal]: true, [IDS.briefing]: true, [IDS.macro]: true })),
-    setChannelEvent: vi.fn(async (eventId: string, enabled: boolean) => ({ eventId, enabled })),
-    getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, desktopEnabled: false, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })),
-    getSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
-    setSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
-    sendTest: vi.fn(async () => ({ state: 'sent' as const, channelId: 'slack', channelName: 'Slack' })),
-    productsInvoke: vi.fn(async (_productId: string, method: string) => {
-      if (String(method).includes('getNewsPushThreshold') || String(method).includes('saveNewsPushThreshold')) {
-        return { pushThreshold: 'medium' }
-      }
-      if (String(method).includes('getNewsPushOutletState') || String(method).includes('setNewsPushOutletEnabled')) {
-        return { enabled: true }
-      }
-      if (String(method).includes('getCalendarReminderSettings')) {
-        return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
-      }
-      if (String(method).includes('setCalendarReminderSettings')) {
-        return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
-      }
-      return { enabled: false }
-    }),
-    ...overrides
+    getChannelEvents: overrides.getChannelEvents
+      ?? vi.fn(async () => ({ [IDS.signal]: true, [IDS.briefing]: true, [IDS.macro]: true })),
+    setChannelEvent: overrides.setChannelEvent
+      ?? vi.fn(async (eventId: string, enabled: boolean) => ({ eventId, enabled })),
+    getDeliverySettings: overrides.getDeliverySettings
+      ?? vi.fn(async () => ({ toastEnabled: true, desktopEnabled: false, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })),
+    getSurfaceSelection: overrides.getSurfaceSelection
+      ?? vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
+    setSurfaceSelection: overrides.setSurfaceSelection
+      ?? vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
+    sendTest,
+    productsInvoke
   }
   ;(window as unknown as { platform: unknown }).platform = {
     notifications: {
@@ -65,8 +74,7 @@ function install(overrides: Partial<Stubs> = {}): Stubs {
       setChannelEvent: stubs.setChannelEvent,
       getDeliverySettings: stubs.getDeliverySettings,
       getSurfaceSelection: stubs.getSurfaceSelection,
-      setSurfaceSelection: stubs.setSurfaceSelection,
-      sendTest: stubs.sendTest
+      setSurfaceSelection: stubs.setSurfaceSelection
     },
     products: { invoke: stubs.productsInvoke }
   }
