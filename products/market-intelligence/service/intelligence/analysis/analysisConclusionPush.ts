@@ -1,7 +1,6 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
-import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 
 /**
  * AI 分析结论推送（N12）的**判定层**：只回答"这一条要不要推、推给谁、句子写成什么"。
@@ -13,10 +12,13 @@ import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/n
  * - **同向不推手机**：信号方向与结论方向相同 → 只进中心；反向、或结论引用了信号没带的事实才算"新信息"。
  * - **第二条带上下文**：标题沿用「资产 + 规则」，正文带结论摘要与证据引用条数。
  * - **句子只有一句**：结论 + 半句理由，中文 ≤40 字 / 英文 ≤90 字符；超了**截到句末**，绝不截半句。
+ *
+ * 事件 id 不在这里：它在提交点直接引 `MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisConclusion`。
+ * 这里写一份「策略对象的字段」，生产者门禁就证明不了这条通知有人在发（它只认能静态看见的形态），
+ * 于是同一个事件会有第二个名字。
  */
 export const analysisConclusionPushPolicy = Object.freeze({
   version: 'analysisConclusionPush.v1',
-  eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisConclusion,
   /** 去重键：同一触发键 + 同一截止时刻一条；**不用 runId**（同一份证据重跑会换 runId）。 */
   dedupeKeyTemplate: 'analysis:{triggerKey}:{cutoff}',
   /** 同一触发键每天 1 条；模块每天 4 条（两条推送合计）；超出只进中心。 */
