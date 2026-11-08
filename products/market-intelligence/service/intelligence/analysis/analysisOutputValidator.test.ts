@@ -688,6 +688,28 @@ describe('signed percentages', () => {
     }
   })
 
+  it('recognises every change wording, whatever the sign character is', () => {
+    // 这条正则曾在 build 挂过：`[+＋-]` 里 `-` 紧跟全角 `＋` 被当成区间（U+FF0B → U+002D 降序）。
+    // 单测跑不到构建器，所以这里把四种写法（半角/全角、正负）各过一遍，换字符类写法会当场红。
+    for (const text of [
+      '较上一日 +0.3 个百分点。',
+      '较上一日 ＋0.3 个百分点。',
+      '较上一日 -0.3 个百分点。',
+      '较上一日 −0.3 个百分点。',
+      '24 小时变化 +0.2%。'
+    ]) {
+      expect(macro(text)).toEqual({
+        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+        rule: 'policy-probability-citation', detail: 'policy-probability-change-not-frozen'
+      })
+    }
+  })
+
+  it('does not mistake a plain probability level for a change claim', () => {
+    // `降息概率 77%` 没有变化语义：它既不是变化句，也不该被判成带符号。
+    expect(macro('降息概率 77%。')).toMatchObject({ ok: true })
+  })
+
   it('accepts the "not available yet" sentence instead of a computed number', () => {
     expect(macro('24 小时变化尚未可得。')).toMatchObject({ ok: true })
   })
