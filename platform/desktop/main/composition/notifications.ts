@@ -62,7 +62,12 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
       { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
       ...ports.manifests
         .filter((manifest) => (manifest.notificationEvents?.length ?? 0) > 0)
-        .map((manifest) => ({ productId: manifest.id, events: manifest.notificationEvents ?? [] }))
+        .map((manifest) => ({
+          productId: manifest.id,
+          events: manifest.notificationEvents ?? [],
+          // 批准值随声明走（契约 §7.1b）：迁移期与平台表并存，兜底仍在，行为不变。
+          ...(manifest.notificationApproval === undefined ? {} : { approval: manifest.notificationApproval })
+        }))
     ],
     policy: NOTIFICATION_EVENT_POLICY
   })
