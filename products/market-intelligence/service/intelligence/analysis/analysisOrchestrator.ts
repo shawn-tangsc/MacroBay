@@ -12,7 +12,7 @@ import {
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
-import { analysisRunLineOf, isGateExempt } from './analysisTriggerSourcePolicy'
+import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
 import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
 import { analysisUpstreamRetryPolicy, decideUpstreamRetry, waitForRetry } from './analysisUpstreamRetry'
 import {
@@ -198,6 +198,16 @@ export function createAnalysisOrchestrator(deps: Readonly<{
   ensureRunSession?: (input: Readonly<{ runId: string; queuedAt: string }>) => Promise<string | undefined>
   /** The summary, appended after the run published. Never the prompt or the model's answer. */
   appendRunSummary?: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
+  /**
+   * N12：分析结论推送。**只在信号唤起的那一次**提交（手动、日报那次都不发），且只有一个提交点——
+   * 成功写入记录之后。判定与请求构造在 `analysisConclusionNotifier`，这里只负责"什么时候"。
+   */
+  notifyAnalysisConclusion?: (notice: import('./analysisConclusionNotifier').AnalysisConclusionNotice) => Promise<void>
+  /**
+   * 触发这次运行的信号长什么样（方向与它带的事实）；读不出来就返回空对象——
+   * 没有证据说"反了"，推送只会进中心，不叫醒手机。
+   */
+  readTriggerSignal?: (triggerKey: string) => Readonly<{ direction?: 'bullish' | 'bearish'; factIds?: readonly string[] }>
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
@@ -377,6 +387,30 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       const summaryText = summary.conclusion?.summary ?? summary.eventAssessment ?? ''
       if (summaryText) {
         try { await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText }) } catch { /* 会话是附加物 */ }
+      }
+    }
+    // N12：信号唤起的那一次、写入记录之后，**提交一次**结论推送。手动与日报那次不走这里。
+    if (deps.notifyAnalysisConclusion !== undefined && analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(runRecord.triggerKey)) {
+      try {
+        const trigger = deps.readTriggerSignal?.(runRecord.triggerKey) ?? {}
+        const citedFactIds = Object.freeze([...new Set([
+          ...validated.value.knownFacts.map((claim) => claim.factId),
+          ...validated.value.marketReaction.flatMap((claim) => claim.factIds)
+        ])])
+        await deps.notifyAnalysisConclusion({
+          runId: runRecord.id,
+          triggerKey: runRecord.triggerKey,
+          cutoff: snapshot.asOf,
+          summary: validated.value.conclusion.summary,
+          conclusionDirection: validated.value.conclusion.direction,
+          citedFactIds,
+          ...(trigger.direction === undefined ? {} : { triggerDirection: trigger.direction }),
+          ...(trigger.factIds === undefined ? {} : { triggerFactIds: trigger.factIds }),
+          citedCount: validated.value.evidenceRefs.length,
+          occurredAt: deps.now()
+        })
+      } catch {
+        // 通知是记录的附加物：发不出去不许把一次成功的分析变成失败。
       }
     }
     // A success may end a failure episode; the decision is made once, from the same rows the notices

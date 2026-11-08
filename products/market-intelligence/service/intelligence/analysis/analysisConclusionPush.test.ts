@@ -97,3 +97,25 @@ describe('the sentence', () => {
     expect(body.text.replace(' · 2 evidence refs', '').length).toBeLessThanOrEqual(90)
   })
 })
+
+describe('an unreadable signal widens nothing', () => {
+  it('does not treat "no known signal facts" as new information', () => {
+    // 空数组会让每一条引用都像新事实 → 每次都能叫醒手机；读不出来必须按"没有新信息"算。
+    const decision = analysisConclusionPushesPhone({
+      signalDirection: 'bearish',
+      conclusionDirection: 'bearish',
+      citedFactIds: ['mi-fact-flow', 'mi-fact-price'],
+      sentToday: { byTriggerKey: 0, module: 0 }
+    })
+    expect(decision).toMatchObject({ phone: false, centerOnly: true, reason: 'same-direction' })
+  })
+
+  it('keeps the centre-only default when the trigger direction itself is unknown', () => {
+    const decision = analysisConclusionPushesPhone({
+      conclusionDirection: 'bullish',
+      citedFactIds: ['mi-fact-flow'],
+      sentToday: { byTriggerKey: 0, module: 0 }
+    })
+    expect(decision).toMatchObject({ phone: false, centerOnly: true })
+  })
+})

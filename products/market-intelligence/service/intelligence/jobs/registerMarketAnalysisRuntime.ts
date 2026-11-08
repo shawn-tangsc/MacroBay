@@ -166,7 +166,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     now,
     idFactory: () => randomUUID(),
     ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
-    ...createAnalysisNoticeDeps(input),
+    ...createAnalysisNoticeDeps({ ...input, now, timeZone }),
     ensureRunSession: runSession.ensureRunSession,
     appendRunSummary: runSession.appendRunSummary
   })

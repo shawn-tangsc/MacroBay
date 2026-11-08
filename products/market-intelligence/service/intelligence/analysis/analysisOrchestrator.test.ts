@@ -420,6 +420,72 @@ describe('analysisOrchestrator', () => {
     marker.mockRestore()
   })
 
+  describe('the analysis-conclusion push (N12)', () => {
+    const runFixture = (triggerKey: string) => ({
+      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
+      modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
+      skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
+      failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
+    })
+
+    it('submits exactly once after a signal-triggered run is written', async () => {
+      const notifyAnalysisConclusion = vi.fn(async (_notice: import('./analysisConclusionNotifier').AnalysisConclusionNotice) => undefined)
+      const invoke = vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository({ getRun: () => runFixture('signal.open-interest.oi-liquidation-proxy') }),
+        structuredModelInvocation: { invoke } as never,
+        now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+        notifyAnalysisConclusion,
+        readTriggerSignal: () => ({ direction: 'bearish' as const, factIds: ['fact-1'] })
+      })
+
+      await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+      expect(notifyAnalysisConclusion).toHaveBeenCalledTimes(1)
+      expect(notifyAnalysisConclusion.mock.calls[0]![0]).toMatchObject({
+        runId: 'mi-ar-1',
+        triggerKey: 'signal.open-interest.oi-liquidation-proxy',
+        cutoff: asOf,
+        conclusionDirection: 'range',
+        summary: '官方数据已发布，市场反应仍需观察。',
+        citedFactIds: ['fact-1'],
+        triggerDirection: 'bearish',
+        triggerFactIds: ['fact-1'],
+        citedCount: 1
+      })
+    })
+
+    it('stays silent for a manual run and for the daily-briefing path', async () => {
+      for (const triggerKey of ['manual.refresh', 'manual.initial', 'macro.actual.first-confirmed', 'calendar.refresh']) {
+        const notifyAnalysisConclusion = vi.fn(async (_notice: import('./analysisConclusionNotifier').AnalysisConclusionNotice) => undefined)
+        const invoke = vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+        const orchestrator = createAnalysisOrchestrator({
+          repository: createRepository({ getRun: () => runFixture(triggerKey) }),
+          structuredModelInvocation: { invoke } as never,
+          now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+          notifyAnalysisConclusion
+        })
+        await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+        expect(notifyAnalysisConclusion, triggerKey).not.toHaveBeenCalled()
+      }
+    })
+
+    it('never pushes a failed or rejected run — those already have their own events', async () => {
+      const notifyAnalysisConclusion = vi.fn(async (_notice: import('./analysisConclusionNotifier').AnalysisConclusionNotice) => undefined)
+      const invoke = vi.fn(async () => ({ ok: true as const, output: { ...validOutput(), knownFacts: [{ factId: 'fact-1', statement: '事实。', evidenceRefIds: ['evidence-unknown'] }] }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository({ getRun: () => runFixture('signal.open-interest.oi-liquidation-proxy') }),
+        structuredModelInvocation: { invoke } as never,
+        now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+        notifyAnalysisConclusion
+      })
+      const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+      expect(result.status).toBe('invalid-output')
+      expect(notifyAnalysisConclusion).not.toHaveBeenCalled()
+    })
+  })
+
   it('cancels before model invocation when the run signal is already aborted', async () => {
     const controller = new AbortController()
     controller.abort()

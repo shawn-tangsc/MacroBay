@@ -24,6 +24,14 @@ export const analysisConclusionPushPolicy = Object.freeze({
   moduleDailyLimit: 4,
   /** 正文上限：中文按字、英文按字符。 */
   maximumBodyLength: Object.freeze({ 'zh-CN': 40, 'en-US': 90 }) as Readonly<Record<'zh-CN' | 'en-US', number>>,
+  /**
+   * 成品句子里的标题与理由：这条通知的正文是运行时拼的（结论句），所以标题/理由也随成品一起给。
+   * 与通知文案表里那两行**同字**——表里那两行只服务没有成品的老记录，两处一起改。
+   */
+  renderedCopy: Object.freeze({
+    'zh-CN': { title: '分析结论', reason: '你订阅了信号触发的分析结论提醒。' },
+    'en-US': { title: 'Analysis conclusion', reason: 'You subscribed to signal-triggered analysis conclusions.' }
+  }),
   /** 结论方向里这五个是"有方向"的取值，其余按"没表态"处理。 */
   directionKeys: ['bullish', 'bearish', 'range', 'undecided', 'mixed'] as readonly AnalysisConclusionDirection[]
 })
@@ -35,8 +43,11 @@ export type AnalysisConclusionPushInput = Readonly<{
   cutoff: string
   /** 这一次的信号方向；没有信号（手动/定时）就没有这一项——调用方不应走到这里。 */
   signalDirection: 'bullish' | 'bearish'
-  /** 信号带的事实 id：结论引用集合里出现它之外的，就是"信号没提的事"。 */
-  signalFactIds: readonly string[]
+  /**
+   * 信号带的事实 id；`undefined` = 读不出来。读不出来就**不算**"新信息"——
+   * 空数组会让每一条引用都像新事实，等于每次都能叫醒手机。
+   */
+  signalFactIds?: readonly string[]
   conclusion: Readonly<{ direction: AnalysisConclusionDirection; summary: string }>
   /** 结论引用的证据事实 id（至少一条；正文里的"证据 N 条"读它）。 */
   citedFactIds: readonly string[]
@@ -120,15 +131,16 @@ function firstClause(text: string): string {
  * 反向、或结论引用了信号没带的事实 → 推手机。配额用尽也只进中心。
  */
 export function analysisConclusionPushesPhone(input: Readonly<{
-  signalDirection: 'bullish' | 'bearish'
+  /** 读不出来就是 `undefined`：没有证据说"反了"，就不叫醒读者。 */
+  signalDirection?: 'bullish' | 'bearish'
   conclusionDirection: AnalysisConclusionDirection
-  signalFactIds: readonly string[]
+  signalFactIds?: readonly string[]
   citedFactIds: readonly string[]
   sentToday: Readonly<{ byTriggerKey: number; module: number }>
 }>): Readonly<{ phone: boolean; centerOnly: boolean; reason?: 'same-direction' | 'quota-trigger-key' | 'quota-module' }> {
   const directional = input.conclusionDirection === 'bullish' || input.conclusionDirection === 'bearish'
-  const opposing = directional && input.conclusionDirection !== input.signalDirection
-  const newInformation = input.citedFactIds.some((id) => !input.signalFactIds.includes(id))
+  const opposing = directional && input.signalDirection !== undefined && input.conclusionDirection !== input.signalDirection
+  const newInformation = input.signalFactIds !== undefined && input.citedFactIds.some((id) => !input.signalFactIds!.includes(id))
   const quotaHit = input.sentToday.byTriggerKey >= analysisConclusionPushPolicy.perTriggerKeyDailyLimit
     ? 'quota-trigger-key' as const
     : input.sentToday.module >= analysisConclusionPushPolicy.moduleDailyLimit ? 'quota-module' as const : undefined
