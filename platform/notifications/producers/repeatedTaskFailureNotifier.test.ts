@@ -97,9 +97,9 @@ describe('repeated task failure notifier (P2)', () => {
     const runs = [3, 2, 1].map((index) =>
       run({
         id: `run-${index}`,
-        definitionId: `market-intelligence.scoreNewsSentiment:global:1794052912${index}00:abc${index}`,
+        definitionId: `sample-product.handler:global:1794052912${index}00:abc${index}`,
         trigger: { kind: 'manual' },
-        payload: { sourceId: 'coindesk' }
+        payload: { sourceId: 'sample-source' }
       })
     )
     const upgraded = notifier({ runs })
@@ -108,10 +108,10 @@ describe('repeated task failure notifier (P2)', () => {
 
     // 换一个来源：那是另一件事，不许借前一条的计数凑到阈值。
     const other = notifier({
-      runs: [run({ definitionId: 'other:1', trigger: { kind: 'manual' }, payload: { sourceId: 'theblock' } })]
+      runs: [run({ definitionId: 'other:1', trigger: { kind: 'manual' }, payload: { sourceId: 'other-source' } })]
     })
     await other.notify({
-      run: run({ definitionId: 'other:1', trigger: { kind: 'manual' }, payload: { sourceId: 'theblock' } }),
+      run: run({ definitionId: 'other:1', trigger: { kind: 'manual' }, payload: { sourceId: 'other-source' } }),
       cause: 'executed'
     })
     expect(other.submit).not.toHaveBeenCalled()
