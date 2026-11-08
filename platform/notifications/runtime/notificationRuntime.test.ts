@@ -13,15 +13,16 @@ import { createNotificationRuntime, type NotificationRuntime } from './notificat
 const clock = { now: () => new Date('2026-11-01T12:00:00.000Z'), timeZone: () => 'UTC' }
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
-    // 本机两个开关各要一条「它真的能出来」的事件：`platform.test` 只批桌面与手机，
-    // 拨到提示档永远出不来，拿它测 toast 会把「没批」误当成「开关生效」。
-    'platform.local': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+        // 本机两个开关各要一条「它真的能出来」的事件：`platform.test` 只批桌面与手机，
+        // 拨到提示档永远出不来，拿它测 toast 会把「没批」误当成「开关生效」。
+        'platform.local': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.test',
@@ -320,13 +321,14 @@ describe('test notifications do not spend the daily cap', () => {
 })
 
 const catalogWithBlocked = createNotificationEventCatalog({
-  policy: {
-    'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
-    'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+        'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.test',
