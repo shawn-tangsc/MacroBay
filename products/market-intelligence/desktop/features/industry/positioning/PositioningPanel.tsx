@@ -184,14 +184,17 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       */}
       {alertChip ? (
         <Modal open={dialogOpen} width="standard"
-          titleKey="pages.intelligence.portal.dashboard.positioning.helpDetailsLabel"
+          ariaLabelKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
           onClose={() => setDialogOpen(false)}
           className="mi-sample-surface mi-positioning-panel__help-modal"
           destroyOnHidden
           resolveText={resolveProductKey}>
           <div className="mi-positioning-panel__help-dialog">
-            {/* 标题行尾的一颗 ⓘ：卡片怎么来的、口径怎么定义，都在悬停/聚焦里；正文只留读数与证据。 */}
+            {/* 标题行：标题文字在前、ⓘ 紧跟其后，同一行、间距 4px（用户 2026-11-08 的截图：
+                「这个 icon hover 给我放到标题边上不行吗」）。**不许**推到行尾——`space-between`
+                与 `margin-left: auto` 会让图标和它解释的文字脱钩。弹层因此改成无头、标题画在正文第一行。 */}
             <div className="mi-positioning-panel__dialog-head">
+              <h3 className="mi-positioning-panel__dialog-title">{text.signalDetailsTitle}</h3>
               <Popover lines={positioningNoteKeys.map(labelKey => ({ labelKey }))} resolveText={resolveNote}
                 trigger={triggerProps => (
                   <IconButton {...triggerProps}

@@ -165,8 +165,14 @@ body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }
   color: var(--mi-dashboard-muted);
   font-size: 11.5px; line-height: 1.6;
 }
-/* 标题行：只有一颗 ⓘ，靠右；正文里不再铺开任何口径段落。 */
-.mi-positioning-panel__dialog-head { display: flex; justify-content: flex-end; margin-bottom: -4px; }
+/* 弹层标题行：标题文字在前、ⓘ 紧跟其后，同一左对齐流、间距 4px、不换行（用户 2026-11-08）。
+   **不许**推到行尾：`justify-content: space-between` / `margin-left: auto` 会让图标和它解释的
+   文字脱钩——这正是这次被退回来的写法。 */
+.mi-positioning-panel__dialog-head { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.mi-positioning-panel__dialog-title {
+  margin: 0; color: var(--mi-dashboard-text); font-weight: 650;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+}
 
 
 /* 强平判定的脚注：卡面最末一行，三句互斥、同位置只出现一句（没命中 / 读不到 / 数据不齐）。

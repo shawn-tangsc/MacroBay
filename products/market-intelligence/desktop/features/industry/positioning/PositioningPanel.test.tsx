@@ -372,6 +372,25 @@ describe('the truncated-hit count', () => {
 describe('the one ⓘ on the reading dialog', () => {
   const notes = resolvePositioningNote('zh-CN')
 
+  it('puts the ⓘ beside the title text, in the same left-aligned flow', async () => {
+    const { entry } = await openReadings()
+    const head = document.querySelector('.mi-positioning-panel__dialog-head')!
+    expect(head).not.toBeNull()
+    expect(head.children).toHaveLength(2)
+    // 第一格是标题文字本身，第二格才是 ⓘ：相邻，不是各占一行、也不是被推到行尾。
+    expect(head.children[0]!.tagName).toBe('H3')
+    expect(head.children[0]!.textContent).toBe(text.signalDetailsTitle)
+    // 第二格是 Popover 自己那层锚点 span，按钮在它里面；整行只有这一颗按钮。
+    const icon = head.children[1]!.querySelector('button')
+    expect(icon).not.toBeNull()
+    expect(icon!.getAttribute('aria-label')).toBe('口径说明')
+    expect(head.querySelectorAll('button')).toHaveLength(1)
+    // 写法层面：容器规则里不许出现把图标推开的两种写法。
+    const headRule = styles.match(/\.mi-positioning-panel__dialog-head \{([^}]*)\}/)?.[1] ?? ''
+    expect(headRule).not.toContain('space-between')
+    expect(headRule).not.toContain('margin-left: auto')
+  })
+
   it('does not exist until the dialog is open, then carries every meta sentence', async () => {
     const { host, entry } = await mountPanel({ positioning: alertPositioning })
     // 弹层没开，就没有这颗 ⓘ。
@@ -765,7 +784,8 @@ describe('opening the reading', () => {
     await flush()
     // 牌子不重建：`entry` 还是同一个节点，antd 的焦点回位才落得回它身上。
     expect(document.querySelector('.mi-positioning-panel__signal')).toBe(chipNode)
-    expect(dialog()?.textContent).toContain(text.helpDetailsLabel)
+    // 弹层无头（名字给读屏），可见标题画在正文第一行、ⓘ 紧跟其后。
+    expect(dialog()?.textContent).toContain(text.signalDetailsTitle)
     const detail = document.querySelector('#mi-positioning-signal-detail')!
     // The rule is named in the reader's words. The internal id is not a reading and never shows.
     expect(detail.textContent).toContain(text.signalDetailsRuleName)
