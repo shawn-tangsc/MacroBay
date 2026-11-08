@@ -227,14 +227,19 @@ export function buildAnalysisFailureNoticeRequest(
   // No action button yet: a button needs a signed copy key, and those land with the platform's
   // declaration rows. A notice without its action is still readable; a notice with an unresolved
   // label key would render blank.
+  // `actions: []` 不是可省字段：声明里 `requiresUserAction: false` 只表示「不需要按钮」，
+  // 提交契约仍然要求这个数组在（规划器会遍历它）。2026-11-08 线上 P12 每次提交都抛
+  // `TypeError`、通知静默丢失，就是这里少了它——而末尾那个 `as NotificationSubmitRequest`
+  // 把「少一个必填字段」压成了编译通过。**不许再把类型断言加回来**：让它编不过才是对的。
   return {
     eventTypeId,
     producerId: RUN_MARKET_ANALYSIS_JOB,
+    actions: [],
     dedupeVars: { builder: 'template', vars },
     rendered,
     ...(deeplink ? { deeplink } : {}),
     occurredAt
-  } as NotificationSubmitRequest
+  }
 }
 
 /**
