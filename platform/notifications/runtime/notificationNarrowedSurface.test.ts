@@ -31,14 +31,14 @@ function request(overrides: Partial<NotificationSubmitRequest> = {}): Notificati
   }
 }
 
-function harness() {
+function harnessWith(catalogOverride?: ReturnType<typeof createNotificationEventCatalog>) {
   let state: any = { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
   const storage: NotificationStorage = { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { state = JSON.parse(JSON.stringify(next)) } }
   const runtime = createNotificationRuntime({
     storage,
-    catalog: createNotificationEventCatalog({
+    catalog: catalogOverride ?? createNotificationEventCatalog({
       policy: NOTIFICATION_EVENT_POLICY,
-      // 合成 manifest：平台测试不 import 产品（G2）。这里只要一条已批准 center+channel 的平台事件。
+      // 合成 manifest：平台测试不 import 产品（G2）。这里只要平台自己的事件。
       sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }]
     }),
     diagnostics: () => undefined,
@@ -50,14 +50,17 @@ function harness() {
   return { runtime, state: () => state }
 }
 
+function harness() { return harnessWith() }
+
 function harnessWithDiagnostics() {
+  const catalogOverride = undefined
   let state: any = { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
   const entries: { code: string; eventTypeId?: string }[] = []
   const runtime = createNotificationRuntime({
     storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { state = JSON.parse(JSON.stringify(next)) } },
-    catalog: createNotificationEventCatalog({
+    catalog: catalogOverride ?? createNotificationEventCatalog({
       policy: NOTIFICATION_EVENT_POLICY,
-      // 合成 manifest：平台测试不 import 产品（G2）。这里只要一条已批准 center+channel 的平台事件。
+      // 合成 manifest：平台测试不 import 产品（G2）。这里只要平台自己的事件。
       sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }]
     }),
     diagnostics: (entry) => entries.push(entry),
@@ -94,9 +97,20 @@ describe('narrowedDisruptionLevels', () => {
   })
 
   it('refuses a narrowed level the approval table never approved, instead of silently intersecting', async () => {
-    const { runtime, state } = harness()
-    // 这条事件只批了 center + channel；要桌面就是生产者写错了——**拒收**，不静默求交。
-    await expect(runtime.submit(request({ narrowedDisruptionLevels: ['center', 'desktop'] }))).resolves.toMatchObject({
+    // 真实事件的档位以后还会变，所以这里**自己造一份合成声明**：只批 center，收窄到 desktop 必须被拒。
+    const synthetic = createNotificationEventCatalog({
+      policy: { 'platform.narrow.synthetic': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
+      sources: [{
+        productId: 'platform',
+        events: [{
+          id: 'platform.narrow.synthetic', titleKey: 'notification.test.title', bodyKey: 'notification.test.body',
+          reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder',
+          requestedDisruptionLevels: [], dedupeKeyTemplate: 'synthetic:{date}', dedupeUnit: 'occurrence'
+        }]
+      }]
+    })
+    const { runtime, state } = harnessWith(synthetic)
+    await expect(runtime.submit(request({ eventTypeId: 'platform.narrow.synthetic', dedupeVars: { builder: 'template', vars: { date: '2026-11-08' } }, narrowedDisruptionLevels: ['center', 'desktop'] }))).resolves.toMatchObject({
       kind: 'rejected',
       reason: 'surface-not-approved'
     })
@@ -106,8 +120,9 @@ describe('narrowedDisruptionLevels', () => {
   it('absent means exactly today: the approved levels go out unchanged', async () => {
     const { runtime, state } = harness()
     await runtime.submit(request())
-    // `channels` 只装应用内表面（中心/提示/桌面）；手机那一档体现在 `delivery.push` 上。
-    expect(state().records[0].channels).toEqual(['center'])
+    // 断事实：这条事件现在批准 center+toast+desktop+channel，桌面优先互斥后应用内是 center+desktop，
+    // 手机那一档体现在 `delivery.push` 上。
+    expect(new Set(state().records[0].channels)).toEqual(new Set(['center', 'desktop']))
     expect(state().records[0].delivery.push).toMatchObject({ state: expect.any(String) })
   })
 })
