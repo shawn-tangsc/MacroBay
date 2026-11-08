@@ -11,6 +11,7 @@ import {
 } from '../../platform/notifications/contracts/platformNotificationEvents'
 
 import { marketIntelligenceNotificationCopy } from './desktop/shared/i18n/text/notifications'
+import { marketIntelligenceAgentApprovalFieldLabels } from './desktop/shared/i18n/text/agentApprovalFields'
 import { moduleSignalPolicy } from './contracts/moduleSignal'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
@@ -66,7 +67,9 @@ export const marketIntelligenceProductManifest = {
         title: { 'zh-CN': '情报源', 'en-US': 'Intelligence Sources' },
         icon: 'database',
         order: 10,
-        module: './desktop/settings/intelligence-sources'
+        module: './desktop/settings/intelligence-sources',
+        // 资源任务空态的「去启用」由壳层按业务意图带路，壳层不写死我们的面板 id。
+        navIntent: 'resource-sources'
       },
       {
         // 设置 → 情报 → 运行日志：这个模块做过什么。从情报源页的标签搬出来，配置与记录各占一页。
@@ -300,6 +303,22 @@ export const marketIntelligenceProductManifest = {
    * 批准的事件」，运行时只会以 `unknown-event-type` 拒收。完成类（日报已完成）是读者翻案恢复的，
    * 见下：只进中心、读者在情报页勾了才推手机、桌面不弹。
    */
+  /**
+   * 批准值随声明走（契约 §7.1b）：**值逐字照搬平台表**，谁签的还是谁签，这里只换写的地址。
+   * 迁移期平台表仍在、兜底未删；等这一步的 10 行全部被目录读到、覆盖检查降到 0，才动行为。
+   */
+  notificationApproval: {
+    'market-intelligence.briefing.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+    'market-intelligence.briefing.ready': { approvedDisruptionLevels: ['center', 'channel', 'desktop'], approvedBypassQuietHours: false },
+    'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
+    'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
+    'market-intelligence.calendar.event-upcoming': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
+    'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+    'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+    'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+    'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+    'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
+  },
   notificationEvents: [
     notificationEvent('market-intelligence.briefing.failed', {
       category: 'failure',
@@ -433,6 +452,8 @@ export const marketIntelligenceProductManifest = {
   notificationProducerClaims: ['market-intelligence.dailyBriefing', 'market-intelligence.collectSource'],
   /** 7 条事件的句子（含「日报已完成」）；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
   notificationCopy: marketIntelligenceNotificationCopy,
+  // 工具审批卡片的字段名是产品词，住在这里；壳层只按工具名 + 字段名 + 语言取。
+  agentApprovalFieldLabels: marketIntelligenceAgentApprovalFieldLabels,
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest
