@@ -1,5 +1,6 @@
 import type { ProductManifest } from '../../platform/product-manifest'
 import type { NotificationEventDeclaration } from '../../platform/notifications/contracts/notificationEventCatalog'
+import { MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS } from './contracts/notificationApprovals'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
 import { INTELLIGENCE_IPC_METHODS } from './contracts/intelligenceIpcMethods'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
@@ -303,22 +304,8 @@ export const marketIntelligenceProductManifest = {
    * 批准的事件」，运行时只会以 `unknown-event-type` 拒收。完成类（日报已完成）是读者翻案恢复的，
    * 见下：只进中心、读者在情报页勾了才推手机、桌面不弹。
    */
-  /**
-   * 批准值随声明走（契约 §7.1b）：**值逐字照搬平台表**，谁签的还是谁签，这里只换写的地址。
-   * 迁移期平台表仍在、兜底未删；等这一步的 10 行全部被目录读到、覆盖检查降到 0，才动行为。
-   */
-  notificationApproval: {
-    'market-intelligence.briefing.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-    'market-intelligence.briefing.ready': { approvedDisruptionLevels: ['center', 'channel', 'desktop'], approvedBypassQuietHours: false },
-    'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
-    'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
-    'market-intelligence.calendar.event-upcoming': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
-    'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-    'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-    'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-    'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
-    'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
-  },
+  // 批准值在独立文件里（「申请」与「批准」两份数据分开）：这里只 import 引用，不内联。
+  notificationApproval: MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS,
   notificationEvents: [
     notificationEvent('market-intelligence.briefing.failed', {
       category: 'failure',
