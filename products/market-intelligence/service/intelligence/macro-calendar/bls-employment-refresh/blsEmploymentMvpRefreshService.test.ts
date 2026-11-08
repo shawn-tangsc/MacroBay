@@ -1,13 +1,17 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 
-import { createBlsEmploymentMvpRefreshService } from './blsEmploymentMvpRefreshService'
+import type { MacroCalendarRevision } from '../macroCalendarContracts'
+import type { BlsPythonBridgeOperation, BlsPythonBridgeResult } from '../bls-python/blsPythonRequestsBridge'
+import type { MacroCalendarRepository } from '../macroCalendarRepository'
+import { blsEmploymentMvpRefreshPolicy, createBlsEmploymentMvpRefreshService } from './blsEmploymentMvpRefreshService'
 
 describe('BLS calendar-family refresh service', () => {
   it('allows disjoint automatic families while rejecting a second owner of the same family', async () => {
     let releaseCpi: ((value: { state: 'response'; status: number; body: string }) => void) | undefined
-    const valuesBridge = { run: vi.fn((operation: { family: 'cpi' | 'employment' }) => operation.family === 'cpi'
-      ? new Promise<{ state: 'response'; status: number; body: string }>((resolve) => { releaseCpi = resolve })
-      : Promise.resolve({ state: 'response' as const, status: 200, body: familyResponse('employment') })) }
+    const valuesBridge = { run: vi.fn((operation: BlsPythonBridgeOperation): Promise<BlsPythonBridgeResult> =>
+      operation.kind === 'calendar-family-values' && operation.family === 'cpi'
+        ? new Promise((resolve) => { releaseCpi = resolve })
+        : Promise.resolve({ state: 'response' as const, status: 200, body: familyResponse('employment') })) }
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge, repository: repository([...cpiGroup(), ...employmentGroup()], vi.fn((revisions) => ({ insertedCount: revisions.length, dedupedCount: 0 }))), evidence: evidenceStore(),
       now: () => '2026-08-08T00:00:00.000Z'
@@ -35,7 +39,7 @@ describe('BLS calendar-family refresh service', () => {
   it('rejects a lock-internal family whose repository member has a mismatched event key', async () => {
     const valuesBridge = { run: vi.fn() }
     const reserve = vi.fn()
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
     const events = cpiGroup()
     const mismatchedCore = { ...events[1]!, eventKey: 'US.CORE_CPI.RELEASE.2026-M06' }
     const service = createBlsEmploymentMvpRefreshService({
@@ -57,7 +61,7 @@ describe('BLS calendar-family refresh service', () => {
   it('rejects a lock-internal family whose scheduled members share a non-canonical release group key', async () => {
     const valuesBridge = { run: vi.fn() }
     const reserve = vi.fn()
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
     const events = cpiGroup().map((event) => ({ ...event, releaseGroupKey: 'US.CPI.RELEASE.2026-M06' }))
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge,
@@ -75,7 +79,7 @@ describe('BLS calendar-family refresh service', () => {
   it('returns unchanged after acquiring the automatic family lock when the exact official family is already complete', async () => {
     const valuesBridge = { run: vi.fn() }
     const reserve = vi.fn()
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge,
       repository: repository(completeOfficialCpiGroup(), appendManyIfNew),
@@ -91,7 +95,7 @@ describe('BLS calendar-family refresh service', () => {
 
   it('does not treat an official family with a non-canonical value unit as current', async () => {
     const valuesBridge = { run: vi.fn(async () => ({ state: 'response' as const, status: 200, body: familyResponse('cpi') })) }
-    const appendManyIfNew = vi.fn(() => ({ insertedCount: 2, dedupedCount: 0 }))
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>(() => ({ insertedCount: 2, dedupedCount: 0 }))
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge,
       repository: repository(completeOfficialCpiGroup().map((revision, index) => index === 0
@@ -110,7 +114,7 @@ describe('BLS calendar-family refresh service', () => {
     ['employment', employmentGroup, 'US.NONFARM_PAYROLLS.RELEASE.2026-M07', 3, { kind: 'calendar-family-values', family: 'employment', period: '2026-M07' }]
   ] as const)('requests and atomically persists the complete %s family', async (_family, createGroup, eventKey, count, operation) => {
     const events = createGroup()
-    const appendManyIfNew = vi.fn(() => ({ insertedCount: count, dedupedCount: 0 }))
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>(() => ({ insertedCount: count, dedupedCount: 0 }))
     const valuesBridge = { run: vi.fn(async () => ({ state: 'response' as const, status: 200, body: familyResponse(operation.family) })) }
     const appendApiBody = vi.fn(() => ({ rawRecordId: 'raw-bls', evidenceHash: 'hash' }))
     const service = createBlsEmploymentMvpRefreshService({
@@ -141,7 +145,7 @@ describe('BLS calendar-family refresh service', () => {
   })
 
   it('rejects a formatter-invalid family before evidence append or any revision write', async () => {
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
     const appendApiBody = vi.fn()
     const body = familyResponse('employment').replace('"value":"108"', '"value":"108.5"')
     const service = createBlsEmploymentMvpRefreshService({
@@ -158,7 +162,7 @@ describe('BLS calendar-family refresh service', () => {
   it('does not request or write when reservation is unavailable', async () => {
     const events = employmentGroup()
     const valuesBridge = { run: vi.fn() }
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge, repository: repository(events, appendManyIfNew),
       evidence: { reserve: vi.fn(() => undefined), release: vi.fn(), appendApiBody: vi.fn() } as never,
@@ -183,7 +187,7 @@ describe('BLS calendar-family refresh service', () => {
 
   it('rejects incomplete family output without evidence or a partial write', async () => {
     const events = employmentGroup()
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
     const appendApiBody = vi.fn()
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge: { run: vi.fn(async () => ({ state: 'response' as const, status: 200, body: familyResponse('employment').replace('CES0500000003', 'foreign') })) },
@@ -200,7 +204,7 @@ describe('BLS calendar-family refresh service', () => {
     const events = employmentGroup().map((event, index) => index < 2
       ? { ...event, descriptorId: 'macro-calendar-bls-employment-refresh-api', revisionKind: 'official-release' as const, lifecycleState: 'released' as const }
       : event)
-    const appendManyIfNew = vi.fn(() => ({ insertedCount: 3, dedupedCount: 0 }))
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>(() => ({ insertedCount: 3, dedupedCount: 0 }))
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge: { run: vi.fn(async () => ({ state: 'response' as const, status: 200, body: familyResponse('employment') })) },
       repository: repository(events, appendManyIfNew), evidence: evidenceStore(),
@@ -216,7 +220,7 @@ describe('BLS calendar-family refresh service', () => {
 
   it('dedupes retained evidence after a failed SQLite transaction before a successful retry', async () => {
     const events = cpiGroup()
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
       .mockReturnValueOnce({ insertedCount: 1, dedupedCount: 0 })
       .mockReturnValueOnce({ insertedCount: 2, dedupedCount: 0 })
     const appendApiBody = vi.fn(() => ({ rawRecordId: 'raw-bls', evidenceHash: 'hash' }))
@@ -240,7 +244,7 @@ describe('BLS calendar-family refresh service', () => {
       actual: { numericValue: index === 0 ? 3.960396039604 : 2.985074626866, displayValue: 'unchanged', unit: 'percent' },
       previous: { numericValue: index === 0 ? 3.000000000001 : 2.500000000001, displayValue: 'unchanged', unit: 'percent' }
     }))
-    const appendManyIfNew = vi.fn()
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>()
     const appendApiBody = vi.fn()
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge: { run: vi.fn(async () => ({ state: 'response' as const, status: 200, body: familyResponse('cpi') })) },
@@ -255,7 +259,7 @@ describe('BLS calendar-family refresh service', () => {
 
   it('refreshes a January CPI group from the complete cross-year P-13 window', async () => {
     const events = cpiGroup('2026-M01')
-    const appendManyIfNew = vi.fn(() => ({ insertedCount: 2, dedupedCount: 0 }))
+    const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>(() => ({ insertedCount: 2, dedupedCount: 0 }))
     const valuesBridge = { run: vi.fn(async () => ({ state: 'response' as const, status: 200, body: januaryCpiResponse() })) }
     const service = createBlsEmploymentMvpRefreshService({
       valuesBridge, repository: repository(events, appendManyIfNew), evidence: evidenceStore(),
@@ -271,16 +275,17 @@ describe('BLS calendar-family refresh service', () => {
     vi.useFakeTimers()
     try {
       let resolveChild: ((value: { state: 'response'; status: number; body: string }) => void) | undefined
-      const appendManyIfNew = vi.fn(() => ({ insertedCount: 3, dedupedCount: 0 }))
+      const appendManyIfNew = vi.fn<MacroCalendarRepository['appendManyIfNew']>(() => ({ insertedCount: 3, dedupedCount: 0 }))
       const appendApiBody = vi.fn(() => ({ rawRecordId: 'raw-bls', evidenceHash: 'hash' }))
       const service = createBlsEmploymentMvpRefreshService({
-        valuesBridge: { run: vi.fn(() => new Promise((resolve) => { resolveChild = resolve })) },
+        valuesBridge: { run: vi.fn(() => new Promise<BlsPythonBridgeResult>((resolve) => { resolveChild = resolve })) },
         repository: repository(employmentGroup(), appendManyIfNew), evidence: evidenceStore(appendApiBody),
         now: () => '2026-08-08T00:00:00.000Z'
       })
 
       const result = service.refresh({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M07', confirmed: true })
-      await vi.advanceTimersByTimeAsync(17_000)
+      // 边界取自策略本身，不另写一个 17_000：期限一改，这条用例跟着走。
+      await vi.advanceTimersByTimeAsync(blsEmploymentMvpRefreshPolicy.childDeadlineMs)
       await expect(result).resolves.toEqual({ state: 'unavailable' })
       resolveChild!({ state: 'response', status: 200, body: familyResponse('employment') })
       await Promise.resolve()
@@ -293,8 +298,19 @@ describe('BLS calendar-family refresh service', () => {
   })
 })
 
-function repository(events: any[], appendManyIfNew: ReturnType<typeof vi.fn>) {
-  return { getEffectiveEventAsOf: vi.fn(({ eventKey }) => events.find((event) => event.eventKey === eventKey)), appendManyIfNew }
+/**
+ * 仓库桩只用被测代码真正调用的两个方法，但**按真实签名写**：`appendManyIfNew` 是 `Mock<真实签名>`，
+ * 所以既能塞进服务，也能在用例里读 `.mock.calls[0][0]`——类型与断言是同一个形状，不需要收窄。
+ */
+function repository(
+  events: readonly MacroCalendarRevision[],
+  appendManyIfNew: Mock<MacroCalendarRepository['appendManyIfNew']>
+): Pick<MacroCalendarRepository, 'getEffectiveEventAsOf' | 'appendManyIfNew'> {
+  return {
+    getEffectiveEventAsOf: vi.fn((input: { eventKey: string; asOf: string }) =>
+      events.find((event) => event.eventKey === input.eventKey)),
+    appendManyIfNew
+  }
 }
 
 function cpiGroup(period = '2026-M07') {
@@ -323,8 +339,8 @@ function employmentGroup() {
   ]
 }
 
-function revision(eventKey: string, releaseGroupKey: string, eventFamily: string, eventNameKey: string, period = '2026-M07') {
-  return { eventKey, releaseGroupKey, eventFamily, eventNameKey, countryCode: 'US', importance: 'high', periodKey: period, lifecycleState: 'scheduled', revisionKind: 'schedule', scheduledDate: '2026-08-07', detectedAt: '2026-08-01T00:00:00.000Z', recordedAt: '2026-08-01T00:00:00.000Z', providerId: 'macro-calendar-bls', descriptorId: 'macro-calendar-bls-python-schedule', sourceUrl: 'https://www.bls.gov/schedule/2026/home.htm', evidenceHash: 'schedule', evidenceRefs: [], snapshotHash: 'snapshot', parserVersion: 'bls-python-annual-schedule-v1', caveats: ['bls-python-schedule'] }
+function revision(eventKey: string, releaseGroupKey: string, eventFamily: MacroCalendarRevision['eventFamily'], eventNameKey: string, period = '2026-M07'): MacroCalendarRevision {
+  return { revisionId: `${eventKey}:${period}:schedule`, eventKey, releaseGroupKey, eventFamily, eventNameKey, countryCode: 'US', importance: 'high', periodKey: period, lifecycleState: 'scheduled', revisionKind: 'schedule', scheduledDate: '2026-08-07', detectedAt: '2026-08-01T00:00:00.000Z', recordedAt: '2026-08-01T00:00:00.000Z', providerId: 'macro-calendar-bls', descriptorId: 'macro-calendar-bls-python-schedule', sourceUrl: 'https://www.bls.gov/schedule/2026/home.htm', evidenceHash: 'schedule', evidenceRefs: [], snapshotHash: 'snapshot', parserVersion: 'bls-python-annual-schedule-v1', caveats: ['bls-python-schedule'] }
 }
 
 function familyResponse(family: 'cpi' | 'employment'): string {
