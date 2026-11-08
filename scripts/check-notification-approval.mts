@@ -11,12 +11,38 @@
  * 没有兜底：来源没带 `approval` 就是 `missing`，不再从别处派生（b3-5 已删兜底与派生视图）。
  */
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { inspectApprovalCoverage, formatApprovalCoverage, formatApprovalGaps } from '../platform/notifications/contracts/notificationApprovalCoverage'
 import type { NotificationApprovalGap } from '../platform/notifications/contracts/notificationApprovalCoverage'
 import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '../platform/notifications/contracts/platformNotificationEvents'
 import type { NotificationEventDeclarationSource } from '../platform/notifications/contracts/notificationEventCatalog'
-import { productManifests } from '../products/generated/productManifests'
+
+/**
+ * 生成物按需生成一次（2026-11-08 CI 红过一次）。
+ *
+ * `products/generated/` 是**构建期生成、不入库**的目录：本机因为跑过生成而一直存在，干净检出
+ * （CI、新克隆）里没有。这道检查现在挂在 `verify` 链上，直接静态 import 生成物就会在干净检出上
+ * `ERR_MODULE_NOT_FOUND`，整条链在第一步断掉——而且本机永远复现不出来。
+ *
+ * 所以：先看生成物在不在，不在就生成一次，再动态 import。生成只写 `.gitignore` 里的构建输出，
+ * 不动已跟踪文件，`verify:preflight` 的 `dirty` 计数不受影响。
+ */
+async function loadProductManifests(): Promise<readonly { id: string; notificationEvents?: readonly unknown[]; notificationApproval?: unknown }[]> {
+  const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  const generated = resolve(workspaceRoot, 'products/generated/productManifests.ts')
+  if (!existsSync(generated)) {
+    execFileSync('pnpm', ['-s', 'generate:products'], { stdio: 'inherit', cwd: workspaceRoot })
+  }
+  const module = (await import(pathToFileURL(generated).href)) as {
+    productManifests: readonly { id: string; notificationEvents?: readonly unknown[]; notificationApproval?: unknown }[]
+  }
+  return module.productManifests
+}
+
+const productManifests = await loadProductManifests()
 
 const sources: NotificationEventDeclarationSource[] = [
   // 平台自己的事件，批准值读平台自己声明的那份（b3-2）。以前这里读的是那张共享表——
@@ -26,9 +52,11 @@ const sources: NotificationEventDeclarationSource[] = [
     .filter((manifest) => (manifest.notificationEvents?.length ?? 0) > 0)
     .map((manifest): NotificationEventDeclarationSource => ({
       productId: manifest.id,
-      events: manifest.notificationEvents ?? [],
+      events: (manifest.notificationEvents ?? []) as NotificationEventDeclarationSource['events'],
       // 批准值随声明走（契约 §7.1b）：产品自己声明，检查脚本也按同一处读。
-      ...(manifest.notificationApproval === undefined ? {} : { approval: manifest.notificationApproval })
+      ...(manifest.notificationApproval === undefined
+        ? {}
+        : { approval: manifest.notificationApproval as NotificationEventDeclarationSource['approval'] })
     }))
 ]
 
