@@ -19,6 +19,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { releaseNotesLimits } from '../platform/updates/contracts/releaseNotes'
+
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const args = process.argv.slice(2)
 const tag = (args.find((value) => !value.startsWith('--')) ?? '').trim()
@@ -62,6 +64,32 @@ if (version) {
   const missing = notes.filter((path) => !existsSync(join(ROOT, path)))
   if (missing.length > 0) bad('release notes', `missing ${missing.join(', ')}`)
   else ok('release notes', 'both languages present')
+}
+
+/**
+ * The published release body, which is also what the app's About page renders.
+ *
+ * It used to be a sentence hard-coded in the release workflow plus a link, and the reader-facing
+ * version of it was pasted into the release page by hand after publishing — so the page and the
+ * repository could disagree, and the pages that were worth reading were the ones nobody had
+ * remembered to patch. Now the workflow publishes these two files verbatim, which makes them a
+ * release input that has to exist before the tag, exactly like the notes.
+ */
+if (version) {
+  const body = [
+    `docs/reference/release-notes/${version}.release-body.md`,
+    `docs/reference/release-notes/${version}.release-body.zh-CN.md`
+  ]
+  const missing = body.filter((path) => !existsSync(join(ROOT, path)))
+  if (missing.length > 0) bad('release body', `missing ${missing.join(', ')}`)
+  else {
+    const length = body.reduce((total, path) => total + readFileSync(join(ROOT, path), 'utf8').length, 0)
+    // The cap the About page applies, read from the renderer's own constant: past it the page
+    // truncates and says so, which is not a shape anyone meant to publish.
+    const cap = releaseNotesLimits.textCharacters
+    if (length > cap) bad('release body', `${length} characters; the About page stops at ${cap}`)
+    else ok('release body', `both languages present, ${length} characters`)
+  }
 }
 
 /** The tree being tagged must be the tree that was reviewed and verified. */
