@@ -53,19 +53,24 @@
 }
 .mi-economic-calendar {
   height: 100%;
-  /* One row: the detail panel and the calendar column. `row-reverse` because the panel is the DOM's
-     second child — it is opened from a row, so "calendar, then detail" is the reading order — while
-     it sits on the left, where the drawer it replaced was. DOM order is not permuted for looks. */
+  /* One column, and the detail is an overlay layer on top of it — not a sibling that takes width.
+     The page was briefly a `row-reverse` flex row with the panel as the second column, which
+     squeezed the seven week columns every time an event was opened (calendar widths changed by the
+     panel's 480px). The drawer this replaced was a maskless overlay, and that is what this page
+     needs: the reader opens an event to read it *against* the month, not to lose the month.
+
+     `position: relative` anchors the overlay: `.mi-calendar-detail` is absolutely positioned
+     within this element, so opening it cannot move the grid. */
   position: relative;
   display: flex;
-  flex-direction: row-reverse;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
   background: var(--bg);
   color: var(--mi-economic-text);
 }
-/* The calendar side of the row: toolbar, status, legend and the month/day workspace. It carries the
-   page padding now that the page itself is the row, so the panel can sit flush against its edge. */
+/* The calendar itself: toolbar, status, legend and the month/day workspace. It owns the page
+   padding and is the only in-flow child, so nothing it renders can be narrowed by the overlay. */
 .mi-economic-calendar__column {
   display: flex;
   flex-direction: column;
@@ -76,16 +81,19 @@
   overflow: hidden;
 }
 /*
- * Below 1300 the panel covers the row, exactly as the drawer did.
+ * The detail as a maskless overlay, at every width: left edge, full height, the panel's own
+ * `--side-panel-width` (min(480px, 46vw)). Out of flow, so the seven week columns keep exactly the
+ * width they had before the drawer was opened; closing it leaves nothing behind.
  *
- * The number, because the drawing's "1000" does not fit this page: a squeezed row holds the panel
- * (480) + workspace gap (22) + day list (320) + page padding (40), so the month grid keeps
- * `width − 862`. At a 1000px window that is ~140px — seven columns of 20px. 1300 leaves it 438,
- * which is the narrowest month the grid already renders on its own (see the 1023px rule below);
- * under 1300 the page keeps today's full-width overlay instead of inventing a sliver of a month.
+ * No mask on purpose: the reader picks the next event from the rows the panel does not cover, and a
+ * grey sheet over the board would swallow that click.
  */
-@media (max-width: 1299px) {
-  .mi-economic-calendar .mi-calendar-detail { position: absolute; inset: 0; width: 100%; z-index: 2; }
+.mi-economic-calendar .mi-calendar-detail {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 2;
+  max-height: 100%;
 }
 
 :root[data-theme='light'] .mi-economic-calendar {

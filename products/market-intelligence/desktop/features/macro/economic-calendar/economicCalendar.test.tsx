@@ -339,7 +339,7 @@ describe('macro economic calendar', () => {
       expect(container.querySelector('[data-calendar-detail-actions]')).toBeNull()
     } finally { spy.mockRestore() }
   })
-  it('opens the detail in its own column beside the calendar instead of covering it', async () => {
+  it('opens the detail as a maskless overlay, leaving the month column exactly where it was', async () => {
     const copy = productText['zh-CN'].pages.intelligence.portal.calendar
     const event = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
     const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [event] }),
@@ -349,8 +349,7 @@ describe('macro economic calendar', () => {
     await flush()
     const detail = container.querySelector<HTMLElement>('[data-calendar-detail-container]')!
     expect(detail.textContent).toContain(copy.events.cpi)
-    // A side panel, not a drawer and not a modal: no overlay, no dialog role, and the month grid
-    // beside it stays where it was and stays clickable. That is what giving up a column buys.
+    // A maskless overlay, not a column and not a modal: no drawer, no mask, no dialog role.
     const panel = container.querySelector('aside')
     expect(panel?.classList.contains('side-panel')).toBe(true)
     expect(panel?.classList.contains('mi-calendar-detail')).toBe(true)
@@ -362,17 +361,31 @@ describe('macro economic calendar', () => {
     for (const rule of ['.mi-calendar-detail dt', '.mi-calendar-detail dd', '.mi-calendar-detail h2']) {
       expect(styles, rule).toContain(rule)
     }
-    // The page is the row; the calendar keeps the page padding in its own column. The panel is the
-    // DOM's second child (opened from a row, so "calendar, then detail" is the reading order) and
-    // lands on the left through `row-reverse`, where the drawer used to be.
-    const pageRule = styles.slice(styles.indexOf('.mi-economic-calendar {'))
-    expect(pageRule.slice(0, pageRule.indexOf('\n}'))).toContain('flex-direction: row-reverse')
-    expect(styles).toContain('.mi-economic-calendar__column {')
+    /*
+     * 打开详情不许改变月份列的宽度。jsdom 没有布局，量不出像素；能被钉住的是**为什么**宽度不会变：
+     * 页面是单列，详情是这一列之外的覆盖层。所以这里断言结构而不是像素——把布局退回「并排」时，
+     * 下面两条会立刻红：`flex-direction: row-reverse`（详情占第二列）或详情 `position: static`
+     * （重新进入文档流、挤压 7 列周视图）。
+     */
+    // 断言只看规则、不看注释：注释里写着这次回归的历史，正文明文里不该再出现 `row-reverse`。
+    const layout = styles.replace(/\/\*[\s\S]*?\*\//g, '')
+    const pageRule = layout.slice(layout.indexOf('.mi-economic-calendar {'))
+    const pageBody = pageRule.slice(0, pageRule.indexOf('\n}'))
+    expect(pageBody).toContain('flex-direction: column')
+    expect(pageBody).not.toContain('row-reverse')
+    const overlaySelector = '.mi-economic-calendar .mi-calendar-detail {'
+    expect(layout).toContain(overlaySelector)
+    const overlayRule = layout.slice(layout.indexOf(overlaySelector))
+    const overlayBody = overlayRule.slice(overlayRule.indexOf('{') + 1, overlayRule.indexOf('\n}'))
+    expect(overlayBody).toContain('position: absolute')
+    expect(overlayBody).toContain('inset-block: 0')
+    expect(overlayBody).toContain('inset-inline-start: 0')
+    // 覆盖层不许按屏宽切换形态：以前 ≥1300 并排、<1300 才覆盖，同一份数据两种布局正是这次回归的形态。
+    expect(layout).not.toContain('@media (max-width: 1299px)')
+    // 结构上的第二道保险：面板不在日历列里，所以工作区（月份网格 + 当日列表）无法把它算进列宽。
+    expect(container.querySelector('.mi-economic-calendar__column .mi-calendar-detail')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__column .mi-economic-calendar__header')).not.toBeNull()
-    // Under 1300 the panel covers the row exactly as the drawer did. The threshold is arithmetic,
-    // not taste: panel 480 + gap 22 + day list 320 + padding 40 leaves the month 140px at 1000.
-    expect(styles).toContain('@media (max-width: 1299px)')
-    expect(styles).toContain('.mi-economic-calendar .mi-calendar-detail { position: absolute; inset: 0; width: 100%; z-index: 2; }')
+    expect(container.querySelector('.mi-economic-calendar > .mi-calendar-detail')).not.toBeNull()
     // The reused body's tokens travel with the surface. Opened from the market dashboard there is no
     // `.mi-economic-calendar` ancestor, and an undefined `var()` is invalid at computed-value time —
     // it unsets the property instead of falling back — so the body silently lost its padding and the
