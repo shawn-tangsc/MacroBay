@@ -438,18 +438,18 @@ describe('免打扰时段只进中心（验收 S6 / 测试单第 18 条）', () 
 
 describe('动作标签：归属与存在性（契约 v2.58）', () => {
   const productAction = (overrides: Record<string, unknown> = {}) => ({
-    id: 'open-briefing',
+    id: 'open-target',
     labelRef: {
       scope: 'product' as const,
-      productId: 'market-intelligence',
-      key: 'notification.action.market-intelligence.open-briefing'
+      productId: 'sample-product',
+      key: 'notification.action.sample-product.open-target'
     },
     kind: 'open' as const,
     ...overrides
   })
 
   it('rejects a label that belongs to another product — two names would end up on one button', () => {
-    // 事件属于 `platform`，动作却引用 `market-intelligence` 的键：解析得出来就是把别人的句子
+    // 事件属于 `platform`，动作却引用某个产品的键：解析得出来就是把别人的句子
     // 贴到这条通知的按钮上，解析不出来就是个没名字的按钮。两种都不许落库。
     const plan = planNotificationSubmit({ ...base, request: request({ actions: [productAction()] }) })
     expect(plan).toMatchObject({ kind: 'rejected', outcome: { reason: 'action-label-wrong-scope' } })
@@ -461,7 +461,7 @@ describe('动作标签：归属与存在性（契约 v2.58）', () => {
       request: request({
         eventTypeId: 'other-product.thing',
         dedupeVars: { builder: 'template', vars: { id: '2' } },
-        actions: [productAction({ labelRef: { scope: 'product', productId: 'other-product', key: 'notification.action.other-product.open-briefing' } })]
+        actions: [productAction({ labelRef: { scope: 'product', productId: 'other-product', key: 'notification.action.other-product.open-target' } })]
       })
     })
     expect(plan.kind).toBe('new')

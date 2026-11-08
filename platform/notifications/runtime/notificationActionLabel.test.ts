@@ -20,32 +20,32 @@ import { createNotificationDelivery } from './notificationRuntimeDelivery'
 const clock = { now: () => new Date('2026-11-08T12:00:00.000Z'), timeZone: () => 'UTC' }
 
 const RENDERED: NotificationContentByLanguage = {
-  'zh-CN': { title: '日报没生成出来', body: '', reason: '' },
-  'en-US': { title: 'The daily briefing did not generate', body: '', reason: '' }
+  'zh-CN': { title: '示例事件没生成出来', body: '', reason: '' },
+  'en-US': { title: 'The sample event did not generate', body: '', reason: '' }
 }
 
-const ACTION_KEY = 'notification.action.sample-product.open-briefing'
+const ACTION_KEY = 'notification.action.sample-product.open-target'
 
 const PRODUCT_TABLE: NotificationCopyTableSet = {
-  'zh-CN': { [ACTION_KEY]: '打开日报' },
-  'en-US': { [ACTION_KEY]: 'Open briefing' }
+  'zh-CN': { [ACTION_KEY]: '打开动作' },
+  'en-US': { [ACTION_KEY]: 'Open action' }
 }
 
 function record(overrides: Partial<NotificationRecord> = {}): NotificationRecord {
   return {
     id: 'record-action-1',
-    owner: 'market-intelligence',
-    sourceId: 'market-intelligence.dailyBriefing',
-    eventTypeId: 'market-intelligence.briefing.failed',
-    productId: 'market-intelligence',
+    owner: 'sample-product',
+    sourceId: 'sample-product.sampleSource',
+    eventTypeId: 'sample-product.sample-event.failed',
+    productId: 'sample-product',
     delivery: {},
     severity: 'info',
     priority: 'normal',
     channels: ['center'],
     state: 'unread',
     actions: [{
-      id: 'open-briefing',
-      labelRef: { scope: 'product', productId: 'market-intelligence', key: ACTION_KEY },
+      id: 'open-target',
+      labelRef: { scope: 'product', productId: 'sample-product', key: ACTION_KEY },
       kind: 'open'
     }],
     occurrenceCount: 1,
@@ -62,7 +62,7 @@ function harness(productTable: NotificationCopyTableSet) {
     clock,
     now: () => '2026-11-08T12:00:00.000Z',
     diagnostics: (entry) => diagnostics.push(entry),
-    copy: createNotificationCopyPort({ platform: notificationCopy, products: { 'market-intelligence': productTable } })
+    copy: createNotificationCopyPort({ platform: notificationCopy, products: { 'sample-product': productTable } })
   })
   return { delivery, diagnostics }
 }
@@ -74,8 +74,8 @@ describe('动作标签：引用与解析（契约 v2.58）', () => {
     const en = await delivery.resolveContent(record(), 'en-US')
 
     // 记录没变、存的是引用：切语言后历史通知的按钮跟着变，这才是「存引用不存成品」的目的。
-    expect(zh.actionLabels['open-briefing']).toBe('打开日报')
-    expect(en.actionLabels['open-briefing']).toBe('Open briefing')
+    expect(zh.actionLabels['open-target']).toBe('打开动作')
+    expect(en.actionLabels['open-target']).toBe('Open action')
   })
 
   it('a key the product table no longer carries drops that action and says why', async () => {
@@ -83,13 +83,13 @@ describe('动作标签：引用与解析（契约 v2.58）', () => {
     const content = await delivery.resolveContent(record(), 'zh-CN')
 
     // 没有名字的按钮不渲染（不是渲染成空标签）。
-    expect(content.actionLabels['open-briefing']).toBeUndefined()
+    expect(content.actionLabels['open-target']).toBeUndefined()
     expect(diagnostics).toContainEqual(expect.objectContaining({
       code: 'action-label-unresolved',
       recordId: 'record-action-1',
-      eventTypeId: 'market-intelligence.briefing.failed',
+      eventTypeId: 'sample-product.sample-event.failed',
       key: ACTION_KEY,
-      reason: 'open-briefing',
+      reason: 'open-target',
       language: 'zh-CN'
     }))
   })
@@ -106,10 +106,10 @@ describe('动作标签：引用与解析（契约 v2.58）', () => {
   it('keeps resolving a legacy record that only carries the platform key', async () => {
     const { delivery } = harness(PRODUCT_TABLE)
     const content = await delivery.resolveContent(record({
-      actions: [{ id: 'open-briefing', labelKey: 'notification.action.open-briefing', kind: 'open' }]
+      actions: [{ id: 'open-settings', labelKey: 'notification.action.open-settings', kind: 'open' }]
     }), 'zh-CN')
 
     // v2.58 之前落库的记录存的是平台键：删掉平台那句，这些通知的按钮会凭空消失。
-    expect(content.actionLabels['open-briefing']).toBe('打开日报')
+    expect(content.actionLabels['open-settings']).toBe('去设置')
   })
 })
