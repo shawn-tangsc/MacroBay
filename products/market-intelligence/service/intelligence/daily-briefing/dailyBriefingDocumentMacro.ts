@@ -129,7 +129,7 @@ export function selectMacroFloorItem(items: readonly BriefingMacroItem[]): Brief
       continue
     }
     const difference = surpriseMagnitude(item) - surpriseMagnitude(floor)
-    if (difference > 0 || (difference === 0 && Date.parse(item.scheduledAt ?? item.scheduledDate ?? '') > Date.parse(floor.scheduledAt ?? floor.scheduledDate ?? ''))) floor = item
+    if (difference > 0 || (difference === 0 && Date.parse(item.scheduledAt) > Date.parse(floor.scheduledAt))) floor = item
   }
   return floor
 }
@@ -140,8 +140,6 @@ function toMacroItem(event: DailyBriefingCalendarEvent, webSourced = false): Bri
     title: event.title,
     ...(event.titleKey ? { titleKey: event.titleKey } : {}),
     scheduledAt: event.scheduledAt,
-    // v16 起每行都带日期（时间未知时它就是唯一的日期来源）。
-    scheduledDate: event.scheduledAt.slice(0, 10),
     importance: event.importance,
     ...(event.countryCode ? { countryCode: event.countryCode } : {}),
     ...(event.countryName ? { countryName: event.countryName } : {}),

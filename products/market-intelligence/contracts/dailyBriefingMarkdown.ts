@@ -259,8 +259,7 @@ function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOption
     item
   )
   return [
-    // 时刻未知的行（v16 起 `scheduledAt` 缺席）只印日期：导出件与界面同规则，不许出现补出来的时刻。
-    `- **${title}** — ${item.scheduledAt === undefined ? (item.scheduledDate ?? '') : options.formatTime(item.scheduledAt)}`,
+    `- **${title}** — ${options.formatTime(item.scheduledAt)}`,
     ...(value === undefined ? [] : [value]),
     `${options.labels.macro.consensus} ${item.consensus ?? options.labels.macro.noConsensus}`,
     `${options.labels.macro.previous} ${item.previous ?? '—'}`,
@@ -297,9 +296,7 @@ function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBrief
 
 function nextLine(item: BriefingNextItem, options: DailyBriefingMarkdownOptions): string {
   const title = escapeMarkdown(options.eventTitle ? options.eventTitle(item) : item.title)
-  // 同上：时间未知的「未来要关注」只有日期，不印分钟数，也不印假时刻。
-  const when = item.at === undefined ? (item.scheduledDate ?? '') : options.formatTime(item.at)
-  return `- ${when} **${title}** · ${options.labels.next.category[item.category] ?? item.category}`
+  return `- ${options.formatTime(item.at)} **${title}** · ${options.labels.next.category[item.category] ?? item.category}`
 }
 
 function emptyNews(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {

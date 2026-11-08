@@ -251,22 +251,6 @@ export type DailyBriefingDocument = Readonly<{
       /** 窗口内高影响事件总数（不看有没有实际值）——「事件优先」那一步的数（`A0.12`）。 */
       macroHighImpactCount?: number
       /**
-       * 官方日历这一版拿不到（`02` v2.16x，用户 2026-11-08 定）。
-       *
-       * 放在块级而不是每行：同步时刻是**来源级事实**，同一份文档里所有官方行都相同；
-       * 写进每行等于同一事实写 N 份、写一次漂一次。
-       *
-       * 存在的意思很具体：库里的官方事件来自 `lastSuccessfulSyncAt` 那次（它们的时刻可能未知），
-       * **官方源这一版不可用**。整栏因此不能用"确实没有"的空态，而要用"拿不到"的那一档。
-       */
-      macroOfficialUnavailable?: Readonly<{
-        reasonCode: 'official-endpoint-returned-403'
-        /** 库里最后一次成功同步官方日历的时刻（UTC ISO）。 */
-        lastSuccessfulSyncAt: string
-        /** 库里现有多少条官方事件（照存量显示的那批）。 */
-        storedEvents: number
-      }>
-      /**
        * 两个来源说两个数的事件键（`02` v2.128）：**值格整格不渲染**，右列「数据缺口与限制」里
        * 恰一条冲突说明。冲突是数据质量问题，不进正文措辞。
        */
