@@ -27,7 +27,6 @@ export function structuredApprovalInput(
   toolName: string,
   input: unknown,
   language: AppLanguage,
-  text: AgentText['runtimeActivity'],
   /** 默认取产品声明汇总表；测试传自己的表，壳层因此不需要认识任何产品工具名。 */
   declaredLabels: AgentApprovalLabelTable = productApprovalFieldLabels
 ): readonly AgentApprovalField[] | null {
@@ -94,7 +93,7 @@ export function attachApprovalInputs<
     if (card.kind !== 'approval' || !card.toolCallId) continue
     const approvalInput = approvalInputByToolCallId.get(card.toolCallId)
     if (!approvalInput) continue
-    const fields = structuredApprovalInput(card.title, approvalInput.input, language, text, declaredLabels)
+    const fields = structuredApprovalInput(card.title, approvalInput.input, language, declaredLabels)
     cards.set(key, {
       ...card,
       ...(card.approvalInputText ? {} : { approvalInputText: approvalInput.text }),
