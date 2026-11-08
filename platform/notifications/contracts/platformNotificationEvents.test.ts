@@ -8,6 +8,7 @@ import { planNotificationSubmit } from '../runtime/notificationSubmitPlan'
 import {
   notificationEventReasonKey,
   notificationEventTitleKey,
+  PLATFORM_NOTIFICATION_APPROVALS,
   PLATFORM_NOTIFICATION_EVENTS
 } from './platformNotificationEvents'
 
@@ -27,8 +28,7 @@ describe('platform notification event declarations', () => {
 
   it('every platform declaration reaches the catalog, and approval is the upper bound of every request', () => {
     const catalog = createNotificationEventCatalog({
-      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
-      policy: NOTIFICATION_EVENT_POLICY
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS }]
     })
     // **双向覆盖**，不是计数：只做正向会漏掉「目录里凭空多出几条」——那正是前面用双向覆盖堵过的洞。
     const declared = new Set(PLATFORM_NOTIFICATION_EVENTS.map((event) => event.id))
@@ -98,8 +98,7 @@ describe('platform notification event declarations', () => {
    */
   it('accepts a P9 submission and answers every failed run exactly once', () => {
     const catalog = createNotificationEventCatalog({
-      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
-      policy: NOTIFICATION_EVENT_POLICY
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS }]
     })
     const settings = {
       desktopEnabled: true,
@@ -180,8 +179,7 @@ describe('platform notification event declarations', () => {
           { id: 'platform.capped-probe', titleKey: 'notification.taskFailed.title', reasonKey: 'notification.taskFailed.body', category: 'failure', requiresUserAction: false, requestedDisruptionLevels: [], dedupeUnit: 'occurrence', dedupeKeyTemplate: 'probe:{slot}', dailyLimit: 2, minimumGapMs: 6 * 60 * 60 * 1_000 },
           { id: 'platform.uncapped-probe', titleKey: 'notification.taskFailed.title', reasonKey: 'notification.taskFailed.body', category: 'failure', requiresUserAction: false, requestedDisruptionLevels: [], dedupeUnit: 'occurrence', dedupeKeyTemplate: 'uncapped:{slot}' }
         ]
-      }],
-      policy: {}
+      }]
     })
     const settings = {
       desktopEnabled: true,
@@ -223,8 +221,7 @@ describe('platform notification event declarations', () => {
    */
   it('never caps the manual-failure notice, even after five went out today', () => {
     const catalog = createNotificationEventCatalog({
-      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
-      policy: NOTIFICATION_EVENT_POLICY
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS }]
     })
     const declaration = PLATFORM_NOTIFICATION_EVENTS.find((event) => event.id === 'platform.analysis.manual-failed')
     expect(declaration?.dailyLimit).toBeUndefined()
