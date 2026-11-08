@@ -10,6 +10,7 @@ import { Segmented } from '@platform/ui/components/segmented'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { CALENDAR_REMINDER_LEAD_MINUTES } from '../../../contracts/calendarEventReminder'
+import { CalendarLandedCountriesRow } from './calendarLandedCountriesRow'
 import { SettingsGroup, SettingsRow } from './settingsRow'
 import type { CalendarReminderSettingsState } from './useCalendarReminderSettings'
 import type { useSurfaceSelection } from './useSurfaceSelection'
@@ -197,7 +198,7 @@ export function CalendarDetail(props: Readonly<{
           </SettingsRow>
         </>
         : null}
-      {reminder.saveFailed
+      {reminder.saveFailedField === 'enabled' || reminder.saveFailedField === 'leadMinutes' || reminder.saveFailedField === 'importance'
         ? <SettingsRow label="" last>
           <span className="intelligence-notification-form-note" role="status">
             {text['pages.intelligence.notification.saveFailed']}
@@ -209,7 +210,7 @@ export function CalendarDetail(props: Readonly<{
     <SettingsGroup title={text['pages.intelligence.notification.calendar.after'] ?? ''}>
       <SettingsRow
         label={text['pages.intelligence.notification.calendar.landedRow'] ?? ''}
-        last={value.landedFilter !== 'also-matched'}
+        last={false}
       >
         <Segmented
           ariaLabelKey="pages.intelligence.notification.calendar.landedRow"
@@ -225,8 +226,17 @@ export function CalendarDetail(props: Readonly<{
       </SettingsRow>
       {/* 代价只在被选中时出现，而且留在选择发生的地方——塞进 ⓘ 就变成「选完才发现」。 */}
       {value.landedFilter === 'also-matched'
-        ? <SettingsRow label="" last note={text['pages.intelligence.notification.landed.cost']} noteRole="status" />
+        ? <SettingsRow label="" note={text['pages.intelligence.notification.landed.cost']} noteRole="status" />
         : null}
+      <CalendarLandedCountriesRow
+        last
+        onChange={(next) => reminder.update({ landedCountries: next })}
+        resolveText={props.resolveText}
+        saveFailedField={reminder.saveFailedField}
+        saving={reminder.saving}
+        selection={value.landedCountries}
+        text={props.text}
+      />
     </SettingsGroup>
   </div>
 }

@@ -1,0 +1,122 @@
+import { useEffect, useState, type ReactElement } from 'react'
+
+import { Checkbox, Select } from 'antd'
+
+import {
+  CALENDAR_LANDED_COUNTRY_CODES,
+  MAX_CALENDAR_LANDED_COUNTRIES,
+  type CalendarLandedCountryCode,
+  type CalendarLandedCountryScope,
+  type CalendarLandedCountrySelection
+} from '../../../contracts/calendarLandedCountries'
+import { SettingsRow } from './settingsRow'
+
+/**
+ * 「发生后」段里的「哪些国家的数据」：三项下拉 + 自选国家清单。
+ *
+ * 三条行为约束（原型 v2 定稿）：
+ * - **值只从服务读**，写完服务端说了算；但**存失败时保留读者刚选的值**（本地草稿），
+ *   不退回默认——退回默认会让读者以为「本来就选这个」。
+ * - 上限 = 名单长度（契约里的 `MAX_CALENDAR_LANDED_COUNTRIES`）：选满后未勾的项置灰，
+ *   计数变 `8 / 8` 并出现「最多选 8 个」；`n ≤ 7` 时那句不出现。
+ * - 文案全部走 i18n 键，组件内零句子。
+ */
+export function CalendarLandedCountriesRow(props: Readonly<{
+  selection: CalendarLandedCountrySelection
+  saving: boolean
+  /** 哪一处保存失败；只有这里是 `landedCountries` 才在这一行提示。 */
+  saveFailedField?: string
+  text: Readonly<Record<string, string>>
+  resolveText: (key: string) => string
+  onChange: (next: CalendarLandedCountrySelection) => void
+  last?: boolean
+}>): ReactElement {
+  const { selection, saving, saveFailedField, text } = props
+  // 草稿：服务端确认前先显示读者刚选的；存失败也不回退。
+  const [draft, setDraft] = useState(selection)
+  useEffect(() => { setDraft(selection) }, [selection])
+
+  const label = text['pages.intelligence.notification.countries.row'] ?? ''
+  const scopeNote = text['pages.intelligence.notification.countries.scopeNote'] ?? ''
+  const count = draft.codes.length
+  const full = count >= MAX_CALENDAR_LANDED_COUNTRIES
+
+  const choose = (next: CalendarLandedCountrySelection): void => {
+    setDraft(next)
+    props.onChange(next)
+  }
+  const chooseScope = (scope: CalendarLandedCountryScope): void => {
+    choose(scope === 'custom' ? { scope, codes: draft.codes } : { scope, codes: [] })
+  }
+  const toggleCode = (code: CalendarLandedCountryCode, checked: boolean): void => {
+    if (checked && count >= MAX_CALENDAR_LANDED_COUNTRIES) return
+    const codes = checked
+      ? [...draft.codes, code]
+      : draft.codes.filter((entry) => entry !== code)
+    choose({ scope: 'custom', codes })
+  }
+
+  const options = (['us', 'all', 'custom'] as const).map((scope) => ({
+    value: scope,
+    label: text[`pages.intelligence.notification.countries.${scope}`] ?? scope
+  }))
+
+  return <>
+    <SettingsRow label={label} note={scopeNote}>
+      <Select<CalendarLandedCountryScope>
+        aria-label={label}
+        disabled={saving}
+        onChange={chooseScope}
+        options={options}
+        size="small"
+        style={{ minWidth: 180 }}
+        value={draft.scope}
+      />
+    </SettingsRow>
+    {/* 第二句最多一句：全选含未知 / 自选的代价；其余范围不出现。 */}
+    {draft.scope === 'all'
+      ? <SettingsRow label="" note={text['pages.intelligence.notification.countries.allNote']} noteRole="status" />
+      : draft.scope === 'custom'
+        ? <SettingsRow label="" note={text['pages.intelligence.notification.countries.customCost']} noteRole="status" />
+        : null}
+    {draft.scope === 'custom'
+      ? <SettingsRow label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}>
+        <div className="intelligence-notification-form-checks" role="group">
+          {CALENDAR_LANDED_COUNTRY_CODES.map((code) => {
+            const checked = draft.codes.includes(code)
+            return <Checkbox
+              checked={checked}
+              disabled={saving || (full && !checked)}
+              key={code}
+              onChange={(event) => toggleCode(code, event.target.checked)}
+            >
+              {text[`pages.intelligence.notification.countries.name.${code}`] ?? code}
+            </Checkbox>
+          })}
+        </div>
+        <span
+          className={`intelligence-notification-form-note${full ? ' is-caution' : ''}`}
+          data-count={`${count}/${MAX_CALENDAR_LANDED_COUNTRIES}`}
+        >
+          {(text['pages.intelligence.notification.countries.count'] ?? '{count} / {max}')
+            .replace('{count}', String(count))
+            .replace('{max}', String(MAX_CALENDAR_LANDED_COUNTRIES))}
+        </span>
+        {/* 空选不是空态：给指路句，不留一个只有计数的空框。 */}
+        {count === 0
+          ? <span className="intelligence-notification-form-note" role="status">
+            {text['pages.intelligence.notification.countries.emptyHint']}
+          </span>
+          : null}
+        {full
+          ? <span className="intelligence-notification-form-note is-caution" role="status">
+            {text['pages.intelligence.notification.countries.fullHint']}
+          </span>
+          : null}
+      </SettingsRow>
+      : null}
+    {saveFailedField === 'landedCountries'
+      ? <SettingsRow label="" note={text['pages.intelligence.notification.countries.saveFailed']} noteRole="status" last={props.last} />
+      : null}
+  </>
+}

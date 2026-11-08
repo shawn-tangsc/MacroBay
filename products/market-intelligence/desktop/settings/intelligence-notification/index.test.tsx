@@ -216,8 +216,8 @@ describe('intelligence notification settings', () => {
     await render()
     await selectItem(3)
     const rows = [...(container?.querySelectorAll('.intelligence-notification-form-row') ?? [])]
-    // 打开时完整形态：通知方式 / 开始前提醒 / 提前多久 / 哪些重要性 / 发生后 / 代价说明。
-    expect(rows).toHaveLength(6)
+    // 打开时完整形态：通知方式 / 开始前提醒 / 提前多久 / 哪些重要性 / 发生后 / 代价说明 / 哪些国家的数据。
+    expect(rows).toHaveLength(7)
     for (const row of rows) {
       const cells = [...row.children]
       expect(cells).toHaveLength(2)
@@ -661,7 +661,8 @@ describe('不动任何配置项（判据 ⑥）', () => {
     expect(signature()).toEqual(['舆情提醒:button', '最低强度:div+span'])
 
     await selectItem(3)
-    expect(signature()).toEqual(['通知方式:div', '提前提醒:button+span', '通知条件:div'])
+    // 新增的「哪些国家的数据」紧接「只在超出预期时报」之后，其余行的位置与顺序未动。
+    expect(signature()).toEqual(['通知方式:div', '提前提醒:button+span', '通知条件:div', '哪些国家的数据:div+span'])
   })
 })
 
