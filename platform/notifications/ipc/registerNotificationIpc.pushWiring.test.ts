@@ -120,4 +120,13 @@ describe('the runtime gets the injected push-channel resolver', () => {
     const runtime = getNotificationRuntime()
     await expect(runtime.sendTestNotice()).resolves.toEqual({ state: 'sent', channelId: 'channel-a', channelName: 'Telegram · test' })
   })
+  it('refuses to build the singleton before configuration, instead of creating a push-dead runtime', async () => {
+    // 装配顺序错了必须响亮失败：一个在装配前被造出来的运行时，本进程内永远不会再被修正。
+    expect(() => getNotificationRuntime()).toThrow('notification-runtime-used-before-configuration')
+    // 标记位随 `reset` 一起清掉：否则下一个用例会拿到上一轮「已装配」的残影。
+    configure()
+    expect(() => getNotificationRuntime()).not.toThrow()
+    resetNotificationRuntimeForTests()
+    expect(() => getNotificationRuntime()).toThrow('notification-runtime-used-before-configuration')
+  })
 })

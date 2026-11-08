@@ -857,6 +857,17 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   })
   const productIpcRegistry = createProductIpcRegistry()
   setProductIpcRegistryForDisposal(productIpcRegistry)
+  /**
+   * 通知运行时**必须先于任何可能提交的路径装配**。
+   *
+   * 为什么不能留在下面那几行之后：`jobRuntime.recover()` 是同步的，对残留的 running/queued 运行
+   * 会立刻 `reportRunTerminal` → 同步调到 `submit` → `getNotificationRuntime()` 创建运行时。
+   * 那时装配还没跑，运行时就被创建成一个「没有推送钩子、没有派生入口」的例子，整个进程内永远是坏的
+   * （2026-11-08 的线上事故里，这条是仅次于「派生入口没转发」的第二个断点）。
+   *
+   * `jobTitle` 是闭包，调用时 `jobRuntime` 早已就绪；这里只把端口交进去，不调用。
+   */
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
   // 第一个真实通知来源：任务最终失败。装配在这，通知语义不进平台。
   const onRunTerminal = wireTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
@@ -909,7 +920,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     await replaceAgentState(localizedState)
   }
   // 通知运行时的端口：jobRuntime 已就绪，平台 handlerId 视为已登记。
-  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
   registerIpcHandlers(
     productManifests,
     productIpcRegistry,
