@@ -106,7 +106,7 @@ describe('dashboard feed rows', () => {
   })
 
   /** The state most easily lost: the real point is stale, so the synthesis answers. It is never 正常. */
-  it('states an aged-out real dollar as 已回退 and keeps the panel\'s own 合成 wording', () => {
+  it('states an aged-out real dollar with the shared stale copy and keeps the panel\'s own 合成 wording', () => {
     const rows = project({
       macro: macroSnapshot([dxyReal(asOfMs - 30 * 60_000), dxySynthetic(asOfMs)]),
       feed: feedFor([feedSource('realmarketapi-market')])
@@ -116,7 +116,9 @@ describe('dashboard feed rows', () => {
     expect(dollar.fallback).toBe('synthetic')
     expect(dollar.staleMinutes).toBe(30)
     const status = textOf(dollar).status
-    expect(status).toContain('已回退')
+    expect(status).toContain(zh.feedStatus.states['stale-fallback'])
+    // The row says which session the number is from; it never reports a retreat.
+    expect(status).not.toContain('回退')
     expect(status).toContain('30 分钟')
     // The word the strip uses is the tag the 市场状态 row prints beside the same level.
     expect(status).toContain(`${zh.crossAsset.syntheticTag}值`)

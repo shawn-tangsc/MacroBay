@@ -67,12 +67,18 @@ describe('reader-facing copy avoids coined terms', () => {
     return out
   }
 
-  it('does not call a reading a "回退值" or a "Fallback"', () => {
+  it('does not call a reading a "回退值" or a "Fallback", or say a stale basis "已回退"', () => {
     // The reader has never seen this word, and it flattened five different time bases into one.
     // What they need is which instant the number is from, so the words themselves have to say it.
+    // The state line had the same coinage ("已回退" / "Stale, fell back"): the reading did not go
+    // anywhere — it is the previous session's number, so the copy names that session instead.
+    // A model that could not be reached does "fall back" to another model; that is a different
+    // subject on a different line, so the English guard stays on the stale-basis sentence itself.
     for (const [path, sentence] of [...leaves('zh-CN'), ...leaves('en-US')]) {
       expect(sentence, path).not.toContain('回退值')
+      expect(sentence, path).not.toContain('已回退')
       expect(sentence, path).not.toMatch(/\bFallback\b/)
+      expect(sentence, path).not.toMatch(/\bStale,? fell back\b/i)
     }
   })
 

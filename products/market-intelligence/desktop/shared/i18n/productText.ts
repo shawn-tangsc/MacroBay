@@ -785,7 +785,7 @@ mi: miText['zh-CN'],
               },
               states: {
                 loading: '加载中', ok: '采集正常', unconfigured: '未配置', 'configured-disabled': '已配置未启用',
-                failed: '采集失败', 'stale-fallback': '数据过期，已回退', proxy: '代理在役',
+                failed: '采集失败', 'stale-fallback': '数据过期，沿用上一交易日', proxy: '代理在役',
                 'awaiting-collection': '等待首次采集', unavailable: '不可用'
               },
               detail: {
@@ -2102,7 +2102,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               states: {
                 loading: 'Loading', ok: 'Collecting normally', unconfigured: 'Not configured',
                 'configured-disabled': 'Configured but disabled', failed: 'Collection failed',
-                'stale-fallback': 'Stale, fell back', proxy: 'Proxy in use',
+                'stale-fallback': 'Stale — using the previous session', proxy: 'Proxy in use',
                 'awaiting-collection': 'Waiting for the first collection', unavailable: 'Unavailable'
               },
               detail: {
