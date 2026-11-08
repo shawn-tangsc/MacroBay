@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
 
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
@@ -40,10 +39,10 @@ function createRuntime(subscriptions: Record<string, unknown> = {}) {
   const runtime = createNotificationRuntime({
     storage,
     catalog: createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
+      // 断的是产品的批准值 → 读产品自己的签署文件（平台侧只给自己的）。
       sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
       ]
     }),
     diagnostics: () => undefined,
@@ -67,8 +66,7 @@ describe('daily briefing notifier', () => {
     })
 
     const catalog = createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
-      sources: [{ productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }]
+      sources: [{ productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }]
     })
     expect(catalog.has(READY_EVENT_ID)).toBe(true)
     expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).toContain('center')
