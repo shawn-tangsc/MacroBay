@@ -13,6 +13,7 @@
  * 也不替代 Chief 跑的全量。成本实测：5 个真实文件 6.3s（原来全仓 tsc 是 42–60s）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
+import { materializeCommitTree, readDeletedPaths } from './pre-commit-tree.mts'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -139,7 +140,26 @@ if (guard.status !== 0) {
  *    （`@platform/*` 找不到，而在 /tmp 下同一棵树正常），2026-11-06 实测复现。
  */
 const treeRoot = mkdtempSync(join(tmpdir(), 'macrobay-precommit-'))
-execFileSync('git', ['checkout-index', '-a', `--prefix=${treeRoot}/`], { cwd: root })
+/**
+ * 落出「HEAD + 本笔改动」，**不是「只有这一笔的路径」**。
+ *
+ * 只落这一笔的话，任何「A 依赖 B 的既有内容」都会在树里缺 B：假红从这儿来（2026-11-08 两条线各一次），
+ * 而每次假红的出口都是 `SKIP_PRE_COMMIT=1`。提交后仓库长什么样，才是这道检查该看的东西。
+ */
+try {
+  materializeCommitTree({
+    cwd: root,
+    treeRoot,
+    staged,
+    deleted: readDeletedPaths(root)
+  })
+} catch (error) {
+  // 树落不出来 ⇒ 后面任何类型错都是假的。明说「没检查」，不静默放行。
+  say(`提交树没能落出来，**这一次没有检查**；请自己跑 pnpm typecheck。`)
+  console.error(error instanceof Error ? error.message.split('\n').slice(0, 5).join('\n') : String(error))
+  rmSync(treeRoot, { recursive: true, force: true })
+  process.exit(0)
+}
 /** 临时树用完就删（报错信息里已经把路径剥成仓库相对形式，作者不需要它留在磁盘上）。 */
 const dropTree = (): void => { rmSync(treeRoot, { recursive: true, force: true }) }
 for (const modules of ['node_modules', join('apps', 'desktop-shell', 'node_modules')]) {
