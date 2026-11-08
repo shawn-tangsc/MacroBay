@@ -30,16 +30,13 @@ export function registerNotificationIpcHandlers(): void {
   // 入参只带 `kind`（设置页的三枚测试按钮）；强度/条数/时区/通道全由主进程按当前配置重算。
   // 测试与真实走同一个 `submit`，只多 `namespace: 'test'` 去重域与候选自带的【测试】前缀。
   ipcMain.handle(IpcChannels.notificationsSendTest, async (_event, input?: { kind?: string }) => {
-    const kind = input?.kind
-    if (kind !== 'sentiment' && kind !== 'calendar-upcoming' && kind !== 'calendar-landed' && kind !== 'link') {
-      throw new Error('notification-test-kind-invalid')
-    }
-    const receipt = await getNotificationRuntime().sendTestNotice(kind)
+    // 平台只有一种测试：链路自检。产品的三种取数由产品自己的 IPC 拼请求、走现有提交入口。
+    if (input?.kind !== undefined && input.kind !== 'link') throw new Error('notification-test-kind-invalid')
+    const receipt = await getNotificationRuntime().sendTestNotice()
     if (receipt.state !== 'sent') {
       // 留痕只带 kind 与闭集码（`push-unavailable` 时带条数）：**不记强度、不记时区字符串、不记凭据**。
       console.log(JSON.stringify({
-        marker: receipt.state === 'no-data' ? 'MI_TEST_NOTICE_NO_DATA' : 'MI_TEST_NOTICE_UNAVAILABLE',
-        kind,
+        marker: 'MI_TEST_NOTICE_UNAVAILABLE',
         reasonCode: receipt.reasonCode,
         ...(receipt.state === 'unavailable' && receipt.enabledChannelCount !== undefined ? { enabledChannelCount: receipt.enabledChannelCount } : {})
       }))

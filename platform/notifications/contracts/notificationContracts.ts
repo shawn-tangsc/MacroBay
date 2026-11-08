@@ -4,6 +4,8 @@ import type { NotificationSubmitRejection, NotificationSubmitRejectionReason } f
 import type { NotificationCopyParam } from './notificationCopyPort'
 import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
 
+export type { NotificationApprovedLevel }
+
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
 
 /**

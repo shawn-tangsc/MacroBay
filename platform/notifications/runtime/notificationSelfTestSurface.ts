@@ -1,33 +1,13 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../contracts/notificationContracts'
-import type {
-  LinkSelfTestKind,
-  TestNoticeCandidate,
-  TestNoticeCandidatePort,
-  TestNoticeKind,
-  TestNoticeReceipt
-} from '../contracts/notificationSelfTest'
+import type { TestNoticeReceipt } from '../contracts/notificationSelfTest'
 import type { PushChannelResolution } from '../delivery/pushChannelResolution'
 
 /**
- * 三枚「测试」按钮的主进程实现（技术方案 §2/§3）。单独成文件：`notificationRuntime.ts` 已经顶在
- * 500 行硬线上，而这一块增长的理由（取数口径、三档回执）与运行时主体无关。
+ * 平台「链接自检」那颗按钮的主进程实现（设置页的「发送测试通知」）。
  *
- * 顺序即判据：
- * 1. **通道**先判（`runtime-ready` 恰好一条）——0 条与 ≥2 条都是 `push-unavailable`，带真实条数；
- * 2. **时区**再判，读不到 → `timezone-unreadable`，**绝不静默退回 UTC**（那会把日界算错一天）；
- * 3. **取数**由产品侧只读端口给（平台不 import 产品）；端口缺席 → `read-failed`，诚实的读不到；
- * 4. 真数据 → 同一个 `submit`、同一张批准表，只多 `namespace: 'test'`（去重域）与候选自带的【测试】前缀。
- *
- * 每次点击都是新键（`occurredAt` 由调用方给），所以连点两次是两条测试记录，且**不占真实去重键**。
- *
- * 链路自检的固定样例（中英各一份，`rendered` 成品句）：**不取任何情报数据**，所以它不需要产品端口，
- * 也正是它与另外三个 kind 的区别。标题带【测试】、正文首行写明「这是测试消息」。
- *
- * **载体事件是临时借用的，不是设计如此**：`market-intelligence.briefing.ready` 是既有那条已批准
- * `channel` 的事件，借它只为今晚能点（另造事件要加声明 + 中英文案键，而文案表在排队）。
- * **后果**：通知中心里那条会显示成「简报已生成」，点开才是测试内容——看起来像某件事、其实不是。
- * 欠账在 `docs-private/iterations/BACKLOG.md` 的 `MI-11-R215`（专属 `platform.notification-self-test`），
- * 那条落地时把下面的 `eventTypeId` 换掉即可，其余不用动。
+ * `link` 是**唯一**的 kind：不取产品数据、不需要任何取数端口，所以它是平台唯一该有的那种测试。
+ * 顺序：通道（`runtime-ready` 恰好一条；0 条与 ≥2 条都是 `push-unavailable`，带真实条数）→ 固定样例
+ * → 同一个提交入口（`test:` 去重域，正文带【测试】）。每次点击都是新键，不占真实去重键。
  */
 const LINK_SAMPLE_REQUEST: NotificationSubmitRequest = {
   eventTypeId: 'market-intelligence.briefing.ready',
@@ -41,65 +21,29 @@ const LINK_SAMPLE_REQUEST: NotificationSubmitRequest = {
 }
 
 export type SelfTestSurfaceInput = {
-  getTimezone: () => string
   resolvePushChannel: () => Promise<PushChannelResolution>
-  candidates?: TestNoticeCandidatePort
   /** 交给运行时的**同一个**提交入口（不是另开一条发消息的路）；名字不叫 submit 只为不误导生产者门禁。 */
   deliver: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
-  /** 每次点击留一行可查记录（`MI_TEST_NOTICE_*`）：只带 kind、闭集码与条数，不带强度/时区/凭据。 */
-  report?: (entry: { kind: TestNoticeKind | LinkSelfTestKind; receipt: TestNoticeReceipt }) => void
+  /** 每次点击留一行可查记录（`MI_TEST_NOTICE_*`）：只带闭集码与条数。 */
+  report?: (entry: { receipt: TestNoticeReceipt }) => void
   now: () => string
 }
 
 export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
   return {
-    async sendTestNotice(kind: TestNoticeKind | LinkSelfTestKind): Promise<TestNoticeReceipt> {
+    async sendTestNotice(): Promise<TestNoticeReceipt> {
       const finish = (receipt: TestNoticeReceipt): TestNoticeReceipt => {
-        input.report?.({ kind, receipt })
+        input.report?.({ receipt })
         return receipt
       }
       const channel = await input.resolvePushChannel()
       if (!channel.ok) {
         return finish({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: channel.enabledChannelCount })
       }
-
-      let timeZone = ''
-      try {
-        timeZone = input.getTimezone().trim()
-      } catch {
-        timeZone = ''
-      }
-      if (timeZone === '') {
-        // 拿不到读者时区就不算日界：宁可说「暂时读不到」，也不用 UTC 顶一次。
-        return finish({ state: 'unavailable', reasonCode: 'timezone-unreadable' })
-      }
-
-      // 链路自检不取数：固定样例，直接走同一个提交入口（含手机通道）。
-      if (kind === 'link') {
-        const outcome = await input.deliver({ ...LINK_SAMPLE_REQUEST, namespace: 'test' })
-        return outcome.kind === 'rejected'
-          ? finish({ state: 'unavailable', reasonCode: 'read-failed' })
-          : finish({ state: 'sent', channelId: channel.channelId, channelName: channel.channelName })
-      }
-
-      if (input.candidates === undefined) {
-        return finish({ state: 'unavailable', reasonCode: 'read-failed' })
-      }
-
-      const candidate = await input.candidates(kind).catch(() => ({ ok: false as const, reasonCode: 'read-failed' as const }))
-      if (!candidate.ok) {
-        if (candidate.reasonCode === 'source-disabled' || candidate.reasonCode === 'read-failed') {
-          return finish({ state: 'unavailable', reasonCode: candidate.reasonCode })
-        }
-        return finish({ state: 'no-data', reasonCode: candidate.reasonCode })
-      }
-
-      const outcome = await input.deliver({ ...candidate.request, namespace: 'test' })
-      if (outcome.kind === 'rejected') {
-        // 被拒也是「没发出去」，按闭集里最接近的一档回，不新造码。
-        return finish({ state: 'unavailable', reasonCode: 'read-failed' })
-      }
-      return { state: 'sent', channelId: channel.channelId, channelName: channel.channelName }
+      const outcome = await input.deliver({ ...LINK_SAMPLE_REQUEST, namespace: 'test' })
+      // 提交被拒也是「没发出去」：按闭集里最接近的一档回，不新造码。
+      if (outcome.kind === 'rejected') return finish({ state: 'unavailable', reasonCode: 'read-failed' })
+      return finish({ state: 'sent', channelId: channel.channelId, channelName: channel.channelName })
     }
   }
 }

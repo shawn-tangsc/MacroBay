@@ -46,7 +46,6 @@ import type {
 } from './intelligence/agent-capabilities/operationFacades'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
 import { landedFilterReader, registerCalendarEventReminder } from './intelligence/macro-calendar/registerCalendarEventReminder'
-import { wireNotificationSelfTest } from './notificationSelfTestWiring'
 import { createCalendarReminderSettingsStore } from './intelligence/macro-calendar/calendarEventReminderSettingsStore'
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
@@ -337,9 +336,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
   const calendarReminder = registerCalendarEventReminder({ jobRuntime: deps.jobRuntime, settings: calendarReminderSettings,
     queryMonth: marketCalendar.queryMonth, submit: (request) => getNotificationRuntime().submit(request), timeZone: () => currentReaderTimeZone() })
-  // 测试按钮的三个取数端口：产品侧构造、注册给平台（一次性槽位，见 `testNoticeCandidatesSlot.ts`）。
-  // TODO(MI-11-R200)：这三条接线属于 `wireNotifications`，组合根拆分时搬进去；这里暂挂两行。
-  wireNotificationSelfTest({ intelligence: intelligenceModule, calendarReminder, readEnabledCalendarFeeds, getAppLanguage: deps.getAppLanguage, timeZone: currentReaderTimeZone })
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected
   // separately from the read surface above, and the brief never constructs a client of its own.

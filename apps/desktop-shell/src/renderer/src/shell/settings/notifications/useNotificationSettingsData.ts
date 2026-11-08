@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type {
   LinkSelfTestKind,
-  TestNoticeKind,
   TestNoticeReceipt
 } from '@platform/notifications/contracts/notificationSelfTest'
 
@@ -23,7 +22,7 @@ export type NotificationSettingsClient = {
    * 真实回执：三档（`sent` / `no-data` / `unavailable`）+ 闭集码。**形状取自主进程契约**，
    * 这里只引用、不重写——旧的 `{ record, delivery }` 已随 preload 换成 `TestNoticeReceipt`。
    */
-  sendTest?: (input: { kind: TestNoticeKind | LinkSelfTestKind }) => Promise<TestNoticeReceipt>
+  sendTest?: (input: { kind: LinkSelfTestKind }) => Promise<TestNoticeReceipt>
 }
 
 export type NotificationSettingsState =

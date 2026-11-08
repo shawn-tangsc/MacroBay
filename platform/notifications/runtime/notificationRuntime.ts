@@ -57,9 +57,7 @@ import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushChannelResolution'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeSelfTestSurface } from './notificationSelfTestSurface'
-import { readTestNoticeCandidates } from './testNoticeCandidatesSlot'
 import { reportNarrowingWidened } from './notificationNarrowingTrace'
-import type { TestNoticeCandidatePort } from '../contracts/notificationSelfTest'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
 import { decideSeverityUpgrade } from './notificationSeverityUpgrade'
@@ -123,8 +121,6 @@ export type NotificationRuntimeDependencies = {
   getPushTargets?: () => Promise<readonly unknown[]>
   /** 目标通道的**唯一派生**（技术方案 §1），主推送/升级/重投共用；缺省＝一条都没有，绝不回退读旧字段。 */
   resolvePushChannel?: () => Promise<PushChannelResolution>
-  /** 三枚测试按钮的**只读取数**端口（产品侧实现、组合根注入）；缺席＝诚实的 `read-failed`。 */
-  testNoticeCandidates?: TestNoticeCandidatePort
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
@@ -418,10 +414,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     toCenterItem: (record: NotificationRecord, content?: NotificationDeliveryContent): Promise<NotificationCenterItem> =>
       centerItem(record, content),
 
-    ...composeSelfTestSurface({ getTimezone: () => deps.clock.timeZone(),
-      resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
-      candidates: (kind) => (deps.testNoticeCandidates ?? readTestNoticeCandidates())?.(kind)
-        ?? Promise.resolve({ ok: false as const, reasonCode: 'read-failed' as const }),
+    ...composeSelfTestSurface({ resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
       deliver: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
     reportProviderCredential,

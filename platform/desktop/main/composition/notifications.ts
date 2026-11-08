@@ -14,7 +14,6 @@ import { configureNotificationRuntime } from '@platform/notifications/ipc/regist
 import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
 import { resolvePushChannel, type PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { createNotificationProducerOwnership } from '@platform/notifications/contracts/notificationProducerOwnership'
-import type { TestNoticeCandidatePort } from '@platform/notifications/contracts/notificationSelfTest'
 import type { DeliveryHooks } from '@platform/notifications/runtime/notificationRouting'
 
 /**
@@ -40,8 +39,6 @@ export type NotificationCompositionPorts = Readonly<{
   diagnostics: NotificationDiagnosticsSink
   /** 目标通道的唯一派生；App 组合根按通道投影注入，低层组合根由调用方给。 */
   resolvePushChannel?: () => Promise<PushChannelResolution>
-  /** 三枚测试按钮的只读取数端口：产品侧实现（舆情 / 日历两条），组合根注入。 */
-  testNoticeCandidates?: TestNoticeCandidatePort
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
   /**
@@ -92,7 +89,6 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     ...(ports.push === undefined ? {} : { push: ports.push }),
     ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
     ...(ports.resolvePushChannel === undefined ? {} : { resolvePushChannel: ports.resolvePushChannel }),
-    ...(ports.testNoticeCandidates === undefined ? {} : { testNoticeCandidates: ports.testNoticeCandidates })
   })
 }
 

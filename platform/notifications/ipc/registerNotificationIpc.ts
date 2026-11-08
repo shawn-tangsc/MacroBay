@@ -11,7 +11,6 @@ import type { DeliveryHooks, NotificationClock, NotificationDeliveryContent } fr
 import type { NotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type { NotificationProducerOwnership } from '../contracts/notificationProducerOwnership'
-import type { TestNoticeCandidatePort } from '../contracts/notificationSelfTest'
 import type { PushChannelResolution } from '../delivery/pushChannelResolution'
 
 let notificationRuntime: ReturnType<typeof createNotificationRuntime> | null = null
@@ -29,7 +28,7 @@ let notificationProductIds: readonly string[] | null = null
 /** 这两个端口是「一旦装配就固定」的，用一个小对象收着，免得再加两个模块级变量。 */
 const resolutionDeps: {
   resolvePushChannel: (() => Promise<PushChannelResolution>) | null
-  testNoticeCandidates: TestNoticeCandidatePort | null
+  testNoticeCandidates: null
 } = { resolvePushChannel: null, testNoticeCandidates: null }
 
 export function configureNotificationRuntime(deps: {
@@ -41,7 +40,6 @@ export function configureNotificationRuntime(deps: {
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
   /** 三枚测试按钮的只读取数端口（产品侧实现，组合根注入）；不传＝诚实的 `read-failed`。 */
-  testNoticeCandidates?: TestNoticeCandidatePort
   /** 目标通道的唯一派生（技术方案 §1）。 */
   resolvePushChannel?: () => Promise<PushChannelResolution>
   push?: DeliveryHooks['push']
@@ -65,7 +63,6 @@ export function configureNotificationRuntime(deps: {
   updateNotificationSettings = deps.updateSettings ?? null
   getNotificationPushTargets = deps.getPushTargets ?? null
   resolutionDeps.resolvePushChannel = deps.resolvePushChannel ?? null
-  resolutionDeps.testNoticeCandidates = deps.testNoticeCandidates ?? null
   notificationPushHook = deps.push ?? null
   notificationProducerOwnership = deps.producerOwnership ?? null
   notificationProductIds = deps.productIds ?? null
