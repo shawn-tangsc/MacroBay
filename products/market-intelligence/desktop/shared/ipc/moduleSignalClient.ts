@@ -1,5 +1,4 @@
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../../../contracts/intelligencePublicQueryMethods'
-import type { OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import { isCanonicalSignalTime } from '../../../contracts/moduleSignal'
 import { isModuleSignalRead } from '../../../contracts/moduleSignalRead'
 import type { ModuleSignalAnalysisRead } from '../../../service/intelligence/analysis/signalAnalysisRead'
@@ -19,7 +18,7 @@ import type { SignalAnalysisStateView } from '../../../service/intelligence/anal
  * read is unavailable (the card says it cannot read the record), never "not triggered yet".
  */
 export const moduleSignalClient = {
-  async query(input: Readonly<{ asOf: string; window?: OpenInterestWindow }>): Promise<ModuleSignalAnalysisRead> {
+  async query(input: Readonly<{ asOf: string }>): Promise<ModuleSignalAnalysisRead> {
     try {
       if (!isCanonicalSignalTime(input.asOf)) return { state: 'unavailable', failureCode: 'invalid-as-of' }
       // A missing bridge is a failed read, not a malformed answer: the two get different sentences
@@ -29,7 +28,7 @@ export const moduleSignalClient = {
       const value = await products.invoke(
         'market-intelligence',
         INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead,
-        { asOf: input.asOf, ...(input.window === undefined ? {} : { window: input.window }) }
+        { asOf: input.asOf }
       )
       return toDisplayRead(value)
     } catch {

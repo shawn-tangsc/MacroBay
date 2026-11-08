@@ -13,27 +13,11 @@ describe('module signal query', () => {
       liquidationHintsState: 'available' as const
     }))
     const signals = await createOpenInterestSignalQuery({ readHistory }).query({ asOf }).then(entries => entries.map(entry => entry.signal))
-    // 没有窗口参数（老调用点）按 24 小时判；带窗口时按那个窗口判。
+    // 判定窗口固定 24 小时，不跟卡片页签（用户 2026-11-08 10:4x 定）。
     expect(readHistory).toHaveBeenCalledWith({ asOf, window: '24h' })
     expect(signals).toHaveLength(1)
     expect(signals[0]).toMatchObject({ ruleId: 'oi-liquidation-proxy', severity: 'high' })
     expect(isModuleSignal(signals[0])).toBe(true)
-  })
-
-  it('judges over the window the card is showing, so a 7-day hit can light the chip', async () => {
-    // 只存在于 7 天窗口里的命中：切到 7 天牌子才该出现，24 小时视图下不该出现。
-    const readHistory = vi.fn(async (input: Readonly<{ asOf: string; window: '24h' | '7d' }>) => ({
-      state: 'available' as const, asOf: input.asOf, window: input.window, btc: [], eth: [],
-      liquidationHints: input.window === '7d'
-        ? [{ observedAt: '2026-10-28T14:30:00.000Z', asset: 'btc' as const, direction: 'long' as const, dropPct: -2, volumeMultiple: 3, notionalUsd: 7.4e9 }]
-        : [],
-      liquidationHintsState: 'available' as const
-    }))
-    const query = createOpenInterestSignalQuery({ readHistory })
-    expect(await query.query({ asOf, window: '7d' })).toHaveLength(1)
-    expect(readHistory).toHaveBeenLastCalledWith({ asOf, window: '7d' })
-    expect(await query.query({ asOf, window: '24h' })).toHaveLength(0)
-    expect(readHistory).toHaveBeenLastCalledWith({ asOf, window: '24h' })
   })
 
   it('turns a thrown read into a failed-read signal, never into silence', async () => {

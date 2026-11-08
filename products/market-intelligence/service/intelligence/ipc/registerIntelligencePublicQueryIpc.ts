@@ -139,22 +139,13 @@ export function registerIntelligencePublicQueryIpc(
    * list is an app that refuses to start.
    */
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead, async (payload) => {
-    // 两种入参：老的 `{ asOf }`（判定按 24 小时）与带窗口的 `{ asOf, window }`（页签视图）。
-    // 键集是闭集：多传一个键就是形状不对，宁可报错也不猜。
-    const plain = isExactDataRecord(payload, ['asOf'])
-    const windowed = !plain && isExactDataRecord(payload, ['asOf', 'window'])
-    if ((!plain && !windowed) || !isCanonicalSignalTime((payload as { asOf: unknown }).asOf)) {
-      return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
-    }
-    const window = windowed ? (payload as { window: unknown }).window : undefined
-    if (window !== undefined && !isOpenInterestWindow(window)) {
+    // 牌子的判定**固定 24 小时**（用户 2026-11-08 10:4x 定）：那颗牌子是「现在怎么样」的
+    // 状态指示，三天前的命中挂到标题边，读者会当成刚发生。历史归图，现状归标题。
+    if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) {
       return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
     }
     try {
-      return await publicQueryService().queryModuleSignalRead({
-        asOf: (payload as { asOf: string }).asOf,
-        ...(window === undefined ? {} : { window })
-      })
+      return await publicQueryService().queryModuleSignalRead({ asOf: payload.asOf })
     } catch {
       return { state: 'unavailable', failureCode: 'query-failed' } satisfies ModuleSignalRead
     }

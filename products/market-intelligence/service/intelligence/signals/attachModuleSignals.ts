@@ -18,7 +18,7 @@ export type ModuleSignalHost = {
   queryOpenInterestHistory: (input: Readonly<{ asOf: string; window: OpenInterestWindow }>) => Promise<OpenInterestHistoryResult>
   /** The panel's own snapshot read: the ETF leg judges the rows the card already draws. */
   queryCapitalConditionsSnapshot: (input: Readonly<{ asOf: string }>) => Promise<CapitalConditionsSnapshotResult>
-  queryModuleSignals: (input: Readonly<{ asOf: string; window?: OpenInterestWindow }>) => Promise<readonly SignalWithWindow[]>
+  queryModuleSignals: (input: Readonly<{ asOf: string }>) => Promise<readonly SignalWithWindow[]>
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
 } & MacroRouteQuery
 
@@ -38,7 +38,7 @@ export type SignalAnalysisReader = Readonly<{
 
 export function attachModuleSignals(host: ModuleSignalHost & {
   addSignalAnalysisReader: (reader: SignalAnalysisReader) => void
-  queryModuleSignalRead: (input: Readonly<{ asOf: string; window?: OpenInterestWindow }>) => Promise<ModuleSignalAnalysisRead>
+  queryModuleSignalRead: (input: Readonly<{ asOf: string }>) => Promise<ModuleSignalAnalysisRead>
 }): void {
   let analysisReader: SignalAnalysisReader | undefined
   host.addSignalAnalysisReader = (reader) => { analysisReader = reader }
@@ -77,7 +77,7 @@ export function attachModuleSignals(host: ModuleSignalHost & {
     // failed read is already reported as an `unavailable` signal by the leg that owns it.
     const perProducer = await Promise.all(producers.map(async (producer) => {
       try {
-        return await producer.query({ asOf: queryInput.asOf, ...(queryInput.window === undefined ? {} : { window: queryInput.window }) })
+        return await producer.query({ asOf: queryInput.asOf })
       } catch (error) {
         console.error('[signals] producer threw:', error instanceof Error ? `${error.name}: ${error.message}` : String(error))
         return []
