@@ -137,12 +137,14 @@ describe('a backfilled edition says which world it read', () => {
 
 })
 
-describe('the macro section draws events, never a message about missing data (v2.124)', () => {
+describe('the macro section draws events, and says why it is empty without implying missing data', () => {
   const emptyMacro = (notes: DailyBriefingDocument['news']['notes']): DailyBriefingDocument => {
     const doc = briefing()
     return { ...doc, news: { ...doc.news, macro: [], notes } }
   }
   // 用户 2026-11-06：正文里「没数据」「没拿到」「未拿到」「未公布」一个都不许出现。
+  // 「暂时读不到：<原因>」是 2026-11-09（`MI-2-R89`）唯一被允许的缺失话术，只在**读不到**时说，
+  // 所以它仍在「确实没有」那一档的禁令里——这一档正文一个字都不印。
   const forbidden = ['没数据', '没拿到', '未拿到', '未公布', '没有已发布的高影响事件', '暂时读不到']
   const assertClean = (host: HTMLElement): void => {
     for (const word of forbidden) expect(host.textContent).not.toContain(word)
@@ -155,13 +157,37 @@ describe('the macro section draws events, never a message about missing data (v2
     assertClean(rendered)
   })
 
-  it('draws nothing for a calendar that could not be read — the gap belongs to the audit column', async () => {
-    // 「读不到」不进正文：右列缺口负责说它（原因 + 重试），正文里一个字都不提。
-    for (const notes of [{ macroEmpty: 'calendar-stale', macroEmptyHours: 42 }, { macroEmpty: 'calendar-catch-up-timeout' }, { macroEmpty: 'calendar-unavailable' }]) {
+  it('says the macro section could not be read, and why, when the calendar failed', async () => {
+    // 用户 2026-11-09（`MI-2-R89`，呈现分寸放宽后）：空栏不再只靠右列解释——正文用同一句
+    // 「暂时读不到：<原因>」说出来，与「数据缺口与限制」是同一个推导、同一句话。
+    // 「确实没有」那一档仍不印（见上一条）：区分「拿不到」和「没有」，不把前者写成后者。
+    // 期望句由同一张文案表推出（过期那条还要填上小时数），不是手抄一句话：文案一改，用例跟着改。
+    const cases: Array<{ notes: DailyBriefingDocument['news']['notes']; expected: string }> = [
+      { notes: { macroEmpty: 'calendar-stale', macroEmptyHours: 42 }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-stale'].replace('{hours}', '42')}` },
+      { notes: { macroEmpty: 'calendar-catch-up-timeout' }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-catch-up-timeout']}` },
+      { notes: { macroEmpty: 'calendar-unavailable' }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-unavailable']}` }
+    ]
+    for (const { notes, expected } of cases) {
       const rendered = await render(emptyMacro(notes))
-      expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
-      assertClean(rendered)
+      expect(rendered.querySelector('.mi-brief-poster__macro-head')?.textContent).toBe(text.sections.macro)
+      const rows = rendered.querySelectorAll('.mi-brief-poster__macro')
+      expect(rows).toHaveLength(1)
+      const row = rendered.querySelector('.mi-brief-poster__macro-row-empty')
+      expect(row?.getAttribute('data-macro-empty')).toBe('unreadable')
+      expect(row?.textContent).toBe(expected)
+      // 仍然是一个判断，不是一句哭诉：说原因，但不出现「没数据/没拿到」这类把事说死的词。
+      for (const word of ['没数据', '没拿到', '未拿到', '未公布', '没有已发布的高影响事件']) {
+        expect(rendered.textContent, word).not.toContain(word)
+      }
     }
+  })
+
+  it('says nothing when the edition recorded no reason at all', async () => {
+    // 反例：老版本文档没有 `macroEmpty` 码。此时说不出是哪一档原因，**就不说**——
+    // 编一句「暂时读不到」等于替文档猜原因。
+    const rendered = await render(emptyMacro({}))
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+    expect(rendered.querySelector('.mi-brief-poster__macro-row-empty')).toBeNull()
   })
 
   it('keeps an event that has no actual, and renders no value cell for it', async () => {
