@@ -44,7 +44,7 @@ function harnessWith(catalogOverride?: ReturnType<typeof createNotificationEvent
           reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder',
           requestedDisruptionLevels: ['channel'], dedupeKeyTemplate: 'probe:{date}', dedupeUnit: 'occurrence'
         }],
-        approval: { 'platform.narrow.probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } }
+        approval: { 'platform.narrow.probe': { approvedDisruptionLevels: ['center', 'toast', 'desktop', 'channel'], approvedBypassQuietHours: false } }
       }]
     }),
     diagnostics: () => undefined,
@@ -73,7 +73,7 @@ function harnessWithDiagnostics() {
           reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder',
           requestedDisruptionLevels: ['channel'], dedupeKeyTemplate: 'probe:{date}', dedupeUnit: 'occurrence'
         }],
-        approval: { 'platform.narrow.probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } }
+        approval: { 'platform.narrow.probe': { approvedDisruptionLevels: ['center', 'toast', 'desktop', 'channel'], approvedBypassQuietHours: false } }
       }]
     }),
     diagnostics: (entry) => entries.push(entry),
@@ -133,9 +133,9 @@ describe('narrowedDisruptionLevels', () => {
   it('absent means exactly today: the approved levels go out unchanged', async () => {
     const { runtime, state } = harness()
     await runtime.submit(request())
-    // 断事实：合成载体批准 center+channel，所以应用内只有 center、手机那一档体现在 `delivery.push` 上。
-    // 这条断言的**不变量**没变：不传收窄时，批准表里的每一档都照原样排上。
-    expect(new Set(state().records[0].channels)).toEqual(new Set(['center']))
+    // 断事实：合成载体四档全批，桌面优先互斥后应用内是 center+desktop，手机那一档体现在 `delivery.push` 上。
+    // 不传收窄时，批准表里的每一档都照原样排上（这条不变量与换夹具之前**同一力度**）。
+    expect(new Set(state().records[0].channels)).toEqual(new Set(['center', 'desktop']))
     expect(state().records[0].delivery.push).toMatchObject({ state: expect.any(String) })
   })
 })
