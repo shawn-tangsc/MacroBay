@@ -180,7 +180,9 @@
 .mi-capital-conditions__coverage { margin-left: 4px; color: var(--mi-dashboard-caution); font-size: 9px; }
 .mi-capital-conditions__etf-unavailable { color: var(--mi-dashboard-muted); font-family: inherit; font-size: 12px; text-align: left; }
 .mi-capital-conditions__etf-flow { display: grid; align-self: stretch; align-content: stretch; grid-template-rows: auto auto minmax(var(--mi-dashboard-etf-flow-chart-height), 1fr); gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
-.mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: var(--mi-dashboard-etf-flow-block-gap); }
+/* 标题行内的 ⓘ 紧跟标题文字：这一行按规范用 4px（块间距 8px 仍归 `--mi-dashboard-etf-flow-block-gap`，
+   那是这一块与图例/图之间的竖直间距，不是标题行内的间距）。 */
+.mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
 .mi-capital-conditions__etf-flow h3 { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; }
 .mi-capital-conditions__chart-window { color: var(--mi-dashboard-muted); font-size: 10px; }
 .mi-capital-conditions__etf-flow > p { color: var(--mi-dashboard-muted); font-size: 12px; }

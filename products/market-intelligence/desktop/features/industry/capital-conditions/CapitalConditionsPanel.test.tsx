@@ -390,6 +390,20 @@ describe('CapitalConditionsPanel', () => {
     expect(header.querySelectorAll('button.icon-button').length).toBe(1)
   })
 
+  // 标题行（含 ⓘ）的间距只有一格：4px，且不许用推/换行那三种写法。
+  it('keeps the flow block title line at the 4px gap the rule names', () => {
+    const sheet = readFileSync(
+      resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
+    const rule = /\.mi-capital-conditions__etf-flow > header \{([^}]*)\}/.exec(sheet)?.[1]
+    expect(rule).toBeTruthy()
+    // 注释里的禁止说明不算命中：只在规则体内查声明。
+    expect(rule!).toMatch(/gap:\s*4px/)
+    expect(rule!).not.toMatch(/justify-content:\s*space-between/)
+    expect(rule!).not.toMatch(/margin-left:\s*auto/)
+    expect(rule!).not.toMatch(/flex-wrap:\s*wrap/)
+    expect(rule!).toMatch(/flex-wrap:\s*nowrap/)
+  })
+
   it('draws no chip at all while the rule had nothing to say', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() }))
