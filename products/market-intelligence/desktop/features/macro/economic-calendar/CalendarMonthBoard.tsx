@@ -4,6 +4,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { StateView } from '@platform/ui/components/state'
 import { CalendarEmptyMonthState } from './CalendarEmptyMonthState'
 import { CalendarEventRow } from './CalendarEventRow'
 import { unifiedCalendarDay, type CalendarDayCoverage, type CalendarDayItem } from './economicCalendarDayModel'
@@ -25,7 +26,7 @@ const economicCalendarEmptyStateActionPolicy = { emptyEventCount: 0 } as const
  * state: every value arrives as a prop, so the grid can be reasoned about — and tested — without the
  * page's effects.
  */
-export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage }: {
+export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable }: {
   statusNow: string
   today: string
   asOf: string
@@ -39,16 +40,44 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   selectedEventKey: string | undefined
   state: EconomicCalendarMonthState
   text: EconomicCalendarText
+  /** 官方源停用时那一句；有它就按「拿不到」画，而不是按「没有」。 */
+  officialUnavailable?: string
 }): ReactElement {
-  const status = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
+  let status: string | undefined = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
+  /**
+   * 「没有」与「拿不到」必须分得开（Chief 2026-11-08）：官方那条腿读不到时，
+   * - 市场侧也没有行 → 错误态，**不给动作**（再试必失败、去设置也改不了 403）；
+   * - 市场侧有行 → 正常列出来，另加一条 muted 说明；摆空态会把「还有数据」说成「什么都没有」。
+   */
+  const surface = monthSurface({ officialUnavailable: officialUnavailable !== undefined, officialCount: events.length, marketCount: marketEvents.length })
+  if (surface === 'official-unavailable') return <CalendarState month={month} text={officialUnavailable!} loading={false} unavailable />
+  if (surface === 'note') status ??= officialUnavailable
   if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
   return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
 }
 
-function CalendarState({ month, text, loading }: { month: string; text: string; loading: boolean }): ReactElement {
+/**
+ * 这个月该怎么画，一句话判完——三态都能单独测，不用渲染整块板子。
+ *
+ * 判据（Chief 2026-11-08）：只有「两个来源都读到了」才允许说「本月没有」；官方那条腿读不到时，
+ * 空必须说成「拿不到」。官方不可用且市场侧有行时，**不许摆空态**——那会把「还有数据」说成「什么都没有」。
+ */
+export function monthSurface(input: Readonly<{ officialUnavailable: boolean; officialCount: number; marketCount: number }>): 'board' | 'note' | 'official-unavailable' {
+  if (!input.officialUnavailable) return 'board'
+  if (input.officialCount === 0 && input.marketCount === 0) return 'official-unavailable'
+  return input.marketCount > 0 ? 'note' : 'board'
+}
+
+function CalendarState({ month, text, loading, unavailable = false }: { month: string; text: string; loading: boolean; unavailable?: boolean }): ReactElement {
   return <section className="mi-economic-calendar__month" aria-live="polite" data-month-key={month}>
-    {loading ? <LoadingState label={text} minHeight={220} /> : <p className="mi-economic-calendar__more">{text}</p>}
+    {loading
+      ? <LoadingState label={text} minHeight={220} />
+      // 拿不到：错误态 + 产品那句话，**不给动作按钮**——这里没有能让它成功的按钮。
+      : unavailable
+        ? <StateView className="mi-economic-calendar__official-unavailable" productReason={{ key: 'mi.calendar.official-unavailable', resolve: () => text }}
+            reasonCode="capability-not-wired" size="lg" state="disabled" />
+        : <p className="mi-economic-calendar__more">{text}</p>}
   </section>
 }
 
