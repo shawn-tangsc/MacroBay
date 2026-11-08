@@ -74,7 +74,11 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   // N10 舆情「强度中以上」（契约 §4.1 已批；情报需求 v3.58 §十四）：只批 center + channel。
   // 桌面与提示两档没批过，也不许顺手补——信息类按读者原话「没打开应用还被轰炸」是明确不要的。
   // 手机这一档不是无限量：每天 5 条（读者时区），超出的只进中心并在列表里写明还有几条没推。
-  'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
+  'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+  // AI 分析结论：用户 2026-11-08 问起「为什么不推手机」后补通。**真的到手机**（不是只到中心）：
+  // `channel` 必须批；`center` 是「中心必达」。按次收窄由 `narrowedDisruptionLevels` 决定，
+  // 引擎只许收窄、不许放大（见 `notificationSubmitPlan.ts`）。
+  'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
 })
 
 /** 本版批准表行数：验收与守卫按它核对「21 行」。多一行少一行都要回产品重签。 */

@@ -414,6 +414,16 @@ export type NotificationSubmitRequest = {
    * 就全凭调用方自觉了，而这正是「测试不吃真实通知」要防的。这里只有「同一个键、不同域」一件事。
    */
   namespace?: 'test'
+  /**
+   * **按次收窄**要发的表面（一次提交一个值，不落进读者配置）。
+   *
+   * 四条语义：
+   * 1. **只能收窄**：结果 = 批准档 ∩ 这个数组，任何情况下不超出批准表；
+   * 2. **`center` 不可排除**：中心是平台必达，数组里没有它也照样保留；
+   * 3. **合并不许升级**：只影响本次提交，不改记录已有的最高档；
+   * 4. **缺省同今天**：不传＝完全按批准表。
+   */
+  narrowedDisruptionLevels?: readonly NotificationApprovedLevel[]
   producerId?: string
   /**
    * 只记录不投递（契约 §16.3.3）：照常走提交与去重，但**不写任何表面的 delivery 条目**。

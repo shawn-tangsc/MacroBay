@@ -192,7 +192,13 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     now: () => new Date(input.now),
     timeZone: () => input.timeZone
   })
-  const levels = effectiveLevels(surfaces, !insideQuietHours)
+  const approved = effectiveLevels(surfaces, !insideQuietHours)
+  // 按次收窄（`narrowedDisruptionLevels`）：**只许收窄、不许放大**；`center` 是平台必达，传的数组里
+  // 没有它也保留。不传＝与今天逐字一致（下面那行不会改变任何东西）。
+  const narrowed = input.request.narrowedDisruptionLevels
+  const levels = narrowed === undefined
+    ? approved
+    : approved.filter((level) => level === 'center' || narrowed.includes(level))
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }

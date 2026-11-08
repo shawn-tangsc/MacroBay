@@ -22,11 +22,11 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
 })
 
 describe('notification event policy', () => {
-  it('is the signed 21-row table (13 platform + 8 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(22)
+  it('is the signed 23-row table (13 platform + 10 market-intelligence)', () => {
+    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(23)
     const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
     expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(13)
-    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(9)
+    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(10)
     // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
     expect(ids).not.toContain('market-intelligence.signal.interpreted')
     // N8 calibration.result 2026-11-04 撤回：编号不复用，行也不留（留着就是静默复活的口子）。
@@ -64,6 +64,7 @@ describe('notification event policy', () => {
     // 手机四条：N2 日报完成、N3 信号、N5 宏观事件、N10 舆情。N10 是 2026-11-06 新增的
     // （契约 §4.1 / 情报需求 v3.58 §十四），它只批 center + channel——桌面与提示两档明确不加。
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('channel')).map(([id]) => id).sort()).toEqual([
+      'market-intelligence.analysis.conclusion',
       'market-intelligence.briefing.ready',
       'market-intelligence.calendar.event-upcoming',
       'market-intelligence.macro.event-landed',
@@ -76,12 +77,14 @@ describe('notification event policy', () => {
     // - P9：读者刚点过、人就在面板前，桌面优先，同一次失败不在应用内再吵一遍；
     // - 日报完成：**桌面批准、提示不批**——11-04 用户原话「不弹提示」，11-06 只要求桌面通知，
     //   两格不是一回事，留着提示就是替他多要一次打扰（不是漏配，别顺手补回来）；
-    // - N10 舆情：信息类，手机与中心就够。
+    // - N10 舆情：信息类，手机与中心就够；
+    // - 分析结论：完成类，用户要的是「结论到了」这一声，反过来只在手机与中心（同向时由调用方收窄到中心）。
     // 顺序就是表里的顺序（平台几行在前），别按字母排。
     expect(rows.filter(([, row]) => !row.approvedDisruptionLevels.includes('toast')).map(([id]) => id)).toEqual([
       'platform.analysis.manual-failed',
       'market-intelligence.briefing.ready',
-      'market-intelligence.sentiment.alert'
+      'market-intelligence.sentiment.alert',
+      'market-intelligence.analysis.conclusion'
     ])
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(19)
   })
