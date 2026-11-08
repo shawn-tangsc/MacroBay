@@ -169,7 +169,8 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
       <div className="mi-analysis-dashboard-layout__dashboard">
         {conclusionHost ? createPortal(<LatestAnalysisConclusionCard
           text={detailText}
-          workspaceText={workspaceText}
+          // 读不到时用 productText 里既有那口径句（与抽屉同一句），不另写一版。
+          workspaceText={{ ...workspaceText, conclusionUnreadable: resolveWorkspaceText('pages.intelligence.portal.data.drawerUnavailable') }}
           timeline={timeline}
           onOpenDetail={entry => { setOpenEntry(entry); timeline.ensureDetail(entry) }}
           onOpenTimeline={() => setTimelineOpen(true)}

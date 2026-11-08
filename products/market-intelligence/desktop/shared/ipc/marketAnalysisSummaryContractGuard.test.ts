@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { analysisOutputTopLevelKeys } from '../../../service/intelligence/analysis/analysisOutputValidator'
-import { SUMMARY_OPTIONAL_FIELDS, SUMMARY_REQUIRED_FIELDS } from './marketAnalysisTimelineClient'
+import { SUMMARY_OPTIONAL_FIELDS, SUMMARY_REQUIRED_FIELDS, missingSummaryWhitelistKeys } from './marketAnalysisSummaryWhitelist'
 
 /**
  * **体系守卫**：服务侧能持久化的顶层键，与渲染端白名单必须逐字对齐。
@@ -14,10 +14,9 @@ import { SUMMARY_OPTIONAL_FIELDS, SUMMARY_REQUIRED_FIELDS } from './marketAnalys
  */
 describe('the summary whitelist matches what an analysis result may persist', () => {
   it('accepts every top-level key the service may write into a summary', () => {
-    const accepted = new Set<string>([...SUMMARY_REQUIRED_FIELDS, ...SUMMARY_OPTIONAL_FIELDS])
-    const missing = analysisOutputTopLevelKeys.filter((key) => !accepted.has(key))
     // 少一个键，读者看到的就是「这项数据暂时读不到」——所以这里是「一个都不能少」。
-    expect(missing).toEqual([])
+    // 比较逻辑只有一份（白名单模块里），用例只负责把服务侧常量喂进去。
+    expect(missingSummaryWhitelistKeys(analysisOutputTopLevelKeys)).toEqual([])
   })
 
   it('keeps the divergence self-report optional: silence is not disagreement', () => {

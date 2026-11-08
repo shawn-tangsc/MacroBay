@@ -7,6 +7,7 @@ import { localizeAnalysisMagnitudeUnits } from '../../../contracts/marketAnalysi
 import type { AnalysisConclusionDetail, AnalysisDetailText } from './AnalysisConclusionDetail'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { analysisConclusionSurfacePolicy } from './analysisWorkspaceLayoutPolicy'
 import { analysisConclusionDirectionPolicy } from './analysisConclusionDirectionPolicy'
 import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
@@ -24,6 +25,11 @@ export type LatestConclusionText = Readonly<{
   latestConclusionEmpty: string
   latestConclusionLoading: string
   latestConclusionUnavailable: string
+  /**
+   * 读不到时那一句（既有口径「这项数据暂时读不到，不是你没有」）。
+   * 可选：老调用点没有它时回落到 `latestConclusionUnavailable`，不因此不渲染。
+   */
+  conclusionUnreadable?: string
   openDetail: string
 }>
 
@@ -93,7 +99,21 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
     {!latest && state.loading ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
     {!latest && !state.loading ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
     {latest && pending === 'loading' ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
-    {latest && pending === 'unavailable' ? <p role="alert" className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionUnavailable}</p> : null}
+    {/* 读不到不是「没有这条分析」：走统一状态面，句子是产品那句，动作是真重读**这一个节点**
+        （与抽屉同一条 `ensureDetail`）。自动重试停了之后，读者还留着一个出口——没有出口的失败态
+        下次任何一次瞬时失败都会再卡一次。 */}
+    {latest && pending === 'unavailable' ? <StateView
+      action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => timeline.ensureDetail(latest) }}
+      productReason={{
+        key: 'mi.latestConclusion.unreadable',
+        resolve: (key, _params) => key === 'mi.latestConclusion.unreadable'
+          ? workspaceText.conclusionUnreadable ?? workspaceText.latestConclusionUnavailable
+          : ''
+      }}
+      reasonCode="unreadable"
+      size="md"
+      state="error"
+    /> : null}
     {latest && detail ? <div className="mi-analysis-conclusion-card__body" data-direction={direction ?? 'none'}
       style={direction ? { '--mi-conclusion-direction': `var(${analysisConclusionDirectionPolicy.colorTokens[direction]})` } as React.CSSProperties : undefined}>
       <p className="mi-analysis-conclusion-card__conclusion">
