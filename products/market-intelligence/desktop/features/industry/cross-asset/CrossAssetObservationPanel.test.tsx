@@ -227,8 +227,9 @@ describe('cross-asset observation workspace', () => {
     }
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
-      for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
-      expect(host.textContent).toContain(text.contractMismatch)
+      // 条件是「契约不一致那句话出现」，不是「刷 6 个微任务」：固定次数是在赌调用链长度，
+      // 链一变就红（同一提交两次跑结果不一致的典型来源）。轮询一成立就继续，上限由 `vi.waitFor` 兜住。
+      await vi.waitFor(() => { expect(host.textContent).toContain(text.contractMismatch) })
       // 版本不一致时重试没有意义（重读同一份契约），所以这一态的出口是「重启应用」，不是「重试」。
       // 比的是两条平台动作句，不是 `text.retry`——那个键在跨资产文案里根本不存在，比 undefined
       // 永远成立，等于没断言（2026-11-06 预检钩子把它抓出来）。
