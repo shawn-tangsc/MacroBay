@@ -186,13 +186,16 @@ export function EtfSignalDetailDialog({ open, onClose, chip, verifiedAt, text, a
     onClose={onClose}
     open={open}
     resolveText={resolveText}
-    titleKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle"
+    // 平台弹窗的标题只有文字、塞不进去第二个元素，所以这里用无标题档：可见的标题由本组件画，
+    // ⓘ 才能真的**贴在标题文字后面**（同一行、相邻兄弟），而不是掉到下面一行靠右。
+    ariaLabelKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle"
     width="standard">
     {/* 正文自己滚：标题与关闭键不动，8 行以上也不会把窗口顶出屏幕。 */}
     <div className="mi-capital-signal-dialog__body">
-      {/* 元说明只有一处：标题行尾的一颗 ⓘ，悬停/聚焦打开；正文只留读数、流水与时间。
-          这是用户的通用规则——说明性文字不许作为正文铺开（界面 2026-11-08，与背离卡同一形态）。 */}
+      {/* 标题行：文字 + 一颗 ⓘ（元说明的唯一去处），同一 flex 行、左对齐、只留小 gap。
+          窗口变窄时截断的是文字，图标不许被挤走，也不许换行。 */}
       <div className="mi-capital-signal-dialog__head">
+        <h2 className="mi-capital-signal-dialog__title">{resolveText('pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle')}</h2>
         <Popover
           lines={[{ labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailNote' }]}
           resolveText={resolveText}
@@ -206,10 +209,13 @@ export function EtfSignalDetailDialog({ open, onClose, chip, verifiedAt, text, a
               variant="plain" />
           )} />
       </div>
-      <SignalDetail
-        groups={groups}
-        id={ETF_SIGNAL_DETAIL_ID}
-        titleKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle" />
+      {/* 标题不滚：滚的是下面这一块，8 行以上也不会把标题顶走。 */}
+      <div className="mi-capital-signal-dialog__scroll">
+        <SignalDetail
+          groups={groups}
+          id={ETF_SIGNAL_DETAIL_ID}
+          titleKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailDialogTitle" />
+      </div>
     </div>
   </Modal>
 }

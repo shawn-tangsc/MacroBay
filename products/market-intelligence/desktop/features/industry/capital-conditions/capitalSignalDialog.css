@@ -2,15 +2,37 @@
    常驻区不留解释，点开给一个可关闭的弹层；这里只管弹层内部：正文自己滚、标签列 136px、
    值比标签亮一档、落款与读数之间一条分隔线。颜色全部走看板 token，深浅两套与卡片同底同描边。 */
 
-/* 说明只有一颗 ⓘ，靠右坐在正文第一行：正文里不放解释性段落。 */
+/* 标题行：文字 + ⓘ 同一行、左对齐，只留一个小 gap。
+   不用 `space-between` / `margin-left: auto`（那会把图标推到行尾，窄容器里还会掉行），
+   也不许 `flex-wrap`：窗口变窄时**截断文字**，图标留在标题右侧。 */
 .mi-capital-signal-dialog__head {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 2px;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  margin-bottom: 10px;
 }
 
-/* 标题与关闭键不滚，正文自己滚：行数再多也不把窗口顶出去。 */
-.mi-capital-signal-dialog__body {
+.mi-capital-signal-dialog__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mi-dashboard-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* 图标是不许被挤走的那一半：它固定大小，文字负责让位。 */
+.mi-capital-signal-dialog__head .icon-button { flex: none; }
+
+/* 标题、关闭键都不滚：滚动只发生在正文那一段里，行数再多也不把标题顶出视野。
+   上限仍按 v1 规格：min(70vh, 560px)。 */
+.mi-capital-signal-dialog__body { display: flex; flex-direction: column; }
+
+.mi-capital-signal-dialog__scroll {
   max-height: min(70vh, 560px);
   overflow: auto;
 }

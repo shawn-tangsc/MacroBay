@@ -486,6 +486,31 @@ describe('CapitalConditionsPanel', () => {
     expect(document.querySelector('.mi-capital-signal-dialog')).not.toBeNull()
   })
 
+  // 标题与 ⓘ 必须真的同一行、相邻：它在窄容器里掉到第二行，是因为被推到了行尾。
+  it('keeps the title and its info button in one non-wrapping row', async () => {
+    const { container } = await renderAlert()
+    await act(async () => container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.click())
+
+    const head = document.querySelector<HTMLElement>('.mi-capital-signal-dialog__head')!
+    const title = head.querySelector<HTMLElement>('.mi-capital-signal-dialog__title')!
+    const info = head.querySelector<HTMLButtonElement>('button.icon-button')!
+    expect(title).not.toBeNull()
+    expect(info).not.toBeNull()
+    // 同一行容器，且图标是标题的**相邻兄弟**（中间没有别的元素把它顶到别处）。
+    expect(head.contains(title)).toBe(true)
+    expect(title.nextElementSibling).toBe(info.closest('.platform-popover__anchor'))
+
+    // 容器规则里不许出现把图标推到行尾或允许换行的写法。
+    const sheet = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/capital-conditions/capitalSignalDialog.css'), 'utf8')
+    const rule = /\.mi-capital-signal-dialog__head\s*\{([^}]*)\}/.exec(sheet)![1]!
+    expect(rule).not.toMatch(/justify-content:\s*space-between/)
+    expect(rule).not.toMatch(/margin-left:\s*auto/)
+    expect(rule).not.toMatch(/flex-wrap:\s*wrap/)
+    expect(rule).toMatch(/flex-wrap:\s*nowrap/)
+    // 文字负责让位：标题截断、图标固定大小。
+    expect(/\.mi-capital-signal-dialog__title\s*\{([^}]*)\}/.exec(sheet)![1]!).toMatch(/text-overflow:\s*ellipsis/)
+  })
+
   // 判据三：× / Esc / 遮罩三种关法，各关一次都能关，关后焦点回到牌子。
   async function openThen(close: () => void) {
     const { container } = await renderAlert()
