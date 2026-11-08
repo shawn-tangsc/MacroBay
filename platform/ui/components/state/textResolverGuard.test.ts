@@ -95,10 +95,10 @@ describe('产品原因句：键带前缀、参数不被吃掉（§17）', () => 
   })
 
   it('catches each shape it claims to catch', () => {
-    const good = `productReason={{ key: 'mi.newsSentiment.staleSince', params: { moment: momentText }, resolve: (k, p) => t(k, p) }}`
+    const good = `productReason={{ key: 'sample.reason.staleSince', params: { moment: momentText }, resolve: (k, p) => t(k, p) }}`
     const platformPrefix = `productReason={{ key: 'ui.state.empty', resolve: (k, p) => t(k, p) }}`
     const noPrefix = `productReason={{ key: 'staleSince', resolve: (k, p) => t(k, p) }}`
-    const eatsParams = `productReason={{ key: 'mi.newsSentiment.staleSince', params: { moment: momentText }, resolve: (k) => t(k) }}`
+    const eatsParams = `productReason={{ key: 'sample.reason.staleSince', params: { moment: momentText }, resolve: (k) => t(k) }}`
 
     expect(productReasonOffenders('good.tsx', good)).toEqual([])
     expect(productReasonOffenders('prefix.tsx', platformPrefix).length).toBe(1)

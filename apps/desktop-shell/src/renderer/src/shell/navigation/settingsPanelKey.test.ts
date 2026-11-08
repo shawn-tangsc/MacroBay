@@ -5,7 +5,7 @@ import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } fro
 const entries = [
   { id: 'sample-product.exchange-connections' },
   { id: 'sample-product.market-data-sources' },
-  { id: 'market-intelligence.intelligence-sources' }
+  { id: 'sample-product.panel-c' }
 ]
 
 describe('resolveSettingsPanelKeyFromHash', () => {
@@ -23,15 +23,13 @@ describe('resolveSettingsPanelKeyFromHash', () => {
     expect(resolveSettingsPanelKeyFromHash('exchange-connections', entries)).toBe(
       'sample-product.exchange-connections'
     )
-    expect(resolveSettingsPanelKeyFromHash('intelligence-sources', entries)).toBe(
-      'market-intelligence.intelligence-sources'
-    )
+    expect(resolveSettingsPanelKeyFromHash('panel-c', entries)).toBe('sample-product.panel-c')
   })
 
   it('leaves an ambiguous slug unresolved instead of guessing a product', () => {
     const ambiguous = [
       { id: 'sample-product.sources' },
-      { id: 'market-intelligence.sources' }
+      { id: 'other-product.sources' }
     ]
     expect(resolveSettingsPanelKeyFromHash('sources', ambiguous)).toBe('sources')
   })
