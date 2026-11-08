@@ -255,15 +255,34 @@ describe('Drawer', () => {
     expect(rules).toMatch(/\.drawer__title-row\s*\{[^}]*min-width:\s*0/)
   })
 
-  it('truncates the title before the action: the action only stops at its 45% cap', () => {
-    // 槽的尺寸按规则定，不按今天那句文案定——下一个产品的动作更长时，仍要标题先截断。
+  it('caps the action at 45% of the header, not of its own content-sized group', () => {
+    // 2026-11-08 退回重做：`max-width: 45%` 挂在 `flex: none` 的分组里，百分比对宽度未定的盒子
+    // 会先按内容算，于是上限成了「分组宽 × 45%」，分组却保留未压缩的宽度——关闭键被推到中间
+    // （602px 头实测 ✕ 距右缘 148.7px）。所以参照物必须是**头**：头声明容器，上限用 `cqw`。
     const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).toMatch(/\.drawer \.ant-drawer-header\s*\{[^}]*container-type:\s*inline-size/)
+    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*max-width:\s*45cqw/)
+    // 反向：一旦退回裸百分比，参照物又变回分组，这条必须红。
+    expect(rules).not.toMatch(/\.drawer__actions\s*\{[^}]*max-width:\s*\d+%/)
     expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*flex:\s*0 0 auto/)
-    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*max-width:\s*45%/)
     // 槽内文字自己有省略号：槽是通用的，里面放什么由调用方决定。
     expect(rules).toMatch(/\.drawer__actions\s*>\s*\*\s*\{[^}]*text-overflow:\s*ellipsis/)
     // 动作槽与关闭键之间的 12px 写在组件里，不是调用方传的。
     expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*gap:\s*12px/)
+  })
+
+  it('keeps the close control as the last element of the unsqueezed group', async () => {
+    await mount({ actions: <button data-actions type="button">send</button> })
+    // happy-dom 不做布局，这里**证明不了**「✕ 距右缘 ≤1px」。所以只断言能机械判的两件事：
+    // 关闭键是分组里最后一个元素（`flex: none` 的分组本身不被压缩），以及上限的参照物是头。
+    // 真实数值由浏览器量：`docs-private/05-desktop/ui-audit/evidence/drawer/measure-header-slot.html`
+    // 在 602px 长文案下实测 ✕ 距右缘 0px、动作 270.9（=602×45%）、间距 12；退回裸百分比时同页量到 148.7px。
+    const group = document.querySelector('.drawer__header-actions')
+    expect(group).not.toBeNull()
+    expect(group?.lastElementChild?.tagName).toBe('BUTTON')
+
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*flex:\s*none/)
   })
 
   it('takes no gap or width for the slot: the caller cannot resize the header', () => {
