@@ -13,6 +13,7 @@
  *
  * **平台侧不做时间窗去重**：读者点一次就再推一次，防连点归界面的「发送中」禁用。
  */
+import { pushDeliveryState } from '../delivery/pushDeliveryState'
 import type { NotificationDeliveryState, NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDeliveryContent } from './notificationRouting'
 
@@ -68,21 +69,15 @@ export async function redeliverPushToChannel(
   }
   const result = await deps.deliver(record, await deps.resolveContent(record))
   const previousCount = record.delivery.push?.pushCount ?? 0
-  const delivery: NotificationDeliveryState = result.ok
-    ? {
-        state: result.messageId === undefined ? 'sent-unconfirmed' : 'sent-accepted',
-        at: deps.now,
-        pushCount: previousCount + 1,
-        lastPushedAt: deps.now,
-        ...(result.messageId === undefined ? {} : { messageId: result.messageId })
-      }
-    : {
-        state: 'failed',
-        reason: result.reason ?? 'channel-rejected',
-        at: deps.now,
-        pushCount: previousCount + 1,
-        lastPushedAt: deps.now
-      }
+  // 状态词只由这一处映射给：与新提交路径读同一张表（`pushDeliveryState`）。
+  const mapped = pushDeliveryState(result)
+  const delivery: NotificationDeliveryState = {
+    ...mapped,
+    at: deps.now,
+    pushCount: previousCount + 1,
+    lastPushedAt: deps.now,
+    ...(result.messageId === undefined ? {} : { messageId: result.messageId })
+  }
   return { kind: 'accepted', recordId: record.id, delivery }
 }
 

@@ -22,6 +22,7 @@ import type {
   NotificationRuntimeSettings
 } from '../contracts/notificationContracts'
 import { recordPushOutcome, shouldSkipPush, type PushDeliveryOutcome } from '../delivery/pushBackoffPolicy'
+import { pushDeliveryState } from '../delivery/pushDeliveryState'
 import type { PushChannelResolution } from '../delivery/pushChannelResolution'
 import {
   routeTransientDelivery,
@@ -354,11 +355,14 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     }
 
     const result = await input.deliveryHooks.push({ ...record, delivery }, content)
-    const outcome: PushDeliveryOutcome = result.ok
-      ? 'sent-accepted'
-      : result.reason === 'unknown-after-send'
-        ? 'unknown-after-send'
-        : 'failed'
+    // 记录上的状态词只由这一处映射给（与手动重投读同一张表）。
+    const mapped = pushDeliveryState(result)
+    // 熔断只认「确定失败」：`sent-unconfirmed`（发出去了、没拿到回执）既不是成功也不是失败。
+    const outcome: PushDeliveryOutcome = mapped.state === 'sent-unconfirmed'
+      ? 'unknown-after-send'
+      : mapped.state === 'failed'
+        ? 'failed'
+        : 'sent-accepted'
     const decision = recordPushOutcome(current, outcome, at)
     // `unknown-after-send` 与「本来就没失败过」返回原值：不写，保留「没有熔断记录」这个状态。
     if (decision.changed) {
@@ -373,19 +377,12 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     if (decision.transition === 'resumed') transition = { kind: 'resumed', channelId }
     const sent = outcome !== 'failed'
     const nextHighest = highest(sent)
-    delivery.push = result.ok
-      ? {
-          state: 'sent-accepted',
-          at,
-          ...(result.messageId === undefined ? {} : { messageId: result.messageId }),
-          ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
-        }
-      : {
-          state: 'failed',
-          reason: result.reason ?? 'channel-rejected',
-          at,
-          ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
-        }
+    delivery.push = {
+      ...mapped,
+      at,
+      ...(result.messageId === undefined ? {} : { messageId: result.messageId }),
+      ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
+    }
     return { pushBackoff: changed ? nextBackoff : pushBackoff, ...(transition === undefined ? {} : { transition }) }
   }
 

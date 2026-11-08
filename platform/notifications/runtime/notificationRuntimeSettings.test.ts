@@ -212,14 +212,17 @@ describe('notification settings surface', () => {
     expect((await runtime.getDeliverySettings()).toastEnabled).toBe(true)
   })
 
-  it('does not count unknown-after-send as a failure and does not clear the backoff', async () => {
+  it('does not count unknown-after-send as a failure anywhere: no backoff, no "last failure"', async () => {
     const { runtime, state } = createRuntime({
       push: async () => ({ ok: false, reason: 'unknown-after-send' })
     })
     for (const date of ['2026-11-01', '2026-11-02', '2026-11-03']) await runtime.submit(request(date))
-    // 「拿不到确认」不是「失败」：不累计、不暂停。
+    // 「拿不到确认」不是「失败」：不累计、不暂停、也不算「最近一次失败」。
+    // 以前它在新提交路径被写成 `failed`（那一刻它就出现在「最近一次失败」里），
+    // 与重投路径的 `sent-unconfirmed` 是同一件事的两种说法。
     expect(state().pushBackoff.telegram).toBeUndefined()
-    expect((await runtime.getDeliverySettings()).lastPushFailureAt).toBe('2026-11-03T00:00:00.000Z')
+    expect((await runtime.getDeliverySettings()).lastPushFailureAt).toBeNull()
+    expect(state().records.every((record: { delivery?: { push?: { state?: string } } }) => record.delivery?.push?.state !== 'failed')).toBe(true)
   })
 
   it('clears the backoff after a successful send', async () => {
