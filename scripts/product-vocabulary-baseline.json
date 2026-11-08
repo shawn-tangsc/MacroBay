@@ -16,7 +16,6 @@
     "apps/desktop-shell/src/renderer/src/shell/navigation/openProductSettingsPanel.ts",
     "apps/desktop-shell/src/renderer/src/shell/navigation/shellNavigationIntents.test.ts",
     "apps/desktop-shell/src/renderer/src/shell/notifications/notificationDeeplink.test.ts",
-    "apps/desktop-shell/src/renderer/src/shell/notifications/notificationDeeplink.ts",
     "apps/desktop-shell/src/renderer/src/shell/notifications/notificationDeeplinkHandler.test.ts",
     "apps/desktop-shell/src/renderer/src/shell/settings/task-automation/TaskAutomationResourceJobsSection.test.tsx",
     "apps/desktop-shell/src/renderer/src/shell/settings/task-automation/TaskAutomationSettingsPage.test.tsx",
