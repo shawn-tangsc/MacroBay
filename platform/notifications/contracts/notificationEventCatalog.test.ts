@@ -111,8 +111,11 @@ describe('notification event policy', () => {
 describe('notification event catalog', () => {
   it('merges declarations with the approval table: approval is the upper bound, not the request', () => {
     const catalog = createNotificationEventCatalog({
-      sources: [{ productId: 'platform', events: [declaration({ requestedDisruptionLevels: ['desktop'] })] }],
-      policy: { 'platform.job.failed-terminal': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false } }
+      sources: [{
+        productId: 'platform',
+        approval: { 'platform.job.failed-terminal': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false } },
+        events: [declaration({ requestedDisruptionLevels: ['desktop'] })]
+      }],
     })
     expect(catalog.has('platform.job.failed-terminal')).toBe(true)
     expect(catalog.get('platform.job.failed-terminal')?.approvedDisruptionLevels).toEqual(['center', 'desktop'])
@@ -124,22 +127,24 @@ describe('notification event catalog', () => {
     // 契约 §4 第二句：没有批准记录的一律只进中心；「申请了但还没批」不是错误（通道那条也走这里）。
     const catalog = createNotificationEventCatalog({
       sources: [{ productId: 'platform', events: [declaration({ requestedDisruptionLevels: ['desktop', 'channel'] })] }],
-      policy: {}
     })
     expect(catalog.get('platform.job.failed-terminal')?.approvedDisruptionLevels).toEqual(['center'])
   })
 
   it('refuses a declaration whose requested level the platform did not approve', () => {
+    // 批准在来源上（b2/b3）：来源给了批准、但没含申请的那一档 -> 装配期报错。
     expect(() => createNotificationEventCatalog({
-      sources: [{ productId: 'platform', events: [declaration({ requestedDisruptionLevels: ['toast'] })] }],
-      policy: { 'platform.job.failed-terminal': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false } }
+      sources: [{
+        productId: 'platform',
+        events: [declaration({ requestedDisruptionLevels: ['toast'] })],
+        approval: { 'platform.job.failed-terminal': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } }
+      }],
     })).toThrow(/requested-not-approved/)
   })
 
   it('treats an unapproved channel request as "not approved" instead of failing the declaration', () => {
     const catalog = createNotificationEventCatalog({
       sources: [{ productId: 'platform', events: [declaration({ requestedDisruptionLevels: ['desktop', 'channel'] })] }],
-      policy: { 'platform.job.failed-terminal': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false } }
     })
     expect(catalog.get('platform.job.failed-terminal')?.approvedDisruptionLevels).not.toContain('channel')
   })
@@ -150,12 +155,10 @@ describe('notification event catalog', () => {
         productId: 'platform',
         events: [declaration({ requestedDisruptionLevels: [] }), declaration({ requestedDisruptionLevels: [] })]
       }],
-      policy: {}
     })).toThrow(/duplicate-id/)
 
     expect(() => createNotificationEventCatalog({
       sources: [{ productId: 'market-intelligence', events: [declaration({ id: 'platform.job.failed-terminal' })] }],
-      policy: {}
     })).toThrow(/prefix-mismatch/)
   })
 })
