@@ -16,9 +16,9 @@ import { describe, expect, it } from 'vitest'
  * **精确值**，不是上限：写成 `<=` 时，「实际 24、基线 27」会允许回退 3 处——棘轮看着在转，
  * 其实什么都不证明（和「行数常量当验收」同一类毛病）。每迁一处就把这个数字改小一次。
  *
- * 41 = 当前仍传 `policy` 的**调用点数**（不是文件数）。已迁：`runtime/notificationRedeliver.test.ts`、`runtime/pushTargetDerivation.test.ts`（各 1 处，来源上补批准，值不变）。
+ * 41 = 当前仍传 `policy` 的**调用点数**（不是文件数）。已迁：`notificationRedeliver`、`pushTargetDerivation`、`notificationDedupeCadence` 各 1 处（来源上补批准，值不变）。
  */
-const BASELINE: number = 40
+const BASELINE: number = 39
 
 function callSites(): string[] {
   const found: string[] = []

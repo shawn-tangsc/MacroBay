@@ -27,13 +27,14 @@ function clockAt(iso: string) {
 }
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.signal': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-    'platform.etf': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：两条批准原样挪到来源上，值逐字不变。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.signal': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        'platform.etf': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.signal',
