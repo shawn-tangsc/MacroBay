@@ -10,7 +10,7 @@ function harness(options: { channel?: unknown; rejected?: boolean } = {}) {
   const submitted: { eventTypeId: string; namespace?: string; rendered?: Record<string, { title: string }> }[] = []
   const surface = composeSelfTestSurface({
     resolvePushChannel: async () => (options.channel ?? { ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }) as never,
-    deliver: async (input) => {
+    submitRequest: async (input) => {
       submitted.push(input as never)
       return (options.rejected === true ? { kind: 'rejected', reason: 'unknown-event-type', message: 'x' } : { kind: 'accepted', recordId: 'r1', levels: ['channel'] }) as never
     },

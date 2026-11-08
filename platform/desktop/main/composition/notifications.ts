@@ -143,7 +143,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
    * 因此「读者启用了两条」这件事在三条路上同时成立，不会主路径拒绝、升级路径照发。
    */
   const pushTarget = async () => resolvePushChannel(ports.channels.list(), (code, count) => {
-    ports.log.log('warn', code === 'push-multiple-enabled' ? 'MI_PUSH_MULTIPLE_ENABLED' : `notification.${code}`, { count })
+    ports.log.log('warn', code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${code}`, { count })
   })
   const push = createChannelPushPort({
     channels: ports.channels,
@@ -151,7 +151,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     resolvePushChannel: pushTarget,
     // 至多一个「看原文」；多出来的取第一个照发，但留一行痕——静默取第一个等于让写错的人永远不知道。
     diagnostics: (code, detail) => {
-      ports.log.log('warn', code === 'push-multiple-enabled' ? 'MI_PUSH_MULTIPLE_ENABLED' : `notification.${code}`, { ...detail })
+      ports.log.log('warn', code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${code}`, { ...detail })
     }
   })
   composeNotificationRuntime({
@@ -183,7 +183,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
         (entry.code === 'delegated' || entry.code === 'unclaimed-producer'
           ? 'info'
           : entry.code === 'persist-failed' ? 'error' : 'warn')
-      const event = entry.code === 'push-multiple-enabled' ? 'MI_PUSH_MULTIPLE_ENABLED' : `notification.${entry.code}`
+      const event = entry.code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${entry.code}`
       ports.log.log(level, event, {
         ...(entry.count === undefined ? {} : { count: entry.count }),
         eventTypeId: entry.eventTypeId,

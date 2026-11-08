@@ -36,7 +36,7 @@ export function registerNotificationIpcHandlers(): void {
     if (receipt.state !== 'sent') {
       // 留痕只带 kind 与闭集码（`push-unavailable` 时带条数）：**不记强度、不记时区字符串、不记凭据**。
       console.log(JSON.stringify({
-        marker: 'MI_TEST_NOTICE_UNAVAILABLE',
+        marker: 'notification.test-notice-unavailable',
         reasonCode: receipt.reasonCode,
         ...(receipt.state === 'unavailable' && receipt.enabledChannelCount !== undefined ? { enabledChannelCount: receipt.enabledChannelCount } : {})
       }))

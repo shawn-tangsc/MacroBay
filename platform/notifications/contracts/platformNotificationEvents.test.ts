@@ -18,7 +18,7 @@ import {
 describe('platform notification event declarations', () => {
   it('declares the ten platform events the policy table signs', () => {
     const ids = PLATFORM_NOTIFICATION_EVENTS.map((event) => event.id)
-    expect(ids).toHaveLength(13)
+    expect(ids).toHaveLength(14)
     for (const id of ids) {
       expect(id.startsWith('platform.'), id).toBe(true)
       expect(NOTIFICATION_EVENT_POLICY[id], `${id} 缺批准表行`).toBeDefined()
@@ -30,7 +30,7 @@ describe('platform notification event declarations', () => {
       sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
       policy: NOTIFICATION_EVENT_POLICY
     })
-    expect(catalog.list()).toHaveLength(13)
+    expect(catalog.list()).toHaveLength(14)
     for (const entry of catalog.list()) {
       for (const level of entry.requestedDisruptionLevels) {
         // channel 例外：没批按未批准处理，不报错（契约 §4）。

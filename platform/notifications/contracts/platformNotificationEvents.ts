@@ -55,6 +55,15 @@ function declaration(
 }
 
 export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration[] = Object.freeze([
+  // 平台自己的「通知链路自检」：不借任何产品事件当载体，否则中心里会显示成那件事的名字
+  // （用户 2026-11-08：平台侧不许出现产品业务概念）。正文由调用点给成品句（【测试】标记）。
+  declaration('platform.notification.self-test', {
+    category: 'reminder',
+    requiresUserAction: false,
+    requestedDisruptionLevels: ['channel'],
+    dedupeKeyTemplate: 'self-test:{date}:{seq}',
+    dedupeUnit: 'occurrence'
+  }),
   // P1 任务跑到终态仍失败：同一任务同一天一条、次数累加（`condition` + 24h 窗，跨天重算）。
   declaration('platform.job.failed-terminal', {
     category: 'failure',

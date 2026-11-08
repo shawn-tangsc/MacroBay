@@ -406,6 +406,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
 
   return {
     submit,
+    /** 推送目标（唯一派生）：产品侧要读「发到哪条、几条可用」，别再造第二份三档判定。 */
+    resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
 
     /**
      * 渲染层看到的那一份（落地约束 v1.2 §1）：应用内投递与列表共用**同一个**投影。
@@ -415,7 +417,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       centerItem(record, content),
 
     ...composeSelfTestSurface({ resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
-      deliver: (request) => submitEvent(request), now: nowIso }),
+      submitRequest: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
     reportProviderCredential,
 
