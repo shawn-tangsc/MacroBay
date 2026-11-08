@@ -1140,10 +1140,13 @@ export type PlatformText = {
     timeZoneSearch: string
     timeZoneUnavailable: string
     timeZoneOpenTimesHint: string
+    /** 「时区」那颗 ⓘ 的读屏名：念「它解释的东西 + 说明」，不念「更多信息」。 */
+    timeZoneOpenTimesHintInfo: string
     proxyMode: string
     proxyAddress: string
     proxyBypassRules: string
     proxyRequestHint: string
+    proxyRequestHintInfo: string
     proxySelfTest: string
     proxySelfTestRunning: string
     proxySelfTestPassedViaProxy: (status: number, seconds: string) => string
@@ -2516,10 +2519,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       timeZoneSearch: '搜索时区',
       timeZoneUnavailable: '无法读取系统时区，暂时按 UTC 显示。',
       timeZoneOpenTimesHint: '开盘时刻按这里选择的时区计算',
+      timeZoneOpenTimesHintInfo: '时区说明',
       proxyMode: '代理模式',
       proxyAddress: '代理地址',
       proxyBypassRules: '代理绕过规则',
       proxyRequestHint: '应用请求走这里的代理设置；浏览器能打开不代表应用能连。',
+      proxyRequestHintInfo: '代理设置说明',
       proxySelfTest: '测试代理',
       proxySelfTestRunning: '测试中…',
       proxySelfTestPassedViaProxy: (status, seconds) => `已通过代理到达目标站点（HTTP ${status} · ${seconds}s）`,
@@ -3871,10 +3876,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       timeZoneSearch: 'Search time zones',
       timeZoneUnavailable: 'The system time zone is unavailable; times are shown in UTC.',
       timeZoneOpenTimesHint: 'Open times are calculated in the time zone selected here.',
+      timeZoneOpenTimesHintInfo: 'Time zone explanation',
       proxyMode: 'Proxy Mode',
       proxyAddress: 'Proxy Address',
       proxyBypassRules: 'Proxy Bypass Rules',
       proxyRequestHint: 'App requests use the proxy settings here; the browser reaching a site does not mean the app can.',
+      proxyRequestHintInfo: 'Proxy settings explanation',
       proxySelfTest: 'Test proxy',
       proxySelfTestRunning: 'Testing…',
       proxySelfTestPassedViaProxy: (status, seconds) => `Reached the target site through the proxy (HTTP ${status} · ${seconds}s)`,

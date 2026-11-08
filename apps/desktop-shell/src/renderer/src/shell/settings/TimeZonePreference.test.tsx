@@ -37,17 +37,29 @@ describe('time zone preference', () => {
     expect(combobox).not.toBeNull()
   })
 
-  it('always says that open times follow this setting', async () => {
+  it('keeps the open-times explanation behind the title info button, not in the row text', async () => {
     const text = platformText['zh-CN'].preferences
     const following = await mount(systemTimeZoneSetting)
-    expect(following.textContent).toContain('开盘时刻按这里选择的时区计算')
+    // 行里只许「字段名 / 当前值 / 控件」：这句解释**不在 DOM 文本里**（不是 CSS 藏起来）。
+    expect(following.textContent).not.toContain(text.timeZoneOpenTimesHint)
+    const info = following.querySelector<HTMLButtonElement>(`button[aria-label="${text.timeZoneOpenTimesHintInfo}"]`)
+    expect(info).not.toBeNull()
+    expect(info?.getAttribute('aria-describedby')).toBeTruthy()
 
-    // 显式选了别的时区也照样显示：这条不是「跟随系统」专属的提示。
+    // 点开才读得到，且句子一字不改——收的是位置，不是改写。
+    await act(async () => {
+      info?.click()
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(text.timeZoneOpenTimesHint))
+
+    // 显式选了别的时区也一样：这条说明不是「跟随系统」专属的。
     await act(async () => root?.unmount())
     root = undefined
     document.body.replaceChildren()
     const explicit = await mount('Asia/Tokyo')
-    expect(explicit.textContent).toContain(text.timeZoneOpenTimesHint)
+    expect(explicit.textContent).not.toContain(text.timeZoneOpenTimesHint)
+    expect(explicit.querySelector(`button[aria-label="${text.timeZoneOpenTimesHintInfo}"]`)).not.toBeNull()
   })
 
   it('lists real IANA time zones and nothing invented when the runtime cannot list them', () => {

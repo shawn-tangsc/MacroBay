@@ -70,6 +70,7 @@ import {
 import { resolveLocalizedTitle } from './navigation/shellIconRegistry'
 import { ProductContributionHost } from './workspace/ProductContributionHost'
 import { TimeZonePreference } from './settings/TimeZonePreference'
+import { SettingInfoPopover } from './settings/SettingInfoPopover'
 import { createBuiltInPageAdapters, type BuiltInPageMounts } from './workspace/builtInPageAdapters'
 import { createShellWorkspacePageRegistry, type ShellWorkspacePage } from './navigation/workspacePageRegistry'
 import { WorkspacePageHost } from './workspace/WorkspacePageHost'
@@ -1375,6 +1376,15 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           <div className="preference-heading">
             <Globe2 size={18} />
             <span>{t.preferences.proxyMode}</span>
+            {/*
+              * 说明句收进标题旁的 ⓘ（设置页每行只许「字段名 / 当前值 / 控件 / 状态」四类文本）。
+              * 是移出 DOM，不是藏：正文里已经没有这句话，读屏与全选都拿不到它。
+              */}
+            <SettingInfoPopover
+              hintKey="proxyRequestHint"
+              infoLabelKey="proxyRequestHintInfo"
+              resolveText={preferencesText}
+            />
           </div>
           <Select<ProxyMode>
             className="preference-select"
@@ -1385,7 +1395,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             }))}
             onChange={(value) => void updateNetworkSettings({ proxyMode: value })}
           />
-          <p className="preference-hint" data-preferences-proxy-hint>{t.preferences.proxyRequestHint}</p>
           <div className="preference-proxy-probe">
             <Button
               className="ant-secondary-button"

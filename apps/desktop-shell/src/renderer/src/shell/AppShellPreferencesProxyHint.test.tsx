@@ -11,7 +11,10 @@ import { AppShell } from './AppShell'
 import { installPlatform } from './model-service/modelServicePageHarness'
 
 /**
- * PLAT-61：基础设置 → 代理段的一句灰字说明（应用请求走这里的代理；浏览器能打开≠应用能连）。
+ * PLAT-61：基础设置 → 代理段的说明（应用请求走这里的代理；浏览器能打开≠应用能连）。
+ *
+ * 2026-11-09：这句从正文灰字收进**标题旁的 ⓘ**——设置页那一行只许「字段名 / 当前值 / 控件 / 状态」，
+ * 说明留在正文里会被读者当成字段读。判据是「真从 DOM 移出」：关闭态下 `container.textContent` 里没有它。
  */
 const labels = platformText['en-US'].preferences
 const sentences = platformText['en-US'].models
@@ -48,8 +51,19 @@ async function renderBasicSettings(options: Parameters<typeof installPlatform>[0
   return container
 }
 
+/** 标题旁那颗 ⓘ：读屏名逐字取自文案表（`Proxy settings explanation`）。 */
+async function waitForProxyHintButton(container: ParentNode): Promise<HTMLButtonElement> {
+  let found: HTMLButtonElement | null = null
+  await vi.waitFor(() => {
+    found = container.querySelector<HTMLButtonElement>(`button[aria-label="${labels.proxyRequestHintInfo}"]`)
+    expect(found).not.toBeNull()
+  })
+  if (found === null) throw new Error('proxy hint button not found')
+  return found
+}
+
 describe('PLAT-61 基础设置代理说明', () => {
-  it('shows the proxy request hint and a proxy self-test that reports success without credentials', async () => {
+  it('keeps the proxy request hint behind the title info button, and the self-test reports success without credentials', async () => {
     const container = await renderBasicSettings({
       settings: {
         ...createDefaultAppSettings(),
@@ -57,8 +71,10 @@ describe('PLAT-61 基础设置代理说明', () => {
       }
     })
 
-    await vi.waitFor(() => expect(container.querySelector('[data-preferences-proxy-hint]')).not.toBeNull())
-    expect(container.querySelector('[data-preferences-proxy-hint]')?.textContent).toBe(labels.proxyRequestHint)
+    const hint = await waitForProxyHintButton(container)
+    // 说明句**不在正文里**（不是 CSS 藏起来）：这一行只剩字段名、控件与状态。
+    expect(container.textContent).not.toContain(labels.proxyRequestHint)
+    expect(hint.getAttribute('aria-describedby')).toBeTruthy()
 
     const button = container.querySelector<HTMLButtonElement>('[data-proxy-self-test]')
     expect(button?.textContent?.trim()).toBe(labels.proxySelfTest)
@@ -104,7 +120,7 @@ describe('PLAT-61 基础设置代理说明', () => {
     expect(container.querySelector('[data-proxy-self-test-result]')?.textContent).not.toContain('network_timeout')
   })
 
-  it('shows the proxy request hint in basic settings', async () => {
+  it('keeps the proxy request hint out of the row text in basic settings', async () => {
     installPlatform()
     const container = document.createElement('div')
     document.body.append(container)
@@ -116,7 +132,13 @@ describe('PLAT-61 基础设置代理说明', () => {
     await clickButton(container, 'Settings')
     await clickButton(container, 'Basic Settings')
 
-    await vi.waitFor(() => expect(container.querySelector('[data-preferences-proxy-hint]')).not.toBeNull())
-    expect(container.querySelector('[data-preferences-proxy-hint]')?.textContent).toBe(labels.proxyRequestHint)
+    const hint = await waitForProxyHintButton(container)
+    expect(container.textContent).not.toContain(labels.proxyRequestHint)
+    // 点开才读得到，句子一词不改——收的是位置，不是改写。
+    await act(async () => {
+      hint.click()
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(labels.proxyRequestHint))
   })
 })
