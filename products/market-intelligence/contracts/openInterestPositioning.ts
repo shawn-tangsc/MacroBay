@@ -81,9 +81,14 @@ export type PositioningBar = Readonly<{
   closePrice: number | null
 }>
 
+/** 哪一边被清掉：多头（价格跌）或空头（价格涨）。方向是规则自身的属性，不是信号字段。 */
+export type LiquidationDirection = 'long' | 'short'
+
 export type LiquidationHint = Readonly<{
   observedAt: string
   asset: 'btc' | 'eth'
+  /** 产出这条命中的规则方向：两条规则各判各的，快照不互相复用。 */
+  direction: LiquidationDirection
   /** Negative percent change of notional open interest across this one bucket. */
   dropPct: number
   /** Volume of this bucket divided by the mean of the previous `lookbackBars`. */
@@ -96,6 +101,24 @@ export type LiquidationHint = Readonly<{
    * beside a flat line with nothing to explain it.
    */
   notionalUsd: number
+  /**
+   * The price this bucket closed at.
+   *
+   * Carried for the same reason as the notional: a recorded hit has to show what the reader saw
+   * at the time. Recomputing it later would rewrite history every time a threshold moved, so the
+   * number travels with the judgement instead (2026-11-07, r29).
+   *
+   * Optional on purpose: reads built before this field existed do not carry it, and a missing
+   * price must stay missing instead of being stood in for by today's number.
+   */
+  closePrice?: number
+  /**
+   * 这一格的带符号价格变化（负=跌、正=涨）。
+   *
+   * 随判定一起记：详情要能说「当时跌了 1.2%」，而回头再看价格只会得到今天的答案。
+   * 两条反向规则各自记自己的符号，不复用对方的快照。
+   */
+  pricePct?: number
 }>
 
 export type LiquidationHintsResult = Readonly<{
@@ -115,6 +138,8 @@ export const liquidationHintPolicy = Object.freeze({
   dropPct: -1.5,
   strongDropPct: -2.5,
   priceDropPct: -0.8,
+  /** 空头爆仓的价格条件是镜像：涨幅达到同一个门槛。两条规则同门槛，不另设。 */
+  priceRisePct: 0.8,
   volumeMultiple: 2,
   lookbackMs: LIQUIDATION_LOOKBACK_MS,
   lookbackBars: bucketsInSpan(LIQUIDATION_LOOKBACK_MS, openInterestBucketPolicy.signalBucketMs),
@@ -139,6 +164,11 @@ export const liquidationHintPolicy = Object.freeze({
 export function detectLiquidationHints(input: Readonly<{
   asset: 'btc' | 'eth'
   bars: readonly PositioningBar[]
+  /**
+   * 判哪一边：`long` 要价格跌（多头被清），`short` 要价格涨（空头被清）。必填，不给默认值——
+   * 方向写反了，读者会做反动作，这件事不能靠隐式默认蒙对。
+   */
+  direction: LiquidationDirection
 }>): LiquidationHintsResult {
   const { asset, bars } = input
   const policy = liquidationHintPolicy
@@ -163,13 +193,18 @@ export function detectLiquidationHints(input: Readonly<{
     const dropPct = percentChange(previous.notionalUsd, bar.notionalUsd)
     const pricePct = percentChange(previous.closePrice, bar.closePrice)
     const multiple = bar.volumeBase / mean
-    if (dropPct <= policy.dropPct && pricePct <= policy.priceDropPct && multiple >= policy.volumeMultiple) {
+    const priceMatches = input.direction === 'long' ? pricePct <= policy.priceDropPct : pricePct >= policy.priceRisePct
+    if (dropPct <= policy.dropPct && priceMatches && multiple >= policy.volumeMultiple) {
       found.push(Object.freeze({
         observedAt: bar.observedAt,
         asset,
+        direction: input.direction,
         dropPct: round(dropPct),
         volumeMultiple: round(multiple),
-        notionalUsd: bar.notionalUsd
+        notionalUsd: bar.notionalUsd,
+        // 判定当时那一格的收盘价与涨跌：随判定一起存，之后不再回头算。
+        closePrice: bar.closePrice,
+        pricePct: round(pricePct)
       }))
     }
   }

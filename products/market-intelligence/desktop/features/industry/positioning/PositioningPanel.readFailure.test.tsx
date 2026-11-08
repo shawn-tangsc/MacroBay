@@ -14,11 +14,12 @@ import type { DashboardPositioningViewState } from '../../../pages/intelligence/
 import { PositioningPanel } from './PositioningPanel'
 
 /**
- * 中线牌子上「读不到」的样子：一句话 + 「能重试才给按钮」。
+ * 「读不到」那一条脚注：一句话 + 平台既有那枚重试。
  *
- * 单独一个文件，只为这条判据服务。那份完整的卡片测试文件里有别的历史类型偏移（`MI-11-R199`
- * 的 `desktop/features` 那批在办），把这条判据混进去会被淹掉，也会逼着顺手重写不该在这一笔动的
- * 夹具。
+ * 这里原先钉的是一条相反的规矩——「读不到只给一枚 16px 感叹号，卡片正面不留整行排障话、不给按钮」。
+ * 它在「必须让读者分清 没命中 / 读不到 / 数据不齐」这个要求下不成立了：一枚感叹号说不出是哪一种，
+ * 而区分这三种正是用户反复要求的（界面设计 v2、产品 2026-11-08）。改的是这一处和下面这几条用例；
+ * 共享的 `SignalReadIssue` 与其他卡一行未动。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.positioning
 const at = (minutesAgo: number): string => new Date(Date.UTC(2026, 9, 29, 0, 0) - minutesAgo * 60_000).toISOString()
@@ -30,7 +31,7 @@ const funding: DashboardFundingRateHistoryState = {
 }
 
 function positioning(signal: Extract<DashboardPositioningViewState, { state: 'available' }>['signal']): DashboardPositioningViewState {
-  return { state: 'available', window: '7d', btc: [], eth: [], signal, onReload: () => undefined }
+  return { state: 'available', window: '7d', btc: [], eth: [], hints: [], signal, onReload: () => undefined }
 }
 
 function render(state: DashboardPositioningViewState): string {
@@ -43,32 +44,32 @@ function render(state: DashboardPositioningViewState): string {
   }))
 }
 
-describe('a failed signal read on the positioning chip', () => {
-  it('marks the failure with one icon instead of a line of text', () => {
+describe('the liquidation note when the rule could not be read', () => {
+  const noteOf = (markup: string): string =>
+    markup.match(/<p class="mi-positioning-panel__liquidation-note"[^>]*>([\s\S]*?)<\/p>/)?.[1] ?? ''
+
+  it('says it in one line, and offers the retry the card already had', () => {
     const markup = render(positioning({ state: 'unreadable', failureCode: 'query-failed', onReload: () => undefined }))
-    // 正面上只有标记：一句话在悬停/聚焦里。整行排障话不许上牌位。
-    expect(markup).toContain('mi-signal-read-issue')
-    expect(markup).toContain('有没有被分析过')
-    expect(markup).not.toContain('判定记录没拿到')
-    // 一处一个：同一个失败在同一张卡上只挂一个。
-    expect(markup.split('mi-signal-read-issue').length - 1).toBe(1)
+    const line = noteOf(markup)
+    expect(line).toContain(text.liquidationNoteUnreadable)
+    expect(line).toContain('重试')
+    // 一处一个：同一张卡上这行只出现一次。
+    expect(markup.split('data-liquidation-note').length - 1).toBe(1)
     // 牌子是「有这条信号」的陈述：读不到时一条都不许出现，连灰牌也不行。
-    // 没有牌子本体：不是 alert 按钮，也不是灰牌。读不到就不许有「有这条信号」的陈述。
     expect(markup).not.toContain('data-state="alert"')
     expect(markup).not.toContain('疑似强平')
-    expect(markup).not.toContain('数据不齐')
+    // 另外两种说法不许顶上来。
+    expect(markup).not.toContain(text.liquidationNoteNoHit)
+    expect(markup).not.toContain(text.liquidationNoteInsufficient)
+    // 那枚感叹号标记换成了这一行。
+    expect(markup).not.toContain('mi-signal-read-issue')
   })
 
-  it('never offers a retry: this is not something the reader can do', () => {
-    const markup = render(positioning({ state: 'unreadable', failureCode: 'invalid-as-of', onReload: () => undefined }))
-    // 标记仍在（我们确实出错了），但正面与浮层里都不许出现「重试」：这件事不用读者动手。
-    expect(markup).toContain('mi-signal-read-issue')
-    expect(markup).not.toContain('重试')
-    // 内部词不上屏——只对**那句话**断言，不对整块卡片跑宽泛正则：卡片别处正常出现「记录」
-    // 两个字（比如「上次更新记录」）时，宽断言会误红，然后有人为了变绿去删断言。
-    const sentence = markup.match(/aria-label="([^"]*没查到[^"]*)"/)?.[1] ?? ''
-    expect(sentence).not.toMatch(/状态|记录|通道/)
-    expect(markup).not.toContain('retry')
+  it('keeps the internal vocabulary off the line', () => {
+    const markup = render(positioning({ state: 'unreadable', failureCode: 'contract-invalid', onReload: () => undefined }))
+    // 内部词不上屏——只对**这一行**断言，不对整张卡跑宽泛正则：卡片别处正常出现「记录」两个字时，
+    // 宽断言会误红，然后有人为了变绿去删断言。
+    expect(noteOf(markup)).not.toMatch(/contract|invalid|状态|记录|通道/)
   })
 })
 

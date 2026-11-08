@@ -40,22 +40,22 @@ function notifier(overrides: {
     { 'zh-CN': string; 'en-US': string } | undefined
 } = {}) {
   const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<unknown>>(async () => undefined)
-  const listDefinitionRuns = vi.fn(() => overrides.runs ?? history(3))
+  const listHandlerRuns = vi.fn(() => overrides.runs ?? history(3))
   const notify = createRepeatedTaskFailureNotifier({
     submit,
     taskNameSnapshot: overrides.taskNameSnapshot ?? (() => ({ 'zh-CN': '央行利率决议采集', 'en-US': 'Central bank rate decision' })),
-    listDefinitionRuns,
+    listHandlerRuns,
     dayToken: (instant) => instant.slice(0, 10)
   })
-  return { submit, notify, listDefinitionRuns }
+  return { submit, notify, listHandlerRuns }
 }
 
 describe('repeated task failure notifier (P2)', () => {
   it('upgrades exactly at the third consecutive terminal failure', async () => {
-    const { submit, notify, listDefinitionRuns } = notifier()
+    const { submit, notify, listHandlerRuns } = notifier()
     await notify({ run: run(), cause: 'executed' })
 
-    expect(listDefinitionRuns).toHaveBeenCalledWith('definition-1')
+    expect(listHandlerRuns).toHaveBeenCalledWith('handler-1')
     expect(submit).toHaveBeenCalledTimes(1)
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
     expect(request.eventTypeId).toBe('platform.job.repeated-failed')
@@ -67,7 +67,7 @@ describe('repeated task failure notifier (P2)', () => {
     expect(request).not.toHaveProperty('bodyParams')
     expect(request.dedupeVars).toEqual({
       builder: 'template',
-      vars: { definitionId: 'definition-1', date: '2026-11-02' }
+      vars: { jobKey: 'definition:definition-1', date: '2026-11-02' }
     })
     expect(request.deeplink).toMatchObject({ entityType: 'job-definition', entityId: 'definition-1' })
     expect(request.occurredAt).toBe('2026-11-02T01:00:05.000Z')
@@ -90,6 +90,31 @@ describe('repeated task failure notifier (P2)', () => {
     const newStreak = notifier({ runs: history(3, ['completed']) })
     await newStreak.notify({ run: run(), cause: 'executed' })
     expect(newStreak.submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts one-shot runs of the same handler and source as one streak, across different definition ids', async () => {
+    // 同一来源连续失败 3 次、每次 definitionId 都不同 → 仍然只发一条升级（恰好一条）。
+    const runs = [3, 2, 1].map((index) =>
+      run({
+        id: `run-${index}`,
+        definitionId: `sample-product.handler:global:1794052912${index}00:abc${index}`,
+        trigger: { kind: 'manual' },
+        payload: { sourceId: 'sample-source' }
+      })
+    )
+    const upgraded = notifier({ runs })
+    await upgraded.notify({ run: runs[0]!, cause: 'executed' })
+    expect(upgraded.submit).toHaveBeenCalledTimes(1)
+
+    // 换一个来源：那是另一件事，不许借前一条的计数凑到阈值。
+    const other = notifier({
+      runs: [run({ definitionId: 'other:1', trigger: { kind: 'manual' }, payload: { sourceId: 'other-source' } })]
+    })
+    await other.notify({
+      run: run({ definitionId: 'other:1', trigger: { kind: 'manual' }, payload: { sourceId: 'other-source' } }),
+      cause: 'executed'
+    })
+    expect(other.submit).not.toHaveBeenCalled()
   })
 
   it('stays silent for successful runs and for runs that were cancelled or recovered', async () => {

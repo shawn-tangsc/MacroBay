@@ -20,8 +20,6 @@ export type ChannelTargetView = {
   list(): readonly ChannelManagementSafeView[]
   listDeliveryTargets(): { channels: readonly ChannelDeliveryTargetView[] }
   listConversations(input: { id: string; limit?: number }): readonly ChannelConversationSafeView[]
-  /** 把一条会话登记成投递目标（测试消息自动兜底时回写一次，下次不必再推断）。 */
-  bindDeliveryTarget?(input: { channelId: string; conversationId: string }): void
 }
 
 export type ChannelTargetResolution =
@@ -31,17 +29,13 @@ export type ChannelTargetResolution =
     agentId: string
     conversationId: string
     kind: ChannelConversationSafeView['kind']
-    /** 这个目标是「读者显式绑定」还是本轮自动推出来的（自动的那种要回写）。 */
-    source: 'bound' | 'fallback'
+    /** 这个目标来自读者显式绑定（自动兜底已删除，见下方 `resolveDeliveryTarget`）。 */
+    source: 'bound'
   }
   /** `not-ready`：通道不存在、凭据缺失或没启用；读者该做的是「去检查通道」。 */
   | { ok: false; reason: 'not-ready' | 'no-target' | 'ambiguous' }
 
-export function resolveDeliveryTarget(
-  channels: ChannelTargetView,
-  channelId: string,
-  options: { allowFallback?: boolean } = {}
-): ChannelTargetResolution {
+export function resolveDeliveryTarget(channels: ChannelTargetView, channelId: string): ChannelTargetResolution {
   const channel = channels.list().find((entry) => entry.id === channelId)
   if (channel === undefined) return { ok: false, reason: 'not-ready' }
   const target = channels.listDeliveryTargets().channels.find((entry) => entry.id === channelId)
@@ -56,18 +50,8 @@ export function resolveDeliveryTarget(
     .listConversations({ id: channelId, limit: CHANNEL_TARGET_CONVERSATION_PAGE })
     .filter((conversation) => conversation.targetEnabled && conversation.hasBoundSession)
   if (candidates.length === 1) return { ok: true, channelId, agentId: channel.agentId, conversationId: candidates[0].id, kind: candidates[0].kind, source: 'bound' }
-  if (candidates.length > 1) {
-    // 通知推送必须唯一，多个绑定时**不猜**；测试消息允许按「最近活跃」兜底（下方）。
-    if (!options.allowFallback) return { ok: false, reason: 'ambiguous' }
-  }
-  if (options.allowFallback) {
-    // 读者没有显式绑定时，不让他去绑：跟这条通道说过话的对话就是候选。
-    // 查询按 `created_at desc` 返回，第一条即最近创建的那个（入站顺序 = 最近活跃）。
-    const bound = channels
-      .listConversations({ id: channelId, limit: CHANNEL_TARGET_CONVERSATION_PAGE })
-      .filter((conversation) => conversation.hasBoundSession)
-    if (bound.length === 0) return { ok: false, reason: 'no-target' }
-    return { ok: true, channelId, agentId: channel.agentId, conversationId: bound[0].id, kind: bound[0].kind, source: 'fallback' }
-  }
+  // 多目标**拒绝**，不按「最近活跃」猜一条（技术方案 §1）：兜底一旦存在，就一定会有人用它解释
+  // 「为什么我这条发给了另一个会话」。测试消息与真实推送在这里同一条规则，不允许两边各一套。
+  if (candidates.length > 1) return { ok: false, reason: 'ambiguous' }
   return { ok: false, reason: 'no-target' }
 }

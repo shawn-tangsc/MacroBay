@@ -9,7 +9,7 @@ import { createJobRuntime } from '@platform/jobs'
 import { createEventBusJsonStorage, createEventBusRuntime } from '@platform/message-bus'
 import { createEventBusStore } from '@platform/message-bus/store/eventBusStore'
 
-import { createIntelligencePipeline } from './intelligencePipeline'
+import { createIntelligencePipeline, EMPTY_SOURCE_COLLECTION_COUNTS } from './intelligencePipeline'
 import { createRawRecordStore } from './rawRecordStore'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 import { createDefaultSourceProfile, resolveAndValidateRuntimeConfig } from './sourceRuntimeConfig'
@@ -39,7 +39,7 @@ describe('intelligencePipeline', () => {
       sourceId: 'defillama-stablecoins',
       runId: 'retired-source-run',
       fixtureText: '{"peggedAssets":[]}'
-    })).resolves.toEqual({ queuedJobs: [] })
+    })).resolves.toEqual({ queuedJobs: [], counts: EMPTY_SOURCE_COLLECTION_COUNTS })
 
     expect(rawRecordStore.inspectSnapshot().recordCount).toBe(0)
     expect(pipeline.getHealth('defillama-stablecoins')).toBeUndefined()
@@ -338,6 +338,75 @@ describe('intelligencePipeline', () => {
       })
       await rm(directory, { recursive: true, force: true })
     }
+  })
+
+  it('counts what it fetched, parsed and appended, so "nothing new" is not a blank run', async () => {
+    // 用户 2026-11-07：采集「完成」时 result 是空的，「今天真的没新文章」与「抓到了没写进去」
+    // 在运行记录里长得一模一样。这条钉住四个数：抓 / 解析 / 新增 / 重复。
+    const pipeline = createPipeline()
+    const fixture = loadFixture('rss-sample.xml')
+
+    const first = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-1', fixtureText: fixture })
+    expect(first.counts).toEqual({ httpCalls: 0, fetchedBytes: 0, parsed: 2, appended: 2, duplicates: 0 })
+    expect(first.reasonCode).toBeUndefined()
+
+    // 同一份 RSS 再采一次：全被判重复，但这是一次**成功**的采集，不是失败。
+    const second = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-2', fixtureText: fixture })
+    expect(second.counts).toEqual({ httpCalls: 0, fetchedBytes: 0, parsed: 2, appended: 0, duplicates: 2 })
+    expect(second.reasonCode).toBeUndefined()
+    expect(second.queuedJobs).toEqual([])
+  })
+
+  it('holds the counting identity even when the three numbers differ', async () => {
+    // 三个数各不相同才有意义：parsed=3 / appended=2 / duplicates=1（两条同 guid）。
+    // 现有夹具都是「2 = 2 + 0」或「2 = 0 + 2」，等式任一边写歪都不会红——这条专门防那个。
+    const threeWithOneRepeat = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<rss version="2.0"><channel><title>CoinDesk</title>',
+      '<item><guid>guid-1</guid><link>https://example.test/a</link><title>First</title><pubDate>Mon, 05 Jul 2026 10:00:00 GMT</pubDate></item>',
+      '<item><guid>guid-2</guid><link>https://example.test/b</link><title>Second</title><pubDate>Mon, 05 Jul 2026 11:00:00 GMT</pubDate></item>',
+      '<item><guid>guid-1</guid><link>https://example.test/a</link><title>First again</title><pubDate>Mon, 05 Jul 2026 12:00:00 GMT</pubDate></item>',
+      '</channel></rss>'
+    ].join('\n')
+    const pipeline = createPipeline()
+
+    const result = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-identity', fixtureText: threeWithOneRepeat })
+
+    expect(result.counts).toMatchObject({ parsed: 3, appended: 2, duplicates: 1 })
+    // The identity itself, on its own line: parsed = appended + duplicates（跳过/失败都不许混进来）。
+    expect(result.counts.parsed).toBe(result.counts.appended + result.counts.duplicates)
+  })
+
+  it('hands the notifier the last new item, not the last successful fetch', async () => {
+    // 接线这一层单测：`lastPublishedAt` 必须真的从检查点传到来源事件里。
+    // 少了这一步，`decideSourceIssue` 改对了也不会生效（它有回落到 lastSuccessAt 的分支，会静默走老路）。
+    const seen: Array<{ lastNewItemAt?: string; lastSuccessAt?: string }> = []
+    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
+    const pipeline = createIntelligencePipeline({
+      profileStore,
+      sourceIssueNotifier: async (input) => { seen.push(input) }
+    })
+
+    await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-1', fixtureText: loadFixture('rss-sample.xml') })
+    const health = pipeline.getHealth('coindesk-rss')
+    expect(health?.lastPublishedAt).toBeTruthy()
+    // 事件里带的是「最后一次新条目」，来源判陈旧用它；`lastSuccessAt` 是「刚才」，靠它会永远判不出陈旧。
+    expect(seen.at(-1)?.lastNewItemAt).toBe(health?.lastPublishedAt)
+  })
+
+  it('marks a failed fetch as a different shape from a successful empty collection', async () => {
+    // 判据：抓取失败必须能一眼区分出来——带原因码、四个计数归零，而不是又一个「完成、没数字」。
+    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
+    const pipeline = createIntelligencePipeline({
+      profileStore,
+      fetchText: async () => { throw new Error('feed unreachable') }
+    })
+
+    const failed = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-fail' })
+    expect(failed.reasonCode).toBe('collect-failed')
+    expect(failed.reason).toContain('feed unreachable')
+    expect(failed.counts).toEqual({ httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 })
+    expect(failed.queuedJobs).toEqual([])
   })
 
   it('creates clusters and revisions while queueing downstream work', async () => {

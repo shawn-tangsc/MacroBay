@@ -1,6 +1,8 @@
 import { Popover as AntPopover } from 'antd'
 import {
+  cloneElement,
   useEffect,
+  useId,
   useRef,
   useState,
   type FocusEvent as ReactFocusEvent,
@@ -48,6 +50,14 @@ import './popover.css'
 const MAX_WIDTH = 360
 const MAX_HEIGHT = 320
 const PLACEMENT = 'bottom' as const
+
+/**
+ * 气泡不接受指针事件：鼠标移上去、点下去都穿到下面的控件上。
+ *
+ * 与 `Tooltip` 同一条理由、同一处实现：气泡是**说明**，不是控件，它挡住下面的东西，读者反而点不动
+ * 本来要点的。只给一个节点不够——antd 把浮层渲染成外层与内层两个元素，漏一个另一个仍会接住点击。
+ */
+const BUBBLE_POINTER_EVENTS = { pointerEvents: 'none' } as const
 
 /**
  * 浮层交给触发器的那组属性。
@@ -123,6 +133,14 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const trigger = useRef<HTMLElement | null>(null)
+  /**
+   * 浮层的 id：`aria-describedby` 要指向**确实存在**的节点，所以 id 由组件生成、挂在内容上，
+   * 再让触发器指过来。调用方不用传 id——它不该知道浮层节点长什么样。
+   *
+   * 触发器是调用方的 render prop，只能靠 clone 把属性挂上去；`IconButton` 因此要能转发这一条
+   * （与 `onClick` 那批同一个道理：注进去的属性被静默丢掉，等于没挂）。
+   */
+  const contentId = useId()
   const content = useRef<HTMLDivElement | null>(null)
   const open = pinned || hovered || focused
 
@@ -206,6 +224,7 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
         <div
           className="platform-popover__content"
           data-popover-content
+          id={contentId}
           ref={content}
           style={{ maxHeight: MAX_HEIGHT, maxWidth: MAX_WIDTH }}>
           {resolvedLines.map((line, index) => (
@@ -223,8 +242,13 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
       }
       open={open}
       placement={PLACEMENT}
+      styles={{ root: BUBBLE_POINTER_EVENTS, body: BUBBLE_POINTER_EVENTS }}
       trigger={[]}>
-      <span className="platform-popover__anchor">{props.trigger(triggerProps)}</span>
+      <span className="platform-popover__anchor">
+        {cloneElement(props.trigger(triggerProps) as ReactElement<{ 'aria-describedby'?: string }>, {
+          'aria-describedby': contentId
+        })}
+      </span>
     </AntPopover>
   )
 }

@@ -34,7 +34,8 @@ function positioning(analysis: SignalAnalysisStateView): DashboardPositioningVie
     window: '7d',
     btc: [{ observedAt: at(15), notionalUsd: 8.9e9 }],
     eth: [{ observedAt: at(15), notionalUsd: 2.4e9 }],
-    signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) },
+    hints: [],
+    signal: { state: 'alert', asset: 'btc', direction: 'long', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) },
     signalAnalysis: analysis,
     onReload: () => undefined
   }
@@ -55,7 +56,9 @@ async function openDetails(state: DashboardPositioningViewState): Promise<string
   })
   const chip = [...container.querySelectorAll('button')].find(button => button.getAttribute('data-state') === 'alert')
   await act(async () => { chip?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-  const markup = container.innerHTML
+  await act(async () => { await Promise.resolve() })
+  // 读数搬进了弹层，而弹层 portal 到 `<body>`：卡片的 innerHTML 里已经看不到它了。
+  const markup = document.querySelector('[role="dialog"]')?.innerHTML ?? ''
   act(() => root.unmount())
   return markup
 }

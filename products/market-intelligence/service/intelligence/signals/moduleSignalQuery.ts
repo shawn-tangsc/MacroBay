@@ -18,6 +18,10 @@ import { openInterestSignalsFromHistory } from './openInterestSignals'
  * list of signals for one instant, not a per-module tree.
  */
 export type ModuleSignalQuery = Readonly<{
+  /**
+   * 判定窗口固定 24 小时（用户 2026-11-08 10:4x 定）：牌子是「现在怎么样」的状态指示，
+   * 不跟卡片页签走。图上那些点跟窗口，走的是另一条读取（面板自己的历史查询）。
+   */
   query: (input: Readonly<{ asOf: string }>) => Promise<readonly SignalWithWindow[]>
 }>
 
@@ -36,6 +40,7 @@ export function createOpenInterestSignalQuery(deps: Readonly<{
   return {
     async query(input) {
       try {
+        // 判定窗口固定 24 小时，不跟卡片页签：历史在图上，现状在标题旁。
         const reading = await deps.readHistory({ asOf: input.asOf, window: '24h' })
         return withRuleWindow(openInterestSignalsFromHistory(reading, input.asOf), 1)
       } catch {

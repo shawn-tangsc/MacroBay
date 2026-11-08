@@ -68,6 +68,7 @@ import { useBriefingEditionReader } from './useBriefingEditionReader'
 import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoading, readyKind, readyZone, resolveBriefingMode } from './dailyBriefingMode'
 import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingBackgroundRunReload } from './useBriefingBackgroundRunReload'
+import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import { useBriefingRunActions, type BriefingRunIntent } from './useBriefingRunActions'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
@@ -197,8 +198,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // says is running right now (a scheduled run, or one started in another window).
   const generating = busyLocally || progress?.state === 'running'
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
-  // 不是本页发起的跑（定时、别的窗口）一开始，就让列表重读一次，那一行才会立刻出现。
-  useBriefingBackgroundRunReload(progress?.state === 'running', () => setReloadKey((key) => key + 1))
+  const { markLocalSettled } = useBriefingBackgroundRunReload(progress?.state === 'running', () => setReloadKey((key) => key + 1))
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
   // must not pretend the run stopped either — the pipeline is still spending model calls.
   const progressUnreadable = generating && progress?.state === 'unavailable'
@@ -248,6 +248,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
    * 少了这两样，服务端只能回落到期配置列表第一项（初始化那第 1 期的 07:00），于是"点重新生成，
    * 又变成 7 点"，还会在同一个截止上多插一版。没有正文可读时不给（那是"生成这一期"，不是重跑）。
    */
+  /**
+   * 「重新生成」作用在哪一天：有正文就是这一版那一天；**失败/缺版**的那一天没有正文，
+   * 日期在视图里（`view.date`），不许因为它没正文就没得判断。
+   */
+  const regenerateDay = screenDocument?.edition.date
+    ?? (view.status === 'no-edition' ? view.date : undefined)
   const screenWindowHours = screenDocument?.edition.windowHours
   const screenRerun = screenDocument === undefined ? undefined : {
     periodTime: screenDocument.edition.windowEnd,
@@ -273,9 +279,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setPickedPeriodId(intent.periodId)
       setPickedLocale(intent.locale)
     },
-    // 跑完不清任何"这一次的期号"了：进度只认选中那一版，没有"最后一次"这个概念可用。
-    // 这里**不顺手整页重读**：重读走的是 `getToday`（默认期），会把刚跑出来的那一期正文顶掉——
-    // 列表那一行已由 runBriefing 自己按新文档合并。
+    // 跑完不整页重读（`getToday` 会把刚跑出来的正文顶掉）：列表那一行由 runBriefing 合入新文档，
+    // 这里只记一笔"本页这次已落定"，让背景重读的收尾那一次不再重复刷新（v2.167）。
+    onSettled: markLocalSettled
   })
   const runManual = useBriefingManualRun({
     timeZone,
@@ -445,6 +451,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           onCopy={() => void copy()}
           // 重跑的是**屏幕上这一版**：期号与语言取自它，不是服务端的默认期。
           // 以前这里不带期号，历史日点「重新生成」写的是今天那版（审计 #10/#23）。
+          // 重跑这一期只有这一个入口（用户 2026-11-07）：与"有没有正文"无关，只看是否在可生成窗口内。
+          // 超窗时禁用并给可见理由——那是唯一需要拦的情况，跑进行中由 `generating` 自己表达。
+          {...(regenerateDay === undefined || isManualGenerationDateAllowed(regenerateDay, todayDate)
+            ? {}
+            : { regenerateBlockedReason: text.history.generationWindowOnly })}
           onRegenerate={() => void runBriefing({ periodId: onScreenPeriodId, locale: screenDocument?.edition.locale ?? effectiveLocale, trigger: 'regenerate', ...(screenRerun === undefined ? {} : { rerun: screenRerun }) })}
           push={pushToPhone}
           pushText={briefingPushText[locale]}

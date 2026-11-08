@@ -22,7 +22,7 @@ vi.mock('antd', async (importOriginal) => {
     ...actual,
     Drawer: (props: Record<string, unknown>) => {
       passedProps.push(props)
-      return <RealDrawer {...(props as never)} />
+      return <RealDrawer {...(props as React.ComponentProps<typeof RealDrawer>)} />
     }
   }
 })
@@ -45,6 +45,7 @@ function props(overrides: Partial<DrawerProps> = {}): DrawerProps {
   return {
     open: true,
     onClose: () => undefined,
+    mode: 'modal',
     size: 'narrow',
     titleKey: 'ui.test.title',
     resolveText: key,
@@ -76,7 +77,7 @@ describe('Drawer 的 destroyOnHidden 透传', () => {
 
     act(() => {
       root!.render(
-        <Drawer open onClose={() => undefined} size="narrow" titleKey="ui.test.title" resolveText={key}>
+        <Drawer mode="modal" open onClose={() => undefined} size="narrow" titleKey="ui.test.title" resolveText={key}>
           <span data-probe="content">content</span>
         </Drawer>
       )
@@ -102,6 +103,7 @@ describe('Drawer 的 destroyOnHidden 透传', () => {
       act(() => {
         root!.render(
           <Drawer
+            mode="modal"
             open={open}
             onClose={() => undefined}
             size="narrow"
@@ -220,6 +222,75 @@ describe('Drawer', () => {
     await mount()
     // 浮层不传 autoFocus：锁焦点、Esc 都归 antd，我们不在这里改第二个模式的行为。
     expect(passedProps.at(-1)?.autoFocus).toBeUndefined()
+  })
+
+  it('puts the action slot left of the close control, and keeps the title first', async () => {
+    const host = await mount({
+      titleExtra: <span data-title-extra>?</span>,
+      actions: <button data-actions type="button">send</button>
+    })
+
+    const header = document.querySelector('.ant-drawer-header')
+    expect(header).not.toBeNull()
+    const html = header?.innerHTML ?? ''
+    // 顺序固定：标题 → 标题旁解释 → 右端动作 → 关闭。
+    // 分组节点本身先出现，动作在分组里、关闭在动作之后：顺序按开标签算。
+    const order = ['drawer__title-row', 'data-title-extra', 'drawer__header-actions', 'data-actions'].map((marker) =>
+      html.indexOf(marker)
+    )
+    expect(order.every((index) => index > -1)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    // 动作槽在关闭键**左侧**：同一个分组里，动作在前、关闭在后。
+    const group = document.querySelector('.drawer__header-actions')
+    expect(group?.lastElementChild?.tagName).toBe('BUTTON')
+    expect(group?.querySelector('[data-actions]')).not.toBeNull()
+    void host
+  })
+
+  it('never lets the title push the close control', () => {
+    // 缩短优先级 关闭键 > 动作 > 标题：关闭键所在分组 `flex: none`，标题可缩且有 `min-width: 0`。
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*flex:\s*none/)
+    expect(rules).toMatch(/\.drawer__title-row\s*\{[^}]*flex:\s*1 1 auto/)
+    expect(rules).toMatch(/\.drawer__title-row\s*\{[^}]*min-width:\s*0/)
+  })
+
+  it('caps the action at 45% of the header, not of its own content-sized group', () => {
+    // 2026-11-08 退回重做：`max-width: 45%` 挂在 `flex: none` 的分组里，百分比对宽度未定的盒子
+    // 会先按内容算，于是上限成了「分组宽 × 45%」，分组却保留未压缩的宽度——关闭键被推到中间
+    // （602px 头实测 ✕ 距右缘 148.7px）。所以参照物必须是**头**：头声明容器，上限用 `cqw`。
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).toMatch(/\.drawer \.ant-drawer-header\s*\{[^}]*container-type:\s*inline-size/)
+    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*max-width:\s*45cqw/)
+    // 反向：一旦退回裸百分比，参照物又变回分组，这条必须红。
+    expect(rules).not.toMatch(/\.drawer__actions\s*\{[^}]*max-width:\s*\d+%/)
+    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*flex:\s*0 0 auto/)
+    // 槽内文字自己有省略号：槽是通用的，里面放什么由调用方决定。
+    expect(rules).toMatch(/\.drawer__actions\s*>\s*\*\s*\{[^}]*text-overflow:\s*ellipsis/)
+    // 动作槽与关闭键之间的 12px 写在组件里，不是调用方传的。
+    expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*gap:\s*12px/)
+  })
+
+  it('keeps the close control as the last element of the unsqueezed group', async () => {
+    await mount({ actions: <button data-actions type="button">send</button> })
+    // happy-dom 不做布局，这里**证明不了**「✕ 距右缘 ≤1px」。所以只断言能机械判的两件事：
+    // 关闭键是分组里最后一个元素（`flex: none` 的分组本身不被压缩），以及上限的参照物是头。
+    // 真实数值由浏览器量：`docs-private/05-desktop/ui-audit/evidence/drawer/measure-header-slot.html`
+    // 在 602px 长文案下实测 ✕ 距右缘 0px、动作 270.9（=602×45%）、间距 12；退回裸百分比时同页量到 148.7px。
+    const group = document.querySelector('.drawer__header-actions')
+    expect(group).not.toBeNull()
+    expect(group?.lastElementChild?.tagName).toBe('BUTTON')
+
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*flex:\s*none/)
+  })
+
+  it('takes no gap or width for the slot: the caller cannot resize the header', () => {
+    // 一旦开了「调用方传间距」，两个调用点就会传 8 和 16，平台这边就没有比例可言了。
+    expect(source).not.toMatch(/actionsGap|actionsWidth|actionsStyle|actionsClassName/)
+    expect(source).toMatch(/actions\?:\s*ReactElement/)
+    // 12 是组件自己的决定，写死在样式里，不是变量、不是 prop。
+    expect(css).toMatch(/gap:\s*12px/)
   })
 
   it('takes the title from a key, never from a sentence', async () => {

@@ -378,10 +378,10 @@ describe('daily briefing page', () => {
     expect(panel.getAttribute('data-failure-code')).toBe('model-unavailable')
     expect(panel.querySelectorAll('[data-stage]')).toHaveLength(9)
     expect(panel.textContent).toContain(text.aiSettings.failure['model-unavailable']!)
-    const retry = panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!
-    // 10 天前 → 超出"最近 3 天"窗口：重试禁用，理由换成新的那句（旧禁令已作废）。
-    expect(retry.disabled).toBe(true)
-    expect(retry.getAttribute('aria-label')).toBe(text.history.generationWindowOnly)
+    // 10 天前 → 超出"最近 3 天"窗口：重跑入口禁用并给可见理由（旧禁令已作废）。
+    const regenerate = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!
+    expect(regenerate.disabled).toBe(true)
+    expect(regenerate.getAttribute('aria-label')).toBe(text.history.generationWindowOnly)
 
     // 3. Selecting wrote nothing and started nothing: no open, no run, no attempt.
     expect(client.getToday).toHaveBeenCalledTimes(getTodayCalls)
@@ -1054,11 +1054,12 @@ describe('daily briefing page', () => {
     expect(panel.querySelector('[data-failure-next]')?.textContent).toBe('接下来：再试一次；反复出现就换一个模型或检查网络')
     expect(panel.textContent).not.toContain('editorial-timeout')
     expect(panel.querySelector('[data-failure-code-label]')).toBeNull()
-    expect(panel.querySelector('[data-failure-action="retry"]')).not.toBeNull()
-    // Two actions only: retry, and the same settings drawer the header opens. A third button per
-    // advice code is what the reader saw as duplicated settings entries.
+    // 面板里不再有「重新生成」（用户 2026-11-07）：重跑这一期只走正文顶部工具栏那颗。
+    expect(panel.querySelector('[data-failure-action="retry"]')).toBeNull()
+    // 面板只留「日报设置」这一颗：一句建议一个入口，不再按建议码长出第三颗按钮。
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
-    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
+    // 面板里恰好一颗按钮（设置）；重跑在工具栏。
+    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(1)
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
     // The header action stays clickable in a failure too: only a run in flight disables it. It and
     // the panel's retry may both be clickable — that is the ask, not a duplicate to remove.
@@ -1066,10 +1067,11 @@ describe('daily briefing page', () => {
     expect(headerAction).not.toBeNull()
     expect(headerAction.disabled).toBe(false)
     expect(headerAction.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-30'))
-    expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
+    expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(0)
 
+    // 重跑这一期只有工具栏那颗入口（用户 2026-11-07）：失败行上它必须可点。
     await act(async () => {
-      panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!.click()
+      dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click()
       await Promise.resolve(); await Promise.resolve()
     })
     // 重跑的是屏幕上这一版：期号与它自己的截止都要跟着走。少了 `rerun`，服务端只能回落到
@@ -1495,8 +1497,8 @@ describe('daily briefing page', () => {
       .toBe('这次在数据采集就停下了：情报源采集失败，数据没到齐')
     expect(panel.querySelector('[data-failure-next]')?.textContent)
       .toBe('接下来：到「数据缺口与限制」看是哪一项，重试读取或检查来源')
-    // The advice sentence names the source check; the buttons do not grow a third entry for it.
-    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
+    // 面板只留一颗「日报设置」：建议句已经点名要检查什么，按钮不再跟着建议码长。
+    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(1)
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
   })
 
@@ -2920,5 +2922,73 @@ describe('a run in flight never steals the row the reader is reading', () => {
     // 正文是那一版有内容的，不是"正在生成"的九步面板。
     expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('有正文的这一版')
     expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).toBeNull()
+  })
+})
+
+describe('a re-run over an existing edition says the body is the previous issue (v2.167)', () => {
+  const runningToday = (state: 'generating' | 'published') => ({
+    state: 'available' as const,
+    result: {
+      editions: editions.map((edition) => edition.date === '2026-10-30'
+        ? { ...edition, languages: [{ locale: 'zh-CN' as const, state }] }
+        : edition)
+    }
+  })
+
+  it('keeps the body readable and marks it, instead of passing the old edition off as the new one', async () => {
+    const client = fakeClient({ list: vi.fn(async () => runningToday('generating')) })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    for (let round = 0; round < 5; round += 1) await act(async () => { await Promise.resolve() })
+
+    // 正文照常可读（不抢屏），内容就是库里那一版——不是空的、也不是别的期。
+    expect(dom.textContent).toContain('CPI 超预期 · Ripple 获批')
+    const note = dom.querySelector('[data-briefing-previous-version]')
+    expect(note).not.toBeNull()
+    expect(note!.getAttribute('role')).toBe('status')
+    expect(note!.textContent).toBe(text.previousUnderRegenerate)
+  })
+
+  it('drops the note the moment the run is no longer running', async () => {
+    const client = fakeClient({ list: vi.fn(async () => runningToday('published')) })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(dom.querySelector('[data-briefing-previous-version]')).toBeNull()
+    // 正文还是那一版，只是不再叫"上一版"。
+    expect(dom.textContent).toContain('CPI 超预期 · Ripple 获批')
+  })
+
+  it('keeps a run of another issue from marking this one', async () => {
+    // 别的日期在跑：本期没有上一版这回事，正文正常、没有说明。
+    const client = fakeClient({
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: editions.map((edition) => edition.date === '2026-10-29'
+          ? { ...edition, languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] }
+          : edition) }
+      }))
+    })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(dom.querySelector('[data-briefing-previous-version]')).toBeNull()
+  })
+
+  it('shows no body at all when this issue has never produced one', async () => {
+    // 之前失败过、从来没有版次：继续只显示进度，正文区不许出现任何旧内容。
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'missing' as const })),
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: editions.map((edition) => edition.date === '2026-10-30'
+          ? { ...edition, state: 'missing' as const, availableLocales: [], languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] }
+          : edition) }
+      }))
+    })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(dom.querySelector('[data-briefing-previous-version]')).toBeNull()
+    expect(dom.textContent).not.toContain('CPI 超预期 · Ripple 获批')
   })
 })

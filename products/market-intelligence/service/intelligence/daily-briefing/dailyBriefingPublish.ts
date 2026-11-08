@@ -74,7 +74,10 @@ export async function publishDailyBriefingEdition(input: Readonly<{
   await store.prune(cutoffDate(date)).catch(() => undefined)
   await notifyDailyBriefing(input.noticeSubmit, {
     kind: 'ready', date, periodId, editionId: `${date}:${locale}:${periodId}`, locale, deliver: input.deliver,
-    timeLabel: briefingTimeLabel(traced.edition.windowEnd, traced.edition.timeZone)
+    timeLabel: briefingTimeLabel(traced.edition.windowEnd, traced.edition.timeZone),
+    // 导读：手动「推送到手机」那条早就带上了，自动发布这条以前漏了——手机上就只剩标题，没有内容。
+    // 两条路径共用同一个字段、同一个拼句函数。
+    ...(traced.lede?.text ? { lede: traced.lede.text } : {})
   }, input.now())
   return { state: 'available', document: traced }
 }

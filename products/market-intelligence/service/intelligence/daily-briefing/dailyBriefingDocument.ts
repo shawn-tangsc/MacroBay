@@ -124,6 +124,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
       items: news,
       macro,
       ...(macroCandidates.length > 0 ? { macroCandidates } : {}),
+      // 来源静默/连续失败（schema 15）：右列只读文档，所以这件事必须冻在文档里。
+      ...(packet.newsSources === undefined || packet.newsSources.length === 0 ? {} : { sources: packet.newsSources }),
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
         ...(macroEmpty === undefined ? {} : macroEmptyNotes),

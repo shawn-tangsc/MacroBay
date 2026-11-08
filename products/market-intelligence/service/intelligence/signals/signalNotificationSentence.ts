@@ -47,6 +47,8 @@ export type EtfOutflowSentenceInput = Readonly<{
   flowUsd: number
   /** 规则常量本身，不是另算一遍的数。 */
   thresholdUsd: number
+  /** 三日累计判到的那一天（`YYYY-MM-DD`）：读者要知道「截至哪天收盘」。 */
+  asOfDate: string
   aggravated: boolean
 }>
 
@@ -54,14 +56,17 @@ export function renderEtfOutflowSentence(
   input: EtfOutflowSentenceInput
 ): NotificationContentByLanguage | undefined {
   if (!Number.isFinite(input.flowUsd) || !Number.isFinite(input.thresholdUsd)) return undefined
+  // 「截至哪天」是这条提醒的一半事实：缺了它，读者分不清半天数与定稿数。日期坏掉就不发。
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.asOfDate)) return undefined
+  const asOf = input.asOfDate.slice(5)
   const variant: SignalNotificationVariant = input.aggravated ? 'etfOutflowAggravated' : 'etfOutflow'
   return compose({ asset: input.asset, variant }, (language): Record<string, string | null> => {
     const amount = formatNotificationNumber({ number: input.flowUsd, kind: 'usd' }, language)
     if (!input.aggravated) {
-      return { amount, threshold: formatNotificationNumber({ number: input.thresholdUsd, kind: 'usd' }, language) }
+      return { amount, asOf, threshold: formatNotificationNumber({ number: input.thresholdUsd, kind: 'usd' }, language) }
     }
     const multiple = thresholdMultiple(input.flowUsd, input.thresholdUsd)
-    return { amount, multiple: formatNotificationNumber({ number: multiple, kind: 'multiple' }, language) }
+    return { amount, asOf, multiple: formatNotificationNumber({ number: multiple, kind: 'multiple' }, language) }
   })
 }
 
@@ -75,6 +80,10 @@ export type OpenInterestSentenceInput = Readonly<{
   notionalUsd: number
   /** 规则常量：常规阈值或强阈值，二选一。 */
   thresholdPct: number
+  /** 哪一边被清：词与句子都跟着它分叉，读者就不会把两头做反。 */
+  direction: 'long' | 'short'
+  /** 空头那条的带符号涨幅（正数）；多头那条不用。 */
+  pricePct?: number
   aggravated: boolean
 }>
 
@@ -83,12 +92,21 @@ export function renderOpenInterestSentence(
 ): NotificationContentByLanguage | undefined {
   const finite = [input.dropPct, input.volumeMultiple, input.notionalUsd, input.thresholdPct]
   if (!finite.every((value) => Number.isFinite(value))) return undefined
-  const variant: SignalNotificationVariant = input.aggravated ? 'oiDropAggravated' : 'oiDrop'
+  // 空头那条的正文写「涨了多少」：缺这个数就不发，绝不拿跌幅顶替。
+  // 数字格式化只出绝对值、正负号由词承担，所以**符号必须在这里判**：把 -1.8 喂进来会印成
+  // 「涨 1.8%」，一句话把读者送到反方向去。方向错了就拼不出句子，由调用点放弃这次提交。
+  if (input.direction === 'short' && !(Number.isFinite(input.pricePct) && input.pricePct! > 0)) return undefined
+  const short = input.direction === 'short'
+  const variant: SignalNotificationVariant = short
+    ? (input.aggravated ? 'oiShortAggravated' : 'oiShort')
+    : (input.aggravated ? 'oiLongAggravated' : 'oiLong')
   return compose({ asset: input.asset, variant }, (language): Record<string, string | null> => {
     const dropPct = formatNotificationNumber({ number: input.dropPct, kind: 'pct' }, language)
     const thresholdPct = formatNotificationNumber({ number: input.thresholdPct, kind: 'pct' }, language)
+    const pricePct = short ? formatNotificationNumber({ number: input.pricePct!, kind: 'pct' }, language) : dropPct
     return {
       dropPct,
+      pricePct,
       ...(input.aggravated ? { strongPct: thresholdPct } : { thresholdPct }),
       multiple: formatNotificationNumber({ number: input.volumeMultiple, kind: 'multiple' }, language),
       notional: formatNotificationNumber({ number: input.notionalUsd, kind: 'usd' }, language)

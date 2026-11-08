@@ -53,7 +53,11 @@ export type SettingsCommittedChange = Readonly<{
 
 export type SettingsCommittedListener = (change: SettingsCommittedChange) => void
 
-export function updateAppSettings(current: AppSettings, patch: AppSettingsPatch): AppSettings {
+export function updateAppSettings(
+  current: AppSettings,
+  patch: AppSettingsPatch,
+  onUnknownNotificationField?: (field: string) => void
+): AppSettings {
   return {
     language: isAppLanguage(patch.language) ? patch.language : current.language,
     themeMode: isThemeMode(patch.themeMode) ? patch.themeMode : current.themeMode,
@@ -73,7 +77,7 @@ export function updateAppSettings(current: AppSettings, patch: AppSettingsPatch)
     notifications:
       patch.notifications === undefined
         ? current.notifications
-        : normalizeNotificationSettings(patch.notifications, current.notifications),
+        : normalizeNotificationSettings(patch.notifications, current.notifications, onUnknownNotificationField),
     observability:
       patch.observability === undefined
         ? current.observability
@@ -85,7 +89,24 @@ export function updateAppSettings(current: AppSettings, patch: AppSettingsPatch)
   }
 }
 
-export function createSettingsStore(storage?: SettingsStorage): SettingsStore {
+export function createSettingsStore(
+  storage?: SettingsStorage,
+  options: {
+    /**
+     * 通知设置里出现了类型不认识的字段：**保留**，但每个字段名只报一次。
+     *
+     * 只报一次是因为它在每次读盘时都会出现——不记一次就变成每次启动都刷一行；
+     * 完全不报又会让拼错的键永久潜伏、谁都以为它在生效。
+     */
+    onUnknownNotificationField?: (field: string) => void
+  } = {}
+): SettingsStore {
+  const reportedUnknownFields = new Set<string>()
+  const reportUnknownField = (field: string): void => {
+    if (reportedUnknownFields.has(field)) return
+    reportedUnknownFields.add(field)
+    options.onUnknownNotificationField?.(field)
+  }
   let settings: AppSettings | null = null
   let updateQueue: Promise<void> = Promise.resolve()
   const listeners = new Set<SettingsCommittedListener>()
@@ -99,7 +120,7 @@ export function createSettingsStore(storage?: SettingsStorage): SettingsStore {
       return settings
     }
 
-    settings = normalizeAppSettings(await storage.read())
+    settings = normalizeAppSettings(await storage.read(), reportUnknownField)
     return settings
   }
 
@@ -108,7 +129,7 @@ export function createSettingsStore(storage?: SettingsStorage): SettingsStore {
     async update(patch) {
       const operation = updateQueue.then(async () => {
         const previous = await load()
-        const next = updateAppSettings(previous, patch)
+        const next = updateAppSettings(previous, patch, reportUnknownField)
         await storage?.write(next)
         settings = next
         pending = { previous, next, patch, changedKeys: changedSettingKeys(previous, next) }

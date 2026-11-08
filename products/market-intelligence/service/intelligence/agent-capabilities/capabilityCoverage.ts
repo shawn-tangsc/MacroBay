@@ -79,6 +79,13 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.translateNewsSentimentBody': excluded('internal-view'),
   'intelligence.getSourceHealth': exposed('get_source_health'),
   'intelligence.getTimeline': exposed('get_intelligence_timeline'),
+  // 读者点按钮发通知：读的是他的结论、发的是他的通道，不对代理人开放。
+  // 下面那条是同一件事的另一半：**点击前**读「有没有可用通道」（0 条不摆按钮、多条点了才拒绝），
+  // 只回答配置事实、不带通道名。一条读一条发，都不对代理人开放。
+  'intelligence.sendAnalysisConclusion': excluded('internal-view'),
+  'intelligence.getAnalysisConclusionSendChannel': excluded('internal-view'),
+  // 同类：设置页那三枚「发一条…」读产品数据、发读者通道，是读者动作，不对代理人开放。
+  'intelligence.sendTestNotification': excluded('internal-view'),
   'intelligence.getWorkspaceState': excluded('internal-view'),
   'intelligence.getWorkspaceTimeline': exposed('get_intelligence_timeline'),
   'intelligence.ingestEvent': excluded('destructive'),
@@ -102,6 +109,12 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.queryModuleSignalRead': excluded('internal-view'),
   'intelligence.getNewsPushOutletState': excluded('internal-view'),
   'intelligence.setNewsPushOutletEnabled': excluded('internal-view'),
+  // 舆情推送的强度门槛：同一条设置页上的读数，agent 没有理由替读者改。
+  'intelligence.getNewsPushThreshold': excluded('internal-view'),
+  'intelligence.saveNewsPushThreshold': excluded('internal-view'),
+  // 日历提醒的读写只服务这一屏的设置表单：agent 没有理由替读者改「提前多久」。
+  'intelligence.getCalendarReminderSettings': excluded('internal-view'),
+  'intelligence.setCalendarReminderSettings': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
   // The same panel's per-day counts: a reader-facing view with no agent tool behind it.
   'intelligence.syncRuns.aggregates': excluded('internal-view'),

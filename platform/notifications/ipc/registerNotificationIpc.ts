@@ -11,6 +11,7 @@ import type { DeliveryHooks, NotificationClock, NotificationDeliveryContent } fr
 import type { NotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type { NotificationProducerOwnership } from '../contracts/notificationProducerOwnership'
+import type { PushChannelResolution } from '../delivery/pushChannelResolution'
 
 let notificationRuntime: ReturnType<typeof createNotificationRuntime> | null = null
 let getNotificationSettings: (() => Promise<NotificationRuntimeSettings>) | null = null
@@ -24,14 +25,23 @@ let getNotificationPushTargets: (() => Promise<readonly unknown[]>) | null = nul
 let notificationPushHook: DeliveryHooks['push'] | null = null
 let notificationProducerOwnership: NotificationProducerOwnership | null = null
 let notificationProductIds: readonly string[] | null = null
+/** 这两个端口是「一旦装配就固定」的，用一个小对象收着，免得再加两个模块级变量。 */
+const resolutionDeps: {
+  resolvePushChannel: (() => Promise<PushChannelResolution>) | null
+  testNoticeCandidates: null
+} = { resolvePushChannel: null, testNoticeCandidates: null }
 
 export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
   catalog?: NotificationEventCatalog
   copy?: NotificationCopyPort
-  diagnostics?: NotificationDiagnosticsSink
+  /** 诊断出口：**必传**。漏传时运行时照样能记、但没人接，等于没留痕（2026-11-08 定）。 */
+  diagnostics: NotificationDiagnosticsSink
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
+  /** 三枚测试按钮的只读取数端口（产品侧实现，组合根注入）；不传＝诚实的 `read-failed`。 */
+  /** 目标通道的唯一派生（技术方案 §1）。 */
+  resolvePushChannel?: () => Promise<PushChannelResolution>
   push?: DeliveryHooks['push']
   producerOwnership?: NotificationProducerOwnership
   productIds?: readonly string[]
@@ -49,9 +59,10 @@ export function configureNotificationRuntime(deps: {
   getLanguage = deps.getLanguage ?? null
   notificationCatalog = deps.catalog ?? null
   notificationCopyPort = deps.copy ?? null
-  notificationDiagnostics = deps.diagnostics ?? null
+  notificationDiagnostics = deps.diagnostics
   updateNotificationSettings = deps.updateSettings ?? null
   getNotificationPushTargets = deps.getPushTargets ?? null
+  resolutionDeps.resolvePushChannel = deps.resolvePushChannel ?? null
   notificationPushHook = deps.push ?? null
   notificationProducerOwnership = deps.producerOwnership ?? null
   notificationProductIds = deps.productIds ?? null
@@ -97,6 +108,10 @@ export function getNotificationRuntime() {
       // 装配顺序错误：宁可启动即失败，也不拿 UTC 顶替读者时区去判一次免打扰。
       throw new Error('notification-runtime-clock-not-configured')
     }
+    if (notificationDiagnostics === null) {
+      // 同样宁可启动即失败：能记却没人接，与实际没留痕无法区分。
+      throw new Error('notification-runtime-diagnostics-not-configured')
+    }
     const desktopAdapter = createDesktopNotificationAdapter()
     notificationRuntime = createNotificationRuntime({
       storage: createNotificationJsonStorage(join(app.getPath('userData'), 'platform', 'notifications.json')),
@@ -114,7 +129,7 @@ export function getNotificationRuntime() {
       getLanguage: () => getLanguage?.() ?? Promise.resolve('zh-CN'),
       catalog: notificationCatalog ?? undefined,
       copy: notificationCopyPort ?? undefined,
-      diagnostics: notificationDiagnostics ?? undefined,
+      diagnostics: notificationDiagnostics,
       updateSettings: updateNotificationSettings ?? undefined,
       getPushTargets: getNotificationPushTargets ?? undefined,
       producerOwnership: notificationProducerOwnership ?? undefined,

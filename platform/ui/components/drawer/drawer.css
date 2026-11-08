@@ -4,14 +4,61 @@
  * 宽度不在这里写——像素表只有 `Drawer.tsx` 一处，写成 `min(<档位>px, 92vw)`。
  * 关闭键的样式归 `IconButton`，本文件不重复一套焦点环或尺寸。
  */
+/*
+ * 标题行与右端动作槽的比例（`ui-conventions.md`「Header action slots」）：
+ * - 标题先截断：`flex: 1 1 auto; min-width: 0`；
+ * - 动作槽只在到 45% 上限时截断：`flex: 0 0 auto; max-width: 45cqw`；
+ * - 关闭键永不移动：`flex: none`。
+ *
+ * **45 必须相对「头」算，不能相对动作分组算**（2026-11-08 实测退回）：分组是 `flex: none`，
+ * 宽度由内容决定；百分比对宽度未定的盒子会先按内容算，于是上限变成「分组宽 × 45%」，分组却
+ * 保留未压缩的宽度，中间留出一块空白，关闭键被推到中间（602px 头实测 ✕ 距右缘 160.8px）。
+ * 所以把头声明成容器（`container-type: inline-size`），上限用 `45cqw`——参照物是头的宽度，
+ * 而头的宽度是确定的。
+ *
+ * 缩短优先级是 **关闭键 > 动作 > 标题**。动作槽与关闭键之间的 12px 由组件决定：
+ * 头内其余间隙是 8，12 只用来分开「针对内容的动作」与「针对窗口的控件」。
+ */
+.drawer .ant-drawer-header {
+  /* 动作槽的 45cqw 以此为容器：参照物必须是「头」这个有确定宽度的盒子。 */
+  container-type: inline-size;
+}
 .drawer__title-row {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
+.drawer__header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 槽是通用的，尺寸由规则定，不由今天那句文案定：下一个产品的动作更长时，仍必须标题先截断。 */
+.drawer__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+  max-width: 45cqw;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.drawer__actions > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .drawer__title {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
   font-size: 14px;

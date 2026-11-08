@@ -1,10 +1,5 @@
-import { readJsonFileRecovering, writeJsonFileAtomically } from '../../storage/jsonFileStorage'
-
-
-import type { JsonFileStorage } from '../../storage/jsonFileStorage'
 import {
   acknowledgeNotification,
-  createDefaultNotificationStoreState,
   createNotificationFromRequest,
   createNotificationId,
   dismissNotification,
@@ -28,6 +23,7 @@ import type {
   NotificationRuntimeSettings,
   NotificationSubmitOutcome,
   NotificationSubmitRequest,
+  NotificationSuppressedLevel,
   NotificationUnreadState,
   NotificationCenterItem
 } from '../contracts/notificationContracts'
@@ -39,6 +35,8 @@ import { toNotificationCenterItem } from './notificationCenterItem'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
+import { rejectionTraceLevel } from '../contracts/notificationSubmitRejection'
+import { reportPersistFailure, traceSubmitFailure } from './notificationSubmitFailureTrace'
 import { pruneNotificationDailyCounters } from './notificationBreaker'
 import { countSameEventToday, decideDailyCap, foldSuppressedIntoLatest, withCenterForDisruptiveChannels } from './notificationAggregate'
 import { evaluateProducerGate } from './notificationProducerGate'
@@ -54,7 +52,10 @@ import {
   type NotificationDeliveryContent
 } from '../runtime/notificationRouting'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
+import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushChannelResolution'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
+import { composeSelfTestSurface } from './notificationSelfTestSurface'
+import { reportNarrowingWidened } from './notificationNarrowingTrace'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
 import { decideSeverityUpgrade } from './notificationSeverityUpgrade'
@@ -66,28 +67,9 @@ import {
   unreadStateOf
 } from './notificationRuntimeQuery'
 
-export type NotificationStorage = JsonFileStorage<NotificationStoreState>
-
-export function createNotificationJsonStorage(filePath: string): NotificationStorage {
-
-  return {
-    /**
-     * 读回整份状态。**走恢复读**：这一份 JSON 是整份读—改—写的目标，历史上被写成过
-     * 「完整文档 + 上一版残片」；裸 `JSON.parse` 会把这种文件变成启动期的未处理拒绝，
-     * 而 `readJsonFileRecovering` 会取回最长可解析前缀、留一份 `.corrupt-*` 再把干净内容写回。
-     *
-     * 文件不存在（首次启动）仍然是默认态，不当作损坏。
-     */
-    async read() {
-      const value = await readJsonFileRecovering(filePath)
-      if (value === undefined) return createDefaultNotificationStoreState()
-      return normalizeNotificationStoreState(value)
-    },
-    async write(value) {
-      await writeJsonFileAtomically(filePath, value)
-    }
-  }
-}
+// 文件存储搬到自己的模块（运行时越过 500 行后抽出）；消费方仍从这里取，导入面不变。
+import type { NotificationStorage } from './notificationJsonStorage'
+export { createNotificationJsonStorage, type NotificationStorage } from './notificationJsonStorage'
 
 export type NotificationRuntimeDependencies = {
   storage: NotificationStorage
@@ -102,8 +84,8 @@ export type NotificationRuntimeDependencies = {
   deliveryHooks?: DeliveryHooks
   /** 事件目录（契约 §2）。装配层注入；没有目录时新提交路径一律 rejected: unknown-event-type。 */
   catalog?: NotificationEventCatalog
-  /** 诊断出口（runtime §2）：必传于装配层；这里可缺省是为了旧测试的迁移，缺省即无人接收。 */
-  diagnostics?: NotificationDiagnosticsSink
+  /** 诊断出口（runtime §2）：**必传**——漏传时「能记但没人接」＝根本没留痕。 */
+  diagnostics: NotificationDiagnosticsSink
   /** 生产者归属表（契约 §14）：未登记 → 平台发；让渡给产品 → 平台不发，只记诊断。 */
   producerOwnership?: NotificationProducerOwnership
   /** 已登记的产品 productId；producerId 前缀对不上任何产品即视为平台自有。 */
@@ -116,6 +98,8 @@ export type NotificationRuntimeDependencies = {
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   /** 通道侧投影：可用通道 + 目标只读；没有通道线时为空数组。 */
   getPushTargets?: () => Promise<readonly unknown[]>
+  /** 目标通道的**唯一派生**（技术方案 §1），主推送/升级/重投共用；缺省＝一条都没有，绝不回退读旧字段。 */
+  resolvePushChannel?: () => Promise<PushChannelResolution>
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
@@ -172,16 +156,27 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     try {
       await persist(state)
     } catch (error) {
-      deps.diagnostics?.({ code: 'persist-failed', at: nowIso() })
+      reportPersistFailure({ error, diagnostics: deps.diagnostics, at: nowIso() })
       throw error
     }
   }
 
-  /**
-   * 新提交路径（契约 §3.2）。规划器只回答「变成什么」，这里负责落库、合并与投递；
-   * 合并/跨类型/空正文等规则全部在 `planNotificationSubmit` + `mergeDuplicateNotification` 一处。
-   */
+  /** 新提交路径（契约 §3.2）：规划器回答「变成什么」，这里落库、合并与投递。 */
   async function submitEvent(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
+    const outcome = await traceSubmitFailure(() => decideAndStoreSubmit(request), { eventTypeId: request.eventTypeId, diagnostics: deps.diagnostics, at: nowIso })
+    // 被拒也要留一行痕（2026-11-08）：调用方普遍 `catch {}`，拒收原本三处都查不到。只留痕、不改行为。
+    if (outcome.kind === 'rejected') {
+      deps.diagnostics({
+        code: outcome.reason,
+        level: rejectionTraceLevel(outcome.reason),
+        eventTypeId: request.eventTypeId,
+        at: nowIso()
+      })
+    }
+    return outcome
+  }
+
+  async function decideAndStoreSubmit(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
     const state = await load()
     const settings = await deps.getSettings()
     const now = nowIso()
@@ -215,12 +210,12 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       desktopSupported: deps.desktopSupported?.() ?? true,
       request,
       sameEventToday,
-      now
+      now,
+      timeZone: deps.clock.timeZone()
     })
     if (first.kind === 'rejected') {
       // 被上限/冷却拦下的那一条不能凭空消失：「今天还出过一次」要落到今天最后那条同事件记录上，
-      // 读者看到的是「共 N 次」，排障在记录里读到 `lastSuppressedReason`。
-      // 没有任何同事件记录可落（例：今天第一条就被冷却拦住）才原样返回拒收。
+      // 读者看到「共 N 次」，排障在记录里读到 `lastSuppressedReason`；没有可折叠记录才原样拒收。
       if (first.outcome.reason === 'daily-limit-reached' || first.outcome.reason === 'minimum-gap-active') {
         const folded = foldSuppressedIntoLatest({
           records: state.records,
@@ -258,12 +253,14 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
           request,
           sameEventToday,
           now,
+          timeZone: deps.clock.timeZone(),
           duplicate
         })
       : first
     if (plan.kind === 'rejected') return plan.outcome
 
     if (plan.kind === 'merge') {
+      reportNarrowingWidened({ duplicate: plan.duplicate, levels: plan.levels, eventTypeId: request.eventTypeId, diagnostics: deps.diagnostics, at: now })
       const merged = mergeDuplicateNotification(plan.duplicate, plan.incoming, now, {
         incrementCount: plan.incrementCount
       })
@@ -291,7 +288,9 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
         kind: 'merged',
         recordId: settled.id,
         occurrenceCount: settled.occurrenceCount,
-        mergedEventTypes: settled.mergedEventTypes ?? [settled.eventTypeId]
+        mergedEventTypes: settled.mergedEventTypes ?? [settled.eventTypeId],
+        // 只有严重度升级那一次真的又推了手机；普通合并里旧记录的投递是历史，不是这次的结果。
+        ...(next?.record.delivery.push === undefined ? {} : { delivery: { push: next.record.delivery.push } })
       }
     }
 
@@ -316,9 +315,19 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     }
 
     const record = plan.record
+    // 同组两条的存量选择对不上：三面已按「都关」处理，这里补一行诊断——
+    // 「都关」看起来跟读者自己关掉一模一样，不记就没人知道少了什么（契约 §5.5）。
+    if (plan.surfaceConflict) {
+      deps.diagnostics?.({
+        code: 'surface-selection-conflict',
+        at: now,
+        eventTypeId: record.eventTypeId,
+        recordId: record.id
+      })
+    }
     await persistWithDiagnostics({ ...state, records: [record, ...state.records], dailyCounters })
     notifyChanged()
-    const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff, request.signalSeverity)
+    const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff, request.signalSeverity, plan.quietHours)
     if (delivered.record !== record || delivered.pushBackoff !== state.pushBackoff) {
       const records = [delivered.record, ...state.records]
       await persistWithDiagnostics({ ...state, records, pushBackoff: delivered.pushBackoff, dailyCounters })
@@ -342,12 +351,33 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
         })
       }
     }
-    return plan.outcome
+    // 手机那一档若被免打扰摘掉，路由表里没有它（它不在 record.channels 里），
+    // 所以「没被尝试」要在这一层补齐：已批 channel、却没排上，且决定是免打扰。
+    const narrowedByQuietHours = plan.quietHours.inside && !plan.quietHours.bypassed &&
+      !(record.appliedLevels ?? []).includes('channel') &&
+      (deps.catalog?.get(record.eventTypeId)?.approvedDisruptionLevels.includes('channel') ?? false)
+    // 被本机开关挡在门外的档也一样要说清：「没测」不是「没到」。只在事件确实批过这一档时才算，
+    // 且提示那一档要看是不是被「桌面优先」挤掉的（那不是读者的开关）。
+    const declared = deps.catalog?.get(record.eventTypeId)?.approvedDisruptionLevels ?? []
+    const applied = record.appliedLevels ?? []
+    const switchedOff: NotificationSuppressedLevel[] = []
+    if (!applied.includes('desktop') && declared.includes('desktop') && !settings.desktopEnabled) {
+      switchedOff.push({ level: 'desktop', reason: 'desktop-disabled' })
+    }
+    if (!applied.includes('desktop') && !applied.includes('toast') && declared.includes('toast') && !settings.toastEnabled) {
+      switchedOff.push({ level: 'toast', reason: 'toast-disabled' })
+    }
+    const suppressedLevels: readonly NotificationSuppressedLevel[] = [
+      ...delivered.suppressedLevels,
+      ...switchedOff,
+      ...(narrowedByQuietHours ? [{ level: 'push', reason: 'quiet-hours' } as const] : [])
+    ]
+    // 投递证据与记录**同源**：四档原样抄记录上的那几条，不从别处反推。
+    return { ...plan.outcome, suppressedLevels, delivery: delivered.record.delivery }
   }
 
   /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */
-  const reportProviderCredential = (input: ProviderCredentialSignal) =>
-    reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
+  const reportProviderCredential = (input: ProviderCredentialSignal) => reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
   const settingsPorts = { catalog: deps.catalog, getSettings: deps.getSettings, updateSettings: deps.updateSettings, getPushTargets: deps.getPushTargets, pushWired: () => deps.deliveryHooks?.push !== undefined }
   const settingsSurface = composeNotificationSettingsSurface(settingsPorts, { load, exclusive, persistWithDiagnostics, notifyChanged })
@@ -357,6 +387,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     getLanguage: deps.getLanguage,
     copy: deps.copy,
     diagnostics: deps.diagnostics,
+    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
     now: nowIso
   })
 
@@ -378,6 +409,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
 
   return {
     submit,
+    /** 推送目标（唯一派生）：产品侧要读「发到哪条、几条可用」，别再造第二份三档判定。 */
+    resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
 
     /**
      * 渲染层看到的那一份（落地约束 v1.2 §1）：应用内投递与列表共用**同一个**投影。
@@ -386,10 +419,12 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     toCenterItem: (record: NotificationRecord, content?: NotificationDeliveryContent): Promise<NotificationCenterItem> =>
       centerItem(record, content),
 
+    ...composeSelfTestSurface({ resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
+      submitRequest: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
     reportProviderCredential,
 
-    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics }),
+    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics, resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL) }),
 
     async initialize(): Promise<void> {
       await load()

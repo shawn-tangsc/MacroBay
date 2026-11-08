@@ -12,7 +12,8 @@ import { createDefaultAppSettings, type AppSettings } from '@platform/settings/s
 import { AppShell } from '../AppShell'
 import { resolveLocalizedTitle } from './shellIconRegistry'
 import { openConversation } from './openConversation'
-import { PRODUCT_SETTINGS_PANELS, openProductSettingsPanel } from './openProductSettingsPanel'
+import { findProductSettingsPanelByIntent, openProductSettingsPanelByIntent } from './openProductSettingsPanel'
+
 
 /**
  * R87 的**落点**证明：两条封装都走真 `AppShell` 的监听（`applyNavigation`），断言不是
@@ -152,19 +153,21 @@ function activeSettingsPanel(host: HTMLElement): string | null {
 }
 
 describe('R87 landing', () => {
-  it('openProductSettingsPanel switches the shell to that settings panel and hands focus into the page', async () => {
+  it('openProductSettingsPanelByIntent switches the shell to the page the product declared, and hands focus into it', async () => {
     installShell()
     const host = await renderShell()
 
+    // 目标由**意图**解析出来：用例不写死面板 id，壳层里也没有那张「产品 → 面板」的表。
+    const panelKey = findProductSettingsPanelByIntent('resource-sources')
+    expect(panelKey).toBeDefined()
+
     await act(async () => {
-      openProductSettingsPanel(PRODUCT_SETTINGS_PANELS.marketIntelligenceSources)
+      expect(openProductSettingsPanelByIntent('resource-sources')).toBe(true)
     })
     await settle()
 
     // 面板真的换了（不是只把侧栏点亮）：高亮的就是那一项，名字取自注册表本身。
-    const panelEntry = productSettingsEntries.find(
-      (entry) => entry.id === PRODUCT_SETTINGS_PANELS.marketIntelligenceSources
-    )
+    const panelEntry = productSettingsEntries.find((entry) => entry.id === panelKey)
     expect(panelEntry).toBeDefined()
     expect(activeSettingsPanel(host)).toBe(
       resolveLocalizedTitle(panelEntry!.title, settingsLanguage())

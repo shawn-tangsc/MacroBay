@@ -4,7 +4,7 @@ import type { OpenInterestHistoryResult } from '../../../contracts/openInterestH
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { liquidationHintPolicy } from '../../../contracts/openInterestPositioning'
-import { openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
+import { openInterestSignalsFromHistory, openInterestShortSignalRule, openInterestSignalRule } from './openInterestSignals'
 import { signalAssetSymbol } from './signalNotificationCopy'
 import { renderOpenInterestSentence } from './signalNotificationSentence'
 
@@ -92,12 +92,16 @@ export function buildOpenInterestSignalRequest(
 
   const aggravated = signal.severity === 'high'
   // 成品句子在源头拼好（契约 v2.56）；阈值取规则常量，句子跟着常量走，模板里没有第二个数。
+  // 方向由规则 id 决定（契约：方向是规则的属性，不是信号字段）；读数符号只是复核。
+  const direction = signal.ruleId === openInterestShortSignalRule.ruleId ? 'short' as const : 'long' as const
   const rendered = renderOpenInterestSentence({
     asset: signalAssetSymbol(signal.asset),
     dropPct,
     volumeMultiple,
     notionalUsd,
     thresholdPct: aggravated ? thresholds.strongDropPct : thresholds.dropPct,
+    direction,
+    ...(Number.isFinite(signal.values.priceChangePct) ? { pricePct: signal.values.priceChangePct } : {}),
     aggravated
   })
   if (rendered === undefined) return undefined
@@ -122,7 +126,9 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
 }>) {
   return async function notifyOpenInterestSignals(): Promise<readonly NotificationSubmitOutcome[]> {
     const asOf = (deps.now ?? (() => new Date().toISOString()))()
-    const reading = await deps.readHistory({ asOf, window: '24h' })
+    const reading = await readOnce(asOf)
+    // 读失败这一轮就没有可说的：**不进**提交循环，也不让异常冒到采集路径上。
+    if (reading === undefined) return Object.freeze([])
     const candidates = selectSignalNotificationCandidates(openInterestSignalsFromHistory(reading, asOf), asOf)
     const outcomes: NotificationSubmitOutcome[] = []
     for (const signal of candidates) {
@@ -131,6 +137,49 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
     }
     return Object.freeze(outcomes)
   }
+
+  /**
+   * 读历史失败要留痕，而且只留一次（2026-11-08）。
+   *
+   * 原来外层那个 `catch {}` 包的是整段 `notify()`，所以它不只吞提交异常，还吞「读历史失败」——
+   * 请求都还没构造出来，运行时的提交留痕根本看不到它。现在读自己包一层：失败记一条
+   * `MI_SIGNAL_READ_FAILED`，然后按「本次无信号」返回；外层 `catch` 只剩提交侧，那部分运行时
+   * 已经记过，这里不再记第二遍。
+   *
+   * **不改失败语义**：读失败仍然是「这一轮不发通知」，采集结果仍然算成功——把异常抛回采集路径
+   * 会把一次通知侧读取失败升级成「这次采集失败」，与上面那条既定取舍相反。
+   *
+   * 一条读数覆盖两个资产，所以这条日志认的是来源，不是某一个资产：它不指名 btc 或 eth。
+   */
+  async function readOnce(asOf: string): Promise<OpenInterestHistoryResult | undefined> {
+    try {
+      const reading = await deps.readHistory({ asOf, window: '24h' })
+      if (reading.state === 'unavailable') {
+        traceReadFailure(reading.failureCode)
+        return undefined
+      }
+      return reading
+    } catch (error) {
+      traceReadFailure(reasonCodeOf(error))
+      return undefined
+    }
+  }
+}
+
+/** 结构化一行，不带叙事文案、不带读者配置：只有来源与原因码。 */
+const SIGNAL_READ_SOURCE_ID = 'binance-futures-positioning'
+
+function traceReadFailure(reasonCode: string): void {
+  console.log(JSON.stringify({ marker: 'MI_SIGNAL_READ_FAILED', sourceId: SIGNAL_READ_SOURCE_ID, reasonCode }))
+}
+
+/** 抛出来的错误没有 `reasonCode` 这个字段：能拿到一个短码就用它，拿不到就记 `read-failed`。 */
+function reasonCodeOf(error: unknown): string {
+  if (error !== null && typeof error === 'object') {
+    const candidate = (error as { reasonCode?: unknown; code?: unknown }).reasonCode ?? (error as { code?: unknown }).code
+    if (typeof candidate === 'string' && candidate.length > 0 && candidate.length <= 64) return candidate
+  }
+  return 'read-failed'
 }
 
 /**

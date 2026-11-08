@@ -35,7 +35,9 @@ export async function withDeadline<T>(read: Promise<T>, milliseconds: number, on
           // The timeout is a cancellation, not just an abandoned wait: the work behind `read` is
           // told to stop before the caller is released with a failure.
           onTimeout?.()
-          reject(new Error('daily-briefing-generation-timeout'))
+          const timeout = new Error('daily-briefing-generation-timeout')
+          timeout.name = 'DailyBriefTimeoutError'
+          reject(timeout)
         }, milliseconds)
       })
     ])
@@ -47,6 +49,25 @@ export async function withDeadline<T>(read: Promise<T>, milliseconds: number, on
 export function cutoffDate(today: string): string {
   const start = Date.parse(`${today}T00:00:00.000Z`)
   return new Date(start - (dailyBriefingPolicy.retentionDays - 1) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
+}
+
+/**
+ * 一次**抛出来**的错误算什么——只认类型化的名字，不看报文。
+ *
+ * 三件事各自有名字：超时是 `AgentTurnTimeoutError`（平台）或我们自己的 `DailyBriefTimeoutError`；
+ * 取消是 `AbortError`；输出被截断是平台自己的类型。**其余一律 `provider-error`**：拿不到原因时
+ * 说"模型没有返回结果"，不替它断言"超时"——那是在写一件没发生的事。
+ *
+ * 这里**不再有**"运行时释放"这一档：释放只在 `paused` 的 `stopReason.kind === 'runtime-stop'`
+ * 上认（`dailyBriefAgentRunner.ts`），不在异常文本上认。拿提示语当协议，一个上游的
+ * `stream stopped` 就会被说成「应用被关闭了」。
+ */
+export function turnFailureCode(error: unknown): string {
+  const name = error instanceof Error ? error.name : ''
+  if (name === 'AgentTurnTimeoutError' || name === 'DailyBriefTimeoutError') return 'editorial-timeout'
+  if (name === 'AbortError') return 'cancelled'
+  if (isOutputTruncation(error)) return 'agent-turn-output-truncated'
+  return 'provider-error'
 }
 
 /** A model round that ran out of output is a writing failure, not a generic timeout. */

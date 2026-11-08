@@ -6,8 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 
 import { marketIntelligenceNotificationCopy } from '../../../desktop/shared/i18n/text/notifications'
@@ -26,10 +25,10 @@ import { buildEtfOutflowSignal } from './etfOutflowSignal'
  * - 只断言旧路径，证明不了新记录里真的是成品、而不是又回头让平台拼。
  */
 const catalog = createNotificationEventCatalog({
-  policy: NOTIFICATION_EVENT_POLICY,
+  // 断的是产品事件（信号文案）的批准值 -> 产品读自己那份；平台读平台自己的。
   sources: [
-    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-    { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+    { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
   ]
 })
 
@@ -91,8 +90,8 @@ describe('signal notification sentences', () => {
     const request = buildOpenInterestSignalRequest(signal())
     const rendered = request?.rendered
     expect(rendered).toBeDefined()
-    expect(rendered!['zh-CN']!.title).toBe('BTC 持仓骤降')
-    expect(rendered!['en-US']!.title).toBe('BTC open interest dropped')
+    expect(rendered!['zh-CN']!.title).toBe('BTC 多头爆仓')
+    expect(rendered!['en-US']!.title).toBe('BTC long liquidations')
     // 两份都在：只给一份就把语言钉死在提交那一刻，切语言后历史通知不会跟着变。
     expect(Object.keys(rendered!).sort()).toEqual(['en-US', 'zh-CN'])
     // 三段都要非空，`reason` 也走成品（手机上它与正文一起发）。
@@ -101,6 +100,50 @@ describe('signal notification sentences', () => {
       expect(rendered![language]!.body.length).toBeGreaterThan(0)
       expect(rendered![language]!.reason.length).toBeGreaterThan(0)
     }
+  })
+
+  /** 空头那条：数字格式化只出绝对值，正负号由「涨」这个词承担。 */
+  const shortSignal = (overrides: Partial<ModuleSignal> = {}): ModuleSignal =>
+    signal({
+      ruleId: 'oi-short-liquidation-proxy',
+      values: { dropPct: -1.8, volumeMultiple: 3.1, notionalUsd: 850_000_000, priceChangePct: 1.8 },
+      ...overrides
+    })
+
+  it('names the short side in both languages, and quotes the rise rather than the fall', () => {
+    // 方向接反时字面上仍是一条通顺的句子——所以两侧各写一条，标题、动词、数字都要各自钉住。
+    const request = buildOpenInterestSignalRequest(shortSignal())
+    expect(request?.rendered?.['zh-CN']!.title).toBe('BTC 空头爆仓')
+    expect(request?.rendered?.['en-US']!.title).toBe('BTC short liquidations')
+    expect(request?.rendered?.['zh-CN']!.body).toContain('涨 1.8%')
+    expect(request?.rendered?.['zh-CN']!.body).not.toContain('跌')
+    expect(request?.rendered?.['en-US']!.body).toContain('up 1.8%')
+    expect(request?.rendered?.['en-US']!.body).not.toMatch(/down|fell/iu)
+  })
+
+  it('never lets the two sides share one sentence', () => {
+    const long = buildOpenInterestSignalRequest(signal())
+    const short = buildOpenInterestSignalRequest(shortSignal())
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      expect(short!.rendered![language]!.title).not.toBe(long!.rendered![language]!.title)
+      expect(short!.rendered![language]!.body).not.toBe(long!.rendered![language]!.body)
+    }
+  })
+
+  it('switches the short side to its aggravated wording too', () => {
+    const request = buildOpenInterestSignalRequest(shortSignal({
+      severity: 'high',
+      values: { dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 850_000_000, priceChangePct: 2.7 }
+    }))
+    expect(request?.rendered?.['zh-CN']!.title).toBe('BTC 空头爆仓加剧')
+    expect(request?.rendered?.['zh-CN']!.body).toContain('强阈值 2.5%')
+  })
+
+  it('refuses to build a short sentence out of a fall', () => {
+    // 绝对值格式化会把 -1.8 印成「涨 1.8%」——一句话把读者送到反方向。拼不出就不发。
+    expect(buildOpenInterestSignalRequest(shortSignal({
+      values: { dropPct: -1.8, volumeMultiple: 3.1, notionalUsd: 850_000_000, priceChangePct: -1.8 }
+    }))).toBeUndefined()
   })
 
   it('switches the aggravated title and reads the threshold multiple from the signal’s own values', () => {
@@ -113,8 +156,8 @@ describe('signal notification sentences', () => {
     expect(etfSignal.severity).toBe('high')
     const request = buildEtfOutflowSignalRequest(etfSignal)
     expect(request?.rendered?.['zh-CN']!.title).toBe('BTC ETF 净流出加剧')
-    expect(request?.rendered?.['zh-CN']!.body).toBe('净流出 6 亿美元，是阈值的 6 倍')
-    expect(request?.rendered?.['en-US']!.body).toBe('$600M net outflow, 6× the threshold')
+    expect(request?.rendered?.['zh-CN']!.body).toBe('净流出 6 亿美元，是阈值的 6 倍（截至 08-28 交易日）')
+    expect(request?.rendered?.['en-US']!.body).toBe('$600M net outflow, 6× the threshold (as of the 08-28 trading day)')
     expect(Math.abs(etfSignal.values.thresholdUsd)).toBe(Math.abs(etfFlowPolicy.signalOutflowUsd))
   })
 
@@ -197,11 +240,11 @@ describe('signal notification sentences', () => {
             ref: {
               scope: 'product',
               productId: 'market-intelligence',
-              key: 'notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated'
+              key: 'notification.event.market-intelligence.signal.triggered.headline.oiLongAggravated'
             }
           }
         },
-        bodyVariant: 'oiDropAggravated',
+        bodyVariant: 'oiLongAggravated',
         bodyParams: {
           dropPct: { number: -3.4, kind: 'pct' },
           strongPct: { number: -2.5, kind: 'pct' },

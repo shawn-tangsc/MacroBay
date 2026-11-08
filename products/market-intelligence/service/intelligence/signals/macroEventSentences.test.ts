@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 
 import { marketIntelligenceNotificationCopy } from '../../../desktop/shared/i18n/text/notifications'
@@ -18,10 +17,10 @@ import { buildMacroEventLandedRequest, type MacroEventLanding } from './macroEve
  * 口径认得出才写、写不出就不加括号；数字照用源串、不重新格式化。
  */
 const catalog = createNotificationEventCatalog({
-  policy: NOTIFICATION_EVENT_POLICY,
+  // 产品事件（宏观落地文案）的批准值：各读各的。
   sources: [
-    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-    { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+    { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
   ]
 })
 const port = createNotificationCopyPort({
@@ -93,6 +92,17 @@ describe('macro event landed sentences', () => {
     expect(zh.body).not.toContain('—')
     expect(zh.body).not.toContain('（）')
     expect(zh.body).not.toContain('前值 —')
+  })
+
+  it('says "in line with forecast" for a matched release instead of borrowing a direction', () => {
+    // 读者勾了「符合预期也推」才会走到这里；句子不能说成高于/低于——那是另一件事。
+    const zh = render(landing({ comparison: 'matched', eventNameKey: 'cpi' }), 'zh-CN')
+    expect(zh.title).toContain('符合预期')
+    expect(zh.body).toContain('符合预期')
+    expect(zh.title).not.toContain('高于预期')
+    expect(zh.title).not.toContain('低于预期')
+    const en = render(landing({ comparison: 'matched', eventNameKey: 'cpi' }), 'en-US')
+    expect(en.title).toContain('in line with forecast')
   })
 
   it('writes the direction as a word, never as a difference in points', () => {

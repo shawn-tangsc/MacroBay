@@ -53,7 +53,7 @@ describe('task failure notifier', () => {
     expect(request.producerId).toBe('handler-1')
     expect(request.dedupeVars).toEqual({
       builder: 'template',
-      vars: { definitionId: 'definition-1', date: '2026-11-02' }
+      vars: { jobKey: 'handler:handler-1', date: '2026-11-02' }
     })
     // 句子在源头拼好（契约 v2.56）：两种语言各一份，记录里**不再挂文案键与参数**。
     expect(request.rendered?.['zh-CN']).toEqual({
@@ -69,6 +69,31 @@ describe('task failure notifier', () => {
     expect(request.actions).toHaveLength(1)
     expect(request.deeplink).toMatchObject({ entityType: 'job-definition', entityId: 'definition-1' })
     expect(request.occurredAt).toBe('2026-11-02T01:00:05.000Z')
+  })
+
+  it('treats one-shot runs of the same handler and source as one task, whatever their definition id', async () => {
+    // 一次性作业每次注册的 definitionId 都不同；按 id 去重会让同一件事每次单独通知（读者被刷）。
+    const { submit, notify } = notifier()
+    await notify({
+      run: run({
+        definitionId: 'sample-product.handler:global:1794052912321:jg9wly',
+        payload: { sourceId: 'sample-source' }
+      }),
+      cause: 'executed'
+    })
+    await notify({
+      run: run({
+        id: 'run-2',
+        definitionId: 'sample-product.handler:global:1794052955999:abcd12',
+        payload: { sourceId: 'sample-source' }
+      }),
+      cause: 'executed'
+    })
+
+    const first = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
+    const second = submit.mock.calls[1]?.[0] as NotificationSubmitRequest
+    expect(first.dedupeVars).toEqual(second.dedupeVars)
+    expect(JSON.stringify(first.dedupeVars)).toContain('handler:handler-1:sample-source')
   })
 
   it('stays silent when the run succeeded: a quiet day produces nothing', async () => {
@@ -103,7 +128,7 @@ describe('task failure notifier', () => {
 
   it('uses the handler id as producerId: the ownership table claims handlers, not period-bearing definition ids', async () => {
     const { submit, notify } = notifier()
-    await notify({ run: run({ owner: 'product', productId: 'market-intelligence' }), cause: 'executed' })
+    await notify({ run: run({ owner: 'product', productId: 'sample-product' }), cause: 'executed' })
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
     // 让渡表是 manifest 里的静态表：definitionId 天天新一期就 claim 不上，handler 才稳定。
     expect(request.producerId).toBe('handler-1')

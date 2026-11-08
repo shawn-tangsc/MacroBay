@@ -139,6 +139,8 @@ export function registerIntelligencePublicQueryIpc(
    * list is an app that refuses to start.
    */
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead, async (payload) => {
+    // 牌子的判定**固定 24 小时**（用户 2026-11-08 10:4x 定）：那颗牌子是「现在怎么样」的
+    // 状态指示，三天前的命中挂到标题边，读者会当成刚发生。历史归图，现状归标题。
     if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) {
       return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
     }

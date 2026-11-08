@@ -3,7 +3,10 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
-import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import {
+  MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS,
+  OPEN_BRIEFING_ACTION_KEY
+} from '../../../contracts/notificationEventKeys'
 import { failureCopy, readyCopy, timezoneCopy } from './dailyBriefingNoticeSentences'
 import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 import type { BriefingDiagnosticLog } from './dailyBriefReadinessGate'
@@ -47,10 +50,20 @@ const OPEN_BRIEFING_DEEPLINK = Object.freeze({
   pageId: 'daily-briefing'
 })
 
-/** 失败类只有一个动作：打开日报页重试。动作键是平台的（`notification.action.open-briefing`）。 */
+/**
+ * 失败类只有一个动作：打开日报页重试。
+ *
+ * 标签走**产品自己的**文案表（v2.58）：`notification.action.market-intelligence.open-briefing`。
+ * 以前借平台的键，可平台表不该有产品句子；现在记录里存的是**引用**，读取时按当前语言解析，
+ * 所以切语言后历史通知的按钮跟着变（成品标签做不到这一点）。
+ */
 const OPEN_BRIEFING_ACTION = Object.freeze({
   id: 'open-briefing',
-  labelKey: 'notification.action.open-briefing' as const,
+  labelRef: Object.freeze({
+    scope: 'product' as const,
+    productId: 'market-intelligence',
+    key: OPEN_BRIEFING_ACTION_KEY
+  }),
   kind: 'open' as const,
   deeplink: OPEN_BRIEFING_DEEPLINK
 })

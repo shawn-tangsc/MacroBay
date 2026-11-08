@@ -18,7 +18,7 @@ import {
 
 function isDocument(value: unknown): value is DailyBriefingDocument {
   if (!isRecord(value) || !isDailyBriefingDocumentWithinBudget(value)) return false
-  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7 && value.schemaVersion !== 8 && value.schemaVersion !== 9 && value.schemaVersion !== 10 && value.schemaVersion !== 11 && value.schemaVersion !== 12 && value.schemaVersion !== 13 && value.schemaVersion !== 14 && value.schemaVersion !== 15) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18' && value.policyVersion !== 'daily-briefing.v19' && value.policyVersion !== 'daily-briefing.v20' && value.policyVersion !== 'daily-briefing.v21' && value.policyVersion !== 'daily-briefing.v22' && value.policyVersion !== 'daily-briefing.v23' && value.policyVersion !== 'daily-briefing.v24')) return false
+  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7 && value.schemaVersion !== 8 && value.schemaVersion !== 9 && value.schemaVersion !== 10 && value.schemaVersion !== 11 && value.schemaVersion !== 12 && value.schemaVersion !== 13 && value.schemaVersion !== 14 && value.schemaVersion !== 15) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18' && value.policyVersion !== 'daily-briefing.v19' && value.policyVersion !== 'daily-briefing.v20' && value.policyVersion !== 'daily-briefing.v21' && value.policyVersion !== 'daily-briefing.v22' && value.policyVersion !== 'daily-briefing.v23' && value.policyVersion !== 'daily-briefing.v24' && value.policyVersion !== 'daily-briefing.v25')) return false
   if (!isEdition(value.edition, value.schemaVersion) || !isStatus(value.status) || !isLede(value.lede)) return false
   if (!isNews(value.news) || !isData(value.data) || !isConclusionOrNull(value.conclusion)) return false
   if (!isNext(value.next) || !Array.isArray(value.citations) || !isProvenance(value.provenance)) return false
@@ -34,14 +34,14 @@ function isEdition(value: unknown, schemaVersion: unknown): boolean {
   // From schema 13 the edition carries its period identity — periodId (an opaque identity), the
   // nominal cutoff periodTime, and the kind of period. All four fields of that step arrive together,
   // including runTrigger, which is not identity but *how this run happened* (scheduled / catch-up /
-  // retry / manual); a document with only some of them is refused rather than guessed at.
+  // retry / auto-retry / manual); a document with only some of them is refused rather than guessed at.
   if (typeof schemaVersion === 'number' && schemaVersion >= 13) {
     if (!isText(value.periodId) || !isText(value.periodTime)) return false
     // A11.4: the nominal cutoff is stored at millisecond precision, like generatedAt. Without this
     // check a second-precision value would pass and the judge would quietly stop holding.
     if (!isIsoMilliseconds(value.periodTime)) return false
     if (value.periodKind !== 'scheduled' && value.periodKind !== 'manual') return false
-    if (!['scheduled', 'catch-up', 'retry', 'manual'].includes(String(value.runTrigger))) return false
+    if (!['scheduled', 'catch-up', 'retry', 'auto-retry', 'manual'].includes(String(value.runTrigger))) return false
   } else if (value.periodId !== undefined || value.periodTime !== undefined || value.periodKind !== undefined || value.runTrigger !== undefined) {
     // Editions before 13 had no period fields; a half-written set would make the fallback ambiguous.
     return false
@@ -81,7 +81,17 @@ function isNews(value: unknown): boolean {
   if (!Array.isArray(value.macro) || value.macro.length > dailyBriefingPolicy.maximumMacroItems) return false
   if (!Array.isArray(value.items) || !value.items.every(isNewsItem)) return false
   if (!Array.isArray(value.macro) || !value.macro.every(isMacroItem)) return false
+  if (value.sources !== undefined && (!Array.isArray(value.sources) || !value.sources.every(isNewsSource))) return false
   return isRecord(value.notes)
+}
+
+/** 来源状态条目（schema 15）：静默与失败分开，字段缺一不可猜。 */
+function isNewsSource(value: unknown): boolean {
+  return isRecord(value) && isText(value.sourceId) && isText(value.name) &&
+    (value.state === 'silent' || value.state === 'failed') &&
+    (value.lastNewItemAt === undefined || isText(value.lastNewItemAt)) &&
+    (value.silentHours === undefined || typeof value.silentHours === 'number') &&
+    (value.consecutiveFailures === undefined || typeof value.consecutiveFailures === 'number')
 }
 
 function isNewsItem(value: unknown): boolean {

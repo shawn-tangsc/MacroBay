@@ -18,9 +18,8 @@ Analyst. Both are marked **coming soon** and cannot be configured yet.
 
 ![The agent portal with three analyst cards](../assets/screenshots/portal-en.png)
 
-No key yet? **Sample mode** replays a recorded week of real observations — the full desk and three
-published analyses — offline and without writing anything; switch it off and you are back to your own
-empty data. For your own analysis, start at step 1 below.
+Sources that need no credential collect on their own; anything missing is reported as a gap. For your own
+analysis, start at step 1 below.
 
 ## What ships now, and what comes next
 

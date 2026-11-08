@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
 
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
@@ -32,7 +31,7 @@ const settings: NotificationRuntimeSettings = {
 
 type StoreState = { records: Array<Record<string, unknown>>; dailyCounters: Record<string, unknown>; subscriptions: Record<string, unknown>; pushBackoff: Record<string, unknown> }
 
-function runtimeWithPush() {
+function runtimeWithPush(options: { channels?: 'one' | 'none' } = {}) {
   let state: StoreState = { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
   let pushes = 0
   const storage: NotificationStorage = {
@@ -42,13 +41,17 @@ function runtimeWithPush() {
   const runtime = createNotificationRuntime({
     storage,
     catalog: createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
+      // 产品事件（日报已生成）的批准值：各读各的。
       sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
       ]
     }),
     diagnostics: () => undefined,
+    // 目标通道由唯一派生入口给出（技术方案 §1）：夹具给「恰好一条 runtime-ready」，与生产同形。
+    resolvePushChannel: async () => (options.channels === 'none'
+      ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+      : { ok: true as const, channelId: 'telegram', channelName: 'Telegram · test' }),
     getSettings: async () => settings,
     clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
     productIds: ['market-intelligence'],
@@ -68,6 +71,20 @@ function runtimeWithPush() {
 }
 
 describe('publish to phone: write the record first, then push it', () => {
+  it('fails closed with no runtime-ready channel: rejected, reason push-unavailable', async () => {
+    const bare = runtimeWithPush({ channels: 'none' })
+    const outcome = await publishBriefingToPhone({
+      readEdition: async () => ({ document: { lede: { text: '今天的主导事件是…' } } }),
+      submit: bare.submit,
+      redeliver: bare.redeliver,
+      now: () => NOW
+    }, input)
+    // 0 条 runtime-ready 通道 = 配置事实：这条发布入口自己先拦（`channel-missing`），
+    // 运行时那一层的 `push-unavailable` 由 `pushTargetDerivation.test.ts` 钉住。
+    expect(outcome).toMatchObject({ kind: 'rejected', reason: 'channel-missing' })
+    expect(bare.pushes()).toBe(0)
+  })
+
   it('publishes from an empty library: one record appears and the phone receives it once', async () => {
     const runtime = runtimeWithPush()
     const outcome = await publishBriefingToPhone({

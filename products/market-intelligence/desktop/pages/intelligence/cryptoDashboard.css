@@ -37,6 +37,11 @@
   --mi-reading-note-size: 11.5px;
   --mi-reading-note-line-height: 1.6;
   --mi-reading-note-max-height: 320px;
+  /**
+   * 图内标签字号（轴标签与标记牌同档）：9px。**等值迁移**，不是新造档位——此前这一档是
+   * 各处写死的 `font-size: 9px`，图表里谁改一处就和轴标签对不齐。
+   */
+  --mi-chart-label-size: 9px;
   /*
     同起点收益率那张图的五条线：这一份是**唯一 owner**（面板只命名它们，不就地写颜色）。
     五条线必须两两分得清，`crossAssetChartPalette.test.ts` 按色相/明度/饱和度断言——BTC 是饱和的
@@ -175,7 +180,35 @@
 .mi-capital-conditions__coverage { margin-left: 4px; color: var(--mi-dashboard-caution); font-size: 9px; }
 .mi-capital-conditions__etf-unavailable { color: var(--mi-dashboard-muted); font-family: inherit; font-size: 12px; text-align: left; }
 .mi-capital-conditions__etf-flow { display: grid; align-self: stretch; align-content: stretch; grid-template-rows: auto auto minmax(var(--mi-dashboard-etf-flow-chart-height), 1fr); gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
-.mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: var(--mi-dashboard-etf-flow-block-gap); }
+/* 标题行内的 ⓘ 紧跟标题文字：这一行按规范用 4px（块间距 8px 仍归 `--mi-dashboard-etf-flow-block-gap`，
+   那是这一块与图例/图之间的竖直间距，不是标题行内的间距）。
+
+   窄卡时的优先级：**先坏动作，不拆解释**。标题与 ⓘ 分成一组（组内 nowrap），动作是兄弟且
+   `flex: none`；整行允许换行，于是动作整颗折到下一行仍贴右，而 ⓘ 永远贴着它解释的标题。
+   `margin-left: auto` 只在动作上——那条禁令针对的是把**解释图标**甩出行，不是主动作靠右。 */
+.mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+.mi-capital-conditions__etf-flow-title {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+  /* 约六个汉字（12px × 6）——标题再窄就说明该让动作换行了，而不是继续挤解释。 */
+  min-width: 72px;
+  flex-wrap: nowrap;
+}
+
+/* 文字负责让位：它截断，图标不动。 */
+.mi-capital-conditions__etf-flow-title h3 {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mi-capital-conditions__etf-flow-title .icon-button { flex: none; }
+.mi-capital-conditions__etf-flow-title .mi-capital-conditions__chart-window { flex: none; }
 .mi-capital-conditions__etf-flow h3 { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; }
 .mi-capital-conditions__chart-window { color: var(--mi-dashboard-muted); font-size: 10px; }
 .mi-capital-conditions__etf-flow > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -226,7 +259,7 @@
 /* The trigger sits at the right end of the title row as a bordered small button: border, hover and
    focus come from the antd button tokens, so only the geometry and the pushed-right placement are
    set here. */
-.mi-capital-conditions__daily-button { margin-left: auto; min-height: 24px; padding-inline: 10px; white-space: nowrap; }
+.mi-capital-conditions__daily-button { flex: none; margin-left: auto; min-height: 24px; padding-inline: 10px; white-space: nowrap; }
 /* The trigger is a bordered button in both themes. antd's default variant reads its surface and
    border from the window theme, which left a filled block on the light card; these declarations
    come from the portal tokens instead, so the same button shows in either theme. */
@@ -581,9 +614,9 @@
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
-  border: 1px solid var(--mi-dashboard-line);
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-negative) 40%, transparent);
   border-radius: 3px;
-  background: none;
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent);
   color: var(--mi-dashboard-text);
   font: inherit;
   font-size: 10px;
@@ -591,10 +624,25 @@
   line-height: 16px;
   white-space: nowrap;
   cursor: pointer;
+  /* 牌子就是入口，但不是按钮那种重量：它与旁边「观测时间」同一档，只多一枚箭头。 */
+  text-decoration: none;
 }
-.mi-capital-conditions__signal:hover,
-.mi-capital-conditions__signal:focus-visible { border-color: var(--mi-dashboard-text); }
-.mi-capital-conditions__signal:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+/* 常驻的「点开有东西」：6×6 的 ›，颜色跟文字走，只有 55% 实。 */
+.mi-capital-conditions__signal-chevron { flex: none; opacity: 0.55; }
+/* 悬停整颗加深一档：底色 10%→18%、边框 40%→60%；文字色不动（下划线会切断金额与负号）。 */
+.mi-capital-conditions__signal:hover {
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 18%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-negative) 60%, transparent);
+}
+.mi-capital-conditions__signal:hover .mi-capital-conditions__signal-chevron { opacity: 0.95; }
+/* 键盘聚焦：平台统一外框，并保留「加深一档」，让人看出停在一个可点的东西上。 */
+.mi-capital-conditions__signal:focus-visible {
+  outline: 2px solid var(--mi-dashboard-lime);
+  outline-offset: 2px;
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 18%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-negative) 60%, transparent);
+}
+.mi-capital-conditions__signal:focus-visible .mi-capital-conditions__signal-chevron { opacity: 0.95; }
 /* 数据不齐是陈述，不是控件；外层只负责把「缺哪一路」挂到悬停与聚焦上。 */
 .mi-capital-conditions__signal-statement { display: inline-flex; border-radius: 3px; }
 .mi-capital-conditions__signal-statement:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }

@@ -280,6 +280,34 @@ export function isMechanicalDeletionPatch(patch: string): boolean {
   return new Set(removed).size === 1
 }
 
+/**
+ * **已经在 `origin/main` 上的提交不再判**（2026-11-07）。
+ *
+ * 0.4.0 是 squash 合并进 main 的：几十笔压成一笔，逐笔的 `Component-Owner` trailer 结构上留不下来。
+ * 判它只能判出「合并方式造成的声明丢失」，判不出「有人偷偷改组件」——而后者才是这道门的用途。
+ * 判据用 git 事实（祖先关系），不用人补一份声明：补认领要求为**每个非组件文件**写一行 `Also:`，
+ * 几百个产品文件的 squash 提交等于要写几百行套话，那条路天然不可用。
+ *
+ * `--include-merged`（或 `COMPONENTS_OWNERSHIP_INCLUDE_MERGED=1`）可关掉这条豁免，用于审计已合并历史。
+ */
+export function isOnOriginMain(hash: string, ref = 'origin/main'): boolean {
+  try {
+    git(['merge-base', '--is-ancestor', hash, ref])
+    return true
+  } catch {
+    // 读不出来（没有这个 ref、浅克隆、提交不存在）→ **不豁免**，仍按原判据查。兜底不许静默降级。
+    return false
+  }
+}
+
+/** 纯函数版：把「已合并」的提交从待判列表里去掉，便于用例喂假谓词。 */
+export function dropMergedCommits<T extends Readonly<{ hash: string }>>(
+  commits: readonly T[],
+  isMerged: (hash: string) => boolean
+): T[] {
+  return commits.filter((commit) => !isMerged(commit.hash))
+}
+
 export function findViolations(
   commits: readonly InspectedCommit[],
   options: ClaimOptions = {}
@@ -349,6 +377,20 @@ function main(): void {
   } catch {
     console.log(`components-ownership: cannot read range ${base}..HEAD; skipping.`)
     return
+  }
+
+  // 已在 `origin/main` 上的提交不判（见 `isOnOriginMain`）：它们随 PR 合并、发布、复审过。
+  // 直接推 main 的路径不因此失保护——本机门禁在**推送前**跑，那时提交还不是 origin/main 的祖先。
+  const includeMerged =
+    process.argv.includes('--include-merged') || process.env.COMPONENTS_OWNERSHIP_INCLUDE_MERGED === '1'
+  const mergedSkipped = includeMerged ? [] : commits.filter((commit) => isOnOriginMain(commit.hash))
+  if (mergedSkipped.length > 0) {
+    commits = dropMergedCommits(commits, (hash) => mergedSkipped.some((commit) => commit.hash === hash))
+    console.log(
+      `components-ownership: ${mergedSkipped.length} commit(s) already on origin/main, not judged` +
+        (includeMerged ? '' : '（审计它们用 --include-merged）') +
+        '.'
+    )
   }
 
   // 认领不改历史、只补声明，所以「已推送」不再是拒绝理由（Chief 2026-11-02 批准放宽）；

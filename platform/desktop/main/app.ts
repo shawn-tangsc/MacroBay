@@ -861,7 +861,13 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   const onRunTerminal = wireTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
     listDefinitions: () => jobRuntime.listSchedules(),
-    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant)), listDefinitionRuns: (definitionId) => jobRuntime.listRuns({ definitionId, statuses: ['completed', 'failed', 'cancelled'], newestFirst: true, limit: 50 })
+    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant)), // P2 的「连续 3 次失败」按**任务身份**数，所以取的是这个 handler 的运行序列：
+    // 一次性作业每次 definitionId 都带时间戳与随机后缀，按 definitionId 数永远到不了阈值
+    // （同一个人工任务失败 5 次会变成 5 条各自独立的通知）。身份过滤在生产者里做：
+    // 周期作业 = definitionId，一次性作业 = handler + sourceId；这里只负责把序列取回来。
+    // limit 200 是给「同一 handler 多来源交错」留的余量。
+    listHandlerRuns: (handlerId) =>
+      jobRuntime.listRuns({ handlerId, statuses: ['completed', 'failed', 'cancelled'], newestFirst: true, limit: 200 })
   })
   const jobRuntime = createJobRuntime({ store: jobRunStore, onRunTerminal })
   setJobRuntimeForDisposal(jobRuntime)

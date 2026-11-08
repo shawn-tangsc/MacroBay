@@ -244,6 +244,23 @@ describe('daily briefing client', () => {
       languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }, { locale: 'zh-CN', state: 'published' }]
     })
 
+    // 自动重试是它自己的触发值（`02` v2.158）：与读者手点的 `retry` 分开，行首来源词才不会写成
+    // 「重试」；本版不认识的值宁可丢掉（行首落「未记录」或「定时」的既有口径），不许原样冒充。
+    stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, runTrigger: 'auto-retry' }] } }))
+    const auto = await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(auto.state === 'available' && auto.result.editions[0]?.runTrigger).toBe('auto-retry')
+    stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, runTrigger: 'auto' }] } }))
+    const unknown = await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(unknown.state === 'available' && unknown.result.editions[0]?.runTrigger).toBeUndefined()
+
+    // 读者取消这一档必须能过线（`02` v2.176）：漏一个值会被解析成 `null`，整行直接消失——
+    // 看着像"不建行"，其实不是同一条规则，以后查不出来。
+    stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, languages: [{ locale: 'en-US', state: 'missing', reason: 'run-cancelled' }] }] } }))
+    const cancelled = await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(cancelled.state === 'available' && cancelled.result.editions[0]?.languages).toEqual([
+      { locale: 'en-US', state: 'missing', reason: 'run-cancelled' }
+    ])
+
     // A language list this build cannot read refuses the row with it: half a three-state is not shown.
     stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, languages: [{ locale: 'en-US', state: 'gone' }] }] } }))
     expect((await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')

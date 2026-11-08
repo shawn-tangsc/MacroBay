@@ -90,7 +90,10 @@ function harness(options: {
       if (options.throws) throw new Error('transport exploded')
       return options.result ?? { status: 'delivered', attemptId: 'attempt-1', errorCode: null }
     },
-    settings: { pushChannelId: async () => (options.channelId === undefined ? 'channel-a' : options.channelId) },
+    resolvePushChannel: async () =>
+      options.channelId === null
+        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+        : { ok: true as const, channelId: options.channelId ?? 'channel-a', channelName: 'Telegram · test' },
     ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics })
   }
   return { push: createChannelPushPort(deps), requests }
@@ -250,7 +253,7 @@ describe('channelPushPort', () => {
   })
 
   it('sends the first of two external links and leaves a trace, instead of silently picking one', async () => {
-    const events: { code: string; detail: { recordId: string; count: number } }[] = []
+    const events: { code: string; detail: { recordId?: string; count: number } }[] = []
     const { push, requests } = harness({ diagnostics: (code, detail) => { events.push({ code, detail }) } })
     const twoLinks = {
       ...RECORD,

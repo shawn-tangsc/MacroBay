@@ -1,10 +1,13 @@
 import { useRef, useState } from 'react'
 
+import { Tooltip } from '@platform/ui/components/tooltip'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import {
   dashboardPositioningPresentationPolicy,
+  formatDashboardChange,
   formatDashboardNotional,
   type DashboardPositioningPoint,
   type DashboardPositioningViewState
@@ -14,6 +17,8 @@ import { axisTicks } from './positioningAxisTicks'
 import type { PositioningPanelText } from './positioningText'
 
 const VIEW = Object.freeze({ width: 1000, height: 186, left: 32, right: 992, markerTop: 3, markerRow: 16, upperTop: 26, upperBottom: 92, zero: 142 })
+/** 标记牌：13 高、贴图上方那条带里，下缘正好是 `markerRow`——竖线从牌子底下开始，不穿牌。 */
+const MARKER_CHIP = Object.freeze({ height: 13, baseline: 12, radius: 4, gap: 6 })
 
 export function PositioningChart({ positioning, funding, text }: Readonly<{
   positioning: Extract<DashboardPositioningViewState, { state: 'available' }>
@@ -23,6 +28,7 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
   const ref = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<Readonly<{ index: number; left: number; top: number; width: number; height: number }> | undefined>(undefined)
   const formatTime = useShellTimeFormat()
+  const resolveProductKey = useProductTextKey()
 
   const rows = positioning.btc.length >= positioning.eth.length ? positioning.btc : positioning.eth
   const count = rows.length
@@ -107,21 +113,98 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     })
   }
 
-  // The chart marks the one reading the card's rule reported, pinned to its own bucket. The mark
-  // is a dot and a rule only: the words live on the chip, once, in the header.
-  const signalMark = positioning.signal
-  const marker = signalMark.state === 'alert'
-    ? (() => {
-        const markMs = Date.parse(signalMark.observedAt)
-        if (!(markMs >= startMs && markMs <= endMs)) return undefined
-        const point = positioning[signalMark.asset].find(entry => entry.observedAt === signalMark.observedAt)
-        return {
-          x: x(markMs),
-          y: point ? upperY(point.notionalUsd, signalMark.asset === 'btc' ? btcScale : ethScale) : VIEW.upperBottom,
-          asset: signalMark.asset
-        }
-      })()
-    : undefined
+  // 点上画**当前窗口内的全部命中**（账本），每格一个：点与牌子同源、与通知不同源。
+  // 7 天视图就画 7 天内所有命中，不再固定只画「现在那一条」——那条只在 24 小时视图下才等于全部。
+  const marks = positioning.hints
+    .map(hint => {
+      const markMs = Date.parse(hint.observedAt)
+      if (!(markMs >= startMs && markMs <= endMs)) return undefined
+      return {
+        key: `${hint.asset}-${hint.observedAt}`,
+        asset: hint.asset,
+        direction: hint.direction,
+        x: x(markMs),
+        y: upperY(hint.notionalUsd, hint.asset === 'btc' ? btcScale : ethScale),
+        pct: formatDashboardChange(hint.pricePct ?? hint.dropPct),
+        volumeMultiple: hint.volumeMultiple
+      }
+    })
+    .filter((entry): entry is {
+      key: string; asset: 'btc' | 'eth'; direction: 'long' | 'short'; x: number; y: number; pct: string; volumeMultiple: number
+    } => entry !== undefined)
+    .sort((left, right) => left.x - right.x)
+
+  type Mark = (typeof marks)[number]
+  type Cluster = Readonly<{
+    key: string
+    marks: readonly Mark[]
+    asset: 'btc' | 'eth'
+    direction: 'long' | 'short' | 'mixed'
+    label: string
+    summary: string
+    left: number
+    width: number
+  }>
+
+  /** 簇的话：一条说方向 + 价格变化；同向 ≥2 说 ×N；混向不写方向。 */
+  const clusterLabel = (cluster: readonly Mark[]): string => {
+    if (cluster.length === 1) {
+      const only = cluster[0]!
+      return (only.direction === 'long' ? text.markLong : text.markShort).replace('{pct}', only.pct)
+    }
+    const sameDirection = cluster.every(mark => mark.direction === cluster[0]!.direction)
+    if (sameDirection) {
+      const template = cluster[0]!.direction === 'long' ? text.markLongMany : text.markShortMany
+      return template.replace('{count}', String(cluster.length))
+    }
+    return text.markMixedMany.replace('{count}', String(cluster.length))
+  }
+
+  const directionOf = (cluster: readonly Mark[]): 'long' | 'short' | 'mixed' =>
+    cluster.every(mark => mark.direction === cluster[0]!.direction) ? cluster[0]!.direction : 'mixed'
+
+  /**
+   * 从左到右贪心成簇（界面 2026-11-08）：取最左未分配者起一簇，牌以线居中、到边内收贴边；
+   * 若牌与上一张右缘不足 `MARKER_CHIP.gap`，就把下一条并进来重算文字再试——放得下就收簇。
+   * 线不动：并簇只改**文字与牌位**，每条命中仍留自己那根竖线。
+   */
+  const clusters: Cluster[] = []
+  let cursor = 0
+  while (cursor < marks.length) {
+    let members: Mark[] = [marks[cursor]!]
+    let label = clusterLabel(members)
+    let width = chipWidthFor(label)
+    const placement = (): number => {
+      const center = (members[0]!.x + members.at(-1)!.x) / 2
+      return Math.max(VIEW.left, Math.min(center - width / 2, VIEW.right - width))
+    }
+    let left = placement()
+    // 试放下一条：它自己那张牌若与**本簇**的牌右缘不足 6px，就并进来重算，再试下一条。
+    // 注意「并进本簇」不是「另起一簇再往左挤」——那会让两枚牌压在一起。
+    while (cursor + members.length < marks.length) {
+      const next = marks[cursor + members.length]!
+      const nextWidth = chipWidthFor(clusterLabel([next]))
+      const nextLeft = Math.max(VIEW.left, Math.min(next.x - nextWidth / 2, VIEW.right - nextWidth))
+      if (nextLeft >= left + width + MARKER_CHIP.gap) break
+      members = [...members, next]
+      label = clusterLabel(members)
+      width = chipWidthFor(label)
+      left = placement()
+    }
+    const direction = directionOf(members)
+    clusters.push({
+      key: members.map(mark => mark.key).join('+'),
+      marks: members,
+      asset: members[0]!.asset,
+      direction,
+      label,
+      // 浮层与牌同一句话，单个再加一句量；成簇时量各不相同，不编一个数出来。
+      summary: members.length === 1 ? `${label} · ${members[0]!.volumeMultiple.toFixed(1)}×` : label,
+      left,
+      width
+    })
+    cursor += members.length
+  }
 
   return (
     <div className="mi-positioning-panel__chart">
@@ -162,14 +245,27 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
               textAnchor={flip ? 'end' : 'start'}>{formatDashboardNotional(last.notionalUsd)}</text>
           )
         })}
-        {/* One mark per card, from the module rule's chip: the chart no longer draws the query's
-            hint list, because a chip and a dot describing the same reading must not disagree. */}
-        {marker ? (
-          <g className="mi-positioning-panel__hint" data-hint={marker.asset} data-signal-mark>
-            <line x1={marker.x} x2={marker.x} y1={VIEW.markerTop} y2={VIEW.height - 10} />
-            <circle cx={marker.x} cy={marker.y} r="3" />
-          </g>
-        ) : null}
+        {/* 一簇一组：线、点、牌在同一个组里，悬停/聚焦/点哪个都出同一份浮层。
+            **不存在只画线的命中**——每条线都在某个带牌的簇里。 */}
+        {clusters.map(cluster => (
+          <Tooltip key={cluster.key} dataText={cluster.summary} resolveText={resolveProductKey}>
+            <g className="mi-positioning-panel__hint" data-hint={cluster.asset} data-hint-direction={cluster.direction}
+              data-hint-count={cluster.marks.length} tabIndex={0} aria-label={cluster.summary}>
+              {cluster.marks.map(mark => (
+                <g key={mark.key}>
+                  <line x1={mark.x} x2={mark.x} y1={VIEW.markerRow} y2={VIEW.height - 10} />
+                  <circle cx={mark.x} cy={mark.y} r="3" />
+                </g>
+              ))}
+              <g className="mi-positioning-panel__hint-chip">
+                <rect x={cluster.left} y={VIEW.markerTop} width={cluster.width}
+                  height={MARKER_CHIP.height} rx={MARKER_CHIP.radius} />
+                <text x={cluster.left + cluster.width / 2} y={VIEW.markerTop + MARKER_CHIP.baseline}
+                  textAnchor="middle">{cluster.label}</text>
+              </g>
+            </g>
+          </Tooltip>
+        ))}
         {hovered && hover ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover.index)} x2={xAt(hover.index)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
         {axisTicks(startMs, span, count).map(tick => (
           <text key={tick.at} x={x(tick.at)} y={VIEW.height - 1}
@@ -222,7 +318,7 @@ function tooltipStyle(hover: Readonly<{ left: number; top: number; width: number
   return { left, top }
 }
 
-/** Rough advance widths: a CJK glyph is about 9px at 8.5px, latin about 5.2px. */
+/** Rough advance widths at the 9px chart-label size: a CJK glyph ~9px, latin ~5.2px. */
 function chipWidthFor(label: string): number {
   let width = 0
   for (const character of label) width += /[\u3000-\u9fff]/.test(character) ? 9 : 5.2

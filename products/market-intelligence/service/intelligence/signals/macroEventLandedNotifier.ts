@@ -41,7 +41,7 @@ export type MacroEventLanding = Readonly<{
   consensus: string
   /** 缺前值是今天唯一会出现的缺值；缺就不传。 */
   previous?: string
-  comparison: 'above' | 'below'
+  comparison: 'above' | 'below' | 'matched'
   periodicity?: SurprisePeriodicity
 }>
 
@@ -76,7 +76,7 @@ export type LandingSelection = Readonly<{
    * 分两种：算不出偏差（缺预期、单位对不上），以及没过阈值（例行发布）。两种都不报，但**必须
    * 能被数出来**——否则「筛得对」和「读漏了」在日志里长得一模一样。
    */
-  suppressed: Readonly<{ notComparable: number; belowThreshold: number; missingTitle: number }>
+  suppressed: Readonly<{ notComparable: number; belowThreshold: number; missingTitle: number; importanceNotSelected: number }>
 }>
 
 /**
@@ -86,20 +86,36 @@ export type LandingSelection = Readonly<{
  * 过线；「到点」与「拿到了公布值」只是前置条件。身份取 `observationKey`——`eventKey` 是每批采集
  * 的 HMAC，每次刷新都会变，拿它做去重键等于每轮都当成一条新事件。
  */
+/**
+ * 「事件发生后也告诉我」那一行（配置页「日历事件 → 发生后」）：
+ * - `includeMatched: false`（默认）只报超出预期的发布，与既有 N5 行为一致；
+ * - `true` 时**符合预期也报**，但仍受 `importance` 约束——不加重要性约束的「符合也报」
+ *   等于把过阈值的闸整个拿掉，美国数据一天几十条会全到手机；
+ * - `importance` 缺省仍只推「高」。
+ */
+export type LandedReleaseFilter = Readonly<{
+  includeMatched?: boolean
+  importance?: readonly ('high' | 'medium' | 'low')[]
+}>
+
 export function selectLandedReleases(
   events: readonly MarketCalendarEvent[],
   asOf: string,
-  seen?: ReadonlySet<string>
+  seen?: ReadonlySet<string>,
+  filter?: LandedReleaseFilter
 ): LandingSelection {
   const asOfMs = Date.parse(asOf)
   if (!Number.isFinite(asOfMs)) {
-    return Object.freeze({ landings: [], suppressed: { notComparable: 0, belowThreshold: 0, missingTitle: 0 } })
+    return Object.freeze({ landings: [], suppressed: { notComparable: 0, belowThreshold: 0, missingTitle: 0, importanceNotSelected: 0 } })
   }
   const policy = providerReleaseSurprisePolicy
   const landings: MacroEventLanding[] = []
   let notComparable = 0
   let belowThreshold = 0
   let missingTitle = 0
+  let importanceNotSelected = 0
+  const importance = filter?.importance ?? [policy.qualifyingImportance]
+  const includeMatched = filter?.includeMatched === true
   for (const event of events) {
     if (event.providerActual === null) continue
     const releaseAt = typeof event.scheduledAt === 'string' ? event.scheduledAt : undefined
@@ -108,13 +124,15 @@ export function selectLandedReleases(
     if (asOfMs - releasedMs > macroEventLandedPolicy.freshnessMs) continue
     // The same three boundaries the analysis line uses; read from its policy, not retyped here.
     if (event.countryCode !== policy.qualifyingCountryCode) continue
-    if (event.importance !== policy.qualifyingImportance) continue
+    // 重要性按读者勾选的档位放行；缺省仍只推「高」。
+    if (!importance.includes(event.importance)) { importanceNotSelected += 1; continue }
     if (event.eventType !== policy.qualifyingEventFamily) continue
     // 指标名为空 → 标题会变成「美国  高于预期」：双空格、没有指标，比不发更糟。
     // 与「算不出偏差不报」同性质，所以算进 suppressed，而不是静默跳过。
     if (event.title.trim() === '') { missingTitle += 1; continue }
     const assessment = assessMarketCalendarSurprise(event.providerActual, event.consensus)
-    if (!exceedsSurpriseTrigger(assessment)) {
+    const matched = includeMatched && assessment.direction === 'inline'
+    if (!exceedsSurpriseTrigger(assessment) && !matched) {
       if (assessment.absoluteDifference === null) notComparable += 1
       else belowThreshold += 1
       continue
@@ -125,7 +143,7 @@ export function selectLandedReleases(
     const consensus = readDisplayValue(event.consensus)
     // 不可比的一对不会走到这里（`exceedsSurpriseTrigger` 已经判过）；再挡一次是为了类型与文本。
     if (actual === undefined || consensus === undefined) { notComparable += 1; continue }
-    const comparison = assessment.direction === 'miss' ? 'below' : 'above'
+    const comparison = assessment.direction === 'miss' ? 'below' : assessment.direction === 'inline' ? 'matched' : 'above'
     landings.push({
       eventId,
       releaseAt: releaseAt!,
@@ -143,7 +161,7 @@ export function selectLandedReleases(
   }
   return Object.freeze({
     landings: Object.freeze(landings),
-    suppressed: Object.freeze({ notComparable, belowThreshold, missingTitle })
+    suppressed: Object.freeze({ notComparable, belowThreshold, missingTitle, importanceNotSelected })
   })
 }
 

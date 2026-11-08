@@ -222,6 +222,22 @@ describe('Tooltip', () => {
     expect(bubble?.style.fontSize).toBe('12px')
   })
 
+  it('never swallows the pointer: the bubble passes clicks through to the control below', async () => {
+    const trigger = await mount()
+    await act(async () => {
+      trigger.focus()
+    })
+    await tooltipText(trigger)
+
+    // 读渲染值：容器与内容是两个节点，只给一个，另一个仍会接住点击。
+    const popup = document.querySelector<HTMLElement>('.ant-tooltip')
+    const bubble = document.querySelector<HTMLElement>('.ant-tooltip-inner')
+    expect(popup).not.toBeNull()
+    expect(bubble).not.toBeNull()
+    expect(popup?.style.pointerEvents).toBe('none')
+    expect(bubble?.style.pointerEvents).toBe('none')
+  })
+
   it('rejects placement at the call site too, not only in its own props', () => {
     // 两处都要管：组件 props 里出现 `placement` 是红，调用点把 `placement` 传给 `<Tooltip>` 也是红。
     const offenders: string[] = []

@@ -56,11 +56,45 @@ export type NotificationSubmitRejectionReason =
          * 一个是「刚说过，等一下再说」。
          */
         | 'minimum-gap-active'
+        /**
+         * `narrowedDisruptionLevels` 里出现**批准表没有批**的档位。
+         *
+         * 收窄只能**变少**，不能**变出**。「传了却发不出去」如果按「与批准求交」静默处理，
+         * 生产者会以为那一档发出去了——那正是今晚一直在清的静默失败。所以当场拒收，
+         * 与 `assertRequestedWithinApproved` 对「申请了未批准的档位」的处理保持一致。
+         */
+        | 'surface-not-approved'
+        /**
+         * 动作标签的引用指向**另一个产品**（契约 v2.58）：`labelRef.scope === 'product'` 时
+         * 它的 `productId` 必须等于这条事件的 `productId`。
+         *
+         * 单列一个码，是因为后果不是「少一句话」：A 产品的事件带上 B 产品的键，解析得出来
+         * 就会把 B 的文案贴在 A 的按钮上；解析不出来就是个没名字的按钮。两种都不许发生。
+         */
+        | 'action-label-wrong-scope'
+        /**
+         * 动作既没有 `labelRef` 也没有 `labelKey`：一个**没有名字**的按钮。
+         *
+         * 读者看到的是一个只有图标或空白的可点区域，却不知道点了会发生什么。宁可不落库。
+         */
+        | 'action-label-missing'
 
 /** 这一条提交被拒的回执：码给机器、句子给人（诊断与日志用，不进读者界面）。 */
 export type NotificationSubmitRejection = {
   kind: 'rejected'
   reason: NotificationSubmitRejectionReason
   message: string
+}
+
+/**
+ * 被拒留痕的级别：**按「谁的问题」分档，不按严重程度**（Chief 2026-11-08 定）。
+ *
+ * 读者侧的正常抑制——今天说满了（`daily-limit-reached`）、刚说过还在冷却（`minimum-gap-active`）——
+ * 是系统按读者自己声明的上限在正常工作，记 `info`；把它记成 `error` 会让真故障淹在狼来了里。
+ * 其余全部是**契约被写错**（未知事件、缺动作、成品不全、键或严重度非法……）正常永远不该出现，记 `error`。
+ * 缺省朝 `error` 倒：新增一个拒绝码忘了分档时宁可吵一次，也不要静默吞掉。
+ */
+export function rejectionTraceLevel(reason: NotificationSubmitRejectionReason): 'info' | 'error' {
+  return reason === 'daily-limit-reached' || reason === 'minimum-gap-active' ? 'info' : 'error'
 }
 

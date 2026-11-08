@@ -53,12 +53,12 @@ describe('ETF outflow signal notification', () => {
     expect(request!.rendered).toEqual({
       'zh-CN': {
         title: 'BTC ETF 连续净流出',
-        body: '净流出 1.5 亿美元，超过 1 亿美元的阈值',
+        body: '净流出 1.5 亿美元，超过 1 亿美元的阈值（截至 08-28 交易日）',
         reason: '规则命中，且读数达到这条规则的阈值。'
       },
       'en-US': {
         title: 'BTC ETF outflows',
-        body: '$150M net outflow, past the $100M threshold',
+        body: '$150M net outflow, past the $100M threshold (as of the 08-28 trading day)',
         reason: 'A rule matched and the reading reached its threshold.'
       }
     })
@@ -74,9 +74,9 @@ describe('ETF outflow signal notification', () => {
     const request = buildEtfOutflowSignalRequest(signal!)
     expect(request!.signalSeverity).toBe('high')
     expect(request!.rendered?.['zh-CN']!.title).toBe('BTC ETF 净流出加剧')
-    expect(request!.rendered?.['zh-CN']!.body).toBe('净流出 6 亿美元，是阈值的 6 倍')
+    expect(request!.rendered?.['zh-CN']!.body).toBe('净流出 6 亿美元，是阈值的 6 倍（截至 08-28 交易日）')
     expect(request!.rendered?.['en-US']!.title).toBe('BTC ETF outflows deepened')
-    expect(request!.rendered?.['en-US']!.body).toBe('$600M net outflow, 6× the threshold')
+    expect(request!.rendered?.['en-US']!.body).toBe('$600M net outflow, 6× the threshold (as of the 08-28 trading day)')
   })
 
   it('says nothing while the window is not complete: "not judged yet" is not an event', () => {

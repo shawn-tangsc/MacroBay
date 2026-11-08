@@ -51,7 +51,7 @@ describe('macro event landed threshold usage', () => {
     // A release 50% above consensus, so nothing but the shared decision can be keeping it quiet.
     trigger.mockReturnValue(false)
     expect(selectLandedReleases([event()], asOf).landings).toEqual([])
-    expect(selectLandedReleases([event()], asOf).suppressed).toEqual({ notComparable: 0, belowThreshold: 1, missingTitle: 0 })
+    expect(selectLandedReleases([event()], asOf).suppressed).toEqual({ notComparable: 0, belowThreshold: 1, missingTitle: 0, importanceNotSelected: 0 })
     expect(trigger).toHaveBeenCalled()
 
     // And the other direction: when the shared decision says yes, a release that landed exactly on

@@ -32,6 +32,37 @@ export const etfOutflowSignalPolicy = Object.freeze({
   highMultiple: 3
 } as const)
 
+/**
+ * 一个交易日要静置多久才算定稿。
+ *
+ * ETF 的日净流不是收盘那一刻就齐的：发行商在收盘后陆续补报，同一交易日的数字会在第二天
+ * 的数小时里继续变。11-05 那天早上读到 −$14M、四小时后变成 −$411.9M，就是补报还在进行。
+ * 拿没定稿的那天去判三日累计，规则会在盘中点一次火、定稿后再点一次，读者看到「同一件事、
+ * 数字从 3.7 亿跳到 7.7 亿」。所以判据是：**只判已经静置满一天的交易日**。
+ *
+ * 代价说清楚：一条当日流入的提醒会比数据到货晚。这是「数字必须是定稿值」的直接代价，
+ * 不折中——盘中报一次再改口，等于没有报。
+ *
+ * **为什么是 30 小时，不是 24**：美股收盘 21:00Z，发行商补报还会持续数小时；实测 11-05 的数
+ * 在 +28 小时仍在变（−$14M → −$411.9M）。24 小时已经实锤不够，30 小时 = 收盘后 9 小时余量。
+ * 起算点是**交易日 00:00Z**，不是收盘时刻——两者差 21 小时，会得到两个不同结果。
+ * 这是**代理判据**，不是发行商的定稿标记：满 30 小时仍可能变，所以判过之后若再变，
+ * 由刷新路径记一条 `MI_ETF_SETTLED_REVISION`（见 `etfSettledRevision`），不静默。
+ */
+export const etfOutflowSettlePolicy = Object.freeze({
+  settleMs: 30 * 60 * 60 * 1_000
+})
+
+/** 只留静置满 {@link etfOutflowSettlePolicy.settleMs} 的交易日；乱序或坏日期一律不判。 */
+export function settledEtfFlowRows(rows: EtfFlowRows, asOf: string): EtfFlowRows {
+  const asOfMs = Date.parse(asOf)
+  if (!Number.isFinite(asOfMs)) return []
+  return rows.filter(row => {
+    const dayMs = Date.parse(`${row.tradingDate}T00:00:00.000Z`)
+    return Number.isFinite(dayMs) && asOfMs - dayMs >= etfOutflowSettlePolicy.settleMs
+  })
+}
+
 export type EtfOutflowSignalInput = Readonly<{
   asset: 'btc' | 'eth'
   rows: EtfFlowRows
@@ -50,9 +81,11 @@ export type EtfOutflowSignalInput = Readonly<{
  * - a complete window that clears it → a `medium`/`high` signal.
  */
 export function buildEtfOutflowSignal(input: EtfOutflowSignalInput): ModuleSignal | undefined {
-  const windows = computeEtfCumulativeFlow(input.rows, [etfFlowPolicy.signalWindowDays])
+  // 先去掉还没定稿的那一天，再判三天：判的是流水，不是「到目前为止收到多少」。
+  const rows = settledEtfFlowRows(input.rows, input.asOf)
+  const windows = computeEtfCumulativeFlow(rows, [etfFlowPolicy.signalWindowDays])
   const window = windows?.find(candidate => candidate.windowDays === etfFlowPolicy.signalWindowDays)
-  const newest = newestByTradingDate(input.rows)
+  const newest = newestByTradingDate(rows)
   if (!window || !newest) return undefined
 
   const values = Object.freeze({

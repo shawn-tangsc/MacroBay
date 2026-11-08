@@ -21,6 +21,31 @@ import {
 } from './notificationStore'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 
+describe('rendered-only records survive a round trip (two-shape contract)', () => {
+  it('keeps a record that has rendered copy and no titleKey, through load -> persist -> load', () => {
+    // 真实事故：只认 `titleKey` 会把新形状（简报/分析结论/自检）整条丢掉，而丢弃结果还会被写回。
+    const withRendered = {
+      id: 'notification-1',
+      owner: 'product',
+      sourceId: 'market-intelligence.briefing.ready',
+      eventTypeId: 'market-intelligence.briefing.ready',
+      rendered: { 'zh-CN': { title: '标题', body: '正文', reason: '理由' }, 'en-US': { title: 'T', body: 'B', reason: 'R' } },
+      channels: ['center'],
+      state: 'unread',
+      delivery: {},
+      createdAt: '2026-11-07T23:01:00.000Z',
+      updatedAt: '2026-11-07T23:01:00.000Z',
+      occurrenceCount: 0,
+      severity: 'info',
+      priority: 'normal'
+    }
+    const once = normalizeNotificationStoreState({ records: [withRendered] })
+    expect(once.records).toHaveLength(1)
+    const twice = normalizeNotificationStoreState(JSON.parse(JSON.stringify(once)))
+    expect(twice.records).toHaveLength(1)
+  })
+})
+
 describe('notification store', () => {
   it('dedupes active notifications by dedupeKey and increments occurrence count', () => {
     resetNotificationIdCounterForTests()

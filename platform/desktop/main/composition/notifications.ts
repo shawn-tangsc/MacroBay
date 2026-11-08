@@ -4,14 +4,14 @@ import { notificationCopy } from '@platform/i18n/notificationCopy'
 import { createNotificationCopyPort, type JobTitleResolver } from '@platform/notifications/contracts/notificationCopyPort'
 import { productNotificationCopyTables } from './notificationCopyTables'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import type {
   NotificationDiagnosticsSink,
   NotificationRuntimeSettings
 } from '@platform/notifications/contracts/notificationContracts'
 import { configureNotificationRuntime } from '@platform/notifications/ipc/registerNotificationIpc'
 import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
+import { resolvePushChannel, type PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { createNotificationProducerOwnership } from '@platform/notifications/contracts/notificationProducerOwnership'
 import type { DeliveryHooks } from '@platform/notifications/runtime/notificationRouting'
 
@@ -34,8 +34,10 @@ export type NotificationCompositionPorts = Readonly<{
   manifests: readonly ProductManifest[]
   /** 写提示开关 / 通道选择；由 app.ts 接到设置 store。 */
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
-  /** 诊断出口（runtime §2）：装配层接到 AppLog，测试可给 recorder。 */
-  diagnostics?: NotificationDiagnosticsSink
+  /** 诊断出口（runtime §2）：**必传**，装配层接到 AppLog、测试给 recorder；缺了运行时一律编译不过。 */
+  diagnostics: NotificationDiagnosticsSink
+  /** 目标通道的唯一派生；App 组合根按通道投影注入，低层组合根由调用方给。 */
+  resolvePushChannel?: () => Promise<PushChannelResolution>
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
   /**
@@ -56,12 +58,17 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
   // 平台事件表 + 各产品 manifest 的声明：目录只接受注入，平台不认识产品代码（契约 §2/§3）。
   const catalog = createNotificationEventCatalog({
     sources: [
-      { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
+      // b1：平台事件也带自己的批准段（值逐字抄自平台表）；本步目录仍读表，行为不变。
+      { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
       ...ports.manifests
         .filter((manifest) => (manifest.notificationEvents?.length ?? 0) > 0)
-        .map((manifest) => ({ productId: manifest.id, events: manifest.notificationEvents ?? [] }))
-    ],
-    policy: NOTIFICATION_EVENT_POLICY
+        .map((manifest) => ({
+          productId: manifest.id,
+          events: manifest.notificationEvents ?? [],
+          // 批准值随声明走（契约 §7.1b）：迁移期与平台表并存，兜底仍在，行为不变。
+          ...(manifest.notificationApproval === undefined ? {} : { approval: manifest.notificationApproval })
+        }))
+    ]
   })
 
   const producerOwnership = createNotificationProducerOwnership({ manifests: ports.manifests })
@@ -82,9 +89,10 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
       ...(ports.jobTitle === undefined ? {} : { jobTitle: ports.jobTitle })
     }),
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
-    ...(ports.diagnostics === undefined ? {} : { diagnostics: ports.diagnostics }),
+    diagnostics: ports.diagnostics,
     ...(ports.push === undefined ? {} : { push: ports.push }),
-    ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets })
+    ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
+    ...(ports.resolvePushChannel === undefined ? {} : { resolvePushChannel: ports.resolvePushChannel }),
   })
 }
 
@@ -94,7 +102,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
  *
  * 适配器放这里而不是 app.ts：`app.ts` 是「只减不增」的基线文件，每加一行都要先抽离。
  */
-export type AppNotificationCompositionPorts = NotificationCompositionPorts & {
+export type AppNotificationCompositionPorts = Omit<NotificationCompositionPorts, 'diagnostics' | 'resolvePushChannel'> & {
   /** 通道侧的只读投影 + 投递入口；只有 app 组合根有这两样。 */
   channels: ChannelPushPortDeps['channels']
   deliver: ChannelPushPortDeps['deliver']
@@ -107,16 +115,47 @@ export type AppNotificationCompositionPorts = NotificationCompositionPorts & {
   }
 }
 
+/**
+ * 表面选择写失败时留一行痕（契约 §5.5），其余设置失败照旧往上抛。
+ *
+ * 为什么单独包一层：读者点了勾、页面弹回原样、一声不响——那正是「点了没反应」，而这一格
+ * 以前就是静默的。日志**只打组键与原因**：`surfaceSelections` 是读者自己的配置，整份打出来
+ * 等于把它抄进日志。错误照旧抛回去，页面才能当场说「这次没存上」。
+ */
+export function withSurfaceSaveDiagnostics(input: {
+  update: (patch: Partial<NotificationRuntimeSettings>) => Promise<unknown>
+  log: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+}): (patch: Partial<NotificationRuntimeSettings>) => Promise<void> {
+  return async (patch) => {
+    try {
+      await input.update(patch)
+    } catch (error) {
+      if (patch.surfaceSelections !== undefined) {
+        input.log('warn', 'notification.surface-selection-save-failed', {
+          key: Object.keys(patch.surfaceSelections)[0] ?? null,
+          reason: error instanceof Error ? error.message : String(error)
+        })
+      }
+      throw error
+    }
+  }
+}
+
 export function composeNotificationRuntimeForApp(ports: AppNotificationCompositionPorts): void {
+  /**
+   * 目标通道的唯一派生（技术方案 §1）：三处（主推送 / 严重度升级 / 手动重投）都读这一个函数，
+   * 因此「读者启用了两条」这件事在三条路上同时成立，不会主路径拒绝、升级路径照发。
+   */
+  const pushTarget = async () => resolvePushChannel(ports.channels.list(), (code, count) => {
+    ports.log.log('warn', code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${code}`, { count })
+  })
   const push = createChannelPushPort({
     channels: ports.channels,
     deliver: ports.deliver,
-    settings: {
-      pushChannelId: async () => (await ports.settingsStore.get()).notifications.push.channelId
-    },
+    resolvePushChannel: pushTarget,
     // 至多一个「看原文」；多出来的取第一个照发，但留一行痕——静默取第一个等于让写错的人永远不知道。
     diagnostics: (code, detail) => {
-      ports.log.log('warn', `notification.${code}`, { ...detail })
+      ports.log.log('warn', code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${code}`, { ...detail })
     }
   })
   composeNotificationRuntime({
@@ -124,14 +163,33 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     timeZone: ports.timeZone,
     manifests: ports.manifests,
     push,
+    resolvePushChannel: pushTarget,
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
-    updateSettings: async (patch) => {
-      const current = await ports.settingsStore.get()
-      await ports.settingsStore.update({ notifications: { ...current.notifications, ...patch } })
-    },
+    updateSettings: withSurfaceSaveDiagnostics({
+      update: async (patch) => {
+        const current = await ports.settingsStore.get()
+        await ports.settingsStore.update({ notifications: { ...current.notifications, ...patch } })
+      },
+      log: (level, event, fields) => ports.log.log(level, event, fields)
+    }),
     diagnostics: (entry) => {
-      const level = entry.code === 'delegated' ? 'info' : entry.code === 'persist-failed' ? 'error' : 'warn'
-      ports.log.log(level, `notification.${entry.code}`, {
+      // `unclaimed-producer` 记 `info`，不是 `warn`（2026-11-07 定）。
+      //
+      // 它是「首次见到这个未声明生产者」的一次性提示，不是故障：平台照发（门禁在记完之后
+      // `return { action: 'send' }`），S10② 要求的正是这行可查。而它按**作业 handler** 计——
+      // 实测 5 天 204 条，全在 `platform.job.failed-terminal` 上（某个每 10 分钟跑一次的采集
+      // 作业这类），每次启动每个 handler 一条。记成 warn 的代价不是「多了几行」，是**真的故障混在里面
+      // 没人再看**。也不能靠给这些 handler 补 claim 消掉：claim 会让平台事件被让渡，P1/P2 就没人发了。
+      // 提交被拒自带档位（`rejectionTraceLevel` 一处定义：代码错 `error`、正常抑制 `info`），
+      // 这里只透传——档位规则不在这层重建第二份。
+      const level =
+        entry.level ??
+        (entry.code === 'delegated' || entry.code === 'unclaimed-producer'
+          ? 'info'
+          : entry.code === 'persist-failed' ? 'error' : 'warn')
+      const event = entry.code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${entry.code}`
+      ports.log.log(level, event, {
+        ...(entry.count === undefined ? {} : { count: entry.count }),
         eventTypeId: entry.eventTypeId,
         producerId: entry.producerId,
         at: entry.at

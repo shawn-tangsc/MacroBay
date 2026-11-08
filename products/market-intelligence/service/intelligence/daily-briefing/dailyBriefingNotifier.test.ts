@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
 
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
@@ -40,10 +39,10 @@ function createRuntime(subscriptions: Record<string, unknown> = {}) {
   const runtime = createNotificationRuntime({
     storage,
     catalog: createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
+      // 断的是产品的批准值 → 读产品自己的签署文件（平台侧只给自己的）。
       sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
       ]
     }),
     diagnostics: () => undefined,
@@ -67,8 +66,7 @@ describe('daily briefing notifier', () => {
     })
 
     const catalog = createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
-      sources: [{ productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }]
+      sources: [{ productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }]
     })
     expect(catalog.has(READY_EVENT_ID)).toBe(true)
     expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).toContain('center')
@@ -140,7 +138,12 @@ describe('daily briefing notifier', () => {
       expect(request).not.toHaveProperty('dedupeKey')
       expect(request.actions).toEqual([
         expect.objectContaining({
-          labelKey: 'notification.action.open-briefing',
+          // 产品动作的标签是**引用**（v2.58）：读取时按当前语言解析，切语言历史记录跟着变。
+          labelRef: {
+            scope: 'product',
+            productId: 'market-intelligence',
+            key: 'notification.action.market-intelligence.open-briefing'
+          },
           kind: 'open',
           // 动作与整行都指向日报页：壳层按 pageId 解析，产品不自己拼路由。
           deeplink: { scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' }

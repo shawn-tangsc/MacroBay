@@ -4,6 +4,7 @@ import {
   claimProblems,
   claimedCommits,
   COMPONENTS_DIR,
+  dropMergedCommits,
   RULES_SINCE,
   declaresComponentOwner,
   findViolations,
@@ -177,7 +178,9 @@ describe('components ownership guard', () => {
       }
     ]
 
-    expect(findViolations(commits, new Set(['old']))).toEqual([])
+    // 第二个参数曾经是「已被认领的哈希集合」，改成对象选项后这一行留了下来：
+    // `old` 本来就因生效点被豁免，`new` 只有组件 + 组件自己的文档，所以这里不需要任何选项。
+    expect(findViolations(commits)).toEqual([])
 
     // 反过来：同一笔若带上契约文件却不肯写理由，就必须红（文档豁免不等于全豁免）。
     const withContract = [
@@ -400,5 +403,27 @@ describe('components ownership guard', () => {
       files: ['scripts/x.ts']
     })
     expect(claimProblems([target, claim('c4c4c4c'), claim('c5c5c5c')]).join('\n')).toContain('被两家认领')
+  })
+})
+
+describe('已合并进 origin/main 的提交不再判', () => {
+  const componentCommit = (hash: string) => ({
+    hash,
+    subject: 'squash merge of the 0.4.0 line',
+    message: 'feat: the whole 0.4.0 line, squashed',
+    authorDate: AFTER,
+    // squash 合并里组件改动是真的，逐笔 trailer 结构上留不下来。
+    files: [`${COMPONENTS_DIR}/popover/popover.tsx`, 'products/market-intelligence/service/x.ts']
+  })
+
+  it('skips a commit that is on origin/main, and still flags the same commit when it is not', () => {
+    const commit = componentCommit('a1a1a1a')
+    // ① 在 main 上 → 不报：判它只能判出「合并方式造成的声明丢失」。
+    expect(findViolations(dropMergedCommits([commit], () => true))).toEqual([])
+    // ② 同样的提交不在 main 上 → 必须照旧报，拦截能力不许因为这条豁免而丢掉。
+    expect(findViolations(dropMergedCommits([commit], () => false))).toHaveLength(1)
+    // ③ 假谓词只按哈希判：另一笔不受牵连。
+    const other = componentCommit('b2b2b2b')
+    expect(dropMergedCommits([commit, other], (hash) => hash === 'a1a1a1a')).toHaveLength(1)
   })
 })

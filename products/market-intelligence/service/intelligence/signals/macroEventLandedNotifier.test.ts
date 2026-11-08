@@ -98,7 +98,8 @@ describe('macro event landed notifier', () => {
     expect(selection.landings).toEqual([landing()])
     // The two that were dropped for a reason worth counting are counted: "signed filter kept" and
     // "we read nothing" must not look the same in a log.
-    expect(selection.suppressed).toEqual({ notComparable: 1, belowThreshold: 1, missingTitle: 0 })
+    // 低重要性那条现在**有名字地**被数出来（以前是静默跳过）：重要性的筛选也是「筛得对」的一部分。
+    expect(selection.suppressed).toEqual({ notComparable: 1, belowThreshold: 1, missingTitle: 0, importanceNotSelected: 1 })
     // A release this process already announced is not announced again, even though the key would merge.
     expect(selectLandedReleases([event()], asOf, new Set(['US.CPI.RELEASE.2026-M08:2026-09-10T10:00:00.000Z'])).landings).toEqual([])
     // `eventKey` is a per-batch HMAC: two collections of one release carry different ones, so identity
@@ -106,11 +107,32 @@ describe('macro event landed notifier', () => {
     expect(selectLandedReleases([event({ eventKey: 'another-hmac' })], asOf).landings).toEqual([landing()])
   })
 
+  it('reports a matched release only when the reader asked for it, and still honours importance', () => {
+    // 它是一条**符合预期**、重要性为高的发布：默认（只推出乎意料的）不推；勾了「符合预期也推」才推。
+    const matched = event({ providerActual: { displayValue: '2' }, consensus: { displayValue: '2' } })
+    expect(selectLandedReleases([matched], asOf).landings).toHaveLength(0)
+    expect(selectLandedReleases([matched], asOf, undefined, { includeMatched: true }).landings).toHaveLength(1)
+    // 成对的反向用例：放宽了「符合预期」，**重要性约束没有跟着放宽**。
+    const lowMatched = event({
+      eventKey: 'low-matched',
+      observationKey: 'US.CPI.RELEASE.low',
+      importance: 'low',
+      providerActual: { displayValue: '2' },
+      consensus: { displayValue: '2' }
+    })
+    const strict = selectLandedReleases([lowMatched], asOf, undefined, { includeMatched: true })
+    expect(strict.landings).toHaveLength(0)
+    expect(strict.suppressed.importanceNotSelected).toBe(1)
+    // 勾了「低」才放行。
+    expect(selectLandedReleases([lowMatched], asOf, undefined, { includeMatched: true, importance: ['low'] }).landings)
+      .toHaveLength(1)
+  })
+
   it('refuses to announce a release with no indicator name, and counts it', () => {
     // 空标题会拼出「美国  高于预期」：双空格、没有指标，比不发更糟。纯空格走同一条路。
     const empty = selectLandedReleases([event({ title: '' })], asOf)
     expect(empty.landings).toHaveLength(0)
-    expect(empty.suppressed).toEqual({ notComparable: 0, belowThreshold: 0, missingTitle: 1 })
+    expect(empty.suppressed).toEqual({ notComparable: 0, belowThreshold: 0, missingTitle: 1, importanceNotSelected: 0 })
     const blank = selectLandedReleases([event({ title: '   ' })], asOf)
     expect(blank.landings).toHaveLength(0)
     expect(blank.suppressed.missingTitle).toBe(1)

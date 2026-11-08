@@ -69,6 +69,29 @@ export function registerIntelligenceJobs(
       sourceId: input.sourceId,
       runId: input.runId ?? context.jobRunId
     })
+    // 一次采集必须留下可查的数字（用户 2026-11-07）：以前这里什么都不记，于是
+    // 「今天真的没有新文章」与「抓到了但一条没写进去」在运行记录里长得一模一样。
+    //
+    // 平台的运行结论只收四个计数（总数 = 成功 + 失败 + 跳过），所以按语义映射：
+    //   总数 = 解析出的条目、成功 = 真正新增、跳过 = 被去重挡住；没采成时`失败 = 1` + 原因码。
+    // 这样「成功但 0 条新」是 `{total:25, succeeded:0, skipped:25}`、
+    // 「抓不到」是 `{total:0, failed:1, reasonCode:'collect.failed'}`——必然长得不一样。
+    const { counts } = result
+    await context.log({
+      level: result.reasonCode === undefined ? 'info' : 'warn',
+      message: `Collected ${input.sourceId}: ${counts.httpCalls} request(s), ${counts.fetchedBytes} byte(s), `
+        + `${counts.parsed} parsed, ${counts.appended} new, ${counts.duplicates} duplicate`
+        + (result.reasonCode === undefined ? '.' : `; ${result.reasonCode}: ${result.reason ?? ''}`)
+    })
+    // 抓住了正文却一条都没解析出来：对 RSS 这类源来说这不是「今天很安静」，是源坏了。
+    const empty = result.reasonCode === undefined && counts.httpCalls > 0 && counts.parsed === 0
+    const reasonCode = result.reasonCode ?? (empty ? 'collect.empty' : undefined)
+    await context.result?.({
+      counts: reasonCode === undefined
+        ? { total: counts.parsed, succeeded: counts.appended, failed: 0, skipped: counts.duplicates }
+        : { total: 0, succeeded: 0, failed: 1, skipped: 0 },
+      ...(reasonCode === undefined ? {} : { reasonCode })
+    })
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
       sourceId: input.sourceId
     })

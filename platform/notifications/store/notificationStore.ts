@@ -61,10 +61,18 @@ export function resetNotificationIdCounterForTests(): void {
   idCounter = 0
 }
 
+/**
+ * 丢弃原因（加载期）。必须可观测：静默丢记录会出现「计数器说有 13 条、库里 4 条，没人知道为什么」。
+ */
+export type NotificationRecordDropReason = 'not-an-object' | 'missing-id' | 'missing-source' | 'missing-copy'
+
 export function normalizeNotificationRecord(value: unknown): NotificationRecord | null {
   if (!value || typeof value !== 'object') return null
   const candidate = value as Partial<NotificationRecord>
-  if (!candidate.id || !candidate.sourceId || !candidate.titleKey) return null
+  // **`titleKey` 或 `rendered` 至少有一个就算有正文来源**（契约的双形状）：只认 `titleKey` 会把
+  // 新形状（简报/分析结论/自检只给成品句）整条丢掉——丢完还会被持久化回去，等于永久删除。
+  const hasCopy = (typeof candidate.titleKey === 'string' && candidate.titleKey.length > 0) || candidate.rendered !== undefined
+  if (!candidate.id || !candidate.sourceId || !hasCopy) return null
 
   return {
     id: String(candidate.id),
@@ -113,6 +121,28 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
     snoozedUntil: candidate.snoozedUntil ? String(candidate.snoozedUntil) : undefined,
     expiresAt: candidate.expiresAt ? String(candidate.expiresAt) : undefined
   }
+}
+
+/** 逐条归一化并**报告丢弃**：条数与原因分类，供加载路径留痕。 */
+export function normalizeNotificationRecordsWithReport(value: unknown): {
+  records: NotificationRecord[]
+  dropped: readonly NotificationRecordDropReason[]
+} {
+  if (!Array.isArray(value)) return { records: [], dropped: [] }
+  const records: NotificationRecord[] = []
+  const dropped: NotificationRecordDropReason[] = []
+  for (const raw of value) {
+    const normalized = normalizeNotificationRecord(raw)
+    if (normalized !== null) { records.push(normalized); continue }
+    dropped.push(
+      raw === null || typeof raw !== 'object'
+        ? 'not-an-object'
+        : !(raw as Partial<NotificationRecord>).id
+          ? 'missing-id'
+          : !(raw as Partial<NotificationRecord>).sourceId ? 'missing-source' : 'missing-copy'
+    )
+  }
+  return { records, dropped }
 }
 
 export function normalizeNotificationStoreState(value: unknown): NotificationStoreState {

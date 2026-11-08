@@ -1,13 +1,13 @@
 /**
  * 平台事件声明表（契约 §2）：平台自己产生的 13 条通知事件（P8 于 2026-11-04 新增；P9–P12 于 2026-11-06 签）。
  *
- * 与产品 manifest 里的声明**同形**，只是声明者固定为 `platform`；批准值不在这里——
- * 生效表面只读 `notificationEventPolicy.ts` 的批准表（契约 §4：「生效值只读批准表」）。
+ * 与产品 manifest 里的声明**同形**，只是声明者固定为 `platform`；批准值在同文件的
+ * `PLATFORM_NOTIFICATION_APPROVALS` 里——批准随声明走，装配时与各产品那份合成批准视图。
  *
  * 键名由事件 id 机械生成（`notificationEventTitleKey` / `notificationEventReasonKey`），
  * 句子归文案表；这里一条句子都不写，免得两处都能改。
  */
-import type { NotificationEventDeclaration } from './notificationEventCatalog'
+import type { NotificationEventDeclaration, NotificationEventPolicyEntry } from './notificationEventCatalog'
 
 /** 标题键：`notification.event.<event id>.title`。同一处生成，调用点不手拼。 */
 export function notificationEventTitleKey(eventTypeId: string): string {
@@ -55,12 +55,23 @@ function declaration(
 }
 
 export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration[] = Object.freeze([
+  // 平台自己的「通知链路自检」：不借任何产品事件当载体，否则中心里会显示成那件事的名字
+  // （用户 2026-11-08：平台侧不许出现产品业务概念）。正文由调用点给成品句（【测试】标记）。
+  declaration('platform.notification.self-test', {
+    category: 'reminder',
+    requiresUserAction: false,
+    // 诊断事件：读者亲手点的那一下，是「已批的免打扰穿透」唯一的代码依据。
+    diagnostic: true,
+    requestedDisruptionLevels: ['channel'],
+    dedupeKeyTemplate: 'self-test:{date}:{seq}',
+    dedupeUnit: 'occurrence'
+  }),
   // P1 任务跑到终态仍失败：同一任务同一天一条、次数累加（`condition` + 24h 窗，跨天重算）。
   declaration('platform.job.failed-terminal', {
     category: 'failure',
     requiresUserAction: true,
     requestedDisruptionLevels: ['toast', 'desktop'],
-    dedupeKeyTemplate: 'job-failed:{definitionId}:{date}',
+    dedupeKeyTemplate: 'job-failed:{jobKey}:{date}',
     dedupeUnit: 'condition',
     conditionWindowMs: 86_400_000
   }),
@@ -69,7 +80,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     category: 'needs-action',
     requiresUserAction: true,
     requestedDisruptionLevels: ['desktop'],
-    dedupeKeyTemplate: 'job-repeated:{definitionId}:{date}',
+    dedupeKeyTemplate: 'job-repeated:{jobKey}:{date}',
     dedupeUnit: 'occurrence'
   }),
   // P3 分析额度用尽：同一天只发一次，不随每次被拒重复。
@@ -183,3 +194,27 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     dailyLimit: 2
   })
 ])
+
+/**
+ * 平台事件的**批准值**，随声明走（契约 §7.1b 的 b1：纯加法）。
+ *
+ * 值从平台批准表**逐字抄**——谁签的还是谁签，这里只把它放到「声明这一侧」。本步目录仍读表，
+ * 行为零变化；b2 才换源、b3 才删表。签名侧的规范化要求 `surfaceGroup` 显式（缺 ≠ null），
+ * 那一步在签署入口补齐；这里的形状与产品批准文件一致：没有组就不写这个键。
+ */
+export const PLATFORM_NOTIFICATION_APPROVALS: Readonly<Record<string, NotificationEventPolicyEntry>> = Object.freeze({
+  'platform.job.failed-terminal': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.job.repeated-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.quota-exhausted': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.provider.credential-invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.provider.credential-recovered': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.channel.push-resumed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.notification.self-test': { approvedDisruptionLevels: ['center', 'toast', 'desktop', 'channel'], approvedBypassQuietHours: true },
+  'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false },
+  'platform.channel.connection-lost': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.manual-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.repeated-failure': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.attempt-abandoned': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.recovered': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false }
+})

@@ -6,6 +6,7 @@ import { sentimentAlertTemplates } from '../../../../contracts/sentimentAlertSen
 import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
+  OPEN_BRIEFING_ACTION_KEY,
   notificationEventBodyKey,
   notificationEventNamedKey,
   notificationEventHeadlineKey,
@@ -36,6 +37,8 @@ const REASON = notificationEventReasonKey
 export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationCopy = Object.freeze({
   'zh-CN': Object.freeze({
     [TITLE(IDS.briefingFailed)]: '日报没生成出来',
+    // 产品动作的标签（v2.58）：与正文同一条解析链路。句子与搬家前逐字相同。
+    [OPEN_BRIEFING_ACTION_KEY]: '打开日报',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '{date} {time} {language}这一期没有生成出来。',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了，但解读没出来。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
@@ -48,23 +51,40 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: zh.signal.headline.oiDrop,
     [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: zh.signal.headline.etfOutflowAggravated,
     [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: zh.signal.headline.oiDropAggravated,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiLong')]: zh.signal.headline.oiLong,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiLongAggravated')]: zh.signal.headline.oiLongAggravated,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiShort')]: zh.signal.headline.oiShort,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiShortAggravated')]: zh.signal.headline.oiShortAggravated,
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: zh.signal.body.etfOutflow,
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: zh.signal.body.etfOutflowAggravated,
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: zh.signal.body.oiDrop,
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: zh.signal.body.oiDropAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiLong')]: zh.signal.body.oiLong,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiLongAggravated')]: zh.signal.body.oiLongAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiShort')]: zh.signal.body.oiShort,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiShortAggravated')]: zh.signal.body.oiShortAggravated,
     [REASON(IDS.signalTriggered)]: zh.signal.reason,
 
     // 与源头拼成品**共用同一份字符串**（`contracts/macroEventNotificationSentences.ts`）；
     // 这几条只服务已落库的旧记录——新记录存的是成品，平台不再读这张表。
     // N10 舆情：标题【强度】+ 原文标题、正文来源、理由是一句事实（不含任何动作指令）。
+    // 日历事件的开始前提醒：实际发出的句子在源头按「哪一条事件 + 读者时区的时刻 +
+    // 还剩多少分钟」拼好（`renderCalendarReminderSentence`），这里必须也有三格——声明指着的
+    // 键一旦空缺，界面上印的就是键名，而且不会报错。三句都不含动作指令（手机推送不许带）。
+    [TITLE(IDS.calendarEventUpcoming)]: '日历事件即将开始',
+    [BODY(IDS.calendarEventUpcoming)]: '按你设定的提前量提醒：有一条日历事件快开始了。',
+    [REASON(IDS.calendarEventUpcoming)]: '你打开了日历事件的开始前提醒。',
+
     [TITLE(IDS.sentimentAlert)]: zh.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: zh.alert.bodyWithSource,
     [REASON(IDS.sentimentAlert)]: zh.alert.reason,
     [notificationEventNamedKey(IDS.sentimentAlert, 'strength.high')]: zh.alert.strength.high,
     [notificationEventNamedKey(IDS.sentimentAlert, 'strength.medium')]: zh.alert.strength.medium,
+    [notificationEventNamedKey(IDS.sentimentAlert, 'strength.low')]: zh.alert.strength.low,
     [TITLE(IDS.macroEventLanded)]: zh.macro.title,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: zh.macro.direction.above,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: zh.macro.direction.below,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.matched')]: zh.macro.direction.matched,
     // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
     ...Object.fromEntries(
       Object.entries(indicatorNames).map(([id, name]) => [
@@ -77,6 +97,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: zh.macro.body.values,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: zh.macro.body.noPrevious,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: zh.macro.body.noForecast,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'matched')]: zh.macro.body.matched,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: zh.macro.periodicity.yoy,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: zh.macro.periodicity.mom,
     [REASON(IDS.macroEventLanded)]: zh.macro.reason,
@@ -85,13 +106,18 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceConsecutiveFailed)]: '这个来源一直取不到数据，去设置检查密钥或代理。',
     [REASON(IDS.sourceConsecutiveFailed)]: '同一个来源连续三次失败，提醒一次。',
 
-    [TITLE(IDS.sourceStale)]: '{sourceName} 很久没有新数据',
-    [BODY(IDS.sourceStale)]: '超过这个来源的新鲜度窗口仍没有新数据，去设置检查。',
-    [REASON(IDS.sourceStale)]: '最后一次成功采集在窗口之前。',
+    [TITLE(IDS.sourceStale)]: '{sourceName} 这段时间没有新内容',
+    [BODY(IDS.sourceStale)]: '这个源在它的静默窗口内没有带来新条目。去设置里检查它的开关和连接。',
+    [REASON(IDS.sourceStale)]: '最后一条新内容出现在这个窗口之前，之后的采集都没有带来新条目。',
 
     [TITLE(IDS.briefingReady)]: '日报已完成',
     [BODY(IDS.briefingReady)]: '{date} {time} {language}这一期已经生成。',
     [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
+
+    // N12：信号唤起的那次分析出结论。正文由源头拼成品（结论一句 + 半句理由），这张表只是旧记录的回退句。
+    [TITLE(IDS.analysisConclusion)]: '分析结论',
+    [BODY(IDS.analysisConclusion)]: '这次分析的结论已经出来了。',
+    [REASON(IDS.analysisConclusion)]: '你订阅了信号触发的分析结论提醒。',
 
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
     [BODY(IDS.timezoneInvalid)]: '去设置里改成有效的时区，日报会恢复自动生成。',
@@ -99,6 +125,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
   }),
   'en-US': Object.freeze({
     [TITLE(IDS.briefingFailed)]: 'The daily briefing did not generate',
+    [OPEN_BRIEFING_ACTION_KEY]: 'Open briefing',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'The {date} {time} {language} edition failed to generate.',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
@@ -108,20 +135,34 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: en.signal.headline.oiDrop,
     [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: en.signal.headline.etfOutflowAggravated,
     [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: en.signal.headline.oiDropAggravated,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiLong')]: en.signal.headline.oiLong,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiLongAggravated')]: en.signal.headline.oiLongAggravated,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiShort')]: en.signal.headline.oiShort,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiShortAggravated')]: en.signal.headline.oiShortAggravated,
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: en.signal.body.etfOutflow,
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: en.signal.body.etfOutflowAggravated,
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: en.signal.body.oiDrop,
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: en.signal.body.oiDropAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiLong')]: en.signal.body.oiLong,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiLongAggravated')]: en.signal.body.oiLongAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiShort')]: en.signal.body.oiShort,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiShortAggravated')]: en.signal.body.oiShortAggravated,
     [REASON(IDS.signalTriggered)]: en.signal.reason,
+
+    [TITLE(IDS.calendarEventUpcoming)]: 'A calendar event starts soon',
+    [BODY(IDS.calendarEventUpcoming)]: 'A reminder at the lead time you set: a calendar event is about to start.',
+    [REASON(IDS.calendarEventUpcoming)]: 'You turned on the reminder before calendar events start.',
 
     [TITLE(IDS.sentimentAlert)]: en.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: en.alert.bodyWithSource,
     [REASON(IDS.sentimentAlert)]: en.alert.reason,
     [notificationEventNamedKey(IDS.sentimentAlert, 'strength.high')]: en.alert.strength.high,
     [notificationEventNamedKey(IDS.sentimentAlert, 'strength.medium')]: en.alert.strength.medium,
+    [notificationEventNamedKey(IDS.sentimentAlert, 'strength.low')]: en.alert.strength.low,
     [TITLE(IDS.macroEventLanded)]: en.macro.title,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: en.macro.direction.above,
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: en.macro.direction.below,
+    [notificationEventNamedKey(IDS.macroEventLanded, 'direction.matched')]: en.macro.direction.matched,
     // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
     ...Object.fromEntries(
       Object.entries(indicatorNames).map(([id, name]) => [
@@ -134,6 +175,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: en.macro.body.values,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: en.macro.body.noPrevious,
     [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: en.macro.body.noForecast,
+    [notificationEventVariantKey(IDS.macroEventLanded, 'matched')]: en.macro.body.matched,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.yoy')]: en.macro.periodicity.yoy,
     [notificationEventNamedKey(IDS.macroEventLanded, 'periodicity.mom')]: en.macro.periodicity.mom,
     [REASON(IDS.macroEventLanded)]: en.macro.reason,
@@ -142,13 +184,17 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceConsecutiveFailed)]: 'This source keeps returning nothing. Check its key or proxy in settings.',
     [REASON(IDS.sourceConsecutiveFailed)]: 'The same source failed three times in a row, so it is mentioned once.',
 
-    [TITLE(IDS.sourceStale)]: '{sourceName} has no new data',
-    [BODY(IDS.sourceStale)]: 'No new data for longer than this source’s freshness window. Check it in settings.',
-    [REASON(IDS.sourceStale)]: 'The last successful collection was before the window.',
+    [TITLE(IDS.sourceStale)]: '{sourceName} has had no new items',
+    [BODY(IDS.sourceStale)]: 'This source brought no new items for longer than its silence window. Check its switch and connection in settings.',
+    [REASON(IDS.sourceStale)]: 'The last new item arrived before this window; collections since then brought nothing new.',
 
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
     [BODY(IDS.briefingReady)]: 'The {date} {time} {language} edition is ready.',
     [REASON(IDS.briefingReady)]: 'You subscribed to briefing-ready notices.',
+
+    [TITLE(IDS.analysisConclusion)]: 'Analysis conclusion',
+    [BODY(IDS.analysisConclusion)]: 'The conclusion from this analysis is ready.',
+    [REASON(IDS.analysisConclusion)]: 'You subscribed to signal-triggered analysis conclusions.',
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
     [BODY(IDS.timezoneInvalid)]: 'Set a valid time zone in settings and the briefing will generate automatically again.',

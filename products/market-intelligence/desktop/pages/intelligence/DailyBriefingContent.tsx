@@ -12,8 +12,8 @@ import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
-import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
+import { BriefingReplacingNotice } from './BriefingReplacingNotice'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
@@ -160,12 +160,9 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
       {bodyState === 'no-edition' && noEditionView !== undefined ? <DailyBriefingNoEditionPanel
         view={noEditionView}
         text={text} timeZone={timeZone} scheduledTime={scheduledTime} todayDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
-      {/* 失败面板只有这一个出口。历史日的重试**在最近 3 天内是放开的**（用户 2026-11-06 定的新口径，
-          「这一版还不支持补生成历史日报」作废）；超出 3 天仍然禁用，理由换成"只能生成最近 3 天"。 */}
-      {failure !== null && bodyState === 'failure' ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
-        {...('date' in view && typeof view.date === 'string' && !isManualGenerationDateAllowed(view.date, todayDate)
-          ? { retryBlockedReason: text.history.generationWindowOnly } : {})}
-        onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
+      {/* 失败面板只有这一个出口。面板里**不再放「重新生成」**（用户 2026-11-07）：重跑这一期
+          只有一个入口——正文顶部工具栏那颗；面板只讲原因、步骤与去设置看一眼。 */}
+      {failure !== null && bodyState === 'failure' ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {/* Any editorial failure, not just "AI is off": when the editor could not produce its half, the
           edition still ships and says so here. A reader must never be told "no brief today" instead. */}
       {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText(view.document.provenance.editorialFailure, text)}</p> : null}
@@ -192,6 +189,9 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
           scales the whole sheet down. Stretching it to the column width is what re-flowed the three cards
           and wrapped the rate card's number across its dial. */}
       {/* `showingEdition` 同时是类型收窄：纸里的 `view.document` 只有它成立时存在。 */}
+      {/* 重跑期间正文照常可读（不抢屏），但**必须自己说是上一版**（`02` v2.167）；跑完这一档
+          消失，说明随之消失。组件自己处理"不显示时不留空壳"。 */}
+      <BriefingReplacingNotice visible={mode === 'ready-replacing'} label={text.previousUnderRegenerate} />
       {showingEdition && bodyState === 'paper' ? <div className="mi-daily-briefing-page__paper" ref={paperHostRef} style={paperHostHeight ? { height: paperHostHeight } : undefined}>
         <div className="mi-daily-briefing-page__paper-scale" style={{ left: paperOffsetX, transform: `scale(${paperScale})` }}>
           <div ref={paperSheetRef} style={{ width: BRIEFING_PAPER_WIDTH }}>

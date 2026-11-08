@@ -15,6 +15,7 @@ import type {
   ChannelManagementSafeView
 } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { resolveDeliveryTarget } from '../../ai/agent-platform/channels/channelDeliveryTargetResolution'
+import type { PushChannelResolution } from './pushChannelResolution'
 import type { ChannelDeliveryRequest, ChannelDeliveryResult } from '../../ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { NotificationAction, NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDeliveryContent } from '../runtime/notificationRouting'
@@ -52,13 +53,19 @@ export type ChannelPushPortDeps = {
     listConversations(input: { id: string; limit?: number }): readonly ChannelConversationSafeView[]
   }
   deliver(request: ChannelDeliveryRequest): Promise<ChannelDeliveryResult>
-  /** 读读者选的通道；由组合根接到 runtime 设置（`push.channelId`）。 */
-  settings: { pushChannelId(): Promise<string | null> }
+  /**
+   * 目标通道的**唯一派生**（技术方案 §1）：`runtime-ready` 恰好一条就用它，0 条与 ≥2 条都是
+   * `push-unavailable`。组合根注入；`push.channelId` 已降级为历史字段，运行路径不再读。
+   */
+  resolvePushChannel: () => Promise<PushChannelResolution>
   /**
    * 「多于一个外部链接」这件事的出口（契约 §7.5 ⑫）：取第一个照发，但**不许只在脑子里处理**。
    * 两种外链是设计错误，留一行日志，第二次写错的人才查得到。
    */
-  diagnostics?: (code: 'multiple-external-actions', detail: { recordId: string; count: number }) => void
+  diagnostics?: (
+    code: 'multiple-external-actions' | 'push-multiple-enabled',
+    detail: { recordId?: string; count: number }
+  ) => void
 }
 
 /**
@@ -134,12 +141,16 @@ export function createChannelPushPort(deps: ChannelPushPortDeps) {
     content: NotificationDeliveryContent
   ): Promise<ChannelPushResult> {
     try {
-      const channelId = await deps.settings.pushChannelId()
-      if (channelId === null) return { ok: false, reason: 'push-unavailable' }
+      const channel = await deps.resolvePushChannel()
+      if (!channel.ok) {
+        // ≥2 条不是「没有」，是配置冲突：留一行痕（只记条数），否则读者只会看到「发不出去」。
+        if (channel.multiple) deps.diagnostics?.('push-multiple-enabled', { count: channel.enabledChannelCount })
+        return { ok: false, reason: 'push-unavailable' }
+      }
 
       // 目标判定是**唯一实现**（`resolveDeliveryTarget`）：设置页、测试消息和这条推送都读它，
       // 免得两个功能在「一个说已绑定、另一个说没绑定」上各说各话。
-      const resolved = resolveDeliveryTarget(deps.channels, channelId)
+      const resolved = resolveDeliveryTarget(deps.channels, channel.channelId)
       if (!resolved.ok) {
         return {
           ok: false,

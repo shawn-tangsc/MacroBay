@@ -15,12 +15,10 @@ import { EtfOutflowChip, type EtfSignalText } from './EtfOutflowSignal'
  * 夹具还有别的历史偏移，混在一起会把这条判据淹掉。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions as unknown as EtfSignalText
-const triggerProps = { 'aria-expanded': false, 'aria-controls': 'detail' } as const
-
 function render(chip: Parameters<typeof EtfOutflowChip>[0]['chip']): string {
   return renderToStaticMarkup(createElement(ShellLanguageProvider, {
     language: 'zh-CN',
-    children: createElement(EtfOutflowChip, { chip, text, triggerProps, onToggle: () => undefined, onRetry: () => undefined })
+    children: createElement(EtfOutflowChip, { chip, text, onRetry: () => undefined })
   }))
 }
 

@@ -13,9 +13,52 @@ const css = readFileSync('products/market-intelligence/desktop/pages/intelligenc
 
 describe('daily briefing layout', () => {
   it('keeps the audit column beside the report at desktop widths', () => {
-    expect(css).toContain('.mi-daily-briefing-page__body--with-appendix { grid-template-columns: clamp(240px, 18vw, 320px) minmax(0, 1fr) clamp(240px, 18vw, 320px);')
+    // 轨道下限 296px（`02` v2.167）：失败行在最小两列宽度下不裁语言徽标；附录那侧的上限仍是 320。
+    expect(css).toContain('.mi-daily-briefing-page__body--with-appendix { grid-template-columns: clamp(296px, 18vw, 320px) minmax(0, 1fr) clamp(240px, 18vw, 320px);')
     // No rule may stack it at a width a normal desktop window sits in: 1450px did exactly that.
     expect(css).not.toContain('max-width: 1450px')
+  })
+
+  /**
+   * 失败行的宽度预算（`02` v2.167，界面设计给的数）：轨道 296px、行内固定开销 26px（轨道右内距 12 +
+   * 行内距 12 + 行描边 2），所以行内容可用 270px；失败行内容 中文 234.5 / 英文 267.3。两列最小宽度
+   * 1084px 时，正文 = 1084 − 页面左右内距 48 − 轨道 296 − 间距 20 = 720px。
+   */
+  describe('the failed row fits the rail at the smallest two-column window', () => {
+    const ruleOf = (selector: string): string => {
+      const at = css.indexOf(selector)
+      return at < 0 ? '' : css.slice(at, css.indexOf('}', at))
+    }
+    const RAIL = 296
+    const ROW_CHROME = 26
+    const FAILED_ROW_ZH = 234.5
+    const FAILED_ROW_EN = 267.3
+    const TWO_COLUMN_MIN = 1084
+    const PAGE_PADDING = 24 * 2
+    const GAP = 20
+
+    it('gives the rail 296px, the report 720px, and leaves room for the widest failed row', () => {
+      expect(css).toContain(`grid-template-columns: ${RAIL}px minmax(0, 1040px)`)
+      expect(TWO_COLUMN_MIN - PAGE_PADDING - RAIL - GAP).toBe(720)
+      expect(RAIL - ROW_CHROME).toBeGreaterThanOrEqual(FAILED_ROW_EN)
+      expect(RAIL - ROW_CHROME).toBeGreaterThanOrEqual(FAILED_ROW_ZH)
+    })
+
+    it('stacks below that width, and the stacking rule comes after the two-column rule', () => {
+      // 真 bug：同特异性下后面的基础规则胜。堆叠规则写在前面时它恒不生效（960 窗口实际还是两列）。
+      const baseAt = css.indexOf('grid-template-columns: 296px minmax(0, 1040px)')
+      const stackAt = css.indexOf('@media (max-width: 1084px) {\n  .mi-daily-briefing-page { padding: 10px; }')
+      expect(baseAt).toBeGreaterThanOrEqual(0)
+      expect(stackAt).toBeGreaterThan(baseAt)
+      // 往这段媒体查询里看一段，别停在第一个内层规则的右括号上。
+      expect(css.slice(stackAt, stackAt + 240)).toContain('grid-template-columns: 1fr')
+    })
+
+    it('stacks the three-column variant at the same threshold, with no 980px rule left', () => {
+      const narrow = css.slice(css.indexOf('@media (max-width: 1084px) { .mi-daily-briefing-page__body--with-appendix'))
+      expect(narrow).toContain('grid-template-columns: minmax(0, 1fr)')
+      expect(css).not.toContain('max-width: 980px')
+    })
   })
 
   it('keeps a stage name on one line, even when the rail is narrower than the name', () => {
@@ -30,7 +73,7 @@ describe('daily briefing layout', () => {
   })
 
   it('stacks only below a narrow window', () => {
-    const narrow = css.slice(css.indexOf('@media (max-width: 980px) { .mi-daily-briefing-page__body--with-appendix'))
+    const narrow = css.slice(css.indexOf('@media (max-width: 1084px) { .mi-daily-briefing-page__body--with-appendix'))
     expect(narrow).toContain('grid-template-columns: minmax(0, 1fr)')
     expect(narrow).toContain('.mi-daily-briefing-page__appendix { grid-column: 1 / -1;')
   })
@@ -393,6 +436,59 @@ describe('the fallback row for a day with no edition', () => {
     // An edition row is `padding: 4px 6px` with a 27px pitch; this one must not inherit that shape.
     expect(row).not.toContain('padding: 4px 6px;')
     expect(rule('.mi-daily-briefing__rail-fallback:hover {')).toContain('rgba(255, 255, 255, .04)')
+  })
+})
+
+/**
+ * The failure badge opens the row. It is a status word, so it renders the platform's one pill at its one
+ * size; its place in the row is a layout question, and the row is baseline-aligned for text, not for a
+ * bordered box.
+ */
+describe('the failure badge in the row', () => {
+  it('is centred on the line and never shrinks', () => {
+    const pill = rule('.mi-daily-briefing__rail-line .status-pill {')
+    expect(pill).toContain('align-self: center;')
+    // A row gives up its own words before it gives up a state.
+    expect(pill).toContain('flex: none;')
+  })
+
+  it('does not invent a second size for it', () => {
+    // One status size is what lets a reader recognise a state word anywhere; a size here would be a
+    // second answer to that question.
+    const pill = rule('.mi-daily-briefing__rail-line .status-pill {')
+    expect(pill).not.toContain('font-size')
+  })
+})
+
+/**
+ * Which of the six things a row shows may give way is a rendering decision (locale and row state), not a
+ * measurement. CSS's part is the invariant underneath it: the four that must never disappear cannot be
+ * squeezed, and no width-based rule may hide any of them behind the renderer's back.
+ */
+describe('the row never squeezes what a reader must see', () => {
+  it('lets the facts give way and keeps everything outside them whole', () => {
+    // The moment may be the thing that gets cut when an enumerated case is wrong — it is inside the
+    // facts group. What must not be cut are the three outside it.
+    expect(rule('.mi-daily-briefing__rail-fact:first-child {')).toContain('flex: 0 1 auto;')
+    // The source's flex lives in the rule it shares with the window chip, not in its colour rule.
+    const chipRule = css.slice(css.indexOf('.mi-daily-briefing__rail-fact[data-window-hours],'))
+    expect(chipRule.slice(0, chipRule.indexOf('}'))).toContain('flex: none;')
+    expect(rule('.mi-daily-briefing__rail-line .status-pill {')).toContain('flex: none;')
+    expect(rule('.mi-daily-briefing__rail-lang {')).toContain('flex: 0 0 auto;')
+  })
+
+  it('hides none of them by width — the renderer decides, not a query', () => {
+    // A width query would make the same locale show different things at different widths, and the
+    // renderer's enumeration is what the acceptance criteria describe.
+    for (const selector of [
+      '.mi-daily-briefing__rail-line',
+      '.mi-daily-briefing__rail-source',
+      '.mi-daily-briefing__rail-lang',
+      '.mi-daily-briefing__rail-fact'
+    ]) {
+      const queryRule = new RegExp(`@(?:media|container)[^{]*\\{[^}]*${selector.replace(/\./g, '\\.')}`)
+      expect(queryRule.test(css)).toBe(false)
+    }
   })
 })
 

@@ -13,12 +13,16 @@ import { createNotificationRuntime, type NotificationRuntime } from './notificat
 const clock = { now: () => new Date('2026-11-01T12:00:00.000Z'), timeZone: () => 'UTC' }
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+        // 本机两个开关各要一条「它真的能出来」的事件：`platform.test` 只批桌面与手机，
+        // 拨到提示档永远出不来，拿它测 toast 会把「没批」误当成「开关生效」。
+        'platform.local': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.test',
@@ -31,6 +35,17 @@ const catalog = createNotificationEventCatalog({
           dedupeKeyTemplate: 'test:{id}',
           dedupeUnit: 'condition',
           conditionWindowMs: 86_400_000,
+        },
+        {
+          id: 'platform.local',
+          titleKey: 'notification.taskFailed.title',
+          bodyKey: 'notification.taskFailed.body',
+          reasonKey: 'notification.taskFailed.body',
+          requiresUserAction: false,
+    category: 'reminder',
+          requestedDisruptionLevels: ['toast', 'desktop'],
+          dedupeKeyTemplate: 'local:{id}',
+          dedupeUnit: 'occurrence',
         }
       ]
     }
@@ -57,9 +72,16 @@ function createRuntime(overrides: {
   onChanged?: (change: { version: number }) => void
   /** 读者偏好：现在只剩两个本机开关与三条频道事件表，没有逐事件订阅。 */
   settings?: Partial<NotificationRuntimeSettings>
+  /**
+   * 投递钩子。**不接钩子的表面会被记成 `skipped`，记录里那一项随即被删掉**——
+   * 所以「该投的投了」这类断言必须接上钩子，否则测到的是「没接钩子」，不是「开关生效」。
+   */
+  deliveryHooks?: { toast?: () => void; desktop?: () => Promise<{ ok: boolean }> }
 } = {}) {
   const state = createDefaultNotificationStoreState()
   return createNotificationRuntime({
+    resolvePushChannel: resolvePushChannelFromSettings,
+    diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
       write: async (next) => { Object.assign(state, next) }
@@ -67,7 +89,8 @@ function createRuntime(overrides: {
     catalog,
     getSettings: async () => runtimeSettings(overrides.settings),
     clock,
-    ...(overrides.onChanged === undefined ? {} : { onChanged: overrides.onChanged })
+    ...(overrides.onChanged === undefined ? {} : { onChanged: overrides.onChanged }),
+    ...(overrides.deliveryHooks === undefined ? {} : { deliveryHooks: overrides.deliveryHooks })
   })
 }
 
@@ -88,6 +111,11 @@ function selfTestRequest(index: number): NotificationRequest {
     requestedChannels: ['center'],
     dedupeKey: `test-${index}`
   }
+}
+
+/** 这些夹具没有可用通道：派生入口按「一条都没有」处理（fail closed，不再读 `push.channelId`）。 */
+async function resolvePushChannelFromSettings() {
+  return { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
 }
 
 describe('notification list ordering and cursors', () => {
@@ -147,16 +175,42 @@ describe('notification list ordering and cursors', () => {
 })
 
 describe('notification center guarantee (4a)', () => {
-  it('keeps the center record for a notification that also uses a disruptive surface', async () => {
-    const runtime = createRuntime({ settings: { desktopEnabled: true } })
+  // 两个方向各说清「谁必须在、谁必须不在」。
+  // 旧写法是 `toast === undefined || desktop === undefined`——两个都关时它也绿，
+  // 于是「开关生效」和「方向搞反」两种错都抓不住：那不是断言，是占位。
+  it('sends the desktop and not the toast when only the desktop switch is on', async () => {
+    const runtime = createRuntime({
+      settings: { desktopEnabled: true, toastEnabled: false },
+      deliveryHooks: { desktop: async () => ({ ok: true }) }
+    })
     const outcome = await runtime.submit(request('desktop-only'))
     expect(outcome.kind).toBe('accepted')
     if (outcome.kind !== 'accepted') return
     const record = await recordById(runtime, outcome.recordId)
     expect(outcome.levels).toContain('center')
     expect(record.channels).toContain('center')
-    // 本机表面互斥：不会同时出现桌面与提示两条交付。
-    expect(record.delivery.toast === undefined || record.delivery.desktop === undefined).toBe(true)
+    expect(record.delivery.desktop).toBeDefined()
+    expect(record.delivery.toast).toBeUndefined()
+  })
+
+  it('sends the toast and not the desktop when only the toast switch is on', async () => {
+    const runtime = createRuntime({
+      settings: { desktopEnabled: false, toastEnabled: true },
+      deliveryHooks: { toast: () => undefined }
+    })
+    const outcome = await runtime.submit(
+      request('toast-only', {
+        eventTypeId: 'platform.local',
+        dedupeVars: { builder: 'template', vars: { id: 'toast-only' } }
+      })
+    )
+    expect(outcome.kind).toBe('accepted')
+    if (outcome.kind !== 'accepted') return
+    const record = await recordById(runtime, outcome.recordId)
+    expect(outcome.levels).toContain('toast')
+    expect(outcome.levels).not.toContain('desktop')
+    expect(record.delivery.toast).toBeDefined()
+    expect(record.delivery.desktop).toBeUndefined()
   })
 
   it('leaves the center surface untouched when both local switches are off', async () => {
@@ -267,13 +321,14 @@ describe('test notifications do not spend the daily cap', () => {
 })
 
 const catalogWithBlocked = createNotificationEventCatalog({
-  policy: {
-    'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
-    'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+        'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.test',
@@ -307,6 +362,8 @@ describe('P7: the desktop blocked event has a producer', () => {
   it('submits platform.desktop.blocked when show() fails, and records it in the center', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      resolvePushChannel: resolvePushChannelFromSettings,
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }
@@ -331,6 +388,8 @@ describe('P7: the desktop blocked event has a producer', () => {
   it('does not submit it when the desktop switch is simply off', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      resolvePushChannel: resolvePushChannelFromSettings,
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }

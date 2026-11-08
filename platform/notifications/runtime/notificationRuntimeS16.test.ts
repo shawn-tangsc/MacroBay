@@ -15,13 +15,13 @@ const settings: NotificationRuntimeSettings = {
 const clock = { now: () => new Date('2026-11-03T00:00:00.000Z'), timeZone: () => 'UTC' }
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.done': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
-    'platform.other': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false }
-  },
   sources: [
     {
       productId: 'platform',
+        approval: {
+    'platform.done': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
+    'platform.other': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false }
+  },
       events: [
         {
           id: 'platform.done',
@@ -86,6 +86,8 @@ function createRuntime(records: readonly ReturnType<typeof record>[]) {
   }
   return {
     runtime: createNotificationRuntime({
+      resolvePushChannel: resolvePushChannelFromSettings,
+      diagnostics: () => undefined,
       storage,
       catalog,
       getSettings: async () => settings,
@@ -97,6 +99,11 @@ function createRuntime(records: readonly ReturnType<typeof record>[]) {
     state: () => state,
     settings: () => settings
   }
+}
+
+/** 这些夹具没有可用通道：派生入口按「一条都没有」处理（fail closed，不再读 `push.channelId`）。 */
+async function resolvePushChannelFromSettings() {
+  return { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
 }
 
 describe('S16: prune keeps subscriptions and caps records', () => {

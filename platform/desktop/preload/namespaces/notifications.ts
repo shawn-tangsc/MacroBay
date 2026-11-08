@@ -5,7 +5,8 @@ import type { NotificationCenterItem, NotificationUnreadState } from '../../../n
 import type { NotificationRuntime } from '../../../notifications/runtime/notificationRuntime'
 
 /** 测试通知的真实回执：一条记录 + 每一档投递的尝试结果。形状取自运行时签名，不在这里抄第二份。 */
-export type NotificationSelfTestReceipt = Awaited<ReturnType<NotificationRuntime['submitSelfTest']>>
+/** 三枚测试按钮的闭集回执（平台契约 `notificationSelfTest.ts`）：三档 + 闭集码。 */
+export type NotificationSelfTestReceipt = Awaited<ReturnType<NotificationRuntime['sendTestNotice']>>
 
 /**
  * 通知命名空间（从 `preload/index.ts` 抽出来的第一块）。
@@ -33,8 +34,8 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
     markRead: (id: string) =>
       ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }) as Promise<NotificationCenterItem>,
     /** 发送一条测试通知：走真实 `submit()`，验证链路与系统放行；每次点击都是一条新记录。 */
-    sendTest: () =>
-      ipcRenderer.invoke(IpcChannels.notificationsSendTest) as Promise<NotificationSelfTestReceipt>,
+    sendTest: (input?: { kind?: string }) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSendTest, input) as Promise<NotificationSelfTestReceipt>,
     /** 清空 = 全部未读标为已读；返回 `{ unread, version }`，角标不必再查一次。 */
     markAllRead: (input?: { productId?: string }) =>
       ipcRenderer.invoke(IpcChannels.notificationsMarkAllRead, input) as Promise<NotificationUnreadState>,
@@ -61,6 +62,16 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
     getChannelEvents: () =>
       ipcRenderer.invoke(IpcChannels.notificationsGetChannelEvents) as Promise<
         Awaited<ReturnType<NotificationRuntime['getChannelEvents']>>
+      >,
+    /** 读一条通知（或其组）的表面选择（契约 §5.5 第三层）：只读，画勾用。 */
+    getSurfaceSelection: (eventTypeId: string) =>
+      ipcRenderer.invoke(IpcChannels.notificationsGetSurfaceSelection, { eventTypeId }) as Promise<
+        Awaited<ReturnType<NotificationRuntime['getSurfaceSelection']>>
+      >,
+    /** 写同一份选择。**唯一一条写通道**：没有批量、没有删除、没有 reset。 */
+    setSurfaceSelection: (eventTypeId: string, surfaces: { channel?: boolean; toast?: boolean; desktop?: boolean }) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSetSurfaceSelection, { eventTypeId, surfaces }) as Promise<
+        Awaited<ReturnType<NotificationRuntime['setSurfaceSelection']>>
       >,
     setChannelEvent: (eventId: string, enabled: boolean) =>
       ipcRenderer.invoke(IpcChannels.notificationsSetChannelEvent, { eventId, enabled }) as Promise<

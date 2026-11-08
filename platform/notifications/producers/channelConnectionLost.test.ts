@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { notificationCopy } from '../../i18n/notificationCopy'
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '../contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '../contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '../contracts/platformNotificationEvents'
 import { planNotificationSubmit } from '../runtime/notificationSubmitPlan'
 import { buildChannelConnectionLostRequest, notifyChannelConnectionLost } from './channelConnectionLost'
 
@@ -61,7 +60,8 @@ describe('channel connection lost producer', () => {
   })
 
   it('is never approved for the phone: this is a local state, not a push', () => {
-    const row = NOTIFICATION_EVENT_POLICY['platform.channel.connection-lost']
+    // 批准值读平台自己的声明（b3-1），不再读那张共享表；断言的事实与原来相同。
+    const row = PLATFORM_NOTIFICATION_APPROVALS['platform.channel.connection-lost']!
     expect(row.approvedDisruptionLevels).toEqual(['center', 'toast', 'desktop'])
     expect(row.approvedDisruptionLevels).not.toContain('channel')
   })
@@ -69,15 +69,16 @@ describe('channel connection lost producer', () => {
   it('is accepted by the real catalog and lands on the signed surfaces, never the phone', () => {
     // 「登记了却从来不响」这一族，就在这一格：请求过了目录、键真的展开、档位真的落到表面上。
     const catalog = createNotificationEventCatalog({
-      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
-      policy: NOTIFICATION_EVENT_POLICY
+      // **机制夹具**：断言「频道连接断开」这类事件怎么走到中心/手机，不涉及任何产品事件。
+      // 批准值取平台自己的声明（b2 之后来源优先），断言的事实与原来相同。
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS }]
     })
     const settings = {
       desktopEnabled: true, toastEnabled: true, popupEnabled: false,
       push: { channelId: 'channel-1' }, retentionDays: 30, defaultSnoozeMinutes: 60
     }
     const plan = planNotificationSubmit({
-      catalog, settings, desktopSupported: true, now: input.occurredAt,
+      catalog, settings, desktopSupported: true, now: input.occurredAt, timeZone: 'UTC',
       request: buildChannelConnectionLostRequest(input)
     })
     expect(plan.kind).toBe('new')
@@ -93,7 +94,7 @@ describe('channel connection lost producer', () => {
 
     const withoutDesktop = planNotificationSubmit({
       catalog, settings: { ...settings, desktopEnabled: false }, desktopSupported: true,
-      now: input.occurredAt, request: buildChannelConnectionLostRequest(input)
+      now: input.occurredAt, timeZone: 'UTC', request: buildChannelConnectionLostRequest(input)
     })
     expect(withoutDesktop.kind).toBe('new')
     if (withoutDesktop.kind !== 'new') return
@@ -103,7 +104,7 @@ describe('channel connection lost producer', () => {
   })
 
   it('submits and swallows failures: a lost notification must not turn a fact into a fault', async () => {
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'r1', levels: [] }))
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'r1', levels: [], suppressedLevels: [] }))
     await expect(notifyChannelConnectionLost(submit, input)).resolves.toMatchObject({ kind: 'accepted' })
     expect(submit).toHaveBeenCalledTimes(1)
 

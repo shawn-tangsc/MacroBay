@@ -18,6 +18,7 @@ import { briefingMarketKnowledgeAt, logBriefingMarketRead, readBriefingMarketSna
 import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
 import { lookupMissingMacroValues, mergeMacroValues } from './dailyBriefingMacroValueLookup'
 import { ensureCalendarFreshForRun } from './dailyBriefingCalendarCatchUp'
+import { readNewsSourceIssues } from './dailyBriefingSourceIssues'
 import { backfillMacroValues } from './dailyBriefingMacroBackfill'
 import type { BriefingMacroWebRead } from './dailyBriefingMacroWebSource'
 import {
@@ -60,6 +61,11 @@ export type DailyBriefingSourceDeps = Readonly<{
    * packet; the window then carries analysis conclusions only.
    */
   briefEditions?: Pick<DailyBriefingStore, 'list'>
+  /**
+   * 来源的运行状态（只读）。静默/连续失败由此算出来写进文档（`02` v2.167）。
+   * 缺省时不报来源状态：没有这张表，就说不出"哪个源安静了多久"，编不出来。
+   */
+  sourceStates?: () => readonly import('@platform/jobs').RuntimeStateRecord[]
   /**
    * 第二级取值：联网。由组装层注入（开关、授权、供应商就绪与平台搜索都在那里合成），
    * 没注入 = 开关关掉/未授权——这时一次搜索都不发，事件照显示、值格不渲染。
@@ -128,6 +134,10 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         timeline,
         conclusion,
         news,
+        // 新闻源 24 小时的静默窗口与读者时区无关（周末那档只对非新闻源生效），这里给 UTC 即可。
+        ...(deps.sourceStates === undefined
+          ? {}
+          : { newsSources: readNewsSourceIssues({ states: deps.sourceStates(), now: input.asOf, timeZone: 'UTC' }) }),
         readings: Object.freeze({ fearGreed, funding, capital: capitalAsOf(capital, input.asOf) }),
         ...(positioning ? { positioning } : {}),
         ...(policyPath ? { policyPath } : {}),

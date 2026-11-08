@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { createDefaultAppSettings, normalizeAppSettings, normalizeUpdateSettings } from '../schema/appSettings'
+import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
 import { createSettingsStore, updateAppSettings } from './settingsStore'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 
@@ -517,5 +518,152 @@ describe('the update check switch', () => {
     const reopened = createSettingsStore(storage as never)
     await expect(reopened.get()).resolves.toMatchObject({ updates: { checkEnabled: false } })
     expect(written).toMatchObject({ updates: { checkEnabled: false } })
+  })
+})
+
+describe('notification surface selection persists (2026-11-07)', () => {
+  /**
+   * 读者在「日历事件」那一排勾上「应用内提示」，重启后必须还在。
+   *
+   * 这个字段曾被 `normalizeNotificationSettings` 的**白名单静默丢掉**：写进去、读回来没有，
+   * 页面把勾冲掉，表现是「这一格点了不能改」，而且不报错。所以验它必须**换一个 store 实例读**——
+   * 在同一个 runtime 里读回来当然还在（内存在），那测的是内存不是落盘。
+   */
+  it('survives a fresh store reading the same file', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'settings-surface-'))
+    try {
+      const storage = createJsonFileStorage(join(directory, 'settings.json'), createDefaultAppSettings())
+      const first = createSettingsStore({ read: storage.read, write: storage.write })
+      await first.update({
+        notifications: {
+          ...createDefaultAppSettings().notifications,
+          surfaceSelections: { 'calendar-events': { channel: true, toast: false } }
+        }
+      })
+
+      const second = createSettingsStore({ read: storage.read, write: storage.write })
+      const readBack = await second.get()
+      expect(readBack.notifications.surfaceSelections).toEqual({ 'calendar-events': { channel: true, toast: false } })
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('every notification setting survives a reload (2026-11-07)', () => {
+  /**
+   * 白名单是这套设置的问题源头：`normalizeNotificationSettings` 只留列出来的字段，
+   * **每加一个字段都要人记得回来加一行，漏一次就静默丢数据**（`channelEvents` 丢了整整一版，
+   * 用户报的「通知方式勾不动」也是同一个病）。
+   *
+   * 这里用 `Record<keyof NotificationRuntimeSettings, unknown>` 把字段清单交给编译器：
+   * **以后新增一个字段而这里没跟上，tsc 直接红**，不必等人发现「怎么重启就没了」。
+   */
+  const EVERY_FIELD: Record<keyof NotificationRuntimeSettings, unknown> = {
+    desktopEnabled: true,
+    toastEnabled: true,
+    popupEnabled: false,
+    // 夹具里的产品名与事件 id 用中性 id：这里断言的是「字段存得住、读得回」，
+    // 不依赖任何真实产品的存在——用真名会让平台侧看起来在认识某个产品。
+    channelEvents: { 'sample-product.signal.triggered': false },
+    surfaceSelections: { 'calendar-events': { channel: true, toast: false } },
+    push: { channelId: 'channel-a' },
+    retentionDays: 14,
+    defaultSnoozeMinutes: 30,
+    quietHours: { enabled: true, startLocalTime: '23:00', endLocalTime: '07:00' },
+    minimumDisruptivePriority: 'high',
+    productPermissions: { 'sample-product': { enabled: true, allowDesktop: false, allowToast: true, allowPopup: false } }
+  }
+
+  it('keeps every field the type declares, across a fresh store', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'settings-all-fields-'))
+    try {
+      const storage = createJsonFileStorage(join(directory, 'settings.json'), createDefaultAppSettings())
+      const first = createSettingsStore({ read: storage.read, write: storage.write })
+      await first.update({ notifications: { ...createDefaultAppSettings().notifications, ...EVERY_FIELD } })
+
+      const second = createSettingsStore({ read: storage.read, write: storage.write })
+      const readBack = (await second.get()).notifications
+      for (const [key, value] of Object.entries(EVERY_FIELD)) {
+        expect(readBack[key as keyof NotificationRuntimeSettings], key).toEqual(value)
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('unknown notification fields: kept, but reported once', () => {
+  /**
+   * 保留未知字段是为了不再「漏改一次就静默丢数据」；但**保留不等于默认它对**——
+   * 拼错的键如果没人知道，就会永久潜伏。所以每个名字只报一次：
+   * 报零次 = 静默丢信号，报每次 = 刷屏丢信噪，两种都会让人不看日志。
+   */
+  it('keeps a field the type does not know, and reports its name exactly once', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'settings-unknown-field-'))
+    try {
+      const storage = createJsonFileStorage(join(directory, 'settings.json'), createDefaultAppSettings())
+      // 直接落一份带未知字段的文件：模拟新版本写过、或有人手改过。
+      await storage.write({
+        ...createDefaultAppSettings(),
+        notifications: {
+          ...createDefaultAppSettings().notifications,
+          futureFlag: { enabled: true }
+        } as never
+      })
+
+      const reported: string[] = []
+      const store = createSettingsStore(
+        { read: storage.read, write: storage.write },
+        { onUnknownNotificationField: (field) => reported.push(field) }
+      )
+      const first = await store.get()
+      expect((first.notifications as unknown as Record<string, unknown>).futureFlag).toEqual({ enabled: true })
+
+      // 再写一次（归一化会再跑一遍）：字段还在，且**不再报第二遍**。
+      await store.update({ notifications: { ...first.notifications, toastEnabled: true } })
+      const after = await store.get()
+      expect((after.notifications as unknown as Record<string, unknown>).futureFlag).toEqual({ enabled: true })
+      expect(reported).toEqual(['futureFlag'])
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('treats every field with a default as a known field (no unknown report)', async () => {
+    // 登记表由类型强制（`satisfies Record<keyof NotificationSettings, true>`）。这条是它的运行期补角：
+    // 「有默认值 = 一定被登记」——否则新加且带默认值的字段会被当成未知字段留一份副本、还报一次。
+    const directory = mkdtempSync(join(tmpdir(), 'settings-defaults-known-'))
+    try {
+      const storage = createJsonFileStorage(join(directory, 'settings.json'), createDefaultAppSettings())
+      const reported: string[] = []
+      const store = createSettingsStore(
+        { read: storage.read, write: storage.write },
+        { onUnknownNotificationField: (field) => reported.push(field) }
+      )
+      await store.get()
+      expect(reported).toEqual([])
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('still rejects a known field of the wrong type instead of preserving it', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'settings-wrong-type-'))
+    try {
+      const storage = createJsonFileStorage(join(directory, 'settings.json'), createDefaultAppSettings())
+      const store = createSettingsStore({ read: storage.read, write: storage.write })
+      await store.update({
+        notifications: {
+          ...createDefaultAppSettings().notifications,
+          // 类型错：不能被当成「未知字段」留下来，照旧回落默认。
+          desktopEnabled: 'yes' as never
+        }
+      })
+      const readBack = await store.get()
+      expect(readBack.notifications.desktopEnabled).toBe(false)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

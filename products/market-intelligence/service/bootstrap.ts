@@ -27,6 +27,7 @@ import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossA
 
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
+import { createNotificationTestWiring } from './intelligence/ipc/notificationTestWiring'
 import { translationRecordsBytes } from './intelligence/application/intelligenceTranslationCache'
 import { createEnabledCalendarFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
@@ -45,6 +46,8 @@ import type {
   MacroCalendarOps
 } from './intelligence/agent-capabilities/operationFacades'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
+import { landedFilterReader, registerCalendarEventReminder } from './intelligence/macro-calendar/registerCalendarEventReminder'
+import { createCalendarReminderSettingsStore } from './intelligence/macro-calendar/calendarEventReminderSettingsStore'
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
@@ -313,10 +316,16 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const readEnabledCalendarFeeds = createEnabledCalendarFeeds({
     listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles()
   })
+  // 「事件发生后也告诉我」那一行要真的影响落地通知：配置只存一处，日历经这个读取器拿它。
+  const calendarReminderSettings = createCalendarReminderSettingsStore(
+    join(getIntelligenceProductDataDir(), 'calendar-event-reminder.json')
+  )
   const marketCalendar = composeStoredManualCalendar({ storage: macroCalendarBackend.storage,
     archive: intelligenceModule.macroCalendarEvidenceArchive, evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
     requestGovernanceQueue: intelligenceModule.requestGovernanceQueue,
     readEnabledFeeds: readEnabledCalendarFeeds,
+    // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
+    readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
@@ -325,6 +334,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     queryMonth: marketCalendar.queryMonth,
     readCollectionFreshness: () => marketCalendar.readCollectionFreshness()
   })
+  // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
+  const calendarReminder = registerCalendarEventReminder({ jobRuntime: deps.jobRuntime, settings: calendarReminderSettings,
+    queryMonth: marketCalendar.queryMonth, submit: (request) => getNotificationRuntime().submit(request), timeZone: () => currentReaderTimeZone() })
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected
   // separately from the read surface above, and the brief never constructs a client of its own.
@@ -535,7 +547,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // the failure, so no service has to grow a logging dependency for it.
   const auditedRegister = syncAudit ? withSyncAudit(register, syncAudit) : register
 
-  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule)
+  // 装配细节在 `ipc/notificationTestWiring.ts`：这个文件每涨一行都要有人问「为什么必须在这里」。
+  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule, calendarReminder, createNotificationTestWiring({
+    readEnabledCalendarFeeds, readTimeZone: currentReaderTimeZone, getAppLanguage: deps.getAppLanguage
+  }), () => getNotificationRuntime().resolvePushChannel())
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
   registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())

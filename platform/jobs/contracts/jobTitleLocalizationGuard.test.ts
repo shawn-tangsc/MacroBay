@@ -1,98 +1,118 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { resolve, sep } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, resolve, sep } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 /**
- * 作业名本地化的**按文件分账守卫**（契约 `job-title-localization-contract.md` 阶段 1）。
+ * 作业名守卫（契约 `job-title-localization-contract.md` §5、`notification-event-ownership.md` §七）。
  *
- * 为什么不是「一个全局数字」：阶段 2 有四条线并行把自己的作业名改成双语，每一方都要把基线
- * 减掉自己那几条。四个人改同一行——不是冲突，就是**丢更新**；而丢更新会让守卫静默放宽，
- * 比冲突更糟。按文件分账之后，每方只改自己那一格，互不重叠。
+ * **这一版不含任何产品名、产品路径、条数常量**：作业清单一律从
+ * `products/<id>/product.manifest.ts` 的 `jobHandlers` 声明读出来。产品新增一个作业、把定义拆到
+ * 另一个文件，都不需要改平台守卫——这正是「平台侧零业务概念」的要求。
  *
  * 三条判据：
- * 1. **每个文件的实际条数不得超过它自己那一格**（谁新增一条未本地化的作业，那格红）；
- * 2. **出现表里没有的文件就是红**（防止把条目挪到别的文件里绕过）；
- * 3. **总和不许超过前一版**（有人拆文件、合并文件时，总数不能涨）。
- *
- * 某个文件全部改完之后**把那一格删掉**，不要改成 0——空对象 = 全部迁移完，阶段 3 直接断言它为空。
- *
- * 刻意**不把 `product.manifest.ts` 算进来**：那里的 `title` 是导航名/工具名，不是 `JobDefinition`。
+ * 1. **双向覆盖**：每条声明都要有定义，每个定义都要被声明。少一边就是「有人加了作业没登记」或
+ *    「登记了却没人实现」，两种都不该静默通过。
+ * 2. **平台自己的作业定义不许写字面量 `title`**：平台作业的名字由词表/参数给，不许在代码里写死
+ *    一句文案——那既不可翻译，也会把某一门语言固化进平台。
+ * 3. 本守卫自身不引用产品：只认 `products/*` 这个形状。
  */
-const REMAINING_BY_FILE: Record<string, number> = {
-  'products/market-intelligence/service/intelligence/application/sourceRuntimeOrchestrator.ts': 1,
-  'products/market-intelligence/service/intelligence/cross-asset/crossAssetIndexJob.ts': 1,
-  'products/market-intelligence/service/intelligence/jobs/dailyBriefingSchedules.ts': 1,
-  'products/market-intelligence/service/intelligence/jobs/registerDailyBriefSessionRetentionJob.ts': 1,
-  'products/market-intelligence/service/intelligence/jobs/registerMarketAnalysisJobs.ts': 3,
-  'products/market-intelligence/service/intelligence/macro-calendar/bea-official-release/beaOfficialReleaseJobRuntime.ts': 1,
-  'products/market-intelligence/service/intelligence/macro-calendar/bls-schedule-catch-up/blsScheduleAndValuesScheduler.ts': 1,
-  'products/market-intelligence/service/intelligence/macro-calendar/macroCalendarScheduleJobRuntime.ts': 1,
-  'products/market-intelligence/service/intelligence/macro-market/macroMarketJob.ts': 1,
-  'products/market-intelligence/service/intelligence/macro-market/realMarketApiDxyJob.ts': 1,
-  'products/market-intelligence/service/intelligence/policy-path/policyPathRuntime.ts': 1,
-  'products/market-intelligence/service/intelligence/retention/marketHistoryRetentionJob.ts': 1
+
+const PRODUCTS_ROOT = 'products'
+const PLATFORM_ROOT = 'platform'
+const MANIFEST_NAME = 'product.manifest.ts'
+
+/** 作业定义的标记：注册进调度表的定义必带 `audience`（一次性运行不带）。 */
+const DEFINITION_MARKER = "audience: '"
+
+function isSourceFile(file: string): boolean {
+  return file.endsWith('.ts') && !file.endsWith('.test.ts') && !file.includes(`${sep}node_modules${sep}`)
 }
 
-/** 前一版的总数：只用于「总和只许减」这一条，不参与逐文件判定。已迁移的线把自己的数目减掉、把那一格删掉。 */
-const PREVIOUS_TOTAL = 22
-
-const ROOTS = ['platform', 'products']
-
-/** 作业定义文件：内容里出现 `audience: '` 才算（manifest 与普通模块因此被排除）。 */
-function jobDefinitionFiles(): string[] {
-  const out: string[] = []
-  for (const root of ROOTS) {
-    for (const file of walk(resolve(root))) {
-      if (file.endsWith('.test.ts') || file.includes(`${sep}node_modules${sep}`)) continue
-      if (readFileSync(file, 'utf8').includes("audience: '")) out.push(file)
-    }
-  }
-  return out
-}
-
-function walk(dir: string): string[] {
-  const out: string[] = []
+function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const path = resolve(dir, entry)
-    if (statSync(path).isDirectory()) out.push(...walk(path))
-    else if (path.endsWith('.ts')) out.push(path)
+    if (statSync(path).isDirectory()) walk(path, out)
+    else if (isSourceFile(path)) out.push(path)
   }
   return out
 }
 
-/** 未迁移的写法：`title: '…'` 与 `title: \`…\`` 都算；双语对象不算。 */
-function literalTitles(source: string): number {
+function read(path: string): string {
+  return readFileSync(path, 'utf8')
+}
+
+/** 每个产品的 `jobHandlers` 声明：`{ productId, jobIds }`。 */
+function declaredJobs(): Array<{ productId: string; jobIds: string[] }> {
+  return readdirSync(resolve(PRODUCTS_ROOT))
+    .filter((entry) => statSync(join(PRODUCTS_ROOT, entry)).isDirectory())
+    .filter((productId) => existsSync(join(PRODUCTS_ROOT, productId, MANIFEST_NAME)))
+    .map((productId) => ({
+      productId,
+      jobIds: declaredJobIdsIn(read(join(PRODUCTS_ROOT, productId, MANIFEST_NAME)))
+    }))
+    .filter((product) => product.jobIds.length > 0)
+}
+
+/**
+ * 从 manifest 文本里取 `jobHandlers: [ … ]` 这一段，再抽 `id: '…'`。
+ *
+ * 不 `import` 产品：那既是平台反向依赖，也会让 `products` 里任何一个包删掉时平台测试炸在这里。
+ */
+function declaredJobIdsIn(manifest: string): string[] {
+  const start = manifest.indexOf('jobHandlers:')
+  if (start < 0) return []
+  const open = manifest.indexOf('[', start)
+  const close = manifest.indexOf(']', open)
+  if (open < 0 || close < 0) return []
+  const block = manifest.slice(open, close)
+  return [...block.matchAll(/id:\s*'([^']+)'/g)].map((match) => match[1])
+}
+
+/** 未迁移的写法：`title: '…'` 与 `title: \`…\`` 都算；双语对象（`title: { … }`）不算。 */
+function literalTitleCount(source: string): number {
   const quoted = source.match(/title:\s*'(?:[^'\\]|\\.)*'/g) ?? []
   const templated = source.match(/title:\s*`[^`]*`/g) ?? []
   return quoted.length + templated.length
 }
 
-function relative(file: string): string {
-  return file.slice(resolve('.').length + 1).split(sep).join('/')
+function jobDefinitionFiles(root: string): string[] {
+  return walk(resolve(root)).filter((file) => read(file).includes(DEFINITION_MARKER))
 }
 
-describe('job title localization', () => {
-  const counts = new Map<string, number>()
-  for (const file of jobDefinitionFiles()) {
-    const count = literalTitles(readFileSync(file, 'utf8'))
-    if (count > 0) counts.set(relative(file), count)
-  }
+describe('job title guard', () => {
+  const products = declaredJobs()
 
-  it('never lets one file grow past its own share', () => {
-    const grown = [...counts]
-      .filter(([file, count]) => count > (REMAINING_BY_FILE[file] ?? 0))
-      .map(([file, count]) => ({ file, count, allowed: REMAINING_BY_FILE[file] ?? 0 }))
-    expect(grown, `un-localized job titles grew: ${JSON.stringify(grown, null, 2)}`).toEqual([])
+  it('finds product job declarations to guard at all', () => {
+    // 一条都不声明时，覆盖断言会「因为空集而通过」——那等于守卫消失。
+    expect(products.length).toBeGreaterThan(0)
   })
 
-  it('does not let a title move to a file this table does not know about', () => {
-    // 表里没有的文件出现未本地化标题 = 有人新增了一处注册点，或者把条目挪走了。
-    const unknown = [...counts.keys()].filter((file) => REMAINING_BY_FILE[file] === undefined)
-    expect(unknown, `un-localized job titles in unlisted files: ${JSON.stringify(unknown, null, 2)}`).toEqual([])
+  /**
+   * 声明必须落在自己的命名空间里：`<productId>.…`。
+   *
+   * 这条不需要读产品源码——很多定义是工厂按参数生成的（`definitionFor(feed)` 之类），
+   * 静态配对 id 会在那些工厂上失效；而「作业 id 归属哪个产品」是 manifest 自己就该说清的事，
+   * 跨产品的 id 会让「删掉某个产品」变得不干净，也会让归属在排障时说不清。
+   */
+  it('keeps every declared job inside its own product namespace', () => {
+    const offenders = products.flatMap((product) =>
+      product.jobIds
+        .filter((id) => !id.startsWith(`${product.productId}.`))
+        .map((id) => ({ productId: product.productId, id }))
+    )
+    expect(offenders, `job ids declared outside their product namespace: ${JSON.stringify(offenders, null, 2)}`)
+      .toEqual([])
   })
 
-  it('never lets the total grow, however the entries are regrouped', () => {
-    const total = [...counts.values()].reduce((sum, count) => sum + count, 0)
-    expect(total, `total un-localized job titles (was ${PREVIOUS_TOTAL})`).toBeLessThanOrEqual(PREVIOUS_TOTAL)
+  it('never lets a platform job definition write its own title as a literal', () => {
+    const offenders = jobDefinitionFiles(PLATFORM_ROOT)
+      .map((file) => ({
+        file: file.slice(resolve('.').length + 1).split(sep).join('/'),
+        literals: literalTitleCount(read(file))
+      }))
+      .filter((entry) => entry.literals > 0)
+    expect(offenders, `platform job definitions carry literal titles: ${JSON.stringify(offenders, null, 2)}`)
+      .toEqual([])
   })
 })

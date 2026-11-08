@@ -340,7 +340,12 @@ export class AgentSessionRuntimeService {
           resumeToken: entry.lastResumeToken
         })
         traceSpan = null
-        return toolInvocations.length > 0 ? { ...result, toolInvocations } : result
+        // A paused turn says why it paused; a failed one must not, or "the model errored" would be
+        // readable as "the app was closed". The caller reads status first, then this.
+        const settled = entry.lastTerminalStatus === 'paused' && entry.lastStopReason
+          ? { ...result, stopReason: entry.lastStopReason }
+          : result
+        return toolInvocations.length > 0 ? { ...settled, toolInvocations } : settled
       } catch (error) {
         entry.lastTerminalStatus = isRuntimeAbortError(error) ? 'paused' : 'error'
         entry.lastStopReason =

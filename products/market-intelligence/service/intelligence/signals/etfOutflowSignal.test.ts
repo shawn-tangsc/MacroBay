@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { isModuleSignal, signalCooldown, signalWindow } from '../../../contracts/moduleSignal'
 import { etfFlowPolicy } from '../../../contracts/etfFlows'
-import { buildEtfOutflowSignal, etfOutflowSignalPolicy } from './etfOutflowSignal'
+import { buildEtfOutflowSignal, etfOutflowSignalPolicy, settledEtfFlowRows } from './etfOutflowSignal'
 import { isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
+import { buildEtfOutflowSignalRequest } from './etfOutflowNotifier'
 import { signalTriggerKey } from '../../../contracts/moduleSignal'
 
 const threshold = etfFlowPolicy.signalOutflowUsd
@@ -120,5 +121,71 @@ describe('ETF outflow signal', () => {
   it('keeps the rule name independent of its module', () => {
     expect(etfOutflowSignalPolicy.ruleId).toBe('etf-outflow-3d')
     expect(etfOutflowSignalPolicy.moduleId).toBe('etf-flows')
+  })
+})
+
+describe('judging only settled trading days (2026-11-06 replay)', () => {
+  // 这一天的真实读数：11-05 在 11-06 早上读到 −$14M、四小时后变成 −$411.9M，发行商还在补报。
+  const rows = [
+    { tradingDate: '2026-11-04', netFlowUsd: 74_600_000, observedAt: '2026-11-04T00:00:00.000Z' },
+    { tradingDate: '2026-11-05', netFlowUsd: -430_200_000, observedAt: '2026-11-05T00:00:00.000Z' },
+    { tradingDate: '2026-11-06', netFlowUsd: -411_900_000, observedAt: '2026-11-06T00:00:00.000Z' }
+  ]
+
+  // 08:01 与 12:52（+08）都在 11-06 的 UTC 日里：11-06 还没定稿，只剩两天可判——
+  // 结论是「数据不齐」（牌子灰、不推通知、不叫分析），不是「三天净流出」。
+  it('judges only the settled days, so no alert fires while the newest day is still being revised', () => {
+    for (const asOf of ['2026-11-06T00:01:00.000Z', '2026-11-06T04:52:00.000Z']) {
+      const signal = buildEtfOutflowSignal({ asset: 'btc', rows, asOf })!
+      expect(signal.readiness).toBe('unavailable')
+      // 30 小时窗口下，11-05 在 04:52Z（+28.9h）也还没定稿：只剩 11-04 一天可判。
+      expect(signal.values).toMatchObject({ coveredDays: 1, requiredDays: 3 })
+      expect(buildEtfOutflowSignalRequest(signal)).toBeUndefined()
+    }
+  })
+
+  // 第二天（UTC 日）11-06 静置满一天，三天累计 = 74.6 − 430.2 − 411.9 = −767.5M：一条，且是定稿值。
+  it('speaks once the day has settled, with the final number and that trading day as the bucket', () => {
+    const signal = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-11-07T06:00:00.000Z' })!
+    expect(signal.readiness).toBe('available')
+    expect(signal.severity).toBe('high')
+    expect(signal.observedAt).toBe('2026-11-06T00:00:00.000Z')
+    expect(signal.values).toMatchObject({ cumulativeNetFlowUsd: -767_500_000, coveredDays: 3, requiredDays: 3 })
+
+    // 提醒正文必须写明「截至哪天收盘」：读者就是被这一句缺了误导的。
+    const request = buildEtfOutflowSignalRequest(signal)!
+    expect(request.rendered?.['zh-CN']!.body).toContain('截至 11-06 交易日')
+    expect(request.rendered?.['en-US']!.body).toContain('as of the 11-06 trading day')
+  })
+
+  // 同一桶再读一次：去重键不变，平台按它合并，不会推第二次。
+  it('keeps one bucket for the settled day across later refreshes', () => {
+    const first = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-11-07T06:00:00.000Z' })!
+    const later = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-11-07T12:00:00.000Z' })!
+    expect(later.dedupeKey).toBe(first.dedupeKey)
+    expect(later.values.cumulativeNetFlowUsd).toBe(first.values.cumulativeNetFlowUsd)
+  })
+})
+
+describe('the settle window itself', () => {
+  const row = [{ tradingDate: '2026-11-05', netFlowUsd: -414_000_000, observedAt: '2026-11-05T00:00:00.000Z' }]
+
+  // 起算点是交易日 00:00Z：29 小时 59 分还不够，满 30 小时才放行。
+  it('starts the clock at the trading day boundary, not at a close', () => {
+    expect(settledEtfFlowRows(row, '2026-11-06T05:59:59.000Z')).toEqual([])
+    expect(settledEtfFlowRows(row, '2026-11-06T06:00:00.000Z')).toHaveLength(1)
+  })
+
+  // 判据（架构师）：11-05 那组数在 +28.9h 还在变（−14M → −411.9M）；到 +30h 判它时，
+  // 累计里只能是最新的数，不能含 −14M。
+  it('judges the revised value once the day has settled, and never the old one', () => {
+    const signals = [
+      { tradingDate: '2026-11-03', netFlowUsd: -10_000_000, observedAt: '2026-11-03T00:00:00.000Z' },
+      { tradingDate: '2026-11-04', netFlowUsd: 74_600_000, observedAt: '2026-11-04T00:00:00.000Z' },
+      { tradingDate: '2026-11-05', netFlowUsd: -411_900_000, observedAt: '2026-11-05T00:00:00.000Z' }
+    ]
+    const signal = buildEtfOutflowSignal({ asset: 'btc', rows: signals, asOf: '2026-11-06T06:00:00.000Z' })!
+    expect(signal.readiness).toBe('available')
+    expect(signal.values.cumulativeNetFlowUsd).toBe(-347_300_000)
   })
 })

@@ -6,13 +6,14 @@ import { createCalendarSignalQuery, createEtfOutflowSignalQuery, createOpenInter
 const asOf = '2026-10-31T14:45:00.000Z'
 
 describe('module signal query', () => {
-  it('asks the panel query once, for the window the rule needs', async () => {
+  it('asks the panel query once, for the window the card is showing', async () => {
     const readHistory = vi.fn(async () => ({
       state: 'available' as const, asOf, window: '24h' as const, btc: [], eth: [],
-      liquidationHints: [{ observedAt: '2026-10-31T14:30:00.000Z', asset: 'btc' as const, dropPct: -2.6, volumeMultiple: 3.2, notionalUsd: 7.4e9 }],
+      liquidationHints: [{ observedAt: '2026-10-31T14:30:00.000Z', asset: 'btc' as const, direction: 'long' as const, dropPct: -2.6, volumeMultiple: 3.2, notionalUsd: 7.4e9 }],
       liquidationHintsState: 'available' as const
     }))
     const signals = await createOpenInterestSignalQuery({ readHistory }).query({ asOf }).then(entries => entries.map(entry => entry.signal))
+    // 判定窗口固定 24 小时，不跟卡片页签（用户 2026-11-08 10:4x 定）。
     expect(readHistory).toHaveBeenCalledWith({ asOf, window: '24h' })
     expect(signals).toHaveLength(1)
     expect(signals[0]).toMatchObject({ ruleId: 'oi-liquidation-proxy', severity: 'high' })
@@ -148,7 +149,7 @@ describe('the window travels with the signal', () => {
     const oi = await createOpenInterestSignalQuery({
       readHistory: async () => ({
         state: 'available', asOf, window: '24h', btc: [], eth: [],
-        liquidationHints: [{ observedAt: '2026-10-31T14:30:00.000Z', asset: 'btc' as const, dropPct: -2.6, volumeMultiple: 3.2, notionalUsd: 7.4e9 }],
+        liquidationHints: [{ observedAt: '2026-10-31T14:30:00.000Z', asset: 'btc' as const, direction: 'long' as const, dropPct: -2.6, volumeMultiple: 3.2, notionalUsd: 7.4e9 }],
         liquidationHintsState: 'available' as const
       })
     }).query({ asOf })

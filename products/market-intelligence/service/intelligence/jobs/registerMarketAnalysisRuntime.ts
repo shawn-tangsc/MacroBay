@@ -19,7 +19,6 @@ import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotT
 import type { SessionSlotInstant } from '../analysis/analysisSlotCoverage'
 import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
 import { queryMacroRoute } from '../public-query/macroRouteQuery'
-import type { SignificanceSignal } from '../analysis/significanceChangeMatcher'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
 import { createAnalysisTriggerPolicy, type TriggerHistoryEntry } from '../analysis/analysisTriggerPolicy'
 import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from '../analysis/eventGroupService'
@@ -29,8 +28,10 @@ import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
+import { createAnalysisConclusionManualSend, type AnalysisConclusionSend } from '../analysis/analysisConclusionManualSend'
 import { createAnalysisNoticeDeps, createReleaseCoverageReader, notifyAbandonedRelease } from './analysisReleaseNoticeWiring'
 import { createRunSessionBinding, type RunSessionPort } from './analysisRunSessionPort'
+import { hasEligibleAnalysisAnchor, readCanonicalAsOf, readSignificanceSignals, readString, resolveDomain, safeJson } from './analysisRuntimePayload'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
@@ -58,6 +59,8 @@ export type MarketAnalysisRuntime = Readonly<{
   requestInitialAnalysis: (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource) => Promise<{ itemId: string; queued: true }>
   /** 最后一跳：规则线把一条模块信号交给它（见 `requestSignalAnalysis`）。 */
   requestSignalAnalysis: SignalAnalysisService
+  /** 抽屉里那枚「发送到频道」：按运行 id 取结论，走与自动推送同一条提交路。 */
+  sendConclusion: AnalysisConclusionSend
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
   /** Mounted by the bootstrap: the session ports are injected there, not built here. */
   setRunSessionPort: (port: RunSessionPort | undefined) => void
@@ -166,7 +169,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     now,
     idFactory: () => randomUUID(),
     ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
-    ...createAnalysisNoticeDeps(input),
+    ...createAnalysisNoticeDeps({ ...input, now, timeZone }),
     ensureRunSession: runSession.ensureRunSession,
     appendRunSummary: runSession.appendRunSummary
   })
@@ -396,6 +399,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   return {
     repository,
     startRecovery,
+    // 「发送到频道」：与自动推送同一个构造器、同一个提交入口，只换去重分量与收窄。
+    sendConclusion: createAnalysisConclusionManualSend({
+      repository,
+      now,
+      ...(input.submitNotification === undefined ? {} : { submit: input.submitNotification })
+    }),
     getSettings: settingsService.getSettings,
     updateSettings: async (patch) => {
       const before = await settingsService.getSettings()
@@ -609,52 +618,6 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       groupType: domain === 'macro' ? 'macro' : domain === 'capital' ? 'capital' : domain === 'funding' ? 'funding' : domain === 'cross-asset' ? 'cross-asset' : 'sentiment'
     }
   }
-}
-
-/** Defensive: a malformed payload degrades to "no trigger reasons", never to a failed run. */
-/** Same eligibility the anchor resolution uses; kept here so the tick can answer "is there anything to analyse". */
-function hasEligibleAnalysisAnchor(item: { sourceTrust?: string; publishedAt?: string | null; processingLabelsJson?: string | null }): boolean {
-  if (item.sourceTrust !== 'high' || !item.publishedAt) return false
-  try {
-    const labels = JSON.parse(item.processingLabelsJson ?? '{}')
-    return labels.relevanceOutcome === 'full-intelligence' && labels.sentimentEligible === true
-  } catch { return false }
-}
-
-function readSignificanceSignals(payload: unknown): readonly SignificanceSignal[] {
-  const raw = (payload as { significanceSignals?: unknown } | null)?.significanceSignals
-  if (typeof raw !== 'string' || raw.length === 0) return []
-  try {
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter(entry => entry && typeof entry === 'object' && typeof (entry as { eventKey?: unknown }).eventKey === 'string') as SignificanceSignal[] : []
-  } catch { return [] }
-}
-
-function readString(value: unknown, key: string): string | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const candidate = (value as Record<string, unknown>)[key]
-  return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
-}
-
-function readCanonicalAsOf(value: unknown): string | undefined {
-  const asOf = readString(value, 'asOf')
-  if (!asOf) return undefined
-  try { return new Date(asOf).toISOString() === asOf ? asOf : undefined } catch { return undefined }
-}
-
-function safeJson(value: string | undefined): Record<string, unknown> {
-  if (!value) return {}
-  try {
-    const parsed = JSON.parse(value)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}
-  } catch { return {} }
-}
-
-function resolveDomain(value: unknown, sourceId: string): AnalysisChange['domain'] {
-  if (value === 'macro' || value === 'capital' || value === 'sentiment' || value === 'funding' || value === 'cross-asset') return value
-  if (sourceId.includes('funding')) return 'funding'
-  if (sourceId.includes('stablecoin') || sourceId.includes('router')) return 'capital'
-  return 'sentiment'
 }
 
 /**

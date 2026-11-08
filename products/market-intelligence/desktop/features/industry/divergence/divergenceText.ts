@@ -1,7 +1,29 @@
-import type { DivergenceDirection, DivergenceLegId, DivergencePairId } from '../../../../contracts/marketDivergence'
+import type { DivergenceLegId, DivergencePairId } from '../../../../contracts/marketDivergence'
 
 export type DivergencePanelText = Readonly<{
   title: string
+  /** 卡面那一行摘要（五态逐字，界面设计 v2）。卡面只剩它，读数进展开区。 */
+  summary: Readonly<{
+    divergence: string
+    quiet: string
+    divergenceWithheldOne: string
+    divergenceWithheldMany: string
+    quietWithheldOne: string
+    quietWithheldMany: string
+    allWithheld: string
+  }>
+  /** 展开区标题（「本次读数」）：ⓘ 紧跟其后，卡面因此没有第二个控件。 */
+  detailTitle: string
+  /** 观察态的中性标签：消息偏空、价格没动。方向色只给 bearish / bullish。 */
+  observedLabel: string
+  /** 「截至」那一行用的短名：不带窗口，窗口在腿行里已经有了。 */
+  legNames: Readonly<Record<DivergenceLegId, string>>
+  /** 「当前值 / 规则」那一行：三种写法，只在一处拼（`boundLine`）。 */
+  boundAtLeast: string
+  boundAtMostNegative: string
+  boundAtMostAbsolute: string
+  /** 收进 ⓘ 的四句：这张卡怎么来的。 */
+  notes: readonly string[]
   /**
    * The rule's chip. Only the intraday pair gets one, and it carries no numbers: the readings stay
    * on the rows below, once.
@@ -20,11 +42,6 @@ export type DivergencePanelText = Readonly<{
   chipWhy: string
   /** The word that marks the block as a conclusion rather than another section. */
   helpLabel: string
-  /** The popover's four one-look bullets, one point each: the bubble is a glance, not a document. */
-  helpBullets: readonly string[]
-  /** The entry beside the help icon that opens the longer notes below the card. */
-  helpDetailsLabel: string
-  helpDetails: readonly string[]
   /** Appended when several pairs were held back for the same reason. */
   withheldGroup: string
   /** What separates two withheld pairs, and what marks a missing instant. Per language. */
@@ -54,8 +71,8 @@ export type DivergencePanelText = Readonly<{
    */
   sentimentNoScoredItems: string
   legs: Readonly<Record<DivergenceLegId, string>>
-  directions: Readonly<Record<DivergenceDirection, string>>
-  pairs: Readonly<Record<DivergencePairId, Readonly<{ mechanism: string; invalidation: string }>>>
+  directions: Readonly<Record<'bearish' | 'bullish', string>>
+  pairs: Readonly<Record<DivergencePairId, Readonly<{ mechanism?: string; invalidation: string }>>>
   /** Short name per pair, for lines that must say *which* comparison was skipped. */
   pairNames: Readonly<Record<DivergencePairId, string>>
   /** "{leg} 截至 {at}" — the instant a withheld leg stopped. */

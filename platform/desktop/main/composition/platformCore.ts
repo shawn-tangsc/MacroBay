@@ -43,8 +43,20 @@ const writableTempDirectory = ensureWritableTempDirectory({
 markTempDirectoryVerified()
 const platformDataDirectory = join(userDataPath, 'platform')
 mkdirSync(platformDataDirectory, { recursive: true })
+// 日志口先建：设置存储要把「读到一个类型不认识的字段」记进去，而那张白名单此前把
+// `channelEvents` / `surfaceSelections` 静默丢了一版又一版——保留未知字段是第一半，
+// 「见到就记一条、每个名字只记一次」是第二半，两半都要有落点。
+const appLog = createAppLog({
+  directory: join(userDataPath, 'logs'),
+  redact: (text) => redactText(text).text
+})
 const settingsStore = createSettingsStore(
-  createJsonFileStorage(join(userDataPath, 'platform', 'settings.json'), createDefaultAppSettings())
+  createJsonFileStorage(join(userDataPath, 'platform', 'settings.json'), createDefaultAppSettings()),
+  {
+    onUnknownNotificationField: (field) => {
+      appLog.log('warn', 'settings.unknown-notification-field', { field })
+    }
+  }
 )
 /** 主进程唯一的「读者时区」来源；任务排期、免打扰、日报调度、分析展示都从这里取。 */
 const shellTimeZone = createShellTimeZoneProvider({ settings: settingsStore })
@@ -58,11 +70,6 @@ const providerStore = createProviderStore(
   createProviderSqliteStorage({ path: join(userDataPath, 'platform', 'model-providers.sqlite') }),
   providerSecretVault
 )
-/** 唯一的日志落盘口：主进程与渲染层诊断共用 `userData/logs/app.log`，写入前统一脱敏。 */
-const appLog = createAppLog({
-  directory: join(userDataPath, 'logs'),
-  redact: (text) => redactText(text).text
-})
 appLog.log('info', 'app.start', { version: appVersion, platform })
 if (writableTempDirectory.redirected) {
   // 只在真的换了目录时记一行：正常机器上启动日志不因此变吵，出问题时又能看出换过。

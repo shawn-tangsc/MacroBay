@@ -10,17 +10,20 @@ import {
   type NotificationCopyLanguage
 } from '../../i18n/notificationCopy'
 import { findActionDirective } from '../contracts/actionDirective'
-import type { NotificationCopyParam, NotificationCopyPort } from '../contracts/notificationCopyPort'
+import type { NotificationCopyParam, NotificationCopyPort, NotificationCopyRef } from '../contracts/notificationCopyPort'
 import { SIGNAL_SEVERITY_RANK } from '../contracts/notificationContracts'
 import type {
   NotificationAction,
   NotificationDiagnosticsSink,
+  NotificationSuppressedLevel,
   NotificationSignalSeverity,
   NotificationPushBackoff,
   NotificationRecord,
   NotificationRuntimeSettings
 } from '../contracts/notificationContracts'
 import { recordPushOutcome, shouldSkipPush, type PushDeliveryOutcome } from '../delivery/pushBackoffPolicy'
+import { pushDeliveryState } from '../delivery/pushDeliveryState'
+import type { PushChannelResolution } from '../delivery/pushChannelResolution'
 import {
   routeTransientDelivery,
   type DeliveryHooks,
@@ -36,6 +39,8 @@ export type NotificationDeliveryInput = {
   getLanguage?: () => Promise<'zh-CN' | 'en-US'>
   copy?: NotificationCopyPort
   diagnostics?: NotificationDiagnosticsSink
+  /** 目标通道的唯一派生（技术方案 §1）；缺省视为「一条都没有」，绝不回退去读旧字段。 */
+  resolvePushChannel?: () => Promise<PushChannelResolution>
   now: () => string
 }
 
@@ -119,7 +124,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       body: title === null ? '' : (body ?? ''),
       reason: title === null ? '' : (reason ?? ''),
       // 动作**不跟着文案走**：它是一条结构事实（点开去哪），文案缺了也不许把入口一起吞掉。
-      actionLabels: resolveActionLabels(record.actions, resolvedLanguage),
+      actionLabels: resolveActionLabels(record, resolvedLanguage),
       ...(occurrenceLabel === null ? {} : { occurrenceLabel }),
       ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
     }
@@ -162,7 +167,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
           title: fallbackTitle,
           body: '',
           reason: '',
-          actionLabels: resolveActionLabels(record.actions, language),
+          actionLabels: resolveActionLabels(record, language),
           ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
         }
       }
@@ -170,26 +175,64 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
         title: picked.title,
         body: picked.body,
         reason: picked.reason,
-        actionLabels: resolveActionLabels(record.actions, language),
+        actionLabels: resolveActionLabels(record, language),
         ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
       }
     }
 
     /**
-     * 动作标签和正文用**同一次**语言、同一张表解析。解析不出来就整条不给（`null`）：
-     * 一个按不动的按钮比没有按钮更糟，而拿 `labelKey` 顶上去正是今晚要灭的那种露键。
+     * 动作标签和正文用**同一次**语言、同一条解析链路（v2.58）：引用优先（产品动作只有引用），
+     * 老记录只有 `labelKey` 时按平台闭集读。
+     *
+     * 解析不出来就**不给这条动作**（渲染层没有标签就不画按钮）：一个按不动的按钮比没有按钮更糟，
+     * 而拿键顶上去正是今晚要灭的那种露键。同时留一条 `action-label-unresolved`——按钮凭空消失
+     * 而没有任何线索，是这次一定要堵掉的那种静默。
      */
     function resolveActionLabels(
-      actions: readonly NotificationAction[],
+      record: NotificationRecord,
       language: NotificationCopyLanguage
     ): Readonly<Record<string, string>> {
       const labels: Record<string, string> = {}
-      for (const action of actions) {
-        const text = notificationCopyText(language, action.labelKey)
-        if (typeof text !== 'string' || text.length === 0) continue
+      for (const action of record.actions) {
+        const ref = action.labelRef
+          ?? (action.labelKey === undefined ? undefined : { scope: 'platform' as const, key: action.labelKey })
+        const text = ref === undefined
+          ? null
+          : input.copy === undefined
+            // 没有文案端口（未装配/单测）：只有平台键还读得出来，产品键照实报「解析不到」。
+            ? (action.labelRef === undefined && action.labelKey !== undefined
+                ? notificationCopyText(language, action.labelKey)
+                : null)
+            : input.copy.resolve(ref, language)
+        if (typeof text !== 'string' || text.length === 0) {
+          reportActionLabelUnresolved(record, action.id, ref, language)
+          continue
+        }
         labels[action.id] = text
       }
       return labels
+    }
+
+    /** 一条动作标签解析不到只报**一次**：切语言、翻页都会再解析，不去重会把真正的第一次淹掉。 */
+    function reportActionLabelUnresolved(
+      record: NotificationRecord,
+      actionId: string,
+      ref: NotificationCopyRef | undefined,
+      language: NotificationCopyLanguage
+    ): void {
+      const key = ref === undefined ? undefined : (ref.scope === 'job-title' ? ref.definitionId : ref.key)
+      const dedupeKey = `action:${record.id}:${actionId}:${key ?? ''}:${language}`
+      if (reportedUnresolved.has(dedupeKey)) return
+      reportedUnresolved.add(dedupeKey)
+      input.diagnostics?.({
+        code: 'action-label-unresolved',
+        at: input.now(),
+        recordId: record.id,
+        eventTypeId: record.eventTypeId,
+        ...(key === undefined ? {} : { key }),
+        language,
+        reason: actionId
+      })
     }
   }
 
@@ -202,21 +245,28 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     settings: NotificationRuntimeSettings,
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>,
     /** 这次提交声明的信号严重度：首次推送成功时记进 `delivery.push.highestSeverity`。 */
-    signalSeverity?: NotificationSignalSeverity
+    signalSeverity?: NotificationSignalSeverity,
+    /** 规划器算好的免打扰决定：路由拿它，不再自己重算（同一决定两处共用）。 */
+    quietHours?: { inside: boolean; bypassed: boolean }
   ): Promise<{
     record: NotificationRecord
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
     /** 桌面这一跳没弹出来（`show()` 返回 `ok:false` 或平台不支持）：P7 的唯一来源。 */
     desktopBlocked: boolean
+    /** 这次**没被尝试**的表面（免打扰 / 开关关着）：回执据此说「没测」而不是「没到」。 */
+    suppressedLevels: readonly NotificationSuppressedLevel[]
     transition?: NotificationPushTransition
   }> {
     const content = await resolveContent(record)
-    const attempts = await routeTransientDelivery(record, settings, input.deliveryHooks ?? {}, input.clock, content)
+    const attempts = await routeTransientDelivery(record, settings, input.deliveryHooks ?? {}, input.clock, content, quietHours)
     const delivery: NotificationRecord['delivery'] = { ...record.delivery }
+    const suppressedLevels: NotificationSuppressedLevel[] = []
     let desktopBlocked = false
     for (const attempt of attempts) {
       if (attempt.channel !== 'toast' && attempt.channel !== 'popup' && attempt.channel !== 'desktop') continue
       if (attempt.result === 'skipped') {
+        const reason = suppressionReason(attempt.reason)
+        if (reason !== undefined) suppressedLevels.push({ level: attempt.channel, reason })
         delete delivery[attempt.channel]
         continue
       }
@@ -237,8 +287,18 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       record: deliveryChanged ? { ...record, delivery } : record,
       pushBackoff: pushOutcome?.pushBackoff ?? pushBackoff,
       desktopBlocked,
+      suppressedLevels,
       ...(pushOutcome?.transition === undefined ? {} : { transition: pushOutcome.transition })
     }
+  }
+
+  /** `skipped` 的原因里哪几种属于「根本没试」：其余（`*-unavailable`）是「想试但没有入口」。 */
+  function suppressionReason(reason: string | undefined): NotificationSuppressedLevel['reason'] | undefined {
+    if (reason === 'quiet-hours') return 'quiet-hours'
+    if (reason === 'toast-disabled') return 'toast-disabled'
+    if (reason === 'popup-disabled') return 'popup-disabled'
+    if (reason === 'desktop-disabled') return 'desktop-disabled'
+    return undefined
   }
 
   /**
@@ -262,7 +322,13 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     let changed = false
     let transition: NotificationPushTransition | undefined
     const at = input.now()
-    const channelId = settings.push.channelId
+    // 目标通道由派生入口给出（`runtime-ready` 恰好一条），不再读 `settings.push.channelId`——
+    // 那个字段没有任何生产写入方，读它等于让推送目标悬空（技术方案 §1）。
+    const pushChannel = await (input.resolvePushChannel?.() ?? null) ?? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+    if (!pushChannel.ok && pushChannel.multiple) {
+      input.diagnostics?.({ code: 'push-multiple-enabled', count: pushChannel.enabledChannelCount, at })
+    }
+    const channelId = pushChannel.ok ? pushChannel.channelId : null
     const current = channelId === null ? undefined : pushBackoff[channelId]
     const previousHighest = delivery.push?.highestSeverity
     const highest = (sent: boolean): NotificationSignalSeverity | undefined => {
@@ -273,6 +339,11 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
         : previousHighest
     }
 
+    // 事件级开关的兜底：规划层已经不排手机，但严重度升级与手动重投不经过规划。
+    // 明确关掉的事件在这里直接不发，也不写 `delivery.push`——「读者选择不推」不是一次失败。
+    if ((settings.channelEvents ?? {})[record.eventTypeId] === false) {
+      return { pushBackoff }
+    }
     if (channelId === null || !input.deliveryHooks?.push) {
       delivery.push = { state: 'failed', reason: 'push-unavailable', at, ...(previousHighest === undefined ? {} : { highestSeverity: previousHighest }) }
       return { pushBackoff }
@@ -284,11 +355,14 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     }
 
     const result = await input.deliveryHooks.push({ ...record, delivery }, content)
-    const outcome: PushDeliveryOutcome = result.ok
-      ? 'sent-accepted'
-      : result.reason === 'unknown-after-send'
-        ? 'unknown-after-send'
-        : 'failed'
+    // 记录上的状态词只由这一处映射给（与手动重投读同一张表）。
+    const mapped = pushDeliveryState(result)
+    // 熔断只认「确定失败」：`sent-unconfirmed`（发出去了、没拿到回执）既不是成功也不是失败。
+    const outcome: PushDeliveryOutcome = mapped.state === 'sent-unconfirmed'
+      ? 'unknown-after-send'
+      : mapped.state === 'failed'
+        ? 'failed'
+        : 'sent-accepted'
     const decision = recordPushOutcome(current, outcome, at)
     // `unknown-after-send` 与「本来就没失败过」返回原值：不写，保留「没有熔断记录」这个状态。
     if (decision.changed) {
@@ -303,19 +377,12 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     if (decision.transition === 'resumed') transition = { kind: 'resumed', channelId }
     const sent = outcome !== 'failed'
     const nextHighest = highest(sent)
-    delivery.push = result.ok
-      ? {
-          state: 'sent-accepted',
-          at,
-          ...(result.messageId === undefined ? {} : { messageId: result.messageId }),
-          ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
-        }
-      : {
-          state: 'failed',
-          reason: result.reason ?? 'channel-rejected',
-          at,
-          ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
-        }
+    delivery.push = {
+      ...mapped,
+      at,
+      ...(result.messageId === undefined ? {} : { messageId: result.messageId }),
+      ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
+    }
     return { pushBackoff: changed ? nextBackoff : pushBackoff, ...(transition === undefined ? {} : { transition }) }
   }
 

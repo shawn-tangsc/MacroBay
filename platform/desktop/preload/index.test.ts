@@ -137,12 +137,18 @@ describe('desktop preload platform api', () => {
     // 具名白名单：新增方法必须改这里，否则「渲染层能调什么」会悄悄变宽。
     // `deleteRead` 是唯一破坏性入口，其余都是读、标读、收起、稍后这类状态迁移。
     // 订阅层撤销后，设置类只留两个总开关 + 情报三条的频道开关（契约 §5.1 / §5.4）。
+    //
+    // `getSurfaceSelection` / `setSurfaceSelection` 是**表面选择（契约 §5.5 第三层）的读写口**：
+    // 设置页要把「这条事件发到哪些面」落在 `notifications.surfaceSelections` 里，读一份、写一份，
+    // 没有这两条，读者勾上的东西就只在内存里。写口只有这一对（无批量、无删除、无 reset），
+    // 且服务端仍会按批准表夹一遍——所以它们必须留在白名单里，不是「顺手多开两个口子」。
     expect(Object.keys(api.notifications).sort()).toEqual([
       'acknowledge',
       'deleteRead',
       'dismiss',
       'getChannelEvents',
       'getDeliverySettings',
+      'getSurfaceSelection',
       'getUnreadState',
       'list',
       'listEventCatalog',
@@ -155,6 +161,7 @@ describe('desktop preload platform api', () => {
       'sendTest',
       'setChannelEvent',
       'setDesktopEnabled',
+      'setSurfaceSelection',
       'setToastEnabled',
       'snooze'
     ])

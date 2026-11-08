@@ -17,21 +17,19 @@ const zhText = (key: keyof typeof notificationCopy['zh-CN']): string => notifica
 const SUSPEND_TITLE = 'notification.event.platform.channel.push-suspended.title'
 const RESUMED_TITLE = 'notification.event.platform.channel.push-resumed.title'
 
-const policy: NotificationEventPolicy = {
-  'platform.push-probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
-  'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  // 凭据翻转两条也要在目录里：不在目录里的提交会被拒成「事件没登记」，
-  // 那就测不到「句子拼没拼出来」这件事本身。
-  'platform.provider.credential-invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.provider.credential-recovered': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
-
 const catalog = createNotificationEventCatalog({
-  policy,
+  // 批准值随声明走（b2）：五条批准原样挪到来源上，值逐字不变。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.push-probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+        'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+        'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        // 凭据翻转两条也要在目录里：不在目录里的提交会被拒成「事件没登记」。
+        'platform.provider.credential-invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+        'platform.provider.credential-recovered': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.push-probe',
@@ -95,6 +93,14 @@ const catalog = createNotificationEventCatalog({
   ]
 })
 
+/** 目标通道现在由派生入口给出（技术方案 §1）：沿用夹具的 `push.channelId` 意图，换成一次 `runtime-ready`。 */
+async function resolvePushChannelFromSettings() {
+  const channelId = settings.push.channelId
+  return channelId === null
+    ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+    : { ok: true as const, channelId, channelName: 'channel-1' }
+}
+
 const settings: NotificationRuntimeSettings = {
   desktopEnabled: false,
   toastEnabled: false,
@@ -123,6 +129,8 @@ function createHarness() {
   // 出站推送要读者订阅了 channel 档才会排进投递表（`effectiveLevels` 第 186 行）。
   Object.assign(state, { subscriptions: { 'platform.push-probe': { record: true, channel: true } } })
   const runtime = createNotificationRuntime({
+    resolvePushChannel: resolvePushChannelFromSettings,
+    diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
       write: async (next) => { Object.assign(state, next) }
@@ -203,6 +211,8 @@ describe('P4a/P4b: credential health announces only flips', () => {
     const state = createDefaultNotificationStoreState()
     const make = (): ReturnType<typeof createNotificationRuntime> =>
       createNotificationRuntime({
+        resolvePushChannel: resolvePushChannelFromSettings,
+        diagnostics: () => undefined,
         storage: {
           read: async () => JSON.parse(JSON.stringify(state)),
           write: async (next) => { Object.assign(state, next) }
@@ -235,6 +245,8 @@ describe('P4a/P4b: credential health announces only flips', () => {
   it('never prints the provider id: no display name means no notice, and the flip is still recorded', async () => {
     const state = createDefaultNotificationStoreState()
     const runtime = createNotificationRuntime({
+      resolvePushChannel: resolvePushChannelFromSettings,
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }
@@ -258,6 +270,8 @@ describe('P4a/P4b: credential health announces only flips', () => {
     const state = createDefaultNotificationStoreState()
     state.providerCredentialHealth = { silicon: 'invalid' }
     const runtime = createNotificationRuntime({
+      resolvePushChannel: resolvePushChannelFromSettings,
+      diagnostics: () => undefined,
       storage: {
         read: async () => JSON.parse(JSON.stringify(state)),
         write: async (next) => { Object.assign(state, next) }

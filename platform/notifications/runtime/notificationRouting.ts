@@ -1,4 +1,4 @@
-import { minutesOfDayInTimeZone } from '../../time/timeZoneClock'
+import { isInsideQuietHours } from './quietHours'
 import type { NotificationChannel, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDeeplink, NotificationRequest } from '../contracts/notificationContracts'
@@ -51,7 +51,12 @@ export function routeTransientDelivery(
   settings: NotificationRuntimeSettings,
   hooks: DeliveryHooks,
   clock: NotificationClock,
-  content: NotificationDeliveryContent = buildDeliveryContent(record)
+  content: NotificationDeliveryContent = buildDeliveryContent(record),
+  /**
+   * 规划器算好的**免打扰决定**：同一份决定两处共用（2026-11-08）。缺省时按当前时钟算一次，
+   * 只服务还没有规划器决策的旧调用点（读者手动重投）。
+   */
+  quietHours?: { inside: boolean; bypassed: boolean }
 ): Promise<DeliveryAttempt[]> {
   const attempts: DeliveryAttempt[] = []
   // 编译期已经要求必传；这里再挡一次 `as never` 之类的绕过，并给出可读原因，
@@ -59,8 +64,14 @@ export function routeTransientDelivery(
   if (!clock || typeof clock.now !== 'function') throw new Error('notification-clock-required')
   const now = clock.now().toISOString()
   const transientChannels = record.channels.filter((channel) => channel !== 'center')
+  // 免打扰内**一档都不试**（S6）：跳过要留证据，不能让它看起来像「试了没到」。
+  const quietHoursSuppress = (quietHours?.inside ?? isInsideQuietHours(settings, clock)) && quietHours?.bypassed !== true
 
   for (const channel of transientChannels) {
+    if (quietHoursSuppress) {
+      attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'quiet-hours' })
+      continue
+    }
     if (channel === 'toast') {
       if (!settings.toastEnabled) {
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'toast-disabled' })
@@ -92,6 +103,11 @@ export function routeTransientDelivery(
 
   const desktopChannel = transientChannels.includes('desktop')
   if (!desktopChannel) return Promise.resolve(attempts)
+
+  if (quietHoursSuppress) {
+    // 已在循环里记过一跳 `quiet-hours`（桌面也在 transientChannels 里），这里不再重复。
+    return Promise.resolve(attempts)
+  }
 
   if (!settings.desktopEnabled) {
     attempts.push({ channel: 'desktop', attemptedAt: now, result: 'skipped', reason: 'desktop-disabled' })
@@ -171,44 +187,20 @@ function applyQuietHoursAndPriority(
     urgent: 4
   }
 
+  // 免打扰判别走 `quietHours.ts` 一处实现：`unknown`（时区取不到）**不静音**，只有确定在窗口内才静音。
+  // 窗口内**不留穿透**（Chief 2026-11-07 定）：`urgent` 也不再豁免。留一个例外，就等于替读者
+  // 决定「这一条算紧急」，而他从没同意把那个判断权交给我们；真要「必须叫醒」的事件，那是单独
+  // 设计一类、在界面上写明会穿透，不能靠一个悄悄标的 `priority` 绕过去。
+  // 手机那一档在 `notificationSubmitPlan.effectiveLevels` 里按同一份判定摘掉。
+  const insideQuietHours = isInsideQuietHours(settings, clock)
   return channels.filter((channel) => {
     if (!disruptive.has(channel)) return true
+    if (insideQuietHours) return false
     if (minimumPriority && priorityRank[priority] < priorityRank[minimumPriority]) return false
-    if (settings.quietHours?.enabled && quietHoursVerdict(settings.quietHours, clock) === 'inside') {
-      return priority === 'urgent'
-    }
     return true
   })
 }
 
-/**
- * 免打扰窗口的判定结果。`unknown` 与 `outside` 是两件事：前者是「拿不到现在几点」，
- * 后者是「拿得到，且不在窗口内」。混成一个布尔值，就等于把「不知道」当成「不在」。
- */
-type QuietHoursVerdict = 'inside' | 'outside' | 'unknown'
-
-function quietHoursVerdict(
-  quietHours: NonNullable<NotificationRuntimeSettings['quietHours']>,
-  clock: NotificationClock
-): QuietHoursVerdict {
-  // 免打扰窗口按设置的读者时区判断，不按运行这台机器的本地时间。
-  const currentMinutes = minutesOfDayInTimeZone(clock.now(), clock.timeZone())
-  // 时区用不了时不做判定：宁可多响一次，也不在错的钟点把提醒静音掉。
-  if (currentMinutes === null) return 'unknown'
-  const start = parseLocalMinutes(quietHours.startLocalTime)
-  const end = parseLocalMinutes(quietHours.endLocalTime)
-  if (start === end) return 'outside'
-  const inside = start < end
-    ? currentMinutes >= start && currentMinutes < end
-    : currentMinutes >= start || currentMinutes < end
-  return inside ? 'inside' : 'outside'
-}
-
-function parseLocalMinutes(value: string): number {
-  const [hours, minutes] = value.split(':').map((part) => Number.parseInt(part, 10))
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0
-  return hours * 60 + minutes
-}
 
 
 /** 旧的 `(record)` 调用点没有正文：用记录里的键兜底，保证端口永远拿到同一份形状。 */

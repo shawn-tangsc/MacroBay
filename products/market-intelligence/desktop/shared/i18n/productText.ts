@@ -502,11 +502,21 @@ mi: miText['zh-CN'],
                 'mixed': '方向分歧'
               },
               liquidationChip: '疑似强平 {asset} {pct} · 量 {multiple}×',
-              signalInsufficient: '数据不齐',
+              liquidationChipLong: '疑似多头爆仓 {asset} {pct} · 量 {multiple}×',
+              liquidationChipShort: '疑似空头爆仓 {asset} {pct} · 量 {multiple}×',
+              // 强平判定的三种说法：脚注区一行，互斥。三句都不用警告色——它们说结论，不是报错。
+              liquidationNoteNoHit: '强平判定（近 24 小时）没有命中',
+              liquidationNoteUnreadable: '强平判定暂时读不到',
+              liquidationNoteInsufficient: '强平判定数据不齐，这次不下结论',
+              liquidationHiddenHits: '图上还有 {count} 次疑似爆仓没有标出',
+              markLong: '疑似多头爆仓 {pct}',
+              markShort: '疑似空头爆仓 {pct}',
+              markLongMany: '疑似多头爆仓 ×{count}',
+              markShortMany: '疑似空头爆仓 ×{count}',
+              markMixedMany: '疑似爆仓 ×{count}',
               signalHover: '{rule}｜窗口 {window}｜{kind}',
               signalKindInferred: '推断值',
               window15m: '15 分钟',
-              signalDetailsOpen: '看数据',
               signalDetailsTitle: '信号读数',
               signalDetailsRule: '规则',
               /** The rule's own words; the internal id never reaches the reader. */
@@ -516,7 +526,6 @@ mi: miText['zh-CN'],
               signalDetailsVolume: '成交量为均值',
               signalDetailsObservedAt: '观测时间',
               signalDetailsNote: '这是推断值，不是交易所强平数据。',
-              helpLabel: '这张卡在读什么',
               /** Four one-look bullets: the popover is a glance, not a document. */
               helpBullets: [
                 '线是持仓名义额（1 小时），柱是资金费率（8 小时）；两者都只代表 Binance 一家。',
@@ -532,7 +541,6 @@ mi: miText['zh-CN'],
                 '窗口：7 天把 15 分钟数据折叠成每小时 1 点；24 小时用 15 分钟原生点。',
                 '六档判定：持仓 24h ≤ −5% 且费率回落 = 去杠杆；≥ +5% 且费率 < 0 = 空头拥挤；≥ +5% 且费率 > +0.03% = 多头拥挤；≥ +5% 且费率在 0 ~ +0.03% = 杠杆回补；|Δ| < 5% = 中性；其余不给标签。把鼠标放在标签上可以看到该资产的两个依据数字。'
               ],
-              liquidationFoot: '▲ 疑似强平为推断值，非交易所强平数据（持仓骤降 + 价格同向 + 成交量放大）',
 
               noRate: '该时段无费率',
               sourceName: 'Binance Futures Positioning',
@@ -559,20 +567,6 @@ mi: miText['zh-CN'],
               chipWhyLabel: '为什么算背离',
               chipWhy: '稳定币 7 天在减少、持仓 24 小时在增加，费率同时为负：三条同时成立才判为背离。',
               helpLabel: '这张卡怎么来的',
-              /** Four one-look bullets: the bubble is a glance, not a document. */
-              helpBullets: [
-                '只有两组数据指向相反方向时才会出现这一行；三对都没背离时只显示一句话。',
-                '这几行由固定阈值判定，没有模型参与：同一组数字每次读到的结论都相同。',
-                '不常规的组合会被标出来，交给页面右侧的 AI 总结说清为什么特殊，这张卡不解释。',
-                '「舆情」是模型给新闻标题打的标签，不是交易所数据；其余几组才是。'
-              ],
-              /** The longer notes: opened below the card, never inside the bubble. */
-              helpDetailsLabel: '口径说明',
-              helpDetails: [
-                '不常规的组合指：同时出现两对、方向互相冲突、某条腿正压在阈值上。',
-                '「舆情」的口径：24 小时内明确表态的新闻标题里，看空的占多少。',
-                '比对前先对时间：按天更新的数据超过 36 小时、或某条腿超过它自己节奏的允许滞后时，这一对不下结论，并在下方写明原因。'
-              ],
               withheldGroup: '（{count} 对）',
               /** Joiners and placeholders live here: a fullwidth colon on an English screen is a typo. */
               withheldListSep: '、',
@@ -598,7 +592,40 @@ mi: miText['zh-CN'],
                 stablecoin: '稳定币 7 天', etf: 'ETF 3 日净流', 'open-interest': '持仓 24 小时',
                 funding: '费率', price: '价格 24 小时', sentiment: '舆情看空占比'
               },
-              directions: { bearish: '偏空', bullish: '偏强', unpriced: '未被计价' },
+              /** 卡面那一行摘要：五态逐字（界面设计 v2，2026-11-08）。都不带句末句号。 */
+              summary: {
+                divergence: '今天有一组数据方向相反',
+                quiet: '今天资金、杠杆与价格方向一致，没有背离',
+                divergenceWithheldOne: '今天有一组方向相反；另有 1 组暂时判不了：{reason}',
+                divergenceWithheldMany: '今天有一组方向相反；另有 {count} 组暂时判不了',
+                quietWithheldOne: '今天资金、杠杆与价格一致；另有 1 组暂时判不了：{reason}',
+                quietWithheldMany: '今天资金、杠杆与价格一致；另有 {count} 组暂时判不了',
+                allWithheld: '今天三组都暂时判不了'
+              },
+              /* 「当前值 / 规则」那一行的三种写法。绝对值那条不写 `|OI|`——数学记号读者未必认，
+                 所以 atMost 且阈值为正时读作「不超过」。三种模板只在这一处拼，界面复核后改这里。 */
+              /* 收进 ⓘ 的四句（界面 2026-11-08 定稿逐字）。旧的两组说明（helpBullets / helpDetails）
+                 已被这四句取代，实现侧只渲染这里。 */
+              notes: [
+                '固定阈值判出，没有模型：同一组数字每次结论相同；只有两组数据方向相反才出现。',
+                '方向互冲、或某条腿贴着阈值，会被标出来交给右侧 AI 解释。',
+                '「舆情」是模型给标题打的标签（24 小时内明确表态的标题里看空的占比），不是交易所数据。',
+                '对时间：按天数据超 36 小时、或某腿滞后超自己节奏，就不下结论，并写明是哪条腿。'
+              ],
+              /* 「截至」那一行只用短名：窗口（7 天 / 24 小时）腿行里已有；每条腿各带自己的日期。 */
+              /* 展开区标题。为什么用「本次读数」而不是「三组读数」/「本次判读」：展开区里既有判出来的读数，
+                 也有「没判成、所以没有读数」的组——「三组」会错（有时不是三组），「判读」像内部说法。 */
+              detailTitle: '本次读数',
+              legNames: {
+                stablecoin: '稳定币', etf: 'ETF', 'open-interest': '持仓',
+                funding: '费率', price: '价格', sentiment: '舆情'
+              },
+              boundAtLeast: '规则 ≥ {threshold}',
+              boundAtMostNegative: '规则 ≤ {threshold}',
+              boundAtMostAbsolute: '规则 变动不超过 {threshold}',
+              directions: { bearish: '偏空', bullish: '偏强' },
+              /** 观察态的中性标签：消息偏空、价格没动。它不是方向色标签，所以单独一个键。 */
+              observedLabel: '消息偏空 · 价格没动',
               invalidationLabel: '失效条件',
               pairNames: { 'liquidity-leverage': '弹药 × 空头', 'flows-price': '现货 × 价格', 'narrative-price': '舆情 × 价格' },
               pairs: {
@@ -611,7 +638,8 @@ mi: miText['zh-CN'],
                   invalidation: 'ETF 转为净流入，或价格补跌 1% 以上。'
                 },
                 'narrative-price': {
-                  mechanism: '消息面偏空，但价格与持仓都没有反应：要么尚未计价，要么早已计价完毕。',
+                  // 机制句已删（界面设计 2026-11-08 §九）：观察态用中性标签 + 一句事实，不再写
+                  // 「要么…要么…」这种把两种可能并排放的句子。失效条件保留。
                   invalidation: '价格或持仓出现 1% 以上的方向性移动。'
                 }
               }
@@ -720,10 +748,16 @@ mi: miText['zh-CN'],
               signalInsufficientReason: '数据不齐：三日累计拿不到',
               signalTooltip: '{rule}｜窗口 {window}｜{kind}', signalRuleName: 'ETF 净流出', signalRuleWindow: '3 个交易日', signalKindObserved: '来源报告的事实',
               signalAriaAlert: '{chip}，{asset}',
+              /* 牌子现在是入口：可见文字在前，后面说明点开会发生什么（label-in-name）。 */
+              signalChipOpen: '{chip}，打开口径与来源',
               signalDetailTitle: 'ETF 三日净流出', signalDetailRule: '规则', signalDetailWindow: '窗口',
               signalDetailCumulative: '三日累计', signalDetailCoverage: '覆盖', signalCoverage: '{covered}/{required} 个交易日',
               signalDetailTradingDay: '数据所属交易日（UTC）', signalDetailObservedAt: '观测时间',
-              signalDetailNote: '这是来源报告的净流事实，不是本机推算；数据所属交易日与观测时间不是同一件事。'
+              signalDetailNote: '这是来源报告的净流事实，不是本机推算；数据所属交易日与观测时间不是同一件事。',
+              signalDetailDialogTitle: 'ETF 三日净流出 · 口径与来源',
+              /* 说明图标的读屏名：它解释的那个东西 + 「说明」，不念整段说明、不念「更多信息」。 */
+              signalDetailHelpLabel: '口径与来源说明', signalInsufficientHelpLabel: '数据不齐说明',
+              signalDetailGroupAnalysis: '这次分析', signalDetailGroupReadings: '读数', signalDetailGroupTime: '时间与来源'
             },
             sentiment: { title: '市场情绪', fearGreed: '恐惧与贪婪', observedAt: '观测时间', gaugeMarkers: { fear: '极恐', neutral: '中性', greed: '极贪' } },
             macroMarket: {
@@ -804,7 +838,7 @@ mi: miText['zh-CN'],
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': '非农', unemployment: '失业率',
               'average-hourly-earnings': '时薪', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: '宏观'
             },
-            details: { title: '事件详情', category: '类别', period: '统计周期', source: '来源', time: '发布时间', importance: '重要性', state: '状态', actual: '实际值', previous: '前值', unavailable: '暂无官方值', consensusUnavailable: '官方源未提供', scheduledDateOnly: '官方未公布具体时间', conventionTime: '惯例默认', editedTime: '已编辑',
+            details: { title: '事件详情', category: '类别', period: '统计周期', source: '来源', time: '发布时间', importance: '重要性', state: '状态', actual: '实际值', previous: '前值', unavailable: '暂无官方值', consensusMissing: '预期值未提供', consensusUnreadable: '暂时读不到', consensusUnreadableReason: '已有观测，但预期字段为空（数据缺口）。', consensusReadFailedReason: '这次没有读到市场观测（读取失败），不是没有预期。', consensusFromMarket: '预期来自市场源', scheduledDateOnly: '官方未公布具体时间', conventionTime: '惯例默认', editedTime: '已编辑',
               editTime: { label: '发布时间（可编辑）', save: '保存', cancel: '取消', restore: '恢复官方/惯例', saved: '已保存你的时间。', rejected: '保存失败：时间或日期不合法。', ambiguous: '该时刻在本地时区出现两次（夏令时切换），请换一个时间。', hint: '编辑会保存你的日期与时间，并覆盖官方与惯例值。' } },
             sources: { federalReserve: 'Federal Reserve Board (Fed)', bea: '美国经济分析局（BEA）', blsManualIcs: '美国劳工统计局（BLS，手动 ICS）', blsAutomaticSchedule: '美国劳工统计局（BLS，自动年度日程）' },
             sourceMarkers: { federalReserve: 'Fed', bea: 'BEA', blsManualIcs: 'BLS', blsAutomaticSchedule: 'BLS' },
@@ -1799,11 +1833,20 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'mixed': 'Mixed'
               },
               liquidationChip: 'Suspected liquidation {asset} {pct} · vol {multiple}×',
-              signalInsufficient: 'Insufficient data',
+              liquidationChipLong: 'Suspected long liquidation {asset} {pct} · vol {multiple}×',
+              liquidationChipShort: 'Suspected short liquidation {asset} {pct} · vol {multiple}×',
+              liquidationNoteNoHit: 'Liquidation rule (last 24 hours): no hit.',
+              liquidationNoteUnreadable: 'Liquidation read unavailable.',
+              liquidationNoteInsufficient: 'Not enough data to judge liquidation this time.',
+              liquidationHiddenHits: '{count} more suspected liquidations are not marked on the chart',
+              markLong: 'Suspected long liquidation {pct}',
+              markShort: 'Suspected short liquidation {pct}',
+              markLongMany: 'Suspected long liquidations ×{count}',
+              markShortMany: 'Suspected short liquidations ×{count}',
+              markMixedMany: 'Suspected liquidations ×{count}',
               signalHover: '{rule} | window {window} | {kind}',
               signalKindInferred: 'inferred',
               window15m: '15 minutes',
-              signalDetailsOpen: 'View data',
               signalDetailsTitle: 'Signal reading',
               signalDetailsRule: 'Rule',
               /** The rule's own words; the internal id never reaches the reader. */
@@ -1813,7 +1856,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               signalDetailsVolume: 'Volume vs average',
               signalDetailsObservedAt: 'Observed at',
               signalDetailsNote: 'An inferred mark, not exchange liquidation data.',
-              helpLabel: 'What this card reads',
               /** Four one-look bullets: the popover is a glance, not a document. */
               helpBullets: [
                 'The line is notional open interest (hourly), the bars are the funding rate (8-hourly); both cover Binance alone.',
@@ -1829,7 +1871,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'Windows: 7 days folds the 15-minute rows to one point per hour; 24 hours keeps the native points.',
                 'Six states: open interest 24h ≤ −5% with the rate falling = deleveraging; ≥ +5% with the rate below zero = crowded shorts; ≥ +5% with the rate above +0.03% = crowded longs; ≥ +5% with the rate between zero and +0.03% = refilling; |Δ| < 5% = neutral; anything else is left unlabelled. Hover a label to see the two numbers behind it.'
               ],
-              liquidationFoot: '▲ Suspected liquidation is inferred, not exchange liquidation data (position drop + price move + volume expansion)',
 
               noRate: 'No funding rate in this window',
               sourceName: 'Binance Futures Positioning',
@@ -1852,20 +1893,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               chipWhyLabel: 'Why this counts as a divergence',
               chipWhy: 'Stablecoins falling over 7 days, open interest rising over 24 hours, and funding negative: all three must hold.',
               helpLabel: 'How this card is produced',
-              /** Four one-look bullets: the bubble is a glance, not a document. */
-              helpBullets: [
-                'A line appears only when two readings point opposite ways; with none, the card is one sentence.',
-                'These lines come from fixed thresholds, with no model in the loop: the same readings always give the same answer.',
-                'Unusual combinations are flagged and handed to the written analysis on the right, which says why they are special.',
-                'Sentiment is the model labelling headlines; it is not an exchange reading. The other legs are.'
-              ],
-              /** The longer notes: opened below the card, never inside the bubble. */
-              helpDetailsLabel: 'Reading notes',
-              helpDetails: [
-                'Unusual means two pairs at once, directions that contradict each other, or a leg sitting on its threshold.',
-                'Sentiment counts the headlines that took a side in the last 24 hours: of those, how many were bearish.',
-                'Windows are checked first: data updated daily that is older than 36 hours, or any leg older than its own cadence allows, withholds the pair and names the reason.'
-              ],
               withheldGroup: ' ({count} pairs)',
               withheldListSep: ', ',
               labelSep: ': ',
@@ -1887,7 +1914,33 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 stablecoin: 'Stablecoins 7d', etf: 'ETF net flow 3d', 'open-interest': 'Open interest 24h',
                 funding: 'Funding', price: 'Price 24h', sentiment: 'Bearish share'
               },
-              directions: { bearish: 'Bearish', bullish: 'Bullish', unpriced: 'Unpriced' },
+              /** The one-line summary on the card: five states, verbatim (design v2, 2026-11-08). No final stop. */
+              summary: {
+                divergence: 'One pair points in opposite directions today',
+                quiet: 'Funding, leverage and price all point the same way today; no divergence',
+                divergenceWithheldOne: 'One pair points in opposite directions today; one pair could not be judged: {reason}',
+                divergenceWithheldMany: 'One pair points in opposite directions today; {count} pairs could not be judged',
+                quietWithheldOne: 'Funding, leverage and price all point the same way today; one pair could not be judged: {reason}',
+                quietWithheldMany: 'Funding, leverage and price all point the same way today; {count} pairs could not be judged',
+                allWithheld: 'None of the three pairs could be judged today'
+              },
+              notes: [
+                'Fixed thresholds, no model: the same numbers always read the same way; a pair shows only when two readings point opposite ways.',
+                'Conflicting directions, or a leg right on its threshold, get marked and explained by the AI summary on the right.',
+                "Sentiment is a model's label on headlines (share of bearish among those that took a stance in 24h), not exchange data.",
+                'Readings are aligned first: a daily figure older than 36h, or a leg lagging its own cadence, gets no verdict — the row says which leg.'
+              ],
+              detailTitle: 'This reading',
+              legNames: {
+                stablecoin: 'Stablecoins', etf: 'ETF', 'open-interest': 'Open interest',
+                funding: 'Funding', price: 'Price', sentiment: 'Sentiment'
+              },
+              boundAtLeast: 'rule ≥ {threshold}',
+              boundAtMostNegative: 'rule ≤ {threshold}',
+              boundAtMostAbsolute: 'rule: within {threshold}',
+              directions: { bearish: 'Bearish', bullish: 'Bullish' },
+              /** The observed state's neutral label: bad news, price unmoved. Not a direction colour, so its own key. */
+              observedLabel: 'Bad news, price unmoved',
               invalidationLabel: 'Invalidated by',
               pairNames: { 'liquidity-leverage': 'Money × shorts', 'flows-price': 'Spot × price', 'narrative-price': 'Narrative × price' },
               pairs: {
@@ -1900,7 +1953,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   invalidation: 'ETF flows turn positive, or price falls through 1%.'
                 },
                 'narrative-price': {
-                  mechanism: 'The news was negative and neither price nor positioning moved: either not priced yet, or priced long ago.',
+                  // The mechanism sentence is gone (design 2026-11-08 §九): the observed state now
+                  // carries a neutral label and one fact, not a sentence that puts two possibilities
+                  // side by side. The invalidation sentence stays.
                   invalidation: 'Price or open interest moves more than 1% in either direction.'
                 }
               }
@@ -2006,10 +2061,14 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               signalInsufficientReason: 'Insufficient data: the three-day total is not available',
               signalTooltip: '{rule} | window {window} | {kind}', signalRuleName: 'ETF net outflow', signalRuleWindow: '3 trading days', signalKindObserved: 'fact reported by the source',
               signalAriaAlert: '{chip}, {asset}',
+              signalChipOpen: '{chip}, open scope and source',
               signalDetailTitle: 'ETF three-day net outflow', signalDetailRule: 'Rule', signalDetailWindow: 'Window',
               signalDetailCumulative: 'Three-day total', signalDetailCoverage: 'Coverage', signalCoverage: '{covered}/{required} trading days',
               signalDetailTradingDay: 'Trading day (UTC)', signalDetailObservedAt: 'Observed at',
-              signalDetailNote: 'This is a net flow the source reported, not a figure computed here; the trading day and the observation time are different things.'
+              signalDetailNote: 'This is a net flow the source reported, not a figure computed here; the trading day and the observation time are different things.',
+              signalDetailDialogTitle: 'ETF three-day net outflow · Scope and source',
+              signalDetailHelpLabel: 'Scope and source help', signalInsufficientHelpLabel: 'Insufficient data help',
+              signalDetailGroupAnalysis: 'This analysis', signalDetailGroupReadings: 'Readings', signalDetailGroupTime: 'Time and source'
             },
             sentiment: { title: 'Market sentiment', fearGreed: 'Fear & Greed', observedAt: 'Observed at', gaugeMarkers: { fear: 'Extreme fear', neutral: 'Neutral', greed: 'Extreme greed' } },
             macroMarket: {
@@ -2088,7 +2147,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'NFP', unemployment: 'Unemployment',
               'average-hourly-earnings': 'Wages', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: 'Macro'
             },
-            details: { title: 'Event detail', category: 'Category', period: 'Period', source: 'Source', time: 'Release time', importance: 'Importance', state: 'State', actual: 'Actual', previous: 'Previous', unavailable: 'No official value', consensusUnavailable: 'Not provided by official sources', scheduledDateOnly: 'Official time not published', conventionTime: 'Convention default', editedTime: 'Edited',
+            details: { title: 'Event detail', category: 'Category', period: 'Period', source: 'Source', time: 'Release time', importance: 'Importance', state: 'State', actual: 'Actual', previous: 'Previous', unavailable: 'No official value', consensusMissing: 'No consensus provided', consensusUnreadable: 'Temporarily unreadable', consensusUnreadableReason: 'An observation exists, but its expectation field is empty (data gap).', consensusReadFailedReason: 'The market observation could not be read this time — this is not the same as having no expectation.', consensusFromMarket: 'Expectation comes from the market source', scheduledDateOnly: 'Official time not published', conventionTime: 'Convention default', editedTime: 'Edited',
               editTime: { label: 'Release time (editable)', save: 'Save', cancel: 'Cancel', restore: 'Restore published/convention', saved: 'Your time has been saved.', rejected: 'Not saved: the time or date is not valid.', ambiguous: 'That instant occurs twice in this timezone (daylight saving). Pick another.', hint: 'An edit stores your date and time and overrides the published and convention values.' } },
             sources: { federalReserve: 'Federal Reserve Board (Fed)', bea: 'Bureau of Economic Analysis (BEA)', blsManualIcs: 'Bureau of Labor Statistics (BLS, manual ICS)', blsAutomaticSchedule: 'Bureau of Labor Statistics (BLS, automatic annual schedule)' },
             sourceMarkers: { federalReserve: 'Fed', bea: 'BEA', blsManualIcs: 'BLS', blsAutomaticSchedule: 'BLS' },

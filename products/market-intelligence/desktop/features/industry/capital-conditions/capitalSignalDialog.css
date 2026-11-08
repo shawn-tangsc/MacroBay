@@ -1,0 +1,71 @@
+/* 资金面 · 口径与来源（dialog）——2026-11-07 规范。
+   常驻区不留解释，点开给一个可关闭的弹层；这里只管弹层内部：正文自己滚、标签列 136px、
+   值比标签亮一档、落款与读数之间一条分隔线。颜色全部走看板 token，深浅两套与卡片同底同描边。 */
+
+/* 标题行：文字 + ⓘ 同一行、左对齐，只留一个小 gap。
+   不用 `space-between` / `margin-left: auto`（那会把图标推到行尾，窄容器里还会掉行），
+   也不许 `flex-wrap`：窗口变窄时**截断文字**，图标留在标题右侧。 */
+.mi-capital-signal-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  margin-bottom: 10px;
+}
+
+.mi-capital-signal-dialog__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mi-dashboard-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* 图标是不许被挤走的那一半：它固定大小，文字负责让位。 */
+.mi-capital-signal-dialog__head .icon-button { flex: none; }
+
+/* 标题、关闭键都不滚：滚动只发生在正文那一段里，行数再多也不把标题顶出视野。
+   上限仍按 v1 规格：min(70vh, 560px)。 */
+.mi-capital-signal-dialog__body { display: flex; flex-direction: column; }
+
+.mi-capital-signal-dialog__scroll {
+  max-height: min(70vh, 560px);
+  overflow: auto;
+}
+
+/* 弹层里的详情块不再自带边框与内边距：它已经不是卡片里的一块脚注，而是弹层的正文。 */
+.mi-capital-signal-dialog__body .mi-signal-detail {
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  font-size: 11.5px;
+}
+
+.mi-capital-signal-dialog__body .mi-signal-detail__group { gap: 6px; }
+
+.mi-capital-signal-dialog__body .mi-signal-detail__group-title {
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.mi-capital-signal-dialog__body .mi-signal-detail__rows { gap: 6px; }
+
+/* 两列固定：标签 136px、值占其余；值列放得下最长那一行「数据所属交易日（UTC）」。 */
+.mi-capital-signal-dialog__body .mi-signal-detail__rows div {
+  display: grid;
+  grid-template-columns: 136px 1fr;
+  gap: 9px;
+}
+
+.mi-capital-signal-dialog__body .mi-signal-detail__rows dt { color: var(--mi-dashboard-muted); }
+.mi-capital-signal-dialog__body .mi-signal-detail__rows dd { font-size: 12px; }
+
+/* 落款不是第五条读数：一条分隔线把它和读数分开。 */
+.mi-capital-signal-dialog__body .mi-signal-detail__note {
+  border-top: 1px solid var(--mi-dashboard-line);
+  padding-top: 9px;
+}

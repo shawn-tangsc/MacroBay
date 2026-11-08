@@ -16,12 +16,11 @@ const settings: NotificationRuntimeSettings = {
 const clock = { now: () => new Date('2026-11-01T12:00:00.000Z'), timeZone: () => 'UTC' }
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.test': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: { 'platform.test': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false } },
       events: [
         {
           id: 'platform.test',
@@ -63,7 +62,7 @@ function request(index: number): NotificationSubmitRequest {
 describe('notification runtime retention and breaker', () => {
   it('folds writes above the daily cap and keeps the count across a restart', async () => {
     const storage = createMemoryStorage()
-    const first = createNotificationRuntime({ storage, catalog, getSettings: async () => settings, clock })
+    const first = createNotificationRuntime({ diagnostics: () => undefined, storage, catalog, getSettings: async () => settings, clock })
 
     for (let index = 0; index < 51; index += 1) await first.submit(request(index))
 
@@ -77,7 +76,7 @@ describe('notification runtime retention and breaker', () => {
     expect(aggregate.bodyKey).toBeUndefined()
 
     // 重启：新的运行时读回同一份 JSON，计数仍在，第 52 条继续折叠。
-    const second = createNotificationRuntime({ storage, catalog, getSettings: async () => settings, clock })
+    const second = createNotificationRuntime({ diagnostics: () => undefined, storage, catalog, getSettings: async () => settings, clock })
     await second.submit(request(52))
 
     const afterRestart = storage.dump()
@@ -107,7 +106,7 @@ describe('notification runtime retention and breaker', () => {
       dailyCounters: { 'platform|2026-08-01': 3, 'platform|2026-11-01': 1 }
     })
 
-    const runtime = createNotificationRuntime({ storage, catalog, getSettings: async () => settings, clock, onChanged: onChange })
+    const runtime = createNotificationRuntime({ diagnostics: () => undefined, storage, catalog, getSettings: async () => settings, clock, onChanged: onChange })
     const first = await runtime.prune()
 
     expect(first.removedRecords).toBe(1)

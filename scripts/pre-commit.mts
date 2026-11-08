@@ -13,6 +13,7 @@
  * 也不替代 Chief 跑的全量。成本实测：5 个真实文件 6.3s（原来全仓 tsc 是 42–60s）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
+import { materializeCommitTree, readDeletedPaths } from './pre-commit-tree.mts'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -99,8 +100,18 @@ if (guard.error !== undefined && guard.error !== null && (guard.error as NodeJS.
 
 if (guard.status !== 0) {
   const guardOutput = `${guard.stdout ?? ''}${guard.stderr ?? ''}`
-  // 守卫红在别人的文件上时同样不拦：它扫的是目录，不是「这一笔」。
-  const blamesStaged = codeStaged.some((path) => guardOutput.includes(path))
+  /**
+   * 守卫红在别人的文件上时同样不拦：它扫的是目录，不是「这一笔」。
+   *
+   * 判据是「**失败行**里有没有本次提交的文件」。以前直接拿整段输出做 `includes`，于是通过用例那几行
+   * （`✓ … 某守卫.test.ts`）也会算证据：提交里只要有任何一个文件碰巧被列进测试清单，就会被别人的红拦住，
+   * 而绕过去只能用 `SKIP_PRE_COMMIT=1`——2026-11-08 真机上撞到，正是「红在别处、却要跳过整道检查」。
+   */
+  const failureText = guardOutput
+    .split('\n')
+    .filter((line) => !/^\s*✓/.test(line))
+    .join('\n')
+  const blamesStaged = codeStaged.some((path) => failureText.includes(path))
   if (blamesStaged) {
     console.error('[pre-commit] ✗ 四条守卫有红，且命中了本次提交的文件：')
     console.error(guardOutput.split('\n').filter((line) => line.includes('FAIL') || line.includes('×')).slice(0, 20).join('\n'))
@@ -129,7 +140,26 @@ if (guard.status !== 0) {
  *    （`@platform/*` 找不到，而在 /tmp 下同一棵树正常），2026-11-06 实测复现。
  */
 const treeRoot = mkdtempSync(join(tmpdir(), 'macrobay-precommit-'))
-execFileSync('git', ['checkout-index', '-a', `--prefix=${treeRoot}/`], { cwd: root })
+/**
+ * 落出「HEAD + 本笔改动」，**不是「只有这一笔的路径」**。
+ *
+ * 只落这一笔的话，任何「A 依赖 B 的既有内容」都会在树里缺 B：假红从这儿来（2026-11-08 两条线各一次），
+ * 而每次假红的出口都是 `SKIP_PRE_COMMIT=1`。提交后仓库长什么样，才是这道检查该看的东西。
+ */
+try {
+  materializeCommitTree({
+    cwd: root,
+    treeRoot,
+    staged,
+    deleted: readDeletedPaths(root)
+  })
+} catch (error) {
+  // 树落不出来 ⇒ 后面任何类型错都是假的。明说「没检查」，不静默放行。
+  say(`提交树没能落出来，**这一次没有检查**；请自己跑 pnpm typecheck。`)
+  console.error(error instanceof Error ? error.message.split('\n').slice(0, 5).join('\n') : String(error))
+  rmSync(treeRoot, { recursive: true, force: true })
+  process.exit(0)
+}
 /** 临时树用完就删（报错信息里已经把路径剥成仓库相对形式，作者不需要它留在磁盘上）。 */
 const dropTree = (): void => { rmSync(treeRoot, { recursive: true, force: true }) }
 for (const modules of ['node_modules', join('apps', 'desktop-shell', 'node_modules')]) {
@@ -214,21 +244,59 @@ if (timedOut(check)) {
 }
 
 const tscOutput = `${check.stdout ?? ''}${check.stderr ?? ''}`
-const errors = tscOutput
+const allErrors = tscOutput
   .split('\n')
   .filter((line) => line.includes('error TS'))
   .map((line) => line.trim())
 
-if (errors.length > 0) {
-  console.error(`[pre-commit] ✗ 这一笔提交的树里有 ${errors.length} 条类型错（含它依赖的、已进库的那一版）：`)
-  // tsc 是从临时树里报错的：路径有时是 `../../var/folders/…/macrobay-precommit-xxx/…`，有时是绝对路径。
-  // 两种都要剥成仓库相对形式，否则读者看到一串自己磁盘上没有的路径，只能靠猜这是哪个文件。
-  for (const line of errors.slice(0, 20)) {
-    console.error(`  ${line
-      .replace(/^(?:\.\.\/)+/, '')
-      .replace(treeRoot + '/', '')
-      .replace(/^var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')
-      .replace(/^private\/var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')}`)
+/**
+ * tsc 是从临时树里报错的：路径有时是 `../../var/folders/…/macrobay-precommit-xxx/…`，有时是绝对路径。
+ * 剥成仓库相对形式，既能给读者看，也是「这条错落在谁的文件上」的判据。
+ */
+const repoPathOf = (line: string): string | undefined =>
+  /^(.+?)\(\d+,\d+\): error TS\d+/u
+    .exec(line)?.[1]
+    ?.replace(/^(?:\.\.\/)+/, '')
+    .replace(treeRoot + '/', '')
+    .replace(/^var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')
+    .replace(/^private\/var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')
+    .replace(/^\.\//, '')
+
+/**
+ * **只有落在本笔文件上的错才拦**（用户 2026-11-07 拍板）。
+ *
+ * 钩子查的是「这一笔的树」，但作用域工程（按文件列出的临时 tsconfig）复现不出**整棵项目**才有的
+ * 环境类型：本地那份 `import.meta.glob` 声明比真实用法窄，于是会报「'query' 不存在」这类项目里
+ * 并不存在的错。按目录铺 `include` 又会把整目录的兄弟文件拉进来 —— 那正是 `products/**` 的 708 条
+ * 既有债，等于让每次提交替别人的历史错背锅。
+ *
+ * 所以判据落在归属上：报错在**本笔文件**里 → 拦（改 import/export 只带调用方的半条链就报在调用方上，
+ * 照旧红）；报错在别的文件里 → 只报数量、不拦。残留风险：把本笔之外的文件改坏不会被这道门拦住，
+ * 用户已知并接受（`products/**` 全量本来也看不到）。
+ */
+const located = allErrors.map((line) => ({ line, file: repoPathOf(line) }))
+const ownErrors = located.filter((entry) => entry.file !== undefined && codeStaged.includes(entry.file))
+const foreignErrors = located.filter((entry) => !ownErrors.includes(entry))
+
+if (foreignErrors.length > 0) {
+  say(`另有 ${foreignErrors.length} 条类型错在**本笔没动的文件**里（含作用域工程复现不出的环境类型差异），本次不拦截。`)
+}
+
+if (ownErrors.length > 0) {
+  console.error(`[pre-commit] ✗ 这一笔提交的树里，有 ${ownErrors.length} 条类型错落在本次提交的文件上：`)
+  /**
+   * 打**整行**，不是只打文件名：`error TS` 后面那句才是能照着改的东西。
+   *
+   * 2026-11-08 只打文件名，我在真机上被拦了一次却完全不知道错在哪，只能自己重建同一棵树跑 tsc——
+   * 而重建之后是 0 条错（那是短暂的状态不一致）。**被拦下却看不到理由**，下一步一定是有人去用
+   * `SKIP_PRE_COMMIT=1`，那比这条报错更难收拾。
+   */
+  for (const entry of ownErrors.slice(0, 20)) {
+    // 文件路径用已剥干净的 `entry.file`，位置与错误正文从原行里取：tsc 有时给 `../../var/folders/…`
+    // 相对路径、有时给绝对路径，直接打原行会露出一串读者磁盘上不存在的路径（实测过）。
+    const position = /\(\d+,\d+\)/u.exec(entry.line)?.[0] ?? ''
+    const message = entry.line.slice(entry.line.indexOf(': error TS'))
+    console.error(`  ${entry.file ?? entry.line}${position}${message}`)
   }
   console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')

@@ -160,8 +160,8 @@ function matchesSearch(item: AssistantTemplateCatalogItem, search: string): bool
 /**
  * 产品助手分组。`fallbackName` 是**产品摘要里没有名字时**用的兜底说法（契约 v2.41 第三档）。
  *
- * 以前这里退 `sourceProductId`：于是产品名读不到时，助手库分组标题直接印出
- * `market-intelligence` 这种内部 id。读者看不出那是什么，只会以为界面坏了——
+ 以前这里退 `sourceProductId`：于是产品名读不到时，助手库分组标题直接印出
+ * 产品的内部 id（形如 `product-<slug>`）。读者看不出那是什么，只会以为界面坏了——
  * **拿不到名字就用兜底说法，绝不用 id 垫背**。
  */
 export function buildProductGroups(

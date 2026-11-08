@@ -4,9 +4,7 @@ import { resolveToolDisplayName, summarizeToolCallInput } from './agentToolCallS
 
 describe('resolveToolDisplayName', () => {
   it('drops the MCP transport prefix from product tools', () => {
-    expect(resolveToolDisplayName('mcp__market-intelligence__query_sentiment_snapshot')).toBe(
-      'query_sentiment_snapshot'
-    )
+    expect(resolveToolDisplayName('mcp__sample-product__query_records')).toBe('query_records')
     expect(resolveToolDisplayName('mcp__docs__search')).toBe('search')
   })
 
@@ -20,10 +18,10 @@ describe('summarizeToolCallInput', () => {
   it('shows the command a shell call ran, folded onto one line', () => {
     expect(
       summarizeToolCallInput('Bash', {
-        command: 'cd products/market-intelligence &&\n  pnpm test --run',
+        command: 'cd packages/sample-product &&\n  pnpm test --run',
         description: 'Run tests'
       })
-    ).toBe('cd products/market-intelligence && pnpm test --run')
+    ).toBe('cd packages/sample-product && pnpm test --run')
   })
 
   it('shows the file a read or write call touched', () => {
@@ -32,11 +30,11 @@ describe('summarizeToolCallInput', () => {
     )
     expect(
       summarizeToolCallInput('Edit', {
-        file_path: '/repo/products/market-intelligence/service/intelligence/application/sourceCatalog.ts',
+        file_path: '/repo/packages/sample-product/service/records/workspace/application/catalog.ts',
         old_string: 'a',
         new_string: 'b'
       })
-    ).toBe('…/application/sourceCatalog.ts')
+    ).toBe('…/application/catalog.ts')
   })
 
   it('shows the pattern and root of a search call', () => {
@@ -58,9 +56,9 @@ describe('summarizeToolCallInput', () => {
 
   it('falls back to the first meaningful field for an unknown or product tool', () => {
     expect(
-      summarizeToolCallInput('query_sentiment_snapshot', {
+      summarizeToolCallInput('query_records', {
         asOf: '2026-10-23T00:00:00.000Z',
-        scope: { symbol: 'BTC' }
+        scope: { key: 'A' }
       })
     ).toBeNull()
     expect(summarizeToolCallInput('get_evidence_excerpt', { evidenceRefId: 'ev-1' })).toBeNull()

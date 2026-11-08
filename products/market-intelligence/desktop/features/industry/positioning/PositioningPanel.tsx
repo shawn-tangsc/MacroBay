@@ -1,14 +1,20 @@
-import { useRef, useState } from 'react'
+import { ChevronRight, Info } from 'lucide-react'
+import { useState } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Modal } from '@platform/ui/components/modal'
+import { Popover } from '@platform/ui/components/popover'
 import { Tooltip } from '@platform/ui/components/tooltip'
-import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { OpenInterestWindow } from '../../../../contracts/openInterestHistory'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
@@ -18,45 +24,17 @@ import {
   formatDashboardNotional,
   positioningStateFor,
   type DashboardPositioningPoint,
-  type DashboardPositioningViewState
+  type DashboardPositioningViewState,
+  type DashboardSignalChip
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
-import { SignalDetail, SignalReadIssue, useSignalDetail } from '../shared'
+import { SignalDetail } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import { PositioningChart, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
+import { positioningNoteKeys, resolvePositioningNote } from './positioningNotes'
 
 import './PositioningPanel.css'
-
-/**
- * The four one-look bullets that lead the readings region, one literal key per line.
- *
- * Literal on purpose: the guards check that a key exists and is spelled as a dotted path, which a
- * template string hides from them. A table also makes it obvious that the bullets and the text
- * table have the same number of lines.
- *
- * Four because they are a glance: a fifth bullet, or a paragraph where a bullet belongs, means the
- * sentence is a reading note and belongs in `positioningHelpDetailKeys` instead.
- */
-export const positioningHelpBulletKeys = Object.freeze([
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.0',
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.1',
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.2',
-  'pages.intelligence.portal.dashboard.positioning.helpBullets.3'
-] as const)
-
-/**
- * The readings behind the numbers: thresholds, window folding, what a mark does not cover.
- *
- * These live in a region under the card that the reader opens on purpose. A bubble that covered
- * half the chart was the same prose in the wrong home.
- */
-export const positioningHelpDetailKeys = Object.freeze([
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.0',
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.1',
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.2',
-  'pages.intelligence.portal.dashboard.positioning.helpDetails.3'
-] as const)
 
 /**
  * The six state labels, one literal key each.
@@ -89,52 +67,86 @@ export type PositioningPanelProps = Readonly<{
 // very movement it was pointing at.
 // The viewBox is drawn at roughly the width the card is, so the svg scales ~1:1: text keeps its
 // nominal size and the drawing is 186 units tall instead of being blown up with the container.
+/** 牌子那一行：方向进词，符号进数——两条规则各写各的，正号配“空头”而不是配“强平”。 */
+function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip, { state: 'alert' }>): string {
+  const move = chip.pricePct !== undefined ? formatDashboardChange(chip.pricePct) : formatDashboardChange(chip.dropPct)
+  const template = chip.direction === 'short' ? text.liquidationChipShort : text.liquidationChipLong
+  return template
+    .replace('{asset}', text.assets[chip.asset])
+    .replace('{pct}', move)
+    .replace('{multiple}', chip.volumeMultiple.toFixed(1))
+}
+
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
-  // Opening the numbers spends nothing: no analysis call, no budget, no request. The paid action
-  // is one level deeper and is not this button.
-  const signalDetail = useSignalDetail('mi-positioning-signal-detail')
+  // 口径说明收在一颗 ⓘ 里（界面 2026-11-08）：正文只留读数与证据，元说明不占版面。
+  const resolveNote = resolvePositioningNote(useShellLanguage())
+  // 重试那一枚的文案归平台（`ui.state.action.retry`）：这行不造句，也不新造第二个「重试」。
+  const stateText = useStateViewText()
   const analysisSentence = useSignalAnalysisSentence(positioning.state === 'available' ? positioning.signalAnalysis : undefined)
-  // The long readings sit behind their own entry: closed by default, so the card stays a card.
-  const [helpOpen, setHelpOpen] = useState(false)
+  // 牌子本身就是入口（界面设计 v2，2026-11-08）：没有再单独一颗「口径说明」。牌子只在规则命中时
+  // 存在——没有读数就没有可解释的口径，给入口等于给空盒子。
+  // 牌子在弹层打开时**不重建**：焦点回位是 antd 在 afterClose 里把焦点送回「打开前的那个节点」，
+  // 牌子一旦换成另一个节点，回位就落到 `<body>`。所以说明气泡靠一条 CSS 让位（见 PositioningPanel.css），
+  // 而不是靠把 `Tooltip` 从树上摘掉。
+  const [dialogOpen, setDialogOpen] = useState(false)
   // The chip the module's rule produced, if any. A hidden chip renders nothing at all — no empty
   // container, no grey "normal": an always-present badge becomes background noise within a fortnight.
   const signal = positioning.state === 'available' ? positioning.signal : undefined
   const chip = signal && signal.state !== 'hidden' ? signal : undefined
+  const alertChip = chip?.state === 'alert' ? chip : undefined
+  /**
+   * 强平判定的三种说法，卡面脚注区一行、互斥（产品 2026-11-08）。
+   *
+   * 判据全部来自同一份投影，不另算：牌子 `hidden` = 读到了、判完了、零命中；`unreadable` =
+   * 规则那次没读到；`insufficient` = 读到了但成交量腿不齐。第三种以前只给一枚「数据不齐」的
+   * 状态牌、第二种只给一个 16px 感叹号——两者都说不清「是没命中，还是没读到」。
+   *
+   * 整卡本身不可用时（空 / 读失败 / 加载中）这行不出现：那是平台 `StateView` 的地盘。
+   */
+  // 判据直接读投影里的牌子状态（不从上面那个只为「显示哪些牌子」过滤过的 `chip` 取：
+  // `hidden` 恰恰是被过滤掉的那一种，而「没命中」正是它）。
+  const liquidationNote: 'noHit' | 'unreadable' | 'insufficient' | undefined =
+    positioning.state !== 'available'
+      ? undefined
+      : positioning.signal.state === 'alert'
+        ? undefined
+        : positioning.signal.state === 'unreadable'
+          ? 'unreadable'
+          : positioning.signal.state === 'insufficient'
+            ? 'insufficient'
+            : 'noHit'
+  // 这行只在整卡可用时存在，但 JSX 里读不到那个收窄：把重读入口先取出来。
+  const reloadPositioning = positioning.state === 'available' ? positioning.onReload : undefined
+  const liquidationNoteText = liquidationNote === 'noHit'
+    ? text.liquidationNoteNoHit
+    : liquidationNote === 'unreadable'
+      ? text.liquidationNoteUnreadable
+      : liquidationNote === 'insufficient'
+        ? text.liquidationNoteInsufficient
+        : undefined
   const header = (extra?: React.ReactNode) => (
     <header className="mi-positioning-panel__head">
       <h2>{text.pairTitle}</h2>
-      {chip ? (chip.state === 'alert' ? (
-        <button type="button" className="mi-positioning-panel__signal" data-state="alert"
-          {...signalDetail.triggerProps}
-          aria-label={`${text.liquidationChip
-            .replace('{asset}', text.assets[chip.asset])
-            .replace('{pct}', formatDashboardChange(chip.dropPct))
-            .replace('{multiple}', chip.volumeMultiple.toFixed(1))} · ${text.signalDetailsOpen}`}
-          onClick={signalDetail.toggle}>
-          {text.liquidationChip
-            .replace('{asset}', text.assets[chip.asset])
-            .replace('{pct}', formatDashboardChange(chip.dropPct))
-            .replace('{multiple}', chip.volumeMultiple.toFixed(1))}
-        </button>
-      ) : chip.state === 'unreadable' ? (
-        // 读不到只留一个标记：一处一个、不占版面、悬停与聚焦都能读到人话。卡片正面没有那行字。
-        <SignalReadIssue failureCode={chip.failureCode} resolveText={resolveProductKey} />
-      ) : (
-        // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
-        <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
-      )) : null}
-      {/*
-        One entry, not two: the bullets lead the same readings the long notes sit in, so the reader
-        opens one place. The second trigger this card used to carry (an icon button over the four
-        bullets) made the reader choose between two explanations of one card.
-      */}
-      <button type="button" className="mi-positioning-panel__help-toggle"
-        aria-expanded={helpOpen} aria-controls="mi-positioning-help-details"
-        onClick={() => setHelpOpen(open => !open)}>
-        {text.helpDetailsLabel}
-      </button>
+      {alertChip ? (
+        // 说明与点击并存：说明是规则/窗口/「这是推断值」那一句，悬停与聚焦都能读到；气泡在下、
+        // 点在牌子上。牌子本身不重建（弹层打开时只让气泡让位），焦点回位才落得回它身上。
+        <Tooltip resolveText={resolveProductKey}
+          labelKey="pages.intelligence.portal.dashboard.positioning.signalHover"
+          labelParams={{ rule: text.signalDetailsRuleName, window: text.window15m, kind: text.signalKindInferred }}>
+          {/* 牌子即入口：可见文字就是读数，后面一句话说清点开会怎样（label-in-name 成立）。
+              没有 `aria-expanded`——弹层不是就地展开；回车与空格由原生 `button` 给。 */}
+          <button type="button" className="mi-positioning-panel__signal" data-state="alert"
+            aria-haspopup="dialog"
+            aria-label={`${chipLabel(text, alertChip)} · ${text.helpDetailsLabel}`}
+            onClick={() => setDialogOpen(true)}>
+            {chipLabel(text, alertChip)}
+            {/* 只表示「点开有东西」：不是第二颗按钮，也不抢读数本身的注意力。 */}
+            <ChevronRight aria-hidden="true" className="mi-positioning-panel__signal-chevron" size={6} strokeWidth={2} />
+          </button>
+        </Tooltip>
+      ) : null}
       {extra}
       <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
     </header>
@@ -163,33 +175,50 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             : null}
         </>
       )}
-      {helpOpen ? (
-        <div id="mi-positioning-help-details" className="mi-positioning-panel__help-details"
-          role="region" aria-label={text.helpDetailsLabel}>
-          {positioningHelpBulletKeys.map(labelKey => (
-            <p key={labelKey}>{resolveProductKey(labelKey)}</p>
-          ))}
-          {positioningHelpDetailKeys.map(labelKey => (
-            <p key={labelKey}>{resolveProductKey(labelKey)}</p>
-          ))}
-        </div>
-      ) : null}
-      {chip?.state === 'alert' && signalDetail.open ? (
-        <SignalDetail
-          id="mi-positioning-signal-detail"
-          titleKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
-          rows={[
-            // 第一行回答「这次分析到哪一步」：读者点开牌子最先想知道的是分析会不会来。
-            ...(analysisSentence ? [{ labelKey: 'pages.intelligence.portal.dashboard.signalAnalysis.label', value: analysisSentence }] : []),
-            // The rule's own words, never its internal id: the reader came to check the reading,
-            // not to learn a code name.
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsRule', value: text.signalDetailsRuleName },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsWindow', value: text.window15m },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsDrop', value: formatDashboardChange(chip.dropPct) },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsVolume', value: `${chip.volumeMultiple.toFixed(1)}×` },
-            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsObservedAt', value: formatTime(chip.observedAt) }
-          ]}
-          noteKey="pages.intelligence.portal.dashboard.positioning.signalDetailsNote" />
+      {/*
+        弹层里三组，讲的是同一件事的三个层次：这次读数是什么、这张卡在读什么、口径上哪里容易读错。
+        读数原先挂在牌子下面就地展开；牌子现在只开这一个弹层，那些数字跟着进来，否则它们没有第二个家。
+
+        `mi-sample-surface` 挂在弹层根上：弹窗 portal 到 `<body>`，页面根上的门户色板到不了这里，
+        不带它，`--mi-dashboard-*` 会全部解析成空（资金流那张卡的柱子就这样透明过一次）。
+      */}
+      {alertChip ? (
+        <Modal open={dialogOpen} width="standard"
+          ariaLabelKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
+          onClose={() => setDialogOpen(false)}
+          className="mi-sample-surface mi-positioning-panel__help-modal"
+          destroyOnHidden
+          resolveText={resolveProductKey}>
+          <div className="mi-positioning-panel__help-dialog">
+            {/* 标题行：标题文字在前、ⓘ 紧跟其后，同一行、间距 4px（用户 2026-11-08 的截图：
+                「这个 icon hover 给我放到标题边上不行吗」）。**不许**推到行尾——`space-between`
+                与 `margin-left: auto` 会让图标和它解释的文字脱钩。弹层因此改成无头、标题画在正文第一行。 */}
+            <div className="mi-positioning-panel__dialog-head">
+              <h3 className="mi-positioning-panel__dialog-title">{text.signalDetailsTitle}</h3>
+              <Popover lines={positioningNoteKeys.map(labelKey => ({ labelKey }))} resolveText={resolveNote}
+                trigger={triggerProps => (
+                  <IconButton {...triggerProps}
+                    ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpDetailsLabel"
+                    icon={Info} resolveText={resolveProductKey} size="sm" variant="plain" />
+                )} />
+            </div>
+            <SignalDetail
+              id="mi-positioning-signal-detail"
+              titleKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
+              rows={[
+                // 第一行回答「这次分析到哪一步」：读者点开牌子最先想知道的是分析会不会来。
+                ...(analysisSentence ? [{ labelKey: 'pages.intelligence.portal.dashboard.signalAnalysis.label', value: analysisSentence }] : []),
+                // The rule's own words, never its internal id: the reader came to check the reading,
+                // not to learn a code name.
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsRule', value: text.signalDetailsRuleName },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsWindow', value: text.window15m },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsDrop', value: formatDashboardChange(alertChip.dropPct) },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsVolume', value: `${alertChip.volumeMultiple.toFixed(1)}×` },
+                { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsObservedAt', value: formatTime(alertChip.observedAt) }
+              ]}
+              noteKey="pages.intelligence.portal.dashboard.positioning.signalDetailsNote" />
+          </div>
+        </Modal>
       ) : null}
       <div className="mi-positioning-panel__body">
         <div className="mi-positioning-panel__summary">
@@ -202,10 +231,31 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           {available
             ? <>
                 <PositioningChart positioning={positioning} funding={funding} text={text} />
+                {/*
+                  截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
+                  一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
+                  只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
+                */}
+                {positioning.hiddenHits > 0 ? (
+                  <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
+                    {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
+                  </p>
+                ) : null}
               </>
             : status}
         </div>
       </div>
+      {liquidationNoteText ? (
+        // 一行，muted，不是警报色：它说的是判定的结论，不是「我们出错了」。
+        <p className="mi-positioning-panel__liquidation-note" data-liquidation-note={liquidationNote} role="status">
+          {liquidationNoteText}
+          {liquidationNote === 'unreadable'
+            // 「读不到」后面跟那枚既有重试：读者在这行要的是一个动作和一个结论，不是诊断。
+            ? <button type="button" className="mi-positioning-panel__liquidation-retry"
+                onClick={reloadPositioning}>{stateText(STATE_VIEW_ACTION_KEYS.retry)}</button>
+            : null}
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -259,6 +309,8 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
   state: PositioningState | undefined
 }>): React.ReactElement {
   const resolveProductKey = useProductTextKey()
+  // 口径说明收在一颗 ⓘ 里（界面 2026-11-08）：正文只留读数与证据，元说明不占版面。
+  const resolveNote = resolvePositioningNote(useShellLanguage())
   return (
     <div className="mi-positioning-panel__asset" data-asset={asset} data-funding-latest={asset}>
       <div className="mi-positioning-panel__asset-head">

@@ -947,3 +947,57 @@ describe('preload 分片后的形状', () => {
     expect(ASSISTANT_API_KEYS.length).toBe(29)
   })
 })
+
+describe('notification surface selection surface', () => {
+  it('exposes read only, on its own channel, through the runtime', () => {
+    // 只露读：写入仍走主进程那一个入口（`setSurfaceSelection`），不为读多开一条写通道。
+    expect(IpcChannels.notificationsGetSurfaceSelection).toBe('platform:notifications-get-surface-selection')
+    const block = mainRegistrationBlock(notificationIpcSource, 'notificationsGetSurfaceSelection')
+    expect(block).toContain("typeof payload.eventTypeId !== 'string'")
+    expect(block).toContain('getNotificationRuntime().getSurfaceSelection(payload.eventTypeId)')
+    expect(preloadMethodBlock(readSource('../preload/namespaces/notifications.ts'), 'getSurfaceSelection'))
+      .toContain('IpcChannels.notificationsGetSurfaceSelection')
+  })
+
+  it('offers exactly one write channel for the selection: no batch, no delete, no reset', () => {
+    expect(IpcChannels.notificationsSetSurfaceSelection).toBe('platform:notifications-set-surface-selection')
+    const block = mainRegistrationBlock(notificationIpcSource, 'notificationsSetSurfaceSelection')
+    expect(block).toContain("typeof payload.eventTypeId !== 'string'")
+    expect(block).toContain('getNotificationRuntime().setSurfaceSelection(payload.eventTypeId, payload.surfaces)')
+    // 不预夹越权面：交给运行时按 `notification-surface-not-approved` 拒，页面才知道没存上。
+    expect(block).not.toContain('filter(')
+    expect(preloadMethodBlock(readSource('../preload/namespaces/notifications.ts'), 'setSurfaceSelection'))
+      .toContain('IpcChannels.notificationsSetSurfaceSelection')
+  })
+
+  it('keeps every notification channel that existed before: adding one must not drop another', () => {
+    // 受保护接缝的回归守卫：这份清单是**当时的全量**。少一条（改名/误删）就红；
+    // 多一条则要在这里显式加一行——那正是「新增通道」必须被看见的地方。
+    const channels = [...readSource('../../desktop/ipc/channels.ts').matchAll(/'(platform:notifications-[a-z-]+)'/gu)]
+      .map((match) => match[1])
+      .sort()
+    expect(channels).toEqual([
+      'platform:notifications-acknowledge',
+      'platform:notifications-changed',
+      'platform:notifications-delete-read',
+      'platform:notifications-delivered',
+      'platform:notifications-dismiss',
+      'platform:notifications-get-channel-events',
+      'platform:notifications-get-delivery-settings',
+      'platform:notifications-get-surface-selection',
+      'platform:notifications-get-unread-state',
+      'platform:notifications-list',
+      'platform:notifications-list-event-catalog',
+      'platform:notifications-mark-all-read',
+      'platform:notifications-mark-read',
+      'platform:notifications-read-desktop-permission',
+      'platform:notifications-redeliver-push',
+      'platform:notifications-send-test',
+      'platform:notifications-set-channel-event',
+      'platform:notifications-set-desktop-enabled',
+      'platform:notifications-set-surface-selection',
+      'platform:notifications-set-toast-enabled',
+      'platform:notifications-snooze'
+    ])
+  })
+})

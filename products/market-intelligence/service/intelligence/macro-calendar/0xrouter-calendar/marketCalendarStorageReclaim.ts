@@ -31,6 +31,8 @@ export const marketCalendarRetentionPolicy = Object.freeze({
    * looking up each identity's row in the collection that last stored one.
    */
   identityScanIndex: 'idx_mi_calendar_market_observation_identity',
+  /** The same columns, but UNIQUE: one row per identity per batch, enforced for new libraries. */
+  identityScanKeyIndex: 'idx_mi_calendar_market_observation_identity_key',
   ledgerTable: 'mi_macro_calendar_market_observation_ledger',
 })
 
@@ -197,5 +199,42 @@ export function ensureMarketCalendarObservationState(database: DatabaseSync): bo
   // scanning every row in scope for every page.
   database.exec(`create index if not exists ${marketCalendarRetentionPolicy.identityScanIndex}
     on mi_macro_calendar_market_event_observations(candidate_key, collection_id)`)
+  ensureObservationIdentity(database)
   return added
+}
+
+
+/**
+ * One identity, one row per batch.
+ *
+ * A library written before the write model changed had no `unique(collection_id, candidate_key)`,
+ * so the same event read twice inside one batch could be stored twice. Cross-batch rows are **not**
+ * duplicates — they are the version history the current-state read walks with
+ * `max(collection_sequence)` — so this only collapses copies that share a batch.
+ *
+ * **Rollback.** The removed rows are copied into `…_duplicates_backup` in the same transaction
+ * before they are deleted, and the index is dropped with `drop index`. Deleting without that copy
+ * would be data loss with no way back: the surviving row carries the same identity but not
+ * necessarily the same values (two rows of one batch can disagree when the source was mid-update).
+ */
+function ensureObservationIdentity(database: DatabaseSync): void {
+  const indexes = database.prepare('pragma index_list(mi_macro_calendar_market_event_observations)').all() as unknown as { name: string; unique: number }[]
+  const alreadyUnique = indexes.some((index) => Number(index.unique) === 1 &&
+    (database.prepare(`pragma index_info(\`${index.name}\`)`).all() as unknown as { name: string }[])
+      .map((column) => column.name).join(',') === 'collection_id,candidate_key')
+  if (alreadyUnique) return
+  database.exec('begin immediate')
+  try {
+    database.exec(`create table if not exists mi_macro_calendar_market_observation_duplicates_backup as
+      select * from mi_macro_calendar_market_event_observations where 0`)
+    database.exec(`insert into mi_macro_calendar_market_observation_duplicates_backup
+      select o.* from mi_macro_calendar_market_event_observations as o
+      where o.rowid not in (
+        select max(rowid) from mi_macro_calendar_market_event_observations group by collection_id, candidate_key)`)
+    database.exec(`delete from mi_macro_calendar_market_event_observations where rowid not in (
+      select max(rowid) from mi_macro_calendar_market_event_observations group by collection_id, candidate_key)`)
+    database.exec(`create unique index if not exists ${marketCalendarRetentionPolicy.identityScanKeyIndex}
+      on mi_macro_calendar_market_event_observations(collection_id, candidate_key)`)
+    database.exec('commit')
+  } catch (error) { database.exec('rollback'); throw error }
 }

@@ -1,5 +1,6 @@
 import type { ProductManifest } from '../../platform/product-manifest'
 import type { NotificationEventDeclaration } from '../../platform/notifications/contracts/notificationEventCatalog'
+import { MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS } from './contracts/notificationApprovals'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
 import { INTELLIGENCE_IPC_METHODS } from './contracts/intelligenceIpcMethods'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
@@ -11,6 +12,7 @@ import {
 } from '../../platform/notifications/contracts/platformNotificationEvents'
 
 import { marketIntelligenceNotificationCopy } from './desktop/shared/i18n/text/notifications'
+import { marketIntelligenceAgentApprovalFieldLabels } from './desktop/shared/i18n/text/agentApprovalFields'
 import { moduleSignalPolicy } from './contracts/moduleSignal'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
@@ -66,7 +68,9 @@ export const marketIntelligenceProductManifest = {
         title: { 'zh-CN': '情报源', 'en-US': 'Intelligence Sources' },
         icon: 'database',
         order: 10,
-        module: './desktop/settings/intelligence-sources'
+        module: './desktop/settings/intelligence-sources',
+        // 资源任务空态的「去启用」由壳层按业务意图带路，壳层不写死我们的面板 id。
+        navIntent: 'resource-sources'
       },
       {
         // 设置 → 情报 → 运行日志：这个模块做过什么。从情报源页的标签搬出来，配置与记录各占一页。
@@ -300,6 +304,8 @@ export const marketIntelligenceProductManifest = {
    * 批准的事件」，运行时只会以 `unknown-event-type` 拒收。完成类（日报已完成）是读者翻案恢复的，
    * 见下：只进中心、读者在情报页勾了才推手机、桌面不弹。
    */
+  // 批准值在独立文件里（「申请」与「批准」两份数据分开）：这里只 import 引用，不内联。
+  notificationApproval: MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS,
   notificationEvents: [
     notificationEvent('market-intelligence.briefing.failed', {
       category: 'failure',
@@ -313,8 +319,9 @@ export const marketIntelligenceProductManifest = {
     }),
     notificationEvent('market-intelligence.signal.triggered', {
       category: 'reminder',
-      // 正文按「规则 × 档位」四个变体；标题是 `{asset} {headline}`，资产名开头。
-      bodyVariants: ['etfOutflow', 'etfOutflowAggravated', 'oiDrop', 'oiDropAggravated'],
+      // 正文按「规则 × 档位」分变体；标题是 `{asset} {headline}`，资产名开头。
+      // `oiDrop*` 只服务已落库的旧记录；新记录按方向分成多头/空头四条（方向是读者做动作的前提）。
+      bodyVariants: ['etfOutflow', 'etfOutflowAggravated', 'oiDrop', 'oiDropAggravated', 'oiLong', 'oiLongAggravated', 'oiShort', 'oiShortAggravated'],
       requiresUserAction: false,
       // 信息类只走应用内与手机：桌面按「失败 / 需修正 / 系统状态」三类收口，不再申请桌面档。
       requestedDisruptionLevels: ['channel'],
@@ -339,11 +346,26 @@ export const marketIntelligenceProductManifest = {
     notificationEvent('market-intelligence.macro.event-landed', {
       category: 'reminder',
       // 三值齐 / 缺前值 / 缺预期（后者今天不可达，键留着等放宽筛选）。
-      bodyVariants: ['values', 'noPrevious', 'noForecast'],
+      bodyVariants: ['values', 'noPrevious', 'noForecast', 'matched'],
       requiresUserAction: false,
-      // 同上：信息类不申请桌面档。
-      requestedDisruptionLevels: ['channel'],
+      // 批准表给 N5 批了 `center` + `toast` + `channel`，但声明过去只申请了手机——
+      // 于是「日历事件」那份组选择里勾「应用内提示」只对「开始前」生效、对「发生后」无效，
+      // 正是「勾着却只对一半生效」。批准了不等于会发：三层（申请/批准/开关）缺一层都不出声。
+      requestedDisruptionLevels: ['toast', 'channel'],
       dedupeKeyTemplate: 'calendar:{eventId}:{releaseAt}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.calendar.event-upcoming', {
+      category: 'reminder',
+      // 一条：事件名 + 时区化时刻 + 重要性 + 距开始 N 分钟（N 取实际剩余，不取配置档位）。
+      body: true,
+      requiresUserAction: false,
+      // 批准表批的是 `center` + `toast` + `channel`；桌面不批，所以这里不申请。
+      requestedDisruptionLevels: ['toast', 'channel'],
+      // 键**不含提前量**：读者把 60 分钟改成 30 分钟，已提醒过的那条键相同→合并不重推，
+      // 还没到窗口的事件键还没被用过→照常发。事件改期会得到新键（时间变了必须再说一次）。
+      dedupeKeyTemplate: 'calendar-upcoming:{eventKey}:{scheduledAt}',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),
@@ -378,6 +400,25 @@ export const marketIntelligenceProductManifest = {
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),
+    // N12：信号唤起的那次分析给出结论。只在这一条路径发，手动与日报都不发。
+    // 去重键只用触发键与截止时刻——同一份证据重跑会换 runId，带上它读者会收到两条同样的结论。
+    // 手机那一档要等平台加上按次收窄的字段（architect 已判，排在频道线之后单独一笔）：同向收窄到
+    // 只进中心，反向或新信息不传、按批准表全档。在那之前这里只声明、不投递。
+    notificationEvent('market-intelligence.analysis.conclusion', {
+      category: 'completed',
+      body: true,
+      requiresUserAction: false,
+      requestedDisruptionLevels: ['channel'],
+      dedupeKeyTemplate: 'analysis:{triggerKey}:{cutoff}',
+      dedupeUnit: 'occurrence',
+      // 模块每天 4 条（两条推送合计）——与 `analysisConclusionPushPolicy.moduleDailyLimit` 同数：
+      // 没有上限就批 channel，等于把结论推送接到信号量上（一次行情抖动就是三条同向结论）。
+      // **不声明 `minimumGapMs`**：代码里没有这个数，编一个就是第二个没有出处的阈值；
+      // 「同一触发键每天 1 条」由去重键（`triggerKey`+`cutoff`）保证，不靠间隔。
+      dailyLimit: 4,
+      // 不穿免打扰：这条说"结论出来了"，不是必须立刻打断读者的那种事。
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.timezone.invalid', {
       category: 'needs-action',
       body: true,
@@ -398,6 +439,8 @@ export const marketIntelligenceProductManifest = {
   notificationProducerClaims: ['market-intelligence.dailyBriefing', 'market-intelligence.collectSource'],
   /** 7 条事件的句子（含「日报已完成」）；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
   notificationCopy: marketIntelligenceNotificationCopy,
+  // 工具审批卡片的字段名是产品词，住在这里；壳层只按工具名 + 字段名 + 语言取。
+  agentApprovalFieldLabels: marketIntelligenceAgentApprovalFieldLabels,
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest

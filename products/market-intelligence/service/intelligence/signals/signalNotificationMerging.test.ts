@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
 
@@ -36,10 +35,10 @@ function createRuntime(clock: { now: string }) {
   const runtime = createNotificationRuntime({
     storage,
     catalog: createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
+      // 断的是产品事件（信号合并）的批准值 -> 各读各的。
       sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
       ]
     }),
     getSettings: async () => settings,

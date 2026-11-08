@@ -8,7 +8,7 @@
  */
 export type SentimentAlertLocale = 'zh-CN' | 'en-US'
 
-export type SentimentAlertStrength = 'high' | 'medium'
+export type SentimentAlertStrength = 'high' | 'medium' | 'low'
 
 export type SentimentAlertTemplates = Readonly<{
   title: string
@@ -23,13 +23,13 @@ export const sentimentAlertTemplates: Readonly<Record<SentimentAlertLocale, Sent
     title: '【{strength}】{headline}',
     bodyWithSource: '来源：{sourceName}',
     reason: '分析给出的强度达到了收推送的门槛。',
-    strength: Object.freeze({ high: '高', medium: '中' })
+    strength: Object.freeze({ high: '高', medium: '中', low: '弱' })
   }),
   'en-US': Object.freeze({
     title: '[{strength}] {headline}',
     bodyWithSource: 'Source: {sourceName}',
     reason: 'The analysis rated this high enough to reach your phone.',
-    strength: Object.freeze({ high: 'High', medium: 'Medium' })
+    strength: Object.freeze({ high: 'High', medium: 'Medium', low: 'Weak' })
   })
 })
 

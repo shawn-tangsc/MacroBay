@@ -11,7 +11,7 @@ import SelectionContextMenu from '../../SelectionContextMenu'
 import type { AgentContextRendererRegistry } from '../agentContextRenderers'
 import { buildAgentMessageAnchorItems } from '../agentMessageNavigation'
 import { groupAgentSessionMessages, type AgentMessageGroup } from '@platform/ui/agent-chat'
-import { useAgentText } from '../agentTextProvider'
+import { useAgentLanguage, useAgentText } from '../agentTextProvider'
 import { buildAgentRuntimeActivityCards } from '../agentRuntimeActivityViewModel'
 import { hasPersistedRuntimeParts, selectLiveActivityCards } from '../agentLiveTraceSelection'
 import { resolveAgentRuntimePhaseText } from '../agentRuntimePhaseText'
@@ -34,7 +34,7 @@ type AgentSessionMessagesProps = {
   onRuntimeSnapshotChange: (snapshot: AgentSessionRuntimeSnapshot) => void
   /** Full persisted history for usage totals; falls back to the rendered window. */
   usageMessages?: readonly AgentSessionMessageEntity[]
-  /** Host-owned renderers for message contexts (analysis node, calendar event, ...). */
+  /** Host-owned renderers for message contexts; the shell ships none of its own. */
   contextRenderers?: AgentContextRendererRegistry
   /** Host copy for an empty conversation; a vertical surface owns its own wording. */
   emptyState?: React.ReactNode
@@ -55,6 +55,7 @@ export default function AgentSessionMessages({
   emptyState
 }: AgentSessionMessagesProps): React.ReactElement {
   const t = useAgentText()
+  const language = useAgentLanguage()
   const groups = useMemo(() => groupAgentSessionMessages(messages), [messages])
   const runtimeActivityCards = useMemo(
     () =>
@@ -63,9 +64,10 @@ export default function AgentSessionMessages({
         chunksBySessionId: runtimeSnapshot.chunksBySessionId,
         toolApprovals: runtimeSnapshot.toolApprovals,
         toolApprovalHistory: runtimeSnapshot.toolApprovalHistory,
-        text: t.runtimeActivity
+        text: t.runtimeActivity,
+        language
       }),
-    [activeSession.id, runtimeSnapshot.chunksBySessionId, runtimeSnapshot.toolApprovalHistory, runtimeSnapshot.toolApprovals, t.runtimeActivity]
+    [activeSession.id, runtimeSnapshot.chunksBySessionId, runtimeSnapshot.toolApprovalHistory, runtimeSnapshot.toolApprovals, t.runtimeActivity, language]
   )
   const {
     shouldVirtualize,

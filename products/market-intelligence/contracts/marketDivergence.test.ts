@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   detectDivergences,
+  divergencePairBounds,
   divergencePolicy,
   isCanonicalDivergenceTime,
+  isMarketDivergenceResult,
   type DivergenceInputs
 } from './marketDivergence'
 
@@ -133,5 +135,118 @@ describe('window alignment', () => {
     expect(detectDivergences({ ...inputs(), asOf: '2026-10-30 12:00' }).state).toBe('unavailable')
     expect(isCanonicalDivergenceTime('2026-10-30T12:00:00.000Z')).toBe(true)
     expect(isCanonicalDivergenceTime('2026-10-30T12:00:00Z')).toBe(false)
+  })
+})
+
+describe('the bound a pair was judged on', () => {
+  /** 上界一侧（持仓 ≥ +3%）：钱在撤、空头在加。 */
+  const upperBoundCase = () => inputs()
+  /** 下界一侧（持仓 ≤ −3%）：资金撤出、价格没跌。 */
+  const lowerBoundCase = () => inputs({
+    stablecoin: { change7dPercent: 0.4, observedAt: at(2) },
+    openInterest: { change24hPct: -3.4, observedAt: at(1) },
+    price: { return24hPercent: 0.2, observedAt: at(1) },
+    sentiment: { bearishSharePercent: 20, scoredCount: 4, observedAt: at(1) }
+  })
+
+  it('writes the bound the verdict turned on, for both an upper and a lower bound', () => {
+    const upper = detectDivergences(upperBoundCase())
+    if (upper.state !== 'available') throw new Error('unexpected')
+    const upperRow = upper.rows.find(row => row.pairId === 'liquidity-leverage')!
+    expect(upperRow.bound).toEqual({
+      leg: 'open-interest', comparator: 'atLeast', threshold: divergencePolicy.thresholds.openInterest24hUpPercent
+    })
+
+    const lower = detectDivergences(lowerBoundCase())
+    if (lower.state !== 'available') throw new Error('unexpected')
+    const lowerRow = lower.rows.find(row => row.pairId === 'flows-price')!
+    expect(lowerRow.bound).toEqual({
+      leg: 'open-interest', comparator: 'atMost', threshold: divergencePolicy.thresholds.openInterest24hDownPercent
+    })
+  })
+
+  it('never puts a bound on a pair that could not be judged', () => {
+    // 判不了不是「差一点」：给它显示阈值会被读成快到界了。
+    const result = detectDivergences(inputs({ sentiment: undefined }))
+    if (result.state === 'unavailable') throw new Error('unexpected')
+    expect(result.withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' })
+    for (const entry of result.withheld) expect('bound' in entry).toBe(false)
+    // 命中的那几行则必须有，值就是那一刻用的界。
+    for (const row of result.state === 'available' ? result.rows : []) {
+      expect(row.bound).toEqual(divergencePairBounds[row.pairId])
+    }
+  })
+
+  it('keeps the static table and the verdict on the same numbers', () => {
+    // 这条是「规则改了、文案没改」的钉子：两边的界逐对相等，否则红。
+    expect(divergencePairBounds).toEqual({
+      'liquidity-leverage': {
+        leg: 'open-interest', comparator: 'atLeast', threshold: divergencePolicy.thresholds.openInterest24hUpPercent
+      },
+      'flows-price': {
+        leg: 'open-interest', comparator: 'atMost', threshold: divergencePolicy.thresholds.openInterest24hDownPercent
+      },
+      'narrative-price': {
+        leg: 'open-interest', comparator: 'atMost', threshold: divergencePolicy.thresholds.openInterestFlatPercent
+      }
+    })
+    const result = detectDivergences(upperBoundCase())
+    if (result.state !== 'available') throw new Error('unexpected')
+    for (const row of result.rows) expect(row.bound).toEqual(divergencePairBounds[row.pairId])
+  })
+
+  it('still accepts a row without a bound, and refuses a malformed one', () => {
+    // 老格式（没有 `bound`）仍要通过：这是 IPC 边界上的兼容。一旦落库或进冻结快照，就得 bump。
+    const available = detectDivergences(upperBoundCase())
+    if (available.state !== 'available') throw new Error('unexpected')
+    const withoutBound = {
+      ...available,
+      rows: available.rows.map(row => {
+        const { bound: _bound, ...rest } = row
+        return rest
+      })
+    }
+    expect(isMarketDivergenceResult(withoutBound, asOf)).toBe(true)
+    expect(isMarketDivergenceResult(available, asOf)).toBe(true)
+    const malformed = {
+      ...available,
+      rows: [{ ...available.rows[0]!, bound: { leg: 'open-interest', comparator: 'below', threshold: 3 } }],
+      withheld: []
+    }
+    expect(isMarketDivergenceResult(malformed, asOf)).toBe(false)
+  })
+})
+
+describe('why escalation cannot fire today — and why the branches stay', () => {
+  /**
+   * 三对共用同一条 OI 腿，三条条件把它切成互不相交的区间：≥ +3% / ≤ −3% / |·| ≤ 1%。
+   * 因此同一时刻最多一行，`minimumPairs` 与「方向互冲」两条分支今天都不可达。
+   *
+   * 这条用例把「不可达」变成被检查的事实，而不是删掉一段保险：
+   * - 谁放宽任一档 → 区间相交 → 红，红的信息就是「这两条升格触发从此可达，保留它们是对的」；
+   * - 谁把三条改成不再共用同一条腿 → 第一条断言红。
+   */
+  it('keeps the three open-interest bands disjoint', () => {
+    const entries = Object.entries(divergencePairBounds)
+    expect(entries).toHaveLength(3)
+    // 三条界必须共用同一条腿：换成别的腿，下面的区间推理就不再成立。
+    expect(new Set(entries.map(([, bound]) => bound.leg))).toEqual(new Set(['open-interest']))
+    const intervalOf = (bound: { comparator: 'atMost' | 'atLeast'; threshold: number }): Readonly<{ lo: number; hi: number }> =>
+      bound.comparator === 'atLeast'
+        ? { lo: bound.threshold, hi: Number.POSITIVE_INFINITY }
+        : bound.threshold > 0
+          // 绝对值那条：|x| ≤ t 读作 [−t, +t]。
+          ? { lo: -bound.threshold, hi: bound.threshold }
+          : { lo: Number.NEGATIVE_INFINITY, hi: bound.threshold }
+    const intervals = entries.map(([pairId, bound]) => ({ pairId, ...intervalOf(bound) }))
+    for (let left = 0; left < intervals.length; left += 1) {
+      for (let right = left + 1; right < intervals.length; right += 1) {
+        const a = intervals[left]!
+        const b = intervals[right]!
+        const overlap = Math.max(a.lo, b.lo) <= Math.min(a.hi, b.hi)
+        // 相交即红：那时两行可能同时成立，`minimumPairs` 与「方向互冲」不再是死代码。
+        expect({ pair: [a.pairId, b.pairId], overlap }).toEqual({ pair: [a.pairId, b.pairId], overlap: false })
+      }
+    }
   })
 })

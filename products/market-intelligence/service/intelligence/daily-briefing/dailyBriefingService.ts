@@ -37,12 +37,13 @@ export { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
 import { withRunGaps } from './dailyBriefCrossAssetGap'
 import { previousEditionBefore } from './dailyBriefingPreviousEdition'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
-import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
+import { candidateOverflow, cutoffDate, isOutputTruncation, turnFailureCode, withDeadline } from './dailyBriefingGenerationGuards'
 import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { briefingScheduledTimeFor, readBriefingHistory } from './dailyBriefingHistory'
 import { missedScheduledPeriods } from './dailyBriefingMissedPeriods'
+import { createAutoRetryingResolve } from './dailyBriefingAutoRetry'
 export type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
 import type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRegenerate, type DailyBriefingRegenerateInput } from './dailyBriefingRegenerate'
@@ -215,7 +216,7 @@ export type DailyBriefingTodayFailureCode =
   | 'model-not-ready' | 'provider-disabled' | 'missing-api-key' | 'cancelled' | 'rate-limited'
   | 'provider-error' | 'invalid-json' | 'schema-validation-failed' | 'invalid-translation'
   | 'agent-turn-output-truncated' | 'direction-conflict' | 'row-set-mismatch' | 'model-unavailable' | 'date-out-of-window'
-  | 'not-generated' // Not a failure: a read-only open found nothing written for this issue yet.
+  | 'run-interrupted' | 'not-generated' // 后者不是失败：只读打开时还没写过这一期。
 
 export type DailyBriefingTodayResult =
   | Readonly<{
@@ -268,6 +269,8 @@ export type DailyBriefingService = Readonly<{
     runTrigger?: DailyBriefingRunTrigger
     /** `false` opens the page as a read; no run. */
     generate?: boolean
+    /** 调用方的中止信号：job 被停/应用正在关闭时不再起第二次（自动重试的活体判定）。 */
+    signal?: AbortSignal
   }>) => Promise<DailyBriefingTodayResult>
   /**
    * 手动生成/重新生成**一次**。
@@ -304,6 +307,7 @@ export type DailyBriefingService = Readonly<{
  * with `editorial-timeout` and its session is abandoned instead of running on.
  */
 export const DAILY_BRIEF_GENERATION_BUDGET_MS = 300_000
+
 
 /**
  * The deterministic core-fact pass runs after the packet/document is built and before any model
@@ -342,10 +346,7 @@ export function createDailyBriefingService(deps: Readonly<{
    * cutoff.
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
-  /**
-   * 期配置列表：`regenerate` 按 `periodId` 取这一期自己的时刻、窗口与语言（用户 2026-11-06）。
-   * 缺省时退回 `generationSettings`，行为与旧版一致（只用于没装配期模型的测试装配）。
-   */
+  /** 期配置列表：`regenerate` 按 `periodId` 取这一期自己的时刻、窗口与语言（缺省退回旧口径）。 */
   readPeriods?: () => Promise<readonly Readonly<{ id: string; generationTime: string; windowHours: 12 | 24 | 48; language?: DailyBriefingLocale }>[]>
   noticeSubmit?: DailyBriefingNoticeSubmit
   /** 结构化诊断（appLog）：导读被扣时那条日志走它；缺省时只是不记。 */
@@ -387,12 +388,9 @@ export function createDailyBriefingService(deps: Readonly<{
     }
   }
 
-  /**
-   * Open today's edition — one named period's when the scheduler says which fired.
-   *
-   * `generation` is that period's own time and window, so a period never borrows another one's
-   * cutoff; an unscheduled caller (the reader opening the page) means the period `default`.
-   */
+  /** One named period's edition when the scheduler fired it; an unscheduled caller means `default`. */
+  const resolveToday = createAutoRetryingResolve({ run: resolveAttempt, now })
+
   async function getToday(input: Readonly<{
     locale: DailyBriefingLocale
     timeZone: string
@@ -401,6 +399,7 @@ export function createDailyBriefingService(deps: Readonly<{
     periodKind?: DailyBriefingPeriodKind
     runTrigger?: DailyBriefingRunTrigger
     generate?: boolean
+    signal?: AbortSignal
   }>): Promise<DailyBriefingTodayResult> {
     const periodId = input.periodId ?? DEFAULT_PERIOD_ID
     const window = briefingWindow(now(), input.timeZone, input.generation ?? await generation())
@@ -413,7 +412,7 @@ export function createDailyBriefingService(deps: Readonly<{
     return runs.join(runs.key(window.date, periodId, input.locale), async () => {
       const result = await resolveToday({
         asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours,
-        ...(input.periodKind ? { periodKind: input.periodKind } : {}), ...(input.runTrigger ? { runTrigger: input.runTrigger } : {})
+        ...(input.periodKind ? { periodKind: input.periodKind } : {}), ...(input.runTrigger ? { runTrigger: input.runTrigger } : {}), ...(input.signal ? { signal: input.signal } : {})
       }, false)
       return withTimeZoneSource(await withStoredAttempt(deps.store, result, window.date, input.locale, periodId), window.zoneSource)
     })
@@ -424,7 +423,7 @@ export function createDailyBriefingService(deps: Readonly<{
     ...(deps.readPeriods ? { readPeriods: deps.readPeriods } : {})
   })
 
-  async function resolveToday(rawInput: Readonly<{
+  async function resolveAttempt(rawInput: Readonly<{
     asOf: string
     date: string
     periodId: string
@@ -433,6 +432,7 @@ export function createDailyBriefingService(deps: Readonly<{
     windowHours: number
     periodKind?: DailyBriefingPeriodKind
     runTrigger?: DailyBriefingRunTrigger
+    signal?: AbortSignal
   }>, force: boolean): Promise<DailyBriefingTodayResult> {
     // 一个 (日期, 截止, 语言) 只允许一版：槽被别的期占着就写进它，不另插一行。
     const slotPeriodId = await briefingEditionSlotPeriodId(deps.store, rawInput)
@@ -584,7 +584,7 @@ export function createDailyBriefingService(deps: Readonly<{
             onStage
           }), DAILY_BRIEF_GENERATION_BUDGET_MS, () => controller.abort())
         } catch (error) {
-          const failureCode = isOutputTruncation(error) ? 'agent-turn-output-truncated' : 'editorial-timeout'
+          const failureCode = turnFailureCode(error)
           const detail = error instanceof Error && error.message ? error.message : undefined
           if (activeStage) {
             recorder.end(activeStage, 'failed', { failureCode, ...(detail ? { failureDetail: detail } : {}) })
@@ -602,9 +602,8 @@ export function createDailyBriefingService(deps: Readonly<{
             sessionId: sessionId ?? 'unknown',
             toolInvocations: []
           }
-          // The answer is no longer awaited, but the runtime session must stop. The port only
-          // abandons a link that is still running, so a turn that finished at the deadline keeps its
-          // terminal state. A deadline that fires before any session exists has nothing to close.
+          // The answer is no longer awaited, but the runtime session must stop. The port only abandons
+          // a link that is still running, so a turn that finished at the deadline keeps its state.
           if (sessionId) await deps.agentRunner.finish(sessionId, 'abandoned').catch(() => undefined)
         }
         if (turn.state === 'accepted') {

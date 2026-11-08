@@ -51,6 +51,63 @@ describe('ETF current-state refresh service', () => {
     })
   })
 
+  // 定稿后仍变的交易日：写一行计数（不是静默），这是「30 小时余量够不够」的唯一数据来源。
+  it('counts a settled day that a later refresh changed, through the real store', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      const first = createEtfCurrentStateRefreshService({
+        isEnabled: async () => true, hasCredential: async () => true,
+        requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
+        store, now: () => '2026-09-02T12:00:00.000Z'
+      })
+      await expect(first.refresh()).resolves.toEqual({ state: 'updated' })
+
+      // 同一天（08-31）的读数在下一轮被改写：这一天早已静置满 30 小时。
+      const revised = rows('BTC').map((row) => row.date === Date.parse('2026-08-31T00:00:00.000Z') ? { ...row, changeUsd: -999 } : row)
+      const second = createEtfCurrentStateRefreshService({
+        isEnabled: async () => true, hasCredential: async () => true,
+        requestWindow: async () => ({ state: 'available' as const, btc: revised, eth: rows('ETH') }),
+        store, now: () => '2026-09-02T13:00:00.000Z'
+      })
+      await expect(second.refresh()).resolves.toEqual({ state: 'updated' })
+
+      const revision = log.mock.calls
+        .map(([line]) => (typeof line === 'string' ? JSON.parse(line) as Record<string, unknown> : {}))
+        .find((line) => line.marker === 'MI_ETF_SETTLED_REVISION')
+      expect(revision).toMatchObject({ asset: 'btc', tradingDate: '2026-08-31', currentUsd: -999 })
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  // 反例（架构师判据一）：上次读到它时还没定稿——补报完成不是「判后又变」，不许计数。
+  it('does not count a revision that only completes the reporting inside the window', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      const first = createEtfCurrentStateRefreshService({
+        isEnabled: async () => true, hasCredential: async () => true,
+        requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
+        store, now: () => '2026-09-02T05:00:00.000Z'
+      })
+      await expect(first.refresh()).resolves.toEqual({ state: 'updated' })
+
+      // 09-01 在 09-02T05:00Z 才满 29 小时；下一轮 06:30Z 它刚满窗口，这次变大是补报收尾。
+      const late = rows('BTC').map((row) => row.date === Date.parse('2026-09-01T00:00:00.000Z') ? { ...row, changeUsd: -777 } : row)
+      const second = createEtfCurrentStateRefreshService({
+        isEnabled: async () => true, hasCredential: async () => true,
+        requestWindow: async () => ({ state: 'available' as const, btc: late, eth: rows('ETH') }),
+        store, now: () => '2026-09-02T06:30:00.000Z'
+      })
+      await expect(second.refresh()).resolves.toEqual({ state: 'updated' })
+
+      expect(log.mock.calls.map(([line]) => line).filter((line) => typeof line === 'string' && line.includes('MI_ETF_SETTLED_REVISION'))).toEqual([])
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   it('fails closed without a write when fewer than five common complete UTC dates remain', async () => {
     const replace = vi.fn()
     const service = createEtfCurrentStateRefreshService({

@@ -1,0 +1,227 @@
+{
+  "market-intelligence.analysis.conclusion": {
+    "levels": [
+      "center",
+      "channel"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": true
+  },
+  "market-intelligence.briefing.failed": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "market-intelligence.briefing.ready": {
+    "levels": [
+      "center",
+      "channel",
+      "desktop"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": true
+  },
+  "market-intelligence.calendar.event-upcoming": {
+    "levels": [
+      "center",
+      "channel",
+      "toast"
+    ],
+    "group": "calendar-events",
+    "bypass": false,
+    "channel": true
+  },
+  "market-intelligence.macro.event-landed": {
+    "levels": [
+      "center",
+      "channel",
+      "toast"
+    ],
+    "group": "calendar-events",
+    "bypass": false,
+    "channel": true
+  },
+  "market-intelligence.sentiment.alert": {
+    "levels": [
+      "center",
+      "channel"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": true
+  },
+  "market-intelligence.signal.triggered": {
+    "levels": [
+      "center",
+      "channel",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": true
+  },
+  "market-intelligence.source.consecutive-failed": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "market-intelligence.source.stale": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "market-intelligence.timezone.invalid": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.analysis.attempt-abandoned": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.analysis.manual-failed": {
+    "levels": [
+      "center",
+      "desktop"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.analysis.quota-exhausted": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.analysis.recovered": {
+    "levels": [
+      "center",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.analysis.repeated-failure": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.channel.connection-lost": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.channel.push-resumed": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.channel.push-suspended": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.desktop.blocked": {
+    "levels": [
+      "center",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.job.failed-terminal": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.job.repeated-failed": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.provider.credential-invalid": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
+  "platform.provider.credential-recovered": {
+    "levels": [
+      "center",
+      "desktop",
+      "toast"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  }
+}

@@ -509,4 +509,184 @@ describe('the citable set (Chief 2026-11-06)', () => {
     const repair = continues.find((text) => text.includes('failed validation')) ?? ''
     expect(repair).toContain('news:dropped-1')
   })
+
+  it('really runs one repair after an unparsable reply, and accepts the repaired answer', async () => {
+    // 兜底必须真的跑起来：第一稿不是 JSON，重写一次给出合法 JSON，这一版就该成功。
+    let rounds = 0
+    const continues: string[] = []
+    const stages: { id: string; state: string; failureCode?: string }[] = []
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async (_sessionId: string, text: string) => {
+        continues.push(text)
+        rounds += 1
+        return { assistantText: rounds === 1 ? 'I could not finish that.' : JSON.stringify(editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.')), toolInvocations: [] }
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({
+      runner, document: withNextCandidates(), locale: 'en-US',
+      onStage: (event: { stage: string; state: string; failureCode?: string }) => { stages.push({ id: event.stage, state: event.state, ...(event.failureCode ? { failureCode: event.failureCode } : {}) }) }
+    })
+
+    expect(result.state).toBe('accepted')
+    expect(continues.filter((text) => text.includes('failed validation'))).toHaveLength(1)
+    const repair = stages.filter((stage) => stage.id === 'repair-1')
+    expect(repair.map((stage) => stage.state)).toEqual(['begin', 'success'])
+  })
+
+  it('records a stopped turn as cancelled, never as the model writing bad JSON', async () => {
+    // 真机：应用在写作中途被关，运行时把回合停成「已停止。」。它不是一个坏答案，
+    // 拿去解析只会得到 invalid-json，再去重写只会撞上已释放的运行时。
+    const stages: { id: string; state: string; failureCode?: string }[] = []
+    const continues: string[] = []
+    const finish = vi.fn(async () => undefined)
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async (_sessionId: string, text: string) => {
+        continues.push(text)
+        return { assistantText: '已停止。', toolInvocations: [], stopped: true }
+      }),
+      finish
+    }
+
+    const result = await runDailyBriefAgentTurn({
+      runner, document: withNextCandidates(), locale: 'en-US',
+      onStage: (event: { stage: string; state: string; failureCode?: string }) => { stages.push({ id: event.stage, state: event.state, ...(event.failureCode ? { failureCode: event.failureCode } : {}) }) }
+    })
+
+    expect(result).toMatchObject({ state: 'failed', failureCode: 'run-interrupted' })
+    expect(stages.find((stage) => stage.id === 'writing' && stage.state === 'failed')?.failureCode).toBe('run-interrupted')
+    expect(stages.some((stage) => stage.id === 'validation')).toBe(false)
+    expect(continues.filter((text) => text.includes('failed validation'))).toHaveLength(0)
+    expect(finish).toHaveBeenCalledWith('s1', 'abandoned')
+  })
+
+  it('never reads a disposed runtime out of the error text — that sentence is not a protocol', async () => {
+    // 2026-11-07 改判：旧版逐字比对「Agent session runtime is disposed.」来认定"应用被关闭"，
+    // 那是拿提示语当协议。现在中断只在 `paused + stopReason.kind === 'runtime-stop'` 上认
+    // （见 `dailyBriefAgentRunner.test.ts` 的三支）；抛出来的错误按类型化名字归类。
+    // 于是这里不再冒充"应用被关闭"，也不再冒充超时：保留这一轮真正的失败码 `invalid-json`。
+    let rounds = 0
+    const stages: { id: string; state: string; failureCode?: string }[] = []
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async () => {
+        rounds += 1
+        if (rounds === 1) return { assistantText: 'not json at all', toolInvocations: [] }
+        throw new Error('Agent session runtime is disposed.')
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({
+      runner, document: withNextCandidates(), locale: 'en-US',
+      onStage: (event: { stage: string; state: string; failureCode?: string }) => { stages.push({ id: event.stage, state: event.state, ...(event.failureCode ? { failureCode: event.failureCode } : {}) }) }
+    })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('invalid-json')
+    expect(result.failureCode).not.toBe('run-interrupted')
+    expect(result.failureCode).not.toBe('editorial-timeout')
+    expect(result.failureDetail).toContain('Agent session runtime is disposed.')
+    expect(stages.find((stage) => stage.id === 'repair-1' && stage.state === 'failed')?.failureCode).toBe('invalid-json')
+  })
+
+  it('keeps invalid-json when the repair fails for a reason that is not a cancellation', async () => {
+    let rounds = 0
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async () => {
+        rounds += 1
+        if (rounds === 1) return { assistantText: 'the model rambled instead of answering', toolInvocations: [] }
+        throw new Error('provider returned 500')
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('invalid-json')
+    // 失败明细里要有它到底长什么样的一小段，下一次不必靠猜。
+    expect(result.failureDetail).toContain('unparsable: the model rambled')
+    expect(result.failureDetail).toContain('provider returned 500')
+  })
+
+  it('does not call an unrelated "stopped" error an app close', async () => {
+    // 架构师保留项：宽泛词（stopped/interrupted）会把上游网络错误说成「应用被关闭了」。
+    // 只有运行时自己那句固定文案才算中断；其余一律落回这一轮真正的失败码。
+    let rounds = 0
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async () => {
+        rounds += 1
+        if (rounds === 1) return { assistantText: 'not json at all', toolInvocations: [] }
+        throw new Error('upstream stream stopped by peer')
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('invalid-json')
+    expect(result.failureCode).not.toBe('run-interrupted')
+    expect(result.failureDetail).toContain('stopped by peer')
+  })
+
+  it('keeps the provider’s own failure code when the model errors mid-writing (v2.166)', async () => {
+    // 架构师退回项：`error` 不是"应用被关"。三种终态分开后，provider 报错必须保留它自己的码，
+    // 明细里也不许出现"应用被关闭"那种说法（那是另一件事）。
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, toolInvocations: [], assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }) })),
+      continue: vi.fn(async () => ({ assistantText: '', toolInvocations: [], stopped: true, stoppedReason: 'failed' as const, failureCode: 'provider-error', failureDetail: 'provider-request-failed' })),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('provider-error')
+    expect(result.failureDetail).toContain('provider-request-failed')
+    expect(result.failureDetail).not.toContain('stopped mid-turn')
+    // 不是"没写完"那种中断：这一期按失败收，下一次不会再被当成应用退出。
+    expect(runner.finish).toHaveBeenCalledWith('s1', 'failed')
+  })
+
+  it('still calls a runtime stopped on its own an interrupted run (v2.166)', async () => {
+    // 另一半判据：应用正在关闭时仍然是 `run-interrupted`，不许因为上一处改动被一起吃成取消或失败。
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, toolInvocations: [], assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }) })),
+      continue: vi.fn(async () => ({ assistantText: '', toolInvocations: [], stopped: true, stoppedReason: 'run-interrupted' as const })),
+      finish: vi.fn(async () => undefined)
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') return
+    expect(result.failureCode).toBe('run-interrupted')
+    expect(result.failureDetail).toBe('runtime stopped mid-turn')
+    expect(runner.finish).toHaveBeenCalledWith('s1', 'abandoned')
+  })
 })

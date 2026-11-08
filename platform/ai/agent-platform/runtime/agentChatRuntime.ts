@@ -69,6 +69,15 @@ export type AgentChatRuntimeResult = {
   assistantMessage: AgentSessionMessageEntity
   /** Tool calls completed during this turn; null when the runtime did not expose any. */
   toolInvocations?: readonly import('./runtimeTypes').AgentRuntimeToolInvocation[]
+  /**
+   * Why a turn that came back `paused` stopped: `runtime-stop` (the runtime was disposed or was
+   * laid down), `user-stop` (the reader cancelled) or `interrupt` (a newer turn took the session).
+   *
+   * Present **only** for a paused turn. A turn that failed carries `assistantMessage.status =
+   * 'error'` and no stop reason, so a caller can never read "the model errored" as "the app was
+   * closed" by looking at this field -- the two answers come from two fields, never one.
+   */
+  stopReason?: import('./runtimeTypes').AgentRuntimeStopReason
 }
 
 export type AgentChatRuntime = {

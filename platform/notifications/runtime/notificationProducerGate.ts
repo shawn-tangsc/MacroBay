@@ -32,8 +32,8 @@ export function evaluateProducerGate(input: {
   const owner = input.ownership?.[producerId]
   if (owner !== undefined) {
     if (owner === 'platform') return { action: 'send' }
-    // 让渡只吞**平台事件**：产品自己的 `market-intelligence.*` 提交照常走，claim 不能把
-    // 来源两条自有事件整 handler 吞掉。
+    // 让渡只吞**平台事件**：产品自己的 `<productId>.*` 提交照常走，claim 不能把
+    // 产品自有事件整 handler 吞掉。
     if (input.eventTypeId.startsWith('platform.')) {
       input.diagnostics?.({ code: 'delegated', eventTypeId: input.eventTypeId, producerId, at: input.now })
       return { action: 'delegated', ownerProductId: owner.productId }

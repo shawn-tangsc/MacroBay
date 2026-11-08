@@ -4,6 +4,7 @@ import {
   dailyBriefingPolicy,
   isBriefingGenerationTrace,
   isDailyBriefingDocumentWithinBudget,
+  isDailyBriefingEditionLanguageReason,
   isDailyBriefingLocale,
   isDailyBriefingReadingState,
   isFactImportanceTier,
@@ -456,7 +457,7 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
   })
 }
 
-const RUN_TRIGGERS = ['scheduled', 'catch-up', 'retry', 'manual'] as const
+const RUN_TRIGGERS = ['scheduled', 'catch-up', 'retry', 'auto-retry', 'manual'] as const
 
 /** The per-language three-state, or `null` when one entry is not a value this build understands. */
 function parseSummaryLanguages(value: unknown): readonly DailyBriefingEditionLanguage[] | null {
@@ -469,9 +470,8 @@ function parseSummaryLanguages(value: unknown): readonly DailyBriefingEditionLan
       continue
     }
     if (entry.state !== 'missing') return null
-    const reason = entry.reason
-    if (reason !== 'not-published' && reason !== 'run-running' && reason !== 'run-failed' && reason !== 'run-interrupted') return null
-    parsed.push(Object.freeze({ locale: entry.locale, state: 'missing' as const, reason }))
+    if (!isDailyBriefingEditionLanguageReason(entry.reason)) return null
+    parsed.push(Object.freeze({ locale: entry.locale, state: 'missing' as const, reason: entry.reason }))
   }
   return Object.freeze(parsed)
 }

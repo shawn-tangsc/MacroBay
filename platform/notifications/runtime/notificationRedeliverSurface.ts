@@ -7,6 +7,7 @@
  * 抽出来的原因与设置面相同：`notificationRuntime.ts` 贴着体积上限，任何新的成块逻辑
  * 都直接进独立模块，**不许先长后拆**。
  */
+import type { PushChannelResolution } from '../delivery/pushChannelResolution'
 import type {
   NotificationDiagnosticsSink,
   NotificationRuntimeSettings
@@ -42,6 +43,8 @@ export type RedeliverSurfaceDeps = {
   notifyChanged: () => void
   /** 判定阶段被拒的留痕出口：与 `persist-failed` 同一条路（appLog），**不进记录**。 */
   diagnostics?: NotificationDiagnosticsSink
+  /** 目标通道的唯一派生（技术方案 §1）：重投不许再读 `settings.push.channelId`。 */
+  resolvePushChannel: () => Promise<PushChannelResolution>
 }
 
 /** 拒绝码 → 哪一步拒的。一码一步，映射只有这一处。 */
@@ -66,7 +69,11 @@ export function composeRedeliverSurface(deps: RedeliverSurfaceDeps) {
         const state = await deps.load()
         const settings = await deps.getSettings()
         const now = deps.now()
-        const channelId = settings.push.channelId
+        const pushChannel = await deps.resolvePushChannel()
+        if (!pushChannel.ok && pushChannel.multiple) {
+          deps.diagnostics?.({ code: 'push-multiple-enabled', count: pushChannel.enabledChannelCount, at: now })
+        }
+        const channelId = pushChannel.ok ? pushChannel.channelId : null
         const pausedUntil = channelId === null ? null : (state.pushBackoff?.[channelId]?.pausedUntil ?? null)
         const result = await redeliverPushToChannel(input, {
           records: state.records,

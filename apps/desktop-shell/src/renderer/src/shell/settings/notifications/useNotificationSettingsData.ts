@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import type { NotificationCenterItem } from '@platform/notifications/contracts/notificationContracts'
-import type { DeliveryAttempt } from '@platform/notifications/runtime/notificationRouting'
+import type {
+  LinkSelfTestKind,
+  TestNoticeReceipt
+} from '@platform/notifications/contracts/notificationSelfTest'
 
 /**
  * 这一屏要的两份事实：应用内提示开关、桌面提醒开关（`getDeliverySettings` 一次读回）。
@@ -16,8 +18,11 @@ export type NotificationSettingsClient = {
   getDeliverySettings?: () => Promise<{ toastEnabled?: boolean; desktopEnabled?: boolean }>
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
   setDesktopEnabled?: (enabled: boolean) => Promise<unknown>
-  /** 真实回执：一条记录 + 每一档投递的尝试结果（形状取自主进程运行时，不是我们自己拼的）。 */
-  sendTest?: () => Promise<{ record: NotificationCenterItem; delivery: readonly DeliveryAttempt[] }>
+  /**
+   * 真实回执：三档（`sent` / `no-data` / `unavailable`）+ 闭集码。**形状取自主进程契约**，
+   * 这里只引用、不重写——旧的 `{ record, delivery }` 已随 preload 换成 `TestNoticeReceipt`。
+   */
+  sendTest?: (input: { kind: LinkSelfTestKind }) => Promise<TestNoticeReceipt>
 }
 
 export type NotificationSettingsState =

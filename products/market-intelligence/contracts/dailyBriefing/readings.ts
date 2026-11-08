@@ -8,7 +8,7 @@
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
 export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24'
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24' | 'daily-briefing.v25'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -327,6 +327,33 @@ export type BriefingMacroItem = Readonly<{
   /** AI visibility decision; absent means shown for older editions. */
   visibility?: 'shown' | 'hidden'
   visibilityReason?: string
+}>
+
+/**
+ * 一个新闻来源今天的状态（`02` v2.167，schema 15）。
+ *
+ * 右列「数据缺口与限制」只读冻结的日报文档，所以来源的状态必须**写进文档**才到得了读者眼前；
+ * 另开一张来源状态表等于让读者去两个地方找同一种事。
+ *
+ * 两种状态分开，**永远不共用一句话**：
+ * - `silent`：活着的源，但**超过它自己的静默窗口没有新条目**（新闻源 24 小时）。`lastNewItemAt`
+ *   是**最后一次真的带来新条目**的时刻，不是"最后一次采集成功"——每 15 分钟都成功、抓回来全是
+ *   被去重挡掉的旧条目时，后者永远是"刚才"。写不出这个时刻就不报静默，宁可不说话。
+ * - `failed`：连续采集失败（与「静默」是两条事件）。
+ *
+ * 正常的源**不进这个列表**：没有条目就是没有条目，不是"缺什么"。
+ */
+export type BriefingNewsSource = Readonly<{
+  sourceId: string
+  /** 读者看得见的名字，来自来源注册表；渲染层不再自己查表。 */
+  name: string
+  state: 'silent' | 'failed'
+  /** `silent`：最后一次真的带来新条目的时刻（UTC）。 */
+  lastNewItemAt?: string
+  /** `silent`：距那一刻过去了多少小时（取整，只用于句子里的数字）。 */
+  silentHours?: number
+  /** `failed`：连续失败次数。 */
+  consecutiveFailures?: number
 }>
 
 /**

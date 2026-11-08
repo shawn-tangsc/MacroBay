@@ -10,6 +10,14 @@ import type {
   NotificationEventCatalogEntry
 } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
+import {
+  isSurfaceAvailable,
+  resolveSurfaceSelection,
+  SELECTABLE_SURFACES,
+  surfaceGroupMembers,
+  type NotificationSurfaceSelection,
+  type SelectableSurface
+} from '../contracts/notificationSurfaceSelection'
 import type { NotificationStoreState } from '../store/notificationStore'
 
 export type NotificationSettingsSurfaceInput = {
@@ -55,6 +63,77 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
         channelEvents: { ...(settings.channelEvents ?? {}), [eventId]: enabled }
       })
       return { eventId, enabled }
+    },
+
+    /**
+     * 读一条通知（或一个组）的表面选择（契约 §5.5 第三层）。
+     *
+     * 键是**组键**（同一件事的两条共用一份）或事件 id；返回值里带上「可用面」与「是否冲突」，
+     * 页面据此只画能画的勾、并在冲突时说清「今天先按都关」——**页面不自己判三层**。
+     */
+    async getSurfaceSelection(eventTypeId: string): Promise<{
+      key: string
+      available: readonly SelectableSurface[]
+      selection: NotificationSurfaceSelection
+      conflict: boolean
+    }> {
+      const entry = input.getCatalog()?.get(eventTypeId)
+      if (!entry) throw new Error(`notification-surface-event-unknown: ${eventTypeId}`)
+      const settings = await input.getSettings()
+      const list = () => input.getCatalog()?.list() ?? []
+      const resolved = resolveSurfaceSelection({
+        entry,
+        list,
+        selections: settings.surfaceSelections ?? {}
+      })
+      const members = entry.surfaceGroup === undefined ? [entry] : surfaceGroupMembers(entry.surfaceGroup, list)
+      return {
+        key: entry.surfaceGroup ?? entry.id,
+        available: SELECTABLE_SURFACES.filter((surface) => isSurfaceAvailable(surface, members)),
+        selection: resolved.selection,
+        conflict: resolved.conflict
+      }
+    },
+
+    /**
+     * 写一份表面选择（契约 §5.5）。**一次只写一个键**：有组写组键，没组写事件 id。
+     *
+     * 三种情况报错、不静默忽略：事件不存在、某条成员没批这个面（越权）、组里没有任何成员。
+     * 组写到一个键上，所以「一条写了、另一条没写」这种半次写入**不可能**发生——
+     * 历史数据里各存一份的旧形状由读端按「都关 + 诊断」兜住。
+     */
+    async setSurfaceSelection(eventTypeId: string, selection: NotificationSurfaceSelection): Promise<{
+      key: string
+      selection: NotificationSurfaceSelection
+    }> {
+      if (!input.updateSettings) throw new Error('notification-settings-update-not-configured')
+      const entry = input.getCatalog()?.get(eventTypeId)
+      if (!entry) throw new Error(`notification-surface-event-unknown: ${eventTypeId}`)
+      const list = () => input.getCatalog()?.list() ?? []
+      const members = entry.surfaceGroup === undefined ? [entry] : surfaceGroupMembers(entry.surfaceGroup, list)
+      const key = entry.surfaceGroup ?? entry.id
+
+      for (const [surface, wanted] of Object.entries(selection)) {
+        if (wanted !== true) continue
+        // 没批的面不许写进来：写进来读端也会夹掉，但那样调用方会以为存上了。
+        if (!isSurfaceAvailable(surface, members)) {
+          throw new Error(`notification-surface-not-approved: ${key}:${surface}`)
+        }
+      }
+
+      const current = await input.getSettings()
+      const stored: NotificationSurfaceSelection = Object.freeze({
+        ...(current.surfaceSelections ?? {})[key],
+        ...Object.fromEntries(
+          SELECTABLE_SURFACES
+            .filter((surface) => selection[surface] !== undefined)
+            .map((surface) => [surface, selection[surface] === true])
+        )
+      })
+      await input.updateSettings({
+        surfaceSelections: { ...(current.surfaceSelections ?? {}), [key]: stored }
+      })
+      return { key, selection: stored }
     },
 
     /** 读回那张三条表：没写过的按默认（开）——「装上就推，不想收再去关」。 */

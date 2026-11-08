@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { findMissingNotificationEventCopy } from '@platform/notifications/contracts/notificationEventCopyGate'
 
+import { OPEN_BRIEFING_ACTION_KEY } from '../../../../contracts/notificationEventKeys'
 import { marketIntelligenceProductManifest } from '../../../../product.manifest'
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
@@ -81,10 +82,13 @@ describe('market intelligence notification copy', () => {
     expect(new Set(gaps.map((gap) => gap.eventTypeId))).toEqual(new Set([undeclared.id]))
   })
 
-  it('leaves the action label to the platform key instead of inventing a product one', () => {
-    // 来源两条要求读者动手，动作标签取平台闭集的「去设置」；产品文案表里不该再有一份同名句子。
-    expect(Object.keys(marketIntelligenceNotificationCopy['zh-CN']).some((key) => key.endsWith('.action'))).toBe(false)
-    expect(marketIntelligenceNotificationCopy['en-US']).toBeDefined()
+  it('carries the action label of its own buttons, not a second copy of a platform sentence', () => {
+    // v2.58 起产品动作的标签住在这里（`notification.action.<productId>.<actionId>`），
+    // 平台表里那一行只服务历史记录。句子与搬家前逐字相同，中英各一份。
+    expect(marketIntelligenceNotificationCopy['zh-CN'][OPEN_BRIEFING_ACTION_KEY]).toBe('打开日报')
+    expect(marketIntelligenceNotificationCopy['en-US'][OPEN_BRIEFING_ACTION_KEY]).toBe('Open briefing')
+    // 「去设置」仍是平台动作，产品表不复制它。
+    expect(Object.keys(marketIntelligenceNotificationCopy['zh-CN'])).not.toContain('notification.action.open-settings')
   })
 
   it('is carried by the manifest, so the platform resolves these keys without importing this file', () => {

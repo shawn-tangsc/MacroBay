@@ -1,7 +1,10 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
-import type { NotificationSubmitRejection } from './notificationSubmitRejection'
-import type { NotificationCopyParam } from './notificationCopyPort'
+import type { NotificationSurfaceSelection } from './notificationSurfaceSelection'
+import type { NotificationSubmitRejection, NotificationSubmitRejectionReason } from './notificationSubmitRejection'
+import type { NotificationCopyParam, NotificationCopyRef } from './notificationCopyPort'
 import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
+
+export type { NotificationApprovedLevel }
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
 
@@ -36,8 +39,23 @@ export type NotificationDeeplink = {
 
 export type NotificationAction = {
   id: string
-  /** 动作标签的键；调用点不写句子，句子在文案表里。 */
-  labelKey: NotificationCopyKey
+  /**
+   * 平台动作与**历史记录**的标签键（平台闭集）；调用点不写句子，句子在文案表里。
+   *
+   * 产品动作**不再用它**：产品自己的键走 `labelRef`（下一项）。保留它是为了老记录——
+   * 记录里存的是当初那个键，删掉这个字段等于让历史通知的按钮凭空消失。
+   */
+  labelKey?: NotificationCopyKey
+  /**
+   * 标签的引用（v2.58）：与正文**同一条解析链路、同一次语言**。
+   *
+   * 为什么不是「提交成品标签」：记录存引用、读取时按当前语言解析，切语言后历史通知的标签
+   * 才会跟着变（单语成品会让老通知停在旧语言，那正是成品句模型存中英两份要守的东西）。
+   *
+   * 产品动作必须用它：`scope: 'product'` 自带 `productId`，提交期校验它与本条事件同属一个产品
+   * （`action-label-wrong-scope`）。两个字段都没有 → 提交期拒收（`action-label-missing`）。
+   */
+  labelRef?: NotificationCopyRef
   /**
    * `open-external` = 「看原文」：打开一个**读者真能点的公开地址**（契约 §7.5 ⑫）。
    *
@@ -126,6 +144,11 @@ export type NotificationRecord = {
   /** 「为什么推了」的键与参数；端口拿解析后的句子，不自己拼。 */
   reasonKey?: NotificationCopyKey
   reasonParams?: Record<string, NotificationCopyParam>
+  /**
+   * **首次定档**：建记录时写一次，是「这次真正排上了哪几档」的快照；合并**不改写**（它是事实，不是状态）。
+   * 老记录没有这一项时，读侧按 `channels + delivery.push` 推断一次——那是兼容用的推断，不是权威。
+   */
+  appliedLevels?: readonly NotificationApprovedLevel[]
   severity: NotificationSeverity
   priority: NotificationPriority
   channels: NotificationChannel[]
@@ -157,9 +180,9 @@ export type SafeNotificationRecord = Omit<NotificationRecord, 'safeMetadata'> & 
  * 通知自带动作在界面上的样子：标签已经是句子，不再是键。
  *
  * 为什么动作标签也要在主进程解析：渲染层一旦拿得到 `labelKey`，它就得有一张文案表去查——
- * 那张表正是 `notification.event.…` 被印到屏幕上的入口。动作标签只有平台键，没有产品键。
+ * 那张表正是 `notification.event.…` 被印到屏幕上的入口。所以键与引用都不进这份载荷。
  */
-export type NotificationCenterAction = Omit<NotificationAction, 'labelKey'> & { label: string }
+export type NotificationCenterAction = Omit<NotificationAction, 'labelKey' | 'labelRef'> & { label: string }
 
 /**
  * 渲染层看到的一条通知（落地约束 v1.2 §1）：句子已由主进程在**读的那一刻**按当前界面语言解析。
@@ -264,8 +287,23 @@ export type NotificationRuntimeSettings = {
    */
   channelEvents?: Readonly<Record<string, boolean>>
   /**
+   * 事件级 / 组级的表面选择（契约 §5.5 第三层）：键是**组键**（同一件事的两条共用一个）或事件 id。
+   *
+   * 它是读者能选的**最后一道**，只能收窄：没批的面存进来也会被夹掉。缺省（没这个键）＝读者还没
+   * 表过态，按批准表允许的来——不是「全关」，否则刚打开提醒就会一条都收不到。
+   */
+  surfaceSelections?: Readonly<Record<string, NotificationSurfaceSelection>>
+  /**
    * 出站通道（**过渡字段**）：设置页已经不再读写它；投递端口在「取唯一启用频道」落地前
    * 仍按它取目标。第六组改完端口后，这个字段随 AppSettings 一并删除。
+   */
+  /**
+   * 历史遗留的「推到哪条通道」字段（技术方案 §1）。
+   *
+   * @deprecated **没有任何生产代码会写它，运行路径也不再读它**——目标改由
+   * `resolvePushChannel(channels)` 从「恰好一条 `runtime-ready`」派生。字段保留只为旧文件可读
+   * （`normalize` 不删），等确认无消费者（`grep -rn 'push.channelId'` 只剩归一与类型）再单独一笔删。
+   * **不要**在它上面再加任何读点：两个来源描述同一件事，迟早出现「发到一条已停用的通道」。
    */
   push: { channelId: string | null }
   /**
@@ -301,6 +339,7 @@ export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeS
     popupEnabled: true,
     // 三条频道事件默认全开：「装上就推，不想收再去关」（契约 §5.4）。
     channelEvents: Object.freeze({}),
+    surfaceSelections: Object.freeze({}),
     // 过渡字段：设置页不再写它，第六组把端口改成「唯一启用频道」后删掉。
     push: { channelId: null },
     retentionDays: 30,
@@ -366,109 +405,12 @@ export const PRIORITY_RANK: Record<NotificationPriority, number> = {
   urgent: 3
 }
 
-/** 去重键的输入（契约 §3.2）：判别联合，不是自由字符串表。 */
-export type NotificationDedupeVars =
-  /**
-   * 日内：键 = 模块 + 规则 + 资产，**不带时间**（契约 v2.43 §7.4）。窗口由 `conditionWindowMs` 判。
-   *
-   * `observedAt` / `bucketMs` 已废弃：留着只是为了产品侧还没迁完的提交能编译。**运行时一律拒收**
-   * （`stale-signal-dedupe-vars`）——静默忽略就等于「你以为冷却生效了、其实每个桶都算一件事」。
-   * 产品侧改完那一天，这两个字段随之删除。
-   */
-  | { builder: 'moduleSignal'; moduleId: string; ruleId: string; asset: string | null
-      cadence: 'intraday'
-      /** @deprecated 日内键不带时间；传了会被拒收。 */
-      observedAt?: string
-      /** @deprecated 同上。 */
-      bucketMs?: number }
-  /** 交易日：键里带交易日（由 `observedAt` 折成日期），一天一条天然成立。 */
-  | { builder: 'moduleSignal'; moduleId: string; ruleId: string; asset: string | null
-      observedAt: string; cadence: 'trading-day' }
-  | { builder: 'sourceIssue'; sourceId: string }
-  | { builder: 'template'; vars: Readonly<Record<string, string>> }
+// 提交这一侧的形状搬到自己的模块（契约同一节）；消费方仍从这里取，导入面不变。
+export type {
+  NotificationDedupeVars,
+  NotificationSubmitRequest,
+  NotificationSuppressedLevel,
+  NotificationSubmitOutcome
+} from './notificationSubmitContracts'
 
-/** 提交请求（契约 §3.2）：记录里存键与参数，不存句子。 */
-export type NotificationSubmitRequest = {
-  eventTypeId: string
-  producerId?: string
-  /**
-   * 只记录不投递（契约 §16.3.3）：照常走提交与去重，但**不写任何表面的 delivery 条目**。
-   * 缺省 `true`（不传＝投递，历史调用方一行不用改）。**只许手动/读者动作路径用**，
-   * 自动生产者带上它由生产者边界守卫报错。
-   */
-  deliver?: boolean
-  /** 读者眼前那一版；落库供 `redeliverPush` 核对。 */
-  edition?: { editionId: string; locale: string }
-  dedupeVars: NotificationDedupeVars
-  /**
-   * 记录上的**展示严重度**（`NotificationSeverity`）。以前提交计划器把它写死成 `info`，
-   * 于是每一行的严重度都是常量——生产者传了也没用。缺省 `info` 只为历史调用方。
-   */
-  severity?: NotificationSeverity
-  /**
-   * 这次提交的**信号严重度**（契约 v2.45）：只参与 `condition` 事件的「升级再投递」判断。
-   * 与 `severity` 是两个概念，不许互相顶替。不传＝这次不声明档位，也就不触发升级。
-   */
-  signalSeverity?: NotificationSignalSeverity
-  /**
-   * 源头拼好的成品句子（契约 v2.56）。给了它，平台**不再碰文案表**；
-   * 三段缺语言或某段空串 → `rejected: copy-missing`，不落库。
-   */
-  rendered?: NotificationContentByLanguage
-  titleParams?: Readonly<Record<string, NotificationCopyParam>>
-  bodyParams?: Readonly<Record<string, NotificationCopyParam>>
-  bodyVariant?: string
-  reasonParams?: Readonly<Record<string, NotificationCopyParam>>
-  actions: readonly NotificationAction[]
-  deeplink?: NotificationDeeplink
-  correlationId?: string
-  occurredAt: string
-}
-
-/** 给产品的回执（契约 §6.1 封闭集合）；不向用户抛异常。 */
-export type NotificationSubmitOutcome =
-  | { kind: 'accepted'; recordId: string; levels: readonly NotificationApprovedLevel[] }
-  | { kind: 'merged'; recordId: string; occurrenceCount: number; mergedEventTypes: string[] }
-  | { kind: 'collapsed'; aggregateRecordId: string; collapsedCount: number }
-  /** 让渡给了产品：平台不落库、不投递，只记一条 `delegated` 诊断（契约 §14）。 */
-  | { kind: 'delegated'; eventTypeId: string; producerId: string; ownerProductId: string }
-  | NotificationSubmitRejection
-
-/** 诊断出口：五类「没人看就会变成黑箱」的事实（runtime §2）。 */
-export type NotificationDiagnosticsEntry = {
-  code:
-    | 'delegated'
-    | 'unclaimed-producer'
-    | 'claim-never-registered'
-    /**
-     * 这一侧**只剩一种文案失败**（契约 v2.56 收窄）：按挑选顺序挑不出可发的成品——
-     * 两份都没有、或选中的那一段里有裸键 / 花括号 / 内部 id / 指向本条通知的动作词（平台**只拦不改**）。
-     *
-     * **不建 `copy-action-withheld`**（Chief 2026-11-06 裁定）：源头没提交的那段平台根本看不见，
-     * 建一个永远没有实例的码比没有更糟；产品侧的留痕由产品自己打日志。
-     */
-    | 'copy-unresolved'
-    | 'persist-failed'
-    /**
-     * 读者点「推送到手机」在**判定阶段**被拒（记录不存在 / 版次不符 / 没通道 / 熔断中 / 表面非法）。
-     * 这一支**不写记录**：`delivery.push` 只回答「推过没有」，没调用过通道就不该写。
-     * 日志回答的是另一个问题——「这次操作发生了什么」，所以它必须是可查的一行。
-     */
-    | 'redeliver-rejected'
-  eventTypeId?: string
-  producerId?: string
-  /**
-   * `copy-unresolved` 用：哪一条记录、哪个键、哪种语言解析不出来。
-   * 用途是回答「这条为什么显示成兜底句」，**不是给读者看的**——它只进日志与开发工具。
-   */
-  recordId?: string
-  key?: string
-  /** `copy-param-missing` 用：消失的是哪一格参数（`taskName` 这类名字）。 */
-  param?: string
-  /** `redeliver-rejected` 用：拒绝码与**哪一步**拒的（表面 / 找不到记录 / 版次 / 通道状态）。 */
-  reason?: string
-  step?: 'surface' | 'target' | 'edition' | 'channel'
-  language?: 'zh-CN' | 'en-US'
-  at: string
-}
-export type NotificationDiagnosticsSink = (entry: NotificationDiagnosticsEntry) => void
+export type { NotificationDiagnosticsEntry, NotificationDiagnosticsSink } from './notificationDiagnostics'

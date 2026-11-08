@@ -90,8 +90,13 @@ export type IntelligencePipelineHealth = {
   collectionGap?: boolean
 }
 
+import { collectSourceOnce, type SourceCollectionResult } from './sourceCollectionRun'
+
+export type { SourceCollectionCounts, SourceCollectionResult } from './sourceCollectionRun'
+export { EMPTY_SOURCE_COLLECTION_COUNTS } from './sourceCollectionRun'
+
 export type IntelligencePipeline = {
-  collectSource: (input: { sourceId: string; runId: string; fixtureText?: string }) => Promise<{ queuedJobs: string[] }>
+  collectSource: (input: { sourceId: string; runId: string; fixtureText?: string }) => Promise<SourceCollectionResult>
   normalizeRawRecords: (input: { sourceId?: string; limit?: number }) => Promise<{
     processedCount: number
     queuedJobs: string[]
@@ -427,72 +432,19 @@ export function createIntelligencePipeline(deps?: {
 
   return {
     async collectSource({ sourceId, runId, fixtureText }) {
-      const queuedJobs: string[] = []
-      if (isDefillamaStablecoinRetiredPath(sourceId)) {
-        return { queuedJobs: [] }
-      }
-      const definition = getIntelligenceSourceDefinition(sourceId)
-      if (!definition) throw new Error(`Unknown intelligence source "${sourceId}".`)
-
-      const profile = await profileStore.resolveProfile(sourceId)
-      const { config, issues } = resolveAndValidateRuntimeConfig({
-        definition,
-        profile,
-        hasCredential: Boolean(profile.credentialRef)
-      })
-      if (issues.length > 0) {
-        await recordCollectionFailure(sourceId, issues[0]?.message ?? 'Source is not ready to run.')
-        return { queuedJobs: [] }
-      }
-
-      const adapter = getIntelligenceAdapter(sourceId)
-      if (!adapter) throw new Error(`No adapter registered for "${sourceId}".`)
-
-      try {
-        const rawInputs = fixtureText
-          ? buildFixtureRawRecords(sourceId, runId, fixtureText, adapter.parserVersion)
-          : await adapter.collect({
-              config,
-              runId,
-              fetchText: async (url) => {
-                if (!fetchText) {
-                  throw new Error('HTTP fetch is not configured for intelligence collection.')
-                }
-                return fetchText(url, sourceId)
-              },
-              fetchMetricTarget: fetchMetricTarget
-                ? async (target, sid) => fetchMetricTarget(target, sid)
-                : undefined
-            })
-
-        let appended = 0
-        for (const rawInput of rawInputs) {
-          const appendedRecord = rawRecordStore.appendRawRecord(rawInput)
-          if (appendedRecord) appended += 1
-        }
-
-        if (appended > 0) {
-          queueJob(queuedJobs, 'market-intelligence.normalizeRawRecords')
-        }
-
-        const checkpoint = buildSourceCollectionCheckpoint({
-          rawInputs,
-          parserVersion: adapter.parserVersion,
-          appended
-        })
-        await recordCollectionSuccess(
-          sourceId,
-          checkpoint,
-          formatSourceCheckpointPreview(checkpoint)
-        )
-        return { queuedJobs: [...queuedJobs] }
-      } catch (error) {
-        await recordCollectionFailure(
-          sourceId,
-          error instanceof Error ? error.message : 'Collection failed.'
-        )
-        return { queuedJobs: [] }
-      }
+      // 数字与去重逻辑在 `sourceCollectionRun.ts`（本文件只做接线：这一层不该再长）。
+      return collectSourceOnce(
+        {
+          resolveProfile: (id) => profileStore.resolveProfile(id),
+          appendRawRecord: (rawInput) => rawRecordStore.appendRawRecord(rawInput),
+          recordSuccess: recordCollectionSuccess,
+          recordFailure: recordCollectionFailure,
+          fetchText,
+          fetchMetricTarget,
+          fixtureRecords: buildFixtureRawRecords
+        },
+        { sourceId, runId, ...(fixtureText === undefined ? {} : { fixtureText }) }
+      )
     },
 
     async normalizeRawRecords({ sourceId, limit = 100 }) {

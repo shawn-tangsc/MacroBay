@@ -89,7 +89,7 @@ describe('新形状：成品句子只挑不拼', () => {
     const { delivery, diagnostics } = harness('en-US')
     const content = await delivery.resolveContent(record({
       rendered: RENDERED,
-      eventTypeId: 'market-intelligence.signal.triggered'
+      eventTypeId: 'platform.synthetic-pick'
     }))
 
     expect(content.title).toBe('The 11/06 07:00 English edition is ready.')
@@ -139,9 +139,13 @@ describe('合并成品记录：标题取第一次、正文取最新', () => {
   it('同一键两次提交，正文换成第二版，标题与理由保持第一版', async () => {
     const state = createDefaultNotificationStoreState()
     const catalog = createNotificationEventCatalog({
-      policy: { 'platform.merge': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
       sources: [{
         productId: 'platform',
+        approval: {
+          'platform.merge': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+          'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+          'platform.test': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+        },
         events: [{
           id: 'platform.merge',
           titleKey: 'notification.taskFailed.title',
@@ -156,6 +160,7 @@ describe('合并成品记录：标题取第一次、正文取最新', () => {
       }]
     })
     const instance = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
       catalog,
       getSettings: async () => createDefaultNotificationRuntimeSettings(),
@@ -196,9 +201,13 @@ describe('成品在手时不再读键', () => {
   function runtimeWithVariants() {
     const state = createDefaultNotificationStoreState()
     const catalog = createNotificationEventCatalog({
-      policy: { 'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
       sources: [{
         productId: 'platform',
+        approval: {
+          'platform.merge': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+          'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+          'platform.test': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+        },
         events: [{
           id: 'platform.variant',
           titleKey: 'notification.taskFailed.title',
@@ -213,6 +222,7 @@ describe('成品在手时不再读键', () => {
       }]
     })
     const instance = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
       catalog,
       getSettings: async () => createDefaultNotificationRuntimeSettings(),
@@ -265,7 +275,6 @@ describe('重投在判定阶段被拒：记录干净，日志留痕', () => {
     const instance = createNotificationRuntime({
       storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
       catalog: createNotificationEventCatalog({
-        policy: {},
         sources: [{ productId: 'platform', events: [] }]
       }),
       getSettings: async () => createDefaultNotificationRuntimeSettings(),
@@ -296,9 +305,13 @@ describe('源头没拼完：拒收，不落库', () => {
   function runtime() {
     const state = createDefaultNotificationStoreState()
     const catalog = createNotificationEventCatalog({
-      policy: { 'platform.test': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false } },
       sources: [{
         productId: 'platform',
+        approval: {
+          'platform.merge': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+          'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+          'platform.test': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+        },
         events: [{
           id: 'platform.test',
           titleKey: 'notification.taskFailed.title',
@@ -312,6 +325,7 @@ describe('源头没拼完：拒收，不落库', () => {
       }]
     })
     const instance = createNotificationRuntime({
+      diagnostics: () => undefined,
       storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
       catalog,
       getSettings: async () => createDefaultNotificationRuntimeSettings(),

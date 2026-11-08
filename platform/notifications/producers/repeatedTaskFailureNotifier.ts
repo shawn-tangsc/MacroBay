@@ -2,6 +2,7 @@ import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { countConsecutiveTerminalFailures, JOB_REPEATED_FAILURE_THRESHOLD } from './jobFailureChain'
+import { jobFailureIdentityOf } from './jobFailureIdentity'
 import { renderPlatformEventCopy } from './platformEventCopy'
 
 /**
@@ -22,8 +23,8 @@ export type RepeatedTaskFailureNotifierDeps = {
   /** 与 P1 同一个源：作业名的**中英两份快照**（契约 v2.49），取不到就不发。 */
   taskNameSnapshot: (input: { definitionId: string; productId?: string }) =>
     { 'zh-CN': string; 'en-US': string } | undefined
-  /** 同一任务定义的终态运行，**新到旧**；由装配点从 run 台账取。 */
-  listDefinitionRuns: (definitionId: string) => readonly JobRunRecord[]
+  /** 同一 handler 的终态运行，**新到旧**；由装配点从 run 台账取，再按身份过滤。 */
+  listHandlerRuns: (handlerId: string) => readonly JobRunRecord[]
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」的去重键。 */
   dayToken: (instant: string) => string
 }
@@ -33,8 +34,10 @@ export function createRepeatedTaskFailureNotifier(deps: RepeatedTaskFailureNotif
     if (input.cause !== 'executed' || input.run.status !== 'failed') return Promise.resolve()
 
     const { run } = input
+    const identity = jobFailureIdentityOf(run)
     // 台账里已经包含这一跑（钩子在 run 写进终态之后触发），所以段长就是含本次的连续失败数。
-    const chain = countConsecutiveTerminalFailures(deps.listDefinitionRuns(run.definitionId))
+    // 按**身份**数而不是按 definitionId：一次性作业每次 id 都不同，按 id 数永远到不了 3。
+    const chain = countConsecutiveTerminalFailures(deps.listHandlerRuns(run.handlerId), identity)
     if (chain !== JOB_REPEATED_FAILURE_THRESHOLD) return Promise.resolve()
 
     const taskName = deps.taskNameSnapshot({ definitionId: run.definitionId, productId: run.productId })
@@ -65,7 +68,7 @@ export function createRepeatedTaskFailureNotifier(deps: RepeatedTaskFailureNotif
         producerId: run.handlerId,
         dedupeVars: {
           builder: 'template',
-          vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
+          vars: { jobKey: identity, date: deps.dayToken(completedAt) }
         },
         rendered,
         actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],

@@ -23,8 +23,8 @@ async function render(text: DailyBriefingText, failure: Parameters<typeof DailyB
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
-  await act(async () => root.render(<DailyBriefingFailurePanel failure={failure} text={text} formatTime={(value) => value} regenerating={false}
-    onRetry={vi.fn()} onOpenSettings={vi.fn()} />))
+  await act(async () => root.render(<DailyBriefingFailurePanel failure={failure} text={text} formatTime={(value) => value}
+    onOpenSettings={vi.fn()} />))
   return host
 }
 
@@ -36,7 +36,7 @@ describe('the failure panel says what happened in a sentence', () => {
     // 步骤名用**步骤清单里那一步的真名**（写作），不是表里的兜底名：两处必须同名，否则句子说
     // 写稿、清单写着写作，读者又要猜。
     expect(host.querySelector('[data-failure-reason]')?.textContent)
-      .toBe('写作没跑完：等到超时也没返回，这次没写完（用了 1 分 23 秒）')
+      .toBe('写作没跑完：等到超时也没返回，这次没写完')
     expect(host.querySelector('[data-failure-next]')?.textContent).toBe('接下来：再试一次；反复出现就换一个模型或检查网络')
     expect(host.textContent).not.toContain('editorial-timeout')
     // 原来的码标签那句不再重复一遍：一句人话已经说了同一件事。
@@ -47,11 +47,48 @@ describe('the failure panel says what happened in a sentence', () => {
     // 表里的码：照表拼。
     const known = await render(base, { kind: 'editorial', code: 'editorial-timeout', generationTrace: trace })
     expect(known.querySelector('[data-failure-reason]')?.textContent)
-      .toBe('写作没跑完：等到超时也没返回，这次没写完（用了 1 分 23 秒）')
+      .toBe('写作没跑完：等到超时也没返回，这次没写完')
 
     // 表外码：走兜底句，绝不把码印给读者。
     const unknown = await render(base, { kind: 'generation', code: 'brand-new-reason' })
     expect(unknown.querySelector('[data-failure-reason]')?.textContent).toBe('这次在生成就停下了：这一期没能生成出来')
     expect(unknown.textContent).not.toContain('brand-new-reason')
+  })
+
+  it('says the app was closed when the writing runtime was stopped, and never calls it a timeout', async () => {
+    // 2026-11-07 20:00 真机：应用在写作中途被关，写作 15.4 秒后运行时释放。旧码把它记成
+    // 「超时（用了 1 毫秒）」，读者会去查网络和模型。新码是 `run-interrupted`。
+    const stopped: GenerationTrace = {
+      attemptId: 'attempt-2', startedAt: '2026-11-07T12:00:02.956Z', finishedAt: '2026-11-07T12:01:39.436Z',
+      state: 'failed',
+      stages: [
+        { id: 'writing', state: 'failed', startedAt: '2026-11-07T12:01:24.079Z', finishedAt: '2026-11-07T12:01:39.435Z', durationMs: 15_356 }
+      ]
+    } as GenerationTrace
+    const host = await render(base, { kind: 'editorial', code: 'run-interrupted', generationTrace: stopped })
+
+    const reason = host.querySelector('[data-failure-reason]')?.textContent ?? ''
+    expect(reason).toContain('应用在这之前被关闭了，这次没写完')
+    expect(reason).not.toContain('超时')
+    expect(host.textContent).not.toContain('1 毫秒')
+  })
+
+  it('does not report a duration for the step that failed in a millisecond', async () => {
+    // 校验 1 毫秒就判死：说明卡住的不是它。把 1 毫秒写成时长，就是那句自相矛盾的
+    // 「超时（用了 1 毫秒）」的来源。
+    const instant: GenerationTrace = {
+      attemptId: 'attempt-3', startedAt: '2026-11-07T12:00:02.956Z', finishedAt: '2026-11-07T12:01:39.436Z',
+      state: 'failed',
+      stages: [
+        { id: 'writing', state: 'success', startedAt: '2026-11-07T12:01:24.079Z', finishedAt: '2026-11-07T12:01:39.435Z', durationMs: 15_356 },
+        { id: 'validation', state: 'failed', startedAt: '2026-11-07T12:01:39.435Z', finishedAt: '2026-11-07T12:01:39.436Z', durationMs: 1 }
+      ]
+    } as GenerationTrace
+    const host = await render(base, { kind: 'editorial', code: 'invalid-json', generationTrace: instant })
+
+    const reason = host.querySelector('[data-failure-reason]')?.textContent ?? ''
+    expect(reason).toContain('返回的不是一段能读的 JSON')
+    expect(reason).not.toContain('用了')
+    expect(reason).not.toContain('1 毫秒')
   })
 })

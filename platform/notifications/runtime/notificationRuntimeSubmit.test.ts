@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
-import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
+import { createDefaultNotificationStoreState } from '../store/notificationStore'
+import type {
+  NotificationDiagnosticsEntry,
+  NotificationRuntimeSettings,
+  NotificationSubmitRequest
+} from '../contracts/notificationContracts'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
 
 const settings: NotificationRuntimeSettings = {
@@ -14,17 +19,7 @@ const settings: NotificationRuntimeSettings = {
 }
 const clock = { now: () => new Date('2026-11-03T00:00:00.000Z'), timeZone: () => 'UTC' }
 
-const policy: NotificationEventPolicy = {
-  'platform.failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
-  'platform.done': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
-  'platform.merge-a': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.merge-b': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.merge-c': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
-
 const catalog = createNotificationEventCatalog({
-  policy,
   sources: [
     {
       productId: 'market-intelligence',
@@ -43,6 +38,16 @@ const catalog = createNotificationEventCatalog({
     },
     {
       productId: 'platform',
+    // 批准值随声明走（b2）：值原样。
+    approval: {
+  'platform.failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
+  'platform.done': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
+  'platform.merge-a': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'platform.merge-b': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'platform.merge-c': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'platform.capped': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+},
       events: [
         {
           id: 'platform.failed',
@@ -89,6 +94,17 @@ const catalog = createNotificationEventCatalog({
           dedupeUnit: 'occurrence',
         },
         {
+          id: 'platform.capped',
+          titleKey: 'notification.test.title',
+          reasonKey: 'notification.test.body',
+          requiresUserAction: false,
+    category: 'reminder',
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'capped:{id}',
+          dedupeUnit: 'occurrence',
+          dailyLimit: 1
+        },
+        {
           id: 'platform.merge-c',
           titleKey: 'notification.test.title',
           reasonKey: 'notification.test.body',
@@ -118,16 +134,20 @@ function createRuntime(
     }
   }
   const diagnostics: string[] = []
+  const diagnosticEntries: NotificationDiagnosticsEntry[] = []
   const runtime = createNotificationRuntime({
     storage,
     catalog,
-    diagnostics: (entry) => diagnostics.push(entry.code),
+    diagnostics: (entry) => {
+      diagnostics.push(entry.code)
+      diagnosticEntries.push(entry)
+    },
     ...(extra.producerOwnership === undefined ? {} : { producerOwnership: extra.producerOwnership }),
     ...(extra.productIds === undefined ? {} : { productIds: extra.productIds }),
     getSettings: async () => settings,
     clock
   })
-  return { runtime, state: () => state, diagnostics }
+  return { runtime, state: () => state, diagnostics, diagnosticEntries }
 }
 
 function request(overrides: Partial<NotificationSubmitRequest> = {}): NotificationSubmitRequest {
@@ -263,5 +283,95 @@ describe('notification runtime submit', () => {
       )
     ).resolves.toMatchObject({ kind: 'accepted' })
     expect(state().records[0]?.delivery.desktop).toBeUndefined()
+  })
+})
+
+/**
+ * 被拒留痕（第 10 条同类问题的第二次，2026-11-08）：调用方普遍 `catch {}` 或丢弃返回值，
+ * 被拒的那一次原本在日志、记录、计数三处都查不到。这里钉三件事：记不记、记几条、什么级别。
+ */
+describe('notification runtime: a refusal leaves exactly one trace', () => {
+  it('S37①: an unregistered event type is refused and leaves one error-level line, carrying only the event id and the reason', async () => {
+    const { runtime, state, diagnosticEntries } = createRuntime()
+    await expect(runtime.submit(request({ eventTypeId: 'platform.nope' }))).resolves.toMatchObject({
+      kind: 'rejected',
+      reason: 'unknown-event-type'
+    })
+    expect(diagnosticEntries).toHaveLength(1)
+    expect(diagnosticEntries[0]).toMatchObject({
+      code: 'unknown-event-type',
+      level: 'error',
+      eventTypeId: 'platform.nope'
+    })
+    // 只留痕、不改行为：拒收不建记录。
+    expect(state().records).toHaveLength(0)
+  })
+
+  it('S37②: the entry stopped by the daily cap folds into today last record instead of logging a refusal', async () => {
+    const { runtime, state, diagnosticEntries } = createRuntime()
+    const first = await runtime.submit(
+      request({ eventTypeId: 'platform.capped', dedupeVars: { builder: 'template', vars: { id: 'a' } } })
+    )
+    expect(first).toMatchObject({ kind: 'accepted' })
+
+    const second = await runtime.submit(
+      request({ eventTypeId: 'platform.capped', dedupeVars: { builder: 'template', vars: { id: 'b' } } })
+    )
+    // 折叠不是「被拒」：记录里有痕（`lastSuppressedReason`），日志里不该再有一条——两个痕迹就是两套说法。
+    expect(second).toMatchObject({ kind: 'merged', occurrenceCount: 2 })
+    expect(diagnosticEntries).toEqual([])
+    expect(state().records).toHaveLength(1)
+    expect(state().records[0]?.safeMetadata.lastSuppressedReason).toBe('daily-limit-reached')
+  })
+
+  it('S37③: one submission leaves one line, not zero and not two', async () => {
+    const { runtime, diagnosticEntries } = createRuntime()
+    await runtime.submit(request({ eventTypeId: 'platform.nope' }))
+    await runtime.submit(request({ eventTypeId: 'platform.nope' }))
+    expect(diagnosticEntries.map((entry) => entry.code)).toEqual(['unknown-event-type', 'unknown-event-type'])
+  })
+})
+
+/**
+ * 提交**抛出**那一类（第 10 条同类问题的第二次的第二半）：调用方六处 `catch {}`，抛出来的东西
+ * 以前一个痕也留不下。两个码互斥——写盘失败记 `persist-failed`，其余记 `submit-failed`。
+ */
+describe('notification runtime: a thrown submission leaves exactly one line', () => {
+  function runtimeWith(storage: NotificationStorage) {
+    const entries: NotificationDiagnosticsEntry[] = []
+    const runtime = createNotificationRuntime({
+      storage,
+      catalog,
+      diagnostics: (entry) => entries.push(entry),
+      getSettings: async () => settings,
+      clock
+    })
+    return { runtime, entries }
+  }
+
+  it('S38①: a read failure is one submit-failed line, carrying the error type but not its message', async () => {
+    const failure = Object.assign(new Error('disk gone at /Users/someone'), { name: 'ReadFailure' })
+    const { runtime, entries } = runtimeWith({
+      read: async () => {
+        throw failure
+      },
+      write: async () => undefined
+    })
+    await expect(runtime.submit(request())).rejects.toThrow('disk gone')
+    expect(entries.map((entry) => entry.code)).toEqual(['submit-failed'])
+    expect(entries[0]).toMatchObject({ level: 'error', eventTypeId: 'platform.failed', reason: 'ReadFailure' })
+    // 消息里可能带路径或载荷片段，所以只记类型名。
+    expect(JSON.stringify(entries[0])).not.toContain('disk gone')
+  })
+
+  it('S38②: a write failure keeps exactly one line — persist-failed, never both', async () => {
+    const { runtime, entries } = runtimeWith({
+      read: async () => createDefaultNotificationStoreState(),
+      write: async () => {
+        throw new Error('read-only file system')
+      }
+    })
+    await expect(runtime.submit(request())).rejects.toThrow('read-only file system')
+    expect(entries.map((entry) => entry.code)).toEqual(['persist-failed'])
   })
 })

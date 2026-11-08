@@ -34,7 +34,9 @@ const cells: readonly Cell[] = [
   // generation must not be swallowed by it.
   { rowState: 'running', viewStatus: 'loading', hasEdition: false, localeAvailable: true, mode: 'generating' },
   { rowState: 'running', viewStatus: 'no-edition', hasEdition: false, localeAvailable: true, mode: 'generating' },
-  { rowState: 'running', viewStatus: 'ready', hasEdition: true, localeAvailable: true, mode: 'ready' },
+  // v2.167：同一期同一语言在重跑、库里有上一版 → 正文照常可读，但模式是 `ready-replacing`
+  // （正文顶上要出现「上一版 · 正在重新生成」）；没有上一版的期走上面的 `generating` 两行。
+  { rowState: 'running', viewStatus: 'ready', hasEdition: true, localeAvailable: true, mode: 'ready-replacing' },
   { rowState: 'running', viewStatus: 'unavailable', hasEdition: false, localeAvailable: true, mode: 'generating' },
   { rowState: 'running', viewStatus: 'locale-missing', hasEdition: true, localeAvailable: false, mode: 'locale-missing' },
 

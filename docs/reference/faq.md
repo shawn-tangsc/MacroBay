@@ -51,9 +51,9 @@ concrete failures.
 
 ## Can I use it without a dashboard or live data?
 
-Yes, for a look: **sample mode** shows the full dashboard and three published analyses from a recorded real
-week, with no key and no network. Doing your own analysis still needs configured source credentials and
-data — sample mode never collects and never writes to your database.
+It needs configured source credentials and a model key to show you anything. Sources that need no credential
+still collect; whatever cannot be read is reported as a gap rather than filled with a value that reads like
+data.
 
 ## Is the analysis investment advice?
 

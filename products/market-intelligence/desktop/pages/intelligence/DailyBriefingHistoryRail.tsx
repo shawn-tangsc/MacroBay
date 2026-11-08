@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
+import { StatusPill } from '@platform/ui/components/status-pill'
+
 import { ContextMenu, type MenuAnchor, type MenuItem } from '@platform/ui/components/menu'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
@@ -36,19 +38,26 @@ export function briefingRailKey(row: Readonly<{ date: string; periodId: string; 
  * groups by date and draws those conclusions, it never re-derives one.
  */
 
-/** How this edition came to exist. Exactly one per row, five in total (`02` A5.4b). */
-type RailTriggerKind = 'scheduled' | 'manual' | 'retry' | 'catch-up'
+/** How this edition came to exist. Exactly one per row, six in total (`02` A5.4b v2.158). */
+type RailTriggerKind = 'scheduled' | 'manual' | 'retry' | 'auto-retry' | 'catch-up'
+
+/** 失败标的文案键：平台药丸只收键，句子的来源仍是产品文案表。 */
+const failureBadgeKey = 'pages.intelligence.portal.dashboard.dailyBriefing.history.failureBadge'
 
 /**
- * 第一行的**来源**：定时 / 手动 / 重试 / 补跑，四档互斥（`02` A5.4b v2.147）。
+ * 第一行的**来源**：定时 / 手动 / 重试 / 自动重试 / 补跑，五档互斥（`02` A5.4b v2.158）。
  *
  * 用户 2026-11-06：「这次失败」以前占的就是这一格，把"手动还是定时"顶掉了，读者看不出这条记录是
  * 怎么来的。状态词退到第二行，来源位从此只回答这一件事。老记录没存触发方式 → `undefined`，
  * 界面写「未记录」，**不拿当前设置回填**。
+ *
+ * 「重试」是读者自己按的，「自动重试」是应用替环境类失败重跑的那一次（`02` v2.158：两种同词
+ * 即红，否则读者会以为自己点了两次）。
  */
 function triggerKindOf(edition: DailyBriefingEditionSummary): RailTriggerKind | undefined {
   const trigger = edition.runTrigger
   if (trigger === 'catch-up') return 'catch-up'
+  if (trigger === 'auto-retry') return 'auto-retry'
   if (trigger === 'retry') return 'retry'
   if (trigger === 'manual' || edition.periodKind === 'manual') return 'manual'
   if (trigger === 'scheduled') return 'scheduled'
@@ -59,6 +68,7 @@ function triggerKindOf(edition: DailyBriefingEditionSummary): RailTriggerKind | 
 
 function triggerLabelOf(kind: RailTriggerKind | undefined, text: DailyBriefingText): string {
   if (kind === 'manual') return text.history.runManual
+  if (kind === 'auto-retry') return text.history.runAutoRetry
   if (kind === 'retry') return text.history.runRetry
   if (kind === 'catch-up') return text.history.runCatchUp
   if (kind === 'scheduled') return text.history.runScheduled
@@ -273,17 +283,25 @@ export function DailyBriefingHistoryRail({
             const key = briefingRailKey(edition)
             const missing = edition.state === 'missing'
             const running = key === waitingKey
-            // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的"。
-            // 那一行此刻没有正文，但它的来源没变，所以不能借机写成「未运行」。
-            const triggerKind = running
-              ? (edition.periodKind === 'manual' ? 'manual' as const : edition.runTrigger === 'catch-up' ? 'catch-up' as const : 'scheduled' as const)
-              : triggerKindOf(edition)
+            // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的 / 应用替我重跑的"。
+            // 那一行此刻没有正文，但它的来源没变，所以不能借机写成「未运行」。来源照它自己的触发值
+            // 走（自动重试也是其中一档）；只有连触发值都没有、又在跑的时候，才回落到定时/手动。
+            const triggerKind = triggerKindOf(edition)
+              ?? (running ? (edition.periodKind === 'manual' ? 'manual' as const : 'scheduled' as const) : undefined)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
             // 行上**不放任何按钮**（用户 2026-11-06：list 上每个 item 都有重试按钮，太重）。
             // 重试只在正文的失败面板与工具栏，行本身只陈述事实。
             const interrupted = runReasonOf(edition) === 'run-interrupted'
-            const failedRun = runReasonOf(edition) === 'run-failed' || (!running && Boolean(edition.attemptCount))
+            /**
+             * **失败只认这一行自己的原因**，不许用"有没有尝试过"去猜（用户 2026-11-07 的回归：成功行也
+             * 有尝试记录，于是整列都被标成「失败」）。
+             * - 有正文：正文在就说明成了，永远不出失败标；
+             * - 没有正文：只看这一行的 `reason`；`run-failed` 才是失败，中断是另一句，缺原因落到「未运行」；
+             * - `run-cancelled` 不是故障（读者自己取消/被自己顶掉）：投影层已经不建这一行（`02` v2.176），
+             *   这里再守一道——万一到了渲染层，也**不出红标**，不把它说成失败。
+             */
+            const failedRun = !running && missing && runReasonOf(edition) === 'run-failed'
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
               <button type="button"
                 aria-current={rowSelected(edition) ? 'true' : undefined}
@@ -307,10 +325,15 @@ export function DailyBriefingHistoryRail({
                   if (onSelectLocale) onSelectLocale({ date: edition.date, periodId: edition.periodId, locale: edition.locale })
                   else onSelect(edition.date)
                 }}>
-                {/* 第一行 = 这一行的身份（`02` A5.4b v2.147）：时刻 · 窗口 · 来源 · 语言，
-                    分隔只用留白，行内没有 `·`。状态词退到第二行——它以前占的正是来源那一格，
-                    把"手动还是定时"顶掉了（用户 2026-11-06 看不出这条失败是怎么来的）。 */}
+                {/* 第一行 = 这一行的身份（`02` A5.4b v2.147）：**失败标 · 时刻 · 窗口 · 方向 · 来源 · 语言**，
+                    分隔只用留白，行内没有 `·`。
+                    失败标打头（`02` v2.163）：它是这一行**第一个可读元素**——扫列表时先看到"这一行失败了"，
+                    再看到是哪一期；排在来源徽标之后时，读者要跨过三个元素才知道这行失败。
+                    状态词仍只在第一行出现一次，第二行说这一期讲什么。 */}
                 <span className="mi-daily-briefing__rail-line">
+                  {failedRun
+                    ? <StatusPill labelKey={failureBadgeKey} resolveText={(key) => key === failureBadgeKey ? text.history.failureBadge : (resolveText?.(key) ?? '')} tone="bad" />
+                    : null}
                   <span className="mi-daily-briefing__rail-fact" data-rail-clock={clock === undefined ? 'not-recorded' : 'recorded'}>
                     {clock ?? text.history.notRecorded}
                   </span>
@@ -324,7 +347,7 @@ export function DailyBriefingHistoryRail({
                     ? null
                     : <i className="mi-daily-briefing__rail-dot" data-direction={edition.direction ?? 'none'} role="img"
                       aria-label={edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion} />}
-                  {/* 这一格只回答"这一行是怎么来的"：定时 / 手动 / 重试 / 补跑，缺记录写「未记录」。 */}
+                  {/* 这一格只回答"这一行是怎么来的"：定时 / 手动 / 重试 / 自动重试 / 补跑，缺记录写「未记录」。 */}
                   <span className="mi-daily-briefing__rail-source" data-run-source={triggerKind ?? 'not-recorded'}>{triggerLabelOf(triggerKind, text)}</span>
                   {/* 语言徽标贴右，一行只出现一次：一行就是"一期 + 一种语言"。 */}
                   <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
@@ -346,7 +369,8 @@ export function DailyBriefingHistoryRail({
                           ? <span data-rail-status="missed-at-cutoff">{text.history.missedAtCutoff}</span>
                         // 状态词在第二行：这次失败 / 上次没跑完；后面那句是它为什么没出来。
                         : <><span data-rail-status={failedRun ? 'failed' : interrupted ? 'interrupted' : 'not-run'}>
-                          {failedRun ? text.history.runFailed : interrupted ? text.history.runInterrupted : text.history.missingRun}
+                          {/* 失败行的状态词在第一行那枚标里；第二行只写原因，不许两个词都出现。 */}
+                          {failedRun ? null : interrupted ? text.history.runInterrupted : text.history.missingRun}
                         </span>{reasonSuffix(edition, text, failedRun, interrupted)}</>}
                     </span>
                     : <span className="mi-daily-briefing__rail-row-title" data-rail-title="summary" title={title === '' ? undefined : title}>
@@ -428,6 +452,8 @@ function reasonOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText)
   const reason = runReasonOf(edition)
   if (reason === 'run-interrupted') return text.history.runInterrupted
   if (reason === 'run-failed') return text.history.railFailedReason
+  // 读者自己的动作：不建行、也不编一句"没跑过"（`02` v2.176）。走到这里说明投影漏了，留空。
+  if (reason === 'run-cancelled') return ''
   return text.history.railNotRun
 }
 

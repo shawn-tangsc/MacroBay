@@ -73,7 +73,9 @@ describe('market-intelligence product manifest', () => {
           title: { 'zh-CN': '情报源', 'en-US': 'Intelligence Sources' },
           icon: 'database',
           order: 10,
-          module: './desktop/settings/intelligence-sources'
+          module: './desktop/settings/intelligence-sources',
+          // 壳层的「去启用」按意图找这一页（不认产品面板 id），声明在设置分区上。
+          navIntent: 'resource-sources'
         }
       ])
     )

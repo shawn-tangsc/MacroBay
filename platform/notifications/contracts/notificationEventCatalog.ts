@@ -26,10 +26,38 @@ export type NotificationEventDeclaration = {
   titleKey: string
   bodyKey?: string
   bodyKeyByVariant?: Readonly<Record<string, string>>
+  /**
+   * 标题与理由的**变体**（契约 §3.2，2026-11-07 与 `bodyKeyByVariant` 同形补齐）。
+   *
+   * 为什么标题也需要变体：同一个事件在不同情形下标题的**语法**就不一样，不是填个参数能解决的。
+   * 例如「美国 密歇根消费者信心初值 高于预期」在没有预期值时根本不成句——参数只有方向词的三个值，
+   * 没有「不适用」这一档，硬塞就印出一句自相矛盾的话。理由同理：按重要性推送却写「达到意外阈值」，
+   * 是一句假话。
+   *
+   * **不是 `rendered`**：那会把成品句子冻结进记录，以后改文案永远追不到历史。变体解析出的仍是
+   * **键 + 参数**，措辞照旧由文案表给，历史跟着一起变好。
+   */
+  titleKeyByVariant?: Readonly<Record<string, string>>
+  reasonKeyByVariant?: Readonly<Record<string, string>>
+  /**
+   * 声明者在源码里给这条事件起的**常量名**（如 `sampleEventLanded`）。
+   *
+   * 生产者门禁要靠它把源码里的 `SOME_TABLE.sampleEventLanded` 解析成事件 id。这份映射以前由平台
+   * 去读产品的常量表文件获得——那等于平台认识产品的文件结构，产品挪一个文件平台就红。
+   * 名字随声明走之后，平台只读声明，不读任何产品源码。
+   */
+  constantName?: string
   /** 「为什么推了」那一句，必填：没有收据就没法解释。 */
   reasonKey: string
   /** 读者要不要动手：决定提交期 `actions` 能不能是空数组，不是「一定有动作」。 */
   requiresUserAction: boolean
+  /**
+   * **诊断事件**：读者亲手点出来的那一下（今天只有通知链路自检）。
+   *
+   * 它是「可以批免打扰穿透」的**唯一**资格。判据不能靠 id、来源或提交请求上的 `namespace: 'test'`
+   * ——那些都不说明「这是读者主动要的一次测试」。批准里写了穿透、声明却没这个标记，装配期就红。
+   */
+  diagnostic?: boolean
   /**
    * 读者面向的类型标签（契约 v2.38）：**只能声明、不许推导**。
    *
@@ -71,6 +99,11 @@ export type NotificationEventCatalogEntry = NotificationEventDeclaration & {
   productId: string
   approvedDisruptionLevels: readonly NotificationApprovedLevel[]
   approvedBypassQuietHours: boolean
+  /**
+   * 事件级表面选择的**组键**（契约 §5.5）：同一件事的两条通知共用一个键、共用一份选择。
+   * 只有一条成员时它等同于自己；两条时可用面取两条批准表的**交集**。
+   */
+  surfaceGroup?: string
 }
 
 export type NotificationEventCatalog = {
@@ -83,11 +116,23 @@ export type NotificationEventDeclarationSource = {
   /** `platform` 或产品的 productId（必须等于声明 id 的前缀）。 */
   productId: string
   events: readonly NotificationEventDeclaration[]
+  /**
+   * 这份来源自己的批准值（契约 §7.1b，2026-11-08）：**批准随声明走**，同一个 `productId` 只写一处。
+   *
+   * 迁移期它可以是 `undefined`——那样每条声明都会被 `notificationApprovalCoverage` 报成 `missing`，
+   * 报数降到 0 之后才允许删平台表里的兜底。之后它改为必填（漏写编译期红）。
+   */
+  approval?: Readonly<Record<string, NotificationEventPolicyEntry>>
 }
 
 export type NotificationEventPolicyEntry = {
   approvedDisruptionLevels: readonly NotificationApprovedLevel[]
   approvedBypassQuietHours: boolean
+  /**
+   * 事件级表面选择的组键（契约 §5.5）：同一件事的两条通知写**同一个值**，读者的选择就只有一份。
+   * 写在这里而不是另立一张组表：批准行是上限的唯一来源，组也属于上限，两处记必然漂移。
+   */
+  surfaceGroup?: string
 }
 
 export type NotificationEventPolicy = Readonly<Record<string, NotificationEventPolicyEntry>>
@@ -105,7 +150,6 @@ const REQUESTED_LEVELS: readonly NotificationRequestedLevel[] = ['toast', 'popup
  */
 export function createNotificationEventCatalog(input: {
   sources: readonly NotificationEventDeclarationSource[]
-  policy: NotificationEventPolicy
 }): NotificationEventCatalog {
   const entries: NotificationEventCatalogEntry[] = []
   const byId = new Map<string, NotificationEventCatalogEntry>()
@@ -133,16 +177,24 @@ export function createNotificationEventCatalog(input: {
           throw new Error(`notification-event-invalid-requested-level:${declaration.id}:${String(level)}`)
         }
       }
-      const policy = input.policy[declaration.id]
-      // 没有批准记录 = 只进中心（契约 §4 第二句）：**不报错**，因为「还没批」是合法状态，
-      // 生效值本来也只读批准表。只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
-      const approvedDisruptionLevels = policy?.approvedDisruptionLevels ?? ['center']
-      if (policy !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
+      // 生效值只来自**这条声明所属来源自己的 `approval`**（契约 §7.1b）：
+      // 平台一份、每个产品各一份，装配时不设兜底——没有第二个地方能批一条事件。
+      const approval = source.approval?.[declaration.id]
+      // 没有批准记录 = 只进中心（契约 §4 第二句）：**不报错**，因为「还没批」是合法状态。
+      // 只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
+      const approvedDisruptionLevels = approval?.approvedDisruptionLevels ?? ['center']
+      if (approval !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
+      // 免打扰穿透只给**诊断**事件（读者亲手点的那一下）：批准里写了穿透、声明却不是诊断事件
+      // → 装配期红，点名 id。否则「谁能穿透」就退化成批准文件里的一行字，没有代码依据。
+      if (approval?.approvedBypassQuietHours === true && declaration.diagnostic !== true) {
+        throw new Error(`notification-event-bypass-not-diagnostic:${declaration.id}`)
+      }
       const entry: NotificationEventCatalogEntry = Object.freeze({
         ...declaration,
         productId: source.productId,
         approvedDisruptionLevels: Object.freeze([...approvedDisruptionLevels]),
-        approvedBypassQuietHours: policy?.approvedBypassQuietHours === true
+        approvedBypassQuietHours: approval?.approvedBypassQuietHours === true,
+        ...(approval?.surfaceGroup === undefined ? {} : { surfaceGroup: approval.surfaceGroup })
       })
       entries.push(entry)
       byId.set(entry.id, entry)

@@ -1,9 +1,7 @@
+import { normalizeNotificationSettings, type NotificationSettings } from './notificationSettings'
 import { normalizeBypassRules } from './proxyBypassRules'
 
-import {
-  createDefaultNotificationRuntimeSettings,
-  type NotificationRuntimeSettings
-} from '@platform/notifications/contracts/notificationContracts'
+import { createDefaultNotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
 import {
   createDefaultAgentObservabilitySettings,
   normalizeAgentObservabilitySettings,
@@ -109,7 +107,9 @@ export type AssistantPlatformSettings = {
   topicNamingModelId: string
 }
 
-export type NotificationSettings = NotificationRuntimeSettings
+/** 通知设置的形状与归一在 `notificationSettings.ts`，这里只转出，保持既有 import 路径不变。 */
+export { normalizeNotificationSettings }
+export type { NotificationSettings }
 export type ObservabilitySettings = AgentObservabilitySettings
 export type PlatformWebSearchSettings = WebSearchSettings
 
@@ -297,7 +297,14 @@ function isLegacyImplicitProxyDefault(network: NetworkSettings): boolean {
   )
 }
 
-export function normalizeAppSettings(value: unknown): AppSettings {
+export function normalizeAppSettings(
+  value: unknown,
+  /**
+   * 通知设置里出现了类型不认识的字段时回调（每个字段名由调用方去重）。
+   * 用回调而不是直接打日志：这一层是纯函数，测试里能直接断言「报没报、报了几次」。
+   */
+  onUnknownNotificationField?: (field: string) => void
+): AppSettings {
   const defaults = createDefaultAppSettings()
   if (!value || typeof value !== 'object') return defaults
 
@@ -312,7 +319,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     assistant: normalizeAssistantPlatformSettings(candidate.assistant, defaults.assistant),
     modelDefaults: normalizeModelDefaultsSettings(candidate.modelDefaults, defaults.modelDefaults),
     chat: normalizeChatSettings(candidate.chat, defaults.chat),
-    notifications: normalizeNotificationSettings(candidate.notifications, defaults.notifications),
+    notifications: normalizeNotificationSettings(candidate.notifications, defaults.notifications, onUnknownNotificationField),
     observability: normalizeAgentObservabilitySettings(candidate.observability, defaults.observability),
     webSearch: normalizeWebSearchSettings(candidate.webSearch, defaults.webSearch),
     updates: normalizeUpdateSettings(candidate.updates, defaults.updates)
@@ -349,49 +356,6 @@ export function normalizeModelDefaultsSettings(
     fastModelId: read('fastModelId'),
     translationModelId: read('translationModelId'),
     imageModelId: read('imageModelId')
-  }
-}
-
-export function normalizeNotificationSettings(
-  value: unknown,
-  defaults: NotificationSettings = createDefaultAppSettings().notifications
-): NotificationSettings {
-  if (!value || typeof value !== 'object') return defaults
-  const candidate = value as Partial<NotificationSettings>
-  return {
-    desktopEnabled: typeof candidate.desktopEnabled === 'boolean' ? candidate.desktopEnabled : defaults.desktopEnabled,
-    toastEnabled: typeof candidate.toastEnabled === 'boolean' ? candidate.toastEnabled : defaults.toastEnabled,
-    popupEnabled: typeof candidate.popupEnabled === 'boolean' ? candidate.popupEnabled : defaults.popupEnabled,
-    // 通道选择：空字符串视为未选（null 即关，不另加 enabled 布尔，契约 §2）。
-    push: {
-      channelId:
-        typeof candidate.push?.channelId === 'string' && candidate.push.channelId.length > 0
-          ? candidate.push.channelId
-          : null
-    },
-    retentionDays:
-      typeof candidate.retentionDays === 'number' && candidate.retentionDays > 0
-        ? Math.min(90, Math.round(candidate.retentionDays))
-        : defaults.retentionDays,
-    defaultSnoozeMinutes:
-      typeof candidate.defaultSnoozeMinutes === 'number' && candidate.defaultSnoozeMinutes > 0
-        ? Math.round(candidate.defaultSnoozeMinutes)
-        : defaults.defaultSnoozeMinutes,
-    quietHours: candidate.quietHours
-      ? {
-          enabled: Boolean(candidate.quietHours.enabled),
-          startLocalTime:
-            typeof candidate.quietHours.startLocalTime === 'string'
-              ? candidate.quietHours.startLocalTime
-              : defaults.quietHours?.startLocalTime ?? '22:00',
-          endLocalTime:
-            typeof candidate.quietHours.endLocalTime === 'string'
-              ? candidate.quietHours.endLocalTime
-              : defaults.quietHours?.endLocalTime ?? '08:00'
-        }
-      : defaults.quietHours,
-    minimumDisruptivePriority: candidate.minimumDisruptivePriority ?? defaults.minimumDisruptivePriority,
-    productPermissions: candidate.productPermissions ?? defaults.productPermissions
   }
 }
 

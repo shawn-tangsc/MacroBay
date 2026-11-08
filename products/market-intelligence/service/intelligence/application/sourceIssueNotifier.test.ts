@@ -3,15 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import { notificationDedupeBuilders } from '@platform/notifications/contracts/notificationDedupeKeys'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
 
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import {
   createSourceIssueNotifier,
   decideSourceIssue,
-  SOURCE_ISSUE_FAILURE_THRESHOLD
+  NEWS_SILENCE_MS,
+  resolveSilenceWindow,
+  silenceWindowFor,
+  SOURCE_ISSUE_FAILURE_THRESHOLD,
+  WEEKDAY_SILENCE_MS
 } from './sourceIssueNotifier'
 
 const HOUR = 60 * 60 * 1000
@@ -41,10 +44,10 @@ function createRuntime(
   const runtime = createNotificationRuntime({
     storage,
     catalog: createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
+      // 断的是产品事件（来源状态）的批准值 -> 读产品自己那份；平台读平台自己的。
       sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
       ]
     }),
     diagnostics: (entry) => diagnostics.push(entry.code),
@@ -82,6 +85,62 @@ describe('source issue decision', () => {
     expect(decideSourceIssue(snapshot({ lastSuccessAt: fresh }), 6 * HOUR)).toBeNull()
   })
 
+  it('calls a source stale when collection keeps succeeding but brings nothing new', () => {
+    // 2026-11-07 的真实形状：coindesk-rss 每 15 分钟都 `completed`、`lastSuccessAt` 永远是刚才，
+    // 但最新条目停在 17 小时前。按 lastSuccessAt 判永远不会 stale —— 用户看到的是「今天没新闻」。
+    const oldItem = new Date(Date.parse(NOW) - 17 * HOUR).toISOString()
+    expect(decideSourceIssue(snapshot({ lastSuccessAt: NOW, lastNewItemAt: oldItem }), 6 * HOUR)).toBe('stale')
+  })
+
+  it('stays silent while new items keep arriving, even if a fetch failed in between', () => {
+    const recent = new Date(Date.parse(NOW) - 1 * HOUR).toISOString()
+    expect(decideSourceIssue(snapshot({ lastSuccessAt: NOW, lastNewItemAt: recent }), 6 * HOUR)).toBeNull()
+  })
+
+  it('gives a news source 24 hours of silence before calling it stale', () => {
+    // 新闻源 15 分钟一轮：24 小时 = 96 轮全部抓到但 0 条新增，不可能用「今天没新闻」解释。
+    expect(NEWS_SILENCE_MS).toBe(96 * 15 * 60 * 1000)
+    expect(silenceWindowFor('coindesk-rss', NOW, 'UTC')).toBe(NEWS_SILENCE_MS)
+    expect(silenceWindowFor('fred-rates-liquidity', NOW, 'UTC')).toBe(WEEKDAY_SILENCE_MS)
+    const window = silenceWindowFor('coindesk-rss', NOW, 'UTC')
+
+    // 工作日 12 小时那档不适用于新闻源：13 小时安静还算正常。
+    const thirteen = new Date(Date.parse(NOW) - 13 * HOUR).toISOString()
+    expect(decideSourceIssue({ sourceId: 'coindesk-rss', consecutiveFailures: 0, lastSuccessAt: NOW, lastNewItemAt: thirteen, now: NOW }, window)).toBeNull()
+    // 越过 24 小时才报，且报的是「静默」，不是失败。
+    const twentyFive = new Date(Date.parse(NOW) - 25 * HOUR).toISOString()
+    expect(decideSourceIssue({ sourceId: 'coindesk-rss', consecutiveFailures: 0, lastSuccessAt: NOW, lastNewItemAt: twentyFive, now: NOW }, window)).toBe('stale')
+  })
+
+  it('gives the weekend a longer window: 20 hours of silence on a Sunday is not an alert', () => {
+    // 2026-11-08 是周日。实测：2026-11-07（周六）同一刻 CoinDesk 17.7h、Decrypt 16.7h、
+    // The Block 16.8h 都没新条目——三家一起安静，是周末低产，不是某一家坏了。
+    const sunday = '2026-11-08T00:00:00.000Z'
+    const twentyHours = new Date(Date.parse(sunday) - 20 * HOUR).toISOString()
+    const window = resolveSilenceWindow(sunday, 'UTC')
+    expect(window.weekend).toBe(true)
+    expect(decideSourceIssue({ sourceId: SOURCE_ID, consecutiveFailures: 0, lastSuccessAt: sunday, lastNewItemAt: twentyHours, now: sunday }, window.windowMs)).toBeNull()
+  })
+
+  it('alerts after 13 silent hours on a weekday', () => {
+    // 2026-11-03 是周二；工作日窗口 12 小时。
+    const thirteenHours = new Date(Date.parse(NOW) - 13 * HOUR).toISOString()
+    const window = resolveSilenceWindow(NOW, 'UTC')
+    expect(window.weekend).toBe(false)
+    expect(window.windowMs).toBe(WEEKDAY_SILENCE_MS)
+    expect(decideSourceIssue({ sourceId: SOURCE_ID, consecutiveFailures: 0, lastSuccessAt: NOW, lastNewItemAt: thirteenHours, now: NOW }, window.windowMs)).toBe('stale')
+  })
+
+  it('judges the weekend in the reader\'s time zone, not UTC', () => {
+    // 2026-11-07T23:30Z 在 UTC 是周六，在 Asia/Shanghai 已经是周日（11-08 07:30）——两边都算周末，
+    // 所以用周日早上那一刻验反方向：UTC 是周六、上海也是周日，窗口必须仍是 24 小时。
+    expect(resolveSilenceWindow('2026-11-07T23:30:00.000Z', 'UTC').weekend).toBe(true)
+    expect(resolveSilenceWindow('2026-11-07T23:30:00.000Z', 'Asia/Shanghai').weekend).toBe(true)
+    // 周一 00:30（上海）而 UTC 还是周日 16:30：按读者时区应判成工作日。
+    expect(resolveSilenceWindow('2026-11-08T16:30:00.000Z', 'Asia/Shanghai').weekend).toBe(false)
+    expect(resolveSilenceWindow('2026-11-08T16:30:00.000Z', 'UTC').weekend).toBe(true)
+  })
+
   it('does not call a never-collected source stale: that is “waiting for first collection”', () => {
     expect(decideSourceIssue({ sourceId: SOURCE_ID, consecutiveFailures: 0, now: NOW }, 6 * HOUR)).toBeNull()
   })
@@ -102,11 +161,13 @@ describe('source issue submission', () => {
         seen.push(request as unknown as Record<string, unknown>)
         return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
       },
-      defaultFreshnessMs: 6 * HOUR
+      defaultFreshnessMs: 6 * HOUR,
+      timeZone: () => 'UTC'
     })
 
     await notify(snapshot({ consecutiveFailures: 3 }))
-    await notify(snapshot({ lastSuccessAt: new Date(Date.parse(NOW) - 7 * HOUR).toISOString() }))
+    // NOW 是周二（工作日窗口 12 小时），13 小时前才算陈旧。
+    await notify(snapshot({ lastSuccessAt: new Date(Date.parse(NOW) - 13 * HOUR).toISOString() }))
 
     expect(seen.map((request) => request.eventTypeId)).toEqual([
       'market-intelligence.source.consecutive-failed',
@@ -128,10 +189,35 @@ describe('source issue submission', () => {
         calls += 1
         return { kind: 'accepted', recordId: 'r1', levels: ['center'] }
       },
-      defaultFreshnessMs: 6 * HOUR
+      defaultFreshnessMs: 6 * HOUR,
+      timeZone: () => 'UTC'
     })
     await expect(notify(snapshot({ consecutiveFailures: 1 }))).resolves.toBeNull()
     expect(calls).toBe(0)
+  })
+
+  it('writes one diagnostic line with this source and every other source’s silence', async () => {
+    // 误报时要能一眼分开「周末低产」与「真异常」：诊断里带各源静默小时数 + 用的是哪档窗口。
+    const lines: Array<{ event: string; fields?: Record<string, unknown> }> = []
+    const notify = createSourceIssueNotifier({
+      submit: async () => ({ kind: 'accepted', recordId: 'r1', levels: ['center'] }),
+      defaultFreshnessMs: 6 * HOUR,
+      timeZone: () => 'UTC',
+      log: (_level, event, fields) => { lines.push({ event, ...(fields === undefined ? {} : { fields }) }) },
+      silenceHours: () => ({ 'coindesk-rss': 17.7, 'decrypt-rss': 16.7 })
+    })
+    const oldItem = new Date(Date.parse(NOW) - 17 * HOUR).toISOString()
+    await notify(snapshot({ lastSuccessAt: NOW, lastNewItemAt: oldItem }))
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]?.event).toBe('intelligence.source.silence')
+    expect(lines[0]?.fields).toMatchObject({
+      sourceId: SOURCE_ID,
+      silentHours: 17,
+      weekend: false,
+      windowHours: 12,
+      sources: { 'coindesk-rss': 17.7, 'decrypt-rss': 16.7 }
+    })
   })
 
   it('N8: equivalent spellings of one source yield one key, and that key is the platform builder’s', () => {
@@ -150,7 +236,7 @@ describe('source issue submission', () => {
       producerOwnership: { 'market-intelligence.collectSource': { productId: 'market-intelligence' } },
       productIds: ['market-intelligence']
     })
-    const notify = createSourceIssueNotifier({ submit: runtime.submit, defaultFreshnessMs: 6 * HOUR })
+    const notify = createSourceIssueNotifier({ submit: runtime.submit, defaultFreshnessMs: 6 * HOUR, timeZone: () => 'UTC' })
 
     await expect(notify(snapshot({ consecutiveFailures: 3 }))).resolves.toMatchObject({ kind: 'accepted' })
     expect(records()).toHaveLength(1)
@@ -169,7 +255,7 @@ describe('source issue submission', () => {
 
   it('N6: failure then stale on one source folds into one centre row inside the 24h window', async () => {
     const { runtime, records } = createRuntime()
-    const notify = createSourceIssueNotifier({ submit: runtime.submit, defaultFreshnessMs: 6 * HOUR })
+    const notify = createSourceIssueNotifier({ submit: runtime.submit, defaultFreshnessMs: 6 * HOUR, timeZone: () => 'UTC' })
 
     const first = await notify(snapshot({ consecutiveFailures: 3 }))
     const second = await notify(

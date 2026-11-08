@@ -14,12 +14,23 @@ import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../.
  * 保存失败**回滚那一行**并就地提示，不假装成功（界面规范 §9d 第③条）。
  */
 
-/** 这一屏的三条，顺序就是页面顺序：信号 → 宏观 → 日报。 */
+/**
+ * 屏上四行，一行一条：**事件 id 与标题键写在一起**，页面按 `itemKey` 取行、按 `eventId` 绑定。
+ *
+ * 不再用 `ROWS[0] / ROWS[1] / ROWS[2]` 取：下标取法在补一行、删一行、换顺序时**不会报错**，
+ * 只会让某一行的开关悄悄绑到别的事件上——2026-11-07 舆情行借用 `macro.event-landed` 就是这么来的。
+ *
+ * `control` 说明这一行的开关落到哪个存储：
+ * - `channel-event`：`settings.json → notifications.channelEvents[eventId]`（平台否决位）；
+ * - `outlet`：新闻推送水位（另一套存储，不走 channelEvents）；
+ * - `surface-group`：日历组选择（`calendar-events`，一条管「开始前 / 发生后」两段）。
+ */
 export const INTELLIGENCE_CHANNEL_EVENT_ROWS = Object.freeze([
-  { eventId: EVENT_IDS.signalTriggered, titleKey: 'pages.intelligence.notification.rows.signalTriggered.title', infoKey: 'pages.intelligence.notification.rows.signalTriggered.info' },
-  { eventId: EVENT_IDS.macroEventLanded, titleKey: 'pages.intelligence.notification.rows.macroEventLanded.title', infoKey: 'pages.intelligence.notification.rows.macroEventLanded.info' },
-  { eventId: EVENT_IDS.briefingReady, titleKey: 'pages.intelligence.notification.rows.briefingReady.title', infoKey: 'pages.intelligence.notification.rows.briefingReady.info' }
-])
+  { itemKey: 'signal', control: 'channel-event', eventId: EVENT_IDS.signalTriggered, titleKey: 'pages.intelligence.notification.rows.signalTriggered.title', infoKey: 'pages.intelligence.notification.rows.signalTriggered.info' },
+  { itemKey: 'briefing', control: 'channel-event', eventId: EVENT_IDS.briefingReady, titleKey: 'pages.intelligence.notification.rows.briefingReady.title', infoKey: 'pages.intelligence.notification.rows.briefingReady.info' },
+  { itemKey: 'sentiment', control: 'outlet', eventId: EVENT_IDS.sentimentAlert, titleKey: 'pages.intelligence.notification.rows.sentimentAlert.title', infoKey: 'pages.intelligence.notification.rows.sentimentAlert.info' },
+  { itemKey: 'calendar', control: 'surface-group', eventId: EVENT_IDS.calendarEventUpcoming, titleKey: 'pages.intelligence.notification.rows.calendar.title', infoKey: 'pages.intelligence.notification.rows.calendar.info' }
+] as const)
 
 export type IntelligenceChannelEventRow = (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]
 

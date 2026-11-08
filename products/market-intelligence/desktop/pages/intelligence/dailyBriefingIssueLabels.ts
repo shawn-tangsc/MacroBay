@@ -47,3 +47,8 @@ export function rowSource(id: BriefingMarketRow['id'] | BriefingPulseRow['id'], 
 export function eventTitle(item: Readonly<{ title: string; titleKey?: string }>, eventTitles: Record<string, string> | undefined): string {
   return eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
 }
+
+/** 模板占位填充：`{event}` 这类键按 values 替换，缺值就原样留着（不印半句）。 */
+export function fillTemplate(template: string, values: Readonly<Record<string, string>>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match)
+}

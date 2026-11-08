@@ -1,9 +1,8 @@
 /*
  * Canonical agent-conversation presentation.
  *
- * The bubble and composer rules below are the design that shipped with the market-intelligence
- * agent panel; the main agent page reuses the same primitives so a change here lands on both
- * surfaces. Keep role-identifying colour in the bubble (not in a label) and let the transcript own
+ * The bubble and composer rules below are the design that shipped with a product's agent panel;
+ * the main agent page reuses the same primitives so a change here lands on both surfaces. Keep role-identifying colour in the bubble (not in a label) and let the transcript own
  * the scroll.
  */
 /*

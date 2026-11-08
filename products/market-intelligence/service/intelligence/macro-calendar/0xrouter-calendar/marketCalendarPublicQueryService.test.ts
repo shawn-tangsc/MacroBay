@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import { parseZeroXRouterCentralBankActivities } from './zeroXRouterCentralBankActivitiesParser'
 import { parseZeroXRouterEconomicData } from './zeroXRouterEconomicDataParser'
@@ -21,10 +21,10 @@ async function setup(readRefreshAttempt?: (scope: unknown, kind: string) => { st
     resolveCollectionContext: () => ({ ...scope, descriptorId, detectedAt, evidence: { providerId: scope.providerId,
       descriptorId, rawRecordId: 'private-raw-id', evidenceHash: 'a'.repeat(64) } }),
     now: () => detectedAt, readCapacity: () => ({ marketBytes: 0, walBytes: 0, freeBytes: 10 * 1024 ** 3, archiveAvailable: true }) })
-  const append = (id: string, count: number, title = 'Derived event', country?: { code: string; name: string }) => {
+  const append = (id: string, count: number, title = 'Derived event', country?: { code: string; name: string }, pubValue = '3') => {
     descriptorId = scope.descriptorId
     const data = Array.from({ length: count }, (_, i) => ({ calendarId: 'derived', id: i + 1, calendarName: title,
-      locale: 'zh', star: 3, pubTimestamp: Date.parse(asOf), estimateValue: 0, preValue: null, pubValue: '3',
+      locale: 'zh', star: 3, pubTimestamp: Date.parse(asOf), estimateValue: 0, preValue: null, pubValue,
       ...(country ? { countryCode: country.code, countryName: country.name } : {}) }))
     expect(repository.appendCollection({ ...scope, collectionId: id, parserVersion: 'derived',
       parseResult: parseZeroXRouterEconomicData({ code: 200, msg: '', data }, 'zh') }).state).toBe('succeeded')
@@ -174,3 +174,42 @@ describe('market public paging independent of official 200 item cap', () => {
     expect(new Set(events.map((event) => event.eventKey)).size).toBe(300)
   })
 })
+
+describe('multi-version identities are normal, not a warning', () => {
+  it('reads one identity stored by several batches without a per-identity log line', async () => {
+    const h = await setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      // Three batches, each changing the value, so the identity really has three stored rows.
+      h.append('batch-1', 1, 'Derived event', undefined, '3')
+      h.setTime('2026-09-10T01:00:00.000Z'); h.append('batch-2', 1, 'Derived event', undefined, '4')
+      h.setTime('2026-09-10T02:00:00.000Z'); h.append('batch-3', 1, 'Derived event', undefined, '5')
+      const page = h.service.queryMonth(query)
+      expect(page.state).toBe('available')
+      // 多行是设计：读取按批次取最新一行，且**不**按身份打日志。
+      expect(warn).not.toHaveBeenCalled()
+      expect(page.state === 'available' && page.events[0]?.providerActual).toEqual({ displayValue: '5' })
+    } finally { warn.mockRestore() }
+  })
+})
+
+  it('warns once per query when one batch holds two rows for the same identity', async () => {
+    // New libraries cannot store this (the table's unique index), and old ones are collapsed at
+    // startup — so the only honest way to prove the alarm exists is a repository stub that hands
+    // the reader a batch with a second observation of one identity.
+    const h = await setup()
+    h.append('batch-1', 1, 'Derived event')
+    const real = h.repository.listObservationStates({ providerId: '0xrouter', descriptorId: scope.descriptorId,
+      month: '2026-09', locale: 'zh', asOf, limit: 10 })
+    if (real.state !== 'succeeded' || !real.rows[0]) throw new Error('expected a stored row')
+    const duplicate = { ...real.rows[0], observation_id: 'duplicate-in-batch' }
+    const { createMarketCalendarPublicQueryService } = await import('./marketCalendarPublicQueryService')
+    const service = createMarketCalendarPublicQueryService({ repository: { ...h.repository,
+      listObservationStates: () => ({ state: 'succeeded' as const, rows: [real.rows[0]!, duplicate], nextCursor: undefined }) } as never })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      service.queryMonth(query)
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(String(warn.mock.calls[0]?.[0])).toContain('同一批次内同一身份')
+    } finally { warn.mockRestore() }
+  })

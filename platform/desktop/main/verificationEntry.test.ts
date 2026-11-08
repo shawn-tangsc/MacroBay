@@ -78,6 +78,7 @@ describe('verification entry', () => {
       'check:components-ownership',
       'check:async-initial-state',
       'check:state-content-ternary',
+      'check:notification-approval',
       'typecheck',
       'test',
       'build'

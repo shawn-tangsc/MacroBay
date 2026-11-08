@@ -1,5 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
+import { createAnalysisConclusionNotifier } from '../analysis/analysisConclusionNotifier'
+import { analysisTriggerDirectionOf } from '../analysis/analysisTriggerDirection'
 import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
 
 import type { AnalysisFailureNoticeDecision } from '../analysis/analysisFailureNotices'
@@ -86,10 +88,33 @@ export async function notifyAbandonedRelease(input: Readonly<{
  * 0′ 与三档共用一次提交入口：文案没落时构造返回 undefined——不发半句话，也不因为一次通知
  * 没发出去就把已完成的运行弄成失败。
  */
-export function createAnalysisNoticeDeps(input: Readonly<{ submitNotification?: (request: NotificationSubmitRequest) => Promise<unknown> }>) {
+export function createAnalysisNoticeDeps(input: Readonly<{
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<unknown>
+  /** N12 结论推送要用：读者时区的日界，以及"这一条是什么时候发生的"。 */
+  now?: () => string
+  timeZone?: () => string
+}>) {
   return {
     notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification }),
     notifyAnalysisNotice: async ({ decision, occurredAt }: Readonly<{ decision: AnalysisFailureNoticeDecision; occurredAt: string }>) =>
-      deliverAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) })
+      deliverAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) }),
+    // N12：只有信号唤起的那次会在成功写入后调它；没有提交入口时这一项不装——不发半句话。
+    ...(input.submitNotification !== undefined && input.now !== undefined && input.timeZone !== undefined
+      ? {
+          notifyAnalysisConclusion: createAnalysisConclusionNotifier({
+            submit: input.submitNotification as Parameters<typeof createAnalysisConclusionNotifier>[0]['submit'],
+            now: input.now,
+            timeZone: input.timeZone
+          })
+        }
+      : {}),
+    /**
+     * 触发的信号方向：只从触发键的规则名翻，不重读信号表（表里"最新那条"不一定是唤起这次运行的那条）。
+     * 读不出来就为空对象——推送那边按"没有证据说反了"处理，只进中心。
+     */
+    readTriggerSignal: (triggerKey: string) => {
+      const direction = analysisTriggerDirectionOf(triggerKey)
+      return direction === undefined ? {} : { direction }
+    }
   }
 }

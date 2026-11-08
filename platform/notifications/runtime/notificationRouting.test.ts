@@ -43,7 +43,7 @@ describe('notification routing settings boundary', () => {
     expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center'])
   })
 
-  it('allows urgent notifications during quiet hours', () => {
+  it('does not let urgent pierce quiet hours: a silent window is silent for every local surface', () => {
     const request: NotificationRequest = {
       owner: 'product',
       productId: 'sample-product',
@@ -57,10 +57,13 @@ describe('notification routing settings boundary', () => {
 
     const settings = {
       ...createDefaultNotificationRuntimeSettings(),
+      popupEnabled: true,
       quietHours: { enabled: true, startLocalTime: '00:00', endLocalTime: '23:59' }
     }
 
-    expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center', 'popup'])
+    // Chief 2026-11-07 定：窗口内不留穿透。今天没有任何生产者发 `urgent`，所以这条改的是规则、
+    // 不是今天的观感——但留下例外，将来就有人靠「悄悄标个 urgent」绕开读者的免打扰。
+    expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center'])
   })
 })
 
@@ -108,8 +111,15 @@ describe('notification quiet hours follow the reader time zone', () => {
 })
 
 describe('notification transient delivery wiring', () => {
-  // 桌面开关新装默认关（契约 §4.2）；这一组测的是「开关打开时」的接线，所以显式打开。
-  const settings = { ...createDefaultNotificationRuntimeSettings(), toastEnabled: true, desktopEnabled: true }
+  // 三个开关**全部显式写出来**，不靠默认值：这一组测的是「开关打开时」的接线，
+  // 断言里出现了哪个档位，那个档位就得由这条用例自己打开——否则把默认值一改，
+  // 断言会跟着变绿或变红，而它声称要测的那件事根本没被测到。
+  const settings = {
+    ...createDefaultNotificationRuntimeSettings(),
+    toastEnabled: true,
+    desktopEnabled: true,
+    popupEnabled: true
+  }
   const record = createNotificationFromRequest({
     owner: 'platform',
     sourceId: 'job-runtime',

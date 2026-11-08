@@ -50,9 +50,12 @@ export async function queryOpenInterestHistoryAsync(input: Readonly<{
     if (btc === undefined || eth === undefined) return openInterestUnavailable()
 
     const change = changeOf(read.btc, read.eth)
+    // 两条方向各判一次：多头看跌、空头看涨，同一份数据、同一套门槛。
     const hints = [
-      detect(read.btc, 'btc', asOfMs, window),
-      detect(read.eth, 'eth', asOfMs, window)
+      detect(read.btc, 'btc', asOfMs, window, 'long'),
+      detect(read.btc, 'btc', asOfMs, window, 'short'),
+      detect(read.eth, 'eth', asOfMs, window, 'long'),
+      detect(read.eth, 'eth', asOfMs, window, 'short')
     ]
     const hintsState = hints.some(entry => entry.state === 'unavailable') ? 'unavailable' as const : 'available' as const
     const usableHints = hints.flatMap(entry => entry.hints).sort((left, right) => left.observedAt.localeCompare(right.observedAt))
@@ -66,6 +69,8 @@ export async function queryOpenInterestHistoryAsync(input: Readonly<{
       eth: eth.points,
       ...(change ? { change } : {}),
       ...(usableHints.length > 0 ? { liquidationHints: Object.freeze(usableHints.slice(-openInterestHistoryPolicy.maximumLiquidationHints)) } : {}),
+      // 计数是「判定产出的全部命中」，不是「画出来的那几个」：截断时卡上要靠它说还差多少。
+      ...(usableHints.length > 0 ? { liquidationHintsTotal: usableHints.length } : {}),
       ...(truncated || usableHints.length > openInterestHistoryPolicy.maximumLiquidationHints ? { liquidationHintsTruncated: true } : {}),
       liquidationHintsState: hintsState
     }
@@ -138,7 +143,7 @@ function changeFor(rows: readonly PositioningStoredBar[]): OpenInterestChange | 
  * Only closed buckets are judged, and only marks inside the window are reported. A bucket is
  * closed once its 15 minutes have elapsed; the newest one usually has not.
  */
-function detect(rows: readonly PositioningStoredBar[], asset: 'btc' | 'eth', asOfMs: number, window: OpenInterestWindow) {
+function detect(rows: readonly PositioningStoredBar[], asset: 'btc' | 'eth', asOfMs: number, window: OpenInterestWindow, direction: 'long' | 'short') {
   const closed = rows.filter(row => Date.parse(row.observedAt) + BUCKET_MS <= asOfMs)
   const bars: PositioningBar[] = closed.map(row => Object.freeze({
     observedAt: row.observedAt,
@@ -146,7 +151,7 @@ function detect(rows: readonly PositioningStoredBar[], asset: 'btc' | 'eth', asO
     volumeBase: row.volumeBase,
     closePrice: row.closePrice
   }))
-  const result = detectLiquidationHints({ asset, bars })
+  const result = detectLiquidationHints({ asset, bars, direction })
   const from = asOfMs - (window === '7d' ? openInterestHistoryPolicy.windows['7d'].spanMs : openInterestHistoryPolicy.windows['24h'].spanMs)
   return {
     state: result.state,

@@ -218,6 +218,11 @@ export function createStoredManualCalendar(deps: {
    * 「发生了」要不要被说出来。缺省时采集行为与从前一字不差。
    */
   submitNotification?: MacroEventLandedSubmit
+  /**
+   * 「事件发生后也告诉我」那一行的选择（配置页「日历事件 → 发生后」）。缺省＝只推出乎意料的，
+   * 与既有 N5 行为一字不差；读者选了「符合预期也推」才放宽，且仍受重要性勾选约束。
+   */
+  readLandedFilter?: () => Readonly<{ includeMatched?: boolean; importance?: readonly ('high' | 'medium' | 'low')[] }>
   /** Clock of the composed calendar; production passes nothing and gets the wall clock. */
   now?: () => Date
 }) {
@@ -248,7 +253,7 @@ export function createStoredManualCalendar(deps: {
   async function announce(page: ReturnType<typeof query.queryMonth>, asOf: string): Promise<void> {
     if (page.state !== 'available') return
     forgetAnnounced(asOf)
-    const selection = selectLandedReleases(page.events, asOf, new Set(announced.keys()))
+    const selection = selectLandedReleases(page.events, asOf, new Set(announced.keys()), deps.readLandedFilter?.())
     const { notComparable, belowThreshold, missingTitle } = selection.suppressed
     if (notComparable > 0 || belowThreshold > 0 || missingTitle > 0) {
       // 筛掉的也要数得出来：否则「筛得对」和「读漏了」在日志里长得一模一样。

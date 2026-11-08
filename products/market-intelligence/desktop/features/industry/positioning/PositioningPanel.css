@@ -50,7 +50,7 @@
 /* Width-driven: the viewBox keeps its aspect, so the drawing fills the card instead of being
    letterboxed by a fixed height (that is what left the empty sides on a wide window). */
 .mi-positioning-panel__chart svg { display: block; width: 100%; height: auto; cursor: crosshair; }
-.mi-positioning-panel__lane { fill: var(--mi-dashboard-muted); font-size: 9px; letter-spacing: .05em; }
+.mi-positioning-panel__lane { fill: var(--mi-dashboard-muted); font-size: var(--mi-chart-label-size); letter-spacing: .05em; }
 .mi-positioning-panel__rule { stroke: var(--mi-dashboard-line); stroke-width: 1; }
 .mi-positioning-panel__zero { stroke: var(--mi-dashboard-text); stroke-width: 1; opacity: .5; }
 .mi-positioning-panel__line { fill: none; stroke-width: 1.9; stroke-linejoin: round; stroke-linecap: round; }
@@ -58,24 +58,35 @@
 .mi-positioning-panel__line[data-series='eth'] { stroke: var(--mi-dashboard-etf-eth); }
 .mi-positioning-panel__bar[data-series='btc'] { fill: var(--mi-dashboard-etf-btc); opacity: .95; }
 .mi-positioning-panel__bar[data-series='eth'] { fill: var(--mi-dashboard-etf-eth); opacity: .5; }
-.mi-positioning-panel__hint line { stroke: var(--mi-dashboard-negative); stroke-width: 1; stroke-dasharray: 2 2; opacity: .9; }
-.mi-positioning-panel__hint circle { fill: var(--mi-dashboard-negative); }
+/* 一簇的方向决定这一簇的颜色：多头＝负向色，空头＝正向色（涨出来的那条画成红的就是反方向），
+   混向＝静音色。竖线、圆点、牌底、牌字全部走 `currentColor`，一处声明、四处跟着变。 */
+.mi-positioning-panel__hint { color: var(--mi-dashboard-negative); }
+.mi-positioning-panel__hint[data-hint-direction='short'] { color: var(--mi-dashboard-positive); }
+.mi-positioning-panel__hint[data-hint-direction='mixed'] { color: var(--mi-dashboard-muted); }
+.mi-positioning-panel__hint[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mi-positioning-panel__hint line { stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 2; opacity: .9; }
+.mi-positioning-panel__hint circle { fill: currentColor; }
 .mi-positioning-panel__end {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--mi-chart-label-size);
   /* A halo in the surface colour: the label sits where the line ends, and the line runs through
      it on the way there. */
   paint-order: stroke; stroke: var(--mi-dashboard-surface); stroke-width: 3px; stroke-linejoin: round;
 }
 .mi-positioning-panel__end[data-series='btc'] { fill: var(--mi-dashboard-etf-btc); }
 .mi-positioning-panel__end[data-series='eth'] { fill: var(--mi-dashboard-etf-eth); }
-.mi-positioning-panel__hint-chip {
-  fill: color-mix(in srgb, var(--mi-dashboard-negative) 16%, var(--mi-dashboard-surface));
-  stroke: color-mix(in srgb, var(--mi-dashboard-negative) 45%, transparent);
+/* 牌子就贴在图上那条带里：13 高、圆角 4、底片取方向色的 16% 薄底、描边 45%。 */
+.mi-positioning-panel__hint-chip rect {
+  fill: color-mix(in srgb, currentColor 16%, var(--mi-dashboard-surface));
+  stroke: color-mix(in srgb, currentColor 45%, transparent);
   stroke-width: 1;
 }
-.mi-positioning-panel__hint text { fill: var(--mi-dashboard-negative); font-size: 9px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* 牌字号与图内轴标签同一个 token：两处写死一个 9 就会各改各的。 */
+.mi-positioning-panel__hint-chip text {
+  fill: currentColor; font-size: var(--mi-chart-label-size);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .mi-positioning-panel__crosshair { stroke: var(--mi-dashboard-text); stroke-width: 1; stroke-dasharray: 3 3; opacity: .35; }
-.mi-positioning-panel__tick { fill: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+.mi-positioning-panel__tick { fill: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--mi-chart-label-size); }
 
 .mi-positioning-panel__tooltip {
   position: absolute; top: 30px; left: 12px; display: grid; gap: 2px; padding: 6px 8px;
@@ -98,43 +109,93 @@
 
 /* The module rule's chip: at most one per card, beside the title, never over a reading. */
 .mi-positioning-panel__signal {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
   padding: 1px 6px; border-radius: 3px;
   border: 1px solid var(--mi-dashboard-line);
   background: none; color: var(--mi-dashboard-text); font: inherit;
   font-size: 10px; font-weight: 600;
   line-height: 16px; white-space: nowrap; cursor: pointer;
 }
-.mi-positioning-panel__signal:hover,
-.mi-positioning-panel__signal:focus-visible { border-color: var(--mi-dashboard-text); }
+/* 牌子即入口（界面设计 v2 §一）：悬停整颗加深一档、不加下划线——读数下面的横线会把它切成两段。
+   这张卡的牌子是中性色，不是资金面那种带负向底色的牌子，所以「加深一档」落成一层文字色薄底
+   加一档更实的描边，而不是照抄那组负向配比。 */
+.mi-positioning-panel__signal:hover {
+  background: color-mix(in srgb, var(--mi-dashboard-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-text) 55%, var(--mi-dashboard-line));
+}
+/* 键盘聚焦用平台统一规格，并保留「加深一档」：读者要看出自己停在一个可点的东西上。 */
+.mi-positioning-panel__signal:focus-visible {
+  background: color-mix(in srgb, var(--mi-dashboard-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mi-dashboard-text) 55%, var(--mi-dashboard-line));
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* 弹层打开时，牌子上那条说明必须让位：气泡挂到 `<body>`、层级 1070，比弹窗的 1000 高，留着就会浮在
+   弹层之上（界面设计 v2 §二）。用 `:has()` 认「这一屏开着这张卡的弹层」，关掉即失效——不写 `<body>`
+   属性、也不去动全局 tooltip 样式。牌子本身不重建，所以焦点回位仍归 antd。
+
+   **这是一处 workaround，不是设计**：组件层已经修过「气泡挡点击」（`242020e`，tooltip 两侧节点都
+   `pointer-events: none`），但「气泡浮在弹窗上面」组件还没管。等平台 Tooltip 支持受控开合（或给
+   弹层场景一个开关），这条整块撤掉，调用点不再碰 `.ant-tooltip`。 */
+body:has(.mi-positioning-panel__help-dialog) .ant-tooltip { display: none; }
+
+/* 6×6 的 ›：只表示「点开有东西」，不是第二颗按钮。 */
+.mi-positioning-panel__signal-chevron { flex: none; opacity: .55; transition: opacity .12s; }
+.mi-positioning-panel__signal:hover .mi-positioning-panel__signal-chevron,
+.mi-positioning-panel__signal:focus-visible .mi-positioning-panel__signal-chevron { opacity: .95; }
 
 
 /* The block behind the chip is the shared `SignalDetail`; this card adds nothing to it, so there is
    no card-local rule here to drift from the shared one. */
 
-/* The entry to the readings behind the numbers: a word, not a chip. Body-level type, not the
-   footnote size of the chip row beside it; hover brightens the word and draws nothing — a block
-   behind a two-character entry reads as a second button ring.
-   Type and the region's cap come from the dashboard's reading-note tokens: the same shape exists
-   on another card, and a number written in two places drifts (the two cards already disagreed
-   once: 10px against 11.5px). */
-.mi-positioning-panel__help-toggle {
-  padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit;
-  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  white-space: nowrap; cursor: pointer;
-}
-.mi-positioning-panel__help-toggle:hover { color: var(--mi-dashboard-text); }
-.mi-positioning-panel__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+/* The readings now live in a dialog, not under the card: the region used to push the chart down
+   while the reader was looking at it, and closing it meant scrolling back (user, 2026-11-08).
 
-/* The long readings: opened on purpose, so they get room and their own scroll instead of
-   stretching the card. Body type matches the entry that opened them — "come and read", then a
-   smaller size, is a contradiction, which is why this is a token and not a number. */
-.mi-positioning-panel__help-details {
-  display: grid; gap: 6px; margin: 0;
-  padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  color: var(--mi-dashboard-muted);
-  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  max-height: var(--mi-reading-note-max-height); overflow-y: auto;
+   Two things about this block are not obvious:
+   - `mi-sample-surface` sits on the dialog root, so the palette resolves inside the portal. Without
+     it every `--mi-dashboard-*` here resolves to nothing and the text falls back to inherited colour.
+   - the type size is a literal, not the reading-note token: those tokens are declared on
+     `.mi-crypto-dashboard`, which is on the page side of the portal. The value is the token's own
+     11.5px/1.6, so the dialog and the card still read as one system. */
+.mi-positioning-panel__help-modal .ant-modal-content {
+  background: var(--mi-dashboard-surface);
+  border: 1px solid var(--mi-dashboard-line);
 }
-.mi-positioning-panel__help-details p { margin: 0; }
+.mi-positioning-panel__help-dialog {
+  display: grid; gap: 10px; min-width: 0; height: auto;
+  color: var(--mi-dashboard-muted);
+  font-size: 11.5px; line-height: 1.6;
+}
+/* 弹层标题行：标题文字在前、ⓘ 紧跟其后，同一左对齐流、间距 4px、不换行（用户 2026-11-08）。
+   **不许**推到行尾：`justify-content: space-between` / `margin-left: auto` 会让图标和它解释的
+   文字脱钩——这正是这次被退回来的写法。 */
+.mi-positioning-panel__dialog-head { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.mi-positioning-panel__dialog-title {
+  margin: 0; color: var(--mi-dashboard-text); font-weight: 650;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+}
+
+
+/* 强平判定的脚注：卡面最末一行，三句互斥、同位置只出现一句（没命中 / 读不到 / 数据不齐）。
+   muted、单行、不加图标、不用告警色——它说的是判定的结论，不是「我们出错了」。
+   整卡本身空/读失败时这行不出现：那是平台 `StateView` 的地盘。 */
+.mi-positioning-panel__liquidation-note {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  margin: 0; color: var(--mi-dashboard-muted);
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+}
+/* 「读不到」后面那枚既有重试（`ui.state.action.retry`，不新造文案）：一行文字按钮，没有第二个框，
+   因为它是这行的动作，不是第二颗牌子。 */
+.mi-positioning-panel__liquidation-retry {
+  padding: 0; border: 0; background: none; color: var(--mi-dashboard-text);
+  font: inherit; font-size: var(--mi-reading-note-size); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.mi-positioning-panel__liquidation-retry:hover { color: var(--mi-dashboard-lime); }
+.mi-positioning-panel__liquidation-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 截断时才出现的一行：图上只画最近 8 条，剩下的只报个数。与脚注同语气（muted、单行、无图标），
+   但位置在图上、靠近它解释的那些点。命中数不超上限时这一行**不存在**——不是空着，是不渲染。 */
+.mi-positioning-panel__hidden-hits {
+  margin: 4px 0 0; color: var(--mi-dashboard-muted);
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+}

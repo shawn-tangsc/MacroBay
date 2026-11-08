@@ -42,8 +42,37 @@ export function briefingNotificationPorts(hooks: Readonly<{
   redeliverPush?: BriefingRedeliver
   log?: BriefingDiagnosticLog
 }> {
+  const submit = hooks?.submitNotification
+  if (!submit) {
+    // 没有通知端口时整条链静默——2026-11-07 那两条通知查不出来的正是这一点。装配期记一条。
+    hooks?.log?.('warn', 'MI_DAILY_BRIEF_NOTICE_PORT_MISSING', { at: 'wiring' })
+    return {
+      ...(hooks?.redeliverPush ? { redeliverPush: hooks.redeliverPush } : {}),
+      ...(hooks?.log ? { log: hooks.log } : {})
+    }
+  }
   return {
-    ...(hooks?.submitNotification ? { noticeSubmit: hooks.submitNotification } : {}),
+    // 提交结果与原因必须留痕：平台会静默拒收（未知事件类型、免打扰、上限、审批未通过…），
+    // 而 `notifyDailyBriefing` 自己会把异常吞掉。判"发没发"以库里记录为准，"为什么没发"读日志。
+    noticeSubmit: async (request) => {
+      try {
+        const outcome = await submit(request)
+        if (outcome.kind !== 'accepted' && outcome.kind !== 'merged') {
+          hooks?.log?.('warn', 'MI_DAILY_BRIEF_NOTICE_NOT_DELIVERED', {
+            eventTypeId: request.eventTypeId,
+            outcome: outcome.kind,
+            ...('reason' in outcome && outcome.reason ? { reason: outcome.reason } : {})
+          })
+        }
+        return outcome
+      } catch (error) {
+        hooks?.log?.('error', 'MI_DAILY_BRIEF_NOTICE_SUBMIT_FAILED', {
+          eventTypeId: request.eventTypeId,
+          message: error instanceof Error ? error.message : String(error)
+        })
+        throw error
+      }
+    },
     ...(hooks?.redeliverPush ? { redeliverPush: hooks.redeliverPush } : {}),
     ...(hooks?.log ? { log: hooks.log } : {})
   }

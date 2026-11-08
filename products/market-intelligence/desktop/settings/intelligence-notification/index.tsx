@@ -1,5 +1,6 @@
+import { useState, type ReactElement } from 'react'
+
 import { Info } from 'lucide-react'
-import { Switch } from 'antd'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
@@ -8,166 +9,198 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { intelligenceNotificationText } from './text'
-import {
-  INTELLIGENCE_CHANNEL_EVENT_ROWS,
-  useChannelEventSettings
-} from './useChannelEventSettings'
+import { CalendarDetail } from './calendarDetail'
+import { ContentDetail } from './contentDetail'
+import { NewsPushThresholdRow } from './newsPushThresholdRow'
+import { NotificationList, type NotificationListItem } from './notificationList'
+import { useCalendarReminderSettings } from './useCalendarReminderSettings'
+import { INTELLIGENCE_CHANNEL_EVENT_ROWS, useChannelEventSettings } from './useChannelEventSettings'
 import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
+import { useNewsPushThreshold } from './useNewsPushThreshold'
+import { useNotificationLayout } from './useNarrowWindow'
+import { useSurfaceSelection } from './useSurfaceSelection'
+import { TestNotificationButton } from './testNotificationButton'
 
 import './intelligence-notification.css'
 
 /**
- * 设置 → 情报 → 通知（界面规范 v2.27 §9d）。
+ * 设置 → 情报 → 通知（界面规范 v1.9 §8 版式、v2.39 §9d–§9f 内容）。
  *
- * 四条：模块信号、宏观事件、日报完成（**默认全开**）与舆情提醒（**默认关**）。这一屏只管
- * 「推不推手机」；应用内提示与桌面提醒在通用通知页，不搬到这里、也不在这里重复。
+ * 版式：**标题一行；下面「列表 | 详情」两列**。DOM 顺序就是视觉顺序，标题不在网格里——
+ * 三个块塞进两列网格，自动排布会把标题扔进窄格、详情挤到下一行。
  *
- * 第四条与前三条的来源不同：前三条是**事件级开关**，第四条是**推送出口开关**（水位 + 基线），
- * 所以它自己读自己写，但长得和另外三条一样——读者不需要知道背后的区别。
- *
- * 频道没就绪时**不禁用**：勾选照常存，块头一行说明它会在频道可用后生效——
- * 禁用会让读者以为这条设置坏了，而实际上选择是有效的。
+ * 内容：三项管「哪些情报内容推手机」，第四项「日历事件」管同一个事件的前后两段。
+ * 页面只读服务结果；三层「与」（批准 ∩ 总开关 ∩ 本处选择）由平台算。
  */
-export default function IntelligenceNotificationSettingsSection(): React.ReactElement {
+
+type ItemKey = (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]['itemKey']
+
+const ITEM_KEYS: readonly ItemKey[] = INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => row.itemKey)
+
+const ROW_BY_ITEM = Object.fromEntries(
+  INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => [row.itemKey, row])
+) as Readonly<Record<ItemKey, (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]>>
+
+const CALENDAR_GROUP_EVENT_ID = 'market-intelligence.calendar.event-upcoming'
+
+/** 从通知中心点「去设置」进来时落到对应那一项；定位不到落第一项，不猜。 */
+export function itemForFocus(focusEntityId: string | null | undefined): ItemKey {
+  if (!focusEntityId) return 'signal'
+  // 每一行按自己的 id 命中自己：舆情通知必须落到舆情行，不许再借别的行的事件 id。
+  const row = INTELLIGENCE_CHANNEL_EVENT_ROWS.find((entry) => entry.eventId === focusEntityId)
+  if (row) return row.itemKey
+  // 宏观事件与日历「开始前」共用同一组表面选择（`calendar-events`），定位到日历行。
+  if (focusEntityId.startsWith('market-intelligence.calendar.')) return 'calendar'
+  if (focusEntityId === 'market-intelligence.macro.event-landed') return 'calendar'
+  return 'signal'
+}
+
+export default function IntelligenceNotificationSettingsSection(
+  { focusEntityId }: Readonly<{ focusEntityId?: string | null }> = {}
+): ReactElement {
   const language = useShellLanguage()
   const text = intelligenceNotificationText[language]
   const resolveText = (key: string): string => text[key] ?? ''
-  const { status, values, savingEventId, failedEventId, channelReady, reload, toggle } =
-    useChannelEventSettings()
+  const { status, values, savingEventId, failedEventId, channelReady, reload, toggle } = useChannelEventSettings()
   const outlet = useNewsPushOutletSwitch()
+  const threshold = useNewsPushThreshold()
+  const reminder = useCalendarReminderSettings()
+  const surfaces = useSurfaceSelection(CALENDAR_GROUP_EVENT_ID)
+  const [selected, setSelected] = useState<ItemKey>(() => itemForFocus(focusEntityId))
+  const { setSectionRef, layout } = useNotificationLayout()
+
+  const itemName = (key: ItemKey): string => text[ROW_BY_ITEM[key].titleKey] ?? ''
+
+  /** 状态词只在列表行出现一次（详情标题不重复同一句）。 */
+  const itemState = (key: ItemKey): string => {
+    if (key === 'calendar') {
+      if (reminder.status === 'loading') return text['pages.intelligence.notification.status.loading'] ?? ''
+      if (reminder.value === undefined) return text['pages.intelligence.notification.status.unreadable'] ?? ''
+      return reminder.value.enabled
+        ? (text['pages.intelligence.notification.status.calendarOn'] ?? '').replace(
+          '{lead}',
+          text[`pages.intelligence.notification.leads.${reminder.value.leadMinutes}`] ?? ''
+        )
+        : text['pages.intelligence.notification.status.off'] ?? ''
+    }
+    const row = ROW_BY_ITEM[key]
+    const enabled = row.control === 'outlet'
+      ? outlet.enabled
+      : row.control === 'surface-group'
+        ? reminder.value?.enabled === true
+        : values[row.eventId] ?? true
+    return enabled
+      ? text['pages.intelligence.notification.status.on'] ?? ''
+      : text['pages.intelligence.notification.status.off'] ?? ''
+  }
+
+  const items: readonly NotificationListItem[] = ITEM_KEYS.map((key) => ({
+    key,
+    name: itemName(key),
+    state: itemState(key)
+  }))
 
   if (status === 'loading') {
-    return (
-      <section className="settings-workspace intelligence-notification-workspace" aria-busy="true">
-        <LoadingState ariaLabel={text['pages.intelligence.notification.groupTitle']} />
-      </section>
-    )
-  }
-
-  // 读不到就报读不到，并给「再试一次」：渲染成空清单会让读者以为三条都被关掉了。
-  if (status === 'error') {
-    return (
-      <section className="settings-workspace intelligence-notification-workspace">
-        <StateView
-          state="error"
-          reasonCode="unreadable"
-          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: reload }}
-        />
-      </section>
-    )
-  }
-
-  return (
-    <section className="settings-workspace intelligence-notification-workspace">
-      <div className="intelligence-notification-card">
-        <header className="intelligence-notification-heading">
-          <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
-          <Popover
-            lines={[{ labelKey: 'pages.intelligence.notification.groupInfo.1' }, { labelKey: 'pages.intelligence.notification.groupInfo.2' }]}
-            resolveText={resolveText}
-            trigger={(triggerProps) => (
-              <IconButton
-                {...triggerProps}
-                ariaLabelKey="pages.intelligence.notification.infoAria"
-                icon={Info}
-                size="sm"
-                variant="plain"
-                resolveText={resolveText}
-              />
-            )}
-          />
-        </header>
-
-        {channelReady ? null : (
-          <p className="intelligence-notification-hint" role="status">
-            {text['pages.intelligence.notification.channelNotReady']}
-          </p>
-        )}
-
-        <ul className="intelligence-notification-rows">
-          {INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => (
-            <ChannelEventRow
-              key={row.eventId}
-              titleKey={row.titleKey}
-              infoKey={row.infoKey}
-              text={text}
-              resolveText={resolveText}
-              enabled={values[row.eventId] ?? true}
-              saving={savingEventId === row.eventId}
-              saveFailed={failedEventId === row.eventId}
-              onChange={(next) => toggle(row.eventId, next)}
-            />
-          ))}
-          {/* 第四条：值只从服务读，写完读回；读不到时不假装关着，而是就地说明读不到。 */}
-          {outlet.status === 'error'
-            ? <li className="intelligence-notification-row">
-              <span className="intelligence-notification-row-title">
-                {text['pages.intelligence.notification.rows.sentimentAlert.title']}
-              </span>
-              <span className="intelligence-notification-save-failed" role="status">
-                {text['pages.intelligence.notification.outletUnreadable']}
-              </span>
-            </li>
-            : <ChannelEventRow
-              titleKey="pages.intelligence.notification.rows.sentimentAlert.title"
-              infoKey="pages.intelligence.notification.rows.sentimentAlert.info"
-              text={text}
-              resolveText={resolveText}
-              enabled={outlet.enabled}
-              saving={outlet.saving || outlet.status === 'loading'}
-              saveFailed={outlet.saveFailed}
-              onChange={outlet.setEnabled}
-            />}
-        </ul>
-
-        <p className="intelligence-notification-footer">{text['pages.intelligence.notification.footer']}</p>
-      </div>
+    return <section aria-busy="true" className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>
+      <LoadingState ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''} />
     </section>
-  )
-}
-
-function ChannelEventRow(props: {
-  titleKey: string
-  infoKey: string
-  text: Readonly<Record<string, string>>
-  resolveText: (key: string) => string
-  enabled: boolean
-  saving: boolean
-  saveFailed: boolean
-  onChange: (enabled: boolean) => void
-}): React.ReactElement {
-  const title = props.text[props.titleKey] ?? ''
-  return (
-    <li className="intelligence-notification-row">
-      <div className="intelligence-notification-row-label">
-        <span className="intelligence-notification-row-title">{title}</span>
-        <Popover
-          labelKey={props.infoKey}
-          resolveText={props.resolveText}
-          trigger={(triggerProps) => (
-            <IconButton
-              {...triggerProps}
-              ariaLabelKey="pages.intelligence.notification.rowInfoAria"
-              icon={Info}
-              size="sm"
-              variant="plain"
-              resolveText={props.resolveText}
-            />
-          )}
-        />
-      </div>
-      <Switch
-        checked={props.enabled}
-        loading={props.saving}
-        disabled={props.saving}
-        aria-label={title}
-        onChange={props.onChange}
+  }
+  if (status === 'error') {
+    return <section className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>
+      <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: reload }}
+        reasonCode="unreadable"
+        state="error"
       />
-      {props.saveFailed ? (
-        <p className="intelligence-notification-save-failed" role="alert">
-          {props.text['pages.intelligence.notification.saveFailed']}
-        </p>
-      ) : null}
-    </li>
-  )
+    </section>
+  }
+
+  return <section className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>
+    {/* 标题一行：13.5/600/正常色，上 16 下 12；ⓘ 只放「为什么勾了还不响」。 */}
+    <div className="intelligence-notification-head">
+      <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
+      <Popover
+        labelKey="pages.intelligence.notification.groupInfo.2"
+        resolveText={resolveText}
+        trigger={(triggerProps) => (
+          <IconButton
+            {...triggerProps}
+            ariaLabelKey="pages.intelligence.notification.infoAria"
+            icon={Info}
+            size="sm"
+            variant="plain"
+            resolveText={resolveText}
+          />
+        )}
+      />
+    </div>
+
+    <div className="intelligence-notification-panes">
+      <NotificationList
+        ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''}
+        items={items}
+        narrow={layout.mode === 'dropdown'}
+        onSelect={(key) => setSelected(key as ItemKey)}
+        selected={selected}
+      />
+      <div className="intelligence-notification-detail">
+        {/* 详情标题不再重复列表里的名字：同一个名字写两处，迟早有一处说法不同。 */}
+        <div className="intelligence-notification-card">
+          {selected === 'calendar'
+            ? <CalendarDetail
+              landedAction={<TestNotificationButton
+                channelReady={channelReady}
+                disabled={reminder.value === undefined}
+                kind="calendar-landed"
+                labelKey="pages.intelligence.notification.test.calendarLanded"
+                resolveText={resolveText}
+              />}
+              reminder={reminder}
+              resolveText={resolveText}
+              surfaces={surfaces}
+              text={text}
+              upcomingAction={<TestNotificationButton
+                channelReady={channelReady}
+                disabled={reminder.value === undefined || !reminder.value.enabled}
+                kind="calendar-upcoming"
+                labelKey="pages.intelligence.notification.test.calendarUpcoming"
+                resolveText={resolveText}
+              />}
+            />
+            : <ContentDetail
+              enabled={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true}
+              failed={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saveFailed : failedEventId === ROW_BY_ITEM[selected].eventId}
+              name={itemName(selected)}
+              onChange={(next) => {
+                if (ROW_BY_ITEM[selected].control === 'outlet') outlet.setEnabled(next)
+                else toggle(ROW_BY_ITEM[selected].eventId, next)
+              }}
+              saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
+              saving={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saving : savingEventId === ROW_BY_ITEM[selected].eventId}
+              action={selected === 'sentiment'
+                ? <TestNotificationButton
+                  channelReady={channelReady}
+                  disabled={!(ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true)}
+                  kind="sentiment"
+                  labelKey="pages.intelligence.notification.test.sentiment"
+                  resolveText={resolveText}
+                />
+                : undefined}
+            >
+              {selected === 'sentiment'
+                ? <NewsPushThresholdRow
+                  last
+                  resolveText={resolveText}
+                  state={threshold}
+                  text={text}
+                />
+                : null}
+            </ContentDetail>}
+          {channelReady ? null : <p className="intelligence-notification-form-note" role="status">
+            {text['pages.intelligence.notification.channelNotReady']}
+          </p>}
+        </div>
+      </div>
+    </div>
+  </section>
 }

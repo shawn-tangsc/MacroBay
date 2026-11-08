@@ -83,6 +83,8 @@ export function analysisPromptSchemaExample(): Record<string, unknown> {
     }],
     nextCatalysts: [{ statement: '<有证据的后续催化剂>', evidenceRefIds: ['输入中的 evidenceRef 原文'] }],
     dataCaveats: ['<输入标注的数据限制>'],
-    evidenceRefs: ['本次实际引用的 evidenceRef 原文，至少一个']
+    evidenceRefs: ['本次实际引用的 evidenceRef 原文，至少一个'],
+    // 可选块：只有"不同意卡片"的那几对才写；整块可以不要。
+    divergences: [{ pairId: '<输入里 divergence-<pairId> 事实的 pairId 原文；整块可省略>', stance: 'diverging 或 not-diverging' }]
   }
 }

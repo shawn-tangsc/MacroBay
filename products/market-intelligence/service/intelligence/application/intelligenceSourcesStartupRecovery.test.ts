@@ -26,7 +26,10 @@ describe('intelligence source startup recovery', () => {
     const jobRuntime = createJobRuntime()
     const capitalRefresh = vi.fn(async () => ({ state: 'updated' as const }))
     const fundingRefresh = vi.fn(async () => ({ state: 'updated' as const }))
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, {
       pipeline,
@@ -53,7 +56,10 @@ describe('intelligence source startup recovery', () => {
     const saved = profile('0xrouter-aggregate-provider', { enabled: true, collectionPreset: 'manual', credentialRef: '0xrouter-credentials' })
     const jobRuntime = createJobRuntime()
     const etfRefresh = vi.fn(async () => ({ state: 'updated' as const }))
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline, etfFlowHistory: { refresh: etfRefresh } })
     const service = createService({ profiles: [saved], jobRuntime, pipeline })
@@ -79,7 +85,10 @@ describe('intelligence source startup recovery', () => {
     ] as IntelligenceSourceProfile[]
     const jobRuntime = createJobRuntime()
     const capitalRefresh = vi.fn(async () => ({ state: 'unchanged' as const }))
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline, capitalConditions: { refresh: capitalRefresh } })
     const service = createService({ profiles, jobRuntime, pipeline })
@@ -99,7 +108,10 @@ describe('intelligence source startup recovery', () => {
   it('deduplicates saved source ids and applies concurrent or repeated initialization once', async () => {
     const saved = profile('alternative-fear-greed', { enabled: true, collectionPreset: 'balanced' })
     const jobRuntime = createJobRuntime()
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline })
     const service = createService({ profiles: [saved, { ...saved }], jobRuntime, pipeline })
@@ -118,7 +130,10 @@ describe('intelligence source startup recovery', () => {
       .mockRejectedValueOnce(new Error('credential and endpoint detail'))
       .mockResolvedValue([saved])
     const jobRuntime = createJobRuntime()
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline })
     const service = createService({ profiles: [], profileStore, jobRuntime, pipeline })
@@ -142,7 +157,10 @@ describe('intelligence source startup recovery', () => {
       return current
     })
     const jobRuntime = createJobRuntime()
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline })
     const service = createService({ profiles: [], profileStore, jobRuntime, pipeline })
@@ -160,7 +178,10 @@ describe('intelligence source startup recovery', () => {
   it('removes an existing schedule when the saved runtime becomes ineligible', async () => {
     const saved = profile('alternative-fear-greed', { enabled: true, collectionPreset: 'balanced' })
     const jobRuntime = createJobRuntime()
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline })
     const service = createService({ profiles: [saved], jobRuntime, pipeline })
@@ -175,7 +196,10 @@ describe('intelligence source startup recovery', () => {
   it('keeps failed credential validation from writing a reference or scheduling a blocked source', async () => {
     const saved = profile('bea-economic-series', { enabled: true, collectionPreset: 'balanced' })
     const jobRuntime = createJobRuntime()
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline })
     const profileStore = createSourceProfileStore(createInMemoryProfileStorage([saved]))
@@ -192,7 +216,9 @@ describe('intelligence source startup recovery', () => {
     await service.initializeRuntime()
     expect(jobRuntime.listRecentRuns()).toEqual([])
     const result = await service.testCredentials({ sourceId: saved.sourceId, credentialDraft: 'test-key' })
-    expect(result.ok).toBe(false)
+    // `testCredentials` 现在有两条返回族（已注册探针走 SafeCredentialSaveResult、老路径带 ok），
+    // 直接读 `result.ok` 在这条联合类型上不成立；这里只断言「这次没通过」，形状交给各自的用例。
+    expect(result).toHaveProperty('ok', false)
     expect(jobRuntime.listRecentRuns()).toEqual([])
     expect((await profileStore.resolveProfile(saved.sourceId)).credentialRef).toBeUndefined()
     expect(collectSource).not.toHaveBeenCalled()
@@ -203,7 +229,10 @@ describe('intelligence source startup recovery', () => {
     const profileStore = stubProfileStore(saved)
     profileStore.saveProfile = vi.fn(async () => saved)
     const jobRuntime = createJobRuntime()
-    const collectSource = vi.fn(async () => ({ queuedJobs: [] as string[] }))
+    const collectSource = vi.fn(async () => ({
+      queuedJobs: [] as string[],
+      counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 }
+    }))
     const pipeline = fakePipeline({ collectSource })
     registerIntelligenceJobs(jobRuntime, { pipeline })
     const service = createIntelligenceSourcesService({ profileStore, pipeline, jobRuntime })

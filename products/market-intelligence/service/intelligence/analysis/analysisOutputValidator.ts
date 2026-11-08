@@ -17,11 +17,19 @@ import { isMarketReactionFact, marketAnalysisUnsafeOutputPolicy, marketAnalysisV
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import { policyProbabilityDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
+import {
+  divergenceDefectOf,
+  isAnalysisDivergenceBlock,
+  type AnalysisDivergenceStance
+} from './analysisDivergenceConsistency'
 
 export type FrozenAnalysisEvidence = Readonly<{
   facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'comparability' | 'freshness' | 'value' | 'observedAt'>[]
   evidenceRefs: readonly Pick<EvidenceClaim, 'evidenceRefId'>[]
 }>
+
+/** 背离立场块的形状与判定在 `analysisDivergenceConsistency`（体积门禁要求抽离）；类型从这里照旧导出。 */
+export type { AnalysisDivergenceStance }
 
 export type ValidatedAnalysisModelOutput = Readonly<{
   conclusion: AnalysisConclusion
@@ -35,6 +43,8 @@ export type ValidatedAnalysisModelOutput = Readonly<{
   nextCatalysts: readonly Catalyst[]
   dataCaveats: readonly string[]
   evidenceRefs: readonly string[]
+  /** 可选的背离立场；不写就是"没有意见"，不参与任何判定。 */
+  divergences?: readonly AnalysisDivergenceStance[]
 }>
 
 /** A value that matched a prohibited pattern, named so the failure is diagnosable. */
@@ -75,7 +85,14 @@ export const analysisValidationRules = Object.freeze({
    * talks about the background. Coarse code stays `analysis-missing-evidence`, which is already in
    * the repairable set, so the model gets its one rewrite; the detail names this rule.
    */
-  triggerFocus: 'missing-trigger-focus'
+  triggerFocus: 'missing-trigger-focus',
+  /**
+   * 分析的背离结论与快照里已有的事实相反（`02` 系统设计 §校验规则）。
+   *
+   * 与 `direction-evidence-mismatch` **不合并**：那条管"引用了不存在的证据"，修法是把引用补成
+   * 存在的那个；这条管"结论与已有证据相反"，修法是改判断。合成一个码，模型会去补一个根本不存在的引用。
+   */
+  divergenceContradiction: 'divergence-contradiction'
 })
 
 export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof analysisValidationRules]
@@ -101,8 +118,14 @@ function missingEvidence(rule: AnalysisValidationRule, detail?: AnalysisProbabil
 
 const outputKeys = [
   'conclusion', 'knownFacts', 'transmissionHypotheses', 'marketReaction', 'supportingEvidence', 'counterEvidence',
-  'scenarios', 'directions', 'nextCatalysts', 'dataCaveats', 'evidenceRefs'
+  'scenarios', 'directions', 'nextCatalysts', 'dataCaveats', 'evidenceRefs', 'divergences'
 ] as const
+
+/**
+ * 这些键必须出现；`divergences` **可选**——沉默不算相反，逼着模型表态等于逼它点头
+ * （`04-ai-analysis-inclusion.md` 的政策句）。
+ */
+const requiredOutputKeys = outputKeys.filter((key) => key !== 'divergences')
 
 /**
  * One predicate per top-level section, checked in contract order.
@@ -155,9 +178,10 @@ function isDirectionKey(value: unknown): value is AnalysisConclusion['direction'
 function topLevelShapeDefect(value: unknown): AnalysisShapeDefect | undefined {
   if (!isPlainRecord(value)) return 'shape:not-an-object'
   const present = Object.keys(value)
-  const missing = outputKeys.filter((key) => !Object.prototype.hasOwnProperty.call(value, key))
+  const missing = requiredOutputKeys.filter((key) => !Object.prototype.hasOwnProperty.call(value, key))
   const extra = present.filter((key) => !(outputKeys as readonly string[]).includes(key))
-  if (missing.length === 0 && extra.length === 0 && present.length === outputKeys.length) return undefined
+  // `divergences` 可缺省；其余十一个必须齐，且不许有多余键。
+  if (missing.length === 0 && extra.length === 0 && present.length <= outputKeys.length) return undefined
   const details = [
     ...missing.map((key) => `missing-${key}`),
     ...extra.slice(0, 5).map((key) => `extra-${key}`)
@@ -186,6 +210,7 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   const record = value as Record<string, unknown>
   const broken = outputSections.find(([key, valid]) => !valid(record[key]))
   if (broken) return invalidSchema(`shape:${broken[0]}`)
+  if (record.divergences !== undefined && !isAnalysisDivergenceBlock(record.divergences, marketAnalysisValidationPolicy.maximumCollectionItems)) return invalidSchema('shape:divergences')
 
   const factIds = new Set(snapshot.facts.map((fact) => fact.factId))
   const evidenceRefIds = new Set(snapshot.evidenceRefs.map((evidence) => evidence.evidenceRefId))
@@ -227,6 +252,11 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
     ])
     if (![...sentimentRefs].some(ref => citedEvidence.has(ref))) return missingEvidence(analysisValidationRules.sentimentNotWeighed)
   }
+  // 背离立场（`02` 系统设计 §背离一致性）：只判**说出来的**那些对——不写就是没意见。
+  // 与证据相反即拒；pairId 认不出来是引用缺陷（不许就地编一对）。
+  const divergenceDefect = divergenceDefectOf(output.divergences, snapshot.facts)
+  if (divergenceDefect === 'unknown-pair') return missingEvidence(analysisValidationRules.unknownReference)
+  if (divergenceDefect === 'contradiction') return missingEvidence(analysisValidationRules.divergenceContradiction)
   const probabilityDefect = policyProbabilityDefect(output.conclusion, snapshot)
   if (probabilityDefect) return missingEvidence(analysisValidationRules.policyProbabilityCitation, probabilityDefect)
   // Only when the caller could resolve a trigger source; a snapshot with no change record never

@@ -30,6 +30,22 @@ import type {
   NotificationSubmitRequest
 } from '../contracts/notificationContracts'
 import { createNotificationId } from '../store/notificationStore'
+import { isInsideQuietHours, type QuietHoursDecision } from './quietHours'
+import { resolveSubmitSurfaces, type NotificationSurfaceDecision } from './notificationSurfaceDecision'
+import { applySurfaceNarrowing, effectiveLevels } from './notificationSurfaceLevels'
+import {
+  crossProductPrefix,
+  invalidExternalAction,
+  isInvalidDedupeVars,
+  isSignalSeverity,
+  missingRenderedField,
+  resolveBodyKey,
+  resolveDedupeKey,
+  resolveKeyByVariant,
+  usesStaleIntradayBucketShape
+} from './notificationSubmitValidation'
+import { actionLabelRejection } from './notificationActionLabelRejection'
+
 
 export type NotificationSubmitPlan =
   | { kind: 'rejected'; outcome: Extract<NotificationSubmitOutcome, { kind: 'rejected' }> }
@@ -37,12 +53,25 @@ export type NotificationSubmitPlan =
       kind: 'new'
       record: NotificationRecord
       levels: readonly NotificationApprovedLevel[]
+      /**
+       * 这次提交的**免打扰决定**（只算一次）：投递路由拿它，不再自己重算。
+       * `bypassed` 只对「读者亲手点的诊断 + 已批穿透 + 测试命名空间」为真。
+       */
+      quietHours: QuietHoursDecision
+      /**
+       * 同一组两条通知的存量选择对不上（历史数据/半次写入）：三面已按「都关」处理，
+       * 调用方**必须**记一行诊断——否则「都关」看起来跟读者自己关掉一模一样。
+       */
+      surfaceConflict: boolean
       /** 旧提交形状，供 `mergeDuplicateNotification` 的字段读取（不用于标题/动作）。 */
       incoming: NotificationRequest
       outcome: Extract<NotificationSubmitOutcome, { kind: 'accepted' }>
     }
   | {
       kind: 'merge'
+      /** 本次提交真正排上的档位（用于判「第二次是否更宽」）。 */
+      levels: readonly NotificationApprovedLevel[]
+      quietHours: QuietHoursDecision
       duplicate: NotificationRecord
       incoming: NotificationRequest
       /** `condition` 窗口内再提交算「又一次」；`occurrence` 的重复上报不计数。 */
@@ -56,37 +85,18 @@ export type NotificationSubmitPlanInput = {
   desktopSupported: boolean
   request: NotificationSubmitRequest
   duplicate?: NotificationRecord
-  /**
-   * 今天（**UTC 自然日**）这个事件已经落了几条、最近一条是什么时候。
-   *
-   * 由调用方从通知记录本身数出来（`countSameEventToday`），不是一个单独的计数器：
-   * 计数器和记录各说一套，就是两套账。缺省视为「今天还没有」。
-   */
+  /** 今天（**UTC 自然日**）这个事件已落几条、最近一次何时：由调用方从记录数出，不另设计数器。 */
   sameEventToday?: Readonly<{ count: number; lastOccurredAt: string | null }>
   now: string
+  /** 读者时区（`clock.timeZone()`）：免打扰按它算；拿不到时判 `unknown` 且**不静音**（宁可多响一次）。 */
+  timeZone: string
 }
 
-/**
- * 一次提交会打扰哪些表面（契约 §5.1 / 设计 §2）。
- *
- * 中心恒真：它就是铃铛里那份记录。桌面与提示**互斥**，桌面优先——这条互斥只写在这里，
- * 投递层不许再写第二套（设计 §2 硬规矩 2）。
- *
- * 桌面「可用」这里只判两件能判的事实：开关开、平台支持。第三种（`show()` 抛错/返回
- * `ok:false`）只能投递时才知道，由投递层退回提示并记一条「桌面没有弹出来」——见 P7。
- */
-export type NotificationSurfacePlan = Readonly<{ desktop: boolean; toast: boolean }>
-
-export function planNotificationSurfaces(
-  entry: NotificationEventCatalogEntry,
-  settings: NotificationRuntimeSettings,
-  desktopSupported: boolean
-): NotificationSurfacePlan {
-  const desktopApproved = entry.approvedDisruptionLevels.includes('desktop')
-  const toastApproved = entry.approvedDisruptionLevels.includes('toast')
-  const desktop = desktopApproved && settings.desktopEnabled && desktopSupported
-  // 桌面优先：桌面真能弹时，这条不再另外在应用内重复一次。
-  return Object.freeze({ desktop, toast: desktop ? false : toastApproved && settings.toastEnabled })
+function rejected(
+  reason: Extract<NotificationSubmitOutcome, { kind: 'rejected' }>['reason'],
+  message: string
+): Extract<NotificationSubmitPlan, { kind: 'rejected' }> {
+  return { kind: 'rejected', outcome: { kind: 'rejected', reason, message } }
 }
 
 export function planNotificationSubmit(input: NotificationSubmitPlanInput): NotificationSubmitPlan {
@@ -105,6 +115,8 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   if (badExternalAction !== undefined) {
     return rejected(badExternalAction.reason, `notification event "${entry.id}" ${badExternalAction.message}`)
   }
+  const badActionLabel = actionLabelRejection(input.request.actions, entry.productId)
+  if (badActionLabel !== undefined) return { kind: 'rejected', outcome: badActionLabel }
 
   // 信号严重度只认三档闭集：类型层挡得住编译期，运行期还要挡一次（IPC / 生产者 / JS 调用点）。
   // 放行 `critical` 会让 `highestSeverity` 一次抬到顶，之后永不再升级——而且看起来一切正常。
@@ -130,6 +142,16 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   if (bodyKey === null) {
     return rejected('unknown-body-variant', `notification event "${entry.id}" has no body variant "${input.request.bodyVariant ?? ''}"`)
   }
+  // 标题与理由的变体：与正文同形、同一条规则（声明了变体表就必须给对名字，不退回默认键）。
+  // 退回默认键会印出一句措辞对不上情形的话（无预期值却写「高于预期」），那正是要修的缺陷。
+  const titleKey = resolveKeyByVariant(entry.titleKey, entry.titleKeyByVariant, input.request.titleVariant)
+  if (titleKey === null) {
+    return rejected('unknown-body-variant', `notification event "${entry.id}" has no title variant "${input.request.titleVariant ?? ''}"`)
+  }
+  const reasonKey = resolveKeyByVariant(entry.reasonKey, entry.reasonKeyByVariant, input.request.reasonVariant)
+  if (reasonKey === null) {
+    return rejected('unknown-body-variant', `notification event "${entry.id}" has no reason variant "${input.request.reasonVariant ?? ''}"`)
+  }
 
   // 旧的日内键形状（带时间桶）现在构造不出键；单列一个原因，别让它落成「没有键」这种含糊说法。
   if (usesStaleIntradayBucketShape(input.request.dedupeVars)) {
@@ -150,7 +172,8 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   if (crossProduct !== undefined) {
     return rejected('cross-product-key', `dedupe key belongs to "${crossProduct}", not "${entry.productId}"`)
   }
-  const dedupeKey = `${entry.productId}|${rawDedupeKey}`
+  // 测试与真实**永不互相吞掉**：同一个键、两个域（§2），前缀只在这一处加。
+  const dedupeKey = input.request.namespace === 'test' ? `test:${entry.productId}|${rawDedupeKey}` : `${entry.productId}|${rawDedupeKey}`
 
   // 当日上限与最小间隔：只在**会新建记录**的提交上判（合并进已有那一条不算新的一条）。
   // 数从记录里来（`sameEventToday`），这一处只负责比大小——所以平台与生产者不会各有一套阈值。
@@ -176,193 +199,73 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported)
-  const levels = effectiveLevels(entry, surfaces)
+  // 读者选择 + 三个面：判定在 `notificationSurfaceDecision.ts`（契约 §5.1 / §5.5）。
+  const { surfaces, conflict: surfaceConflict } = resolveSubmitSurfaces({
+    entry,
+    list: () => input.catalog.list(),
+    settings: input.settings,
+    desktopSupported: input.desktopSupported
+  })
+  // 免打扰**只算这一次**：手机这一档按它摘掉（验收 S6 / 用户测试单第 18 条「只进中心，
+  // 不弹、不发手机」），同一个决定原样传给投递路由——两处各判会产出「一处放过、另一处筛掉」的假事实。
+  const insideQuietHours = isInsideQuietHours(input.settings, {
+    now: () => new Date(input.now),
+    timeZone: () => input.timeZone
+  })
+  // 诊断事件已批穿透 + 读者亲手点（`namespace: 'test'`）→ 这一下不受免打扰约束：
+  // 三档全试，回执才说得清「哪一档到了、哪一档没到」。
+  const bypassQuietHours = insideQuietHours &&
+    entry.diagnostic === true &&
+    entry.approvedBypassQuietHours === true &&
+    input.request.namespace === 'test'
+  const quietHours: QuietHoursDecision = { inside: insideQuietHours, bypassed: bypassQuietHours }
+  const approved = effectiveLevels(surfaces, !insideQuietHours || bypassQuietHours)
+  // 按次收窄（`narrowedDisruptionLevels`）：**只许收窄、不许放大**；`center` 是平台必达，传的数组里
+  // 没有它也保留。不传＝与今天逐字一致（下面那行不会改变任何东西）。
+  const narrowed = input.request.narrowedDisruptionLevels
+  if (narrowed !== undefined) {
+    // 收窄只能**变少**、不能**变出**：出现批准表没批的档位就是生产者写错了，**拒收**，
+    // 不静默求交（那会让生产者以为那一档发出去了）。与「申请了未批准的档位」同一个处理。
+    const unapproved = narrowed.filter((level) => !approved.includes(level))
+    if (unapproved.length > 0) {
+      return rejected('surface-not-approved', `notification event "${entry.id}" narrowed to an unapproved level: ${unapproved.join(', ')}`)
+    }
+  }
+  // `center` 不是可被收窄的面，是必达记录：传不传它都在，所以 `['channel']` 的含义就是「channel + center」。
+  const levels = narrowed === undefined
+    ? approved
+    : approved.filter((level) => level === 'center' || narrowed.includes(level))
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
-  const incoming = toLegacyRequest(entry, request, dedupeKey, levels, bodyKey)
+  const incoming = toLegacyRequest(entry, request, dedupeKey, levels, bodyKey, titleKey, reasonKey)
   if (input.duplicate) {
     return {
       kind: 'merge',
+      levels,
       duplicate: input.duplicate,
       incoming,
+      quietHours,
       incrementCount: entry.dedupeUnit === 'condition'
     }
   }
 
-  const record = createRecord(entry, request, dedupeKey, levels, surfaces, bodyKey, input.now)
+  const record = createRecord(entry, request, dedupeKey, levels, surfaces, bodyKey, input.now, titleKey, reasonKey)
   return {
     kind: 'new',
     record,
     levels,
+    quietHours,
+    surfaceConflict,
     incoming,
-    outcome: { kind: 'accepted', recordId: record.id, levels }
+    outcome: { kind: 'accepted', recordId: record.id, levels, suppressedLevels: [] }
   }
-}
-
-/** 运行期校验：值必须落在三档闭集里（不被 `as` 或 JS 调用点绕过去）。 */
-function isSignalSeverity(value: unknown): value is NotificationSignalSeverity {
-  return value === 'low' || value === 'medium' || value === 'high'
-}
-
-/**
- * `open-external` 的四条硬边界（契约 §7.5 ⑫）。
- *
- * 为什么在提交入口拒收而不是在渲染层兜底：静默丢掉一个动作，读者看到的是「按钮莫名其妙没了」；
- * 而把 URL 塞进正文的替代办法会让中心那条被两行截断——两种都比当场拒收更难查。
- * 消息里**只回协议名**不回整条 URL：正文里可能带一次性参数，日志不该多存一份。
- */
-function invalidExternalAction(
-  actions: readonly NotificationAction[]
-): { reason: Extract<NotificationSubmitOutcome, { kind: 'rejected' }>['reason']; message: string } | undefined {
-  for (const action of actions) {
-    const url = typeof action.url === 'string' ? action.url.trim() : undefined
-    if (action.kind !== 'open-external') {
-      if (action.url !== undefined) {
-        return {
-          reason: 'url-without-external-action',
-          message: `action "${action.id}" carries a url but its kind is "${action.kind}"; only open-external points outside`
-        }
-      }
-      continue
-    }
-    if (url === undefined || url.length === 0) {
-      return { reason: 'external-action-without-url', message: `action "${action.id}" is open-external but has no url` }
-    }
-    if (!isPublicWebUrl(url)) {
-      return {
-        reason: 'external-action-bad-url',
-        message: `action "${action.id}" has a url that is not an absolute http(s) address (${url.split(':')[0] ?? ''}:)`
-      }
-    }
-    if (action.deeplink !== undefined) {
-      return {
-        reason: 'external-action-with-deeplink',
-        message: `action "${action.id}" is open-external and also carries a deeplink; an in-app landing cannot be opened on a phone`
-      }
-    }
-  }
-  return undefined
-}
-
-/** 只认 http/https 且必须带主机名：`javascript:`、`file:`、`http:foo`、相对路径一律不算。 */
-function isPublicWebUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value)
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname.length > 0
-  } catch {
-    return false
-  }
-}
-
-function rejected(
-  reason: Extract<NotificationSubmitOutcome, { kind: 'rejected' }>['reason'],
-  message: string
-): Extract<NotificationSubmitPlan, { kind: 'rejected' }> {
-  return { kind: 'rejected', outcome: { kind: 'rejected', reason, message } }
-}
-
-/** 正文变体：声明了变体表就必须选中一个；没声明时 `bodyVariant` 忽略。 */
-function resolveBodyKey(entry: NotificationEventCatalogEntry, request: NotificationSubmitRequest): string | undefined | null {
-  if (!entry.bodyKeyByVariant) return entry.bodyKey
-  const variant = request.bodyVariant
-  if (variant === undefined) return null
-  return entry.bodyKeyByVariant[variant] ?? null
-}
-
-/**
- * 成品完整性（契约 v2.56 + 首席 2026-11-06 裁定）：
- *
- * - **带 `edition.locale`**：只要求**那一份**三段齐全。那一期只有一种语言是合法状态，
- *   硬凑第二种语言就是「英文成品里塞中文导读」——假齐全，比缺更糟。
- *   `edition.locale` 不是 `zh-CN`/`en-US` → 拒收（**不许当成「没有 edition」默默走读者语言**，
- *   那会让一条错数据看着像正常）。
- * - **不带 `edition`**（信号、宏观、失败、时区）：两语言都要齐，与今天一致。
- *
- * 返回第一个缺口（回执与排查都用它），完整则 `undefined`。
- */
-function missingRenderedField(
-  rendered: NonNullable<NotificationSubmitRequest['rendered']>,
-  editionLocale: string | undefined
-): string | undefined {
-  const requirement: readonly ('zh-CN' | 'en-US')[] = editionLocale === undefined
-    ? ['zh-CN', 'en-US']
-    : editionLocale === 'zh-CN' || editionLocale === 'en-US'
-      ? [editionLocale]
-      : []
-  if (requirement.length === 0) return `edition.locale "${String(editionLocale)}"`
-  for (const language of requirement) {
-    const entry = rendered[language]
-    if (entry === undefined) return `${language}.title`
-    for (const field of ['title', 'body', 'reason'] as const) {
-      const value = entry[field]
-      if (typeof value !== 'string' || value.trim().length === 0) return `${language}.${field}`
-    }
-  }
-  return undefined
-}
-
-/** 日内键不许带时间：带了就是旧口径残留，拒收并给具名原因。 */
-function usesStaleIntradayBucketShape(vars: NotificationDedupeVars): boolean {
-  if (vars.builder !== 'moduleSignal' || vars.cadence !== 'intraday') return false
-  return 'observedAt' in vars || 'bucketMs' in vars
-}
-
-function isInvalidDedupeVars(entry: NotificationEventCatalogEntry, vars: NotificationDedupeVars): boolean {
-  if (entry.dedupeKeyTemplate !== undefined) return vars.builder !== 'template'
-  if (entry.dedupeKeyBuilder === undefined) return true
-  return vars.builder !== entry.dedupeKeyBuilder
-}
-
-function resolveDedupeKey(entry: NotificationEventCatalogEntry, vars: NotificationDedupeVars): string | undefined {
-  if (entry.dedupeKeyTemplate !== undefined) {
-    if (vars.builder !== 'template') return undefined
-    const expanded = entry.dedupeKeyTemplate.replace(/\{(\w+)\}/gu, (placeholder, name: string) => {
-      const value = vars.vars[name]
-      return value === undefined ? placeholder : value
-    })
-    return expanded.includes('{') ? undefined : expanded
-  }
-  if (entry.dedupeKeyBuilder === undefined || !isNotificationDedupeBuilderId(entry.dedupeKeyBuilder)) {
-    return undefined
-  }
-  if (vars.builder !== entry.dedupeKeyBuilder) return undefined
-  if (vars.builder === 'moduleSignal') return notificationDedupeBuilders.moduleSignal(vars)
-  if (vars.builder === 'sourceIssue') return notificationDedupeBuilders.sourceIssue({ sourceId: vars.sourceId })
-  return undefined
-}
-
-/**
- * 跨产品同键（§16.2b）：键在展开时被手工带上了 `productId|` 前缀，且那个产品真实存在、
- * 不是本事件的声明者 → 直接拒。正常构造的键没有这个前缀，由平台统一加。
- */
-function crossProductPrefix(
-  catalog: NotificationEventCatalog,
-  rawDedupeKey: string,
-  ownerProductId: string
-): string | undefined {
-  const separator = rawDedupeKey.indexOf('|')
-  if (separator <= 0) return undefined
-  const claimed = rawDedupeKey.slice(0, separator)
-  if (claimed === ownerProductId) return undefined
-  return catalog.list().some((entry) => entry.productId === claimed) ? claimed : undefined
 }
 
 /**
  * 生效表面 = 批准 ∩ 开关（桌面优先互斥）。手机那一档仍按批准：**投递层**还要再判
  * 「频道事件表勾了 ∩ 频道启用 ∩ 频道可用」，两处各判自己那一半，不在这里替它猜。
  */
-function effectiveLevels(
-  entry: NotificationEventCatalogEntry,
-  surfaces: NotificationSurfacePlan
-): readonly NotificationApprovedLevel[] {
-  const levels: NotificationApprovedLevel[] = ['center']
-  if (surfaces.desktop) levels.push('desktop')
-  if (surfaces.toast) levels.push('toast')
-  if (entry.approvedDisruptionLevels.includes('channel')) levels.push('channel')
-  return Object.freeze(levels)
-}
 
 /**
  * 「看原文」的地址在**进记录那一刻规范化一次**，之后中心按钮与手机末尾那一行读的是同一个值。
@@ -380,7 +283,9 @@ function toLegacyRequest(
   request: NotificationSubmitRequest,
   dedupeKey: string,
   levels: readonly NotificationApprovedLevel[],
-  bodyKey: string | undefined
+  bodyKey: string | undefined,
+  titleKey: string,
+  reasonKey: string
 ): NotificationRequest {
   const localChannels = levels.filter((level): level is NotificationChannel =>
     level === 'center' || level === 'toast' || level === 'desktop'
@@ -390,11 +295,11 @@ function toLegacyRequest(
     ...(entry.productId === 'platform' ? {} : { productId: entry.productId }),
     sourceId: entry.id,
     eventTypeId: entry.id,
-    titleKey: entry.titleKey as NotificationCopyKey,
+    titleKey: titleKey as NotificationCopyKey,
     ...(request.titleParams === undefined ? {} : { titleParams: request.titleParams }),
     ...(bodyKey === undefined ? {} : { bodyKey: bodyKey as NotificationCopyKey }),
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
-    ...(request.rendered === undefined ? { reasonKey: entry.reasonKey as NotificationCopyKey } : {}),
+    ...(request.rendered === undefined ? { reasonKey: reasonKey as NotificationCopyKey } : {}),
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
     ...(request.rendered === undefined ? {} : { rendered: request.rendered }),
     severity: request.severity ?? 'info',
@@ -413,9 +318,11 @@ function createRecord(
   request: NotificationSubmitRequest,
   dedupeKey: string,
   levels: readonly NotificationApprovedLevel[],
-  surfaces: NotificationSurfacePlan,
+  surfaces: Readonly<{ desktop: boolean; toast: boolean }>,
   bodyKey: string | undefined,
-  now: string
+  now: string,
+  titleKey: string,
+  reasonKey: string
 ): NotificationRecord {
   // `deliver: false`：只落记录、不排任何投递面；记录内容与 `occurrenceCount` 照常。
   const deliver = request.deliver !== false
@@ -437,15 +344,16 @@ function createRecord(
     eventTypeId: entry.id,
     delivery,
     ...(request.rendered === undefined
-      ? { titleKey: entry.titleKey as NotificationCopyKey }
+      ? { titleKey: titleKey as NotificationCopyKey }
       : { rendered: request.rendered }),
     ...(request.titleParams === undefined ? {} : { titleParams: request.titleParams }),
     ...(bodyKey === undefined ? {} : { bodyKey: bodyKey as NotificationCopyKey }),
     ...(request.bodyParams === undefined ? {} : { bodyParams: request.bodyParams }),
-    ...(request.rendered === undefined ? { reasonKey: entry.reasonKey as NotificationCopyKey } : {}),
+    ...(request.rendered === undefined ? { reasonKey: reasonKey as NotificationCopyKey } : {}),
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
     severity: request.severity ?? 'info',
     priority: 'normal',
+    appliedLevels: [...levels],
     channels: localChannels.length > 0 ? [...localChannels] : ['center'],
     state: 'unread',
     ...(request.deeplink === undefined ? {} : { deeplink: request.deeplink }),

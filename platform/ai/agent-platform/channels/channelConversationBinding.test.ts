@@ -72,20 +72,16 @@ describe('delivery target resolution without an explicit binding', () => {
     }))
   })
 
-  it('falls back to the most recent conversation instead of asking the reader to bind', () => {
-    const database = seed({ withTarget: false })
-    const resolved = resolveDeliveryTarget(view(database), 'channel-a', { allowFallback: true })
-    expect(resolved).toMatchObject({ ok: true, conversationId: 'conversation-new', source: 'fallback', kind: 'direct' })
-  })
-
-  it('keeps the strict behaviour for notification push (no guessing among several)', () => {
+  it('refuses to guess among several conversations: the same rule for push and for the test message', () => {
+    // 兜底（按「最近活跃」挑一条）**已删除**（技术方案 §1）：测试消息和真实推送同一条规则，
+    // 猜出来的成功会把「真实推不出去」显示成「测试通过」。
     const database = seed({ withTarget: false })
     expect(resolveDeliveryTarget(view(database), 'channel-a')).toMatchObject({ ok: false, reason: 'no-target' })
   })
 
   it('uses the explicit binding when there is one', () => {
     const database = seed({ withTarget: true })
-    expect(resolveDeliveryTarget(view(database), 'channel-a', { allowFallback: true }))
+    expect(resolveDeliveryTarget(view(database), 'channel-a'))
       .toMatchObject({ ok: true, conversationId: 'conversation-old', source: 'bound' })
   })
 })

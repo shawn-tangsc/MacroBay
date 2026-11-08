@@ -5,19 +5,18 @@ import type { NotificationSubmitRequest } from '../contracts/notificationContrac
 import { planNotificationSubmit } from './notificationSubmitPlan'
 import { externalActionUrl } from '../delivery/channelPushPort'
 
-const policy: NotificationEventPolicy = {
-  'platform.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.ready': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
-  'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.raw': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'other-product.thing': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
-
 const catalog = createNotificationEventCatalog({
-  policy,
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+        'platform.ready': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+        'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        'platform.title-variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        'platform.raw': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.failed',
@@ -59,6 +58,18 @@ const catalog = createNotificationEventCatalog({
     category: 'reminder',
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'variant:{id}',
+          dedupeUnit: 'occurrence',
+        },
+        {
+          id: 'platform.title-variant',
+          titleKey: 'notification.test.title',
+          titleKeyByVariant: { direction: 'notification.test.title', published: 'notification.test.body' },
+          reasonKey: 'notification.test.body',
+          reasonKeyByVariant: { threshold: 'notification.test.body', importance: 'notification.test.title' },
+          requiresUserAction: false,
+          category: 'reminder',
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'title-variant:{id}',
           dedupeUnit: 'occurrence',
         }
       ]
@@ -102,10 +113,48 @@ const base = {
     defaultSnoozeMinutes: 60
   },
   desktopSupported: true,
-  now: '2026-11-03T00:00:00.000Z'
+  now: '2026-11-03T00:00:00.000Z',
+  // 用例显式声明读者在哪个时区：免打扰窗口按它算，不再有「没传就按 UTC」的缺省。
+  timeZone: 'UTC'
 }
 
 describe('notification submit planner', () => {
+  it('resolves the title and reason variant the event declared, like the body variant', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({
+        eventTypeId: 'platform.title-variant',
+        dedupeVars: { builder: 'template', vars: { id: 'v1' } },
+        titleVariant: 'published',
+        reasonVariant: 'importance'
+      })
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 变体解析出的仍是**键**，不是句子：以后改文案历史跟着变好（这正是它不等于 `rendered` 的地方）。
+    expect(plan.record.titleKey).toBe('notification.test.body')
+    expect(plan.record.reasonKey).toBe('notification.test.title')
+  })
+
+  it('rejects a missing or unknown title/reason variant instead of falling back to the default key', () => {
+    const missing = planNotificationSubmit({
+      ...base,
+      request: request({ eventTypeId: 'platform.title-variant', dedupeVars: { builder: 'template', vars: { id: 'v2' } } })
+    })
+    expect(missing.kind).toBe('rejected')
+
+    const unknown = planNotificationSubmit({
+      ...base,
+      request: request({
+        eventTypeId: 'platform.title-variant',
+        dedupeVars: { builder: 'template', vars: { id: 'v3' } },
+        titleVariant: 'nope'
+      })
+    })
+    expect(unknown.kind).toBe('rejected')
+  })
+
   it('rejects an unregistered event type', () => {
     const plan = planNotificationSubmit({ ...base, request: request({ eventTypeId: 'platform.nope' }) })
     expect(plan.kind).toBe('rejected')
@@ -259,5 +308,178 @@ describe('「看原文」动作：外链只有一种写法（契约 §7.5 ⑫）
       expect(plan.outcome.message).toContain('ftp:')
       expect(plan.outcome.message).not.toContain('token=abc')
     }
+  })
+})
+
+describe('事件级频道开关（channelEvents）', () => {
+  // `platform.ready` 批准 center + desktop + channel；`platform.variant` 只批 center。
+  const readyRequest = request({
+    eventTypeId: 'platform.ready',
+    dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } },
+    actions: []
+  })
+
+  it('treats a missing key as on: 装上就推，不想收再去关', () => {
+    const plan = planNotificationSubmit({ ...base, request: readyRequest })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+    expect(plan.record.delivery.push).toEqual({ state: 'queued', at: base.now })
+  })
+
+  it('drops the phone when the reader turned this event off', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: { ...base.settings, channelEvents: { 'platform.ready': false } },
+      request: readyRequest
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 关掉只是不推手机：中心照旧留一条，且不排一次注定不发的 push。
+    expect(plan.outcome.levels).toContain('center')
+    expect(plan.outcome.levels).not.toContain('channel')
+    expect(plan.record.delivery.push).toBeUndefined()
+  })
+
+  it('keeps the phone when the key is explicitly true', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: { ...base.settings, channelEvents: { 'platform.ready': true } },
+      request: readyRequest
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+  })
+
+  // 否决位不是许可位：对没批 channel 的事件写 true，不能把它推上手机。
+  it('cannot grant a surface the approval table never gave', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: { ...base.settings, channelEvents: { 'platform.failed': true } },
+      request: request()
+    })
+
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).not.toContain('channel')
+    expect(plan.record.delivery.push).toBeUndefined()
+  })
+})
+
+describe('免打扰时段只进中心（验收 S6 / 测试单第 18 条）', () => {
+  // 窗口 22:00–08:00（读者时区 UTC）；`platform.ready` 批准 center + channel。
+  const quiet = {
+    ...base.settings,
+    quietHours: { enabled: true, startLocalTime: '22:00', endLocalTime: '08:00' }
+  }
+  const channelRequest = request({
+    eventTypeId: 'platform.ready',
+    dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } },
+    actions: []
+  })
+
+  it('drops the phone inside the window and keeps the centre record', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: quiet,
+      now: '2026-11-03T23:30:00.000Z',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 手机这一档在窗口内根本不排：夜里推一条到读者身上，和弹一下没有区别。
+    expect(plan.outcome.levels).not.toContain('channel')
+    expect(plan.outcome.levels).toContain('center')
+    expect(plan.record.delivery.push).toBeUndefined()
+  })
+
+  it('keeps the phone outside the window', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: quiet,
+      now: '2026-11-03T12:30:00.000Z',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+  })
+
+  it('does not silence anything when the zone cannot be read', () => {
+    // S6 原话：时区判断不出来时不静音。`unknown` 不许折成 `inside`，也不许折成「不在」——
+    // 它是「不知道」，而「不知道」的默认动作是照常投递。
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: quiet,
+      now: '2026-11-03T23:30:00.000Z',
+      timeZone: 'Mars/Olympus_Mons',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+  })
+
+  it('behaves the same when quiet hours are switched off', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      now: '2026-11-03T23:30:00.000Z',
+      request: channelRequest
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toContain('channel')
+  })
+})
+
+describe('动作标签：归属与存在性（契约 v2.58）', () => {
+  const productAction = (overrides: Record<string, unknown> = {}) => ({
+    id: 'open-target',
+    labelRef: {
+      scope: 'product' as const,
+      productId: 'sample-product',
+      key: 'notification.action.sample-product.open-target'
+    },
+    kind: 'open' as const,
+    ...overrides
+  })
+
+  it('rejects a label that belongs to another product — two names would end up on one button', () => {
+    // 事件属于 `platform`，动作却引用某个产品的键：解析得出来就是把别人的句子
+    // 贴到这条通知的按钮上，解析不出来就是个没名字的按钮。两种都不许落库。
+    const plan = planNotificationSubmit({ ...base, request: request({ actions: [productAction()] }) })
+    expect(plan).toMatchObject({ kind: 'rejected', outcome: { reason: 'action-label-wrong-scope' } })
+  })
+
+  it('accepts the same reference when the event belongs to that product', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({
+        eventTypeId: 'other-product.thing',
+        dedupeVars: { builder: 'template', vars: { id: '2' } },
+        actions: [productAction({ labelRef: { scope: 'product', productId: 'other-product', key: 'notification.action.other-product.open-target' } })]
+      })
+    })
+    expect(plan.kind).toBe('new')
+  })
+
+  it('rejects an action carrying no label at all — an unnamed button is not a button', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({ actions: [{ id: 'open', kind: 'open' }] })
+    })
+    expect(plan).toMatchObject({ kind: 'rejected', outcome: { reason: 'action-label-missing' } })
+  })
+
+  it('still accepts the platform key, because records written before v2.58 carry it', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({ actions: [{ id: 'open', labelKey: 'notification.action.open-settings', kind: 'open' }] })
+    })
+    expect(plan.kind).toBe('new')
   })
 })

@@ -22,11 +22,34 @@ export function tierOf(strength: number): NewsSentimentTier {
   return 'medium'
 }
 
-/** 一条判断是否够「值得推」的口径：模型分析、中以上、有归并键。缺一不推。 */
+/** 读者可配的推送门槛：与三档同一套顺序，弱 < 中 < 强。 */
+export type NewsSentimentTierThreshold = NewsSentimentTier
+
+const TIER_ORDER: Readonly<Record<NewsSentimentTier, number>> = Object.freeze({
+  low: 0,
+  medium: 1,
+  high: 2
+})
+
+/**
+ * 「档位 ≥ 门槛」。门槛可配之后，**顺序只在这里定一次**——闸门与界面都调它，
+ * 谁想改成「按分数比」或另写一组阈值，都得先删掉这个函数。
+ */
+export function meetsTierThreshold(tier: NewsSentimentTier, threshold: NewsSentimentTierThreshold): boolean {
+  return TIER_ORDER[tier] >= TIER_ORDER[threshold]
+}
+
+/** 一条判断是否够「值得推」的口径：模型分析、档位达到门槛、有归并键。缺一不推。 */
 export function isAlertWorthy(input: {
   engine: 'model' | 'rules'
   strength: number
   storyKey?: string
+  threshold?: NewsSentimentTierThreshold
 }): boolean {
-  return input.engine === 'model' && tierOf(input.strength) !== 'low' && Boolean(input.storyKey?.trim())
+  const threshold = input.threshold ?? 'medium'
+  return (
+    input.engine === 'model' &&
+    meetsTierThreshold(tierOf(input.strength), threshold) &&
+    Boolean(input.storyKey?.trim())
+  )
 }

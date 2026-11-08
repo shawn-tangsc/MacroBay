@@ -1,10 +1,5 @@
 import { openInterestBucketPolicy } from '../../../contracts/openInterestHistory'
-import {
-  detectLiquidationHints,
-  liquidationHintPolicy,
-  type LiquidationHint,
-  type PositioningBar
-} from '../../../contracts/openInterestPositioning'
+import { liquidationHintPolicy, type LiquidationHint } from '../../../contracts/openInterestPositioning'
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { buildSignalDedupeKey, moduleSignalPolicy, type ModuleSignal } from '../../../contracts/moduleSignal'
 
@@ -23,6 +18,8 @@ import { buildSignalDedupeKey, moduleSignalPolicy, type ModuleSignal } from '../
 export const openInterestSignalRule = Object.freeze({
   moduleId: 'open-interest' as const,
   ruleId: 'oi-liquidation-proxy',
+  /** 这条规则只说一件事：多头被清（价格跌）。 */
+  direction: 'long' as const,
   /**
    * The width one judgement covers. Read from the bucket policy, not spelled here: the store may
    * get finer without the rule's own bucket moving, and a local literal is how that distinction
@@ -32,27 +29,14 @@ export const openInterestSignalRule = Object.freeze({
   triggerOwner: 'module-signal'
 })
 
-/**
- * Signals for one asset's closed buckets, oldest first.
- *
- * Returns one signal per marked bucket, or a single `unavailable` signal when the read could not be
- * made at all: an empty list means "nothing looked like a liquidation", which must not be how a
- * failed read looks.
- */
-export function openInterestSignals(input: Readonly<{
-  asset: 'btc' | 'eth'
-  bars: readonly PositioningBar[]
-  /** Used only when there is no bucket to date an `unavailable` signal by. */
-  asOf: string
-}>): readonly ModuleSignal[] {
-  const hints = detectLiquidationHints({ asset: input.asset, bars: input.bars })
-  return signalsFromHints({
-    asset: input.asset,
-    hints: hints.hints,
-    state: hints.state,
-    fallbackObservedAt: input.bars.at(-1)?.observedAt ?? input.asOf
-  })
-}
+/** 镜像那条：空头被清（价格涨）。门槛同一套，方向只由 `ruleId` 与读数符号表达。 */
+export const openInterestShortSignalRule = Object.freeze({
+  moduleId: 'open-interest' as const,
+  ruleId: 'oi-short-liquidation-proxy',
+  direction: 'short' as const,
+  bucketMs: openInterestBucketPolicy.signalBucketMs,
+  triggerOwner: 'module-signal'
+})
 
 /**
  * The same signals, read from the query the panel already made.
@@ -94,13 +78,27 @@ function signalsFromHints(input: Readonly<{
   }
   const signals: ModuleSignal[] = []
   for (const hint of input.hints) {
+    const rule = hint.direction === 'short' ? openInterestShortSignalRule : openInterestSignalRule
     // `strongDropPct` is the rule's own "this one is worse" line, not a second threshold.
     const severity = hint.dropPct <= liquidationHintPolicy.strongDropPct ? 'high' : 'medium'
+    // 方向不变量：多头规则必须记负的涨跌、空头规则必须记正的。不符就不产出，也不发出去再看。
+    if (Number.isFinite(hint.pricePct) && (rule.direction === 'long' ? hint.pricePct! >= 0 : hint.pricePct! <= 0)) {
+      console.log(JSON.stringify({ marker: 'MI_OI_SIGNAL_SIGN_CONFLICT', ruleId: rule.ruleId, asset: input.asset, observedAt: hint.observedAt }))
+      continue
+    }
     const signal = build({
+      rule,
       asset: input.asset,
       observedAt: hint.observedAt,
       severity,
-      values: { dropPct: hint.dropPct, volumeMultiple: hint.volumeMultiple, notionalUsd: hint.notionalUsd },
+      // 价格只加不改：老记录/旧读取缺这一格就不写，绝不拿别的数补上。
+      values: {
+        dropPct: hint.dropPct,
+        volumeMultiple: hint.volumeMultiple,
+        notionalUsd: hint.notionalUsd,
+        ...(Number.isFinite(hint.closePrice) ? { priceUsd: hint.closePrice } : {}),
+        ...(Number.isFinite(hint.pricePct) ? { priceChangePct: hint.pricePct } : {})
+      },
       ready: true
     })
     // A bucket whose instant cannot be read is not a signal: it cannot be deduplicated or placed.
@@ -116,17 +114,21 @@ function unavailableForBothAssets(asOf: string): readonly ModuleSignal[] {
     .filter((signal): signal is ModuleSignal => signal !== undefined))
 }
 
+type OpenInterestSignalRule = typeof openInterestSignalRule | typeof openInterestShortSignalRule
+
 function build(input: Readonly<{
+  rule?: OpenInterestSignalRule
   asset: 'btc' | 'eth'
   observedAt: string
   severity: ModuleSignal['severity']
   values: Readonly<Record<string, number>>
   ready: boolean
 }>): ModuleSignal | undefined {
-  const cadence = Object.freeze({ kind: 'intraday' as const, bucketMs: openInterestSignalRule.bucketMs })
+  const rule = input.rule ?? openInterestSignalRule
+  const cadence = Object.freeze({ kind: 'intraday' as const, bucketMs: rule.bucketMs })
   const dedupeKey = buildSignalDedupeKey({
-    moduleId: openInterestSignalRule.moduleId,
-    ruleId: openInterestSignalRule.ruleId,
+    moduleId: rule.moduleId,
+    ruleId: rule.ruleId,
     asset: input.asset,
     observedAt: input.observedAt,
     cadence
@@ -134,8 +136,8 @@ function build(input: Readonly<{
   if (!dedupeKey) return undefined
   return Object.freeze({
     version: moduleSignalPolicy.version,
-    moduleId: openInterestSignalRule.moduleId,
-    ruleId: openInterestSignalRule.ruleId,
+    moduleId: rule.moduleId,
+    ruleId: rule.ruleId,
     asset: input.asset,
     severity: input.severity,
     observedAt: input.observedAt,
@@ -143,6 +145,6 @@ function build(input: Readonly<{
     values: Object.freeze({ ...input.values }),
     dedupeKey,
     readiness: input.ready ? 'available' as const : 'unavailable' as const,
-    triggerOwner: openInterestSignalRule.triggerOwner
+    triggerOwner: rule.triggerOwner
   })
 }

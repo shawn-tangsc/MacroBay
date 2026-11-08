@@ -1,4 +1,5 @@
 import type { NewsSentimentRecord } from '../schema/newsSentiment'
+import type { NewsSentimentTier, NewsSentimentTierThreshold } from '../../../contracts/newsSentimentTiers'
 import { decideAlert, selectBaselineCandidates } from './newsSentimentAlertGate'
 import type { NewsPushLedgerStore } from './newsPushLedgerStore'
 
@@ -16,7 +17,7 @@ import type { NewsPushLedgerStore } from './newsPushLedgerStore'
 export type NewsSentimentAlertDeliver = (input: {
   itemId: string
   storyKey: string
-  strength: 'medium' | 'high'
+  strength: NewsSentimentTier
   /** 原标题：数据，不翻译、不改写。 */
   headline: string
   /** 来源显示名：缺它就不提交（正文三段必须齐）。 */
@@ -30,6 +31,8 @@ export function createNewsSentimentAlertOutlet(deps: {
   ledger: Pick<NewsPushLedgerStore, 'has' | 'markPushed' | 'readWatermark'>
   deliver: NewsSentimentAlertDeliver
   now: () => string
+  /** 读者设的强度门槛；缺省「中」——与今天的推送行为一致。 */
+  threshold?: () => NewsSentimentTierThreshold
 }) {
   return {
     /**
@@ -41,13 +44,14 @@ export function createNewsSentimentAlertOutlet(deps: {
         NewsSentimentRecord,
         'itemId' | 'engine' | 'strength' | 'storyKey' | 'publishedAt'
       > & { headline: string; sourceName?: string; url?: string }
-    ): Promise<{ outcome: 'pushed'; tier: 'medium' | 'high' } | { outcome: 'skipped'; reason: string }> {
+    ): Promise<{ outcome: 'pushed'; tier: NewsSentimentTier } | { outcome: 'skipped'; reason: string }> {
       const watermark = deps.ledger.readWatermark()
       // 开关默认关：没有水位就是「读者还没按过」，一条都不推——这是默认值，不是错误状态。
       if (!watermark) return { outcome: 'skipped', reason: 'outlet-disabled' }
       const decision = decideAlert({
         engine: record.engine,
         strength: record.strength,
+        threshold: deps.threshold?.() ?? 'medium',
         ...(record.storyKey ? { storyKey: record.storyKey } : {}),
         publishedAt: record.publishedAt,
         enabledAt: watermark,

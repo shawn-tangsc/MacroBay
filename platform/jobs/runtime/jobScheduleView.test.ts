@@ -22,12 +22,12 @@ describe('projectJobSchedules', () => {
     const views = projectJobSchedules({
       listSchedules: () => [
         definition({
-          id: 'market-intelligence.source.crypto-news',
+          id: 'sample-product.source.feed-a',
           owner: 'product',
-          productId: 'market-intelligence',
+          productId: 'sample-product',
           title: 'Crypto news collection',
           trigger: { kind: 'cron', expression: '0 * * * *', timezone: 'Asia/Shanghai' },
-          payload: { credentialRef: 'vault://market-intelligence/news', workspacePath: '/tmp/profile/secret' },
+          payload: { credentialRef: 'vault://sample-product/feed', workspacePath: '/tmp/profile/secret' },
           redact: () => ({ redacted: true })
         })
       ],
@@ -35,10 +35,10 @@ describe('projectJobSchedules', () => {
     }, { now })
 
     expect(views).toEqual([{
-      id: 'market-intelligence.source.crypto-news',
+      id: 'sample-product.source.feed-a',
       title: 'Crypto news collection',
       owner: 'product',
-      productId: 'market-intelligence',
+      productId: 'sample-product',
       trigger: { kind: 'cron', expression: '0 * * * *', timezone: 'Asia/Shanghai' },
       registered: true,
       nextRunAt: '2026-07-17T10:00:00.000Z',

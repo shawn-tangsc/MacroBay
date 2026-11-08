@@ -4,6 +4,7 @@ import { isMarketCalendarEvent, isMarketCalendarPage, isMarketCalendarQuery, mar
 } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import type { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import type { MarketRow } from './marketCalendarStorageValidation'
+import { preferredObservation, type MarketObservationCandidate } from './marketCalendarObservationPrecedence'
 
 // Ephemeral main-only page positions, not durable identity or a cache of event history.
 export const marketCalendarPublicPagingPolicy = Object.freeze({ maximumContexts: 128, contextLifetimeMs: 10 * 60 * 1000,
@@ -14,7 +15,9 @@ export type MarketCalendarLinkEvidence = Readonly<{ providerId: string; descript
   evidenceHash: string; sourceEventId: string; indicatorId: string | null }>
 export type MarketCalendarEvidenceObserver = (event: MarketCalendarEvent, evidence: MarketCalendarLinkEvidence) => void
 type Selection = { collectionId: string; evidenceHash: string; source: MarketCalendarSource } | undefined
-type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; selections: Selection[]; sources: MarketCalendarSource[]; index: number; storageCursor?: string; created: number; seen: Set<string> }
+type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; selections: Selection[]; sources: MarketCalendarSource[]; index: number; storageCursor?: string; created: number;
+  /** 已经投影出去的事件按身份归位：同一身份再来一行时按优先级替换，而不是按顺序留第一行。 */
+  chosen: Map<string, { index: number; candidate: MarketObservationCandidate; collectionId: string; observationId: string }> }
 export function createMarketCalendarPublicQueryService(deps: {
   repository: Pick<ReturnType<typeof createMarketCalendarEventRepository>, 'listCollections' | 'listObservationStates'>
   now?: () => number
@@ -27,6 +30,10 @@ export function createMarketCalendarPublicQueryService(deps: {
   function remember(position: Position): string {
     while (contexts.size >= marketCalendarPublicPagingPolicy.maximumContexts) contexts.delete(contexts.keys().next().value!)
     const key = randomUUID(); contexts.set(key, position); return key
+  }
+  function candidateOf(row: MarketRow): MarketObservationCandidate {
+    return { eventIdentity: String(row.market_fact_key), hasActual: row.provider_actual_json !== null,
+      visibleAt: String(row.last_observed_at), stableKey: String(row.observation_id) }
   }
   function event(row: MarketRow): MarketCalendarEvent {
     const hash = createHmac('sha256', identityKey).update(String(row.observation_id)).digest('hex').slice(0, 32)
@@ -82,7 +89,7 @@ export function createMarketCalendarPublicQueryService(deps: {
               sourceObservedAt: String(newest.detected_at) } : { eventType, status: 'unavailable' as const, sourceObservedAt: null }),
               ...(attempt && attempt.attemptedAt <= asOf ? { latestAttempt: attempt } : {}) }
           })
-          position = { query: { month, locale, asOf }, selections, sources, index: 0, created: timestamp, seen: new Set() }
+          position = { query: { month, locale, asOf }, selections, sources, index: 0, created: timestamp, chosen: new Map() }
         }
         const sources = position.sources
         const events: MarketCalendarEvent[] = []
@@ -92,6 +99,7 @@ export function createMarketCalendarPublicQueryService(deps: {
         // empty batch stored nothing at all, so the walk follows the storage cursor until the
         // page's byte budget or event bound is reached. The continuation keeps the same cursor
         // and the same event keys, so a later page never repeats or skips an identity.
+        let duplicatesInBatch = 0
         while (position.index < policy.descriptors.length && events.length < policy.maximumEvents) {
           const selected = position.selections[position.index]
           if (!selected || selected.source.status === 'success-empty' || selected.source.status === 'all-skipped') {
@@ -103,7 +111,26 @@ export function createMarketCalendarPublicQueryService(deps: {
           let full = false
           for (const row of page.rows) {
             const key = String(row.market_fact_key)
-            if (position.seen.has(key)) continue
+            const candidate = candidateOf(row)
+            const seated = position.chosen.get(key)
+            if (seated !== undefined) {
+              // 同一身份的第二行：按 §3 的四级优先级换人，不按查询顺序留第一行。换掉的是整行，
+              // 绝不把两行的字段拼成一条。
+              //
+              // 多行本身是设计：观测表 append-only，每次采集一行，当前状态读按批次取。只有
+              // **同一批次内**同一身份出现两行才是异常（那正是唯一索引要防的），所以这里只计数，
+              // 由本次请求末尾聚合成一行；逐身份打日志等于每次读取都在报「一切正常」。
+              const projected = event(row)
+              if (!projected.scheduledAt.startsWith(month + '-')) continue
+              // 续读会重新扫到同一行：同一 observation 不是重复，只有同一批次里**另一行**才是。
+              if (String(row.collection_id) === seated.collectionId &&
+                String(row.observation_id) !== seated.observationId) duplicatesInBatch += 1
+              if (preferredObservation(seated.candidate, candidate)) {
+                events[seated.index] = projected
+                seated.candidate = candidate
+              }
+              continue
+            }
             const projected = event(row)
             if (!projected.scheduledAt.startsWith(month + '-')) continue
             if (events.length >= policy.maximumEvents ||
@@ -112,7 +139,8 @@ export function createMarketCalendarPublicQueryService(deps: {
               full = true
               break
             }
-            position.seen.add(key)
+            position.chosen.set(key, { index: events.length, candidate, collectionId: String(row.collection_id),
+              observationId: String(row.observation_id) })
             events.push(projected)
             observe?.(projected, { providerId: String(row.provider_id), descriptorId: String(row.descriptor_id), locale: String(row.locale),
               evidenceHash: String(row.collection_evidence_hash), sourceEventId: String(row.source_event_id),
@@ -126,6 +154,10 @@ export function createMarketCalendarPublicQueryService(deps: {
           if (full) break
           position.storageCursor = page.nextCursor
           if (!page.nextCursor) { position.index++; position.storageCursor = undefined }
+        }
+        // 一次请求最多一行，而且只在真异常时：同一批次里同一身份出现了两行。
+        if (duplicatesInBatch > 0) {
+          console.warn(`[macro-calendar] 同一批次内同一身份出现多行：${duplicatesInBatch} 处，读取按优先级取一行`)
         }
         const result = { ...envelope, ...(position.index < policy.descriptors.length ? { nextCursor: remember(position) } : {}) }
         return isMarketCalendarPage(result, input) ? result : unavailable()

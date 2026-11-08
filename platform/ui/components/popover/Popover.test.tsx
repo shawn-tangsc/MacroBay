@@ -228,6 +228,75 @@ describe('Popover', () => {
     expect(layer?.className).not.toContain('ant-popover-placement-top')
   })
 
+  it('describes the trigger by an id that really names the floating content', async () => {
+    const trigger = await mount()
+    await act(async () => {
+      trigger.focus()
+    })
+    await tick()
+
+    const describedBy = trigger.getAttribute('aria-describedby')
+    // 指向一个不存在的 id 比没有更糟：读屏会念「说明：」然后停住。
+    expect(describedBy).not.toBeNull()
+    const described = document.getElementById(describedBy as string)
+    expect(described).not.toBeNull()
+    expect(described).toBe(document.querySelector('[data-popover-content]'))
+  })
+
+  it('still describes the trigger when the trigger is an IconButton, not a bare button', async () => {
+    // 真实场景：触发器几乎都是 `IconButton`，它的 props 是收窄的——注进去的属性若不被转发，
+    // 症状与「没挂」完全一样，所以这条必须用组件实例跑，不能只用裸 `<button>`。
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <Popover
+          labelKey="ui.test.help"
+          resolveText={key}
+          trigger={(triggerProps) => (
+            <IconButton
+              ariaLabelKey="ui.test.help"
+              expanded={triggerProps.expanded}
+              icon={Info}
+              onSelect={(event) => triggerProps.onSelect(event)}
+              onFocus={triggerProps.onFocus}
+              onBlur={triggerProps.onBlur}
+              resolveText={key}
+              size="sm"
+            />
+          )}
+        />
+      )
+    })
+    const trigger = host.querySelector<HTMLButtonElement>('button')
+    if (trigger === null) throw new Error('no trigger rendered')
+    await act(async () => {
+      trigger.focus()
+    })
+    await tick()
+
+    const describedBy = trigger.getAttribute('aria-describedby')
+    expect(describedBy).not.toBeNull()
+    expect(document.getElementById(describedBy as string)).toBe(document.querySelector('[data-popover-content]'))
+  })
+
+  it('never swallows the pointer: clicks pass through the bubble to the control below', async () => {
+    const trigger = await mount()
+    await act(async () => {
+      trigger.focus()
+    })
+    await tick()
+
+    // 读渲染值：antd 把浮层渲染成外层与内层两个元素，只给一个，另一个仍会接住点击。
+    const layer = document.querySelector<HTMLElement>('.ant-popover')
+    const inner = document.querySelector<HTMLElement>('.ant-popover-inner')
+    expect(layer).not.toBeNull()
+    expect(inner).not.toBeNull()
+    expect(layer?.style.pointerEvents).toBe('none')
+    expect(inner?.style.pointerEvents).toBe('none')
+  })
+
   it('renders one key per line, with the first line carrying the emphasis', async () => {
     await mountLines(['ui.test.line0', 'ui.test.line1', 'ui.test.line2'])
     const rendered = await waitForLines()

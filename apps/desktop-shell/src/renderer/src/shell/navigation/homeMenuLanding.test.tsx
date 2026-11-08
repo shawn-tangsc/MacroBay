@@ -16,7 +16,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
-import { productMenuEntries } from '@products/generated/shellRegistry'
 
 const MAIN_WINDOW_ID = 'main'
 const HOST_EPOCH = 1
@@ -25,17 +24,27 @@ const APP_SHELL_CASE_TIMEOUT_MS = 30_000
 const CONDITION_TIMEOUT_MS = 5_000
 const FLUSH_TURNS = 16
 
-/** 生成物里声明了「我是首页」的那个菜单键。没有声明就立刻报错，别让用例静默退化成「谁也没声明」。 */
-const declaredHomeKey = productMenuEntries
-  .map((entry) => entry as { routePath: string; home?: true })
-  .find((entry) => entry.home === true)?.routePath
+/**
+ * 生成物里声明了「我是首页」的那个菜单键。没有声明就立刻报错，别让用例静默退化成「谁也没声明」。
+ *
+ * 它必须在 `vi.resetModules()` **之后**才读：生成注册表在文件顶部静态 import 的话，得到的是
+ * reset 之前那套模块图里的绑定，而下面的 `await import('../AppShell')` 拿的是 reset 之后的新图。
+ * 两套图混用会在慢环境（CI 并行跑全量）里触发 `Cannot access '_vite_ssr_import_N_' before
+ * initialization` —— 本机永远复现不出来。所以改成每个用例重置模块后再取。
+ */
+let declaredHomeKey: string | undefined
 
 let root: Root | undefined
 let container: HTMLDivElement | undefined
 
-beforeEach(() => {
+beforeEach(async () => {
   // 能力就绪是每个渲染进程一份的模块状态：每个用例都从干净模块图开始，绝不互相污染。
   vi.resetModules()
+  // 重置之后再读生成注册表，保证与下面的 `await import('../AppShell')` 用同一套模块图。
+  const { productMenuEntries } = await import('@products/generated/shellRegistry')
+  declaredHomeKey = productMenuEntries
+    .map((entry) => entry as { routePath: string; home?: true })
+    .find((entry) => entry.home === true)?.routePath
 })
 
 afterEach(async () => {

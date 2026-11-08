@@ -4,6 +4,8 @@ import type {
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import type { RuntimeStateRecord } from '@platform/jobs'
+
 import { isSourceStaleAsOf } from './macroSourceHealth'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 
@@ -20,6 +22,60 @@ import { getIntelligenceSourceDefinition } from './sourceCatalog'
  */
 export const SOURCE_ISSUE_FAILURE_THRESHOLD = 3
 
+/**
+ * 「静默多久算异常」的两档窗口（Chief 2026-11-07 按实测定）：
+ * 实测同一刻 CoinDesk 17.7h / Decrypt 16.7h / The Block 16.8h 都没新条目，而那天是**周六**；
+ * 三家一起安静更像周末低产，不是某一家坏了。所以工作日 12 小时、周末 24 小时。
+ */
+export const WEEKDAY_SILENCE_MS = 12 * 60 * 60 * 1000
+export const WEEKEND_SILENCE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 新闻源（`category === 'mainstream-news'`）的静默窗口：**24 小时**，不分工作日与周末。
+ *
+ * 为什么是 24：新闻源 15 分钟一轮，24 小时 = **96 轮连续抓到但 0 条新增**；一个还在发稿的
+ * 新闻站不可能连续 96 轮没有一条新 URL，所以这个长度不能用「今天本来就没新闻」解释。
+ * 工作日 12 小时那档是给定期发布的数据源留的（周末低产），新闻源不适用。
+ *
+ * **「源静默」不是「采集失败」**：采集成功、只是没有新条目时走 `stale`，与 `consecutive-failed`
+ * 是两条独立事件，文案与动作都不同。
+ */
+export const NEWS_SILENCE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 今天算不算周末——**按读者时区**判（这是给人看的判断，跟读者时区走；
+ * 「窗口多长」本身是时长，不随时区变化）。
+ */
+export function isWeekendIn(timeZone: string, now: string): boolean {
+  let weekday: string
+  try {
+    weekday = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(new Date(now))
+  } catch {
+    // 时区坏了不猜：按工作日判（窗口更短、更容易报），并让调用方在诊断里看到时区无效。
+    return false
+  }
+  return weekday === 'Sat' || weekday === 'Sun'
+}
+
+/** 这一次判定该用哪个窗口。`weekend` 同时进诊断——误报时一眼能看出是不是周末。 */
+export function resolveSilenceWindow(
+  now: string,
+  timeZone: string
+): Readonly<{ windowMs: number; weekend: boolean }> {
+  const weekend = isWeekendIn(timeZone, now)
+  return { windowMs: weekend ? WEEKEND_SILENCE_MS : WEEKDAY_SILENCE_MS, weekend }
+}
+
+/**
+ * 这一次该用多长的静默窗口：新闻源固定 24 小时，其余按工作日 / 周末两档。
+ * 只看来源自己的类别，不看同刻别家安静多久——「三家一起安静」是诊断，不是判据。
+ */
+export function silenceWindowFor(sourceId: string, now: string, timeZone: string): number {
+  return getIntelligenceSourceDefinition(sourceId)?.category === 'mainstream-news'
+    ? NEWS_SILENCE_MS
+    : resolveSilenceWindow(now, timeZone).windowMs
+}
+
 export type SourceIssueKind = 'consecutive-failed' | 'stale'
 
 const SOURCE_ISSUE_EVENT_IDS: Readonly<Record<SourceIssueKind, string>> = Object.freeze({
@@ -30,10 +86,42 @@ const SOURCE_ISSUE_EVENT_IDS: Readonly<Record<SourceIssueKind, string>> = Object
 /** 来源采集 job 的 handler id：产品自己的 job 提交也要带它（契约 §3.2）。 */
 const SOURCE_COLLECTION_PRODUCER_ID = 'market-intelligence.collectSource'
 
+/**
+ * 同一刻各源静默了多少小时（诊断用，只写源 id 与小时数）。**不进通知正文**，也不做判定：
+ * 判定只看本来源。它的用处是误报时能一眼看出「今天三家都安静」还是「只有它在安静」。
+ *
+ * 静默的起点取检查点里的 `lastPublishedAt`（最后一次真的带来新条目），没有才退回 `lastSuccessAt`。
+ */
+export function silenceHoursBySource(
+  states: readonly RuntimeStateRecord[],
+  now: string
+): Readonly<Record<string, number>> {
+  const nowMs = Date.parse(now)
+  const out: Record<string, number> = {}
+  for (const state of states) {
+    const checkpoint = state.checkpoint as { lastPublishedAt?: unknown } | undefined
+    const lastPublishedAt = typeof checkpoint?.lastPublishedAt === 'string' ? checkpoint.lastPublishedAt : undefined
+    const lastEvidenceAt = lastPublishedAt ?? state.lastSuccessAt
+    if (lastEvidenceAt === undefined) continue
+    const hours = (nowMs - Date.parse(lastEvidenceAt)) / 3_600_000
+    if (!Number.isFinite(hours)) continue
+    out[state.resourceId] = Math.round(hours * 10) / 10
+  }
+  return out
+}
+
 export type SourceIssueSnapshot = {
   sourceId: string
   consecutiveFailures: number
   lastSuccessAt?: string
+  /**
+   * **最后一次真的带来新条目的时刻**（检查点里的 `lastPublishedAt`）。
+   *
+   * 为什么不看 `lastSuccessAt`：采集每 15 分钟都成功、抓回来 25 条全是被去重挡掉的旧条目时，
+   * `lastSuccessAt` 永远是「刚才」——陈旧判定就永远不触发，用户看到的是「今天没新闻」，
+   * 实际是「这个源停了」。2026-11-07 CoinDesk 就是这样：17 小时没有新条目，运行记录全绿。
+   */
+  lastNewItemAt?: string
   adapterConfig?: Readonly<Record<string, unknown>>
   /** 判定用的当前时刻（UTC）。 */
   now: string
@@ -48,11 +136,13 @@ export type SourceIssueSnapshot = {
  */
 export function decideSourceIssue(input: SourceIssueSnapshot, defaultFreshnessMs: number): SourceIssueKind | null {
   if (input.consecutiveFailures >= SOURCE_ISSUE_FAILURE_THRESHOLD) return 'consecutive-failed'
-  if (input.lastSuccessAt === undefined) return null
+  // 陈旧看的是「最后一次真的带来新条目」；没有这个数才退回「最后一次采集成功」（旧来源没有检查点）。
+  const lastEvidenceAt = input.lastNewItemAt ?? input.lastSuccessAt
+  if (lastEvidenceAt === undefined) return null
   return isSourceStaleAsOf({
     sourceId: input.sourceId,
     adapterConfig: input.adapterConfig as Record<string, unknown> | undefined,
-    lastSuccessAt: input.lastSuccessAt,
+    lastSuccessAt: lastEvidenceAt,
     asOf: input.now,
     defaultFreshnessMs
   })
@@ -69,7 +159,7 @@ export type SourceIssueNotifier = (input: SourceIssueSnapshot) => Promise<unknow
 export async function notifySourceIssueForSource(input: {
   notifier?: SourceIssueNotifier
   sourceId: string
-  health?: { consecutiveFailures: number; lastSuccessAt?: string }
+  health?: { consecutiveFailures: number; lastSuccessAt?: string; lastPublishedAt?: string }
   adapterConfig?: Readonly<Record<string, unknown>>
   now?: string
 }): Promise<void> {
@@ -79,6 +169,7 @@ export async function notifySourceIssueForSource(input: {
       sourceId: input.sourceId,
       consecutiveFailures: input.health.consecutiveFailures,
       ...(input.health.lastSuccessAt === undefined ? {} : { lastSuccessAt: input.health.lastSuccessAt }),
+      ...(input.health.lastPublishedAt === undefined ? {} : { lastNewItemAt: input.health.lastPublishedAt }),
       ...(input.adapterConfig === undefined ? {} : { adapterConfig: input.adapterConfig }),
       now: input.now ?? new Date().toISOString()
     })
@@ -91,8 +182,14 @@ export type SourceIssueNotifierDeps = {
   submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   /** 判定窗口的缺省值（毫秒）；调用方与来源覆盖视图用同一个默认。 */
   defaultFreshnessMs: number
+  /** 读者时区：只用来判「今天是不是周末」，不参与时长计算。 */
+  timeZone: () => string
   /** 来源的显示名；解析不出时退回 sourceId，不猜。 */
   resolveSourceName?: (sourceId: string) => string
+  /** 平台落盘日志（app.log）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  /** 同一刻各源的静默小时数（源 id → 小时），只进诊断，不进通知正文。 */
+  silenceHours?: () => Readonly<Record<string, number>>
 }
 
 /**
@@ -123,8 +220,24 @@ function sourceIssueDeeplink(sourceId: string) {
 
 export function createSourceIssueNotifier(deps: SourceIssueNotifierDeps) {
   return async function notifySourceIssue(input: SourceIssueSnapshot): Promise<NotificationSubmitOutcome | null> {
-    const kind = decideSourceIssue(input, deps.defaultFreshnessMs)
+    const weekend = isWeekendIn(deps.timeZone(), input.now)
+    const windowMs = silenceWindowFor(input.sourceId, input.now, deps.timeZone())
+    const kind = decideSourceIssue(input, windowMs)
     if (kind === null) return null
+
+    // 诊断：这次为什么判成陈旧、当时各源各静默多久。误报时能一眼分开「周末低产」与「真异常」。
+    if (kind === 'stale' && deps.log) {
+      const lastNewItemAt = input.lastNewItemAt ?? input.lastSuccessAt
+      deps.log('info', 'intelligence.source.silence', {
+        sourceId: input.sourceId,
+        silentHours: lastNewItemAt === undefined
+          ? null
+          : Math.round((Date.parse(input.now) - Date.parse(lastNewItemAt)) / 3_600_000 * 10) / 10,
+        weekend,
+        windowHours: windowMs / 3_600_000,
+        ...(deps.silenceHours === undefined ? {} : { sources: deps.silenceHours() })
+      })
+    }
 
     const definition = getIntelligenceSourceDefinition(input.sourceId)
     const sourceName = deps.resolveSourceName?.(input.sourceId) ?? definition?.displayName ?? input.sourceId

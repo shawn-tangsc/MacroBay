@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { MARKET_ANALYSIS_CONTRACT_POLICY, MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
 import { marketAnalysisUnsafeOutputPolicy } from './analysisConstants'
-import { formatMarketAnalysisAcceptanceMarker, validateAnalysisModelOutput } from './analysisOutputValidator'
+import { analysisValidationRules, formatMarketAnalysisAcceptanceMarker, validateAnalysisModelOutput } from './analysisOutputValidator'
 
 describe('analysisOutputValidator', () => {
   it.each([
@@ -540,4 +540,82 @@ it('requires the conclusion to cite the key sentiment when the snapshot carries 
   const cited = validOutput()
   cited.knownFacts.push({ factId: 'mi-fact-news-1', statement: '舆情偏空，支持谨慎判断。', evidenceRefIds: ['mi-ev-news'] })
   expect(validateAnalysisModelOutput(JSON.stringify(cited), withNews)).toMatchObject({ ok: true })
+})
+
+/**
+ * 背离一致性（`02` 系统设计 §校验规则）：卡说背离、分析说没背离，现在有码可判。
+ *
+ * 三条判据——A 事实说背离、输出说不背离 → 拒；B 事实说没背离、输出说背离 → 拒；
+ * 沉默（不带这块）→ 通过。删掉这条校验，A/B 会变 ok，这三条用例就是红的。
+ */
+describe('divergence consistency', () => {
+  const divergenceFact = (pairId: string, value: string) => ({
+    factId: `mi-fact-divergence-${pairId}`, evidenceRefId: 'mi-ev-market-move',
+    metric: `divergence-${pairId}`, domain: 'cross-asset' as const, subject: pairId, value, unit: null,
+    sourceId: 'source', sourceLabel: 'source',
+    observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z',
+    freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const
+  })
+
+  // 允许"坏形状"的条目进入夹具：形状用例要能送一个缺 stance 的对象。
+  const withDivergences = (divergences: readonly Readonly<Record<string, unknown>>[]) =>
+    ({ ...validOutput(), divergences })
+
+  it('is registered as its own rule, not merged into the reference rule', () => {
+    // 分开的理由：这条的修法是"改判断"，引用那条的修法是"补一个存在的引用"。
+    expect(analysisValidationRules.divergenceContradiction).toBe('divergence-contradiction')
+    expect(analysisValidationRules.divergenceContradiction).not.toBe(analysisValidationRules.directionEvidenceMismatch)
+  })
+
+  it('rejects an output that calls a diverging pair "not diverging" (fixture A)', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, divergenceFact('narrative-price', 'bearish')]
+    const output = withDivergences([{ pairId: 'narrative-price', stance: 'not-diverging' }])
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'divergence-contradiction'
+    })
+  })
+
+  it('rejects an output that calls a pair with no divergence "diverging" (fixture B)', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, divergenceFact('flows-price', 'none')]
+    const output = withDivergences([{ pairId: 'flows-price', stance: 'diverging' }])
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'divergence-contradiction'
+    })
+  })
+
+  it('passes when the stance agrees with the evidence', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, divergenceFact('narrative-price', 'bearish')]
+    const output = withDivergences([{ pairId: 'narrative-price', stance: 'diverging' }])
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+  })
+
+  it('stays silent when the output omits the block — silence is not disagreement', () => {
+    // 沉默不判：不带这块、或只提别的对 → 通过（否则等于逼分析点头）。
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, divergenceFact('narrative-price', 'bearish'), divergenceFact('flows-price', 'none')]
+
+    expect(validateAnalysisModelOutput(JSON.stringify(validOutput()), snapshot)).toMatchObject({ ok: true })
+    expect(validateAnalysisModelOutput(JSON.stringify(withDivergences([])), snapshot)).toMatchObject({ ok: true })
+    // 只提与证据一致的那一对，另一对没提也不判。
+    expect(validateAnalysisModelOutput(JSON.stringify(withDivergences([{ pairId: 'narrative-price', stance: 'diverging' }])), snapshot))
+      .toMatchObject({ ok: true })
+  })
+
+  it('refuses a pairId the snapshot does not hold, and a malformed entry', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, divergenceFact('narrative-price', 'bearish')]
+
+    expect(validateAnalysisModelOutput(JSON.stringify(withDivergences([{ pairId: 'made-up-pair', stance: 'diverging' }])), snapshot))
+      .toMatchObject({ ok: false, rule: 'unknown-reference' })
+    expect(validateAnalysisModelOutput(JSON.stringify(withDivergences([{ pairId: 'narrative-price' }])), snapshot))
+      .toMatchObject({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema, rule: 'shape:divergences' })
+    expect(validateAnalysisModelOutput(JSON.stringify(withDivergences([{ pairId: 'narrative-price', stance: 'maybe' }])), snapshot))
+      .toMatchObject({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema, rule: 'shape:divergences' })
+  })
 })

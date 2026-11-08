@@ -46,7 +46,9 @@ export function CalendarDetailSurface({ contentId, when, selectedMarket, selecte
       {selectedMarket ? <MarketCalendarInspector event={selectedMarket} source={marketSources.find(source => source.eventType === selectedMarket.eventType)} text={text} /> : null}
       {selectedLinkedMarket ? <MarketCalendarInspector event={selectedLinkedMarket} source={marketSources.find(source => source.eventType === selectedLinkedMarket.eventType)} text={text} /> : null}
       {!selectedMarket && detailState.state === 'loading' ? <EventDetailState state="loading" text={text.status.loading} /> : null}
-      {!selectedMarket && detailState.state === 'available' ? <EventDetail event={detailState.event} now={now} onRefresh={onRefresh} onReleaseTimeChanged={onReleaseTimeChanged} releaseTimeClient={client} refreshState={refreshState} text={text} /> : null}
+      {!selectedMarket && detailState.state === 'available' ? <EventDetail event={detailState.event}
+        linkedConsensus={selectedLinkedMarket?.consensus}
+        now={now} onRefresh={onRefresh} onReleaseTimeChanged={onReleaseTimeChanged} releaseTimeClient={client} refreshState={refreshState} text={text} /> : null}
       {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState state="error"
         text={text.failures[detailState.failureCode]} onRetry={onRetry} /> : null}
     </CalendarInspector>

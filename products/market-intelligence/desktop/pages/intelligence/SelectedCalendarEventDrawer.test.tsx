@@ -88,10 +88,11 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     // The figures the reader came for, in the same rows the calendar page prints them in.
     expect(body.querySelector('.mi-economic-calendar__values')?.textContent).toContain('0.3%')
     expect(body.querySelector('.mi-economic-calendar__values')?.textContent).toContain('0.2%')
-    // Official sources carry no consensus: the row says what is absent instead of printing 0 or —.
-    const officialConsensus = body.querySelector('[data-official-consensus="unavailable"]')
-    expect(officialConsensus?.textContent).toBe(`${text.market.consensus}${text.details.consensusUnavailable}`)
-    expect(officialConsensus?.textContent).not.toMatch(/[\d—−]/)
+    // Neither side has an expectation here: the row says so, and prints no number and no dash —
+    // "we don't know the expectation" must not read as a verdict.
+    const consensus = body.querySelector('[data-consensus="missing"]')
+    expect(consensus?.textContent).toBe(`${text.market.consensus}${text.details.consensusMissing}`)
+    expect(consensus?.textContent).not.toMatch(/[\d—−]/)
   })
 
   it('carries the drawer\'s one visible way out', async () => {
@@ -183,5 +184,75 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     expect(host.querySelector('[data-source-advanced]')?.textContent).toBe(text.market.sourceAdvanced)
     // The values are still the observation's own, with its own time.
     expect(host.querySelector('[data-market-value="providerActual"]')?.textContent).toContain('0.8%')
+  })
+})
+
+describe('the drawer pairs an official event with its admitted market observation', () => {
+  const linkedMarket = (consensus: unknown) => ({
+    state: 'available' as const, month: selection.month, locale: 'zh' as const, asOf, sources: [],
+    events: [{
+      eventKey: 'market:core-cpi', title: '美国核心CPI', countryCode: 'US', eventType: 'economic-indicator',
+      importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus, providerPrevious: null, providerActual: null,
+      source: '0xRouter', sourceObservedAt: asOf, coverage: 'observed-unverified',
+      officialLink: {
+        officialEventKey: selection.eventKey, officialPeriodKey: '2026-M09', officialScheduledDate: '2026-10-14',
+        officialScheduledAt: '2026-10-14T12:30:00.000Z', officialDetectedAt: asOf,
+        timeDisplaySource: 'official-scheduled', displayScheduledAt: '2026-10-14T12:30:00.000Z',
+        officialActual: null, officialPrevious: null
+      }
+    }]
+  })
+
+  it('reads the market month once and shows the market expectation with its source', async () => {
+    const readMarketMonth = vi.fn(async () => linkedMarket({ displayValue: '0.3%' }))
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    expect(readMarketMonth).toHaveBeenCalledTimes(1)
+    const row = host.querySelector('[data-consensus]')!
+    expect(row.getAttribute('data-consensus')).toBe('market')
+    expect(row.textContent).toContain('0.3%')
+    expect(row.textContent).toContain(text.details.consensusFromMarket)
+  })
+
+  it('says the expectation is missing when the paired observation has none either', async () => {
+    const readMarketMonth = vi.fn(async () => linkedMarket(null))
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    expect(host.querySelector('[data-consensus="missing"]')?.textContent).toContain(text.details.consensusMissing)
+  })
+
+  it('says the market read failed, which is not the same as no expectation', async () => {
+    const readMarketMonth = vi.fn(async () => { throw new Error('ipc down') })
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    const row = host.querySelector('[data-consensus]')!
+    expect(row.getAttribute('data-consensus')).toBe('unreadable')
+    expect(host.querySelector('[data-consensus-gap]')?.textContent).toBe(text.details.consensusReadFailedReason)
+  })
+
+  it('does not pair a different indicator that happens to share the release minute', async () => {
+    // 非农、失业率、时薪常常同一分钟发布。市场侧那条同一时刻的观测没有准入映射，
+    // 就不许被当成「这条官方事件的预期」——那是凭空造的一对。
+    const otherAtSameInstant = {
+      state: 'available' as const, month: selection.month, locale: 'zh' as const, asOf, sources: [],
+      events: [{
+        eventKey: 'market:unemployment', title: '美国失业率', countryCode: 'US', eventType: 'economic-indicator',
+        importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus: { displayValue: '4.1%' },
+        providerPrevious: null, providerActual: null, source: '0xRouter', sourceObservedAt: asOf,
+        coverage: 'observed-unverified'
+      }]
+    }
+    const readMarketMonth = vi.fn(async () => otherAtSameInstant)
+    const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
+    // 没有映射 → 不配对：既不用那条 4.1%，也不说「未对上」（那同样是在断言两行同一件事）。
+    const row = host.querySelector('[data-consensus]')!
+    expect(row.getAttribute('data-consensus')).toBe('missing')
+    expect(row.textContent).not.toContain('4.1%')
+    expect(host.textContent).not.toContain('未对上')
+  })
+
+  it('never pairs by timestamp: the source compares no scheduled time', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const source = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/SelectedCalendarEventDrawer.tsx'), 'utf8')
+    // B 的延伸：认成对只能走准入映射，时间比较一出现就是越界。
+    expect(source).not.toMatch(/scheduledAt\s*(===|!==|==|!=)/)
   })
 })

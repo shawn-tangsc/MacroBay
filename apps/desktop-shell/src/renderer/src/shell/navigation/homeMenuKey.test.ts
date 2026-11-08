@@ -18,7 +18,7 @@ const builtIns: readonly HomeMenuCandidate[] = [
 ]
 
 const homeCandidate = toProductHomeMenuCandidate({
-  routePath: '/market-intelligence/intelligence',
+  routePath: '/sample-product/home',
   order: 10,
   home: true
 })
@@ -29,7 +29,7 @@ describe('默认首页解析（口径 A 的落点）', () => {
     const resolved = resolveHomeMenuKey(builtIns, [otherCandidate, homeCandidate])
 
     // 反向断言：不是 null、也不是菜单顺序里的第一项（否则「有声明」与「没声明」看不出区别）。
-    expect(resolved).toBe('/market-intelligence/intelligence')
+    expect(resolved).toBe('/sample-product/home')
     expect(resolved).not.toBe(builtIns[0]!.menuKey)
     expect(resolved).not.toBe(otherCandidate.menuKey)
   })
@@ -37,7 +37,7 @@ describe('默认首页解析（口径 A 的落点）', () => {
   it('home 胜出与 order 无关：order 更小的非 home 项不许顶替它', () => {
     const earlier = toProductHomeMenuCandidate({ routePath: '/other/earlier', order: 1 })
 
-    expect(resolveHomeMenuKey(builtIns, [earlier, homeCandidate])).toBe('/market-intelligence/intelligence')
+    expect(resolveHomeMenuKey(builtIns, [earlier, homeCandidate])).toBe('/sample-product/home')
   })
 
   it('零处声明 ⇒ 菜单 order 第一项（输入故意乱序，结果不能等于「数组第一个」）', () => {
@@ -78,8 +78,8 @@ describe('默认首页解析（口径 A 的落点）', () => {
   it('两处声明是错误状态（守卫另有红用例），解析器仍要给出确定答案而不是随机或 null', () => {
     const secondHome = toProductHomeMenuCandidate({ routePath: '/other/second', order: 20, home: true })
 
-    expect(resolveHomeMenuKey(builtIns, [homeCandidate, secondHome])).toBe('/market-intelligence/intelligence')
-    expect(resolveHomeMenuKey(builtIns, [secondHome, homeCandidate])).toBe('/market-intelligence/intelligence')
+    expect(resolveHomeMenuKey(builtIns, [homeCandidate, secondHome])).toBe('/sample-product/home')
+    expect(resolveHomeMenuKey(builtIns, [secondHome, homeCandidate])).toBe('/sample-product/home')
   })
 
   it('未声明 home 的候选里不出现 home 键（不是 false），否则「没声明」与「声明了别的页」分不清', () => {

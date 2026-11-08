@@ -28,6 +28,14 @@ export type ProducerGateInput = {
   sources: readonly ProducerGateSource[]
   /** 事件 id 常量表：常量名 → 事件 id。由调用方从定义处读出来，不手抄。 */
   idConstants: Readonly<Record<string, string>>
+  /**
+   * 准入集：只有这些 id 算作「被生产」。缺省时等于 `approvedIds`。
+   *
+   * 必须有这一层：扫描器顺着常量定义能读到**任何**形似事件 id 的字符串（错误码、外部键都可能
+   * 长得一样），若不按准入集过滤，一个没人声明过的串就能把某条事件「补齐」，门禁从此少报——
+   * 少报是绿的，比红更危险。
+   */
+  admittedIds?: readonly string[]
 }
 
 export type ProducerGateResult = {
@@ -115,6 +123,10 @@ export function evaluateProducerGate(input: ProducerGateInput): ProducerGateResu
   }
 
   const approved = new Set(input.approvedIds)
+  const admitted = new Set(input.admittedIds ?? input.approvedIds)
+  for (const id of [...produced]) {
+    if (!admitted.has(id)) produced.delete(id)
+  }
   const dormant = new Set(input.dormantIds)
   const missing = input.approvedIds.filter((id) => !produced.has(id) && !dormant.has(id))
   const dormantButProduced = input.dormantIds.filter((id) => produced.has(id))
@@ -443,7 +455,10 @@ function sliceStatement(code: string, start: number): string {
 }
 
 function isEventIdShape(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/u.test(value) && !value.includes('notification.')
+  // 要躲的是**文案键**（`notification.event.*` / `notification.action.*`）：那些键**统统以这个前缀开头**。
+  // 用 `includes` 会把「中间段叫 notification」的合法事件 id 一起误伤（`platform.notification.self-test`），
+  // 于是提交点被判成「看不见」。这里换成精确前缀判定：对文案键的严格程度没降，只是不再误伤。
+  return /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/u.test(value) && !value.startsWith('notification.')
 }
 
 function lineOf(code: string, index: number): number {

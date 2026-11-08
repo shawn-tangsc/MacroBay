@@ -22,6 +22,11 @@ import { createNewsPushLedgerStore, newsPushLedgerPolicy } from '../news-sentime
 import { createNewsPushOutletService } from '../news-sentiment/newsPushOutletService'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
+import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNotificationTest'
+import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
+import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
+import type { IntelligenceNotificationTestWiring } from './notificationTestWiring'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -77,7 +82,64 @@ function getNewsPushOutletService(module: IntelligenceModule) {
   return newsPushOutletService
 }
 
-export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime, intelligenceModule: IntelligenceModule): void {
+export function registerIntelligenceIpc(
+  register: ProductIpcRegistrar,
+  jobRuntime: JobRuntime,
+  intelligenceModule: IntelligenceModule,
+  /** 「日历事件 · 开始前」的配置与排程接口；页面只读它、写它，不自己算。 */
+  calendarReminder?: Readonly<{
+    read: () => unknown
+    write: (patch: Readonly<Record<string, unknown>>) => unknown
+    applySchedule: (enabled: boolean) => void
+    /** 提醒作业**原样暴露**的那一份事件读取：测试样例必须与真实提醒同源。 */
+    readEvents: CalendarEventReminderWiring['readEvents']
+  }>,
+  /**
+   * 三枚测试按钮要的平台侧接缝：通道解析、提交入口、数据源状态、读者时区。
+   *
+   * 由装配处（`bootstrap.ts`）注入，不在这里 import：注册器保持纯转发，用例可以只喂这几个函数。
+   * 缺它是允许的（某些装配不接通知），但那时**这个方法不注册**——不会留下一个点了报错的入口。
+   */
+  notificationTest?: IntelligenceNotificationTestWiring & Readonly<{ now?: () => string }>,
+  /**
+   * 点击前的通道可用性：平台唯一那一份派生（`resolvePushChannel`），由装配处注射。
+   * 这里只**去掉通道名**再交出去——渲染层拿不到名字，就不会拿它去拼「已发到 X」。
+   */
+  readPushChannel?: () => Promise<PushChannelResolution>
+): void {
+  if (notificationTest && calendarReminder) {
+    // 注册器这一侧的 `read` 只声明成 `unknown`（它给设置页读整份视图）；测试样例要的是**类型化**的
+    // 那一份。两者是同一个存储的同一次读取——这里按契约收窄，不另读一次。
+    const testDeps = {
+      ...notificationTest,
+      intelligence: intelligenceModule,
+      calendarReminder: calendarReminder as unknown as Pick<CalendarEventReminderWiring, 'read' | 'readEvents'>
+    }
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.sendTestNotification, async (payload) =>
+      sendIntelligenceTestNotification(parseIntelligenceTestRequest(payload), testDeps)
+    )
+  }
+
+  if (calendarReminder) {
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getCalendarReminderSettings, async () => calendarReminder.read())
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.setCalendarReminderSettings, async (payload) => {
+      const patch = (payload ?? {}) as Readonly<Record<string, unknown>>
+      const next = calendarReminder.write(patch)
+      // 写设置的人就是让排程生效的人：不留「设置开了、作业没排上」的中间态。
+      calendarReminder.applySchedule((next as { enabled?: boolean }).enabled === true)
+      return next
+    })
+  }
+
+  if (readPushChannel !== undefined) {
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getAnalysisConclusionSendChannel, async () => {
+      const resolved = await readPushChannel()
+      return resolved.ok
+        ? { state: 'ready' as const }
+        : { state: 'unavailable' as const, enabledChannelCount: resolved.enabledChannelCount, multiple: resolved.multiple }
+    })
+  }
+
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getNewsPushOutletState, async () =>
     getNewsPushOutletService(intelligenceModule).state()
   )
@@ -87,9 +149,38 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     return getNewsPushOutletService(intelligenceModule).setEnabled(enabled, at)
   })
 
+  // 强度门槛（弱/中/强）：读与写都只碰这一份存储。写只收三档之一，非法值原样退回原值，
+  // 页面读回的值说了算——不在这一层替读者「修」成看起来合理的档。
+  // 存储住在评分服务里（判定读的也是它那一份）：没有它就等于舆情不可用，报错而不是给个默认值。
+  const pushThresholdStore = () => {
+    const store = intelligenceModule.newsSentiment.scoring?.pushThreshold
+    if (!store) throw new Error('News sentiment is unavailable.')
+    return store
+  }
+
+  register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getNewsPushThreshold, async () => pushThresholdStore().read())
+
+  register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.saveNewsPushThreshold, async (payload) => {
+    const patch = (payload ?? {}) as { pushThreshold?: unknown }
+    return pushThresholdStore().write({ pushThreshold: patch.pushThreshold })
+  })
+
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getTimeline, async (payload) => {
     const query = (payload ?? {}) as { filter?: 'active-exposure' | 'watchlist' | 'both' | 'all'; limit?: number }
     return getIntelligenceService(intelligenceModule).getTimeline(query)
+  })
+
+  /**
+   * 「发送到频道」的载荷校验：**只有运行 id 一个字段**，写在这里而不是复用别人的读取器
+   * （推送请求被拿去按删除规矩校验过一次，那条 bug 就是复用造成的）。
+   * 结论句、去重键、通道全部由主进程按 id 现取，渲染层传不了内容。
+   */
+  register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.sendAnalysisConclusion, async (payload) => {
+    const analysisRunId = (payload as { analysisRunId?: unknown } | undefined)?.analysisRunId
+    if (typeof analysisRunId !== 'string' || analysisRunId.trim().length === 0 || analysisRunId.length > 200) {
+      throw new Error('analysisRunId must be a non-empty string of at most 200 characters.')
+    }
+    return intelligenceModule.marketAnalysisRuntime.sendConclusion({ analysisRunId })
   })
 
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getMonitoringScope, async () =>

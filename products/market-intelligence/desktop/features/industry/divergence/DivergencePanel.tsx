@@ -1,85 +1,75 @@
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { IconButton } from '@platform/ui/components/icon-button'
-
 import { Popover } from '@platform/ui/components/popover'
 import { Info } from 'lucide-react'
-
 import { LoadingState } from '@platform/ui/components/loading'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useId, useState } from 'react'
 
+import type { DivergenceBound, DivergenceLegId } from '../../../../contracts/marketDivergence'
 import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
-import { SignalDetail, useSignalDetail } from '../shared'
 import type { DivergencePanelText } from './divergenceText'
 
 import './DivergencePanel.css'
 
 /**
- * A conclusion about the card above it.
- *
- * Only readings are on the card: the "why this was judged, and by whom" prose lives behind the `?`
- * before the title, because a reader who came for the readings should not have to step over four
- * lines of explanation to reach them.
+ * 收进 ⓘ 的四句，逐句一个字面键（守卫要查点分形状，模板字符串会把拼写藏起来）。
  */
-/**
- * The bubble's four one-look bullets, one literal key per line.
- *
- * Literal on purpose: a guard checks that each key is a dotted path, and a template string would
- * hide the spelling from it. Four is also the popover's cap — the notes that would not fit moved
- * behind their own entry below the card.
- */
-export const divergenceHelpBulletKeys = Object.freeze([
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.0',
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.1',
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.2',
-  'pages.intelligence.portal.dashboard.divergence.helpBullets.3'
+export const divergenceNoteKeys = Object.freeze([
+  'pages.intelligence.portal.dashboard.divergence.notes.0',
+  'pages.intelligence.portal.dashboard.divergence.notes.1',
+  'pages.intelligence.portal.dashboard.divergence.notes.2',
+  'pages.intelligence.portal.dashboard.divergence.notes.3'
 ])
 
+/**
+ * One line about the day, and the readings behind it when the reader asks.
+ *
+ * The card used to print every reading inline: with three pairs, three leg rows and a threshold
+ * sentence each, it pushed the cards below it down the screen and read as an alarm even on a quiet
+ * day. The reader's decision (2026-11-08) is one neutral line — an index, not a conclusion — and
+ * the readings one click away. Direction colour therefore never reaches the summary line: with two
+ * pairs pointing different ways it would be wrong for one of them.
+ */
 export function DivergencePanel({ state, text, onRetry }: Readonly<{
   state: DashboardDivergenceViewState
   text: DivergencePanelText
-  /** Only offered on a quiet day: asking the model for a second opinion costs a request. */
   /** Always required: a failed read has one honest next step, and it must not appear and vanish. */
   onRetry: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
-  // Three pairs withheld is not "no divergence": nothing was compared. Saying so is the whole
-  // point of the withheld list, and it must not read as a quiet day.
-  const nothingCompared = state.state === 'empty' && withheld.length >= Object.keys(text.pairNames).length
-  const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
+  const zoneLabel = formatShellTimeZoneLabel(useShellTimeZone())
   const resolveProductKey = useProductTextKey()
-  // 长笔记留在读者主动打开的地方：默认收起，打开后是卡片下方一块限高的区域，不盖住要解释的图。
-  const [helpOpen, setHelpOpen] = useState(false)
-  const helpDetailsId = useId()
-  // The rule's chip: only the intraday pair gets one, and it prints no numbers — those stay on the
-  // row below, once. "Data insufficient" is not a chip here: the card's own state already says why
-  // the pair was withheld, and a second badge saying the same thing would read as a second failure.
-  const intraday = state.state === 'available' ? state.rows.find(row => row.pairId === 'liquidity-leverage') : undefined
-  const chipDetail = useSignalDetail('mi-divergence-chip-detail')
-  /** One group per leg the pair is built from; a leg the row does not carry is simply not named. */
-  const legGroups = (['stablecoin', 'open-interest'] as const).flatMap(legId => {
-    const leg = intraday?.legs.find(entry => entry.id === legId)
-    if (!leg) return []
-    return [{
-      labelKey: legId === 'stablecoin'
-        ? 'pages.intelligence.portal.dashboard.divergence.legs.stablecoin'
-        : 'pages.intelligence.portal.dashboard.divergence.legs.open-interest',
-      rows: [{
-        labelKey: 'pages.intelligence.portal.dashboard.divergence.chipFreshLabel',
-        value: `${text.chipFresh} · ${text.chipAsOf.replace('{at}', when(leg.observedAt))}`
-      }]
-    }]
-  })
+  const detailId = useId()
+  const [expanded, setExpanded] = useState(false)
+  const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
 
-  // Two different facts, two different treatments — merging them was the first version's mistake.
-  //
-  // "Nothing could be compared" means we DID read and every pair was short a leg: the card above
-  // already carries 数据已滞后, so a constant apology here is noise. Hidden, per the reader's
-  // request (168 §16). "The read failed" means WE could not look: hiding that would let a failure
-  // pass for "nothing here", so it keeps one assertable line — no numbers, no block.
-  if (nothingCompared) return <></>
+  const rows = state.state === 'available' ? state.rows : []
+  const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
+  const grouped = groupWithheld(withheld)
+  /** A pair, not a reason: two pairs refused for the same missing leg are still two refusals. */
+  const pairCount = new Set(withheld.map(entry => entry.pairId)).size
+  const totalPairs = Object.keys(text.pairNames).length
+  const allWithheld = pairCount >= totalPairs
+  const summary = summaryLine({ rows: rows.length, pairCount, allWithheld, grouped, text, when })
+  /**
+   * Five states, one of which is not a control: a quiet day with nothing withheld has nothing to
+   * open, so it is a plain paragraph — not a disabled button, and not a button that does nothing.
+   */
+  const expandable = rows.length > 0 || pairCount > 0
+
+  if (state.state === 'loading') {
+    return (
+      <section className="mi-divergence" aria-label={text.title} data-state="loading">
+        {/* 加载态不画摘要行：先给一句占位再换掉，比晚一句出现更容易读成「结论」。 */}
+        <LoadingState label={text.loading} minHeight={40} />
+      </section>
+    )
+  }
   if (state.state === 'unavailable') {
     return (
       <section className="mi-divergence" aria-label={text.title} data-state="unavailable" data-divergence-unavailable>
@@ -90,93 +80,146 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
 
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
-      <div className="mi-divergence__lead">
-        {/* The chip sits ahead of the help entries, where a card's title would be: it is the one
-            thing on this line that says "something happened", and the readings stay below it. */}
-        {intraday ? (
-          <Tooltip labelKey="pages.intelligence.portal.dashboard.divergence.chipTip" resolveText={resolveProductKey}>
-            <button type="button" className="mi-divergence__chip" data-state="alert"
-              {...chipDetail.triggerProps}
-              aria-label={`${text.chip} · ${text.chipDetailsOpen}`}
-              onClick={chipDetail.toggle}>{text.chip}</button>
-          </Tooltip>
-        ) : null}
-        {/* Four lines are four keys, one per line: arrays are the semantic shape here, and a
-            joined sentence with newlines would be lost the first time the copy is translated. */}
-        <Popover
-          lines={divergenceHelpBulletKeys.map(labelKey => ({ labelKey }))}
-          resolveText={resolveProductKey}
-          trigger={(triggerProps) => (
-            <IconButton
-              {...triggerProps}
-              ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
-              icon={Info} size="sm" resolveText={resolveProductKey} variant="plain" />
-          )} />
-        {/* The notes that would not fit the bubble: their own entry, closed by default, so a
-            footnote stays a footnote instead of covering the card it explains. */}
-        <button aria-controls={helpDetailsId} aria-expanded={helpOpen}
-          className="mi-divergence__help-toggle" onClick={() => setHelpOpen(open => !open)}
-          type="button">{text.helpDetailsLabel}</button>
-      </div>
-      {intraday && chipDetail.open ? (
-        <SignalDetail
-          id="mi-divergence-chip-detail"
-          titleKey="pages.intelligence.portal.dashboard.divergence.chipDetailsTitle"
-          groups={legGroups}
-          rows={[{ labelKey: 'pages.intelligence.portal.dashboard.divergence.chipWhyLabel', value: text.chipWhy }]} />
-      ) : null}
-      <div className="mi-divergence__content">
-        {/* state-ternary: reviewed — 这一枝只画「正在读」这一块，不藏任何内容；扫描窗口里看到的列表属于下面 available 分支，与它无关。 */}
-        {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
-        {/* state-ternary: reviewed — 这一枝只输出一行「今天没有背离」，不渲染列表；列表见下面 available 分支。 */}
-        {state.state === 'empty' ? (
-          // One line, no block: a card with nothing to report must not take half a screen to say so,
-          // and the platform's empty-state heading ("nothing here yet") adds nothing on a quiet day.
-          <p className="mi-divergence__quiet">{text.empty}</p>
-        ) : null}
-        {/* state-ternary: reviewed — 仍是迁移前自己那套三态：`available` 才带 `rows`，读失败由上面的 error 分支单独处理。
-            R161 迁到 `AsyncState` 时连同「按 rows.length 判」一起改，那时这条注释随之删掉。 */}
-        {state.state === 'available' ? (
-          <div className="mi-divergence__conclusion" data-tone="conclusion">
-            <ul className="mi-divergence__rows">
-              {state.rows.map(row => (
-                // Focusable, not titled: a `title` is invisible to the keyboard and the reader, so the
-                // invalidation sentence opens on focus as well as on hover (single line, so Tooltip).
-                <Tooltip key={row.pairId} resolveText={resolveProductKey}
-                  dataText={invalidationLine(row.pairId, text)}>
-                <li className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction} tabIndex={0}>
-                  <div className="mi-divergence__line">
-                    <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
-                    {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
-                  </div>
-                  <p className="mi-divergence__mechanism">{text.pairs[row.pairId as keyof DivergencePanelText['pairs']].mechanism}</p>
+      {expandable ? (
+        <button aria-controls={detailId} aria-expanded={expanded} className="mi-divergence__summary"
+          onClick={() => setExpanded(current => !current)} type="button">
+          <span className="mi-divergence__summary-text">{summary}</span>
+          {/* 8px 的 `›` 用字符画，不用图标组件：摘要行里不许出现 `<svg>`（界面设计 v2 §四）。 */}
+          <span aria-hidden="true" className="mi-divergence__summary-chevron">›</span>
+        </button>
+      ) : (
+        <p className="mi-divergence__summary mi-divergence__summary--static">{summary}</p>
+      )}
+      {expandable && expanded ? (
+        <div className="mi-divergence__content" data-divergence-detail id={detailId}>
+          {/* 说明只有一处：展开区标题行尾的一颗 ⓘ，悬停/聚焦打开，四句全在里面。
+              正文只留读数与证据——解释卡片本身怎么来的文字不占正文（界面 2026-11-08）。 */}
+          <div className="mi-divergence__detail-head">
+            {/* 标题先说这是哪一屏的东西，ⓘ 紧跟它——不推到行尾、也不单独占一行。
+                「本次读数」而不是「三组读数」：展开区里还有没判成、因而没有读数的组，三组会错。 */}
+            <h3 className="mi-divergence__detail-title">{text.detailTitle}</h3>
+            <Popover lines={divergenceNoteKeys.map(labelKey => ({ labelKey }))} resolveText={resolveProductKey}
+              trigger={triggerProps => (
+                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
+                  icon={Info} resolveText={resolveProductKey} size="sm" variant="plain" />
+              )} />
+          </div>
+          {/* 没判成的组放最上面：读者点开最常见的理由是「为什么这组没结论」。一组一条（按配对去重，
+              不是按原因合并），原因用的就是卡片原来那几句，不另造。 */}
+          {pairCount > 0 ? (
+            <ul className="mi-divergence__withheld">
+              {[...new Map(withheld.map(entry => [entry.pairId, entry])).values()].map(entry => (
+                <li className="mi-divergence__withheld-item" data-reason={entry.reason} key={entry.pairId}>
+                  <b>{text.pairNames[entry.pairId as keyof DivergencePanelText['pairNames']]}</b>
+                  {text.labelSep}{withheldLine(text, entry, when)}
                 </li>
-                </Tooltip>
               ))}
             </ul>
-          </div>
-        ) : null}
-        {state.state === 'available' && withheld.length > 0 ? (
-          <p className="mi-divergence__withheld">
-            <span className="mi-divergence__withheld-title">{text.withheldTitle}{text.labelSep}</span>
-            {groupWithheld(withheld).map(group => (
-              <span key={group.key} className="mi-divergence__withheld-item" data-reason={group.reason}>
-                {withheldLine(text, group, when)}
-                {group.count > 1 ? text.withheldGroup.replace('{count}', String(group.count)) : ''}
-              </span>
-            ))}
-          </p>
-        ) : null}
-      </div>
-      {helpOpen ? (
-        // Bounded on purpose: the notes scroll inside 320px instead of stretching the card, and the
-        // readings above stay visible while the reader checks a threshold.
-        <div className="mi-divergence__help" data-divergence-help id={helpDetailsId}>
-          {text.helpDetails.map(line => <p key={line}>{line}</p>)}
+          ) : null}
+          {rows.length > 0 ? (
+            <ul className="mi-divergence__rows">
+              {rows.map(row => {
+                const mechanism = text.pairs[row.pairId as keyof DivergencePanelText['pairs']].mechanism
+                return (
+                  // Focusable, not titled: a `title` is invisible to the keyboard, so the
+                  // invalidation sentence opens on focus as well as on hover (one line → Tooltip).
+                  <Tooltip dataText={invalidationLine(row.pairId, text)} key={row.pairId} resolveText={resolveProductKey}>
+                    <li className="mi-divergence__row" data-direction={row.direction} data-pair={row.pairId} tabIndex={0}>
+                      <div className="mi-divergence__line">
+                        <b className="mi-divergence__direction" data-direction={row.direction}>
+                          {row.direction === 'unpriced' ? text.observedLabel : text.directions[row.direction]}
+                        </b>
+                        {row.legs.map(leg => <span className="mi-divergence__leg" key={leg.id}><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
+                      </div>
+                      {mechanism === undefined ? null : <p className="mi-divergence__mechanism">{mechanism}</p>}
+                      {/* 每条腿各自的截至时刻：一条腿的「截至」不能替另一条腿作证。 */}
+                      {/* 顺序固定：截至 → 规则（→ 还差）。「还差」要投影层给，今天没有这一项就不显示，
+                          不许拿规则反推一个距离。 */}
+                      <p className="mi-divergence__asof">{factsLine({ text, row, when, zoneLabel })}</p>
+                    </li>
+                  </Tooltip>
+                )
+              })}
+            </ul>
+          ) : null}
         </div>
       ) : null}
     </section>
   )
+}
+
+/**
+ * The five summary sentences, verbatim (design v2 §二).
+ *
+ * No count of divergences: the three pairs' thresholds do not overlap, so at most one can hold and
+ * "2 divergences" is unreachable — a constant in a sentence is noise (the same reason the v1 badge
+ * was withdrawn). What *can* be 1–2 is how many pairs refused to answer, and that is where the
+ * number still carries information. If the thresholds ever change, this line and its assertions
+ * have to be reconsidered in the same change.
+ */
+function summaryLine(input: Readonly<{
+  rows: number
+  pairCount: number
+  allWithheld: boolean
+  grouped: ReturnType<typeof groupWithheld>
+  text: DivergencePanelText
+  when: (value: string) => string
+}>): string {
+  const { rows, pairCount, allWithheld, grouped, text, when } = input
+  if (allWithheld) return text.summary.allWithheld
+  // 冒号后是「那唯一一组」的腿与原因，不是固定写舆情：原型里恰好是舆情腿，照抄就错。
+  const reason = pairCount === 1 && grouped[0] !== undefined ? withheldLine(text, grouped[0], when) : undefined
+  if (rows > 0) {
+    if (pairCount === 0) return text.summary.divergence
+    return reason === undefined
+      ? fillLabelParams(text.summary.divergenceWithheldMany, { count: String(pairCount) })
+      : fillLabelParams(text.summary.divergenceWithheldOne, { reason })
+  }
+  if (pairCount === 0) return text.summary.quiet
+  return reason === undefined
+    ? fillLabelParams(text.summary.quietWithheldMany, { count: String(pairCount) })
+    : fillLabelParams(text.summary.quietWithheldOne, { reason })
+}
+
+/**
+ * 该块最后那行小字：**截至 → 规则 → 还差**，全卡只在这里拼（界面规格 v3 §八）。
+ *
+ * 三条写死的规矩：
+ * - **每条腿的日期跟着它自己**：各腿的日期可能不同（按天腿与小时腿混着），合并成一个日期头会写成假话，
+ *   所以**不留「同一天就合并」的分支**——留一个分支就多一次写成假话的机会；
+ * - **不带窗口**（7 天 / 24 小时腿行里已有），但**必须带「截至」**，否则这行只剩一串时间；
+ * - 阈值只从契约读，不取绝对值、不做百分比换算；「还差」要投影层给，今天没有就不显示。
+ */
+export function factsLine(input: Readonly<{
+  text: DivergencePanelText
+  row: Readonly<{ legs: readonly Readonly<{ id: DivergenceLegId; observedAt: string }>[]; bound?: DivergenceBound }>
+  when: (value: string) => string
+  zoneLabel: string
+}>): string {
+  const { text, row, when, zoneLabel } = input
+  // `when()` 自带一个 `GMT` 尾巴；这里只保留一处偏移写法，所以先摘掉再补时区标签。
+  const stamp = (value: string): string => `${when(value).replace(/\s*GMT$/, '')} ${zoneLabel}`
+  const parts = row.legs.map(leg => `${text.legNames[leg.id]} ${text.chipAsOf.replace('{at}', stamp(leg.observedAt))}`)
+  if (row.bound !== undefined) parts.push(boundRuleClause(text, row.bound))
+  return parts.join(' · ')
+}
+
+/**
+ * 「规则 ≥ +3%」这个子句——**全卡只在这里拼**（界面规格 v3 §八；复核后要改只改这一处）。
+ *
+ * 阈值只从契约读，不取绝对值、不做百分比换算；负号用排版减号。绝对值那条读作「变动不超过」——
+ * 它和「≤ −3%」是同一个 `atMost`，区别只在阈值是正是负，所以不新增第三个 comparator。
+ */
+export function boundRuleClause(text: DivergencePanelText, bound: DivergenceBound): string {
+  // 符号跟着句式走：`≥ +3%` 带正号（那是一个下界），`≤ −3%` 带排版减号，
+  // 绝对值那条写 `1%` 不带号（它说的是「变动不超过」，不是一个带方向的数）。
+  const absolute = bound.comparator === 'atMost' && bound.threshold > 0
+  const magnitude = bound.threshold < 0 ? `−${-bound.threshold}` : String(bound.threshold)
+  const threshold = absolute ? magnitude : bound.comparator === 'atLeast' && bound.threshold > 0 ? `+${magnitude}` : magnitude
+  const template = bound.comparator === 'atLeast'
+    ? text.boundAtLeast
+    : bound.threshold < 0 ? text.boundAtMostNegative : text.boundAtMostAbsolute
+  return fillLabelParams(template, { threshold: `${threshold}%` })
 }
 
 /**
@@ -186,7 +229,11 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
  * line instead of the generic "we did not get it" — the reader must be able to tell a quiet day
  * from a failed read.
  */
-function withheldLine(text: DivergencePanelText, group: ReturnType<typeof groupWithheld>[number], when: (value: string) => string): string {
+function withheldLine(
+  text: DivergencePanelText,
+  group: Readonly<{ reason: DivergenceWithheldView['reason']; leg: DivergenceWithheldView['leg']; observedAt?: string }>,
+  when: (value: string) => string
+): string {
   if (group.reason === 'leg-missing' && group.leg === 'sentiment') return text.sentimentNoScoredItems.replace('{leg}', text.legs[group.leg])
   return text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : text.missingValue)
 }

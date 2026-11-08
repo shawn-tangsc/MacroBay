@@ -65,8 +65,24 @@ describe('cross-asset observation workspace', () => {
     expect(css).toMatch(/\.mi-cross-asset__status-table tbody td \{[^}]*font-size: 9\.5px/)
     expect(css).toMatch(/\.mi-cross-asset__status-table th, \.mi-cross-asset__status-table td \{ padding: 3px 2px/)
     // 说明图标与「日频」之间要留一格：22px 的按钮紧贴 9.5px 的标题会读成同一个词（读者 2026-11-06）。
+
+  })
+
+  it('keeps the daily heading and its icon on one flex line, not two block siblings', () => {
+    // 读者 2026-11-08：icon 换行到第二行，还带默认按钮方框。判据三条一起钉住，
+    // 把容器改回 block、或删掉 `flex: none`，这条就红。
+    const css = readFileSync('products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css', 'utf8')
+    const panel = readFileSync('products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx', 'utf8')
+    const heading = css.match(/\.mi-cross-asset__section-heading \{([^}]*)\}/)?.[1] ?? ''
+    expect(heading).toContain('display: inline-flex')
+    expect(heading).toContain('align-items: center')
+    expect(heading).toContain('gap:')
+    expect(heading).toContain('white-space: nowrap')
+    const hint = css.match(/\.mi-cross-asset__section-hint \{([^}]*)\}/)?.[1] ?? ''
+    expect(hint).toContain('flex: none')
+    // 两者在同一个父容器里，不是两个块级兄弟。
+    expect(panel).toContain('className="mi-cross-asset__section-heading">{text.dailyFrequency}')
     expect(panel).toContain('className="mi-cross-asset__section-hint"')
-    expect(css).toMatch(/\.mi-cross-asset__section-hint \{[^}]*margin-left: 6px/)
   })
 
   it('prints the inputs it does not have as missing, with no figure anywhere in those rows', async () => {
@@ -99,12 +115,21 @@ describe('cross-asset observation workspace', () => {
       // 尺寸钉成最小档：这一行标题 9.5px，24 那档挂上去像一枚徽章（读者 2026-11-06 现场）。
       // 22 是平台最小的触发器，改回 24 必须是一次有理由的显式决定，不该被顺手改掉。
       expect(cadenceTrigger.style.width).toBe('22px')
-      // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的提示上，焦点到位也开，
+      // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的说明上，焦点到位也开，
       // 所以键盘用户与读屏拿到的是同一句，不是只有鼠标才看得到的装饰。
       await act(async () => { cadenceTrigger.focus() })
       await vi.waitFor(() => {
         expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(text.dailyCadence)
       })
+      // 点它不是空动作（界面设计 2026-11-07）：聚焦只是「看一眼」，离开就收；点一下是「钉住」，
+      // 离开还开着。长得像 ⓘ 却点了没反应，读者只会以为坏了——这三步就是那条判据。
+      expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true')
+      await act(async () => { cadenceTrigger.blur() })
+      await vi.waitFor(() => { expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('false') })
+      await act(async () => { cadenceTrigger.click() })
+      await vi.waitFor(() => { expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true') })
+      await act(async () => { cadenceTrigger.blur() })
+      expect(cadenceTrigger.getAttribute('aria-expanded')).toBe('true')
       for (const row of missing) {
         // The honesty guard, stated structurally: a planned row has no price and no return cell at
         // all, and its one value cell names the gap instead of filling it. A label may contain a
@@ -261,6 +286,17 @@ describe('cross-asset observation workspace', () => {
       expect(host.querySelector('.mi-cross-asset > header, .mi-cross-asset > footer')).toBeNull()
       const proxyInfo = host.querySelector<HTMLButtonElement>('.mi-cross-asset__quote button[aria-label]')
       expect(proxyInfo?.getAttribute('aria-label')).toBe(text.subtitle)
+      // 代理说明那颗 ⓘ 不是死按钮（界面设计 2026-11-07）：点一下钉住整段，再点或 Esc 收起。
+      // 它原来挂在 Tooltip 上、`onSelect` 是空的——一段远长于提示上限的话，配一颗点了没反应的按钮。
+      expect(proxyInfo?.getAttribute('aria-expanded')).not.toBe('true')
+      await act(async () => { proxyInfo?.click() })
+      await vi.waitFor(() => {
+        expect(proxyInfo?.getAttribute('aria-expanded')).toBe('true')
+        expect(document.querySelector('[data-popover-content]')?.textContent).toContain(text.subtitle)
+      })
+      // 收起它再继续：下面那颗图表 ⓘ 打开的是另一段说明，两层同时开着会让「读到哪一句」变成运气。
+      await act(async () => { proxyInfo?.click() })
+      await vi.waitFor(() => { expect(proxyInfo?.getAttribute('aria-expanded')).toBe('false') })
       const toolbar = host.querySelector('.mi-cross-asset__chart-toolbar')!
       const refresh = toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${text.refresh}"]`)
       expect(refresh).not.toBeNull()
@@ -268,9 +304,12 @@ describe('cross-asset observation workspace', () => {
       const info = toolbar.querySelector<HTMLButtonElement>(`button[aria-label="${text.analysis}"]`)!
       expect(info).not.toBeNull()
       await act(async () => { info.click() })
+      // 收起的浮层节点还留在 DOM 里，所以按内容找这一个，而不是取「第一个 tooltip」。
       await vi.waitFor(() => {
-        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(text.coverage)
-        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('2026-09-14 12:00:00 GMT')
+        const bubble = [...document.querySelectorAll('[role="tooltip"]')]
+          .map(node => node.textContent ?? '').find(entry => entry.includes(text.coverage))
+        expect(bubble).toBeDefined()
+        expect(bubble).toContain('2026-09-14 12:00:00 GMT')
       })
     } finally { await act(async () => root.unmount()); host.remove() }
   })

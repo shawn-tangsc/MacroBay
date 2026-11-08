@@ -16,6 +16,7 @@ import { scoreNewsWithRules } from './newsSentimentRules'
 import { storyKeyOf, utcDayBucket, type StoryKeyCandidate } from './newsSentimentStoryKey'
 import { createNewsSentimentAlertOutlet } from './newsSentimentAlertOutlet'
 import { buildSentimentAlertRequest } from './newsSentimentAlertRequest'
+import { createNewsPushThresholdStore } from './newsPushThresholdStore'
 import { createNewsPushLedgerStore } from './newsPushLedgerStore'
 
 export { newsPushLedgerPolicy } from './newsPushLedgerStore'
@@ -26,6 +27,7 @@ import type {
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
 import { resolveNewsSentimentModel } from './newsSentimentSettings'
+import type { NewsSentimentTierThreshold } from '../../../contracts/newsSentimentTiers'
 import type { NewsSentimentSettingsStore } from './newsSentimentSettingsStore'
 import type { NewsSentimentStore } from './newsSentimentStore'
 
@@ -71,12 +73,19 @@ export function createNewsSentimentScoringService(deps: {
   alertDelivery?: {
     ledgerPath: string
     submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+    /** 读者设的强度门槛存在这个文件里（与账本同目录）；缺省「中」。 */
+    thresholdFilePath?: string
   }
 }) {
   /**
    * 判定点。`eventTypeId` 必须出现在 `submit(...)` 的实参里：生产者门禁认的是「提交那一刻的
    * 实参」，藏在别的函数的载荷里会被记成无法判定，等于给「已经接好了」发假证书。
    */
+  // 门槛是推送判定的输入，闸门本身是纯函数、不读设置：读在这里做一次，把值传进去。
+  // 没给路径（测试里的轻量装配）就不落盘，判定按缺省「中」——不临时造一个文件出来当存储。
+  const pushThresholdStore = deps.alertDelivery?.thresholdFilePath
+    ? createNewsPushThresholdStore(deps.alertDelivery.thresholdFilePath)
+    : undefined
   const alertOutlet = deps.alertDelivery
     ? createNewsSentimentAlertOutlet({
         ledger: createNewsPushLedgerStore(deps.alertDelivery.ledgerPath),
@@ -88,10 +97,20 @@ export function createNewsSentimentScoringService(deps: {
             ...request
           })
         },
-        now: deps.now
+        now: deps.now,
+        threshold: () => pushThresholdStore?.read().pushThreshold ?? 'medium'
       })
     : undefined
   return {
+    /** 页面对「强度门槛」的读写入口：与判定读的是同一份存储。没给路径时没有这一项。 */
+    ...(pushThresholdStore === undefined ? {} : { pushThreshold: pushThresholdStore }),
+    /**
+     * 只读取当前门槛档，与 `threshold:` 那个闭包读**同一个实例**（同一份文件、同一个刷新时机）。
+     * 「通知测试」按钮用它挑样例：门槛一改，样例跟着改。没接存储时回 `'medium'`——与判定缺省一致，
+     * 不另造一个 store。
+     */
+    readPushThreshold: (): NewsSentimentTierThreshold =>
+      pushThresholdStore?.read().pushThreshold ?? 'medium',
     async scoreItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentScoringResult> {
       const settings = await deps.settingsStore.getSettings()
       const [providerState, modelDefaults] = await Promise.all([

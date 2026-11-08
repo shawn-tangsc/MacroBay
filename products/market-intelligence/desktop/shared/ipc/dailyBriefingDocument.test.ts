@@ -59,7 +59,7 @@ describe('daily briefing document guard at schema 13', () => {
   it('accepts a 13 document that carries the full period identity', () => {
     expect(isDocument(document())).toBe(true)
     expect(isDocument(document({ periodKind: 'manual', periodId: 'period_01J8Z6Q4T3', runTrigger: 'manual' }))).toBe(true)
-    for (const trigger of ['scheduled', 'catch-up', 'retry', 'manual'] as const) {
+    for (const trigger of ['scheduled', 'catch-up', 'retry', 'auto-retry', 'manual'] as const) {
       expect(isDocument(document({ runTrigger: trigger })), trigger).toBe(true)
     }
   })
@@ -110,6 +110,15 @@ describe('daily briefing document guard at schema 13', () => {
     const current = { ...document(), schemaVersion: 15 as const, policyVersion: 'daily-briefing.v24' as const }
     expect(isDocument(current)).toBe(true)
     expect(isDocument({ ...current, schemaVersion: 16 as unknown as 15 })).toBe(false)
+  })
+
+  it('carries the news-source list a schema-15 edition froze, and refuses an unknown state', () => {
+    const current = { ...document(), schemaVersion: 15 as const, policyVersion: 'daily-briefing.v25' as const }
+    const silent = { sourceId: 'coindesk-rss', name: 'CoinDesk RSS', state: 'silent', lastNewItemAt: '2026-10-29T01:30:00.000Z', silentHours: 25 }
+    const withSources = { ...current, news: { ...current.news, sources: [silent] } }
+    expect(isDocument(withSources)).toBe(true)
+    // 状态是闭集：猜出来的第三种状态一律拒绝，不让它混进来。
+    expect(isDocument({ ...withSources, news: { ...withSources.news, sources: [{ ...silent, state: 'quiet' }] } })).toBe(false)
   })
 
   it('ignores unknown fields instead of rejecting the whole document', () => {

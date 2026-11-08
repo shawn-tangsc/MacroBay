@@ -11,20 +11,28 @@
 .mi-divergence[data-state='empty'] { padding: 0; }
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
 .mi-divergence__lead { flex: none; display: flex; align-items: center; gap: 6px; padding-top: 0; }
-/* The rule's chip: the one thing on this line that says something happened. Same shape as the
-   other module chips; the block it opens is the shared `SignalDetail`, on its own row below. */
-.mi-divergence__chip {
-  display: inline-flex; align-items: center;
-  padding: 1px 6px; border-radius: 3px;
-  border: 1px solid var(--mi-dashboard-line);
-  background: none; color: var(--mi-dashboard-text); font: inherit;
-  font-size: 10px; font-weight: 600;
-  line-height: 16px; white-space: nowrap; cursor: pointer;
+/* 卡面那一行摘要：一个索引，不是结论。所以它整行中性——不用琥珀、不用红、不铺底，
+   方向色只出现在展开区每组的标签上（两张牌方向相反时，摘要行着色必然错一半）。
+   右侧 8px 的 `›` 用字符画：摘要行里不许出现 `<svg>`（界面设计 v2 §四）。 */
+.mi-divergence__summary {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 0; border: 0; border-radius: 4px; background: transparent;
+  /* 字号只用同屏既有那一档：看板「口径说明」那条 `--mi-reading-note-size` / `-line-height`
+     （唯一 owner 在 `cryptoDashboard.css`）。摘要行是新加的常驻行，自成一套字号就是「融不进项目」。 */
+  color: var(--mi-dashboard-text); font: inherit;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  text-align: left; text-decoration: none; cursor: pointer;
 }
-.mi-divergence__chip:hover,
-.mi-divergence__chip:focus-visible,
-.mi-divergence__chip[aria-expanded='true'] { border-color: var(--mi-dashboard-text); }
-.mi-divergence__chip:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+/* 安静的一天不是控件：纯文本，没有箭头、没有悬停底、点了没反应。 */
+.mi-divergence__summary--static { cursor: default; }
+.mi-divergence__summary-text {
+  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.mi-divergence__summary-chevron { flex: none; color: var(--mi-dashboard-muted); font-size: 0.85em; opacity: 0.55; }
+.mi-divergence__summary:hover { background: var(--mi-dashboard-surface); }
+.mi-divergence__summary:hover .mi-divergence__summary-chevron { opacity: 0.95; }
+.mi-divergence__summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mi-divergence__summary[aria-expanded='true'] .mi-divergence__summary-chevron { transform: rotate(90deg); }
 .mi-divergence > .mi-signal-detail { flex-basis: 100%; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
 /* A quiet day is one line, not a block: no icon, no heading, no vertical padding to fill. */
@@ -120,7 +128,8 @@
 }
 .mi-divergence__row[data-direction='bearish'] { border-left-color: var(--mi-dashboard-negative); }
 .mi-divergence__row[data-direction='bullish'] { border-left-color: var(--mi-dashboard-positive); }
-.mi-divergence__row[data-direction='unpriced'] { border-left-color: var(--mi-dashboard-caution); }
+/* 观察态不是警报：左边线与标签都用中性色，方向色只属于真的背离（界面设计 2026-11-08）。 */
+.mi-divergence__row[data-direction='unpriced'] { border-left-color: var(--mi-dashboard-line); }
 .mi-divergence__line {
   display: flex;
   flex-wrap: wrap;
@@ -131,7 +140,7 @@
 .mi-divergence__direction { font-size: 11px; font-weight: 650; }
 .mi-divergence__direction[data-direction='bearish'] { color: var(--mi-dashboard-negative); }
 .mi-divergence__direction[data-direction='bullish'] { color: var(--mi-dashboard-positive); }
-.mi-divergence__direction[data-direction='unpriced'] { color: var(--mi-dashboard-caution); }
+.mi-divergence__direction[data-direction='unpriced'] { color: var(--mi-dashboard-muted); }
 .mi-divergence__legs {
   display: flex;
   flex-wrap: wrap;
@@ -152,6 +161,7 @@
   font-size: 10px;
   line-height: 1.5;
 }
+.mi-divergence__asof { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height); }
 .mi-divergence__invalidation {
   margin: 0;
   color: var(--mi-dashboard-muted);
@@ -179,33 +189,11 @@
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
 
 
-/* The entry to the readings behind the numbers: a button, not a text link, and body-size copy —
-   never a chip. Hover brightens the word and draws nothing: a block behind a short entry reads as a
-   second button ring. Its label never changes with the state; only the arrows in `aria-expanded`
-   do, so a screen reader does not hear the state twice.
-   Type comes from the dashboard's reading-note tokens: the same shape exists on another card, and a
-   number written in two places drifts (these two cards already disagreed once, 10px against 11.5). */
-.mi-divergence__help-toggle {
-  padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit;
+/* 展开区标题行：标题文字在前、ⓘ 紧跟其后，同一行、间距 4px、不换行（界面 2026-11-08）。
+   **不许**推到行尾（`justify-content: flex-end` / `margin-left: auto`）、**不许**放进一行没有文字的行里——
+   那两种写法正是用户在别的卡上连着提两次的毛病：图标与内容脱钩。 */
+.mi-divergence__detail-head { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.mi-divergence__detail-title {
+  margin: 0; color: var(--mi-dashboard-muted); font-weight: 650;
   font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  white-space: nowrap; cursor: pointer;
 }
-.mi-divergence__help-toggle:hover { color: var(--mi-dashboard-text); }
-.mi-divergence__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
-
-/* The notes that would not fit the bubble: opened on purpose, so they get their own row and their
-   own scroll instead of stretching the card.
- *
- * Same size as the entry that opened it. The entry says "come and read this"; shrinking the text once
- * the reader does is self-contradictory, and that argument survives a taste change better than "which
- * size looks nicer" — so both sides read the same dashboard tokens and neither card writes the
- * numbers down again. */
-.mi-divergence__help {
-  display: grid; gap: 6px; flex-basis: 100%; margin-top: 4px;
-  padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  color: var(--mi-dashboard-muted);
-  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
-  max-height: var(--mi-reading-note-max-height); overflow-y: auto;
-}
-.mi-divergence__help p { margin: 0; }

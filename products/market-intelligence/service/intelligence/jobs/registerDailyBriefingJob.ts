@@ -50,7 +50,7 @@ export function registerDailyBriefingJob(
     log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   }>
 ): void {
-  jobRuntime.registerHandler(INTELLIGENCE_DAILY_BRIEFING_JOB, async (payload) => {
+  jobRuntime.registerHandler(INTELLIGENCE_DAILY_BRIEFING_JOB, async (payload, context) => {
     const periodId = periodIdOf(payload)
     const period = (await deps.getPeriods()).find((candidate) => candidate.id === periodId)
     if (!period) return
@@ -65,6 +65,8 @@ export function registerDailyBriefingJob(
       // The scheduler fired this run: that is the trigger the edition must record.
       periodKind: 'scheduled',
       runTrigger: 'scheduled',
+      // job 被停（应用正在退出）时这个信号先 abort：自动重试据此不再起第二次。
+      signal: context.signal,
       generation: { generationTime: period.generationTime, windowHours: period.windowHours }
     })
     if (result.state !== 'available') throw new Error(`daily-briefing-generation-${result.failureCode}`)

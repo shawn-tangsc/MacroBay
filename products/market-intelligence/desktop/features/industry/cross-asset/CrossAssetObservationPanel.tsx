@@ -232,15 +232,26 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
         <div className="mi-cross-asset__quote-heading"><h3>{text.statusTitle}</h3>
-        <IconButton
-          ariaLabelKey={crossAssetTextKeys.subtitle}
-          icon={Info}
-          onSelect={() => undefined}
-          resolveText={resolveProductText}
-          size="md"
-          tooltipKey={crossAssetTextKeys.subtitle}
-          variant="plain"
-        /></div>
+        {/* 这段是代理说明，一段话而不是一句：走浮层（多行走浮层），点一下钉住。
+            原来它挂在 `Tooltip` 上、`onSelect` 是空的——一段远长于提示上限的话配一颗点了没反应的 ⓘ，
+            两处都不对（界面设计 2026-11-07：补充说明要么有真动作，要么不该长成按钮）。
+            没改成 dialog：dialog 是给成组的多行读数用的（那张表 8 行分三组），一段话说清的事用浮层就够。 */}
+        <FocusPopover labelKey={crossAssetTextKeys.subtitle} resolveText={resolveProductText}
+          trigger={(triggerProps) => (
+            <IconButton
+              ariaLabelKey={crossAssetTextKeys.subtitle}
+              expanded={triggerProps.expanded}
+              icon={Info}
+              onBlur={triggerProps.onBlur}
+              onFocus={triggerProps.onFocus}
+              onMouseEnter={triggerProps.onMouseEnter}
+              onMouseLeave={triggerProps.onMouseLeave}
+              onSelect={triggerProps.onSelect}
+              resolveText={resolveProductText}
+              size="md"
+              variant="plain"
+            />
+          )} /></div>
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
@@ -250,7 +261,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           {/* The daily block repeats the asset and latest headings but not the window columns: an
               observation per business day has nothing to say about the last fifteen minutes. */}
           <tbody data-status-section="daily">
-            <tr className="mi-cross-asset__section"><th scope="colgroup" colSpan={2 + crossAssetWindows.length}>{text.dailyFrequency}
+            <tr className="mi-cross-asset__section"><th scope="colgroup" colSpan={2 + crossAssetWindows.length}>
+              {/* 标题与 ⓘ 是一个 flex 容器里的两件东西，不是两个块级兄弟：块级流里 icon 会被挤到下一行，
+                  还会因为没吃到复位而画出浏览器默认的方框（读者 2026-11-08 截图）。 */}
+              <span className="mi-cross-asset__section-heading">{text.dailyFrequency}
               {/* The block's rhythm, on its heading rather than inside a figure cell: an official daily
                   close arrives once per trading day, so a row that has not moved for a day or two is
                   waiting for the source to publish, not stuck. The reader asked that after seeing
@@ -263,9 +277,18 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
                   icon read as a badge hanging over the table (reader, 2026-11-06). 22px is the smallest
                   trigger the platform offers — it cannot be drawn at text size without a new档, and a new
                  档 is the component's decision, not this call site's. */}
-              <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} icon={Info} onSelect={() => undefined}
-                resolveText={resolveProductText} size="sm" tooltipKey={crossAssetTextKeys.dailyCadence} variant="plain"
-                className="mi-cross-asset__section-hint" /></th></tr>
+              <FocusPopover labelKey={crossAssetTextKeys.dailyCadence} resolveText={resolveProductText}
+                trigger={(triggerProps) => (
+                  // 悬停/聚焦先看，点一下钉住：同一条说明的两种读法都在这颗按钮上，**不留空处理器**——
+                  // 长得像 ⓘ 却点了没反应，读者只会以为坏了（界面设计 2026-11-07，同行那颗图表的 ⓘ 就是这种形状）。
+                  // 点击只接 `onSelect` 一条：`IconButton` 的 `onClick` 之后仍会再调一次 `onSelect`，
+                  // 两条都接就是同一个动作跑两遍——钉住又被立刻取消，点了看着像没反应。
+                  <IconButton ariaLabelKey={crossAssetTextKeys.dailyCadence} className="mi-cross-asset__section-hint"
+                    expanded={triggerProps.expanded} icon={Info} onBlur={triggerProps.onBlur}
+                    onFocus={triggerProps.onFocus} onMouseEnter={triggerProps.onMouseEnter}
+                    onMouseLeave={triggerProps.onMouseLeave} onSelect={triggerProps.onSelect}
+                    resolveText={resolveProductText} size="sm" variant="plain" />
+                )} /></span></th></tr>
             {dailyRows.map(renderStatusRow)}
           </tbody>
         </table>

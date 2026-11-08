@@ -40,7 +40,7 @@ type AgentSessionMessageGroupProps = {
   onMessageElementRef: (messageId: string, element: HTMLDivElement | null) => void
   /** Shared phase copy for the in-flight assistant placeholder. */
   pendingStatusText?: string
-  /** Host-owned renderers for message contexts (analysis node, calendar event, ...). */
+  /** Host-owned renderers for message contexts; the shell ships none of its own. */
   contextRenderers?: AgentContextRendererRegistry
   /** Live runtime trace for the in-flight (or last) assistant turn. */
   runtimeActivity?: {

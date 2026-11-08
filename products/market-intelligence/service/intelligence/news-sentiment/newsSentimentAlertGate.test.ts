@@ -10,6 +10,8 @@ function judgement(overrides: Partial<Parameters<typeof decideAlert>[0]> = {}) {
   return {
     engine: 'model' as const,
     strength: 3,
+    // 默认门槛「中」＝今天的推送行为。
+    threshold: 'medium' as const,
     storyKey: 'story:2026-11-06:item-a',
     // 开启前半小时发布 —— 三年后来看这条用例名也知道它防的是「补历史」。
     publishedAt: '2026-11-06T21:30:00.000Z',
@@ -33,8 +35,14 @@ describe('decideAlert', () => {
     })
   })
 
-  it('never pushes below medium, and never pushes without a story key', () => {
-    expect(decideAlert(judgement({ strength: 2 }))).toEqual({ push: false, reason: 'below-medium' })
+  it('never pushes below the configured threshold, and never pushes without a story key', () => {
+    expect(decideAlert(judgement({ strength: 2 }))).toEqual({ push: false, reason: 'below-threshold' })
+
+    // 门槛可配之后按档位比：同一条记录换门槛，结论必须跟着变（四条两两成对）。
+    expect(decideAlert(judgement({ strength: 3, threshold: 'medium' }))).toEqual({ push: true, tier: 'medium' })
+    expect(decideAlert(judgement({ strength: 3, threshold: 'high' }))).toEqual({ push: false, reason: 'below-threshold' })
+    expect(decideAlert(judgement({ strength: 2, threshold: 'low' }))).toEqual({ push: true, tier: 'low' })
+    expect(decideAlert(judgement({ strength: 2, threshold: 'medium' }))).toEqual({ push: false, reason: 'below-threshold' })
     expect(decideAlert(judgement({ storyKey: undefined }))).toEqual({ push: false, reason: 'no-story-key' })
     expect(decideAlert(judgement({ storyKey: '  ' }))).toEqual({ push: false, reason: 'no-story-key' })
   })

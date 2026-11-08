@@ -17,10 +17,10 @@ import { app } from 'electron'
 import { createIntelligenceFetchText, executeIntelligenceFetchTarget } from './adapters/intelligenceHttpFetch'
 import { createIntelligenceArchiveService } from './application/intelligenceArchiveService'
 import { createIntelligencePipeline } from './application/intelligencePipeline'
+import { createSourceIssueWiring } from './application/sourceIssueWiring'
 import { createIntelligenceEventPublisher } from './application/intelligenceEventPublisher'
 import { createIntelligenceReplayService } from './application/intelligenceReplayService'
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
-import { createSourceIssueNotifier } from './application/sourceIssueNotifier'
 import { DEFAULT_SOURCE_FRESHNESS_MS } from './application/macroSourceHealth'
 import { createMarketIntelligencePublicQueryService } from './public-query/publicQueryService'
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
@@ -415,12 +415,9 @@ export function getIntelligenceModule(
     const eventPublisher = hooks?.eventBusRuntime
       ? createIntelligenceEventPublisher(hooks.eventBusRuntime)
       : undefined
-    const sourceIssueNotifier = hooks?.submitNotification
-      ? createSourceIssueNotifier({
-          submit: hooks.submitNotification,
-          defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS
-        })
-      : undefined
+    const sourceIssues = createSourceIssueWiring({ defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS, timeZone: shellTimeZone,
+      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }),
+      ...(hooks?.log === undefined ? {} : { log: hooks.log }) })
     const pipeline = createIntelligencePipeline({
       profileStore,
       rawRecordStore,
@@ -435,8 +432,9 @@ export function getIntelligenceModule(
       ),
       runtimeStateHistoryStorage,
       eventPublisher,
-      ...(sourceIssueNotifier === undefined ? {} : { sourceIssueNotifier })
+      ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier })
     })
+    sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
     const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
       storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))
     })
@@ -602,7 +600,7 @@ export function getIntelligenceModule(
           ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
           ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
           invoke: structuredModelInvocation.invoke,
-          ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), submit: hooks.submitNotification } } : {}),
+          ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), thresholdFilePath: join(dataDir, 'intelligence-news-push-threshold.json'), submit: hooks.submitNotification } } : {}),
           now: () => new Date().toISOString()
         })
       : undefined
@@ -940,6 +938,8 @@ export function getIntelligenceModule(
         briefEditions: dailyBriefingStore,
         news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
         profiles: profileStore,
+        // 来源静默/连续失败（`02` v2.167）：读采集运行状态，写进冻结的日报文档。
+        sourceStates: () => pipeline.listRuntimeStates(),
         calendarCommands: briefingCalendar.commands,
         macroWebRead: macroWebReadFromHooks(hooks, () => dailyBriefingAiSettings.getView()),
       }),

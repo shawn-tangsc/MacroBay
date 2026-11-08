@@ -25,8 +25,8 @@ import { notificationCopy } from '@platform/i18n/notificationCopy'
 import { formatPushText } from '@platform/notifications/delivery/channelPushPort'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
 import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { mergeApprovalView } from '@platform/notifications/contracts/notificationApprovalView'
 import type { NotificationCopyRef } from '@platform/notifications/contracts/notificationCopyPort'
 import type { NotificationEventDeclaration } from '@platform/notifications/contracts/notificationEventCatalog'
 import { productNotificationCopyTables } from '@platform/desktop/main/composition/notificationCopyTables'
@@ -64,7 +64,16 @@ describe('手机推送不带动作指令（契约 v2.50）', () => {
     products: productNotificationCopyTables(productManifests)
   })
   const byId = declarationsById()
-  const approvedIds = Object.keys(NOTIFICATION_EVENT_POLICY)
+  // 「全部已批准事件」用合并批准视图算，不在这里再写一套合并逻辑（b3-1）：
+  // 批准随声明走，平台一份、每个产品各一份，视图是唯一的合并实现。
+  const approvedIds = Object.keys(mergeApprovalView([
+    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+    ...productManifests.map((manifest) => ({
+      productId: manifest.id,
+      events: manifest.notificationEvents ?? [],
+      ...(manifest.notificationApproval === undefined ? {} : { approval: manifest.notificationApproval })
+    }))
+  ]))
 
   it('每一条已批准事件都有声明可查（没有声明就没法扫，等于漏掉）', () => {
     const missing = approvedIds.filter((id) => !byId.has(id))
