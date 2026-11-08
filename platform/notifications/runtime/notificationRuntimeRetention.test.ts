@@ -16,12 +16,11 @@ const settings: NotificationRuntimeSettings = {
 const clock = { now: () => new Date('2026-11-01T12:00:00.000Z'), timeZone: () => 'UTC' }
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.test': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: { 'platform.test': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false } },
       events: [
         {
           id: 'platform.test',

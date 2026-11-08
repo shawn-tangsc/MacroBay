@@ -22,12 +22,11 @@ const clock = { now: () => new Date('2026-11-06T12:00:00.000Z'), timeZone: () =>
 
 function catalogFor(dedupeUnit: 'condition' | 'occurrence') {
   return createNotificationEventCatalog({
-    policy: {
-      'platform.signal': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
-    },
+    // 批准值随声明走（b2）：值原样。
     sources: [
       {
         productId: 'platform',
+        approval: { 'platform.signal': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } },
         events: [
           {
             id: 'platform.signal',
