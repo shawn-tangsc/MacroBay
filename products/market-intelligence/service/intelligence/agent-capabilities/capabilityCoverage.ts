@@ -81,6 +81,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.getTimeline': exposed('get_intelligence_timeline'),
   // 读者点按钮发通知：读的是他的结论、发的是他的通道，不对代理人开放。
   'intelligence.sendAnalysisConclusion': excluded('internal-view'),
+  // 同类：设置页那三枚「发一条…」读产品数据、发读者通道，是读者动作，不对代理人开放。
+  'intelligence.sendTestNotification': excluded('internal-view'),
   'intelligence.getWorkspaceState': excluded('internal-view'),
   'intelligence.getWorkspaceTimeline': exposed('get_intelligence_timeline'),
   'intelligence.ingestEvent': excluded('destructive'),
