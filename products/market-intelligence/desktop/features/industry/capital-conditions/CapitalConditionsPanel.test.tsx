@@ -369,8 +369,8 @@ describe('CapitalConditionsPanel', () => {
 
     // 聚焦即展开，Esc 收起并回焦。
     await act(async () => { info.focus() })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-    expect(info.getAttribute('aria-expanded')).toBe('true')
+    // 等「展开」这个事实出现，不等一个固定毫秒：浮层是在 focus 之后异步挂上的。
+    await vi.waitFor(() => expect(info.getAttribute('aria-expanded')).toBe('true'))
     expect(document.body.textContent).toContain(text.signalInsufficientReason)
     // 说明关系是真的：触发件指到的那个 id 必须**查得到节点**、且节点里就是那段说明。
     // 只断言「属性存在」会恒真（antd 触发层自己会挂一个指向 `test-id` 的值），所以查三层：
@@ -383,8 +383,7 @@ describe('CapitalConditionsPanel', () => {
     await act(async () => {
       info.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-    expect(info.getAttribute('aria-expanded')).toBe('false')
+    await vi.waitFor(() => expect(info.getAttribute('aria-expanded')).toBe('false'))
     expect(document.activeElement).toBe(info)
     // 一处只有一颗：牌位里没有第二颗说明图标。
     expect(header.querySelectorAll('button.icon-button').length).toBe(1)
@@ -510,10 +509,8 @@ describe('CapitalConditionsPanel', () => {
     const info = body.querySelector<HTMLButtonElement>('.icon-button')!
     expect(info).not.toBeNull()
     await act(async () => { info.focus() })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-
-    // 逐句：这句落款（含两个分句）在浮层里整句出现。
-    expect(document.body.textContent).toContain(text.signalDetailNote)
+    // 等那句话本身出现；固定毫秒只是在赌它多快挂上。
+    await vi.waitFor(() => expect(document.body.textContent).toContain(text.signalDetailNote))
     expect(document.querySelector('.mi-capital-signal-dialog')).not.toBeNull()
   })
 
@@ -605,9 +602,8 @@ describe('CapitalConditionsPanel', () => {
     expect(document.body.textContent).not.toContain(text.signalRuleName)
 
     await act(async () => { chip.focus() })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(text.signalRuleName))
 
-    expect(document.body.textContent).toContain(text.signalRuleName)
     expect(document.body.textContent).toContain(text.signalRuleWindow)
   })
 
