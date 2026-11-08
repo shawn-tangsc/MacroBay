@@ -627,9 +627,10 @@ describe('divergence consistency', () => {
 })
 
 /**
- * `04` §3.4.1「先判数字绑在谁身上，再判该不该带符号」。
+ * `04` §3.4.1（架构师最终版）：判序写死——**概率/定价 → 读数 → 都不沾才判歧义**；
+ * 概率是水平值必须无符号，绑到可命名的被变读数则允许带符号。
  *
- * 这一组里有一半是**放行**用例：上一版只测"拒"，结果把 `收益率 +6bp` 这种正确写法也拒了。
+ * 这一组同时钉住"不许误杀"的三种正确写法（上一版只测拒，把 `较上一日定价变化 +0.3 个百分点` 误杀了）。
  */
 describe('signed percentages', () => {
   const withProbability = (value = 76.65) => {
@@ -637,87 +638,75 @@ describe('signed percentages', () => {
     snapshot.facts = [...snapshot.facts, policyProbabilityFact(value)]
     return snapshot
   }
+  const withChange = (change: number) => {
+    const snapshot = withProbability()
+    snapshot.facts = [...snapshot.facts, {
+      ...policyProbabilityFact(change),
+      factId: `mi-fact-policy-change-${change}`,
+      metric: 'policy-implied-probability-change-24h'
+    }]
+    return snapshot
+  }
+  const macro = (text: string, snapshot = withProbability()) => {
+    const output = validOutput()
+    output.conclusion.macro = `政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；${text}`
+    return validateAnalysisModelOutput(JSON.stringify(output), snapshot)
+  }
 
-  it('rejects a signed value sitting where a probability level belongs', () => {
-    for (const macro of ['政策与市场定价：降息概率 +77%，截至 2026-10-30 15:00 UTC。', '政策与市场定价：降息概率 3 个百分点，截至 2026-10-30 15:00 UTC。']) {
-      const output = validOutput()
-      output.conclusion.macro = macro
-      expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+  it('rejects a sign or a change unit sitting where the probability level belongs', () => {
+    for (const text of ['降息概率 +5%，截至 2026-10-30 15:00 UTC。', '降息概率 3 个百分点，截至 2026-10-30 15:00 UTC。', '降息 +5%。']) {
+      expect(macro(text)).toEqual({
         ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'probability-is-a-level'
       })
     }
   })
 
-  it('rejects a signed number that is neither an increment unit nor inside a change sentence', () => {
-    const output = validOutput()
-    output.conclusion.summary = '加息 25bp 的概率 77%，市场情绪 +5% 说明风险偏好在抬升。'
-    expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
-      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'ambiguous-signed-percentage'
+  it('allows a sign once it is bound to a named reading', () => {
+    for (const text of ['BTC 24 小时 -3.2%。', '市场情绪 +5% 说明风险偏好在抬升。', '收益率 +6bp。']) {
+      expect(macro(text)).toMatchObject({ ok: true })
+    }
+  })
+
+  it('keeps an explicit change clause readable when the snapshot carries that change', () => {
+    // 这正是上一版被误杀的那一句：`定价变化 +0.3 个百分点`——变化标记先判，不落进「概率位带符号」。
+    expect(macro('较上一日定价变化 +0.3 个百分点。', withChange(0.3))).toMatchObject({ ok: true })
+  })
+
+  it('judges the change value against the fact, not merely whether a fact exists', () => {
+    expect(macro('较上一日变化 +9 个百分点。', withChange(0.3))).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-change-mismatch'
     })
   })
 
-  it('keeps the three allowed shapes: increment units, change markers, and a separate change clause', () => {
-    // 第三种（独立变化句）只有在快照**确实带**这条变化事实时才允许；否则它同时命中「变化不许自己算」。
-    const snapshot = withProbability()
-    snapshot.facts = [...snapshot.facts, {
-      ...policyProbabilityFact(0.3),
-      factId: 'mi-fact-policy-change',
-      metric: 'policy-implied-probability-change-24h'
-    }]
-    const allowed = [
-      // ① 单位本身是增量：不需要出现「变化」二字。
-      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；十年期收益率 +6bp。',
-      // ② 同一子句有变化标记。
-      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；概率较上一日 +0.3 个百分点。',
-      // ③ 无符号概率 + 独立变化句。
-      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；24 小时变化 +0.3 个百分点。'
-    ]
-    for (const macro of allowed) {
-      const output = validOutput()
-      output.conclusion.macro = macro
-      expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
-    }
-  })
-
-  it('treats every full-width and half-width sign the same way', () => {
-    for (const sign of ['+', '＋', '-', '−']) {
-      const output = validOutput()
-      output.conclusion.summary = `市场情绪 ${sign}5% 说明风险偏好在抬升。`
-      expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
-        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'ambiguous-signed-percentage'
-      })
-    }
-  })
-
-  it('accepts a level with no change semantics at all', () => {
-    const output = validOutput()
-    output.conclusion.macro = '政策与市场定价：降息概率 77%，截至 2026-10-30 15:00 UTC。'
-    expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toMatchObject({ ok: true })
-  })
-
-  it('refuses a 24-hour change the snapshot does not carry, instead of letting the model compute one', () => {
-    for (const macro of [
-      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；较上一日 +0.3 个百分点。',
-      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；24 小时变化 +0.2%。'
-    ]) {
-      const output = validOutput()
-      output.conclusion.macro = macro
-      expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+  it('refuses a computed change when the snapshot carries none, whatever the wording', () => {
+    for (const text of ['环比 +0.3 个百分点。', '概率较昨日 +0.3 个百分点。', '加息概率上升 3 个百分点。']) {
+      expect(macro(text)).toEqual({
         ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
         rule: 'policy-probability-citation', detail: 'policy-probability-change-not-frozen'
       })
     }
   })
 
-  it('accepts the same change sentence once the snapshot carries the change fact', () => {
-    const snapshot = withProbability()
-    snapshot.facts = [...snapshot.facts, {
-      ...policyProbabilityFact(0.3),
-      factId: 'mi-fact-policy-change',
-      metric: 'policy-implied-probability-change-24h'
-    }]
+  it('accepts the "not available yet" sentence instead of a computed number', () => {
+    expect(macro('24 小时变化尚未可得。')).toMatchObject({ ok: true })
+  })
+
+  it('rejects a signed number bound to nothing at all (no probability, no reading)', () => {
     const output = validOutput()
-    output.conclusion.macro = '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；较上一日 +0.3 个百分点。'
-    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+    output.conclusion.summary = '市场反弹，+5% 说明资金在换手。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'ambiguous-signed-percentage'
+    })
+  })
+
+  it('treats every full-width and half-width sign the same way', () => {
+    for (const sign of ['+', '＋', '-', '−']) {
+      const output = validOutput()
+      output.conclusion.summary = `市场反弹，${sign}5% 说明资金在换手。`
+      expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'ambiguous-signed-percentage'
+      })
+    }
   })
 })

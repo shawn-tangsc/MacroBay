@@ -51,7 +51,9 @@ export const vagueWordingTerms = [
   'divergence', 'under pressure', 'risk appetite', 'liquidity'
 ] as const
 
-export const concreteAnchorPattern = /稳定币|美元|美债|国债|收益率|利率|资金费率|净流入|净流出|现货|期货|期权|比特币|以太坊|美联储|降息|加息|纳斯达克|标普|黄金|原油|美元指数|\b(?:etf|btc|eth|stablecoins?|dollars?|treasur(?:y|ies)|yields?|rates?|funds?|exchanges?|on-chain|open interest|funding|inflows?|outflows?|spot|futures|options|bitcoins?|ether|fed|nasdaq|s&p|gold|oil|dxy)\b/i
+// 「可命名的被变读数」词表只有一份，放在 `contracts/`（日报与分析都依赖的层）。
+// 这里 re-export 是为了不动既有 import 点；定义与说明见那个文件。
+export { concreteAnchorPattern, concreteReadingPattern } from '../../../contracts/concreteAnchorPattern'
 
 export const clockTimePattern = /\b(?:[01]?\d|2[0-3]):[0-5]\d\b/
 export const marketEventPattern = /CPI|PCE|GDP|PMI|FOMC|非农|议息|美联储|利率决议|公布|发布|数据|财报|开盘|收盘|盘前|盘后|拍卖|结算|交割|减半|升级|硬分叉|release|print|data|report|open|close|auction|settlement|decision|meeting|announcement|payrolls|inflation/i

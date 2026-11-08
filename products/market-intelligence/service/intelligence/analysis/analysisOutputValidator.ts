@@ -274,7 +274,11 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   if (divergenceDefect === 'unknown-pair') return missingEvidence(analysisValidationRules.unknownReference)
   if (divergenceDefect === 'contradiction') return missingEvidence(analysisValidationRules.divergenceContradiction)
   // 先判「数字绑在谁身上」（带符号的两条），再判概率引用的同值与截至时刻（`04` §3.4.1 的顺序）。
-  const bindingDefect = percentageBindingDefect(output.conclusion)
+  const bindingDefect = percentageBindingDefect(output.conclusion, snapshot)
+  if (bindingDefect === 'policy-probability-change-not-frozen' || bindingDefect === 'policy-probability-change-mismatch') {
+    // 变化值的两条缺陷挂在既有粗码下（规则闭集不变），detail 说清是哪一种。
+    return missingEvidence(analysisValidationRules.policyProbabilityCitation, bindingDefect)
+  }
   if (bindingDefect !== undefined) return missingEvidence(bindingDefect)
   const probabilityDefect = policyProbabilityDefect(output.conclusion, snapshot)
   if (probabilityDefect) return missingEvidence(analysisValidationRules.policyProbabilityCitation, probabilityDefect)
