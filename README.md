@@ -82,11 +82,6 @@ This build is **not code-signed and not notarized**, so the first launch takes t
 
 Every update you download repeats those same two steps, until a signed build ships.
 
-**No API key yet?** Open the app and choose **Sample mode → Open sample dashboard**. It replays one
-recorded real week — dashboard, funding, stablecoins, ETF flows, two calendar months and three
-published analyses — labelled *Sample data*, and writes nothing into your database. Live panels still
-need your own model provider and data-source credentials.
-
 <div align="center">
 
 ### ⭐ If this is useful to you, a star keeps it going
@@ -232,9 +227,8 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.4.0`). macOS is the verified platform. A **sample mode** ships with the app:
-with no key and no network you can open the full dashboard and one published analysis, replayed from a
-real recorded week. Live panels still need your own provider credentials. The macOS `.dmg` is unsigned;
+MacroBay is **alpha** (`0.4.0`). macOS is the verified platform. Panels still need your own provider
+credentials; anything that cannot be read is reported as a gap. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified
 there yet, and Linux has no packaging. See [Status and limitations](./docs/reference/status-and-limitations.md).
 

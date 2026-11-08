@@ -39,20 +39,6 @@ configured and its installer builds both in CI and on Windows 11 x64 hardware, b
 not accepted yet; Linux packaging is not configured. There is no auto-update channel. See
 [Packaging](../development/packaging.md).
 
-### Demo data
-
-A sample scenario ships with the app: one recorded week (October 2026) of real observations — market
-status, cross-asset returns, funding, stablecoins and ETF flows, two calendar months, news sentiment, and
-three published analyses with their evidence.
-
-- **No database is bundled.** The scenario is JSON; the running app reads it in memory and never writes it
-  into your database, analysis history, sentiment aggregates or source-health counters.
-- **It is a recording, not a feed.** The scenario clock is pinned to the recorded close, the banner says so,
-  and nothing updates. Leaving sample mode leaves no trace: the switch is session-scoped.
-- **Live panels still need credentials.** Sample mode answers the dashboard's reads instead of calling
-  providers; it never makes a network request.
-- Screenshots are captured from sample mode, not from a live provider feed.
-
 ## Platform support
 
 - **macOS**: developed and verified.
