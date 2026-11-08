@@ -56,19 +56,19 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
   // Only when there is a probability to cite: a snapshot without one must not be penalised.
   if (probabilities.length === 0) return undefined
   const prose = conclusionProse(conclusion)
-  // Only percentages written as a probability are policed: a yield or a CPI print is not one.
-  const mentioned = policyProbabilityMentions(prose)
-  if (mentioned.length === 0) return analysisProbabilityDefects.absent
-  const allowed = probabilities.map(fact => Number(fact.value))
-  // `04` §3.4.1：正文用**约数**（约 77%），两位小数进留痕区——所以「四舍五入到整百分点」是**合规写法**，
-  // 不是缺陷。真正的编造仍然拒（既不等值、也不等于快照值的四舍五入）。
+  // **正文里每个百分数逐个查快照出处**：不在快照里的数就是编造——拒的理由是"那个数不存在"，
+  // 与句子用了什么词无关。旧做法（`概率/定价` 前后 N 个字）是对措辞的猜测，换个说法就绕过。
+  const mentioned = percentagesIn(prose)
+  const allowed = snapshotNumbers(snapshot)
   for (const value of mentioned) {
-    if (allowed.some(candidate => nearlyEqual(candidate, value) || nearlyEqual(Math.round(candidate), value))) continue
-    return analysisProbabilityDefects.notFrozen
+    if (!tracedToSnapshot(value, allowed)) return analysisProbabilityDefects.notFrozen
   }
+  const probabilityValues = probabilities.map(fact => Number(fact.value))
+  // 整段没有一处提到快照里的概率 → 与原来的「回避」同一个缺陷（事实判据，不靠关键词）。
+  if (!mentioned.some(value => tracedToSnapshot(value, probabilityValues))) return analysisProbabilityDefects.absent
   for (const fact of probabilities) {
     const value = Number(fact.value)
-    if (mentioned.some(candidate => nearlyEqual(candidate, value) || nearlyEqual(Math.round(value), candidate)) && !mentionsInstant(prose, fact.observedAt!)) {
+    if (mentioned.some(candidate => tracedToSnapshot(candidate, [value])) && !mentionsInstant(prose, fact.observedAt!)) {
       return analysisProbabilityDefects.missingInstant
     }
   }
@@ -76,26 +76,31 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
 }
 
 /**
- * Percentages that actually claim to be a probability.
+ * 正文里的**每一个百分数**，逐个查它在快照里有没有出处。
  *
- * The keyword must be within a few characters that carry no other number, so "市场定价 66%" and
- * "66% 的概率" are claims while "政策与市场定价：目标区间 4.00%–4.25%" is not. The earlier window
- * was sixteen characters, which swallowed the target range the prompt itself asks for and rejected
- * a correct conclusion for mentioning it.
+ * 旧做法是「`概率/定价` 前后 N 个字以内的数字」——那是对措辞的猜测：`概率/定价` 只是其中一种说法，
+ * 模型换个说法就绕过去了，而合规的写法（`目标区间 4.00%–4.25%`）反而会被窗口吞掉。现在只问事实：
+ * **这个数在快照里存在吗**。
  */
-const policyProbabilityMentionWindow = 4
-
-function policyProbabilityMentions(text: string): number[] {
-  const afterKeyword = new RegExp(`(?:概率|定价)[^0-9%。；\\n]{0,${policyProbabilityMentionWindow}}(\\d+(?:\\.\\d+)?)\\s*[%％]`, 'g')
-  const beforeKeyword = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*[%％][^0-9%。；\\n]{0,${policyProbabilityMentionWindow}}(?:概率|定价)`, 'g')
-  return [
-    ...text.matchAll(afterKeyword),
-    ...text.matchAll(beforeKeyword)
-  ].map(match => Number(match[1])).filter(value => Number.isFinite(value))
+function percentagesIn(text: string): number[] {
+  return [...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:%|\uFF05)/gu)]
+    .map(match => Number(match[1]))
+    .filter(value => Number.isFinite(value))
 }
 
-function nearlyEqual(left: number, right: number): boolean {
-  return Math.abs(left - right) < 0.05
+/** 快照里出现过的所有数字：数字型值直接取，字符串型值把里面的数（如 `4.00%–4.25%`）也取出来。 */
+function snapshotNumbers(snapshot: ProbabilityEvidence): readonly number[] {
+  const numbers: number[] = []
+  for (const fact of snapshot.facts) {
+    if (typeof fact.value === 'number' && Number.isFinite(fact.value)) numbers.push(fact.value)
+    else if (typeof fact.value === 'string') numbers.push(...percentagesIn(fact.value))
+  }
+  return numbers
+}
+
+/** 某个数在快照里有没有出处：等值，或等于它的整百分点（正文写约数是允许的）。 */
+function tracedToSnapshot(value: number, allowed: readonly number[]): boolean {
+  return allowed.some(candidate => Math.abs(candidate - value) < 0.05 || Math.abs(Math.round(candidate) - value) < 0.05)
 }
 
 /** `observedAt` is UTC; accept the ISO form, `YYYY-MM-DD HH:mm`, or `MM-DD HH:mm`. */
