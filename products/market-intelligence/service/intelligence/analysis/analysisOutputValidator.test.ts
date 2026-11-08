@@ -211,15 +211,21 @@ describe('analysisOutputValidator', () => {
     })
   })
 
-  it('names a frozen probability the model rounded, separately from a fabricated one', () => {
+  it('accepts the rounded value the prompt asks for, and still rejects a fabricated one', () => {
+    // `04` §3.4.1：正文用约数（约 77%），两位小数进留痕区——四舍五入到整百分点是**合规写法**。
     const snapshot = frozenSnapshot()
-    snapshot.facts = [...snapshot.facts, policyProbabilityFact(65.5)]
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(76.65)]
     const output = validOutput()
-    output.conclusion.macro = '政策与市场定价：市场定价 66%，截至 2026-10-30 15:00 UTC。'
+    output.conclusion.macro = '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC。'
 
-    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+
+    // 编造仍然拒：70% 既不等值、也不等于快照值的四舍五入。
+    const fabricated = validOutput()
+    fabricated.conclusion.macro = '政策与市场定价：市场定价 70%，截至 2026-10-30 15:00 UTC。'
+    expect(validateAnalysisModelOutput(JSON.stringify(fabricated), snapshot)).toEqual({
       ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
-      rule: 'policy-probability-citation', detail: 'policy-probability-rounded'
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-frozen'
     })
   })
 
@@ -617,5 +623,101 @@ describe('divergence consistency', () => {
       .toMatchObject({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema, rule: 'shape:divergences' })
     expect(validateAnalysisModelOutput(JSON.stringify(withDivergences([{ pairId: 'narrative-price', stance: 'maybe' }])), snapshot))
       .toMatchObject({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema, rule: 'shape:divergences' })
+  })
+})
+
+/**
+ * `04` §3.4.1「先判数字绑在谁身上，再判该不该带符号」。
+ *
+ * 这一组里有一半是**放行**用例：上一版只测"拒"，结果把 `收益率 +6bp` 这种正确写法也拒了。
+ */
+describe('signed percentages', () => {
+  const withProbability = (value = 76.65) => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(value)]
+    return snapshot
+  }
+
+  it('rejects a signed value sitting where a probability level belongs', () => {
+    for (const macro of ['政策与市场定价：降息概率 +77%，截至 2026-10-30 15:00 UTC。', '政策与市场定价：降息概率 3 个百分点，截至 2026-10-30 15:00 UTC。']) {
+      const output = validOutput()
+      output.conclusion.macro = macro
+      expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'probability-is-a-level'
+      })
+    }
+  })
+
+  it('rejects a signed number that is neither an increment unit nor inside a change sentence', () => {
+    const output = validOutput()
+    output.conclusion.summary = '加息 25bp 的概率 77%，市场情绪 +5% 说明风险偏好在抬升。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'ambiguous-signed-percentage'
+    })
+  })
+
+  it('keeps the three allowed shapes: increment units, change markers, and a separate change clause', () => {
+    // 第三种（独立变化句）只有在快照**确实带**这条变化事实时才允许；否则它同时命中「变化不许自己算」。
+    const snapshot = withProbability()
+    snapshot.facts = [...snapshot.facts, {
+      ...policyProbabilityFact(0.3),
+      factId: 'mi-fact-policy-change',
+      metric: 'policy-implied-probability-change-24h'
+    }]
+    const allowed = [
+      // ① 单位本身是增量：不需要出现「变化」二字。
+      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；十年期收益率 +6bp。',
+      // ② 同一子句有变化标记。
+      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；概率较上一日 +0.3 个百分点。',
+      // ③ 无符号概率 + 独立变化句。
+      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；24 小时变化 +0.3 个百分点。'
+    ]
+    for (const macro of allowed) {
+      const output = validOutput()
+      output.conclusion.macro = macro
+      expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+    }
+  })
+
+  it('treats every full-width and half-width sign the same way', () => {
+    for (const sign of ['+', '＋', '-', '−']) {
+      const output = validOutput()
+      output.conclusion.summary = `市场情绪 ${sign}5% 说明风险偏好在抬升。`
+      expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'ambiguous-signed-percentage'
+      })
+    }
+  })
+
+  it('accepts a level with no change semantics at all', () => {
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：降息概率 77%，截至 2026-10-30 15:00 UTC。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toMatchObject({ ok: true })
+  })
+
+  it('refuses a 24-hour change the snapshot does not carry, instead of letting the model compute one', () => {
+    for (const macro of [
+      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；较上一日 +0.3 个百分点。',
+      '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；24 小时变化 +0.2%。'
+    ]) {
+      const output = validOutput()
+      output.conclusion.macro = macro
+      expect(validateAnalysisModelOutput(JSON.stringify(output), withProbability())).toEqual({
+        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+        rule: 'policy-probability-citation', detail: 'policy-probability-change-not-frozen'
+      })
+    }
+  })
+
+  it('accepts the same change sentence once the snapshot carries the change fact', () => {
+    const snapshot = withProbability()
+    snapshot.facts = [...snapshot.facts, {
+      ...policyProbabilityFact(0.3),
+      factId: 'mi-fact-policy-change',
+      metric: 'policy-implied-probability-change-24h'
+    }]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC；较上一日 +0.3 个百分点。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
   })
 })

@@ -203,12 +203,15 @@ describe('policy path prompt rules', () => {
     expect(without).not.toContain('政策与市场定价')
   })
 
-  it('tells the first answer that a probability must equal the frozen value and carry its own instant', () => {
-    // Both sentences used to live only in the repair message, so the model learned them after being
-    // rejected — the expensive first attempt was spent guessing.
+  it('tells the first answer to write a rounded level, unsigned, with its own instant', () => {
+    // `04` §3.4.1：正文用**约数**（约 77%），两位小数进留痕区——所以提示词不再要求「逐字同值」，
+    // 而是要求取整写法 + 概率不带正负号 + 带符号只允许三种。
+    // 前三句都曾只活在修复提示里，模型要等被拒一次才知道——第一次的钱白花了。
     const system = systemPrompt(snapshot({ facts: [policyFact] }))
-    expect(system).toContain('同值')
-    expect(system).toContain('不得自行取整')
+    expect(system).toContain('约数')
+    expect(system).toContain('不带正负号')
+    expect(system).toContain('单位本身是增量')
+    expect(system).toContain('不得换档或编造')
     expect(system).toContain('各自写出那条概率自己的截至时刻')
     // The target range is not a probability and must not be handed a market-pricing citation.
     expect(system).toContain('政策目标区间、SEP 中位数这类读数不是概率')

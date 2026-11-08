@@ -120,7 +120,9 @@ const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
   'fact-evidence-mismatch': '每条 knownFact 只能引用它自己的那一个 evidenceRef；marketReaction 的 evidenceRefIds 必须恰好覆盖它 factIds 对应的证据集合，多一个也会被拒绝。',
   'ineligible-market-reaction': 'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs；输入没有该字段或为空时写 []。',
   'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。',
-  'policy-probability-citation': '结论里的政策概率必须与快照同值，并在同一段写出该概率的截至时刻（例如「市场定价 71%，截至 2026-10-30 15:00 UTC」）；「概率/定价」附近的百分数只能取自输入里的概率事实，不得自行取整、换档或编造。',
+  'policy-probability-citation': '结论里的政策概率取整到整百分点写（输入 76.65% 写「约 77%」或按输入取整写 77%），并在同一段写出该概率的截至时刻（例如「市场定价 77%，截至 2026-10-30 15:00 UTC」）；更精确的值留在记录里，不在正文重复。「概率/定价」附近的百分数只能取自输入里的概率事实，不得换档或编造；输入没有 24 小时变化时写「24 小时变化尚未可得」，不得自己算。',
+  'probability-is-a-level': '概率是水平值，不许带正负号：「降息概率 +5%」「降息概率 3 个百分点」都会被读成变了 5 个百分点。写成「降息概率 77%」；变化另起一句「较上一日 +3 个百分点」。',
+  'ambiguous-signed-percentage': '带正负号的百分数必须让读者一眼看出是变化：要么单位是 bp/基点（「收益率 +6bp」），要么同一句里有「较/变化/环比/同比/上升/下降」这类字样（「较上一日 +0.3 个百分点」）。没有这些就写成不带符号的水平值。',
   // The answer must return to the change that triggered the run, not to a better-writable topic.
   'divergence-contradiction': '上一次 `divergences` 里的立场与输入事实相反：输入里 `divergence-<pairId>` 事实存在，说明这一对的背离成立，`stance` 只能是 diverging；反过来，事实值是 none（查过、没背离）时不能写 diverging。与证据相反会被整份拒绝——**不写不算相反**，没意见就不要写这一项。',
   'shape:divergences': '`divergences` 是可选数组；写的话每项必须恰好包含 pairId 与 stance 两个键，pairId 取输入里 `divergence-<pairId>` 的原文，stance 只能是 diverging 或 not-diverging。',
