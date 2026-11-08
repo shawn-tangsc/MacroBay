@@ -5,7 +5,7 @@ import { NOTIFICATION_EVENT_POLICY } from '../contracts/notificationEventPolicy'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { PLATFORM_NOTIFICATION_EVENTS } from '../contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
-import { marketIntelligenceProductManifest } from '@products/market-intelligence/product.manifest'
+
 
 /**
  * `narrowedDisruptionLevels` 的四条语义（架构师 a 方案）：只能收窄、`center` 不可排除、
@@ -23,8 +23,8 @@ const clock = { now: () => new Date('2026-11-08T00:00:00.000Z'), timeZone: () =>
 
 function request(overrides: Partial<NotificationSubmitRequest> = {}): NotificationSubmitRequest {
   return {
-    eventTypeId: 'market-intelligence.analysis.conclusion',
-    dedupeVars: { builder: 'template', vars: { triggerKey: 'k1', cutoff: '2026-11-08T00:00:00.000Z' } },
+    eventTypeId: 'platform.notification.self-test',
+    dedupeVars: { builder: 'template', vars: { date: '2026-11-08', seq: 'k1' } },
     actions: [],
     occurredAt: '2026-11-08T00:00:00.000Z',
     ...overrides
@@ -38,10 +38,8 @@ function harness() {
     storage,
     catalog: createNotificationEventCatalog({
       policy: NOTIFICATION_EVENT_POLICY,
-      sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
-      ]
+      // 合成 manifest：平台测试不 import 产品（G2）。这里只要一条已批准 center+channel 的平台事件。
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }]
     }),
     diagnostics: () => undefined,
     resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
@@ -59,10 +57,8 @@ function harnessWithDiagnostics() {
     storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { state = JSON.parse(JSON.stringify(next)) } },
     catalog: createNotificationEventCatalog({
       policy: NOTIFICATION_EVENT_POLICY,
-      sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
-      ]
+      // 合成 manifest：平台测试不 import 产品（G2）。这里只要一条已批准 center+channel 的平台事件。
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }]
     }),
     diagnostics: (entry) => entries.push(entry),
     resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
