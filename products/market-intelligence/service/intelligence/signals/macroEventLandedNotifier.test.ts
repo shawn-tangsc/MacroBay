@@ -107,6 +107,59 @@ describe('macro event landed notifier', () => {
     expect(selectLandedReleases([event({ eventKey: 'another-hmac' })], asOf).landings).toEqual([landing()])
   })
 
+  /**
+   * 「哪些国家的数据」只影响这条流，默认一个字不许变。
+   *
+   * 夹具必须**本来就能过**（有 actual、有 consensus、偏离超过 5%），否则它被丢掉是因为缺值，
+   * 国家筛选改坏了这条用例也不会红——今天那条中国外汇储备就正是这种假绿夹具。
+   */
+  describe('country scope', () => {
+    const china = event({
+      eventKey: 'cn-fx',
+      observationKey: 'CN.FX.RELEASE.2026-M10',
+      title: '外汇储备',
+      countryCode: 'CN',
+      providerActual: { displayValue: '110' },
+      consensus: { displayValue: '100' },
+      providerPrevious: { displayValue: '100' }
+    })
+
+    it('keeps a qualifying non-US release silent under the default (US only)', () => {
+      expect(selectLandedReleases([china], asOf).landings).toEqual([])
+      expect(selectLandedReleases([china], asOf, undefined, { landedCountries: { scope: 'us', codes: [] } }).landings).toEqual([])
+      // 反向的成对断言：同样的夹具在放宽后必须推，否则这条用例证明不了「被国家挡下」。
+      expect(selectLandedReleases([china], asOf, undefined, { landedCountries: { scope: 'all', codes: [] } }).landings)
+        .toEqual([landing({ eventId: 'CN.FX.RELEASE.2026-M10', countryCode: 'CN', title: '外汇储备', actual: '110', consensus: '100', previous: '100' })])
+      expect(selectLandedReleases([china], asOf, undefined, { landedCountries: { scope: 'custom', codes: ['CN'] } }).landings)
+        .toHaveLength(1)
+    })
+
+    it('still announces a US release under the default scope', () => {
+      expect(selectLandedReleases([event()], asOf).landings).toEqual([landing()])
+    })
+
+    it('treats an unknown country as "not selected" for us and custom, selected for all', () => {
+      const unknown = event({ eventKey: 'unknown-country', observationKey: 'CN.FX.RELEASE.unknown', countryCode: null })
+      expect(selectLandedReleases([unknown], asOf).landings).toEqual([])
+      expect(selectLandedReleases([unknown], asOf, undefined, { landedCountries: { scope: 'custom', codes: ['US'] } }).landings).toEqual([])
+      expect(selectLandedReleases([unknown], asOf, undefined, { landedCountries: { scope: 'all', codes: [] } }).landings).toHaveLength(1)
+    })
+
+    it('does not trade away the other boundaries when the scope widens', () => {
+      const lowImportance = event({
+        eventKey: 'cn-low',
+        observationKey: 'CN.FX.RELEASE.low',
+        countryCode: 'CN',
+        importance: 'medium',
+        providerActual: { displayValue: '110' },
+        consensus: { displayValue: '100' }
+      })
+      const selection = selectLandedReleases([lowImportance], asOf, undefined, { landedCountries: { scope: 'all', codes: [] } })
+      expect(selection.landings).toEqual([])
+      expect(selection.suppressed.importanceNotSelected).toBe(1)
+    })
+  })
+
   it('reports a matched release only when the reader asked for it, and still honours importance', () => {
     // 它是一条**符合预期**、重要性为高的发布：默认（只推出乎意料的）不推；勾了「符合预期也推」才推。
     const matched = event({ providerActual: { displayValue: '2' }, consensus: { displayValue: '2' } })
