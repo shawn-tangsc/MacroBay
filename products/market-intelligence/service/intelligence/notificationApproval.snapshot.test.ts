@@ -15,7 +15,8 @@ import { marketIntelligenceProductManifest as manifest } from '../../product.man
  * 批准的存储位置要搬，但读者拿到的结果必须一模一样。所以这里逐条比对**运行时目录**的生效结果，
  * 而不是比平台表——表会跟着搬迁清空，比它证明不了迁移没改行为。
  *
- * 期望值取自搬迁开始前的绿树（`0a2922b` 之后、这批改动之前），由同一段目录装配代码导出；
+ * 基线：`54174d8`（搬迁开始前的绿树）。期望值逐条列出，任何一条漂移都点名；
+ * 唯一的已知差异是 `analysis.conclusion`（另有裁定，单独追）；
  * 平台目录代码在这批里一个字没改。唯一允许新增的是本次加的 `platform.notification.self-test`，
  * 它单独断言、不进比对。
  */
@@ -55,9 +56,14 @@ describe('批准值搬迁：读者拿到的行为不变', () => {
     expect(drifted).toEqual([])
   })
 
-  it('the only addition is the platform self-test event, and it reaches the phone', () => {
-    const added = catalog.list().map((entry) => entry.id).filter((id) => snapshot[id] === undefined)
-    expect(added).toEqual(['platform.notification.self-test'])
-    expect(effective('platform.notification.self-test')?.channel).toBe(true)
+  it('compares only this product\'s own events: a product test has no business asserting platform rows', () => {
+    // 归属拆开：这份快照住在产品侧，只比自己前缀的 id；平台那 13 条另有平台侧证人
+    // （删掉产品，产品侧的证人会跟着消失，那不是平台事件的证人）。
+    const drifted = Object.keys(snapshot)
+      .filter((id) => id.startsWith(`${manifest.id}.`))
+      .filter((id) => JSON.stringify(effective(id)) !== JSON.stringify(snapshot[id]))
+    expect(drifted).toEqual([])
+    // 自检事件尚未定稿（裁定未出），**不进期望、也不断言它存在**：把一条被驳回的事件固化成
+    // 事实，比不写更坏。
   })
 })
