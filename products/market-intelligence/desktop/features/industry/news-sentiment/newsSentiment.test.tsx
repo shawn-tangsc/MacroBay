@@ -98,10 +98,12 @@ describe('icon triggers', () => {
     expect(refresh).not.toBeNull()
 
     await act(async () => { settings?.focus() })
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    await act(async () => {})
-    const tooltip = document.body.querySelector('.ant-tooltip')
-    expect(tooltip?.textContent).toContain(text.settings)
+    // 条件是「带这句说明的提示浮层出现了」，不是「等 250ms 再说」：轮询一成立就继续，上限由 `vi.waitFor` 兜住。
+    await vi.waitFor(() => {
+      const tooltip = document.body.querySelector('.ant-tooltip')
+      if (tooltip === null) throw new Error('Expected the settings tooltip.')
+      expect(tooltip.textContent).toContain(text.settings)
+    })
   })
 })
 
@@ -170,12 +172,14 @@ describe('a read that has not settled is not a failure', () => {
     const refresh = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.refresh}"]`)
     expect(refresh).not.toBeNull()
     await act(async () => { refresh?.click() })
-    await act(async () => {})
-    await act(async () => {})
+    // 条件是「失败后的旧读数与那句说明已经出现」，不是数两次微任务拍子：这条刷新链里没有定时器。
+    await vi.waitFor(() => {
+      expect(query).toHaveBeenCalledTimes(2)
+      expect(container.querySelector('[data-news-sentiment-stale-read]')?.textContent).toContain(text.staleRead)
+    })
 
     // The reading is still true, only older: it stays, and a note says why.
     expect(container.querySelectorAll('.mi-news-sentiment__drivers button').length).toBeGreaterThan(0)
-    expect(container.querySelector('[data-news-sentiment-stale-read]')?.textContent).toContain(text.staleRead)
     expect(container.querySelector('.mi-news-sentiment .state-view--error')).toBeNull()
   })
 })
@@ -183,15 +187,22 @@ describe('a read that has not settled is not a failure', () => {
 describe('a read that never answers has a deadline', () => {
   it('turns a hung read into a failure with a retry, instead of loading forever', async () => {
     // The fix for "a failure flashes before the data" must not become "never admit the failure".
-    const query = vi.fn(() => new Promise<NewsSentimentView>(() => {}))
-    const container = await mount(
-      <NewsSentimentFeature readDeadlineMs={30} text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
-    )
-    expect(container.querySelector('.state-view--error')).toBeNull()
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 80)) })
-    expect(container.querySelector('.state-view--error')).not.toBeNull()
-    expect(container.querySelector('.mi-news-sentiment .state-view--error button')).not.toBeNull()
-    expect(container.querySelector('.loading-state')).toBeNull()
+    // 时限到点用假计时器推进，不真等 30/80ms：到点后的状态更新仍在 `act` 里，两次干净运行结果一致。
+    vi.useFakeTimers()
+    try {
+      const query = vi.fn(() => new Promise<NewsSentimentView>(() => {}))
+      const container = await mount(
+        <NewsSentimentFeature readDeadlineMs={30} text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+      )
+      expect(container.querySelector('.state-view--error')).toBeNull()
+      await act(async () => { vi.advanceTimersByTime(31) })
+      await act(async () => {})
+      expect(container.querySelector('.state-view--error')).not.toBeNull()
+      expect(container.querySelector('.mi-news-sentiment .state-view--error button')).not.toBeNull()
+      expect(container.querySelector('.loading-state')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -585,9 +596,11 @@ describe('NewsSentimentFeature', () => {
     const container = await mount(node('en-US'))
     expect(query).toHaveBeenCalledTimes(1)
     await act(async () => { root?.render(node('zh-CN')) })
-    await act(async () => {})
-    expect(query).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain('中文：SEC Approves Spot Ethereum ETF Options')
+    // 条件是「中文标题已经在屏上、重读恰好发生一次」，不是数一次渲染拍子：语言切换触发的读取没有定时器。
+    await vi.waitFor(() => {
+      expect(query).toHaveBeenCalledTimes(2)
+      expect(container.textContent).toContain('中文：SEC Approves Spot Ethereum ETF Options')
+    })
   })
 
   it('shows a queue progress bar only while a translation batch runs', async () => {
@@ -634,13 +647,15 @@ describe('NewsSentimentFeature', () => {
     const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="sources-disabled"] button')
     expect(button).not.toBeNull()
     await act(async () => { button?.click() })
-    // The action settles its own promise chain (enable -> collect -> re-read) before we assert.
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    for (const sourceId of ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']) {
-      expect(setEnabled).toHaveBeenCalledWith(sourceId, true)
-      expect(runNow).toHaveBeenCalledWith(sourceId)
-    }
-    expect(query.mock.calls.length).toBeGreaterThan(1)
+    // 条件是「四个源都启用、各跑一次，卡片也重读过」，不是等一个 0ms 定时器：
+    // enable → collect → refresh 全是 Promise 链，链走完条件就成立，上限由 `vi.waitFor` 兜住。
+    await vi.waitFor(() => {
+      for (const sourceId of ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']) {
+        expect(setEnabled).toHaveBeenCalledWith(sourceId, true)
+        expect(runNow).toHaveBeenCalledWith(sourceId)
+      }
+      expect(query.mock.calls.length).toBeGreaterThan(1)
+    })
   })
 
   it('widens the window when the only data is older than the window', async () => {
