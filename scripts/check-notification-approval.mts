@@ -26,7 +26,9 @@ const sources: NotificationEventDeclarationSource[] = [
     .filter((manifest) => (manifest.notificationEvents?.length ?? 0) > 0)
     .map((manifest): NotificationEventDeclarationSource => ({
       productId: manifest.id,
-      events: manifest.notificationEvents ?? []
+      events: manifest.notificationEvents ?? [],
+      // 批准值随声明走（契约 §7.1b）：产品自己声明，检查脚本也按同一处读。
+      ...(manifest.notificationApproval === undefined ? {} : { approval: manifest.notificationApproval })
     }))
 ]
 
