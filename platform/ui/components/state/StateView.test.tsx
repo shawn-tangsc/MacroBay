@@ -109,7 +109,7 @@ describe('StateView', () => {
         state: 'error',
         reasonCode: 'unreadable',
         resolveText: key,
-        details: { summaryKey: 'ui.state.error.details', bodyKey: 'ui.state.error.details.body' },
+        details: { summaryKey: 'ui.state.error.details', bodyKey: 'ui.state.error.details' },
         action: { labelKey: 'ui.state.action.retry', onSelect: () => undefined }
       })
     )
@@ -307,12 +307,12 @@ describe('StateView', () => {
       resolveText: key,
       action: { labelKey: 'ui.state.action.enable', onSelect: () => undefined }
     }
-    // @ts-expect-error details 只属 error。
     const detailsOnEmpty: StateViewProps = {
       state: 'empty',
       reasonCode: 'never-created',
       resolveText: key,
       action: { labelKey: 'ui.state.action.create', onSelect: () => undefined },
+      // @ts-expect-error details 只属 error：多行字面量里，指令必须贴在真正报错那一行上方。
       details: { summaryKey: 'a', bodyKey: 'b' }
     }
     // @ts-expect-error 动作文案是码表里的键，自由字符串编译不过。
@@ -355,7 +355,7 @@ describe('窗口三种「没有」互不顶替（§3：查过没有 ≠ 还没�
 describe('产品原因句入口（§17：只覆盖原因句，参数必须走到）', () => {
   /** 产品文案表的替身：与产品一样，句子里带 `{参数名}` 占位。 */
   const TEMPLATES: Record<string, string> = {
-    'mi.newsSentiment.staleSince': '数据已过期 · 最后更新 {moment}'
+    'sample.reason.staleSince': '数据已过期 · 最后更新 {moment}'
   }
   const productResolve = (dictKey: string, params?: Record<string, string>): string =>
     (TEMPLATES[dictKey] ?? '').replace(/\{(\w+)\}/g, (_whole, name: string) => params?.[name] ?? `{${name}}`)
@@ -365,7 +365,7 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
     reasonCode: 'target-disabled',
     resolveText: key,
     productReason: {
-      key: 'mi.newsSentiment.staleSince',
+      key: 'sample.reason.staleSince',
       params: { moment: '2026-11-02 01:20 (UTC+08:00)' },
       resolve: productResolve
     }
@@ -409,7 +409,7 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
       state: 'empty',
       reasonCode: 'not-yet',
       resolveText: key,
-      productReason: { key: 'mi.newsSentiment.notInTheTable', resolve: productResolve }
+      productReason: { key: 'sample.reason.notInTheTable', resolve: productResolve }
     })
 
     expect(html).toContain('data-reason-source="platform"')
@@ -422,7 +422,7 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
         state: 'empty',
         reasonCode: 'not-yet',
         resolveText: key,
-        productReason: { key: 'mi.newsSentiment.emptyText', resolve }
+        productReason: { key: 'sample.reason.emptyText', resolve }
       })
 
       expect(html).toContain('data-reason-source="platform"')
@@ -437,7 +437,7 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
       reasonCode: 'unreadable',
       resolveText: key,
       productReason: {
-        key: 'mi.newsSentiment.boom',
+        key: 'sample.reason.boom',
         resolve: () => {
           throw new Error('product table exploded')
         }

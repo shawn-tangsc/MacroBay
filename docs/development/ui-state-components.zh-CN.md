@@ -142,7 +142,7 @@ import { StateView } from '@platform/ui/components/state'
   state="disabled"
   reasonCode="target-disabled"
   productReason={{
-    key: 'mi.newsSentiment.staleSince',            // 必须带产品前缀，不许用 ui.*
+    key: 'sample-product.reason.staleSince',            // 必须带产品前缀，不许用 ui.*
     params: { moment: formatInstant(updatedAt) },  // 已经格式化好的展示值，只收字符串
     resolve: (key, params) => productT(key, params) // 第二个参数必须接住
   }}
@@ -178,7 +178,7 @@ import { StateView } from '@platform/ui/components/state'
   state="empty"
   reasonCode="older-than-window"
   productReason={{
-    key: 'mi.newsSentiment.stale',
+    key: 'sample-product.reason.stale',
     params: { time: formatTime(asOf, 'minute') },  // 先由平台格式化器算好
     resolve: (key, params) => text[key]?.(params) ?? ''
   }}

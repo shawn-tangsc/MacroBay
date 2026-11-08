@@ -154,7 +154,7 @@ platform-owned:
   state="disabled"
   reasonCode="target-disabled"
   productReason={{
-    key: 'mi.newsSentiment.staleSince',             // product prefix; never ui.*
+    key: 'sample-product.reason.staleSince',             // product prefix; never ui.*
     params: { moment: formatInstant(updatedAt) },   // already formatted; strings only
     resolve: (key, params) => productT(key, params) // the second argument must be taken
   }}
@@ -199,7 +199,7 @@ platform cannot know — an as-of time, for instance:
   state="empty"
   reasonCode="older-than-window"
   productReason={{
-    key: 'mi.newsSentiment.stale',
+    key: 'sample-product.reason.stale',
     params: { time: formatTime(asOf, 'minute') },  // formatted by the platform first
     resolve: (key, params) => text[key]?.(params) ?? ''
   }}

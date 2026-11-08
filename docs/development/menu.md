@@ -95,7 +95,7 @@ const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
 | `apps/desktop-shell/src/renderer/src/shell/workspace/WorkspaceTabMenu.tsx` (used by `WorkspaceTabStrip`) | Self-drawn `role="menu"` + own keyboard model | `ContextMenu` with the Tab's viewport rect as `anchor` |
 | `apps/desktop-shell/src/renderer/src/shell/model-service/ProviderRowContextMenu.tsx` | Self-drawn fixed-position menu with its own clamp | `ContextMenu`, anchor from the `contextmenu` event |
 | `apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderMoreMenu.tsx` | Self-drawn `role="menu"` list | `ContextMenu`, anchor from the trigger's rect |
-| `products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentDrawer.tsx` (`mi-news-drawer__context`) | Self-drawn `role="menu"` with hand-written items | `ContextMenu`, anchor from the `contextmenu` event |
+| A product-side drawer that still draws its own `role="menu"` list (product modules are not rewritten in place; already-antd surfaces stay) | Self-drawn `role="menu"` with hand-written items | `ContextMenu`, anchor from the `contextmenu` event |
 
 Already-antd `Dropdown` surfaces keep working and are **not** rewritten in place — they are wrapped
 by their trigger, not point-anchored, so they are not what this component replaces. When one of them

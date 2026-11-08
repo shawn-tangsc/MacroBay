@@ -89,7 +89,7 @@ const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
 | `apps/desktop-shell/src/renderer/src/shell/workspace/WorkspaceTabMenu.tsx`（`WorkspaceTabStrip` 在用） | 自绘 `role="menu"` + 自己一套键盘 | `ContextMenu`，`anchor` 取 Tab 的视口矩形 |
 | `apps/desktop-shell/src/renderer/src/shell/model-service/ProviderRowContextMenu.tsx` | 自绘 fixed 定位菜单，自己夹取 | `ContextMenu`，`anchor` 取 `contextmenu` 事件坐标 |
 | `apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderMoreMenu.tsx` | 自绘 `role="menu"` 列表 | `ContextMenu`，`anchor` 取触发器矩形 |
-| `products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentDrawer.tsx`（`mi-news-drawer__context`） | 自绘 `role="menu"` + 手写各项 | `ContextMenu`，`anchor` 取 `contextmenu` 事件坐标 |
+| 仍在自绘 `role="menu"` 列表的产品侧抽屉（产品模块不就地重写，已经用 antd 的也不动） | 自绘 `role="menu"` + 手写各项 | `ContextMenu`，`anchor` 取 `contextmenu` 事件坐标 |
 
 已经用 antd `Dropdown` 的那批**不就地重写**：它们是挂在触发器上的菜单，不是定点菜单，不在本组件的替换范围里。
 它们要统一行模型时，消费 `MenuItem`，别再长出第五种形状：`AssistantSidePanel`、`WorkspacePanelToolbar`、
