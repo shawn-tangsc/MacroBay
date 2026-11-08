@@ -1,4 +1,4 @@
-import type { JobDefinition, JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
+import type { JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
 import type { BlsScheduleAndValuesSyncWorkflow } from './blsScheduleAndLatestValuesSyncWorkflow'
 
 /**
@@ -25,13 +25,12 @@ export const blsScheduleAndValuesSchedulerPolicy = Object.freeze({
 export type BlsScheduleAndValuesScheduler = Readonly<{ initialize: () => void; dispose: () => void }>
 
 /**
- * Registers the interval job that keeps BLS official values fresh without a user
- * action.
+ * BLS 官方日历的同步作业（**自动排期已于 2026-11-08 停止**，见 `initialize` 与
+ * `blsOfficialCalendarAvailability.ts`）。
  *
- * The workflow re-reads the schedule on every tick and only catches up groups
- * whose release date has passed, so repeated ticks without a new release are
- * no-ops. The year is derived per tick from the clock, never captured when the
- * schedule is registered, so the job keeps working across a year boundary.
+ * 保留这个工厂而不是删掉，是为了让「恢复」只改一处判定 + 两行排期：工作流、年份推导与作业
+ * 信封都还在原处；停掉的只有排期本身。停止后 `listSchedules()` 里不会再有这个 definition，
+ * 设置页因此显示「未安排」，而不是从开关反推出一个假的「已注册」。
  */
 export function createBlsScheduleAndValuesScheduler(deps: Readonly<{
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition'>
@@ -59,23 +58,23 @@ export function createBlsScheduleAndValuesScheduler(deps: Readonly<{
     }
   }
 
+  /**
+   * **自动同步已停止**（用户 2026-11-08 决定）。
+   *
+   * 停的原因写在 `blsOfficialCalendarAvailability.ts`：BLS 两个端点在当前网络被 CDN 边缘
+   * 直接 403，直连与代理都一样，不是作业本身坏了。这一天 8 次自动运行全部失败、官方修订表
+   * 最后一次写入停在 2026-10-22——再排期只会每 6 小时重演一次，并在作业列表里继续留失败记录。
+   *
+   * 因此这里**不再** `registerHandler` / `setSchedule` / `enqueueDefinition`，也不靠
+   * `readEnabled` 早退来「假装停掉」（那样仍会每 6 小时跑一次）。这里只做一件事：把旧版本
+   * 可能已经落盘的排期删掉——不删的话它照旧会触发。
+   *
+   * 恢复（BLS 通了的判定见同一个常量文件）：把 `state` 改成 `'available'`，再把注册 handler
+   * 与 `setSchedule` 两行放回来即可；`deps.workflow` / `readEnabled` / `now` 保留在此就是为这一步。
+   */
   function initialize(): void {
     if (disposed) return
-    deps.jobRuntime.registerHandler(policy.handlerId, async () => {
-      if (disposed) return
-      if (!await readEnabledSafe(deps.readEnabled)) return
-      const year = String(deps.now().getUTCFullYear())
-      const result = await deps.workflow.sync({ year })
-      // `unavailable` means the schedule sync or the value read failed outright;
-      // surfacing it as a failed job run keeps a dead source visible.
-      if (result.state !== 'completed') throw new Error('BLS schedule and latest values sync did not complete.')
-    })
-    const definition = automaticDefinition()
-    deps.jobRuntime.setSchedule(definition)
-    // Run once at startup as well: a `lastStart` interval only fires after six hours,
-    // so a fresh launch would not reconcile the BLS schedule until then. The startup
-    // run carries its own definition id, so it cannot re-arm the interval.
-    void deps.jobRuntime.enqueueDefinition({ ...definition, trigger: { kind: 'startup' } }).catch(() => undefined)
+    deps.jobRuntime.removeSchedule(policy.definitionId)
   }
 
   function dispose(): void {
@@ -84,12 +83,4 @@ export function createBlsScheduleAndValuesScheduler(deps: Readonly<{
   }
 
   return Object.freeze({ initialize, dispose })
-}
-
-async function readEnabledSafe(read: () => boolean | Promise<boolean>): Promise<boolean> {
-  try {
-    return (await read()) === true
-  } catch {
-    return false
-  }
 }

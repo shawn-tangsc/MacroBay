@@ -73,6 +73,16 @@ describe('source issue decision', () => {
     expect(decideSourceIssue(snapshot({ consecutiveFailures: 2 }), 6 * HOUR)).toBeNull()
   })
 
+  /**
+   * BLS 官方日历已被判定为「取不到」（403，自动同步停止）：它既不是「连续失败」（没有可重试的
+   * 作业在跑），也不是「这段时间没新数据」（事务本身存在，只是拿不到）。每天再报一条「陈旧」，
+   * 等于把停任务的收益还回去。
+   */
+  it('never calls a source that is declared unavailable stale or failing', () => {
+    const veryOld = new Date(Date.parse(NOW) - 400 * HOUR).toISOString()
+    expect(decideSourceIssue({ sourceId: 'macro-calendar-bls', consecutiveFailures: 9, lastSuccessAt: veryOld, now: NOW }, 6 * HOUR)).toBeNull()
+  })
+
   it('reports consecutive failure at the declared threshold', () => {
     expect(SOURCE_ISSUE_FAILURE_THRESHOLD).toBe(3)
     expect(decideSourceIssue(snapshot({ consecutiveFailures: 3 }), 6 * HOUR)).toBe('consecutive-failed')
@@ -159,7 +169,7 @@ describe('source issue submission', () => {
     const notify = createSourceIssueNotifier({
       submit: async (request) => {
         seen.push(request as unknown as Record<string, unknown>)
-        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'], suppressedLevels: [] }
       },
       defaultFreshnessMs: 6 * HOUR,
       timeZone: () => 'UTC'
@@ -187,7 +197,7 @@ describe('source issue submission', () => {
     const notify = createSourceIssueNotifier({
       submit: async () => {
         calls += 1
-        return { kind: 'accepted', recordId: 'r1', levels: ['center'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }
       },
       defaultFreshnessMs: 6 * HOUR,
       timeZone: () => 'UTC'
@@ -200,7 +210,7 @@ describe('source issue submission', () => {
     // 误报时要能一眼分开「周末低产」与「真异常」：诊断里带各源静默小时数 + 用的是哪档窗口。
     const lines: Array<{ event: string; fields?: Record<string, unknown> }> = []
     const notify = createSourceIssueNotifier({
-      submit: async () => ({ kind: 'accepted', recordId: 'r1', levels: ['center'] }),
+      submit: async () => ({ kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }),
       defaultFreshnessMs: 6 * HOUR,
       timeZone: () => 'UTC',
       log: (_level, event, fields) => { lines.push({ event, ...(fields === undefined ? {} : { fields }) }) },

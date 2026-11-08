@@ -7,6 +7,7 @@ import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../.
 import type { RuntimeStateRecord } from '@platform/jobs'
 
 import { isSourceStaleAsOf } from './macroSourceHealth'
+import { getSource } from './providerRegistry'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 
 /**
@@ -135,6 +136,10 @@ export type SourceIssueSnapshot = {
  *    缺省跟 `sourceCoverageAsOf` 同一个 6 小时默认值（同一件事只有一个判据）。
  */
 export function decideSourceIssue(input: SourceIssueSnapshot, defaultFreshnessMs: number): SourceIssueKind | null {
+  // 已被判定为「取不到」的源（目前只有 BLS 官方日历）不发这两条事件：它不是「连续失败」，也不是
+  // 「这段时间没新数据」——每天再报一次「陈旧」，等于把停任务的收益又还回去。判定与取证见
+  // `macro-calendar/bls-schedule-catch-up/blsOfficialCalendarAvailability.ts`。
+  if (getSource(input.sourceId)?.unavailable !== undefined) return null
   if (input.consecutiveFailures >= SOURCE_ISSUE_FAILURE_THRESHOLD) return 'consecutive-failed'
   // 陈旧看的是「最后一次真的带来新条目」；没有这个数才退回「最后一次采集成功」（旧来源没有检查点）。
   const lastEvidenceAt = input.lastNewItemAt ?? input.lastSuccessAt
