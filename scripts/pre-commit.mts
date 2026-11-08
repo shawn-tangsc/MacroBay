@@ -272,7 +272,11 @@ if (ownErrors.length > 0) {
    * `SKIP_PRE_COMMIT=1`，那比这条报错更难收拾。
    */
   for (const entry of ownErrors.slice(0, 20)) {
-    console.error(`  ${entry.line.replace(/^(?:\.\.\/)+/, '').replace(treeRoot + '/', '').trim()}`)
+    // 文件路径用已剥干净的 `entry.file`，位置与错误正文从原行里取：tsc 有时给 `../../var/folders/…`
+    // 相对路径、有时给绝对路径，直接打原行会露出一串读者磁盘上不存在的路径（实测过）。
+    const position = /\(\d+,\d+\)/u.exec(entry.line)?.[0] ?? ''
+    const message = entry.line.slice(entry.line.indexOf(': error TS'))
+    console.error(`  ${entry.file ?? entry.line}${position}${message}`)
   }
   console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')
