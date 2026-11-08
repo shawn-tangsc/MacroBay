@@ -8,7 +8,10 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 import { StatusPill } from '@platform/ui/components/status-pill'
 // 深路径：`@platform/jobs` 那个 barrel 会带进 sqlite（主进程用），渲染层只要这一个小函数。
 import { resolveJobTitle } from '@platform/jobs/runtime/jobTitle'
-import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
+import {
+  findProductSettingsPanelByIntent,
+  openProductSettingsPanelByIntent
+} from '../../navigation/openProductSettingsPanel'
 
 import { formatJobSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockError, BlockLoading } from './TaskAutomationBlockParts'
@@ -63,6 +66,13 @@ export function TaskAutomationResourceJobsSection(props: {
   const pillText = pillTextResolver(labels)
   /** 已安装的产品数：决定「没启用」到底是读者关掉的，还是根本没有可启用的。 */
   const installedProductCount = Object.keys(controller.productNames).length
+  /**
+   * 本构建里有没有一页产品设置承担「资源来源」这个意图。
+   *
+   * 按**意图**查，不按面板 id：写死某个产品的面板就是壳层点名那个产品，删掉产品包之后按钮还在、
+   * 页面没了（壳会静默落到默认面板，读者以为点错）。查不到就是没有入口——不造一个点了没反应的按钮。
+   */
+  const resourceSourcesPanel = findProductSettingsPanelByIntent('resource-sources')
   const clearFilters = (): void => {
     setNameQuery('')
     setSource('all')
@@ -133,9 +143,10 @@ export function TaskAutomationResourceJobsSection(props: {
       ) : controller.items.length === 0 ? (
         // 空有两种，动作不同，不能共用一句「去启用」：
         // - 装了产品、但它的自动任务能力没启用 → `nothing-enabled`，动作是**去启用**（有地方可去）；
-        // - 一个产品都没有 → 本屏给不出动作，换成 `not-yet` 且不挂按钮。
+        // - 一个产品都没有，或本构建没有哪一页承担「资源来源」意图 → 本屏给不出动作，
+        //   换成 `not-yet` 且不挂按钮。
         //   挂一个点了没反应的「去启用」比空着更糟：读者点进去会发现那里根本没有可启用的东西。
-        installedProductCount > 0 ? (
+        installedProductCount > 0 && resourceSourcesPanel !== undefined ? (
           <>
             <StateView
               state="empty"
@@ -143,7 +154,7 @@ export function TaskAutomationResourceJobsSection(props: {
               size="md"
               action={{
                 labelKey: STATE_VIEW_ACTION_KEYS.enable,
-                onSelect: () => navigateTo({ page: 'settings', panel: 'market-intelligence.intelligence-sources' })
+                onSelect: () => openProductSettingsPanelByIntent('resource-sources')
               }}
             />
             <p className="task-automation-note">{labels.resourceEmptyBody}</p>
