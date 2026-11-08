@@ -81,6 +81,7 @@ describe('verification entry', () => {
       'check:notification-approval',
       'typecheck',
       'test',
+      'check:test-budget',
       'build'
     ])
   })

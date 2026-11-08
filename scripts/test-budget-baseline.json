@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "status": "pending",
+  "targets": {
+    "totalMs": 360000,
+    "fileMs": 15000,
+    "testMs": 2000
+  },
+  "tolerance": {
+    "ratio": 1.1,
+    "floorMs": 200
+  },
+  "totalMs": null,
+  "files": {},
+  "tests": {}
+}

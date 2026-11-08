@@ -63,6 +63,8 @@ export const VERIFY_CHECKS = [
   'check:notification-approval',
   'typecheck',
   'test',
+  // 排在 `test` 之后：它读的是那一步写下来的 vitest JSON 报告，不自己再跑一遍。
+  'check:test-budget',
   'build'
 ] as const
 

@@ -11,7 +11,7 @@
     "build": "cd ../.. && electron-vite build --config electron.vite.config.ts",
     "typecheck": "tsc --noEmit -p ../../tsconfig.json",
     "lint": "tsc --noEmit -p ../../tsconfig.json",
-    "test": "cd ../.. && pnpm exec vitest run"
+    "test": "cd ../.. && pnpm exec vitest run --reporter=default --reporter=json --outputFile.json=.vitest-report.json"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",

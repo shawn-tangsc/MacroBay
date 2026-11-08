@@ -130,6 +130,8 @@ test-results/
 blob-report/
 coverage/
 *.lcov
+# `check:test-budget` 读的那份 vitest JSON 报告：每次 `pnpm test` 重写，产物不进库。
+.vitest-report.json
 /screenshots/
 /videos/
 

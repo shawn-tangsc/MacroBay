@@ -48,7 +48,8 @@
     "seed:analysis-quota": "tsx scripts/seed-analysis-quota.mts",
     "check:async-initial-state": "tsx scripts/check-async-initial-state.mts",
     "check:state-content-ternary": "tsx scripts/check-state-content-ternary.mts",
-    "check:components-ownership": "tsx scripts/check-components-ownership.mts"
+    "check:components-ownership": "tsx scripts/check-components-ownership.mts",
+    "check:test-budget": "tsx scripts/check-test-budget.mts"
   },
   "workspaces": [
     "apps/*",
