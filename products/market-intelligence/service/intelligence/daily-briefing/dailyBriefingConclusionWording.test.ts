@@ -175,8 +175,7 @@ describe('daily briefing conclusion wording', () => {
 
   it.each([
     ['目标价', '目标价 12 万美元，建议等待回调。'],
-    ['建议买入', '建议买入 BTC，等待反弹。'],
-    ['70% 概率', '70% 概率继续下跌，未来走势偏空。']
+    ['建议买入', '建议买入 BTC，等待反弹。']
   ])('rejects the prohibited forecast %s', (term, sentence) => {
     const result = validate(chinese({ summary: `${chinese().summary}${sentence}` }))
     expect(result).toMatchObject({ ok: false, failureCode: 'forbidden-forecast' })
@@ -198,9 +197,13 @@ describe('daily briefing conclusion wording', () => {
     if (!result.ok) expect(result.detail).toBe('-9.99')
   })
 
-  it('rejects a probability invented in English', () => {
-    const result = validateEnglish(english({ summary: `${english().summary} There is a 70% probability this continues.` }))
-    expect(result).toMatchObject({ ok: false, failureCode: 'forbidden-forecast' })
+  it('rejects an invented probability by its number, not by the words around it', () => {
+    // 措辞判据已撤：`70% 概率`/`70% probability` 这类句式不再由正则拦。判的是**事实**——
+    // 文档里没有 70% 这个数，就按 `unknown-number` 拒（同一个数换成任何说法都一样被拒）。
+    const chineseResult = validate(chinese({ summary: `${chinese().summary} 70% 概率继续下跌。` }))
+    expect(chineseResult).toMatchObject({ ok: false, failureCode: 'unknown-number' })
+    const englishResult = validateEnglish(english({ summary: `${english().summary} There is a 70% probability this continues.` }))
+    expect(englishResult).toMatchObject({ ok: false, failureCode: 'unknown-number' })
   })
 
   it('rejects an outlook without an explicit bias', () => {

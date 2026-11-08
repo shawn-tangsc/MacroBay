@@ -34,6 +34,17 @@ export type NotificationDiagnosticsEntry = {
     /** 通道目标不唯一：`runtime-ready` 有 ≥2 条，推送按 fail closed 拒绝（技术方案 §1）。只记条数。 */
     | 'push-multiple-enabled'
     /**
+     * 推送**根本没有钩子**（`deliveryHooks.push` 缺席）：装配漏了出站端口。读者侧仍只有
+     * `push-unavailable` 一个码，这四个是**诊断**码，不进读者可见闭集。
+     */
+    | 'push-hook-missing'
+    /** 推送**没有派生入口**（`resolvePushChannel` 缺席）：装配漏了这根线（2026-11-08 事故的形态）。 */
+    | 'push-resolver-missing'
+    /** 0 条通道：`channels.list()` 里就一条都没有——配置事实，不是瞬时失败。 */
+    | 'push-target-none'
+    /** 有通道、但没有一条是 `runtime-ready`：带状态直方图，说清「卡在哪种状态」。 */
+    | 'push-target-not-ready'
+    /**
      * 同一键的第二次提交想比**首次定档**更宽：按第一次（合并不升级），并记这一条。
      * 不记的话，生产者会遇到「我传了全档为什么只进中心」而毫无线索。
      */
@@ -67,6 +78,8 @@ export type NotificationDiagnosticsEntry = {
   language?: 'zh-CN' | 'en-US'
   /** `push-multiple-enabled` 用：当时处于 `runtime-ready` 的通道条数。**不记通道名、不记凭据。** */
   count?: number
+  /** `push-target-not-ready` 用：**按状态**的通道条数（`{ 'runtime-ready': 0, 'credential-missing': 1 }`）。 */
+  states?: Readonly<Record<string, number>>
   /** 只有「提交被拒」这一支自带档位（同一出口要记 `error` 与 `info`，规则见 `rejectionTraceLevel`）；其它码由装配层定。 */
   level?: 'info' | 'warn' | 'error'
   at: string

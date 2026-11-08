@@ -11,7 +11,7 @@ import { macroCalendarEvidenceArchivePolicy, type MacroCalendarEvidenceArchive }
 import type { MacroCalendarSqlite } from '../macroCalendarSqlite'
 import { createMarketCalendarPublicQueryService } from './marketCalendarPublicQueryService'
 import { createMarketCalendarRefreshAttemptStore, latestAttemptFor, readWorstEnabledCollection } from './marketCalendarRefreshAttemptStore'
-import { notifyMacroEventLandings, selectLandedReleases, type MacroEventLandedSubmit } from '../../signals/macroEventLandedNotifier'
+import { notifyMacroEventLandings, selectLandedReleases, type LandedReleaseFilter, type MacroEventLandedSubmit } from '../../signals/macroEventLandedNotifier'
 import { marketCalendarPublicPolicy, type MarketCalendarFreshness, type MarketCalendarRefreshNowResult,
   type MarketCalendarRefreshResult, type MarketCalendarSource, type MarketCalendarRefreshAttempt, type MarketCalendarScope,
   isMarketCalendarScope } from '../../../../contracts/macro/marketCalendarQueryContracts'
@@ -222,7 +222,7 @@ export function createStoredManualCalendar(deps: {
    * 「事件发生后也告诉我」那一行的选择（配置页「日历事件 → 发生后」）。缺省＝只推出乎意料的，
    * 与既有 N5 行为一字不差；读者选了「符合预期也推」才放宽，且仍受重要性勾选约束。
    */
-  readLandedFilter?: () => Readonly<{ includeMatched?: boolean; importance?: readonly ('high' | 'medium' | 'low')[] }>
+  readLandedFilter?: () => LandedReleaseFilter
   /** Clock of the composed calendar; production passes nothing and gets the wall clock. */
   now?: () => Date
 }) {

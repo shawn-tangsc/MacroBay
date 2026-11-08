@@ -3,7 +3,8 @@ import type { JobRuntime } from '@platform/jobs'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { MarketCalendarPage, MarketCalendarQuery } from '../../../contracts/macro/marketCalendarQueryContracts'
-import type { CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
+import { DEFAULT_CALENDAR_LANDED_COUNTRIES, type CalendarLandedCountrySelection } from '../../../contracts/calendarLandedCountries'
+import { DEFAULT_CALENDAR_REMINDER_SETTINGS, type CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
 import { registerCalendarEventReminderJob } from './calendarEventReminderJob'
 import type { CalendarReminderEvent } from './calendarEventReminderScan'
 import type { CalendarReminderSettingsStore } from './calendarEventReminderSettingsStore'
@@ -17,16 +18,35 @@ import type { CalendarReminderSettingsStore } from './calendarEventReminderSetti
 /** 「事件发生后也告诉我」那一行的读取器：缺省＝只推出乎意料的、只推「高」（与从前一致）。 */
 export function landedFilterReader(
   settings: CalendarReminderSettingsStore
-): () => Readonly<{ includeMatched: boolean; importance: readonly ('high' | 'medium' | 'low')[] }> {
+): () => Readonly<{
+  includeMatched: boolean
+  importance: readonly ('high' | 'medium' | 'low')[]
+  landedCountries: CalendarLandedCountrySelection
+}> {
   return () => {
-    const current = settings.read()
-    return { includeMatched: current.landedFilter === 'also-matched', importance: current.importance }
+    const current = settings.readWithStatus()
+    // 读不到按默认「只美国」处理：与「缺键 = 可读 + 默认」同一条规矩，也不放大推送量。
+    if (current.state === 'unreadable') {
+      return {
+        includeMatched: false,
+        importance: DEFAULT_CALENDAR_REMINDER_SETTINGS.importance,
+        landedCountries: DEFAULT_CALENDAR_LANDED_COUNTRIES
+      }
+    }
+    return {
+      includeMatched: current.settings.landedFilter === 'also-matched',
+      importance: current.settings.importance,
+      landedCountries: current.settings.landedCountries
+    }
   }
 }
 
 export type CalendarEventReminderWiring = Readonly<{
   read: () => CalendarReminderSettings
   write: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderSettings
+  /** 读不到与"没存上"各自成结果：设置页据此区分，不许拿默认值冒充"读到了"。 */
+  readWithStatus: CalendarReminderSettingsStore['readWithStatus']
+  writeWithStatus: CalendarReminderSettingsStore['writeWithStatus']
   applySchedule: (enabled: boolean) => void
   /**
    * 提醒作业实际使用的那一份事件读取（当前月 + 下月、身份 `observationKey ?? eventKey`）。
@@ -85,5 +105,12 @@ export function registerCalendarEventReminder(input: Readonly<{
       console.log(JSON.stringify({ marker: 'MI_CALENDAR_REMINDER', ...line }))
     }
   })
-  return { read: () => settings.read(), write: (patch) => settings.write(patch), applySchedule: job.applySchedule, readEvents }
+  return {
+    read: () => settings.read(),
+    write: (patch) => settings.write(patch),
+    readWithStatus: () => settings.readWithStatus(),
+    writeWithStatus: (patch) => settings.writeWithStatus(patch),
+    applySchedule: job.applySchedule,
+    readEvents
+  }
 }

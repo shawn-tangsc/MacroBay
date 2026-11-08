@@ -4,6 +4,7 @@ import { notificationCopy } from '@platform/i18n/notificationCopy'
 import { createNotificationCopyPort, type JobTitleResolver } from '@platform/notifications/contracts/notificationCopyPort'
 import { productNotificationCopyTables } from './notificationCopyTables'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
+import { diagnosticLogFields } from '@platform/notifications/contracts/notificationDiagnosticLogFields'
 import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import type {
   NotificationDiagnosticsSink,
@@ -188,12 +189,9 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
           ? 'info'
           : entry.code === 'persist-failed' ? 'error' : 'warn')
       const event = entry.code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${entry.code}`
-      ports.log.log(level, event, {
-        ...(entry.count === undefined ? {} : { count: entry.count }),
-        eventTypeId: entry.eventTypeId,
-        producerId: entry.producerId,
-        at: entry.at
-      })
+      // 字段透传走**唯一一份清单**（`diagnosticLogFields`）：手写一份白名单会吞掉下一个字段，
+      // 线上那次 `submit-failed` 没有 `reason` 就是这么来的。清单只含闭集码、id、条数与时刻。
+      ports.log.log(level, event, diagnosticLogFields(entry))
     }
   })
 }

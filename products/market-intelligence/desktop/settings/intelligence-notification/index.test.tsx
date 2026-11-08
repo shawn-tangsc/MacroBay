@@ -115,6 +115,21 @@ function pressedLabel(groupLabel: string): string | null {
 }
 
 /**
+ * 点开一行上的 ⓘ，读**这一颗触发器自己**指向的浮层内容（`aria-describedby` 是浮层给的 id）。
+ * 浮层挂在 overlay 容器里，而且关着的那些也留在文档里——所以按 id 取，不按「第一个浮层」取。
+ */
+async function openRowInfo(ariaLabel: string): Promise<string> {
+  const trigger = [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .find((button) => button.getAttribute('aria-label') === ariaLabel)
+  expect(trigger).toBeDefined()
+  await act(async () => { trigger!.click() })
+  await act(async () => { await Promise.resolve() })
+  const describedBy = trigger!.getAttribute('aria-describedby') ?? ''
+  const node = describedBy.split(' ').map((id) => document.getElementById(id)).find((each) => each !== null)
+  return node?.textContent ?? ''
+}
+
+/**
  * 断点量的是**这一页自己的宽度**（规范 §9f 的「容器宽」），不是窗口宽——外壳的三列里
  * 这一页只占一块。测试直接驱动这个宽度：`clientWidth` 在 happy-dom 里恒为 0，不 stub 就
  * 永远走「窗口宽」的兜底，量出来的不是被测对象。
@@ -216,7 +231,8 @@ describe('intelligence notification settings', () => {
     await render()
     await selectItem(3)
     const rows = [...(container?.querySelectorAll('.intelligence-notification-form-row') ?? [])]
-    // 打开时完整形态：通知方式 / 开始前提醒 / 提前多久 / 哪些重要性 / 发生后 / 代价说明。
+    // 打开时完整形态：通知方式 / 开始前提醒 / 提前多久 / 哪些重要性 / 发生后 / 哪些国家的数据。
+    // （「代价说明」那一行已删：整句说明一律进 ⓘ，正文不再单独占一行——2026-11-08。）
     expect(rows).toHaveLength(6)
     for (const row of rows) {
       const cells = [...row.children]
@@ -311,7 +327,12 @@ describe('intelligence notification settings', () => {
     await render()
     await selectItem(3)
     const detail = container?.querySelector('.intelligence-notification-calendar-detail')?.textContent ?? ''
-    expect(detail).toContain(text['pages.intelligence.notification.calendar.summary'].replace('{lead}', '1 小时').replace('{importance}', '高'))
+    // 关着时摆出**已存的值**（状态 / 提前量 / 重要性），不是一句话。
+    expect(detail).toContain(
+      [text['pages.intelligence.notification.status.off'], text['pages.intelligence.notification.leads.60'], text['pages.intelligence.notification.importance.high']]
+        .join(text['pages.intelligence.notification.joiner'])
+    )
+    expect(detail).not.toContain(text['pages.intelligence.notification.calendar.summary'].replace('{lead}', '').slice(0, 6))
     // 关着靠收起：提前量与重要性整行都不出现（不画禁用控件）。
     expect(detail).not.toContain(text['pages.intelligence.notification.calendar.lead'])
     expect(detail).not.toContain(text['pages.intelligence.notification.calendar.importance'])
@@ -356,9 +377,10 @@ describe('intelligence notification settings', () => {
     expect(surfaceBoxes.every((box) => box.checked)).toBe(true)
     // 提前提醒：关。
     expect(container?.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('false')
-    // 关着时用一行摘要说清「打开后会怎样」，不是让两个控件看起来能用却不起作用。
+    // 关着时把已存的值摆出来（状态 / 提前量 / 重要性）——是当前值，不是整句说明。
     expect(container?.textContent ?? '').toContain(
-      text['pages.intelligence.notification.calendar.summary']!.replace('{lead}', '1 小时').replace('{importance}', '高')
+      [text['pages.intelligence.notification.status.off'], text['pages.intelligence.notification.leads.60'], text['pages.intelligence.notification.importance.high']]
+        .join(text['pages.intelligence.notification.joiner'])
     )
     // 通知条件：默认只推出乎意料的。
     expect(pressedLabel(text['pages.intelligence.notification.calendar.landedRow']!))
@@ -429,7 +451,7 @@ describe('intelligence notification settings', () => {
       .toBe(text['pages.intelligence.notification.threshold.high'])
   })
 
-  it('shows the cost line only once the lowest tier is chosen', async () => {
+  it('keeps the lowest-tier cost inside the ⓘ, never in the row body', async () => {
     // 界面设计 2026-11-07：代价只给量级（「几十条」），且**只在选「低」时出现**；不写实测数字，
     // 那会变成承诺，明天变多就是我们在撒谎。
     const invoke = vi.fn(async (_productId: string, method: string, payload?: unknown) => {
@@ -448,7 +470,11 @@ describe('intelligence notification settings', () => {
       .find((button) => button.textContent === text['pages.intelligence.notification.threshold.low'])!
     await act(async () => { low.click(); await Promise.resolve() })
     await act(async () => { await Promise.resolve() })
-    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.threshold.cost'])
+
+    // 选「低」也不再往正文里塞一句代价——它只在 ⓘ 里。
+    expect(container?.textContent ?? '').not.toContain(text['pages.intelligence.notification.threshold.cost'])
+    expect(await openRowInfo(text['pages.intelligence.notification.threshold.aria']!))
+      .toContain(text['pages.intelligence.notification.threshold.cost'])
   })
 
   it('says so when saving the tier fails, and keeps the value the service still reports', async () => {
@@ -474,7 +500,7 @@ describe('intelligence notification settings', () => {
       .toBe(text['pages.intelligence.notification.threshold.medium'])
   })
 
-  it('shows the cost line only when "also matched" is chosen', async () => {
+  it('keeps the "also matched" cost inside the ⓘ of that row', async () => {
     install({
       productsInvoke: vi.fn(async (_productId: string, method: string) => {
         if (String(method).includes('getCalendarReminderSettings')) {
@@ -485,7 +511,9 @@ describe('intelligence notification settings', () => {
     })
     await render()
     await selectItem(3)
-    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.landed.cost'])
+    expect(container?.textContent ?? '').not.toContain(text['pages.intelligence.notification.landed.cost'])
+    expect(await openRowInfo(text['pages.intelligence.notification.calendar.landedInfoAria']!))
+      .toContain(text['pages.intelligence.notification.landed.cost'])
   })
 })
 
@@ -514,8 +542,12 @@ describe('通知配置后的测试按钮（R201）', () => {
     install({ getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: [], lastPushFailureAt: null, lastPushFailureReason: null })) })
     await render()
     expect(testButtons()).toHaveLength(0)
-    // 既有说明仍在：指路没有跟着按钮一起消失。
-    expect(container?.textContent).toContain(text['pages.intelligence.notification.channelNotReady'])
+    // 正文只留**状态**（还没有可用频道）；「勾选会保留、等频道能用时生效」那句解释在标题旁的 ⓘ 里，
+    // 所以正文断言短句、并且断言长句不在正文（2026-11-08：说明一律进 ⓘ）。
+    expect(container?.textContent).toContain(text['pages.intelligence.notification.channelNotReadyState'])
+    expect(container?.textContent).not.toContain(text['pages.intelligence.notification.channelNotReady'])
+    expect(await openRowInfo(text['pages.intelligence.notification.infoAria']!))
+      .toContain(text['pages.intelligence.notification.channelNotReady'])
   })
 
   it('renders one button per config item with a per-row label, and names the channel on success', async () => {
@@ -658,10 +690,12 @@ describe('不动任何配置项（判据 ⑥）', () => {
       })
 
     await selectItem(2)
-    expect(signature()).toEqual(['舆情提醒:button', '最低强度:div+span'])
+    expect(signature()).toEqual(['舆情提醒:button', '最低强度:div'])
 
     await selectItem(3)
-    expect(signature()).toEqual(['通知方式:div', '提前提醒:button+span', '通知条件:div'])
+    // 新增的「哪些国家的数据」紧接「只在超出预期时报」之后，其余行的位置与顺序未动。
+    // 「提前提醒」那一行关着时附一个**当前值**（不是说明句）；「哪些国家的数据」只有一个下拉。
+    expect(signature()).toEqual(['通知方式:div', '提前提醒:button+span', '通知条件:div', '哪些国家的数据:div'])
   })
 })
 

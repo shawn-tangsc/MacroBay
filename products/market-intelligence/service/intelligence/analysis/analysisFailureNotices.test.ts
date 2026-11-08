@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
+import { createDefaultNotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { planNotificationSubmit } from '@platform/notifications/runtime/notificationSubmitPlan'
+
 import {
   analysisFailureNoticePolicy,
   analysisNoticeDeeplink,
@@ -100,5 +105,37 @@ describe('the three failure notices', () => {
       'platform.analysis.repeated-failure', 'platform.analysis.attempt-abandoned', 'platform.analysis.recovered'
     ])
     expect(analysisFailureNoticePolicy.recoverySuccessStreak).toBe(2)
+  })
+  it('carries the actions array every request must have, for all three kinds', () => {
+    // 2026-11-08 线上：P12（恢复）每次提交都抛 `TypeError`，通知静默丢失。原因是这里少了
+    // `actions: []`，而末尾的 `as NotificationSubmitRequest` 把「少一个必填字段」压成了编译通过。
+    // 契约里 `requiresUserAction: false` 只表示「不需要按钮」，不是「可以不给这个数组」。
+    const decisions = [
+      { kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 2 },
+      { kind: 'repeated-failure', line: 'event', failures: 6, sample: 10 },
+      { kind: 'attempt-abandoned', line: 'event', runId: 'run-5', abandon: 'release' }
+    ] as const
+    for (const decision of decisions) {
+      const request = buildAnalysisFailureNoticeRequest(decision, at(0))
+      expect(request, decision.kind).toBeDefined()
+      expect(request?.actions, decision.kind).toEqual([])
+    }
+  })
+
+  it('produces a request the platform planner can actually plan instead of throwing', () => {
+    // 光有 `actions: []` 还不够：整个 request 要过得了规划器。这条会跑真实目录与批准，
+    // 少任何必填字段都会在 `invalidExternalAction` 那一层变成异常（线上就是 `submit-failed` 的形态）。
+    const catalog = createNotificationEventCatalog({
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS }]
+    })
+    const plan = planNotificationSubmit({
+      catalog,
+      settings: createDefaultNotificationRuntimeSettings(),
+      desktopSupported: true,
+      request: buildAnalysisFailureNoticeRequest({ kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 2 }, at(0))!,
+      now: at(0),
+      timeZone: 'Asia/Shanghai'
+    })
+    expect(plan.kind).toBe('new')
   })
 })

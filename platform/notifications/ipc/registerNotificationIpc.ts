@@ -25,11 +25,21 @@ let getNotificationPushTargets: (() => Promise<readonly unknown[]>) | null = nul
 let notificationPushHook: DeliveryHooks['push'] | null = null
 let notificationProducerOwnership: NotificationProducerOwnership | null = null
 let notificationProductIds: readonly string[] | null = null
-/** 这两个端口是「一旦装配就固定」的，用一个小对象收着，免得再加两个模块级变量。 */
-const resolutionDeps: {
-  resolvePushChannel: (() => Promise<PushChannelResolution>) | null
-  testNoticeCandidates: null
-} = { resolvePushChannel: null, testNoticeCandidates: null }
+/**
+ * 推送目标的派生入口（技术方案 §1）：装配期注入，**必须转发进运行时**。
+ *
+ * 2026-11-08 的线上事故：它原来住在一个只写不读的 `resolutionDeps` 对象里，运行时那三处
+ * （主推送 / 自检 / 重投）拿到 `undefined` 后各自兜底成 `NO_PUSH_CHANNEL`——通道明明
+ * `runtime-ready`，推送却整程 `push-unavailable`、通道投递记录 0 条。存进去不等于接上。
+ */
+let notificationPushResolver: (() => Promise<PushChannelResolution>) | null = null
+/**
+ * `configureNotificationRuntime` 跑过的标记。
+ *
+ * 判据用它、**不用**「有没有 push 钩子」：没有通道的纯平台构建也走 configure，只是 `push: undefined`。
+ * 守卫只放在单例里（`getNotificationRuntime`），**不进工厂**——单测大量直接调工厂，放进去会全打死。
+ */
+let notificationRuntimeConfigured = false
 
 export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
@@ -62,10 +72,11 @@ export function configureNotificationRuntime(deps: {
   notificationDiagnostics = deps.diagnostics
   updateNotificationSettings = deps.updateSettings ?? null
   getNotificationPushTargets = deps.getPushTargets ?? null
-  resolutionDeps.resolvePushChannel = deps.resolvePushChannel ?? null
+  notificationPushResolver = deps.resolvePushChannel ?? null
   notificationPushHook = deps.push ?? null
   notificationProducerOwnership = deps.producerOwnership ?? null
   notificationProductIds = deps.productIds ?? null
+  notificationRuntimeConfigured = true
 }
 
 /** 记录变化后广播一次：角标与列表订阅它，不轮询。事件只说明「变了」，真值仍由 `list()` 读。 */
@@ -100,6 +111,11 @@ function broadcastNotificationChanged(change: { version: number }): void {
 }
 
 export function getNotificationRuntime() {
+  if (!notificationRuntime && !notificationRuntimeConfigured) {
+    // 装配顺序错误：宁可启动即失败，也不让一个「没有推送钩子、没有派生入口」的运行时被造出来——
+    // 那种例子在本进程内永远不会再被修正，推送会整程静默失效（2026-11-08 线上事故的第二断点）。
+    throw new Error('notification-runtime-used-before-configuration')
+  }
   if (!notificationRuntime) {
     if (getLanguage === null) {
       throw new Error('notification-runtime-language-not-configured')
@@ -132,6 +148,10 @@ export function getNotificationRuntime() {
       diagnostics: notificationDiagnostics,
       updateSettings: updateNotificationSettings ?? undefined,
       getPushTargets: getNotificationPushTargets ?? undefined,
+      // **推送目标的派生入口必须进运行时**（2026-11-08 线上事故）：它原来只写不读，运行时这边
+      // 拿到 `undefined` 后各自兜底成 `NO_PUSH_CHANNEL`——于是每条通知写 `failed / push-unavailable`、
+      // push 端口一次不被调用，而通道页的测试消息走另一条路照样能发。接线只有这一根。
+      ...(notificationPushResolver === null ? {} : { resolvePushChannel: notificationPushResolver }),
       producerOwnership: notificationProducerOwnership ?? undefined,
       productIds: notificationProductIds ?? undefined,
       deliveryHooks: {
@@ -166,4 +186,6 @@ export function resetNotificationRuntimeForTests(): void {
   notificationPushHook = null
   notificationProducerOwnership = null
   notificationProductIds = null
+  notificationPushResolver = null
+  notificationRuntimeConfigured = false
 }

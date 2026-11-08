@@ -95,5 +95,4 @@ export const forbiddenForecastPatterns: readonly Readonly<{ pattern: RegExp; rep
   { pattern: /\b(?:price\s+target|target\s+price|stop[-\s]?loss|take[-\s]?profit)\b/i, repair: 'drop the price target or trade instruction; state the direction, the mechanism and the condition that would flip it instead' },
   { pattern: /建议\s*(?:买入|卖出|加仓|减仓|做多|做空)|(?:买入|卖出|加仓|减仓)\s*建议/, repair: 'drop the recommendation; write the directional bias and the condition that would invalidate it' },
   { pattern: /\b(?:buy|sell|long|short)\s+(?:btc|eth|bitcoin|ether|ethereum|the\s+dip)\b/i, repair: 'drop the recommendation; write the directional bias and the condition that would invalidate it' },
-  { pattern: /(?:概率|可能性)\s*(?:为|约|大约|有)?\s*\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*%\s*(?:的)?(?:概率|可能性)|\b\d+(?:\.\d+)?\s*%\s*(?:probability|chance|odds|likely)\b/i, repair: 'drop the invented probability; use a conditional ("若/if … 则/then …") instead' }
 ]

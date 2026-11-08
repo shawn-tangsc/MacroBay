@@ -180,7 +180,7 @@ describe('analysisOutputValidator', () => {
   })
   it('accepts a policy probability that carries the frozen as-of it came from', () => {
     const snapshot = frozenSnapshot()
-    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(), policyExtraFact('policy-sep-median-current-year', 4.1)]
     const output = validOutput()
     output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 10-30 15:00 UTC；SEP 中位 4.1%（09-16 那场）。'
 
@@ -189,7 +189,7 @@ describe('analysisOutputValidator', () => {
 
   it('rejects a policy probability without its as-of', () => {
     const snapshot = frozenSnapshot()
-    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(), policyExtraFact('policy-sep-median-current-year', 4.1)]
     const output = validOutput()
     output.conclusion.macro = '政策与市场定价：市场定价 71%，SEP 中位 4.1%。'
 
@@ -211,15 +211,21 @@ describe('analysisOutputValidator', () => {
     })
   })
 
-  it('names a frozen probability the model rounded, separately from a fabricated one', () => {
+  it('accepts the rounded value the prompt asks for, and still rejects a fabricated one', () => {
+    // `04` §3.4.1：正文用约数（约 77%），两位小数进留痕区——四舍五入到整百分点是**合规写法**。
     const snapshot = frozenSnapshot()
-    snapshot.facts = [...snapshot.facts, policyProbabilityFact(65.5)]
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(76.65)]
     const output = validOutput()
-    output.conclusion.macro = '政策与市场定价：市场定价 66%，截至 2026-10-30 15:00 UTC。'
+    output.conclusion.macro = '政策与市场定价：市场定价 77%，截至 2026-10-30 15:00 UTC。'
 
-    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+
+    // 编造仍然拒：70% 既不等值、也不等于快照值的四舍五入。
+    const fabricated = validOutput()
+    fabricated.conclusion.macro = '政策与市场定价：市场定价 70%，截至 2026-10-30 15:00 UTC。'
+    expect(validateAnalysisModelOutput(JSON.stringify(fabricated), snapshot)).toEqual({
       ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
-      rule: 'policy-probability-citation', detail: 'policy-probability-rounded'
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-frozen'
     })
   })
 
@@ -227,7 +233,7 @@ describe('analysisOutputValidator', () => {
     // The cheapest way to pass "the cited value must equal the snapshot" is to cite no value at all.
     // Without this rule the reader gets a complete-looking analysis with the policy pricing missing.
     const snapshot = frozenSnapshot()
-    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(), policyExtraFact('policy-target-range', '4.00%–4.25%'), policyExtraFact('policy-sep-median-current-year', 4.1)]
     const output = validOutput()
     output.conclusion.macro = '政策与市场定价：目标区间 4.00%–4.25%，下次会议 2026-12-09，SEP 中位 4.1%。'
 
@@ -257,7 +263,7 @@ describe('analysisOutputValidator', () => {
     // The prompt itself asks for the target range in a paragraph that starts with 「政策与市场定价：」.
     // A sixteen-character window swallowed 4.00% and rejected a correct conclusion for mentioning it.
     const snapshot = frozenSnapshot()
-    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(), policyExtraFact('policy-target-range', '4.00%–4.25%')]
     const output = validOutput()
     output.conclusion.macro = '政策与市场定价：目标区间 4.00%–4.25%，下次会议 2026-12-09，市场定价 71%，截至 10-30 15:00 UTC。'
 
@@ -309,6 +315,15 @@ function frozenSnapshot(): TestSnapshot {
     facts: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', metric: 'price-return', comparability: 'comparable', freshness: 'fresh', domain: 'cross-asset', subject: 'BTC', value: 1, unit: '%', sourceId: 'source', sourceLabel: 'source', observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z', confidence: 1 }],
     evidenceRefs: [{ evidenceRefId: 'mi-ev-market-move' }]
   } as unknown as TestSnapshot
+}
+
+function policyExtraFact(metric: string, value: string | number): import('../../../contracts/marketAnalysisContracts').AgentFact {
+  return {
+    factId: `mi-fact-${metric}`, evidenceRefId: 'mi-ev-policy', metric, domain: 'macro', subject: 'us',
+    value, unit: '%', sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
+    observedAt: '2026-10-30T15:00:00.000Z', asOf: '2026-10-30T15:00:00.000Z',
+    freshness: 'fresh', confidence: 1, comparability: 'comparable', sourceUrl: 'https://polymarket.com/'
+  }
 }
 
 function policyProbabilityFact(value = 71, observedAt = '2026-10-30T15:00:00.000Z'): import('../../../contracts/marketAnalysisContracts').AgentFact {

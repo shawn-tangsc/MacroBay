@@ -459,7 +459,9 @@ export function useMarketAnalysisTimeline(input: Readonly<{
 
   const ensureDetail = (entry: MarketAnalysisTimelineEntry): void => {
     if (detailCache.current[entry.id] || detailRequests.current.has(entry.id)) return
-    setDetailState(current => ({ ...current, [entry.id]: current[entry.id] ?? 'loading' }))
+    // 重试时**必须回到 loading**：失败后状态停在 `unavailable`，读者点了重试却看不到任何变化，
+    // 会以为按钮坏了。首次请求本来就是 loading，所以这一行对首读没有行为改变。
+    setDetailState(current => ({ ...current, [entry.id]: 'loading' }))
     readDetail(entry)
   }
 

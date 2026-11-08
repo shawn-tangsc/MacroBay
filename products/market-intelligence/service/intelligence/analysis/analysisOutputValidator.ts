@@ -116,10 +116,19 @@ function missingEvidence(rule: AnalysisValidationRule, detail?: AnalysisProbabil
   return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule, ...(detail ? { detail } : {}) }
 }
 
-const outputKeys = [
+/**
+ * 模型输出里**允许出现、并会被持久化**的顶层键（`divergences` 可选，其余必须）。
+ *
+ * 导出是因为读取端的白名单必须与它逐字对齐：渲染层少认一个键，整条详情就变「暂不可用」
+ * （2026-11-08 的事故就是 `divergences` 不在读取端白名单里）。守卫用例直接读这一个常量，
+ * 不在测试里手抄第二份。
+ */
+export const analysisOutputTopLevelKeys = [
   'conclusion', 'knownFacts', 'transmissionHypotheses', 'marketReaction', 'supportingEvidence', 'counterEvidence',
   'scenarios', 'directions', 'nextCatalysts', 'dataCaveats', 'evidenceRefs', 'divergences'
 ] as const
+
+const outputKeys = analysisOutputTopLevelKeys
 
 /**
  * 这些键必须出现；`divergences` **可选**——沉默不算相反，逼着模型表态等于逼它点头

@@ -412,6 +412,14 @@ export const intelligenceSourcesText = {
       extended: '扩展'
     }
   },
+  /**
+   * 设置页只放**短句**：这里不显示内容，套全句会变成「先显示上次同步的内容」而那儿什么都没显示。
+   * 全句只用在会显示内容的地方（经济日历错误态、日报）。
+   */
+  unavailableShort: '官方源暂时不可用',
+  unavailableReasonCode: '原因码：{code}',
+  automaticSyncStopped: '自动同步已停止',
+  lastSuccessfulSync: '上次成功同步：{date}',
   health: {
     title: '来源健康',
     runtimeStatus: '运行状态',
@@ -868,6 +876,10 @@ export const intelligenceSourcesText = {
       extended: 'Extended'
     }
   },
+  unavailableShort: 'The official source is temporarily unavailable',
+  unavailableReasonCode: 'Reason code: {code}',
+  automaticSyncStopped: 'Automatic sync stopped',
+  lastSuccessfulSync: 'Last successful sync: {date}',
   health: {
     title: 'Source Health',
     runtimeStatus: 'Runtime Status',

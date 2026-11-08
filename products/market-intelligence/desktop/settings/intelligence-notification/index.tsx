@@ -1,10 +1,6 @@
 import { useState, type ReactElement } from 'react'
 
-import { Info } from 'lucide-react'
-
-import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
-import { Popover } from '@platform/ui/components/popover'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
@@ -13,6 +9,7 @@ import { CalendarDetail } from './calendarDetail'
 import { ContentDetail } from './contentDetail'
 import { NewsPushThresholdRow } from './newsPushThresholdRow'
 import { NotificationList, type NotificationListItem } from './notificationList'
+import { SettingsInfo } from './settingsRow'
 import { useCalendarReminderSettings } from './useCalendarReminderSettings'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS, useChannelEventSettings } from './useChannelEventSettings'
 import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
@@ -119,19 +116,13 @@ export default function IntelligenceNotificationSettingsSection(
     {/* 标题一行：13.5/600/正常色，上 16 下 12；ⓘ 只放「为什么勾了还不响」。 */}
     <div className="intelligence-notification-head">
       <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
-      <Popover
-        labelKey="pages.intelligence.notification.groupInfo.2"
+      <SettingsInfo
+        ariaLabelKey="pages.intelligence.notification.infoAria"
+        labelKeys={[
+          'pages.intelligence.notification.groupInfo.2',
+          'pages.intelligence.notification.channelNotReady'
+        ]}
         resolveText={resolveText}
-        trigger={(triggerProps) => (
-          <IconButton
-            {...triggerProps}
-            ariaLabelKey="pages.intelligence.notification.infoAria"
-            icon={Info}
-            size="sm"
-            variant="plain"
-            resolveText={resolveText}
-          />
-        )}
       />
     </div>
 
@@ -196,8 +187,9 @@ export default function IntelligenceNotificationSettingsSection(
                 />
                 : null}
             </ContentDetail>}
+          {/* 只报**状态**（还没有可用频道）；「勾选会保留、等频道能用时生效」那句解释在标题旁的 ⓘ 里。 */}
           {channelReady ? null : <p className="intelligence-notification-form-note" role="status">
-            {text['pages.intelligence.notification.channelNotReady']}
+            {text['pages.intelligence.notification.channelNotReadyState']}
           </p>}
         </div>
       </div>

@@ -38,7 +38,10 @@ function labels(): ProviderDetailLabels {
     connectionSucceeded: settingsText.connectionSucceeded,
     connectionFailed: settingsText.connectionFailed,
     connectionUnsupported: settingsText.connectionUnsupported,
-    apiKey: settingsText.apiKey
+    apiKey: settingsText.apiKey,
+    unavailableReasonCode: settingsText.unavailableReasonCode,
+    automaticSyncStopped: settingsText.automaticSyncStopped,
+    lastSuccessfulSync: settingsText.lastSuccessfulSync
   }
 }
 
@@ -101,5 +104,137 @@ describe('ProviderDetail source details', () => {
 
     expect(pageStateRequests).not.toContain('macro-calendar-fed')
     expect(pageStateRequests).toContain('federal-reserve-rss')
+  })
+
+  it('does not paint an enabled calendar source healthy when it has no health data', async () => {
+    // 缺陷（宏观线报）：已启用 + jobRegistered + 无健康数据 → 过去这里画绿的 healthy。
+    // BLS 正是这种源：已启用、实际取不到；假绿比没有状态更坏。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          sources: [source({
+            providerId: 'bls',
+            sourceId: 'macro-calendar-bls',
+            displayName: 'BLS official schedule',
+            kind: 'official-calendar',
+            jobRegistered: true
+          })]
+        },
+        showSourceDetails: true,
+        onSelectSource: () => undefined
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.textContent).not.toContain(settingsText.health.statuses.healthy)
+    expect(container.querySelector('.status-pill--ok')).toBeNull()
+  })
+
+  it('shows “unavailable”, the reason and the last good date for a source the platform cannot fetch', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          sources: [source({
+            providerId: 'bls',
+            sourceId: 'macro-calendar-bls',
+            displayName: 'BLS official schedule',
+            kind: 'official-calendar',
+            jobRegistered: false,
+            unavailable: {
+              reasonCode: 'official-endpoint-returned-403',
+              automaticSync: 'stopped',
+              lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z',
+              decidedAt: '2026-11-08'
+            }
+          })]
+        },
+        showSourceDetails: true,
+        onSelectSource: () => undefined
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    // 设置页用**短句**（逐字，含「暂时」）：这里不显示内容，不套「先显示上次同步的内容」全句。
+    expect(container.textContent).toContain('官方源暂时不可用')
+    expect(container.textContent).not.toContain('先显示上次成功同步的内容')
+    // 原因码、自动同步已停止、上次成功日期照原样给。
+    expect(container.textContent).toContain('official-endpoint-returned-403')
+    expect(container.textContent).toContain('自动同步已停止')
+    expect(container.textContent).toContain('2026-10-22')
+    expect(container.querySelector('.status-pill--ok')).toBeNull()
+    // 「未安排」不许显示成「已启用」。
+    expect(container.textContent).toContain(settingsText.jobNotRegistered)
+  })
+
+  it('does not paint “enabled” next to “unavailable”: one of them has to win', async () => {
+    // 缺陷（界面自查退回 ③）：已启用 + 未安排 + 不可用 三个标签并排，读者不知道哪个说了算。
+    // 这个源是启用的（开关位为真），但这不改变「现在取不到」——启用词在这一行必须让位。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          sources: [source({
+            providerId: 'bls',
+            sourceId: 'macro-calendar-bls',
+            displayName: 'BLS official schedule',
+            kind: 'official-calendar',
+            jobRegistered: false,
+            // panels 非空：否则首标签是「待接入」，这条用例就测不到启用词本身。
+            panels: ['economic-calendar'],
+            unavailable: {
+              reasonCode: 'official-endpoint-returned-403',
+              automaticSync: 'stopped',
+              lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z',
+              decidedAt: '2026-11-08'
+            }
+          })]
+        },
+        showSourceDetails: true,
+        onSelectSource: () => undefined
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    // 只看这一行的标签排（页头的「1 项能力 · 已启用 1」是另一件事）。
+    const rowTags = container.querySelector('.source-provider-detail__row .intelligence-source-tags')?.textContent ?? ''
+    expect(rowTags).toContain('官方源暂时不可用')
+    expect(rowTags).toContain(settingsText.jobNotRegistered)
+    expect(rowTags).not.toContain(settingsText.status.enabled)
+    expect(rowTags).not.toContain(settingsText.status.disabled)
   })
 })

@@ -40,6 +40,13 @@ export type ProviderDetailLabels = {
   connectionFailed: string
   connectionUnsupported: string
   apiKey: { label: string; save: string; emptyHint: string; savedHint: string; revealFailed: string }
+  /**
+   * 设置页只说**短句**（这里不显示内容，用全句会承诺「先显示上次同步的内容」而这儿没有内容）。
+   * 原因码、自动同步已停止、上次成功日期照原样给，由下面三个模板拼。
+   */
+  unavailableReasonCode: string
+  automaticSyncStopped: string
+  lastSuccessfulSync: string
 }
 
 /** The badge's own words; the tone rides along, the word carries the meaning. */
@@ -285,12 +292,17 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
       {sources.map((source) => {
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0
+        const unavailable = source.unavailable
         const tags = [
           unused || source.visibility === 'pending'
             ? labels.badges.pending
             : source.visibility === 'advanced'
               ? labels.badges.advanced
-              : source.enabled ? labels.status.enabled : labels.status.disabled,
+              : unavailable
+                // 「不可用」时不打「已启用／已停用」：那个词说的是启用开关的位置，读者要判断的是
+                // 这个源现在能不能用。三个状态词并排（已启用 + 未安排 + 不可用）没人知道哪个说了算。
+                ? null
+                : source.enabled ? labels.status.enabled : labels.status.disabled,
           isCalendar(source) ? labels.badges.calendar : null,
           ...source.panels.map((panel) => labels.panelNames[panel] ?? panel)
         ].filter((tag): tag is string => Boolean(tag))
@@ -307,12 +319,28 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
                 // pipeline has nothing to say about it, and an old failure from a manual attempt
                 // would otherwise read as "this source is broken".
                 const health = source.collection === 'none' ? undefined : details[source.sourceId]?.health
-                const calendarOnly = !health && source.enabled && source.jobRegistered && source.kind.includes('calendar')
-                if (!health && !calendarOnly) return null
-                const view = healthBadgeView(health?.runtimeStatus ?? 'healthy', health?.consecutiveFailures ?? 0)
+                // 「没有健康数据」不等于「健康」：过去这里给已启用、无健康数据的日历源画绿的 healthy，
+                // 而 BLS 正是这种源——已启用、实际取不到。没有数据就不画药丸。
+                if (unavailable) {
+                  return <StatusPill labelKey="settings.intelligenceSources.unavailableShort" resolveText={resolveText} tone="muted" />
+                }
+                if (!health) return null
+                const view = healthBadgeView(health.runtimeStatus, health.consecutiveFailures ?? 0)
                 return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
               })()}
             </span>
+            {/* 「不可用」不是失败：药丸之外必须给出同一句原因，读者才知道为什么取不到、数据有多旧。 */}
+            {unavailable
+              ? <span className="source-provider-detail__unavailable">
+                {[
+                  labels.unavailableReasonCode.replace('{code}', unavailable.reasonCode),
+                  labels.automaticSyncStopped,
+                  ...(unavailable.lastSuccessfulSyncAt
+                    ? [labels.lastSuccessfulSync.replace('{date}', unavailable.lastSuccessfulSyncAt.slice(0, 10))]
+                    : [])
+                ].join(' · ')}
+              </span>
+              : null}
             {/* The one visible sign this row opens something: it is an entrance, not an action,
                 so it stays a row with an arrow rather than becoming a button. */}
             <ChevronRight aria-hidden="true" className="source-provider-detail__chevron" size={13} />

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CALENDAR_REMINDER_SETTINGS } from '../../../contracts/calendarEventReminder'
 import type { MarketCalendarEvent, MarketCalendarPage } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { CalendarEventReminderDeps } from './calendarEventReminderJob'
-import { registerCalendarEventReminder } from './registerCalendarEventReminder'
+import { landedFilterReader, registerCalendarEventReminder } from './registerCalendarEventReminder'
 
 /** 捕获作业拿到的依赖，用来证明「测试样例与真实提醒读的是同一个函数」。 */
 const captured = vi.hoisted(() => ({ deps: undefined as CalendarEventReminderDeps | undefined }))
@@ -47,13 +47,46 @@ function wiringWith(queryMonth: (query: { month: string }) => MarketCalendarPage
       setSchedule: () => undefined,
       removeSchedule: () => undefined
     },
-    settings: { read: () => DEFAULT_CALENDAR_REMINDER_SETTINGS, write: () => DEFAULT_CALENDAR_REMINDER_SETTINGS },
+    settings: {
+      read: () => DEFAULT_CALENDAR_REMINDER_SETTINGS,
+      write: () => DEFAULT_CALENDAR_REMINDER_SETTINGS,
+      readWithStatus: () => ({ state: 'readable' as const, settings: DEFAULT_CALENDAR_REMINDER_SETTINGS }),
+      writeWithStatus: () => ({ state: 'saved' as const, settings: DEFAULT_CALENDAR_REMINDER_SETTINGS })
+    },
     queryMonth: queryMonth as never,
     submit: async () => undefined,
     timeZone: () => 'Asia/Shanghai',
     now: () => NOW
   })
 }
+
+describe('the landed filter the refresh path reads', () => {
+  /**
+   * 「哪些国家的数据」读不到时按默认「只美国」处理：与「缺键 = 可读 + 默认」同一条规矩，
+   * 也不放大推送量。读到了就原样交给 `selectLandedReleases`，这里不重判一次。
+   */
+  it('falls back to US-only when the settings file cannot be read', () => {
+    const read = landedFilterReader({
+      read: () => DEFAULT_CALENDAR_REMINDER_SETTINGS,
+      write: () => DEFAULT_CALENDAR_REMINDER_SETTINGS,
+      readWithStatus: () => ({ state: 'unreadable' as const }),
+      writeWithStatus: () => ({ state: 'not-saved' as const, settings: DEFAULT_CALENDAR_REMINDER_SETTINGS })
+    })
+    expect(read()).toEqual({ includeMatched: false, importance: ['high'], landedCountries: { scope: 'us', codes: [] } })
+  })
+
+  it('passes the stored selection through unchanged', () => {
+    const stored = { ...DEFAULT_CALENDAR_REMINDER_SETTINGS, landedFilter: 'also-matched' as const,
+      landedCountries: { scope: 'all' as const, codes: [] as const } }
+    const read = landedFilterReader({
+      read: () => stored,
+      write: () => stored,
+      readWithStatus: () => ({ state: 'readable' as const, settings: stored }),
+      writeWithStatus: () => ({ state: 'saved' as const, settings: stored })
+    })
+    expect(read()).toEqual({ includeMatched: true, importance: ['high'], landedCountries: { scope: 'all', codes: [] } })
+  })
+})
 
 describe('registerCalendarEventReminder wiring', () => {
   /**

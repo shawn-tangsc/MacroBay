@@ -1,5 +1,10 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
+import {
+  DEFAULT_CALENDAR_LANDED_COUNTRIES,
+  calendarLandedCountryMatches,
+  type CalendarLandedCountrySelection
+} from '../../../contracts/calendarLandedCountries'
 import { assessMarketCalendarSurprise, exceedsSurpriseTrigger } from '../../../contracts/macro/marketCalendarSurprise'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
@@ -82,7 +87,7 @@ export type LandingSelection = Readonly<{
 /**
  * 这一页里哪些发布值得现在说。
  *
- * 判据顺序与旧路径一致：先看是不是这条流管的事（美国 + 高重要性 + 经济指标），再看偏差有没有
+ * 判据顺序与旧路径一致：先看是不是这条流管的事（选中的国家 + 高重要性 + 经济指标），再看偏差有没有
  * 过线；「到点」与「拿到了公布值」只是前置条件。身份取 `observationKey`——`eventKey` 是每批采集
  * 的 HMAC，每次刷新都会变，拿它做去重键等于每轮都当成一条新事件。
  */
@@ -96,6 +101,13 @@ export type LandingSelection = Readonly<{
 export type LandedReleaseFilter = Readonly<{
   includeMatched?: boolean
   importance?: readonly ('high' | 'medium' | 'low')[]
+  /**
+   * 读者在「发生后」段选的「哪些国家的数据」。
+   *
+   * 缺省 = `DEFAULT_CALENDAR_LANDED_COUNTRIES`（只美国），也就是改版前的行为；判定只走
+   * `calendarLandedCountryMatches` 一处，这里不重写三档语义、也不另造「未知桶」。
+   */
+  landedCountries?: CalendarLandedCountrySelection
 }>
 
 export function selectLandedReleases(
@@ -122,8 +134,10 @@ export function selectLandedReleases(
     const releasedMs = Date.parse(releaseAt ?? '')
     if (!Number.isFinite(releasedMs) || releasedMs > asOfMs) continue
     if (asOfMs - releasedMs > macroEventLandedPolicy.freshnessMs) continue
-    // The same three boundaries the analysis line uses; read from its policy, not retyped here.
-    if (event.countryCode !== policy.qualifyingCountryCode) continue
+    // 国家这一道由读者在「发生后」段选择（默认只美国＝改版前的行为）；语义只在
+    // `calendarLandedCountryMatches` 一处定义，三个档位在「国家未知」上两两不同。
+    const landedCountries = filter?.landedCountries ?? DEFAULT_CALENDAR_LANDED_COUNTRIES
+    if (!calendarLandedCountryMatches(landedCountries, event.countryCode)) continue
     // 重要性按读者勾选的档位放行；缺省仍只推「高」。
     if (!importance.includes(event.importance)) { importanceNotSelected += 1; continue }
     if (event.eventType !== policy.qualifyingEventFamily) continue

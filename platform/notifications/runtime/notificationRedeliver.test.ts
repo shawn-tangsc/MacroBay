@@ -59,7 +59,7 @@ function createRuntime(options: {
   const runtime = createNotificationRuntime({
     resolvePushChannel: async () =>
       options.resolveChannel === null
-        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: {} }
         : { ok: true as const, channelId: 'telegram', channelName: 'telegram' },
     diagnostics: () => undefined,
     storage,

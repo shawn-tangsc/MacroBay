@@ -330,3 +330,51 @@ describe('marketAnalysisTimelineClient', () => {
     expect(result.state === 'available' ? result.detail.summary.eventAssessment : undefined).toBe('市场情绪偏谨慎')
   })
 })
+
+/**
+ * 2026-11-08 的事故复现：服务侧多写了一个可选顶层键（`divergences`，空数组），
+ * 读取端的白名单不认得它，于是整条详情被判成「暂不可用」——数据完好、时间轴能看、卡片读不到。
+ *
+ * 判据：**多一个可选键不许把整条详情拒掉**；而且产品的口径是「进结果、不进详情渲染」，
+ * 所以认得它、但不把它带进详情。
+ */
+describe('a summary that carries the optional divergences key', () => {
+  const entry = {
+    id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+    groupType: null, groupSubject: null, triggerStatus: null,
+    occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
+  }
+  const run = {
+    id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
+    queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 1
+  }
+  const baseSummary = {
+    id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
+    eventAssessment: '市场情绪偏谨慎', knownFacts: [], transmissionHypotheses: [], marketReaction: [],
+    supportingEvidence: [], counterEvidence: [], scenarios: [], nextCatalysts: [], dataCaveats: [],
+    evidenceRefs: ['ev-1'], createdAt: asOf
+  }
+
+  const readDetail = async (summary: unknown) => {
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method === 'marketAnalysis.getAnalysisRun') return run
+      if (method === 'marketAnalysis.getSummary') return summary
+      return []
+    })
+    vi.stubGlobal('window', { platform: { products: { invoke } } })
+    return marketAnalysisTimelineClient.getDetail(entry)
+  }
+
+  it('stays readable when the key is an empty array (this exact payload broke the card)', async () => {
+    const result = await readDetail({ ...baseSummary, divergences: [] })
+    expect(result.state).toBe('available')
+    expect(result.state === 'available' ? result.detail.summary.eventAssessment : undefined).toBe('市场情绪偏谨慎')
+  })
+
+  it('stays readable when the key has entries, and does not render them as a second account', async () => {
+    const result = await readDetail({ ...baseSummary, divergences: [{ pairId: 'narrative-price', stance: 'diverging' }] })
+    expect(result.state).toBe('available')
+    // 进结果、不进详情渲染：读取端认得它，但不把第二套说法带到界面上。
+    expect(result.state === 'available' ? (result.detail.summary as Record<string, unknown>).divergences : 'missing').toBeUndefined()
+  })
+})

@@ -1,6 +1,7 @@
 import {
   MARKET_ANALYSIS_IPC_METHODS
 } from '../../../contracts/marketAnalysisIpcContracts'
+import { SUMMARY_OPTIONAL_FIELDS, SUMMARY_REQUIRED_FIELDS } from './marketAnalysisSummaryWhitelist'
 import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalysisContracts'
 import type { AnalysisConclusion, AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
 
@@ -312,11 +313,9 @@ function sanitizeRun(value: unknown): MarketAnalysisTimelineDetail['run'] | unde
 }
 
 function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'] | undefined {
-  const fields = ['id', 'schemaVersion', 'analysisRunId', 'eventGroupId', 'version', 'knownFacts', 'transmissionHypotheses', 'marketReaction', 'supportingEvidence', 'counterEvidence', 'scenarios', 'nextCatalysts', 'dataCaveats', 'evidenceRefs', 'createdAt']
-  // `directions`, `eventAssessment` (legacy) and `conclusion` (structured) are all optional: a
-  // summary from either contract generation must render, and a missing optional field must never
-  // turn the detail into "unavailable".
-  if (!isExactRecordWithOptionals(value, fields, ['directions', 'eventAssessment', 'conclusion']) || value.schemaVersion !== 1 ||
+  // 白名单只从 `marketAnalysisSummaryWhitelist` 读（守卫用例与这里同一份）。可选键缺席一律不判错：
+  // 两种契约世代的摘要都要能渲染，少一个可选字段不许把详情变成「读不到」。
+  if (!isExactRecordWithOptionals(value, SUMMARY_REQUIRED_FIELDS, SUMMARY_OPTIONAL_FIELDS) || value.schemaVersion !== 1 ||
     !isText(value.id) || typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1 ||
     !isCanonicalTime(value.createdAt)) return undefined
   // Caveats are rendered, so an over-long list is truncated; the evidence references are only

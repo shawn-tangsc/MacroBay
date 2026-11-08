@@ -12,10 +12,23 @@
  * 也会全绿——那正是这类「字段能写、没人读」最容易混过去的形状。
  */
 import { act, createElement } from 'react'
+/**
+ * 产品页换成一个轻组件：这条用例要验的是**壳层**把快照落成「带页签的宿主」，
+ * 不是产品页内部长什么样。挂真实页面会把它变成两百个模块的加载时序测试——
+ * 2026-11-08 它在 CI 上抛 `Cannot access '__vite_ssr_import_N__' before initialization`，
+ * 本机与 CI 各自绿/红、改两次都没修死。菜单项本身仍用生成物里的真实数据（`home` 声明要真）。
+ */
+vi.mock('@products/generated/shellRegistry', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@products/generated/shellRegistry')>()
+  const StubPage = (): ReturnType<typeof createElement> => createElement('div', { 'data-test-page': 'stub' })
+  return {
+    ...real,
+    productMenuEntries: real.productMenuEntries.map((entry) => ({ ...entry, load: async () => ({ default: StubPage }) }))
+  }
+})
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
 const MAIN_WINDOW_ID = 'main'
 const HOST_EPOCH = 1
@@ -33,6 +46,13 @@ const FLUSH_TURNS = 16
  * initialization` —— 本机永远复现不出来。所以改成每个用例重置模块后再取。
  */
 let declaredHomeKey: string | undefined
+/**
+ * 与注册表同理：设置工厂也必须在 `vi.resetModules()` **之后**再取。
+ * 静态 import 会留下 reset 之前那套图里的绑定，而 `await import('../AppShell')` 拿的是新图；
+ * 两套图混用会在慢环境（CI 并行跑全量）里抛
+ * `Cannot access '__vite_ssr_import_N__' before initialization`——本机复现不出来。
+ */
+let freshDefaultSettings: (typeof import('@platform/settings/schema/appSettings'))['createDefaultAppSettings']
 
 let root: Root | undefined
 let container: HTMLDivElement | undefined
@@ -42,6 +62,8 @@ beforeEach(async () => {
   vi.resetModules()
   // 重置之后再读生成注册表，保证与下面的 `await import('../AppShell')` 用同一套模块图。
   const { productMenuEntries } = await import('@products/generated/shellRegistry')
+  // 同一套图里取设置工厂：不要用文件顶部静态 import 的那份（见上面的说明）。
+  ;({ createDefaultAppSettings: freshDefaultSettings } = await import('@platform/settings/schema/appSettings'))
   declaredHomeKey = productMenuEntries
     .map((entry) => entry as { routePath: string; home?: true })
     .find((entry) => entry.home === true)?.routePath
@@ -171,7 +193,7 @@ function installShellPlatform(surface: ReturnType<typeof createSurface>): void {
       getProductSummaries: vi.fn(async () => []),
       openExternal: vi.fn(async () => undefined)
     },
-    settings: { get: vi.fn(async () => ({ ...createDefaultAppSettings(), language: 'en-US' })) },
+    settings: { get: vi.fn(async () => ({ ...freshDefaultSettings(), language: 'en-US' })) },
     modelProviders: { list: vi.fn(async () => []), upsert: vi.fn(async () => undefined) },
     assistants: {
       list: vi.fn(async () => []),
@@ -202,6 +224,22 @@ describe('默认首页接线（口径 A：只在没有历史时生效）', () =>
   it('生成物里确实有一处 home 声明（没有的话下面两条都会失去意义）', () => {
     expect(declaredHomeKey).toBeDefined()
     expect(declaredHomeKey).not.toBe('assistants')
+  })
+
+  it('自动落点开出的那一页必须**真的渲染出来**（不是只「调用过 openTab」）', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
+    const surface = createSurface({ initial: emptySnapshot() })
+    await renderShell(surface)
+
+    // 判据在 DOM 上：宿主进入 tabs 形态且有一个页签。只断言「发过命令」的话，一个发出命令却不采用快照的
+    // 实现也能过，而那种实现给用户的就是「当前没有打开的页面」。
+    await vi.waitFor(() => {
+      expect(container?.querySelector('[data-workspace-page-host="tabs"]')).not.toBeNull()
+    }, { timeout: CONDITION_TIMEOUT_MS })
+    expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
+    // 页签有了还不算「真的渲染」：路由到的页面组件必须真的被挂上（桩页面留了这个标记）。
+    await vi.waitFor(() => {
+      expect(container?.querySelector('[data-test-page="stub"]')).not.toBeNull()
+    }, { timeout: CONDITION_TIMEOUT_MS })
   })
 
   it('首次打开（快照里没有活动页）⇒ 真的打开声明了 home 的那一页', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
@@ -238,18 +276,6 @@ describe('默认首页接线（口径 A：只在没有历史时生效）', () =>
     await settle()
 
     expect(surface.openTabRequests.length).toBe(1)
-  })
-
-  it('自动落点开出的那一页必须**真的渲染出来**（不是只「调用过 openTab」）', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {
-    const surface = createSurface({ initial: emptySnapshot() })
-    await renderShell(surface)
-
-    // 判据在 DOM 上：宿主进入 tabs 形态且有一个页签。只断言「发过命令」的话，一个发出命令却不采用快照的
-    // 实现也能过，而那种实现给用户的就是「当前没有打开的页面」。
-    await vi.waitFor(() => {
-      expect(container?.querySelector('[data-workspace-page-host="tabs"]')).not.toBeNull()
-    }, { timeout: CONDITION_TIMEOUT_MS })
-    expect(container?.querySelectorAll('[data-tab-item]').length).toBe(1)
   })
 
   it('点菜单被拒 ⇒ error 级报出 errorCode，且原有页签不被抹掉', { timeout: APP_SHELL_CASE_TIMEOUT_MS }, async () => {

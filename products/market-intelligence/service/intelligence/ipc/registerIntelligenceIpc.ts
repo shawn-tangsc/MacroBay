@@ -90,6 +90,9 @@ export function registerIntelligenceIpc(
   calendarReminder?: Readonly<{
     read: () => unknown
     write: (patch: Readonly<Record<string, unknown>>) => unknown
+    /** 读不到与"没存上"各自成结果；页面据此区分，不拿默认值冒充读到。 */
+    readWithStatus: CalendarEventReminderWiring['readWithStatus']
+    writeWithStatus: CalendarEventReminderWiring['writeWithStatus']
     applySchedule: (enabled: boolean) => void
     /** 提醒作业**原样暴露**的那一份事件读取：测试样例必须与真实提醒同源。 */
     readEvents: CalendarEventReminderWiring['readEvents']
@@ -121,13 +124,19 @@ export function registerIntelligenceIpc(
   }
 
   if (calendarReminder) {
-    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getCalendarReminderSettings, async () => calendarReminder.read())
+    register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getCalendarReminderSettings, async () => {
+      const result = calendarReminder.readWithStatus()
+      // 「读不到」必须能被页面看见，不能拿默认值冒充读到。
+      if (result.state === 'unreadable') throw new Error('calendar-reminder-settings-unreadable')
+      return result.settings
+    })
     register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.setCalendarReminderSettings, async (payload) => {
       const patch = (payload ?? {}) as Readonly<Record<string, unknown>>
-      const next = calendarReminder.write(patch)
+      const result = calendarReminder.writeWithStatus(patch as never)
       // 写设置的人就是让排程生效的人：不留「设置开了、作业没排上」的中间态。
-      calendarReminder.applySchedule((next as { enabled?: boolean }).enabled === true)
-      return next
+      calendarReminder.applySchedule(result.settings.enabled === true)
+      // 「没存上」作为一个结果回给页面，不抛：抛出去页面只剩一句笼统失败，旧值也没法留在界面上。
+      return result
     })
   }
 

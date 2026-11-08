@@ -92,7 +92,7 @@ function harness(options: {
     },
     resolvePushChannel: async () =>
       options.channelId === null
-        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: {} }
         : { ok: true as const, channelId: options.channelId ?? 'channel-a', channelName: 'Telegram · test' },
     ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics })
   }

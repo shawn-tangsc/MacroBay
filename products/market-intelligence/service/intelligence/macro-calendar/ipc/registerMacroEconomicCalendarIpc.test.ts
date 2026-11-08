@@ -25,18 +25,24 @@ describe('registerMacroEconomicCalendarIpc', () => {
     market.queryMonth.mockReturnValue({ ...page, body: 'forbidden' } as never)
     expect(await query!(input)).toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
   })
-  it('reconstructs only the exact BLS schedule-and-values aggregate', async () => {
+  /**
+   * BLS 自动同步已停（2026-11-08，源头在 CDN 边缘 403；判定与取证见
+   * `bls-schedule-catch-up/blsOfficialCalendarAvailability.ts`）。入口保留、请求不发：
+   * 这条用例钉的是「**一次同步都没有发生**」，不只是把 `completed` 换成 `unavailable`——
+   * 断言 `sync` 的调用计数为 0，接回真请求就会红。
+   */
+  it('answers unavailable for the BLS schedule sync without calling the sync service', async () => {
     const handlers = new Map<string, (payload: unknown) => unknown>()
-    const sync = vi.fn()
-      .mockResolvedValueOnce({ state: 'completed', schedule: 'unchanged', values: { cpi: 'current', employment: 'updated' } })
-      .mockResolvedValueOnce({ state: 'completed', schedule: 'unchanged', values: { cpi: 'current', employment: 'updated' }, rawBody: 'secret' })
+    const sync = vi.fn(async () => ({ state: 'completed', schedule: 'unchanged', values: { cpi: 'current', employment: 'updated' } }))
     registerMacroEconomicCalendarIpc((_productId, method, handler) => handlers.set(method, handler), {
       listEffectiveMonthAsOf: () => [], getEffectiveEventAsOf: () => undefined
     } as never, { preview: () => ({ state: 'failed', failureCode: 'invalid-file' }), import: () => ({ state: 'failed', failureCode: 'invalid-file' }) } as never, undefined, undefined, undefined, { sync } as never)
 
-    await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.syncBlsEmploymentSchedule)?.({ year: '2026' })).resolves.toEqual({ state: 'completed', schedule: 'unchanged', values: { cpi: 'current', employment: 'updated' } })
-    await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.syncBlsEmploymentSchedule)?.({ year: '2026' })).resolves.toEqual({ state: 'unavailable' })
-    expect(sync).toHaveBeenCalledTimes(2)
+    const handler = handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.syncBlsEmploymentSchedule)
+    await expect(handler?.({ year: '2026' })).resolves.toEqual({ state: 'unavailable' })
+    // 服务就算会返回"成功"，结果也不许从它那儿来：同一次调用只回答「读不到」。
+    await expect(handler?.({ year: '2026' })).resolves.toEqual({ state: 'unavailable' })
+    expect(sync).not.toHaveBeenCalled()
   })
   it('registers only the sealed confirmed FOMC refresh result and redacts dependency fields', async () => {
     const handlers = new Map<string, (payload: unknown) => unknown>()
@@ -53,26 +59,35 @@ describe('registerMacroEconomicCalendarIpc', () => {
     expect(refresh).toHaveBeenCalledTimes(2)
   })
 
-  it('registers the sealed confirmed BLS employment refresh route and redacts service output', async () => {
+  it('registers the sealed confirmed BLS employment refresh route and never reaches the service', async () => {
     const handlers = new Map<string, (payload: unknown) => unknown>()
     const refresh = vi.fn(async () => ({ state: 'updated', rawBody: 'sensitive' }))
     registerMacroEconomicCalendarIpc((_productId, method, handler) => handlers.set(method, handler), {
       listEffectiveMonthAsOf: () => [], getEffectiveEventAsOf: () => undefined
     } as never, { preview: () => ({ state: 'failed', failureCode: 'invalid-file' }), import: () => ({ state: 'failed', failureCode: 'invalid-file' }) } as never, undefined, undefined, { refresh } as never)
 
-    await expect(handlers.get('intelligence.macro.economicCalendar.refreshBlsEmploymentRelease')?.({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.group', confirmed: true })).resolves.toEqual({ state: 'unavailable' })
-    await expect(handlers.get('intelligence.macro.economicCalendar.refreshBlsEmploymentRelease')?.({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.group', confirmed: false })).resolves.toEqual({ state: 'unavailable' })
-    await expect(handlers.get('intelligence.macro.economicCalendar.refreshBlsEmploymentRelease')?.({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.group', confirmed: true, extra: 'hostile' })).resolves.toEqual({ state: 'unavailable' })
-    expect(refresh).toHaveBeenCalledTimes(1)
+    const handler = handlers.get('intelligence.macro.economicCalendar.refreshBlsEmploymentRelease')
+    // 形状合规的已确认请求也必须落回「读不到」：停用不看请求写得多对。
+    await expect(handler?.({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.group', confirmed: true })).resolves.toEqual({ state: 'unavailable' })
+    // 未确认、以及多带字段的请求，同样在读不到这一侧被挡住，且都不触达服务。
+    await expect(handler?.({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.group', confirmed: false })).resolves.toEqual({ state: 'unavailable' })
+    await expect(handler?.({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.group', confirmed: true, extra: 'hostile' })).resolves.toEqual({ state: 'unavailable' })
+    expect(refresh).not.toHaveBeenCalled()
   })
 
-  it.each(['updated', 'unchanged', 'unavailable'] as const)('reconstructs only the declared BLS refresh state %s', async (state) => {
-    const handlers = new Map<string, (payload: unknown) => unknown>()
-    registerMacroEconomicCalendarIpc((_productId, method, handler) => handlers.set(method, handler), {
-      listEffectiveMonthAsOf: () => [], getEffectiveEventAsOf: () => undefined
-    } as never, { preview: () => ({ state: 'failed', failureCode: 'invalid-file' }), import: () => ({ state: 'failed', failureCode: 'invalid-file' }) } as never, undefined, undefined, { refresh: () => ({ state }) } as never)
+  it('never consults the BLS refresh service, whichever state it would have returned', async () => {
+    // 三种服务返回值各试一遍：结论都必须是「读不到」，且服务一次都没被调用——否则哪天有人
+    // 把入口接回真请求，这三档里至少一档会让它变绿。
+    for (const state of ['updated', 'unchanged', 'unavailable'] as const) {
+      const handlers = new Map<string, (payload: unknown) => unknown>()
+      const refresh = vi.fn(() => ({ state }))
+      registerMacroEconomicCalendarIpc((_productId, method, handler) => handlers.set(method, handler), {
+        listEffectiveMonthAsOf: () => [], getEffectiveEventAsOf: () => undefined
+      } as never, { preview: () => ({ state: 'failed', failureCode: 'invalid-file' }), import: () => ({ state: 'failed', failureCode: 'invalid-file' }) } as never, undefined, undefined, { refresh } as never)
 
-    await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.refreshBlsEmploymentRelease)?.({ eventKey: 'US.CPI.RELEASE.2026-M07', confirmed: true })).resolves.toEqual({ state })
+      await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.refreshBlsEmploymentRelease)?.({ eventKey: 'US.CPI.RELEASE.2026-M07', confirmed: true })).resolves.toEqual({ state: 'unavailable' })
+      expect(refresh).not.toHaveBeenCalled()
+    }
   })
   it('accepts only a fixed provider input for the provider-scoped safe connection method', async () => {
     const handlers = new Map<string, (payload: unknown) => unknown>()

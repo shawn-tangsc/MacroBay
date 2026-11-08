@@ -3,7 +3,7 @@ import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 import { listIntelligenceSourceDefinitions, getIntelligenceSourceDefinition } from './sourceCatalog'
 import { agentView, panelView, settingsView, type AgentView, type PanelView, type SettingsView } from './sourceProjection'
 import { allSources, type AgentId, type PanelId } from './providerRegistry'
-import { needsSourceJob, sourceJobIds } from './sourceJobRegistration'
+import { projectJobRegistration } from './sourceJobRegistration'
 import { getIntelligenceAdapter } from '../adapters/adapterRegistry'
 import type { IntelligencePipeline } from './intelligencePipeline'
 import {
@@ -216,14 +216,10 @@ export function createIntelligenceSourcesService(deps: {
     appliedRuntimeFingerprintBySource.set(profile.sourceId, fingerprint)
   }
 
-  function jobRegistration(enabledById: Readonly<Record<string, boolean>>): Record<string, boolean> {
+  function jobRegistration(): Record<string, boolean> {
+    // 只认真实排期：`listSchedules()` 里没有这个源的作业，它就是「未安排」——不从启用开关反推。
     const scheduled = new Set(deps.jobRuntime.listSchedules().map((definition) => definition.id))
-    const result: Record<string, boolean> = {}
-    for (const source of allSources()) {
-      const registered = sourceJobIds(source).some((id) => scheduled.has(id))
-      result[source.sourceId] = registered || (needsSourceJob(source) && enabledById[source.sourceId] === true)
-    }
-    return result
+    return projectJobRegistration(allSources(), scheduled)
   }
 
   return {
@@ -268,21 +264,21 @@ export function createIntelligenceSourcesService(deps: {
       const enabledById: Record<string, boolean> = {}
       for (const profile of profiles) enabledById[profile.sourceId] = profile.enabled === true
       const knownSourceIds = new Set(profiles.map((profile) => profile.sourceId))
-      return settingsView({ enabledById, jobRegisteredById: jobRegistration(enabledById), knownSourceIds })
+      return settingsView({ enabledById, jobRegisteredById: jobRegistration(), knownSourceIds })
     },
 
     async getAgentView(input: { agentId: string }): Promise<AgentView | undefined> {
       const profiles = await deps.profileStore.listProfiles()
       const enabledById: Record<string, boolean> = {}
       for (const profile of profiles) enabledById[profile.sourceId] = profile.enabled === true
-      return agentView(input.agentId as AgentId, { enabledById, jobRegisteredById: jobRegistration(enabledById) })
+      return agentView(input.agentId as AgentId, { enabledById, jobRegisteredById: jobRegistration() })
     },
 
     async getPanelView(input: { panelId: string }): Promise<PanelView | undefined> {
       const profiles = await deps.profileStore.listProfiles()
       const enabledById: Record<string, boolean> = {}
       for (const profile of profiles) enabledById[profile.sourceId] = profile.enabled === true
-      return panelView(input.panelId as PanelId, { enabledById, jobRegisteredById: jobRegistration(enabledById) })
+      return panelView(input.panelId as PanelId, { enabledById, jobRegisteredById: jobRegistration() })
     },
 
     async getPageState(input?: { sourceId?: string }) {

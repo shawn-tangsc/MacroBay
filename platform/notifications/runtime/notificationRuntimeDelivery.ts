@@ -324,11 +324,29 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     const at = input.now()
     // 目标通道由派生入口给出（`runtime-ready` 恰好一条），不再读 `settings.push.channelId`——
     // 那个字段没有任何生产写入方，读它等于让推送目标悬空（技术方案 §1）。
-    const pushChannel = await (input.resolvePushChannel?.() ?? null) ?? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
-    if (!pushChannel.ok && pushChannel.multiple) {
-      input.diagnostics?.({ code: 'push-multiple-enabled', count: pushChannel.enabledChannelCount, at })
+    //
+    // not-ok 时**必须留一行可查的原因**（2026-11-08）：以前这一支什么都不记，于是「装配漏了钩子」
+    // 「漏了派生入口」「一条通道都没配」「配了但状态不对」四种完全不同的处境，在日志里长得一模一样，
+    // 读者侧也只有一个 `push-unavailable` 可看。四个诊断码只进日志，读者的闭集一个码都不加。
+    const resolvePushChannel = input.resolvePushChannel
+    if (resolvePushChannel === undefined) {
+      input.diagnostics?.({ code: 'push-resolver-missing', count: 0, at })
     }
-    const channelId = pushChannel.ok ? pushChannel.channelId : null
+    const pushChannel = resolvePushChannel === undefined
+      ? null
+      : await resolvePushChannel()
+    if (pushChannel !== null && !pushChannel.ok) {
+      if (pushChannel.multiple) {
+        input.diagnostics?.({ code: 'push-multiple-enabled', count: pushChannel.enabledChannelCount, at })
+      } else if (Object.keys(pushChannel.states).length === 0) {
+        // 一条通道都没有：配置事实，不是瞬时失败。
+        input.diagnostics?.({ code: 'push-target-none', count: 0, at })
+      } else {
+        // 有通道、但没有一条 `runtime-ready`：带状态直方图说清卡在哪一档，**不含通道名与凭据**。
+        input.diagnostics?.({ code: 'push-target-not-ready', count: pushChannel.enabledChannelCount, states: pushChannel.states, at })
+      }
+    }
+    const channelId = pushChannel?.ok === true ? pushChannel.channelId : null
     const current = channelId === null ? undefined : pushBackoff[channelId]
     const previousHighest = delivery.push?.highestSeverity
     const highest = (sent: boolean): NotificationSignalSeverity | undefined => {
@@ -345,6 +363,8 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       return { pushBackoff }
     }
     if (channelId === null || !input.deliveryHooks?.push) {
+      // 钩子缺席是**装配漏了出站端口**，与「没有可用通道」是两件事：分开记，下一次一眼定案。
+      if (!input.deliveryHooks?.push) input.diagnostics?.({ code: 'push-hook-missing', count: 0, at })
       delivery.push = { state: 'failed', reason: 'push-unavailable', at, ...(previousHighest === undefined ? {} : { highestSeverity: previousHighest }) }
       return { pushBackoff }
     }

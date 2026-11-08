@@ -32,6 +32,22 @@ export type SourceDefinition = {
    * need is derived with `sources.some(...)` rather than stored a second time.
    */
   requiresProxy?: boolean
+  /**
+   * The source cannot be fetched at all right now, by a recorded decision rather than by a failure.
+   *
+   * Different from `readiness: 'planned'` (never wired) and from a failed run (it may come back):
+   * here the endpoint itself refuses every attempt, so automatic collection is **stopped** and the
+   * settings page must say 「不可用」+ the reason instead of showing a green or a failing state.
+   * `reasonCode` is the existing failure vocabulary, not a new one.
+   */
+  unavailable?: Readonly<{
+    reasonCode: 'official-endpoint-returned-403'
+    automaticSync: 'stopped'
+    /** Last time this source actually wrote data; the reader is told the data is that old. */
+    lastSuccessfulSyncAt?: string
+    /** When the decision was taken (a date, not an instant: it is a decision, not a run). */
+    decidedAt: string
+  }>
 }
 
 export type ProviderDefinition = {
@@ -125,7 +141,19 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'macro',
     credential: 'none',
     sources: [
-      src({ sourceId: 'macro-calendar-bls', displayName: 'BLS official schedule', panels: dashboardAndCalendar, collection: 'provider', kind: 'official-calendar', capabilities: { runNow: 'provider', testConnection: true, blsSync: true } }),
+      // 官方站点在当前网络被 CDN 边缘拒绝（403，直连与代理都一样），自动同步 2026-11-08 停止。
+      // 判定与取证在 `macro-calendar/bls-schedule-catch-up/blsOfficialCalendarAvailability.ts`，
+      // 这里只是把它投影到设置页/源健康：显示「不可用」，不是「同步失败」也不是「没有数据」。
+      src({
+        sourceId: 'macro-calendar-bls',
+        displayName: 'BLS official schedule',
+        panels: dashboardAndCalendar,
+        collection: 'provider',
+        kind: 'official-calendar',
+        capabilities: { runNow: 'provider', testConnection: true, blsSync: true },
+        unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped',
+          lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z', decidedAt: '2026-11-08' }
+      }),
       src({ sourceId: 'bls-economic-series', displayName: 'BLS economic series', visibility: 'pending', collection: 'none', readiness: 'fixture-ready', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'bls-economic-series' })
     ]
   }),

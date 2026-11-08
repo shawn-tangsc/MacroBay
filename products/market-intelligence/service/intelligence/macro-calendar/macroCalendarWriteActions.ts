@@ -9,6 +9,7 @@ import type {
   SyncBlsScheduleAndValuesResult
 } from '../../../contracts/macro/economicCalendarQueryContracts'
 import type { BlsEmploymentMvpRefreshService } from './bls-employment-refresh/blsEmploymentMvpRefreshService'
+import { isBlsOfficialCalendarUnavailable } from './bls-schedule-catch-up/blsOfficialCalendarAvailability'
 import type { BlsScheduleAndValuesSyncWorkflow } from './bls-schedule-catch-up/blsScheduleAndLatestValuesSyncWorkflow'
 import type { ManualBlsIcsImportService } from './bls-ics-manual/blsManualIcsImportService'
 import type { FedFomcManualRefreshService } from './fed-statements/fedFomcManualRefreshService'
@@ -113,9 +114,19 @@ export function createMacroCalendarWriteActions(
         return { state: 'rejected' }
       }
     },
-    refreshBlsEmployment: (payload) => safeBlsEmploymentRefresh(deps.blsEmploymentRefresh, payload),
+    /**
+     * BLS 手动入口：不可用时**立刻返回「读不到」，不发请求**。
+     *
+     * 留一个点了必然失败的入口，就是把「8 次失败」换成「每次点击都失败」；而返回一个假的成功
+     * 更糟。理由与自动同步停用同源（`blsOfficialCalendarAvailability.ts`）。
+     */
+    refreshBlsEmployment: (payload) => isBlsOfficialCalendarUnavailable()
+      ? Promise.resolve({ state: 'unavailable' as const })
+      : safeBlsEmploymentRefresh(deps.blsEmploymentRefresh, payload),
     refreshFedFomc: (payload) => safeFedFomcRefresh(deps.fedFomcRefresh, payload),
-    syncBlsSchedule: (payload) => safeBlsEmploymentSchedule(deps.blsEmploymentSchedule, payload),
+    syncBlsSchedule: (payload) => isBlsOfficialCalendarUnavailable()
+      ? Promise.resolve({ state: 'unavailable' as const })
+      : safeBlsEmploymentSchedule(deps.blsEmploymentSchedule, payload),
     async previewManualIcs(payload) {
       return safeManualPreview(() => deps.manualBlsIcs.preview(payload))
     },

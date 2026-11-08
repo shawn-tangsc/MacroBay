@@ -11,6 +11,23 @@ function actions(overrides: Parameters<typeof createMacroCalendarWriteActions>[0
   return createMacroCalendarWriteActions(overrides)
 }
 
+describe('BLS manual entries while the official source is unavailable', () => {
+  /**
+   * 入口保留、请求不发：留一个点了必然失败的按钮，就是把「8 次失败」换成「每次点击都失败」；
+   * 返回假的成功更糟。恢复时只改 `blsOfficialCalendarAvailability` 一处。
+   */
+  it('answers "unavailable" without calling the network or the parser', async () => {
+    const refresh = vi.fn(async () => ({ state: 'updated' as const }))
+    const schedule = vi.fn(async () => ({ state: 'unavailable' as const }))
+    const write = actions({ manualBlsIcs, blsEmploymentRefresh: refresh as never, blsEmploymentSchedule: schedule as never })
+
+    await expect(write.refreshBlsEmployment({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', confirmed: true })).resolves.toEqual({ state: 'unavailable' })
+    await expect(write.syncBlsSchedule({ year: '2026' })).resolves.toEqual({ state: 'unavailable' })
+    expect(refresh).not.toHaveBeenCalled()
+    expect(schedule).not.toHaveBeenCalled()
+  })
+})
+
 describe('macro calendar release time actions', () => {
   it('applies a saved release time to the synchronous cache', async () => {
     const saved = {

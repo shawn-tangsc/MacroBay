@@ -65,7 +65,7 @@ describe('sendTestNotice (link only)', () => {
   })
 
   it('fails closed with ≥2 channels and reports the real count, not a hard-coded 2', async () => {
-    const { surface } = harness({ channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 3, multiple: true } })
+    const { surface } = harness({ channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 3, multiple: true, states: { 'runtime-ready': 3 } } })
     await expect(surface.sendTestNotice()).resolves.toMatchObject({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 3 })
   })
 })

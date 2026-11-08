@@ -4,6 +4,10 @@ import type {
   CalendarReminderLeadMinutes,
   CalendarReminderSettings
 } from '../../../contracts/calendarEventReminder'
+import {
+  normalizeCalendarLandedCountries,
+  type CalendarLandedCountrySelection
+} from '../../../contracts/calendarLandedCountries'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -18,7 +22,13 @@ export type CalendarReminderSettingsView = Readonly<{
   leadMinutes: CalendarReminderLeadMinutes
   importance: readonly CalendarReminderImportance[]
   landedFilter: CalendarLandedFilter
+  landedCountries: CalendarLandedCountrySelection
 }>
+
+/** 写的两个结果：存上了、没存上。页面在后者保留读者刚选的值，并说"这次没存上"。 */
+export type CalendarReminderWriteOutcome =
+  | Readonly<{ state: 'saved'; settings: CalendarReminderSettingsView }>
+  | Readonly<{ state: 'not-saved'; settings: CalendarReminderSettingsView }>
 
 type Invoke = (productId: string, method: string, payload?: unknown) => Promise<unknown>
 
@@ -35,13 +45,14 @@ function toView(value: unknown): CalendarReminderSettingsView {
     enabled: raw.enabled,
     leadMinutes: raw.leadMinutes ?? 60,
     importance: raw.importance ?? ['high'],
-    landedFilter: raw.landedFilter ?? 'surprise-only'
+    landedFilter: raw.landedFilter ?? 'surprise-only',
+    landedCountries: normalizeCalendarLandedCountries(raw.landedCountries)
   }
 }
 
 export type CalendarReminderClient = Readonly<{
   read: () => Promise<CalendarReminderSettingsView>
-  write: (patch: Readonly<Partial<CalendarReminderSettingsView>>) => Promise<CalendarReminderSettingsView>
+  write: (patch: Readonly<Partial<CalendarReminderSettingsView>>) => Promise<CalendarReminderWriteOutcome>
 }>
 
 export const intelligenceReminderClient: CalendarReminderClient = {
@@ -53,6 +64,11 @@ export const intelligenceReminderClient: CalendarReminderClient = {
   async write(patch) {
     const send = invoke()
     if (send === undefined) throw new Error('product IPC bridge is unavailable')
-    return toView(await send(PRODUCT_ID, 'intelligence.setCalendarReminderSettings', patch))
+    const raw = await send(PRODUCT_ID, 'intelligence.setCalendarReminderSettings', patch)
+    // 服务端回的是判别式结果；形状不对就当作失败，不猜成"存上了"。
+    if (!raw || typeof raw !== 'object') throw new Error('calendar reminder settings: unexpected write result')
+    const record = raw as { state?: unknown; settings?: unknown }
+    const settings = toView(record.settings)
+    return record.state === 'saved' ? { state: 'saved', settings } : { state: 'not-saved', settings }
   }
 }

@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.4.0`. This page describes what is usable today and what is intentionally not
+MacroBay is at `0.4.1`. This page describes what is usable today and what is intentionally not
 supported yet.
 
 ## Usable from source
@@ -26,6 +26,13 @@ page is reachable from the desktop shell: channels can be created, and credentia
 the adapters that have a runtime implementation. No adapter is enabled in this release, and the app
 offers no way to enable one, so a channel created here sends and receives nothing. Treat channels as
 unavailable until an adapter is deliberately enabled.
+
+### Official BLS calendar
+
+The official BLS release calendar cannot be fetched from this network: `www.bls.gov` and
+`api.bls.gov` return 403 at the CDN edge, with or without the proxy. Automatic BLS schedule and value
+sync is therefore disabled. Stored BLS events come from the last successful sync and carry no release
+time. The Fed and BEA calendars and the market-sourced calendar are unaffected.
 
 ### Packaged installers
 
@@ -84,7 +91,7 @@ hiding it.
 
 ## API and configuration stability
 
-The `0.4.0` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.4.1` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 
