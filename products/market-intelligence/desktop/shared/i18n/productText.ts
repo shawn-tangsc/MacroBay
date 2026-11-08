@@ -874,6 +874,11 @@ mi: miText['zh-CN'],
               cpi: { updated: 'CPI 值已更新', current: 'CPI 值已是最新', 'not-required': 'CPI 暂无需补抓', unavailable: 'CPI 值暂不可用' },
               employment: { updated: '就业值已更新', current: '就业值已是最新', 'not-required': '就业暂无需补抓', unavailable: '就业值暂不可用' }
             },
+            recordTimes: {
+              // 两行只写字段名与值：说明（「不是发布时间」之类）归 ⓘ，不进正文。
+              createdAt: '创建时间',
+              actualDetectedAt: '实际值获取时间'
+            },
             fomcRefresh: {
               publishedAt: '官方公布时间', retained: '刷新失败，显示上次官方值',
               action: '获取官方值',
@@ -2184,6 +2189,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               schedule: { updated: 'BLS schedule updated', unchanged: 'BLS schedule is current', unavailable: 'BLS schedule unavailable' },
               cpi: { updated: 'CPI values updated', current: 'CPI values are current', 'not-required': 'CPI catch-up not required', unavailable: 'CPI values unavailable' },
               employment: { updated: 'Employment values updated', current: 'Employment values are current', 'not-required': 'Employment catch-up not required', unavailable: 'Employment values unavailable' }
+            },
+            recordTimes: {
+              createdAt: 'Created',
+              actualDetectedAt: 'Actual value received'
             },
             fomcRefresh: {
               publishedAt: 'Official publication time', retained: 'Refresh failed; showing previous official value',

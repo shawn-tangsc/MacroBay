@@ -70,7 +70,13 @@ export type MacroCalendarReleaseTimeOverrides = Readonly<{
 const noReleaseTimeOverrides: MacroCalendarReleaseTimeOverrides = Object.freeze({ get: () => undefined })
 
 export function createMacroEconomicCalendarQueryService(deps: {
-  repository: Pick<MacroCalendarRepository, 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>
+  repository: Pick<MacroCalendarRepository, 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'> & {
+    /**
+     * 可选：仓库没提供这两个时刻时，详情不画那两行——**不拿别的时刻顶上**。生产装配给的是真仓库
+     * （`macroCalendarRepository` 里实现），这里可选只为了让只读月/详情的既有替身不必跟着改。
+     */
+    getEventTimesAsOf?: MacroCalendarRepository['getEventTimesAsOf']
+  }
   releaseTimeOverrides?: MacroCalendarReleaseTimeOverrides
 }): MacroEconomicCalendarQueryService {
   const overrides = deps.releaseTimeOverrides ?? noReleaseTimeOverrides
@@ -117,9 +123,10 @@ export function createMacroEconomicCalendarQueryService(deps: {
         const peers = bounds
           ? deps.repository.listEffectiveMonthAsOf({ ...bounds, asOf: input.asOf, limit: macroEconomicCalendarQueryPolicy.monthResultLimit })
           : []
-        return isEligible(revision, input.asOf, peers)
-          ? { state: 'available', asOf: input.asOf, event: toEvent(revision, input.asOf) }
-          : eventUnavailable('event-not-found')
+        if (!isEligible(revision, input.asOf, peers)) return eventUnavailable('event-not-found')
+        // 两个时刻只属于详情：月度列表里逐条聚合会变成 N+1，而且列表不需要它们。
+        const times = deps.repository.getEventTimesAsOf?.({ eventKey: input.eventKey, asOf: input.asOf }) ?? {}
+        return { state: 'available', asOf: input.asOf, event: { ...toEvent(revision, input.asOf), ...times } }
       } catch {
         return eventUnavailable('calendar-query-unavailable')
       }
@@ -128,7 +135,13 @@ export function createMacroEconomicCalendarQueryService(deps: {
 }
 
 function resolveEventDetail(
-  repository: Pick<MacroCalendarRepository, 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>,
+  repository: Pick<MacroCalendarRepository, 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'> & {
+    /**
+     * 可选：仓库没提供这两个时刻时，详情不画那两行——**不拿别的时刻顶上**。生产装配给的是真仓库
+     * （`macroCalendarRepository` 里实现），这里可选只为了让只读月/详情的既有替身不必跟着改。
+     */
+    getEventTimesAsOf?: MacroCalendarRepository['getEventTimesAsOf']
+  },
   eventKey: string,
   asOf: string
 ): MacroCalendarRevision | undefined {

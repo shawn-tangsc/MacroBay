@@ -15,6 +15,13 @@ export type MacroCalendarRepository = {
   appendManyIfNew: (revisions: readonly MacroCalendarRevision[]) => { insertedCount: number; dedupedCount: number }
   listEffectiveMonthAsOf: (input: { monthStart: string; monthEndExclusive: string; asOf: string; limit: number }) => MacroCalendarRevision[]
   getEffectiveEventAsOf: (input: { eventKey: string; asOf: string }) => MacroCalendarRevision | undefined
+  /**
+   * 只读的两个时刻，按 `asOf` 的可见性聚合：
+   * - `createdAt` = `min(recorded_at)`：这条事件第一次落库，后续修订不改变它；
+   * - `actualDetectedAt` = 第一次 `actual` 非空那行的 `detected_at`：拿到值那一刻的**来源观测时刻**。
+   * 都不是"最新修订时刻"，所以不能用有效行的 `recorded_at`/`detected_at` 代替。
+   */
+  getEventTimesAsOf: (input: { eventKey: string; asOf: string }) => Readonly<{ createdAt?: string; actualDetectedAt?: string }>
   listVisibleProviderFactsAsOf: (input: { providerIds: string[]; asOf: string }) => MacroCalendarRevision[]
   getBeaObservation: (releaseGroupKey: string) => { scheduleFingerprint: string; lastAttemptAt: string } | undefined
   recordBeaObservationAttemptIfDue: (input: { releaseGroupKey: string; scheduleFingerprint: string; now: string; minimumIntervalMs: number }) => boolean
@@ -108,6 +115,19 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
       if (asOfMs === undefined) return undefined
       const row = visibleByEvent.get(eventKey, asOfMs) as Row | undefined
       return row ? fromRow(row) : undefined
+    },
+    getEventTimesAsOf({ eventKey, asOf }) {
+      const asOfMs = epochTime(asOf)
+      if (asOfMs === undefined) return Object.freeze({})
+      const row = sqlite.database.prepare(
+        `select min(recorded_at) as created_at,
+                min(case when actual_json is not null and actual_json not in ('', 'null') then detected_at end) as actual_detected_at
+           from mi_macro_calendar_revisions where event_key = ? and detected_at_ms <= ?`
+      ).get(eventKey, asOfMs) as { created_at?: string | null; actual_detected_at?: string | null } | undefined
+      return Object.freeze({
+        ...(typeof row?.created_at === 'string' && isValidIsoTime(row.created_at) ? { createdAt: row.created_at } : {}),
+        ...(typeof row?.actual_detected_at === 'string' && isValidIsoTime(row.actual_detected_at) ? { actualDetectedAt: row.actual_detected_at } : {})
+      })
     },
     listVisibleProviderFactsAsOf({ providerIds, asOf }) {
       const asOfMs = epochTime(asOf)

@@ -130,6 +130,10 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
       <Meta label={text.details.source} value={event.sources.map((source) => text.sources[source]).join(', ')} />
       <ReleaseTimeRow client={releaseTimeClient} event={event} onChanged={onReleaseTimeChanged} text={text} timeZone={timeZone} timeZoneLabel={timeZoneLabel} />
       {event.sources.includes(fedFomcRefreshPresentationPolicy.source) && event.publishedAt ? <Meta label={text.fomcRefresh.publishedAt} value={formatTime(event.publishedAt, 'second')} /> : null}
+      {/* 两个时刻都是"记录本身"的时间，不是发布时刻：创建时间在修订后不变；实际值时间取第一次
+          拿到非空现值那刻的**来源观测时刻**。缺就不画，不拿别的时刻顶上。 */}
+      {event.createdAt ? <Meta label={text.recordTimes.createdAt} value={formatTime(event.createdAt, 'second')} /> : null}
+      {event.actualDetectedAt ? <Meta label={text.recordTimes.actualDetectedAt} value={formatTime(event.actualDetectedAt, 'second')} /> : null}
       <Meta label={text.details.importance} value={text.importance.high} />
       <Meta label={text.details.state} value={text.states[event.lifecycleState]} />
     </dl>

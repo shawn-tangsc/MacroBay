@@ -60,6 +60,41 @@ async function render(detail: Parameters<typeof EconomicCalendarEventDetail>[0])
 
 const base = { event: event(), now: () => new Date(asOf), onRefresh: async () => undefined, onReleaseTimeChanged: async () => undefined, releaseTimeClient: client, refreshState: undefined, text }
 
+describe('the record times on the detail', () => {
+  /**
+   * R36：创建时间 = 第一次落库（修订不改变它）；实际值时间 = 第一次拿到非空现值那一刻的
+   * **来源观测时刻**。三条时间故意互不相等：发布 10-28 18:00、观测 10-30 14:40、创建 10-30 08:35，
+   * 显示成哪个都不会靠巧合对上。
+   */
+  it('shows when the record was created and when the value was received, never the publication time', async () => {
+    const host = await render({
+      ...base,
+      event: event({
+        createdAt: '2026-10-30T08:35:28.000Z',
+        actualDetectedAt: '2026-10-30T14:40:21.000Z',
+        publishedAt: '2026-10-28T18:00:00.000Z'
+      }),
+      officialConsensus: null,
+      linkedConsensus: undefined
+    })
+    const rows = Array.from(host.querySelectorAll('dt'))
+    const valueOf = (label: string): string | null =>
+      rows.find((dt) => dt.textContent === label)?.nextElementSibling?.textContent ?? null
+
+    expect(valueOf(text.recordTimes.createdAt)).toContain('08:35')
+    expect(valueOf(text.recordTimes.actualDetectedAt)).toContain('14:40')
+    // 观测时刻不是发布时刻：页面里不许出现 18:00 被当成「拿到值的时间」。
+    expect(valueOf(text.recordTimes.actualDetectedAt)).not.toContain('18:00')
+  })
+
+  it('omits both rows when the record carries neither time', async () => {
+    const host = await render({ ...base, officialConsensus: null, linkedConsensus: undefined })
+    const labels = Array.from(host.querySelectorAll('dt')).map((dt) => dt.textContent)
+    expect(labels).not.toContain(text.recordTimes.createdAt)
+    expect(labels).not.toContain(text.recordTimes.actualDetectedAt)
+  })
+})
+
 describe('the official detail’s expectation row', () => {
   it('uses the official consensus when there is one, without a source note', async () => {
     const host = await render({ ...base, officialConsensus: { displayValue: '180' } })
