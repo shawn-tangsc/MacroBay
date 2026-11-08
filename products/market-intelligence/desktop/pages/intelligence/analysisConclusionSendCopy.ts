@@ -1,4 +1,4 @@
-import type { SendOutcomeState } from './analysisConclusionSendState'
+import type { SendOutcomeState, SuppressionReason } from './analysisConclusionSendState'
 import type { AnalysisConclusionSendText } from './analysisConclusionSendText'
 
 /**
@@ -41,7 +41,10 @@ export function describeSendStatus(input: Readonly<{
     case 'handed': return { message: fill(text.sentUnconfirmed) }
     // 记录在、中心有条，只是手机那档没排上：不许写成「失败」。
     case 'app-only': return { message: fill(text.appOnly) }
-    case 'suppressed': return { message: suppressedSentence(state.reason, text) }
+    case 'suppressed': return { message: SUPPRESSED_SENTENCE[state.reason](text) }
+    // 认不出的码：不空着、不猜成没发、更不说成已发送；码进折叠区给排查用。
+    case 'suppressed-unknown': return { message: text.suppressedUnknown, reasonCode: state.reason }
+    case 'daily-limit': return { message: text.dailyLimit }
     case 'push-unavailable': {
       // 0 条与多条是两种下一步：一条要「去启用」，多条要「停到只剩一条」。
       const multiple = input.channel === undefined ? false : input.channel.multiple || input.channel.enabledChannelCount > 1
@@ -52,15 +55,13 @@ export function describeSendStatus(input: Readonly<{
   }
 }
 
-/** 被压下的六种原因各一句：上限与免打扰下一步不同，不许合成一句「没发出去」。 */
-function suppressedSentence(reason: Extract<SendOutcomeState, { state: 'suppressed' }>['reason'], text: AnalysisConclusionSendText): string {
-  switch (reason) {
-    case 'quiet-hours': return text.quietHours
-    case 'daily-limit': return text.dailyLimit
-    case 'minimum-gap': return text.minimumGap
-    case 'surface-off': return text.surfaceOff
-    case 'not-subscribed': return text.notSubscribed
-    case 'not-approved': return text.notApproved
-    case 'desktop-unsupported': return text.desktopUnsupported
-  }
+/**
+ * 被压下的原因各一句。**键就是契约的值域**（四个码），少一个多一个都编不过——
+ * 所以不会出现「表里留着一条永远没数据的句子」。认不出的码走 `suppressedUnknown` 兜底。
+ */
+const SUPPRESSED_SENTENCE: Readonly<Record<SuppressionReason, (text: AnalysisConclusionSendText) => string>> = {
+  'quiet-hours': (text) => text.quietHours,
+  'toast-disabled': (text) => text.toastDisabled,
+  'popup-disabled': (text) => text.popupDisabled,
+  'desktop-disabled': (text) => text.desktopDisabled
 }

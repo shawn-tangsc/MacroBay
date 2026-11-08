@@ -49,26 +49,44 @@ describe('reading one send receipt', () => {
     expect(describeSendStatus({ state, text: zh, time }).message).toBe('只留在应用内，没到手机 · 12:44')
   })
 
-  it('calls the daily cap by its name, from the rejection and from the suppression alike', () => {
+  it('calls the daily cap by its name: a refused submit, not a suppressed surface', () => {
+    // 上限是提交被拒（`rejected`），不属于「某一档被压下」——两步动作不同：等明天 vs 查通道。
     const rejected = classifySendReceipt({ kind: 'rejected', reason: 'daily-limit-reached' })
-    const suppressed = classifySendReceipt({
-      kind: 'accepted',
-      delivery: { suppressed: [{ level: 'channel', reason: 'daily-limit' }] }
-    })
-    // 同一个事实一个说法：两条来源都落到「今天的上限到了」。
-    expect(rejected).toEqual({ state: 'suppressed', reason: 'daily-limit' })
-    expect(suppressed).toEqual(rejected)
+    expect(rejected).toEqual({ state: 'daily-limit' })
     const copy = describeSendStatus({ state: rejected, text: zh, time })
     expect(copy.message).toContain('今天的上限到了')
     expect(copy.reasonCode).toBeUndefined()
   })
 
+  it('says it does not recognize a suppression reason, instead of calling it sent or unsent', () => {
+    // 契约的值域是四个码；这里喂一个**值域外**的码（旧表里那个「未批准」），
+    // 界面必须出兜底句：不空着、不说「已发到」、也不冒充「没发到手机」的原因。
+    const state = classifySendReceipt({
+      kind: 'accepted',
+      delivery: { suppressed: [{ level: 'push', reason: 'not-approved' }] }
+    })
+    expect(state).toEqual({ state: 'suppressed-unknown', reason: 'not-approved' })
+    const copy = describeSendStatus({ state, text: zh, time })
+    expect(copy.message).toBe(zh.suppressedUnknown)
+    expect(copy.message.length).toBeGreaterThan(0)
+    expect(copy.message).not.toContain('已发到')
+    expect(copy.reasonCode).toBe('not-approved')
+  })
+
+  it('has a sentence for every reason the contract can actually produce', () => {
+    for (const reason of ['quiet-hours', 'toast-disabled', 'popup-disabled', 'desktop-disabled'] as const) {
+      const state = classifySendReceipt({ kind: 'accepted', delivery: { suppressed: [{ level: 'push', reason }] } })
+      expect(state).toEqual({ state: 'suppressed', reason })
+      expect(describeSendStatus({ state, text: zh, time }).message.length).toBeGreaterThan(0)
+    }
+  })
+
   it('points at the channel page differently for none and for several channels', () => {
     const state = classifySendReceipt({ kind: 'accepted', delivery: { push: { state: 'failed', reason: 'push-unavailable' } } })
     expect(state).toEqual({ state: 'push-unavailable' })
-    expect(describeSendStatus({ state, text: zh, channel: { ok: false, enabledChannelCount: 0, multiple: false }, time }))
+    expect(describeSendStatus({ state, text: zh, channel: { enabledChannelCount: 0, multiple: false }, time }))
       .toEqual({ message: '没发到手机：还没有可用的通道，去「频道」启用一条', reasonCode: 'push-unavailable' })
-    expect(describeSendStatus({ state, text: zh, channel: { ok: false, enabledChannelCount: 2, multiple: true }, time }).message)
+    expect(describeSendStatus({ state, text: zh, channel: { enabledChannelCount: 2, multiple: true }, time }).message)
       .toContain('停用到只剩一条')
   })
 
@@ -84,8 +102,8 @@ describe('reading one send receipt', () => {
   it('falls back to a neutral channel name instead of inventing one', () => {
     const state = classifySendReceipt({ kind: 'accepted', delivery: { push: { state: 'sent-accepted' } } })
     expect(describeSendStatus({ state, text: zh, time }).message).toBe('已发到 推送通道 · 12:44')
-    // 点击前那份通道派生**不参与**这句话：它只回答「有没有可用通道」。
-    expect(describeSendStatus({ state, text: zh, channel: { ok: true, channelName: 'Telegram' }, time }).message)
+    // 点击前那份通道事实**不参与**这句话：它只回答「有没有可用通道」，而且这里根本没有通道名。
+    expect(describeSendStatus({ state, text: zh, channel: { enabledChannelCount: 0, multiple: false }, time }).message)
       .toBe('已发到 推送通道 · 12:44')
   })
 

@@ -1,3 +1,5 @@
+import type { NotificationSuppressedLevel } from '@platform/notifications/contracts/notificationSubmitContracts'
+
 /**
  * 「发送到频道」的回执判定：**回执 → 读者要看的那一种情况**。
  *
@@ -26,23 +28,19 @@ export type PushDeliveryReading = Readonly<{
 }>
 
 /**
- * 被压下的档位与原因。**上限、免打扰、冷却、开关、未批准、桌面不支持都用这一份**：
- * 同一个事实不设第二个出处——「今天的上限到了」以后只认这里，不另做一条判断。
+ * 被压下的原因。**值域直接取契约**（`NotificationSuppressedLevel['reason']`），不在这里另抄一份：
+ * 平台多一个码，这张表跟着多一条；平台少一个码，多余的人话也不会留下。
  */
-export type SuppressionReason =
-  | 'quiet-hours'
-  | 'daily-limit'
-  | 'minimum-gap'
-  | 'surface-off'
-  | 'not-subscribed'
-  | 'not-approved'
-  | 'desktop-unsupported'
+export type SuppressionReason = NotificationSuppressedLevel['reason']
 
 export type DeliveryReading = Readonly<{
   /** 手机那一档；**缺席**＝没排上（免打扰摘掉的就是这种）。 */
   push?: PushDeliveryReading | undefined
-  /** 平台报的压下原因；有它时优先于「缺席」的默认解释。 */
-  suppressed?: readonly Readonly<{ level: string; reason: SuppressionReason }>[] | undefined
+    /**
+   * 平台报的压下原因；有它时优先于「缺席」的默认解释。
+   * `reason` 收成 `string`：认不出的码也要**如实说「没认出来」**，不许当成「没发」或「已发」。
+   */
+  suppressed?: readonly Readonly<{ level: string; reason: string }>[] | undefined
 }>
 
 /** 一次提交的回执，按判定需要的最小形状。 */
@@ -51,6 +49,21 @@ export type SendReceiptView =
   | Readonly<{ kind: 'rejected'; reason: string }>
 
 /** 读者面前只有这几种情况；`sending` 是过程，不在这支里。 */
+/**
+ * 认得的压下原因：**键就是契约的值域**（少一个多一个都编不过），所以人话表也跟着穷尽。
+ * 认不出的码在运行时走 `suppressed-unknown`，说「没认出来」，不猜成没发也不猜成已发。
+ */
+const SUPPRESSED_REASONS: Readonly<Record<SuppressionReason, true>> = {
+  'quiet-hours': true,
+  'toast-disabled': true,
+  'popup-disabled': true,
+  'desktop-disabled': true
+}
+
+function isKnownSuppression(reason: string): reason is SuppressionReason {
+  return Object.hasOwn(SUPPRESSED_REASONS, reason)
+}
+
 export type SendOutcomeState =
   | Readonly<{ state: 'sent' }>
   | Readonly<{ state: 'handed' }>
@@ -58,26 +71,26 @@ export type SendOutcomeState =
   /** 记录在、应用内有，手机那一档没排上且没给原因。 */
   | Readonly<{ state: 'app-only' }>
   | Readonly<{ state: 'suppressed'; reason: SuppressionReason }>
+  /** 平台报了一个这台设备不认识的压下原因：如实说没认出来，别猜成没发也别猜成已发。 */
+  | Readonly<{ state: 'suppressed-unknown'; reason: string }>
+  /** 平台每日上限：提交就被拒，不是某一档被压下——读者要做的是等明天。 */
+  | Readonly<{ state: 'daily-limit' }>
   /** 通道不通（0 条或多条）。条数不在这里判，那是 `resolvePushChannel` 的事。 */
   | Readonly<{ state: 'push-unavailable' }>
   /** 提交层面的其他拒绝，以及请求根本没到（IPC 抛错）。 */
   | Readonly<{ state: 'failed'; reason: string }>
 
-/** 认得的压下原因闭集：认不出的一律按「没排上」处理，不编一个原因给读者。 */
-/** 闭集就这七个，映射表按这七个出人话；要加第八种先问产品，不许自己造一个码。 */
-const SUPPRESSION_REASONS: readonly SuppressionReason[] = [
-  'quiet-hours', 'daily-limit', 'minimum-gap', 'surface-off', 'not-subscribed', 'not-approved', 'desktop-unsupported'
-]
-
 export function classifySendReceipt(receipt: SendReceiptView): SendOutcomeState {
   if (receipt.kind === 'rejected') {
-    // 上限在本层收成「被压下」，与记录里的同一条事实共用一个说法。
-    return receipt.reason === 'daily-limit-reached' ? { state: 'suppressed', reason: 'daily-limit' } : { state: 'failed', reason: receipt.reason }
+    // 上限是提交被拒（`rejected`），不是某一档被压下：读者下一步是等明天，不是查通道。
+    return receipt.reason === 'daily-limit-reached' ? { state: 'daily-limit' } : { state: 'failed', reason: receipt.reason }
   }
   const delivery = receipt.delivery
   const suppressed = delivery?.suppressed?.find(entry => entry.level === 'channel' || entry.level === 'push')
-  if (suppressed !== undefined && SUPPRESSION_REASONS.includes(suppressed.reason)) {
-    return { state: 'suppressed', reason: suppressed.reason }
+  if (suppressed !== undefined) {
+    return isKnownSuppression(suppressed.reason)
+      ? { state: 'suppressed', reason: suppressed.reason }
+      : { state: 'suppressed-unknown', reason: suppressed.reason }
   }
   const push = delivery?.push
   // 缺席不是失败：记录与中心都在，只是手机那一档没排上。

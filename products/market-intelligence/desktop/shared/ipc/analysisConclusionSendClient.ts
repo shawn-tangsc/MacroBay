@@ -1,7 +1,7 @@
 import type { NotificationSubmitOutcome } from '@platform/notifications/contracts/notificationContracts'
 
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
-import type { DeliveryReading, PushDeliveryReading, SuppressionReason, SendReceiptView } from '../../pages/intelligence/analysisConclusionSendState'
+import type { DeliveryReading, PushDeliveryReading, SendReceiptView } from '../../pages/intelligence/analysisConclusionSendState'
 
 /**
  * 抽屉里「发送到频道」的渲染层入口：**只传运行 id**。
@@ -32,9 +32,6 @@ export const SEND_ACTION_READY: ReceiptCarriesDelivery = true
 
 const PRODUCT_ID = 'market-intelligence'
 
-const SUPPRESSION_REASONS: readonly SuppressionReason[] = [
-  'quiet-hours', 'daily-limit', 'minimum-gap', 'surface-off', 'not-subscribed', 'not-approved', 'desktop-unsupported'
-]
 const PUSH_STATES: readonly PushDeliveryReading['state'][] = ['queued', 'sent-accepted', 'sent-unconfirmed', 'failed']
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,12 +49,12 @@ function readPush(value: unknown): PushDeliveryReading | undefined {
 
 function readSuppressed(value: unknown): DeliveryReading['suppressed'] {
   if (!Array.isArray(value)) return undefined
-  const entries: { level: string; reason: SuppressionReason }[] = []
+  const entries: { level: string; reason: string }[] = []
   for (const entry of value) {
     if (!isRecord(entry)) continue
-    const reason = SUPPRESSION_REASONS.find(candidate => candidate === entry.reason)
-    if (reason === undefined || typeof entry.level !== 'string') continue
-    entries.push({ level: entry.level, reason })
+    // **认不出的码也留着**：界面要能说「这台设备不认识这个原因」，丢掉就等于把它当成「没排上」。
+    if (typeof entry.reason !== 'string' || entry.reason.length === 0 || typeof entry.level !== 'string') continue
+    entries.push({ level: entry.level, reason: entry.reason })
   }
   return entries.length === 0 ? undefined : entries
 }

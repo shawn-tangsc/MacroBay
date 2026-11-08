@@ -47,12 +47,12 @@ describe('reading the send receipt', () => {
       .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } })
   })
 
-  it('keeps the suppression reason, and ignores a reason the closed set does not have', () => {
+  it('keeps the suppression reason, including one this build does not recognize', () => {
     expect(readSendReceipt({ kind: 'accepted', delivery: { suppressed: [{ level: 'channel', reason: 'quiet-hours' }] } }))
       .toEqual({ kind: 'accepted', delivery: { suppressed: [{ level: 'channel', reason: 'quiet-hours' }] } })
-    // 认不出的码不当成某一种原因：整条压下信息丢掉，于是判成「没排上」，绝不当成功。
+    // 认不出的码**不能丢**：丢了它就变成「没排上」，界面会说不清；留着才能说「不认识这个原因」。
     expect(readSendReceipt({ kind: 'accepted', delivery: { suppressed: [{ level: 'channel', reason: 'brand-new-reason' }] } }))
-      .toEqual({ kind: 'accepted' })
+      .toEqual({ kind: 'accepted', delivery: { suppressed: [{ level: 'channel', reason: 'brand-new-reason' }] } })
   })
 
   it('treats an accepted submit without a delivery result as "no delivery this time"', () => {

@@ -32,16 +32,17 @@ export type AnalysisConclusionSendText = Readonly<{
   quietHours: string
   /** 被压下：平台每日上限。下一步是等明天。 */
   dailyLimit: string
-  /** 被压下：同一触发键的最小间隔内（同类通知刚发过）。 */
-  minimumGap: string
-  /** 被压下：读者没有订阅这条事件的手机档。 */
-  notSubscribed: string
+  /** 被压下：应用内提示关着。 */
+  toastDisabled: string
+  /** 被压下：高优先级弹窗关着。 */
+  popupDisabled: string
+  /** 被压下：桌面通知关着。 */
+  desktopDisabled: string
+  /** 平台报了一个这台设备不认识的原因：如实说没认出来，别空着，也别当成已发送。 */
+  suppressedUnknown: string
   /** 被压下：读者自己关了这条事件的手机档。 */
   surfaceOff: string
-  /** 被压下：该档没有批准（代码与批准表不一致，属缺陷，但界面不许装成成功）。 */
-  notApproved: string
-  /** 被压下：设备给不了桌面通知——这条事件在手机上不适用。 */
-  desktopUnsupported: string
+
   /** 通道 0 条：指路去启用一条。 */
   pushUnavailableNone: string
   /** 通道多条：指路停用到只剩一条。 */
@@ -65,11 +66,11 @@ const zh: AnalysisConclusionSendText = {
   appOnly: '只留在应用内，没到手机 · {time}',
   quietHours: '这次没发到手机：现在是免打扰时段，不会自动补发。要现在验通道，关掉免打扰再点一次。',
   dailyLimit: '今天的上限到了（每天 4 条），明天再发',
-  minimumGap: '这次没发到手机：同类通知刚发过，还在最小间隔内，过一会儿再点一次',
-  notSubscribed: '你没订阅这条通知的手机档，这次只留在应用内',
+  toastDisabled: '你没开应用内提示，这次只留在应用内',
+  popupDisabled: '你没开高优先级弹窗，这次只留在应用内',
+  desktopDisabled: '你没开桌面通知，这次只留在应用内',
+  suppressedUnknown: '这次没发到手机：这台设备还不认识平台给的原因',
   surfaceOff: '你关掉了这条通知的手机档，这次只留在应用内',
-  notApproved: '这个版本没有批准这一档，没发出去',
-  desktopUnsupported: '这台设备收不了这类通知',
   pushUnavailableNone: '没发到手机：还没有可用的通道，去「频道」启用一条',
   pushUnavailableMultiple: '没发到手机：启用了不止一条通道，去「频道」停用到只剩一条',
   notSent: '没发到手机',
@@ -88,11 +89,11 @@ const en: AnalysisConclusionSendText = {
   appOnly: 'Stayed in the app, not sent to your phone · {time}',
   quietHours: 'Not sent to your phone this time: it is quiet hours now, and nothing is resent later. To test the channel, turn quiet hours off and send again.',
   dailyLimit: 'Today’s limit is reached (4 a day) — try again tomorrow',
-  minimumGap: 'Not sent to your phone: a notification like this one just went out, so it is inside the minimum gap — send again shortly',
-  notSubscribed: 'You have the phone leg turned off for this notification, so it stayed in the app',
+  toastDisabled: 'In-app toasts are off, so this stayed in the app',
+  popupDisabled: 'High-priority popups are off, so this stayed in the app',
+  desktopDisabled: 'Desktop notifications are off, so this stayed in the app',
+  suppressedUnknown: 'Not sent to your phone: the platform reported a reason this build does not recognize',
   surfaceOff: 'You turned off the phone leg for this notification, so it stayed in the app',
-  notApproved: 'This build has not approved that leg, so nothing was sent',
-  desktopUnsupported: 'This device cannot receive this kind of notification',
   pushUnavailableNone: 'Not sent to your phone: no usable channel yet — enable one under Channels',
   pushUnavailableMultiple: 'Not sent to your phone: more than one channel is enabled — turn all but one off under Channels',
   notSent: 'Not sent to your phone',
