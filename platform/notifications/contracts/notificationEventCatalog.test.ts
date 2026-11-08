@@ -39,7 +39,7 @@ describe('notification event policy', () => {
     // 桌面对「信息类」不开放（用户原话：没打开应用还被轰炸）。2026-11-06 用户追加一条：
     // **日报生成成功**也要能弹（此前只有失败那档弹）；同一天摘掉它的 `toast`——用户只说了桌面，
     // 「不弹应用内提示」是 11-04 的原话。同日加入 P9 手动分析失败（失败类，读者刚点过）。
-    // 14 = 平台 9（10 行里 P7 自己不走桌面）+ 情报 4 + 日报完成 1。
+    // 17 = 平台 14（P7 不走桌面；自检是诊断，四档全批）+ 情报 4 + 日报完成 1（含在情报 4 里，别重算）。
     const rows = Object.entries(NOTIFICATION_EVENT_POLICY)
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('desktop')).map(([id]) => id).sort()).toEqual([
       'market-intelligence.briefing.failed',
@@ -56,6 +56,9 @@ describe('notification event policy', () => {
       'platform.channel.push-suspended',
       'platform.job.failed-terminal',
       'platform.job.repeated-failed',
+      // 自检是读者亲手点的诊断，四档全批（2026-11-08 用户拍板），所以它也在桌面这一格里；
+      // 它和「真实事件」不是同一类，别因为它在表里就以为桌面又要对所有事件开放。
+      'platform.notification.self-test',
       'platform.provider.credential-invalid',
       'platform.provider.credential-recovered'
     ])
@@ -82,7 +85,6 @@ describe('notification event policy', () => {
     // - 分析结论：完成类，用户要的是「结论到了」这一声，反过来只在手机与中心（同向时由调用方收窄到中心）。
     // 顺序就是表里的顺序（平台几行在前），别按字母排。
     expect(rows.filter(([, row]) => !row.approvedDisruptionLevels.includes('toast')).map(([id]) => id)).toEqual([
-      'platform.notification.self-test',
       'platform.analysis.manual-failed',
       'market-intelligence.briefing.ready',
       'market-intelligence.sentiment.alert',
@@ -90,10 +92,18 @@ describe('notification event policy', () => {
     ])
   })
 
-  it('never approves a bypass and always keeps center', () => {
+  it('approves a quiet-hours bypass only for the self-test, and always keeps center', () => {
+    // 2026-11-08 用户拍板：读者亲手点的诊断不算系统打扰，只有自检一行可穿透。
+    // 这条用例是「谁能穿透」的唯一定义处——多放一行进去，等于替读者多批了一次打扰。
+    const bypassing = Object.entries(NOTIFICATION_EVENT_POLICY)
+      .filter(([, row]) => row.approvedBypassQuietHours)
+      .map(([id]) => id)
+    expect(bypassing).toEqual(['platform.notification.self-test'])
     for (const [id, row] of Object.entries(NOTIFICATION_EVENT_POLICY)) {
-      expect(row.approvedBypassQuietHours, `${id} 不应批准穿透免打扰`).toBe(false)
       expect(row.approvedDisruptionLevels, `${id} 必须含 center`).toContain('center')
+      if (id !== 'platform.notification.self-test') {
+        expect(row.approvedBypassQuietHours, `${id} 不应批准穿透免打扰`).toBe(false)
+      }
     }
   })
 })

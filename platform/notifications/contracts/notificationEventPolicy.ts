@@ -25,6 +25,10 @@
  *    再投桌面就是「失败 → P7 → 投桌面 → 再失败」的自激循环。所以它只有 center + toast。
  * 3. **订阅层整体撤销**：不再有逐事件订阅表、不再有 `not-subscribed` 抑制；
  *    只有频道那三条（N2/N3/N5）有读者开关，存在通知设置的同一份 JSON 里（契约 §5.4）。
+ * 4. **2026-11-08 用户拍板：自检事件可穿透免打扰**——全表只有 `platform.notification.self-test` 一行
+ *    `approvedBypassQuietHours: true`（依据：读者亲手点的诊断，不算系统打扰），其余一律 false；
+ *    它同时也是唯一一行四档全批（中心/提示/桌面/手机），因为全表没有一条真实事件同时批四档，
+ *    借真实事件自检必然只测一部分。三层缺一不生效：声明 `diagnostic` + 本表批准 + 提交带 `test` 命名空间。
  */
 import type { NotificationEventPolicy } from './notificationEventCatalog'
 
@@ -38,7 +42,10 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'platform.channel.push-resumed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   // 桌面自己失败时不再投桌面：见文件头第 2 条。
-  'platform.notification.self-test': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+  // 自检：**唯一一行四档全批 + 唯一一行批准穿透免打扰**（签署：通用模块产品经理，2026-11-08 用户拍板）。
+  // 四档全批的理由：全表没有任何一条真实事件同时批了四档，借真实事件自检必然只测一部分。
+  // 穿透免打扰的理由：「读者亲手点的诊断，不算系统打扰」；装配期对非诊断事件申请穿透直接报错。
+  'platform.notification.self-test': { approvedDisruptionLevels: ['center', 'toast', 'desktop', 'channel'], approvedBypassQuietHours: true },
   'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false },
   // P8 频道连不上（2026-11-04 用户拍板新增；通用 PM 需求 v2.17 §11 签字）：
   // 系统状态类，与该表其它系统状态同档；**不含 channel**——本机状态不该再推到手机。
