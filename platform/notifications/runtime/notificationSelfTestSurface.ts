@@ -46,8 +46,13 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
         occurredAt: at,
         namespace: 'test'
       })
-      // 提交被拒也是「没发出去」：按闭集里最接近的一档回，不新造码。
+      // **只有真投递出去才算 sent**。`collapsed`（宿主当日熔断折叠成聚合、不投递）、`merged`（并进已有那条）、
+      // `delegated`（让渡给产品）都**没有发生投递**，回「已发到 X」就是把「成功了但没发生」喂给读者——
+      // 比熔断本身更糟。被拒按闭集最接近的一档回，不新造码。
       if (outcome.kind === 'rejected') return finish({ state: 'unavailable', reasonCode: 'read-failed' })
+      if (outcome.kind === 'collapsed') return finish({ state: 'unavailable', reasonCode: 'collapsed' })
+      if (outcome.kind === 'merged') return finish({ state: 'unavailable', reasonCode: 'merged' })
+      if (outcome.kind === 'delegated') return finish({ state: 'unavailable', reasonCode: 'delegated' })
       return finish({ state: 'sent', channelId: channel.channelId, channelName: channel.channelName })
     }
   }

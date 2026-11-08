@@ -14,7 +14,11 @@ export type TestNoticeReceipt =
   | { state: 'sent'; channelId: string; channelName: string }
   | {
     state: 'unavailable'
-    reasonCode: 'push-unavailable' | 'read-failed'
+    /**
+     * `collapsed` / `merged` / `delegated` 是**结果**，不是失败：读者点的那一下没产生投递，
+     * 就不许回「已发到 X」。三条各自报，别默认落进 sent。
+     */
+    reasonCode: 'push-unavailable' | 'read-failed' | 'collapsed' | 'merged' | 'delegated'
     /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（0 或 ≥2）。 */
     enabledChannelCount?: number
   }

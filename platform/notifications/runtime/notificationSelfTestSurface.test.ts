@@ -6,13 +6,17 @@ import { composeSelfTestSurface } from './notificationSelfTestSurface'
 /**
  * 平台只剩一种测试：`link`（链路自检）。产品的三种取数在各自产品里拼请求，不属于这份契约。
  */
-function harness(options: { channel?: unknown; rejected?: boolean } = {}) {
+function harness(options: { channel?: unknown; outcome?: string } = {}) {
   const submitted: { eventTypeId: string; namespace?: string; rendered?: Record<string, { title: string }>; deeplink?: unknown; dedupeVars?: { vars?: Record<string, string> } }[] = []
   const surface = composeSelfTestSurface({
     resolvePushChannel: async () => (options.channel ?? { ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }) as never,
     submitRequest: async (input) => {
       submitted.push(input as never)
-      return (options.rejected === true ? { kind: 'rejected', reason: 'unknown-event-type', message: 'x' } : { kind: 'accepted', recordId: 'r1', levels: ['channel'] }) as never
+      if (options.outcome === 'rejected') return { kind: 'rejected', reason: 'unknown-event-type', message: 'x' } as never
+      if (options.outcome === 'collapsed') return { kind: 'collapsed', aggregateRecordId: 'a1', collapsedCount: 2 } as never
+      if (options.outcome === 'merged') return { kind: 'merged', recordId: 'r1', occurrenceCount: 2, mergedEventTypes: [] } as never
+      if (options.outcome === 'delegated') return { kind: 'delegated', eventTypeId: 'x', producerId: 'p', ownerProductId: 'o' } as never
+      return { kind: 'accepted', recordId: 'r1', levels: ['channel'] } as never
     },
     now: () => '2026-11-08T00:00:00.000Z'
   })
@@ -39,6 +43,13 @@ describe('sendTestNotice (link only)', () => {
     expect(submitted[0]?.rendered).toBeUndefined()
     // 点开回到设置页那枚按钮。
     expect(submitted[0]?.deeplink).toEqual({ scope: 'platform' })
+  })
+
+  it('never reports "sent" when the submission was folded, merged or delegated', async () => {
+    for (const outcome of ['collapsed', 'merged', 'delegated'] as const) {
+      const { surface } = harness({ outcome })
+      await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: outcome })
+    }
   })
 
   it('fails closed with 0 channels and carries the count from the same judgement', async () => {
