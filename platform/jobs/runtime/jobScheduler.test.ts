@@ -21,16 +21,16 @@ describe('jobScheduler', () => {
   })
 
   it('does not fire a cron whose next slot is months away', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'))
-    const enqueue = vi.fn()
-    const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
+    await withFakeTimers(async () => {
+      vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'))
+      const enqueue = vi.fn()
+      const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
 
-    scheduler.setSchedule(createDefinition({ id: 'cron-yearly', trigger: { kind: 'cron', expression: '0 0 1 1 *' } }))
-    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
+      scheduler.setSchedule(createDefinition({ id: 'cron-yearly', trigger: { kind: 'cron', expression: '0 0 1 1 *' } }))
+      await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
 
-    expect(enqueue).not.toHaveBeenCalled()
-    vi.useRealTimers()
+      expect(enqueue).not.toHaveBeenCalled()
+    })
   })
 
   it('restarts the cron search at wake-up time so missed slots are not replayed', () => {
@@ -60,160 +60,160 @@ describe('jobScheduler', () => {
   })
 
   it('skips interval ticks while the concurrency key is locked', async () => {
-    vi.useFakeTimers()
-    const enqueue = vi.fn()
-    const isLocked = vi.fn(() => true)
-    const scheduler = createJobScheduler({ enqueue, isLocked })
+    await withFakeTimers(async () => {
+      const enqueue = vi.fn()
+      const isLocked = vi.fn(() => true)
+      const scheduler = createJobScheduler({ enqueue, isLocked })
 
-    const definition = createDefinition({
-      id: 'interval-1',
-      trigger: { kind: 'interval', intervalMs: 1000, anchor: 'lastComplete' },
-      concurrencyKey: 'lock-1'
+      const definition = createDefinition({
+        id: 'interval-1',
+        trigger: { kind: 'interval', intervalMs: 1000, anchor: 'lastComplete' },
+        concurrencyKey: 'lock-1'
+      })
+      scheduler.setSchedule(definition)
+
+      vi.advanceTimersByTime(1000)
+      expect(enqueue).not.toHaveBeenCalled()
+
     })
-    scheduler.setSchedule(definition)
-
-    vi.advanceTimersByTime(1000)
-    expect(enqueue).not.toHaveBeenCalled()
-
-    vi.useRealTimers()
   })
 
   it('fires interval jobs after the configured delay for lastStart anchor', async () => {
-    vi.useFakeTimers()
-    const enqueue = vi.fn()
-    const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
+    await withFakeTimers(async () => {
+      const enqueue = vi.fn()
+      const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
 
-    const definition = createDefinition({
-      id: 'interval-2',
-      trigger: { kind: 'interval', intervalMs: 2000, anchor: 'lastStart' }
+      const definition = createDefinition({
+        id: 'interval-2',
+        trigger: { kind: 'interval', intervalMs: 2000, anchor: 'lastStart' }
+      })
+      scheduler.setSchedule(definition)
+
+      vi.advanceTimersByTime(1999)
+      expect(enqueue).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      expect(enqueue).toHaveBeenCalledWith(definition)
+
     })
-    scheduler.setSchedule(definition)
-
-    vi.advanceTimersByTime(1999)
-    expect(enqueue).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(enqueue).toHaveBeenCalledWith(definition)
-
-    vi.useRealTimers()
   })
 
   it('schedules the next lastComplete interval after run completion', async () => {
-    vi.useFakeTimers()
-    const enqueue = vi.fn()
-    const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
+    await withFakeTimers(async () => {
+      const enqueue = vi.fn()
+      const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
 
-    const definition = createDefinition({
-      id: 'interval-last-complete',
-      trigger: { kind: 'interval', intervalMs: 2000, anchor: 'lastComplete' }
+      const definition = createDefinition({
+        id: 'interval-last-complete',
+        trigger: { kind: 'interval', intervalMs: 2000, anchor: 'lastComplete' }
+      })
+      scheduler.setSchedule(definition)
+      scheduler.notifyRunCompleted('interval-last-complete')
+
+      vi.advanceTimersByTime(1999)
+      expect(enqueue).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      expect(enqueue).toHaveBeenCalledWith(definition)
+
     })
-    scheduler.setSchedule(definition)
-    scheduler.notifyRunCompleted('interval-last-complete')
-
-    vi.advanceTimersByTime(1999)
-    expect(enqueue).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(enqueue).toHaveBeenCalledWith(definition)
-
-    vi.useRealTimers()
   })
 
   it('fires cron jobs at the next matching minute and reschedules the following match', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-01-01T10:10:30.000Z'))
-    const enqueue = vi.fn()
-    const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
+    await withFakeTimers(async () => {
+      vi.setSystemTime(new Date('2026-01-01T10:10:30.000Z'))
+      const enqueue = vi.fn()
+      const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
 
-    const definition = createDefinition({
-      id: 'cron-1',
-      trigger: { kind: 'cron', expression: '15 * * * *' }
+      const definition = createDefinition({
+        id: 'cron-1',
+        trigger: { kind: 'cron', expression: '15 * * * *' }
+      })
+      scheduler.setSchedule(definition)
+
+      await vi.advanceTimersByTimeAsync(269_000)
+      expect(enqueue).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(enqueue).toHaveBeenCalledTimes(1)
+      expect(enqueue).toHaveBeenLastCalledWith(definition)
+
+      await vi.advanceTimersByTimeAsync(3_599_000)
+      expect(enqueue).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(enqueue).toHaveBeenCalledTimes(2)
+      expect(enqueue).toHaveBeenLastCalledWith(definition)
+
     })
-    scheduler.setSchedule(definition)
-
-    await vi.advanceTimersByTimeAsync(269_000)
-    expect(enqueue).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(enqueue).toHaveBeenCalledTimes(1)
-    expect(enqueue).toHaveBeenLastCalledWith(definition)
-
-    await vi.advanceTimersByTimeAsync(3_599_000)
-    expect(enqueue).toHaveBeenCalledTimes(1)
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(enqueue).toHaveBeenCalledTimes(2)
-    expect(enqueue).toHaveBeenLastCalledWith(definition)
-
-    vi.useRealTimers()
   })
 
   it('fires cron jobs using the configured timezone instead of raw UTC fields', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-01-01T10:10:30.000Z'))
-    const enqueue = vi.fn()
-    const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
+    await withFakeTimers(async () => {
+      vi.setSystemTime(new Date('2026-01-01T10:10:30.000Z'))
+      const enqueue = vi.fn()
+      const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
 
-    const definition = createDefinition({
-      id: 'cron-timezone',
-      trigger: { kind: 'cron', expression: '15 5 * * *', timezone: 'America/New_York' }
+      const definition = createDefinition({
+        id: 'cron-timezone',
+        trigger: { kind: 'cron', expression: '15 5 * * *', timezone: 'America/New_York' }
+      })
+      scheduler.setSchedule(definition)
+
+      await vi.advanceTimersByTimeAsync(269_000)
+      expect(enqueue).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(enqueue).toHaveBeenCalledTimes(1)
+      expect(enqueue).toHaveBeenLastCalledWith(definition)
+
     })
-    scheduler.setSchedule(definition)
-
-    await vi.advanceTimersByTimeAsync(269_000)
-    expect(enqueue).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(enqueue).toHaveBeenCalledTimes(1)
-    expect(enqueue).toHaveBeenLastCalledWith(definition)
-
-    vi.useRealTimers()
   })
 
   it('skips locked cron slots and retries on the next matching minute', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-01-01T10:14:30.000Z'))
-    const enqueue = vi.fn()
-    let locked = true
-    const scheduler = createJobScheduler({
-      enqueue,
-      isLocked: () => locked
+    await withFakeTimers(async () => {
+      vi.setSystemTime(new Date('2026-01-01T10:14:30.000Z'))
+      const enqueue = vi.fn()
+      let locked = true
+      const scheduler = createJobScheduler({
+        enqueue,
+        isLocked: () => locked
+      })
+
+      const definition = createDefinition({
+        id: 'cron-locked',
+        trigger: { kind: 'cron', expression: '* * * * *' },
+        concurrencyKey: 'lock-1'
+      })
+      scheduler.setSchedule(definition)
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(enqueue).not.toHaveBeenCalled()
+
+      locked = false
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(enqueue).toHaveBeenCalledTimes(1)
+      expect(enqueue).toHaveBeenLastCalledWith(definition)
+
     })
-
-    const definition = createDefinition({
-      id: 'cron-locked',
-      trigger: { kind: 'cron', expression: '* * * * *' },
-      concurrencyKey: 'lock-1'
-    })
-    scheduler.setSchedule(definition)
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(enqueue).not.toHaveBeenCalled()
-
-    locked = false
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(enqueue).toHaveBeenCalledTimes(1)
-    expect(enqueue).toHaveBeenLastCalledWith(definition)
-
-    vi.useRealTimers()
   })
 
   it('clears schedules when removed', async () => {
-    vi.useFakeTimers()
-    const enqueue = vi.fn()
-    const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
+    await withFakeTimers(async () => {
+      const enqueue = vi.fn()
+      const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
 
-    const definition = createDefinition({
-      id: 'interval-3',
-      trigger: { kind: 'interval', intervalMs: 1000, anchor: 'lastStart' }
+      const definition = createDefinition({
+        id: 'interval-3',
+        trigger: { kind: 'interval', intervalMs: 1000, anchor: 'lastStart' }
+      })
+      scheduler.setSchedule(definition)
+      scheduler.removeSchedule('interval-3')
+
+      vi.advanceTimersByTime(2000)
+      expect(enqueue).not.toHaveBeenCalled()
+
     })
-    scheduler.setSchedule(definition)
-    scheduler.removeSchedule('interval-3')
-
-    vi.advanceTimersByTime(2000)
-    expect(enqueue).not.toHaveBeenCalled()
-
-    vi.useRealTimers()
   })
 })
 
@@ -227,5 +227,19 @@ function createDefinition(overrides: Partial<JobDefinition>): JobDefinition {
     trigger: { kind: 'manual' },
     payload: {},
     ...overrides
+  }
+}
+
+/**
+ * 假计时器只在**这一段**里生效：`useRealTimers` 必须走 `finally`。
+ *
+ * 写在断言之后的还原是同一个病：一红就把假时间留给后面的用例，后面的红点就成了假证据。
+ */
+async function withFakeTimers<T>(run: () => Promise<T> | T): Promise<T> {
+  vi.useFakeTimers()
+  try {
+    return await run()
+  } finally {
+    vi.useRealTimers()
   }
 }
