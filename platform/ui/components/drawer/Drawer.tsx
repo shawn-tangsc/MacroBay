@@ -28,8 +28,8 @@ import { fillLabelParams } from '../textKeyParams'
  *
  * 这三条对 `modal` 一条都不适用：浮层必须锁焦点、Esc 归 antd。
  *
- * 关闭控件归组件：`ui.drawer.close` 一条平台键，16 个抽屉共用；调用方不再各画一个，
- * 要加额外动作走 `titleExtra`。
+ * 关闭控件归组件：`ui.drawer.close` 一条平台键，16 个抽屉共用；调用方不再各画一个。
+ * 标题行两个槽**一处一个意思**：标题旁的解释走 `titleExtra`，右端针对内容的动作走 `actions`。
  */
 
 /** 四档，仅此四档。宽度只在下面这张表里出现一次。 */
@@ -96,8 +96,16 @@ type DrawerHeaderShape =
        * （那是可见结构变更）。两者都比一个参数贵。
        */
       titleParams?: Readonly<Record<string, string>>
-      /** 标题旁的徽标或动作槽，不是自定义整个标题栏的入口。 */
+      /** 标题旁的**解释**（徽标、问号这类），不是自定义整个标题栏的入口。右端动作走 `actions`。 */
       titleExtra?: ReactNode
+      /**
+       * 标题行**右端**的动作，渲染在关闭键左侧（间距 12，组件决定，不是 prop）。
+       *
+       * 只收**一个元素**：一个头里两个动作意味着这一页没有动作层级，第二个该进正文。
+       * 类型上收成单个 `ReactElement` 能挡住「传数组」，但挡不住「传一个 Fragment 里塞两个」——
+       * 那一条靠评审与调用点用例，不为此造一套重型机制。
+       */
+      actions?: ReactElement
     }
   | {
       header: 'none'
@@ -146,15 +154,20 @@ export function Drawer(props: DrawerProps): ReactElement {
       closable={false}
       title={title}
       extra={
-        <IconButton
-          ariaLabelKey={DRAWER_CLOSE_KEY}
-          icon={X}
-          onSelect={onClose}
-          // 组件之间也只传键：IconButton 拿键、我们的 resolver 把这一条映射成句子。
-          resolveText={(value) => (value === DRAWER_CLOSE_KEY ? closeLabel : value)}
-          size="sm"
-          variant="plain"
-        />
+        <span className="drawer__header-actions">
+          {props.header === 'none' || props.actions === undefined ? null : (
+            <span className="drawer__actions">{props.actions}</span>
+          )}
+          <IconButton
+            ariaLabelKey={DRAWER_CLOSE_KEY}
+            icon={X}
+            onSelect={onClose}
+            // 组件之间也只传键：IconButton 拿键、我们的 resolver 把这一条映射成句子。
+            resolveText={(value) => (value === DRAWER_CLOSE_KEY ? closeLabel : value)}
+            size="sm"
+            variant="plain"
+          />
+        </span>
       }
       footer={footer}
       {...(destroyOnHidden === undefined ? {} : { destroyOnHidden })}
