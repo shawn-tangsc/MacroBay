@@ -173,8 +173,8 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
       //
       // 它是「首次见到这个未声明生产者」的一次性提示，不是故障：平台照发（门禁在记完之后
       // `return { action: 'send' }`），S10② 要求的正是这行可查。而它按**作业 handler** 计——
-      // 实测 5 天 204 条，全在 `platform.job.failed-terminal` 上（`market-intelligence.syncBls…`
-      // 这类），每次启动每个 handler 一条。记成 warn 的代价不是「多了几行」，是**真的故障混在里面
+      // 实测 5 天 204 条，全在 `platform.job.failed-terminal` 上（某个每 10 分钟跑一次的采集
+      // 作业这类），每次启动每个 handler 一条。记成 warn 的代价不是「多了几行」，是**真的故障混在里面
       // 没人再看**。也不能靠给这些 handler 补 claim 消掉：claim 会让平台事件被让渡，P1/P2 就没人发了。
       // 提交被拒自带档位（`rejectionTraceLevel` 一处定义：代码错 `error`、正常抑制 `info`），
       // 这里只透传——档位规则不在这层重建第二份。

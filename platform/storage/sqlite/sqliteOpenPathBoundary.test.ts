@@ -14,7 +14,7 @@ const sharedOpener = join(repoRoot, 'platform/storage/sqlite/openSqliteDatabase.
  * 它们为了核对 pragma 与文件内容，本来就该直接打开。
  *
  * **扫描范围含 `scripts/` 与 `apps/`**：早先只扫 `platform` 与 `products`，于是
- * `scripts/seed-daily-briefing-history.mts` 里那两处 `new DatabaseSync(` 完全躲过去了——守卫叫
+ * 某个灌历史数据的脚本里那两处 `new DatabaseSync(` 完全躲过去了——守卫叫
  * 「所有本地库都必须走统一入口」，实际只管一半。脚本写出来的库也是真库：它们决定 fixture 的
  * journal 模式，进而决定拿它去验收的人看到的是不是真实形态。
  */
