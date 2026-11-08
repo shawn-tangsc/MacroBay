@@ -90,6 +90,17 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
+/**
+ * 选中一项之后，等选择框真的把这一项显示出来——等条件，不等一个宏任务。
+ * 失败信息带上等的是哪个值，免得「下拉没关」和「值没选上」分不清。
+ */
+async function waitForSelection(label: string): Promise<void> {
+  await vi.waitFor(() => {
+    const shown = [...document.querySelectorAll('.ant-select-selection-item')]
+    expect(shown.some((node) => node.textContent?.trim() === label), `selection ${label}`).toBe(true)
+  })
+}
+
 describe('reading the channel list', () => {
   it('surfaces a failed first read as an error with retry, never as "no channels"', async () => {
     installPlatform({ catalog: vi.fn(async () => { throw new Error('ipc-unavailable') }) })
@@ -749,8 +760,9 @@ describe('saving a credential has to prove itself', () => {
     ) as HTMLElement
     await act(async () => {
       option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    // 选完之后等选择框真的显示这一项，而不是等一个宏任务。
+    await waitForSelection('助手一')
     const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
     await act(async () => typeInto(token, '123:new-token'))
     await clickByText(labels.channelCreate)
@@ -986,8 +998,8 @@ describe('the working folder picker', () => {
     ) as HTMLElement
     await act(async () => {
       agentOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    await waitForSelection('助手一')
     const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
