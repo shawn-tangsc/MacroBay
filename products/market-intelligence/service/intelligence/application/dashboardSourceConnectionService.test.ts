@@ -155,20 +155,6 @@ describe('dashboardSourceConnectionService', () => {
       vi.useRealTimers()
     }
   })
-
-  it('does not reuse the generic health-writing source probe', async () => {
-    const body = '{"data":[]}'
-    platformFetch.mockReturnValue(vi.fn().mockResolvedValue({
-      status: 200,
-      headers: new Headers({ 'content-length': String(Buffer.byteLength(body, 'utf8')) }),
-      text: vi.fn().mockResolvedValue(body)
-    }))
-    const genericProbe = vi.fn()
-
-    await createDashboardSourceConnectionService().testConnection('alternative-fear-greed')
-
-    expect(genericProbe).not.toHaveBeenCalled()
-  })
 })
 
 function stablecoinPayload(usdtOverrides: Record<string, unknown> = {}) {

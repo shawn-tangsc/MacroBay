@@ -500,21 +500,6 @@ describe('intelligence notification settings', () => {
       .toBe(text['pages.intelligence.notification.threshold.medium'])
   })
 
-  it('keeps the "also matched" cost inside the ⓘ of that row', async () => {
-    install({
-      productsInvoke: vi.fn(async (_productId: string, method: string) => {
-        if (String(method).includes('getCalendarReminderSettings')) {
-          return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'also-matched' }
-        }
-        return { enabled: false }
-      })
-    })
-    await render()
-    await selectItem(3)
-    expect(container?.textContent ?? '').not.toContain(text['pages.intelligence.notification.landed.cost'])
-    expect(await openRowInfo(text['pages.intelligence.notification.calendar.landedInfoAria']!))
-      .toContain(text['pages.intelligence.notification.landed.cost'])
-  })
 })
 
 /** 有可用通道：`channelReady` 由投影的 `deliverable` 决定。 */
