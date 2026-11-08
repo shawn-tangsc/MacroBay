@@ -7,7 +7,7 @@
  * 键名由事件 id 机械生成（`notificationEventTitleKey` / `notificationEventReasonKey`），
  * 句子归文案表；这里一条句子都不写，免得两处都能改。
  */
-import type { NotificationEventDeclaration } from './notificationEventCatalog'
+import type { NotificationEventDeclaration, NotificationEventPolicyEntry } from './notificationEventCatalog'
 
 /** 标题键：`notification.event.<event id>.title`。同一处生成，调用点不手拼。 */
 export function notificationEventTitleKey(eventTypeId: string): string {
@@ -192,3 +192,27 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     dailyLimit: 2
   })
 ])
+
+/**
+ * 平台事件的**批准值**，随声明走（契约 §7.1b 的 b1：纯加法）。
+ *
+ * 值从平台批准表**逐字抄**——谁签的还是谁签，这里只把它放到「声明这一侧」。本步目录仍读表，
+ * 行为零变化；b2 才换源、b3 才删表。签名侧的规范化要求 `surfaceGroup` 显式（缺 ≠ null），
+ * 那一步在签署入口补齐；这里的形状与产品批准文件一致：没有组就不写这个键。
+ */
+export const PLATFORM_NOTIFICATION_APPROVALS: Readonly<Record<string, NotificationEventPolicyEntry>> = Object.freeze({
+  'platform.job.failed-terminal': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.job.repeated-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.quota-exhausted': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.provider.credential-invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.provider.credential-recovered': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.channel.push-resumed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.notification.self-test': { approvedDisruptionLevels: ['center', 'toast', 'desktop', 'channel'], approvedBypassQuietHours: true },
+  'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false },
+  'platform.channel.connection-lost': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.manual-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.repeated-failure': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.attempt-abandoned': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.analysis.recovered': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false }
+})

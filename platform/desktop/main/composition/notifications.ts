@@ -5,7 +5,7 @@ import { createNotificationCopyPort, type JobTitleResolver } from '@platform/not
 import { productNotificationCopyTables } from './notificationCopyTables'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import type {
   NotificationDiagnosticsSink,
   NotificationRuntimeSettings
@@ -59,7 +59,8 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
   // 平台事件表 + 各产品 manifest 的声明：目录只接受注入，平台不认识产品代码（契约 §2/§3）。
   const catalog = createNotificationEventCatalog({
     sources: [
-      { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
+      // b1：平台事件也带自己的批准段（值逐字抄自平台表）；本步目录仍读表，行为不变。
+      { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
       ...ports.manifests
         .filter((manifest) => (manifest.notificationEvents?.length ?? 0) > 0)
         .map((manifest) => ({
