@@ -15,12 +15,11 @@ import { createNotificationRuntime, type NotificationStorage } from './notificat
  */
 
 const catalog = createNotificationEventCatalog({
-  policy: {
-    'platform.done': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
-  },
+  // 批准值随声明走（b2）：同一条批准，挪到来源上；值逐字不变。
   sources: [
     {
       productId: 'platform',
+      approval: { 'platform.done': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } },
       events: [
         {
           id: 'platform.done',
