@@ -6,22 +6,22 @@
  *   - 有缺口时逐条点名（`missing <eventId>`），并以非 0 退出。
  *
  * 为什么它是搬迁的前置证据：兜底删了、用例全绿，都不能证明「删之前一条不缺」——只有这份输出能。
- * 现在是**平台表还没删**的迁移期，所以两条来源都算：声明上的 `policy`（派生视图）+ 平台表兜底，
- * 一旦产品把 `policy` 补齐，平台那条就不再被读到。
+ * 读法（b3-2）：三条来源各读**自己那份**批准——平台读 `PLATFORM_NOTIFICATION_APPROVALS`，
+ * 产品读自己 manifest 里的 `notificationApproval`；三个数都从这一份 `sources` 算，没有第二个口径。
+ * 迁移期的 `declaration.policy` 派生视图仍在（b3-5 才删），但只在来源没带 `approval` 时兜底。
  */
 import { execSync } from 'node:child_process'
 
 import { inspectApprovalCoverage, formatApprovalCoverage, formatApprovalGaps } from '../platform/notifications/contracts/notificationApprovalCoverage'
 import type { NotificationApprovalGap } from '../platform/notifications/contracts/notificationApprovalCoverage'
-import { NOTIFICATION_EVENT_POLICY } from '../platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '../platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '../platform/notifications/contracts/platformNotificationEvents'
 import type { NotificationEventDeclarationSource } from '../platform/notifications/contracts/notificationEventCatalog'
 import { productManifests } from '../products/generated/productManifests'
 
 const sources: NotificationEventDeclarationSource[] = [
-  // 平台自己的事件，批准值仍读平台自己的表（那里面**只许有** platform.* 行；
-  // 产品行还有残留时会被算成 orphaned，这正是迁移进度，不是噪音）。
-  { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: NOTIFICATION_EVENT_POLICY },
+  // 平台自己的事件，批准值读平台自己声明的那份（b3-2）。以前这里读的是那张共享表——
+  // 表里同时抄着 10 条产品批准，于是每个产品事件在「平台来源」下都成了孤儿批准（10 条）。
+  { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
   ...productManifests
     .filter((manifest) => (manifest.notificationEvents?.length ?? 0) > 0)
     .map((manifest): NotificationEventDeclarationSource => ({
