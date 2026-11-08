@@ -75,8 +75,8 @@ function memoryStore(): DailyBriefingStore & {
     async listPeriodRuns(from, to) {
       return runs.filter((run) => run.date >= from && run.date <= to)
     },
-    async getPeriodRun(date, periodId = 'default') {
-      return runs.find((run) => run.date === date && run.periodId === periodId)
+    async getPeriodRun(date, periodId = 'default', locale = 'zh-CN') {
+      return runs.find((run) => run.date === date && run.periodId === periodId && run.locale === locale)
     },
     async prune(beforeDate) { pruned.push(beforeDate) }
   }
@@ -111,6 +111,7 @@ function periodRun(date: string): DailyBriefingPeriodRun {
   return {
     date,
     periodId: 'default',
+    locale: 'zh-CN',
     expectedLocales: ['zh-CN'],
     primaryRequested: 'zh-CN',
     primaryUsed: 'zh-CN',
@@ -630,7 +631,7 @@ describe('daily briefing service', () => {
 
     // 一条只存在于审计表里的"运行"：它有日期、有期号，但没有任何版次与尝试。
     await store.openPeriodRun!({
-      date: '2026-10-27', periodId: 'period_audit_only', expectedLocales: ['zh-CN'],
+      date: '2026-10-27', periodId: 'period_audit_only', locale: 'zh-CN', expectedLocales: ['zh-CN'],
       primaryRequested: 'zh-CN', primaryUsed: 'zh-CN', snapshotId: 'bs_audit', snapshotHash: 'h',
       contentVersion: 1, writingRounds: 1, direction: 'bearish', editionRows: [], state: 'failed',
       startedAt: '2026-10-27T00:00:00.000Z'
@@ -867,7 +868,7 @@ describe('period run', () => {
     const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    const run = await store.getPeriodRun?.('2026-10-30')
+    const run = await store.getPeriodRun?.('2026-10-30', 'default', 'zh-CN')
     expect(run).toMatchObject({
       periodId: 'default',
       expectedLocales: ['zh-CN'],
@@ -972,7 +973,7 @@ describe('period run', () => {
     }
     const service = createDailyBriefingService({ source: failing, store, now: () => asOf })
     expect((await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).state).toBe('unavailable')
-    expect(await store.getPeriodRun?.('2026-10-30')).toBeUndefined()
+    expect(await store.getPeriodRun?.('2026-10-30', 'default', 'zh-CN')).toBeUndefined()
   })
 })
 
@@ -986,7 +987,7 @@ describe('briefing notices', () => {
       generationSettings: async () => ({ generationTime: '08:00', windowHours: 24 }),
       noticeSubmit: async (request) => {
         notices.push(request as unknown as Record<string, unknown>)
-        return { kind: 'accepted', recordId: 'r1', levels: ['center'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }
       }
     })
     return { service, notices }
@@ -1043,7 +1044,7 @@ describe('briefing notices', () => {
       now: () => asOf,
       noticeSubmit: async (request) => {
         notices.push(request as unknown as Record<string, unknown>)
-        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'], suppressedLevels: [] }
       }
     })
 
@@ -1073,7 +1074,7 @@ describe('briefing notices', () => {
       agentModel: async () => ({ state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }),
       noticeSubmit: async (request) => {
         notices.push(request as unknown as Record<string, unknown>)
-        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'], suppressedLevels: [] }
       }
     })
 

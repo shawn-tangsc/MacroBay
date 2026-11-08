@@ -41,6 +41,29 @@ const edition = (date: string, text?: string) => ({
   document: document(date, text)
 })
 
+/** 一期一语言一条运行记录（0.4.2 #18）：语言是这条记录身份的一部分。 */
+const periodRun = (
+  locale: 'zh-CN' | 'en-US',
+  snapshotId: string,
+  snapshotHash: string,
+  date = '2026-11-02'
+) => ({
+  date,
+  periodId: 'default',
+  locale,
+  expectedLocales: [locale] as const,
+  primaryRequested: locale,
+  primaryUsed: locale,
+  snapshotId,
+  snapshotHash,
+  contentVersion: 1,
+  writingRounds: 0,
+  direction: 'bearish' as const,
+  editionRows: ['market:btc', 'funds:etf-btc'],
+  state: 'running' as const,
+  startedAt: `${date}T00:00:00.000Z`
+})
+
 describe('daily briefing store', () => {
   // 用户 2026-11-06：同一个时间、同一个窗口、同一个语言生成了两份简报。查这个槽的眼睛在这里：
   // 键是 (日期, 截止时刻, 语言)，窗口不进键，期号也不进键（期号是那一版的属性，不是它的身份）。
@@ -269,7 +292,7 @@ describe('writing attempts', () => {
 
 
 describe('deleting one language', () => {
-  it('removes that language\'s attempts, keeps the other edition and the shared run readable', async () => {
+  it('removes that language\'s attempts and run, keeps the other edition and its run readable', async () => {
     // The failure mode this catches: a delete that forgot `where ... and locale = ?` removes the
     // whole issue and still reports success. Only the other edition's absence would show it — so the
     // assertions below are counts before/after and a read of the edition that must survive.
@@ -283,14 +306,15 @@ describe('deleting one language', () => {
     })
     await store.beginAttempt!({ date: '2026-11-03', locale: 'zh-CN', startedAt: '2026-11-03T00:00:00.000Z' })
     await store.beginAttempt!({ date: '2026-11-03', locale: 'en-US', startedAt: '2026-11-03T00:01:00.000Z' })
+    // 运行记录按语言各一行：删中文版只带走中文那一行，英文那一行必须原样留着。
     await store.openPeriodRun!({
-      date: '2026-11-03', periodId: 'default', expectedLocales: ['zh-CN', 'en-US'],
-      primaryRequested: 'zh-CN', primaryUsed: 'zh-CN', snapshotId: 'bs_x', snapshotHash: 'h',
-      contentVersion: 1, writingRounds: 1, direction: 'bearish', editionRows: [], state: 'published',
-      startedAt: '2026-11-03T00:00:00.000Z'
+      ...periodRun('zh-CN', 'bs_zh', 'h-zh', '2026-11-03'), state: 'published', writingRounds: 1
+    })
+    await store.openPeriodRun!({
+      ...periodRun('en-US', 'bs_en', 'h-en', '2026-11-03'), state: 'published', writingRounds: 1
     })
     const attemptsBefore = (await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length
-    const runBefore = await store.getPeriodRun!('2026-11-03', 'default')
+    const englishRunBefore = await store.getPeriodRun!('2026-11-03', 'default', 'en-US')
 
     const removed = await store.deletePeriod!('2026-11-03', 'default', 'zh-CN')
 
@@ -299,30 +323,18 @@ describe('deleting one language', () => {
     expect(await store.get('2026-11-03', 'zh-CN')).toBeUndefined()
     // 2. The other edition is still there and still readable.
     expect((await store.get('2026-11-03', 'en-US'))?.document.edition.locale).toBe('en-US')
-    // 3. 中文版那条尝试跟着删掉；英文版那条还在；共用的大运行记录留着（英文版还读得到）。
+    // 3. 中文版那条尝试与它自己的运行记录跟着删掉；英文版两样都还在。
     expect(removed.attempts).toBe(1)
+    expect(removed.periodRuns).toBe(1)
     expect((await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length).toBe(attemptsBefore - 1)
     expect((await store.listAttempts!('2026-11-03', 'en-US', 'default')).length).toBe(1)
-    expect(await store.getPeriodRun!('2026-11-03', 'default')).toEqual(runBefore)
+    expect(await store.getPeriodRun!('2026-11-03', 'default', 'zh-CN')).toBeUndefined()
+    expect(await store.getPeriodRun!('2026-11-03', 'default', 'en-US')).toEqual(englishRunBefore)
   })
 })
 
 describe('period runs', () => {
-  const run = (snapshotId: string, snapshotHash: string) => ({
-    date: '2026-11-02',
-    periodId: 'default',
-    expectedLocales: ['zh-CN' as const],
-    primaryRequested: 'zh-CN',
-    primaryUsed: 'zh-CN' as const,
-    snapshotId,
-    snapshotHash,
-    contentVersion: 1,
-    writingRounds: 0,
-    direction: 'bearish' as const,
-    editionRows: ['market:btc', 'funds:etf-btc'],
-    state: 'running' as const,
-    startedAt: '2026-11-02T00:00:00.000Z'
-  })
+  const run = (snapshotId: string, snapshotHash: string) => periodRun('zh-CN', snapshotId, snapshotHash)
 
   it('replaces the run when the period is regenerated, and settles its state in place', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
@@ -330,13 +342,30 @@ describe('period runs', () => {
     // A regeneration replaces the editions, so the run has to describe the batch that produced them.
     await store.openPeriodRun!(run('bs_second', 'hash-second'))
 
-    expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({
-      periodId: 'default', expectedLocales: ['zh-CN'], snapshotId: 'bs_second', snapshotHash: 'hash-second',
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'zh-CN')).toMatchObject({
+      periodId: 'default', locale: 'zh-CN', expectedLocales: ['zh-CN'], snapshotId: 'bs_second', snapshotHash: 'hash-second',
       state: 'running', direction: 'bearish', editionRows: ['market:btc', 'funds:etf-btc']
     })
 
-    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })
-    expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({ state: 'published', writingRounds: 1, finishedAt: '2026-11-02T00:05:00.000Z' })
+    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'zh-CN')).toMatchObject({ state: 'published', writingRounds: 1, finishedAt: '2026-11-02T00:05:00.000Z' })
+  })
+
+  it('keeps one run per language, so settling zh never lands on the en row', async () => {
+    // 0.4.2 #18 的判据：两语言各开各结，第二语言不许覆盖第一语言。
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.openPeriodRun!(periodRun('zh-CN', 'bs_zh', 'hash-zh'))
+    await store.openPeriodRun!(periodRun('en-US', 'bs_en', 'hash-en'))
+    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })
+    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', locale: 'en-US', state: 'failed', finishedAt: '2026-11-02T00:06:00.000Z' })
+
+    expect((await store.listPeriodRuns!('2026-11-02', '2026-11-02'))
+      .map((entry) => [entry.locale, entry.snapshotId, entry.state]))
+      .toEqual([['en-US', 'bs_en', 'failed'], ['zh-CN', 'bs_zh', 'published']])
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'zh-CN'))
+      .toMatchObject({ locale: 'zh-CN', snapshotId: 'bs_zh', state: 'published' })
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'en-US'))
+      .toMatchObject({ locale: 'en-US', snapshotId: 'bs_en', state: 'failed' })
   })
 
   it('lists the runs of a date range, including one that wrote no edition at all', async () => {

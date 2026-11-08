@@ -83,10 +83,16 @@ export type DailyBriefingStoredEdition = Readonly<{
 
 /** The same row, settled. It is updated in place, never deleted: the attempt is history. */
 
-/** A period's run: one per day and issue, holding what the editions of that run were written from. */
+/**
+ * A period's run: one per day, issue **and language**, holding what the editions of that run were
+ * written from. The language is part of the identity because two languages of one issue produce
+ * two runs; sharing one row made the second overwrite the first (0.4.2 #18).
+ */
 export type DailyBriefingPeriodRun = Readonly<{
   date: string
   periodId: string
+  /** 旧形状（v3，迁移没跑成）读出来是 `unknown`；坏数据兜底，正常写入永远是一个具体语言。 */
+  locale: DailyBriefingLocale | 'unknown'
   expectedLocales: readonly DailyBriefingLocale[]
   primaryRequested: string
   primaryUsed: DailyBriefingLocale
@@ -148,8 +154,8 @@ export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunSt
   }>) => Promise<number | null>
   /** Every attempt of that edition, newest first; the history rail expands this list. */
   listAttempts?: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<readonly DailyBriefingAttemptRecord[]>
-  /** The run of that period, holding the frozen facts every edition of it was written from. */
-  getPeriodRun?: (date: string, periodId?: string) => Promise<DailyBriefingPeriodRun | undefined>
+  /** The run of that period and language, holding the frozen facts its edition was written from. */
+  getPeriodRun?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<DailyBriefingPeriodRun | undefined>
   /**
    * Every run of a date range. The list needs this to show a period whose run wrote no edition at
    * all (still generating, failed, or interrupted): edition rows are what name a period id, so a
@@ -161,6 +167,8 @@ export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunSt
   settlePeriodRun?: (run: Readonly<{
     date: string
     periodId: string
+    /** 结算必须点名语言：否则会改到另一语言那一行（0.4.2 #18）。 */
+    locale: DailyBriefingLocale
     state: 'published' | 'partial' | 'failed'
     finishedAt: string
     writingRounds?: number
