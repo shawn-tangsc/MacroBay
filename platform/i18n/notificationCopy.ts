@@ -83,13 +83,20 @@ export type NotificationCopyTable = {
   'notification.channelCheck.action': string
   /** 通用动作：去设置（来源两条等产品事件的动作标签）。 */
   'notification.action.open-settings': string
-  /** 日报失败事件的动作：打开日报。 */
+  /**
+   * 日报失败事件的动作：打开日报。**只服务历史记录**（v2.58）：那一笔起产品动作改用自己的键
+   * （`notification.action.market-intelligence.open-briefing`，引用形状 `labelRef`），新记录不再写这个键。
+   *
+   * **删它的条件**：库里 `actions[].labelKey === 'notification.action.open-briefing'` 的记录数降到 0
+   * （保留期 30 天）。在那之前删掉，老通知的按钮会凭空消失——记录里存的是当初那个键，不是句子。
+   */
   'notification.action.open-briefing': string
   /**
    * 打开**原文链接**（N10 舆情等「看原文」动作）。
    *
-   * 为什么在平台表里而不是产品表：`NotificationAction.labelKey` 的类型是 `NotificationCopyKey`，
-   * 就是这张表的键；同族的 `open-settings` / `open-briefing` 也都在这里。产品表里的键过不了类型。
+   * `NotificationAction.labelKey` 的类型仍是 `NotificationCopyKey`（这张表的键），但 v2.58 起它是
+   * **可选的兼容字段**：产品动作改用 `labelRef` 指向产品自己的表，与本表同一条解析链路、同一次语言。
+   * 两条路并存是为了历史记录——记录里存的键不能凭空消失。
    */
   'notification.action.open-original': string
   /** 桌面 / 通道投递的五个原因句（P7 五种可显示事实；S15 逐键 grep）。 */

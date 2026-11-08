@@ -10,7 +10,7 @@ import {
   type NotificationCopyLanguage
 } from '../../i18n/notificationCopy'
 import { findActionDirective } from '../contracts/actionDirective'
-import type { NotificationCopyParam, NotificationCopyPort } from '../contracts/notificationCopyPort'
+import type { NotificationCopyParam, NotificationCopyPort, NotificationCopyRef } from '../contracts/notificationCopyPort'
 import { SIGNAL_SEVERITY_RANK } from '../contracts/notificationContracts'
 import type {
   NotificationAction,
@@ -122,7 +122,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       body: title === null ? '' : (body ?? ''),
       reason: title === null ? '' : (reason ?? ''),
       // 动作**不跟着文案走**：它是一条结构事实（点开去哪），文案缺了也不许把入口一起吞掉。
-      actionLabels: resolveActionLabels(record.actions, resolvedLanguage),
+      actionLabels: resolveActionLabels(record, resolvedLanguage),
       ...(occurrenceLabel === null ? {} : { occurrenceLabel }),
       ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
     }
@@ -165,7 +165,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
           title: fallbackTitle,
           body: '',
           reason: '',
-          actionLabels: resolveActionLabels(record.actions, language),
+          actionLabels: resolveActionLabels(record, language),
           ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
         }
       }
@@ -173,26 +173,64 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
         title: picked.title,
         body: picked.body,
         reason: picked.reason,
-        actionLabels: resolveActionLabels(record.actions, language),
+        actionLabels: resolveActionLabels(record, language),
         ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
       }
     }
 
     /**
-     * 动作标签和正文用**同一次**语言、同一张表解析。解析不出来就整条不给（`null`）：
-     * 一个按不动的按钮比没有按钮更糟，而拿 `labelKey` 顶上去正是今晚要灭的那种露键。
+     * 动作标签和正文用**同一次**语言、同一条解析链路（v2.58）：引用优先（产品动作只有引用），
+     * 老记录只有 `labelKey` 时按平台闭集读。
+     *
+     * 解析不出来就**不给这条动作**（渲染层没有标签就不画按钮）：一个按不动的按钮比没有按钮更糟，
+     * 而拿键顶上去正是今晚要灭的那种露键。同时留一条 `action-label-unresolved`——按钮凭空消失
+     * 而没有任何线索，是这次一定要堵掉的那种静默。
      */
     function resolveActionLabels(
-      actions: readonly NotificationAction[],
+      record: NotificationRecord,
       language: NotificationCopyLanguage
     ): Readonly<Record<string, string>> {
       const labels: Record<string, string> = {}
-      for (const action of actions) {
-        const text = notificationCopyText(language, action.labelKey)
-        if (typeof text !== 'string' || text.length === 0) continue
+      for (const action of record.actions) {
+        const ref = action.labelRef
+          ?? (action.labelKey === undefined ? undefined : { scope: 'platform' as const, key: action.labelKey })
+        const text = ref === undefined
+          ? null
+          : input.copy === undefined
+            // 没有文案端口（未装配/单测）：只有平台键还读得出来，产品键照实报「解析不到」。
+            ? (action.labelRef === undefined && action.labelKey !== undefined
+                ? notificationCopyText(language, action.labelKey)
+                : null)
+            : input.copy.resolve(ref, language)
+        if (typeof text !== 'string' || text.length === 0) {
+          reportActionLabelUnresolved(record, action.id, ref, language)
+          continue
+        }
         labels[action.id] = text
       }
       return labels
+    }
+
+    /** 一条动作标签解析不到只报**一次**：切语言、翻页都会再解析，不去重会把真正的第一次淹掉。 */
+    function reportActionLabelUnresolved(
+      record: NotificationRecord,
+      actionId: string,
+      ref: NotificationCopyRef | undefined,
+      language: NotificationCopyLanguage
+    ): void {
+      const key = ref === undefined ? undefined : (ref.scope === 'job-title' ? ref.definitionId : ref.key)
+      const dedupeKey = `action:${record.id}:${actionId}:${key ?? ''}:${language}`
+      if (reportedUnresolved.has(dedupeKey)) return
+      reportedUnresolved.add(dedupeKey)
+      input.diagnostics?.({
+        code: 'action-label-unresolved',
+        at: input.now(),
+        recordId: record.id,
+        eventTypeId: record.eventTypeId,
+        ...(key === undefined ? {} : { key }),
+        language,
+        reason: actionId
+      })
     }
   }
 

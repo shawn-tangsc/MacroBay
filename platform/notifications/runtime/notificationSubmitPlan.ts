@@ -33,6 +33,7 @@ import { createNotificationId } from '../store/notificationStore'
 import { isInsideQuietHours } from './quietHours'
 import { resolveSubmitSurfaces, type NotificationSurfaceDecision } from './notificationSurfaceDecision'
 import { applySurfaceNarrowing, effectiveLevels } from './notificationSurfaceLevels'
+import { actionLabelRejection } from './notificationActionLabelRejection'
 
 
 export type NotificationSubmitPlan =
@@ -90,6 +91,8 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   if (badExternalAction !== undefined) {
     return rejected(badExternalAction.reason, `notification event "${entry.id}" ${badExternalAction.message}`)
   }
+  const badActionLabel = actionLabelRejection(input.request.actions, entry.productId)
+  if (badActionLabel !== undefined) return { kind: 'rejected', outcome: badActionLabel }
 
   // 信号严重度只认三档闭集：类型层挡得住编译期，运行期还要挡一次（IPC / 生产者 / JS 调用点）。
   // 放行 `critical` 会让 `highestSeverity` 一次抬到顶，之后永不再升级——而且看起来一切正常。

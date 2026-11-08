@@ -1,7 +1,7 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import type { NotificationSurfaceSelection } from './notificationSurfaceSelection'
 import type { NotificationSubmitRejection, NotificationSubmitRejectionReason } from './notificationSubmitRejection'
-import type { NotificationCopyParam } from './notificationCopyPort'
+import type { NotificationCopyParam, NotificationCopyRef } from './notificationCopyPort'
 import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
 
 export type { NotificationApprovedLevel }
@@ -39,8 +39,23 @@ export type NotificationDeeplink = {
 
 export type NotificationAction = {
   id: string
-  /** 动作标签的键；调用点不写句子，句子在文案表里。 */
-  labelKey: NotificationCopyKey
+  /**
+   * 平台动作与**历史记录**的标签键（平台闭集）；调用点不写句子，句子在文案表里。
+   *
+   * 产品动作**不再用它**：产品自己的键走 `labelRef`（下一项）。保留它是为了老记录——
+   * 记录里存的是当初那个键，删掉这个字段等于让历史通知的按钮凭空消失。
+   */
+  labelKey?: NotificationCopyKey
+  /**
+   * 标签的引用（v2.58）：与正文**同一条解析链路、同一次语言**。
+   *
+   * 为什么不是「提交成品标签」：记录存引用、读取时按当前语言解析，切语言后历史通知的标签
+   * 才会跟着变（单语成品会让老通知停在旧语言，那正是成品句模型存中英两份要守的东西）。
+   *
+   * 产品动作必须用它：`scope: 'product'` 自带 `productId`，提交期校验它与本条事件同属一个产品
+   * （`action-label-wrong-scope`）。两个字段都没有 → 提交期拒收（`action-label-missing`）。
+   */
+  labelRef?: NotificationCopyRef
   /**
    * `open-external` = 「看原文」：打开一个**读者真能点的公开地址**（契约 §7.5 ⑫）。
    *
@@ -165,9 +180,9 @@ export type SafeNotificationRecord = Omit<NotificationRecord, 'safeMetadata'> & 
  * 通知自带动作在界面上的样子：标签已经是句子，不再是键。
  *
  * 为什么动作标签也要在主进程解析：渲染层一旦拿得到 `labelKey`，它就得有一张文案表去查——
- * 那张表正是 `notification.event.…` 被印到屏幕上的入口。动作标签只有平台键，没有产品键。
+ * 那张表正是 `notification.event.…` 被印到屏幕上的入口。所以键与引用都不进这份载荷。
  */
-export type NotificationCenterAction = Omit<NotificationAction, 'labelKey'> & { label: string }
+export type NotificationCenterAction = Omit<NotificationAction, 'labelKey' | 'labelRef'> & { label: string }
 
 /**
  * 渲染层看到的一条通知（落地约束 v1.2 §1）：句子已由主进程在**读的那一刻**按当前界面语言解析。

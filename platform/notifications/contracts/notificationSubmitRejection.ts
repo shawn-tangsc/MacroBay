@@ -64,6 +64,20 @@ export type NotificationSubmitRejectionReason =
          * 与 `assertRequestedWithinApproved` 对「申请了未批准的档位」的处理保持一致。
          */
         | 'surface-not-approved'
+        /**
+         * 动作标签的引用指向**另一个产品**（契约 v2.58）：`labelRef.scope === 'product'` 时
+         * 它的 `productId` 必须等于这条事件的 `productId`。
+         *
+         * 单列一个码，是因为后果不是「少一句话」：A 产品的事件带上 B 产品的键，解析得出来
+         * 就会把 B 的文案贴在 A 的按钮上；解析不出来就是个没名字的按钮。两种都不许发生。
+         */
+        | 'action-label-wrong-scope'
+        /**
+         * 动作既没有 `labelRef` 也没有 `labelKey`：一个**没有名字**的按钮。
+         *
+         * 读者看到的是一个只有图标或空白的可点区域，却不知道点了会发生什么。宁可不落库。
+         */
+        | 'action-label-missing'
 
 /** 这一条提交被拒的回执：码给机器、句子给人（诊断与日志用，不进读者界面）。 */
 export type NotificationSubmitRejection = {

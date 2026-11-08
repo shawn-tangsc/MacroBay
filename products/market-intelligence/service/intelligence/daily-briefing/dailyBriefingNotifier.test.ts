@@ -140,7 +140,12 @@ describe('daily briefing notifier', () => {
       expect(request).not.toHaveProperty('dedupeKey')
       expect(request.actions).toEqual([
         expect.objectContaining({
-          labelKey: 'notification.action.open-briefing',
+          // 产品动作的标签是**引用**（v2.58）：读取时按当前语言解析，切语言历史记录跟着变。
+          labelRef: {
+            scope: 'product',
+            productId: 'market-intelligence',
+            key: 'notification.action.market-intelligence.open-briefing'
+          },
           kind: 'open',
           // 动作与整行都指向日报页：壳层按 pageId 解析，产品不自己拼路由。
           deeplink: { scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' }

@@ -10,13 +10,28 @@ import {
  * 标题/正文/理由直接用平台那三个生成函数（`notification.event.<id>.<part>`），
  * 这样事件改名时键跟着变、文案门禁（`notificationEventCopyGate`）能把缺口点名到事件和语言。
  *
- * 动作标签用平台的动作键（`notification.action.open-settings`），不在产品键里另起一套。
+ * 动作标签（v2.58）：**产品动作的键也住在产品表里**，形如
+ * `notification.action.<productId>.<actionId>`——与平台同一条解析链路，只是表不同。
+ * 平台动作（如「去设置」）仍用平台闭集键。
  */
 export {
   notificationEventBodyKey,
   notificationEventReasonKey,
   notificationEventTitleKey
 } from '@platform/notifications/contracts/platformNotificationEvents'
+
+/**
+ * 产品动作的文案键（v2.58）：`notification.action.<productId>.<actionId>`。
+ *
+ * 前缀与平台动作同一族（`notification.action.`），但**表**是产品那张——解析走
+ * `NotificationCopyRef.scope: 'product'`，切语言后历史记录的按钮文案跟着变。
+ */
+export function productNotificationActionKey(productId: string, actionId: string): string {
+  return `notification.action.${productId}.${actionId}`
+}
+
+/** 「打开日报」：日报生成失败那条通知的唯一动作。 */
+export const OPEN_BRIEFING_ACTION_KEY = productNotificationActionKey('market-intelligence', 'open-briefing')
 
 /**
  * 事件下的任意一段文案键：`notification.event.<id>.<path>`（如 `country.US`、`indicator.cpi`）。

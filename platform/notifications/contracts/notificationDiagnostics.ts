@@ -20,6 +20,14 @@ export type NotificationDiagnosticsEntry = {
      * 建一个永远没有实例的码比没有更糟；产品侧的留痕由产品自己打日志。
      */
     | 'copy-unresolved'
+    /**
+     * 动作标签解析不到，这条动作因此**不渲染**（v2.58）。带记录 id、动作 id 与键名，**不带句子**。
+     *
+     * 为什么必须记：标签是按钮的**名字**，名字没了按钮就凭空消失——读者只会以为「本来就没有」
+     * 或「点过了」，而生产者那边一切正常。和 `copy-unresolved` 同一类：少一句话可以查，
+     * 少一个入口不查就永远不知道。
+     */
+    | 'action-label-unresolved'
     | 'persist-failed'
     /** 提交**抛出**（读回坏了 / 规划器炸了 / 目录实现抛错）：与 `persist-failed` 互斥，同一失败只记一条。 */
     | 'submit-failed'
