@@ -30,6 +30,13 @@ export type PushChannelResolution =
     enabledChannelCount: number
     /** ≥2 时为真：调用方据此记一条 `push-multiple-enabled`，0 条时不记（那不是配置冲突）。 */
     multiple: boolean
+    /**
+     * **所有**通道按状态的直方图（`{ 'runtime-ready': 1, 'credential-missing': 2 }`）。
+     *
+     * 为什么必要：0 条 `runtime-ready` 有两种完全不同的处境——「一台通道都没配」与「配了但状态不对」，
+     * 以前两者都长成 `push-unavailable`，日志里分不开。直方图**只有状态词与条数**，不含通道名与凭据。
+     */
+    states: Readonly<Record<string, number>>
   }
 
 export function resolvePushChannel(
@@ -41,7 +48,9 @@ export function resolvePushChannel(
   if (only !== undefined) return { ok: true, channelId: only.id, channelName: only.name }
   const multiple = ready.length >= 2
   if (multiple) report?.('push-multiple-enabled', ready.length)
-  return { ok: false, reason: 'push-unavailable', enabledChannelCount: ready.length, multiple }
+  const states: Record<string, number> = {}
+  for (const channel of channels) states[channel.state] = (states[channel.state] ?? 0) + 1
+  return { ok: false, reason: 'push-unavailable', enabledChannelCount: ready.length, multiple, states }
 }
 
 /** 没有可派生目标时的稳定值：三处调用点的 fail-closed 形态只写一次。 */
@@ -49,5 +58,6 @@ export const NO_PUSH_CHANNEL: PushChannelResolution = {
   ok: false,
   reason: 'push-unavailable',
   enabledChannelCount: 0,
-  multiple: false
+  multiple: false,
+  states: {}
 }

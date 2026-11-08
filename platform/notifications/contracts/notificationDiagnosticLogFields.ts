@@ -22,6 +22,7 @@ export const DIAGNOSTIC_LOG_FIELDS = [
   'step',
   'language',
   'count',
+  'states',
   'at'
 ] as const satisfies readonly Exclude<keyof NotificationDiagnosticsEntry, 'code' | 'level'>[]
 

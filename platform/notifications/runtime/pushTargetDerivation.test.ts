@@ -84,13 +84,13 @@ describe('resolvePushChannel', () => {
   it('judges by runtime-ready only, not by "requested + credential": those two are a second criterion', () => {
     // 读者勾了启用、凭据也在，但运行时没接通（configuration-ready）→ 不算可用通道。
     expect(resolvePushChannel([{ id: 'a', name: 'A', state: 'configuration-ready' }]))
-      .toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false })
+      .toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: { 'configuration-ready': 1 } })
   })
 
   it('fails closed with 0 channels and reports no conflict', () => {
     const codes: string[] = []
     const result = resolvePushChannel([], (code) => codes.push(code))
-    expect(result).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false })
+    expect(result).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} })
     expect(codes).toEqual([])
   })
 
@@ -101,7 +101,7 @@ describe('resolvePushChannel', () => {
       { id: 'b', name: 'B', state: 'runtime-ready' },
       { id: 'c', name: 'C', state: 'runtime-ready' }
     ], (_code, count) => seen.push(count))
-    expect(result).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 3, multiple: true })
+    expect(result).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 3, multiple: true, states: { 'runtime-ready': 3 } })
     // 数字必须来自同一次判定：写死 2 的实现在这里就红。
     expect(seen).toEqual([3])
   })
@@ -115,7 +115,7 @@ describe('the three read sites share one derivation', () => {
       storage: { read: async () => createDefaultNotificationStoreState(), write: async () => undefined },
       catalog,
       diagnostics: () => undefined,
-      resolvePushChannel: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false }),
+      resolvePushChannel: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} }),
       getSettings: async () => settings,
       clock,
       deliveryHooks: { push: async (record) => { pushed.push(record.id); return { ok: true, messageId: record.id } } }

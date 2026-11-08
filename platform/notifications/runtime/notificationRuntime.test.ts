@@ -115,7 +115,7 @@ function selfTestRequest(index: number): NotificationRequest {
 
 /** 这些夹具没有可用通道：派生入口按「一条都没有」处理（fail closed，不再读 `push.channelId`）。 */
 async function resolvePushChannelFromSettings() {
-  return { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false }
+  return { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: {} }
 }
 
 describe('notification list ordering and cursors', () => {
