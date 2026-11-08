@@ -1,7 +1,7 @@
 /**
  * 「0 missing」守卫（契约 §7.1b 第 6 条）：批准值搬家之前，先给出一份**可复跑**的覆盖率。
  *
- * 用途：`pnpm -s check:notification-approval`
+ * 落点：`verify` 链（每一次全量都跑）。也可以单独跑：`pnpm -s check:notification-approval`。
  *   - 打印一行结论：`declared=… approved=… missing=… orphaned=… requested-not-approved=…`
  *   - 有缺口时逐条点名（`missing <eventId>`），并以非 0 退出。
  *
@@ -10,7 +10,7 @@
  * 产品读自己 manifest 里的 `notificationApproval`；三个数都从这一份 `sources` 算，没有第二个口径。
  * 没有兜底：来源没带 `approval` 就是 `missing`，不再从别处派生（b3-5 已删兜底与派生视图）。
  */
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 
 import { inspectApprovalCoverage, formatApprovalCoverage, formatApprovalGaps } from '../platform/notifications/contracts/notificationApprovalCoverage'
 import type { NotificationApprovalGap } from '../platform/notifications/contracts/notificationApprovalCoverage'
@@ -38,9 +38,11 @@ const sources: NotificationEventDeclarationSource[] = [
  * 与 `verify:preflight` 同一个形状：**只有 `dirty=0` 的那一行才可以当作搬迁证据。**
  */
 function provenance(): string {
+  // 不走 shell：参数用数组传。Windows 上没有 `sh`，`execSync('git …')` 在那边根本不成立
+  // （跨平台守卫就是这么拦下这一行的）。
   try {
-    const head = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
-    const dirty = execSync('git status --porcelain', { encoding: 'utf8' }).trim().split('\n').filter(Boolean).length
+    const head = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
+    const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean).length
     return `head=${head} dirty=${dirty}`
   } catch {
     return 'head=unknown dirty=unknown'
@@ -59,4 +61,4 @@ if (blocking.length > 0) {
   console.error(`\n[check:notification-approval] ${blocking.length} 处缺口：批准值没搬齐之前不许删平台兜底。`)
   process.exit(1)
 }
-console.log('\n[check:notification-approval] 0 missing：可以进入搬迁的下一步（改必填 → 删兜底 → 加载断言）。')
+console.log('\n[check:notification-approval] 每一条声明都带着自己的批准：0 缺口。')

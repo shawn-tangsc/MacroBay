@@ -60,6 +60,7 @@ export const VERIFY_CHECKS = [
   'check:components-ownership',
   'check:async-initial-state',
   'check:state-content-ternary',
+  'check:notification-approval',
   'typecheck',
   'test',
   'build'
