@@ -9,14 +9,11 @@ import type { PushChannelResolution } from '../delivery/pushChannelResolution'
  * 顺序：通道（`runtime-ready` 恰好一条；0 条与 ≥2 条都是 `push-unavailable`，带真实条数）→ 固定样例
  * → 同一个提交入口（`test:` 去重域，正文带【测试】）。每次点击都是新键，不占真实去重键。
  */
-const LINK_SAMPLE_COPY: Omit<NotificationSubmitRequest, 'dedupeVars' | 'occurredAt' | 'eventTypeId'> = {
-  rendered: {
-    'zh-CN': { title: '【测试】通知链路自检', body: '这是测试消息，不是真实提醒。收到它说明推送链路是通的。', reason: '测试消息' },
-    'en-US': { title: '[Test] Notification link check', body: 'This is a test message, not a real alert. Getting it means the push link works.', reason: 'Test message' }
-  },
-  actions: []
-}
-
+/**
+ * 正文与标题走**平台自己的文案表**（`notification.event.platform.notification.self-test.*`），
+ * 不在代码里写字面量：中心与手机拿同一份，读者在手机上第一句就知道这是自检、不是出事了。
+ * 去重键带**点击时刻**：读者连点两次要收到两条，否则他会以为通道坏了——而他要验的正是这个。
+ */
 export type SelfTestSurfaceInput = {
   resolvePushChannel: () => Promise<PushChannelResolution>
   /** 交给运行时的**同一个**提交入口；名字以 `submit` 开头，生产者门禁才看得见这件事由谁发。 */
@@ -42,8 +39,9 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
       // 实参写平：事件 id 就在提交调用里，生产者门禁第一层就能读到（不靠名字猜、也不靠再跟一层）。
       const outcome = await input.submitRequest({
         eventTypeId: 'platform.notification.self-test',
-        rendered: LINK_SAMPLE_COPY.rendered,
         actions: [],
+        // 点开回到设置页那枚按钮（平台范围；具体落到哪一屏由设置侧给页面 id）。
+        deeplink: { scope: 'platform' },
         dedupeVars: { builder: 'template', vars: { date: at.slice(0, 10), seq: String(Date.parse(at)) } },
         occurredAt: at,
         namespace: 'test'
