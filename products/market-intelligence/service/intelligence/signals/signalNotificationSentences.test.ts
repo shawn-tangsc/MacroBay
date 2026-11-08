@@ -6,8 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 
 import { marketIntelligenceNotificationCopy } from '../../../desktop/shared/i18n/text/notifications'
@@ -26,10 +25,10 @@ import { buildEtfOutflowSignal } from './etfOutflowSignal'
  * - 只断言旧路径，证明不了新记录里真的是成品、而不是又回头让平台拼。
  */
 const catalog = createNotificationEventCatalog({
-  policy: NOTIFICATION_EVENT_POLICY,
+  // 断的是产品事件（信号文案）的批准值 -> 产品读自己那份；平台读平台自己的。
   sources: [
-    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
-    { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+    { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+    { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
   ]
 })
 
