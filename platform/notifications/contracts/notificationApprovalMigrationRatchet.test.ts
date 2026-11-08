@@ -12,7 +12,13 @@ import { describe, expect, it } from 'vitest'
  */
 // 27 = 迁完 `producers/channelConnectionLost.test.ts` 与 `runtime/notificationNarrowedSurface.test.ts`
 // 之后的处数（29 -> 27，正好这两处各减一）。
-const BASELINE: number = 27
+/**
+ * **精确值**，不是上限：写成 `<=` 时，「实际 24、基线 27」会允许回退 3 处——棘轮看着在转，
+ * 其实什么都不证明（和「行数常量当验收」同一类毛病）。每迁一处就把这个数字改小一次。
+ *
+ * 42 = 当前仍传 `policy` 的**调用点数**（不是文件数；一个文件里可能有多处）。
+ */
+const BASELINE: number = 42
 
 function callSites(): string[] {
   const found: string[] = []
@@ -21,7 +27,9 @@ function callSites(): string[] {
       if (entry === 'node_modules' || entry === 'out' || entry === 'dist') continue
       const path = join(dir, entry)
       if (statSync(path).isDirectory()) { walk(path); continue }
-      if (!/\.(ts|tsx|mts)$/u.test(entry) || /\.test\.(ts|tsx|mts)$/u.test(entry)) continue
+      // **测试夹具也要算**：这一批迁移的对象正是夹具。之前沿用生产者门禁的「跳过 .test.」过滤，
+      // 导致棘轮一直是空集在比 30——它从写下的那一刻起就没检查过任何东西。
+      if (!/\.(ts|tsx|mts)$/u.test(entry)) continue
       const code = readFileSync(path, 'utf8')
       if (/createNotificationEventCatalog\(/u.test(code)) found.push(path)
     }
@@ -32,10 +40,12 @@ function callSites(): string[] {
 }
 
 describe('approval migration ratchet', () => {
-  it('never grows the number of catalog call sites that still pass `policy`', () => {
-    const withPolicy = callSites().filter((path) => /\bpolicy\s*:/u.test(readFileSync(path, 'utf8')))
-    // 只许减：基线就是今天的处数。每迁一批把它改小；到 0 时下一句会要求删参数。
-    expect(withPolicy.length).toBeLessThanOrEqual(BASELINE)
+  it('passes `policy` in exactly the number of call sites recorded as the baseline', () => {
+    // **精确相等**：任何一处回增都当场红，任何一处迁走也要把数字改小——两者都不许漂。
+    const occurrences = callSites()
+      .map((path) => (readFileSync(path, 'utf8').match(/\bpolicy\s*:/gu) ?? []).length)
+      .reduce((sum, count) => sum + count, 0)
+    expect(occurrences).toBe(BASELINE)
   })
 
   it('when the baseline reaches zero, the fallback and the platform table must be gone', () => {
