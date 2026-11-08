@@ -264,7 +264,16 @@ if (foreignErrors.length > 0) {
 
 if (ownErrors.length > 0) {
   console.error(`[pre-commit] ✗ 这一笔提交的树里，有 ${ownErrors.length} 条类型错落在本次提交的文件上：`)
-  for (const entry of ownErrors.slice(0, 20)) console.error(`  ${entry.file ?? entry.line}`)
+  /**
+   * 打**整行**，不是只打文件名：`error TS` 后面那句才是能照着改的东西。
+   *
+   * 2026-11-08 只打文件名，我在真机上被拦了一次却完全不知道错在哪，只能自己重建同一棵树跑 tsc——
+   * 而重建之后是 0 条错（那是短暂的状态不一致）。**被拦下却看不到理由**，下一步一定是有人去用
+   * `SKIP_PRE_COMMIT=1`，那比这条报错更难收拾。
+   */
+  for (const entry of ownErrors.slice(0, 20)) {
+    console.error(`  ${entry.line.replace(/^(?:\.\.\/)+/, '').replace(treeRoot + '/', '').trim()}`)
+  }
   console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')
   dropTree()
