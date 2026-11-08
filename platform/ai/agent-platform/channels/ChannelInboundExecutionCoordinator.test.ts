@@ -104,6 +104,9 @@ describe('ChannelInboundExecutionCoordinator', () => {
   it('runs two dispatches for one conversation one after another, never at the same time', async () => {
     let inFlight = 0
     let maxInFlight = 0
+    let sendCalls = 0
+    // 用对象装闸门：闭包里赋值时，TypeScript 不会把它收窄成 null。
+    const sendGate: { release: (() => void) | null } = { release: null }
     const runs = { get: vi.fn(() => null), start: vi.fn(() => true), complete: vi.fn(), markResult: vi.fn() }
     const inbound = {
       admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode('{"text":"hi"}'), keyRef: 'ref', keyRevision: 1 })),
@@ -121,9 +124,13 @@ describe('ChannelInboundExecutionCoordinator', () => {
       } as never,
       runtime: {
         sendMessage: vi.fn(async () => {
+          sendCalls += 1
           inFlight += 1
           maxInFlight = Math.max(maxInFlight, inFlight)
-          await new Promise((resolve) => { setTimeout(resolve, 10) })
+          // 第一次发出去之后挂在这里：串行要是坏了，第二次会**立刻**进来把 inFlight 顶到 2，
+          // 于是下面那条 `sendCalls === 1` 先红。旧写法用 10ms 睡眠来制造这个「同时」，
+          // 现在「同时」由闸门构造，不依赖机器快慢。
+          if (sendCalls === 1) await new Promise<void>((resolve) => { sendGate.release = resolve })
           inFlight -= 1
           return { assistantMessage: { data: { parts: [{ type: 'text', text: 'ok' }] } }, state: {} }
         })
@@ -131,13 +138,18 @@ describe('ChannelInboundExecutionCoordinator', () => {
       runs: runs as never
     })
 
-    const [first, second] = await Promise.all([
-      coordinator.execute({ ...claim, dispatchId: 'dispatch-1' }),
-      coordinator.execute({ ...claim, dispatchId: 'dispatch-2' })
-    ])
+    const first = coordinator.execute({ ...claim, dispatchId: 'dispatch-1' })
+    const second = coordinator.execute({ ...claim, dispatchId: 'dispatch-2' })
 
+    // 有界冲刷：只推进微任务，把「第二次尝试入队」这件事推到必然发生的那一步。
+    for (let turn = 0; turn < 20; turn += 1) await Promise.resolve()
+    // 串行成立时第二次还堵在队列里：只发出过一次，且当前只有一次在飞。
+    expect(sendCalls).toBe(1)
+    expect(inFlight).toBe(1)
+
+    sendGate.release?.()
+    await expect(Promise.all([first, second])).resolves.toEqual(['completed', 'completed'])
     expect(maxInFlight).toBe(1)
-    expect([first, second]).toEqual(['completed', 'completed'])
   })
 
   it('marks a recovered started run interrupted instead of calling the Agent twice', async () => {
