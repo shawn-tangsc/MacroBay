@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderModelServiceSettings } from './modelServicePageHarness'
 
@@ -21,11 +21,10 @@ describe('PLAT-62 model removal', () => {
     const page = await renderModelServiceSettings({ provider: { models } })
     await act(async () => {
       page.container.querySelector<HTMLButtonElement>('[data-model-row="m-1"] [data-model-row-remove]')?.click()
-      await Promise.resolve()
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(page.api.removeModel).toHaveBeenCalledWith('silicon', 'm-1')
+    // 删除是异步落地的：等它真的被调用，不等一个宏任务。
+    await vi.waitFor(() => { expect(page.api.removeModel).toHaveBeenCalledWith('silicon', 'm-1') })
     await expect.poll(() => page.container.querySelector('[data-models-notice]')?.textContent).toContain('Removed 1')
     await act(async () => page.root.unmount())
   })
@@ -39,10 +38,9 @@ describe('PLAT-62 model removal', () => {
     })
     await act(async () => {
       page.container.querySelector<HTMLButtonElement>('[data-model-row="m-1"] [data-model-row-remove]')?.click()
-      await Promise.resolve()
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
+    // 错误行是这条用例要等的那个事实；`expect.poll` 已经是条件驱动，不需要额外的宏任务让路。
     await expect.poll(() => page.container.querySelector('[data-models-error]')).not.toBeNull()
     await act(async () => page.root.unmount())
   })
