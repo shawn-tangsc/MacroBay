@@ -174,13 +174,19 @@ export type MacroEconomicCalendarEventView = {
   publishedAt?: string
   detectedAt: string
   /**
-   * 这条事件**第一次落库**的时刻（`min(recorded_at)`）。后续修订不改变它——所以它不是
-   * `detectedAt`（当前有效行的检测时刻，会被修订刷新）。只在事件详情里给出。
+   * 这条事件**第一次落库**的时刻。后续修订、替换都不改变它——所以它不是 `detectedAt`
+   * （当前有效行的检测时刻，会被修订刷新），也不是 `min(recorded_at)`（替换式来源删旧行后
+   * 只剩最新一行，`min` 会取到这次替换的写入时刻）。持久化在
+   * `mi_macro_calendar_event_first_seen`，本机写入时刻、**不受 as-of 约束**。
+   *
+   * **共享视图、仅详情填充；冻结快照不得携带（有守卫）。**
    */
   createdAt?: string
   /**
-   * **第一次拿到非空实际值那一刻的来源观测时刻**（`detected_at` of the first revision whose
-   * `actual` is non-empty）。不是发布时间、不是日历时刻、不是本机刷新时刻。只在事件详情里给出。
+   * **第一次拿到非空实际值那一刻的来源观测时刻**。不是发布时间、不是日历时刻、不是本机刷新
+   * 时刻。持久化同上（替换后那行已不存在，不能事后聚合）。
+   *
+   * **共享视图、仅详情填充；冻结快照不得携带（有守卫）。**
    */
   actualDetectedAt?: string
   actual?: MacroEconomicCalendarValueView

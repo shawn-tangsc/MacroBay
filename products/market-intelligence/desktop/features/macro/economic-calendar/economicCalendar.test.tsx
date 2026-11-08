@@ -799,7 +799,7 @@ describe('macro economic calendar', () => {
 
     const inspector = container.querySelector('.mi-economic-calendar__inspector')?.textContent
     expect(inspector).toContain('3.50%–3.75%')
-    expect(inspector).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.details.unavailable)
+    expect(inspector).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.details.valueNotProvided)
     expect(inspector).not.toMatch(/https?:|rawRecordId|evidenceHash|sourceUrl|parser/i)
   })
 
@@ -829,8 +829,9 @@ describe('macro economic calendar', () => {
       expect(inspector.textContent).toContain('2026-08-05 08:00:00 GMT+8')
       expect(inspector.textContent).toContain('3.50%–3.75%')
     } else {
+      // 没有保留值时的句子不是「暂无」：事件早已到点、源也没给值，所以写「源未给出」。
       expect(inspector.textContent).not.toContain('显示上次官方值')
-      expect(inspector.textContent).toContain('暂无官方值')
+      expect(inspector.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.details.valueNotProvided)
     }
   })
 

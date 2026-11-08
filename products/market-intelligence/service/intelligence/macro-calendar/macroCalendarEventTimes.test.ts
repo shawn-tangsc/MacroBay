@@ -92,6 +92,44 @@ describe('event record times', () => {
     } finally { repository.close() }
   })
 
+  /**
+   * BLS/BEA/0xRouter 走的是"删旧行再插入"。如果从修订表聚合 `min(recorded_at)`，拿到的会是
+   * **这次替换的写入时刻**——所以这条用例必须用替换式来源，并且断言"重新读一次还是第一次"。
+   * 反证：把实现改回 `min(recorded_at)`，下面的 createdAt 会变成 T2 而不是 T1。
+   */
+  it('keeps the first time across a replacement of the whole row', () => {
+    const repository = createMacroCalendarRepository({ filePath: ':memory:' })
+    try {
+      const bls = (overrides: Partial<MacroCalendarRevision>): MacroCalendarRevision => revision({
+        eventFamily: 'consumer-price-index',
+        eventNameKey: 'cpi',
+        providerId: 'macro-calendar-bls',
+        descriptorId: 'macro-calendar-bls-calendar-family-refresh-api-v2',
+        caveats: ['bls-python-schedule'],
+        ...overrides
+      })
+      repository.appendIfNew(bls({
+        revisionId: 'first', lifecycleState: 'released', revisionKind: 'official-release',
+        detectedAt: '2026-10-20T12:30:00.000Z', recordedAt: '2026-10-20T12:30:00.000Z',
+        actual: { displayValue: '3.0%', numericValue: 3, unit: 'percent' }
+      }))
+      // 同一条事件被整体替换：修订表里第一行已经不在了。
+      repository.appendIfNew(bls({
+        revisionId: 'second', lifecycleState: 'released', revisionKind: 'official-release',
+        detectedAt: '2026-10-21T12:30:00.000Z', recordedAt: '2026-10-21T12:30:00.000Z',
+        actual: { displayValue: '3.2%', numericValue: 3.2, unit: 'percent' }
+      }))
+
+      // 表里确实只剩替换后的那一行（这就是"不能聚合"的原因）。
+      expect(repository.getEffectiveEventAsOf({ eventKey: EVENT_KEY, asOf: '2026-11-01T00:00:00.000Z' })?.recordedAt)
+        .toBe('2026-10-21T12:30:00.000Z')
+      expect(repository.getEventTimesAsOf({ eventKey: EVENT_KEY, asOf: '2026-11-01T00:00:00.000Z' })).toEqual({
+        createdAt: '2026-10-20T12:30:00.000Z',
+        actualDetectedAt: '2026-10-20T12:30:00.000Z'
+      })
+    } finally { repository.close() }
+  })
+
   it('hides times that were not visible yet at the as-of instant', () => {
     const repository = repositoryWithHistory()
     try {

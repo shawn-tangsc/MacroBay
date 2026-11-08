@@ -60,6 +60,34 @@ async function render(detail: Parameters<typeof EconomicCalendarEventDetail>[0])
 
 const base = { event: event(), now: () => new Date(asOf), onRefresh: async () => undefined, onReleaseTimeChanged: async () => undefined, releaseTimeClient: client, refreshState: undefined, text }
 
+describe('a missing value is never one sentence', () => {
+  /**
+   * 「没有」与「拿不到」分开：这一层能分的是「还没到」和「已到点但源没给」。第三种（读不到）
+   * 由整块读失败态给句子，不是某一行缺值。三句不许并成「暂无」。
+   */
+  it('says "not released yet" before the release instant', async () => {
+    const host = await render({
+      ...base,
+      event: event({ lifecycleState: 'scheduled', scheduledAt: '2026-11-20T13:30:00.000Z', actual: undefined, previous: { displayValue: '29' } }),
+      officialConsensus: null,
+      linkedConsensus: undefined
+    })
+    expect(host.textContent).toContain(text.details.valueNotYet)
+    expect(host.textContent).not.toContain(text.details.valueNotProvided)
+  })
+
+  it('says "source did not provide it" once the release instant has passed', async () => {
+    const host = await render({
+      ...base,
+      event: event({ lifecycleState: 'scheduled', scheduledAt: '2026-11-01T13:30:00.000Z', actual: undefined, previous: { displayValue: '29' } }),
+      officialConsensus: null,
+      linkedConsensus: undefined
+    })
+    expect(host.textContent).toContain(text.details.valueNotProvided)
+    expect(host.textContent).not.toContain(text.details.valueNotYet)
+  })
+})
+
 describe('the record times on the detail', () => {
   /**
    * R36：创建时间 = 第一次落库（修订不改变它）；实际值时间 = 第一次拿到非空现值那一刻的

@@ -114,6 +114,17 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   const valueRows: { id: 'actual' | 'previous'; label: string }[] = [
     { id: 'actual', label: text.details.actual }, { id: 'previous', label: text.details.previous }
   ]
+  /*
+   * 缺值不许写成一句「暂无」：那是把「还没到」「源没给」「读不到」三件事并成一个。
+   * 这一层能分的是前两种——发布时刻还没到写「尚未公布」，已到点而源没给值写「源未给出」。
+   * 第三种（读不到）由整块的读失败态给句子，它不是某一行缺值，整页都不该有内容。
+   */
+  const releaseInstantPassed = event.scheduledAt !== undefined
+    ? Date.parse(event.scheduledAt) <= now().getTime()
+    : event.scheduledDate <= calendarDisplayDate(now().toISOString(), timeZone)
+  const missingValueSentence = event.lifecycleState === 'scheduled' && !releaseInstantPassed
+    ? text.details.valueNotYet
+    : text.details.valueNotProvided
   // 停用是现状，不是这次点击失败：按钮置灰、点不动，也不发请求（服务侧也已立刻回 unavailable）。
   const blsRefreshAction = refreshActionPresentation(refreshState, event.eventKey, 'bls', blsUnavailableNotice !== undefined)
   const fomcRefreshAction = refreshActionPresentation(refreshState, event.eventKey, 'fomc')
@@ -138,7 +149,7 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
       <Meta label={text.details.state} value={text.states[event.lifecycleState]} />
     </dl>
     <div className="mi-economic-calendar__values">
-      {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? text.details.unavailable}</strong></div>)}
+      {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? missingValueSentence}</strong></div>)}
       {/* 官方三源（Fed/BLS/BEA）不提供预期；能用的只有挂着的那条市场观测，所以标出来源。
           两边都没有时写「预期值未提供」——不是「没有超预期」，那会把未知说成结论。 */}
       {(() => {

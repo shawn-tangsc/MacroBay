@@ -15,9 +15,11 @@ import { fedFomcDecisionEvidencePolicy as fedEvidence } from './fed-statements/f
 // CalendarBackupPolicy, owned by product design 121; no identity inference or repair.
 export const calendarSnapshotEvidencePolicy = Object.freeze({
   pageSize: 100,
-  officialTables: ['mi_macro_calendar_migrations', 'mi_macro_calendar_revisions', 'mi_bea_release_observation_state'],
+  // `mi_macro_calendar_event_first_seen` 是数据的一部分：恢复后若没有它，"创建时间"会退化成
+  // 最近一次替换的写入时刻（BLS/BEA 是删旧行再插入），所以快照必须带着它，缺失即 schema-invalid。
+  officialTables: ['mi_macro_calendar_migrations', 'mi_macro_calendar_revisions', 'mi_bea_release_observation_state', 'mi_macro_calendar_event_first_seen'],
   marketTables: ['mi_macro_calendar_market_event_collections', 'mi_macro_calendar_market_event_observations', 'mi_macro_calendar_provider_indicator_links'],
-  migrationVersions: [1, 2, 3, 4, 5, 6, 7], hashPattern: /^[a-f0-9]{64}$/,
+  migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8], hashPattern: /^[a-f0-9]{64}$/,
   canonicalMarketProvider: '0xrouter', archiveMarketProvider: 'macro-calendar-0xrouter'
 })
 export type SnapshotFailureCode = 'schema-invalid' | 'evidence-invalid' | 'evidence-unresolved' | 'capacity' | 'path-invalid' | 'bundle-invalid' | 'incomplete' | 'io-failure'
@@ -119,11 +121,11 @@ export async function collectSnapshotEvidence(database: DatabaseSync,
 function* pages(database: DatabaseSync, table: string, key: string, fields: string): Generator<Row> {
   let after: string | null = null
   while (true) {
-    const rows = database.prepare(`select ${fields} from ${table} ${after === null ? '' : `where ${key} > ?`} order by ${key} limit ?`)
-      .all(...(after === null ? [] : [after]), calendarSnapshotEvidencePolicy.pageSize)
+    const rows: Row[] = database.prepare(`select ${fields} from ${table} ${after === null ? '' : `where ${key} > ?`} order by ${key} limit ?`)
+      .all(...(after === null ? [] : [after]), calendarSnapshotEvidencePolicy.pageSize) as Row[]
     if (!rows.length) return
     for (const row of rows) yield row
-    const last = rows.at(-1)![key]
+    const last: unknown = rows.at(-1)?.[key]
     if (typeof last !== 'string' || last === after) snapshotReject('schema-invalid')
     after = last
   }
@@ -175,7 +177,7 @@ function mapped(ref: Ref, context?: 'bea' | 'fed'): Expected {
     if (ref.providerId !== 'macro-calendar-bls' || ref.sourceUrl !== bls.sourceUrl) snapshotReject('evidence-invalid')
     return { ...ref, sourceId: blsEvidence.sourceId, parserVersion: blsEvidence.parserVersion }
   }
-  if (context === 'bea' && [beaEvidence.rssSourceId, beaEvidence.pageSourceId].includes(ref.descriptorId)) {
+  if (context === 'bea' && ([beaEvidence.rssSourceId, beaEvidence.pageSourceId] as readonly string[]).includes(ref.descriptorId)) {
     if (ref.providerId !== bea.providerId || !ref.sourceUrl || (ref.descriptorId === beaEvidence.rssSourceId && ref.sourceUrl !== beaEvidence.rssUrl)) snapshotReject('evidence-invalid')
     return { ...ref, sourceId: ref.descriptorId, parserVersion: beaEvidence.parserVersion, metadata: beaEvidence.payloadMetadata }
   }

@@ -78,6 +78,9 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
   const revisionById = sqlite.database.prepare('select * from mi_macro_calendar_revisions where revision_id = ? limit 1')
   const visibleByEvent = sqlite.database.prepare(`select * from mi_macro_calendar_revisions where event_key = ? and detected_at_ms <= ? order by ${macroCalendarEffectiveOrderSql} limit 1`)
   const automaticBlsMetricExists = sqlite.database.prepare('select 1 from mi_macro_calendar_revisions where provider_id = ? and event_family = ? and event_name_key = ? and scheduled_date = ? and descriptor_id in (?,?) limit 1')
+  const firstSeenInsert = sqlite.database.prepare('insert into mi_macro_calendar_event_first_seen (event_key, first_recorded_at) values (?, ?) on conflict(event_key) do nothing')
+  const firstSeenActual = sqlite.database.prepare('update mi_macro_calendar_event_first_seen set first_actual_detected_at = ? where event_key = ? and first_actual_detected_at is null')
+  const firstSeenRead = sqlite.database.prepare('select first_recorded_at, first_actual_detected_at from mi_macro_calendar_event_first_seen where event_key = ?')
   const deleteByEvent = sqlite.database.prepare('delete from mi_macro_calendar_revisions where event_key = ?')
   const deleteManualBlsMetric = sqlite.database.prepare('delete from mi_macro_calendar_revisions where provider_id = ? and descriptor_id = ? and event_family = ? and event_name_key = ? and scheduled_date = ?')
   const visibleByMonth = sqlite.database.prepare(`select * from mi_macro_calendar_revisions where scheduled_date >= ? and scheduled_date < ? and detected_at_ms <= ? order by event_key, ${macroCalendarEffectiveOrderSql}`)
@@ -117,16 +120,15 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
       return row ? fromRow(row) : undefined
     },
     getEventTimesAsOf({ eventKey, asOf }) {
-      const asOfMs = epochTime(asOf)
-      if (asOfMs === undefined) return Object.freeze({})
-      const row = sqlite.database.prepare(
-        `select min(recorded_at) as created_at,
-                min(case when actual_json is not null and actual_json not in ('', 'null') then detected_at end) as actual_detected_at
-           from mi_macro_calendar_revisions where event_key = ? and detected_at_ms <= ?`
-      ).get(eventKey, asOfMs) as { created_at?: string | null; actual_detected_at?: string | null } | undefined
+      if (epochTime(asOf) === undefined) return Object.freeze({})
+      const row = firstSeenRead.get(eventKey) as { first_recorded_at?: string | null; first_actual_detected_at?: string | null } | undefined
+      const firstRecorded = typeof row?.first_recorded_at === 'string' && isValidIsoTime(row.first_recorded_at) ? row.first_recorded_at : undefined
+      const firstActual = typeof row?.first_actual_detected_at === 'string' && isValidIsoTime(row.first_actual_detected_at) ? row.first_actual_detected_at : undefined
       return Object.freeze({
-        ...(typeof row?.created_at === 'string' && isValidIsoTime(row.created_at) ? { createdAt: row.created_at } : {}),
-        ...(typeof row?.actual_detected_at === 'string' && isValidIsoTime(row.actual_detected_at) ? { actualDetectedAt: row.actual_detected_at } : {})
+        // 本机写入时刻，**不受 as-of 约束**：它是"这条记录何时存在"，不是某次读取看到的事实。
+        ...(firstRecorded === undefined ? {} : { createdAt: firstRecorded }),
+        // 来源观测时刻，按 as-of 收窄：那一刻还没观测到值，就不该在回放里显示"已拿到"。
+        ...(firstActual === undefined || firstActual > asOf ? {} : { actualDetectedAt: firstActual })
       })
     },
     listVisibleProviderFactsAsOf({ providerIds, asOf }) {
@@ -183,6 +185,7 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
         return { inserted: false, revision: fromRow(current) }
       }
       insert.run(...values(stored))
+      recordFirstSeen(stored)
       return { inserted: true, revision: stored }
     }
     if (current && isFedOfficialRecord(fromRow(current)) && isFedSchedule(stored)) return { inserted: false, revision: fromRow(current) }
@@ -198,7 +201,17 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
       stored.eventFamily, stored.eventNameKey, stored.scheduledDate
     )
     insert.run(...values(stored))
+    recordFirstSeen(stored)
     return { inserted: true, revision: stored }
+  }
+
+  /**
+   * 首次写入记一次（替换时 `on conflict do nothing` 保留旧值）；第一次带非空实际值的修订补上
+   * 观测时刻。两个写入都在调用方的事务里，跟修订行同生共死。
+   */
+  function recordFirstSeen(stored: MacroCalendarRevision): void {
+    firstSeenInsert.run(stored.eventKey, stored.recordedAt)
+    if (stored.actual !== undefined) firstSeenActual.run(stored.detectedAt, stored.eventKey)
   }
 }
 
@@ -214,6 +227,17 @@ function migrate(database: ReturnType<typeof createMacroCalendarSqlite>['databas
     execute("create table if not exists mi_policy_path_sep (meeting_date text primary key, sep_json text not null, detected_at text not null, constraint mi_policy_path_sep_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); insert or ignore into mi_macro_calendar_migrations(version) values (6)")
     // The venue page the odds came from, so the number can be opened instead of trusted.
     execute("create table if not exists mi_policy_path_market (meeting_date text primary key, slug text not null, detected_at text not null, constraint mi_policy_path_market_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); insert or ignore into mi_macro_calendar_migrations(version) values (7)")
+    /**
+     * 首次落库 / 首次拿到实际值：**必须持久化**，不能事后从修订表聚合。
+     *
+     * `replaceCurrent` 对 BLS/BEA/0xRouter 是"删旧行再插入"：替换之后表里只剩最新一行，所以
+     * `min(recorded_at)` 得到的是**这次替换的写入时刻**，`min(detected_at) where actual` 同理——
+     * 第一次带值那行已经不存在了。侧表在首次插入时写一次，替换时保留，聚合改读它。
+     *
+     * 回填只能拿得到"当前还看得见的行"，被替换掉的历史无法还原；对已经替换过的源，回填值是
+     * **近似的**，从本笔之后写入的事件开始准确。这一点写在这里，免得以后有人把回填值当权威。
+     */
+    execute("create table if not exists mi_macro_calendar_event_first_seen (event_key text primary key, first_recorded_at text not null, first_actual_detected_at text); insert or ignore into mi_macro_calendar_event_first_seen (event_key, first_recorded_at, first_actual_detected_at) select event_key, min(recorded_at), min(case when actual_json is not null and actual_json not in ('', 'null') then detected_at end) from mi_macro_calendar_revisions group by event_key; insert or ignore into mi_macro_calendar_migrations(version) values (8)")
     execute('commit')
   } catch (error) {
     try { execute('rollback') } catch { /* Preserve the migration failure. */ }
