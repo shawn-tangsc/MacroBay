@@ -6,8 +6,8 @@ import { parseJsonBlock, type JsonBlock } from './jsonBlock'
 /**
  * Markdown for chat bubbles, in the platform so both the shell and a product chat can use it.
  *
- * It was shell-only, and the market-intelligence agent imported it across the product/shell
- * boundary; the reader's report was simply that a table came out as raw pipes, because this parser
+ * It was shell-only, and a product surface imported it across the product/shell boundary; the
+ * reader's report was simply that a table came out as raw pipes, because this parser
  * had no table block at all. Tables are the one construct an LLM answer uses to line up "项目/时间"
  * pairs, so they are parsed here rather than left to the reader's imagination.
  *

@@ -164,11 +164,9 @@ const CONDITIONAL_SPREAD = [
  * 与上面那份基线分开：那一份记「有没有动作」，这一份记「键对不对」。
  */
 const KEY_BASELINE = new Map<string, number>([
-  // 情报线：`filtered-out` 的动作是「清除筛选」，站点给的是「看全部」。
-  [
-    'products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx|empty.filtered-out',
-    1
-  ]
+  // 产品线一处尚未迁移：`filtered-out` 的动作应是「清除筛选」，那里给的是「看全部」。
+  // 键按「码 + 写错的键」记，不记文件路径——平台目录里不写产品路径（§七 零业务概念）。
+  ['empty.filtered-out|ui.state.action.widen-time-window', 1]
 ])
 
 function baselineKeyOf(site: CallSite): string {
@@ -214,7 +212,7 @@ describe('StateView call sites match the action rules', () => {
         .filter((key) => !allowed.includes(key))
         .map((key) => ({ file: site.file, line: site.line, code, key }))
     })
-    const unbaselined = offenders.filter((entry) => (KEY_BASELINE.get(`${entry.file}|${entry.code}`) ?? 0) === 0)
+    const unbaselined = offenders.filter((entry) => (KEY_BASELINE.get(`${entry.code}|${entry.key}`) ?? 0) === 0)
 
     expect(unbaselined).toEqual([])
   })
@@ -275,10 +273,10 @@ describe('StateView call sites match the action rules', () => {
       const code = `${site.state}.${site.reasonCode}`
       const allowed = STATE_VIEW_ACTION_CHOICES[code]
       if (allowed === undefined) continue
-      const broken = site.actionKeys.filter((key) => !allowed.includes(key)).length
-      if (broken === 0) continue
-      const key = `${site.file}|${code}`
-      live.set(key, (live.get(key) ?? 0) + broken)
+      for (const key of site.actionKeys.filter((entry) => !allowed.includes(entry))) {
+        const baselineKey = `${code}|${key}`
+        live.set(baselineKey, (live.get(baselineKey) ?? 0) + 1)
+      }
     }
     const stale = [...KEY_BASELINE.keys()].filter((entry) => (live.get(entry) ?? 0) === 0)
 

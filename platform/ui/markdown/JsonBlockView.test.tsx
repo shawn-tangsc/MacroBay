@@ -8,7 +8,7 @@ import { parseJsonBlock } from './jsonBlock'
 
 const structuredPayload = [
   '{',
-  '  "label": "BTC 15m 复核",',
+  '  "label": "示例 15m 复核",',
   '  "text": "结构仍偏多，但量能没有跟上。",',
   '  "tone": "watch",',
   '  "watchPoints": ["前高 68.4k", "资金费率"],',
@@ -54,7 +54,7 @@ describe('structured JSON blocks in chat markdown (PLAT-64)', () => {
     const html = renderZh(structuredPayload)
 
     expect(html).toContain('chat-markdown-json-card')
-    expect(html).toContain('BTC 15m 复核')
+    expect(html).toContain('示例 15m 复核')
     expect(html).toContain('结构仍偏多，但量能没有跟上。')
     // 卡片只是摘要：没被卡片展示的字段同样必须在代码块里一次看全，不给「展开 / 查看原始」入口。
     expect(html).toContain('watchPoints')
