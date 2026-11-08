@@ -21,6 +21,8 @@
 export type PushDeliveryReading = Readonly<{
   state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
   reason?: string
+  /** 这次真的发到了哪条通道——**通道名跟着这次提交走**，不从通道列表读。 */
+  channelName?: string
 }>
 
 /**

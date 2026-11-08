@@ -1,3 +1,5 @@
+import type { NotificationSubmitOutcome } from '@platform/notifications/contracts/notificationContracts'
+
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
 import type { DeliveryReading, PushDeliveryReading, SuppressionReason, SendReceiptView } from '../../pages/intelligence/analysisConclusionSendState'
 
@@ -12,6 +14,21 @@ import type { DeliveryReading, PushDeliveryReading, SuppressionReason, SendRecei
  * 不再去读一次记录——「提交成功 ≠ 手机收到」这句话靠这两处判，不靠猜。
  */
 export type AnalysisConclusionSendReceipt = SendReceiptView
+
+/**
+ * 回执里是否已经带这次提交的投递结果（`accepted.delivery`）。这是**类型事实**，不是开关人记得。
+ *
+ * 为什么现在藏在它后面：没有 `delivery` 时，一次真的发到手机也会被判成「只在应用内」——
+ * 句子不撒谎，但读者刚点了「发送到频道」，看到这句会以为通道坏了。
+ *
+ * 等什么：**频道线的回执笔**——`NotificationSubmitOutcome` 的 `accepted`（以及 `merged` 在真升级时）
+ * 带上 `delivery`。等它进契约，`ReceiptCarriesDelivery` 就变成 `true`，下面那一行随之编不过，
+ * 把它改成 `true` 按钮就出来了；同时有一条用例钉着 `false`，改的时候会一起提醒。
+ * 放出来那一笔还要一并接：0 条通道不渲染（`getNotificationRuntime().resolvePushChannel()`）。
+ */
+export type ReceiptCarriesDelivery = 'delivery' extends keyof Extract<NotificationSubmitOutcome, { kind: 'accepted' }> ? true : false
+
+export const SEND_ACTION_READY: ReceiptCarriesDelivery = false
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -28,7 +45,9 @@ function readPush(value: unknown): PushDeliveryReading | undefined {
   if (!isRecord(value)) return undefined
   const state = PUSH_STATES.find(candidate => candidate === value.state)
   if (state === undefined) return undefined
-  return typeof value.reason === 'string' && value.reason.length > 0 ? { state, reason: value.reason } : { state }
+  const reason = typeof value.reason === 'string' && value.reason.length > 0 ? { reason: value.reason } : {}
+  const channelName = typeof value.channelName === 'string' && value.channelName.length > 0 ? { channelName: value.channelName } : {}
+  return { state, ...reason, ...channelName }
 }
 
 function readSuppressed(value: unknown): DeliveryReading['suppressed'] {

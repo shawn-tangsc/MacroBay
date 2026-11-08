@@ -40,9 +40,14 @@ export function useAnalysisConclusionSend(input: Readonly<{
     setPhase({ kind: 'sending' })
     let status: SendStatusCopy
     try {
+      const receipt = await send(input.analysisRunId)
       status = describeSendStatus({
-        state: classifySendReceipt(await send(input.analysisRunId)),
+        state: classifySendReceipt(receipt),
         text: input.text,
+        // 通道名跟着这次提交的结果走；点击前的那份派生只判「有没有可用通道」。
+        ...(receipt.kind === 'accepted' && receipt.delivery?.push?.channelName !== undefined
+          ? { receiptChannelName: receipt.delivery.push.channelName }
+          : {}),
         channel: input.channel,
         time: formatNow()
       })

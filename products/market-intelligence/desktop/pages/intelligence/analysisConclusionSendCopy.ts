@@ -22,13 +22,20 @@ export type SendStatusCopy = Readonly<{
 export function describeSendStatus(input: Readonly<{
   state: SendOutcomeState
   text: AnalysisConclusionSendText
-  /** 这一次要发到哪条通道；读不到就省略——成功句用中性名，不编品牌。 */
+  /** 回执里这次真的发到的通道名（与提交同一次结果）；没有就用中性命。 */
+  receiptChannelName?: string | undefined
+  /**
+   * 点击前的通道派生（`resolvePushChannel`）：只用于「0 条 / 多条」这种配置事实，
+   * **不拿它渲染「已发到 X」**——那是两回事。
+   */
   channel?: ChannelAvailability | undefined
   /** 已格式化好的时刻（读者时区）。 */
   time: string
 }>): SendStatusCopy {
   const { state, text } = input
-  const channelName = input.channel?.ok === true ? input.channel.channelName : text.channelUnknown
+  // 通道名跟着**这次提交的结果**走；`channel` 那一份派生只回答「点击前有没有可用通道」，
+  // 不参与「已发到 X」这句话——两个问题两个来源。
+  const channelName = input.receiptChannelName ?? text.channelUnknown
   const fill = (sentence: string): string => sentence.replaceAll('{channel}', channelName).replaceAll('{time}', input.time)
   switch (state.state) {
     case 'sent': return { message: fill(text.sentAccepted) }

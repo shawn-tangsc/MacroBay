@@ -6,6 +6,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
+import { SEND_ACTION_READY } from '../../shared/ipc/analysisConclusionSendClient'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { AnalysisConclusionSendButton } from './AnalysisConclusionSendButton'
@@ -45,6 +46,9 @@ export function AnalysisTimelineDrawer(props: {
   // 最新那条带分析运行的条目：时间轴按时间倒序，第一条带 run id 的就是「最新那条结论」。
   // 条件写「有运行」而不是「有通知记录」——手动跑出来的结论从来没有通知记录，照样可以发。
   const latest = props.timeline.state.entries.find((entry) => entry.analysisRunId !== null)
+  // 回执还不带投递结果时**先不摆按钮**：那段时间一次真的发到手机也会被判成「只在应用内」。
+  // 藏的只是按钮与它的 ⓘ，抽屉照常可用；条件写在 `SEND_ACTION_READY`（类型事实，不是注释掉的一段）。
+  const canSend = SEND_ACTION_READY && latest !== undefined
   const { phase, send } = useAnalysisConclusionSend({
     text: sendText,
     analysisRunId: latest?.analysisRunId ?? undefined,
@@ -57,12 +61,11 @@ export function AnalysisTimelineDrawer(props: {
     return resolveProductText(key)
   }
   return <Drawer
-    actions={<AnalysisConclusionSendButton
-      disabled={latest === undefined}
+    actions={canSend ? <AnalysisConclusionSendButton
       onSelect={() => void send()}
       sending={phase.kind === 'sending'}
       text={sendText}
-    />}
+    /> : undefined}
     className="mi-analysis-timeline-drawer"
     destroyOnHidden
     mode="modal"
@@ -70,7 +73,7 @@ export function AnalysisTimelineDrawer(props: {
     open={props.open}
     resolveText={resolveProductText}
     size="large"
-    titleExtra={<Popover
+    titleExtra={!canSend ? undefined : <Popover
       labelKey={INFO_KEY}
       resolveText={infoResolver}
       trigger={(triggerProps) => <IconButton

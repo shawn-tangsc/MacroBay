@@ -18,13 +18,14 @@ describe('reading one send receipt', () => {
   it('says the channel accepted it, with the channel name and the time', () => {
     const state = classifySendReceipt({ kind: 'accepted', delivery: { push: { state: 'sent-accepted' } } })
     expect(state).toEqual({ state: 'sent' })
-    expect(describeSendStatus({ state, text: zh, channel: { ok: true, channelName: 'Telegram · 观潮' }, time }))
+    // 通道名来自**这次提交的结果**（回执），不是点击前那份通道派生。
+    expect(describeSendStatus({ state, text: zh, receiptChannelName: 'Telegram · 观潮', time }))
       .toEqual({ message: '已发到 Telegram · 观潮 · 12:44' })
   })
 
   it('does not dress "no receipt" up as delivered', () => {
     const state = classifySendReceipt({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } })
-    expect(describeSendStatus({ state, text: zh, channel: { ok: true, channelName: 'Telegram' }, time }).message)
+    expect(describeSendStatus({ state, text: zh, receiptChannelName: 'Telegram', time }).message)
       .toBe('已交给 Telegram，没拿到回执 · 12:44')
   })
 
@@ -83,6 +84,9 @@ describe('reading one send receipt', () => {
   it('falls back to a neutral channel name instead of inventing one', () => {
     const state = classifySendReceipt({ kind: 'accepted', delivery: { push: { state: 'sent-accepted' } } })
     expect(describeSendStatus({ state, text: zh, time }).message).toBe('已发到 推送通道 · 12:44')
+    // 点击前那份通道派生**不参与**这句话：它只回答「有没有可用通道」。
+    expect(describeSendStatus({ state, text: zh, channel: { ok: true, channelName: 'Telegram' }, time }).message)
+      .toBe('已发到 推送通道 · 12:44')
   })
 
   it('carries any other rejection code through untouched', () => {

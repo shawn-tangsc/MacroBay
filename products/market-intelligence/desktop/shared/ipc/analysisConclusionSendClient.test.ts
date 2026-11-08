@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { readSendReceipt } from './analysisConclusionSendClient'
+import { SEND_ACTION_READY, readSendReceipt } from './analysisConclusionSendClient'
 
 /**
  * 回执解析的两条规矩：
@@ -8,10 +8,20 @@ import { readSendReceipt } from './analysisConclusionSendClient'
  * 2. **投递结果就在回执里**（`delivery.push` / `delivery.suppressed`），不再去读一次记录；
  *    没带就是「这次没有投递」，那是「只在应用内」，不是「已发到」。
  */
+/**
+ * 放行开关：**回执里还没有 `delivery` 时按钮不摆**。频道线把 `accepted.delivery` 落进契约后，
+ * 这一条会跟着 `SEND_ACTION_READY` 一起要改——那时按钮才允许出现。
+ */
+describe('the send action gate', () => {
+  it('stays hidden until the receipt carries the delivery result', () => {
+    expect(SEND_ACTION_READY).toBe(false)
+  })
+})
+
 describe('reading the send receipt', () => {
   it('keeps the delivery the platform reported for this submit', () => {
-    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1', delivery: { push: { state: 'sent-accepted' } } }))
-      .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-accepted' } } })
+    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1', delivery: { push: { state: 'sent-accepted', channelName: 'Telegram' } } }))
+      .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-accepted', channelName: 'Telegram' } } })
     // 「没拿到回执」也是一档，原样带过来，界面负责说得准。
     expect(readSendReceipt({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } }))
       .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } })

@@ -55,6 +55,12 @@ describe('the send state machine', () => {
     expect(phaseNode().dataset.code).toBe('')
   })
 
+  it('names the channel the receipt says this submit went to', async () => {
+    act(() => root.render(<Probe send={async () => ({ kind: 'accepted', delivery: { push: { state: 'sent-accepted', channelName: 'Telegram · 观潮' } } })} />))
+    await click('[data-action="send"]')
+    expect(phaseNode().dataset.message).toBe('已发到 Telegram · 观潮 · 12:44')
+  })
+
   it('says the day cap is reached, not that sending failed', async () => {
     act(() => root.render(<Probe send={async () => ({ kind: 'rejected', reason: 'daily-limit-reached' })} />))
     await click('[data-action="send"]')
