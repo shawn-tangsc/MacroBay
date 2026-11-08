@@ -247,15 +247,23 @@ describe('Drawer', () => {
     void host
   })
 
-  it('keeps the close control from being squeezed: the proportions are the component’s', () => {
-    // 判据落在规则上：标题先截断、动作到 45% 才截断、关闭键永不移动。
+  it('never lets the title push the close control', () => {
+    // 缩短优先级 关闭键 > 动作 > 标题：关闭键所在分组 `flex: none`，标题可缩且有 `min-width: 0`。
     const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
     expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*flex:\s*none/)
-    expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*gap:\s*12px/)
-    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*flex:\s*0 0 auto/)
-    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*max-width:\s*45%/)
     expect(rules).toMatch(/\.drawer__title-row\s*\{[^}]*flex:\s*1 1 auto/)
     expect(rules).toMatch(/\.drawer__title-row\s*\{[^}]*min-width:\s*0/)
+  })
+
+  it('truncates the title before the action: the action only stops at its 45% cap', () => {
+    // 槽的尺寸按规则定，不按今天那句文案定——下一个产品的动作更长时，仍要标题先截断。
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*flex:\s*0 0 auto/)
+    expect(rules).toMatch(/\.drawer__actions\s*\{[^}]*max-width:\s*45%/)
+    // 槽内文字自己有省略号：槽是通用的，里面放什么由调用方决定。
+    expect(rules).toMatch(/\.drawer__actions\s*>\s*\*\s*\{[^}]*text-overflow:\s*ellipsis/)
+    // 动作槽与关闭键之间的 12px 写在组件里，不是调用方传的。
+    expect(rules).toMatch(/\.drawer__header-actions\s*\{[^}]*gap:\s*12px/)
   })
 
   it('takes no gap or width for the slot: the caller cannot resize the header', () => {
