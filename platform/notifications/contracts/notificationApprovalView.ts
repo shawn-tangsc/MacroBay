@@ -35,9 +35,11 @@ export function mergeApprovalView(sources: readonly NotificationEventDeclaration
         seenIn.set(id, source.productId)
         continue
       }
-      if (canonical(previous) !== canonical(entry)) {
-        throw new Error(`approval-conflict:${id}:${seenIn.get(id) ?? '?'}:${source.productId}`)
-      }
+      // **同一 id 出现在两个来源就是错**，即使值恰好相同：那等于允许第二个来源替别人的事件批一次，
+      // 今天相同、明天改不同就是一次无人发现的篡改。值相同与不同分两种文案，都是装配错误。
+      const first = seenIn.get(id) ?? '?'
+      if (canonical(previous) === canonical(entry)) throw new Error(`approval-duplicate-source:${id}:${first}|${source.productId}`)
+      throw new Error(`approval-conflict:${id}:${first}|${source.productId}:levels=${String(previous.approvedDisruptionLevels)}|${String(entry.approvedDisruptionLevels)};bypass=${String(previous.approvedBypassQuietHours)}|${String(entry.approvedBypassQuietHours)};group=${String(previous.surfaceGroup ?? null)}|${String(entry.surfaceGroup ?? null)}`)
     }
   }
   return Object.freeze(merged)

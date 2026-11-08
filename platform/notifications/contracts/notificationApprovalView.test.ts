@@ -26,7 +26,12 @@ describe('mergeApprovalView', () => {
     expect(Object.keys(view)).toEqual([])
   })
 
-  it('throws when two sources approve the same id differently (temporary rule, pending the architect)', () => {
+  it('throws even when two sources approve the same id identically: a second source has no business approving it', () => {
+    const same = { productId: 'acme.demo', events: [], approval: { 'platform.one': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } } }
+    expect(() => mergeApprovalView([platform, same as never])).toThrow('approval-duplicate-source:platform.one')
+  })
+
+  it('throws when two sources approve the same id differently, naming both sides and each field', () => {
     // 待架构师确认：不一致时是报错还是取一边。当前写成「遇到即报错」，绝不静默挑一边。
     const conflict: NotificationEventDeclarationSource = {
       productId: 'acme.demo',
