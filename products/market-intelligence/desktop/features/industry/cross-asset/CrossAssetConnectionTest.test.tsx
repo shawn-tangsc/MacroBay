@@ -9,7 +9,8 @@ describe('cross-asset capability connection result', () => {
   it('starts only after the existing test action and cancels its own observation on unmount', async () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
-    const client = { testInterface: vi.fn(async () => ({ state: 'partial', testedAt: Date.now(), assets: { index: { rest: true, ws: false }, btc: { rest: true, ws: true }, eth: { rest: true, ws: true } } })), cancelInterfaceTest: vi.fn(async () => ({ state: 'cancelled' })) }
+    const client = { testInterface: vi.fn(async () => ({ state: 'partial', // 固定时刻：这个夹具不需要「现在」，摸系统时钟只会让同一提交的两次结果不可比。
+      testedAt: Date.parse('2026-11-09T00:00:00.000Z'), assets: { index: { rest: true, ws: false }, btc: { rest: true, ws: true }, eth: { rest: true, ws: true } } })), cancelInterfaceTest: vi.fn(async () => ({ state: 'cancelled' })) }
     await act(async () => root.render(createElement(CrossAssetConnectionTest, { client: client as never, text, requestId: 0 })))
     expect(client.testInterface).not.toHaveBeenCalled()
     await act(async () => root.render(createElement(CrossAssetConnectionTest, { client: client as never, text, requestId: 1 })))
