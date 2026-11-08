@@ -25,11 +25,14 @@ let getNotificationPushTargets: (() => Promise<readonly unknown[]>) | null = nul
 let notificationPushHook: DeliveryHooks['push'] | null = null
 let notificationProducerOwnership: NotificationProducerOwnership | null = null
 let notificationProductIds: readonly string[] | null = null
-/** 这两个端口是「一旦装配就固定」的，用一个小对象收着，免得再加两个模块级变量。 */
-const resolutionDeps: {
-  resolvePushChannel: (() => Promise<PushChannelResolution>) | null
-  testNoticeCandidates: null
-} = { resolvePushChannel: null, testNoticeCandidates: null }
+/**
+ * 推送目标的派生入口（技术方案 §1）：装配期注入，**必须转发进运行时**。
+ *
+ * 2026-11-08 的线上事故：它原来住在一个只写不读的 `resolutionDeps` 对象里，运行时那三处
+ * （主推送 / 自检 / 重投）拿到 `undefined` 后各自兜底成 `NO_PUSH_CHANNEL`——通道明明
+ * `runtime-ready`，推送却整程 `push-unavailable`、通道投递记录 0 条。存进去不等于接上。
+ */
+let notificationPushResolver: (() => Promise<PushChannelResolution>) | null = null
 
 export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
@@ -62,7 +65,7 @@ export function configureNotificationRuntime(deps: {
   notificationDiagnostics = deps.diagnostics
   updateNotificationSettings = deps.updateSettings ?? null
   getNotificationPushTargets = deps.getPushTargets ?? null
-  resolutionDeps.resolvePushChannel = deps.resolvePushChannel ?? null
+  notificationPushResolver = deps.resolvePushChannel ?? null
   notificationPushHook = deps.push ?? null
   notificationProducerOwnership = deps.producerOwnership ?? null
   notificationProductIds = deps.productIds ?? null
@@ -132,6 +135,10 @@ export function getNotificationRuntime() {
       diagnostics: notificationDiagnostics,
       updateSettings: updateNotificationSettings ?? undefined,
       getPushTargets: getNotificationPushTargets ?? undefined,
+      // **推送目标的派生入口必须进运行时**（2026-11-08 线上事故）：它原来只写不读，运行时这边
+      // 拿到 `undefined` 后各自兜底成 `NO_PUSH_CHANNEL`——于是每条通知写 `failed / push-unavailable`、
+      // push 端口一次不被调用，而通道页的测试消息走另一条路照样能发。接线只有这一根。
+      ...(notificationPushResolver === null ? {} : { resolvePushChannel: notificationPushResolver }),
       producerOwnership: notificationProducerOwnership ?? undefined,
       productIds: notificationProductIds ?? undefined,
       deliveryHooks: {
@@ -166,4 +173,5 @@ export function resetNotificationRuntimeForTests(): void {
   notificationPushHook = null
   notificationProducerOwnership = null
   notificationProductIds = null
+  notificationPushResolver = null
 }
