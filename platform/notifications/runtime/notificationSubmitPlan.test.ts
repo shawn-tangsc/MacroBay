@@ -5,20 +5,18 @@ import type { NotificationSubmitRequest } from '../contracts/notificationContrac
 import { planNotificationSubmit } from './notificationSubmitPlan'
 import { externalActionUrl } from '../delivery/channelPushPort'
 
-const policy: NotificationEventPolicy = {
-  'platform.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.ready': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
-  'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.title-variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.raw': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'other-product.thing': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
-}
-
 const catalog = createNotificationEventCatalog({
-  policy,
+  // 批准值随声明走（b2）：值原样。
   sources: [
     {
       productId: 'platform',
+      approval: {
+        'platform.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+        'platform.ready': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+        'platform.variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        'platform.title-variant': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+        'platform.raw': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+      },
       events: [
         {
           id: 'platform.failed',
