@@ -247,7 +247,9 @@ describe('PLAT-60 two-dimension web search settings', () => {
     expect(text).toContain(`${labels.drawerTitle('Jina')}`)
     expect(text).toContain(labels.enableProvider)
     expect(text).toContain(labels.apiKey)
-    expect(text).toContain(labels.drawerDefaultHint)
+    // 说明句不在抽屉正文/标题行里：改挂在 ⓘ 上，点开才读得到。
+    expect(text).not.toContain(labels.drawerDefaultHint)
+    expect(drawer?.querySelector(`button[aria-label="${labels.drawerDefaultHintInfo}"]`)).not.toBeNull()
     expect(text).not.toContain(labels.compression)
     expect(text).not.toContain(labels.blacklist)
     expect(text).not.toContain(labels.maxResults)

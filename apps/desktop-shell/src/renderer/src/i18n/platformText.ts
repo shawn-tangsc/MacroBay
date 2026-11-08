@@ -332,6 +332,8 @@ export type PlatformText = {
     channelLogsReadFailed: string
     channelLogsReadFailedHint: string
     channelLogsFooter: string
+    /** 记录范围那颗 ⓘ 的读屏名。 */
+    channelLogsFooterInfo: string
     /** 面板标题下那一行：时间口径声明；时区由 `formatShellTimeZoneLabel` 算，不写死。 */
     channelLogsTimeZone: string
     /** 闭集里查不到的码：只写这一句，原始码不上屏。 */
@@ -531,6 +533,8 @@ export type PlatformText = {
     assistantPrompt: string
     /** 设置抽屉不再重复选模型：模型统一在助手页顶部选择器切换。 */
     modelSwitchHint: string
+    /** 模型切换那颗 ⓘ 的读屏名。 */
+    modelSwitchHintInfo: string
     enableTemperature: string
     temperature: string
     streamOutput: string
@@ -542,6 +546,7 @@ export type PlatformText = {
     mcpModeUnavailableHint: string
     enableWebSearch: string
     webSearchHint: string
+    webSearchHintInfo: string
     comingSoon: string
     mentionedModels: string
     /** 提及选择器不可用时的回执：带下一步（先选模型）。 */
@@ -1371,6 +1376,8 @@ export type PlatformText = {
     deferredProviderHint: string
     drawerTitle: (name: string) => string
     drawerDefaultHint: string
+    /** 只读说明那颗 ⓘ 的读屏名。 */
+    drawerDefaultHintInfo: string
     toggleImmediateHint: string
     builtinApiHost: string
     capabilityJoin: string
@@ -1759,6 +1766,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsReadFailed: '日志没读出来。',
       channelLogsReadFailedHint: '已有的记录不会因此丢失，这次只是没读到。',
       channelLogsFooter: '记录连接的启动与停止、引起中断的错误，以及最近一次发送失败；不记录每一次轮询。',
+      channelLogsFooterInfo: '记录范围说明',
       channelLogsTimeZone: '时间均为 {zone}',
       channelLogsUnknownCode: '没有更多说明',
       channelLogOperationPrefix: '操作：',
@@ -1962,6 +1970,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       assistantName: '助手名称',
       assistantPrompt: '系统提示词',
       modelSwitchHint: '模型在助手页顶部的模型选择器里切换。',
+      modelSwitchHintInfo: '模型切换说明',
       enableTemperature: '启用温度',
       temperature: '温度',
       streamOutput: '流式输出',
@@ -1972,6 +1981,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       mcpModeUnavailableHint: '助手的 MCP 执行尚未接入，此处设置暂不生效；需要 MCP 请使用智能体。',
       enableWebSearch: '启用网页搜索',
       webSearchHint: '允许此助手调用当前互联网搜索与网页读取工具。',
+      webSearchHintInfo: '联网搜索说明',
       comingSoon: '即将推出',
       mentionedModels: '提及模型',
       mentionedModelsMissingHint: '先选择一个模型',
@@ -2736,6 +2746,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       deferredProviderHint: '已规划，当前版本还不能用。',
       drawerTitle: (name) => `配置 · ${name}`,
       drawerDefaultHint: '只读：默认能力在「策略」里设置',
+      drawerDefaultHintInfo: '默认能力说明',
       toggleImmediateHint: '点一下立即生效',
       builtinApiHost: '内置地址，不可改',
       capabilityJoin: ' · ',
@@ -3111,6 +3122,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsReadFailed: 'The log could not be read.',
       channelLogsReadFailedHint: 'Existing records are not lost; this read just failed.',
       channelLogsFooter: 'Records when the connection starts and stops, the errors that interrupt it, and the last failed send; every poll is not recorded.',
+      channelLogsFooterInfo: 'Log scope explanation',
       channelLogsTimeZone: 'All times are in {zone}',
       channelLogsUnknownCode: 'No further explanation',
       channelLogOperationPrefix: 'Operation: ',
@@ -3310,6 +3322,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       assistantName: 'Assistant name',
       assistantPrompt: 'System prompt',
       modelSwitchHint: 'Switch the model from the picker at the top of the assistant page.',
+      modelSwitchHintInfo: 'Model switch explanation',
       enableTemperature: 'Enable temperature',
       temperature: 'Temperature',
       streamOutput: 'Stream output',
@@ -3321,6 +3334,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Assistant-side MCP execution is not connected yet, so this setting has no effect. Use an agent when you need MCP.',
       enableWebSearch: 'Enable web search',
       webSearchHint: 'Allow this assistant to use current web search and web page fetch tools.',
+      webSearchHintInfo: 'Web search explanation',
       comingSoon: 'Coming soon',
       mentionedModels: 'Mentioned models',
       mentionedModelsMissingHint: 'Select a model first',
@@ -4098,6 +4112,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       deferredProviderHint: 'Planned, but not usable in this version.',
       drawerTitle: (name) => `Configure · ${name}`,
       drawerDefaultHint: 'Read-only: default capabilities are set in Policy',
+      drawerDefaultHintInfo: 'Default capabilities explanation',
       toggleImmediateHint: 'Takes effect immediately',
       builtinApiHost: 'Built-in address, read-only',
       capabilityJoin: ' · ',

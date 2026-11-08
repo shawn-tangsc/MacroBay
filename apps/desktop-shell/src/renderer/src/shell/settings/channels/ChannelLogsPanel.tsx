@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
 import { LoadingState } from '@platform/ui/components/loading'
+import { SettingInfoPopover } from '../SettingInfoPopover'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock, formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import type { PlatformText } from '../../../i18n/platformText'
@@ -117,7 +118,6 @@ export function ChannelLogsPanel(props: {
           <p className="channel-log-state" role="note">
             {labels.channelLogsEmptyTitle}
           </p>
-          <p className="channel-log-hint">{labels.channelLogsEmptyHint}</p>
         </>
       )
     }
@@ -136,7 +136,6 @@ export function ChannelLogsPanel(props: {
             </li>
           ))}
         </ul>
-        <p className="channel-log-footer">{labels.channelLogsFooter}</p>
       </>
     )
   }
@@ -151,6 +150,18 @@ export function ChannelLogsPanel(props: {
       resolveText={(key) => (key === 'settings.channels.logs' ? labels.channelLogsTitle : '')}
       footer={null}
     >
+      {/*
+        * 两句说明（记录范围、以及「空态时会出现在这里的是什么」）收进标题这颗 ⓘ：
+        * 面板正文只留状态行与记录本身。是移出 DOM，不是藏起来。
+        */}
+      <div className="channel-log-header">
+        <SettingInfoPopover
+          hintKeys={['channelLogsFooter', 'channelLogsEmptyHint']}
+          infoLabelKey="channelLogsFooterInfo"
+          resolveText={(key: string) => (labels as unknown as Record<string, string>)[key] ?? ''}
+        />
+      </div>
+
       {state.status === 'ready' && state.rows.length > 0 ? (
         <div className="channel-log-toolbar">
           <IconButton

@@ -20,7 +20,9 @@ describe('AssistantSettingsDrawer', () => {
       />
     )
 
-    expect(markup).toContain(labels.modelSwitchHint)
+    // 说明句不在正文里，改挂在 ⓘ 上（点开才读得到）。
+    expect(markup).not.toContain(labels.modelSwitchHint)
+    expect(markup).toContain(`aria-label="${labels.modelSwitchHintInfo}"`)
     // 同一概念只留一处：设置抽屉里不再有模型下拉（只有那行说明）。
     expect(markup).toContain('data-assistant-model-note')
     expect(markup).not.toContain('默认模型')

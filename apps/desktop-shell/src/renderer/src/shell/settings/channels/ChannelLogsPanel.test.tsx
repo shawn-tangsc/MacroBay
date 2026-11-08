@@ -234,7 +234,9 @@ describe('the channel log panel', () => {
     })
 
     expect(container.textContent).toContain(labels.channelLogsEmptyTitle)
-    expect(container.textContent).toContain(labels.channelLogsEmptyHint)
+    // 说明句不在正文里：空态只留状态行 + 标题那颗 ⓘ。
+    expect(container.textContent).not.toContain(labels.channelLogsEmptyHint)
+    expect(container.querySelector(`button[aria-label="${labels.channelLogsFooterInfo}"]`)).not.toBeNull()
     expect(container.querySelector('.channel-log-toolbar')).toBeNull()
   })
 

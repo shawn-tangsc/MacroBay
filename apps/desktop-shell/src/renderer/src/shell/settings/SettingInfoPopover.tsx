@@ -21,14 +21,18 @@ import { Popover } from '@platform/ui/components/popover'
  */
 export function SettingInfoPopover(props: Readonly<{
   /** 说明句的键：句子由调用方解析，本组件零文案。 */
-  hintKey: string
+  hintKey?: string
+  /** 一个 ⓘ 底下挂多句（同一件事的两层说明）时用它；与 `hintKey` 二选一。 */
+  hintKeys?: readonly string[]
   /** 触发件的读屏名（「代理设置说明」这类）。 */
   infoLabelKey: string
   resolveText: (key: string) => string
 }>): ReactElement {
   return (
     <Popover
-      labelKey={props.hintKey}
+      {...(props.hintKeys === undefined
+        ? { labelKey: props.hintKey ?? '' }
+        : { lines: props.hintKeys.map((key) => ({ labelKey: key })) })}
       resolveText={props.resolveText}
       trigger={(triggerProps) => (
         <IconButton

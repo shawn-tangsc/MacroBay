@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 
 import type { AssistantEntity, AssistantMcpMode } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import type { PlatformText } from '../../i18n/platformText'
+import { SettingInfoPopover } from '../settings/SettingInfoPopover'
 
 /**
  * 两个元素各用各的键：主抽屉与「还没加载出来」那一档今天写着同一句话，但它们是两个元素，
@@ -128,9 +129,14 @@ export function AssistantSettingsForm({
           onChange={(event) => onPromptChange(event.target.value)}
         />
       </label>
-      <p className="assistant-settings-note" data-assistant-model-note>
-        {labels.modelSwitchHint}
-      </p>
+      {/* 说明句收进 ⓘ：这里没有「模型」字段，所以它是一颗独立站着的说明图标（规则按有无附着物分）。 */}
+      <div className="assistant-settings-note" data-assistant-model-note>
+        <SettingInfoPopover
+          hintKey="modelSwitchHint"
+          infoLabelKey="modelSwitchHintInfo"
+          resolveText={(key: string) => (labels as unknown as Record<string, string>)[key] ?? ''}
+        />
+      </div>
 
       <div className="assistant-settings-toggle">
         <span>{labels.enableTemperature}</span>
@@ -184,13 +190,19 @@ export function AssistantSettingsForm({
       </p>
 
       <div className="assistant-settings-toggle">
-        <span>{labels.enableWebSearch}</span>
+        <span>
+          {labels.enableWebSearch}
+          <SettingInfoPopover
+            hintKey="webSearchHint"
+            infoLabelKey="webSearchHintInfo"
+            resolveText={(key: string) => (labels as unknown as Record<string, string>)[key] ?? ''}
+          />
+        </span>
         <Switch
           checked={settings.enableWebSearch}
           onChange={(checked) => onSettingsChange({ ...settings, enableWebSearch: checked })}
         />
       </div>
-      <p className="status-line">{labels.webSearchHint}</p>
     </div>
   )
 }
