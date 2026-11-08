@@ -37,8 +37,9 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).toContain('从来没有创建过，先创建一个')
     expect(markup).toContain('每天早上 9 点总结行情')
     expect(markup).toContain('平台与产品资源任务')
-    // 资源任务由产品注册，读者在这一屏改不了；原因是「一个都没启用」，不是「等着就会来」。
-    expect(markup).toContain('一个都还没有启用，先启用一个')
+    // 空 profile 里一个产品都没装：资源任务这一格是 `not-yet`，**不给按钮**
+    //（「去启用」在没装产品时点了也无处可去）。装了产品但没启用那一支由区段用例覆盖。
+    expect(markup).toContain('还没有发生过；等有数据进来后这里就会出现')
     expect(markup).toContain('执行策略')
     expect(markup).toContain('当前没有自动任务，策略会在任务开始运行后生效。')
     expect(markup).not.toContain('没有匹配的任务。')

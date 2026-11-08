@@ -31,7 +31,7 @@ describe('TaskAutomationResourceJobsSection filters', () => {
         job({ id: 'b', title: 'Beta collect', productId: 'market-intelligence' }),
         job({ id: 'c', title: 'Beta digest', productId: 'market-intelligence' })
       ],
-      productNames: { 'market-intelligence': 'Market Intelligence' },
+      productNames: { 'market-intelligence': 'Market Intelligence' } as Record<string, string>,
       reload: vi.fn()
     }
     const container = document.createElement('div')
@@ -242,6 +242,30 @@ describe('TaskAutomationResourceJobsSection source names', () => {
   })
 })
 
+describe('TaskAutomationResourceJobsSection empty states', () => {
+  /**
+   * 「没启用」有两种，动作不同：读者自己关掉的可以「去启用」；一个产品都没有时本屏给不出动作，
+   * 换 `not-yet` 且不挂按钮——点进去发现那里也不能解决问题，比没有按钮更糟。
+   */
+  it('offers the enable action when products are installed but nothing is registered', async () => {
+    const container = await renderSection(controllerWith([]))
+
+    expect(container.querySelector('[data-state="empty"]')).not.toBeNull()
+    expect(container.textContent).toContain('一个都还没有启用')
+    // 动作行由 StateView 自己渲染（`.state-view__action`），文案归平台词表。
+    expect(container.querySelector('.state-view__action')).not.toBeNull()
+  })
+
+  it('drops the action and uses the plain not-yet code when no product is installed', async () => {
+    const controller = { ...controllerWith([]), productNames: {} }
+    const container = await renderSection(controller)
+
+    expect(container.querySelector('[data-state="empty"]')).not.toBeNull()
+    expect(container.textContent).toContain('还没有发生过')
+    expect(container.querySelector('.state-view__action')).toBeNull()
+  })
+})
+
 function jobs18(): JobScheduleView[] {
   return Array.from({ length: 18 }, (_, index) => job({
     id: `job-${index + 1}`,
@@ -257,7 +281,7 @@ function controllerWith(items: JobScheduleView[]) {
     error: false,
     errorReason: null as ResourceJobSchedulesErrorReason | null,
     items,
-    productNames: { 'market-intelligence': 'Market Intelligence' },
+    productNames: { 'market-intelligence': 'Market Intelligence' } as Record<string, string>,
     reload: vi.fn()
   }
 }
