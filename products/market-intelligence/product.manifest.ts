@@ -49,7 +49,7 @@ function notificationEvent(
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.4.0',
+  version: '0.4.1',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [

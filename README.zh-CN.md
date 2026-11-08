@@ -201,7 +201,7 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.4.0`）。macOS 是已验证平台。面板仍需你自己的供应商凭据；读不到的数据
+MacroBay 目前是 **alpha**（`0.4.1`）。macOS 是已验证平台。面板仍需你自己的供应商凭据；读不到的数据
 会如实报成缺口。macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
 运行态尚未验证，Linux 尚未配置打包。详见
 [状态与限制](./docs/reference/status-and-limitations.zh-CN.md)。
