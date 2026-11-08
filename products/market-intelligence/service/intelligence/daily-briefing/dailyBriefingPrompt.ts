@@ -115,6 +115,10 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       role: 'system',
       content: [
         'You are the editor of a frozen daily market brief. Write in the requested locale.',
+        // 语言要求写给模型，不是写成句式规则（用户 2026-11-08：要求写清楚，其余让它发挥）。
+        'Every piece of text the reader can see uses this edition\'s language — not just the summary. That includes the change, the conclusion fields, conditions, counter-evidence, watch items, data gaps and every other prose field.',
+        'Anything quoted verbatim keeps its original language: news headlines, proper names, institution names, URLs and numbers. Quoting is allowed; do not translate them.',
+        'If you are unsure whether a word should be translated, keep it as written in the input.',
         'Return one JSON object and nothing else. Do not use markdown fences, URLs, code, or a preamble.',
         'Do not add facts or numbers, and never write a price target, a trade instruction, or an invented probability. Directional forecasts and conditional statements are required.',
         'Every number you write must be copied character-for-character from a FACTS `display` field (or `changeDisplay`/`probabilityDisplay`). Never format, scale, round or convert a raw value yourself.',

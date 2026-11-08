@@ -27,8 +27,9 @@ for (const row of parsed) {
     report.push({ date: row.edition_date, period: row.period_id, locale: row.locale, unreadable: true })
     continue
   }
-  // 先不带白名单扫一遍：命中集要人工过，判断每一条是不是"该拒的"。
-  const breaches = briefingTextBreaches({ document, locale: row.locale })
+  // 来源数据白名单：逐字来自输入的串（新闻 id、原标题、来源名、URL、事件键/名）。
+  // 注意：这是**测量用的近似**——上线时这份清单必须由构建器从输入事实生成，而不是从文档读回来。
+  const breaches = briefingTextBreaches({ document, locale: row.locale, sourceTexts: sourceTextsOf(document) })
   report.push({
     date: row.edition_date,
     period: row.period_id,
@@ -37,3 +38,22 @@ for (const row of parsed) {
   })
 }
 console.log(JSON.stringify(report, null, 2))
+
+/** 从文档里取"逐字来自输入"的那几类串，作为测量用的来源白名单。 */
+function sourceTextsOf(document: unknown): readonly string[] {
+  const found: string[] = []
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') return
+    if (Array.isArray(value)) { value.forEach(visit); return }
+    if (value === null || typeof value !== 'object') return
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof entry === 'string' && /^(?:itemId|sourceId|id|url|eventKey|titleKey|label|sourceLabel|title|countryName)$/u.test(key)) {
+        found.push(entry)
+        continue
+      }
+      visit(entry)
+    }
+  }
+  visit(document)
+  return found
+}
