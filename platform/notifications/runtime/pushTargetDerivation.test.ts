@@ -11,14 +11,12 @@ import { resolvePushChannel } from '../delivery/pushChannelResolution'
  * 目标通道只有一个派生入口，三处读点（主推送 / 严重度升级 / 手动重投）都用它，
  * `push.channelId` 这条旧路**一处也不许再读**，多目标一律拒绝、没有「最近活跃」兜底。
  */
-const policy: NotificationEventPolicy = {
-  'platform.failed': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
-}
 
 const catalog = createNotificationEventCatalog({
-  policy,
   sources: [{
     productId: 'platform',
+    // 批准值随声明走（b2）：同一条批准，值逐字不变。
+    approval: { 'platform.failed': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } },
     events: [{
       id: 'platform.failed',
       titleKey: 'notification.taskFailed.title',
