@@ -32,6 +32,7 @@ import type {
 import { createNotificationId } from '../store/notificationStore'
 import { isInsideQuietHours } from './quietHours'
 import { resolveSubmitSurfaces, type NotificationSurfaceDecision } from './notificationSurfaceDecision'
+import { applySurfaceNarrowing, effectiveLevels } from './notificationSurfaceLevels'
 
 
 export type NotificationSubmitPlan =
@@ -51,6 +52,8 @@ export type NotificationSubmitPlan =
     }
   | {
       kind: 'merge'
+      /** 本次提交真正排上的档位（用于判「第二次是否更宽」）。 */
+      levels: readonly NotificationApprovedLevel[]
       duplicate: NotificationRecord
       incoming: NotificationRequest
       /** `condition` 窗口内再提交算「又一次」；`occurrence` 的重复上报不计数。 */
@@ -64,20 +67,10 @@ export type NotificationSubmitPlanInput = {
   desktopSupported: boolean
   request: NotificationSubmitRequest
   duplicate?: NotificationRecord
-  /**
-   * 今天（**UTC 自然日**）这个事件已经落了几条、最近一条是什么时候。
-   *
-   * 由调用方从通知记录本身数出来（`countSameEventToday`），不是一个单独的计数器：
-   * 计数器和记录各说一套，就是两套账。缺省视为「今天还没有」。
-   */
+  /** 今天（**UTC 自然日**）这个事件已落几条、最近一次何时：由调用方从记录数出，不另设计数器。 */
   sameEventToday?: Readonly<{ count: number; lastOccurredAt: string | null }>
   now: string
-  /**
-   * 读者时区（`clock.timeZone()`），免打扰窗口按它算，不按这台机器的本地时间。
-   *
-   * 拿不到/用不了时 `quietHours.ts` 判成 `unknown`，**不静音**（验收 S6 原话）——宁可多响一次，
-   * 也不在错的钟点把提醒吞掉。手机那一档的判定也走这里，所以两处不会各说一套。
-   */
+  /** 读者时区（`clock.timeZone()`）：免打扰按它算；拿不到时判 `unknown` 且**不静音**（宁可多响一次）。 */
   timeZone: string
 }
 
@@ -215,6 +208,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   if (input.duplicate) {
     return {
       kind: 'merge',
+      levels,
       duplicate: input.duplicate,
       incoming,
       incrementCount: entry.dedupeUnit === 'condition'
@@ -401,18 +395,6 @@ function crossProductPrefix(
  * 生效表面 = 批准 ∩ 开关（桌面优先互斥）。手机那一档仍按批准：**投递层**还要再判
  * 「频道事件表勾了 ∩ 频道启用 ∩ 频道可用」，两处各判自己那一半，不在这里替它猜。
  */
-function effectiveLevels(
-  /** 三面判定结果（`decideNotificationSurfaces`）：批准 ∩ 开关 ∩ 选择已经算完。 */
-  surfaces: NotificationSurfaceDecision,
-  /** 免打扰之外才排手机：窗口内只进中心（S6），不是本机开关的事。 */
-  channelAllowed: boolean
-): readonly NotificationApprovedLevel[] {
-  const levels: NotificationApprovedLevel[] = ['center']
-  if (surfaces.desktop) levels.push('desktop')
-  if (surfaces.toast) levels.push('toast')
-  if (channelAllowed && surfaces.channel) levels.push('channel')
-  return Object.freeze(levels)
-}
 
 /**
  * 「看原文」的地址在**进记录那一刻规范化一次**，之后中心按钮与手机末尾那一行读的是同一个值。
@@ -500,6 +482,7 @@ function createRecord(
     ...(request.reasonParams === undefined ? {} : { reasonParams: request.reasonParams }),
     severity: request.severity ?? 'info',
     priority: 'normal',
+    appliedLevels: [...levels],
     channels: localChannels.length > 0 ? [...localChannels] : ['center'],
     state: 'unread',
     ...(request.deeplink === undefined ? {} : { deeplink: request.deeplink }),

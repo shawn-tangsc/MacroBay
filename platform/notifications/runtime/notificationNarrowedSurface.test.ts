@@ -52,7 +52,38 @@ function harness() {
   return { runtime, state: () => state }
 }
 
+function harnessWithDiagnostics() {
+  let state: any = { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
+  const entries: { code: string; eventTypeId?: string }[] = []
+  const runtime = createNotificationRuntime({
+    storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { state = JSON.parse(JSON.stringify(next)) } },
+    catalog: createNotificationEventCatalog({
+      policy: NOTIFICATION_EVENT_POLICY,
+      sources: [
+        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS },
+        { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }
+      ]
+    }),
+    diagnostics: (entry) => entries.push(entry),
+    resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
+    getSettings: async () => settings,
+    clock,
+    deliveryHooks: { push: async (record) => ({ ok: true, messageId: record.id }) }
+  })
+  return { runtime, state: () => state, entries }
+}
+
 describe('narrowedDisruptionLevels', () => {
+  it('keeps the first narrowing and logs exactly one diagnostic when a later submission is wider', async () => {
+    const { runtime, state, entries } = harnessWithDiagnostics()
+    await runtime.submit(request({ narrowedDisruptionLevels: ['center'] }))
+    // 同一键第二次提交不传收窄（＝按批准全档）：合并**不升级**，仍按第一次只进中心。
+    await runtime.submit(request())
+    expect(state().records).toHaveLength(1)
+    expect(state().records[0].appliedLevels).toEqual(['center'])
+    expect(entries.filter((entry) => entry.code === 'narrowing-widened')).toHaveLength(1)
+  })
+
   it('narrows to the centre only, and the phone leg is not even planned', async () => {
     const { runtime, state } = harness()
     await runtime.submit(request({ narrowedDisruptionLevels: ['center'] }))

@@ -407,6 +407,8 @@ export const marketIntelligenceProductManifest = {
       dedupeUnit: 'occurrence',
       // 模块每天 4 条（两条推送合计）——与 `analysisConclusionPushPolicy.moduleDailyLimit` 同数：
       // 没有上限就批 channel，等于把结论推送接到信号量上（一次行情抖动就是三条同向结论）。
+      // **不声明 `minimumGapMs`**：代码里没有这个数，编一个就是第二个没有出处的阈值；
+      // 「同一触发键每天 1 条」由去重键（`triggerKey`+`cutoff`）保证，不靠间隔。
       dailyLimit: 4,
       // 不穿免打扰：这条说"结论出来了"，不是必须立刻打断读者的那种事。
       requestedBypassQuietHours: false

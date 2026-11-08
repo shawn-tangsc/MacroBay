@@ -1,6 +1,4 @@
 import { readJsonFileRecovering, writeJsonFileAtomically } from '../../storage/jsonFileStorage'
-
-
 import type { JsonFileStorage } from '../../storage/jsonFileStorage'
 import {
   acknowledgeNotification,
@@ -60,6 +58,7 @@ import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushCha
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeSelfTestSurface } from './notificationSelfTestSurface'
 import { readTestNoticeCandidates } from './testNoticeCandidatesSlot'
+import { reportNarrowingWidened } from './notificationNarrowingTrace'
 import type { TestNoticeCandidatePort } from '../contracts/notificationSelfTest'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
@@ -108,7 +107,7 @@ export type NotificationRuntimeDependencies = {
   deliveryHooks?: DeliveryHooks
   /** 事件目录（契约 §2）。装配层注入；没有目录时新提交路径一律 rejected: unknown-event-type。 */
   catalog?: NotificationEventCatalog
-  /** 诊断出口（runtime §2）：**必传**。漏传时「能记但没人接」＝根本没留痕，宁可装配时编译红。 */
+  /** 诊断出口（runtime §2）：**必传**——漏传时「能记但没人接」＝根本没留痕。 */
   diagnostics: NotificationDiagnosticsSink
   /** 生产者归属表（契约 §14）：未登记 → 平台发；让渡给产品 → 平台不发，只记诊断。 */
   producerOwnership?: NotificationProducerOwnership
@@ -241,8 +240,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     })
     if (first.kind === 'rejected') {
       // 被上限/冷却拦下的那一条不能凭空消失：「今天还出过一次」要落到今天最后那条同事件记录上，
-      // 读者看到的是「共 N 次」，排障在记录里读到 `lastSuppressedReason`。
-      // 没有任何同事件记录可落（例：今天第一条就被冷却拦住）才原样返回拒收。
+      // 读者看到「共 N 次」，排障在记录里读到 `lastSuppressedReason`；没有可折叠记录才原样拒收。
       if (first.outcome.reason === 'daily-limit-reached' || first.outcome.reason === 'minimum-gap-active') {
         const folded = foldSuppressedIntoLatest({
           records: state.records,
@@ -287,6 +285,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     if (plan.kind === 'rejected') return plan.outcome
 
     if (plan.kind === 'merge') {
+      reportNarrowingWidened({ duplicate: plan.duplicate, levels: plan.levels, eventTypeId: request.eventTypeId, diagnostics: deps.diagnostics, at: now })
       const merged = mergeDuplicateNotification(plan.duplicate, plan.incoming, now, {
         incrementCount: plan.incrementCount
       })

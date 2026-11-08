@@ -127,6 +127,11 @@ export type NotificationRecord = {
   /** 「为什么推了」的键与参数；端口拿解析后的句子，不自己拼。 */
   reasonKey?: NotificationCopyKey
   reasonParams?: Record<string, NotificationCopyParam>
+  /**
+   * **首次定档**：建记录时写一次，是「这次真正排上了哪几档」的快照；合并**不改写**（它是事实，不是状态）。
+   * 老记录没有这一项时，读侧按 `channels + delivery.push` 推断一次——那是兼容用的推断，不是权威。
+   */
+  appliedLevels?: readonly NotificationApprovedLevel[]
   severity: NotificationSeverity
   priority: NotificationPriority
   channels: NotificationChannel[]
