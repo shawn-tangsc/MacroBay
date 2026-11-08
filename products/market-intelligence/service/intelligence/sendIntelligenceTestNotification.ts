@@ -20,7 +20,9 @@ import { readSentimentTestCandidate } from './news-sentiment/newsSentimentTestCa
 import {
   buildCalendarLandedTestRequest,
   buildCalendarUpcomingTestRequest,
-  buildSentimentTestRequest
+  buildSentimentTestRequest,
+  buildIntelligenceTestRequest,
+  type TestNotificationPayload
 } from './notificationTestRequests'
 
 /**
@@ -52,7 +54,7 @@ export type IntelligenceTestDeps = Readonly<{
 }>
 
 type CandidateRead =
-  | Readonly<{ kind: 'request'; request: NotificationSubmitRequest }>
+  | Readonly<{ kind: 'request'; payload: TestNotificationPayload }>
   | Readonly<{ kind: 'no-data'; reasonCode: Extract<IntelligenceTestReceipt, { state: 'no-data' }>['reasonCode'] }>
   | Readonly<{
     kind: 'unavailable'
@@ -74,7 +76,8 @@ export async function sendIntelligenceTestNotification(
   if (read.kind === 'no-data') return { state: 'no-data', reasonCode: read.reasonCode }
   if (read.kind === 'unavailable') return { state: 'unavailable', reasonCode: read.reasonCode }
 
-  const outcome = await deps.submit(read.request)
+  // 实参是**构造函数调用**：事件 id 在那个函数体里是字面量，生产者门禁能静态判出这一处提交的是什么。
+  const outcome = await deps.submit(buildIntelligenceTestRequest(kind, read.payload))
   // 提交被拒也是「没发出去」：按闭集里最接近的一档回（`read-failed`），不新造码、不报成功。
   if (outcome.kind === 'rejected') return { state: 'unavailable', reasonCode: 'read-failed' }
   return { state: 'sent', channelId: channel.channelId, channelName: channel.channelName }
@@ -111,7 +114,7 @@ async function readSentiment(deps: IntelligenceTestDeps, now: string): Promise<C
     // 读者要的是**时钟**（它自己取当下），不是已经取好的那一串：传字符串会在它内部当场炸。
     now: () => now
   })
-  if (result.kind === 'candidate') return { kind: 'request', request: buildSentimentTestRequest(result, now) }
+  if (result.kind === 'candidate') return { kind: 'request', payload: buildSentimentTestRequest(result, now) }
   if (result.kind === 'none') return { kind: 'no-data', reasonCode: 'sentiment-none' }
   if (result.kind === 'source-disabled') return { kind: 'unavailable', reasonCode: 'source-disabled' }
   // 时区读不到是**另一件事**：窗口算不出来，让读者去改时区，而不是叫他重试。
@@ -128,7 +131,7 @@ async function readUpcoming(deps: IntelligenceTestDeps, now: string): Promise<Ca
     events: deps.calendarReminder.readEvents()
   })
   if (result.kind === 'reminder' || result.kind === 'nearest-future') {
-    return { kind: 'request', request: buildCalendarUpcomingTestRequest(result, now) }
+    return { kind: 'request', payload: buildCalendarUpcomingTestRequest(result, now) }
   }
   if (result.kind === 'none-upcoming') return { kind: 'no-data', reasonCode: 'calendar-upcoming-none' }
   if (result.kind === 'source-disabled') return { kind: 'unavailable', reasonCode: 'source-disabled' }
@@ -147,7 +150,7 @@ async function readLanded(deps: IntelligenceTestDeps, now: string): Promise<Cand
     if ((page as { state?: string }).state === 'unavailable') return { kind: 'unavailable', reasonCode: 'read-failed' }
     const events = ((page as { events?: readonly CalendarLandedTestEvent[] }).events ?? [])
     const landed = calendarLandedTestCandidate({ now, source, events })
-    if (landed.kind === 'landed') return { kind: 'request', request: buildCalendarLandedTestRequest(landed, now) }
+    if (landed.kind === 'landed') return { kind: 'request', payload: buildCalendarLandedTestRequest(landed, now) }
     if (landed.kind === 'source-disabled') return { kind: 'unavailable', reasonCode: 'source-disabled' }
     if (landed.kind === 'unreadable') return { kind: 'unavailable', reasonCode: 'read-failed' }
   }

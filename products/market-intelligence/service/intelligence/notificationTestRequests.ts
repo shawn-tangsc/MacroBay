@@ -1,5 +1,10 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
+import type { IntelligenceTestKind } from '../../contracts/intelligenceNotificationTest'
+
+/** 一条测试消息的其余部分：事件 id **不在这里**，由 `buildIntelligenceTestRequest` 一处决定。 */
+export type TestNotificationPayload = Omit<NotificationSubmitRequest, 'eventTypeId'>
+
 import type {
   CalendarLandedTestCandidate,
   CalendarUpcomingTestCandidate
@@ -31,9 +36,8 @@ function rendered(zhTitle: string, zhBody: string, enTitle: string, enBody: stri
  * 事件 id 与去重键口径与**真实那条完全一致**（`sentiment-alert:{storyKey}`），区别只在
  * `namespace: 'test'`：同一条消息在测试域里发，真实域里的键一个都不占。
  */
-export function buildSentimentTestRequest(item: SentimentTestCandidateItem, now: string): NotificationSubmitRequest {
+export function buildSentimentTestRequest(item: SentimentTestCandidateItem, now: string): TestNotificationPayload {
   return {
-    eventTypeId: 'market-intelligence.sentiment.alert',
     namespace: 'test',
     dedupeVars: { builder: 'template', vars: { storyKey: item.itemId } },
     rendered: rendered(
@@ -51,11 +55,10 @@ export function buildSentimentTestRequest(item: SentimentTestCandidateItem, now:
 export function buildCalendarUpcomingTestRequest(
   candidate: Extract<CalendarUpcomingTestCandidate, { kind: 'reminder' | 'nearest-future' }>,
   now: string
-): NotificationSubmitRequest {
+): TestNotificationPayload {
   const when = candidate.scheduledAt
   const zhWhen = candidate.kind === 'reminder' ? `距开始还有 ${candidate.remainingMinutes} 分钟` : `实际时间：${when}`
   return {
-    eventTypeId: 'market-intelligence.calendar.event-upcoming',
     namespace: 'test',
     dedupeVars: { builder: 'template', vars: { eventKey: candidate.eventKey, scheduledAt: candidate.scheduledAt } },
     rendered: rendered(
@@ -73,9 +76,8 @@ export function buildCalendarUpcomingTestRequest(
 export function buildCalendarLandedTestRequest(
   candidate: Extract<CalendarLandedTestCandidate, { kind: 'landed' }>,
   now: string
-): NotificationSubmitRequest {
+): TestNotificationPayload {
   return {
-    eventTypeId: 'market-intelligence.macro.event-landed',
     namespace: 'test',
     dedupeVars: { builder: 'template', vars: { eventId: candidate.eventKey, releaseAt: candidate.scheduledAt } },
     rendered: rendered(
@@ -87,4 +89,23 @@ export function buildCalendarLandedTestRequest(
     actions: [],
     occurredAt: now
   }
+}
+
+/**
+ * 事件 id **只在这里出现一次**，而且是字面量。
+ *
+ * 为什么不让每一条构造器各写一次：生产者门禁要能静态看见「这一处提交的是什么事件」，它顺着
+ * `deps.submit(...)` 的实参去找构造函数体；把 id 藏在运行时数据里（对象属性、参数）它就判不出来，
+ * 而判不出来就等于「看起来接了、其实没人能证明」。三条消息走的是同一个提交点，id 就该在同一个地方。
+ */
+export function buildIntelligenceTestRequest(
+  kind: IntelligenceTestKind,
+  payload: TestNotificationPayload
+): NotificationSubmitRequest {
+  const eventTypeId = kind === 'sentiment'
+    ? 'market-intelligence.sentiment.alert'
+    : kind === 'calendar-upcoming'
+      ? 'market-intelligence.calendar.event-upcoming'
+      : 'market-intelligence.macro.event-landed'
+  return { ...payload, eventTypeId }
 }
