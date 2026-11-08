@@ -31,7 +31,7 @@ import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
 import { useBlsIcsImport } from './useBlsIcsImport'
 import { useMarketCalendar } from './useMarketCalendar'
 import { MarketCalendarInspector } from './MarketCalendarEvents'
-import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
+import { CalendarSourceStatusInfo, MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
 import { CalendarEventStatusPolicy } from './calendarEventStatusModel'
 import { useCalendarStatusClock } from './useCalendarStatusClock'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
@@ -366,12 +366,13 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       </header>
       {shouldShowMarketCalendarProxyNotice(market.sources) ? <NetworkProxyBanner onOpenProxySettings={openProxySettings} /> : null}
       <section className="mi-market-calendar__status" aria-live="polite">
-        <span>{text.unifiedDay.coverage.replace('{months}', gridMonths.join(' · '))}</span>
-        {market.pending ? <span>{text.market.pending}</span> : market.feedback ? <span>{text.market[market.feedback.state]}</span> : null}
+        {/* 常态说明（读取范围、刷新成功、采集时刻、更新频率）都收进那颗 ⓘ；正文只留状态。 */}
+        {market.pending ? <span>{text.market.pending}</span> : market.feedback && market.feedback.state !== 'completed' ? <span>{text.market[market.feedback.state]}</span> : null}
         {market.feedback?.failureCode === 'storage-unavailable' || market.feedback?.failureCode === 'storage-pressure' ? <span>{text.unifiedDay.storageUnavailable}</span> : null}
         {market.loading ? <LoadingState layout="inline" size="sm" label={text.market.loading} /> : null}
         {market.failure ? <span>{text.market.queryUnavailable}</span> : null}
         {market.sources.map(source => <MarketCalendarSourceStatus key={source.eventType} source={source} text={text} />)}
+        <CalendarSourceStatusInfo coverage={text.unifiedDay.coverage.replace('{months}', gridMonths.join(' · '))} sources={market.sources} text={text} />
         {market.feedback?.failureCode === 'disabled' || market.feedback?.failureCode === 'credential-not-configured' ?
           <Button size="small" onClick={openIntelligenceSourcesSettings}>{text.market.settings}</Button> : null}
       </section>

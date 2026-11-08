@@ -155,7 +155,9 @@ describe('macro economic calendar', () => {
       expect(overview.textContent).toContain('经济指标 · 刷新失败')
       expect(overview.textContent).toContain('显示上次数据')
       expect(overview.textContent).toContain('2026-08-05 08:00:00 GMT+8')
-      expect(overview.textContent).toContain('财经事件 · 刷新成功')
+      // 成功的常态串已收进 ⓘ：正文只留类别名，不再逐条写「刷新成功」。
+      expect(overview.textContent).toContain('财经事件')
+      expect(overview.textContent).not.toContain('刷新成功')
       await act(async () => container.querySelector<HTMLButtonElement>('[data-market-event]')!.click())
       expect(container.querySelector('.mi-market-calendar__inspector')?.textContent).toContain('刷新失败')
       expect(container.querySelector('[data-market-value="providerActual"]')?.textContent).toContain('暂无')
@@ -290,7 +292,10 @@ describe('macro economic calendar', () => {
     try {
       const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [] }), getEventDetail: async () => unavailableDetail() })
       await flush()
-      expect(container.querySelector('.mi-market-calendar__status')?.textContent).toContain('官方每月最多 200 条')
+      const strip = container.querySelector('.mi-market-calendar__status')!
+      expect(strip.textContent).not.toContain('官方每月最多 200 条')
+      await act(async () => strip.querySelector<HTMLButtonElement>('[aria-label="日历说明"]')!.click())
+      expect(document.body.textContent).toContain('官方每月最多 200 条')
       await act(async () => button(container, productText['zh-CN'].pages.intelligence.portal.calendar.market.refresh).click())
       await flush()
       expect(container.querySelector('.mi-market-calendar__status')?.textContent).toContain('存储受限')
@@ -610,8 +615,11 @@ describe('macro economic calendar', () => {
       // The same verdict is on the source line, with its origin and the retained-data time.
       const status = container.querySelector('.mi-market-calendar__status')?.textContent ?? ''
       expect(status).toContain(copy.market.attemptFailure['storage-pressure'])
-      expect(status).toContain(copy.market.refreshTrigger.automatic)
       expect(status).toContain(copy.market.retainedData)
+      // 触发方式是常态信息，收在 ⓘ 里：正文说「失败了、看上批数据」，ⓘ 说「这次是自动跑的」。
+      expect(status).not.toContain(copy.market.refreshTrigger.automatic)
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="日历说明"]')!.click())
+      expect(document.body.textContent).toContain(copy.market.refreshTrigger.automatic)
     } finally { spy.mockRestore() }
   })
   it('shows the same overdue cell as not-yet-published when the source answered after the release', async () => {
@@ -1910,8 +1918,11 @@ describe('macro economic calendar', () => {
     })
     await flush()
     const status = container.querySelector('.mi-market-calendar__status')?.textContent ?? ''
-    expect(status).toContain('2026-07 · 2026-08 · 2026-09')
-    expect(status).not.toContain('跨月事件覆盖可能不完整')
+    // 「读取范围」是常态说明，已收进 ⓘ：正文一个字都不该有它。
+    expect(status).not.toContain('2026-07 · 2026-08 · 2026-09')
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="日历说明"]')!.click())
+    expect(document.body.textContent).toContain('2026-07 · 2026-08 · 2026-09')
+    expect(document.body.textContent).not.toContain('跨月事件覆盖可能不完整')
   })
 })
 
