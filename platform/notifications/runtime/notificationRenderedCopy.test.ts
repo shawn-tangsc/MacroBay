@@ -89,7 +89,7 @@ describe('新形状：成品句子只挑不拼', () => {
     const { delivery, diagnostics } = harness('en-US')
     const content = await delivery.resolveContent(record({
       rendered: RENDERED,
-      eventTypeId: 'market-intelligence.signal.triggered'
+      eventTypeId: 'platform.synthetic-pick'
     }))
 
     expect(content.title).toBe('The 11/06 07:00 English edition is ready.')
