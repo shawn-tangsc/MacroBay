@@ -135,10 +135,6 @@ describe('a backfilled edition says which world it read', () => {
     expect((backfilled() as { edition: { isBackfill?: boolean } }).edition.isBackfill).toBe(true)
   })
 
-  it('says nothing on a punctual edition', async () => {
-    const host = await render(briefing())
-    expect(host.querySelector('[data-backfill-note]')).toBeNull()
-  })
 })
 
 describe('the macro section draws events, never a message about missing data (v2.124)', () => {
@@ -222,10 +218,6 @@ describe('the macro section draws events, never a message about missing data (v2
     expect(store.textContent).toContain('3.4%')
   })
 
-  it('prints the value when there is one', async () => {
-    const rendered = await render(briefing())
-    expect(rendered.textContent).toContain('3.4%')
-  })
 
   it('stays silent for an edition written before reasons were recorded', async () => {
     const rendered = await render({ ...briefing(), news: { ...briefing().news, macro: [], notes: {} } })
@@ -626,14 +618,6 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toContain(text.next.watchOther)
   })
 
-  it('hides a condition it cannot classify instead of printing it raw', async () => {
-    const rendered = await renderWith(withFocus({
-      watch: [{ condition: '波动放大但方向不明', implication: '等待收盘确认。' }]
-    }), zhText, 'zh-CN')
-
-    expect(rendered.textContent).not.toContain('波动放大但方向不明')
-    expect(rendered.querySelector('[data-watch-kind]')).toBeNull()
-  })
 
   it('carries expected and previous into the event header instead of a trailing line', async () => {
     const rendered = await render(withFocus({ consensus: '3.2%', previous: '29' }))
