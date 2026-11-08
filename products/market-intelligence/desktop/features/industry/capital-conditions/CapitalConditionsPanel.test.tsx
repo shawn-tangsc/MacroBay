@@ -390,18 +390,35 @@ describe('CapitalConditionsPanel', () => {
     expect(header.querySelectorAll('button.icon-button').length).toBe(1)
   })
 
-  // 标题行（含 ⓘ）的间距只有一格：4px，且不许用推/换行那三种写法。
+  // 标题行（含 ⓘ）：间距 4px；窄卡时**先坏动作、不拆解释**。断的是规则本身，不是「我改过了」。
   it('keeps the flow block title line at the 4px gap the rule names', () => {
     const sheet = readFileSync(
       resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
-    const rule = /\.mi-capital-conditions__etf-flow > header \{([^}]*)\}/.exec(sheet)?.[1]
-    expect(rule).toBeTruthy()
+    const ruleBody = (selector: string): string => {
+      const body = new RegExp(`${selector.replace(/[.]/g, '\\.')}\\s*\\{([^}]*)\\}`).exec(sheet)?.[1]
+      expect(body).toBeTruthy()
+      return body!
+    }
+
+    const header = ruleBody('.mi-capital-conditions__etf-flow > header')
     // 注释里的禁止说明不算命中：只在规则体内查声明。
-    expect(rule!).toMatch(/gap:\s*4px/)
-    expect(rule!).not.toMatch(/justify-content:\s*space-between/)
-    expect(rule!).not.toMatch(/margin-left:\s*auto/)
-    expect(rule!).not.toMatch(/flex-wrap:\s*wrap/)
-    expect(rule!).toMatch(/flex-wrap:\s*nowrap/)
+    expect(header).toMatch(/gap:\s*4px/)
+    expect(header).not.toMatch(/justify-content:\s*space-between/)
+    // 整行允许换行：窄卡时换的是动作。ⓘ 的「不许被推走」由下面那一组保证。
+    expect(header).toMatch(/flex-wrap:\s*wrap/)
+
+    // 标题 + ⓘ 成组且组内不换行：解释永远贴着它解释的那句话。
+    const titleGroup = ruleBody('.mi-capital-conditions__etf-flow-title')
+    expect(titleGroup).toMatch(/flex-wrap:\s*nowrap/)
+    expect(titleGroup).toMatch(/min-width:\s*72px/)
+
+    // 文字让位：标题可缩到 0 并省略；图标固定不被挤压；动作也不被挤压。
+    const title = ruleBody('.mi-capital-conditions__etf-flow-title h3')
+    expect(title).toMatch(/min-width:\s*0/)
+    expect(title).toMatch(/text-overflow:\s*ellipsis/)
+    expect(ruleBody('.mi-capital-conditions__etf-flow-title .icon-button')).toMatch(/flex:\s*none/)
+    expect(ruleBody('.mi-capital-conditions__daily-button')).toMatch(/flex:\s*none/)
+    expect(ruleBody('.mi-capital-conditions__daily-button')).toMatch(/margin-left:\s*auto/)
   })
 
   it('draws no chip at all while the rule had nothing to say', () => {

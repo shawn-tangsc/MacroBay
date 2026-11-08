@@ -181,8 +181,34 @@
 .mi-capital-conditions__etf-unavailable { color: var(--mi-dashboard-muted); font-family: inherit; font-size: 12px; text-align: left; }
 .mi-capital-conditions__etf-flow { display: grid; align-self: stretch; align-content: stretch; grid-template-rows: auto auto minmax(var(--mi-dashboard-etf-flow-chart-height), 1fr); gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
 /* 标题行内的 ⓘ 紧跟标题文字：这一行按规范用 4px（块间距 8px 仍归 `--mi-dashboard-etf-flow-block-gap`，
-   那是这一块与图例/图之间的竖直间距，不是标题行内的间距）。 */
-.mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+   那是这一块与图例/图之间的竖直间距，不是标题行内的间距）。
+
+   窄卡时的优先级：**先坏动作，不拆解释**。标题与 ⓘ 分成一组（组内 nowrap），动作是兄弟且
+   `flex: none`；整行允许换行，于是动作整颗折到下一行仍贴右，而 ⓘ 永远贴着它解释的标题。
+   `margin-left: auto` 只在动作上——那条禁令针对的是把**解释图标**甩出行，不是主动作靠右。 */
+.mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+.mi-capital-conditions__etf-flow-title {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+  /* 约六个汉字（12px × 6）——标题再窄就说明该让动作换行了，而不是继续挤解释。 */
+  min-width: 72px;
+  flex-wrap: nowrap;
+}
+
+/* 文字负责让位：它截断，图标不动。 */
+.mi-capital-conditions__etf-flow-title h3 {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mi-capital-conditions__etf-flow-title .icon-button { flex: none; }
+.mi-capital-conditions__etf-flow-title .mi-capital-conditions__chart-window { flex: none; }
 .mi-capital-conditions__etf-flow h3 { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; }
 .mi-capital-conditions__chart-window { color: var(--mi-dashboard-muted); font-size: 10px; }
 .mi-capital-conditions__etf-flow > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -233,7 +259,7 @@
 /* The trigger sits at the right end of the title row as a bordered small button: border, hover and
    focus come from the antd button tokens, so only the geometry and the pushed-right placement are
    set here. */
-.mi-capital-conditions__daily-button { margin-left: auto; min-height: 24px; padding-inline: 10px; white-space: nowrap; }
+.mi-capital-conditions__daily-button { flex: none; margin-left: auto; min-height: 24px; padding-inline: 10px; white-space: nowrap; }
 /* The trigger is a bordered button in both themes. antd's default variant reads its surface and
    border from the window theme, which left a filled block on the light card; these declarations
    come from the portal tokens instead, so the same button shows in either theme. */

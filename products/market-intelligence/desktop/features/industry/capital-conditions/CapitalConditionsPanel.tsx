@@ -252,20 +252,24 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
   const key = (name: string): string => `pages.intelligence.portal.dashboard.capitalConditions.${name}`
   return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available">
     <header>
-      <h3>{text.etfFlow}</h3>
-      {/* Everything the numbers cannot carry themselves lives here: what the series are, which row
-          they must not be reconciled with, and what each column covers. */}
-      <Popover
-        lines={[
-          { labelKey: key('chartScopeNoteMain') },
-          { labelKey: key('chartScopeNoteEtf') },
-          { labelKey: key('notComparable'), params: { row: `${text.stablecoin}${text.stablecoinScope}` } },
-          { labelKey: key('columnScopeNote') }
-        ]}
-        resolveText={resolveText}
-        trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
-          icon={Info} size="sm" resolveText={resolveText} variant="plain" />} />
-      <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
+      {/* 标题 + ⓘ 是一个整体：窄卡时**先坏动作**（整颗折到下一行仍贴右），
+          解释图标永远不离开它解释的那句话。所以这两件事分组，动作留作兄弟。 */}
+      <div className="mi-capital-conditions__etf-flow-title">
+        <h3>{text.etfFlow}</h3>
+        {/* Everything the numbers cannot carry themselves lives here: what the series are, which row
+            they must not be reconciled with, and what each column covers. */}
+        <Popover
+          lines={[
+            { labelKey: key('chartScopeNoteMain') },
+            { labelKey: key('chartScopeNoteEtf') },
+            { labelKey: key('notComparable'), params: { row: `${text.stablecoin}${text.stablecoinScope}` } },
+            { labelKey: key('columnScopeNote') }
+          ]}
+          resolveText={resolveText}
+          trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
+            icon={Info} size="sm" resolveText={resolveText} variant="plain" />} />
+        <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
+      </div>
       <button type="button" className="mi-capital-conditions__daily-button"
         aria-haspopup="dialog" onClick={() => setDialogOpen(true)}>{text.expandDaily}</button>
     </header>
