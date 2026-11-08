@@ -7,7 +7,7 @@
  *
  * **拿不到名字时绝不回退产品 id**（契约 v2.41 第三档：系统内部标识任何情况下都不许当文案）。
  * 产品摘要读失败、产品被停用或卸载时，读者看到的是「产品」这样的兜底说法，
- * 而不是 `market-intelligence`。
+ * 而不是 `sample-product`。
  */
 export function resolveResourceJobSourceName(
   productNames: Readonly<Record<string, string>>,

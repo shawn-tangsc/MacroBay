@@ -51,7 +51,7 @@ function assertWorkspacePanelModule(productDir: string, modulePath: unknown): vo
 
 const KEBAB_CASE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /**
- * 事件话题的形状（`MI-11-R22` A1）：小写、点/横线分段，例如 `market-intelligence.item.created`。
+ * 事件话题的形状（`MI-11-R22` A1）：小写、点/横线分段，例如 `sample-product.item.created`。
  *
  * 事件总线本身只要求「非空字符串」，这里更严是**故意**的：这份目录用来给读者选订阅目标，
  * 带空格或大写的拼写错误会让任务「建得成、永远不触发」，而在生成期就报错能立刻看见。

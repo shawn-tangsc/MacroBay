@@ -40,9 +40,9 @@ export type NotificationEventDeclaration = {
   titleKeyByVariant?: Readonly<Record<string, string>>
   reasonKeyByVariant?: Readonly<Record<string, string>>
   /**
-   * 声明者在源码里给这条事件起的**常量名**（如 `briefingFailed`）。
+   * 声明者在源码里给这条事件起的**常量名**（如 `sampleEventLanded`）。
    *
-   * 生产者门禁要靠它把源码里的 `SOME_TABLE.briefingFailed` 解析成事件 id。这份映射以前由平台
+   * 生产者门禁要靠它把源码里的 `SOME_TABLE.sampleEventLanded` 解析成事件 id。这份映射以前由平台
    * 去读产品的常量表文件获得——那等于平台认识产品的文件结构，产品挪一个文件平台就红。
    * 名字随声明走之后，平台只读声明，不读任何产品源码。
    */

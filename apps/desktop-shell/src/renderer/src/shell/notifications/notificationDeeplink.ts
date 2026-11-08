@@ -50,10 +50,10 @@ const ENTITY_SETTINGS_PANEL: Readonly<Record<string, string>> = {
 
 /**
  * 产品页的 navKey **不是** manifest 里的 pageId，而是注册表里的 `routePath`
- * （`shellRegistry.ts` 给的是 `/market-intelligence/intelligence`）。
+ * （`shellRegistry.ts` 给的是产品自己那条 `/sample-product/home`）。
  *
- * 早先这里有一张 `PAGE_ID_TO_MENU_KEY = { 'daily-briefing': 'intelligence' }`：键是真的，
- * 但 `'intelligence'` 不是 navKey，`openTab` 会被主进程按注册表拒掉（`registration-missing`），
+ * 早先这里有一张手写的 `PAGE_ID_TO_MENU_KEY = { '<产品页 id>': '<菜单键>' }`：键是真的，
+ * 但值不是 navKey，`openTab` 会被主进程按注册表拒掉（`registration-missing`），
  * 而 `activateNavKey` 的 `.catch` 又把它吞成「侧栏高亮变了」——看起来像跳了，其实没开页。
  * 所以映射必须来自**注册表本身**，不能来自手写表。
  */
