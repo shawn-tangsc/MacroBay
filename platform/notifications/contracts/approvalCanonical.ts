@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import type { NotificationApprovedLevel } from '@platform/notifications/contracts/notificationEventCatalog'
+import type { NotificationApprovedLevel } from './notificationEventCatalog'
 
 /**
  * 批准值签署的规范化与哈希——**唯一实现**，别处不许再写第二份。

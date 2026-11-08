@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { canonicalApprovalText, signApprovals, type SignedApprovalDocument } from './approvalCanonical'
+import { canonicalApprovalText, signApprovals, type SignedApprovalDocument } from '@platform/notifications/contracts/approvalCanonical'
 
 /**
  * 反误绿闸：先钉**规范化后的字符串**，再钉哈希。

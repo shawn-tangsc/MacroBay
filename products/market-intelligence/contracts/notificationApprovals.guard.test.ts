@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { signApprovals } from './approvalCanonical'
+import { signApprovals } from '@platform/notifications/contracts/approvalCanonical'
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS,
   SIGNATURE,
