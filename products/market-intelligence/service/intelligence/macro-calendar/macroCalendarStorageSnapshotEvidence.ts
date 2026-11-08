@@ -19,6 +19,14 @@ export const calendarSnapshotEvidencePolicy = Object.freeze({
   // 最近一次替换的写入时刻（BLS/BEA 是删旧行再插入），所以快照必须带着它，缺失即 schema-invalid。
   officialTables: ['mi_macro_calendar_migrations', 'mi_macro_calendar_revisions', 'mi_bea_release_observation_state', 'mi_macro_calendar_event_first_seen'],
   marketTables: ['mi_macro_calendar_market_event_collections', 'mi_macro_calendar_market_event_observations', 'mi_macro_calendar_provider_indicator_links'],
+  /**
+   * **v7 及更早的 bundle 不可导入**（因此这里是精确匹配而不是"≥"）。
+   *
+   * 这条快照路径是 **main-only 的内部维护**（`calendarBackupPolicy` 注释、没有 IPC/界面入口），
+   * 不是给读者的备份恢复；要求到 8 是为了让"首次落库"的侧表一定存在——旧 bundle 里没有这张表，
+   * 导入后旧事件的创建时间会是未知（我们本就不回填），但没有表连"新事件从此刻起准确"也做不到。
+   * 若将来把它开放成读者备份，必须先改成接受旧版本并建空侧表，别让读者丢可恢复数据。
+   */
   migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8], hashPattern: /^[a-f0-9]{64}$/,
   canonicalMarketProvider: '0xrouter', archiveMarketProvider: 'macro-calendar-0xrouter'
 })

@@ -130,6 +130,21 @@ describe('event record times', () => {
     } finally { repository.close() }
   })
 
+  /**
+   * 侧表行与修订行必须同生共死：单条写入没有事务时，崩溃窗口里会出现"修订没写成、首次却记下了"，
+   * 那条事件以后永远带着一个凭空的时间。这里用主键冲突制造一次真实失败，断言侧表没有留下残行。
+   */
+  it('leaves no first-seen row behind when the single write fails', () => {
+    const repository = createMacroCalendarRepository({ filePath: ':memory:' })
+    try {
+      repository.appendIfNew(revision({ revisionId: 'shared-id', detectedAt: '2026-10-30T08:35:28.000Z', recordedAt: '2026-10-30T08:35:28.000Z' }))
+      expect(() => repository.appendIfNew(revision({
+        revisionId: 'shared-id', eventKey: 'US.CPI.RELEASE.2026-M10', detectedAt: '2026-10-31T08:35:28.000Z'
+      }))).toThrow()
+      expect(repository.getEventTimesAsOf({ eventKey: 'US.CPI.RELEASE.2026-M10', asOf: '2026-11-01T00:00:00.000Z' })).toEqual({})
+    } finally { repository.close() }
+  })
+
   it('hides times that were not visible yet at the as-of instant', () => {
     const repository = repositoryWithHistory()
     try {

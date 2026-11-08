@@ -177,7 +177,8 @@ export type MacroEconomicCalendarEventView = {
    * 这条事件**第一次落库**的时刻。后续修订、替换都不改变它——所以它不是 `detectedAt`
    * （当前有效行的检测时刻，会被修订刷新），也不是 `min(recorded_at)`（替换式来源删旧行后
    * 只剩最新一行，`min` 会取到这次替换的写入时刻）。持久化在
-   * `mi_macro_calendar_event_first_seen`，本机写入时刻、**不受 as-of 约束**。
+   * `mi_macro_calendar_event_first_seen`。**本机写入时刻，不受 as-of 约束**——它是"这条记录
+   * 何时存在"，不是某次读取看到的事实。旧事件不回填，因此可能是 `undefined`（未知，不是"没有"）。
    *
    * **共享视图、仅详情填充；冻结快照不得携带（有守卫）。**
    */

@@ -92,7 +92,16 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
   return {
     appendIfNew(revision) {
       const stored = prepareRevision(revision)
-      return replaceCurrent(stored)
+      // 与批量写入同一条规矩：修订行与首次落库的侧表行同生共死，崩溃窗口里不许只落一半。
+      sqlite.database.exec(macroCalendarAtomicWritePolicy.beginStatement)
+      try {
+        const result = replaceCurrent(stored)
+        sqlite.database.exec(macroCalendarAtomicWritePolicy.commitStatement)
+        return result
+      } catch (error) {
+        try { sqlite.database.exec(macroCalendarAtomicWritePolicy.rollbackStatement) } catch { /* Preserve the write failure. */ }
+        throw error
+      }
     },
     appendManyIfNew(revisions) {
       const prepared = revisions.map(prepareRevision)
@@ -128,7 +137,7 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
         // 本机写入时刻，**不受 as-of 约束**：它是"这条记录何时存在"，不是某次读取看到的事实。
         ...(firstRecorded === undefined ? {} : { createdAt: firstRecorded }),
         // 来源观测时刻，按 as-of 收窄：那一刻还没观测到值，就不该在回放里显示"已拿到"。
-        ...(firstActual === undefined || firstActual > asOf ? {} : { actualDetectedAt: firstActual })
+        ...(firstActual === undefined || (epochTime(firstActual) ?? 0) > (epochTime(asOf) ?? 0) ? {} : { actualDetectedAt: firstActual })
       })
     },
     listVisibleProviderFactsAsOf({ providerIds, asOf }) {
@@ -232,12 +241,17 @@ function migrate(database: ReturnType<typeof createMacroCalendarSqlite>['databas
      *
      * `replaceCurrent` 对 BLS/BEA/0xRouter 是"删旧行再插入"：替换之后表里只剩最新一行，所以
      * `min(recorded_at)` 得到的是**这次替换的写入时刻**，`min(detected_at) where actual` 同理——
-     * 第一次带值那行已经不存在了。侧表在首次插入时写一次，替换时保留，聚合改读它。
+     * 第一次带值那行已经不存在了。侧表在首次插入时写一次，替换时保留，读取改查它。
      *
-     * 回填只能拿得到"当前还看得见的行"，被替换掉的历史无法还原；对已经替换过的源，回填值是
-     * **近似的**，从本笔之后写入的事件开始准确。这一点写在这里，免得以后有人把回填值当权威。
+     * **旧事件不回填＝未知，从本笔起准确。** 不回填是刻意的：`replaces_revision_id` 从没被写入，
+     * 凭现有行分不出"第一次插入"和"替换后仅存"，任何回填值都是推测；而迁移每次启动都会重跑，
+     * 回填一次就会把推测**常态化**成"事实"。界面按"缺值不画那一行"，旧事件少一行是诚实的。
+     *
+     * **回收策略**：仓库里没有"彻底删除一个事件"的路径（`deleteByEvent` 只服务于替换，替换后
+     * 同名事件仍在）。因此侧表行随事件长期保留。将来若新增真删除路径，必须在同一事务里按
+     * `event_key` 删掉侧表行——否则同名事件重建会继承上一世的"创建时间"。
      */
-    execute("create table if not exists mi_macro_calendar_event_first_seen (event_key text primary key, first_recorded_at text not null, first_actual_detected_at text); insert or ignore into mi_macro_calendar_event_first_seen (event_key, first_recorded_at, first_actual_detected_at) select event_key, min(recorded_at), min(case when actual_json is not null and actual_json not in ('', 'null') then detected_at end) from mi_macro_calendar_revisions group by event_key; insert or ignore into mi_macro_calendar_migrations(version) values (8)")
+    execute("create table if not exists mi_macro_calendar_event_first_seen (event_key text primary key, first_recorded_at text not null, first_actual_detected_at text); insert or ignore into mi_macro_calendar_migrations(version) values (8)")
     execute('commit')
   } catch (error) {
     try { execute('rollback') } catch { /* Preserve the migration failure. */ }
