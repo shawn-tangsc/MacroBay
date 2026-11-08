@@ -7,7 +7,11 @@ import { productMenuEntries, productSettingsEntries } from '@products/generated/
 
 import { mergeShellNavItems } from './mergeShellNavigation'
 import { openConversation } from './openConversation'
-import { PRODUCT_SETTINGS_PANELS, openProductSettingsPanel } from './openProductSettingsPanel'
+import {
+  findProductSettingsPanelByIntent,
+  openProductSettingsPanel,
+  resolveSettingsPanelForIntent
+} from './openProductSettingsPanel'
 import { resolveAvailableSettingsPanelKey } from './settingsPanelKey'
 
 /**
@@ -61,18 +65,37 @@ describe('openConversation', () => {
 describe('openProductSettingsPanel', () => {
   it('sends the settings destination with the panel key, nothing else', () => {
     const details = recordDetails()
-    openProductSettingsPanel(PRODUCT_SETTINGS_PANELS.marketIntelligenceSources)
+    const panelKey = findProductSettingsPanelByIntent('resource-sources')
+    expect(panelKey).toBeDefined()
+    openProductSettingsPanel(panelKey!)
 
-    expect(details).toEqual([
-      { navKey: 'settings', settingsPanelKey: 'market-intelligence.intelligence-sources' }
-    ])
+    expect(details).toEqual([{ navKey: 'settings', settingsPanelKey: panelKey }])
   })
 
-  it('every key in the table survives the shell fallback — no silent jump to another panel', () => {
+  it('resolves the intent to a page this build registers — otherwise the shell would fall back to models', () => {
     // `resolveAvailableSettingsPanelKey` 不认识就回落到 models：那才是「落到别的页」。
-    for (const panelKey of Object.values(PRODUCT_SETTINGS_PANELS)) {
-      expect(resolveAvailableSettingsPanelKey(panelKey, productSettingsEntries)).toBe(panelKey)
-    }
+    const panelKey = findProductSettingsPanelByIntent('resource-sources')
+    expect(panelKey).toBeDefined()
+    expect(resolveAvailableSettingsPanelKey(panelKey!, productSettingsEntries)).toBe(panelKey)
+  })
+
+  it('no page declares the intent ⇒ undefined, so the caller shows no entry at all', () => {
+    // 这条守的是「找不到就不出这个入口」：注册表是空的、或者没有一页标这个意图时，
+    // 解析结果必须是 `undefined`（调用方据此不出按钮），**不是**回落到默认面板。
+    expect(resolveSettingsPanelForIntent('resource-sources', [])).toBeUndefined()
+    expect(resolveSettingsPanelForIntent('resource-sources', [{ id: 'sample-product.a' }])).toBeUndefined()
+    expect(
+      resolveSettingsPanelForIntent('resource-sources', [
+        { id: 'sample-product.a' },
+        { id: 'sample-product.b', navIntent: 'resource-sources' }
+      ])
+    ).toBe('sample-product.b')
+  })
+
+  it('the intent resolves against this build’s real registry — the product really declared it', () => {
+    const panelKey = findProductSettingsPanelByIntent('resource-sources')
+    expect(panelKey).toBeDefined()
+    expect(productSettingsEntries.some((entry) => entry.id === panelKey)).toBe(true)
   })
 
   it('refuses a panel key this build does not register, instead of landing on the fallback', () => {
