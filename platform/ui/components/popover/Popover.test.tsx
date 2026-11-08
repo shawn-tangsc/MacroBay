@@ -77,15 +77,20 @@ async function mountLines(keys: readonly string[], resolveText: (value: string) 
  * 原来这里等一次 20ms，单独跑够用、全套并发跑就不够——同一棵树、同一时刻，跑全套红、单跑绿，
  * 那是测试在对时序作假设，不是产品行为。等待要等的是「东西出现了」，不是一个时长。
  */
-async function waitForLines(): Promise<HTMLElement[]> {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const rendered = [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
-    if (rendered.length > 0) return rendered
+async function waitForElement(selector: string, attempts = 60): Promise<HTMLElement | null> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const found = document.querySelector<HTMLElement>(selector)
+    if (found !== null) return found
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
     })
   }
-  return []
+  return document.querySelector<HTMLElement>(selector)
+}
+
+async function waitForLines(): Promise<HTMLElement[]> {
+  await waitForElement('[data-popover-line]')
+  return [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
 }
 
 async function tick(): Promise<void> {
@@ -441,16 +446,7 @@ describe('Popover', () => {
       await act(async () => {
         button.focus()
       })
-      const layer = await (async () => {
-        for (let attempt = 0; attempt < 60; attempt += 1) {
-          const found = document.querySelector<HTMLElement>('.ant-popover')
-          if (found !== null) return found
-          await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 10))
-          })
-        }
-        return null
-      })()
+      const layer = await waitForElement('.ant-popover')
       expect(layer).not.toBeNull()
       expect(layer!.parentElement).toBe(document.body)
       return { left: Number.parseFloat(layer!.style.left), top: Number.parseFloat(layer!.style.top) }
