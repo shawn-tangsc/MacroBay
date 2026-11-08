@@ -39,6 +39,21 @@ const danger: ConfirmProps = {
   onConfirm: () => undefined
 }
 
+/**
+ * 等一个条件真的成立，而不是等一个固定时长：条件一成立就立刻返回，上限用完才红。
+ * 上限按「次数 × 10ms」算，不读系统时钟；超时的失败信息说明等的是哪件事。
+ */
+async function waitUntil(condition: () => boolean, what: string, attempts = 300): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (condition()) return
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  if (condition()) return
+  throw new Error(`timed out waiting for ${what}`)
+}
+
 async function waitFor<T>(probe: () => T | null, attempt = 0): Promise<T | null> {
   const found = probe()
   if (found !== null) return found
@@ -136,10 +151,9 @@ describe('ConfirmProvider', () => {
     )
     const cancel = await waitFor(() => buttonByLabel('取消') ?? null)
     expect(cancel).not.toBeNull()
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 400))
-    })
+    // 初始焦点不是「睡 400ms 后应该已经落下」：等它真的落在取消上，等不到就红。
     // 按住回车连击时，焦点落在破坏性按钮上就是连续执行。
+    await waitUntil(() => document.activeElement === cancel, 'the initial focus to land on cancel')
     expect(document.activeElement).toBe(cancel)
     expect(buttonByLabel('删除')?.className).toContain('ant-btn-dangerous')
   })
@@ -188,9 +202,12 @@ describe('ConfirmProvider', () => {
       destructive?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     // 弹窗关掉、处理器只被调用一次，而且整个文件跑完没有未处理错误（vitest 会因此非零退出）。
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-    })
+    // 「关掉」的可观察事实是弹窗进入 leave 态（或者已被移除）：无布局环境里动画不会走完，
+    // 所以等这个真条件，不睡固定时长。未处理拒绝仍会让整份文件非零退出，与等待无关。
+    await waitUntil(() => {
+      const modal = document.querySelector<HTMLElement>('.ant-modal')
+      return modal === null || modal.classList.contains('ant-zoom-leave')
+    }, 'the dialog to start closing after the failed handler')
     expect(calls).toBe(1)
   })
 
@@ -223,12 +240,9 @@ describe('ConfirmProvider', () => {
     await act(async () => {
       cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    // antd 在关闭动画结束后才调 `afterClose`，所以等「焦点回到触发器」这个条件成立，不等固定时长。
-    for (let attempt = 0; attempt < 120 && document.activeElement !== trigger; attempt += 1) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 50))
-      })
-    }
+    // 归还焦点发生在动作之后的一个宏任务里（见 `confirmOptions`），关闭动画在无布局环境里不会推进。
+    // 所以等「焦点回到触发器」这个条件成立，不等固定时长。
+    await waitUntil(() => document.activeElement === trigger, 'the focus to return to the trigger')
     expect(document.activeElement).toBe(trigger)
   })
 
