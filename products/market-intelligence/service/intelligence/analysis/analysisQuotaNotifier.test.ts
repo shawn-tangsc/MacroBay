@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
-import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
-import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
+import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
 import { notificationCopyText } from '@platform/i18n/notificationCopy'
 
@@ -38,8 +37,8 @@ function createRuntime() {
   const runtime = createNotificationRuntime({
     storage,
     catalog: createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
-      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }]
+      // 断的是平台事件（额度通知）的行为 -> 读平台自己的批准值。
+      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS }]
     }),
     diagnostics: () => undefined,
     getSettings: async () => settings,
