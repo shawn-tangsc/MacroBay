@@ -7,7 +7,8 @@ import {
   useState,
   type FocusEvent as ReactFocusEvent,
   type MouseEvent as ReactMouseEvent,
-  type ReactElement
+  type ReactElement,
+  type ReactNode
 } from 'react'
 
 import { fillLabelParams } from '../textKeyParams'
@@ -99,25 +100,48 @@ export type PopoverText<K extends string = string> =
       /** 要填进模板的数字或名词，**只收已经格式化好的字符串**（`10–2`、`289/289`）。 */
       labelParams?: Readonly<Record<string, string>>
       lines?: undefined
+      content?: undefined
     }
   | {
       labelKey?: undefined
       labelParams?: never
       lines: readonly PopoverLine<K>[]
+      content?: undefined
+    }
+  | {
+      labelKey?: undefined
+      labelParams?: never
+      lines?: undefined
+      /**
+       * 调用方拼好的节点：原样放进浮层内容区，组件不解析、不加样式、不知道里面是什么。
+       *
+       * 为什么需要这一支：有些说明由多项组成，其中若干片段可以缺失，用键模板拼会留下空括号
+       * （「来源 · （）· 每 30 分钟」）。哪些片段能缺只有调用方知道，所以拼装留在调用方；
+       * 组件只提供一个**纯泛型槽**，槽里出现业务词汇就是越界。
+       */
+      content: ReactNode
     }
 
 export type PopoverProps<K extends string = string> = PopoverText<K> & {
-  /** 调用方的文案解析入口；未知键返回空串时整块浮层不渲染。 */
-  resolveText: (key: K) => string
   /**
    * 触发器：交出属性、由调用方自己渲染那个可聚焦控件。
    * 不接受裸 children——那会退回「注入处理器」的老路，两个平台组件就又能互相咬住。
    */
   trigger: (props: PopoverTriggerProps) => ReactElement
-}
+} & (
+  | {
+      /** 调用方的文案解析入口；未知键返回空串时整块浮层不渲染。`content` 分支不需要它。 */
+      resolveText: (key: K) => string
+      content?: undefined
+    }
+  | {
+      resolveText?: never
+      content: ReactNode
+    }
+)
 
 export function Popover<K extends string = string>(props: PopoverProps<K>): ReactElement {
-  const { resolveText } = props
+  const resolveText = props.resolveText
   // 多行只来自**键数组**，不来自 `\n` 折行：换行属于排版巧合，翻译会被合并或吃掉，而首行强调只有数组能表达。
   // 逐行解析、逐行填占位符：每行的参数各管各的，空行丢弃（原行为不变）。
   const entries: ReadonlyArray<{ key: K; params?: Readonly<Record<string, string>> }> =
@@ -126,9 +150,11 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
       : props.labelKey === undefined
         ? []
         : [{ key: props.labelKey, params: props.labelParams }]
-  const resolvedLines = entries
-    .map((entry) => fillLabelParams(resolveText(entry.key), entry.params))
-    .filter((line) => line.trim() !== '')
+  const resolvedLines = resolveText === undefined
+    ? []
+    : entries
+        .map((entry) => fillLabelParams(resolveText(entry.key), entry.params))
+        .filter((line) => line.trim() !== '')
   const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -144,8 +170,12 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
   const content = useRef<HTMLDivElement | null>(null)
   const open = pinned || hovered || focused
 
-  // 没有句子就不存在浮层：空框比没有框更糟，键名更糟。
-  const resolved = resolvedLines.length > 0
+  // 内容只有两个来处：调用方拼好的节点，或由键解析出的句子（类型上两者互斥）。
+  // 没有内容就不存在浮层：空框比没有框更糟，键名更糟。
+  const hasContentSlot = props.content !== undefined
+  // 给了槽但这一帧是 `null`/`false`：那是调用方的条件渲染，不是「文案没写」的缺陷，也不画空框。
+  const contentPresent = hasContentSlot && props.content !== null && props.content !== false
+  const resolved = hasContentSlot ? contentPresent : resolvedLines.length > 0
 
   const close = (): void => {
     setPinned(false)
@@ -188,6 +218,8 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
 
   // 缺文案是**缺陷**，不是一种运行态（产品经理 + 架构师 2026-11-02 定）。
   if (!resolved) {
+    // 槽给了、这一帧是空的：调用方的条件渲染，不是缺文案——静默不画，也不抛。
+    if (hasContentSlot) return <>{null}</>
     if (import.meta.env.DEV) {
       // 开发期当场炸：键不存在、解析成空串、解析器把键名原样吐回来，都算「这句话没写」。
       // 生产期不抛——顶栏不该因为一句文案崩掉；那时**连触发器一起不渲染**（见下）。
@@ -227,7 +259,7 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
           id={contentId}
           ref={content}
           style={{ maxHeight: MAX_HEIGHT, maxWidth: MAX_WIDTH }}>
-          {resolvedLines.map((line, index) => (
+          {hasContentSlot ? props.content : resolvedLines.map((line, index) => (
             <p
               // 文案是纯数据、顺序固定，没有稳定 id 可用，按位置当键是这里唯一诚实的做法。
               key={index}
