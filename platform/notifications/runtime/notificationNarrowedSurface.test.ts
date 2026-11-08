@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
-import { NOTIFICATION_EVENT_POLICY } from '../contracts/notificationEventPolicy'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { PLATFORM_NOTIFICATION_EVENTS } from '../contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
@@ -23,8 +22,8 @@ const clock = { now: () => new Date('2026-11-08T00:00:00.000Z'), timeZone: () =>
 
 function request(overrides: Partial<NotificationSubmitRequest> = {}): NotificationSubmitRequest {
   return {
-    eventTypeId: 'platform.notification.self-test',
-    dedupeVars: { builder: 'template', vars: { date: '2026-11-08', seq: 'k1' } },
+    eventTypeId: 'platform.narrow.probe',
+    dedupeVars: { builder: 'template', vars: { date: '2026-11-08' } },
     actions: [],
     occurredAt: '2026-11-08T00:00:00.000Z',
     ...overrides
@@ -37,9 +36,16 @@ function harnessWith(catalogOverride?: ReturnType<typeof createNotificationEvent
   const runtime = createNotificationRuntime({
     storage,
     catalog: catalogOverride ?? createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
-      // 合成 manifest：平台测试不 import 产品（G2）。这里只要平台自己的事件。
-      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }]
+      // **合成声明 + 合成批准**：收窄是通用机制，不拿真实事件的档位当夹具（真实档位会变）。
+      sources: [{
+        productId: 'platform',
+        events: [{
+          id: 'platform.narrow.probe', titleKey: 'notification.test.title', bodyKey: 'notification.test.body',
+          reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder',
+          requestedDisruptionLevels: ['channel'], dedupeKeyTemplate: 'probe:{date}', dedupeUnit: 'occurrence'
+        }],
+        approval: { 'platform.narrow.probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } }
+      }]
     }),
     diagnostics: () => undefined,
     resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
@@ -59,9 +65,16 @@ function harnessWithDiagnostics() {
   const runtime = createNotificationRuntime({
     storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { state = JSON.parse(JSON.stringify(next)) } },
     catalog: catalogOverride ?? createNotificationEventCatalog({
-      policy: NOTIFICATION_EVENT_POLICY,
-      // 合成 manifest：平台测试不 import 产品（G2）。这里只要平台自己的事件。
-      sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }]
+      // **合成声明 + 合成批准**：收窄是通用机制，不拿真实事件的档位当夹具（真实档位会变）。
+      sources: [{
+        productId: 'platform',
+        events: [{
+          id: 'platform.narrow.probe', titleKey: 'notification.test.title', bodyKey: 'notification.test.body',
+          reasonKey: 'notification.test.body', requiresUserAction: false, category: 'reminder',
+          requestedDisruptionLevels: ['channel'], dedupeKeyTemplate: 'probe:{date}', dedupeUnit: 'occurrence'
+        }],
+        approval: { 'platform.narrow.probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false } }
+      }]
     }),
     diagnostics: (entry) => entries.push(entry),
     resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
@@ -120,9 +133,9 @@ describe('narrowedDisruptionLevels', () => {
   it('absent means exactly today: the approved levels go out unchanged', async () => {
     const { runtime, state } = harness()
     await runtime.submit(request())
-    // 断事实：这条事件现在批准 center+toast+desktop+channel，桌面优先互斥后应用内是 center+desktop，
-    // 手机那一档体现在 `delivery.push` 上。
-    expect(new Set(state().records[0].channels)).toEqual(new Set(['center', 'desktop']))
+    // 断事实：合成载体批准 center+channel，所以应用内只有 center、手机那一档体现在 `delivery.push` 上。
+    // 这条断言的**不变量**没变：不传收窄时，批准表里的每一档都照原样排上。
+    expect(new Set(state().records[0].channels)).toEqual(new Set(['center']))
     expect(state().records[0].delivery.push).toMatchObject({ state: expect.any(String) })
   })
 })
