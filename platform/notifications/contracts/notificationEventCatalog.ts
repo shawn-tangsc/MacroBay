@@ -115,6 +115,11 @@ export type NotificationEventCatalogEntry = NotificationEventDeclaration & {
 }
 
 export type NotificationEventCatalog = {
+  /**
+   * b2 观测点：这次装配里哪些条目**落到了平台表兜底**（来源没给 `approval`）。
+   * 棘轮减到 0 时，连同 `policy` 参数与平台表一起删。
+   */
+  policyFallbacks?: () => readonly string[]
   has: (id: string) => boolean
   get: (id: string) => NotificationEventCatalogEntry | undefined
   list: () => readonly NotificationEventCatalogEntry[]
@@ -162,6 +167,8 @@ export function createNotificationEventCatalog(input: {
 }): NotificationEventCatalog {
   const entries: NotificationEventCatalogEntry[] = []
   const byId = new Map<string, NotificationEventCatalogEntry>()
+  /** 落到 `policy` 兜底的事件 id（b2 期间的观测点；棘轮减到 0 时连同兜底一起删）。 */
+  const usedPolicyFallback: string[] = []
 
   for (const source of input.sources) {
     for (const declaration of source.events) {
@@ -186,9 +193,14 @@ export function createNotificationEventCatalog(input: {
           throw new Error(`notification-event-invalid-requested-level:${declaration.id}:${String(level)}`)
         }
       }
-      const policy = input.policy[declaration.id]
-      // 没有批准记录 = 只进中心（契约 §4 第二句）：**不报错**，因为「还没批」是合法状态，
-      // 生效值本来也只读批准表。只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
+      // **来源优先**（契约 §7.1b 的 b2）：声明自己带的 `approval` 就是生效值；平台表降级成**兜底**，
+      // 只在来源没给这一条时被读。兜底不是静默的：`usedPolicyFallback` 记下用的是哪几条，
+      // 由调用方决定怎么报——静默兜底是这个项目反复踩的坑。
+      const fromSource = source.approval?.[declaration.id]
+      const policy = fromSource ?? input.policy[declaration.id]
+      if (fromSource === undefined && policy !== undefined) usedPolicyFallback.push(declaration.id)
+      // 没有批准记录 = 只进中心（契约 §4 第二句）：**不报错**，因为「还没批」是合法状态。
+      // 只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
       const approvedDisruptionLevels = policy?.approvedDisruptionLevels ?? ['center']
       if (policy !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
       const entry: NotificationEventCatalogEntry = Object.freeze({
@@ -206,7 +218,9 @@ export function createNotificationEventCatalog(input: {
   return Object.freeze({
     has: (id: string) => byId.has(id),
     get: (id: string) => byId.get(id),
-    list: () => entries
+    list: () => entries,
+    /** b2 观测点：这次装配里哪些条目落到了平台表兜底（来源没给 `approval`）。不静默。 */
+    policyFallbacks: () => Object.freeze([...usedPolicyFallback])
   })
 }
 
