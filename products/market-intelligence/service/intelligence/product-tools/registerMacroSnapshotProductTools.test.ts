@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
+import type { ProductAgentToolHandlerContext, ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 
 import { registerMacroSnapshotProductTools } from './registerMacroSnapshotProductTools'
 
@@ -17,13 +17,31 @@ function service(overrides: Partial<Record<'market' | 'rates', unknown>> = {}) {
   }
 }
 
+/**
+ * 平台拿到的是**登记项**，调用方式是 `handle(input, context)`——两个必填参数，装不进
+ * `(input) => Promise<unknown>` 这种单参签名。夹具照平台的方式来：留住登记项，用它自己的 `handle` 调。
+ */
 function handlersFor(target: ReturnType<typeof service>) {
-  const handlers = new Map<string, (input: unknown) => Promise<unknown>>()
+  const registrations = new Map<string, ProductAgentToolHandlerRegistration>()
   registerMacroSnapshotProductTools(
-    (registration: ProductAgentToolHandlerRegistration) => handlers.set(registration.handlerId, registration.handle),
+    (registration) => { registrations.set(registration.handlerId, registration) },
     () => target as never
   )
-  return handlers
+  return registrations
+}
+
+/** 平台每次调用都传这一份；本文件的用例不读它，但它是签名的一部分。 */
+function contextFor(handlerId: string): ProductAgentToolHandlerContext {
+  return {
+    toolCallId: `call-${handlerId}`, productId: 'market-intelligence', toolName: handlerId, schemaVersion: 1,
+    agentId: 'agent-1', agentSessionId: 'session-1', signal: new AbortController().signal, log: async () => undefined
+  }
+}
+
+function callTool(registrations: ReadonlyMap<string, ProductAgentToolHandlerRegistration>, handlerId: string): Promise<unknown> {
+  const registration = registrations.get(handlerId)
+  if (!registration) throw new Error(`handler not registered: ${handlerId}`)
+  return registration.handle({}, contextFor(handlerId))
 }
 
 describe('registerMacroSnapshotProductTools', () => {
@@ -31,15 +49,15 @@ describe('registerMacroSnapshotProductTools', () => {
     const target = service({ market: { state: 'available', asOf: AS_OF, readings: [{ seriesId: 'dxy-real', level: 102.24, atMs: Date.parse(AS_OF), returns: {} }], caveats: [] } })
     const handlers = handlersFor(target)
 
-    await expect(handlers.get('market-intelligence.get-macro-market-snapshot')?.({})).resolves.toMatchObject({ state: 'available' })
+    await expect(callTool(handlers, 'market-intelligence.get-macro-market-snapshot')).resolves.toMatchObject({ state: 'available' })
     expect(target.queryMacroMarketSnapshot).toHaveBeenCalledWith()
   })
 
   it('answers unavailable rather than inventing a value when the query is not wired', async () => {
     const handlers = handlersFor({ queryMacroMarketSnapshot: () => undefined, queryMacroRatesSnapshot: () => undefined } as never)
 
-    await expect(handlers.get('market-intelligence.get-macro-market-snapshot')?.({})).resolves.toEqual({ state: 'unavailable' })
-    await expect(handlers.get('market-intelligence.get-macro-rates-snapshot')?.({})).resolves.toEqual({ state: 'unavailable' })
+    await expect(callTool(handlers, 'market-intelligence.get-macro-market-snapshot')).resolves.toEqual({ state: 'unavailable' })
+    await expect(callTool(handlers, 'market-intelligence.get-macro-rates-snapshot')).resolves.toEqual({ state: 'unavailable' })
   })
 
   it('registers both handlers under the manifest identities', () => {
