@@ -17,6 +17,10 @@ on:
         description: Create or update the GitHub Release for that tag
         type: boolean
         default: false
+      self_test:
+        description: Validate the publish step and print its commands; no Release is created or changed
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -259,10 +263,21 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: [macos, macos-x64, windows]
-    if: github.event_name == 'push' || github.event.inputs.publish == 'true'
+    # `self_test` 与 `publish` 都能把这条作业叫起来：前者只校验，不建 Release。
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.publish == 'true' ||
+      github.event.inputs.self_test == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # 0.4.2 的教训：作业要从仓库里拿东西，就得自己检出仓库。这次它拿的是发布脚本本身；
+      # 产物仍然只来自下面那一步下载——两样都显式取，谁也不靠「环境里应该有」。
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
       - name: Download installers
         uses: actions/download-artifact@v4
         with:
@@ -270,37 +285,15 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Publish the release
+      # 唯一实现是 `scripts/release/publish-release.mts`：先校验产物齐不齐（少一件就报名字退 1），
+      # 再决定上传还是创建。`self_test` 走 `--dry-run`：只打印计划和要跑的命令，不碰 GitHub。
+      - name: Publish or validate the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          SELF_TEST: ${{ github.event.inputs.self_test }}
         run: |
           set -euo pipefail
-
-          # NUL-separated so no artifact name can be split into two arguments.
-          list_assets() {
-            find dist -type f \
-              \( -name '*.dmg' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) -print0
-          }
-
-          if [ ! -d dist ] || [ -z "$(list_assets | tr -d '\0')" ]; then
-            echo "no installer files were downloaded from the build jobs" >&2
-            exit 1
-          fi
-          echo 'attaching:'
-          list_assets | tr '\0' '\n'
-
-          # 发布说明**不在**这里生成：它由人在 Release 页上手写（用户 2026-11-10 定）。
-          # 这条作业只负责把产物挂上去，并且**重跑时不动说明**——重跑是为了换包，不是覆盖人写的字。
-          version="${BUILD_REF#v}"
-
-          if gh release view "$BUILD_REF" >/dev/null 2>&1; then
-            list_assets | xargs -0 gh release upload "$BUILD_REF" --clobber
-          else
-            list_assets | xargs -0 gh release create "$BUILD_REF" \
-              --title "MacroBay ${version}" \
-              --notes-file /dev/null \
-              --verify-tag
-          fi
-
-          gh release view "$BUILD_REF" --json url -q .url
+          args=(--dist dist --tag "$BUILD_REF")
+          if [ "${SELF_TEST:-false}" = "true" ]; then args+=(--dry-run); fi
+          node scripts/release/publish-release.mts "${args[@]}"
