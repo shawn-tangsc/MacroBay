@@ -28,7 +28,7 @@ const economicCalendarEmptyStateActionPolicy = { emptyEventCount: 0 } as const
  * state: every value arrives as a prop, so the grid can be reasoned about — and tested — without the
  * page's effects.
  */
-export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable, officialFeeds }: {
+export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable, officialFeeds, onRetryMonth }: {
   statusNow: string
   today: string
   asOf: string
@@ -46,6 +46,8 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   officialUnavailable?: string
   /** 官方日历腿的三态（注册表那侧算好的）：全关 / 可用 / 取不到。 */
   officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
+  /** 重读这个月：`unavailable` 那句旁边的「重试」按它，重试是再读一次，不是再跑一次采集。 */
+  onRetryMonth?: () => void
 }): ReactElement {
   let status: string | undefined = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
   /**
@@ -68,18 +70,32 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   const surface = monthSurface({ officialUnavailable: officialUnavailable !== undefined, officialCount: events.length, marketCount: marketEvents.length })
   if (surface === 'official-unavailable') return <CalendarState month={month} text={officialUnavailable!} loading={false} unavailable />
   /**
+   * 「来源只提供中文」不是「本月没有」：英文读者在这个月没有任何可显示的内容，是因为这几类来源
+   * 根本没有英文条目。产品 2026-11-09：这一种落**说明行**，**不进空态**——空态只属于「都读到了、
+   * 都为空」。判据只读已投影好的来源状态（`no-locale-rows`），不在页面上再判一次语言。
+   *
+   * `coverage === 'complete'` 是前提：任何一侧没读完（加载中/读失败），这句话都不成立，
+   * 那时要么是加载态，要么是「读不到」——不能拿它顶替。
+   */
+  const noLocaleRows = coverage === 'complete' && events.length === 0 && marketEvents.length === 0 &&
+    marketSources.some(source => source.status === 'no-locale-rows')
+  /**
    * 说明行是**常驻注解**，不是状态变更：用 `role="note"`，别用活区。
    * 且两行说同一件事时只留一行——`note` 在、状态又是 `unavailable`（BLS 停用 + 当月查询也失败 + 市场侧有行，
    * 这条组合可达）时，`unavailable` 那句与注解讲的是同一件事；`loading` 那句要说「正在读」，保留。
    */
   const { note, status: statusLine } = monthStatusLines({
-    note: surface === 'note' ? officialUnavailable : undefined,
+    // 「失败但另一侧有内容」→ 说明行（不是活区里的状态播报）；官方腿停用的那句仍走同一条说明位。
+    note: state.state === 'unavailable' ? status : surface === 'note' ? officialUnavailable : undefined,
     state: state.state,
     status
   })
-  if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
+  if (state.state !== 'available' && !marketEvents.length) {
+    return <CalendarState month={month} text={status!} loading={state.state === 'loading'}
+      onRetry={state.state === 'unavailable' ? onRetryMonth : undefined} />
+  }
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{note ? <p className="mi-economic-calendar__comparison-rule" role="note">{note}</p> : null}{statusLine ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={statusLine} /> : <p role="status">{statusLine}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+  return <div className="mi-calendar-month-scroll">{note ? <p className="mi-economic-calendar__comparison-rule" role="note">{note}</p> : null}{noLocaleRows ? <p className="mi-economic-calendar__comparison-rule" data-calendar-no-locale role="note">{text.noLocaleRowsNote}</p> : null}{statusLine ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={statusLine} /> : <p role="status">{statusLine}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} showEmpty={!noLocaleRows} /></div>
 }
 
 /**
@@ -113,19 +129,23 @@ export function monthSurface(input: Readonly<{ officialUnavailable: boolean; off
   return input.marketCount > 0 ? 'note' : 'board'
 }
 
-function CalendarState({ month, text, loading, unavailable = false }: { month: string; text: string; loading: boolean; unavailable?: boolean }): ReactElement {
+function CalendarState({ month, text, loading, unavailable = false, onRetry }: { month: string; text: string; loading: boolean; unavailable?: boolean; onRetry?: () => void }): ReactElement {
   return <section className="mi-economic-calendar__month" aria-live="polite" data-month-key={month}>
     {loading
       ? <LoadingState label={text} minHeight={220} />
-      // 拿不到：错误态 + 产品那句话，**不给动作按钮**——这里没有能让它成功的按钮。
+      // 官方腿已判定不可用：不可用态 + 原因，**不给动作按钮**——403 再试必失败，假动作比没有更坏。
       : unavailable
         ? <StateView className="mi-economic-calendar__official-unavailable" productReason={{ key: 'mi.calendar.official-unavailable', resolve: () => text }}
             reasonCode="capability-not-wired" size="lg" state="disabled" />
-        : <p className="mi-economic-calendar__more">{text}</p>}
+        // 「读不到」：错误态 + 原因 + 重试（界面设计 2026-11-09 四行表的第二行）。重试重读这个月。
+        : onRetry !== undefined
+          ? <StateView action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }} className="mi-economic-calendar__read-failed"
+              productReason={{ key: 'mi.calendar.month-read-failed', resolve: () => text }} reasonCode="unavailable" size="lg" state="error" />
+          : <p className="mi-economic-calendar__more">{text}</p>}
   </section>
 }
 
-function CalendarMonth({ month, today, statusNow, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
+function CalendarMonth({ month, today, statusNow, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage, showEmpty }: {
   statusNow: string
   today: string
   events: readonly EconomicCalendarEventView[]
@@ -138,6 +158,8 @@ function CalendarMonth({ month, today, statusNow, projection, events, selectedEv
   selectedEventKey: string | undefined
   onOpenDay: (day: string) => void
   text: EconomicCalendarText
+  /** 整块空的时候画不画那个「本月没有任何事件」的空态：来源不提供读者语言时由说明行替代。 */
+  showEmpty: boolean
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const linkedMarketKeys = new Set(marketEvents.filter(event => event.officialLink).map(event => event.eventKey))
@@ -155,6 +177,6 @@ function CalendarMonth({ month, today, statusNow, projection, events, selectedEv
         </article>
       })}
     </div>
-    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyMonthState text={text} /> : null}
+    {showEmpty && events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyMonthState text={text} /> : null}
   </section>
 }

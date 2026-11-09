@@ -395,6 +395,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           selectedEventKey={selectedEventKey}
           state={monthState}
           text={text}
+          onRetryMonth={() => loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))}
         />
         <section aria-label={text.dayEvents.listLabel} className="mi-calendar-day-list" data-calendar-day-list ref={dayList}>
           <h2>{text.dayEvents.title.replace('{date}', selectedDay)}</h2>
