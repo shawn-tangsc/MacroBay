@@ -628,7 +628,7 @@ export function reconcileStalePendingMessages(
   state: AgentStoreState,
   options: Readonly<{ ownerBootId: string; stoppedText?: string }>
 ): AgentStoreState {
-  const stoppedText = options.stoppedText ?? '上次运行已中断。'
+  const stoppedText = options.stoppedText ?? '上次运行已中断，可以重新发一次。'
   let changed = false
   const now = new Date().toISOString()
   const messagesBySessionId = Object.fromEntries(
@@ -640,7 +640,9 @@ export function reconcileStalePendingMessages(
         const nextData = message.searchableText.trim() ? message.data : textData(stoppedText)
         return {
           ...message,
-          status: 'paused' as const,
+          // `error` 而不是 `paused`：这条消息**继续不了**（写它的进程已经没了），
+          // `paused` 旁边读者会等一个「继续」按钮，那正是假控件。
+          status: 'error' as const,
           data: nextData,
           searchableText: messageDataToSearchableText(nextData),
           updatedAt: now

@@ -100,7 +100,7 @@ describe('startup convergence judged by ownerBootId', () => {
     )
 
     expect(messageById(next, 'm-previous')).toMatchObject({
-      status: 'paused',
+      status: 'error',
       searchableText: '上个进程收到的半截'
     })
   })
@@ -130,7 +130,7 @@ describe('startup convergence judged by ownerBootId', () => {
       stateWith([pendingMessage({ id: 'm-legacy' })]),
       { ownerBootId: CURRENT_BOOT }
     )
-    expect(messageById(afterBoot, 'm-legacy')).toMatchObject({ status: 'paused' })
+    expect(messageById(afterBoot, 'm-legacy')).toMatchObject({ status: 'error' })
 
     // 运行期又起了一次运行（本批次）；即便有人再把收尾跑一次，也不许动它。
     const runtime = addAgentSessionMessage(afterBoot, session.id, pendingMessage({
@@ -140,7 +140,7 @@ describe('startup convergence judged by ownerBootId', () => {
     const second = reconcileStalePendingMessages(runtime, { ownerBootId: CURRENT_BOOT })
 
     expect(messageById(second, 'm-runtime')).toMatchObject({ status: 'pending' })
-    expect(messageById(second, 'm-legacy')).toMatchObject({ status: 'paused' })
+    expect(messageById(second, 'm-legacy')).toMatchObject({ status: 'error' })
     expect(second).toBe(runtime)
   })
 })

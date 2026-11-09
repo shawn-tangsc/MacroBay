@@ -568,7 +568,7 @@ describe('agent store', () => {
     expect(page.nextCursor).toBe(`${Date.parse(messageFixture(2).createdAt)}:message-002`)
   })
 
-  it('marks stale pending messages as paused on startup reconciliation', () => {
+  it('marks turns left by a dead process as error on startup reconciliation', () => {
     const state = addAgentSessionMessage(
       addAgentSessionMessage(createAgentStoreState({ agents, sessions, workspaces: [workspace] }), 'session-1', {
         id: 'message-1',
@@ -588,8 +588,8 @@ describe('agent store', () => {
     const next = reconcileStalePendingMessages(state, { ownerBootId: 'boot-current', stoppedText: 'stopped' })
 
     expect(next.messagesBySessionId['session-1']).toEqual([
-      expect.objectContaining({ id: 'message-1', status: 'paused', searchableText: 'partial answer' }),
-      expect.objectContaining({ id: 'message-2', status: 'paused', searchableText: 'stopped' })
+      expect.objectContaining({ id: 'message-1', status: 'error', searchableText: 'partial answer' }),
+      expect.objectContaining({ id: 'message-2', status: 'error', searchableText: 'stopped' })
     ])
   })
 
