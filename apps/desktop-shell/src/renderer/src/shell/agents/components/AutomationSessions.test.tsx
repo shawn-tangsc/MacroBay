@@ -57,13 +57,51 @@ afterEach(async () => {
   host = undefined
 })
 
+
+/**
+ * 用例断言的是**真实 CSS 链**：把三个样式文件里相关的规则原样注入，再量计算值。
+ * jest 环境不加载样式表，所以不注入就等于没测样式。
+ */
+const REPO_ROOT = join(__dirname, '../../../../../../../..')
+function cssRule(source: string, selector: string): string {
+  const start = source.indexOf(`${selector} {`)
+  if (start < 0) throw new Error(`rule not found: ${selector}`)
+  return source.slice(start, source.indexOf('}', start) + 1)
+}
+function injectStyles(): HTMLStyleElement {
+  // 只取与这条判据有关的三条规则：整份 styles.css 有一万多行，happy-dom 解析不了会整块丢掉。
+  const collapsibleCss = readFileSync(
+    join(REPO_ROOT, 'platform/ui/components/collapsible-group/collapsibleGroup.css'),
+    'utf8'
+  )
+  const blockCss = readFileSync(join(__dirname, 'automationSessions.css'), 'utf8')
+  const shellCss = readFileSync(join(__dirname, '../../../styles.css'), 'utf8')
+  // happy-dom 不展开 `overflow` 简写，只认 `overflow-y`；真实文件里是简写，注入前按等价长写展开，
+  // 两处都保留断言（下面 CSS 链用例仍读原文，真文件没这条简写就会红）。
+  const longhand = (rule: string): string => rule.replace(/overflow:\s*(auto|scroll|hidden|visible)/u, 'overflow-y: $1')
+  const element = document.createElement('style')
+  element.textContent = [
+    longhand(cssRule(collapsibleCss, '.collapsible-group__body')),
+    longhand(cssRule(blockCss, '.agent-auto-sessions .collapsible-group__body')),
+    longhand(cssRule(shellCss, '.agent-session-list'))
+  ].join('\n')
+  document.head.append(element)
+  return element
+}
+const scrollsVertically = (element: HTMLElement): boolean => {
+  const value = getComputedStyle(element).overflowY
+  return value === 'auto' || value === 'scroll'
+}
+
 async function render(sessions: readonly AgentSessionEntity[], onSelectSession = vi.fn()) {
   await act(async () => root!.render(createElement(ShellTimeZoneProvider, {
     timeZone: 'UTC',
-    children: createElement(AgentTextProvider, {
-      language: 'zh-CN',
-      children: createElement(AutomationSessions, { sessions, onSelectSession })
-    })
+    children: createElement('div', { className: 'agent-session-list' },
+      createElement(AgentTextProvider, {
+        language: 'zh-CN',
+        children: createElement(AutomationSessions, { sessions, onSelectSession })
+      })
+    )
   })))
   await act(async () => { await Promise.resolve() })
   return { dom: host!, onSelectSession }
@@ -189,51 +227,38 @@ describe('automation sessions block', () => {
   })
 
   it('with 41 real rows never builds a second scrollbar inside the sidebar', async () => {
-    // 真实量级：41 条自动会话。滚动只许有一条，而且在外层 `.agent-session-list`（侧栏唯一的
-    // 滚动容器）：展开区一旦自己设上限（`maxBodyHeight` 的默认 320），同一列上就会出现两条滚动条，
+    // 真实量级：41 条自动会话。滚动只许有一条，而且在外层 `.agent-session-list`：
+    // 展开区自己设上限（`maxBodyHeight` 的默认 320）就会出现第二条滚动条，
     // 外侧那条几乎没内容可滚——就是「小盒子自己滚、盒子下面一大片空白」。
     const { dom } = await render(
       Array.from({ length: 41 }, (_, index) => session(`s${index}`, `自动会话 ${index}`, todayAt))
     )
     await click(outerHead(dom))
-
-    const outerBody = dom.querySelector<HTMLElement>('.agent-auto-sessions .collapsible-group__body')!
-    expect(outerBody.style.maxHeight).toBe('')
-    expect(outerBody.style.height).toBe('')
-    expect(outerBody.style.overflowY).toBe('')
-    expect(outerBody.contains(outerHead(dom))).toBe(false)
-    expect(outerBody.querySelectorAll('.collapsible-group__row--action')).toHaveLength(41)
-
-    // 内层每天一组同样不设上限（同一条判据）。
-    for (const dayBody of [...dom.querySelectorAll<HTMLElement>('.collapsible-group__body')].slice(1)) {
-      expect(dayBody.style.maxHeight).toBe('')
-      expect(dayBody.style.height).toBe('')
-      expect(dayBody.style.overflowY).toBe('')
-    }
-
-    // 计算样式：组件 CSS 给展开区的是 `overflow: auto`（jest/happy-dom 不加载样式表，这里把真实
-    // 规则原样注入，见下方「CSS 链」断言——两处必须一致）。有了 auto 但没有上限，它就不是滚动容器。
-    const style = document.createElement('style')
-    style.textContent = `
-      .collapsible-group__body { overflow-y: auto; }
-      .agent-session-list { overflow-y: auto; }
-    `
-    document.head.append(style)
+    const styles = injectStyles()
     try {
-      // happy-dom 把「没有设上限」报成 `''`（浏览器报 `none`），两种都算没有上限。
-      const unbounded = (value: string): boolean => value === '' || value === 'none' || value === 'auto'
-      const isBoundedScroller = (element: HTMLElement): boolean => {
-        const computed = getComputedStyle(element)
-        const scrolls = computed.overflowY === 'auto' || computed.overflowY === 'scroll'
-        return scrolls && !unbounded(computed.maxHeight) && !unbounded(computed.height)
+      const bodies = [...dom.querySelectorAll<HTMLElement>('.agent-auto-sessions .collapsible-group__body')]
+      expect(bodies.length).toBeGreaterThan(0)
+
+      for (const body of bodies) {
+        // 判据 1：展开区不得自带滚动条——计算值上既不是 auto/scroll，也没有高度上限。
+        expect(body.style.maxHeight).toBe('')
+        expect(body.style.height).toBe('')
+        expect(scrollsVertically(body)).toBe(false)
+        const maxHeight = getComputedStyle(body).maxHeight
+        expect(maxHeight === '' || maxHeight === 'none').toBe(true)
       }
-      const block = dom.querySelector<HTMLElement>('.agent-auto-sessions')!
-      expect([...block.querySelectorAll<HTMLElement>('*')].filter(isBoundedScroller)).toHaveLength(0)
-      expect(unbounded(getComputedStyle(outerBody).maxHeight)).toBe(true)
-      // 组件 CSS 确实给了 `overflow: auto`：它不滚，是因为**没有上限**，不是因为没有 overflow。
-      expect(getComputedStyle(outerBody).overflowY).toBe('auto')
+
+      // 判据 2：这一列只有一个滚动容器，而且就是 `.agent-session-list` 自己。
+      const list = dom.querySelector<HTMLElement>('.agent-session-list')!
+      expect(scrollsVertically(list)).toBe(true)
+      const scrollers = [list, ...list.querySelectorAll<HTMLElement>('*')].filter(scrollsVertically)
+      expect(scrollers).toEqual([list])
+
+      const outerBody = dom.querySelector<HTMLElement>('.agent-auto-sessions .collapsible-group__body')!
+      expect(outerBody.contains(outerHead(dom))).toBe(false)
+      expect(outerBody.querySelectorAll('.collapsible-group__row--action')).toHaveLength(41)
     } finally {
-      style.remove()
+      styles.remove()
     }
   })
 
@@ -241,8 +266,9 @@ describe('automation sessions block', () => {
     // CSS 链：本块的样式表不许再出现 overflow / max-height（出现即等于自己造第二个滚动条）；
     // 侧栏那条唯一滚动条仍由 `.agent-session-list` 声明。两条一起钉——只钉一条会被另一条绕过。
     const blockCss = readFileSync(join(__dirname, 'automationSessions.css'), 'utf8')
-    expect(blockCss).not.toMatch(/\.agent-auto-sessions[^{]*\{[^}]*overflow/iu)
-    expect(blockCss).not.toMatch(/\.agent-auto-sessions[^{]*\{[^}]*max-height/iu)
+    // 本块的规则只许把展开区覆盖成「不滚」：任何 overflow: auto/scroll 或数字上限都会再造一条滚动条。
+    expect(blockCss).not.toMatch(/\.agent-auto-sessions[^{]*\{[^}]*overflow(-y)?:\s*(auto|scroll)/iu)
+    expect(blockCss).not.toMatch(/\.agent-auto-sessions[^{]*\{[^}]*max-height:\s*\d/iu)
 
     const shellCss = readFileSync(join(__dirname, '../../../styles.css'), 'utf8')
     const listRule = shellCss.slice(shellCss.indexOf('.agent-session-list {'), shellCss.indexOf('}', shellCss.indexOf('.agent-session-list {')))

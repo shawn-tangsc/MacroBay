@@ -8,6 +8,16 @@
   border-top: 1px solid var(--border);
 }
 
+/* 本块的展开区**不自带滚动**：`CollapsibleGroup` 给展开区的是 `overflow: auto`（壳的通用规则），
+   这里按界面设计 2026-11-10 的判据覆盖成不滚——滚动交给侧栏唯一的 `.agent-session-list`，
+   同一列上不许出现第二条滚动条。上限由外层 `maxBodyHeight={null}` 一并去掉；
+   组件默认值 320 不动（通知、情报源详情、运行活动面板还在用）。 */
+.agent-auto-sessions .collapsible-group__body {
+  overflow-y: visible;
+  overflow-x: visible;
+  max-height: none;
+}
+
 /* 每天一组：整块进一层 12。块头在 12，日头与行内容都落在 24——**只进一层**，
    行内容不许再叠 12 变成 36（界面设计 2026-11-09 写死的判据）。 */
 .agent-auto-sessions__day {
