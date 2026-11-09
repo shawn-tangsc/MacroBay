@@ -353,7 +353,7 @@ export const intelligenceSourcesText = {
     'realmarketapi-market': 'RealMarketAPI',
     'treasury-fiscal-data': '美国财政部数据',
     fred: 'FRED',
-    'alternative-fear-greed': '恐惧贪婪指数',
+    'alternative-fear-greed': '恐惧与贪婪指数',
     'defillama-stablecoins': 'DeFiLlama 稳定币',
     'defillama-tvl': 'DeFiLlama TVL',
     'kraken-system-status': 'Kraken SystemStatus',
