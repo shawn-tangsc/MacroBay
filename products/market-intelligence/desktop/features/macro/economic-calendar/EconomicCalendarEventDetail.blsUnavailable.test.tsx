@@ -60,14 +60,15 @@ async function render(detail: Parameters<typeof EconomicCalendarEventDetail>[0])
 }
 
 describe('the BLS refresh once the official calendar has stopped', () => {
-  const detail = (overrides: Record<string, unknown> = {}) => ({
+  // 与组件契约逐字段对齐：`refreshState` 是可选的，但漏传时 TypeScript 会在这里把缺字段说出来。
+  const detail = (overrides: Record<string, unknown> = {}): Parameters<typeof EconomicCalendarEventDetail>[0] => ({
     event: event(), now: () => new Date(asOf), onRefresh: vi.fn(async () => undefined),
-    onReleaseTimeChanged: async () => undefined, releaseTimeClient: client, text, ...overrides
-  })
+    onReleaseTimeChanged: async () => undefined, releaseTimeClient: client, refreshState: undefined, text, ...overrides
+  } as Parameters<typeof EconomicCalendarEventDetail>[0])
 
   it('shows the stop notice and greys the refresh control, which then sends nothing', async () => {
     const onRefresh = vi.fn(async () => undefined)
-    const host = await render(detail({ onRefresh, blsUnavailableNotice: notice }) as never)
+    const host = await render(detail({ onRefresh, blsUnavailableNotice: notice }))
     // 说明与源注册表同源（调用方传进来的就是由原因码拼出的那一句）。
     expect(host.querySelector('[data-bls-unavailable]')?.textContent).toBe(notice)
     const refresh = [...host.querySelectorAll('button')].find(button => button.textContent?.includes(text.blsRefresh.action))
@@ -81,7 +82,7 @@ describe('the BLS refresh once the official calendar has stopped', () => {
   it('says inline why the control cannot be used: the reason code and that recovery is unknown', async () => {
     // 界面设计 2026-11-09：置灰必须当场说清「为什么不能刷新、什么时候能好（若有）」。
     // 它必须是**这颗键自己的**行内句：不是第二个弹窗，也不是又一段解释。
-    const host = await render(detail({ blsUnavailableNotice: notice, blsRefreshBlocked: blocked }) as never)
+    const host = await render(detail({ blsUnavailableNotice: notice, blsRefreshBlocked: blocked }))
     const inline = host.querySelector('[data-bls-refresh-blocked]')
     expect(inline, 'the greyed key carries its own reason').not.toBeNull()
     expect(inline?.textContent).toContain('official-endpoint-returned-403')
@@ -94,7 +95,7 @@ describe('the BLS refresh once the official calendar has stopped', () => {
 
   it('leaves the control usable when the source is not stopped', async () => {
     const onRefresh = vi.fn(async () => undefined)
-    const host = await render(detail({ onRefresh, blsUnavailableNotice: undefined, blsRefreshBlocked: undefined }) as never)
+    const host = await render(detail({ onRefresh, blsUnavailableNotice: undefined, blsRefreshBlocked: undefined }))
     expect(host.querySelector('[data-bls-unavailable]')).toBeNull()
     expect(host.querySelector('[data-bls-refresh-blocked]')).toBeNull()
     const refresh = [...host.querySelectorAll('button')].find(button => button.textContent?.includes(text.blsRefresh.action))
