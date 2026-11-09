@@ -9,7 +9,9 @@ import type { SafeIntelligenceSourceDetailView } from '../../../service/intellig
 import type { IntelligenceFocusMarketSettings } from '../../../service/intelligence/application/intelligenceFocusSettings'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
-import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
+import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout } from './intelligenceSourceProfileEditor'
+
+export { isSuccessfulCredentialOperation }
 import { buildSourceEnabledById } from './intelligenceSourceCatalogView'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 
@@ -163,7 +165,7 @@ export function useIntelligenceSourcesSettings(labels: {
           notifyIntelligenceSourcesChanged()
 
           if (enabled && detail.profile.collectionPreset !== 'manual') {
-            void pollRunHealth(sourceId!)
+            void waitForRunHealth(sourceId!)
               .then((health) => {
                 setState((current) => {
                   if (current.selectedSourceId !== sourceId) return current
@@ -450,87 +452,4 @@ export function useIntelligenceSourcesSettings(labels: {
     refreshHealth,
     saveFocusMarkets
   }
-}
-
-export function isSuccessfulCredentialOperation(value: unknown, sourceId: string): boolean {
-  return isAcceptedCredentialSave(value, sourceId)
-}
-
-function waitForRunHealth(sourceId: string) {
-  return pollRunHealth(sourceId)
-}
-
-async function pollRunHealth(sourceId: string) {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const health = await intelligenceSourcesClient.getHealth(sourceId)
-    if (health.lastSuccessAt || health.lastFailureAt || health.lastRunSummary) {
-      return health
-    }
-    await sleep(500)
-  }
-  return intelligenceSourcesClient.getHealth(sourceId)
-}
-
-function resolveEnabledNotice(
-  profile: IntelligenceSourceProfile,
-  enabled: boolean,
-  labels: {
-    saved: string
-    disabledSaved: string
-    enabledManualHint: string
-    enabledAutoCollectQueued: string
-  }
-): string {
-  if (!enabled) return labels.disabledSaved
-  if (profile.collectionPreset === 'manual') return labels.enabledManualHint
-  return labels.enabledAutoCollectQueued
-}
-
-function resolveRunNotice(
-  health: Awaited<ReturnType<typeof intelligenceSourcesClient.getHealth>>,
-  labels: { runQueued: string; runSucceeded: string; runFailed: string }
-): string {
-  if (health.lastFailureAt && (!health.lastSuccessAt || health.lastFailureAt >= health.lastSuccessAt)) {
-    return health.lastRunSummary ? `${labels.runFailed} ${health.lastRunSummary}` : labels.runFailed
-  }
-  if (health.lastSuccessAt) {
-    return health.lastRunSummary ? `${labels.runSucceeded} ${health.lastRunSummary}` : labels.runSucceeded
-  }
-  return labels.runQueued
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    sleep(ms).then(() => {
-      throw new Error('Save timed out.')
-    })
-  ])
-}
-
-function toSaveProfileInput(profile: IntelligenceSourceProfile) {
-  return {
-    sourceId: profile.sourceId,
-    enabled: profile.enabled,
-    collectionPreset: profile.collectionPreset,
-    includeInSentiment: profile.includeInSentiment,
-    scopePolicy: profile.scopePolicy,
-    rawArchiveEnabled: profile.rawArchiveEnabled,
-    retentionMode: profile.retentionMode,
-    autoReplayAfterParserUpgrade: profile.autoReplayAfterParserUpgrade,
-    credentialRef: profile.credentialRef
-  }
-}
-
-function upsertProfile(
-  profiles: IntelligenceSourceProfile[],
-  profile: IntelligenceSourceProfile
-): IntelligenceSourceProfile[] {
-  const index = profiles.findIndex((item) => item.sourceId === profile.sourceId)
-  if (index < 0) return [...profiles, profile]
-  return profiles.map((item, itemIndex) => (itemIndex === index ? profile : item))
 }
