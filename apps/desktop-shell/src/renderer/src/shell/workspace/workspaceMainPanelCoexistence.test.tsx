@@ -161,7 +161,8 @@ describe('PLAT-35 主窗 DOM 共存：页面正文 + 停靠面板帧', () => {
 })
 
 describe('PLAT-35 接线守卫：AppShell 必须把主窗页面区域包进 MainWindowPanelArea', () => {
-  const appShell = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/AppShell.tsx'), 'utf8')
+  // 2026-11-09：主窗视图搬到 `AppShellView.tsx`，判据不变，只跟着实现换文件。
+  const appShell = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/AppShellView.tsx'), 'utf8')
 
   it('AppShell 使用 MainWindowPanelArea 并以 Tab 链的活动实例键作为工作区键', () => {
     expect(appShell).toContain('MainWindowPanelArea')
