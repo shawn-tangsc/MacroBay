@@ -156,6 +156,11 @@ describe('claiming the briefing sessions that were created without an identity',
     await d.links.put({ editionDate: '2026-11-10', periodId: DEFAULT_PERIOD_ID, locale: 'zh-CN', sessionId: otherEdition.id, state: 'running', createdAt: '2026-11-10T05:00:00.000Z', updatedAt: '2026-11-10T05:00:00.000Z' })
 
     // 迁移前快照：内容字段原样记下来，迁移后逐字比对。
+    // 读者列表的判据就是面板用的那条：origin !== 'automation'。迁移前这一期有三条混在里面。
+    const readerVisibleBefore = [...d.sessions.values()]
+      .filter(session => (session.origin ?? 'reader') !== 'automation' && session.name.includes('11-09'))
+    expect(readerVisibleBefore).toHaveLength(3)
+
     const before = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
     const countBefore = d.sessions.size
 
@@ -188,7 +193,12 @@ describe('claiming the briefing sessions that were created without an identity',
     // 3) 行数不变；消息表没动（fake 里的 messages 属于会话内容，上面已逐字比对）。
     expect(d.sessions.size).toBe(countBefore)
 
-    // 幂等：再跑一次不再改任何行。
+    // 4) 读者列表（面板的过滤条件：origin !== 'automation'）里，这一期**一条都不再出现**。
+    expect([...d.sessions.values()]
+      .filter(session => (session.origin ?? 'reader') !== 'automation' && session.name.includes('11-09'))).toHaveLength(0)
+
+    // 幂等：再跑一次不再改任何行，而且每一行的内容**逐字不变**（不是只看 updated 计数）。
+    const afterFirstRun = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
     const again = await claimExistingBriefingSessions({
       links: d.links,
       agentId: 'daily-brief-editor',
@@ -197,5 +207,7 @@ describe('claiming the briefing sessions that were created without an identity',
     })
     expect(again.updated).toBe(0)
     expect(d.updateAgentSession).toHaveBeenCalledTimes(4)
+    const afterSecondRun = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
+    expect(afterSecondRun).toEqual(afterFirstRun)
   })
 })
