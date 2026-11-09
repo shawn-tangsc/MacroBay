@@ -1,4 +1,4 @@
-import { editionNewsTitle, editionNewsTitleIsOriginal, type BriefingConclusionSynthesis, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import { dailyBriefingPolicy, editionNewsTitle, editionNewsTitleIsOriginal, type BriefingConclusionSynthesis, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -172,6 +172,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
 
     {hasData ? <section className="mi-brief-poster__data-section">
       <h2>{text.sections.data}</h2>
+      {/* 必须显示的读数超过阈值：全部照印，另外说一句"今天信息较多"——不许为了版面删行。 */}
+      {must.length > dailyBriefingPolicy.denseDayMustRows ? <p className="mi-brief-poster__dense-day">{text.denseDay}</p> : null}
       <BriefingDataArea groups={groups} text={text} locale={locale} formatTime={formatTime} paymentDirectionsCompact={paymentDirectionsCompact} policyWords={policyWords} changeArrows={changeArrows} fearGreedBuckets={fearGreedBuckets} />
     </section> : null}
 

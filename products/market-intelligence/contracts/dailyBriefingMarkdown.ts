@@ -1,3 +1,4 @@
+import { dailyBriefingPolicy } from './dailyBriefing/policies'
 import { editionNewsTitle, editionNewsTitleIsOriginal } from './dailyBriefing/readings'
 import { briefingMacroValueLabel } from './dailyBriefingMacroValueText'
 import { briefingEditionPeriod, type BriefingMacroItem, type BriefingMarketRow, type BriefingNewsItem, type BriefingNextItem, type BriefingPulseRow, type BriefingRowChange, type DailyBriefingDocument } from './dailyBriefing'
@@ -20,6 +21,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   readingsAllMissing: string
   /** 价格那两行读的是永续合约：正文标了，复制文本也要标。 */
   perpetualContract: string
+  /** 必须显示的读数超过阈值时说的那句「今天信息较多」。 */
+  denseDay: string
   /** 中文版没有译文时标在标题后的两个字；英文版是 "Original"。 */
   newsOriginal: string
   noValue: string
@@ -107,6 +110,8 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   const rows = briefingDataRows(document)
   if (rows.length > 0) {
     lines.push('', `## ${labels.sections.data}`)
+    // 与海报同一条判据：必须显示的读数超过阈值，就明说这一天很密。
+    if (rows.filter((row) => row.importance.tier === 'must').length > dailyBriefingPolicy.denseDayMustRows) lines.push('', labels.denseDay)
     for (const tier of ['must', 'support', 'reference'] as const) {
       const tierRows = rows.filter((row) => row.importance.tier === tier)
       if (tierRows.length === 0) continue

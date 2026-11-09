@@ -130,6 +130,21 @@ describe('a web-sourced value says so in the copy too (v2.128)', () => {
 })
 
 describe('daily briefing markdown', () => {
+  it('says the day is dense only when the must rows pass the threshold', () => {
+    const base = document()
+    const row = base.data.market[0]!
+    const dense = dailyBriefingToMarkdown({
+      ...base,
+      data: { ...base.data, market: Array.from({ length: 8 }, (_, index) => ({ ...row, id: (['btc','eth','index','dxy','gold','us10y','us10y-real'] as const)[index % 7]!, labelKey: 'dailyBriefing.row.btc' })) }
+    }, options)
+    expect(dense).toContain(options.labels.denseDay)
+    const normal = dailyBriefingToMarkdown({
+      ...base,
+      data: { ...base.data, market: Array.from({ length: 6 }, (_, index) => ({ ...row, id: (['btc','eth','index','dxy','gold','us10y','us10y-real'] as const)[index % 7]!, labelKey: 'dailyBriefing.row.btc' })) }
+    }, options)
+    expect(normal).not.toContain(options.labels.denseDay)
+  })
+
   it('marks the perpetual contract on the copied price rows, like the card does', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     const btc = markdown.split('\n').find((line) => line.startsWith('- BTC'))

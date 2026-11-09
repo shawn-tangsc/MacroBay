@@ -707,6 +707,20 @@ describe('news titles follow the edition language', () => {
     expect(poster).not.toContain(SOURCE)
   })
 
+  it('says the day is dense when the must rows pass the threshold', async () => {
+    const doc = briefing()
+    // 读数行按 id 去重，所以「多」不能靠复制同一条：七条行情 + 三条资金，已经过阈值。
+    const market = (['btc', 'eth', 'index', 'dxy', 'gold', 'us10y', 'us10y-real'] as const)
+      .map((id) => ({ ...doc.data.market[0]!, id, labelKey: 'dailyBriefing.row.btc' }))
+    // 资金行在夹具里是空的：按读数行造三条，只为把"必须显示"的条数顶过阈值（形状由渲染层按 id 归组）。
+    const funds = (['stablecoin', 'etf-btc', 'etf-eth'] as const)
+      .map((id) => ({ ...doc.data.market[0]!, id, group: 'funds' as const, labelKey: 'dailyBriefing.row.stablecoin' })) as unknown as typeof doc.data.funds
+    const rendered = await render({ ...doc, data: { ...doc.data, market, funds } })
+    expect(rendered.querySelector('.mi-brief-poster__dense-day')?.textContent).toBe(text.denseDay)
+    const below = await render({ ...doc, data: { ...doc.data, market, funds: funds.slice(0, 1) } })
+    expect(below.querySelector('.mi-brief-poster__dense-day')).toBeNull()
+  })
+
   it('marks an English headline on a Chinese card as the original instead of printing it silently', async () => {
     const rendered = await renderWith(withNews('zh-CN', [newsItem({})]), zhText, 'zh-CN')
     const title = rendered.querySelector('.mi-brief-poster__news p')!.textContent ?? ''

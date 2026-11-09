@@ -195,6 +195,8 @@
 
 /* 没有 AI 解读的那一期：一句说明，跟着报头走。不是警告条——读者拿到的是数据，缺的是解读。 */
 .mi-brief-poster__ai-notice { margin: 8px 0 0; color: #625f55; font-size: 11px; line-height: 1.55; }
+/* 今日信息较多：一句提示，不是警告条。 */
+.mi-brief-poster__dense-day { margin: 2px 0 6px; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
 .mi-brief-poster__comparison { margin: 8px 0 0; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
 
 /* 没有本期译文的标题：标「原文」，不是重点签，换成次级墨色——事实标记，不抢视线。 */
