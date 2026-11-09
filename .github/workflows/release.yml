@@ -105,10 +105,11 @@ jobs:
 
   macos-x64:
     name: macOS x64 dmg
-    # Intel runner. If `macos-13` is retired, use `macos-15-intel`; if neither exists,
-    # cross-build on `macos-latest` with pnpm `supportedArchitectures` for darwin/x64 and
-    # keep the CLI-architecture assertion below (do not drop it).
-    runs-on: macos-13
+    # Intel runner. `macos-13` was retired: the GitHub-hosted runner list now publishes macOS 15
+    # x64 as `macos-15-intel` (and `macos-15-large`). If that label ever disappears too, cross-build
+    # on `macos-latest` with pnpm `supportedArchitectures` for darwin/x64 and keep the
+    # CLI-architecture assertion below (do not drop it).
+    runs-on: macos-15-intel
     timeout-minutes: 60
     steps:
       - name: Checkout

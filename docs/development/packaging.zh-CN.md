@@ -30,8 +30,8 @@ git tag -a vX.Y.Z -m "MacroBay X.Y.Z (alpha)"
 git push origin vX.Y.Z
 ```
 
-它在 `macos-latest` 上产出 `release/MacroBay-arm64.dmg`、在 Intel runner（`macos-13`；退役则用
-`macos-15-intel`）上产出 `release/MacroBay-x64.dmg`、在 `windows-latest` 上产出 NSIS 安装器，
+它在 `macos-latest` 上产出 `release/MacroBay-arm64.dmg`、在 Intel runner（`macos-15-intel`，即
+`macos-13` 退役后 GitHub 托管的 macOS 15 x64 镜像）上产出 `release/MacroBay-x64.dmg`、在 `windows-latest` 上产出 NSIS 安装器，
 然后把三个文件、各自的 blockmap 和自动更新元数据挂到同一个 GitHub Release。两条链路都不需要签名
 密钥。`latest-mac.yml` 只由 arm64 job 产出并上传，所以 `MacroBay-arm64.dmg` 的永久链接不会被 x64
 包顶掉。

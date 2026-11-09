@@ -35,7 +35,7 @@ git push origin vX.Y.Z
 ```
 
 That builds `release/MacroBay-arm64.dmg` on `macos-latest`, `release/MacroBay-x64.dmg` on an Intel
-runner (`macos-13`; fall back to `macos-15-intel` if that label is retired), and the NSIS installer on
+runner (`macos-15-intel`, the x64 macOS 15 image GitHub hosts now that `macos-13` is retired), and the NSIS installer on
 `windows-latest`, then publishes one GitHub Release with all three files, their blockmaps and the
 auto-update metadata attached. Neither lane needs signing secrets. `latest-mac.yml` is produced and
 uploaded only by the arm64 job, so the permanent `MacroBay-arm64.dmg` link keeps pointing at the
