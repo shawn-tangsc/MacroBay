@@ -313,9 +313,12 @@ describe('capital conditions snapshot query', () => {
   })
 
   it('returns unavailable before reading current state when the source profile is disabled', async () => {
-    const store = {
-      read: vi.fn()
-    } as never
+    // 用真 store + 一个只观察 read 的内存存储：`as never` 会让 `store.read` 在类型上不存在，
+    // 于是「没读过」这条断言根本写不出来。
+    const read = vi.fn(async () => null)
+    const store = createCapitalConditionsCurrentStateStore({
+      storage: { ...createInMemoryCapitalConditionsStateStorage(), read }
+    })
     const service = createCapitalConditionsSnapshotQueryService({
       store,
       isEnabled: async () => false
@@ -325,7 +328,7 @@ describe('capital conditions snapshot query', () => {
       state: 'unavailable',
       failureCode: 'capital-conditions-query-unavailable'
     })
-    expect(store.read).not.toHaveBeenCalled()
+    expect(read).not.toHaveBeenCalled()
   })
 
   it('fails closed instead of projecting a future or inconsistent current snapshot', async () => {
