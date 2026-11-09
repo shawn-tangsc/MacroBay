@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
+import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from './marketDivergenceQuery'
 
 const asOf = '2026-10-30T12:00:00.000Z'
@@ -18,6 +20,15 @@ function reader(overrides: Partial<DivergenceLegReader> = {}): DivergenceLegRead
   }
 }
 
+/**
+ * `withheld` rides on the two settled branches of the result; the `unavailable` branch has no rows and
+ * no reasons. Every case below expects a settled answer, so this says that once instead of casting.
+ */
+function settled(result: MarketDivergenceResult): Exclude<MarketDivergenceResult, { state: 'unavailable' }> {
+  if (result.state === 'unavailable') throw new Error(`expected a settled result, got ${result.reason}`)
+  return result
+}
+
 describe('market divergence query', () => {
   it('answers with the rows the legs support', async () => {
     const result = await queryMarketDivergenceAsync({ asOf, read: reader() })
@@ -28,7 +39,7 @@ describe('market divergence query', () => {
 
   it('names a leg that answered nothing instead of failing the whole card', async () => {
     const result = await queryMarketDivergenceAsync({ asOf, read: reader({ stablecoin: async () => undefined }) })
-    expect(result.withheld).toContainEqual({ pairId: 'liquidity-leverage', reason: 'leg-missing', leg: 'stablecoin' })
+    expect(settled(result).withheld).toContainEqual({ pairId: 'liquidity-leverage', reason: 'leg-missing', leg: 'stablecoin' })
     if (result.state !== 'available') return
     expect(result.rows.map(row => row.pairId)).not.toContain('liquidity-leverage')
   })
@@ -36,25 +47,25 @@ describe('market divergence query', () => {
   it('reports a throwing leg as a failed read, not as an empty market', async () => {
     const boom = vi.fn(async () => { throw new Error('leg down') })
     const result = await queryMarketDivergenceAsync({ asOf, read: reader({ sentiment: boom as never }) })
-    expect(result.withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'sentiment' })
+    expect(settled(result).withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'sentiment' })
   })
 
   it('reports an unwired sentiment reader as a failed read too', async () => {
     const result = await queryMarketDivergenceAsync({ asOf, read: reader({ sentiment: async () => ({ state: 'unavailable' }) }) })
-    expect(result.withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'sentiment' })
+    expect(settled(result).withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'sentiment' })
   })
 
   it('reports a day with nothing to score as a missing leg, not as a failed read', async () => {
     const result = await queryMarketDivergenceAsync({ asOf, read: reader({ sentiment: async () => ({ state: 'empty', reason: 'no-scored-items' }) }) })
-    expect(result.withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' })
-    expect(result.withheld.some(entry => entry.reason === 'leg-unavailable')).toBe(false)
+    expect(settled(result).withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' })
+    expect(settled(result).withheld.some(entry => entry.reason === 'leg-unavailable')).toBe(false)
   })
 
   it('keeps a zero bearish share as a reading: no headline was bearish, which is not an empty day', async () => {
     const reading = readSentimentLeg(view({ bearish: 0, directional: 12 }))
     expect(reading).toMatchObject({ state: 'available', bearishSharePercent: 0, scoredCount: 12 })
     const result = await queryMarketDivergenceAsync({ asOf, read: reader({ sentiment: async () => reading }) })
-    expect(result.withheld.some(entry => entry.leg === 'sentiment')).toBe(false)
+    expect(settled(result).withheld.some(entry => entry.leg === 'sentiment')).toBe(false)
   })
 
   it('refuses to publish a share when no headline took a side', async () => {
@@ -81,11 +92,12 @@ describe('market divergence query', () => {
 })
 
 /** The narrowest view the leg reader accepts: enough to say how many headlines took which side. */
-function view(input: Readonly<{ bearish: number; directional: number }>) {
+function view(input: Readonly<{ bearish: number; directional: number }>): NewsSentimentView {
   const item = (index: number, polarity: 'bearish' | 'bullish' | 'neutral') => ({
-    itemId: `item-${polarity}-${index}`, title: `headline ${index}`, polarity, polarityScore: 0,
-    strength: 1, confidence: 0.8, engine: 'rules', scoredAt: at(1), publishedAt: at(1),
-    sourceId: 'wire', sourceCategory: 'crypto-media', sourceTrust: 'standard', caveats: [], bodyTranslationState: 'missing'
+    itemId: `item-${polarity}-${index}`, title: `headline ${index}`, polarity,
+    strength: 1, confidence: 0.8, engine: 'rules' as const, scoredAt: at(1), publishedAt: at(1),
+    sourceId: 'wire', sourceName: 'Wire', symbols: [], reasonCode: 'scored',
+    caveats: [], bodyTranslationState: 'missing' as const
   })
   return {
     state: 'available', asOf, generatedAt: asOf, window: '24h',
