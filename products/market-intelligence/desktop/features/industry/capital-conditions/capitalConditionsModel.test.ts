@@ -185,10 +185,10 @@ describe('dashboard capital conditions model', () => {
 
   it.each([
     [{ state: 'empty', asOf }, { state: 'empty' }],
-    [{ state: 'unavailable', failureCode: 'capital-conditions-query-unavailable' }, { state: 'unavailable' }],
-    [{ state: 'available', asOf, etf: { state: 'unavailable' }, coreStablecoins: { observedAt: asOf, verifiedAt: asOf, currentUsd: Number.POSITIVE_INFINITY, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }, conclusion: 'partial' }, { state: 'unavailable' }],
-    [{ state: 'available', asOf, etf: { state: 'unavailable' }, coreStablecoins: { observedAt: asOf, verifiedAt: asOf, currentUsd: Number.MAX_VALUE, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }, conclusion: 'partial' }, { state: 'unavailable' }],
-    [{ state: 'available', asOf, etf: { state: 'unavailable' }, coreStablecoins: { observedAt: '2026-08-18T07:00:00Z', verifiedAt: asOf, currentUsd: 1, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }, conclusion: 'partial' }, { state: 'unavailable' }]
+    [{ state: 'unavailable', failureCode: 'capital-conditions-query-unavailable' }, { state: 'unavailable', reason: 'snapshot-unavailable' }],
+    [{ state: 'available', asOf, etf: { state: 'unavailable' }, coreStablecoins: { observedAt: asOf, verifiedAt: asOf, currentUsd: Number.POSITIVE_INFINITY, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }, conclusion: 'partial' }, { state: 'unavailable', reason: 'value-unformattable' }],
+    [{ state: 'available', asOf, etf: { state: 'unavailable' }, coreStablecoins: { observedAt: asOf, verifiedAt: asOf, currentUsd: Number.MAX_VALUE, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }, conclusion: 'partial' }, { state: 'unavailable', reason: 'value-unformattable' }],
+    [{ state: 'available', asOf, etf: { state: 'unavailable' }, coreStablecoins: { observedAt: '2026-08-18T07:00:00Z', verifiedAt: asOf, currentUsd: 1, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }, conclusion: 'partial' }, { state: 'unavailable', reason: 'contract-mismatch' }]
   ])('fails closed for unsafe safe-query variants', (input, expected) => {
     expect(projectDashboardCapitalConditionsSnapshot(input, asOf)).toEqual(expected)
   })

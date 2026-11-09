@@ -114,6 +114,25 @@ export type DashboardEtfReading = Readonly<{
   verifiedAt?: string
 }>
 
+/**
+ * 卡片整体读不出来时的**原因**。原来这里一个字都没有，5 种完全不同的失败都画成同一块「读取失败 + 重试」，
+ * 而其中三种点了重试也不会好——给一个必然再失败的按钮，比没有按钮更坏。
+ *
+ * `retryable` 的判据只有一条：**读者点一下会不会有不同结果**。只有「读了但没读成」会；
+ * 形状/版本不符、时钟不合法、客户端没接上，重试一万次也一样。
+ */
+export type DashboardCapitalConditionsUnavailableReason =
+  | 'contract-mismatch'
+  | 'invalid-clock'
+  | 'client-unavailable'
+  | 'snapshot-unavailable'
+  | 'value-unformattable'
+  | 'query-failed'
+
+export function isCapitalConditionsRetryable(reason: DashboardCapitalConditionsUnavailableReason): boolean {
+  return reason === 'snapshot-unavailable' || reason === 'query-failed'
+}
+
 export type DashboardCapitalConditionsState =
   | { state: 'loading' }
   | {
@@ -157,14 +176,18 @@ export type DashboardCapitalConditionsState =
       dailyFlows?: readonly DashboardStablecoinFlow[]
     }
   | { state: 'empty' }
-  | { state: 'unavailable' }
+  | { state: 'unavailable'; reason: DashboardCapitalConditionsUnavailableReason }
 
 export function projectDashboardCapitalConditionsSnapshot(value: unknown, asOf: string): Exclude<DashboardCapitalConditionsState, { state: 'loading' }> {
   try {
-    if (!isCanonicalCapitalConditionsSnapshotTime(asOf)) return { state: 'unavailable' }
+    if (!isCanonicalCapitalConditionsSnapshotTime(asOf)) return { state: 'unavailable', reason: 'invalid-clock' }
     if (isExactRecord(value, ['state', 'asOf']) && value.state === 'empty' && value.asOf === asOf) return { state: 'empty' }
-    if (isExactRecord(value, ['state', 'failureCode']) && value.state === 'unavailable' && value.failureCode === capitalConditionsSnapshotPolicy.unavailableFailureCode) return { state: 'unavailable' }
-    if (!isAvailable(value, asOf)) return { state: 'unavailable' }
+    if (isExactRecord(value, ['state', 'failureCode']) && value.state === 'unavailable' && value.failureCode === capitalConditionsSnapshotPolicy.unavailableFailureCode) return { state: 'unavailable', reason: 'snapshot-unavailable' }
+    // 两种失败都不要重试，但原因不同：形状/版本不符（旧版 DTO 多/少键、答案不是这次 asOf 的）该重开应用；
+    // 形状对、只是数字超出显示策略（Infinity / MAX_VALUE）是值本身没法显示。
+    if (!isAvailable(value, asOf)) {
+      return { state: 'unavailable', reason: numbersOutsideDisplayPolicy(value) ? 'value-unformattable' : 'contract-mismatch' }
+    }
     const core = value.coreStablecoins
     const currentUsd = formatUsd(core.currentUsd, false)
     const change1dUsd = formatUsd(core.change1dUsd, true)
@@ -173,7 +196,7 @@ export function projectDashboardCapitalConditionsSnapshot(value: unknown, asOf: 
     const change7dPercent = formatPercent(core.change7dPercent)
     const change30dUsd = formatUsd(core.change30dUsd, true)
     const change30dPercent = formatPercent(core.change30dPercent)
-    if (!currentUsd || !change1dUsd || !change1dPercent || !change7dUsd || !change7dPercent || !change30dUsd || !change30dPercent) return { state: 'unavailable' }
+    if (!currentUsd || !change1dUsd || !change1dPercent || !change7dUsd || !change7dPercent || !change30dUsd || !change30dPercent) return { state: 'unavailable', reason: 'value-unformattable' }
     const dailyFlows = isValidCapitalConditionsDailyFlows(core.dailyFlows, asOf) ? core.dailyFlows : undefined
     const etfReading = projectEtf(value.etf, asOf)
     const etf = legacyEtfProjection(etfReading)
@@ -184,7 +207,7 @@ export function projectDashboardCapitalConditionsSnapshot(value: unknown, asOf: 
       ...(dailyFlows ? { dailyFlows } : {})
     }
   } catch {
-    return { state: 'unavailable' }
+    return { state: 'unavailable', reason: 'query-failed' }
   }
 }
 
@@ -373,6 +396,19 @@ export function etfChipAnalysisOf(read: ModuleSignalAnalysisRead | ModuleSignalR
     signalSeverityRank[entry.signal.severity] > signalSeverityRank[best.signal.severity] ? entry : best)
   const analysis = (read as { analysis?: Readonly<Record<string, SignalAnalysisStateView>> }).analysis
   return analysis?.[loudest.signal.dedupeKey]
+}
+
+/**
+ * 形状对、字段齐全，但数字超出显示策略（`Infinity`、`MAX_VALUE`）：与「版本不符」分开，
+ * 因为读者看到的动作相同（都不给重试），但排障时要知道是喂来的数不对、不是版本错。
+ */
+function numbersOutsideDisplayPolicy(value: unknown): boolean {
+  if (!isExactRecord(value, ['state', 'asOf', 'etf', 'coreStablecoins', 'conclusion'])) return false
+  const core = value.coreStablecoins
+  if (!isExactRecord(core, ['observedAt', 'verifiedAt', 'currentUsd', 'change1dUsd', 'change1dPercent', 'change7dUsd', 'change7dPercent', 'change30dUsd', 'change30dPercent']) &&
+    !isExactRecord(core, ['observedAt', 'verifiedAt', 'currentUsd', 'change1dUsd', 'change1dPercent', 'change7dUsd', 'change7dPercent', 'change30dUsd', 'change30dPercent', 'dailyFlows'])) return false
+  const numeric = ['currentUsd', 'change1dUsd', 'change1dPercent', 'change7dUsd', 'change7dPercent', 'change30dUsd', 'change30dPercent']
+  return numeric.every((key) => typeof core[key] === 'number') && numeric.some((key) => !isDisplayNumber(core[key]))
 }
 
 export function projectEtfOutflowChip(

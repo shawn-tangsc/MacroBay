@@ -48,7 +48,9 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
     const asOf = readCanonicalClock(mountInput.now)
     const queryClient = mountInput.client
     if (!asOf || !queryClient) {
-      apply({ state: 'unavailable' })
+      // 两种都不是「读了但没读成」：时钟不合法是调用方给错了 asOf，客户端没接上是装配缺了东西。
+      // 它们与读失败分开，读者才不会对着一个永远不会好的重试一直点。
+      apply({ state: 'unavailable', reason: asOf ? 'client-unavailable' : 'invalid-clock' })
       return () => { active = false }
     }
 
@@ -76,7 +78,7 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
         }
         const delay = capitalConditionsReadRetryDelaysMs[attempt]
         if (delay === undefined) {
-          apply({ state: 'unavailable' })
+          apply({ state: 'unavailable', reason: 'query-failed' })
           return
         }
         timer = setTimeout(() => { if (active) read(attempt + 1) }, delay)

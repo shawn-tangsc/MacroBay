@@ -297,7 +297,7 @@ describe('CapitalConditionsPanel', () => {
 
   it.each(['zh-CN', 'en-US'] as const)('does not fabricate an observation time for the %s non-available states', (locale) => {
     const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
-    for (const state of [{ state: 'loading' as const }, { state: 'empty' as const }, { state: 'unavailable' as const }]) {
+    for (const state of [{ state: 'loading' as const }, { state: 'empty' as const }, { state: 'unavailable' as const, reason: 'query-failed' as const }]) {
       const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
       expect(markup).not.toContain(text.observedAt)
       expect(markup).not.toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2} GMT/)
@@ -319,7 +319,7 @@ describe('CapitalConditionsPanel', () => {
 
   it('tells a failed read apart from an empty one, through the platform error state', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
-    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' } }))
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' } }))
 
     // "Could not read" is an error, never an empty: a panel that says "nothing here" when the
     // query failed tells the reader the opposite of what happened.
@@ -635,7 +635,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh })))
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
     const action = container.querySelector<HTMLButtonElement>('.state-view__action')!
     expect(action).not.toBeNull()
     await act(async () => action.click())
@@ -665,7 +665,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh })))
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
     const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__refresh')!
     expect(button.textContent).toBe(text.refresh)
     await act(async () => button.click())
@@ -695,7 +695,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh: () => undefined, refreshFailed: true })))
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh: () => undefined, refreshFailed: true })))
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(text.refreshFailed)
 
     // `loading` already means a read is in flight, so the control must not start a second one.

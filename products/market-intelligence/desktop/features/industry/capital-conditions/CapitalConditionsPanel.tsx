@@ -16,7 +16,7 @@ import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
-import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
+import { isCapitalConditionsRetryable, type DashboardCapitalConditionsState, type DashboardEtfFlowAsset } from './capitalConditionsModel'
 import { EtfOutflowChip, EtfSignalDetailDialog, type EtfSignalText } from './EtfOutflowSignal'
 
 type Text = {
@@ -24,6 +24,8 @@ type Text = {
   loading: string
   /** The card's own empty sentence, rendered through the platform reason slot (contract §17). */
   empty: string
+  /** 形状/版本不符时读者唯一能做的动作（完全退出后重开）；这一种不给重试按钮。 */
+  contractMismatch: string
   stablecoin: string
   stablecoinScope: string
   asset: string
@@ -100,7 +102,18 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         : state.state === 'empty'
           ? <StateView state="empty" reasonCode="not-yet"
               productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.empty', resolve: () => text.empty }} />
-          : <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />}
+          : state.reason === 'contract-mismatch'
+            // 版本/形状不符：重试读的是同一份契约，多少次都一样；唯一出口是重启应用。
+            // `needs-restart` 这个名字就是为它准备的，动作走平台那条窗口通道（`app.relaunch()`）。
+            ? <StateView state="error" reasonCode="needs-restart"
+                productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.contractMismatch', resolve: () => text.contractMismatch }}
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void window.platform.app.relaunch() } }} />
+            : isCapitalConditionsRetryable(state.reason)
+              // 「读了但没读成」才给重试。
+              ? <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
+              // 其余（时钟不合法、客户端没接上、数字无法显示）都是接线或数据问题：读者能做的是再读一次，
+              // 所以给的是 refresh 而不是一个必然失败的 retry。
+              : <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.refresh, onSelect: onRefresh }} />}
       {/* The state above is what the last read returned. Re-reading it changes nothing, so the
           only useful action here is to ask the sources to be collected again. */}
       {onRefresh ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
