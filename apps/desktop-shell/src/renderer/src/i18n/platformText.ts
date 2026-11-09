@@ -1819,6 +1819,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         channelRuntimeGenerationStale: '频道状态刚变过，这一次没有生效，再点一次',
         channelRuntimeOwnerLost: '启用过程中运行许可被别的操作抢走了，再点一次',
         telegramRuntimeEvidenceMissing: '缺少真机验证记录，所以没有启动',
+        telegramPollTimeout: '连接超时，正在自动重连；不用做什么，恢复后会自动继续收消息',
+        telegramPollRetrying: '暂时连不上，正在自动重试；不用做什么，恢复后会记一行「已恢复」',
+        telegramPollRecovered: '已恢复自动收消息',
+        telegramPollAbandoned: '连续重试都失败，已停止自动重连；检查网络或代理后重新启用这条通道',
         telegramRateLimited: '请求太频繁，被平台限流，稍后会自动重试',
         telegramPollFailed: '这一次取消息失败，稍后会自动重试',
         telegramUpdateInvalid: '收到一条看不懂的消息，已跳过'
@@ -3168,6 +3172,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         runtimeStopped: 'connection stopped'
       }),
       channelLogTelegramFailureText: Object.freeze({
+        telegramPollTimeout: 'the connection timed out; it reconnects automatically — nothing to do',
+        telegramPollRetrying: 'temporarily unreachable, retrying automatically; nothing to do',
+        telegramPollRecovered: 'receiving is working again',
+        telegramPollAbandoned: 'automatic reconnect gave up after repeated failures; check the network or proxy, then re-enable this channel',
         telegramConflict: 'another program is using the same bot, so receiving was interrupted',
         telegramProviderRejected: 'the platform rejected the bot credential; enter the token again',
         telegramNetworkUnavailable: 'the network cannot be reached, so receiving stopped',

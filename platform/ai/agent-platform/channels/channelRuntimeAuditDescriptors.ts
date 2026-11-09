@@ -73,6 +73,10 @@ export function describeChannelRuntimeLifecycle(
  * 会重试、不一定算故障的给 WARN（限流、轮询失败、更新结构异常）。
  */
 export type ChannelTelegramFailureCopyKey =
+  | 'telegramPollTimeout'
+  | 'telegramPollRetrying'
+  | 'telegramPollRecovered'
+  | 'telegramPollAbandoned'
   | 'telegramConflict'
   | 'telegramNetworkUnavailable'
   | 'telegramProxyUnavailable'
@@ -99,6 +103,11 @@ export const channelTelegramFailureDescriptors: Readonly<
   'channel-runtime-owner-lost': { level: 'WARN', copyKey: 'channelRuntimeOwnerLost' },
   'telegram-runtime-evidence-missing': { level: 'ERROR', copyKey: 'telegramRuntimeEvidenceMissing' },
   'telegram-rate-limited': { level: 'WARN', copyKey: 'telegramRateLimited' },
+  // 自动重连四态（2026-11-08）：超时是「尝试过、失败」；重试/恢复/放弃是读者看得见的状态。
+  'telegram-poll-timeout': { level: 'ERROR', copyKey: 'telegramPollTimeout' },
+  'telegram-poll-retrying': { level: 'INFO', copyKey: 'telegramPollRetrying' },
+  'telegram-poll-recovered': { level: 'INFO', copyKey: 'telegramPollRecovered' },
+  'telegram-poll-abandoned': { level: 'ERROR', copyKey: 'telegramPollAbandoned' },
   'telegram-poll-failed': { level: 'WARN', copyKey: 'telegramPollFailed' },
   'telegram-update-invalid': { level: 'WARN', copyKey: 'telegramUpdateInvalid' }
 })
