@@ -117,6 +117,7 @@ export function ModelServiceApiAddressSection({
         {/* 图标型动作 → `IconButton`（`sm`=22，尺寸由组件闭集给）。可访问名与 data 钩子不变。 */}
         <IconButton
           ariaLabelKey="modelService.requestConfig"
+          tooltipKey="modelService.requestConfig"
           dataAttributes={{ 'data-request-config-open': true }}
           icon={Settings2}
           onSelect={onOpenRequestConfig}
