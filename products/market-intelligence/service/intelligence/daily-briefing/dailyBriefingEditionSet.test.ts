@@ -17,15 +17,15 @@ const document = (locale: 'zh-CN' | 'en-US' = 'zh-CN'): DailyBriefingDocument =>
   news: { items: [], macro: [], notes: {} },
   data: {
     market: [{
-      id: 'btc', labelKey: 'rows.btc', importance: 'must', state: 'available',
+      id: 'btc', labelKey: 'rows.btc', importance: { tier: 'must', source: 'rule', reasonCode: 'largest-move' }, state: 'available',
       value: { number: 68000, format: 'usd' }, change: null, window: '24h', observedAt: '2026-11-02T00:00:00.000Z'
     }],
     funds: [{
-      id: 'etf-btc', group: 'funds', labelKey: 'rows.etfBtc', importance: 'support', state: 'available',
+      id: 'etf-btc', group: 'funds', labelKey: 'rows.etfBtc', importance: { tier: 'support', source: 'rule', reasonCode: 'reading' }, state: 'available',
       value: { number: -1, format: 'flow-usd' }, change: null, window: 'trading-day', observedAt: '2026-11-02T00:00:00.000Z'
     }],
     sentiment: {
-      fearGreed: { id: 'fear-greed', group: 'sentiment', labelKey: 'rows.fearGreed', importance: 'support', state: 'available', value: { number: 30, format: 'points' }, change: null, window: '24h', observedAt: '2026-11-02T00:00:00.000Z' },
+      fearGreed: { id: 'fear-greed', group: 'sentiment', labelKey: 'rows.fearGreed', importance: { tier: 'support', source: 'rule', reasonCode: 'reading' }, state: 'available', value: { number: 30, format: 'score' }, change: null, window: '24h', observedAt: '2026-11-02T00:00:00.000Z' },
       news: { state: 'empty' }
     }
   },
