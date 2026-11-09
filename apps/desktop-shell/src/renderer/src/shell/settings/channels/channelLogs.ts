@@ -70,7 +70,15 @@ export const DELIVERY_NOT_SHOWN_CODES: ReadonlySet<string> = new Set([
  * 判据是「这条发送有没有违背谁的意愿」——被限流没有，被平台拒绝/目标非法/宿主没在运行才算是故障。
  */
 export const DELIVERY_BY_RULE_CODES: ReadonlySet<string> = new Set([
-  'delivery-rate-limited'
+  // 频率上限：平台限流，自己会重试。
+  'delivery-rate-limited',
+  // 开关关着（读者关了这个落点）与还没绑目标（未绑定）：都不是「试过但失败」。
+  'delivery-target-disabled',
+  'delivery-no-target-bound',
+  // 通道宿主没在运行：是「没启动」，不是这次发送失败。
+  'delivery-host-unavailable',
+  // 代际变了（重启/换代际）：规则，不是故障。
+  'delivery-lifecycle-fenced'
 ])
 
 export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels): ChannelLogRow[] {
@@ -151,7 +159,8 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     rows.push({
       id: `delivery-${entry.id}`,
       at: entry.createdAt,
-      level: uncertain || byRule ? 'WARN' : 'ERROR',
+      // 规则类走中性 INFO（不红），「不确定」用 WARN 提醒，只有真失败才红。
+      level: uncertain ? 'WARN' : byRule ? 'INFO' : 'ERROR',
       text: `${uncertain ? labels.channelLogUncertainPrefix : byRule ? labels.channelLogByRulePrefix : labels.channelLogDeliveryPrefix}${sentence}${
         detail === null ? '' : `（${detail}）`
       }`

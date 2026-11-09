@@ -1831,17 +1831,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         // 具体码优先：有它就不再显示下面那句兜底。
         'delivery-provider-rejected': '平台拒绝了这条消息（可能是找不到这个会话）',
         'delivery-target-invalid': '目标会话的 ID 不合法，一个请求都没发出去',
-        'delivery-rate-limited': '被平台限流了，等一会儿会自动重试',
-        'delivery-host-unavailable': '通道宿主没在运行，这条没有发出去',
+        'delivery-rate-limited': '被平台限流了，等一会儿会自动重试；不用做什么',
+        'delivery-host-unavailable': '通道宿主没在运行，这条没有发出去；重启应用或重新启用这条通道',
         'channel-delivery-unavailable': '通道暂时不可用，这条没有发出去',
-        'delivery-target-disabled': '接收的目标已停用，这条没有发出去',
-        'delivery-no-target-bound': '还没有接收消息的对话，这条没有发出去',
+        'delivery-target-disabled': '接收的目标已停用，这条没有发出去；到频道设置里重新启用目标',
+        'delivery-no-target-bound': '还没有接收消息的对话，这条没有发出去；在频道设置里绑定一个接收对话',
         'delivery-not-authorized': '没有权限发到这条对话，这条没有发出去',
         'delivery-permission-denied': '没有权限发到这条对话，这条没有发出去',
         // 兜底：只有拿不到具体码时才会出现，别把它当解释。
         'channel-delivery-failed': '这次没有发出去，具体原因没有记录',
         'delivery-send-lease-expired': '发送没有回音，按未确认处理',
-        'delivery-lifecycle-fenced': '运行的代际变了，这次发送被放弃',
+        'delivery-lifecycle-fenced': '运行的代际变了（重启或换代际），这次发送被放弃；不用做什么',
         'channel-rejected': '通道拒收了这条',
         unknownAfterSend: '已交给通道，但没拿到回执'
       })
@@ -3192,16 +3192,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogDeliveryText: Object.freeze({
         'delivery-provider-rejected': 'the platform rejected this message (the conversation may not exist)',
         'delivery-target-invalid': 'the target conversation ID is not valid, so nothing was sent',
-        'delivery-rate-limited': 'the platform rate-limited this send; it retries shortly',
-        'delivery-host-unavailable': 'the channel host is not running, so nothing was sent',
+        'delivery-rate-limited': 'the platform rate-limited this send; it retries shortly — nothing to do',
+        'delivery-host-unavailable': 'the channel host is not running, so nothing was sent — restart the app or re-enable the channel',
         'channel-delivery-unavailable': 'the channel is temporarily unavailable, so nothing was sent',
-        'delivery-target-disabled': 'the receiving target is disabled, so nothing was sent',
-        'delivery-no-target-bound': 'no conversation receives messages yet, so nothing was sent',
+        'delivery-target-disabled': 'the receiving target is disabled, so nothing was sent — re-enable it in channel settings',
+        'delivery-no-target-bound': 'no conversation receives messages yet, so nothing was sent — bind one in channel settings',
         'delivery-not-authorized': 'no permission to send to that conversation, so nothing was sent',
         'delivery-permission-denied': 'no permission to send to that conversation, so nothing was sent',
         'channel-delivery-failed': 'this one was not sent, and no specific reason was recorded',
         'delivery-send-lease-expired': 'the send went quiet and is treated as unconfirmed',
-        'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped',
+        'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped — nothing to do',
         'channel-rejected': 'the channel rejected this message',
         unknownAfterSend: 'handed to the channel, but no receipt came back'
       })

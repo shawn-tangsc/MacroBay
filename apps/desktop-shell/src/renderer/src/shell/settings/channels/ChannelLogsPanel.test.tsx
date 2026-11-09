@@ -98,7 +98,8 @@ describe('the channel log panel', () => {
     const conflict = rows.find((node) => node.textContent?.includes('另一个程序也在用这个机器人'))
     const limited = rows.find((node) => node.textContent?.includes('被平台限流'))
     expect(conflict?.getAttribute('data-log-level')).toBe('ERROR')
-    expect(limited?.getAttribute('data-log-level')).toBe('WARN')
+    // 频率上限是规则：中性，不画红。
+    expect(limited?.getAttribute('data-log-level')).toBe('INFO')
     expect(container.textContent).not.toContain(labels.channelLogsUnknownCode)
     expect(container.textContent).not.toContain('telegram-conflict')
   })
@@ -151,8 +152,8 @@ describe('the channel log panel', () => {
       node.textContent?.includes('群里没有 @ 机器人')
     )
     // 群里没 @ 机器人是「按规则忽略」，不是故障：WARN + 可读说明，不能写「没有更多说明」。
-    expect(row?.getAttribute('data-log-level')).toBe('WARN')
-    expect(row?.querySelector('.channel-log-level')?.textContent).toBe('[WARN]')
+    expect(row?.getAttribute('data-log-level')).toBe('INFO')
+    expect(row?.querySelector('.channel-log-level')?.textContent).toBe('[INFO]')
     expect(row?.textContent).toContain('群里没有 @ 机器人，已按规则忽略')
     expect(row?.textContent).not.toContain(labels.channelLogsUnknownCode)
   })
@@ -260,8 +261,7 @@ describe('the channel log panel', () => {
 describe('a failed send names its reason instead of saying "no further explanation"', () => {
   it.each([
     ['delivery-provider-rejected'],
-    ['delivery-target-invalid'],
-    ['delivery-host-unavailable']
+    ['delivery-target-invalid']
   ])('translates %s', async (code) => {
     const container = await mount({
       ...ok,
@@ -322,7 +322,21 @@ describe('the platform\'s own words ride along as a note, never as the reason', 
     )
   })
 
-  it('paints a rule-held send as WARN with its own prefix, never as a red failure', async () => {
+  it('treats a host that was never started as neutral, with the by-rule prefix', async () => {
+    // 「通道宿主没在运行」是规则（没试过），不是这次发送失败：中性 + 一句能做什么。
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [{ id: 'd14', attemptId: 'x', code: 'delivery-host-unavailable', detail: null, createdAt: '2026-11-04T09:06:38.000Z' }]
+      }))
+    })
+    const row = container.querySelector('[data-log-level]')
+    expect(row?.getAttribute('data-log-level')).toBe('INFO')
+    expect(container.textContent ?? '').toContain(labels.channelLogByRulePrefix)
+    expect(container.textContent ?? '').toContain(labels.channelLogDeliveryText['delivery-host-unavailable'])
+  })
+
+  it('paints a rule-held send as INFO with its own prefix, never as a red failure', async () => {
     // 「被平台限流」是规则挡下、会自动重试：它没有错，画成红故障会让读者去查一个不存在的坏通道。
     const container = await mount({
       ...ok,
@@ -331,7 +345,7 @@ describe('the platform\'s own words ride along as a note, never as the reason', 
       }))
     })
     const row = container.querySelector('[data-log-level]')
-    expect(row?.getAttribute('data-log-level')).toBe('WARN')
+    expect(row?.getAttribute('data-log-level')).toBe('INFO')
     const text = container.textContent ?? ''
     expect(text).toContain(labels.channelLogByRulePrefix)
     expect(text).toContain(labels.channelLogDeliveryText['delivery-rate-limited'])

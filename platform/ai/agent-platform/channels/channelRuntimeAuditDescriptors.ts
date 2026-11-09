@@ -33,17 +33,17 @@ export type ChannelRuntimeAuditDescriptor = {
 export const channelRuntimeAuditDescriptors: Readonly<Record<ChannelInboundAuditCode, ChannelRuntimeAuditDescriptor>> = Object.freeze({
   // 真故障：处理失败、绑定丢失、代际失效、任务丢失、容量耗尽。
   'channel-inbound-failed': { level: 'ERROR', copyKey: 'runtimeInboundFailed' },
-  'channel-agent-missing': { level: 'ERROR', copyKey: 'runtimeAgentMissing' },
-  'channel-lifecycle-fenced': { level: 'ERROR', copyKey: 'runtimeLifecycleFenced' },
+  'channel-agent-missing': { level: 'WARN', copyKey: 'runtimeAgentMissing' },
+  'channel-lifecycle-fenced': { level: 'INFO', copyKey: 'runtimeLifecycleFenced' },
   'channel-receipt-without-work-item': { level: 'ERROR', copyKey: 'runtimeReceiptWithoutWorkItem' },
   'channel-work-capacity-exhausted': { level: 'ERROR', copyKey: 'runtimeWorkCapacityExhausted' },
   // 正常处置：被规则挡下、没 @、类型不支持、旧代际——它们是提醒，不是故障。
-  'channel-policy-denied': { level: 'WARN', copyKey: 'runtimePolicyDenied' },
-  'channel-mention-required': { level: 'WARN', copyKey: 'runtimeMentionRequired' },
-  'channel-content-rejected': { level: 'WARN', copyKey: 'runtimeContentRejected' },
-  'channel-stale-generation': { level: 'WARN', copyKey: 'runtimeStaleGeneration' },
+  'channel-policy-denied': { level: 'INFO', copyKey: 'runtimePolicyDenied' },
+  'channel-mention-required': { level: 'INFO', copyKey: 'runtimeMentionRequired' },
+  'channel-content-rejected': { level: 'INFO', copyKey: 'runtimeContentRejected' },
+  'channel-stale-generation': { level: 'INFO', copyKey: 'runtimeStaleGeneration' },
   // 读者的主动动作（换助手），不是故障：INFO/WARN 都不该红。
-  'channel-conversation-switched': { level: 'WARN', copyKey: 'runtimeConversationSwitched' }
+  'channel-conversation-switched': { level: 'INFO', copyKey: 'runtimeConversationSwitched' }
 })
 
 /**
@@ -98,18 +98,18 @@ export const channelTelegramFailureDescriptors: Readonly<
   'telegram-network-unavailable': { level: 'ERROR', copyKey: 'telegramNetworkUnavailable' },
   'telegram-proxy-unavailable': { level: 'ERROR', copyKey: 'telegramProxyUnavailable' },
   'telegram-runtime-start-failed': { level: 'ERROR', copyKey: 'telegramRuntimeStartFailed' },
-  'channel-runtime-owner-missing': { level: 'WARN', copyKey: 'channelRuntimeOwnerMissing' },
-  'channel-runtime-generation-stale': { level: 'WARN', copyKey: 'channelRuntimeGenerationStale' },
-  'channel-runtime-owner-lost': { level: 'WARN', copyKey: 'channelRuntimeOwnerLost' },
-  'telegram-runtime-evidence-missing': { level: 'ERROR', copyKey: 'telegramRuntimeEvidenceMissing' },
-  'telegram-rate-limited': { level: 'WARN', copyKey: 'telegramRateLimited' },
+  'channel-runtime-owner-missing': { level: 'INFO', copyKey: 'channelRuntimeOwnerMissing' },
+  'channel-runtime-generation-stale': { level: 'INFO', copyKey: 'channelRuntimeGenerationStale' },
+  'channel-runtime-owner-lost': { level: 'INFO', copyKey: 'channelRuntimeOwnerLost' },
+  'telegram-runtime-evidence-missing': { level: 'WARN', copyKey: 'telegramRuntimeEvidenceMissing' },
+  'telegram-rate-limited': { level: 'INFO', copyKey: 'telegramRateLimited' },
   // 自动重连四态（2026-11-08）：超时是「尝试过、失败」；重试/恢复/放弃是读者看得见的状态。
   'telegram-poll-timeout': { level: 'ERROR', copyKey: 'telegramPollTimeout' },
   'telegram-poll-retrying': { level: 'INFO', copyKey: 'telegramPollRetrying' },
   'telegram-poll-recovered': { level: 'INFO', copyKey: 'telegramPollRecovered' },
   'telegram-poll-abandoned': { level: 'ERROR', copyKey: 'telegramPollAbandoned' },
-  'telegram-poll-failed': { level: 'WARN', copyKey: 'telegramPollFailed' },
-  'telegram-update-invalid': { level: 'WARN', copyKey: 'telegramUpdateInvalid' }
+  'telegram-poll-failed': { level: 'ERROR', copyKey: 'telegramPollFailed' },
+  'telegram-update-invalid': { level: 'ERROR', copyKey: 'telegramUpdateInvalid' }
 })
 
 export function describeChannelTelegramFailure(
