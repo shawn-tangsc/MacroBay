@@ -50,5 +50,7 @@ describe('assistant startup convergence judged by ownerBootId', () => {
 
     expect(runtime.reconcileStalePending()).toBe(1)
     expect(repos.messages.listByTopic(topic.id)[0]?.status).toBe('error')
+    // 老行收一次就定了：再跑一次不许重复改（否则每次读都跑一遍就成了运行期收尾）。
+    expect(runtime.reconcileStalePending()).toBe(0)
   })
 })

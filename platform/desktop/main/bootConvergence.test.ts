@@ -21,8 +21,20 @@ describe('startup convergence runs once, at boot', () => {
     expect(callIndex).toBeGreaterThan(bootIndex)
   })
 
+  it('runs the assistant sweep once too, at boot', () => {
+    const occurrences = appSource.match(/assistantChatRuntime\.reconcileStalePending\(/gu) ?? []
+    expect(occurrences).toHaveLength(1)
+    expect(appSource.indexOf('assistantChatRuntime.reconcileStalePending('))
+      .toBeGreaterThan(appSource.indexOf('export async function bootstrapDesktopApp'))
+  })
+
   it('is not reachable from an IPC handler', () => {
-    const handler = readFileSync(new URL('./agentIpcHandlers.ts', import.meta.url), 'utf8')
-    expect(handler).not.toContain('reconcileStalePendingMessages')
+    // 谁把收尾挪到「每次读会话都跑」，老数据（owner_boot_id 为 NULL）就会被反复收：
+    // 运行期再收一次，会把正在跑的回合判死。两个入口都不许出现在读路径上。
+    for (const relativePath of ['./agentIpcHandlers.ts', './ipc/agentIpc.ts']) {
+      const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+      expect(source).not.toContain('reconcileStalePendingMessages')
+      expect(source).not.toContain('reconcileStalePending')
+    }
   })
 })
