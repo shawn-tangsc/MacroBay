@@ -5,7 +5,6 @@ import { Info } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
-import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useId, useState } from 'react'
 
