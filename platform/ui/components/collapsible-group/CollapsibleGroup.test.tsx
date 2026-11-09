@@ -7,7 +7,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { CollapsibleGroup, type CollapsibleGroupProps } from './CollapsibleGroup'
+import { CollapsibleGroup, type CollapsibleGroupProps, type CollapsibleGroupRow } from './CollapsibleGroup'
 
 const keys = (value: string): string => value
 
@@ -19,7 +19,10 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-function props(overrides: Partial<CollapsibleGroupProps> = {}): CollapsibleGroupProps {
+/** rows 模式的 props：`children` 模式有自己的形状，两者互斥，helper 也分开。 */
+type RowsModeProps = Extract<CollapsibleGroupProps, { rows: readonly CollapsibleGroupRow[] }>
+
+function props(overrides: Partial<RowsModeProps> = {}): RowsModeProps {
   return {
     titleKey: 'ui.test.groupTitle',
     metaKey: 'ui.test.groupCount',
@@ -30,7 +33,17 @@ function props(overrides: Partial<CollapsibleGroupProps> = {}): CollapsibleGroup
   }
 }
 
-async function mount(overrides: Partial<CollapsibleGroupProps> = {}): Promise<HTMLDivElement> {
+async function renderGroup(groupProps: CollapsibleGroupProps): Promise<HTMLDivElement> {
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root!.render(<CollapsibleGroup {...groupProps} />)
+  })
+  return host
+}
+
+async function mount(overrides: Partial<RowsModeProps> = {}): Promise<HTMLDivElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -135,6 +148,33 @@ describe('CollapsibleGroup', () => {
     expect(row).toContain('font-size: var(--font-body)')
     expect(row).toContain('font-weight: 500')
     expect(row).toContain('line-height: var(--line-body)')
+  })
+
+  it('accepts custom content instead of rows, and keeps the same six behaviours', async () => {
+    // children 模式：壳只提供行为（头行档、箭头、aria、整行可点、默认收起、展开区自滚、头行不滚走），
+    // 内容由调用方给；行级语义（整行按钮 / StatusPill 槽）不在这个模式下。
+    const host = await renderGroup({
+      titleKey: 'ui.test.groupTitle',
+      resolveText: keys,
+      maxBodyHeight: 240,
+      children: <table data-custom-content><tbody><tr><td>自定义内容</td></tr></tbody></table>
+    })
+
+    const header = host.querySelector<HTMLElement>('.ant-collapse-header')!
+    expect(header.getAttribute('aria-expanded')).toBe('false')
+
+    await act(async () => {
+      host.querySelector<HTMLElement>('.collapsible-group__title')!.click()
+    })
+    expect(header.getAttribute('aria-expanded')).toBe('true')
+    expect(document.getElementById(header.getAttribute('aria-controls')!)).not.toBeNull()
+
+    const body = host.querySelector<HTMLElement>('.collapsible-group__body')!
+    expect(body.style.maxHeight).toBe('240px')
+    expect(body.contains(host.querySelector('.collapsible-group__title'))).toBe(false)
+    expect(body.querySelector('[data-custom-content]')).not.toBeNull()
+    // children 模式下不渲染任何行级元素：没有 rows 就没有按钮行。
+    expect(body.querySelector('.collapsible-group__row')).toBeNull()
   })
 
   it('renders a row as a button only when the row has an action', async () => {

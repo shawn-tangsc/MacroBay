@@ -1,4 +1,5 @@
 import { Collapse } from 'antd'
+import type { ReactNode } from 'react'
 import { useEffect, useId, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 
@@ -45,25 +46,32 @@ export type CollapsibleGroupRow = {
   onSelect?: (key: string) => void
 }
 
-export type CollapsibleGroupProps = {
+/** 两种内容形态共用的那部分。 */
+type CollapsibleGroupBaseProps = {
   titleKey: string
   /** 头行右侧的计数（如「共 41 条」），同样只收键；不传就不显示。 */
   metaKey?: string
   metaParams?: Readonly<Record<string, string>>
-  rows: readonly CollapsibleGroupRow[]
   resolveText: (key: string) => string
   /** 展开区的自滚上限，默认 `COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT`。 */
   maxBodyHeight?: number
 }
 
-export function CollapsibleGroup({
-  titleKey,
-  metaKey,
-  metaParams,
-  rows,
-  resolveText,
-  maxBodyHeight = COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT
-}: CollapsibleGroupProps): React.ReactElement {
+/**
+ * 两种内容形态，**互斥**：
+ * - `rows`：一组行，壳负责行级语义（整行即动作、时间、`StatusPill` 槽）；
+ * - `children`：调用方自定义内容（表格、表单、说明块）。**壳只提供行为**：头行档位、箭头、`aria-*`、
+ *   整行可点、默认收起、展开区自滚、头行不滚走。**不提供行级语义**——需要「整行可点 + `StatusPill`」
+ *   的列表仍用 `rows`；`children` 里内容的可访问性由作者自己负责。
+ */
+export type CollapsibleGroupProps = CollapsibleGroupBaseProps & (
+  | { rows: readonly CollapsibleGroupRow[]; children?: never }
+  | { children: ReactNode; rows?: never }
+)
+
+export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactElement {
+  const { titleKey, metaKey, metaParams, resolveText, maxBodyHeight = COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT } = props
+  const rows = props.rows ?? []
   const title = resolveText(titleKey)
   const meta = metaKey === undefined ? null : fillLabelParams(resolveText(metaKey), metaParams)
   /**
@@ -107,7 +115,7 @@ export function CollapsibleGroup({
         ),
         children: (
           <div className="collapsible-group__body" id={bodyId} style={{ maxHeight: maxBodyHeight }}>
-            {rows.map((row) => {
+            {props.children !== undefined ? props.children : rows.map((row) => {
               const rowTitle = resolveText(row.labelKey)
               const rowMeta = row.metaKey === undefined ? null : fillLabelParams(resolveText(row.metaKey), row.metaParams)
               const inner = (

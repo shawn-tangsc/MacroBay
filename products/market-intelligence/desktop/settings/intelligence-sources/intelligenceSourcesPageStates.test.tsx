@@ -240,9 +240,12 @@ describe('sources settings page states', () => {
     )
     const dom = await render()
 
-    // 默认收起：头行只有「采集策略」，四行控件不在 DOM 里；展开后才出现（界面设计 2026-11-09）。
+    // 默认收起：头行只有「采集策略」，四行控件不显示；展开后才出现（界面设计 2026-11-09）。
+    // 注意：平台壳为了 `aria-controls` 永远指向**存在**的节点，内容从首帧就挂载、收起时是
+    // `display: none`——所以这里判「不显示」，不判「不在 DOM 里」（判 DOM 存在与否会被真正的显隐问题骗过）。
     expect(dom.textContent).toContain(zhText.collectionPolicy.title)
-    expect(dom.querySelector('.intelligence-setting-grid')).toBeNull()
+    const collapsedGrid = dom.querySelector<HTMLElement>('.intelligence-setting-grid')
+    expect(collapsedGrid?.closest<HTMLElement>('.ant-collapse-content')?.style.display).toBe('none')
     const header = [...dom.querySelectorAll<HTMLElement>('.ant-collapse-header')]
       .find((element) => element.textContent?.includes(zhText.collectionPolicy.title))!
     await act(async () => { header.click() })
