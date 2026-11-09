@@ -113,6 +113,22 @@ function dialog(): HTMLElement | null {
 }
 
 describe('positioning panel', () => {
+  it('keeps the leg that has funding history and names the other as unknown with its reason', () => {
+    const partial: DashboardFundingRateHistoryState = {
+      state: 'partial',
+      btc: funding.state === 'available' ? funding.btc : [],
+      missing: { eth: 'value-invalid' }
+    }
+    const markup = render({ funding: partial })
+    // The leg with values keeps its newest rate and its chart; the other says why it has none.
+    expect(markup).toContain('+0.0062%')
+    expect(markup).toContain(text.fundingMissingLeg
+      .replace('{asset}', text.assets.eth)
+      .replace('{reason}', text.fundingMissingReasons['value-invalid']))
+    // The whole card did not become an error state.
+    expect(markup).not.toContain('data-state="unavailable"')
+  })
+
   it('prints the funding rate and the notional reading side by side, one asset per row', () => {
     const markup = render()
     expect(markup).toContain(text.pairTitle)

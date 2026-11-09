@@ -298,7 +298,9 @@ describe('crypto intelligence dashboard', () => {
     ['loading', undefined, 'loading'],
     ['empty', { state: 'empty', asOf }, 'empty'],
     ['unavailable', { state: 'unavailable', failureCode: 'funding-rate-history-query-unavailable' }, 'unavailable'],
-    ['asset-local empty', { state: 'available', asOf, btc: [], eth: [{ observedAt: '2026-08-04T10:00:00.000Z', ratePercent: 0.01234 }] }, 'available']
+    // One leg with rows is `partial`, not `available`: the card draws that leg and names the other
+    // as unknown, which is the fix for "one missing leg erased both".
+    ['asset-local empty', { state: 'available', asOf, btc: [], eth: [{ observedAt: '2026-08-04T10:00:00.000Z', ratePercent: 0.01234 }] }, 'partial']
   ] as const)('renders the compact %s funding-history state without fabricating BTC or ETH', async (_name, result, state) => {
     const container = document.createElement('div')
     document.body.append(container)
@@ -315,7 +317,7 @@ describe('crypto intelligence dashboard', () => {
     // The card no longer blanks when one half is missing: the rate rows print an em dash and the
     // half that failed is named by its own attribute, so a reader can tell which side is absent.
     expect(card.getAttribute('data-funding-state')).toBe(state)
-    if (state === 'available') {
+    if (state === 'partial') {
       const rows = card.querySelectorAll('[data-funding-latest]')
       expect(rows[0]?.textContent).toContain('—')
       expect(rows[1]?.textContent).toContain('+0.0123%')
