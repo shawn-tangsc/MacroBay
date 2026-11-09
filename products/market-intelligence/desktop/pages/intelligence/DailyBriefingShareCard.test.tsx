@@ -127,6 +127,14 @@ describe('a backfilled edition says which world it read', () => {
     expect(host.textContent).not.toContain('本版读取')
   })
 
+  /**
+   * 接管用例：`a07a628` 删掉的「says nothing on a punctual edition」由这条收下（同文件、同一处渲染，
+   * 且断言更多：连 `isBackfill: true` 的版次也不出现标记，字段本身仍在文档里）。
+   *
+   * 反向实测（2026-11-09，删用例规矩的样板）：把 `DailyBriefingShareCard` 改成无条件渲染
+   * `data-backfill-note`，这条立刻红——`expected <span data-backfill-note="true"></span> to be null`。
+   * 只断言「删掉了」不够，接管者必须能红。
+   */
   it('prints no backfill marker at all, and keeps the field in the document', async () => {
     // 用户 2026-11-06：这句也从简报里去掉（正文/导出/复制同源）。字段仍写在文档里，排查要用。
     const host = await render(backfilled())
