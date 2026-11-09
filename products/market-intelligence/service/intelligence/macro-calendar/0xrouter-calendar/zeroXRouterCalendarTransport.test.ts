@@ -244,10 +244,10 @@ describe('0xRouter calendar transport', () => {
   it('derives all automatic work from the current UTC month without accepting caller input', async () => {
     const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-07T01:02:03.000Z') })
     const batch = await transport.requestAutomatic()
-    expect(batch.results).toEqual(Array.from({ length: 6 }, () => expect.objectContaining({ state: 'succeeded', month: '2026-09' })))
-    expect(batch.scopes).toHaveLength(6)
+    expect(batch.results).toEqual(Array.from({ length: 4 }, () => expect.objectContaining({ state: 'succeeded', month: '2026-09' })))
+    expect(batch.scopes).toHaveLength(4)
     expect(new Set(batch.scopes.map(scope => scope.month))).toEqual(new Set(['2026-09']))
-    expect(requestJsonBody).toHaveBeenCalledTimes(6)
+    expect(requestJsonBody).toHaveBeenCalledTimes(4)
   })
 
   it('submits automatic work stepwise and submits a waiting manual request next', async () => {
@@ -264,18 +264,18 @@ describe('0xRouter calendar transport', () => {
     expect(enqueue.mock.calls[1]![0].intent).toBe('user')
     const url = new URL((requestJsonBody.mock.calls[1]![0] as { url: string }).url)
     expect(url.searchParams.get('startTime')).toBe(String(Date.UTC(2026, 7, 1)))
-    for (let index = 1; index < 7; index += 1) await complete(index)
+    for (let index = 1; index < 5; index += 1) await complete(index)
     await expect(manual).resolves.toMatchObject({ state: 'succeeded', month: '2026-08' })
     await expect(automatic).resolves.toMatchObject({ results: expect.any(Array) })
-    expect((await automatic).results).toHaveLength(6)
-    expect(enqueue).toHaveBeenCalledTimes(7)
+    expect((await automatic).results).toHaveLength(4)
+    expect(enqueue).toHaveBeenCalledTimes(5)
   })
 
   it('promotes the same local automatic key and shares its result without preempting active work', async () => {
     const { transport, enqueue, requestJsonBody, complete } = createScheduledHarness()
     const automatic = transport.requestAutomatic()
     await vi.waitFor(() => expect(enqueue).toHaveBeenCalled())
-    const input = { descriptorId: 'macro-calendar-0xrouter-central-bank-activities', month: '2026-09', locale: 'en' } as const
+    const input = { descriptorId: 'macro-calendar-0xrouter-central-bank-activities', month: '2026-09', locale: 'zh' } as const
     const manual = transport.requestManual(input)
     expect(transport.requestManual(input)).toBe(manual)
     expect(enqueue).toHaveBeenCalledTimes(1)
@@ -284,11 +284,11 @@ describe('0xRouter calendar transport', () => {
     expect(enqueue.mock.calls.map(([entry]) => entry.intent)).toEqual(['automatic', 'user'])
     const url = new URL((requestJsonBody.mock.calls[1]![0] as { url: string }).url)
     expect(url.pathname).toBe('/cexdata/calendar/central-bank-activities')
-    expect(url.searchParams.get('locale')).toBe('en')
-    for (let index = 1; index < 6; index += 1) await complete(index)
+    expect(url.searchParams.get('locale')).toBe('zh')
+    for (let index = 1; index < 4; index += 1) await complete(index)
     const { results } = await automatic
-    expect(await manual).toBe(results[5])
-    expect(enqueue).toHaveBeenCalledTimes(6)
+    expect(await manual).toBe(results[3])
+    expect(enqueue).toHaveBeenCalledTimes(4)
   })
 
   it('reuses the entire unfinished automatic batch even after its prefix completes', async () => {
@@ -298,10 +298,10 @@ describe('0xRouter calendar transport', () => {
     await complete(0)
     await vi.waitFor(() => expect(enqueue).toHaveBeenCalledTimes(2))
     expect(transport.requestAutomatic()).toBe(first)
-    for (let index = 1; index < 6; index += 1) await complete(index)
+    for (let index = 1; index < 4; index += 1) await complete(index)
     await expect(first).resolves.toMatchObject({ results: expect.any(Array) })
-    expect((await first).results).toHaveLength(6)
-    expect(enqueue).toHaveBeenCalledTimes(6)
+    expect((await first).results).toHaveLength(4)
+    expect(enqueue).toHaveBeenCalledTimes(4)
   })
 
   it('derives the prefetch month and owner only at month end', () => {
@@ -322,15 +322,14 @@ describe('0xRouter calendar transport', () => {
   it('prefetches the next UTC month for the hour feed inside the end-of-month window', async () => {
     const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z') })
     const batch = await transport.requestAutomatic()
-    // Six current-month rows plus two for the one owner feed: still inside ten per minute.
-    expect(batch.scopes).toHaveLength(8)
-    expect(batch.results).toHaveLength(8)
+    // Four current-month rows plus one for the one owner feed, and that owner publishes only zh.
+    expect(batch.scopes).toHaveLength(5)
+    expect(batch.results).toHaveLength(5)
     expect(batch.scopes.filter(scope => scope.month === '2026-10').map(scope => [scope.descriptorId, scope.locale])).toEqual([
-      ['macro-calendar-0xrouter-central-bank-activities', 'zh'],
-      ['macro-calendar-0xrouter-central-bank-activities', 'en']
+      ['macro-calendar-0xrouter-central-bank-activities', 'zh']
     ])
-    expect(requestJsonBody).toHaveBeenCalledTimes(8)
-    const nextMonthUrl = new URL((requestJsonBody.mock.calls[6]![0] as { url: string }).url)
+    expect(requestJsonBody).toHaveBeenCalledTimes(5)
+    const nextMonthUrl = new URL((requestJsonBody.mock.calls[4]![0] as { url: string }).url)
     expect(nextMonthUrl.searchParams.get('startTime')).toBe(String(Date.UTC(2026, 9, 1)))
     expect(nextMonthUrl.searchParams.get('locale')).toBe('zh')
   })
@@ -339,9 +338,9 @@ describe('0xRouter calendar transport', () => {
     const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), queue: { enqueue: <T>(entry: { run: () => Promise<T> }) => entry.run() } })
     await transport.requestAutomatic()
     const second = await transport.requestAutomatic()
-    expect(second.scopes).toHaveLength(6)
+    expect(second.scopes).toHaveLength(4)
     expect(new Set(second.scopes.map(scope => scope.month))).toEqual(new Set(['2026-09']))
-    expect(requestJsonBody).toHaveBeenCalledTimes(14)
+    expect(requestJsonBody).toHaveBeenCalledTimes(9)
   })
 
   it('asks again for a prefetched month that did not succeed', async () => {
@@ -352,8 +351,8 @@ describe('0xRouter calendar transport', () => {
       queue: { enqueue: <T>(entry: { run: () => Promise<T> }) => entry.run() } })
     await transport.requestAutomatic()
     const retry = await transport.requestAutomatic()
-    expect(retry.scopes.filter(scope => scope.month === '2026-10')).toHaveLength(2)
-    expect(requestJsonBody).toHaveBeenCalledTimes(16)
+    expect(retry.scopes.filter(scope => scope.month === '2026-10')).toHaveLength(1)
+    expect(requestJsonBody).toHaveBeenCalledTimes(10)
   })
 
   it('keeps a separate in-flight batch per requested descriptor set', async () => {
@@ -369,11 +368,11 @@ describe('0xRouter calendar transport', () => {
     const { transport, enqueue, complete } = createScheduledHarness()
     const automatic = transport.requestAutomatic()
     await complete(0, true)
-    for (let index = 1; index < 6; index += 1) await complete(index)
+    for (let index = 1; index < 4; index += 1) await complete(index)
     const { results } = await automatic
     expect(results[0]).toEqual({ state: 'unavailable', failureCode: 'response-unavailable' })
-    expect(results.slice(1)).toEqual(Array.from({ length: 5 }, () => expect.objectContaining({ state: 'succeeded' })))
-    expect(enqueue).toHaveBeenCalledTimes(6)
+    expect(results.slice(1)).toEqual(Array.from({ length: 3 }, () => expect.objectContaining({ state: 'succeeded' })))
+    expect(enqueue).toHaveBeenCalledTimes(4)
   })
 
   it('preserves an automatic request already waiting in the shared quota queue', async () => {
@@ -397,9 +396,9 @@ describe('0xRouter calendar transport', () => {
     queue.pump()
     await Promise.all([automatic, manual])
     expect(enqueue.mock.calls.map(([entry]) => entry.intent)).toEqual([
-      'automatic', 'user', 'automatic', 'automatic', 'automatic', 'automatic'
+      'automatic', 'user', 'automatic', 'automatic', 'automatic'
     ])
-    expect(requestJsonBody).toHaveBeenCalledTimes(6)
+    expect(requestJsonBody).toHaveBeenCalledTimes(5)
     queue.close()
   })
 
