@@ -36,7 +36,13 @@ export type SignificanceGateDependencies = Readonly<{
    * 当日额度用尽时告诉读者一次（P3）。只在 `day-budget-exhausted` 这一种拒绝上调用：
    * 小时窗口、合并区间、时段的保留位都不是「今天的次数用完了」。缺省表示未装配通知运行时。
    */
-  notifyQuotaExhausted?: (input: Readonly<{ used: number; limit: number; occurredAt: string }>) => Promise<void>
+  notifyQuotaExhausted?: (input: Readonly<{
+    used: number
+    limit: number
+    occurredAt: string
+    /** 哪个闸门拒的：按线（带线名）还是全局兜底（不带线名）。 */
+    scope: Readonly<{ kind: 'line'; line: 'event' | 'calendar' }> | Readonly<{ kind: 'global' }>
+  }>) => Promise<void>
 }>
 
 export type SignificanceGateInput = Readonly<{
@@ -68,9 +74,20 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
    * 「今天的次数用完了」只在每日额度这一种拒绝上通知一次；同一天的重复提交由平台按 UTC 日键合并，
    * 所以这里不必自己数次数（那是去重键的职责，写两处迟早会不一致）。
    */
-  const notifyQuotaExhausted = async (reasonCode: string | null, quota: DailyQuota | undefined): Promise<void> => {
-    if (reasonCode !== analysisBudgetPolicy.reasonCodes.daily || quota === undefined) return
-    await dependencies.notifyQuotaExhausted?.({ used: quota.used, limit: quota.limit, occurredAt: dependencies.now() })
+  const notifyQuotaExhausted = async (
+    reasonCode: string | null,
+    quota: DailyQuota | undefined,
+    line: 'event' | 'calendar'
+  ): Promise<void> => {
+    if (quota === undefined) return
+    // 两个日闸门各有一个码：按线拒绝说线名，全局兜底不带线名（否则读者一算就不平）。
+    const scope = reasonCode === analysisBudgetPolicy.reasonCodes.daily
+      ? { kind: 'line' as const, line }
+      : reasonCode === analysisBudgetPolicy.reasonCodes.dailyGlobal
+        ? { kind: 'global' as const }
+        : undefined
+    if (scope === undefined) return
+    await dependencies.notifyQuotaExhausted?.({ used: quota.used, limit: quota.limit, occurredAt: dependencies.now(), scope })
   }
   return {
     async evaluate(input: SignificanceGateInput): Promise<SignificanceGateOutcome> {
@@ -89,7 +106,7 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
           // The freeze boundary refuses an item-line payload without its attempt row, so the id is
           // always present here; without one there is no counted attempt to correct either.
           if (input.attemptLedgerId !== undefined) dependencies.updateDecision(input.attemptLedgerId, 'skipped', budget.reasonCode)
-          await notifyQuotaExhausted(budget.reasonCode, budget.dailyQuota)
+          await notifyQuotaExhausted(budget.reasonCode, budget.dailyQuota, 'event')
           return { decision: 'skipped', reasonCode: budget.reasonCode, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null, dailyQuota: budget.dailyQuota ?? null }
         }
         return { decision: 'queued', reasonCode: null, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null, dailyQuota: null }
@@ -122,7 +139,8 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
           })
         }
       }
-      await notifyQuotaExhausted(decision.reasonCode, decision.dailyQuota ?? undefined)
+      // 事件线在上面已单独返回，走到这里的按日历线处理（会话时段不是这条闸门的输入）。
+      await notifyQuotaExhausted(decision.reasonCode, decision.dailyQuota ?? undefined, 'calendar')
       return {
         decision: decision.decision, reasonCode: decision.reasonCode, signals: decision.signals,
         triggeredEventKeys: new Set(decision.signals.map(signal => signal.eventKey)),

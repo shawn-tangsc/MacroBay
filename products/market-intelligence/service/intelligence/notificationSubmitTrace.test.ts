@@ -82,7 +82,7 @@ describe('S37④ the swallow sites return as before and every submission leaves 
   it('quota notice: resolves null, one submit-failed line', async () => {
     const { runtime, entries } = brokenRuntime()
     await expect(
-      notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: NOW })
+      notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: NOW, scope: { kind: 'line', line: 'event' } })
     ).resolves.toBeNull()
     expect(entries.map((entry) => entry.code)).toEqual(['submit-failed'])
     expect(entries[0]).toMatchObject({ level: 'error', eventTypeId: 'platform.analysis.quota-exhausted' })

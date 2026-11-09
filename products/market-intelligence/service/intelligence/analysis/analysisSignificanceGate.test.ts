@@ -176,7 +176,21 @@ it('tells the reader when the day quota refused the run, and carries the pair th
   })
   expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted', dailyQuota: { used: 48, limit: 48 } })
   expect(notifyQuotaExhausted).toHaveBeenCalledTimes(1)
-  expect(notifyQuotaExhausted).toHaveBeenCalledWith({ used: 48, limit: 48, occurredAt: asOf })
+  expect(notifyQuotaExhausted).toHaveBeenCalledWith({ used: 48, limit: 48, occurredAt: asOf, scope: { kind: 'line', line: 'event' } })
+})
+
+it('tells the notice it was the global ceiling, not this line, that refused', async () => {
+  // 全局兜底与按线拒绝各有一个码：句子靠「哪个闸门拒的」选，不靠数字比较。
+  const notifyQuotaExhausted = vi.fn(async () => undefined)
+  const { instance } = gate({
+    countRuns: () => ({ hourRuns: 5, dayRuns: 60, eventRunsToday: 47, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    notifyQuotaExhausted
+  })
+  const outcome = await instance.evaluate({
+    eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', asOf, previousSnapshot: snapshot('3.1%'), attemptLedgerId: 'mi-ledger-9'
+  })
+  expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'global-day-budget-exhausted', dailyQuota: { used: 60, limit: 60 } })
+  expect(notifyQuotaExhausted).toHaveBeenCalledWith({ used: 60, limit: 60, occurredAt: asOf, scope: { kind: 'global' } })
 })
 
 it('reports the calendar line’s own nine, not the event line’s forty-eight', async () => {
@@ -186,7 +200,7 @@ it('reports the calendar line’s own nine, not the event line’s forty-eight',
     notifyQuotaExhausted
   })
   await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
-  expect(notifyQuotaExhausted).toHaveBeenCalledWith({ used: 9, limit: 9, occurredAt: asOf })
+  expect(notifyQuotaExhausted).toHaveBeenCalledWith({ used: 9, limit: 9, occurredAt: asOf, scope: { kind: 'line', line: 'calendar' } })
 })
 
 it('stays silent for an hourly refusal: the day is not used up', async () => {

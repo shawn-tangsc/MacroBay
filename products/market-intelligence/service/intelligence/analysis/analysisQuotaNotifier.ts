@@ -3,6 +3,7 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
+import { notificationCopy } from '@platform/i18n/notificationCopy'
 import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
@@ -25,7 +26,17 @@ const ANALYSIS_QUOTA_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.quotaExhausted
 
 export type AnalysisQuotaSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
-export type AnalysisQuota = Readonly<{ used: number; limit: number; occurredAt: string }>
+export type AnalysisQuotaScope =
+  | Readonly<{ kind: 'line'; line: 'event' | 'calendar' }>
+  | Readonly<{ kind: 'global' }>
+
+export type AnalysisQuota = Readonly<{ used: number; limit: number; occurredAt: string; scope: AnalysisQuotaScope }>
+
+/** 两条分析线给读者看的名字：只在额度这一句里用，定义在平台文案表（唯一出处）。 */
+const LINE_COPY_KEYS = {
+  event: 'notification.analysis-line.event',
+  calendar: 'notification.analysis-line.calendar'
+} as const
 
 /** UTC 自然日（`YYYY-MM-DD`）：记账口径，不跟读者的显示时区走。 */
 export function utcDayOf(occurredAt: string): string {
@@ -42,7 +53,18 @@ export function utcDayOf(occurredAt: string): string {
 export function buildAnalysisQuotaRequest(quota: AnalysisQuota): NotificationSubmitRequest | undefined {
   const rendered = renderPlatformEventCopy({
     eventTypeId: ANALYSIS_QUOTA_EVENT_ID,
-    params: { used: String(quota.used), limit: String(quota.limit) }
+    // 按哪个闸门拒的选正文变体：全局兜底不写线名（那条线可能还有余量）。
+    ...(quota.scope.kind === 'global'
+      ? { bodyVariant: 'global' as const }
+      : {
+        bodyVariant: 'line' as const,
+        params: { used: String(quota.used), limit: String(quota.limit) },
+        // 线名两种语言不同，按语言各给一份；数字两种语言相同。
+        paramsByLanguage: {
+          'zh-CN': { line: notificationCopy['zh-CN'][LINE_COPY_KEYS[quota.scope.line]] },
+          'en-US': { line: notificationCopy['en-US'][LINE_COPY_KEYS[quota.scope.line]] }
+        }
+      })
   })
   if (rendered === undefined) return undefined
   return {

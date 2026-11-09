@@ -62,6 +62,11 @@ export const analysisBudgetPolicy = Object.freeze({
     invalidInput: 'invalid-budget-input',
     hourly: 'hour-budget-exhausted',
     daily: 'day-budget-exhausted',
+    /**
+     * 全局兜底日闸门单独一个码（同码两义要拆码）：它拒绝时读者的那条线可能还有余量，
+     * 通知正文不能说成「这条线用完了」，否则读者一算就不平。
+     */
+    dailyGlobal: 'global-day-budget-exhausted',
     scheduleReserve: 'schedule-reserve-exhausted',
     interval: 'interval-active'
   })
@@ -143,6 +148,6 @@ export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   // which is what the combined guard these replace used to count. The slots themselves are exempt:
   // they are already capped at three a day, and 48 + 9 + 3 is exactly the 60 this gate enforces.
   if (input.hourRuns >= analysisBudgetPolicy.maximumHourlyRuns) return skip(analysisBudgetPolicy.reasonCodes.hourly)
-  if (input.dayRuns >= analysisBudgetPolicy.maximumDailyRuns) return skip(analysisBudgetPolicy.reasonCodes.daily, quotaOf(input.dayRuns, analysisBudgetPolicy.maximumDailyRuns))
+  if (input.dayRuns >= analysisBudgetPolicy.maximumDailyRuns) return skip(analysisBudgetPolicy.reasonCodes.dailyGlobal, quotaOf(input.dayRuns, analysisBudgetPolicy.maximumDailyRuns))
   return queued
 }

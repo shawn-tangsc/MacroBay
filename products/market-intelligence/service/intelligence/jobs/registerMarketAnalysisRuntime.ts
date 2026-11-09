@@ -186,8 +186,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     recordDecision: (decision) => { void runs.recordDecision(decision) },
     updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode),
     // P3：当日额度被拒时告诉读者一次；按 UTC 日的键由平台声明展开，同一天重复被拒不会多一条。
-    notifyQuotaExhausted: async ({ used, limit, occurredAt }) => {
-      await notifyAnalysisQuota(input.submitNotification, { used, limit, occurredAt })
+    notifyQuotaExhausted: async ({ used, limit, occurredAt, scope }) => {
+      await notifyAnalysisQuota(input.submitNotification, { used, limit, occurredAt, scope })
     }
   })
   let crossAssetQuery = input.crossAssetQuery

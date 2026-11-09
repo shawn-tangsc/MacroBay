@@ -72,6 +72,7 @@ export const triggerStatusPolicy = Object.freeze({
     sameReleaseAbandoned: 'same-release-abandoned',
     hourBudgetExhausted: 'hour-budget-exhausted',
     dayBudgetExhausted: 'day-budget-exhausted',
+    globalDayBudgetExhausted: 'global-day-budget-exhausted',
     scheduleReserveExhausted: 'schedule-reserve-exhausted',
     // One per open: the panel explains a run by its reason code, so these are what make the three
     // session slots tellable apart in the timeline.
