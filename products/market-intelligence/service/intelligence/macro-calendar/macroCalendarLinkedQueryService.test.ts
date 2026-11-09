@@ -7,6 +7,8 @@ const query: MarketCalendarQuery = { month: '2026-09', locale: 'zh', asOf: '2026
 const official: MacroEconomicCalendarEventView = { eventKey: 'US.CPI.RELEASE.2026-M08', releaseGroupKey: 'US.CPI.RELEASE.2026-M08',
   eventFamily: 'consumer-price-index', titleKey: 'cpi', countryCode: 'US', importance: 'high', periodKey: '2026-M08',
   lifecycleState: 'released', coverage: 'available', scheduledDate: '2026-09-11', detectedAt: query.asOf,
+  // 排期时刻的来源是视图契约的必填字段（官方/惯例默认/读者改写/只有日期）；这条是已发布的官方数据。
+  releaseTimeSource: 'official',
   actual: { displayValue: '3%', unit: 'percent' }, previous: { displayValue: '2%', unit: 'percent' },
   consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: [] }
 const marketEvent = (index: number): MarketCalendarEvent => ({ eventKey: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
@@ -20,9 +22,14 @@ function page(events: MarketCalendarEvent[], nextCursor?: string): MarketCalenda
     { eventType: 'central-bank-activity', status: 'unavailable', sourceObservedAt: null }
   ] }
 }
-const derivedLink = (event: MacroEconomicCalendarEventView, market: MarketCalendarEvent) => ({ officialEventKey: event.eventKey,
+/** 端口签名从工厂依赖里取，不另写一份（形状 3：mock 的返回类型必须按端口收窄）。 */
+type LinkPort = NonNullable<Parameters<typeof createMacroCalendarLinkedQueryService>[0]['link']>
+
+const derivedLink: LinkPort = (event, market) => ({ officialEventKey: event.eventKey,
   officialPeriodKey: event.periodKey, officialScheduledDate: event.scheduledDate, officialScheduledAt: event.scheduledAt ?? null,
-  officialDetectedAt: event.detectedAt, timeDisplaySource: 'provider-scheduled' as const, displayScheduledAt: market.scheduledAt })
+  officialDetectedAt: event.detectedAt, timeDisplaySource: 'provider-scheduled' as const, displayScheduledAt: market.scheduledAt,
+  // 这条链接是从市场读数推出来的，官方侧没有数值：两个字段显式写 null，不靠类型放宽。
+  officialActual: null, officialPrevious: null })
 
 // Derived contract scenarios only; never admission evidence.
 describe('linked calendar query composition', () => {
