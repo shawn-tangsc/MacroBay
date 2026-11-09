@@ -318,6 +318,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         {/* 原型里中列最上方有一行「频道」，与左导航的分组标题同一级：小号、次要色。 */}
         <p className="channel-platform-heading">{labels.channels}</p>
         {PLATFORM_ORDER.map((type) => (
+          /**
+           * **例外（登记在案）**：这里保留原生 `<button>`，不换 antd 也不换 `IconButton`。
+           * 原因是它**两行内容**（平台 logo 图形 + 平台名）且是列表项的整行点击区：
+           * 换组件会改掉行高与排印。可访问性已具备——`aria-current` 标当前项，名字取自行内文字，
+           * logo `aria-hidden`。改这一处要同时改中列的行模型，不属于「只换交互元素」。
+           */
           <button
             aria-current={type === selectedType}
             className="channel-platform-item"
@@ -382,9 +388,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             {!notConnectable && stale ? (
               <p className="channel-settings-stale" role="status">
                 <span>{labels.channelStaleNotice}</span>
-                <button onClick={() => void reload()} type="button">
+                {/* 句内动作：命令型一律 antd；`.text-action` 是「行内动作」的标记。 */}
+                <Button type="text" size="small" className="text-action" onClick={() => void reload()}>
                   {labels.channelRefresh}
-                </button>
+                </Button>
               </p>
             ) : null}
 
