@@ -71,13 +71,26 @@ export function calendarSourceStatusFragments(
   return { body: Object.freeze(body), detail: Object.freeze(detail) }
 }
 
-/** 正文那半：类别名 + 只在异常时出现的句子。 */
-export function MarketCalendarSourceStatus({ source, text }: { source: MarketCalendarSource; text: EconomicCalendarText }): ReactElement {
+/**
+ * 正文那半：类别名 + 只在异常时出现的句子。
+ *
+ * `variant` 是"这一屏有没有 ⓘ"：日历页有，所以常态句走 ⓘ；抽屉里没有 ⓘ，用 `full` 把两半
+ * 合起来显示——在抽屉里把「这次是自动跑的」搬走，等于把一个原本为了让"自动重试被拒"可见
+ * 而加的信号删掉。
+ */
+export function MarketCalendarSourceStatus({ source, text, variant = 'body' }: {
+  source: MarketCalendarSource
+  text: EconomicCalendarText
+  variant?: 'body' | 'full'
+}): ReactElement {
   const formatTime = useShellTimeFormat()
   const fragments = calendarSourceStatusFragments(source, text, formatTime)
+  const parts = variant === 'full'
+    ? [text.market.kinds[source.eventType], ...fragments.body, ...fragments.detail.slice(1)]
+    : [text.market.kinds[source.eventType], ...fragments.body]
   return <span className="mi-calendar-detail-status" data-market-source-status={source.eventType}
     data-automatic-refresh={marketCalendarAutomaticRefreshPolicy.automatic ? 'true' : 'false'}>
-    {[text.market.kinds[source.eventType], ...fragments.body].join(' · ')}
+    {parts.join(' · ')}
   </span>
 }
 

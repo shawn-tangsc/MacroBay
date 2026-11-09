@@ -31,7 +31,7 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
     : { eventType: event.eventType, status: 'success', sourceObservedAt: event.sourceObservedAt }
   return <aside className="mi-economic-calendar__inspector mi-market-calendar__inspector" aria-live="polite">
     <p>{text.market.source} · {text.market.kinds[event.eventType]}</p><h2>{event.title}</h2>
-    <p><MarketCalendarSourceStatus source={shownSource} text={text} /></p>
+    <p><MarketCalendarSourceStatus source={shownSource} text={text} variant="full" /></p>
     <dl className="mi-economic-calendar__metadata">
       <div><dt>{text.details.time}</dt><dd>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</dd></div>
       <div><dt>{text.market.observed}</dt><dd>{formatTime(event.sourceObservedAt, 'second')}</dd></div>
