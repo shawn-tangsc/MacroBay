@@ -991,13 +991,22 @@
 }
 
 .source-provider-detail__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  /* 两列：左字段区吃满剩余宽度，右开关固定 34 + 8 间距。
+     原来按字段分窄列，把名字和状态压成一字一格竖排——这是那一类的根因。 */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  column-gap: 8px;
+  align-items: start;
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-soft) 35%, transparent);
+}
+
+.source-provider-detail__row > .ant-switch {
+  /* 与**第一行**文字垂直居中，不随左栏折行往下掉。 */
+  align-self: start;
+  margin-top: 1px;
 }
 
 .source-provider-detail__main {
@@ -1015,10 +1024,14 @@
   text-align: left;
 }
 
+/* 长名字要省略号，不换行把行撑高。 */
 .source-provider-detail__main strong {
   flex: 1;
   font-size: 13px;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .source-provider-detail__main .intelligence-source-tags {
