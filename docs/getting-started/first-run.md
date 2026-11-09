@@ -12,10 +12,7 @@ pnpm dev
 ```
 
 If the window opens on the intelligence dashboard, that is expected: the product shell and the agent
-workspace are separate tabs. The agent portal is not the first screen — reach it with **Back to
-Agents** on the dashboard (shown below).
-
-![Intelligence portal](../assets/screenshots/portal-en.png)
+workspace are separate tabs. **Intelligence** in the sidebar lands on the dashboard.
 
 ## 2. Configure the model service
 

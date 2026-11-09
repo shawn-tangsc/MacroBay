@@ -222,8 +222,7 @@ Full walkthrough: **[Quick start](./docs/getting-started/quick-start.md)**.
    for agents.
 2. **Settings → Intelligence Sources**: enable the sources you have access to and add any required
    credentials.
-3. Open **Intelligence** in the sidebar: it lands on the crypto dashboard. The agent portal is not
-   the first screen; reach it with **Back to Agents** on the dashboard.
+3. Open **Intelligence** in the sidebar: it lands on the crypto dashboard.
 4. Ask the analyst: *What changed in the last macro release, and which assets does it affect?*
 
 The answer should show what is known, what is missing, where the evidence came from, and the time

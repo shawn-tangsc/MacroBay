@@ -43,8 +43,7 @@ check the network and proxy settings before assuming the source is broken.
 
 ## 3. Open the dashboard
 
-Open **Intelligence** in the sidebar: it lands on the crypto dashboard. To go through the agent portal
-instead, choose **Back to Agents** on the dashboard and then **Open dashboard**.
+Open **Intelligence** in the sidebar: it lands on the crypto dashboard.
 
 The dashboard groups:
 

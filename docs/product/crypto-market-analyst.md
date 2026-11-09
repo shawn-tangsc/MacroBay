@@ -13,11 +13,6 @@ the answer says so instead of filling the gap with a neutral value.
 Three ways in: the daily briefing for the last day, the dashboard for the current picture, and the
 analyst agent for the reasoning behind either.
 
-Two sibling agents appear in the same portal, the Equities Market Analyst and the Futures Market
-Analyst. Both are marked **coming soon** and cannot be configured yet.
-
-![The agent portal with three analyst cards](../assets/screenshots/portal-en.png)
-
 Sources that need no credential collect on their own; anything missing is reported as a gap. For your own
 analysis, start at step 1 below.
 
@@ -27,11 +22,11 @@ Crypto intelligence is the current focus, and it keeps getting deeper: more venu
 coverage, ETF and flow history, on-chain signals, and event-driven alerts. Recent text events also
 carry a directional read in the dashboard's [news sentiment](./news-sentiment.md) card.
 
-The portal already shows the next two columns — the Equities Market Analyst and the Futures Market
-Analyst — but they are marked **coming soon**: no sources, no dashboard, nothing to configure. When
-each opens, it will follow the same shape as this one: its own evidence set, its own dashboard, and
-the same rule that every number carries its source and cutoff time. The crypto desk does not depend
-on them, and the configuration you build today stays yours.
+The Equities Market Analyst and the Futures Market Analyst are the next two sibling agents, and neither
+is open yet: no sources, no dashboard, nothing to configure. When each opens, it will follow the same
+shape as this one — its own evidence set, its own dashboard, and the same rule that every number
+carries its source and cutoff time. The crypto desk does not depend on them, and the configuration you
+build today stays yours.
 
 ## Where the analysis comes from
 
@@ -49,7 +44,7 @@ the reasoning comes from someone who has done the work, and it stays open to bei
 
 ## The seven presets
 
-The portal card labels the agent "7 static intelligence sources". Those seven are **presets**, not
+The agent's preset summary calls it "7 static intelligence sources". Those seven are **presets**, not
 individual feeds: each preset bundles the sources that serve one part of the picture.
 
 | Preset | Tier | Sources behind it | What it powers |
@@ -62,9 +57,9 @@ individual feeds: each preset bundles the sources that serve one part of the pic
 | Regulation and venues | Recommended | SEC and CFTC announcements, exchange notices and status pages | Timeline and evidence for the analyst |
 | Industry news | Optional | Industry media, project blogs, repository releases | Background context |
 
-Activating the agent enables the three **required** presets. The recommended and optional presets are
-yours to turn on; a source you leave off shows up as a gap, not as an empty panel pretending to be
-complete.
+The three **required** presets are the smallest set that lights up the dashboard's main panels. The
+recommended and optional presets are yours to turn on; a source you leave off shows up as a gap, not
+as an empty panel pretending to be complete.
 
 ## Before you start
 
@@ -138,20 +133,15 @@ automatic analyses but keeps published history.
 If the agent shows **No model selected**, either no provider is enabled or none of the enabled
 providers exposes a model the agent runtime can use.
 
-## 2. Activate the agent
+## 2. Enable the sources
 
-Open **Intelligence** in the sidebar — it lands on the dashboard; choose **Back to Agents** for the
-agent portal. The card for the Crypto Market Analyst shows its preset summary and one of two states:
-**Configurable** or, for the two sibling agents, **Coming soon**.
+The analyst has no separate switch-on step: its evidence is whatever sources you enable. Open
+**Settings → Intelligence Sources** and enable the sources behind the three **required** presets in
+the table above. This does not add credentials, and it does not fetch data — that is the next two
+steps.
 
-Choose **Configure and activate**. The drawer lists the seven presets with their tier and the
-underlying sources, and shows what each preset needs.
-
-Choose **Activate**. This switches on every source in the three required presets that is implemented
-and not already enabled. It does not add credentials, and it does not fetch data — that is the next
-two steps.
-
-Then choose **Open dashboard**.
+**Intelligence** in the sidebar lands on the dashboard; once a source is enabled and has collected
+data, its panel lights up.
 
 ## 3. Add credentials where they are required
 
