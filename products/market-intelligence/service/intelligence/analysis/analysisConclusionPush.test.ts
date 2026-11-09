@@ -34,6 +34,15 @@ describe('who gets woken up', () => {
     expect(decision).toMatchObject({ phone: true, centerOnly: false })
   })
 
+  it('pushes a threshold run that could not take a side', () => {
+    // 用户 2026-11-09：达门槛的运行即使结论是 undecided/mixed 也照推——达门槛本身就是新信息。
+    for (const direction of ['undecided', 'mixed'] as const) {
+      expect(analysisConclusionPushesPhone({
+        signalDriven: false, conclusionDirection: direction, citedFactIds: ['mi-fact-flow'], sentToday: { byBucket: 0, module: 0 }
+      })).toMatchObject({ phone: true, centerOnly: false })
+    }
+  })
+
   it('still keeps a no-signal run quiet when the quota is used up', () => {
     expect(analysisConclusionPushesPhone({
       signalDriven: false, conclusionDirection: 'bearish', citedFactIds: ['mi-fact-flow'], sentToday: { byBucket: 1, module: 1 }
