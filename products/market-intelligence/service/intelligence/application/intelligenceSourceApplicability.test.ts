@@ -58,14 +58,17 @@ describe('intelligenceSourceApplicability', () => {
 function sampleItem(input: Pick<IntelligenceItem, 'title' | 'summary'>): IntelligenceItem {
   return {
     itemId: 'item-1',
+    primaryRawRecordId: 'raw-1',
+    canonicalDedupeKey: 'dedupe-1',
     sourceId: 'sec-rss',
     sourceCategory: 'regulation',
+    sourceTrust: 'official',
     title: input.title,
     summary: input.summary,
     eventType: 'regulatory-action',
     detectedAt: '2026-01-01T00:00:00.000Z',
     symbolsJson: '[]',
-    dedupeKey: 'dedupe-1',
-    rawRecordId: 'raw-1'
+    timelineStatus: 'new',
+    normalizerVersion: 'v1'
   }
 }
