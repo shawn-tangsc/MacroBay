@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CrossAssetObservationPanel } from './CrossAssetObservationPanel'
 import { productText } from '../../../shared/i18n/productText'
 import { parseCrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
@@ -10,6 +10,15 @@ import { createCrossAssetSnapshotQuery } from '../../../../service/intelligence/
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { resolveStateViewText, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+
+/**
+ * 每个用例之后都把时钟还回去。
+ *
+ * 这个文件里有几条用例要推进重试阶梯（装假计时器）；漏掉归还时，**后面所有用例**都在假时钟里跑——
+ * antd 浮层延迟与 `vi.waitFor` 的轮询就都变成「要有人替它推进才动」，同一份代码时而绿、时而红。
+ * 与 `useMacroMarketSnapshot.test.tsx` / `useCrossAssetObservation.test.tsx` 的做法一致。
+ */
+afterEach(() => { vi.useRealTimers() })
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
@@ -386,6 +395,13 @@ describe('cross-asset observation workspace', () => {
       expect([...host.querySelectorAll('button')].some(button => button.getAttribute('aria-label') === text.refresh)).toBe(true)
       expect(host.querySelector('input[type="password"], input[type="text"]')).toBeNull()
     } finally { await act(async () => root.unmount()); host.remove() }
+  })
+
+  it('never leaves a fake clock installed for the cases that come after it', () => {
+    // 上一条按语言跑两遍、装了假计时器。它不还回去的话，这个文件里**后面所有用例**都在假时钟里跑：
+    // antd 的浮层延迟、`vi.waitFor` 的轮询都变成「要有人替它推进才动」，于是同一份代码时而绿、时而红。
+    // 这条守卫在任何一次泄漏之后立刻红，比等一次难复现的 flake 便宜。
+    expect(vi.isFakeTimers()).toBe(false)
   })
 
   it('shows the gold live price with its badge, and no badge at all when there is no live tick', async () => {
