@@ -81,7 +81,7 @@ describe('metricRestApiAdapter coingecko collection', () => {
     // The declared preset is what arms the cadence: a 10-minute metric poll, not a new schedule.
     expect(runtimeConfig.pollingIntervalSec).toBe(10 * 60)
 
-    const fetchText = vi.fn(async () => loadFixture('coingecko-global-sample.json'))
+    const fetchText = vi.fn(async (_url: string) => loadFixture('coingecko-global-sample.json'))
     const records = await metricRestApiAdapter.collect({ config: runtimeConfig, runId: 'run-cg', fetchText })
     expect(fetchText.mock.calls[0]?.[0]).toBe('https://api.coingecko.com/api/v3/global')
     expect(records.length).toBe(1)
