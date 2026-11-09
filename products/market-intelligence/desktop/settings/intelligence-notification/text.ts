@@ -102,6 +102,8 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.threshold.info': '选「中」时只推中和高；选「低」会把低的那一档也推出去。',
   'pages.intelligence.notification.threshold.cost': '一天可能收到几十条。',
   'pages.intelligence.notification.threshold.aria': '最低强度的说明',
+  'pages.intelligence.notification.threshold.unreadable': '暂时读不到',
+  'pages.intelligence.notification.threshold.unreadableNote': '阈值读不到（设置文件读不到，可能已损坏），暂按「中」推送。',
   'pages.intelligence.notification.saveFailed': '这次没存上，可以再试一次。',
 
   'pages.intelligence.notification.infoAria': '这四条推送的生效条件',
@@ -208,6 +210,8 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.threshold.info': 'With Medium, only Medium and High are sent; Low also sends the weakest tier.',
   'pages.intelligence.notification.threshold.cost': 'Expect several dozen a day.',
   'pages.intelligence.notification.threshold.aria': 'About the minimum intensity',
+  'pages.intelligence.notification.threshold.unreadable': 'Not readable right now',
+  'pages.intelligence.notification.threshold.unreadableNote': 'The threshold could not be read (the settings file is unreadable, possibly corrupted), so pushes currently use "Medium".',
   'pages.intelligence.notification.saveFailed': 'That did not save. You can try again.',
 
   'pages.intelligence.notification.infoAria': 'When these four reach your phone',

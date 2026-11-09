@@ -36,16 +36,27 @@ export function NewsPushThresholdRow(props: Readonly<{
     label={label}
     last={props.last}
   >
-    <Segmented
-      ariaLabelKey="pages.intelligence.notification.threshold.row"
-      items={(['high', 'medium', 'low'] as const).map((tier) => ({
-        value: tier,
-        labelKey: NEWS_PUSH_THRESHOLD_KEYS[tier]
-      }))}
-      onChange={(next) => props.state.setThreshold(next as NewsSentimentTierThreshold)}
-      resolveText={props.resolveText}
-      value={props.state.value}
-    />
+    {/* 读不到时**不画档位**：把默认值「中」画成已配置，等于用「拿不到」冒充「他设的」。
+        同时说明现在按哪一档在推（fail-open，但必须说出来）。 */}
+    {props.state.status === 'error'
+      ? <>
+        <span className="intelligence-notification-form-note" role="status">
+          {props.text['pages.intelligence.notification.threshold.unreadable']}
+        </span>
+        <span className="intelligence-notification-form-note" role="status">
+          {props.text['pages.intelligence.notification.threshold.unreadableNote']}
+        </span>
+      </>
+      : <Segmented
+        ariaLabelKey="pages.intelligence.notification.threshold.row"
+        items={(['high', 'medium', 'low'] as const).map((tier) => ({
+          value: tier,
+          labelKey: NEWS_PUSH_THRESHOLD_KEYS[tier]
+        }))}
+        onChange={(next) => props.state.setThreshold(next as NewsSentimentTierThreshold)}
+        resolveText={props.resolveText}
+        value={props.state.value}
+      />}
     {/* 存不上是**状态**，不是说明：它只在出事时出现，必须当场看见。 */}
     {props.state.saveFailed
       ? <span className="intelligence-notification-form-note" role="status">
