@@ -244,11 +244,12 @@ function SwitchRow(props: {
 }): React.ReactElement {
   const { text } = props
   return (
-    <div className="notification-row" data-row={props.hintKey === HINT_KEY_TOAST ? 'toast' : 'desktop'}>
-      <span className="notification-row-copy">
+    <SettingsRow
+      copyClassName="notification-row-copy"
+      label={<>
         {/*
           * 标题与 ⓘ 包进同一个**行**容器：`.notification-row-copy` 是列布局，直接当兄弟放进去，
-          * 图标永远掉到下一行（用户截图那个缺陷）。
+          * 图标永远掉到下一行（用户截图那个缺陷）。迁移时这一层原样保留。
           */}
         <span className="notification-row-head">
           <strong>{props.name}</strong>
@@ -272,8 +273,10 @@ function SwitchRow(props: {
             )}
           />
         </span>
-      </span>
+      </>}
+      rowAttributes={{ 'data-row': props.hintKey === HINT_KEY_TOAST ? 'toast' : 'desktop' }}
+      rowClassName="notification-row">
       {props.control}
-    </div>
+    </SettingsRow>
   )
 }
