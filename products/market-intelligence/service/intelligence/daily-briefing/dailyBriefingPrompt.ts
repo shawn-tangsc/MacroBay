@@ -21,6 +21,35 @@ export function buildDailyBriefingPrompt(input: Readonly<{
 }>): StructuredModelMessage[] {
   const { document, locale } = input
   const rowFacts = dataFacts(document, locale)
+  // 示例跟着本期语言走（2026-11-09）：提示词里的示例是**要被照写的句子**，中英并排就等于
+  // 允许模型把另一种语言抄进正文。中文期只给中文写法，英文期只给英文写法。
+  const example = locale === 'zh-CN'
+    ? {
+        mechanism: '因为/导致/通过',
+        stance: '偏多/偏空/震荡',
+        relative: '强于/弱于/跑赢/跑输',
+        regime: '方向由偏多转为偏空',
+        noChange: '无重要变化',
+        conditional: '若',
+        higher: '高于预期',
+        lower: '低于预期',
+        watchImplication: '对利率、美元与 BTC/ETH 意味着什么',
+        flow: '-6.43 亿美元',
+        reversal: '盘中一度转多，但 ETF 流出 -6.43 亿美元，判断回到偏空'
+      }
+    : {
+        mechanism: 'because/leads to/through',
+        stance: 'bullish/bearish/range',
+        relative: 'outperform/underperform',
+        regime: 'turned bearish',
+        noChange: 'no material change',
+        conditional: 'if',
+        higher: 'higher than expected',
+        lower: 'lower than expected',
+        watchImplication: 'what follows for rates, dollar and BTC/ETH',
+        flow: '-$643.2M',
+        reversal: 'it briefly turned bid, but the ETF outflow of -$643.2M took the bounce back to bearish'
+      }
   /**
    * 可引用集合（Chief 2026-11-06 批）：模型能看见候选（选择阶段的列表），但**只有落进这一版的
    * 事实才允许被 `items` / `evidenceRefs` 引用**。以前两者混在一起，模型照着候选 id 写，校验回了
@@ -118,6 +147,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         // 语言要求写给模型，不是写成句式规则（用户 2026-11-08：要求写清楚，其余让它发挥）。
         'Every piece of text the reader can see uses this edition\'s language — not just the summary. That includes the change, the conclusion fields, conditions, counter-evidence, watch items, data gaps and every other prose field.',
         'Anything quoted verbatim keeps its original language: news headlines, proper names, institution names, URLs and numbers. Quoting is allowed; do not translate them.',
+        'Do not mix the other language into reader-visible prose: a zh-CN edition must not contain an English sentence or an English phrase, and an en-US edition must not contain Chinese. The prose examples below are written in this edition’s language; write that meaning, not the example’s words.',
         'If you are unsure whether a word should be translated, keep it as written in the input.',
         'Return one JSON object and nothing else. Do not use markdown fences, URLs, code, or a preamble.',
         'Do not add facts or numbers, and never write a price target, a trade instruction, or an invented probability. Directional forecasts and conditional statements are required.',
@@ -161,12 +191,12 @@ export function buildDailyBriefingPrompt(input: Readonly<{
           conclusionSynthesis: {
             direction: 'bullish|bearish|range|undecided|mixed',
             confidence: 'high|medium|low',
-            summary: 'Analyst prose in 2-4 sentences: the mechanism chain — what changed → through which channel → pressure or support for BTC/ETH (use 因为/导致/通过 or because/leads to/through) — plus the call it lands on. The base case, the catalysts and the overturn threshold are rendered as their own lines under the summary, so do NOT restate them here. The direction is already rendered as a tag before this summary, so do NOT start with or repeat the direction label (no 偏空/偏多/震荡/结论偏空/方向偏空). A recital of data without a causal link is not a conclusion. At most 600 characters.',
-            outlook: 'Next one to three sessions: state the base case explicitly as 偏多/偏空/震荡 (bullish/bearish/range), then BTC versus ETH relative strength (强于/弱于/跑赢/跑输 or outperform/underperform). Use only FACTS display numbers.',
+            summary: `Analyst prose in 2-4 sentences: the mechanism chain — what changed → through which channel → pressure or support for BTC/ETH (use ${example.mechanism}) — plus the call it lands on. The base case, the catalysts and the overturn threshold are rendered as their own lines under the summary, so do NOT restate them here. The direction is already rendered as a tag before this summary, so do NOT start with or repeat the direction label (no 偏空/偏多/震荡/结论偏空/方向偏空). A recital of data without a causal link is not a conclusion. At most 600 characters.`,
+            outlook: `Next one to three sessions: state the base case explicitly as ${example.stance}, then BTC versus ETH relative strength (${example.relative}). Use only FACTS display numbers.`,
             conditions: ['premise this forecast needs: the observable market state that must hold, with its FACTS display value; 1-3 items. Derived from this forecast, never copied from the earlier analysis conclusion.'],
-            counterEvidence: ['falsifier for this forecast: 若/if + observable threshold + what it would mean for BTC/ETH; 1-3 items, each with a FACTS display number. Replaces the earlier analysis counter-evidence.'],
+            counterEvidence: [`falsifier for this forecast: ${example.conditional} + observable threshold + what it would mean for BTC/ETH; 1-3 items, each with a FACTS display number. Replaces the earlier analysis counter-evidence.`],
             watch: ['catalyst or indicator to watch next (ETF flow, funding, stablecoins, NFP/CPI, the next release), with its FACTS display number; 1-4 items'],
-            regimeChange: 'a marker, not a paragraph: at most 48 characters (one short phrase) saying whether the call changed and what flipped it, for example "方向由偏多转为偏空" / "turned bearish". If nothing important changed, write "no material change" / "无重要变化" — it is shown as a chip, never as a sentence. Never narrate the editing process, a window, or an earlier AI view.',
+            regimeChange: `a marker, not a paragraph: at most 48 characters (one short phrase) saying whether the call changed and what flipped it, for example "${example.regime}". If nothing important changed, write "${example.noChange}" — it is shown as a chip, never as a sentence. Never narrate the editing process, a window, or an earlier AI view.`,
             confirmed: ['market outcome that supports the earlier read: the fact and its number, one sentence. Empty when not worth mentioning'],
             refuted: ['market outcome that contradicts the earlier read: the fact and its number, one sentence. Empty when not worth mentioning'],
             coreTension: 'the live contradiction in market terms: which buyers/sellers, prices or flows disagree right now. No bare labels.',
@@ -177,8 +207,8 @@ export function buildDailyBriefingPrompt(input: Readonly<{
             eventKey: 'FACTS.nextFocus.eventKey',
             why: 'the BTC/ETH transmission of this event and why it, not the nearest event, is the focus, at most 200 characters',
             watch: [
-              { condition: 'higher than expected', implication: 'what follows for rates, dollar and BTC/ETH' },
-              { condition: 'lower than expected', implication: 'what follows for rates, dollar and BTC/ETH' }
+              { condition: `${example.higher}`, implication: `${example.watchImplication}` },
+              { condition: `${example.lower}`, implication: `${example.watchImplication}` }
             ]
           }
         }, null, 2),
@@ -193,12 +223,12 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- conclusionTranslation: only when conclusionSynthesis is omitted and the fallback conclusion summary is in a different language from LOCALE. When you write conclusionSynthesis, omit it: the synthesized summary is already in LOCALE.',
         '- conclusionSynthesis: required when FACTS.priorConclusions is not empty; omit it when the list is empty (the fact-layer conclusion stays as a marked fallback). Weigh the prior conclusions against today’s facts and write your own forward verdict for a reader who never saw an earlier draft. Never copy any prior conclusion’s wording, sentence or structure; a verbatim or near-verbatim copy is rejected. Never describe the editing process, a window, frozen data, earlier AI views, models, documents called conclusions, or a timeline.',
         '- priorConclusions are claims, not facts: do not repeat their numbers as if verified and do not cite them as evidence. Cite only frozen news:/macro:/data: factIds in conclusionSynthesis.evidenceRefs, at least one. Never mention their observedAt/asOf clock times.',
-        '- summary is an analyst view, not a recap: it must state the mechanism chain (what changed → through which channel → pressure or support for BTC/ETH) and the call it lands on, in at least two sentences, written with 因为/导致/通过 or because/leads to/through. A summary with no mechanism connective or fewer than two sentences is rejected.',
-        '- outlook is the base case itself: 偏多/偏空/震荡 (bullish/bearish/range) plus BTC versus ETH relative strength. conditions are the premises the base case needs; counterEvidence are the falsifiers, each a conditional (若/if) with a FACTS display number. Never reuse the earlier analysis conclusion’s conditions, invalidations or counter-evidence: they describe a different call and horizon. watch lists 1-4 catalysts or indicators with their display numbers (ETF flow, funding, stablecoins, NFP/CPI, the next release).',
+        `- summary is an analyst view, not a recap: it must state the mechanism chain (what changed → through which channel → pressure or support for BTC/ETH) and the call it lands on, in at least two sentences, written with ${example.mechanism}. A summary with no mechanism connective or fewer than two sentences is rejected.`,
+        `- outlook is the base case itself: ${example.stance} plus BTC versus ETH relative strength. conditions are the premises the base case needs; counterEvidence are the falsifiers, each a conditional (${example.conditional}) with a FACTS display number. Never reuse the earlier analysis conclusion’s conditions, invalidations or counter-evidence: they describe a different call and horizon. watch lists 1-4 catalysts or indicators with their display numbers (ETF flow, funding, stablecoins, NFP/CPI, the next release).`,
         '- Each point appears exactly once on the page: summary carries the mechanism, outlook the next-1-3-day base case, watch the catalysts, whatWouldChange the single overturn threshold. Repeating one of those sentences inside summary (or a falsifier inside whatWouldChange) is rejected as duplicate content.',
         '- Price targets, buy/sell advice and invented probabilities are rejected: no 目标价/目标位/上看/下看/止损/止盈, no price target/target price/stop loss/take profit, no 建议买入/卖出/加仓/减仓, no "70% 概率". Directional predictions and conditionals ("若 ... 则 ..." / "if ... then ...") are required instead.',
-        '- Numbers: quote the FACTS `display` field exactly. Percentages keep two decimals; Chinese USD uses 亿/万美元; English USD uses $B/$M; never write a raw 9-digit amount, a percentage with more than two decimals, or mix billion/million with 亿. Example: ETF net flow -6.43 亿美元 / -$643.2M; BTC 24h -0.83%.',
-        '- If today’s facts changed the read, write the market action that changed it: "盘中一度转多，但 ETF 流出 -6.43 亿美元，判断回到偏空" / "it briefly turned bid, but the ETF outflow of -$643.2M took the bounce back to bearish". Name the move and the flow or number that reversed it. Never write "the view flipped during the window", "most calls", or a clock time.',
+        `- Numbers: quote the FACTS \`display\` field exactly. Percentages keep two decimals; Chinese USD uses 亿/万美元; English USD uses $B/$M; never write a raw 9-digit amount, a percentage with more than two decimals, or mix billion/million with 亿. Example: ETF net flow ${example.flow}; BTC 24h -0.83%.`,
+        `- If today’s facts changed the read, write the market action that changed it: "${example.reversal}". Name the move and the flow or number that reversed it. Never write "the view flipped during the window", "most calls", or a clock time.`,
         '- confirmed/refuted describe market outcomes, not an analyst scorecard: each entry names the earlier read and the fact plus number that confirmed or contradicted it. They are rendered as one short "basis held / basis was overturned" line, so keep each entry to a clause, not a paragraph, and leave them empty when the earlier read is not worth mentioning; never pad them with a chronology of views. coreTension is the live contradiction a trader must price now, not a summary of the lede. whatWouldChange is the single clearest observable threshold with a display number, and it must not repeat a counterEvidence entry.',
         '- BANNED in conclusionSynthesis (the validator rejects them): 窗口/窗口内, 多数判断, 冻结数据, 前提被削弱, AI, 模型, 结论, 时间线; English window, most calls, frozen data, premise weakened, AI, model, conclusion, timeline. Also banned: clock times such as 23:09 unless they are a scheduled market event named in the same sentence (for example "20:30 CPI"), and bare 分化/承压/风险偏好/流动性 or divergence/under pressure/risk appetite/liquidity with no concrete object or number in the same sentence. Do not stack jargon.',
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
@@ -313,6 +343,7 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
     { role: 'system', content: 'You are the editor of a frozen daily market brief. Select, do not write prose yet. Return one JSON object and nothing else.' },
     { role: 'user', content: [
       `LOCALE: ${locale}`,
+      'Write every reader-visible reason (focusWhy, hidden reasons, hiddenData reasons) in this edition’s language, and do not mix the other language into it.',
       'CANDIDATES:',
       JSON.stringify(candidates, null, 2),
       'Return this exact shape: {"stage":"select","focus":"<next eventKey>","focusWhy":"why it transmits to BTC/ETH","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"data":["data:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}],"hidden":[{"factId":"<factId>","reason":"why not shown"}],"hiddenData":[{"factId":"data:<id>","reason":"why not shown"}]}',

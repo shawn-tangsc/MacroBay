@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
-import { buildDailyBriefingPrompt } from './dailyBriefingPrompt'
+import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './dailyBriefingPrompt'
 
 const document = (): DailyBriefingDocument => ({
   schemaVersion: 1,
@@ -303,7 +303,7 @@ describe('daily briefing conclusion wording', () => {
   it('asks the model to quote the FACTS display spelling instead of formatting raw numbers', () => {
     const text = promptText()
     expect(text).toContain('quote the FACTS `display` field exactly')
-    expect(text).toContain('-6.43 亿美元 / -$643.2M')
+    expect(text).toContain('Example: ETF net flow -6.43 亿美元; BTC 24h -0.83%')
     expect(text).toContain('never write a raw 9-digit amount')
     expect(text).toContain('Never format, scale, round or convert a raw value yourself')
   })
@@ -323,8 +323,43 @@ describe('daily briefing conclusion wording', () => {
   })
 })
 
-function promptText(): string {
-  return buildDailyBriefingPrompt({ document: document(), locale: 'zh-CN', priorConclusions: [prior()] })
+describe('the prose examples follow the edition language', () => {
+  it('gives a zh-CN edition only Chinese prose examples', () => {
+    const text = promptText('zh-CN')
+    expect(text).toContain('Do not mix the other language into reader-visible prose')
+    expect(text).toContain('高于预期')
+    expect(text).toContain('因为/导致/通过')
+    expect(text).toContain('方向由偏多转为偏空')
+    expect(text).toContain('对利率、美元与 BTC/ETH 意味着什么')
+    for (const english of [
+      'higher than expected',
+      'lower than expected',
+      'turned bearish',
+      'because/leads to/through',
+      'outperform/underperform'
+    ]) expect(text).not.toContain(english)
+  })
+
+  it('gives an en-US edition only English prose examples', () => {
+    const text = promptText('en-US')
+    expect(text).toContain('Do not mix the other language into reader-visible prose')
+    expect(text).toContain('higher than expected')
+    expect(text).toContain('because/leads to/through')
+    expect(text).toContain('turned bearish')
+    for (const chinese of ['高于预期', '低于预期', '方向由偏多转为偏空', '因为/导致/通过']) expect(text).not.toContain(chinese)
+  })
+
+  it('asks the selection pass to write its reasons in the edition language', () => {
+    const text = buildDailyBriefingSelectionPrompt({ document: document(), locale: 'zh-CN' })
+      .map((message) => message.content)
+      .join('\n')
+    expect(text).toContain('Write every reader-visible reason')
+    expect(text).toContain('do not mix the other language into it')
+  })
+})
+
+function promptText(locale: 'zh-CN' | 'en-US' = 'zh-CN'): string {
+  return buildDailyBriefingPrompt({ document: document(), locale, priorConclusions: [prior()] })
     .map((message) => message.content)
     .join('\n')
 }
