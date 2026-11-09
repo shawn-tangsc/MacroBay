@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
@@ -154,9 +155,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           <p>{text.description}</p>
         </div>
         <div className="mi-crypto-dashboard__tools">
-          {briefingEnabled ? <button className="mi-crypto-dashboard__briefing" onClick={onOpenBriefing} type="button">{text.dailyBriefing.entry}</button> : null}
-          <button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="button">{text.configureSources}</button>
-          <button className="mi-crypto-dashboard__back" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToAgents}</button>
+          {/* 三处页头命令按钮：换 antd `Button` 默认档，className 原样保留——尺寸/字重仍由
+              `cryptoDashboard.css` 那几条决定（选择器已加 `.ant-btn` 提高特异性），视觉档位不变。 */}
+          {briefingEnabled ? <Button className="mi-crypto-dashboard__briefing" onClick={onOpenBriefing} type="default">{text.dailyBriefing.entry}</Button> : null}
+          <Button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="default">{text.configureSources}</Button>
+          <Button className="mi-crypto-dashboard__back" icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack} type="default">{text.backToAgents}</Button>
         </div>
       </header>
 

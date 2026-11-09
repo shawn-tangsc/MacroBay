@@ -114,16 +114,18 @@
 .mi-crypto-dashboard h1 { color: #fff; font-size: 30px; font-weight: 650; letter-spacing: -.035em; line-height: 1.16; }
 .mi-crypto-dashboard__heading > p:last-child { max-width: 660px; margin-top: 8px; color: var(--mi-dashboard-muted); font-size: 14px; line-height: 1.5; }
 .mi-crypto-dashboard__tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-.mi-crypto-dashboard__briefing,
-.mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
-.mi-crypto-dashboard__briefing,
-.mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { cursor: pointer; }
-.mi-crypto-dashboard__configure { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
-.mi-crypto-dashboard__back { color: var(--mi-dashboard-muted); }
-.mi-crypto-dashboard__configure:focus-visible,
-.mi-crypto-dashboard__back:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+/* 三处页头命令按钮已是 antd `Button`：选择器带上 `.ant-btn` 才压得住它自带的
+   padding/height/border-radius。**尺寸与字号仍是原来那几个数**，换的只是交互元素。 */
+.mi-crypto-dashboard__briefing.ant-btn,
+.mi-crypto-dashboard__configure.ant-btn,
+.mi-crypto-dashboard__back.ant-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
+.mi-crypto-dashboard__briefing.ant-btn,
+.mi-crypto-dashboard__configure.ant-btn,
+.mi-crypto-dashboard__back.ant-btn { cursor: pointer; }
+.mi-crypto-dashboard__configure.ant-btn { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
+.mi-crypto-dashboard__back.ant-btn { color: var(--mi-dashboard-muted); }
+.mi-crypto-dashboard__configure.ant-btn:focus-visible,
+.mi-crypto-dashboard__back.ant-btn:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 .mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-align: left; }
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
