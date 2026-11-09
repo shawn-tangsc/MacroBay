@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input } from 'antd'
+import { Button, Input } from 'antd'
 import { Check, Copy, Eye, EyeOff, Pencil } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -285,10 +285,11 @@ export function WebSearchApiKeyField({
           <span className="web-search-api-key-error" role="alert">
             {revealError.text}
             {/* 只有「重试可能改变结果」的失败才给按钮：确定性失败上的按钮永远不会成功。 */}
+            {/* 句内动作：antd `Button` 的文本档 + `.text-action` 标记（命令型一律 antd，不再手写按钮）。 */}
             {revealError.retryable ? (
-              <button type="button" className="text-action" onClick={() => void reveal()}>
+              <Button type="text" size="small" className="text-action" onClick={() => void reveal()}>
                 {labels.retry}
-              </button>
+              </Button>
             ) : null}
           </span>
         ) : null}
@@ -298,25 +299,27 @@ export function WebSearchApiKeyField({
           {confirmRemove ? (
             <div className="web-search-api-key-remove-confirm">
               <span>{labels.removeApiKeyConfirm}</span>
-              <button
-                type="button"
-                className="web-search-api-key-link"
+              <Button
+                type="text"
+                size="small"
+                className="text-action"
                 disabled={disabled || removing}
                 onClick={() => void remove()}>
                 {labels.removeApiKeyConfirmAction}
-              </button>
-              <button type="button" className="web-search-api-key-link" onClick={() => setConfirmRemove(false)}>
+              </Button>
+              <Button type="text" size="small" className="text-action" onClick={() => setConfirmRemove(false)}>
                 {labels.cancel}
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
-              type="button"
-              className="web-search-api-key-remove-link"
+            <Button
+              type="text"
+              size="small"
+              className="text-action"
               disabled={disabled}
               onClick={() => setConfirmRemove(true)}>
               {labels.removeApiKey}
-            </button>
+            </Button>
           )}
         </div>
       ) : null}
