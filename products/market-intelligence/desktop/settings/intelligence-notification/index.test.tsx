@@ -164,6 +164,11 @@ describe('row-to-event binding', () => {
       ['pages.intelligence.notification.rows.sentimentAlert.title', 'market-intelligence.sentiment.alert'],
       ['pages.intelligence.notification.rows.calendar.title', 'market-intelligence.calendar.event-upcoming']
     ])
+    // 映射表里不许有重复落点：两个类别指到同一行或同一个事件，读者改一个就会顺手改到另一个。
+    const rows = INTELLIGENCE_CHANNEL_EVENT_ROWS
+    expect(new Set(rows.map((row) => row.itemKey)).size).toBe(rows.length)
+    expect(new Set(rows.map((row) => row.eventId)).size).toBe(rows.length)
+    expect(new Set(rows.map((row) => row.titleKey)).size).toBe(rows.length)
     // 每个 id 都必须在 manifest 里声明过——表里写一个拼错的 id，这里就红。
     const declared = new Set(marketIntelligenceProductManifest.notificationEvents.map((event) => event.id))
     for (const row of INTELLIGENCE_CHANNEL_EVENT_ROWS) expect(declared.has(row.eventId), row.itemKey).toBe(true)
