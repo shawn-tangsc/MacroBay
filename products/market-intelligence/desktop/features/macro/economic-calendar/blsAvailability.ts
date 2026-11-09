@@ -56,9 +56,18 @@ export function blsUnavailableSentence(text: EconomicCalendarText, unavailable: 
  *
  * 「不能刷新」与「自动同步停了」不是同一句话：前者是键按不动的原因，后者是后台的现状。
  * 只置灰不说原因，读者只会以为界面坏了；所以这句话必须贴着那颗键说，并且说出**恢复条件**
- * （今天：要等官方站点不再拒绝当前网络，恢复时间未知）。原因码从注册表那一份取，不在这里另写。
+ * （今天：要等官方站点不再拒绝当前网络，恢复时间未知）。
+ *
+ * **正文只给读者说法**：完整原因码不拼进这句话（2026-11-10 界面设计），它由
+ * `blsRefreshBlockedReasonCode` 交给那颗 ⓘ，默认收起、恰一处。
  */
 export function blsRefreshBlockedSentence(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
   if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
-  return fillLabelParams(text.blsRefresh.blocked, { code: unavailable.reasonCode })
+  return text.blsRefresh.blocked
+}
+
+/** 那枚 ⓘ 里要显示的完整原因码；与行内句同一个闸门，不会出现「句子在、码不在」。 */
+export function blsRefreshBlockedReasonCode(unavailable: BlsUnavailable | undefined): string | undefined {
+  if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
+  return unavailable.reasonCode
 }

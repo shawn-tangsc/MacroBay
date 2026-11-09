@@ -23,7 +23,7 @@ export type CalendarDetailState =
  * this file only decides what the reader sees for a market event, a loading read, a failed read, or
  * the official event itself, in that order.
  */
-export function CalendarDetailSurface({ contentId, when, selectedMarket, selectedLinkedMarket, sourceAdvanced, marketSources, detailState, refreshState, client, text, now, onClose, onRefresh, onReleaseTimeChanged, onRetry, blsUnavailableNotice, blsRefreshBlocked }: {
+export function CalendarDetailSurface({ contentId, when, selectedMarket, selectedLinkedMarket, sourceAdvanced, marketSources, detailState, refreshState, client, text, now, onClose, onRefresh, onReleaseTimeChanged, onRetry, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode }: {
   contentId: string | undefined
   when: string | undefined
   selectedMarket: MarketCalendarEvent | undefined
@@ -43,6 +43,8 @@ export function CalendarDetailSurface({ contentId, when, selectedMarket, selecte
   blsUnavailableNotice?: string
   /** 置灰的刷新键自己的行内句（为什么不能刷新、何时能好）。与上一句分开：一句是后台现状，一句是这颗键。 */
   blsRefreshBlocked?: string
+  /** 行内句旁那颗 ⓘ 里的完整原因码（正文不拼它）。 */
+  blsRefreshBlockedCode?: string
 }): ReactElement {
   return (
     <CalendarInspector contentId={contentId} onClose={onClose} open={contentId !== undefined} when={when}>
@@ -52,7 +54,7 @@ export function CalendarDetailSurface({ contentId, when, selectedMarket, selecte
       {!selectedMarket && detailState.state === 'loading' ? <EventDetailState state="loading" text={text.status.loading} /> : null}
       {!selectedMarket && detailState.state === 'available' ? <EventDetail event={detailState.event}
         linkedConsensus={selectedLinkedMarket?.consensus}
-        now={now} onRefresh={onRefresh} onReleaseTimeChanged={onReleaseTimeChanged} releaseTimeClient={client} refreshState={refreshState} text={text} blsUnavailableNotice={blsUnavailableNotice} blsRefreshBlocked={blsRefreshBlocked} /> : null}
+        now={now} onRefresh={onRefresh} onReleaseTimeChanged={onReleaseTimeChanged} releaseTimeClient={client} refreshState={refreshState} text={text} blsUnavailableNotice={blsUnavailableNotice} blsRefreshBlocked={blsRefreshBlocked} blsRefreshBlockedCode={blsRefreshBlockedCode} /> : null}
       {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState state="error"
         text={text.failures[detailState.failureCode]} onRetry={onRetry} /> : null}
     </CalendarInspector>

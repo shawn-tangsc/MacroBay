@@ -890,8 +890,10 @@ mi: miText['zh-CN'],
               title: '刷新 BLS 发布数据',
               confirmation: '将请求 BLS 官方数据并更新对应完整发布组：CPI 与核心 CPI，或非农、失业率与平均时薪。',
               confirm: '刷新', cancel: '取消', pending: '正在刷新 BLS 数据…',
-              /* 置灰的刷新键自己的行内句：为什么不能刷新、什么时候能好。{code} 来自源注册表，不另抄一份。 */
-              blocked: '暂时不能刷新：官方站点拒绝了当前网络（原因码 {code}），恢复时间未知。',
+              /* 置灰的刷新键自己的行内句：为什么不能刷新、什么时候能好。
+                 完整原因码不进正文（读者的说法在这里，码在键旁那颗 ⓘ 里）。 */
+              blocked: '暂时不能刷新：官方站点拒绝了当前网络。恢复时间未知。',
+              reasonCodeAria: '原因码',
               updated: '已刷新对应完整 BLS 发布组的数据。', unchanged: '对应完整 BLS 发布组的数据已是最新。', unavailable: '对应完整 BLS 发布组的官方数据暂不可用，未保存任何值。'
             },
             blsScheduleSync: {
@@ -2226,7 +2228,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               title: 'Refresh BLS release data',
               confirmation: 'This requests official BLS data and updates the matching complete release family: CPI and Core CPI, or Nonfarm Payrolls, Unemployment Rate, and Average Hourly Earnings.',
               confirm: 'Refresh', cancel: 'Cancel', pending: 'Refreshing BLS data…',
-              blocked: 'Refreshing is unavailable: the official site rejects this network (reason code {code}); the recovery time is unknown.',
+              blocked: 'Refreshing is unavailable: the official site rejects this network; the recovery time is unknown.',
+              reasonCodeAria: 'Reason code',
               updated: 'BLS data for the matching complete release family was refreshed.', unchanged: 'BLS data for the matching complete release family is already current.', unavailable: 'Official BLS data is unavailable for the matching complete release family. No values were saved.'
             },
             blsScheduleSync: {

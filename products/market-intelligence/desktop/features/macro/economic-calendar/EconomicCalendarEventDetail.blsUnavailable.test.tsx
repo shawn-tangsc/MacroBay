@@ -13,7 +13,7 @@ import type { EconomicCalendarEventView } from './economicCalendarModel'
 const text = productText['zh-CN'].pages.intelligence.portal.calendar
 const asOf = '2026-11-06T14:00:00.000Z'
 const notice = 'BLS 官方日历：当前网络环境无法自动获取（官方站点返回 403），自动同步已停止；库里的 BLS 事件来自上次成功同步（2026-10-22），发布时间未知。'
-const blocked = '暂时不能刷新：官方站点拒绝了当前网络（原因码 official-endpoint-returned-403），恢复时间未知。'
+const blocked = '暂时不能刷新：官方站点拒绝了当前网络。恢复时间未知。'
 
 /** A BLS-eligible row: the refresh control only exists for these families and only before release. */
 function event(overrides: Partial<EconomicCalendarEventView> = {}): EconomicCalendarEventView {
@@ -79,18 +79,30 @@ describe('the BLS refresh once the official calendar has stopped', () => {
     expect(onRefresh).not.toHaveBeenCalled()
   })
 
-  it('says inline why the control cannot be used: the reason code and that recovery is unknown', async () => {
+  it('says inline why the control cannot be used and keeps the reason code behind one info trigger', async () => {
     // 界面设计 2026-11-09：置灰必须当场说清「为什么不能刷新、什么时候能好（若有）」。
-    // 它必须是**这颗键自己的**行内句：不是第二个弹窗，也不是又一段解释。
-    const host = await render(detail({ blsUnavailableNotice: notice, blsRefreshBlocked: blocked }))
+    // 2026-11-10 收紧：正文只给读者说法，**完整原因码不进正文**——它在那一格自己的 ⓘ 里，默认收起、恰一处。
+    const host = await render(detail({
+      blsUnavailableNotice: notice,
+      blsRefreshBlocked: blocked,
+      blsRefreshBlockedCode: 'official-endpoint-returned-403'
+    }))
     const inline = host.querySelector('[data-bls-refresh-blocked]')
     expect(inline, 'the greyed key carries its own reason').not.toBeNull()
-    expect(inline?.textContent).toContain('official-endpoint-returned-403')
     expect(inline?.textContent).toContain('恢复时间未知')
+    expect(inline?.textContent).not.toContain('official-endpoint-returned-403')
     // 与刷新键同处一个行内容器（同一行），而不是另起一段。
     expect(inline?.parentElement?.querySelector('button')?.textContent).toContain(text.blsRefresh.action)
     // 同一件事只出现一次。
     expect(host.querySelectorAll('[data-bls-refresh-blocked]')).toHaveLength(1)
+
+    // 码在 ⓘ 里、恰一处，而且默认不展开：没打开时整页读不到这个码。
+    const triggers = [...host.querySelectorAll<HTMLElement>(`[aria-label="${text.blsRefresh.reasonCodeAria}"]`)]
+    expect(triggers).toHaveLength(1)
+    expect(document.body.textContent).not.toContain('official-endpoint-returned-403')
+    await act(async () => { triggers[0]!.focus() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(document.body.textContent).toContain('official-endpoint-returned-403')
   })
 
   it('leaves the control usable when the source is not stopped', async () => {

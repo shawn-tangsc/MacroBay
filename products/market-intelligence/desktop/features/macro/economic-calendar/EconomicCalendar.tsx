@@ -421,6 +421,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       <CalendarDetailSurface
         blsUnavailableNotice={blsAvailability.notice}
         blsRefreshBlocked={blsAvailability.refreshBlocked}
+        blsRefreshBlockedCode={blsAvailability.refreshBlockedCode}
         client={client}
         contentId={detailContentId}
         detailState={detailState}
