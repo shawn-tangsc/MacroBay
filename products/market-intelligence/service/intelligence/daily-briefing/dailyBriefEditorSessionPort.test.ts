@@ -178,7 +178,7 @@ describe('claiming the briefing sessions that were created without an identity',
     const canonicalId = [...d.sessions.entries()]
       .find(([, session]) => session.originRef === `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN`)?.[0]
     expect(canonicalId, '正式身份必须是最近一次生成（换成最早/任意一次即为身份冲突）').toBe('s-new-2')
-    // 1) 同一期只剩一条正式身份，取**最新**那次生成（读者现在打开的就是它的内容）。
+    // 1) 同一期**同一语言**只剩一条正式身份，取**最新**那次生成（读者现在打开的就是它的内容）。
     const edition23 = `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN`
     expect(d.sessions.get('s-new-2')?.originRef).toBe(edition23)
     expect(d.sessions.get('s-mid-3')?.originRef).toBe(`${edition23}#history:s-mid-3`)
