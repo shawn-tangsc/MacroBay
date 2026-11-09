@@ -44,7 +44,10 @@ function gateFor(repo: ReturnType<typeof repository>, current: readonly unknown[
     queryMacroRoute: (input) => queryMacroRoute({ queryMacroEconomicCalendarMonth: async ({ month }) => month === '2026-10' ? { state: 'available', asOf, events: current } as never : { state: 'available', asOf, events: [] } as never }, input),
     countRuns: (now) => countAnalysisRuns(repo, now),
     lastAutoRunAt: (eventGroupId, now) => lastAutoRunAt(repo, eventGroupId, now),
-    recordDecision: (decision) => repo.appendTriggerLedger({ id: `mi-tl-${Math.random().toString(36).slice(2, 8)}`, ...decision, snapshotHash: null, analysisRunId: null, createdAt: queuedAt } as never)
+    recordDecision: (decision) => repo.appendTriggerLedger({ id: `mi-tl-${Math.random().toString(36).slice(2, 8)}`, ...decision, snapshotHash: null, analysisRunId: null, createdAt: queuedAt } as never),
+    // The gate refuses an attempt by flipping that attempt's own row; this is the same wiring the
+    // runtime uses, so a refusal here leaves the ledger in the state the panel reads.
+    updateDecision: (rowId, decision, reasonCode) => repo.updateTriggerLedgerDecision(rowId, decision, reasonCode)
   })
 }
 
@@ -58,7 +61,7 @@ it('does not spend a run on a refresh that re-collected identical values, and sa
   const ledger = repo.listTriggerLedger('mi-eg-1')
   expect(ledger).toHaveLength(1)
   // Attribution is per run: the decision is explainable for the run this key would produce.
-  expect(projectTriggerStatus(ledger, { triggerKey: 'calendar.refresh', queuedAt, completedAt: queuedAt })).toMatchObject({ triggerKey: 'calendar.refresh', reasonCode: 'significance-below-threshold' })
+  expect(projectTriggerStatus(ledger, { id: 'mi-run-1', triggerKey: 'calendar.refresh', queuedAt, completedAt: queuedAt }, 'UTC')).toMatchObject({ triggerKey: 'calendar.refresh', reasonCode: 'significance-below-threshold' })
   expect(projectPreviousBaseline(previousSnapshot)?.values.get('macro|consumer-price-index|actual|US.CPI.RELEASE.2026-M09')).toBe('3.2%')
 })
 
@@ -72,7 +75,7 @@ it('queues a released value, carries the reason into the prompt, and shows it on
   const messages = buildAnalysisMessages({ profileId: 'crypto-market-analysis-v1', asOf, dataCutoff: asOf, facts: [macroFact('3.2%')], missingDomains: [], caveats: [], evidenceRefs: [], sourceHash: null } as never, outcome.signals)
   expect(JSON.parse(messages[1]!.content as string).triggers).toEqual([expect.stringContaining('消费者物价指数（CPI）')])
   // The ledger row is a queue, not a skip, and the count reflects the delivered run.
-  expect(projectTriggerStatus(repo.listTriggerLedger('mi-eg-1'), { triggerKey: 'calendar.refresh', queuedAt, completedAt: queuedAt })).toMatchObject({ reasonCode: 'significance-confirmed' })
+  expect(projectTriggerStatus(repo.listTriggerLedger('mi-eg-1'), { id: 'mi-run-1', triggerKey: 'calendar.refresh', queuedAt, completedAt: queuedAt }, 'UTC')).toMatchObject({ reasonCode: 'significance-confirmed' })
   expect(countAnalysisRuns(repo, queuedAt)).toMatchObject({ dayRuns: 1, calendarRunsToday: 1, eventRunsToday: 0, scheduledRunsToday: 0 })
 })
 
