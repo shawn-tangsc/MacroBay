@@ -16,7 +16,13 @@ import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
-import { isCapitalConditionsRetryable, type DashboardCapitalConditionsState, type DashboardEtfFlowAsset } from './capitalConditionsModel'
+import {
+  isCapitalConditionsRetryable,
+  type DashboardCapitalConditionsState,
+  type DashboardEtfFlowAsset,
+  type DashboardEtfMissingReason,
+  type DashboardEtfReading
+} from './capitalConditionsModel'
 import { EtfOutflowChip, EtfSignalDetailDialog, type EtfSignalText } from './EtfOutflowSignal'
 
 type Text = {
@@ -53,6 +59,14 @@ type Text = {
   btc: string
   eth: string
   etfScope: string
+  /** 某支读不到时：中文「未知」+ 三条原因各一句人话（原因闭集在模型里）。 */
+  etfUnknown: string
+  etfMissingSourceUnreadable: string
+  etfMissingAssetMissing: string
+  etfMissingValueMissing: string
+  /** 对比列单独说：两支窗口不等长不可比；只有 `laggingDays` 存在时才念落后几天。 */
+  etfComparisonUnaligned: string
+  etfComparisonLagging: string
   /** One template: both notes quote `stablecoin` through `{row}`, so they cannot drift apart. */
   notComparable: string
   expandDaily: string
@@ -141,14 +155,14 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           onClose={closeDetail}
           open={detailOpen}
           text={text}
-          verifiedAt={state.etf === 'unavailable' ? undefined : state.etf.verifiedAt} />
+          verifiedAt={state.etfReading?.state === 'unreadable' ? undefined : state.etfReading?.verifiedAt} />
         {/* These are the last numbers that read successfully. Saying so is the difference between
             "old" and "gone", and only one of those is true after a failed re-read. */}
         {state.stale ? <p className="mi-capital-conditions__stale" role="status">{text.staleRead}</p> : null}
         <StablecoinTable state={state} text={text} />
-        <EtfTable etf={state.etf} text={text} onRetry={onRefresh} />
+        <EtfTable reading={state.etfReading} text={text} onRetry={onRefresh} />
       </div>
-      <EtfFlow etf={state.etf} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
+      <EtfFlow reading={state.etfReading} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
     </div>
   </section>
 }
@@ -183,9 +197,17 @@ function StablecoinTable({ state, text }: { state: AvailableState; text: Text })
 
 
 /** One row per asset, one column per horizon: no label repeats inside the body. */
-function EtfTable({ etf, text, onRetry }: { etf: AvailableState['etf']; text: Text; onRetry: () => void }): React.ReactElement {
-  const coverage = etf === 'unavailable' ? undefined : etf.coverage
-  return <table className="mi-capital-conditions__etf-table">
+/**
+ * ETF 两行：**每一支各说各的**。一支有值就照常显示数字（0 就是 0，不许拿另一支补），
+ * 另一支显示「未知」+ 具体原因；两支都读不到才整块换成错误态。
+ * 窗口不等长只让**对比列**不可比，不把两份数字一起撤掉（「ETH 晚一天整份作废」就是这么来的）。
+ */
+function EtfTable({ reading, text, onRetry }: { reading?: DashboardEtfReading; text: Text; onRetry: () => void }): React.ReactElement {
+  const unreadable = reading === undefined || reading.state === 'unreadable'
+  const coverage = unreadable ? undefined : reading.coverage
+  const span = 2 + etfFlowPolicy.cumulativeWindows.length
+  return <>
+  <table className="mi-capital-conditions__etf-table">
     <colgroup>
       <col className="mi-capital-conditions__etf-col-asset" />
       <col span={3} />
@@ -206,14 +228,43 @@ function EtfTable({ etf, text, onRetry }: { etf: AvailableState['etf']; text: Te
       <th scope="col">{text.streakColumn}</th>
     </tr></thead>
     <tbody>
-      {etf === 'unavailable'
-        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={5}><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} /></td></tr>
-        : <><EtfRow asset={etf.btc} label={text.btc} text={text} /><EtfRow asset={etf.eth} label={text.eth} text={text} /></>}
+      {unreadable
+        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={span}><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} /></td></tr>
+        : <>
+            <EtfRow asset={reading.btc} label={text.btc} missing={reading.missing?.btc} text={text} />
+            <EtfRow asset={reading.eth} label={text.eth} missing={reading.missing?.eth} text={text} />
+          </>}
     </tbody>
   </table>
+  {/* 对比列单独说：不可比，且只在有 `laggingDays` 时念出落后几个交易日。 */}
+  {!unreadable && reading.comparison.state === 'unaligned'
+    ? <p className="mi-capital-conditions__etf-comparison" data-etf-comparison="unaligned">
+        {text.etfComparisonUnaligned}
+        {/* 只有「最新交易日不同」那一支带得出落后几个交易日；另一支没有这个数就不念。 */}
+        {'laggingDays' in reading.comparison
+          ? ` · ${format(text.etfComparisonLagging, { days: reading.comparison.laggingDays })}`
+          : null}
+      </p>
+    : null}
+  </>
 }
 
-function EtfRow({ asset, label, text }: { asset: DashboardEtfFlowAsset; label: string; text: Text }): React.ReactElement {
+function EtfRow({ asset, label, missing, text }: {
+  asset?: DashboardEtfFlowAsset
+  label: string
+  /** 这一支读不到时由模型给的原因；有 `asset` 就不用它。 */
+  missing?: DashboardEtfMissingReason
+  text: Text
+}): React.ReactElement {
+  // 这一支没值：说「未知」并给原因，**不补 0、不拿另一支顶**。
+  if (asset === undefined) {
+    return <tr data-etf-missing={missing ?? 'asset-missing'}>
+      <th scope="row"><i className="mi-capital-conditions__asset-dot" data-series={label === text.eth ? 'eth' : 'btc'} aria-hidden="true" />{label}</th>
+      <td className="mi-capital-conditions__etf-unknown" colSpan={1 + etfFlowPolicy.cumulativeWindows.length + 1}>
+        {text.etfUnknown} · {missingReasonText(missing, text)}
+      </td>
+    </tr>
+  }
   const latest = asset.rows.at(-1)
   const days = latest ? consecutiveDirectionDays(asset.rows, latest.direction) : 0
   const streak = latest && days > 0
@@ -225,6 +276,14 @@ function EtfRow({ asset, label, text }: { asset: DashboardEtfFlowAsset; label: s
     {asset.cumulative.map((window) => <td key={window.windowDays} data-flow-direction={flowDirection(window.netFlowUsd)}>{window.netFlowUsd}</td>)}
     <td className="mi-capital-conditions__streak" data-flow-direction={latest?.direction}>{streak}</td>
   </tr>
+}
+
+function missingReasonText(reason: DashboardEtfMissingReason | undefined, text: Text): string {
+  switch (reason) {
+    case 'source-unreadable': return text.etfMissingSourceUnreadable
+    case 'value-missing': return text.etfMissingValueMissing
+    default: return text.etfMissingAssetMissing
+  }
 }
 
 function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflow' | 'zero' }[], direction: 'inflow' | 'outflow' | 'zero'): number {
@@ -239,8 +298,8 @@ function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflo
  * model — and the table's trigger sits in the title row while its panel hangs off this section's
  * bottom edge, so opening it moves nothing in the card.
  */
-function EtfFlow({ etf, flowHistory, text, onRetry }: {
-  etf: AvailableState['etf']
+function EtfFlow({ reading, flowHistory, text, onRetry }: {
+  reading?: DashboardEtfReading
   flowHistory?: AvailableState['flowHistory']
   text: Text
   onRetry: () => void
@@ -249,7 +308,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
   const resolveText = useProductTextKey()
   // "The sources did not answer" stays an error with a retry; "they answered with too few days"
   // is a not-yet with the count, so the two never share a sentence.
-  if (etf === 'unavailable' || !flowHistory) {
+  if (reading === undefined || reading.state === 'unreadable' || !flowHistory) {
     return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3>
       <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} />
     </section>

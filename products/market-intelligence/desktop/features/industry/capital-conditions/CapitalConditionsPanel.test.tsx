@@ -119,7 +119,7 @@ describe('CapitalConditionsPanel', () => {
 
   it.each(['zh-CN', 'en-US'] as const)('shows the %s ETF table as unavailable without inventing numbers', (locale) => {
     const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
-    const state = { ...fullState(), etf: 'unavailable' as const }
+    const state = { ...fullState(), etfReading: unreadableReading() }
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
     const body = etfTableBody(markup)
 
@@ -141,8 +141,11 @@ describe('CapitalConditionsPanel', () => {
       state: {
         state: 'available', conclusion: 'partial', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
         flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1_000_000, btc: 2_000_000, eth: -3_000_000 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
-        etf: {
+        // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
+        etf: 'unavailable' as const,
+        etfReading: {
           state: 'available',
+          comparison: { state: 'aligned' },
           coverage: [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }],
           btc: { asset: 'BTC', latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [{ tradingDate: '2026-08-17', direction: 'inflow', magnitudePercent: 100 }, { tradingDate: '2026-08-18', direction: 'zero', magnitudePercent: 0 }] },
           eth: { asset: 'ETH', latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [{ tradingDate: '2026-08-18', direction: 'outflow', magnitudePercent: 100 }] }
@@ -288,7 +291,7 @@ describe('CapitalConditionsPanel', () => {
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, {
       text,
-      state: { state: 'available', conclusion: 'partial', etf: 'unavailable', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
+      state: { state: 'available', conclusion: 'partial', etf: 'unavailable' as const, etfReading: unreadableReading(), observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
     })))
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() })))
 
@@ -649,7 +652,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    const state = { ...fullState(), etf: 'unavailable' as const }
+    const state = { ...fullState(), etfReading: unreadableReading() }
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh })))
     const actions = [...container.querySelectorAll<HTMLButtonElement>('.state-view__action')]
     expect(actions).toHaveLength(2)
@@ -717,8 +720,11 @@ function flowState(rows: readonly { tradingDate: string; funds: number; btc: num
     change30dUsd: '$0',
     change30dPercent: '0.00%',
     flowHistory: { state: 'available' as const, rows },
-    etf: {
+    // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
+    etf: 'unavailable' as const,
+    etfReading: {
       state: 'available' as const,
+      comparison: { state: 'aligned' as const },
       coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [] },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [] }
@@ -738,8 +744,11 @@ function fullState() {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
     // Mirrors the projection: it already cut the window to the last seven days before the panel sees it.
     flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: (index - 10) * 1_000_000, btc: (index + 1) * 1_000_000, eth: -(index + 1) * 1_000_000 })).slice(-7) },
-    etf: {
+    // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
+    etf: 'unavailable' as const,
+    etfReading: {
       state: 'available' as const,
+      comparison: { state: 'aligned' as const },
       coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: rows.map((row) => ({ ...row, direction: row.direction === 'zero' ? 'zero' as const : 'outflow' as const })) }
@@ -757,8 +766,11 @@ function streakState() {
   const ethRows = btcRows.map((row) => ({ ...row, direction: 'outflow' as const }))
   return {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
-    etf: {
+    // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
+    etf: 'unavailable' as const,
+    etfReading: {
       state: 'available' as const,
+      comparison: { state: 'aligned' as const },
       coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: btcRows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: ethRows }
@@ -768,12 +780,12 @@ function streakState() {
 
 function degradedState() {
   const state = fullState()
-  state.etf.coverage = [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 12, complete: false }]
-  state.etf.btc.cumulative = [
+  state.etfReading.coverage = [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 12, complete: false }]
+  state.etfReading.btc.cumulative = [
     { windowDays: 5, coveredDays: 5, netFlowUsd: '+$50', complete: true },
     { windowDays: 20, coveredDays: 12, netFlowUsd: '+$78', complete: false }
   ]
-  state.etf.eth.cumulative = [
+  state.etfReading.eth.cumulative = [
     { windowDays: 5, coveredDays: 5, netFlowUsd: '-$50', complete: true },
     { windowDays: 20, coveredDays: 12, netFlowUsd: '-$78', complete: false }
   ]
@@ -783,6 +795,12 @@ function degradedState() {
 function completeCoverage() {
   return [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }]
 }
+
+const unreadableReading = () => ({
+  state: 'unreadable' as const,
+  comparison: { state: 'aligned' as const },
+  coverage: []
+})
 
 function cumulativeWindows(amount: string) {
   return [
