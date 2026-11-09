@@ -48,8 +48,12 @@ describe('unregistered calendar refresh facade', () => {
     expect(result).toMatchObject({ state: 'unavailable', failureCode: 'storage-pressure' })
     // Per source, not just per batch: the panel labels the source, and a source that was
     // refused by the ceiling must be distinguishable from one that never answered.
-    expect(result.items.map(item => [item.state, item.failureCode])).toEqual(
-      descriptors.map(() => ['unavailable', 'storage-pressure']))
+    // `Item` 是判别联合：只有 `unavailable` 那支带 failureCode。先按 state 收窄，
+    // 出现 `succeeded` 就直接报出它的真实状态（比拿到一个 undefined 再看断言更有用）。
+    expect(result.items.map(item => {
+      if (item.state !== 'unavailable') throw new Error(`expected unavailable, got ${item.state}`)
+      return [item.state, item.failureCode]
+    })).toEqual(descriptors.map(() => ['unavailable', 'storage-pressure']))
   })
   it.each([
     ['2026-01-01T00:00:00.000Z', ['2025-12', '2026-01', '2026-02']],
