@@ -51,8 +51,11 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | Allowed steps | **4 / 6 / 8 / 10 / 12 / 16** |
 | List row | height 44 (one line) / 60 (two); **32 for dense streams such as logs and message feeds**, inline padding 12, title to meta 8 |
 | New values | a non-step value is a defect; the existing ones merge file by file, no repo-wide rewrite |
+| Two-column rows (field area + trailing control) | field area **`flex: 1; min-width: 0`**, trailing control **`flex: none`** |
 
 ## 4. Colour
+
+**Criterion:** without `min-width: 0` on the field area, a long string is squeezed into a one-character-per-line column — that is how the 403 line in `ProviderDetail` broke. Every two-column row follows the row above.
 
 | Token | Use | Never |
 |---|---|---|
