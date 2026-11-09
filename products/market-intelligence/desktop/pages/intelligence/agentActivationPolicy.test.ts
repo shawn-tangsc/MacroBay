@@ -43,7 +43,7 @@ describe('projectActivation', () => {
 
   it('increments as soon as one provider is enabled, regardless of health', () => {
     const projection = projectActivation(view([
-      group('spot-momentum', [source('coingecko-market', { enabled: true, health: 'failed' })]),
+      group('spot-momentum', [source('coingecko-market', { enabled: true, healthState: 'failed' })]),
       group('fear-greed', [source('alternative-fear-greed')]),
       group('funding-rate', [source('binance-futures-positioning')])
     ]))
@@ -53,7 +53,7 @@ describe('projectActivation', () => {
   it('counts a provider once even when it owns several sources', () => {
     const projection = projectActivation(view([
       group('spot-momentum', [
-        source('0xrouter-aggregate-provider', { providerId: '0xrouter', enabled: true, health: 'failed' }),
+        source('0xrouter-aggregate-provider', { providerId: '0xrouter', enabled: true, healthState: 'failed' }),
         source('0xrouter-economic-data', { providerId: '0xrouter', enabled: true }),
         source('0xrouter-financial-events', { providerId: '0xrouter' })
       ]),
