@@ -451,6 +451,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
                   enabledConfigurable={source.visibility !== 'pending' && !unavailable}
                   labels={policy.labels}
                   onChange={(patch) => policy.onChange(source.sourceId, patch)}
+                  resolveText={resolveText}
                   supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
                 />
               </div>
