@@ -61,6 +61,10 @@ const DEV_ENTRIES: ReadonlyArray<readonly [key: string, why: string]> = [
   ['lint', '公开文档写明的别名，等价于 typecheck（链里已经有 typecheck），留给人手敲'],
   ['dist:mac', '维护者手敲的打包命令'],
   ['dist:mac:dir', '维护者手敲的打包命令（只出目录，不打包）'],
+  // Intel 包只能在 Intel 机器上打（或在文档写的交叉构建下打），流水线用的是自己的命令，
+  // 这两个键给维护者在本机出 Intel 产物用，与上面两个 arm64 的命令同一类。
+  ['dist:mac:x64', '维护者手敲的 Intel 打包命令（要求 x86_64 机器，见打包文档）'],
+  ['dist:mac:dir:x64', '维护者手敲的 Intel 打包命令（只出目录，不打包）'],
   ['dist:win', '维护者手敲的打包命令'],
   ['dist:win:dir', '维护者手敲的打包命令（只出目录，不打包）'],
   ['release:bump', '发版第一步，发布流程里写死'],
