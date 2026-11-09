@@ -80,6 +80,8 @@ export const divergenceReplay = Object.freeze({
     Object.freeze({ tradingDate: '2026-10-29', netFlowUsd: 17200000 }),
     Object.freeze({ tradingDate: '2026-10-30', netFlowUsd: -643200000 })
   ]),
+  /** `satisfies` 而不是断言：这份样本必须真的是 `DivergenceReplayRecord[]`，`refused` 是三元组、
+   *  不是 `string[]`——否则读它的用例只能靠猜。 */
   records: Object.freeze([
   { at: '2026-10-31T10:00:23.000Z', stablecoin: p(-1.077379, '2026-10-31T09:58:31.392Z'), openInterest: p(1.48, '2026-10-31T10:00:00.000Z'), funding: p(0.01, '2026-10-31T08:00:00.000Z'), price: p(-0.300144, '2026-10-31T09:55:00.000Z'), priceStrict: null, sentiment: s(89, 9, '2026-10-31T05:01:32.000Z'), refused: [] },
   { at: '2026-10-31T10:05:23.000Z', stablecoin: p(-1.077379, '2026-10-31T09:58:31.392Z'), openInterest: p(1.48, '2026-10-31T10:00:00.000Z'), funding: p(0.01, '2026-10-31T08:00:00.000Z'), price: p(-0.300144, '2026-10-31T09:55:00.000Z'), priceStrict: null, sentiment: s(89, 9, '2026-10-31T05:01:32.000Z'), refused: [] },
@@ -136,5 +138,5 @@ export const divergenceReplay = Object.freeze({
   { at: '2026-10-31T14:20:23.000Z', stablecoin: p(-1.109774, '2026-10-31T14:06:40.438Z'), openInterest: p(0.81, '2026-10-31T14:15:00.000Z'), funding: p(0.01, '2026-10-31T08:00:00.000Z'), price: p(0.9415, '2026-10-31T14:15:00.000Z'), priceStrict: null, sentiment: s(100, 5, '2026-10-31T14:00:00.000Z'), refused: [] },
   { at: '2026-10-31T14:25:23.000Z', stablecoin: p(-1.109774, '2026-10-31T14:06:40.438Z'), openInterest: p(0.81, '2026-10-31T14:15:00.000Z'), funding: p(0.01, '2026-10-31T08:00:00.000Z'), price: p(0.9415, '2026-10-31T14:15:00.000Z'), priceStrict: null, sentiment: s(100, 5, '2026-10-31T14:00:00.000Z'), refused: [] },
   { at: '2026-10-31T14:30:23.000Z', stablecoin: p(-1.109774, '2026-10-31T14:06:40.438Z'), openInterest: p(0.62, '2026-10-31T14:30:00.000Z'), funding: p(0.01, '2026-10-31T08:00:00.000Z'), price: p(0.9415, '2026-10-31T14:15:00.000Z'), priceStrict: null, sentiment: s(100, 5, '2026-10-31T14:00:00.000Z'), refused: [] },
-  ])
+  ] satisfies readonly DivergenceReplayRecord[])
 })

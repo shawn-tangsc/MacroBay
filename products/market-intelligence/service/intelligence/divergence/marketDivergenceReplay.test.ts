@@ -12,11 +12,11 @@ import { divergenceReplay, type DivergenceReplayRecord, type ReplayReading } fro
  * the rules that came before — so the improvement cannot drift into a remembered claim.
  */
 const readerFor = (record: DivergenceReplayRecord): DivergenceLegReader => ({
-  stablecoin: async () => record.stablecoin ?? undefined,
+  stablecoin: async () => (record.stablecoin === null ? undefined : { change7dPercent: record.stablecoin.value, observedAt: record.stablecoin.observedAt }),
   etf: async () => ({ rows: divergenceReplay.etfRows }),
-  openInterest: async () => record.openInterest ?? undefined,
-  funding: async () => record.funding ?? undefined,
-  price: async () => record.price ?? undefined,
+  openInterest: async () => (record.openInterest === null ? undefined : { change24hPct: record.openInterest.value, observedAt: record.openInterest.observedAt }),
+  funding: async () => (record.funding === null ? undefined : { ratePercent: record.funding.value, observedAt: record.funding.observedAt }),
+  price: async () => (record.price === null ? undefined : { return24hPercent: record.price.value, observedAt: record.price.observedAt }),
   sentiment: async () => record.sentiment
 })
 
