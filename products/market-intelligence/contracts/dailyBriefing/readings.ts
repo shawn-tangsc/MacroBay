@@ -291,6 +291,22 @@ export function editionNewsTitle(item: Readonly<{ title: string; translatedTitle
   return translated
 }
 
+/**
+ * 这一行标题是**原文**吗（本期语言没有译文，只能印来源语言）。
+ *
+ * 读者规则（2026-11-09）：不许静默印英文——中文版没有译文时，要写明"这是原文"。
+ * 判定是事实：本期语言是中文、没有本期语言的译文、标题里也没有汉字；英文版反过来同理。
+ * 不在渲染时翻译，也不把别的语言的译文塞进来。
+ */
+export function editionNewsTitleIsOriginal(
+  item: Readonly<{ title: string; translatedTitle?: string }>,
+  editionLocale: DailyBriefingLocale
+): boolean {
+  const title = editionNewsTitle(item, editionLocale)
+  if (editionLocale === 'zh-CN') return !/[\u3400-\u9fff]/.test(title)
+  return /[\u3400-\u9fff]/.test(title)
+}
+
 export type BriefingMacroItem = Readonly<{
   eventKey: string
   title: string

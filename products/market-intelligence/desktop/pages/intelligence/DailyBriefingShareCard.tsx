@@ -1,4 +1,4 @@
-import { editionNewsTitle, type BriefingConclusionSynthesis, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import { editionNewsTitle, editionNewsTitleIsOriginal, type BriefingConclusionSynthesis, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -136,7 +136,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       {visibleNews.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
         <span data-polarity={item.polarity}>{clockWithZone(item.publishedAt, formatTime)}</span>
         <div>
-          <p>{editionNewsTitle(item, doc.edition.locale)}{item.why ? <span className="mi-brief-poster__news-focus">{text.newsFocus}</span> : null}</p>
+          <p>{editionNewsTitle(item, doc.edition.locale)}{editionNewsTitleIsOriginal(item, doc.edition.locale) ? <span className="mi-brief-poster__news-original">{text.newsOriginal}</span> : null}{item.why ? <span className="mi-brief-poster__news-focus">{text.newsFocus}</span> : null}</p>
           {item.why ? <small>{item.why}</small> : null}
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>

@@ -707,6 +707,13 @@ describe('news titles follow the edition language', () => {
     expect(poster).not.toContain(SOURCE)
   })
 
+  it('marks an English headline on a Chinese card as the original instead of printing it silently', async () => {
+    const rendered = await renderWith(withNews('zh-CN', [newsItem({})]), zhText, 'zh-CN')
+    const title = rendered.querySelector('.mi-brief-poster__news p')!.textContent ?? ''
+    expect(title).toContain(SOURCE)
+    expect(title).toContain(zhText.newsOriginal)
+  })
+
   it('keeps both items, in order, and drops none', async () => {
     const rendered = await renderWith(withNews('en-US', [
       newsItem({ itemId: 'n1', translatedTitle: TRANSLATED }),

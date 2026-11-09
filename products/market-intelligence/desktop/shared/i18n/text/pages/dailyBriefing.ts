@@ -22,7 +22,7 @@ export const dailyBriefingText = {
       // Two headings with meaning: "资金" covers flows and the stablecoin stock, so it is not "流向";
       // and the other line is prices and sentiment together, which is what the five cells are.
       markets: '行情与情绪' },
-    newsFocus: '重点',
+    newsFocus: '重点', newsOriginal: '原文',
     newsCount: '{count} 条',
     labelSeparator: '：',
     citationSources: { macroCalendar: '宏观日历', news: '新闻', analysis: '分析证据' },
@@ -399,7 +399,7 @@ export const dailyBriefingText = {
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
       markets: 'Markets & sentiment' },
-    newsFocus: 'Focus',
+    newsFocus: 'Focus', newsOriginal: 'Original',
     newsCount: '{count} items',
     labelSeparator: ': ',
     citationSources: { macroCalendar: 'Macro calendar', news: 'News', analysis: 'Analysis evidence' },

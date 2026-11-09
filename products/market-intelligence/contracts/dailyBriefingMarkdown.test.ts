@@ -130,6 +130,17 @@ describe('a web-sourced value says so in the copy too (v2.128)', () => {
 })
 
 describe('daily briefing markdown', () => {
+  it('marks an untranslated headline as the original in the copied text', () => {
+    const markdown = dailyBriefingToMarkdown(document(), options)
+    expect(markdown).toContain('（原文）')
+    const translated = document()
+    const withTranslation = dailyBriefingToMarkdown({
+      ...translated,
+      news: { ...translated.news, items: [{ ...translated.news.items[0]!, translatedTitle: '摩根大通称 AI 标签不再赢得贷款机构' }] }
+    }, options)
+    expect(withTranslation).not.toContain('（原文）')
+  })
+
   it('carries the no-AI sentence into the copied text, and leaves it out when there is none', () => {
     // r17 `A9`：屏幕上有的那句，复制出去也要有；没有这回事时不许多出一行。
     const withNotice = dailyBriefingToMarkdown(document(), { ...options, editorialNotice: '本期只有数据，没有 AI 写的解读。' })

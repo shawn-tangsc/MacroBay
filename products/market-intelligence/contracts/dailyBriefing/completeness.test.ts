@@ -20,3 +20,20 @@ describe('briefing completeness', () => {
       .toEqual({ state: 'missing-readings', count: 2 })
   })
 })
+
+describe('a headline with no edition-language translation is marked as the original', () => {
+  it('marks an English headline in a Chinese edition instead of printing it silently', async () => {
+    const { editionNewsTitle, editionNewsTitleIsOriginal } = await import('./readings')
+    const item = { title: 'Bitcoin steadies after AI-led selloff' }
+    expect(editionNewsTitle(item, 'zh-CN')).toBe(item.title)
+    // 没有汉字、也没有本期译文 → 它是原文，页面与复制文本都要标出来。
+    expect(editionNewsTitleIsOriginal(item, 'zh-CN')).toBe(true)
+  })
+
+  it('does not mark a headline that was translated into the edition language', async () => {
+    const { editionNewsTitleIsOriginal } = await import('./readings')
+    expect(editionNewsTitleIsOriginal({ title: 'Bitcoin steadies', translatedTitle: '比特币走稳' }, 'zh-CN')).toBe(false)
+    // 英文版里的中文标题也只能印原文，同样要标。
+    expect(editionNewsTitleIsOriginal({ title: '比特币走稳' }, 'en-US')).toBe(true)
+  })
+})

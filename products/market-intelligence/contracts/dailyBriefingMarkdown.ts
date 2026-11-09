@@ -1,4 +1,4 @@
-import { editionNewsTitle } from './dailyBriefing/readings'
+import { editionNewsTitle, editionNewsTitleIsOriginal } from './dailyBriefing/readings'
 import { briefingMacroValueLabel } from './dailyBriefingMacroValueText'
 import { briefingEditionPeriod, type BriefingMacroItem, type BriefingMarketRow, type BriefingNewsItem, type BriefingNextItem, type BriefingPulseRow, type BriefingRowChange, type DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
@@ -18,6 +18,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
    */
   languageNames?: Readonly<Record<string, string>>
   readingsAllMissing: string
+  /** 中文版没有译文时标在标题后的两个字；英文版是 "Original"。 */
+  newsOriginal: string
   noValue: string
   sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string; leverage: string; policyPath: string }>
   tiers: Readonly<{ must: string; support: string; reference: string }>
@@ -252,7 +254,8 @@ function publicationSpan(
 }
 
 function newsLine(item: BriefingNewsItem, options: DailyBriefingMarkdownOptions): string {
-  const title = escapeMarkdown(editionNewsTitle(item, options.locale))
+  // 中文版没有译文时标题只能是原文：复制出去也要写清，别静默印英文。
+  const title = escapeMarkdown(editionNewsTitle(item, options.locale)) + (editionNewsTitleIsOriginal(item, options.locale) ? `（${options.labels.newsOriginal}）` : '')
   return `- **${title}** — ${escapeMarkdown(item.sourceName)} · ${options.formatTime(item.publishedAt)} · ${item.polarity}`
 }
 
