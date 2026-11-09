@@ -97,6 +97,33 @@ it('keeps exactly one help trigger on the card, and it lives inside the expanded
   expect(helpAt).toBeGreaterThan(detailAt)
 })
 
+/**
+ * 非 UTC 读者：截至那一行只能有一个偏移。
+ *
+ * 旧写法先 `formatTime()` 再 `.replace(/\s*GMT$/, '')` 再补时区标签——那个正则只匹配**裸 `GMT`**，
+ * 所以 UTC 之外的读者会看到「… 18:00 GMT+8 GMT+8」：同一行两遍偏移。
+ *
+ * 用例挂在展开之后（默认收起，收起时这一行根本不在 DOM 里），并且用 Asia/Shanghai 这个**非 UTC**
+ * 的显示时区——UTC 下旧写法与正确写法输出相同，拿 UTC 测等于没测。
+ */
+it('prints the reader’s offset once on every as-of line', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children:
+        createElement(DivergencePanel, { state: answer([row], []), onRetry: () => undefined, text }) }))
+    })
+    const summary = container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!
+    await act(async () => { summary.click() })
+    const line = container.querySelector('.mi-divergence__asof')?.textContent ?? ''
+    expect(line).not.toContain('GMT+8 GMT+8')
+    // 三条腿各一个偏移，且只有一个：多一个就是第二遍。
+    expect((line.match(/GMT\+8/gu) ?? [])).toHaveLength(3)
+  } finally { await act(async () => root.unmount()); container.remove() }
+})
+
 describe('divergence panel · the one summary line', () => {
   /**
    * 五态一张表（界面设计 v2 §二）：每一行给「输入 + 该出现的那句 + 该缺席的几句」。

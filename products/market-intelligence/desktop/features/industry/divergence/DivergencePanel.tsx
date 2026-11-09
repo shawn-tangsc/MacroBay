@@ -42,11 +42,12 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   onRetry: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  const zoneLabel = formatShellTimeZoneLabel(useShellTimeZone())
   const resolveProductKey = useProductTextKey()
   const detailId = useId()
   const [expanded, setExpanded] = useState(false)
-  const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
+  // 契约保证 `observedAt` 是规范 UTC（`isCanonicalDivergenceTime`），直接交给统一格式化；
+  // 不再先切片再补 `Z`——那是在调用点重造一个时刻。
+  const when = (value: string) => formatTime(value)
 
   const rows = state.state === 'available' ? state.rows : []
   const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
@@ -139,7 +140,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
                       {/* 每条腿各自的截至时刻：一条腿的「截至」不能替另一条腿作证。 */}
                       {/* 顺序固定：截至 → 规则（→ 还差）。「还差」要投影层给，今天没有这一项就不显示，
                           不许拿规则反推一个距离。 */}
-                      <p className="mi-divergence__asof">{factsLine({ text, row, when, zoneLabel })}</p>
+                      <p className="mi-divergence__asof">{factsLine({ text, row, when })}</p>
                     </li>
                   </Tooltip>
                 )
@@ -198,11 +199,11 @@ export function factsLine(input: Readonly<{
   text: DivergencePanelText
   row: Readonly<{ legs: readonly Readonly<{ id: DivergenceLegId; observedAt: string }>[]; bound?: DivergenceBound }>
   when: (value: string) => string
-  zoneLabel: string
 }>): string {
-  const { text, row, when, zoneLabel } = input
-  // `when()` 自带一个 `GMT` 尾巴；这里只保留一处偏移写法，所以先摘掉再补时区标签。
-  const stamp = (value: string): string => `${when(value).replace(/\s*GMT$/, '')} ${zoneLabel}`
+  const { text, row, when } = input
+  // 统一格式化自带 `GMT±n` 尾巴，这里不再「摘尾再补标签」：那条正则只匹配**裸 `GMT`**，
+  // 非 UTC 读者会看到「… 18:00 GMT+8 GMT+8」——同一行两遍偏移。
+  const stamp = (value: string): string => when(value)
   const parts = row.legs.map(leg => `${text.legNames[leg.id]} ${text.chipAsOf.replace('{at}', stamp(leg.observedAt))}`)
   if (row.bound !== undefined) parts.push(boundRuleClause(text, row.bound))
   return parts.join(' · ')
