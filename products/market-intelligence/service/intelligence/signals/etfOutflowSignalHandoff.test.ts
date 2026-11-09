@@ -28,7 +28,7 @@ function outflowSignals() {
 describe('the ETF signal hand-off', () => {
   // 交接点只剩通知：分析的唯一入口是十五分钟扫描（两个入口会让「什么时候叫」有两个答案）。
   it('notifies and leaves the analysis to the tick scan', async () => {
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [], suppressedLevels: [] }))
 
     await etfOutflowSignalHandoff(submit).handOffSignals(outflowSignals())
 
