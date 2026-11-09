@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { httpRequest } from '@platform/jobs'
 
 import { applySourceCredential, createIntelligenceFetchText, executeIntelligenceFetchTarget } from './intelligenceHttpFetch'
+import type { HttpClientResponse } from '@platform/jobs/transport/httpClient'
+import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
+import type { SourceProfileStore } from '../application/sourceProfileStore'
 
 // The application injects the platform's proxy-aware fetch at startup. Tests never reach the
 // network, so a stub stands in for it — the point is that the module boundary stays real and no
@@ -21,16 +24,28 @@ vi.mock('@platform/jobs', async () => {
 
 const mockedHttpRequest = vi.mocked(httpRequest)
 
+/** 平台 http 客户端回的是四个字段，缺一个就编译不过——测试照真实签名造。 */
+function response(bodyText: string, status = 200): HttpClientResponse {
+  return { bodyText, byteSize: Buffer.byteLength(bodyText, 'utf8'), headers: {}, status }
+}
+
+/** 这一处只用到 `resolveProfile`，但 store 是四条方法的契约：照真实签名补齐，别把类型放宽。 */
+function profileStore(profile: Readonly<Record<string, unknown>>): SourceProfileStore {
+  const resolved = profile as unknown as IntelligenceSourceProfile
+  return {
+    getProfile: async () => resolved,
+    listProfiles: async () => [resolved],
+    resolveProfile: async () => resolved,
+    saveProfile: async () => resolved
+  }
+}
+
 describe('createIntelligenceFetchText', () => {
   it('uses the platform http client and rejects empty bodies', async () => {
-    mockedHttpRequest.mockResolvedValueOnce({
-      status: 200,
-      bodyText: '<rss></rss>'
-    })
+    mockedHttpRequest.mockResolvedValueOnce(response('<rss></rss>', 200))
 
     const fetchText = createIntelligenceFetchText({
-      profileStore: {
-        resolveProfile: async () => ({
+      profileStore: profileStore(({
           profileId: 'profile-1',
           sourceId: 'coindesk-rss',
           enabled: true,
@@ -41,8 +56,7 @@ describe('createIntelligenceFetchText', () => {
           retentionMode: 'balanced',
           autoReplayAfterParserUpgrade: false,
           updatedAt: '2026-07-05T10:00:00.000Z'
-        })
-      }
+        }))
     })
 
     await expect(fetchText('https://example.com/feed.xml', 'coindesk-rss')).resolves.toBe('<rss></rss>')
@@ -59,10 +73,9 @@ describe('createIntelligenceFetchText', () => {
   })
 
   it('declares a contact in the default user agent', async () => {
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: 'ok' })
+    mockedHttpRequest.mockResolvedValueOnce(response('ok', 200))
     const fetchText = createIntelligenceFetchText({
-      profileStore: {
-        resolveProfile: async () => ({
+      profileStore: profileStore(({
           profileId: 'profile-1',
           sourceId: 'coindesk-rss',
           enabled: true,
@@ -73,8 +86,7 @@ describe('createIntelligenceFetchText', () => {
           retentionMode: 'balanced',
           autoReplayAfterParserUpgrade: false,
           updatedAt: '2026-07-05T10:00:00.000Z'
-        })
-      }
+        }))
     })
 
     await fetchText('https://example.com/feed.xml', 'coindesk-rss')
@@ -83,14 +95,10 @@ describe('createIntelligenceFetchText', () => {
   })
 
   it('throws when the provider returns an error status', async () => {
-    mockedHttpRequest.mockResolvedValueOnce({
-      status: 503,
-      bodyText: 'unavailable'
-    })
+    mockedHttpRequest.mockResolvedValueOnce(response('unavailable', 503))
 
     const fetchText = createIntelligenceFetchText({
-      profileStore: {
-        resolveProfile: async () => ({
+      profileStore: profileStore(({
           profileId: 'profile-1',
           sourceId: 'coindesk-rss',
           enabled: true,
@@ -101,8 +109,7 @@ describe('createIntelligenceFetchText', () => {
           retentionMode: 'balanced',
           autoReplayAfterParserUpgrade: false,
           updatedAt: '2026-07-05T10:00:00.000Z'
-        })
-      }
+        }))
     })
 
     await expect(fetchText('https://example.com/feed.xml', 'coindesk-rss')).rejects.toThrow('HTTP 503')
@@ -154,7 +161,7 @@ describe('applySourceCredential', () => {
 
 describe('executeIntelligenceFetchTarget', () => {
   it('executes POST macro targets with JSON body', async () => {
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: '{"Results":{}}' })
+    mockedHttpRequest.mockResolvedValueOnce(response('{"Results":{}}', 200))
 
     await executeIntelligenceFetchTarget(
       {
@@ -165,8 +172,7 @@ describe('executeIntelligenceFetchTarget', () => {
       },
       'bls-economic-series',
       {
-        profileStore: {
-          resolveProfile: async () => ({
+        profileStore: profileStore(({
             profileId: 'profile-1',
             sourceId: 'bls-economic-series',
             enabled: true,
@@ -177,8 +183,7 @@ describe('executeIntelligenceFetchTarget', () => {
             retentionMode: 'balanced',
             autoReplayAfterParserUpgrade: true,
             updatedAt: '2026-07-05T10:00:00.000Z'
-          })
-        }
+          }))
       }
     )
 

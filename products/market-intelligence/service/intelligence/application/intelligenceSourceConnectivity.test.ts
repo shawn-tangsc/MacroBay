@@ -4,6 +4,7 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import { httpRequest } from '@platform/jobs'
+import type { HttpClientResponse } from '@platform/jobs/transport/httpClient'
 
 import { macroAdapterConfigForSource } from './macroSourceCatalogMetadata'
 import { probeIntelligenceSourceConnection } from './intelligenceSourceConnectivity'
@@ -34,6 +35,11 @@ vi.mock('@platform/jobs', async () => {
 
 const mockedHttpRequest = vi.mocked(httpRequest)
 
+/** 平台 http 客户端回的是四个字段，缺一个就编译不过——测试照真实签名造。 */
+function response(bodyText: string, status = 200): HttpClientResponse {
+  return { bodyText, byteSize: Buffer.byteLength(bodyText, 'utf8'), headers: {}, status }
+}
+
 function macroConfig(sourceId: 'bls-economic-series' | 'fred-rates-liquidity' | 'treasury-fiscal-data'): IntelligenceSourceConfig {
   return {
     sourceId,
@@ -62,7 +68,7 @@ function macroConfig(sourceId: 'bls-economic-series' | 'fred-rates-liquidity' | 
 describe('probeIntelligenceSourceConnection', () => {
   it('probes macro sources using realistic request targets instead of bare endpoints', async () => {
     mockedHttpRequest.mockClear()
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: '{"data":[]}' })
+    mockedHttpRequest.mockResolvedValueOnce(response('{"data":[]}', 200))
 
     const result = await probeIntelligenceSourceConnection(macroConfig('treasury-fiscal-data'))
 
@@ -75,7 +81,7 @@ describe('probeIntelligenceSourceConnection', () => {
 
   it('uses BLS POST probe shape for bls-economic-series', async () => {
     mockedHttpRequest.mockClear()
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: '{"Results":{}}' })
+    mockedHttpRequest.mockResolvedValueOnce(response('{"Results":{}}', 200))
 
     await probeIntelligenceSourceConnection(macroConfig('bls-economic-series'))
 
@@ -90,7 +96,7 @@ describe('probeIntelligenceSourceConnection', () => {
 
   it('rejects non-2xx macro probe responses without credential deps', async () => {
     mockedHttpRequest.mockClear()
-    mockedHttpRequest.mockResolvedValueOnce({ status: 403, bodyText: '{"error":"forbidden"}' })
+    mockedHttpRequest.mockResolvedValueOnce(response('{"error":"forbidden"}', 403))
 
     const result = await probeIntelligenceSourceConnection(macroConfig('fred-rates-liquidity'))
 
@@ -100,7 +106,7 @@ describe('probeIntelligenceSourceConnection', () => {
 
   it('uses FRED series probe with series_id query params', async () => {
     mockedHttpRequest.mockClear()
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: '{"observations":[]}' })
+    mockedHttpRequest.mockResolvedValueOnce(response('{"observations":[]}', 200))
 
     await probeIntelligenceSourceConnection(macroConfig('fred-rates-liquidity'))
 
@@ -111,7 +117,7 @@ describe('probeIntelligenceSourceConnection', () => {
 
   it('injects saved credentials when probing macro sources with credential deps', async () => {
     mockedHttpRequest.mockClear()
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: '{"observations":[]}' })
+    mockedHttpRequest.mockResolvedValueOnce(response('{"observations":[]}', 200))
 
     const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
     const credentialStore = createIntelligenceCredentialStore(createInMemoryIntelligenceCredentialStorage())
@@ -132,10 +138,9 @@ describe('probeIntelligenceSourceConnection', () => {
 
   it('probes OKX against the announcements endpoint the collector reads, not the help-centre shell', async () => {
     mockedHttpRequest.mockClear()
-    mockedHttpRequest.mockResolvedValueOnce({
-      status: 200,
-      bodyText: readFileSync(path.join(__dirname, '../adapters/fixtures/okx-announcements-api-sample.json'), 'utf8')
-    })
+    mockedHttpRequest.mockResolvedValueOnce(response(
+      readFileSync(path.join(__dirname, '../adapters/fixtures/okx-announcements-api-sample.json'), 'utf8')
+    ))
 
     const result = await probeIntelligenceSourceConnection(okxConfig('okx-api-announcements'))
 
@@ -147,10 +152,7 @@ describe('probeIntelligenceSourceConnection', () => {
 
   it('reports an OKX rejection instead of claiming the source is connected', async () => {
     mockedHttpRequest.mockClear()
-    mockedHttpRequest.mockResolvedValueOnce({
-      status: 200,
-      bodyText: '{"code":"51000","msg":"Parameter annType error","data":[]}'
-    })
+    mockedHttpRequest.mockResolvedValueOnce(response('{"code":"51000","msg":"Parameter annType error","data":[]}', 200))
 
     const result = await probeIntelligenceSourceConnection(okxConfig('okx-api-announcements'))
 
