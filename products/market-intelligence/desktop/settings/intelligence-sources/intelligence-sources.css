@@ -1009,6 +1009,38 @@
   margin-top: 1px;
 }
 
+/* 状态串：状态词 + 人话原因 + 上次成功，一条 ` · ` 串起来。
+   行宽已知（栅格第一列吃满、`min-width: 0`），所以 `-webkit-line-clamp: 2` 真的会裁出省略号。 */
+.source-provider-detail__status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.source-provider-detail__unavailable {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
+/* 第二行：归属与任务状态，纯文本 ` · ` 串起。 */
+.source-provider-detail__tags-line {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .source-provider-detail__main {
   display: flex;
   flex: 1;

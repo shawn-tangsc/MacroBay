@@ -364,15 +364,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               hover）——「看着能点、其实没有去处」是这一版在清的一类假可用。 */}
           <div className="source-provider-detail__main">
             <strong>{name}</strong>
-            <span className="intelligence-source-tags">
-              {[...new Set(tags)].map((tag) => <em key={tag}>{tag}</em>)}
-              {source.requiresProxy && !proxyConfigured ? <em className="source-provider-detail__proxy">{labels.badges.proxy}</em> : null}
-              {needsJob(source) ? <em className={`source-provider-detail__job${source.jobRegistered ? ' is-on' : ''}`}>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</em> : null}
+            {/* 状态串：**状态词 → 人话原因 → 上次成功**，一条 ` · ` 串起来，最多两行。 */}
+            <span className="source-provider-detail__status">
               <SourceHealthPill
                 health={source.collection === 'none' ? undefined : details[source.sourceId]?.health}
                 resolveText={resolveText}
                 unavailable={Boolean(unavailable)} />
-            </span>
             {/* 「不可用」不是失败：药丸之外必须给出同一句原因，读者才知道为什么取不到、数据有多旧。 */}
             {unavailable
               ? <span className="source-provider-detail__unavailable">
@@ -402,6 +399,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
                     size="sm" />
                 )} />
               : null}
+            </span>
+            {/* 第二行：归属与任务状态。纯文本 ` · ` 串起，不再是一排药丸。 */}
+            <span className="source-provider-detail__tags-line">
+              {[...new Set(tags)].join(' · ')}
+              {source.requiresProxy && !proxyConfigured ? <><i aria-hidden="true"> · </i><em className="source-provider-detail__proxy">{labels.badges.proxy}</em></> : null}
+              {needsJob(source) ? <><i aria-hidden="true"> · </i>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</> : null}
+            </span>
           </div>
           <Switch
             /* The row's label is the source name; the switch has to say what it does, or a screen

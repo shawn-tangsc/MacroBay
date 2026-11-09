@@ -349,11 +349,12 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    // 只看这一行的标签排（页头的「1 项能力 · 已启用 1」是另一件事）。
-    const rowTags = container.querySelector('.source-provider-detail__row .intelligence-source-tags')?.textContent ?? ''
-    expect(rowTags).toContain('官方源暂时不可用')
+    // 状态串与标签行现在是两行（页头的「1 项能力 · 已启用 1」是另一件事）。
+    const rowStatus = container.querySelector('.source-provider-detail__status')?.textContent ?? ''
+    const rowTags = container.querySelector('.source-provider-detail__tags-line')?.textContent ?? ''
+    expect(rowStatus).toContain('官方源暂时不可用')
     expect(rowTags).toContain(settingsText.jobNotRegistered)
-    expect(rowTags).not.toContain(settingsText.status.enabled)
-    expect(rowTags).not.toContain(settingsText.status.disabled)
+    expect(`${rowStatus}${rowTags}`).not.toContain(settingsText.status.enabled)
+    expect(`${rowStatus}${rowTags}`).not.toContain(settingsText.status.disabled)
   })
 })
