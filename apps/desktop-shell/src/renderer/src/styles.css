@@ -4038,7 +4038,7 @@ h1 {
 .agent-session-group-title small {
   color: color-mix(in srgb, var(--muted) 74%, transparent);
   font-size: 10.5px;
-  font-weight: 560;
+  font-weight: 600;
 }
 
 .agent-session-item {
@@ -6032,7 +6032,7 @@ h1 {
 .agent-quick-panel-group-label {
   color: var(--muted-strong);
   font-size: 11px;
-  font-weight: 680;
+  font-weight: 650;
 }
 
 .agent-quick-panel-search {
@@ -6129,7 +6129,7 @@ h1 {
 .agent-quick-panel-item-copy > span {
   color: var(--text-strong);
   font-size: 12px;
-  font-weight: 620;
+  font-weight: 600;
   line-height: 1.35;
 }
 
