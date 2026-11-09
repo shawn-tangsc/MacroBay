@@ -90,10 +90,10 @@ export const dailyBriefingText = {
       invalid: '这一期的取值无效，请重新选择。', cancel: '取消', save: '保存', saving: '保存中…'
     },
     manualRunDialog: {
-      title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻。', cutoffHintLabel: '解释：截止时刻', repeatHintLabel: '解释：重复生成', windowHint: '统计窗口决定这一版覆盖多长时间；12 小时看半天，48 小时看两天。', windowHintLabel: '解释：统计窗口', languageHint: '这一版用哪种语言写。一期可以同时有中文版和英文版，各自一行。', languageHintLabel: '解释：语言',
-      date: '日期', dateHintLabel: '解释：日期', dateHint: '这一版归档到哪一天。默认是你现在在的那一天；过去的任意一天都可以补，未来不行。',
-      generateTarget: '将生成到 {date} {time}（{zone}）', generateTargetNow: '将生成到 {date}，截止时刻取你按下那一刻（{zone}）',
-      windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时', windowDaysHint: '只能生成最近 3 天（含今天）',
+      title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻（{zone}）。', cutoffHintLabel: '解释：截止时刻', repeatHintLabel: '解释：重复生成', duplicateHintLabel: '解释：替换已有版次', windowHint: '统计窗口决定这一版覆盖多长时间；12 小时看半天，48 小时看两天。', windowHintLabel: '解释：统计窗口', languageHint: '这一版用哪种语言写。一期可以同时有中文版和英文版，各自一行。', languageHintLabel: '解释：语言',
+      date: '日期', dateHintLabel: '解释：日期', dateHint: '这一版归档到哪一天。默认是你现在在的那一天；只能生成最近 3 天（含今天），未来不行。',
+      generateTarget: '将生成到 {date} {time}', generateTargetNow: '将生成到 {date}',
+      windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
       repeatable: '同一时刻、同一语言只保留一版：再点一次会先问你要不要替换那一版。',
       cutoffInFuture: '截止时刻晚于现在：那一份还没有发生，先换一个已经过去的时刻。', alreadyRunning: '已经有一版在生成，等它跑完再试。', duplicateTitle: '这一版已经有了', duplicateBody: '同一时刻、同一语言已经生成过一版（窗口不同也算同一版）。替换会覆盖它，旧内容不保留。', duplicateReplace: '替换',
       cutoffUnreadable: '这个时刻换算不出来，换一个再试。',
@@ -483,10 +483,10 @@ export const dailyBriefingText = {
       invalid: 'One of these values is not valid; choose again.', cancel: 'Cancel', save: 'Save', saving: 'Saving…'
     },
     manualRunDialog: {
-      title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate.', cutoffHintLabel: 'Explain: cutoff', repeatHintLabel: 'Explain: repeating a run', windowHint: 'The window decides how much time this edition covers: 12 hours is half a day, 48 hours is two days.', windowHintLabel: 'Explain: window', languageHint: 'Which language this edition is written in. One period can have both a Chinese and an English edition, each its own row.', languageHintLabel: 'Explain: language',
-      date: 'Date', dateHintLabel: 'Explain: date', dateHint: 'Which day this edition is filed under. Defaults to the day you are on; any past day can be filled in, but not a future one.',
-      generateTarget: 'Will generate into {date} {time} ({zone})', generateTargetNow: 'Will generate into {date}, cut off at the moment you press ({zone})',
-      windowHours: 'Window', language: 'Language', windowValue: '{hours} hours', windowDaysHint: 'Only the last 3 days (today included)',
+      title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate ({zone}).', cutoffHintLabel: 'Explain: cutoff', repeatHintLabel: 'Explain: repeating a run', duplicateHintLabel: 'Explain: replacing an existing edition', windowHint: 'The window decides how much time this edition covers: 12 hours is half a day, 48 hours is two days.', windowHintLabel: 'Explain: window', languageHint: 'Which language this edition is written in. One period can have both a Chinese and an English edition, each its own row.', languageHintLabel: 'Explain: language',
+      date: 'Date', dateHintLabel: 'Explain: date', dateHint: 'Which day this edition is filed under. Defaults to the day you are on; only the last 3 days (today included) can be generated, not a future one.',
+      generateTarget: 'Will generate into {date} {time}', generateTargetNow: 'Will generate into {date}',
+      windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
       repeatable: 'One edition per cutoff and language: pressing again asks whether to replace that edition.',
       cutoffInFuture: 'That cutoff is still in the future — nothing has happened there yet. Pick a time that has passed.', alreadyRunning: 'Another run is already generating; wait for it to finish.', duplicateTitle: 'This edition already exists', duplicateBody: 'An edition already exists at that cutoff in that language (a different window still counts as the same). Replacing overwrites it; the old text is not kept.', duplicateReplace: 'Replace',
       cutoffUnreadable: 'That time could not be resolved here; pick another one.',

@@ -2092,7 +2092,8 @@ it('writes into the day the reader is on, and says that day before the press', a
   const target = document.querySelector('[data-manual-target]')!
   expect(target.textContent).toContain('2026-10-30')
   expect(target.textContent).toContain('08:00')
-  expect(target.textContent).toContain('GMT+8')
+  // 2026-11-09：正文只留值，时区名在截止时刻的 ⓘ 里（弹窗自己的用例钉住那一侧）。
+  expect(target.textContent).not.toContain('GMT+8')
   await confirmManualRun()
   const request = (regenerate.mock.calls as unknown as [[{ generation: { asOf: string } }]])[0]![0]
   expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')

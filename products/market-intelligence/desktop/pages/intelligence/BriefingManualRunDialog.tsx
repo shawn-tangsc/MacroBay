@@ -75,8 +75,9 @@ export function BriefingManualRunDialog({ open, text, timeZone, defaultDate, lat
     setDraft((current) => ({ ...current, date: defaultDate }))
   }, [open, defaultDate])
   const windowLabel = (hours: number): string => copy.windowValue.replace('{hours}', String(hours))
-  // 两句话合成一个问号：「可选时刻有档位」和「截止 = 按下那一刻」。正文里不再铺说明。
-  const cutoffHelp = `${briefingGenerationGridHint(text)} ${copy.nowHint}`
+  const zoneLabel = formatShellTimeZoneLabel(timeZone)
+  // 两句话合成一个问号：「可选时刻有档位」和「截止 = 按下那一刻（含时区）」。正文里不再铺说明。
+  const cutoffHelp = `${briefingGenerationGridHint(text)} ${copy.nowHint.replace('{zone}', zoneLabel)}`
   // 每个字段都有自己的问号：说明放在它专属的浮层里，鼠标 hover 与键盘聚焦都能展开。
   // `ariaLabelKey` 必须是**键的形状**（点分、无空白、无中文），句子由这里注入的解析器给出。
   const helpTrigger = (labelKey: string, label: string, sentence: string): React.ReactElement =>
@@ -102,13 +103,13 @@ export function BriefingManualRunDialog({ open, text, timeZone, defaultDate, lat
     cutoff: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.cutoffHintLabel',
     window: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.windowHintLabel',
     language: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.languageHintLabel',
-    repeat: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.repeatHintLabel'
+    repeat: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.repeatHintLabel',
+    duplicate: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.duplicateHintLabel'
   }
-  // 提交前把落点写出来（`02` v2.129 G1）：读者要能看见它写到哪一天，而不是按完才发现归档在别处。
-  const zoneLabel = formatShellTimeZoneLabel(timeZone)
+  // 提交前把落点写出来（`02` v2.129 G1）：正文只留这个**当前值**，时区与"按下那一刻"在截止时刻的 ⓘ 里。
   const targetSentence = draft.cutoff === 'now'
-    ? copy.generateTargetNow.replace('{date}', draft.date).replace('{zone}', zoneLabel)
-    : copy.generateTarget.replace('{date}', draft.date).replace('{time}', draft.cutoff).replace('{zone}', zoneLabel)
+    ? copy.generateTargetNow.replace('{date}', draft.date)
+    : copy.generateTarget.replace('{date}', draft.date).replace('{time}', draft.cutoff)
 
   return <Modal
     footer={<div className="mi-briefing-period-dialog__actions">
@@ -160,8 +161,6 @@ export function BriefingManualRunDialog({ open, text, timeZone, defaultDate, lat
           value={dayjs(draft.date)}
           style={{ width: 160 }}
         />
-        {/* 只能选最近 3 天：写出来，读者不用试才知道（用户 2026-11-06）。 */}
-        <small className="mi-briefing-period-dialog__note" data-manual-window-hint="true">{copy.windowDaysHint}</small>
       </div>
 
       <div className="mi-briefing-period-dialog__field">
@@ -226,8 +225,10 @@ export function BriefingManualRunDialog({ open, text, timeZone, defaultDate, lat
       {/* A7.9: the reader must be told that pressing again with the same choices is a new issue,
           not a mistake — otherwise the behavior looks like a bug and they delete the second one. */}
       {duplicate === undefined ? null : <>
-        <p className="mi-briefing-period-dialog__conflict" role="alert" data-manual-duplicate="true">{duplicate.label}</p>
-        <p className="mi-briefing-period-dialog__note">{copy.duplicateBody}</p>
+        {/* 状态留在正文；「替换会覆盖什么」是说明，挂在它旁边的 ⓘ 里。 */}
+        <p className="mi-briefing-period-dialog__conflict" role="alert" data-manual-duplicate="true">
+          {duplicate.label}{helpTrigger(keys.duplicate, copy.duplicateHintLabel, copy.duplicateBody)}
+        </p>
       </>}
       {blockedReason === undefined ? null : <p className="mi-briefing-period-dialog__conflict" id="manual-run-blocked-reason" role="alert" data-manual-problem={problem}>
         {blockedReason}
