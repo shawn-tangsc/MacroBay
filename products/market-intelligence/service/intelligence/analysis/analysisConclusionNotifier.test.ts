@@ -17,6 +17,7 @@ const approvedLevels = MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS['market-intell
 const notice = (overrides: Partial<Parameters<ReturnType<typeof createAnalysisConclusionNotifier>>[0]> = {}) => ({
   runId: 'mi-ar-1',
   triggerKey: 'signal.open-interest.oi-liquidation-proxy',
+  bucket: 'signal:mi-eg-1',
   cutoff: '2026-11-08T03:00:00.000Z',
   summary: '多头被清，价格跌到位后买盘回来了。',
   conclusionDirection: 'bullish' as const,
@@ -37,7 +38,7 @@ describe('the analysis conclusion submit', () => {
     await send(notice())
     expect(submit).toHaveBeenCalledTimes(1)
     const request = submit.mock.calls[0]![0] as NotificationSubmitRequest
-    expect(request.dedupeVars).toEqual({ builder: 'template', vars: { triggerKey: 'signal.open-interest.oi-liquidation-proxy', cutoff: '2026-11-08T03:00:00.000Z' } })
+    expect(request.dedupeVars).toEqual({ builder: 'template', vars: { bucket: 'signal:mi-eg-1', cutoff: '2026-11-08T03:00:00.000Z' } })
     expect(JSON.stringify(request.dedupeVars)).not.toContain('mi-ar-1')
     expect(request.eventTypeId).toBe('market-intelligence.analysis.conclusion')
   })
@@ -92,5 +93,44 @@ describe('the analysis conclusion submit', () => {
     const submit = vi.fn(async (_request: NotificationSubmitRequest) => { throw new Error('channel down') })
     const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
     await expect(send(notice())).resolves.toBeUndefined()
+  })
+
+  it('gives two different events their own phone slot on the same day', async () => {
+    // 2026-11-09：桶按触发键算，初次运行全叫 `macro.actual.first-confirmed`，一天只有第一条到手机。
+    // 改成「原因码 + 事件」之后，两条不同事件各推一次。
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n', levels: [], suppressedLevels: [] }))
+    const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
+    const threshold = (bucket: string) => {
+      const { triggerDirection: _direction, triggerFactIds: _facts, ...base } = notice({ bucket, triggerKey: 'macro.actual.first-confirmed' })
+      return { ...base, conclusionDirection: 'bearish' as const }
+    }
+    await send(threshold('severity-confirmed:mi-eg-news'))
+    await send(threshold('severity-confirmed:mi-eg-macro'))
+    expect(submit).toHaveBeenCalledTimes(2)
+    expect(narrowOf(submit.mock.calls[0]![0] as NotificationSubmitRequest)).toBeUndefined()
+    expect(narrowOf(submit.mock.calls[1]![0] as NotificationSubmitRequest)).toBeUndefined()
+  })
+
+  it('still merges the same event triggered twice, and keeps the module cap', async () => {
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n', levels: [], suppressedLevels: [] }))
+    const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
+    const threshold = (bucket: string) => {
+      const { triggerDirection: _direction, triggerFactIds: _facts, ...base } = notice({ bucket, triggerKey: 'macro.actual.first-confirmed' })
+      return { ...base, conclusionDirection: 'bearish' as const }
+    }
+    await send(threshold('severity-confirmed:mi-eg-news'))
+    await send(threshold('severity-confirmed:mi-eg-news'))
+    // 同一条事件第二次：只进中心（不是不发）。
+    expect(narrowOf(submit.mock.calls[1]![0] as NotificationSubmitRequest)).toEqual(['center'])
+    // 不同事件照常，但模块每天 4 条：第五条只进中心。
+    await send(threshold('severity-confirmed:mi-eg-b'))
+    await send(threshold('provider-surprise-confirmed:mi-eg-c'))
+    await send(threshold('medium-score-confirmed:mi-eg-d'))
+    await send(threshold('medium-score-confirmed:mi-eg-e'))
+    expect(submit).toHaveBeenCalledTimes(6)
+    // 前四条（含被合并的那条）到手机，模块当天满 4 条之后只进中心。
+    expect(narrowOf(submit.mock.calls[3]![0] as NotificationSubmitRequest)).toBeUndefined()
+    expect(narrowOf(submit.mock.calls[4]![0] as NotificationSubmitRequest)).toEqual(['center'])
+    expect(narrowOf(submit.mock.calls[5]![0] as NotificationSubmitRequest)).toEqual(['center'])
   })
 })

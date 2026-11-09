@@ -446,6 +446,7 @@ describe('analysisOrchestrator', () => {
       expect(notifyAnalysisConclusion.mock.calls[0]![0]).toMatchObject({
         runId: 'mi-ar-1',
         triggerKey: 'signal.open-interest.oi-liquidation-proxy',
+        bucket: 'signal:mi-eg-1',
         cutoff: asOf,
         conclusionDirection: 'range',
         summary: '官方数据已发布，市场反应仍需观察。',
@@ -470,6 +471,8 @@ describe('analysisOrchestrator', () => {
 
       await orchestrator.run({ analysisRunId: 'mi-ar-1' })
       expect(notifyAnalysisConclusion).toHaveBeenCalledTimes(1)
+      // 桶带原因码与事件：同一天两条不同事件各算一次，不会被同一个触发键并成一条。
+      expect(notifyAnalysisConclusion.mock.calls[0]![0]).toMatchObject({ bucket: 'severity-confirmed:mi-eg-1' })
     })
 
     it('keeps routine slots and restart catch-ups out of the phone', async () => {

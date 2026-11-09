@@ -17,7 +17,7 @@ const basePhone = {
   conclusionDirection: 'bullish' as const,
   signalFactIds: ['mi-fact-flow'],
   citedFactIds: ['mi-fact-flow', 'mi-fact-price'],
-  sentToday: { byTriggerKey: 0, module: 0 }
+  sentToday: { byBucket: 0, module: 0 }
 }
 
 describe('who gets woken up', () => {
@@ -29,14 +29,14 @@ describe('who gets woken up', () => {
   it('pushes a threshold-triggered run that had no signal to compare against', () => {
     // 消息面达门槛的运行没有信号方向：没有"同向"可谈，达门槛本身就是新信息 → 该推手机。
     const decision = analysisConclusionPushesPhone({
-      signalDriven: false, conclusionDirection: 'bearish', citedFactIds: ['mi-fact-flow'], sentToday: { byTriggerKey: 0, module: 0 }
+      signalDriven: false, conclusionDirection: 'bearish', citedFactIds: ['mi-fact-flow'], sentToday: { byBucket: 0, module: 0 }
     })
     expect(decision).toMatchObject({ phone: true, centerOnly: false })
   })
 
   it('still keeps a no-signal run quiet when the quota is used up', () => {
     expect(analysisConclusionPushesPhone({
-      signalDriven: false, conclusionDirection: 'bearish', citedFactIds: ['mi-fact-flow'], sentToday: { byTriggerKey: 1, module: 1 }
+      signalDriven: false, conclusionDirection: 'bearish', citedFactIds: ['mi-fact-flow'], sentToday: { byBucket: 1, module: 1 }
     })).toMatchObject({ phone: false, centerOnly: true, reason: 'quota-trigger-key' })
   })
 
@@ -51,22 +51,23 @@ describe('who gets woken up', () => {
 
   it('keeps the day and module caps: over the cap is centre only, never silence', () => {
     // 同一触发键每天 1 条：第二条只进中心（不是不发）。
-    expect(analysisConclusionPushesPhone({ ...basePhone, sentToday: { byTriggerKey: 1, module: 1 } }))
+    expect(analysisConclusionPushesPhone({ ...basePhone, sentToday: { byBucket: 1, module: 1 } }))
       .toMatchObject({ phone: false, centerOnly: true, reason: 'quota-trigger-key' })
     // 模块每天 4 条：第 5 条起只进中心。
-    expect(analysisConclusionPushesPhone({ ...basePhone, sentToday: { byTriggerKey: 0, module: 4 } }))
+    expect(analysisConclusionPushesPhone({ ...basePhone, sentToday: { byBucket: 0, module: 4 } }))
       .toMatchObject({ phone: false, centerOnly: true, reason: 'quota-module' })
-    expect(analysisConclusionPushesPhone({ ...basePhone, sentToday: { byTriggerKey: 0, module: 3 } }))
+    expect(analysisConclusionPushesPhone({ ...basePhone, sentToday: { byBucket: 0, module: 3 } }))
       .toMatchObject({ phone: true })
   })
 })
 
 describe('the dedupe key ignores the run id', () => {
-  it('is built from the trigger key and the cutoff, and the template names no run', () => {
+  it('is built from the bucket and the cutoff, and the template names no run', () => {
+    // 桶 = 原因码 + 事件：不同事件各算一次，同一条事件重复触发仍被合并。
     // 同一份证据重跑会得到新 runId；键里带它就等于给读者发两条同样的结论。
-    expect(analysisConclusionPushPolicy.dedupeKeyTemplate).toBe('analysis:{triggerKey}:{cutoff}')
+    expect(analysisConclusionPushPolicy.dedupeKeyTemplate).toBe('analysis:{bucket}:{cutoff}')
     expect(analysisConclusionPushPolicy.dedupeKeyTemplate).not.toContain('run')
-    expect(analysisConclusionPushPolicy.perTriggerKeyDailyLimit).toBe(1)
+    expect(analysisConclusionPushPolicy.perBucketDailyLimit).toBe(1)
     expect(analysisConclusionPushPolicy.moduleDailyLimit).toBe(4)
   })
 })
@@ -119,7 +120,7 @@ describe('an unreadable signal widens nothing', () => {
       signalDirection: 'bearish',
       conclusionDirection: 'bearish',
       citedFactIds: ['mi-fact-flow', 'mi-fact-price'],
-      sentToday: { byTriggerKey: 0, module: 0 }
+      sentToday: { byBucket: 0, module: 0 }
     })
     expect(decision).toMatchObject({ phone: false, centerOnly: true, reason: 'same-direction' })
   })
@@ -130,7 +131,7 @@ describe('an unreadable signal widens nothing', () => {
       signalDriven: true,
       conclusionDirection: 'bullish',
       citedFactIds: ['mi-fact-flow'],
-      sentToday: { byTriggerKey: 0, module: 0 }
+      sentToday: { byBucket: 0, module: 0 }
     })
     expect(decision).toMatchObject({ phone: false, centerOnly: true })
   })

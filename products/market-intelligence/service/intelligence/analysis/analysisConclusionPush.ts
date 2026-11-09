@@ -16,10 +16,15 @@ import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
  */
 export const analysisConclusionPushPolicy = Object.freeze({
   version: 'analysisConclusionPush.v1',
-  /** 去重键：同一触发键 + 同一截止时刻一条；**不用 runId**（同一份证据重跑会换 runId）。 */
-  dedupeKeyTemplate: 'analysis:{triggerKey}:{cutoff}',
-  /** 同一触发键每天 1 条；模块每天 4 条（两条推送合计）；超出只进中心。 */
-  perTriggerKeyDailyLimit: 1,
+  /**
+   * 去重键：**同一桶（原因码 + 事件）+ 同一截止时刻**一条；**不用 runId**（同一份证据重跑会换）。
+   *
+   * 桶按事件算，不按触发键：初次运行的键全都叫 `macro.actual.first-confirmed`，按键会让一天
+   * 只有第一条达门槛的能到手机（2026-11-09）。同一条事件重复触发仍是同一个桶，照样被去重。
+   */
+  dedupeKeyTemplate: 'analysis:{bucket}:{cutoff}',
+  /** 同一个桶（原因码 + 事件）每天 1 条；模块每天 4 条；超出只进中心。 */
+  perBucketDailyLimit: 1,
   moduleDailyLimit: 4,
   /** 正文上限：中文按字、英文按字符。 */
   maximumBodyLength: Object.freeze({ 'zh-CN': 40, 'en-US': 90 }) as Readonly<Record<'zh-CN' | 'en-US', number>>,
@@ -84,7 +89,7 @@ export type AnalysisConclusionPushInput = Readonly<{
   /** 读者时区：日界按它算。 */
   timeZone: string
   /** 今天（读者时区）已经为这个触发键发过几条、模块一共发过几条。 */
-  sentToday: Readonly<{ byTriggerKey: number; module: number }>
+  sentToday: Readonly<{ byBucket: number; module: number }>
   now: string
 }>
 
@@ -95,8 +100,8 @@ export type AnalysisConclusionPushDecision = Readonly<{
     centerOnly: boolean
     /** 正文那句（两种语言各一份，平台按读者语言挑）。 */
     body: Readonly<Record<AnalysisPushLanguage, string>>
-    /** 去重键的三个分量：键字符串由平台按模板拼，调用点不自己拼。 */
-    dedupeVars: Readonly<{ triggerKey: string; cutoff: string }>
+    /** 去重键的两个分量（桶 + 截止）：键字符串由平台按模板拼，调用点不自己拼。 */
+    dedupeVars: Readonly<{ bucket: string; cutoff: string }>
   }
   /** 没提交时的原因，供日志与用例断言；`undefined` 表示提交了。 */
   skipped?: 'same-direction' | 'quota-day' | 'quota-module' | 'no-direction'
@@ -171,12 +176,12 @@ export function analysisConclusionPushesPhone(input: Readonly<{
   conclusionDirection: AnalysisConclusionDirection
   signalFactIds?: readonly string[]
   citedFactIds: readonly string[]
-  sentToday: Readonly<{ byTriggerKey: number; module: number }>
+  sentToday: Readonly<{ byBucket: number; module: number }>
 }>): Readonly<{ phone: boolean; centerOnly: boolean; reason?: 'same-direction' | 'quota-trigger-key' | 'quota-module' }> {
   const directional = input.conclusionDirection === 'bullish' || input.conclusionDirection === 'bearish'
   const opposing = directional && input.signalDirection !== undefined && input.conclusionDirection !== input.signalDirection
   const newInformation = input.signalFactIds !== undefined && input.citedFactIds.some((id) => !input.signalFactIds!.includes(id))
-  const quotaHit = input.sentToday.byTriggerKey >= analysisConclusionPushPolicy.perTriggerKeyDailyLimit
+  const quotaHit = input.sentToday.byBucket >= analysisConclusionPushPolicy.perBucketDailyLimit
     ? 'quota-trigger-key' as const
     : input.sentToday.module >= analysisConclusionPushPolicy.moduleDailyLimit ? 'quota-module' as const : undefined
   // 「同向只进中心」只对**信号唤起**的那次成立：没有信号就没有"同不同向"可谈，达门槛本身
@@ -201,7 +206,8 @@ export function analysisConclusionPushesPhone(input: Readonly<{
 export function buildAnalysisConclusionRequest(input: Readonly<{
   summary: string
   citedCount: number
-  triggerKey: string
+  /** 去重桶：原因码 + 事件（手动发送是它自己的桶）。 */
+  bucket: string
   /** 去重键 `analysis:{triggerKey}:{cutoff}` 的第二个分量；手动发送是 `${截止时刻}:${点击时刻}`。 */
   cutoff: string
   occurredAt: string
@@ -214,7 +220,7 @@ export function buildAnalysisConclusionRequest(input: Readonly<{
     withContext: !input.centerOnly
   })
   return {
-    dedupeVars: { builder: 'template', vars: { triggerKey: input.triggerKey, cutoff: input.cutoff } },
+    dedupeVars: { builder: 'template', vars: { bucket: input.bucket, cutoff: input.cutoff } },
     ...(input.centerOnly ? { narrowedDisruptionLevels: ['center'] as const } : {}),
     rendered: {
       'zh-CN': { ...analysisConclusionPushPolicy.renderedCopy['zh-CN'], body: body.text },

@@ -81,10 +81,10 @@ describe('sending one conclusion to the channel', () => {
   it('makes a new dedupe key from the click time, so the real key is never occupied', async () => {
     const { send, submit } = harness()
     await send({ analysisRunId: 'mi-ar-1' })
-    // 模板拼出来就是 analysis:{触发键}:{截止}:{点击}——第二个分量带点击时刻，所以每次点击都是新键。
+    // 模板拼出来就是 analysis:{桶}:{截止}:{点击}——第二个分量带点击时刻，所以每次点击都是新键。
     expect(submit.mock.calls[0]![0].dedupeVars).toEqual({
       builder: 'template',
-      vars: { triggerKey: 'signal.open-interest.oi-liquidation-proxy', cutoff: `${asOf}:${clickAt}` }
+      vars: { bucket: 'manual:mi-eg-1', cutoff: `${asOf}:${clickAt}` }
     })
   })
 

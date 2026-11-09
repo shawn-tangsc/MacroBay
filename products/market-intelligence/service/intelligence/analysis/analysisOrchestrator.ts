@@ -394,9 +394,10 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     }
     // N12：**达到门槛**的那次、写入记录之后，提交一次结论推送。判据是原因码，不是触发键——
     // 键记的是阶段，消息面达门槛的运行也长着宏观的样子（`analysisConclusionPushEligible` 一处判）。
+    const triggerReasonCode = deps.repository.triggerReasonOf?.(runRecord.id)
     if (deps.notifyAnalysisConclusion !== undefined && analysisConclusionPushEligible({
       triggerKey: runRecord.triggerKey,
-      ...(deps.repository.triggerReasonOf ? { reasonCode: deps.repository.triggerReasonOf(runRecord.id) } : {})
+      ...(triggerReasonCode === undefined ? {} : { reasonCode: triggerReasonCode })
     })) {
       try {
         const trigger = deps.readTriggerSignal?.(runRecord.triggerKey) ?? {}
@@ -407,6 +408,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         await deps.notifyAnalysisConclusion({
           runId: runRecord.id,
           triggerKey: runRecord.triggerKey,
+          // 桶 = 原因码 + 事件：不同事件各算一次，同一条事件重复触发仍是一个桶。
+          bucket: `${triggerReasonCode ?? 'signal'}:${runRecord.eventGroupId}`,
           cutoff: snapshot.asOf,
           summary: validated.value.conclusion.summary,
           conclusionDirection: validated.value.conclusion.direction,
