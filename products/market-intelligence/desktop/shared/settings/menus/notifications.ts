@@ -49,19 +49,21 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     availability: 'live'
   },
   {
-    key: 'setting:notifications.channel-event.sentiment-alert',
+    // 舆情提醒挂着 `sentimentAlert` 的 itemKey，但**不是**那条事件的批准位：读者拨的是推送水位
+    // （`intelligence.setNewsPushOutletEnabled`），批准值由批准文件与平台决定，本页不暴露。
+    key: 'setting:notifications.push-outlet',
     menu: 'notifications',
     surfaces: ['settings'],
-    level: 'platform',
+    level: 'product',
     field: { kind: 'switch' },
     read: {
-      command: 'platform:notifications-get-channel-events',
-      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert)
+      command: 'intelligence.getNewsPushOutletState',
+      select: (view) => readViewField(view, 'enabled')
     },
     write: {
-      kind: 'command',
-      id: 'platform:notifications-set-channel-event',
-      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert, enabled: value === true })
+      kind: 'value',
+      command: 'intelligence.setNewsPushOutletEnabled',
+      toPayload: (value) => ({ enabled: value === true })
     },
     copy: {
       labelKey: 'pages.intelligence.notification.rows.sentimentAlert.title',
@@ -70,23 +72,26 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     availability: 'live'
   },
   {
-    key: 'setting:notifications.channel-event.calendar',
+    // 「日历事件」是产品自己的提醒设置：开关在详情「开始前」组内，**列表行只显示状态徽标**。
+    // 不要按别的行在列表上再补一个开关——那会凭空多出一个入口。
+    key: 'setting:notifications.calendar.enabled',
     menu: 'notifications',
     surfaces: ['settings'],
-    level: 'platform',
+    level: 'product',
     field: { kind: 'switch' },
     read: {
-      command: 'platform:notifications-get-channel-events',
-      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.calendarEventUpcoming)
+      command: 'intelligence.getCalendarReminderSettings',
+      select: (view) => readViewField(view, 'enabled')
     },
     write: {
-      kind: 'command',
-      id: 'platform:notifications-set-channel-event',
-      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.calendarEventUpcoming, enabled: value === true })
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value) => ({ enabled: value === true })
     },
+    defaultValueFrom: 'calendarReminder.enabled',
     copy: {
-      labelKey: 'pages.intelligence.notification.rows.calendar.title',
-      helpKey: 'pages.intelligence.notification.rows.calendar.info'
+      labelKey: 'pages.intelligence.notification.calendar.beforeRow',
+      helpKey: 'pages.intelligence.notification.calendar.beforeNote'
     },
     availability: 'live'
   },

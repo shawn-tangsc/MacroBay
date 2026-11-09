@@ -144,6 +144,36 @@ describe('settings registry self-checks (G1–G7)', () => {
     })
   })
 
+  it('declares the two rows product keeps: push outlet and the calendar switch, not channel events', () => {
+    const byKey = new Map(settingRegistry.notifications.map((row) => [row.key, row]))
+    // 舆情提醒：挂 sentimentAlert 的 itemKey，但写的是产品推送水位，不是那条事件的批准位。
+    const outlet = byKey.get('setting:notifications.push-outlet') as SettingDescriptor
+    expect(outlet.level).toBe('product')
+    expect(outlet.read.command).toBe('intelligence.getNewsPushOutletState')
+    if (outlet.write?.kind !== 'value') throw new Error('the push outlet row must be a value write')
+    expect(outlet.write.command).toBe('intelligence.setNewsPushOutletEnabled')
+    expect(outlet.write.toPayload(true, {})).toEqual({ enabled: true })
+    expect(outlet.defaultValueFrom).toBeUndefined()
+
+    // 日历事件：产品提醒设置；开关在详情「开始前」里，列表行只有状态徽标。
+    const calendar = byKey.get('setting:notifications.calendar.enabled') as SettingDescriptor
+    expect(calendar.level).toBe('product')
+    expect(calendar.field).toEqual({ kind: 'switch' })
+    if (calendar.write?.kind !== 'value') throw new Error('the calendar row must be a value write')
+    expect(calendar.write.toPayload(false, {})).toEqual({ enabled: false })
+
+    // 只有两条真正的 channel-event（信号、日报）；那两行不再假装平台事件。
+    const channelEventRows = settingRegistry.notifications.filter(
+      (row) => row.write?.kind === 'command' && row.write.id === 'platform:notifications-set-channel-event'
+    )
+    expect(channelEventRows.map((row) => row.key).sort()).toEqual([
+      'setting:notifications.channel-event.briefing-ready',
+      'setting:notifications.channel-event.signal-triggered'
+    ])
+    expect(byKey.has('setting:notifications.channel-event.calendar')).toBe(false)
+    expect(byKey.has('setting:notifications.channel-event.sentiment-alert')).toBe(false)
+  })
+
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
     const surfaces = settingRegistry.notifications.find(
       (row) => row.key === 'setting:notifications.surfaces'
