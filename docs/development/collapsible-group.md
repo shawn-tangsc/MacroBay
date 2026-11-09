@@ -37,8 +37,11 @@ The two are a union: passing both, or neither, does not compile.
 
 Because `aria-controls` must name a node that really exists, the body is rendered from the first
 frame and the collapsed state sets `display: none`. **Assert visibility, not DOM presence**: a test
-that expects "zero nodes" will disagree with this component by design. (The "zero DOM matches"
-rule elsewhere applies to page copy, not to a collapsible body.)
+that expects "zero nodes" will disagree with this component by design.
+
+The agreed wording (UI, 2026-11-09):
+> "Not shown" means the node exists but is collapsed — invisible, unreadable, taking no space.
+> "Not in the DOM" applies only to whether a body-copy sentence has moved into its ⓘ.
 
 ## How to verify a page that uses it
 
