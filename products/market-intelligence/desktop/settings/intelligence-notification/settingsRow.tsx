@@ -1,5 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 
+import { SettingsRow as SharedSettingsRow } from '@platform/ui/components/settings-row'
+
 import { SettingsInfo, type SettingsInfoSpec } from '../settingsInfo'
 
 /**
@@ -23,16 +25,17 @@ export function SettingsRow(props: Readonly<{
   last?: boolean
   children?: ReactNode
 }>): ReactElement {
-  return <div className={`intelligence-notification-form-row${props.last === true ? ' is-last' : ''}`}>
-    <span className="intelligence-notification-form-label">
+  return <SharedSettingsRow
+    controlClassName="intelligence-notification-form-control"
+    copyClassName="intelligence-notification-form-label"
+    label={<>
       {/* 标题与 ⓘ 同一行：长标题压标题，图标 flex: none 不被挤下去。 */}
       <span className="intelligence-notification-form-label-text">{props.label}</span>
       {props.info === undefined ? null : <SettingsInfo {...props.info} />}
-    </span>
-    <div className="intelligence-notification-form-control">
-      {props.children}
-    </div>
-  </div>
+    </>}
+    rowClassName={`intelligence-notification-form-row${props.last === true ? ' is-last' : ''}`}>
+    {props.children}
+  </SharedSettingsRow>
 }
 
 export type SettingsRowInfo = SettingsInfoSpec
