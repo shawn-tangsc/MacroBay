@@ -165,8 +165,24 @@ async function click(container: ParentNode, selector: string): Promise<void> {
 
 async function openProvidersTab(): Promise<HTMLElement> {
   const container = await mountPage()
-  await click(container, '[data-web-search-tab="providers"]')
+  await clickTab(container, labels.providersTab)
   return container
+}
+
+/**
+ * 按**页签名**点击：平台 `Tabs` 是按钮 + `role="tab"`，不再有手写的 `data-web-search-tab`。
+ * 两个面板都会挂载（非活动加 `hidden`），所以「现在看到的是哪一页」要查可见的那块。
+ */
+async function clickTab(container: ParentNode, label: string): Promise<void> {
+  const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+    .find((candidate) => candidate.textContent?.trim() === label)
+  expect(tab, `no tab named ${label}`).toBeDefined()
+  await act(async () => tab?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await settle()
+}
+
+function visiblePanel(container: ParentNode): HTMLElement | null {
+  return container.querySelector<HTMLElement>('.tabs__panel:not([hidden])')
 }
 
 describe('PLAT-60 two-dimension web search settings', () => {
@@ -174,10 +190,10 @@ describe('PLAT-60 two-dimension web search settings', () => {
     const container = await mountPage()
 
     expect(container.querySelector('.web-search-provider-rail')).toBeNull()
-    const tabs = [...container.querySelectorAll('.web-search-settings-tabs [role="tab"]')]
+    const tabs = [...container.querySelectorAll('[role="tab"]')]
     expect(tabs.map((tab) => tab.textContent)).toEqual([labels.policyTab, labels.providersTab])
-    expect(container.querySelector('[data-web-search-tab="policy"]')?.getAttribute('aria-selected')).toBe('true')
-    expect(container.querySelector('[data-web-search-tab="providers"]')?.getAttribute('aria-selected')).toBe('false')
+    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true')
+    expect(tabs[1]?.getAttribute('aria-selected')).toBe('false')
   })
 
   it('② 策略页没有任何 API Key / 端点 / 启用开关控件', async () => {

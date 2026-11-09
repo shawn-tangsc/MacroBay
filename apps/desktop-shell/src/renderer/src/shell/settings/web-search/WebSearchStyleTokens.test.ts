@@ -75,21 +75,20 @@ describe('PLAT-60 style tokens', () => {
 
   it('matches the prototype page container, tab and summary spacing', () => {
     const content = rule('.web-search-detail-pane')
-    const tabs = rule('.web-search-settings-tabs')
-    const tab = rule('.web-search-settings-tab')
-    const active = rule('.web-search-settings-tab.on')
+    // 页签换成平台 `Tabs`（外观归组件）；这一页自己负责的只剩「面板间距 + 动作条」。
+    const panel = rule('.web-search-panel')
+    const actions = rule('.web-search-panel-actions')
     const summary = rule('.web-search-summary')
     const chip = rule('.web-search-summary-chip')
 
     expect(content).toContain('padding: 22px 26px 48px')
     expect(content).toContain('max-width: 1040px')
-    expect(tabs).toContain('gap: 2px')
-    expect(tabs).toContain('border-bottom: 1px solid var(--border)')
-    expect(tab).toContain('padding: 7px 14px')
-    expect(tab).toContain('font-size: 13px')
-    expect(tab).toContain('color: var(--muted)')
-    expect(active).toContain('border-bottom-color: var(--accent)')
-    expect(active).toContain('font-weight: 600')
+    // 动作条固定在面板顶部、单行靠右，间距 8：这是界面规范 §8 的那条。
+    expect(panel).toContain('gap: 8px')
+    expect(actions).toContain('position: sticky')
+    expect(actions).toContain('justify-content: flex-end')
+    expect(actions).toContain('flex-wrap: nowrap')
+    expect(actions).toContain('gap: 8px')
     expect(summary).toContain('gap: 8px')
     expect(summary).toContain('font-variant-numeric: tabular-nums')
     expect(chip).toContain('padding: 3px 10px')
