@@ -80,6 +80,28 @@ async function flush(): Promise<void> {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 }
 
+type PolicyProp = NonNullable<Parameters<typeof ProviderDetail>[0]['policy']>
+
+/** 采集策略组必须先渲染出来，才测得到「原因挂在组上」这件事：给每个源一份最小 profile。 */
+function policyFor(sourceIds: readonly string[]): PolicyProp {
+  const profiles: Record<string, PolicyProp['profiles'][string]> = {}
+  for (const sourceId of sourceIds) {
+    profiles[sourceId] = {
+      profileId: `profile-${sourceId}`,
+      sourceId,
+      enabled: true,
+      collectionPreset: 'balanced',
+      includeInSentiment: false,
+      scopePolicy: 'all',
+      rawArchiveEnabled: false,
+      retentionMode: 'balanced',
+      autoReplayAfterParserUpgrade: false,
+      updatedAt: '2026-11-01T00:00:00.000Z'
+    }
+  }
+  return { profiles, labels: settingsText.collectionPolicy, supportsSentimentById: {}, onChange: () => {} }
+}
+
 describe('ProviderDetail source details', () => {
   it('does not ask the generic source service for calendar feed details', async () => {
     const pageStateRequests: string[] = []
@@ -357,5 +379,112 @@ describe('ProviderDetail source details', () => {
     expect(rowTags).toContain(settingsText.jobNotRegistered)
     expect(`${rowStatus}${rowTags}`).not.toContain(settingsText.status.enabled)
     expect(`${rowStatus}${rowTags}`).not.toContain(settingsText.status.disabled)
+  })
+
+  it('ties the frozen-policy reason to the policy group, so a screen reader hears why', async () => {
+    // 界面设计 2026-11-10：整组置灰时，那句原因只是一个 <p>。视觉上它在组开头谁都看得见，
+    // 但读屏不看位置——键盘用户 Tab 进一片灰控件只会听到一串「不可用」，不知道为什么。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['macro-calendar-bls']),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          sources: [source({
+            providerId: 'bls',
+            sourceId: 'macro-calendar-bls',
+            displayName: 'BLS official schedule',
+            kind: 'official-calendar',
+            panels: ['economic-calendar'],
+            jobRegistered: false,
+            unavailable: {
+              reasonCode: 'official-endpoint-returned-403',
+              automaticSync: 'stopped',
+              lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z',
+              decidedAt: '2026-11-08'
+            }
+          })]
+        }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const group = container.querySelector<HTMLElement>('.collapsible-group__body [role="group"]')
+    expect(group).not.toBeNull()
+    const describedBy = group?.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    // 指到的必须是那句原因本身，不是一个悬空 id。
+    expect(document.getElementById(describedBy as string)?.textContent).toBe(settingsText.collectionPolicyStopped)
+  })
+
+  it('gives every unavailable source its own description id', async () => {
+    // 组件级单个 id 会让两组的 <p> 撞同一个 id，`aria-describedby` 只解析得到第一个——
+    // 第二个源的读者照样听不到原因。这条钉死「按源派生」。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const unavailable = {
+      reasonCode: 'official-endpoint-returned-403' as const,
+      automaticSync: 'stopped' as const,
+      lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z',
+      decidedAt: '2026-11-08'
+    }
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['macro-calendar-bls', 'macro-calendar-bls-backup']),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          sources: [
+            source({ providerId: 'bls', sourceId: 'macro-calendar-bls', displayName: 'BLS official schedule', kind: 'official-calendar', panels: ['economic-calendar'], unavailable }),
+            source({ providerId: 'bls', sourceId: 'macro-calendar-bls-backup', displayName: 'BLS mirror', kind: 'official-calendar', panels: ['economic-calendar'], unavailable })
+          ]
+        }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const groups = [...container.querySelectorAll<HTMLElement>('.collapsible-group__body [role="group"]')]
+    expect(groups).toHaveLength(2)
+    const ids = groups.map((group) => group.getAttribute('aria-describedby'))
+    expect(new Set(ids).size).toBe(2)
+    for (const id of ids) {
+      expect(document.getElementById(id as string)?.textContent).toBe(settingsText.collectionPolicyStopped)
+    }
+  })
+
+  it('leaves no group semantics and no dangling description on a usable source', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['macro-calendar-fed']),
+        provider: fedProvider()
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.querySelector('.collapsible-group__body [role="group"]')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
   })
 })

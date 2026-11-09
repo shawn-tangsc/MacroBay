@@ -1,6 +1,6 @@
 import { Alert, Button, Input, Switch } from 'antd'
 import { Eye, EyeOff, Info } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -171,6 +171,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
   const resolveText = useProductTextKey()
+  /*
+    每个源策略组的「停用原因」id 前缀。原因句在组开头，视觉上谁都看得见，但读屏不看位置——
+    键盘用户 Tab 进一片灰控件只会听到一串「不可用」，不知道为什么。所以用 `role="group"` +
+    `aria-describedby` 把原因挂到这一组上。**id 按源派生**：同一屏有多个不可用源时，
+    组件级单个 id 会让每组的 <p> 撞同一个 id，`aria-describedby` 只能解析到第一个。
+  */
+  const policyGroupIdBase = useId()
   // 读者已经配好自定义代理时，不再把「需要连接 本地代理」当成他还没做的事（MI-11-R196）。
   const proxyConfigured = useProxyConfigured()
   // 「上次成功同步」是读者可见的日期：走统一格式化（跟读者时区），不自己切 ISO 字符串。
@@ -349,6 +356,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0
         const unavailable = source.unavailable
+        const policyStoppedId = `${policyGroupIdBase}-policy-${source.sourceId}`
         const tags = [
           unused || source.visibility === 'pending'
             ? labels.badges.pending
@@ -433,17 +441,20 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               {/* 不可用的源不该还能改采集策略：整组停用，并说清为什么、什么时候恢复。
                   这句是**通用结构**——所有不可用源同一句，不针对某一个源。 */}
               {unavailable
-                ? <p className="source-provider-detail__policy-stopped">{labels.collectionPolicyStopped}</p>
+                ? <p className="source-provider-detail__policy-stopped" id={policyStoppedId}>{labels.collectionPolicyStopped}</p>
                 : null}
-              <CollectionPolicySection
-                configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
-                draftProfile={policy.profiles[source.sourceId]!}
-                enabledConfigurable={source.visibility !== 'pending' && !unavailable}
-                labels={policy.labels}
-                onChange={(patch) => policy.onChange(source.sourceId, patch)}
-                onEnabledChange={(enabled) => void toggle(source, enabled)}
-                supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
-              />
+              {/* 原因必须能被读屏关联到**这一组控件**：可用时不留组语义、也不留悬空 id。 */}
+              <div {...(unavailable ? { 'aria-describedby': policyStoppedId, role: 'group' } : {})}>
+                <CollectionPolicySection
+                  configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
+                  draftProfile={policy.profiles[source.sourceId]!}
+                  enabledConfigurable={source.visibility !== 'pending' && !unavailable}
+                  labels={policy.labels}
+                  onChange={(patch) => policy.onChange(source.sourceId, patch)}
+                  onEnabledChange={(enabled) => void toggle(source, enabled)}
+                  supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
+                />
+              </div>
             </CollapsibleGroup>
             : null}
         </div>
