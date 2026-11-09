@@ -286,6 +286,34 @@ describe('CollapsibleGroup', () => {
     expect(host.querySelector<HTMLElement>('.collapsible-group__title')!.closest('.collapsible-group__body')).toBeNull()
   })
 
+  it('keeps the header free of focusable elements: the row itself is the only button', async () => {
+    // 头行整行就是按钮。里面再放按钮/链接就是嵌套可聚焦元素：HTML 不合法，键盘会卡在陷阱里
+    // （Tab 进去出不来、回车不知道触发哪个）。守卫跑在**使用处**——渲染出来的头行子树，
+    // 不是「源码里出现过某个图标」。判据见 `header` 的类型注释。
+    const host = await renderGroup({
+      header: (
+        <>
+          <span>组标题</span>
+          <span className="collapsible-group__meta">3 项</span>
+        </>
+      ),
+      resolveText: keys,
+      children: <p data-body>内容</p>
+    })
+
+    const header = host.querySelector<HTMLElement>('.ant-collapse-header')!
+    expect(header.querySelector('[data-collapsible-header]')).not.toBeNull()
+    expect(header.querySelectorAll(
+      'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )).toHaveLength(0)
+    // 头行内容由作者给：壳不渲染标题槽；整行点击仍然由壳接。
+    expect(host.querySelector('.collapsible-group__title')).toBeNull()
+    await act(async () => {
+      header.querySelector<HTMLElement>('[data-collapsible-header]')!.click()
+    })
+    expect(header.getAttribute('aria-expanded')).toBe('true')
+  })
+
   it('renders a row as a button only when the row has an action', async () => {
     const onSelect = vi.fn()
     const host = await mount({

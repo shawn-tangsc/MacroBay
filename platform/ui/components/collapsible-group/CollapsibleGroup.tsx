@@ -63,7 +63,11 @@ export type CollapsibleGroupRow = {
  *
  * 为什么必须分开：把数据当键传进来，解析器会拿它去查表，翻不到就印空串或键名本身。
  */
-type GroupTitle = { titleKey: string; titleText?: never } | { titleText: string; titleKey?: never }
+type GroupTitle =
+  | { titleKey: string; titleText?: never }
+  | { titleText: string; titleKey?: never }
+  /** 两者都不给：头行内容由 `header` 提供（见下）。 */
+  | { titleKey?: undefined; titleText?: undefined }
 
 /** 头行右侧的计数，同样两种来源二选一；不传就不显示。 */
 type GroupMeta =
@@ -94,9 +98,33 @@ type CollapsibleGroupBaseProps = GroupTitle & GroupMeta & {
  *   整行可点、默认收起、展开区自滚、头行不滚走。**不提供行级语义**——需要「整行可点 + `StatusPill`」
  *   的列表仍用 `rows`；`children` 里内容的可访问性由作者自己负责。
  */
+/**
+ * `children` 模式下的**头行内容槽**（行仍然归壳）。
+ *
+ * 加它的理由：组头 / 条目行的头行常常是「图标 + 标题 + 副标题 + 状态词 + 一行错误预览」，
+ * 单靠 `title` + `meta` 装不下；装不下就会有人退回自绘，同屏又出现两种折叠头。
+ *
+ * ## 边界（写死，违反即不是这套组件）
+ *
+ * **壳持有**：整行点击、箭头（最右、展开转 180°）、`aria-expanded` / `aria-controls`、
+ * 左右内距 12、头行档位（`--font-section` / 1.6 / 600 / `--muted-strong`）。
+ *
+ * **作者只在行内放内容**：
+ * 1. **不许出现任何可聚焦元素**（`IconButton`、链接、开关、第二颗箭头）。头行整行就是按钮，
+ *    里面再放按钮/链接就是嵌套可聚焦元素——HTML 不合法，键盘会卡在陷阱里（Tab 进去出不来、
+ *    回车不知道触发哪个）。**需要动作的一律放到展开区。** 判据：头行子树里
+ *    `querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')`
+ *    必须为空。
+ * 2. **收起态的「一行状态预览」最多一行**，纯文本或 `StatusPill`，不许换行成两行——
+ *    它替代的是「必须展开才知道出了什么事」，不是第二个副标题。
+ * 3. 行内元素仍受 `ui-rules` 管：字号取档、状态词走 `StatusPill`、图标按钮走 `IconButton`
+ *    （放展开区）。
+ *
+ * 一句话：**壳持有行与箭头，内容归作者。**
+ */
 export type CollapsibleGroupProps = CollapsibleGroupBaseProps & (
-  | { rows: readonly CollapsibleGroupRow[]; children?: never }
-  | { children: ReactNode; rows?: never }
+  | { rows: readonly CollapsibleGroupRow[]; children?: never; header?: never }
+  | { children: ReactNode; rows?: never; header?: ReactNode }
 )
 
 export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactElement {
@@ -149,9 +177,13 @@ export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactEleme
         key: 'group',
         forceRender: true,
         label: (
-          <span className="collapsible-group__head">
-            <span className="collapsible-group__title" title={title}>{title}</span>
-            {meta === null ? null : <span className="collapsible-group__meta">{meta}</span>}
+          <span className="collapsible-group__head" data-collapsible-header>
+            {props.header !== undefined
+              ? props.header
+              : <>
+                <span className="collapsible-group__title" title={title}>{title}</span>
+                {meta === null ? null : <span className="collapsible-group__meta">{meta}</span>}
+              </>}
           </span>
         ),
         children: (
