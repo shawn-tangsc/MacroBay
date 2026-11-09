@@ -187,6 +187,7 @@ export const agentTextEnWorkbench: AgentTextWorkbench = {
       productToolStatusAvailable: 'Available',
       productToolStatusMissingHandler: 'Missing handler',
       productToolStatusNotInstalled: 'Not installed',
+      unnamedProductToolPackage: 'Untitled tool package',
       productToolSummary: (total, readOnly, writable, asOf) =>
         `${total} tools · ${readOnly} read-only · ${writable} writable · ${asOf} need asOf`,
       productToolDisabledNote: 'Disabled: this agent cannot see tools from this product.',

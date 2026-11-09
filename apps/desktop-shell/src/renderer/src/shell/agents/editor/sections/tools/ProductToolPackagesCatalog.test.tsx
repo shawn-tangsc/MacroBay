@@ -63,7 +63,8 @@ describe('ProductToolPackagesCatalog', () => {
     const container = await mount({ search: '' })
 
     expect(container.textContent).toContain('示例产品')
-    expect(container.textContent).toContain('sample-product')
+    // 内部包名不再印在卡片上（产品 2026-11-09）；「不出现」由下面两条专门的用例判，
+    // 这里只保留工具行的判据——同一事实不在两处重复断言。
     expect(container.textContent).toContain('示例上下文')
     expect(container.textContent).toContain('get_context_sample')
     expect(container.textContent).toContain('修改示例来源配置')
@@ -117,11 +118,29 @@ describe('ProductToolPackagesCatalog', () => {
     expect(container.textContent).toContain('修改示例来源配置')
   })
 
-  it('falls back to the product id when no product summary is available', async () => {
+  it('never shows the internal package id: a name-less package gets a neutral word', async () => {
+    // 产品口径（2026-11-09）：产品包名是**身份**不是技术引用——读者拿着 `sample-product`
+    // 做不了任何事，复制到别处没人认，报障时日志里本来就有。没有名字就显示中性词，
+    // **绝不把内部 slug 顶上去**；悬停露出也算露出，所以 `title` 也不许带它。
     stubPlatform([packageFixture()], { withProductSummaries: false })
     const container = await mount({ search: '' })
 
-    expect(container.querySelector('.agent-product-package-name')?.textContent).toContain('sample-product')
+    expect(container.textContent).not.toContain('sample-product')
+    expect(container.querySelector('.agent-product-package-name')?.textContent).toContain('未命名工具包')
+    expect(container.querySelector('.agent-product-package-id')).toBeNull()
+    // 悬停提示也会露出来，所以整张卡片上任何元素都不许把 slug 挂进 title。
+    for (const element of container.querySelectorAll('[title]')) {
+      expect(element.getAttribute('title')).not.toContain('sample-product')
+    }
+  })
+
+  it('shows the product name and still does not print the package id next to it', async () => {
+    stubPlatform([packageFixture()])
+    const container = await mount({ search: '' })
+
+    const name = container.querySelector('.agent-product-package-name')
+    expect(name?.textContent).toContain('示例产品')
+    expect(container.textContent).not.toContain('sample-product')
     expect(container.querySelector('.agent-product-package-id')).toBeNull()
   })
 })

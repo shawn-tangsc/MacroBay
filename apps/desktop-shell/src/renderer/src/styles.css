@@ -7357,16 +7357,6 @@ h1 {
   white-space: nowrap;
 }
 
-.agent-product-package-id {
-  margin-top: 2px;
-  overflow: hidden;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .agent-product-status {
   display: inline-flex;
   flex: none;

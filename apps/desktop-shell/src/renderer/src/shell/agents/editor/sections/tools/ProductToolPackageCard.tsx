@@ -48,13 +48,17 @@ export function ProductToolPackageCard({
         </span>
         <div className="agent-product-package-identity">
           <div className="agent-product-package-name">
-            <strong title={displayName ?? pkg.productId}>{displayName ?? pkg.productId}</strong>
+            {/*
+              产品口径（2026-11-09）：产品包名是**身份**，不是技术引用。读者拿着 `market-intelligence`
+              做不了任何事——复制到别处没人认，报障时日志里本来就有。所以没有显示名时给中性词，
+              **绝不把内部 slug 顶上去**；`title` 也一并去掉，悬停露出同样算露出。
+            */}
+            <strong>{displayName ?? text.editor.tools.unnamedProductToolPackage}</strong>
             <span className={`agent-product-status ${pkg.status}`}>{statusLabel(text, pkg.status)}</span>
             {pkg.staleBinding ? (
               <span className="agent-product-status stale">{text.editor.tools.staleProductToolBinding}</span>
             ) : null}
           </div>
-          {displayName ? <div className="agent-product-package-id">{pkg.productId}</div> : null}
         </div>
         <div className="agent-product-permission">
           <span>{text.editor.tools.productToolPermissionLabel}</span>
