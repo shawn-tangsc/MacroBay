@@ -208,7 +208,10 @@ function automaticScopes(
   return selected.flatMap((descriptorId) => {
     const months = prefetch !== undefined && descriptorId === owner && !prefetched.has(prefetchKey(prefetch, descriptorId))
       ? [current, prefetch] : [current]
-    return months.flatMap((month) => zeroXRouterCalendarTransportPolicy.locales.map((locale) => ({ descriptorId, month, locale })))
+    // 只排这条日历真正发布的语言：另外两条的 en 请求永远返回同一份空数组（见 policy 注释），
+    // 再请求只是空转，并且会让"成功但 0 行"的假信号继续产生。
+    const locales = zeroXRouterCalendarTransportPolicy.publishedLocales[descriptorId]
+    return months.flatMap((month) => locales.map((locale) => ({ descriptorId, month, locale })))
   })
 }
 
