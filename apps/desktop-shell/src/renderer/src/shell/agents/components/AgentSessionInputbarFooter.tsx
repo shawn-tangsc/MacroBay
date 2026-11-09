@@ -24,7 +24,9 @@ const INPUTBAR_KEYS = {
   tools: 'agent.inputbar.tools',
   commands: 'agent.inputbar.commands',
   expand: 'agent.inputbar.expand',
-  collapse: 'agent.inputbar.collapse'
+  collapse: 'agent.inputbar.collapse',
+  stop: 'agent.inputbar.stop',
+  send: 'agent.inputbar.send'
 } as const
 
 type AgentSessionInputbarFooterProps = {
@@ -94,6 +96,10 @@ export default function AgentSessionInputbarFooter({
         return labels.expand
       case INPUTBAR_KEYS.collapse:
         return labels.collapse
+      case INPUTBAR_KEYS.stop:
+        return labels.stop
+      case INPUTBAR_KEYS.send:
+        return labels.send
       default:
         return key
     }
@@ -170,19 +176,26 @@ export default function AgentSessionInputbarFooter({
       <div className="agent-inputbar-actions">
         {modelPicker ? <div className="agent-inputbar-model">{modelPicker}</div> : null}
         {isStreaming ? (
-          <button type="button" className="agent-send-button stop" aria-label={labels.stop} title={labels.stop} onClick={onStop}>
-            <StopCircle size={16} />
-          </button>
+          <IconButton
+            ariaLabelKey={INPUTBAR_KEYS.stop}
+            icon={StopCircle}
+            size="sm"
+            tone="danger"
+            tooltipKey={INPUTBAR_KEYS.stop}
+            onSelect={onStop}
+            resolveText={resolveText}
+          />
         ) : null}
-        <button
-          type="button"
-          className="agent-send-button"
-          aria-label={labels.send}
-          title={labels.send}
+        <IconButton
+          ariaLabelKey={INPUTBAR_KEYS.send}
+          icon={SendHorizontal}
+          size="sm"
           disabled={!canSend}
-          onClick={onSend}>
-          <SendHorizontal size={16} />
-        </button>
+          // 禁用时不许带提示：接不到焦点的按钮，Tooltip 只有鼠标能看，键盘用户拿不到理由。
+          {...(canSend ? { tooltipKey: INPUTBAR_KEYS.send } : {})}
+          onSelect={onSend}
+          resolveText={resolveText}
+        />
       </div>
     </div>
   )
