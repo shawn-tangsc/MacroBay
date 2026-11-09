@@ -162,6 +162,7 @@ export function ModelServiceModelDrawer({
             {/* 图标型动作 → `IconButton`（`sm`）；可访问名仍随「已复制」变化。 */}
             <IconButton
               ariaLabelKey="modelService.copyModelId"
+              tooltipKey="modelService.copyModelId"
               dataAttributes={{ 'data-model-copy': true }}
               icon={Copy}
               onSelect={() => void copyId()}
