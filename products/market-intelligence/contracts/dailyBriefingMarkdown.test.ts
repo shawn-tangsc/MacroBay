@@ -130,6 +130,15 @@ describe('a web-sourced value says so in the copy too (v2.128)', () => {
 })
 
 describe('daily briefing markdown', () => {
+  it('marks the perpetual contract on the copied price rows, like the card does', () => {
+    const markdown = dailyBriefingToMarkdown(document(), options)
+    const btc = markdown.split('\n').find((line) => line.startsWith('- BTC'))
+    expect(btc).toContain(options.labels.perpetualContract)
+    // 纳指不是永续合约报价：那一行不许挂这个标记。
+    const index = markdown.split('\n').find((line) => line.startsWith('- 纳指'))
+    if (index) expect(index).not.toContain(options.labels.perpetualContract)
+  })
+
   it('marks an untranslated headline as the original in the copied text', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     expect(markdown).toContain('（原文）')

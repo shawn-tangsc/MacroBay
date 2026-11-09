@@ -18,6 +18,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
    */
   languageNames?: Readonly<Record<string, string>>
   readingsAllMissing: string
+  /** 价格那两行读的是永续合约：正文标了，复制文本也要标。 */
+  perpetualContract: string
   /** 中文版没有译文时标在标题后的两个字；英文版是 "Original"。 */
   newsOriginal: string
   noValue: string
@@ -278,7 +280,10 @@ function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOption
 }
 
 function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBriefingMarkdownOptions): string {
-  const label = rowLabel(row.labelKey, options.labels)
+  // 价格那两行读的是币安 U 本位**永续合约**，不是现货；正文卡片标了、复制文本没标，读者会把两个
+  // 市场当成一个。只有 BTC/ETH 两行加：纳指走真指数或代币化永续，它有自己的代理标记。
+  const perpetual = row.id === 'btc' || row.id === 'eth' ? ` · ${options.labels.perpetualContract}` : ''
+  const label = `${rowLabel(row.labelKey, options.labels)}${perpetual}`
   if (row.state === 'available' || row.state === 'stale') {
     const copy = changeLedRowCopy(row, options.labels, options.locale)
     if (copy) {
