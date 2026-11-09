@@ -192,13 +192,21 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).toContain('ant-select-disabled')
   })
 
-  it('shows the policy failure with a retry instead of an empty dropdown', () => {
-    hooks.settings.mockReturnValue(settings({ tasks: [], emptyState: 'never-created', policyError: true, policy: null }))
+  it('shows a failed policy read with a retry instead of an empty dropdown', () => {
+    hooks.settings.mockReturnValue(settings({
+      tasks: [],
+      emptyState: 'never-created',
+      policyReadError: true,
+      policy: null
+    }))
     hooks.schedules.mockReturnValue(schedules({ items: [] }))
 
     const markup = renderPage()
 
     expect(markup).toContain('策略加载失败')
+    // 读失败用读的句子（`error/unreadable`），不是「这次操作没有成功」——读者没做任何操作。
+    expect(markup).toContain('数据没有读出来，可以重试')
+    expect(markup).not.toContain('这次操作没有成功，可以重试')
     expect(markup).toContain('重试')
     expect(markup).toContain('ant-select-disabled')
   })
@@ -413,8 +421,11 @@ function settings(overrides: Record<string, unknown> = {}): Record<string, unkno
     expandedTaskId: overrides.expandedTaskId ?? null,
     audits: overrides.audits ?? [],
     policyLoading: overrides.policyLoading ?? false,
-    policyError: overrides.policyError ?? false,
+    policyReadError: overrides.policyReadError ?? false,
+    policyWriteError: overrides.policyWriteError ?? false,
+    pendingPolicyPreset: overrides.pendingPolicyPreset ?? null,
     reloadPolicy: vi.fn(),
+    retryPolicySave: vi.fn(),
     updatePolicy: vi.fn(),
     policy: overrides.policy === undefined
       ? {

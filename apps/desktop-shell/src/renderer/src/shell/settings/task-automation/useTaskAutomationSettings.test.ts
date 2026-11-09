@@ -302,27 +302,71 @@ describe('useTaskAutomationSettings', () => {
     await act(async () => {
       await capture.current!.reloadPolicy()
     })
-    expect(capture.current!.policyError).toBe(true)
+    expect(capture.current!.policyReadError).toBe(true)
+    // 读失败不许冒充保存失败：只看得到「没读到」，没有未落盘的改动可重发。
+    expect(capture.current!.policyWriteError).toBe(false)
+    expect(capture.current!.pendingPolicyPreset).toBeNull()
+    // 读到之前那份仍然在：重试是重读，不是把表清空。
+    expect(capture.current!.policy?.preset).toBe('balanced')
 
     api.getPolicy.mockResolvedValueOnce({ preset: 'conservative', policy: policy() })
     await act(async () => {
       await capture.current!.reloadPolicy()
     })
-    expect(capture.current!.policyError).toBe(false)
+    expect(capture.current!.policyReadError).toBe(false)
     expect(capture.current!.policy?.preset).toBe('conservative')
+    expect(api.updatePolicy).not.toHaveBeenCalled()
   })
 
-  it('normalizes a policy update failure into the policy error state', async () => {
+  /**
+   * 写失败不是读失败。一个错误标志同时表示两件事时，读者会走成
+   * 「改了 → 提示读不到 → 值退回 → 重试还是旧值」：值没了、控件冻了、重试发的是读。
+   * 这里钉住四件事：写错与读错分开报、读者选的值留住、重试重发同一个值、读口一次都不碰。
+   */
+  it('keeps the picked preset when a save fails and resends that same preset on retry', async () => {
     api.getPolicy.mockResolvedValue({ preset: 'balanced', policy: policy() })
     api.listTasks.mockResolvedValue({ tasks: [], total: 0 })
-    api.updatePolicy.mockRejectedValue(new Error('disk-full /private/secret'))
+    api.updatePolicy.mockRejectedValueOnce(new Error('disk-full /private/secret'))
+
+    const capture = await mountHook()
+    await vi.waitFor(() => expect(capture.current?.loading).toBe(false))
+
+    await act(async () => {
+      await capture.current!.updatePolicy('conservative')
+    })
+
+    expect(capture.current!.policyWriteError).toBe(true)
+    expect(capture.current!.policyReadError).toBe(false)
+    // 没保存上不等于读者没选过：已存的那份不动，选中的那个单独留着。
+    expect(capture.current!.policy?.preset).toBe('balanced')
+    expect(capture.current!.pendingPolicyPreset).toBe('conservative')
+
+    api.updatePolicy.mockResolvedValueOnce({ preset: 'conservative', policy: policy() })
+    const reads = api.getPolicy.mock.calls.length
+    await act(async () => {
+      await capture.current!.retryPolicySave()
+    })
+
+    expect(api.updatePolicy).toHaveBeenLastCalledWith(window.platform, 'conservative')
+    expect(api.getPolicy).toHaveBeenCalledTimes(reads)
+    expect(capture.current!.policyWriteError).toBe(false)
+    expect(capture.current!.policy?.preset).toBe('conservative')
+    expect(capture.current!.pendingPolicyPreset).toBeNull()
+  })
+
+  it('does not send a save when the reader retries with nothing pending', async () => {
+    api.getPolicy.mockResolvedValue({ preset: 'balanced', policy: policy() })
+    api.listTasks.mockResolvedValue({ tasks: [], total: 0 })
 
     const capture = await mountHook()
     await vi.waitFor(() => expect(capture.current?.loading).toBe(false))
     await act(async () => {
-      await capture.current!.updatePolicy('conservative')
+      await capture.current!.retryPolicySave()
     })
-    expect(capture.current!.policyError).toBe(true)
+
+    // 没有待重发的值就什么都不发：空发一次会把「重试」变成「无端改一次策略」。
+    expect(api.updatePolicy).not.toHaveBeenCalled()
+    expect(capture.current!.policyWriteError).toBe(false)
   })
 
   it('leaves loading when the bridge helpers throw synchronously', async () => {
@@ -339,7 +383,8 @@ describe('useTaskAutomationSettings', () => {
     await vi.waitFor(() => expect(capture.current?.loading).toBe(false), { timeout: 2_000 })
     expect(capture.current?.error).toBe(true)
     await vi.waitFor(() => expect(capture.current?.policyLoading).toBe(false), { timeout: 2_000 })
-    expect(capture.current?.policyError).toBe(true)
+    expect(capture.current?.policyReadError).toBe(true)
+    expect(capture.current?.policyWriteError).toBe(false)
     expect(capture.current?.policy).toBeNull()
   })
 })

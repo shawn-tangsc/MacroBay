@@ -44,8 +44,14 @@ export type TaskAutomationSettingsController = {
   state: ReturnType<typeof buildTaskAutomationSettingsState>
   policy: TaskAutomationPolicyState | null
   policyLoading: boolean
-  policyError: boolean
+  /** 读不到策略：整块没有可选的值，重试是**重读**。 */
+  policyReadError: boolean
+  /** 这次没保存上：读者改的值还在控件上，重试是**重发同一个值**。 */
+  policyWriteError: boolean
+  /** 读者改过、还没落盘的那个 preset；控件显示它，重试发它。 */
+  pendingPolicyPreset: TaskAutomationPolicyPreset | null
   reloadPolicy: () => Promise<void>
+  retryPolicySave: () => Promise<void>
   hasMore: boolean
   loadMore: () => Promise<void>
   reload: () => Promise<void>
@@ -65,7 +71,9 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
   const [audits, setAudits] = useState<TaskMutationAuditEntity[]>([])
   const [policy, setPolicy] = useState<TaskAutomationPolicyState | null>(null)
   const [policyLoading, setPolicyLoading] = useState(true)
-  const [policyError, setPolicyError] = useState(false)
+  const [policyReadError, setPolicyReadError] = useState(false)
+  const [policyWriteError, setPolicyWriteError] = useState(false)
+  const [pendingPolicyPreset, setPendingPolicyPreset] = useState<TaskAutomationPolicyPreset | null>(null)
   const tasksRef = useRef<ScheduledTaskEntity[]>([])
   const detailRequestId = useRef(0)
   const pageRequestId = useRef(0)
@@ -123,24 +131,45 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
     setExpandedTaskId((current) => (current === taskId ? null : taskId))
   }
 
-  async function updatePolicy(preset: TaskAutomationPolicyPreset): Promise<void> {
+  /**
+   * 发送一次保存。成功才把「待落盘的值」交回控件；失败只标写错。
+   *
+   * 一个错误标志同时表示读和写，读者会走成「改了 → 提示读不到 → 值退回 → 重试还是旧值」：
+   * 那次修改既没落盘也没留在手上，重试还发的是读取。
+   */
+  async function savePolicy(preset: TaskAutomationPolicyPreset): Promise<void> {
     const mutationId = ++policyMutationId.current
     try {
       const nextPolicy = await updateTaskAutomationPolicyViaApi(window.platform, preset)
       if (policyMutationId.current === mutationId) {
         setPolicy(nextPolicy)
-        setPolicyError(false)
+        // 手上这份就是库里那份：两个错都没有理由留着。
+        setPolicyWriteError(false)
+        setPolicyReadError(false)
+        setPendingPolicyPreset(null)
       }
     } catch {
-      if (policyMutationId.current === mutationId) setPolicyError(true)
+      if (policyMutationId.current === mutationId) setPolicyWriteError(true)
     }
+  }
+
+  async function updatePolicy(preset: TaskAutomationPolicyPreset): Promise<void> {
+    setPendingPolicyPreset(preset)
+    setPolicyWriteError(false)
+    await savePolicy(preset)
+  }
+
+  /** 保存失败后的「重试」：重发同一个值。没有待重发的值就一次都不发。 */
+  async function retryPolicySave(): Promise<void> {
+    if (pendingPolicyPreset === null) return
+    await savePolicy(pendingPolicyPreset)
   }
 
   async function reloadPolicy(): Promise<void> {
     const loadRequestId = ++policyLoadRequestId.current
     const mutationId = policyMutationId.current
     setPolicyLoading(true)
-    setPolicyError(false)
+    setPolicyReadError(false)
     try {
       const nextPolicy = await getTaskAutomationPolicyViaApi(window.platform)
       if (policyLoadRequestId.current === loadRequestId && policyMutationId.current === mutationId) {
@@ -148,7 +177,7 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
       }
     } catch {
       if (policyLoadRequestId.current === loadRequestId && policyMutationId.current === mutationId) {
-        setPolicyError(true)
+        setPolicyReadError(true)
       }
     } finally {
       if (policyLoadRequestId.current === loadRequestId) setPolicyLoading(false)
@@ -234,8 +263,11 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
     state,
     policy,
     policyLoading,
-    policyError,
+    policyReadError,
+    policyWriteError,
+    pendingPolicyPreset,
     reloadPolicy,
+    retryPolicySave,
     hasMore: Boolean(nextCursor),
     loadMore,
     reload,
