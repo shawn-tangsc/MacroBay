@@ -179,6 +179,46 @@ export function applyPeriodLanguageRepairs(
     : Object.freeze({ changed: false, value })
 }
 
+/** A fresh periods document holding exactly these rows; used when the reader has no file yet. */
+export function briefingPeriodsDocument(
+  periods: readonly BriefingPeriod[]
+): Readonly<{ version: 1; periods: readonly BriefingPeriod[] }> {
+  return Object.freeze({ version: 1, periods: Object.freeze([...periods]) })
+}
+
+/**
+ * Put one row into the document **as it is now**: the row with that id is rewritten in place, or the
+ * row is appended.
+ *
+ * Every other row is returned exactly as it came in — including rows this build cannot read, which
+ * the settings surface cannot show and which a save therefore must not destroy. The rewritten row
+ * keeps the fields this build does not know about (an older file's zone, where the row came from).
+ */
+export function upsertBriefingPeriodRow(value: unknown, row: BriefingPeriod): unknown {
+  const fields = { generationTime: row.generationTime, windowHours: row.windowHours, language: row.language }
+  if (!isRecord(value)) return briefingPeriodsDocument([row])
+  if (!Array.isArray(value.periods)) return Object.freeze({ ...value, periods: Object.freeze([{ id: row.id, ...fields }]) })
+  let found = false
+  const periods = value.periods.map((entry) => {
+    if (found || !isRecord(entry) || trimmed(entry.id) !== row.id) return entry
+    found = true
+    return { ...entry, ...fields }
+  })
+  return Object.freeze({
+    ...value,
+    periods: Object.freeze(found ? periods : [...periods, { id: row.id, ...fields }])
+  })
+}
+
+/** Drop the row with this id, and only that row: everything else stays exactly as it came in. */
+export function removeBriefingPeriodRow(value: unknown, id: string): unknown {
+  if (!isRecord(value) || !Array.isArray(value.periods)) return briefingPeriodsDocument([])
+  return Object.freeze({
+    ...value,
+    periods: Object.freeze(value.periods.filter((entry) => !(isRecord(entry) && trimmed(entry.id) === id)))
+  })
+}
+
 export function readBriefingPeriods(value: unknown): readonly BriefingPeriod[] {
   if (!isRecord(value) || !Array.isArray(value.periods)) return Object.freeze([])
   const seen = new Set<string>()

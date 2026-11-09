@@ -10,7 +10,10 @@ import {
   applyPeriodLanguageRepairs,
   briefingPeriodConflict,
   briefingPeriodDraftIssue,
+  briefingPeriodsDocument,
   readBriefingPeriodsWithRepair,
+  removeBriefingPeriodRow,
+  upsertBriefingPeriodRow,
   type BriefingPeriodDraftIssue,
   type BriefingPeriodLanguageRepair
 } from './dailyBriefingPeriodValidation'
@@ -20,9 +23,11 @@ import {
  *
  * It is a new store rather than the old "one period per day" settings shape: a period is an entity
  * with an identity that editions point at, not a daily setting. A read writes only to fill in a
- * missing `language` once, and only into the rows that lacked one. A file that was never written
- * reads as one default period in memory, so a fresh install still has a schedule; a file that
- * exists and holds no periods is a reader who deleted them all, and it stays empty.
+ * missing `language` once, and only into the rows that lacked one. A save touches one row: adding,
+ * editing or deleting writes that id and leaves every other row — including a row this build cannot
+ * read — exactly as it came in. A file that was never written reads as one default period in
+ * memory, so a fresh install still has a schedule; a file that exists and holds no periods is a
+ * reader who deleted them all, and it stays empty.
  */
 export type BriefingPeriodStorage = Readonly<{
   /**
@@ -111,11 +116,6 @@ export function createBriefingPeriodStore(deps: Readonly<{
     return repairedRead.periods
   }
 
-  const persist = async (periods: readonly BriefingPeriod[]): Promise<readonly BriefingPeriod[]> => {
-    await deps.storage.write({ version: 1, periods })
-    return periods
-  }
-
   // One operation at a time per store: two readers acting together must not both read, both write,
   // and let the later write forget the earlier one. This cannot cover the IPC seam, which builds
   // its own store over the same file — that is why the repair merges by id instead of replacing.
@@ -141,10 +141,17 @@ export function createBriefingPeriodStore(deps: Readonly<{
         windowHours: draft.windowHours as BriefingPeriod['windowHours'],
         language: draft.language
       })
-      // The fallback default becomes a real row here: once two periods exist, the file has to carry
-      // both, otherwise the one that was only implied would vanish on the next read.
-      const periods = Object.freeze([...current.filter((entry) => entry.id !== period.id), period])
-      return { state: 'saved' as const, period, periods: await persist(periods) }
+      // The file is rewritten **around** this row, not replaced by the list above: a row this build
+      // cannot read is still the reader's row, and adding one period is no licence to drop it. When
+      // there is no file yet, the fallback default becomes a real row here — otherwise the one that
+      // was only implied would vanish on the next read.
+      const raw = await deps.storage.read()
+      await deps.storage.write(raw === undefined
+        ? briefingPeriodsDocument([...current.filter((entry) => entry.id !== period.id), period])
+        : upsertBriefingPeriodRow(raw, period))
+      // The answer is what the settings surface now shows, not what the file holds: hidden rows stay
+      // hidden until a build can read them.
+      return { state: 'saved' as const, period, periods: Object.freeze([...current.filter((entry) => entry.id !== period.id), period]) }
     }),
 
     update: (id, draft, language) => serialized(async () => {
@@ -163,14 +170,18 @@ export function createBriefingPeriodStore(deps: Readonly<{
       })
       // Keep the list's order: an edit must not make the reader's rows jump around.
       const periods = Object.freeze(current.map((entry) => entry.id === id ? period : entry))
-      return { state: 'saved' as const, period, periods: await persist(periods) }
+      const raw = await deps.storage.read()
+      await deps.storage.write(raw === undefined ? briefingPeriodsDocument(periods) : upsertBriefingPeriodRow(raw, period))
+      return { state: 'saved' as const, period, periods }
     }),
 
     remove: (id, language) => serialized(async () => {
       const current = await readEffective(language)
       if (!current.some((entry) => entry.id === id)) return { state: 'missing', id }
       const periods = Object.freeze(current.filter((entry) => entry.id !== id))
-      return { state: 'removed' as const, id, periods: await persist(periods) }
+      const raw = await deps.storage.read()
+      await deps.storage.write(raw === undefined ? briefingPeriodsDocument([]) : removeBriefingPeriodRow(raw, id))
+      return { state: 'removed' as const, id, periods }
     })
   })
 }

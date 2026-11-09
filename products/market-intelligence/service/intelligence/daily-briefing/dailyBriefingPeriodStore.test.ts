@@ -126,6 +126,56 @@ describe('briefing period store', () => {
     expect(Object.keys(storage.stored().periods[1] ?? {}).sort()).toEqual(['generationTime', 'id', 'language', 'windowHours'])
   })
 
+  it('keeps a row it cannot read when the reader adds a period', async () => {
+    // 读不懂不等于不存在：加一期是保存动作，不是销毁动作。坏行留在文件里，只是这一版显示不出来。
+    const storage = memoryStorage({
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24, language: 'zh-CN' },
+        { id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN', kept: 'verbatim' }
+      ]
+    })
+
+    const result = await store(storage).create({ generationTime: '12:30', windowHours: 12, language: 'en-US' })
+
+    expect(result.state).toBe('saved')
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_ok', 'period_bad', 'period_new'])
+    expect(storage.stored().periods[1]).toEqual({ id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN', kept: 'verbatim' })
+    // 返回给界面的是它看得见的那几行：保留了，但这一版读不懂，不能假装已经显示出来。
+    if (result.state === 'saved') expect(result.periods.map((period) => period.id)).toEqual(['period_ok', 'period_new'])
+  })
+
+  it('keeps a row it cannot read when the reader edits another one', async () => {
+    const storage = memoryStorage({
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24, language: 'zh-CN' },
+        { id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' }
+      ]
+    })
+
+    const result = await store(storage).update('period_ok', { generationTime: '08:00', windowHours: 48, language: 'zh-CN' })
+
+    expect(result.state).toBe('saved')
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_ok', 'period_bad'])
+    expect(storage.stored().periods[1]).toEqual({ id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' })
+  })
+
+  it('keeps a row it cannot read when the reader deletes another one', async () => {
+    const storage = memoryStorage({
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24, language: 'zh-CN' },
+        { id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' }
+      ]
+    })
+
+    const result = await store(storage).remove('period_ok')
+
+    expect(result.state).toBe('removed')
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_bad'])
+  })
+
   it('refuses a duplicate and names the row it collides with, leaving the file untouched', async () => {
     const storage = memoryStorage({ version: 1, periods: [{ id: 'period_a', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }] })
     const result = await store(storage).create({ generationTime: '07:00', windowHours: 24, language: 'zh-CN' })
