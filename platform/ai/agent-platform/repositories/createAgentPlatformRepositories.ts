@@ -2235,7 +2235,6 @@ function mapSessionEntity(row: SessionRow, workspace: AgentWorkspaceEntity): Age
     ...(normalizeSessionOriginRef(row.origin_ref) === undefined
       ? {}
       : { originRef: normalizeSessionOriginRef(row.origin_ref) }),
-    // 只有 superseded 值得写进实体；缺省/未知一律 current（读侧归一，见契约注释）。
     originState: normalizeSessionOriginState(row.origin_state),
     createdAt: row.created_at,
     updatedAt: row.updated_at

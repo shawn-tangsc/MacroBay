@@ -10,6 +10,7 @@ import {
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
+import { logAnalysisSessionAppendFailure } from './analysisSessionAppendFailure'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
@@ -392,13 +393,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         try {
           await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText })
         } catch (error) {
-          // 同上：摘要没进会话时，读者打开那条 run 会话只会看到一张卡片。失败不阻断发布，但要留痕。
-          console.log(JSON.stringify({
-            marker: 'MI_ANALYSIS_RUN_SESSION_APPEND_FAILED',
-            stage: 'summary',
-            runId: runRecord.id,
-            reason: error instanceof Error ? error.message : String(error)
-          }))
+          // 摘要没进会话时，读者打开那条 run 会话只会看到一张卡片。失败不阻断发布，但要留痕。
+          logAnalysisSessionAppendFailure('summary', runRecord.id, error)
         }
       }
     }

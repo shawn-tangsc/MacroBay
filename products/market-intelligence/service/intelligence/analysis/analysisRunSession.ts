@@ -1,4 +1,5 @@
 import type { CreateAgentSessionDto, CreateAgentSessionMessagesDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { logAnalysisSessionAppendFailure } from './analysisSessionAppendFailure'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
 
 type SessionRef = { id: string; agentId: string | null; description?: string }
@@ -101,12 +102,7 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
       try {
         await deps.appendAgentSessionMessages({ sessionId: session.id, messages })
       } catch (error) {
-        console.log(JSON.stringify({
-          marker: 'MI_ANALYSIS_RUN_SESSION_APPEND_FAILED',
-          stage: 'context-card',
-          runId: input.runId,
-          reason: error instanceof Error ? error.message : String(error)
-        }))
+        logAnalysisSessionAppendFailure('context-card', input.runId, error)
       }
     }
     return session.id
