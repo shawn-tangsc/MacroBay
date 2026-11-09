@@ -67,6 +67,37 @@ describe('AgentSidePanel', () => {
     expect(markup).not.toContain('Code chat')
   })
 
+  it('keeps the action bar inside its panel, above the scrollable content', () => {
+    const markup = renderToStaticMarkup(
+      <AgentTextProvider language="zh-CN">
+        <AgentSidePanel
+          state={createAgentStoreState({
+            agents,
+            sessions,
+            workspaces: [workspace],
+            activeAgentId: 'agent-1',
+            activeSessionId: 'session-1'
+          })}
+          runtimeStateBySessionId={{}}
+          channelRuntimeSnapshot={{ channels: [] }}
+          sessionPanelPosition="left"
+          onUpdateSessionPanelPosition={() => undefined}
+          onCreateAgent={() => undefined}
+          onEditAgent={() => undefined}
+          onStateChange={(updater) => updater({} as never)}
+        />
+      </AgentTextProvider>
+    )
+
+    const panelStart = markup.indexOf('role="tabpanel"')
+    // 动作条不属于 tablist：它是面板自己的第一行。
+    expect(markup.slice(0, panelStart)).not.toContain('agent-side-panel-action')
+    const panel = markup.slice(panelStart)
+    // 面板结构 = [动作条][可滚动内容]，动作条在前；`Tabs` 挂载的另一块在 hidden 里，不受影响。
+    expect(panel).toContain('<div class="agent-side-panel-panel"><div class="agent-side-panel-action">')
+    expect(panel.indexOf('agent-side-panel-action')).toBeLessThan(panel.indexOf('agent-side-panel-content'))
+  })
+
   it('keeps automated sessions out of the reader list and shows them as their own block', () => {
     const markup = renderToStaticMarkup(
       <AgentTextProvider language="zh-CN">
