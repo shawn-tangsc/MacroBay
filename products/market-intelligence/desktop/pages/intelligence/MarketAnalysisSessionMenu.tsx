@@ -3,6 +3,7 @@ import { Button, Popconfirm, Popover } from 'antd'
 import { Check, History, Plus, Trash2 } from 'lucide-react'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { displaySessionName } from '@platform/ai/agent-platform/schemas/sessionDisplayName'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { Tooltip } from '@platform/ui/components/tooltip'
@@ -15,6 +16,8 @@ export type MarketAnalysisSessionMenuText = Readonly<{
   delete: string
   deleteConfirm: string
   cancel: string
+  /** 会话名读不出来（为空，或存的就是它自己的 id）时的中性名字；**任何路径不回落 id**。 */
+  untitledSession: string
 }>
 
 export function MarketAnalysisSessionMenu({
@@ -55,10 +58,13 @@ export function MarketAnalysisSessionMenu({
         : sessions.map(session => (
           <div className={`mi-agent-sessions__row${session.id === currentSessionId ? ' is-current' : ''}`} key={session.id}>
             <button
+              aria-current={session.id === currentSessionId ? 'true' : undefined}
               className="mi-agent-sessions__select"
               type="button"
               onClick={() => selectConversation(session.id)}>
-              <span className="mi-agent-sessions__name">{session.name || text.history}</span>
+              {/* 老自动会话把运行 id 当名字存了下来；名字读不出来时给中性文案，绝不印编号。
+                  选中态另给 `aria-current`：勾是 aria-hidden，读屏靠它知道哪一行是当前会话。 */}
+              <span className="mi-agent-sessions__name">{displaySessionName(session) ?? text.untitledSession}</span>
               <span className="mi-agent-sessions__time">{formatSessionTime(session.updatedAt)}</span>
               {session.id === currentSessionId ? <Check aria-hidden="true" size={13} /> : null}
             </button>
