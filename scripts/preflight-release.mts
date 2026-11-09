@@ -75,23 +75,6 @@ if (version) {
  * remembered to patch. Now the workflow publishes these two files verbatim, which makes them a
  * release input that has to exist before the tag, exactly like the notes.
  */
-if (version) {
-  const body = [
-    `docs/reference/release-notes/${version}.release-body.md`,
-    `docs/reference/release-notes/${version}.release-body.zh-CN.md`
-  ]
-  const missing = body.filter((path) => !existsSync(join(ROOT, path)))
-  if (missing.length > 0) bad('release body', `missing ${missing.join(', ')}`)
-  else {
-    const length = body.reduce((total, path) => total + readFileSync(join(ROOT, path), 'utf8').length, 0)
-    // The cap the About page applies, read from the renderer's own constant: past it the page
-    // truncates and says so, which is not a shape anyone meant to publish.
-    const cap = releaseNotesLimits.textCharacters
-    if (length > cap) bad('release body', `${length} characters; the About page stops at ${cap}`)
-    else ok('release body', `both languages present, ${length} characters`)
-  }
-}
-
 /** The tree being tagged must be the tree that was reviewed and verified. */
 try {
   // Tracked changes only: an untracked build product does not change what the tag points at.

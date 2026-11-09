@@ -41,12 +41,11 @@ auto-update metadata attached. Neither lane needs signing secrets. `latest-mac.y
 uploaded only by the arm64 job, so the permanent `MacroBay-arm64.dmg` link keeps pointing at the
 arm64 build.
 
-The text of the Release page is not written after publishing: it is two files in the repository,
-`docs/reference/release-notes/<version>.release-body.md` and `<version>.release-body.zh-CN.md`,
-published in that order as one body. The app's About page renders that same body for the version,
-so a reader sees the same words in both places, and the workflow stops rather than publishing a
-release whose body is missing. `pnpm release:preflight` checks the pair before the tag, including
-that the two together stay under the About page's character cap.
+The text of the Release page is written by hand on the Release page (user, 2026-11-10). The
+publish job only attaches the installers: it creates the release with an empty body and, on a
+re-run of the same tag, replaces the assets without touching the body. The app's About page renders
+whatever body the published release carries, so the page is the single place to edit a sentence —
+never move the tag to change wording.
 
 The dmg and installer file names carry no version, so the README links
 `releases/latest/download/MacroBay-arm64.dmg`, `.../MacroBay-x64.dmg` and `.../MacroBay-x64-setup.exe`

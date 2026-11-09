@@ -290,35 +290,16 @@ jobs:
           echo 'attaching:'
           list_assets | tr '\0' '\n'
 
-          # The release body **is** a page people read: the app's About page fetches it and shows it
-          # as the notes for the version. So it is written per release, in both languages, next to
-          # the long-form notes, and published verbatim — English first, then Chinese. Only the
-          # paths come from the tag, so this block is the same at every release; the writing is
-          # what changes.
+          # 发布说明**不在**这里生成：它由人在 Release 页上手写（用户 2026-11-10 定）。
+          # 这条作业只负责把产物挂上去，并且**重跑时不动说明**——重跑是为了换包，不是覆盖人写的字。
           version="${BUILD_REF#v}"
-          body_en="docs/reference/release-notes/${version}.release-body.md"
-          body_zh="docs/reference/release-notes/${version}.release-body.zh-CN.md"
-          for path in "$body_en" "$body_zh"; do
-            if [ ! -f "$path" ]; then
-              echo "missing release body: $path - write it before tagging; the preflight checks it" >&2
-              exit 1
-            fi
-          done
-          # `$(cat …)` drops each file's trailing newline, so the gap is exactly one blank line
-          # whatever an editor left at the end of either file.
-          body="${RUNNER_TEMP}/release-body.md"
-          printf '%s\n\n%s\n' "$(cat "$body_en")" "$(cat "$body_zh")" >"$body"
 
           if gh release view "$BUILD_REF" >/dev/null 2>&1; then
-            # Re-running a tag that already has a release replaces its assets **and its body**: a
-            # sentence fixed after publication is republished by re-running the job, never by
-            # moving the tag.
             list_assets | xargs -0 gh release upload "$BUILD_REF" --clobber
-            gh release edit "$BUILD_REF" --notes-file "$body"
           else
             list_assets | xargs -0 gh release create "$BUILD_REF" \
               --title "MacroBay ${version}" \
-              --notes-file "$body" \
+              --notes-file /dev/null \
               --verify-tag
           fi
 
