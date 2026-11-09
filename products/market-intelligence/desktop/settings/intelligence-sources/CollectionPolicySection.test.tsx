@@ -14,11 +14,9 @@ const labels = {
   collectionPreset: 'Collection preset',
   manualPresetNote: 'Manual mode does not collect automatically.',
   includeInSentiment: 'Include in sentiment',
-  scopePolicy: 'Scope policy',
   plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
   productOwnedNote: 'A product-owned job collects this source; the enable switch below controls it.',
-  presets: { manual: 'Manual', balanced: 'Balanced', frequent: 'Frequent' },
-  scopePolicies: { all: 'All', 'watchlist-priority': 'Watchlist' }
+  presets: { manual: 'Manual', balanced: 'Balanced', frequent: 'Frequent' }
 }
 
 let root: Root | undefined

@@ -8,11 +8,9 @@ export type CollectionPolicyLabels = {
   collectionPreset: string
   manualPresetNote: string
   includeInSentiment: string
-  scopePolicy: string
   plannedNotConfigurable?: string
   productOwnedNote?: string
   presets: Record<string, string>
-  scopePolicies: Record<string, string>
 }
 
 export function CollectionPolicySection(props: {
@@ -61,15 +59,6 @@ export function CollectionPolicySection(props: {
               <p className="intelligence-source-note">{props.labels.manualPresetNote}</p>
             ) : null}
           </div>
-        </SettingRow>
-        <SettingRow label={props.labels.scopePolicy}>
-          <Select
-            className="intelligence-select intelligence-select-wide"
-            value={props.draftProfile.scopePolicy}
-            disabled={!configurable}
-            options={Object.entries(props.labels.scopePolicies).map(([value, label]) => ({ value, label }))}
-            onChange={(scopePolicy) => props.onChange({ scopePolicy })}
-          />
         </SettingRow>
       {props.supportsSentiment ? (
           <SettingRow label={props.labels.includeInSentiment}>

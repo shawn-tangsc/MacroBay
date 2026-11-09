@@ -364,18 +364,12 @@ export const intelligenceSourcesText = {
     collectionPreset: '采集预设',
     manualPresetNote: '手动模式启用后不会自动采集，需点击「立即运行」。',
     plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
-    productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由这里控制；采集预设与范围策略不适用于它。',
+    productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由这里控制；采集预设不适用于它。',
     includeInSentiment: '纳入情绪分析',
-    scopePolicy: '范围策略',
     presets: {
       manual: '手动',
       balanced: '均衡',
       frequent: '高频'
-    },
-    scopePolicies: {
-      all: '全部',
-      'watchlist-priority': '自选优先',
-      'active-position-priority': '持仓优先'
     }
   },
   credentials: {
@@ -829,18 +823,12 @@ export const intelligenceSourcesText = {
     collectionPreset: 'Collection Preset',
     manualPresetNote: 'Manual mode does not collect automatically after enable. Use Run Now.',
     plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
-    productOwnedNote: 'A product-owned job collects this source; the enable switch below controls it, while the collection preset and scope policy do not apply.',
+    productOwnedNote: 'A product-owned job collects this source; the enable switch below controls it, while the collection preset does not apply.',
     includeInSentiment: 'Include In Sentiment',
-    scopePolicy: 'Scope Policy',
     presets: {
       manual: 'Manual',
       balanced: 'Balanced',
       frequent: 'Frequent'
-    },
-    scopePolicies: {
-      all: 'All',
-      'watchlist-priority': 'Watchlist Priority',
-      'active-position-priority': 'Active Position Priority'
     }
   },
   credentials: {

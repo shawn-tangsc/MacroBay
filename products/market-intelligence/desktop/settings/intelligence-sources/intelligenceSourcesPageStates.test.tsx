@@ -246,18 +246,19 @@ describe('sources settings page states', () => {
     expect(dom.textContent).toContain(zhText.collectionPolicy.title)
     const collapsedGrid = dom.querySelector<HTMLElement>('.intelligence-setting-grid')
     expect(collapsedGrid?.closest<HTMLElement>('.ant-collapse-content')?.style.display).toBe('none')
-    const header = [...dom.querySelectorAll<HTMLElement>('.ant-collapse-header')]
+    const header = [...dom.querySelectorAll<HTMLElement>('.intelligence-policy-disclosure__head')]
       .find((element) => element.textContent?.includes(zhText.collectionPolicy.title))!
     await act(async () => { header.click() })
     await act(async () => { await Promise.resolve() })
 
     const section = dom.querySelector('.intelligence-section:has(.intelligence-setting-grid)')
     expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
-    expect(dom.textContent).toContain(zhText.collectionPolicy.scopePolicy)
     expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)
     expect(section).not.toBeNull()
-    // 三个控件都在：预设、范围是下拉，舆情是开关。
-    expect(section!.querySelectorAll('.ant-select').length).toBeGreaterThanOrEqual(2)
+    // 范围策略已从界面撤掉：读者改它什么也不会发生（架构师核对：只写不读）。控件不能以禁用态
+    // 留着——禁用等于承诺「以后能开」。这里判两个方向：标签不在屏上，且只剩一个下拉（预设）。
+    expect(section!.textContent).not.toContain('范围策略')
+    expect(section!.querySelectorAll('.ant-select')).toHaveLength(1)
 
     const sentimentRow = [...section!.querySelectorAll<HTMLElement>('.intelligence-setting-row')]
       .find((row) => row.textContent?.includes(zhText.collectionPolicy.includeInSentiment))!
