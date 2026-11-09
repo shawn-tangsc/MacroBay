@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
 import { MoreHorizontal, Trash2 } from 'lucide-react'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -46,17 +48,18 @@ export function ModelServiceProviderMoreMenu({
 
   return (
     <div className="model-service-more" ref={wrapRef} data-provider-more-wrap>
-      <button
-        type="button"
-        className="model-service-head-icon"
-        data-provider-more
-        title={labels.providerMoreActions}
-        aria-label={labels.providerMoreActions}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}>
-        <MoreHorizontal size={14} aria-hidden="true" />
-      </button>
+      {/* 图标型触发器 → `IconButton(sm)`；弹出语义由 `hasPopup`+`expanded` 表达（不是 `pressed`）。 */}
+      <IconButton
+        ariaLabelKey="modelService.providerMoreActions"
+        dataAttributes={{ 'data-provider-more': true }}
+        expanded={open}
+        hasPopup="menu"
+        icon={MoreHorizontal}
+        onSelect={() => setOpen((current) => !current)}
+        resolveText={(key) => (key === 'modelService.providerMoreActions' ? labels.providerMoreActions : '')}
+        size="sm"
+        tooltipKey="modelService.providerMoreActions"
+      />
       {open ? (
         <div className="model-service-more-menu" data-provider-more-menu role="menu">
           <button
