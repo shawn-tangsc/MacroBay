@@ -40,7 +40,7 @@ export const agentTextZh: AgentText = {
     emptySessions: '还没有会话，先创建一个。',
     automationSessions: {
       title: '自动会话',
-      collapsedMeta: (today, total) => `今天 ${today} 条 · 共 ${total} 条`,
+      totalOnly: (total) => `共 ${total} 条`,
       today: '今天',
       yesterday: '昨天',
       showAll: '查看全部自动会话',

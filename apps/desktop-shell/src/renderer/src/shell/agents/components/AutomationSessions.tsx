@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import { displaySessionName } from '@platform/ai/agent-platform/schemas/sessionDisplayName'
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock, formatShellDay } from '@platform/ui/time/shellTimeFormat'
 
@@ -21,6 +22,13 @@ type AutomationSessionsProps = {
  * 不是「机器今天干了什么」——所以这块默认只有一行摘要，展开才铺开。
  *
  * 分节按**显示时区**的日算（`formatShellDay`），不用 UTC 日：否则东八区的早晨会被分到前一天。
+ *
+ * 两层折叠，各管一件事，两个能力都要：
+ * - 外层 `children` 模式 = 整块收起（头行是「自动会话」+ 共 N 条，展开区自己滚 320，头行不滚走）；
+ * - 内层 `rows` 模式 = 每天一组、各自独立开合（今天默认开，其余默认收）。
+ * 壳的两层都由 `CollapsibleGroup` 提供，块里不再自绘折叠头。
+ *
+ * 计数只说一次：块头给总计（「共 41 条」），日分组标题**只写日期**，不再重复「今天 21」。
  */
 /** 行尾该显示的时刻；名字里已经有这个时刻时返回 `null`（同一行不许出现两次时间）。 */
 function rowClock(session: AgentSessionEntity, timeZone: string): string | null {
@@ -28,6 +36,13 @@ function rowClock(session: AgentSessionEntity, timeZone: string): string | null 
   if (clock === null) return null
   return session.name.includes(clock) ? null : clock
 }
+
+/**
+ * 壳的 `resolveText` 只被 `*Key` 用到。本块的标题、日期、会话名**全是已解析的原文**
+ * （日期是从数据切出来的，会话名是运行时数据），一个键也不走——所以这里给同义回落，
+ * 真有人误传键进来时看见的是键本身，而不是一句假翻译。
+ */
+const passthroughText = (key: string): string => key
 
 export default function AutomationSessions({ sessions, onSelectSession }: AutomationSessionsProps): React.ReactElement | null {
   const t = useAgentText()
@@ -59,7 +74,6 @@ export default function AutomationSessions({ sessions, onSelectSession }: Automa
   // 一条都没有时整块不出现：读者不该先去怀疑是不是没加载出来。
   if (sessions.length === 0) return null
 
-  const todayCount = groups.find((group) => group.key === todayKey)?.sessions.length ?? 0
   const dayLabel = (key: string): string => {
     if (key === todayKey) return text.today
     const yesterdayKey = formatShellDay(new Date(Date.parse(`${todayKey}T00:00:00Z`) - 86_400_000).toISOString(), 'UTC')
@@ -67,63 +81,53 @@ export default function AutomationSessions({ sessions, onSelectSession }: Automa
     return key.slice(5)
   }
 
+  const toggleDay = (key: string, open: boolean): void => {
+    setOpenDays((current) => {
+      const next = new Set(current)
+      if (open) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+
   return (
     <section aria-label={text.title} className="agent-auto-sessions">
-      <button
-        aria-controls="agent-auto-sessions-body"
-        aria-expanded={expanded}
-        className="agent-auto-sessions__head"
-        onClick={() => setExpanded((current) => !current)}
-        type="button"
+      <CollapsibleGroup
+        metaText={text.totalOnly(sessions.length)}
+        onOpenChange={setExpanded}
+        open={expanded}
+        resolveText={passthroughText}
+        titleText={text.title}
       >
-        <span className="agent-auto-sessions__title">{text.title}</span>
-        <span className="agent-auto-sessions__meta">{text.collapsedMeta(todayCount, sessions.length)}</span>
-      </button>
-      {expanded ? <div id="agent-auto-sessions-body">
         {groups.map((group) => {
-          const open = openDays.has(group.key)
+          const rows = group.sessions.map((session) => {
+            const clock = rowClock(session, timeZone)
+            /*
+              名字一律经 `displaySessionName`：库里的老行把运行 id 当名字存了下来，
+              直接印 `session.name` 就是把 `mi-ar-<uuid>` 给读者看。名字读不出来时给中性文案，
+              **绝不回落到 id**——宁可说「未命名会话」，也不印账本编号。
+
+              同一行只出现一次时间：自动会话的名字里常常已经带了时刻（`2026/11/9 20:45 …`），
+              行尾再印一遍就是两个时间；分组标题已经表达了日期，所以行尾只留时刻。
+              这个判断留在调用方——组件不替调用方猜文案。
+            */
+            const label = displaySessionName(session) ?? t.sidePanel.unnamedSession
+            return clock === null
+              ? { key: session.id, labelText: label, onSelect: onSelectSession }
+              : { key: session.id, labelText: label, metaText: clock, onSelect: onSelectSession }
+          })
+
           return (
-            <div className="agent-auto-sessions__day" key={group.key}>
-              <button
-                aria-expanded={open}
-                className="agent-auto-sessions__day-head"
-                onClick={() => setOpenDays((current) => {
-                  const next = new Set(current)
-                  if (next.has(group.key)) next.delete(group.key)
-                  else next.add(group.key)
-                  return next
-                })}
-                type="button"
-              >
-                <span>{dayLabel(group.key)}</span>
-                <small>{group.sessions.length}</small>
-              </button>
-              {open ? group.sessions.map((session) => (
-                <button
-                  className="agent-auto-sessions__item"
-                  key={session.id}
-                  onClick={() => onSelectSession(session.id)}
-                  type="button"
-                >
-                  {/*
-                    名字一律经 `displaySessionName`：库里的老行把运行 id 当名字存了下来，
-                    直接印 `session.name` 就是把 `mi-ar-<uuid>` 给读者看。名字读不出来时给中性文案，
-                    **绝不回落到 id**——宁可说「未命名会话」，也不印账本编号。
-                  */}
-                  <span className="agent-auto-sessions__item-title">
-                    {displaySessionName(session) ?? t.sidePanel.unnamedSession}
-                  </span>
-                  {/*
-                    同一行只出现一次时间：自动会话的名字里常常已经带了时刻（`2026/11/9 20:45 …`），
-                    行尾再印一遍就是两个时间。名字里已经有这个时刻时，行尾不再重复；
-                    名字里没有（读者自己起的名字）才补上时刻——分组标题已经表达了日期，所以只留时刻。
-                  */}
-                  {rowClock(session, timeZone) === null ? null : (
-                    <span className="agent-auto-sessions__item-meta">{rowClock(session, timeZone)}</span>
-                  )}
-                </button>
-              )) : null}
-            </div>
+            <CollapsibleGroup
+              key={group.key}
+              // 外层已经给了滚动上限（320）：内层再套一个就成两条互相套着的滚动条。
+              maxBodyHeight={null}
+              onOpenChange={(open) => toggleDay(group.key, open)}
+              open={openDays.has(group.key)}
+              resolveText={passthroughText}
+              rows={rows}
+              titleText={dayLabel(group.key)}
+            />
           )
         })}
         {groups.length > 1 || !openDays.has(todayKey) ? (
@@ -135,7 +139,7 @@ export default function AutomationSessions({ sessions, onSelectSession }: Automa
             {text.showAll}
           </button>
         ) : null}
-      </div> : null}
+      </CollapsibleGroup>
     </section>
   )
 }

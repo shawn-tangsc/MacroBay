@@ -40,7 +40,7 @@ export const agentTextEn: AgentText = {
     emptySessions: 'No sessions yet. Create one to start.',
     automationSessions: {
       title: 'Automated sessions',
-      collapsedMeta: (today, total) => `${today} today · ${total} total`,
+      totalOnly: (total) => `${total} total`,
       today: 'Today',
       yesterday: 'Yesterday',
       showAll: 'Show all automated sessions',

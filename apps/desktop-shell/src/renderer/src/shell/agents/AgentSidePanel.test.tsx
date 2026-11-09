@@ -124,12 +124,16 @@ describe('AgentSidePanel', () => {
     )
 
     // 默认列表：读者的那条在，自动那条不在。
-    expect(markup).toContain('Research chat')
-    expect(markup).not.toContain('持仓骤降')
-    // 自动块：独立一块 + 一行摘要（今天 1 条 · 共 1 条）。
+    // 判据是「它落在哪个容器里」，不是「整份标记里有没有」——自动块换成 CollapsibleGroup 后，
+    // 收起态的内容也首帧挂载（壳要让 `aria-controls` 指向真实节点，收起用 `display: none` 表达），
+    // 所以自动会话的名字一定在标记里，但不在 `.agent-sessions` 这个读者列表里。
+    const readerList = markup.slice(markup.indexOf('class="agent-sessions"'), markup.indexOf('agent-auto-sessions'))
+    expect(readerList).toContain('Research chat')
+    expect(readerList).not.toContain('持仓骤降')
+    // 自动块：独立一块 + 一行摘要，只给总计（日分组标题已经写了日期，同一个计数不说两遍）。
     expect(markup).toContain('agent-auto-sessions')
     expect(markup).toContain('自动会话')
-    expect(markup).toContain('今天 1 条 · 共 1 条')
+    expect(markup).toContain('共 1 条')
     // **块必须长在滚动容器里**（`.agent-session-list`）。它曾是列表的兄弟：块没 overflow、
     // 又压不动（flex 子项 `min-height:auto`），条数一多就把列表挤到 0 高、自己被祖先
     // `overflow:hidden` 裁掉——滚轮落在被裁区域上没有任何容器可动（用户 2026-11-09 报的「滚动卡住」）。

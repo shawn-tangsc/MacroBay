@@ -1,120 +1,27 @@
-/* 自动会话块：独立一块、左竖线 + 缩进、灰字。
-   不靠颜色区分——灰度下它仍然与正文列表分开，因为位置和结构不同（原型验收口径）。 */
+/* 自动会话块：独立一块、顶部分隔线。
+   块里的两层折叠头（整块 / 每天）都由 `CollapsibleGroup` 画——头行档位、箭头、`aria-controls`、
+   缩进、展开区自滚都在壳里，这里不再复刻第二套样式（同一个列表上两个长得不一样的可折叠头
+   正是用户第三次投诉的那类问题）。 */
 .agent-auto-sessions {
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
-.agent-auto-sessions__head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: 100%;
-  padding: 2px 0;
+/* 展开全部：行内文字动作，11 / 400 / muted。放在外层展开区末尾，随内容滚走。 */
+.agent-auto-sessions__all {
+  display: block;
+  padding: 4px 0 4px 12px;
   border: 0;
   background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-/* 分组标题：11.5 / 1.6 / 600 / muted-strong（`docs/ui-rules.md` §2）。此前它没有字号，
-   继承了容器的 13 号，用户连说三次「太大了」。 */
-.agent-auto-sessions__title {
-  color: var(--muted-strong);
-  font-size: var(--font-section);
-  font-weight: 600;
-  line-height: var(--line-section);
-}
-.agent-auto-sessions__meta { color: var(--muted); font-size: var(--font-meta); }
-
-.agent-auto-sessions__day {
-  margin-left: 2px;
-  padding-left: 6px;
-  border-left: 2px solid var(--border);
-}
-
-.agent-auto-sessions__day-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 3px 0 3px 8px;
-  border: 0;
-  background: none;
-  /* 分组标题：11.5 / 1.6 / 600 / muted-strong（界面设计 2026-11-09 定档）。 */
-  color: var(--muted-strong);
-  font-size: var(--font-section);
-  font-weight: 600;
-  line-height: var(--line-section);
-  text-align: left;
-  cursor: pointer;
-}
-
-.agent-auto-sessions__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  /* 行高：单行 44、两行 60，左右内边距 12（12 + 18×行数 + 12；单行由 min-height 补到 44）。 */
-  min-height: 44px;
-  padding: 12px;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-/* 行标题：12 / 1.5 / 600 / text。最多两行——**截断先压 meta，最后才压标题**，
- * 所以标题用两行截断而不是单行省略：单行会把「市场…」这种只剩一个字的残句留给读者。 */
-.agent-auto-sessions__item-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: var(--font-body);
-  /* 行标题 12 / 1.5 / 500：比分组的 600 轻一档，内容比结构轻（docs/ui-rules.md §2）。 */
-  font-weight: 500;
-  line-height: var(--line-body);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-/* 行 meta：11 / 1.5 / 400 / muted；等宽数字，便于成列对齐。
- * `flex-shrink: 4` 是「先压 meta」在 flex 里的写法：空间不够时它比标题快四倍缩短。 */
-.agent-auto-sessions__item-meta {
-  flex: 0 4 auto;
-  min-width: 0;
-  overflow: hidden;
   color: var(--muted);
+  font: inherit;
   font-size: var(--font-meta);
   font-weight: 400;
-  line-height: var(--line-meta);
-  font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-auto-sessions__all {
-  padding: 4px 0 0 16px;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: var(--font-meta);
   text-decoration: underline;
   cursor: pointer;
 }
 
-.agent-auto-sessions__head:focus-visible,
-.agent-auto-sessions__day-head:focus-visible,
-.agent-auto-sessions__item:focus-visible,
 .agent-auto-sessions__all:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

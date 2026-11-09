@@ -54,7 +54,8 @@ export type AgentText = {
      */
     automationSessions: {
       title: string
-      collapsedMeta: (today: number, total: number) => string
+      /** 收起态只给**总计**：日分组标题已经写了日期，同一个计数不在两处各说一遍。 */
+      totalOnly: (total: number) => string
       today: string
       yesterday: string
       showAll: string
