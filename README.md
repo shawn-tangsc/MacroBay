@@ -48,11 +48,11 @@ to watch today. Every number carries its source and its cutoff time, so you can 
 and whatever could not be collected is reported as a gap instead of being quietly filled in.
 
 <p align="center">
-  <img src="./docs/assets/screenshots/brief-hero-en.png" alt="MacroBay daily brief: one-sentence lede, the past 24 hours of news, macro events, and the numbers behind them, each with its source and cutoff time" width="100%">
+  <img src="./docs/assets/screenshots/brief-page-en.png" alt="MacroBay daily brief: one-sentence lede, the past 24 hours of news, macro events, and the numbers behind them, each with its source and cutoff time" width="100%">
 </p>
 
 <p align="center">
-  <sub>One page a morning. <a href="./docs/assets/screenshots/brief-page-en.png">See the full page</a> — every item, its source and its cutoff.</sub>
+  <sub>One page a morning, the whole page — every item, its source and its cutoff.</sub>
 </p>
 
 ### Why you can trust it

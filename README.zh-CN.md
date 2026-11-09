@@ -45,11 +45,11 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 你可以自己核；没取到的会如实说成缺口，不会被悄悄填上。
 
 <p align="center">
-  <img src="./docs/assets/screenshots/brief-hero-zh.png" alt="MacroBay 每日简报：一句结论、过去 24 小时要闻与宏观事件，以及支撑它们的数字，每个数字都带来源和截止时间" width="100%">
+  <img src="./docs/assets/screenshots/brief-page-zh.png" alt="MacroBay 每日简报：一句结论、过去 24 小时要闻与宏观事件，以及支撑它们的数字，每个数字都带来源和截止时间" width="100%">
 </p>
 
 <p align="center">
-  <sub>每天早上的一页。<a href="./docs/assets/screenshots/brief-page-zh.png">看完整一页</a>——每一条都带来源和截止时间。</sub>
+  <sub>每天早上的一整页——每一条都带来源和截止时间。</sub>
 </p>
 
 ### 凭什么信
