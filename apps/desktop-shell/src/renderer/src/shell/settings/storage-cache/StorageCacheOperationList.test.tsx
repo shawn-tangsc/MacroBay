@@ -40,7 +40,7 @@ const records: CacheOperationAuditRecord[] = [
   {
     // 这条记录的缓存已经不在注册表里：历史必须还能看懂，但不能把内部点分 id 印给读者。
     operationId: 'op-2',
-    cacheId: 'platform.agent-runtime-retired',
+    cacheId: 'platform.agent-runtime-legacy',
     ownerType: 'platform',
     ownerId: 'platform',
     operation: 'compact',
@@ -70,8 +70,8 @@ describe('Storage cache operation history', () => {
 
     // 查得到名字的那一行照旧显示名字——这条路径是对的，别改。
     expect(markup).toContain('Derived analysis cache')
-    // 查不到名字时给中性说法，绝不印 'platform.agent-runtime-retired' 这种内部 id。
-    expect(markup).not.toContain('platform.agent-runtime-retired')
+    // 查不到名字时给中性说法（缓存定义已不在当前列表），绝不印这种内部点分 id。
+    expect(markup).not.toContain('platform.agent-runtime-legacy')
     expect(markup).toContain(labels.historyUnknownCache)
   })
 
@@ -79,7 +79,7 @@ describe('Storage cache operation history', () => {
     const labels = platformText['zh-CN'].storageCache
     const markup = renderHistory('zh-CN')
 
-    expect(markup).not.toContain('platform.agent-runtime-retired')
+    expect(markup).not.toContain('platform.agent-runtime-legacy')
     expect(markup).toContain(labels.historyUnknownCache)
     expect(markup).toContain('派生分析缓存')
   })
