@@ -41,6 +41,7 @@ function labels(): ProviderDetailLabels {
     connectionUnsupported: settingsText.connectionUnsupported,
     apiKey: settingsText.apiKey,
     unavailableReasonCode: settingsText.unavailableReasonCode,
+    unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria,
     automaticSyncStopped: settingsText.automaticSyncStopped,
     lastSuccessfulSync: settingsText.lastSuccessfulSync
   }
@@ -180,8 +181,12 @@ describe('ProviderDetail source details', () => {
     // 设置页用**短句**（逐字，含「暂时」）：这里不显示内容，不套「先显示上次同步的内容」全句。
     expect(container.textContent).toContain('官方源暂时不可用')
     expect(container.textContent).not.toContain('先显示上次成功同步的内容')
-    // 原因码、自动同步已停止、上次成功日期照原样给。
-    expect(container.textContent).toContain('official-endpoint-returned-403')
+    // 正文只给读者说法（映射表），**完整原因码不进正文**；它在 ⓘ 里，恰一处。
+    expect(container.textContent).toContain('官方源暂时不可用（403）')
+    expect(container.textContent).not.toContain('official-endpoint-returned-403')
+    const reasonTrigger = container.querySelector<HTMLElement>('[aria-label="原因码"]')
+    expect(reasonTrigger).not.toBeNull()
+    expect(container.querySelectorAll('[aria-label="原因码"]')).toHaveLength(1)
     expect(container.textContent).toContain('自动同步已停止')
     expect(container.textContent).toContain('2026-10-22')
     expect(container.querySelector('.status-pill--ok')).toBeNull()

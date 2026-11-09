@@ -1,9 +1,10 @@
 import { Alert, Button, Input, Switch } from 'antd'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
@@ -50,6 +51,8 @@ export type ProviderDetailLabels = {
    * 原因码、自动同步已停止、上次成功日期照原样给，由下面三个模板拼。
    */
   unavailableReasonCode: string
+  /** ⓘ 的名字（与正文那句分开：一个是名字，一个是句子）。 */
+  unavailableReasonCodeAria: string
   automaticSyncStopped: string
   lastSuccessfulSync: string
 }
@@ -107,6 +110,18 @@ function SourceHealthPill({ health, resolveText, unavailable }: {
   if (!health) return null
   const view = healthBadgeView(health.runtimeStatus, health.consecutiveFailures ?? 0)
   return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
+}
+
+/**
+ * 原因码 → 读者看到的说法。**不许从码里截数字**：码名一改，「403」就会变成别的东西、甚至取不到。
+ * 表里没有的码退回不带数字的那句，永远不抛错。加一个码就在这里加一行，别在别处写第二份映射。
+ */
+const UNAVAILABLE_SENTENCE: Readonly<Record<string, string>> = {
+  'official-endpoint-returned-403': '官方源暂时不可用（403）'
+}
+
+function unavailableSentence(reasonCode: string, fallback: string): string {
+  return UNAVAILABLE_SENTENCE[reasonCode] ?? fallback
 }
 
 function needsJob(source: SourceView): boolean {
@@ -364,7 +379,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             {unavailable
               ? <span className="source-provider-detail__unavailable">
                 {[
-                  labels.unavailableReasonCode.replace('{code}', unavailable.reasonCode),
+                  unavailableSentence(unavailable.reasonCode, resolveText('settings.intelligenceSources.unavailableShort')),
                   labels.automaticSyncStopped,
                   // 读不出合法时刻就不写这一句，而不是印一段切出来的字符串。
                   ...(unavailable.lastSuccessfulSyncAt
@@ -375,6 +390,19 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
                     : [])
                 ].join(' · ')}
               </span>
+              : null}
+            {/* 原因码不进正文：它在 ⓘ 里，恰一处、默认不显示。正文那句是给读者的说法。 */}
+            {unavailable
+              ? <Popover
+                content={<code className="source-provider-detail__reason-code">{unavailable.reasonCode}</code>}
+                trigger={(triggerProps) => (
+                  <IconButton
+                    {...triggerProps}
+                    ariaLabelKey="settings.intelligenceSources.unavailableReasonCodeAria"
+                    icon={Info}
+                    resolveText={resolveText}
+                    size="sm" />
+                )} />
               : null}
           </div>
           <Switch

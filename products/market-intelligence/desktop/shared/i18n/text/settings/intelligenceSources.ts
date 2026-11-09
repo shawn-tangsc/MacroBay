@@ -396,6 +396,8 @@ export const intelligenceSourcesText = {
    */
   unavailableShort: '官方源暂时不可用',
   unavailableReasonCode: '原因码：{code}',
+  /** 只给 ⓘ 的可访问名用：它是名字，不是句子（句子那个带 `{code}`）。 */
+  unavailableReasonCodeAria: '原因码',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
   health: {
@@ -827,6 +829,7 @@ export const intelligenceSourcesText = {
   },
   unavailableShort: 'The official source is temporarily unavailable',
   unavailableReasonCode: 'Reason code: {code}',
+  unavailableReasonCodeAria: 'Reason code',
   automaticSyncStopped: 'Automatic sync stopped',
   lastSuccessfulSync: 'Last successful sync: {date}',
   health: {
