@@ -75,13 +75,22 @@ describe('antd 中文按钮不加空格，只关一次', () => {
     const theme = readFileSync(resolve(ROOT, OWNER), 'utf8')
     expect(theme).toContain('export const WINDOW_ANTD_BUTTON_CONFIG')
 
+    // 2026-11-09：主窗视图连同它的 `ConfigProvider` 从 `AppShell.tsx` 搬到 `AppShellView.tsx`
+    // （只搬运、DOM 与接线未变）。判据不变、不断言放宽，只把读取的文件指向新位置。
+    // 事实核对：两处都从 `@platform/ui/theme/windowAntdTheme` 导入同一对常量
+    // （`WINDOW_ANTD_BUTTON_CONFIG` / `WINDOW_ANTD_WAVE_CONFIG`），不存在第二份配置。
     for (const provider of [
-      'apps/desktop-shell/src/renderer/src/shell/AppShell.tsx',
+      'apps/desktop-shell/src/renderer/src/shell/AppShellView.tsx',
       'apps/desktop-shell/src/renderer/src/shell/workspace/workspaceWindowTheme.tsx'
     ]) {
       const source = readFileSync(resolve(ROOT, provider), 'utf8')
-      expect(source, `${provider} 必须读同一份按钮配置`).toContain('WINDOW_ANTD_BUTTON_CONFIG')
-      expect(source, `${provider} 必须读同一份波纹配置`).toContain('WINDOW_ANTD_WAVE_CONFIG')
+      // 断到 prop 上，不是断到 import：`toContain('WINDOW_ANTD_BUTTON_CONFIG')` 光靠 import 行就满足，
+      // 把 `button={…}` 从 JSX 里删掉它照样绿——那不是「引用了」，只是「提到过」。
+      expect(source, `${provider} 必须从单源导入按钮配置`).toMatch(
+        /import \{[^}]*WINDOW_ANTD_BUTTON_CONFIG[^}]*WINDOW_ANTD_WAVE_CONFIG[^}]*\} from '@platform\/ui\/theme\/windowAntdTheme'/u
+      )
+      expect(source, `${provider} 必须把按钮配置传给 ConfigProvider`).toMatch(/button=\{WINDOW_ANTD_BUTTON_CONFIG\}/u)
+      expect(source, `${provider} 必须把波纹配置传给 ConfigProvider`).toMatch(/wave=\{WINDOW_ANTD_WAVE_CONFIG\}/u)
     }
   })
 })
