@@ -61,12 +61,19 @@ export async function queryOpenInterestHistoryAsync(input: Readonly<{
     const usableHints = hints.flatMap(entry => entry.hints).sort((left, right) => left.observedAt.localeCompare(right.observedAt))
     const truncated = hints.some(entry => entry.truncated)
 
+    // 折叠点按小时盖戳，最后那个点的时刻可能比它承载的读数早 45 分钟；「是否滞后」要判真实读数，
+    // 所以把窗口内**折叠前**的最新一条一起带出去（两个资产取更晚的那条）。
+    const newestReadingAt = [btc.windowRows.at(-1)?.observedAt, eth.windowRows.at(-1)?.observedAt]
+      .filter((value): value is string => value !== undefined)
+      .sort()
+      .at(-1)
     const output: OpenInterestHistoryResult = {
       state: 'available',
       asOf: input.asOf,
       window,
       btc: btc.points,
       eth: eth.points,
+      ...(newestReadingAt ? { newestReadingAt } : {}),
       ...(change ? { change } : {}),
       ...(usableHints.length > 0 ? { liquidationHints: Object.freeze(usableHints.slice(-openInterestHistoryPolicy.maximumLiquidationHints)) } : {}),
       // 计数是「判定产出的全部命中」，不是「画出来的那几个」：截断时卡上要靠它说还差多少。

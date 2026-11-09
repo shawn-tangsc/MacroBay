@@ -123,7 +123,12 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
     if (value.state === 'empty') return { state: 'empty', onReload }
     if (value.state === 'unavailable') return { state: 'unavailable', cause: 'query-failed', onReload }
 
-    const latest = value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
+    /**
+     * 「最新读数」不是最后一个点：7 天窗口按小时折叠、时间戳落在小时开头，最后那个点的时刻最多比它
+     * 承载的读数早 45 分钟。拿折叠点判滞后，01:45 的新数据会被标成「已滞后」（用户 2026-11-10 现场）。
+     * `newestReadingAt` 是读侧带来的真实读数时刻；老载荷没有它时退回折叠点，行为不变。
+     */
+    const latest = value.newestReadingAt ?? value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
     const staleSince = latest && Date.parse(asOf) - Date.parse(latest) > dashboardPositioningPresentationPolicy.staleAfterMs ? latest : undefined
     return {
       state: 'available',
