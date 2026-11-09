@@ -27,9 +27,9 @@
 
 ## 情报源配置
 
-- `list_intelligence_sources`（read）；无必填参数；列出一个安装里存在的情报源及其配置与凭据状态：是否启用、采集节奏、是否纳入情绪、保留策略、焦点市场，以及 revision（配置修订号）。限制：返回的是投影，不含 profileId、credentialRef、sourceSpecificConfigJson 或任何密钥/掩码；credentialStatus 只有布尔值与最近校验时间。默认只列已启用的源，includeDisabled=true 才包含停用项；domain 按面板归属过滤为 dashboard 或 calendar。
+- `list_intelligence_sources`（read）；无必填参数；列出一个安装里存在的情报源及其配置与凭据状态：是否启用、采集节奏、是否纳入情绪、保留策略，以及 revision（配置修订号）。限制：返回的是投影，不含 profileId、credentialRef、sourceSpecificConfigJson 或任何密钥/掩码；credentialStatus 只有布尔值与最近校验时间。默认只列已启用的源，includeDisabled=true 才包含停用项；domain 按面板归属过滤为 dashboard 或 calendar。
 - `get_source_detail`（read）；必填：sourceId；读取单个情报源的完整只读投影：配置、健康状态与凭据是否已保存（只有布尔值与最近校验时间），并带上源定义的说明、认证方式与需要用户填写的字段名。限制：未知 sourceId 返回 state=unavailable；不返回 profileId、credentialRef、sourceSpecificConfigJson、maskedPreview 或任何密钥，也不返回原始采集载荷。
-- `configure_intelligence_source`（write）；必填：action；动作：save-profile / set-enabled / save-focus-markets；修改一个情报源的配置，每次调用都会先请用户确认。action=save-profile 只改采集预设、是否计入情绪、范围策略、原始归档、保留策略、解析器升级后自动重放与监控标的——不能改启用状态、凭据或自由配置；action=set-enabled 启用或停用一个源；action=save-focus-markets 改焦点市场。返回 changed（逐字段 before/after）与改动前后的配置修订号。限制：凭据只通过 request_source_credential 交接，绝不经过本工具；未知 sourceId 会失败且不做任何修改；sourceSpecificConfigJson 与 credentialRef 一律不被接受。
+- `configure_intelligence_source`（write）；必填：action；动作：save-profile / set-enabled；修改一个情报源的配置，每次调用都会先请用户确认。action=save-profile 只改采集预设、是否计入情绪、范围策略、原始归档、保留策略、解析器升级后自动重放与监控标的——不能改启用状态、凭据或自由配置；action=set-enabled 启用或停用一个源。返回 changed（逐字段 before/after）与改动前后的配置修订号。限制：凭据只通过 request_source_credential 交接，绝不经过本工具；未知 sourceId 会失败且不做任何修改；sourceSpecificConfigJson 与 credentialRef 一律不被接受。
 - `request_source_credential`（handoff）；必填：sourceId；当某个情报源需要凭据而用户尚未填写时，返回设置页的填写入口，而不是索要或接收密钥。输出只有 handoff、sourceId、settingsSectionId 与需要填写的字段名（如 apiKey；无需凭据的源为空数组）。限制：不返回、不回显、不校验任何密钥、掩码或历史；用户填完后应改用 test-connection 验证，绝不要让用户在对话里粘贴 key。
 
 ## 宏观日历
