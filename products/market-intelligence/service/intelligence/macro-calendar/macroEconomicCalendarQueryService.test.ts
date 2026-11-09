@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { macroEconomicCalendarQueryPolicy, createMacroEconomicCalendarQueryService } from './macroEconomicCalendarQueryService'
+import type { MacroCalendarRevision } from './macroCalendarContracts'
 import type { MacroCalendarRepository } from './macroCalendarRepository'
 
 const asOf = '2026-08-04T00:00:00.000Z'
@@ -386,11 +387,11 @@ describe('macroEconomicCalendarQueryService', () => {
   })
 })
 
-function automaticSchedule(eventKey: string, releaseGroupKey: string, eventFamily: string, eventNameKey: string) {
+function automaticSchedule(eventKey: string, releaseGroupKey: string, eventFamily: MacroCalendarRevision['eventFamily'], eventNameKey: string) {
   return revision({ eventKey, releaseGroupKey, eventFamily, eventNameKey, periodKey: '2026-M07', scheduledDate: '2026-08-07', providerId: 'macro-calendar-bls', descriptorId: macroEconomicCalendarQueryPolicy.pythonAnnualScheduleDescriptorId, caveats: ['official-time-not-published', 'official-timezone-not-published', 'bls-python-schedule'] })
 }
 
-function manualSchedule(eventKey: string, eventFamily: string, eventNameKey: string) {
+function manualSchedule(eventKey: string, eventFamily: MacroCalendarRevision['eventFamily'], eventNameKey: string) {
   return revision({ eventKey, releaseGroupKey: `${eventKey}.group`, eventFamily, eventNameKey, periodKey: '2026-M07', scheduledDate: '2026-08-07', scheduledAt: '2026-08-07T12:30:00.000Z', providerId: 'macro-calendar-bls', descriptorId: macroEconomicCalendarQueryPolicy.manualIcsDescriptorId, caveats: ['manual-ics-import'] })
 }
 
@@ -429,12 +430,16 @@ function manualEmploymentValue(eventKey: string, eventNameKey: string) {
 function createRepository(seed: { month?: any[]; detail?: any } = {}) {
   const monthCalls: Array<{ monthStart: string; monthEndExclusive: string; asOf: string; limit: number }> = []
   const detailCalls: Array<{ eventKey: string; asOf: string }> = []
-  return {
-    month: seed.month ?? [], detail: seed.detail,
+  // 用局部名而不是 `this`：对象字面量方法里的 `this` 在断言到端口之后会被推成 `{}`，
+  // 于是 `return this.month` 反而编译不过——桩自己的簿记字段应该是显式的。
+  const store = {
+    month: (seed.month ?? []) as readonly MacroCalendarRevision[],
+    detail: seed.detail as MacroCalendarRevision | undefined,
     monthCalls, detailCalls,
-    listEffectiveMonthAsOf(input: { monthStart: string; monthEndExclusive: string; asOf: string; limit: number }) { monthCalls.push(input); return this.month },
-    getEffectiveEventAsOf(input: { eventKey: string; asOf: string }) { detailCalls.push(input); return this.detail }
-  } as unknown as MacroCalendarRepository & { month: any[]; detail: any; monthCalls: typeof monthCalls; detailCalls: typeof detailCalls }
+    listEffectiveMonthAsOf(input: { monthStart: string; monthEndExclusive: string; asOf: string; limit: number }) { monthCalls.push(input); return store.month },
+    getEffectiveEventAsOf(input: { eventKey: string; asOf: string }) { detailCalls.push(input); return store.detail }
+  }
+  return store as unknown as MacroCalendarRepository & typeof store
 }
 
 describe('the reader\'s own release time', () => {
@@ -476,7 +481,7 @@ describe('the reader\'s own release time', () => {
   })
 })
 
-function revision(overrides: Record<string, unknown> = {}) {
+function revision(overrides: Partial<MacroCalendarRevision> = {}): MacroCalendarRevision {
   return {
     revisionId: 'revision-1', eventKey: 'US.FOMC.2026-12-09', releaseGroupKey: 'US.FOMC.2026-12-09', eventFamily: 'fomc', eventNameKey: 'fomc', countryCode: 'US', importance: 'high', periodKey: '2026-12-09', lifecycleState: 'scheduled', revisionKind: 'schedule', scheduledDate: '2026-08-15', detectedAt: '2026-08-01T00:00:00.000Z', recordedAt: '2026-08-01T00:00:00.000Z', providerId: 'macro-calendar-fed', descriptorId: 'macro-calendar-fed-schedule', sourceUrl: 'https://secret.example.test/source', rawRecordId: 'raw-secret', evidenceHash: 'evidence-secret', evidenceRefs: [], snapshotHash: 'snapshot-secret', parserVersion: 'parser-secret', caveats: ['official-time-not-published'], ...overrides
   }
