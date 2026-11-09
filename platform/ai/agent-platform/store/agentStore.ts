@@ -259,6 +259,11 @@ export function createAgentSession(state: AgentStoreState, payload: CreateAgentS
     ...(normalizeSessionOriginGroup(payload.originGroup) === undefined
       ? {}
       : { originGroup: normalizeSessionOriginGroup(payload.originGroup) }),
+    // 自动会话的幂等键：**不写进实体，窄查就永远查不到**——分析 run 会话因此一次都复用不了，
+    // 摘要也永远追不回会话（2026-11-10 的事故）。与读侧、更新侧用同一套规范化。
+    ...(normalizeSessionOriginRef(payload.originRef) === undefined
+      ? {}
+      : { originRef: normalizeSessionOriginRef(payload.originRef) }),
     createdAt: now,
     updatedAt: now
   }
