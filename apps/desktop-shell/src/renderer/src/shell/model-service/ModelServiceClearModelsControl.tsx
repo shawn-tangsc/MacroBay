@@ -56,19 +56,26 @@ export function ModelServiceClearModelsControl({
      * 危险动作按档位：`.ant-btn-dangerous`（红字红边、静止可见，不靠 hover）+ 上面已有的确认框。
      * 不再挂 `model-service-pill` / `model-service-pill-danger`：胶囊那套外观在本界面没有第二处。
      */
-    <Tooltip
-      labelKey="modelService.clearModels"
-      resolveText={(key) => (key === 'modelService.clearModels' ? labels.clearModels : '')}
-    >
-      <Button
-        aria-label={labels.clearModels}
-        className="ant-btn-dangerous"
-        data-models-clear
-        disabled={isEmpty || disabled}
-        icon={<Trash2 size={13} aria-hidden="true" />}
-        onClick={askToClear}>
-        {labels.clearModels}
-      </Button>
-    </Tooltip>
+    (() => {
+      const button = (
+        <Button
+          aria-label={labels.clearModels}
+          className="ant-btn-dangerous"
+          data-models-clear
+          disabled={isEmpty || disabled}
+          icon={<Trash2 size={13} aria-hidden="true" />}
+          onClick={askToClear}>
+          {labels.clearModels}
+        </Button>
+      )
+      // 禁用态不套提示：禁用控件接不到焦点，浮层永远出不来（`tooltipCallSiteGuard` 的判据）。
+      return isEmpty || disabled ? button : (
+        <Tooltip
+          labelKey="modelService.clearModels"
+          resolveText={(key) => (key === 'modelService.clearModels' ? labels.clearModels : '')}>
+          {button}
+        </Tooltip>
+      )
+    })()
   )
 }
