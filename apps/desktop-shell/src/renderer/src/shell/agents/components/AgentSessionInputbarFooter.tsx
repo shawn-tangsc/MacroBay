@@ -25,8 +25,7 @@ const INPUTBAR_KEYS = {
   commands: 'agent.inputbar.commands',
   expand: 'agent.inputbar.expand',
   collapse: 'agent.inputbar.collapse',
-  stop: 'agent.inputbar.stop',
-  send: 'agent.inputbar.send'
+  stop: 'agent.inputbar.stop'
 } as const
 
 type AgentSessionInputbarFooterProps = {
@@ -98,8 +97,6 @@ export default function AgentSessionInputbarFooter({
         return labels.collapse
       case INPUTBAR_KEYS.stop:
         return labels.stop
-      case INPUTBAR_KEYS.send:
-        return labels.send
       default:
         return key
     }
@@ -186,16 +183,20 @@ export default function AgentSessionInputbarFooter({
             resolveText={resolveText}
           />
         ) : null}
-        <IconButton
-          ariaLabelKey={INPUTBAR_KEYS.send}
-          icon={SendHorizontal}
-          size="sm"
+        {/*
+          发送**暂不迁**：`IconButton` 目前只有 plain / solid / overlay 三档，solid 是中性底
+          （`--surface-soft` + 描边），没有承载主操作强调的档；换成 22px 无底色图标按钮等于把
+          这一屏的主操作降成次级。等组件补上强调档再迁，届时不改外观、只换元素。
+        */}
+        <button
+          type="button"
+          className="agent-send-button"
+          aria-label={labels.send}
+          title={labels.send}
           disabled={!canSend}
-          // 禁用时不许带提示：接不到焦点的按钮，Tooltip 只有鼠标能看，键盘用户拿不到理由。
-          {...(canSend ? { tooltipKey: INPUTBAR_KEYS.send } : {})}
-          onSelect={onSend}
-          resolveText={resolveText}
-        />
+          onClick={onSend}>
+          <SendHorizontal size={16} />
+        </button>
       </div>
     </div>
   )

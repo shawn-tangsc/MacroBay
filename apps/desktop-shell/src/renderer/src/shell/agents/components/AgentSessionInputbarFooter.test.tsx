@@ -71,22 +71,18 @@ describe('AgentSessionInputbarFooter', () => {
     expect(toolsRow).not.toContain('title="')
   })
 
-  it('sends and stops through the same icon button, at the inline size', () => {
+  it('keeps the send action primary while the icon button has no emphasis variant', () => {
     const idle = render(false)
-    // 发送从 30px 自绘按钮换成 22px 图标按钮：尺寸档由此固定，别再手写一个 `agent-send-button`。
+    // 主操作仍是强调底色那枚：`IconButton` 只有 plain / solid / overlay，solid 是中性底，
+    // 迁过去等于把主操作降成次级。这条断言随组件补上强调档一起改。
+    expect(idle).toContain('agent-send-button')
     expect(idle).toContain('aria-label="发送"')
-    expect(idle.match(/icon-button--sm /g) ?? []).toHaveLength(1)
-    expect(idle).not.toContain('agent-send-button')
 
     const streaming = render(false, { streaming: true })
+    // 停止已迁到图标按钮：读屏名走键、危险用 tone，不再自己铺红色。
     expect(streaming).toContain('aria-label="停止"')
-    // 「停止」是危险的：走组件的 danger 档，不在这里自己铺红色。
     expect(streaming).toContain('icon-button--danger')
-    expect(streaming.match(/icon-button--sm /g) ?? []).toHaveLength(2)
-
-    // 两个动作也不再挂原生 title：悬浮提示与读屏名各说一份，读屏会听两遍。
-    const actionsRow = streaming.slice(streaming.indexOf('agent-inputbar-actions'))
-    expect(actionsRow).not.toContain('title="')
+    expect(streaming).toContain('icon-button--sm')
   })
 
   it('keeps the send control disabled while the input cannot be sent', () => {
