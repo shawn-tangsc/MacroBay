@@ -28,8 +28,6 @@ import type { IntelligenceTranslationService } from './intelligenceTranslationSe
 import type { IntelligenceTranslationStatus } from '../schema/intelligenceTranslation'
 import { resolveSourceFreshnessStatus } from '../schema/intelligenceSourcesContracts'
 import { getIntelligenceSourceDefinition, isDefillamaStablecoinRetiredPath } from './sourceCatalog'
-import { isItemApplicableToFocusMarkets } from './intelligenceSourceApplicability'
-import type { IntelligenceFocusMarket } from '../schema/intelligenceSource'
 import {
   type IntelligenceAssessmentStatus,
   compareTimelineTimestamps,
