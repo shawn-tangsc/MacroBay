@@ -121,7 +121,7 @@ describe('ETF 两支各说各的', () => {
     const content = container.textContent ?? ''
     expect(content).toContain('+$297.4M')          // BTC 照常显示数字
     expect(content).toContain('未知')
-    expect(content).toContain('有行，但最新一行缺净流入')  // 具体原因，不是「原因未记录」
+    expect(content).toContain('最新一天没有净流入数据')  // 具体原因，不是「原因未记录」
     expect(content).toContain('BTC ETF')
     expect(content).toContain('ETH ETF')
   })
