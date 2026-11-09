@@ -4,7 +4,6 @@ import type { IntelligenceSourceProfile } from '../../../service/intelligence/sc
 
 export type CollectionPolicyLabels = {
   title: string
-  enabled: string
   collectionPreset: string
   manualPresetNote: string
   includeInSentiment: string
@@ -13,17 +12,23 @@ export type CollectionPolicyLabels = {
   presets: Record<string, string>
 }
 
+/**
+ * 采集策略：频率档 / 是否纳入情绪分析。
+ *
+ * **这里没有「启用」**：启用状态只有一个归属，就是源那一行末尾的开关。组内再放一颗，
+ * 就等于同一个事实存两份副本——组内读页面持有的 profile、行尾读源视图，各写各的，
+ * 读者一动就互相打架（2026-11-10 用户实测：动组内那颗，上面整行被关掉）。
+ */
 export function CollectionPolicySection(props: {
   draftProfile: IntelligenceSourceProfile
   supportsSentiment: boolean
   configurable?: boolean
   /**
-   * A product-owned collector stores the enable preference on the profile while the generic
-   * collection policy (preset, scope) does not apply to it, so the switch is usable on its own.
+   * Whether this source's enable switch (the one at the end of its row) is usable at all.
+   * It only decides which note the group shows; the switch itself lives in the row.
    */
   enabledConfigurable?: boolean
   labels: CollectionPolicyLabels
-  onEnabledChange: (enabled: boolean) => void
   onChange: (patch: Partial<IntelligenceSourceProfile>) => void
 }): React.ReactElement {
   const configurable = props.configurable ?? true
@@ -38,14 +43,6 @@ export function CollectionPolicySection(props: {
         <p className="intelligence-source-note">{props.labels.productOwnedNote}</p>
       ) : null}
       <div className="intelligence-setting-grid">
-        <SettingRow label={props.labels.enabled}>
-          <Switch
-            size="small"
-            checked={props.draftProfile.enabled}
-            disabled={!enabledConfigurable}
-            onChange={(enabled) => props.onEnabledChange(enabled)}
-          />
-        </SettingRow>
         <SettingRow label={props.labels.collectionPreset}>
           <div className="intelligence-preset-control">
             <Select

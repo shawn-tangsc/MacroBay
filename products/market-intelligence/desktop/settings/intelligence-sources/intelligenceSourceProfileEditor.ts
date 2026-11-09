@@ -73,11 +73,16 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ])
 }
 
-/** 保存只带这几项：profileId / updatedAt 由服务端决定，不能由界面回写。 */
+/**
+ * 保存只带这几项：profileId / updatedAt 由服务端决定，不能由界面回写。
+ *
+ * **`enabled` 不在里面**：启用状态只由行尾那颗开关写（`setEnabled` / `setCalendarEnabled`）。
+ * 页面持有的 profile 是进入这一屏时的快照，读者拨过开关之后它就是过期的；整份回写会把旧值
+ * 盖回磁盘（读者会看到「改了个采集预设，启用又自己变了」）。服务端按「没传就保持」合并。
+ */
 export function toSaveProfileInput(profile: IntelligenceSourceProfile) {
   return {
     sourceId: profile.sourceId,
-    enabled: profile.enabled,
     collectionPreset: profile.collectionPreset,
     includeInSentiment: profile.includeInSentiment,
     scopePolicy: profile.scopePolicy,

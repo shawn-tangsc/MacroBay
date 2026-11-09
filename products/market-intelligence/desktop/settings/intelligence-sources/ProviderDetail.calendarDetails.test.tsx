@@ -487,4 +487,63 @@ describe('ProviderDetail source details', () => {
     expect(container.querySelector('.collapsible-group__body [role="group"]')).toBeNull()
     expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
   })
+
+  it('offers the enable switch only at the end of the row, never inside the policy group', async () => {
+    // 缺陷（用户实测 2026-11-10）：「采集策略」里还有一颗「启用」，动它，上面整行就被关掉。
+    // 两颗开关是同一个事实（profile.enabled）的两份副本：组内读页面 profiles、行尾读 source.enabled，
+    // 各写各的，所以一动就互相打架。改法是启用只留行尾那一颗，组内不再有第二颗。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['macro-calendar-fed', 'federal-reserve-rss']),
+        provider: fedProvider(),
+        showSourceDetails: true
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.querySelectorAll('.collapsible-group__body [role="switch"]')).toHaveLength(0)
+    // 每个源恰一颗，就在它自己那一行末尾，而且它说的是「启用/停用这个源」。
+    const rowSwitches = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__row > [role="switch"]')]
+    expect(rowSwitches).toHaveLength(2)
+    for (const control of rowSwitches) {
+      const label = control.getAttribute('aria-label') ?? ''
+      expect(label.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('disables the row switch for a pending source instead of offering a second one inside the policy group', async () => {
+    // 旧用例在组内那颗禁用开关上钉「尚未实现不可启用」。那颗没了，这条判据不能跟着消失：
+    // 它现在落在行尾那颗上——待接入的源，行尾开关是禁用的，组内没有第二颗。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['closed-source']),
+        provider: {
+          providerId: 'closed',
+          displayName: 'Closed provider',
+          category: 'macro',
+          credential: 'none',
+          sources: [source({ providerId: 'closed', sourceId: 'closed-source', displayName: 'Closed source', visibility: 'pending', readiness: 'planned' })]
+        }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const rowSwitch = container.querySelector<HTMLButtonElement>('.source-provider-detail__row > [role="switch"]')
+    expect(rowSwitch?.disabled).toBe(true)
+    expect(container.querySelectorAll('.collapsible-group__body [role="switch"]')).toHaveLength(0)
+  })
 })

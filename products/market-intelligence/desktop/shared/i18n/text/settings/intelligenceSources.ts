@@ -343,11 +343,10 @@ export const intelligenceSourcesText = {
   },
   collectionPolicy: {
     title: '采集策略',
-    enabled: '启用',
     collectionPreset: '采集预设',
     manualPresetNote: '手动模式启用后不会自动采集，需点击「立即运行」。',
     plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
-    productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由这里控制；采集预设不适用于它。',
+    productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由该来源那一行末尾的开关控制；采集预设不适用于它。',
     includeInSentiment: '纳入情绪分析',
     presets: {
       manual: '手动',
@@ -782,11 +781,10 @@ export const intelligenceSourcesText = {
   },
   collectionPolicy: {
     title: 'Collection Policy',
-    enabled: 'Enable',
     collectionPreset: 'Collection Preset',
     manualPresetNote: 'Manual mode does not collect automatically after enable. Use Run Now.',
     plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
-    productOwnedNote: 'A product-owned job collects this source; the enable switch below controls it, while the collection preset does not apply.',
+    productOwnedNote: 'A product-owned job collects this source; the switch at the end of its row controls it, while the collection preset does not apply.',
     includeInSentiment: 'Include In Sentiment',
     presets: {
       manual: 'Manual',
