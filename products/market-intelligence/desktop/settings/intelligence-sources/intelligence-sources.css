@@ -994,7 +994,7 @@
   /* 两列：左字段区吃满剩余宽度，右开关固定 34 + 8 间距。
      原来按字段分窄列，把名字和状态压成一字一格竖排——这是那一类的根因。 */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) 32px;
   column-gap: 8px;
   align-items: start;
   padding: 10px 12px;

@@ -414,6 +414,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             checked={source.enabled}
             disabled={source.visibility === 'pending'}
             onChange={(enabled) => void toggle(source, enabled)}
+            /* ui-spec §8.3：开关唯一实现是 antd Switch，统一 small（32×18），默认尺寸不在允许写法内。 */
+            size="small"
           />
           </div>
           {/* 采集策略（频率档 / 范围 / 是否纳入舆情）：每个源常显，读者不必先选中它。
