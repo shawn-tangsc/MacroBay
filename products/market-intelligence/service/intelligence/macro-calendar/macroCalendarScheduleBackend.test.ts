@@ -38,7 +38,9 @@ describe('macroCalendarScheduleBackend', () => {
     const close = vi.spyOn(DatabaseSync.prototype, 'close')
     try {
       expect(() => createMacroCalendarScheduleBackend({ rawRecords: createRawRecordStore(), dataDir: testDataDir(),
-        get testProviderConnection() { throw new Error('derived-backend-construction') }
+        // getter 只抛不返回时会被推断成 `void`；显式标 `never` 才与端口
+        // `(providerId) => Promise<DashboardSourceConnectionResult>` 相符（`never` 可赋给任何函数类型）。
+        get testProviderConnection(): never { throw new Error('derived-backend-construction') }
       })).toThrow('derived-backend-construction')
       expect(close).toHaveBeenCalledOnce()
     } finally { close.mockRestore() }
