@@ -21,7 +21,8 @@ import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirectio
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { BRIEFING_PAPER_WIDTH } from './dailyBriefingExport'
 import { briefFailureCodeLabel } from './dailyBriefingFailureDetail'
-import { editorialFailureText } from './dailyBriefingPageDerived'
+import { editorialNotice } from './dailyBriefingEditorialNotice'
+import { BriefingEditorialNotice } from './BriefingEditorialNotice'
 import { resolveBriefingStateReason } from './dailyBriefingText'
 
 /**
@@ -127,6 +128,8 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
       : undefined
   // 唯一有意叠加的一档：正文留着、失败提示挂在它下面（重跑失败不吞掉读者正在读的那一版）。
   const failureUnderPaper = bodyState === 'paper' && failure !== null
+  // 没有 AI 解读的那一期：三种情形一句话，由失败码决定，不读报错文本。
+  const notice = view.status === 'ready' ? editorialNotice(view.document.provenance.editorialFailure, text) : undefined
   return <section className="mi-daily-briefing-page__content" data-body-state={bodyState}>
     {/* 外层卡：工具栏属于这张卡，纸属于它自己。按钮进不了纸的圆角边框，导出图里就不会带
         「删除这一版」这类界面动作——看的边界与导出的边界是两条线。 */}
@@ -164,8 +167,12 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
           只有一个入口——正文顶部工具栏那颗；面板只讲原因、步骤与去设置看一眼。 */}
       {failure !== null && bodyState === 'failure' ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {/* Any editorial failure, not just "AI is off": when the editor could not produce its half, the
-          edition still ships and says so here. A reader must never be told "no brief today" instead. */}
-      {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText(view.document.provenance.editorialFailure, text)}</p> : null}
+          edition still ships and says so here. A reader must never be told "no brief today" instead.
+          Three cases, three sentences, three actions (r17): configure the model, regenerate, or wait
+          for the quota to reset — the last one deliberately has no button. */}
+      {view.status === 'ready' && notice ? <BriefingEditorialNotice
+        notice={notice} text={text} regenerating={regenerating}
+        onOpenSettings={onOpenSettings} onRetry={onRetry} /> : null}
       {showingEdition && view.document.status.readingsAvailable === 0 ? <StateView
         state="empty"
         reasonCode="nothing-enabled"

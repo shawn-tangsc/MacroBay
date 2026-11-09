@@ -182,6 +182,20 @@ describe('the macro section draws events, and says why it is empty without imply
     }
   })
 
+  it('prints the no-AI sentence on the exported sheet when the editorial failed', async () => {
+    // r17 `A9`：导出的那张图就是这张海报，所以说明必须印在这里——不能只在屏幕上说。
+    const doc = briefing()
+    const rendered = await render({ ...doc, provenance: { ...doc.provenance, editorialFailure: 'provider-account-balance-insufficient' } })
+    const notice = rendered.querySelector('.mi-brief-poster__ai-notice')
+    expect(notice?.getAttribute('data-editorial-notice')).toBe('quota')
+    expect(notice?.textContent).toBe(text.aiSettings.notice.quota)
+  })
+
+  it('prints no such line on a clean edition', async () => {
+    const rendered = await render(briefing())
+    expect(rendered.querySelector('.mi-brief-poster__ai-notice')).toBeNull()
+  })
+
   it('says nothing when the edition recorded no reason at all', async () => {
     // 反例：老版本文档没有 `macroEmpty` 码。此时说不出是哪一档原因，**就不说**——
     // 编一句「暂时读不到」等于替文档猜原因。

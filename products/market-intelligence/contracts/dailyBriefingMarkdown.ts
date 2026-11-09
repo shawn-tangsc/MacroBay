@@ -61,6 +61,11 @@ export type DailyBriefingMarkdownOptions = Readonly<{
   direction: (term: string) => string
   eventTitle?: (item: Readonly<{ title: string; titleKey?: string }>) => string
   formatTime: (value: string) => string
+  /**
+   * 这一期没有 AI 解读时要带上的那句说明（r17）。屏幕上有、复制出去没有，读者发出去的
+   * 就是一份"看起来完整"的日报——所以它必须和页面、导出的图是同一句话。
+   */
+  editorialNotice?: string
 }>
 
 /**
@@ -83,6 +88,8 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     : ` · ${(period.periodKind === 'manual' ? labels.periodManual : labels.periodScheduled).replace('{time}', options.formatTime(period.periodTime))}`
   const language = labels.languageNames?.[document.edition.locale] ?? document.edition.locale
   lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))}${periodLabel} · ${language}${allMissing}`)
+  // 单独一段，不用引用块：复制头部那行 `> …` 说的是「这一期是什么」，这句说的是「缺了什么」。
+  if (options.editorialNotice) lines.push('', escapeMarkdown(options.editorialNotice))
   if (document.lede.text) lines.push('', escapeMarkdown(document.lede.text))
 
   const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')

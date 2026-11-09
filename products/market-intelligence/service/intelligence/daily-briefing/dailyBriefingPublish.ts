@@ -96,6 +96,59 @@ export async function publishDailyBriefingEdition(input: Readonly<{
  * 以前这里发的是事实层模板版：页面能打开、却没有任何解读，而库里记的是成功。现在失败就是失败，
  * 原因码原样回给页面，右列与失败面板据此说清是超时、输出不合规还是模型不可用。
  */
+/**
+ * 模型类失败：读者这一天本该有日报，问题既不在数据也不在这份报纸。
+ *
+ * 与「输出质量失败」分开（后者是稿子不能给读者，仍按 2026-11-06 的决定不发）。这一类照发事实层
+ * 版次，原因留在 provenance；`publishDailyBriefingEdition` 会把它记成一次失败，不是"悄悄发一份
+ * 看起来完整的模板版"。
+ */
+export const modelFailureCodes: readonly string[] = Object.freeze([
+  'model-unavailable',
+  'model-not-ready',
+  'provider-disabled',
+  'missing-api-key',
+  'rate-limited',
+  'provider-error',
+  'editorial-timeout'
+])
+
+/**
+ * 写作没出来之后：按原因决定发还是不发（r17 `A1` + 2026-11-06 的顾虑一起满足）。
+ *
+ * 模型类原因 → 发（数据是读者的，缺的只是解读）；输出质量原因 → 不发，返回失败、留失败行。
+ */
+export async function settleEditorialEdition(input: Readonly<{
+  document: DailyBriefingDocument
+  store: Pick<DailyBriefingStore, 'publishEdition' | 'put' | 'prune'> & Partial<Pick<DailyBriefingStore, 'finishAttempt'>>
+  attempts: Pick<DailyBriefingAttemptJournal, 'build' | 'settle'>
+  run: Pick<DailyBriefingPeriodRunJournal, 'settle'>
+  recorder: Pick<DailyBriefingGenerationRecorder, 'begin' | 'end' | 'complete'>
+  now: () => string
+  noticeSubmit?: DailyBriefingNoticeSubmit
+  date: string
+  periodId: string
+  locale: DailyBriefingLocale
+  asOf: string
+  timeZone: string
+  force: boolean
+}>): Promise<DailyBriefingTodayResult> {
+  const failure = input.document.provenance.editorialFailure
+  if (failure !== undefined && failure !== 'editorial-disabled' && !modelFailureCodes.includes(failure)) {
+    return abandonDailyBriefingEditorial({
+      failureCode: failure, attempts: input.attempts, run: input.run, recorder: input.recorder, now: input.now,
+      locale: input.locale, asOf: input.asOf, timeZone: input.timeZone,
+      ...(input.noticeSubmit ? { noticeSubmit: input.noticeSubmit } : {}),
+      date: input.date, periodId: input.periodId
+    })
+  }
+  return publishDailyBriefingEdition({
+    document: input.document, store: input.store, attempts: input.attempts, run: input.run, recorder: input.recorder, now: input.now,
+    ...(input.noticeSubmit ? { noticeSubmit: input.noticeSubmit } : {}),
+    date: input.date, periodId: input.periodId, locale: input.locale, deliver: !input.force
+  })
+}
+
 export async function abandonDailyBriefingEditorial(input: Readonly<{
   failureCode: string
   attempts: Pick<DailyBriefingAttemptJournal, 'settle'>

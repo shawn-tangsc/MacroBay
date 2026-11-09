@@ -9,6 +9,7 @@ import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
+import { editorialNotice } from './dailyBriefingEditorialNotice'
 import { briefingMacroValueLabel } from '../../../contracts/dailyBriefingMacroValueText'
 import { BriefingDataArea } from './BriefingDataArea'
 import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type fearGreedBucketWords as FearGreedBuckets, type paymentDirectionWords as PayDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
@@ -124,6 +125,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
             number said the same thing twice and never named what it counted. */}
       </div>
     </header>
+    {/* 没有 AI 解读的那一期：屏幕、导出图、复制文本三处说同一句（r17）。海报就是导出的那张图，
+        所以这句话写在这里，导出自动带上。 */}
+    {editorialNotice(doc.provenance.editorialFailure, text) ? <p className="mi-brief-poster__ai-notice" data-editorial-notice={editorialNotice(doc.provenance.editorialFailure, text)!.case}>{editorialNotice(doc.provenance.editorialFailure, text)!.sentence}</p> : null}
     {doc.comparison ? <p className="mi-brief-poster__comparison">{comparisonText(doc, text, locale)}</p> : null}
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
 

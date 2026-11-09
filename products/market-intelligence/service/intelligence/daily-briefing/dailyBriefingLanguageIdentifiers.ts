@@ -1,6 +1,6 @@
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { briefingDataFactIds } from './dailyBriefingDataSelection'
-import { briefingTextLeaves } from './dailyBriefingTextScanner'
+import { briefingTextBreaches, briefingTextLeaves } from './dailyBriefingTextScanner'
 
 /**
  * 语言扫描的**登记表**（`04` §3.4.2）：哪些串是标识符、不是正文。
@@ -77,4 +77,24 @@ export function briefingLanguageSourceTexts(document: DailyBriefingDocument): re
   for (const item of document.next.items) texts.push(item.title)
   if (document.next.focus) texts.push(document.next.focus.title)
   return texts.filter((text) => text.trim().length > 0)
+}
+
+/**
+ * 一道判断：把登记表与来源原文一起喂给扫描器，返回命中的叶子（路径点名）。
+ *
+ * 调用方只需要说"编辑前是哪一份文档"，登记表怎么算、来源原文从哪读，都留在这里。
+ */
+export function briefingLanguageBreaches(input: Readonly<{
+  /** 编辑后、要交给读者的文档。 */
+  document: DailyBriefingDocument
+  /** 编辑前的事实层文档：登记表就是它里面���们自己写的那些串。 */
+  before: DailyBriefingDocument
+  locale: 'zh-CN' | 'en-US'
+}>): readonly Readonly<{ path: string }>[] {
+  return briefingTextBreaches({
+    document: input.document,
+    locale: input.locale,
+    identifiers: briefingLanguageIdentifiers({ before: input.before, after: input.document }),
+    sourceTexts: briefingLanguageSourceTexts(input.document)
+  })
 }

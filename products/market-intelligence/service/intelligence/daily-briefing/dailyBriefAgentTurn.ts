@@ -4,8 +4,7 @@ import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairProm
 import { runEditorialGate } from './dailyBriefAgentEditorialGate'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission } from './dailyBriefingValidation'
 import { validateEditorialForPeriod, type DailyBriefingPeriodFacts } from './dailyBriefingPeriodFactsValidation'
-import { briefingTextBreaches } from './dailyBriefingTextScanner'
-import { briefingLanguageIdentifiers, briefingLanguageSourceTexts } from './dailyBriefingLanguageIdentifiers'
+import { briefingLanguageBreaches } from './dailyBriefingLanguageIdentifiers'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { stoppedOutcome } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
@@ -215,14 +214,8 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     repairPrompt: (code, detail, failures) => repairPromptFor(code, detail, failures),
     validate: (parsed) => validateEditorialForPeriod(selectedDocument, parsed, input.locale, toolInvocations, priorConclusions, input.periodFacts),
     apply: (value) => applyDailyBriefingEditorial(selectedDocument, value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions),
-    // 语言按**渲染结果**判：登记表 = 编辑前文档里我们写进去的串 + 事实引用；来源原文按逐字引用放行。
-    // 命中先重写一次（`invalid-output-language`），仍命中就整版失败——不删段、不自动翻译。
-    checkLanguage: (document) => briefingTextBreaches({
-      document,
-      locale: input.locale,
-      identifiers: briefingLanguageIdentifiers({ before: selectedDocument, after: document }),
-      sourceTexts: briefingLanguageSourceTexts(document)
-    }),
+    // 语言按**渲染结果**判：命中先重写一次（`invalid-output-language`），仍命中就整版失败。
+    checkLanguage: (document) => briefingLanguageBreaches({ document, before: selectedDocument, locale: input.locale }),
     ...(input.signal ? { signal: input.signal } : {})
   })
   if (gate.state === 'accepted') {

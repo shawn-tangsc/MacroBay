@@ -130,6 +130,14 @@ describe('a web-sourced value says so in the copy too (v2.128)', () => {
 })
 
 describe('daily briefing markdown', () => {
+  it('carries the no-AI sentence into the copied text, and leaves it out when there is none', () => {
+    // r17 `A9`：屏幕上有的那句，复制出去也要有；没有这回事时不许多出一行。
+    const withNotice = dailyBriefingToMarkdown(document(), { ...options, editorialNotice: '本期只有数据，没有 AI 写的解读。' })
+    expect(withNotice).toContain('本期只有数据，没有 AI 写的解读。')
+    const without = dailyBriefingToMarkdown(document(), options)
+    expect(without).not.toContain('没有 AI 写的解读')
+  })
+
   it('leaves the readings count out of the copy header', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     // The header block only: the body may legitimately say "5 项" about its own rows, so scanning
