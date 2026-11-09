@@ -421,6 +421,9 @@ export function AppShellView(props: AppShellViewProps): React.ReactElement {
                 className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
                 title={item.label}
                 aria-label={item.label}
+                // 当前页：整行即动作、保留现形，组件表达不了（侧栏导航是一个列表，不是按钮组），
+                // 所以补的是可访问名与「当前项」——高亮靠 class 是给眼睛的，读屏拿不到。
+                {...(item.key === activeNavKey ? { 'aria-current': 'page' as const } : {})}
                 // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
                 data-nav-key={item.key}
                 onClick={() => activateNavKey(item.key)}>
@@ -441,6 +444,9 @@ export function AppShellView(props: AppShellViewProps): React.ReactElement {
                 className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
                 title={item.label}
                 aria-label={item.label}
+                // 当前页：整行即动作、保留现形，组件表达不了（侧栏导航是一个列表，不是按钮组），
+                // 所以补的是可访问名与「当前项」——高亮靠 class 是给眼睛的，读屏拿不到。
+                {...(item.key === activeNavKey ? { 'aria-current': 'page' as const } : {})}
                 // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
                 data-nav-key={item.key}
                 onClick={() => activateNavKey(item.key)}>
