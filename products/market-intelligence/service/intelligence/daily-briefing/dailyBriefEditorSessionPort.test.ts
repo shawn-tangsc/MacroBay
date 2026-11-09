@@ -3,7 +3,7 @@ import { DEFAULT_PERIOD_ID } from '../../../contracts/dailyBriefing'
 import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
 
-type FakeSession = { id: string; agentId: string; name: string; origin?: string; originGroup?: string; originRef?: string }
+type FakeSession = { id: string; agentId: string; name: string; createdAt?: string; origin?: string; originGroup?: string; originRef?: string; messages?: unknown[] }
 
 const deps = () => {
   const sessions = new Map<string, FakeSession>()
@@ -120,10 +120,11 @@ describe('daily brief editor session port', () => {
 describe('claiming the briefing sessions that were created without an identity', () => {
   it('marks them as automation, keeps one canonical per edition, and changes no content', async () => {
     const d = deps()
-    const readerSession = (id: string, name: string) => ({
+    const readerSession = (id: string, name: string, createdAt = '2026-11-09T00:00:00.000Z') => ({
       id,
       agentId: 'daily-brief-editor',
       name,
+      createdAt,
       // 正文/消息属于内容：迁移一个字节都不许动，这里拿它们当快照。
       messages: [{
         id: `m-${id}`,
@@ -135,15 +136,16 @@ describe('claiming the briefing sessions that were created without an identity',
         modelSnapshot: null,
         stats: null,
         runtimeResumeToken: null,
-        createdAt: '2026-11-08T23:00:00.000Z',
-        updatedAt: '2026-11-08T23:00:00.000Z'
+        createdAt,
+        updatedAt: createdAt
       }]
     })
     const older = readerSession('s-old-1', '11-09 每日简报 · AI 编辑 · 中文')
     const newer = readerSession('s-new-2', '11-09 每日简报 · AI 编辑 · 中文')
     const middle = readerSession('s-mid-3', '11-09 每日简报 · AI 编辑 · 中文')
     const otherEdition = readerSession('s-10th', '11-10 每日简报 · AI 编辑 · 中文')
-    for (const session of [older, newer, middle, otherEdition]) {
+    const englishEdition = readerSession('s-en', '11-09 Daily brief · AI editor · English')
+    for (const session of [older, newer, middle, otherEdition, englishEdition]) {
       d.sessions.set(session.id, session as never)
     }
 
@@ -153,13 +155,14 @@ describe('claiming the briefing sessions that were created without an identity',
     await put(older.id, '2026-11-08T23:00:00.000Z')
     await put(middle.id, '2026-11-09T08:44:00.000Z')
     await put(newer.id, '2026-11-09T17:02:00.000Z')
+    await d.links.put({ editionDate: '2026-11-09', periodId: DEFAULT_PERIOD_ID, locale: 'en-US', sessionId: englishEdition.id, state: 'running', createdAt: '2026-11-09T09:00:00.000Z', updatedAt: '2026-11-09T09:00:00.000Z' })
     await d.links.put({ editionDate: '2026-11-10', periodId: DEFAULT_PERIOD_ID, locale: 'zh-CN', sessionId: otherEdition.id, state: 'running', createdAt: '2026-11-10T05:00:00.000Z', updatedAt: '2026-11-10T05:00:00.000Z' })
 
     // 迁移前快照：内容字段原样记下来，迁移后逐字比对。
     // 读者列表的判据就是面板用的那条：origin !== 'automation'。迁移前这一期有三条混在里面。
     const readerVisibleBefore = [...d.sessions.values()]
       .filter(session => (session.origin ?? 'reader') !== 'automation' && session.name.includes('11-09'))
-    expect(readerVisibleBefore).toHaveLength(3)
+    expect(readerVisibleBefore).toHaveLength(4) // 中文 3 条 + 英文 1 条，都混在读者列表里
 
     const before = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
     const countBefore = d.sessions.size
@@ -171,14 +174,16 @@ describe('claiming the briefing sessions that were created without an identity',
       updateAgentSession: d.updateAgentSession as never
     })
 
-    expect(result.updated).toBe(4)
+    expect(result.updated).toBe(5)
     // 1) 同一期只剩一条正式身份，取**最新**那次生成（读者现在打开的就是它的内容）。
     const edition23 = `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN`
     expect(d.sessions.get('s-new-2')?.originRef).toBe(edition23)
     expect(d.sessions.get('s-mid-3')?.originRef).toBe(`${edition23}#history:s-mid-3`)
     expect(d.sessions.get('s-old-1')?.originRef).toBe(`${edition23}#history:s-old-1`)
     expect(d.sessions.get('s-10th')?.originRef).toBe(`daily-brief:2026-11-10:${DEFAULT_PERIOD_ID}:zh-CN`)
-    for (const id of ['s-old-1', 's-new-2', 's-mid-3', 's-10th']) {
+    // 身份是「期 × 语言」：同一期中文、英文各一条，互不顶替。
+    expect(d.sessions.get('s-en')?.originRef).toBe(`daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:en-US`)
+    for (const id of ['s-old-1', 's-new-2', 's-mid-3', 's-10th', 's-en']) {
       expect(d.sessions.get(id)?.origin).toBe('automation')
       expect(d.sessions.get(id)?.originGroup).toBe('daily-briefing')
     }
@@ -197,7 +202,14 @@ describe('claiming the briefing sessions that were created without an identity',
     expect([...d.sessions.values()]
       .filter(session => (session.origin ?? 'reader') !== 'automation' && session.name.includes('11-09'))).toHaveLength(0)
 
-    // 幂等：再跑一次不再改任何行，而且每一行的内容**逐字不变**（不是只看 updated 计数）。
+    // 断言 1：这一期在「身份」上只出现一次——按正式身份查恰好一条，且迁移前后行数不变。
+    expect([...d.sessions.values()].filter(session => session.originRef === edition23)).toHaveLength(1)
+    // 断言 3：消息表一行没动（行数与内容都逐字相等）。
+    const messageTable = () => JSON.stringify([...d.sessions.values()].map(session => session.messages))
+    expect(messageTable()).toBe(JSON.stringify([...before.values()].map(snapshot => JSON.parse(snapshot).messages)))
+
+    // 断言 4：后缀幂等——第二次迁移不许把同一条再套一层 `#history:`。
+        // 幂等：再跑一次不再改任何行，而且每一行的内容**逐字不变**（不是只看 updated 计数）。
     const afterFirstRun = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
     const again = await claimExistingBriefingSessions({
       links: d.links,
@@ -206,8 +218,26 @@ describe('claiming the briefing sessions that were created without an identity',
       updateAgentSession: d.updateAgentSession as never
     })
     expect(again.updated).toBe(0)
-    expect(d.updateAgentSession).toHaveBeenCalledTimes(4)
+    expect(d.updateAgentSession).toHaveBeenCalledTimes(5)
     const afterSecondRun = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
     expect(afterSecondRun).toEqual(afterFirstRun)
+    for (const session of d.sessions.values()) {
+      expect(session.originRef ?? '').not.toMatch(/#history:.*#history:/u)
+    }
+
+    // 断言 6（反向）：正式身份必须是**最近**一次生成。换成「最早」或「任意一次」都必须红。
+    expect(d.sessions.get('s-new-2')?.originRef).toBe(edition23)
+    expect(d.sessions.get('s-old-1')?.originRef).not.toBe(edition23)
+    const canonicalId = [...d.sessions.entries()]
+      .find(([, session]) => session.originRef === edition23)?.[0]
+    expect(canonicalId).toBe('s-new-2')
+
+    // 断言 5（可见性看字段不看字符串）：把历史身份的前缀换成任意别的值，读者列表结果不变——
+    // 因为「不进读者列表」是由 `origin = 'automation'` 这个真实字段决定的。
+    for (const session of d.sessions.values()) {
+      if (session.originRef?.includes('#history:')) session.originRef = session.originRef.replace('#history:', 'legacy:')
+    }
+    expect([...d.sessions.values()]
+      .filter(session => (session.origin ?? 'reader') !== 'automation' && session.name.includes('11-09'))).toHaveLength(0)
   })
 })
