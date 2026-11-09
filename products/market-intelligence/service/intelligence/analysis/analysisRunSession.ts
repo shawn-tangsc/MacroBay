@@ -26,7 +26,8 @@ export type AnalysisRunSessionDependencies = Readonly<{
    *
    * 落成文本后不再随语言/时区变：历史会话是快照，和已发布结论保持发布时语言同一条规则。
    */
-  titleFor?: (queuedAt: string) => string | Promise<string>
+  /** 会话标题：只有模块名，不再依赖时刻（时刻在列表右侧、日期在分组标题上）。 */
+  titleFor?: () => string | Promise<string>
   /**
    * 按 (agentId, originRef) 取一条，只读不建。
    *
@@ -64,7 +65,7 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
     const session = await deps.createAgentSession({
       agentId: analysisRunSessionPolicy.agentId,
       // 标题是「时刻 · 模块名」，绝不是 run id：读者在助手列表里不该看到我们的账本编号。
-      name: (deps.titleFor ? await deps.titleFor(input.queuedAt ?? '') : undefined)
+      name: (deps.titleFor ? await deps.titleFor() : undefined)
         ?? analysisRunSessionPolicy.moduleName['zh-CN'],
       description,
       workspace: { type: 'system' },
@@ -88,7 +89,7 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
               // 类型，`payload` 只带 runId——原始标识从不显示，也不会被当成正文念出来。
               type: 'agent-context' as const,
               kind: 'market-analysis-run',
-              label: (deps.titleFor ? await deps.titleFor(input.queuedAt ?? '') : undefined)
+              label: (deps.titleFor ? await deps.titleFor() : undefined)
                 ?? analysisRunSessionPolicy.moduleName['zh-CN'],
               payload: { runId: input.runId }
             }]
@@ -122,20 +123,15 @@ export function appendAnalysisRunSummary(deps: AnalysisRunSessionDependencies) {
 }
 
 /**
- * 「时刻 · 模块名」：会话标题的唯一来源。
+ * 会话标题：**只有模块名**。
  *
- * 时刻按**建会话时**的读者时区格式化，模块名按当时的语言；落成文本后不再随设置变——历史会话
- * 是快照，和已发布结论保持发布时语言同一条规则。时间读不出来就不写时刻，绝不退回 run id。
+ * 时刻与日期不再进标题。会话列表按「今天／昨天／更早」分组（日期在分组标题上），每一行右侧另有
+ * `formatShellClock` 给出的时间——标题再印一遍就是同一事实的第二份，而标题里混数字＋`·` 也让
+ * 中英混排看起来发挤（2026-11-09 的界面反馈）。
+ *
+ * 快照语义不变：落进名字里的文本按**建会话时**的语言，之后不随设置变；已经存成
+ * 「时刻 · 模块名」的老会话保持原样——那是历史事实，不靠解析旧文本去改名。
  */
-export function formatRunSessionTitle(
-  queuedAt: string,
-  language: keyof typeof analysisRunSessionPolicy.moduleName,
-  timeZone: string
-): string {
-  const instant = new Date(queuedAt)
-  const stamp = Number.isFinite(instant.getTime())
-    ? new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short', timeZone }).format(instant)
-    : ''
-  const moduleName = analysisRunSessionPolicy.moduleName[language]
-  return stamp ? `${stamp} · ${moduleName}` : moduleName
+export function formatRunSessionTitle(language: keyof typeof analysisRunSessionPolicy.moduleName): string {
+  return analysisRunSessionPolicy.moduleName[language]
 }
