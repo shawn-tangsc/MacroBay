@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { Trash2 } from 'lucide-react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
@@ -50,16 +51,18 @@ export function ModelServiceClearModelsControl({
   }
 
   return (
-    <button
-      type="button"
-      className="model-service-pill model-service-pill-danger"
+    /*
+     * 危险动作按档位：`.ant-btn-dangerous`（红字红边、静止可见，不靠 hover）+ 上面已有的确认框。
+     * 不再挂 `model-service-pill` / `model-service-pill-danger`：胶囊那套外观在本界面没有第二处。
+     */
+    <Button
+      aria-label={labels.clearModels}
+      className="ant-btn-dangerous"
       data-models-clear
       disabled={isEmpty || disabled}
-      title={labels.clearModels}
-      aria-label={labels.clearModels}
+      icon={<Trash2 size={13} aria-hidden="true" />}
       onClick={askToClear}>
-      <Trash2 size={13} aria-hidden="true" />
       {labels.clearModels}
-    </button>
+    </Button>
   )
 }
