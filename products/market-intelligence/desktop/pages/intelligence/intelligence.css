@@ -334,10 +334,15 @@ button.mi-agent-card__status:focus-visible {
   outline-offset: 2px;
 }
 
-.mi-agent-card__progress {
+/* 进度与它旁边的动作已是 antd `Button`（text 档）：选择器带上 `.ant-btn` 才压得住它自带的字号与内距，
+   另补 `height: auto` / `line-height: inherit`（这是卡内 9px 的行内字，antd 的 24px 档会撑高卡片），
+   以及 hover 的透明底（原来只有颜色变化）。字号、下划线、留白仍是原来的数。 */
+.mi-agent-card__progress.ant-btn {
   position: relative;
   z-index: 2;
   flex: 0 0 auto;
+  height: auto;
+  line-height: inherit;
   padding: 0;
   border: 0;
   background: transparent;
@@ -349,6 +354,8 @@ button.mi-agent-card__status:focus-visible {
   text-underline-offset: 2px;
   white-space: nowrap;
 }
+
+.mi-agent-card__progress.ant-btn:hover { background: transparent; }
 
 .mi-agent-card__progress:hover {
   color: var(--mi-terminal-lime);
@@ -385,7 +392,9 @@ button.mi-agent-card__status:focus-visible {
   white-space: nowrap;
 }
 
-.mi-agent-card__activation-action {
+.mi-agent-card__activation-action.ant-btn {
+  height: auto;
+  line-height: inherit;
   padding: 0;
   border: 0;
   background: transparent;
@@ -397,7 +406,8 @@ button.mi-agent-card__status:focus-visible {
   text-underline-offset: 2px;
 }
 
-.mi-agent-card__activation-action:hover {
+.mi-agent-card__activation-action.ant-btn:hover {
+  background: transparent;
   color: var(--mi-terminal-lime);
 }
 
