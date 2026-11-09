@@ -1509,6 +1509,14 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   {
+    id: '0046_drop_agent_session_messages_fts',
+    up: `
+      -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。
+      -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
+      drop table if exists agent_session_messages_fts;
+    `
+  },
+  {
     /**
      * 会话来源两列（r21 §3.2）：读者自己的会话与产品自动建的会话共用一个列表，但默认列表只取
      * `reader`，否则一天几十条自动会话会把读者的历史埋掉。
@@ -1520,14 +1528,6 @@ const migrations: AgentPlatformMigration[] = [
     up: `
       alter table agent_sessions add column origin text not null default 'reader';
       alter table agent_sessions add column origin_group text;
-    `
-  },
-  {
-    id: '0046_drop_agent_session_messages_fts',
-    up: `
-      -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。
-      -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
-      drop table if exists agent_session_messages_fts;
     `
   },
   ...channelSettingsOverrides,
