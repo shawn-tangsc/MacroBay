@@ -194,6 +194,52 @@ describe('ProviderDetail source details', () => {
     expect(container.textContent).toContain(settingsText.jobNotRegistered)
   })
 
+  it('falls back to the sentence without a number when the reason code is unknown', async () => {
+    // 码名一改（或加了个没登记的新码）就该落到这一支：**不从码里截数字，也不许抛错**。
+    // 没有这条，「表里没有的码」永远没人跑过——`?? fallback` 写成抛错也照样全绿。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          sources: [source({
+            providerId: 'bls',
+            sourceId: 'macro-calendar-bls',
+            displayName: 'BLS official schedule',
+            kind: 'official-calendar',
+            jobRegistered: true,
+            unavailable: {
+              // 今天原因码是**闭集**，未知码只能这样注进来——这条用例钉的正是「以后加码时
+              // fallback 必须活着」：不截数字、不抛错。
+              reasonCode: 'endpoint-vanished-somewhere' as never,
+              automaticSync: 'stopped',
+              lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z',
+              decidedAt: '2026-11-08'
+            }
+          })]
+        },
+        showSourceDetails: true
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const text = container.textContent ?? ''
+    expect(text).toContain(settingsText.unavailableShort)
+    // 不带数字：退回的是那句没有括号的说法。
+    expect(text).not.toContain('（403）')
+    // 码本身仍然在 ⓘ 里（不是被吞掉），只是不进正文。
+    expect(container.querySelectorAll('[aria-label="原因码"]')).toHaveLength(1)
+  })
+
   it('does not dress a source row as an entrance it cannot honour', async () => {
     // 缺陷（MI-10-R17）：行入口的 onSelectSource 一直是空回调，点了没有任何反应——「看着能点、
     // 其实没有去处」。修法是**渲染成非交互行**：不是按钮、没有箭头、没有 hover 指路。
