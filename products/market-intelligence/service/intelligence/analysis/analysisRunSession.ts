@@ -97,7 +97,17 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
         },
         ...(input.summary ? [{ role: 'assistant' as const, data: { parts: [{ type: 'text' as const, text: input.summary }] } }] : [])
       ]
-      try { await deps.appendAgentSessionMessages({ sessionId: session.id, messages }) } catch { /* 会话是记录的附加物 */ }
+      // 会话是记录的附加物，失败不阻断分析——但**不许静默**：这条会话以后打开是空的，只有留痕才能查得到。
+      try {
+        await deps.appendAgentSessionMessages({ sessionId: session.id, messages })
+      } catch (error) {
+        console.log(JSON.stringify({
+          marker: 'MI_ANALYSIS_RUN_SESSION_APPEND_FAILED',
+          stage: 'context-card',
+          runId: input.runId,
+          reason: error instanceof Error ? error.message : String(error)
+        }))
+      }
     }
     return session.id
   }

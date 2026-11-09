@@ -389,7 +389,17 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     if (deps.appendRunSummary) {
       const summaryText = summary.conclusion?.summary ?? summary.eventAssessment ?? ''
       if (summaryText) {
-        try { await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText }) } catch { /* 会话是附加物 */ }
+        try {
+          await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText })
+        } catch (error) {
+          // 同上：摘要没进会话时，读者打开那条 run 会话只会看到一张卡片。失败不阻断发布，但要留痕。
+          console.log(JSON.stringify({
+            marker: 'MI_ANALYSIS_RUN_SESSION_APPEND_FAILED',
+            stage: 'summary',
+            runId: runRecord.id,
+            reason: error instanceof Error ? error.message : String(error)
+          }))
+        }
       }
     }
     // N12：**达到门槛**的那次、写入记录之后，提交一次结论推送。判据是原因码，不是触发键——
