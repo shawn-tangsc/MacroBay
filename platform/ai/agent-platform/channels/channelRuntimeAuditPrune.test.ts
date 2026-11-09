@@ -60,14 +60,22 @@ describe('channel runtime audit prune', () => {
   it('reports what it removed to the retention job log', async () => {
     const prune = vi.fn(() => ({ removedFailureRows: 12, removedLifecycleRows: 3 }))
     let handler: ((payload: unknown, context: { log: (entry: { level: string; message: string }) => Promise<void> }) => Promise<void>) | undefined
+    const schedules: Array<{ id: string; trigger: { kind: string; expression?: string; timezone?: string } }> = []
     const jobRuntime = {
       registerHandler: (id: string, next: typeof handler) => {
         expect(id).toBe(channelRuntimeAuditRetentionJobId)
         handler = next
       },
-      setSchedule: vi.fn()
+      setSchedule: (schedule: { id: string; trigger: { kind: string; expression?: string; timezone?: string } }) => {
+        schedules.push(schedule)
+      }
     } as unknown as JobRuntime
     registerChannelRuntimeAuditRetentionJob(jobRuntime, { audits: () => ({ prune }), timeZone: () => 'Asia/Shanghai' })
+
+    // 夜间序列 4 / 40 / 50 / 55：这条必须占 4 分，40 分是通知保留任务。
+    // 没有这一行时，把 cron 写成 40 分与通知任务撞车也不会有任何用例红。
+    expect(schedules).toHaveLength(1)
+    expect(schedules[0]?.trigger).toEqual({ kind: 'cron', expression: '4 3 * * *', timezone: 'Asia/Shanghai' })
 
     const log = vi.fn(async () => undefined)
     await handler?.({}, { log })

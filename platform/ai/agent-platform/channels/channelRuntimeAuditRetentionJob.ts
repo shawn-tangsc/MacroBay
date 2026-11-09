@@ -33,7 +33,9 @@ export function registerChannelRuntimeAuditRetentionJob(
     handlerId: channelRuntimeAuditRetentionJobId,
     title: { 'zh-CN': '清理通道运行日志', 'en-US': 'Channel runtime log retention' },
     audience: 'internal' as const,
-    trigger: { kind: 'cron', expression: '40 3 * * *', timezone: deps.timeZone() },
+    // 夜间序列 4 / 40 / 50 / 55 按此顺序排：本任务占 **4 分**，40 分是通知保留任务，
+    // 撞同一分钟会让两条裁剪同时抢库（而且谁先谁后看不出）。
+    trigger: { kind: 'cron', expression: '4 3 * * *', timezone: deps.timeZone() },
     payload: {}
   })
 }
