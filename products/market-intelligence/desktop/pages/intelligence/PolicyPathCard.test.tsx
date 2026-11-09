@@ -7,7 +7,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { PolicyPathCard } from './PolicyPathCard'
+import { PolicyPathCard, type PolicyPathCardText } from './PolicyPathCard'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
 const reading: PolicyPathReading = {
@@ -32,12 +32,14 @@ afterEach(async () => {
 // The card resolves its state word through the shell language now, so the test has to supply the
 // same context the app does — a card whose copy is English but whose pill says 实时 is exactly the
 // bug that missing context hides.
-const render = async (candidate: PolicyPathReading, cardText: typeof text = text, language: 'zh-CN' | 'en-US' = 'zh-CN') => {
+const render = async (candidate: PolicyPathReading, cardText: PolicyPathCardText = text, language: 'zh-CN' | 'en-US' = 'zh-CN') => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root!.render(createElement(ShellLanguageProvider, { language },
-    createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' }))))
+  await act(async () => root!.render(createElement(ShellLanguageProvider, {
+    language,
+    children: createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' })
+  })))
   return host
 }
 
@@ -125,6 +127,7 @@ const settlement: PolicyPathSettlement = {
   actualOutcome: 'hike-25',
   priced: 0.38,
   pricedOutcome: 'no-change',
+  pricingBasis: 'pre-decision',
   conclusion: { kind: 'relative', direction: 'hawkish', surprisePp: 62 },
   nextMeeting: { meetingDate: '2027-01-27', daysUntil: 50 }
 }
