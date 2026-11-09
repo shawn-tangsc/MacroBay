@@ -8,7 +8,6 @@ import { createIntelligencePipeline } from './intelligencePipeline'
 import { createIntelligenceSourcesService } from './intelligenceSourcesService'
 import { createInMemoryProfileStorage, createSourceProfileStore } from './sourceProfileStore'
 import { createIntelligenceWorkspaceQueries } from './intelligenceWorkspaceQueries'
-import { createInMemoryFocusSettingsStorage, createIntelligenceFocusSettingsStore } from './intelligenceFocusSettingsStore'
 import type { WorkspaceMatchContext } from './intelligenceWorkspaceQueries'
 
 describe('intelligenceWorkspaceQueries', () => {
@@ -187,44 +186,6 @@ describe('intelligenceWorkspaceQueries', () => {
 
     const rows = await scopedQueries.getTimeline({ scope: 'all', timeRange: 'all' }, matchContext)
     expect(rows.map((row) => row.itemId)).toEqual(['item-a', 'item-b'])
-  })
-
-  it('re-reads the default coverage on the next query, so a saved change changes what the board carries', async () => {
-    // 缺陷（MI-10-R12）：这条设置决定看板带哪些资产，而页面从来没画过它。写入链本身是通的，
-    // 所以要证明的是**下一次查询真的跟着变**——不是只测读取函数自己。
-    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
-    await profileStore.saveProfile({ sourceId: 'coindesk-rss', enabled: true })
-    const localPipeline = createIntelligencePipeline({ profileStore })
-    await localPipeline.collectSource({
-      sourceId: 'coindesk-rss',
-      runId: 'run-focus',
-      fixtureText: loadFixture('rss-sample.xml')
-    })
-    await localPipeline.normalizeRawRecords({ sourceId: 'coindesk-rss' })
-    await localPipeline.assessChangedItems({})
-    await localPipeline.refreshSentimentAggregates({ scopeKey: 'global', horizon: '1h' })
-
-    const focusSettingsStore = createIntelligenceFocusSettingsStore(createInMemoryFocusSettingsStorage())
-    const localService = createIntelligenceSourcesService({
-      focusSettingsStore,
-      profileStore,
-      pipeline: localPipeline,
-      jobRuntime: { setSchedule: () => {}, removeSchedule: () => {}, enqueueDefinition: async () => ({}) } as never
-    })
-    const localQueries = createIntelligenceWorkspaceQueries({ pipeline: localPipeline, sourcesService: localService })
-    const coversCoindesk = (state: Awaited<ReturnType<typeof localQueries.getWorkspaceStateAsync>>): boolean =>
-      state.overview.sourceCoverage.some((row) => row.sourceId === 'coindesk-rss')
-
-    // 默认（global-macro + digital-assets）：coindesk 是数字资产源，在范围内。
-    expect(coversCoindesk(await localQueries.getWorkspaceStateAsync({ matchContext }))).toBe(true)
-
-    // 把范围收到只有美股：下一次查询就不再带它——不重启、不重算。
-    await localService.saveFocusSettings({ enabledFocusMarkets: ['us-equities'] })
-    expect(coversCoindesk(await localQueries.getWorkspaceStateAsync({ matchContext }))).toBe(false)
-
-    // 改回去也立刻回来：这份设置每次查询现读，不是启动时快照。
-    await localService.saveFocusSettings({ enabledFocusMarkets: ['global-macro', 'digital-assets'] })
-    expect(coversCoindesk(await localQueries.getWorkspaceStateAsync({ matchContext }))).toBe(true)
   })
 
   it('shows enabled sources without a successful run as pending in workspace status', async () => {

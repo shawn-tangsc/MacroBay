@@ -6,7 +6,6 @@ import type {
 } from '../schema/intelligenceSource'
 import { resolveSourceFreshnessStatus } from '../schema/intelligenceSourcesContracts'
 import { isDefillamaStablecoinRetiredPath, listIntelligenceSourceDefinitions } from './sourceCatalog'
-import { isSourceApplicableToFocusMarkets } from './intelligenceSourceApplicability'
 import { resolveMacroFreshnessWindowMs } from './macroSourceHealth'
 import type { IntelligencePipeline } from './intelligencePipeline'
 import { V2_REQUIRED_LIVE_SOURCE_IDS } from './v2RequiredSources'
@@ -39,7 +38,6 @@ export type IntelligenceSourceCoverageView = {
   latestFailureAt?: string
   latestItemCount: number
   latestImpactCount: number
-  focusMarketActive: boolean
   action: IntelligenceSourceCoverageAction
 }
 
@@ -59,13 +57,11 @@ const STALE_AFTER_SECONDS: Record<string, number> = {
 export function buildSourceCoverage(input: {
   profileById: Map<string, IntelligenceSourceProfile>
   pipeline: IntelligencePipeline
-  enabledFocusMarkets?: IntelligenceFocusMarket[]
 }): IntelligenceSourceCoverageView[] {
   const items = input.pipeline.listItems()
   const impacts = input.pipeline.listImpacts()
   const itemCountBySource = countByKey(items, (item) => item.sourceId)
   const impactCountBySource = countImpactsBySource(items, impacts)
-  const enabledFocusMarkets = input.enabledFocusMarkets
 
   return listIntelligenceSourceDefinitions()
     .filter((definition) => definition.visibility !== 'hidden')
@@ -76,9 +72,6 @@ export function buildSourceCoverage(input: {
       const health = input.pipeline.getHealth(definition.sourceId)
       const readiness = definition.readiness ?? 'live'
       const runtimeStatus = resolveSourceFreshnessStatus(enabled, health)
-      const focusMarketActive =
-        !enabledFocusMarkets || isSourceApplicableToFocusMarkets(definition, enabledFocusMarkets)
-
       return {
         sourceId: definition.sourceId,
         sourceName: definition.displayName,
@@ -100,11 +93,9 @@ export function buildSourceCoverage(input: {
         latestFailureAt: health?.lastFailureAt,
         latestItemCount: itemCountBySource.get(definition.sourceId) ?? 0,
         latestImpactCount: impactCountBySource.get(definition.sourceId) ?? 0,
-        focusMarketActive,
         action: resolveCoverageAction({ readiness, enabled, runtimeStatus })
       }
     })
-    .filter((row) => row.focusMarketActive)
     .sort(
       (left, right) =>
         Number(right.v2Required) - Number(left.v2Required) || left.sourceName.localeCompare(right.sourceName)
