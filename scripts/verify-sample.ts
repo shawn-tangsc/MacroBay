@@ -57,6 +57,7 @@ export const VERIFY_CHECKS = [
   'check:danger-color',
   'check:hex-color',
   'check:undefined-token',
+  'check:font-weight',
   'check:components-ownership',
   'check:async-initial-state',
   'check:state-content-ternary',
