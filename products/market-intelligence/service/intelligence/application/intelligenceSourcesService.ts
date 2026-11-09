@@ -40,7 +40,6 @@ import type {
   SafeReplayWindowResult,
   SafeRunNowResult,
   SafeIntelligenceSourceHealthView,
-  SaveIntelligenceFocusMarketSettingsInput,
   SaveIntelligenceSourceProfileInput
 } from '../schema/intelligenceSourcesContracts'
 import { resolveConnectivityStatus, sanitizeSafeView, toSafeHealthView } from '../schema/intelligenceSourcesContracts'
@@ -50,8 +49,6 @@ import {
   defaultIntelligenceCredentialRef,
   type IntelligenceCredentialStore
 } from '../store/intelligenceCredentialStore'
-import type { IntelligenceFocusSettingsStore } from './intelligenceFocusSettingsStore'
-import { createDefaultFocusMarketSettings, type IntelligenceFocusMarketSettings } from './intelligenceFocusSettings'
 
 const dashboardScheduleProfilePolicy = {
   requiredFields: [
@@ -100,7 +97,6 @@ export type IntelligenceSourcesService = ReturnType<typeof createIntelligenceSou
 
 export function createIntelligenceSourcesService(deps: {
   profileStore: SourceProfileStore
-  focusSettingsStore?: IntelligenceFocusSettingsStore
   pipeline: IntelligencePipeline
   jobRuntime: JobRuntime
   workerRuntime?: ManagedWorkerRuntime
@@ -131,17 +127,9 @@ export function createIntelligenceSourcesService(deps: {
     platformFetch: deps.platformFetch
   })
   const validatedAtBySource = new Map<string, string>()
-  const focusSettingsStore = deps.focusSettingsStore
   const appliedRuntimeFingerprintBySource = new Map<string, string>()
   let initialization: Promise<void> | undefined
   let initialized = false
-
-  async function getFocusSettings(): Promise<IntelligenceFocusMarketSettings> {
-    if (!focusSettingsStore) {
-      return createDefaultFocusMarketSettings()
-    }
-    return focusSettingsStore.getSettings()
-  }
 
   function requestBudgetFor(policy: SourceRequestGovernancePolicy | undefined) {
     return policy?.settingVisibility === 'visible'
@@ -283,7 +271,6 @@ export function createIntelligenceSourcesService(deps: {
 
     async getPageState(input?: { sourceId?: string }) {
       const definitions = this.listDefinitions()
-      const focusMarketSettings = await getFocusSettings()
       const selectedSourceId = input?.sourceId ?? definitions[0]?.sourceId
       const detail = selectedSourceId ? await this.getDetail(selectedSourceId) : undefined
       const sourceHealthById = Object.fromEntries(
@@ -298,22 +285,8 @@ export function createIntelligenceSourcesService(deps: {
         definitions,
         selectedSourceId,
         detail,
-        sourceHealthById,
-        focusMarketSettings
+        sourceHealthById
       } satisfies SafeIntelligenceSourcesPageState)
-    },
-
-    async getFocusSettings() {
-      return getFocusSettings()
-    },
-
-    async saveFocusSettings(input: SaveIntelligenceFocusMarketSettingsInput) {
-      if (!focusSettingsStore) {
-        throw new Error('Focus market settings are unavailable.')
-      }
-      return focusSettingsStore.saveSettings({
-        enabledFocusMarkets: input.enabledFocusMarkets
-      })
     },
 
     async getDetail(sourceId: string): Promise<SafeIntelligenceSourceDetailView> {

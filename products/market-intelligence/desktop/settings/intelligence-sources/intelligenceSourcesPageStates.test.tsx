@@ -47,7 +47,6 @@ function sourcesState(overrides: Record<string, unknown>) {
     replayWindow: vi.fn(),
     refreshHealth: vi.fn(),
     saveFocusMarkets: vi.fn(),
-    focusMarketSettings: { enabledFocusMarkets: [], updatedAt: '' },
     savingFocusMarkets: false,
     profiles: [],
     definitions: [],

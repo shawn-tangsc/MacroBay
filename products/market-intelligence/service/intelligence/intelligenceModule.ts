@@ -31,10 +31,6 @@ import { createRawRecordStore } from './application/rawRecordStore'
 import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
 import { seedDefaultEnabledSources } from './application/defaultEnabledSources'
 import {
-  createFocusSettingsJsonStorage,
-  createIntelligenceFocusSettingsStore
-} from './application/intelligenceFocusSettingsStore'
-import {
   createIntelligenceCredentialJsonStorage,
   createIntelligenceCredentialStore
 } from './store/intelligenceCredentialStore'
@@ -342,9 +338,6 @@ export function getIntelligenceModule(
     const getAppLanguage = hooks?.getAppLanguage ?? (async () => 'zh-CN' as const)
     const profileStore = createSourceProfileStore(
       createProfileJsonStorage(join(dataDir, 'intelligence-source-profiles.json'))
-    )
-    const focusSettingsStore = createIntelligenceFocusSettingsStore(
-      createFocusSettingsJsonStorage(join(dataDir, 'intelligence-focus-settings.json'))
     )
     const rawRecordStorage = createRawRecordJsonStorage(join(dataDir, 'intelligence-raw-records.json'))
     const rawRecordStore = createRawRecordStore({
@@ -714,7 +707,6 @@ export function getIntelligenceModule(
     })
     const sourcesService = createIntelligenceSourcesService({
       profileStore,
-      focusSettingsStore,
       pipeline,
       jobRuntime,
       workerRuntime,

@@ -4,9 +4,7 @@ import type {
   IntelligenceSourceProfile,
   IntelligenceSourceDefinition
 } from '../../../service/intelligence/schema/intelligenceSource'
-import type { IntelligenceFocusMarket } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
-import type { IntelligenceFocusMarketSettings } from '../../../service/intelligence/application/intelligenceFocusSettings'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
 import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout } from './intelligenceSourceProfileEditor'
@@ -18,14 +16,12 @@ import type { SettingsView } from '../../../service/intelligence/application/sou
 type HookState = {
   definitions: IntelligenceSourceDefinition[]
   profiles: IntelligenceSourceProfile[]
-  focusMarketSettings: IntelligenceFocusMarketSettings
   selectedSourceId?: string
   detail?: SafeIntelligenceSourceDetailView
   draftProfile?: IntelligenceSourceProfile
   loading: boolean
   settingsView?: SettingsView
   saving: boolean
-  savingFocusMarkets: boolean
   running: boolean
   testingCredentials: boolean
   replaying: boolean
@@ -50,10 +46,8 @@ export function useIntelligenceSourcesSettings(labels: {
   const [state, setState] = useState<HookState>({
     definitions: [],
     profiles: [],
-    focusMarketSettings: { enabledFocusMarkets: ['global-macro', 'digital-assets'], updatedAt: '' },
     loading: true,
     saving: false,
-    savingFocusMarkets: false,
     running: false,
     testingCredentials: false,
     replaying: false,
@@ -73,7 +67,6 @@ export function useIntelligenceSourcesSettings(labels: {
       ...current,
       definitions: pageState.definitions,
       profiles,
-      focusMarketSettings: pageState.focusMarketSettings,
       selectedSourceId: pageState.selectedSourceId,
       detail: pageState.detail,
       settingsView,
@@ -394,34 +387,6 @@ export function useIntelligenceSourcesSettings(labels: {
     }))
   }, [state.detail, state.selectedSourceId])
 
-  /**
-   * 写「默认覆盖范围」，并把**这一处**的成败交回调用方：设置行的失败要就地显示（保留读者刚选的），
-   * 与页面级 `errorCode` 不是同一件事——后者只在首屏读失败时用。
-   */
-  const saveFocusMarkets = useCallback(
-    async (enabledFocusMarkets: IntelligenceFocusMarket[]): Promise<boolean> => {
-      setState((current) => ({ ...current, savingFocusMarkets: true, errorCode: null }))
-      try {
-        const focusMarketSettings = await intelligenceSourcesClient.saveFocusSettings({ enabledFocusMarkets })
-        setState((current) => ({
-          ...current,
-          focusMarketSettings,
-          savingFocusMarkets: false,
-          notice: labels.saved
-        }))
-        return true
-      } catch {
-        setState((current) => ({
-          ...current,
-          savingFocusMarkets: false,
-          errorCode: labels.saveFailed
-        }))
-        return false
-      }
-    },
-    [labels.saved, labels.saveFailed]
-  )
-
   const sourceEnabledById = useMemo(
     () =>
       buildSourceEnabledById(
@@ -449,7 +414,6 @@ export function useIntelligenceSourcesSettings(labels: {
     runNow,
     testCredentials,
     replayWindow,
-    refreshHealth,
-    saveFocusMarkets
+    refreshHealth
   }
 }

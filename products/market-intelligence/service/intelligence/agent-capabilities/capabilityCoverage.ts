@@ -156,7 +156,6 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.querySentimentSnapshot': exposed('query_sentiment_snapshot'),
   'intelligence.retryItemAssessment': exposed('operate_intelligence_source'),
 
-  'intelligenceSources.getFocusSettings': excluded('internal-view'),
   'intelligenceSources.getHealth': exposed('get_source_detail'),
   'intelligenceSources.getPageState': excluded('internal-view'),
   'intelligenceSources.revealCredential': excluded('returns-plaintext-credential'),
@@ -173,7 +172,6 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
    */
   'intelligenceSources.replayWindow': excluded('destructive'),
   'intelligenceSources.runNow': exposed('operate_intelligence_source'),
-  'intelligenceSources.saveFocusSettings': excluded('internal-view'),
   'intelligenceSources.saveProfile': exposed('configure_intelligence_source'),
   'intelligenceSources.setEnabled': exposed('configure_intelligence_source'),
   'intelligenceSources.testConnection': exposed('operate_intelligence_source'),
