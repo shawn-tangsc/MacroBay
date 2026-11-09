@@ -24,11 +24,16 @@ describe('dashboard capital conditions model', () => {
     }, asOf)
 
     expect(result).toEqual({
-      state: 'available', conclusion: 'partial', etf: 'unavailable', observedAt: '2026-08-18T07:00:00.000Z',
+      state: 'available', conclusion: 'partial', etf: 'unavailable', etfReading: { state: 'unreadable', missing: { btc: 'source-unreadable', eth: 'source-unreadable' }, comparison: { state: 'unaligned', reason: 'source-unreadable' } }, observedAt: '2026-08-18T07:00:00.000Z',
       currentUsd: '$254.9B', change1dUsd: '+$82.4M', change1dPercent: '+0.03%', change7dUsd: '+$82.4M', change7dPercent: '+0.03%',
       change30dUsd: '-$500M', change30dPercent: '-0.21%'
     })
-    expect(JSON.stringify(result)).not.toMatch(/verifiedAt|https?:|source|raw|error|failure/i)
+    const serialized = JSON.stringify(result)
+    // 卡片状态里不许出现读取时刻、URL、原文或错误文本。
+    expect(serialized).not.toMatch(/verifiedAt|https?:|raw|error|failure/i)
+    // 唯一允许的 `source-` 字样是架构师定的那个闭集原因码，别的来源名一律不许上卡片状态。
+    // 三处：两支各自的缺因 + 对比列的不可比原因。
+    expect(serialized.match(/source-[a-z-]+/g) ?? []).toEqual(['source-unreadable', 'source-unreadable', 'source-unreadable'])
   })
 
   it('projects complete five- and twenty-day cumulative sums from the same validated rows', () => {
@@ -193,7 +198,7 @@ describe('dashboard capital conditions model', () => {
       state: 'available', asOf, etf: { state: 'unavailable' }, conclusion: 'partial',
       coreStablecoins: { observedAt: asOf, verifiedAt: asOf, currentUsd: 1, change1dUsd: -0, change1dPercent: -0, change7dUsd: -0, change7dPercent: -0, change30dUsd: -0, change30dPercent: -0 }
     }, asOf)).toEqual({
-      state: 'available', conclusion: 'partial', etf: 'unavailable', observedAt: asOf, currentUsd: '$1',
+      state: 'available', conclusion: 'partial', etf: 'unavailable', etfReading: { state: 'unreadable', missing: { btc: 'source-unreadable', eth: 'source-unreadable' }, comparison: { state: 'unaligned', reason: 'source-unreadable' } }, observedAt: asOf, currentUsd: '$1',
       change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%'
     })
   })
@@ -338,5 +343,78 @@ describe('ETF signal chip', () => {
   it('draws nothing at all while the panel switch is closed', () => {
     expect(projectEtfOutflowChip(read([signal()]), CLOSED)).toEqual({ state: 'hidden' })
     expect(projectEtfOutflowChip(undefined, CLOSED)).toEqual({ state: 'hidden' })
+  })
+})
+
+/**
+ * 资金面那两格：**有值 / 缺（未知 + 原因）/ 不可比** 是三件不同的事。
+ *
+ * `etf` 那个字符串出口把四条完全不同的路都压成 `'unavailable'`：快照读不到、BTC 没最新值、
+ * ETH 没最新值、两支窗口不齐。于是 BTC 明明有数字，整块却换成一行错误态。以下四条钉住拆开后的语义。
+ */
+describe('ETF reading: each asset keeps its own value, and alignment only affects the comparison', () => {
+  const observedAt = '2026-08-18T07:00:00.000Z'
+  function datesEndingAt(end: string, length: number): string[] {
+    const endMs = Date.parse(`${end}T00:00:00.000Z`)
+    return Array.from({ length }, (_, index) => new Date(endMs - (length - 1 - index) * 86_400_000).toISOString().slice(0, 10))
+  }
+  function snapshot(btcEnd: string, ethEnd: string, length = 30) {
+    return {
+      state: 'available' as const, schemaVersion: 1 as const, sourceId: '0xrouter' as const, windowEnd: btcEnd, verifiedAt: observedAt,
+      btc: { asset: 'BTC' as const, rows: datesEndingAt(btcEnd, length).map((tradingDate, index) => ({ tradingDate, netFlowUsd: index + 1, observedAt })) },
+      eth: { asset: 'ETH' as const, rows: datesEndingAt(ethEnd, length).map((tradingDate, index) => ({ tradingDate, netFlowUsd: -(index + 1), observedAt })) }
+    }
+  }
+  function project(etf: unknown) {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf,
+      coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 254_900_000_000, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 1, change30dPercent: 0.01 }
+    }, asOf)
+    if (result.state !== 'available') throw new Error(`expected an available card, got ${result.state}`)
+    // 模型每一张可用卡片都必须给出读数；缺了就是模型没填（本阶段它是可选字段）。
+    if (!result.etfReading) throw new Error('expected the ETF reading on an available card')
+    return result.etfReading
+  }
+
+  it('keeps the BTC cell when only ETH has no usable latest value', () => {
+    const value = snapshot('2026-08-17', '2026-08-17')
+    // 最新一行给了不可格式化的数字：契约只要求有限，投影层拒绝显示——这就是「有行但没有值」。
+    const rows = value.eth.rows.map((row, index) => index === value.eth.rows.length - 1 ? { ...row, netFlowUsd: 1e16 } : row)
+    const reading = project({ ...value, eth: { ...value.eth, rows } })
+
+    expect(reading.state).toBe('partial')
+    expect(reading.btc?.latestNetFlowUsd).toMatch(/\$\d/)
+    expect(reading.eth).toBeUndefined()
+    expect(reading.missing).toEqual({ eth: 'value-missing' })
+  })
+
+  it('keeps both cells when the windows do not line up, and says so only in the comparison', () => {
+    const reading = project(snapshot('2026-08-17', '2026-08-16'))
+
+    expect(reading.state).toBe('available')
+    expect(reading.btc?.latestNetFlowUsd).toMatch(/\$\d/)
+    expect(reading.eth?.latestNetFlowUsd).toMatch(/\$\d/)
+    expect(reading.missing).toBeUndefined()
+    expect(reading.comparison).toEqual({ state: 'unaligned', reason: 'latest-trading-day-differs', lagging: 'eth' })
+  })
+
+  it('reports an unreadable snapshot as unknown with a reason, not as an empty block', () => {
+    const reading = project({ state: 'unavailable' })
+
+    expect(reading.state).toBe('unreadable')
+    expect(reading.btc).toBeUndefined()
+    expect(reading.eth).toBeUndefined()
+    expect(reading.missing).toEqual({ btc: 'source-unreadable', eth: 'source-unreadable' })
+    expect(reading.comparison).toEqual({ state: 'unaligned', reason: 'source-unreadable' })
+  })
+
+  it('treats a zero net flow as a value, not as missing', () => {
+    const value = snapshot('2026-08-17', '2026-08-17')
+    const rows = value.btc.rows.map((row, index) => index === value.btc.rows.length - 1 ? { ...row, netFlowUsd: 0 } : row)
+    const reading = project({ ...value, btc: { ...value.btc, rows } })
+
+    expect(reading.state).toBe('available')
+    expect(reading.btc?.latestNetFlowUsd).toBe('$0')
+    expect(reading.missing).toBeUndefined()
   })
 })

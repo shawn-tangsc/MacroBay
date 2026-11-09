@@ -74,6 +74,28 @@ export type DashboardFlowHistory =
   | { state: 'available'; rows: readonly FlowChartRow[] }
   | { state: 'not-yet'; availableDays: number }
 
+/**
+ * 资金面那两格的**读数**：每支资产各自有没有值，缺的时候缺什么，以及两支能不能对比。
+ *
+ * 这是架构师定的三档拆分的本侧一半（判定口径归架构师，展示归组件线）：
+ * - `state` 只说这张表的整体可信度：两支都有值 `available`、只有一支 `partial`、一支都没有 `unreadable`；
+ * - **缺必须带原因**，不许画 0，也不许因为另一支有值就把这一支补成 0；
+ * - `comparison` 只影响**对比列**：两支都对不上时，格子里的数字照旧，只是不能并列比较。
+ */
+export type DashboardEtfMissingReason = 'source-unreadable' | 'asset-missing' | 'value-missing'
+export type DashboardEtfComparison =
+  | { state: 'aligned' }
+  | { state: 'unaligned'; reason: DashboardEtfMissingReason | 'latest-trading-day-differs'; lagging?: 'btc' | 'eth' }
+export type DashboardEtfReading = Readonly<{
+  state: 'available' | 'partial' | 'unreadable'
+  btc?: DashboardEtfFlowAsset
+  eth?: DashboardEtfFlowAsset
+  missing?: Readonly<{ btc?: DashboardEtfMissingReason; eth?: DashboardEtfMissingReason }>
+  comparison: DashboardEtfComparison
+  /** 快照的读取时刻：读得到才有，读不到就不是「旧」，而是「不知道」。 */
+  verifiedAt?: string
+}>
+
 export type DashboardCapitalConditionsState =
   | { state: 'loading' }
   | {
@@ -86,7 +108,18 @@ export type DashboardCapitalConditionsState =
        */
       stale?: true
       conclusion: 'partial' | 'unavailable'
+      /**
+       * 旧出口：两支都有值才给形状，否则 `'unavailable'`。**只保留给还没切换的展示侧**，
+       * 新读数走 `etfReading`；等组件线切完这一格删掉（加字段 → 换消费方 → 删旧字段）。
+       */
       etf: DashboardEtfFlow | 'unavailable'
+      /**
+       * 那两格真正的读数：逐资产的值、缺的原因、能不能对比。
+       *
+       * **本阶段可选**：模型总是填它，但展示侧还没切换——在这条三段式的第一段（加字段）里把它写成必填，
+       * 等于强制改动展示侧的每一处夹具。组件线切到 `etfReading`、旧的 `etf` 删掉时，这里转必填。
+       */
+      etfReading?: DashboardEtfReading
       /** Absent when the card could not read at all; `hidden` when the rule had nothing to say. */
       etfSignal?: DashboardEtfSignalChip
       /**
@@ -124,10 +157,11 @@ export function projectDashboardCapitalConditionsSnapshot(value: unknown, asOf: 
     const change30dPercent = formatPercent(core.change30dPercent)
     if (!currentUsd || !change1dUsd || !change1dPercent || !change7dUsd || !change7dPercent || !change30dUsd || !change30dPercent) return { state: 'unavailable' }
     const dailyFlows = isValidCapitalConditionsDailyFlows(core.dailyFlows, asOf) ? core.dailyFlows : undefined
-    const etf = projectEtf(value.etf, asOf)
-    const flowHistory = projectFlowHistory(dailyFlows, etf)
+    const etfReading = projectEtf(value.etf, asOf)
+    const etf = legacyEtfProjection(etfReading)
+    const flowHistory = projectFlowHistory(dailyFlows, etfReading)
     return {
-      state: 'available', conclusion: value.conclusion, etf, ...(flowHistory === 'unavailable' ? {} : { flowHistory }), observedAt: core.observedAt,
+      state: 'available', conclusion: value.conclusion, etf, etfReading, ...(flowHistory === 'unavailable' ? {} : { flowHistory }), observedAt: core.observedAt,
       currentUsd, change1dUsd, change1dPercent, change7dUsd, change7dPercent, change30dUsd, change30dPercent,
       ...(dailyFlows ? { dailyFlows } : {})
     }
@@ -161,13 +195,53 @@ function isAvailable(value: unknown, asOf: string): value is {
   return true
 }
 
-function projectEtf(value: unknown, asOf: string): DashboardEtfFlow | 'unavailable' {
-  if (!isVisibleEtfPublicSnapshot(value, asOf)) return dashboardCapitalConditionsPresentationPolicy.etfState
+/** 两支都对不上时的原因：读不到 → 缺一支 → 最新交易日不同（落后的一方是 `lagging`）。 */
+function projectEtf(value: unknown, asOf: string): DashboardEtfReading {
+  if (!isVisibleEtfPublicSnapshot(value, asOf)) {
+    return {
+      state: 'unreadable',
+      missing: { btc: 'source-unreadable', eth: 'source-unreadable' },
+      comparison: { state: 'unaligned', reason: 'source-unreadable' }
+    }
+  }
   const btc = projectEtfAsset(value.btc)
   const eth = projectEtfAsset(value.eth)
-  if (!btc || !eth) return dashboardCapitalConditionsPresentationPolicy.etfState
-  const coverage = projectEtfCoverage(btc, eth)
-  return coverage ? { state: 'available', btc, eth, coverage, verifiedAt: value.verifiedAt } : dashboardCapitalConditionsPresentationPolicy.etfState
+  const missing: { btc?: DashboardEtfMissingReason; eth?: DashboardEtfMissingReason } = {}
+  // 「一行都没有」与「有行但最新一行给不出可显示的值」是两种缺法：前者从来没发生过，后者发生过但读不出来。
+  if (!btc) missing.btc = value.btc.rows.length === 0 ? 'asset-missing' : 'value-missing'
+  if (!eth) missing.eth = value.eth.rows.length === 0 ? 'asset-missing' : 'value-missing'
+  const state = btc && eth ? 'available' as const : btc || eth ? 'partial' as const : 'unreadable' as const
+  return {
+    state,
+    ...(btc ? { btc } : {}),
+    ...(eth ? { eth } : {}),
+    ...(missing.btc || missing.eth ? { missing } : {}),
+    comparison: etfComparison(btc, eth),
+    verifiedAt: value.verifiedAt
+  }
+}
+
+/**
+ * 能不能并列比较，只看两支**最新交易日**是否同一天。
+ *
+ * 原来这里比的是 `cumulative.length`，而合法的快照里两支都恰好有两个窗口（5/20 天），那个比较
+ * 永远相等——真正的「ETH 晚一天」根本没被它发现，反而靠「任一支缺值就整块作废」掩盖过去。
+ */
+function etfComparison(btc: DashboardEtfFlowAsset | undefined, eth: DashboardEtfFlowAsset | undefined): DashboardEtfComparison {
+  if (!btc || !eth) return { state: 'unaligned', reason: btc ? 'asset-missing' : eth ? 'asset-missing' : 'asset-missing' }
+  const btcDay = btc.rows.at(-1)!.tradingDate
+  const ethDay = eth.rows.at(-1)!.tradingDate
+  if (btcDay === ethDay) return { state: 'aligned' }
+  return { state: 'unaligned', reason: 'latest-trading-day-differs', lagging: btcDay < ethDay ? 'btc' : 'eth' }
+}
+
+/** 旧出口只从「两支都有值」的读数派生，别的状态一律 `'unavailable'`（现面板就认这一个词）。 */
+function legacyEtfProjection(reading: DashboardEtfReading): DashboardEtfFlow | 'unavailable' {
+  if (reading.state !== 'available' || !reading.btc || !reading.eth || !reading.verifiedAt) return dashboardCapitalConditionsPresentationPolicy.etfState
+  const coverage = projectEtfCoverage(reading.btc, reading.eth)
+  return coverage
+    ? { state: 'available', btc: reading.btc, eth: reading.eth, coverage, verifiedAt: reading.verifiedAt }
+    : dashboardCapitalConditionsPresentationPolicy.etfState
 }
 
 function projectEtfCoverage(btc: DashboardEtfFlowAsset, eth: DashboardEtfFlowAsset): readonly DashboardEtfCumulativeCoverage[] | undefined {
@@ -188,11 +262,14 @@ function projectEtfCoverage(btc: DashboardEtfFlowAsset, eth: DashboardEtfFlowAss
   return coverage
 }
 
-function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[] | undefined, etf: DashboardEtfFlow | 'unavailable'): DashboardFlowHistory | 'unavailable' {
-  if (!stablecoinHistory || etf === 'unavailable') return 'unavailable'
+function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[] | undefined, etf: DashboardEtfReading): DashboardFlowHistory | 'unavailable' {
+  if (!stablecoinHistory) return 'unavailable'
+  // 只有「快照根本读不到」才算取不到；缺一支时按日交集自然变空，报 `not-yet` 而不是 `unavailable`——
+  // 那是「这几天凑不齐同一批日子」，不是「读不到」。
+  if (etf.missing?.btc === 'source-unreadable' && etf.missing?.eth === 'source-unreadable') return 'unavailable'
   const funds = new Map(stablecoinHistory.map((row) => [row.tradingDate, row.netFlowUsd]))
-  const eth = new Map(etf.eth.rows.map((row) => [row.tradingDate, row.netFlowUsd]))
-  const rows = etf.btc.rows.flatMap((btc) => {
+  const eth = new Map((etf.eth?.rows ?? []).map((row) => [row.tradingDate, row.netFlowUsd]))
+  const rows = (etf.btc?.rows ?? []).flatMap((btc) => {
     const fund = funds.get(btc.tradingDate)
     const ether = eth.get(btc.tradingDate)
     return fund === undefined || ether === undefined ? [] : [{ tradingDate: btc.tradingDate, funds: fund, btc: btc.netFlowUsd, eth: ether }]
