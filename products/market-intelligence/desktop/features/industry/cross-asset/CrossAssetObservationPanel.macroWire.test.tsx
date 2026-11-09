@@ -54,8 +54,8 @@ async function renderPayload(payload: unknown): Promise<HTMLElement> {
   // The whole point: the panel is fed what the *renderer's* client would hand it, which is the
   // snapshot after the wire contract has had its say — not a literal the test wrote itself.
   const macroSnapshot = parseMacroMarketSnapshot(payload)
-  await act(async () => createRoot(host).render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' },
-    createElement(CrossAssetObservationPanel, { client: client as never, macroSnapshot: macroSnapshot as never, text }))))
+  await act(async () => createRoot(host).render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children:
+    createElement(CrossAssetObservationPanel, { client: client as never, macroSnapshot: macroSnapshot as never, text }) })))
   return host
 }
 

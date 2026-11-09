@@ -42,7 +42,7 @@ const bothLegs = (nowMs: number) => ({
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 const ScopedPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
 
 async function render(input: Readonly<{
   nowMs: number; bySymbol: Record<string, readonly unknown[]>; feed: CrossAssetIndexFeedState

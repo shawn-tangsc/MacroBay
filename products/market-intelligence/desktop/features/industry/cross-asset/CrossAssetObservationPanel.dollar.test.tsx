@@ -19,7 +19,7 @@ const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 const asOf = '2026-09-14T12:00:00.000Z'
 const asOfMs = Date.parse(asOf)
 const Scoped = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
 
 const realReading = (atMs = asOfMs) => ({
   seriesId: macroMarketSnapshotPublicPolicy.series.dollarIndexReal, level: 102.24, atMs,
