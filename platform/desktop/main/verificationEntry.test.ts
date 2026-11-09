@@ -80,6 +80,7 @@ describe('verification entry', () => {
       'check:state-content-ternary',
       'check:notification-approval',
       'typecheck',
+      'typecheck:products',
       'test',
       'check:test-budget',
       'build'
