@@ -21,7 +21,7 @@ const document = (text = '今日要点。', btc = 68000): DailyBriefingDocument 
   news: { items: [], macro: [], notes: {} },
   data: {
     market: [{
-      id: 'btc', labelKey: 'rows.btc', importance: 'must', state: 'available',
+      id: 'btc', labelKey: 'rows.btc', importance: { tier: 'must', source: 'rule', reasonCode: 'largest-move' }, state: 'available',
       value: { number: btc, format: 'usd' }, change: null, window: '24h', observedAt: '2026-11-02T00:00:00.000Z'
     }],
     funds: [],
@@ -87,7 +87,7 @@ describe('briefing snapshot digest', () => {
 
   it('changes when a window or a pointed-at event changes', () => {
     const base = briefingSnapshot(document(), factSnapshotFromPacket(packet()))
-    const shiftedWindow = briefingSnapshot({ ...document(), edition: { ...document().edition, windowEnd: '2026-11-02T01:00:00.000Z' } }, packet())
+    const shiftedWindow = briefingSnapshot({ ...document(), edition: { ...document().edition, windowEnd: '2026-11-02T01:00:00.000Z' } }, factSnapshotFromPacket(packet()))
     const otherPolarity = briefingSnapshot(document(), factSnapshotFromPacket(packet('就业数据', 'bearish')))
     expect(shiftedWindow.hash).not.toBe(base.hash)
     expect(otherPolarity.hash).not.toBe(base.hash)
