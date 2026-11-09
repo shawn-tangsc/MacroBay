@@ -35,7 +35,14 @@ export type SettingsRowProps = {
    * 不用 `''` 与 `undefined` 两种写法打架。这条是为**保持 DOM 逐字不变**，不是偷懒。
    */
   controlWrapperClassName?: string
+  /**
+   * 挂到**控件容器**上的额外属性（`id` / `aria-*` / `data-*`）。
+   *
+   * 只对「给了 `controlWrapperClassName`」的调用方有意义——没有容器就没有可挂的地方。
+   * 之所以不在缺容器时替你包一层：那会给这一处凭空多一个 `div`，DOM 判据第 6 条当场不成立。
+   */
   /** 行容器上的额外属性（如 `data-row`）：这些必须留在**行**上，不能挪到子元素。 */
+  controlAttributes?: Readonly<Record<string, string>>
   rowAttributes?: Readonly<Record<string, string>>
   children?: ReactNode
 }
@@ -46,6 +53,7 @@ export function SettingsRow({
   headClassName,
   label,
   controlWrapperClassName,
+  controlAttributes,
   rowAttributes,
   children
 }: SettingsRowProps): React.ReactElement {
@@ -55,6 +63,6 @@ export function SettingsRow({
     </span>
     {controlWrapperClassName === undefined
       ? children
-      : <div className={controlWrapperClassName}>{children}</div>}
+      : <div className={controlWrapperClassName} {...controlAttributes}>{children}</div>}
   </div>
 }

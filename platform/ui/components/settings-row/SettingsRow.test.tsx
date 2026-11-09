@@ -38,6 +38,23 @@ describe('SettingsRow', () => {
     expect(markup).toContain('<div class="notification-row-control">')
   })
 
+  it('puts the control attributes on the control wrapper, not on the row', () => {
+    // `CollectionPolicySection` 那处要把 `id` / `aria-describedby` 挂在控件容器上：
+    // 挂错一层，读屏就指不到那句停用原因。
+    const markup = renderToStaticMarkup(
+      <SettingsRow
+        controlAttributes={{ 'aria-describedby': 'reason-1', id: 'control-1' }}
+        controlWrapperClassName="intelligence-setting-control"
+        copyClassName="intelligence-setting-label"
+        label="标签"
+        rowClassName="intelligence-setting-row">
+        <button type="button">控件</button>
+      </SettingsRow>
+    )
+    expect(markup).toContain('<div class="intelligence-setting-control" aria-describedby="reason-1" id="control-1">')
+    expect(markup).not.toContain('<div class="intelligence-setting-row" aria-describedby')
+  })
+
   it('has no slot for an explanatory sentence', () => {
     // 正文只允许字段名、当前值、控件。说明只能进 ⓘ——所以这个组件的 props 里没有 note/description。
     // 这条靠类型也靠渲染：多给一个 children 之外的句子，它只能进控件列，而控件列是调用方的事。
