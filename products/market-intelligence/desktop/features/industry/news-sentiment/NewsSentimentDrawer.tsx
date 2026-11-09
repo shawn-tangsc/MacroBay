@@ -217,7 +217,9 @@ export function NewsSentimentDrawer(props: {
                 return
               }
               void withTimeout(props.client.rebuild())
-                .then(() => setActionNotice(text.settingsModal.rebuilt))
+                .then((result) => setActionNotice(
+                  result.quarantinedCopy ? text.settingsModal.rebuiltWithCopy : text.settingsModal.rebuilt
+                ))
                 .catch(() => setActionNotice(text.settingsModal.rebuildFailed))
                 .finally(() => setActionBusy(undefined))
             }}

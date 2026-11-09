@@ -58,10 +58,11 @@ import {
   createNewsSentimentSettingsStore
 } from './news-sentiment/newsSentimentSettingsStore'
 import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './news-sentiment/newsSentimentStore'
+import { rebuildNewsSentimentStorage } from './news-sentiment/newsSentimentStoreRecovery'
+import { createNewsSentimentServices } from './news-sentiment/newsSentimentServices'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
-import { summarizeNewsSentimentReadiness } from './news-sentiment/newsSentimentReadiness'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
@@ -100,15 +101,10 @@ import {
 } from './daily-briefing/dailyBriefingSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
-import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
-import { resolveRuntimeConfig } from './application/sourceRuntimeConfig'
-import { buildSourceCoverageAsOf } from './public-query/sourceCoverageAsOf'
 import { queryOpenInterestHistoryAsync } from './public-query/openInterestHistoryQuery'
 import { createSignalledOpenInterestRefresh } from './signals/openInterestSignalNotifier'
 import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
-import { listIntelligenceSourceDefinitions } from './application/sourceCatalog'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
-import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
 import {
   createRawRecordJsonStorage,
   readRawRecordSnapshotSync
@@ -251,6 +247,11 @@ export type IntelligenceModule = {
       get: () => Promise<NewsSentimentSettingsView>
       save: (patch: Partial<NewsSentimentSettings>) => Promise<NewsSentimentSettingsView>
     }
+    /**
+     * 读者点「重新抓取所有正文」时的存储入口：库正常就清空重抓；库打不开就先隔离现场再建新库。
+     * 返回被隔离的副本路径（没有现场时为 undefined），界面据此说清发生了什么。
+     */
+    rebuildStorage: () => { quarantinedCopy?: string }
   }
   workerRuntime: ManagedWorkerRuntime
   replayService: ReturnType<typeof createIntelligenceReplayService>
@@ -315,43 +316,6 @@ export function currentReaderTimeZone(): string {
 
 function getProductDataDir(): string {
   return join(app.getPath('userData'), 'products', PRODUCT_ID)
-}
-
-/**
- * Publishers disagree about who may read them: SEC.gov returns 403 to a browser user agent but 200
- * to the identified collector, while CoinDesk hands a body-less variant to the collector UA. Pick
- * the headers per host instead of one global article fingerprint.
- */
-/**
- * Electron's net.fetch shares Chromium's HTTP cache. A body-less variant fetched once can be
- * served again to every later request for the same URL, even with different headers, so article
- * reads carry a unique query key as well as no-store.
- */
-function articleFetchUrl(url: string): string {
-  try {
-    const parsed = new URL(url)
-    if (parsed.hostname.endsWith('coindesk.com') || parsed.hostname.endsWith('okx.com')) {
-      parsed.searchParams.set('mb_nocache', String(Date.now()))
-    }
-    return parsed.toString()
-  } catch {
-    return url
-  }
-}
-function articleFetchHeaders(url: string): Record<string, string> {
-  if (url.includes('sec.gov')) {
-    return { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache' }
-  }
-  if (url.includes('binance.com/bapi')) {
-    return { Accept: 'application/json', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache' }
-  }
-  return {
-    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    'Cache-Control': 'no-cache',
-    Pragma: 'no-cache'
-  }
 }
 
 export function getIntelligenceModule(
@@ -565,100 +529,30 @@ export function getIntelligenceModule(
     const newsSentimentSettingsStore = createNewsSentimentSettingsStore(
       createNewsSentimentSettingsJsonStorage(join(dataDir, 'intelligence-news-sentiment-settings.json'))
     )
+    const newsSentimentFilePath = join(dataDir, newsSentimentStoragePolicy.fileName)
     try {
-      newsSentimentStore = createNewsSentimentSqliteStore(join(dataDir, newsSentimentStoragePolicy.fileName))
+      newsSentimentStore = createNewsSentimentSqliteStore(newsSentimentFilePath)
     } catch {
       // A broken database must not take the rest of the product down; news sentiment stays unavailable.
       newsSentimentStore = undefined
     }
-    const newsSentimentEnrichment = newsSentimentStore
-      ? createNewsSentimentEnrichmentService({
-          pipeline,
-          store: newsSentimentStore,
-          fetchArticle: async (url) => {
-            const response = await intelligenceHttpRequest(
-              {
-                url: articleFetchUrl(url),
-                method: 'GET',
-                headers: articleFetchHeaders(url),
-                cache: 'no-store',
-                credentials: 'omit',
-                timeoutMs: 15_000
-              },
-              { retryPolicy: { maxAttempts: 1 } }
-            )
-            return { status: response.status, bodyText: response.bodyText }
-          },
-          now: () => new Date().toISOString()
-        })
-      : undefined
-    const newsSentimentScoring = newsSentimentStore
-      ? createNewsSentimentScoringService({
-          pipeline,
-          store: newsSentimentStore,
-          settingsStore: newsSentimentSettingsStore,
-          ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
-          ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
-          invoke: structuredModelInvocation.invoke,
-          ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), thresholdFilePath: join(dataDir, 'intelligence-news-push-threshold.json'), submit: hooks.submitNotification } } : {}),
-          now: () => new Date().toISOString()
-        })
-      : undefined
-    const newsSentimentBodyTranslation = newsSentimentStore
-      ? createNewsSentimentBodyTranslationService({
-          store: newsSentimentStore,
-          invoke: structuredModelInvocation.invoke,
-          readSettings: async () => {
-            const settings = await translationStorage.readSettings()
-            // Body translation always targets the language the app is currently displayed in, not a
-            // separate preference that could drift from the UI locale.
-            return { settings, targetLocale: await getAppLanguage() }
-          },
-          getProviderState: hooks?.getProviderState,
-          getModelDefaults: hooks?.getModelDefaults,
-          getTitle: (itemId) => pipeline.listItems().find((item) => item.itemId === itemId)?.title,
-          now: () => new Date().toISOString()
-        })
-      : undefined
-    const newsSentimentQuery = newsSentimentStore
-      ? createNewsSentimentQuery({
-          store: newsSentimentStore,
-          pipeline,
-          translation: translationService,
-          getDisplayLocale: getAppLanguage,
-          ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
-          // The four sources' readiness, read from the one projection that already answers "what is
-          // this source doing": the card needs it to name the cause of an empty window.
-          readSourceReadiness: async (asOf) => {
-            const profiles = await profileStore.listProfiles()
-            const enabledSourceIds = new Set(profiles.filter((profile) => profile.enabled).map((profile) => profile.sourceId))
-            const profileBySource = new Map(profiles.map((profile) => [profile.sourceId, profile]))
-            const definitions = listIntelligenceSourceDefinitions().filter((definition) =>
-              (NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(definition.sourceId)
-            )
-            const coverage = buildSourceCoverageAsOf({
-              definitions,
-              runtimeStates: pipeline.listRuntimeStatesAsOf(asOf),
-              items: pipeline.listItems(),
-              asOf,
-              enabledSourceIds
-            })
-            return summarizeNewsSentimentReadiness(coverage.map((row) => {
-              // The cycle comes from the resolver the scheduler itself uses, so the card's idea of
-              // "old" cannot drift away from how often this source is really collected.
-              const definition = definitions.find((entry) => entry.sourceId === row.sourceId)
-              const pollingIntervalSec = definition
-                ? resolveRuntimeConfig({ definition, profile: profileBySource.get(row.sourceId) }).pollingIntervalSec
-                : undefined
-              return {
-                ...row,
-                ...(pollingIntervalSec ? { collectionIntervalMs: pollingIntervalSec * 1_000 } : {})
-              }
-            }))
-          },
-          now: () => new Date().toISOString()
-        })
-      : undefined
+    const assembleNewsSentiment = (store: ReturnType<typeof createNewsSentimentSqliteStore>) =>
+      createNewsSentimentServices(store, {
+        pipeline,
+        settingsStore: newsSentimentSettingsStore,
+        translationService,
+        translationSettingsStorage: translationStorage,
+        invoke: structuredModelInvocation.invoke,
+        getAppLanguage,
+        profileStore,
+        hooks,
+        dataDir
+      })
+    const newsSentimentPieces = newsSentimentStore ? assembleNewsSentiment(newsSentimentStore) : undefined
+    const newsSentimentEnrichment = newsSentimentPieces?.enrichment
+    const newsSentimentScoring = newsSentimentPieces?.scoring
+    const newsSentimentBodyTranslation = newsSentimentPieces?.bodyTranslation
+    const newsSentimentQuery = newsSentimentPieces?.query
     const readNewsSentimentSettings = async (): Promise<NewsSentimentSettingsView> => {
       const settings = await newsSentimentSettingsStore.getSettings()
       const [providerState, modelDefaults] = await Promise.all([
@@ -692,6 +586,19 @@ export function getIntelligenceModule(
         return readNewsSentimentSettings()
       }
     }
+    // 一份可更新的出口：读者重建把库换成新的以后，IPC / Agent 读到的是同一份新服务。
+    const newsSentimentExposure: IntelligenceModule['newsSentiment'] = {
+      settingsStore: newsSentimentSettingsStore,
+      ...(newsSentimentStore ? { store: newsSentimentStore } : {}),
+      ...(newsSentimentEnrichment ? { enrichment: newsSentimentEnrichment } : {}),
+      ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {}),
+      ...(newsSentimentQuery ? { query: newsSentimentQuery } : {}),
+      ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
+      settings: newsSentimentSettings,
+      rebuildStorage: () => {
+        throw new Error('news-sentiment-storage-unavailable')
+      }
+    }
     const archiveService = createIntelligenceArchiveService({
       rawRecordStore,
       archiveBaseDir: join(dataDir, 'intelligence-archive'),
@@ -715,7 +622,9 @@ export function getIntelligenceModule(
       }
     })
 
-    registerIntelligenceJobs(jobRuntime, {
+    // Passed by reference on purpose: a rebuild swaps the services, and the registered handlers
+    // must see the new ones without being re-registered (a second registration throws).
+    const intelligenceJobDeps: Parameters<typeof registerIntelligenceJobs>[1] = {
       pipeline,
       archiveService,
       replayService,
@@ -727,7 +636,8 @@ export function getIntelligenceModule(
       ...(newsSentimentEnrichment && newsSentimentScoring
         ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
         : {})
-    })
+    }
+    registerIntelligenceJobs(jobRuntime, intelligenceJobDeps)
     // Judgments are event-driven: normalize only sends the items it just created. A cleared
     // database, a partial write failure, or a settings change leaves older admitted items with no
     // current row and no event to bring them back. One idempotent pass per start reconciles them
@@ -743,7 +653,32 @@ export function getIntelligenceModule(
     // The divergence card asks whether the day's news was priced; that needs the same scored
     // headlines the news page and the analysis read, not the sentiment aggregate (which only
     // exists for market-wide scopes).
-    publicQueryService.setNewsSentimentQuery(newsSentimentQuery ? { query: input => newsSentimentQuery.query(input) } : undefined)
+    const syncNewsSentimentPublicQuery = (): void => {
+      const query = newsSentimentExposure.query
+      publicQueryService.setNewsSentimentQuery(query ? { query: (input) => query.query(input) } : undefined)
+    }
+    syncNewsSentimentPublicQuery()
+    // 读者主动重建：库正常 → 清空重抓；库打不开 → 先隔离现场、再建新库，并把新服务接回所有出口。
+    newsSentimentExposure.rebuildStorage = () => {
+      const existing = newsSentimentExposure.store
+      if (existing) {
+        existing.clearAll()
+        return {}
+      }
+      const rebuilt = rebuildNewsSentimentStorage(newsSentimentFilePath)
+      const pieces = assembleNewsSentiment(rebuilt.store)
+      newsSentimentExposure.store = rebuilt.store
+      newsSentimentExposure.enrichment = pieces.enrichment
+      newsSentimentExposure.scoring = pieces.scoring
+      newsSentimentExposure.bodyTranslation = pieces.bodyTranslation
+      newsSentimentExposure.query = pieces.query
+      intelligenceJobDeps.newsSentiment = {
+        enrichItems: pieces.enrichment.enrichItems,
+        scoreItems: pieces.scoring.scoreItems
+      }
+      syncNewsSentimentPublicQuery()
+      return rebuilt.quarantinedCopy ? { quarantinedCopy: rebuilt.quarantinedCopy } : {}
+    }
     // The analysis switches own the model as well as the on/off state: a background job may only
     // spend a request on a model the reader enabled it with.
     const marketAnalysisSettingsService = createMarketAnalysisSettingsService({
@@ -765,7 +700,15 @@ export function getIntelligenceModule(
       settingsService: marketAnalysisSettingsService,
       getAppLanguage,
       // 重点舆情进分析：与「Key sentiment」卡读的是同一个查询，窗口由分析运行时决定。
-      ...(newsSentimentQuery ? { newsSentimentQuery } : {}),
+      // 动态读出口：库重建后不必重启分析运行时。库打不开时抛错，分析把这一域记成
+      // `news-sentiment-unavailable`（与原先「没有读取器」同一条缺口，不是「没有舆情」）。
+      newsSentimentQuery: {
+        query: async (input) => {
+          const query = newsSentimentExposure.query
+          if (!query) throw new Error('news-sentiment-storage-unavailable')
+          return query.query(input)
+        }
+      },
       ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
       dataDir
     })
@@ -936,7 +879,11 @@ export function getIntelligenceModule(
         policyPathQuery: { read: (input) => briefingPolicyPathQuery?.read(input) },
         // 只读取历史版次：早报把窗口内更早的简报结论与分析结论一起综合，不复制其中任何一份。
         briefEditions: dailyBriefingStore,
-        news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
+        news: {
+          query: (input) => newsSentimentExposure.query
+            ? newsSentimentExposure.query.query(input)
+            : unavailableNewsQuery.query(input)
+        },
         profiles: profileStore,
         // 来源静默/连续失败（`02` v2.167）：读采集运行状态，写进冻结的日报文档。
         sourceStates: () => pipeline.listRuntimeStates(),
@@ -991,15 +938,7 @@ export function getIntelligenceModule(
       archiveService,
       replayService,
       translationService,
-      newsSentiment: {
-        settingsStore: newsSentimentSettingsStore,
-        ...(newsSentimentStore ? { store: newsSentimentStore } : {}),
-        ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
-        ...(newsSentimentEnrichment ? { enrichment: newsSentimentEnrichment } : {}),
-        ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {}),
-        ...(newsSentimentQuery ? { query: newsSentimentQuery } : {}),
-        settings: newsSentimentSettings
-      },
+      newsSentiment: newsSentimentExposure,
       sourcesService,
       publicQueryService,
       dailyBriefingService, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks,

@@ -254,10 +254,13 @@ export function registerIntelligenceIpc(
 
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.rebuildNewsSentiment, async () => {
     const module = intelligenceModule
-    if (!module.newsSentiment.store) throw new Error('News sentiment storage is unavailable.')
-    module.newsSentiment.store.clearAll()
+    // Reader-initiated only. A working store is cleared and refetched; a store that cannot be
+    // opened is first kept as a `.corrupt-*` copy and only then replaced by a new one.
+    const rebuilt = module.newsSentiment.rebuildStorage()
     await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB], { rebuild: true })
-    return { queued: true }
+    return rebuilt.quarantinedCopy
+      ? { queued: true, quarantinedCopy: rebuilt.quarantinedCopy }
+      : { queued: true }
   })
 
   register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.rescoreNewsSentiment, async () => {
