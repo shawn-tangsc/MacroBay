@@ -77,6 +77,7 @@ describe('verification entry', () => {
       'check:undefined-token',
       'check:font-weight',
       'check:font-size-literals',
+      'check:body-prose',
       'check:components-ownership',
       'check:async-initial-state',
       'check:state-content-ternary',
