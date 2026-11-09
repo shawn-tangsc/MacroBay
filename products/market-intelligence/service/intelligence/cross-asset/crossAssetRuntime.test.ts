@@ -1,19 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { createBinanceCrossAssetStream } from './binanceCrossAssetStream'
 import { createCrossAssetRuntime } from './crossAssetRuntime'
 import { CrossAssetClientError, type ClosedBar, type BinanceAsset } from './binanceCrossAssetClient'
 import { crossAssetPolicy } from './crossAssetPolicy'
 
 const now = Date.parse('2026-09-14T12:00:00.000Z')
-const missing = () => ({ index: { state: 'missing' as const }, btc: { state: 'missing' as const }, eth: { state: 'missing' as const } })
+const missing = () => ({ proxy: { state: 'missing' as const }, btc: { state: 'missing' as const }, eth: { state: 'missing' as const } })
+/** 运行时接受的那个 socket 形状：从工厂取，测试不另立一份。 */
+type Stream = ReturnType<typeof createBinanceCrossAssetStream>
+/** 测试用的流多两件事：`takeClosed` 要被断言、`emitKline` 是测试自己推数据的入口。 */
+type TestStream = Omit<Stream, 'takeClosed' | 'snapshot'> & {
+  takeClosed: ReturnType<typeof vi.fn<Stream['takeClosed']>>
+  snapshot: Stream['snapshot']
+  emitKline: (asset: 'proxy' | 'btc' | 'eth') => void
+}
+
 const bar = { symbol: 'QQQUSDT' as const, barOpenMs: now - 300_000, barEndMs: now, open: '100', high: '101', low: '99', close: '100', volume: '1' }
 function setup() {
   let enabled = true
-  const streams: ReturnType<typeof createStream>[] = []
   const callbacks: ((state: 'connected' | 'disconnected' | 'overflow') => void)[] = []
-  function createStream(callback: (state: 'connected' | 'disconnected' | 'overflow') => void) {
+  // 用运行时自己的 Stream 类型，不在这里另写一份形状：另写的那份一旦缺成员，
+  // `streams[0].snapshot()` 这类用法就变成「属性不存在」，而运行时其实一直在调它。
+  const streams: TestStream[] = []
+  function createStream(callback: (state: 'connected' | 'disconnected' | 'overflow') => void): TestStream {
     callbacks.push(callback)
     let observer: ((asset: 'proxy' | 'btc' | 'eth') => void) | undefined
-    const stream = { close: vi.fn(), takeClosed: vi.fn(() => [] as typeof bar[]),
+    const stream = { close: vi.fn(), takeClosed: vi.fn<Stream['takeClosed']>(() => [] as typeof bar[]),
       observeKlines: (listener: typeof observer) => { observer = listener; return () => { observer = undefined } },
       emitKline: (asset: 'proxy' | 'btc' | 'eth') => observer?.(asset),
       snapshot: () => ({ state: 'connected' as const, quotes: missing(), quoteCount: 0, formingCount: 0, closedCount: 0 }) }
@@ -356,7 +368,7 @@ describe('cross-asset visible runtime', () => {
     const controller = new AbortController()
     fetchClosedBars.mockImplementation(async input => {
       controller.abort()
-      return [{ ...bar, symbol: crossAssetPolicy.assets[input.asset], barOpenMs: input.endMs - 300_000, barEndMs: input.endMs }]
+      return [{ ...bar, symbol: crossAssetPolicy.binanceAssets[input.asset], barOpenMs: input.endMs - 300_000, barEndMs: input.endMs }]
     })
     const lease = await runtime.acquire(); await runtime.whenIdle()
     if (lease.state !== 'active') throw new Error('fixture lease')
