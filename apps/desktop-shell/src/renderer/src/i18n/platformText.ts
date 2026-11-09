@@ -1546,6 +1546,8 @@ export type PlatformText = {
     historyTitle: string
     historyEmpty: string
     historyColumnCache: string
+    /** 历史里的缓存已不在当前注册表：给中性说法，绝不印内部点分 id。 */
+    historyUnknownCache: string
     historyColumnOperation: string
     historyColumnResult: string
     historyColumnTime: string
@@ -2917,6 +2919,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       historyTitle: '操作记录',
       historyEmpty: '还没有操作记录',
       historyColumnCache: '缓存',
+      historyUnknownCache: '已下线的缓存',
       historyColumnOperation: '操作',
       historyColumnResult: '结果',
       historyColumnTime: '时间',
@@ -4289,6 +4292,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       historyTitle: 'Operations',
       historyEmpty: 'No operations yet',
       historyColumnCache: 'Cache',
+      historyUnknownCache: 'Retired cache',
       historyColumnOperation: 'Operation',
       historyColumnResult: 'Result',
       historyColumnTime: 'Time',

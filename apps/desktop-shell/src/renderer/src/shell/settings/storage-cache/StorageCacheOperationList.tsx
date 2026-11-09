@@ -51,8 +51,12 @@ export function StorageCacheOperationList({
       <tbody>
         {records.map((record) => (
           <tr key={record.operationId}>
+            {/*
+              记录比缓存活得久：缓存下线后 `cacheId` 是读者从没见过的内部点分 id，
+              查不到名字时要说清它是什么，绝不把 id 原样印上屏。
+            */}
             {showCacheName ? (
-              <td className="storage-cache-history-cache">{cacheNames.get(record.cacheId) ?? record.cacheId}</td>
+              <td className="storage-cache-history-cache">{cacheNames.get(record.cacheId) ?? labels.historyUnknownCache}</td>
             ) : null}
             <td>{formatStorageOperationType(record.operation, language)}</td>
             <td>
