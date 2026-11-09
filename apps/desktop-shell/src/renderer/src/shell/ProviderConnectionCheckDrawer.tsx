@@ -153,14 +153,14 @@ export function ProviderConnectionCheckDrawer({
             <strong>{providerEnabled ? labels.statusEnabled : labels.statusDisabled}</strong>
           </span>
           {providerEnabled ? null : (
-            <button
-              type="button"
-              className="connection-check-enable-provider"
+            <Button
+              className="connection-check-enable-provider ant-secondary-button"
               data-connection-check-enable
               disabled={isSubmitting}
-              onClick={onEnableProvider}>
+              onClick={onEnableProvider}
+              size="small">
               {labels.enableProvider}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -231,24 +231,24 @@ export function ProviderConnectionCheckDrawer({
                     </small>
                   ) : null}
                   {lane.action === 'enable-gateway' ? (
-                    <button
-                      type="button"
-                      className="connection-check-lane-action"
+                    <Button
+                      className="connection-check-lane-action ant-secondary-button"
                       data-enable-model-gateway
                       disabled={isSubmitting}
-                      onClick={onEnableModelGateway}>
+                      onClick={onEnableModelGateway}
+                      size="small">
                       {labels.enableModelGateway}
-                    </button>
+                    </Button>
                   ) : null}
                   {lane.action === 'retry' ? (
-                    <button
-                      type="button"
-                      className="connection-check-lane-action"
+                    <Button
+                      className="connection-check-lane-action ant-secondary-button"
                       data-retry-runtime-check
                       disabled={isSubmitting}
-                      onClick={onStart}>
+                      onClick={onStart}
+                      size="small">
                       {labels.retry}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ))}
