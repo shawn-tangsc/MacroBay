@@ -234,7 +234,7 @@ function SettingRow(props: { label: string; children: React.ReactNode; wide?: bo
   // 同上：结构走共享组件，类名与 wide 变体由本页给，DOM 不变。
   return (
     <SettingsRow
-      controlClassName="intelligence-setting-control"
+      controlWrapperClassName="intelligence-setting-control"
       copyClassName="intelligence-setting-label"
       label={props.label}
       rowClassName={`intelligence-setting-row${props.wide ? ' intelligence-setting-row-wide' : ''}`}>

@@ -24,8 +24,17 @@ export type SettingsRowProps = {
   headClassName?: string
   /** 标签内容（含 ⓘ）。 */
   label: ReactNode
-  /** 右侧控件容器类名。 */
-  controlClassName: string
+  /**
+   * 右侧**控件容器**的类名。
+   *
+   * - **给了**：控件包一层带这个类名的容器；
+   * - **没给**：控件**裸渲染，不包任何容器**——有的调用方自己渲染控件列（平台设置那处
+   *   `SwitchRow` 的 DOM 里本来就没有控件容器），多包一层就是可见变化。
+   *
+   * 「包不包」是**调用方的事实**，不是组件的开关；所以用「有没有给这个 prop」表达，
+   * 不用 `''` 与 `undefined` 两种写法打架。这条是为**保持 DOM 逐字不变**，不是偷懒。
+   */
+  controlWrapperClassName?: string
   /** 行容器上的额外属性（如 `data-row`）：这些必须留在**行**上，不能挪到子元素。 */
   rowAttributes?: Readonly<Record<string, string>>
   children?: ReactNode
@@ -36,7 +45,7 @@ export function SettingsRow({
   copyClassName,
   headClassName,
   label,
-  controlClassName,
+  controlWrapperClassName,
   rowAttributes,
   children
 }: SettingsRowProps): React.ReactElement {
@@ -44,6 +53,8 @@ export function SettingsRow({
     <span className={copyClassName}>
       {headClassName === undefined ? label : <span className={headClassName}>{label}</span>}
     </span>
-    <div className={controlClassName}>{children}</div>
+    {controlWrapperClassName === undefined
+      ? children
+      : <div className={controlWrapperClassName}>{children}</div>}
   </div>
 }

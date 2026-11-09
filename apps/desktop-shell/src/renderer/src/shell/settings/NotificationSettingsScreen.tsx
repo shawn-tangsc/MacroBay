@@ -166,7 +166,7 @@ export function NotificationSettingsScreen(props: {
           <section className="notification-group" aria-label={text.testGroup}>
             <h3 className="notification-group-title">{text.testGroup}</h3>
             <SettingsRow
-              controlClassName="notification-row-control"
+              controlWrapperClassName="notification-row-control"
               copyClassName="notification-row-copy"
               label={<strong>{text.sendTestRow}</strong>}
               rowAttributes={{ 'data-row': 'test' }}

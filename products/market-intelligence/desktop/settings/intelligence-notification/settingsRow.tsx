@@ -26,7 +26,7 @@ export function SettingsRow(props: Readonly<{
   children?: ReactNode
 }>): ReactElement {
   return <SharedSettingsRow
-    controlClassName="intelligence-notification-form-control"
+    controlWrapperClassName="intelligence-notification-form-control"
     copyClassName="intelligence-notification-form-label"
     label={<>
       {/* 标题与 ⓘ 同一行：长标题压标题，图标 flex: none 不被挤下去。 */}
