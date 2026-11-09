@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { TriangleAlert } from 'lucide-react'
 
 import { inUseModelRetiredStaleness, type InUseModelRetiredItem } from '@platform/ai/providers/inUseModelPatrol'
@@ -42,9 +43,10 @@ export function InUseModelRetiredBanner({
           {labels.inUseModelRetiredCheckedAt(days)}
         </span>
       )}
-      <button type="button" className="model-service-link" data-in-use-model-retired-change onClick={onChangeModel}>
+      {/* 命令型动作 → antd `Button` 文本档 + `.text-action`（不再手写按钮）。 */}
+      <Button type="text" size="small" className="text-action" data-in-use-model-retired-change onClick={onChangeModel}>
         {labels.changeModel}
-      </button>
+      </Button>
     </div>
   )
 }
