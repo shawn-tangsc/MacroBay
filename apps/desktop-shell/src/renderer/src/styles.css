@@ -10443,20 +10443,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   cursor: default;
 }
 
-.model-service-request-config-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-h);
-  height: var(--control-h);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
 /* PLAT-81：抽屉里的输入框高度也由 antd token（controlHeight 32）决定，不再逐个写 height/padding；
    带 👁 的行只需保证同行垂直居中。 */
 .request-config-header-value {
@@ -11454,13 +11440,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   padding: 0;
 }
 
-/* PLAT-72：「清空模型」——平时与普通 pill 一致，只有 hover 才显红（danger 但不喧宾夺主）。 */
-.model-service-pill-danger:hover:not(:disabled) {
-  border-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  color: var(--danger);
-}
-
 .model-service-section {
   display: grid;
   gap: 8px;
@@ -11637,27 +11616,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .model-service-protocol-notice-text {
   flex: 1;
   min-width: 0;
-}
-
-.model-service-protocol-notice-close {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0.7;
-}
-
-.model-service-protocol-notice-close:hover {
-  opacity: 1;
-  background: color-mix(in srgb, var(--warning, #c48a1a) 18%, transparent);
 }
 
 .model-service-inline-error {
@@ -11931,23 +11889,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   gap: 8px;
 }
 
-.model-drawer-copy {
-  display: inline-grid;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.model-drawer-copy:hover {
-  color: var(--text);
-}
-
 .model-drawer-copied {
   position: absolute;
   top: 34px;
@@ -11968,44 +11909,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   align-items: center;
   justify-content: flex-end;
   height: 32px;
-}
-
-.model-drawer-switch {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: var(--border);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.model-drawer-switch::after {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  content: '';
-  transition: transform 0.15s ease;
-}
-
-.model-drawer-switch.is-on {
-  background: var(--accent);
-}
-
-.model-drawer-switch.is-on::after {
-  transform: translateX(18px);
-}
-
-.model-drawer-switch:disabled {
-  cursor: default;
-  opacity: 0.55;
 }
 
 .model-drawer-footer {
@@ -12199,35 +12102,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   flex: 0 0 auto;
   align-items: center;
   gap: 2px;
-}
-
-.model-service-row-icon {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.model-service-row-icon:hover:not(:disabled) {
-  background: var(--surface-soft);
-  color: var(--text);
-}
-
-.model-service-row-icon:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-.model-service-row-remove {
-  color: color-mix(in srgb, var(--danger) 52%, var(--muted));
-}
-
-.model-service-row-remove:hover:not(:disabled) {
-  color: var(--danger);
 }
 
 @media (max-width: 1080px) {

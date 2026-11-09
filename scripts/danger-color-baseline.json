@@ -25,8 +25,6 @@
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-model-free": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-model-row.is-protocol-failed .model-service-model-name": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-more-item": 1,
-  "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-pill-danger:hover:not(:disabled)": 1,
-  "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-row-remove:hover:not(:disabled)": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-sync-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .preference-proxy-probe-result.fail": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .provider-api-key-error": 1,
