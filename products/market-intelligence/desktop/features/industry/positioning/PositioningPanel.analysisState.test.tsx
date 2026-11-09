@@ -35,6 +35,7 @@ function positioning(analysis: SignalAnalysisStateView): DashboardPositioningVie
     btc: [{ observedAt: at(15), notionalUsd: 8.9e9 }],
     eth: [{ observedAt: at(15), notionalUsd: 2.4e9 }],
     hints: [],
+    hiddenHits: 0,
     signal: { state: 'alert', asset: 'btc', direction: 'long', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) },
     signalAnalysis: analysis,
     onReload: () => undefined
