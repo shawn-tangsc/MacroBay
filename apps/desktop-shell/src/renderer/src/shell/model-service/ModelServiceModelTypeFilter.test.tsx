@@ -59,6 +59,30 @@ describe('模型类型筛选', () => {
     expect(container.querySelector('[role="tablist"]')).toBeNull()
   })
 
+  it('resolves every label through its real platformText path', () => {
+    const { container } = mount('all')
+    const texts = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')].map(
+      (button) => button.textContent ?? ''
+    )
+
+    // 11 个标签都必须是「文案 + 计数」。键写成短名（`typeVision`）或路径打错时，
+    // 解析器取不到文案，这里会退化成只显示计数（前导空格）——所以这条能对着可见文案跑红。
+    const fields = [
+      'typeAll',
+      'typeDeal',
+      'typeText',
+      'typeRerank',
+      'typeEmbedding',
+      'typeImage',
+      'typeVideo',
+      'typeSpeech',
+      'typeTranscription',
+      'typeOcr',
+      'typeVision'
+    ] as const
+    expect(texts).toEqual(fields.map((field) => `${labels[field]} 0`))
+  })
+
   it('keeps arrow keys moving focus only, and Enter selects', () => {
     const { container, onChange } = mount('all')
     const items = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')]
