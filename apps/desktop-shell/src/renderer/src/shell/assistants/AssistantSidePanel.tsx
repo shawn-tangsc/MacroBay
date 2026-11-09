@@ -124,6 +124,8 @@ export function AssistantSidePanel({
                 key={assistant.id}
                 type="button"
                 className={assistant.id === activeAssistantId ? 'assistant-side-panel-item active' : 'assistant-side-panel-item'}
+                // 整行只有一个结果：切到这个助手；行内没有独立按钮，所以整行可点。
+                aria-current={assistant.id === activeAssistantId ? 'true' : undefined}
                 onClick={() => onSelectAssistant(assistant.id)}>
                 <span className="assistant-side-panel-item-icon">{assistant.icon}</span>
                 <span className="assistant-side-panel-item-copy">
