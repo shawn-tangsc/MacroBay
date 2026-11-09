@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
-import { CalendarMonthBoard, monthStatusLines, monthSurface } from './CalendarMonthBoard'
+import { CalendarMonthBoard, monthSurface } from './CalendarMonthBoard'
 import { createEconomicCalendarProjection } from './economicCalendarModel'
 
 const zh = productText['zh-CN'].pages.intelligence.portal.calendar
@@ -27,20 +27,28 @@ describe('a month the official source could not be read for', () => {
   })
 
   it('still says「本月没有」when both sources were read and both are empty', () => {
-    // 两个来源都读到了、都为空 → 既有空态，不动。
-    expect(monthSurface({ officialUnavailable: false, officialCount: 0, marketCount: 0 })).toBe('board')
+    // 两个来源都读到了、都为空 → 空态。它现在是独立的一档（`empty`），不再借用 `board`。
+    expect(monthSurface({ officialUnavailable: false, officialCount: 0, marketCount: 0 })).toBe('empty')
   })
 
-  it('shows one line, not two, when the note and the unavailable status would say the same thing', () => {
-    // 组合可达：BLS 停用 + 当月查询也失败 + 市场侧有行 → 注解与 `unavailable` 讲的是同一件事。
-    const lines = monthStatusLines({ note: zh.officialUnavailableNote, state: 'unavailable', status: '经济日历暂时不可用。' })
-    expect(lines.note).toBe(zh.officialUnavailableNote)
-    expect(lines.status).toBeUndefined()
-    // 「正在读」不是重复：那行必须留下。
-    expect(monthStatusLines({ note: zh.officialUnavailableNote, state: 'loading', status: '正在加载经济日历…' }).status)
-      .toBe('正在加载经济日历…')
-    // 没有注解时，状态行照旧显示。
-    expect(monthStatusLines({ state: 'unavailable', status: '经济日历暂时不可用。' }).status).toBe('经济日历暂时不可用。')
+  it('decides the surface in one fixed order, and never calls a failed read empty', () => {
+    // 四行表（界面设计 2026-11-09）的唯一判据处。顺序固定：在读 → 全关 → 命名月读不到 → 官方月读不到
+    // → 官方腿停用 → 来源无该语言 → 确实为空。市场侧只读命名月自己的结论，不读窗口级 `failure`。
+    const base = { officialUnavailable: false, officialCount: 0, marketCount: 0 } as const
+    const failed = { status: 'failed', reason: 'read-threw' } as const
+    expect(monthSurface({ ...base, monthRead: 'loading' })).toBe('loading')
+    expect(monthSurface({ ...base, marketLoading: true })).toBe('loading')
+    expect(monthSurface({ ...base, officialFeeds: 'disabled' })).toBe('disabled')
+    expect(monthSurface({ ...base, marketMonthRead: failed })).toBe('error')
+    expect(monthSurface({ ...base, monthRead: 'unavailable' })).toBe('error')
+    // 另一侧还有内容：列出已有行 + 说明行，绝不摆空态。
+    expect(monthSurface({ ...base, marketCount: 2, marketMonthRead: failed })).toBe('note')
+    expect(monthSurface({ ...base, officialCount: 1, monthRead: 'unavailable' })).toBe('note')
+    // 来源不发布读者语言：说明行，不是「本月没有」。
+    expect(monthSurface({ ...base, marketSources: [{ eventType: 'financial-event', status: 'no-locale-rows', sourceObservedAt: null }] }))
+      .toBe('no-locale')
+    // 都读到、确实为空：这才是空态。
+    expect(monthSurface(base)).toBe('empty')
   })
 
   it('never calls a month it could not read "no calendar source is enabled"', () => {

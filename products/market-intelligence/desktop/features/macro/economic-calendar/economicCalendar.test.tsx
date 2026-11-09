@@ -49,6 +49,7 @@ vi.mock('antd', async () => {
 
 let root: Root | null = null
 let restorePlatform: (() => void) | undefined
+let restoreDefaultMarket: (() => void) | undefined
 
 
 afterEach(async () => {
@@ -56,6 +57,8 @@ afterEach(async () => {
   root = null
   restorePlatform?.()
   restorePlatform = undefined
+  restoreDefaultMarket?.()
+  restoreDefaultMarket = undefined
   document.body.replaceChildren()
 })
 
@@ -1198,7 +1201,7 @@ describe('macro economic calendar', () => {
     await act(async () => unavailable.root.unmount())
     unavailable.container.remove()
 
-    const empty = await renderCalendar({ queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }), getEventDetail: async () => unavailableDetail() })
+    const empty = await renderCalendar({ queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }), getEventDetail: async () => unavailableDetail(), marketEmpty: true })
     await flush()
     // The shared state surface prints its own title; the product sentence rides the reason slot.
     expect(empty.container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
@@ -1315,7 +1318,8 @@ describe('macro economic calendar', () => {
       const pending: ((value: unknown) => void)[] = []
       const { container, client } = await renderCalendar({
         queryMonth: () => new Promise((resolve) => { pending.push(resolve) }),
-        getEventDetail: async () => unavailableDetail()
+        getEventDetail: async () => unavailableDetail(),
+        marketEmpty: true
       })
 
       await act(async () => { for (const resolve of pending) resolve({ state: 'available', asOf, events: [] }) })
@@ -1335,7 +1339,8 @@ describe('macro economic calendar', () => {
     try {
       const { container, client } = await renderCalendar({
         queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
-        getEventDetail: async () => unavailableDetail()
+        getEventDetail: async () => unavailableDetail(),
+        marketEmpty: true
       })
 
       await flush()
@@ -1403,7 +1408,8 @@ describe('macro economic calendar', () => {
     const { container } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
       getEventDetail: async () => unavailableDetail(),
-      officialFeeds: 'enabled'
+      officialFeeds: 'enabled',
+      marketEmpty: true
     })
 
     await flush()
@@ -1413,6 +1419,41 @@ describe('macro economic calendar', () => {
     // 这一态没有「范围」可扩大：页头的上个月/下个月/回到本月已经在屏上，再放一颗就是同一屏两处入口。
     expect(state?.querySelector('button')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__no-source-state')).toBeNull()
+  })
+
+  it('命名月读不到、官方月读到且为空 → 错误态 + 原因 + 重试，不是「本月没有」', async () => {
+    // 四行表第二行的市场侧：命名月自己没读到，就不许画空态——那是在说「确实没有」。
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth')
+      .mockResolvedValue({ state: 'unavailable', failureCode: 'query-unavailable' })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+        getEventDetail: async () => unavailableDetail()
+      })
+      await flush()
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+      const failed = container.querySelector('.mi-economic-calendar__read-failed')
+      expect(failed, 'a failed named month is an error surface').not.toBeNull()
+      expect(failed?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.market.queryUnavailable)
+      expect([...(failed?.querySelectorAll('button') ?? [])].some(candidate => candidate.textContent?.includes('重试'))).toBe(true)
+    } finally { query.mockRestore() }
+  })
+
+  it('命名月读不到、官方侧还有行 → 列出已有行 + 说明行，不画空态', async () => {
+    // 四行表第三行：另一侧有内容时，失败只变成说明行（`role="note"`），不是「什么都没有」。
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth')
+      .mockResolvedValue({ state: 'unavailable', failureCode: 'query-unavailable' })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [blsEvent()] }),
+        getEventDetail: async () => unavailableDetail()
+      })
+      await flush()
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+      const notes = [...container.querySelectorAll('.mi-calendar-month-scroll [role="note"]')]
+      expect(notes.some(note => note.textContent?.includes(productText['zh-CN'].pages.intelligence.portal.calendar.market.queryUnavailable))).toBe(true)
+      expect(container.querySelectorAll('[data-event-key]')).not.toHaveLength(0)
+    } finally { query.mockRestore() }
   })
 
   it('月查询读不到、整块也没有内容 → 错误态 + 原因 + 重试（重试重读这个月）', async () => {
@@ -2073,6 +2114,11 @@ async function renderCalendar(client: {
   officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
   /** 页面文案（语言）：读者切语言时只看这一份，测试据此断言两种语言的成品句。**两种语言都收**。 */
   text?: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['calendar']
+  /**
+   * 四行表第一行需要一个**干净读到的市场侧**：不传时市场读取按「没有 IPC」失败，那是「读不到」，
+   * 日历页据此只会画错误态/说明行——空态用例必须显式说明「两边都读到了」。
+   */
+  marketEmpty?: boolean
   now?: () => Date
   strict?: boolean
   openTarget?: { month: string; eventKey?: string }
@@ -2094,6 +2140,13 @@ async function renderCalendar(client: {
     calendarOfficialFeeds: { state: client.officialFeeds ?? 'enabled' },
     providers: []
   } as never)
+  if (client.marketEmpty === true) {
+    const marketSpy = vi.spyOn(marketCalendarClient, 'queryMonth').mockImplementation(async (input: { month: string; locale: 'zh' | 'en' }) => ({
+      state: 'available' as const, month: input.month, locale: input.locale,
+      asOf: (client.now?.() ?? new Date(asOf)).toISOString(), events: [], sources: []
+    }))
+    restoreDefaultMarket = () => marketSpy.mockRestore()
+  }
   root = localRoot
   // 显示时区由窗口级 provider 提供；测试固定 Asia/Shanghai，断言才与宿主时区无关。
   // 刷新前的确认框由树内的 Modal 实例渲染（`useConfirm`），所以页面必须挂在 `ConfirmProvider` 下；
