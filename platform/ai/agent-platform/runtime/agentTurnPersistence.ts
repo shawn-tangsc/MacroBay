@@ -10,6 +10,8 @@ import {
   getAgentTextParts
 } from '../schemas/messageDataHelpers'
 import { addAgentSessionMessage, getSessionMessages, replaceAgentSessionMessage, type AgentStoreState } from '../store/agentStore'
+export { pendingOwnerFields } from '../schemas/pendingTurnOwnership'
+export type { PendingTurnOwnership } from '../schemas/pendingTurnOwnership'
 import { buildAgentSessionAutoTitle, shouldAutoRenameAgentSession } from './agentSessionAutoTitle'
 import type { AgentChatContextReference, AgentChatRuntimeResult } from './agentChatRuntime'
 import type { AgentSessionNamingResult } from './naming'

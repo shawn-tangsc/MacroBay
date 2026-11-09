@@ -1,6 +1,8 @@
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 
+import { safeParseClaudeSdkJson, serializeClaudeSdkUnknown } from './claudeCodeSdkValues'
+
 import type {
   ClaudeCodeAgentSdkOptions,
   ClaudeCodeAgentSdkQueryRequest,
@@ -34,6 +36,7 @@ import {
 } from './buildSkillToolSdkMcpServers'
 import {
   addPendingAssistantMessageToState,
+  pendingOwnerFields, type PendingTurnOwnership,
   buildRuntimePromptText,
   buildRuntimeTurnResult,
   createRuntimeUserMessageData,
@@ -274,13 +277,11 @@ type ClaudeCodeSdkModuleLoaderDependencies = {
   importers?: Array<() => Promise<ClaudeCodeSdkModule>>
 }
 
-export type ClaudeAgentSdkExecutorDependencies = {
+export type ClaudeAgentSdkExecutorDependencies = PendingTurnOwnership & {
   loadClaudeSdkModule: () => Promise<ClaudeCodeSdkModuleLoadResult>
   getProviderState: () => Promise<ProviderState>
   getAgentState: () => Promise<AgentStoreState>
   saveAgentState: (state: AgentStoreState, options?: { mergeSessionId?: string }) => Promise<void>
-  /** 主进程启动批次：写 pending 时落在消息上，崩溃收尾据此判「是不是本进程的」。 */
-  ownerBootId?: string
   warmQueryIdleTimeoutMs?: number
   /**
    * Optional WQ-2 audit sink. Absent by default: no sink means no diagnostics and no
@@ -677,7 +678,7 @@ export function createClaudeAgentSdkRuntime(deps: ClaudeAgentSdkExecutorDependen
       assistantMessageId,
       modelId: input.composition.modelId,
       modelName: input.composition.modelName,
-      ...(deps.ownerBootId ? { ownerBootId: deps.ownerBootId } : {})
+      ...pendingOwnerFields(deps.ownerBootId)
     })
     await deps.saveAgentState(withPending, { mergeSessionId: input.request.sessionId })
     let lastObservedRuntimeResumeToken: string | null = null
@@ -2193,26 +2194,6 @@ function combineClaudeSdkAssistantText(state: ClaudeSdkToolStreamState): string 
 
 function buildClaudeSdkReasoningPartId(runId: string, index: number): string {
   return `reasoning-${runId}-${index}`
-}
-
-function serializeClaudeSdkUnknown(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (value === undefined) return ''
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
-  }
-}
-
-function safeParseClaudeSdkJson(value: string): unknown {
-  const trimmed = value.trim()
-  if (!trimmed) return {}
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    return trimmed
-  }
 }
 
 function normalizeClaudeSdkToolResultContent(content: unknown): unknown {

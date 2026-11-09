@@ -3,6 +3,7 @@ import type { AgentChannelEntity } from '../schemas/channelSchemas'
 import { stripQuietRuntimeControlParts } from '../schemas/messageDataHelpers'
 import type { McpRuntimeStatus, McpServerEntity } from '../schemas/mcpServerSchemas'
 import { normalizeSessionOrigin, normalizeSessionOriginGroup, normalizeSessionOriginRef } from '../schemas/sessionSchemas'
+import { resolveMessageOwnerBootId } from '../schemas/pendingTurnOwnership'
 import type {
   AgentSessionMessagesListQuery,
   AgentSessionEntity,
@@ -2247,22 +2248,6 @@ function parseAllowedTools(value: string | null | undefined): string[] {
   } catch {
     return []
   }
-}
-
-/**
- * 一条消息写库时的 `ownerBootId`：**进 pending 的那一次**写，pending 生命周期内不变。
- *
- * 写 pending 的落点不止一处（两个运行时 + 仓储），把补写放在仓储这一层，新调用点不会漏；
- * 复用同一条消息重新进入 pending 时覆盖成当前批次（值幂等，不需要额外去重）。
- * 非 pending 不带 owner：收尾之后这个字段没有意义。
- */
-function resolveMessageOwnerBootId(
-  entity: AgentSessionMessageEntity,
-  bootId: string | undefined
-): string | null {
-  if (entity.ownerBootId) return entity.ownerBootId
-  if (entity.status !== 'pending') return null
-  return bootId ?? null
 }
 
 function mapMessageEntity(row: MessageRow): AgentSessionMessageEntity {

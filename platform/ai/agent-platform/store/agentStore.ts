@@ -30,6 +30,7 @@ import type { AgentSessionWorkspaceSource, CreateAgentWorkspaceDto, UpdateAgentW
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
 import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
 import { normalizeSessionOrigin, normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
+import { isAbandonedPendingMessage } from '../schemas/pendingTurnOwnership'
 import {
   normalizeMessagePageLimit,
   normalizePageLimit,
@@ -634,9 +635,7 @@ export function reconcileStalePendingMessages(
     Object.entries(state.messagesBySessionId).map(([sessionId, messages]) => [
       sessionId,
       messages.map((message) => {
-        if (message.status !== 'pending') return message
-        // 本批次写的那条：本进程正在跑，绝不动。
-        if (message.ownerBootId === options.ownerBootId) return message
+        if (!isAbandonedPendingMessage(message, options.ownerBootId)) return message
         changed = true
         const nextData = message.searchableText.trim() ? message.data : textData(stoppedText)
         return {
