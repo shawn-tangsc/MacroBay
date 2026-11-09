@@ -67,7 +67,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # The root tsconfig covers the product sources too: peak RSS 2.8 GB, while Node sizes its
+      # default heap from the runner's available memory (~2 GB) and tsc aborts with SIGABRT.
       - name: Typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm typecheck
 
       - name: Build
@@ -141,7 +145,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # The root tsconfig covers the product sources too: peak RSS 2.8 GB, while Node sizes its
+      # default heap from the runner's available memory (~2 GB) and tsc aborts with SIGABRT.
       - name: Typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm typecheck
 
       - name: Build
@@ -209,7 +217,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # The root tsconfig covers the product sources too: peak RSS 2.8 GB, while Node sizes its
+      # default heap from the runner's available memory (~2 GB) and tsc aborts with SIGABRT.
       - name: Typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm typecheck
 
       - name: Build
