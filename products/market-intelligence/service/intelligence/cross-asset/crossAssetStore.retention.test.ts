@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { ClosedBar } from './binanceCrossAssetClient'
 import { createCrossAssetStore } from './crossAssetStore'
 import { barRetentionCutoffs } from '../retention/barRetention'
 
@@ -20,7 +21,8 @@ const STEP = 300_000
 const hour = 3_600_000
 const nowMs = Date.UTC(2026, 9, 15, 12, 0, 0)
 const coldHourMs = nowMs - 10 * 24 * hour
-const bar = (barOpenMs: number, close = '100') => ({
+/** 收盘柱按契约类型造：`symbol` 是存储层的联合，不是任意字符串。 */
+const bar = (barOpenMs: number, close = '100'): ClosedBar => ({
   symbol: 'BTCUSDT', barOpenMs, barEndMs: barOpenMs + STEP, open: close, high: close, low: close, close, volume: '1'
 })
 
