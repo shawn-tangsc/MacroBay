@@ -29,20 +29,29 @@ it('splits the reader-visible families between the two catalogs without overlap'
 })
 
 it('resolves every reference in both catalogs, and only names functions that exist', () => {
-  for (const catalog of both) {
-    for (const entry of catalog.traceabilityCatalog) {
-      const resolved = catalog.resolveTraceabilityPolicyRefs(entry)
-      expect(Object.keys(resolved)).toEqual([...entry.formula.policyRefs])
-      for (const [ref, value] of Object.entries(resolved)) {
-        const usable = typeof value === 'number' ? Number.isFinite(value) : typeof value === 'string' ? value.length > 0 : value.length > 0
-        expect(usable, `${entry.id} → ${ref}`).toBe(true)
-      }
-      for (const name of entry.formula.functionRefs) {
-        expect(Object.hasOwn(catalog.traceabilityFunctionRefs, name), `${entry.id} → ${name}`).toBe(true)
-      }
-    }
+  // 两侧的条目类型不同（渲染侧不填服务侧独有的 `label`），所以各跑一遍；逐条断言完全相同。
+  for (const entry of serviceSide.traceabilityCatalog) {
+    assertCatalogEntry(entry, serviceSide.resolveTraceabilityPolicyRefs(entry), serviceSide.traceabilityFunctionRefs)
+  }
+  for (const entry of rendererSide.traceabilityCatalog) {
+    assertCatalogEntry(entry, rendererSide.resolveTraceabilityPolicyRefs(entry), rendererSide.traceabilityFunctionRefs)
   }
 })
+
+function assertCatalogEntry(
+  entry: Readonly<{ id: string; formula: Readonly<{ policyRefs: readonly string[]; functionRefs: readonly string[] }> }>,
+  resolved: Readonly<Record<string, number | string | readonly string[]>>,
+  functionRefs: Readonly<Record<string, unknown>>
+): void {
+  expect(Object.keys(resolved)).toEqual([...entry.formula.policyRefs])
+  for (const [ref, value] of Object.entries(resolved)) {
+    const usable = typeof value === 'number' ? Number.isFinite(value) : typeof value === 'string' ? value.length > 0 : value.length > 0
+    expect(usable, `${entry.id} → ${ref}`).toBe(true)
+  }
+  for (const name of entry.formula.functionRefs) {
+    expect(Object.hasOwn(functionRefs, name), `${entry.id} → ${name}`).toBe(true)
+  }
+}
 
 it('states the daily row\'s numbers from the contract and the source catalog that own them', () => {
   const entry = rendererSide.resolveTraceability('daily-rate-row')!

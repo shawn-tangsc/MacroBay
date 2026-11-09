@@ -18,6 +18,15 @@ export const traceabilityPolicyRefs: Readonly<Record<RendererPolicyRefId, () => 
   'daily.maximum-readings': () => macroRatesSnapshotPublicPolicy.maximumReadings
 })
 
+/**
+ * 本侧目录的条目形状：契约的 `TraceabilityEntry` **去掉 `label`**。
+ *
+ * `label` 是**服务侧可读标签**——agent 的常驻索引（`buildProvenanceIndex`）读它，因为那个进程解析不了
+ * `nameKey`。本侧解析得了 `nameKey`，再填一个 label 就成了同一族的第二种叫法：没人读它，还会与文案各自
+ * 漂移。所以这一半只声明自己填得出来的字段；形状本身仍由契约定义（`Omit` 不另写一份）。
+ */
+export type RendererTraceabilityEntry = Omit<TraceabilityEntry, 'label'>
+
 /** 算式里引用到的函数名，必须真实存在：改名而没改目录会红。 */
 export const traceabilityFunctionRefs: Readonly<Record<string, unknown>> = Object.freeze({
   basisPointsText, crossAssetRatesDailyExtras
@@ -26,7 +35,7 @@ export const traceabilityFunctionRefs: Readonly<Record<string, unknown>> = Objec
 /** 这一侧负责的族：日频行的取整与"不同日不给差值"是渲染侧算的。 */
 export const traceabilityFamiliesOwnedHere: readonly TraceabilityFamilyId[] = Object.freeze(['daily-rate-row'])
 
-export const traceabilityCatalog: readonly TraceabilityEntry[] = Object.freeze([
+export const traceabilityCatalog: readonly RendererTraceabilityEntry[] = Object.freeze([
   Object.freeze({
     id: 'daily-rate-row' as const,
     nameKey: 'provenance.daily-rate-row.title',
@@ -52,7 +61,7 @@ export const traceabilityCatalog: readonly TraceabilityEntry[] = Object.freeze([
 ])
 
 /** 这一族有口径记录时返回它，否则 undefined —— 目录之外的族宁可说"没有"，也不猜。 */
-export function resolveTraceability(id: string): TraceabilityEntry | undefined {
+export function resolveTraceability(id: string): RendererTraceabilityEntry | undefined {
   return traceabilityCatalog.find(entry => entry.id === id)
 }
 
@@ -60,6 +69,6 @@ export function isTraceabilityFamilyOwnedHere(id: string): boolean {
   return (traceabilityFamiliesOwnedHere as readonly string[]).includes(id)
 }
 
-export function resolveTraceabilityPolicyRefs(entry: TraceabilityEntry): Readonly<Record<string, number | string | readonly string[]>> {
+export function resolveTraceabilityPolicyRefs(entry: RendererTraceabilityEntry): Readonly<Record<string, number | string | readonly string[]>> {
   return Object.fromEntries(entry.formula.policyRefs.map(ref => [ref, traceabilityPolicyRefs[ref as RendererPolicyRefId]()]))
 }
