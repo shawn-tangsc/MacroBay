@@ -665,10 +665,19 @@
 
 .intelligence-focus-market-save-failed {
   display: block;
-  padding: 6px 12px 0;
+  margin: 8px 12px 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
+/* 当前值：文本枚举（`--text-primary`），档与档之间留 8 的间距，不画成状态药丸。 */
+.intelligence-focus-market-values {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-primary);
 }
 
 .intelligence-focus-market-chip {

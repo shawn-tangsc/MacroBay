@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Switch } from 'antd'
+import { Alert, Button, Collapse, Input, Switch } from 'antd'
 import { Eye, EyeOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -366,15 +366,27 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
           </div>
           {/* 采集策略（频率档 / 范围 / 是否纳入舆情）：每个源常显，读者不必先选中它。
               产品自有采集的源只留启用开关，预设与范围不适用（组件自己写那句说明）。 */}
+          {/* 采集策略（频率档 / 范围 / 纳入情绪分析）：每个源一组，**默认收起**。
+              七个源就是近三十行，平铺会把详情面板的滚动撑散（界面设计 2026-11-09）。
+              平台 `CollapsibleGroup` 只收「行列表」，装不了这四行控件；它落地后换壳，
+              这里先用 antd `Collapse` 的同一形态（头行 + 箭头 + 展开区）。 */}
           {policy && policy.profiles[source.sourceId]
-            ? <CollectionPolicySection
-              configurable={source.collection !== 'none' && source.visibility !== 'pending'}
-              draftProfile={policy.profiles[source.sourceId]!}
-              enabledConfigurable={source.visibility !== 'pending'}
-              labels={policy.labels}
-              onChange={(patch) => policy.onChange(source.sourceId, patch)}
-              onEnabledChange={(enabled) => void toggle(source, enabled)}
-              supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
+            ? <Collapse
+              ghost
+              items={[{
+                key: source.sourceId,
+                label: policy.labels.title,
+                children: <CollectionPolicySection
+                  configurable={source.collection !== 'none' && source.visibility !== 'pending'}
+                  draftProfile={policy.profiles[source.sourceId]!}
+                  enabledConfigurable={source.visibility !== 'pending'}
+                  labels={policy.labels}
+                  onChange={(patch) => policy.onChange(source.sourceId, patch)}
+                  onEnabledChange={(enabled) => void toggle(source, enabled)}
+                  supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
+                />
+              }]}
+              size="small"
             />
             : null}
         </div>

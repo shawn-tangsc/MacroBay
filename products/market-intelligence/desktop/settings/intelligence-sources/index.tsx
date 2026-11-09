@@ -150,11 +150,11 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
                 labelKeys={['settings.intelligenceSources.focusMarkets.description']}
                 resolveText={(key) => focusMarketText[key] ?? ''}
               />
-              <span className="intelligence-focus-market-chip-list">
+              {/* 当前值是**文本枚举**，不是状态药丸：值不是状态词，画成药丸既不属于
+                  `StatusPill` 的用法，档多时还会把一行撑爆（界面设计 2026-11-09）。 */}
+              <span className="intelligence-focus-market-values">
                 {focusDraft.map((market) => (
-                  <span className="intelligence-focus-market-chip" key={market}>
-                    {t.focusMarkets.markets[market]}
-                  </span>
+                  <span key={market}>{t.focusMarkets.markets[market]}</span>
                 ))}
               </span>
             </div>

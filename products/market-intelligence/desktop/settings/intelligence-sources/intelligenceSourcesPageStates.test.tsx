@@ -189,7 +189,7 @@ describe('sources settings page states', () => {
     await act(async () => { usEquities.click(); await Promise.resolve() })
 
     // 没存上：读者刚勾的那个还在，屏幕上多一句「这次没存上」——不退回默认、不假装成功。
-    expect(dom.querySelector('.intelligence-focus-market-chip-list')?.textContent).toContain('美股')
+    expect(dom.querySelector('.intelligence-focus-market-values')?.textContent).toContain('美股')
     expect(dom.textContent).toContain(zhText.focusMarkets.saveFailed)
   })
 
@@ -239,6 +239,14 @@ describe('sources settings page states', () => {
       }) as never
     )
     const dom = await render()
+
+    // 默认收起：头行只有「采集策略」，四行控件不在 DOM 里；展开后才出现（界面设计 2026-11-09）。
+    expect(dom.textContent).toContain(zhText.collectionPolicy.title)
+    expect(dom.querySelector('.intelligence-setting-grid')).toBeNull()
+    const header = [...dom.querySelectorAll<HTMLElement>('.ant-collapse-header')]
+      .find((element) => element.textContent?.includes(zhText.collectionPolicy.title))!
+    await act(async () => { header.click() })
+    await act(async () => { await Promise.resolve() })
 
     const section = dom.querySelector('.intelligence-section:has(.intelligence-setting-grid)')
     expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
