@@ -5,12 +5,19 @@ import { AlertTriangle, Brain, Check, ChevronDown, ShieldQuestion, TerminalSquar
 
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import { LoadingSpinner } from '@platform/ui/components/loading'
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 
 import type { AgentRuntimeActivityCard } from '../agentRuntimeActivityViewModel'
 import { formatAgentElapsed } from '../agentElapsedText'
 import { resolveApprovalInputDraft } from '../agentRuntimeApprovalInput'
 import { useAgentLanguage, useAgentText } from '../agentTextProvider'
 import AgentAskUserQuestionCard from './AgentAskUserQuestionCard'
+
+/**
+ * 壳的 `resolveText` 只被 `*Key` 用到。这些折叠区的头行全是**已解析的原文**
+ * （运行时标签、工具副标题、字段名），一个键也不走——给同义回落，误传键时看见的是键本身。
+ */
+const passthroughText = (key: string): string => key
 
 type AgentRuntimeActivityPanelProps = {
   cards: AgentRuntimeActivityCard[]
@@ -151,17 +158,16 @@ function ActivityItem({
           ))}
         </dl>
       ) : null}
+      {/* 输入 / 输出：头行就是一行字，直接走壳（原生 `<summary>` 与壳头行同屏会分成两套）。 */}
       {card.requestDetail ? (
-        <details className="agent-runtime-activity-detail-fold">
-          <summary>{t.runtimeActivity.input}</summary>
+        <CollapsibleGroup resolveText={passthroughText} titleText={t.runtimeActivity.input}>
           <pre>{card.requestDetail}</pre>
-        </details>
+        </CollapsibleGroup>
       ) : null}
       {card.detail ? (
-        <details className="agent-runtime-activity-detail-fold">
-          <summary>{t.runtimeActivity.output}</summary>
+        <CollapsibleGroup resolveText={passthroughText} titleText={t.runtimeActivity.output}>
           <pre>{card.detail}</pre>
-        </details>
+        </CollapsibleGroup>
       ) : null}
       {card.kind === 'approval' && card.approvalId ? (
         <ApprovalActions card={card} onRuntimeSnapshotChange={onRuntimeSnapshotChange} />

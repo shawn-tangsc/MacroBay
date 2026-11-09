@@ -1,5 +1,7 @@
 import { Brain, TerminalSquare, Zap } from 'lucide-react'
 
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
+
 import type { AgentContextRendererRegistry } from '../agentContextRenderers'
 import type { AgentRuntimeMessagePartBlock, AgentRuntimeMessagePartDetailItem } from '../agentRuntimeMessageParts'
 import { openAgentRuntimeMessagePartDetailItem } from '../agentRuntimeMessagePartItemOpen'
@@ -22,6 +24,12 @@ type AgentRuntimeMessagePartBlocksProps = {
 }
 
 type RuntimeBlock = Extract<AgentRuntimeMessagePartBlock, { kind: 'runtime' }>
+
+/**
+ * 壳的 `resolveText` 只被 `*Key` 用到。这些折叠区的头行全是**已解析的原文**
+ * （运行时标签、工具副标题、字段名），一个键也不走——给同义回落，误传键时看见的是键本身。
+ */
+const passthroughText = (key: string): string => key
 
 export default function AgentRuntimeMessagePartBlocks({
   blocks,
@@ -215,26 +223,23 @@ function RuntimeBlockBody({
   return (
     <>
       {block.requestDetail ? (
-        <details className="agent-message-runtime-detail-fold">
-          <summary>{inputLabel}</summary>
+        <CollapsibleGroup resolveText={passthroughText} titleText={inputLabel}>
           <pre>{block.requestDetail}</pre>
-        </details>
+        </CollapsibleGroup>
       ) : null}
       {block.resultCards?.length ? (
-        <details className="agent-message-runtime-detail-fold">
-          <summary>{resultLabel}</summary>
+        <CollapsibleGroup resolveText={passthroughText} titleText={resultLabel}>
           <div className="agent-message-runtime-result-cards">
             {block.resultCards.map((card) => (
               <ResultPreviewCard key={card.key} card={card} openLabel={openLabel} />
             ))}
           </div>
-        </details>
+        </CollapsibleGroup>
       ) : null}
       {block.details?.length ? (
         <div className="agent-message-runtime-part-details">
           {block.details.map((detail) => (
-            <details key={detail.label} className="agent-message-runtime-detail-fold">
-              <summary>{detail.label}</summary>
+            <CollapsibleGroup key={detail.label} resolveText={passthroughText} titleText={detail.label}>
               {detail.items?.length ? (
                 <div className="agent-message-runtime-part-detail-items">
                   {detail.items.map((item, index) => (
@@ -265,14 +270,13 @@ function RuntimeBlockBody({
               ) : (
                 <pre>{detail.text}</pre>
               )}
-            </details>
+            </CollapsibleGroup>
           ))}
         </div>
       ) : !block.resultCards?.length && block.detail ? (
-        <details className="agent-message-runtime-detail-fold">
-          <summary>{resultLabel}</summary>
+        <CollapsibleGroup resolveText={passthroughText} titleText={resultLabel}>
           <pre>{block.detail}</pre>
-        </details>
+        </CollapsibleGroup>
       ) : null}
     </>
   )
