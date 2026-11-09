@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 import { describe, expect, it } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
-import { monthStatusLines, monthSurface } from './CalendarMonthBoard'
+import { CalendarMonthBoard, monthStatusLines, monthSurface } from './CalendarMonthBoard'
+import { createEconomicCalendarProjection } from './economicCalendarModel'
 
 const zh = productText['zh-CN'].pages.intelligence.portal.calendar
 const en = productText['en-US'].pages.intelligence.portal.calendar
@@ -38,6 +41,27 @@ describe('a month the official source could not be read for', () => {
       .toBe('正在加载经济日历…')
     // 没有注解时，状态行照旧显示。
     expect(monthStatusLines({ state: 'unavailable', status: '经济日历暂时不可用。' }).status).toBe('经济日历暂时不可用。')
+  })
+
+  it('never calls a month it could not read "no calendar source is enabled"', () => {
+    // 架构师 2026-11-09 审出：`feeds` 与 `events` 是两路异步。加载中 `events` 天然为空，先判全关会让
+    // 这一屏闪一下；月查询失败时更糟——「读不到」会被说成「来源全关」。空态只该在读完且确实为空时出现。
+    const board = (state: Parameters<typeof CalendarMonthBoard>[0]['state']) => renderToStaticMarkup(createElement(CalendarMonthBoard, {
+      asOf: '2026-11-01T00:00:00.000Z', coverage: 'complete', events: [], marketEvents: [], marketSources: [],
+      month: '2026-11', onOpenDay: () => undefined, onSelectItem: () => undefined, officialFeeds: 'disabled',
+      selectedEventKey: undefined, state, statusNow: '2026-11-01T00:00:00.000Z', text: zh, today: '2026-11-01'
+    }))
+
+    // 读失败：说的是「拿不到」，不是「来源全关」。
+    const failed = board({ state: 'unavailable', failureCode: 'calendar-query-unavailable' })
+    expect(failed).not.toContain(zh.status.noSourceEnabled)
+    expect(failed).toContain(zh.failures['calendar-query-unavailable'])
+    // 正在读：给的是加载态，不是判定。
+    expect(board({ state: 'loading' })).not.toContain(zh.status.noSourceEnabled)
+    // 读完且确实是空 —— 这才是「来源全关」该出现的时候（反向：抹掉那条 `available` 条件，这条会红）。
+    const projection = createEconomicCalendarProjection({ asOf: '2026-11-01T00:00:00.000Z', events: [], month: '2026-11' })
+    expect(board({ state: 'available', projection, events: [], incomplete: false, version: 1 }))
+      .toContain(zh.status.noSourceEnabled)
   })
 
   it('hangs the note on role="note", not on a live region', () => {

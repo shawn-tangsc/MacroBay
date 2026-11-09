@@ -57,9 +57,12 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
    * 先判「一条官方腿都没启用」（A），再判「取不到」，最后才轮到「本月确实没有」（B）。
    * 三态互斥，绝不并排：A 与 B 说的事情不一样，同时出现等于两种处境混回一个框。
    */
-  // 全关只在「两边都没有行」时才画整页空态：库里可能还留着停用前采集到的行，
-  // 有行就照常列出——把「还有数据」说成「什么都没开」与另一种空态犯的是同一个错。
-  if (officialFeeds === 'disabled' && events.length === 0 && marketEvents.length === 0) {
+  // 全关只在「月读完了、两边都没有行」时才画整页空态：
+  // - 库里可能还留着停用前采集到的行，有行就照常列出——把「还有数据」说成「什么都没开」与另一种空态
+  //   犯的是同一个错；
+  // - **没读完也不许画**：`feeds` 与 `events` 是两路异步，加载中 `events` 天然为空，先判全关会让这一屏
+  //   闪一下；月查询失败（`unavailable`）时更糟——那是「读不到」，说成「来源全关」等于把拿不到说成没有。
+  if (officialFeeds === 'disabled' && state.state === 'available' && events.length === 0 && marketEvents.length === 0) {
     return <CalendarNoSourceEnabledState text={text} />
   }
   const surface = monthSurface({ officialUnavailable: officialUnavailable !== undefined, officialCount: events.length, marketCount: marketEvents.length })
