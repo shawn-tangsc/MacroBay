@@ -102,7 +102,7 @@ describe('daily briefing numeric facts', () => {
           id: 'etf-btc',
           group: 'funds',
           labelKey: 'dailyBriefing.row.etfBtc',
-          importance: { tier: 'support', source: 'rule', reasonCode: 'etf-flow' },
+          importance: { tier: 'support', source: 'rule', reasonCode: 'reading' },
           state: 'available',
           value: { number: -643_200_000, format: 'flow-usd' },
           change: null,
