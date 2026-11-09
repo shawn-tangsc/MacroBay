@@ -15,7 +15,14 @@ const WRITE_CAPABILITY_IDS = [
 
 const HANDOFF_CAPABILITY_ID = 'request_source_credential'
 
-const capabilityById = new Map(intelligenceAgentCapabilities.map((capability) => [capability.id, capability]))
+/**
+ * 目录用 id 字符串查：`intelligenceAgentCapabilities` 是 `as const`，直接建 Map 会得到
+ * 「键是 id 联合」的 Map，测试里按变量查就编不过。这里显式声明键空间为 `string`，
+ * 值仍是目录里那一项的真实类型。
+ */
+const capabilityById: ReadonlyMap<string, (typeof intelligenceAgentCapabilities)[number]> = new Map(
+  intelligenceAgentCapabilities.map((capability) => [capability.id, capability])
+)
 
 function validate(capabilityId: string, input: unknown) {
   const capability = capabilityById.get(capabilityId)
@@ -136,7 +143,9 @@ describe('write capability catalog', () => {
 
     for (const [capabilityId, action, identifier] of identifierActions) {
       const rule = intelligenceWriteActionRules[capabilityId]?.[action]
-      const required = rule && !Array.isArray(rule) ? (rule.required ?? []) : []
+      // 规则有两档：纯字段数组，或 { fields, required?, anyOfRequired? }。`Array.isArray` 对
+      // `readonly string[]` 不做否定收窄，所以按「有没有 fields」判别，两种形状都还是真实类型。
+      const required = rule && !Array.isArray(rule) && 'fields' in rule ? (rule.required ?? []) : []
       expect(required, `${capabilityId}.${action} must require ${identifier}`).toContain(identifier)
     }
   })
