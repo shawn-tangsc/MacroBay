@@ -58,8 +58,10 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
       />
     </div>
     <div className="intelligence-catalog-list">
-      {/* A filter that hides every provider must say so and offer the way back, not render blank. */}
-      {(view?.groups ?? []).every((group) => group.providers.every((provider) => provider.sources.filter((source) => matchesFilter(source, filter)).length === 0))
+      {/* A filter that hides every provider must say so and offer the way back, not render blank.
+          **未结算不是「被筛掉了」**：`view` 还没到时不能画这个空态——空数组的 `every` 恒真，
+          任何新调用点提前渲染都会立刻误导成「筛选后没有来源」。 */}
+      {view !== undefined && view.groups.every((group) => group.providers.every((provider) => provider.sources.filter((source) => matchesFilter(source, filter)).length === 0))
         ? <StateView
           action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: () => onFilterChange('all') }}
           reasonCode="filtered-out"

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { ProviderDetail } from './ProviderDetail'
 import type { ProviderDetailLabels } from './ProviderDetail'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
@@ -212,6 +213,50 @@ describe('ProviderDetail source details', () => {
     expect(row?.tagName).toBe('DIV')
     expect(row?.hasAttribute('onclick')).toBe(false)
     expect(container.querySelector('.source-provider-detail__chevron')).toBeNull()
+  })
+
+  it('formats the last good sync day in the reader\'s time zone instead of slicing the instant', async () => {
+    // 缺陷：`lastSuccessfulSyncAt.slice(0, 10)` 手拼日期，读者时区不同会显示成前一天。
+    // 02:00Z 在纽约是前一天的 22:00：正确显示是 2026-10-21，切字符串永远是 2026-10-22。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ShellTimeZoneProvider, {
+        timeZone: 'America/New_York',
+        children: createElement(ProviderDetail, {
+          labels: labels(),
+          provider: {
+            providerId: 'bls',
+            displayName: 'Bureau of Labor Statistics (BLS)',
+            category: 'macro',
+            credential: 'none',
+            sources: [source({
+              providerId: 'bls',
+              sourceId: 'macro-calendar-bls',
+              displayName: 'BLS official schedule',
+              kind: 'official-calendar',
+              jobRegistered: false,
+              unavailable: {
+                reasonCode: 'official-endpoint-returned-403',
+                automaticSync: 'stopped',
+                lastSuccessfulSyncAt: '2026-10-22T02:00:00.000Z',
+                decidedAt: '2026-11-08'
+              }
+            })]
+          },
+          showSourceDetails: true
+        })
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.textContent).toContain('2026-10-21')
+    expect(container.textContent).not.toContain('2026-10-22')
   })
 
   it('does not paint “enabled” next to “unavailable”: one of them has to win', async () => {

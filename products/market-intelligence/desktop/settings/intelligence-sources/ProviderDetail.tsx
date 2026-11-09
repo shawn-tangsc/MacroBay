@@ -15,6 +15,8 @@ import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/i
 import { openProxySettings } from '../../shared/navigation/productShellNavigation'
 import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
 import { useProxyConfigured } from '../../shared/useProxyConfigured'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellDay } from '@platform/ui/time/shellTimeFormat'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import { SOURCE_REPEATED_FAILURE_THRESHOLD, type ProviderView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -131,6 +133,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const resolveText = useProductTextKey()
   // 读者已经配好自定义代理时，不再把「需要连接 VPN」当成他还没做的事（MI-11-R196）。
   const proxyConfigured = useProxyConfigured()
+  // 「上次成功同步」是读者可见的日期：走统一格式化（跟读者时区），不自己切 ISO 字符串。
+  const timeZone = useShellTimeZone()
   /** Set only by a transport-level refusal, so a rejected key never points at the proxy setting. */
   const [networkFailure, setNetworkFailure] = useState(false)
 
@@ -349,8 +353,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
                 {[
                   labels.unavailableReasonCode.replace('{code}', unavailable.reasonCode),
                   labels.automaticSyncStopped,
+                  // 读不出合法时刻就不写这一句，而不是印一段切出来的字符串。
                   ...(unavailable.lastSuccessfulSyncAt
-                    ? [labels.lastSuccessfulSync.replace('{date}', unavailable.lastSuccessfulSyncAt.slice(0, 10))]
+                    ? (() => {
+                      const day = formatShellDay(unavailable.lastSuccessfulSyncAt, timeZone)
+                      return day === null ? [] : [labels.lastSuccessfulSync.replace('{date}', day)]
+                    })()
                     : [])
                 ].join(' · ')}
               </span>
