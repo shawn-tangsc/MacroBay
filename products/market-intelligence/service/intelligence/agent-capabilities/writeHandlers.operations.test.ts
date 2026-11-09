@@ -7,6 +7,8 @@ import type { JobRuntime } from '@platform/jobs'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 
 import { createAgentChangeLog, type AgentChangeLog } from './changeLog'
+import type { MacroCalendarSettingsProviderId } from '../../../contracts/macro/economicCalendarQueryContracts'
+import type { MacroCalendarOps } from './operationFacades'
 
 const fixture = vi.hoisted(() => ({
   profiles: [
@@ -168,8 +170,9 @@ afterEach(() => {
   rmSync(dataDir, { recursive: true, force: true })
 })
 
-const macroCalendarOps = {
-  saveProviderProfile: async (input: { providerId: string; enabled: boolean }) => {
+// 按真实签名标注：夹具的每个状态字面量都要落进结果联合，不能靠推断放宽成 string。
+const macroCalendarOps: MacroCalendarOps = {
+  saveProviderProfile: async (input: { providerId: MacroCalendarSettingsProviderId; enabled: boolean }) => {
     fixture.calendar.saveProviderProfile.push(input)
     fixture.calendarState.providers[input.providerId] = input.enabled
     return { state: 'saved', provider: { providerId: input.providerId, enabled: input.enabled, scheduleHealth: 'healthy', consecutiveFailures: 0 } }
