@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 
@@ -92,7 +92,7 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
  */
 export function createNewsSentimentSqliteStore(filePath: string) {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
-  const db = openOrReset(filePath)
+  const db = openNewsSentimentDatabase(filePath)
   db.exec('pragma synchronous = full;')
   const storedVersion = readStorageVersion(db)
   if (storedVersion > newsSentimentStoragePolicy.schemaVersion) {
@@ -295,14 +295,40 @@ function deleteBefore(
   return keys.length
 }
 
-/** No migration path: a file that cannot be opened is discarded and rebuilt. */
-function openOrReset(filePath: string): DatabaseSync {
+/**
+ * 打开舆情库。**打不开不是「没有数据」**：原实现在这里删掉库文件再重建，一次文件锁、权限
+ * 或损坏就把整库历史静默清空（0.4.2 存储审计 #1）。现在只报错，由上层把舆情降级为不可用。
+ *
+ * 只有认出「这文件已经不是一个 SQLite 库」时才先留一份 `.corrupt-*` 现场；留档失败同样拒绝
+ * 继续——宁可这次打不开，也不拿一个空库顶替读者的历史。重建只走显式入口
+ * `rebuildNewsSentiment`，这里绝不自动重建。
+ */
+export function openNewsSentimentDatabase(
+  filePath: string,
+  open: (path: string) => DatabaseSync = openSqliteDatabase
+): DatabaseSync {
   try {
-    return openSqliteDatabase(filePath)
+    return open(filePath)
   } catch (error) {
-    if (filePath === ':memory:') throw error
-    for (const suffix of ['', '-wal', '-shm']) rmSync(filePath + suffix, { force: true })
-    return openSqliteDatabase(filePath)
+    if (filePath !== ':memory:' && isCorruptDatabaseError(error)) {
+      quarantineCorruptDatabase(filePath)
+    }
+    throw new Error('news-sentiment-storage-unavailable', { cause: error })
+  }
+}
+
+/** SQLite 说「这不是库 / 库已损坏」的原文；锁与权限不属于这一类，不能当损坏处理。 */
+function isCorruptDatabaseError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /file is not a database|database disk image is malformed|SQLITE_NOTADB|SQLITE_CORRUPT/i.test(message)
+}
+
+/** 复制一份现场（含 WAL/SHM，尚未 checkpoint 的行也在里面）；复制失败直接抛，调用方拒绝继续。 */
+function quarantineCorruptDatabase(filePath: string): void {
+  const target = `${filePath}.corrupt-${Date.now()}`
+  copyFileSync(filePath, target)
+  for (const suffix of ['-wal', '-shm']) {
+    if (existsSync(`${filePath}${suffix}`)) copyFileSync(`${filePath}${suffix}`, `${target}${suffix}`)
   }
 }
 

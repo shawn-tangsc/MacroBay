@@ -19,10 +19,10 @@ export type NewsPushLedgerEntry = {
 /**
  * 推送账本：**独立文件、只增不改**。
  *
- * 为什么不放在 `news_sentiment`：那个库没有迁移路径，版本一变就 `drop table` 重建
- * （`newsSentimentStore.ts` 的 `openOrReset` 与 `schemaVersion`）。账本放里面，一次重建就把
- * 「推过没有」抹掉，然后**全部历史重推**——读者收到一整批旧闻，而我们的所有用例在重建之前
- * 都是绿的。这条不是实现偏好，是存储结构逼出来的。
+ * 为什么不放在 `news_sentiment`：账本里的「推过没有」一旦丢，就会**全部历史重推**——读者收到
+ * 一整批旧闻，而下一轮用例在重建之前还是绿的。舆情库现在按版本原地迁移、打不开就拒绝打开
+ * （`newsSentimentStore.ts` 的 `openNewsSentimentDatabase`），但两条线的保留期与排障互不牵连，
+ * 账本仍然独立存放。
  *
  * 也因此这里**不做版本号、不做重建**：表只加行。真需要改形状时，写一条迁移，不要 drop。
  */
