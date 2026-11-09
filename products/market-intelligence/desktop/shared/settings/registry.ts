@@ -57,6 +57,7 @@ export type SettingOptionsSource =
   | 'calendar-landed-filter'
   | 'calendar-landed-scopes'
   | 'calendar-landed-country-codes'
+  | 'collection-presets'
 
 /** 本版五种控件；文本输入与动作按钮不进注册表（契约 §1.1）。 */
 export type SettingField =
@@ -348,12 +349,52 @@ const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
 ])
 
 /**
+ * 菜单 1 首批：**按来源实例化**的一行。
+ *
+ * 只声明「采集预设」：它的标签是静态文案键、读的是选中来源的 `detail.profile`、写的是
+ * `saveProfile`，三样都有代码证据。逐源「启用」不从这儿声明——它的标签是来源名（数据），
+ * 不是文案键；「能力·看板/日历」「纳入情绪分析」的可见性字段在视图里没有（前者的
+ * `profile.capabilities` 不存在，后者由 `supportsSentimentById` 传进来），声明了就是编。
+ *
+ * 实例 id 由页面按 `keyedBy` 填进模板；读/写靠视图自带的 `selectedSourceId` 与
+ * `detail.profile` 绑定，不要求渲染层再传第二个参数。
+ */
+const SOURCE_ROWS: readonly SettingDescriptor[] = Object.freeze([
+  {
+    key: 'setting:sources.collection-preset@<sourceId>',
+    keyedBy: 'sourceId',
+    menu: 'sources',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'select', optionsFrom: 'collection-presets' },
+    read: {
+      command: 'intelligenceSources.getPageState',
+      select: (view) => readViewField(readViewField(readViewField(view, 'detail'), 'profile'), 'collectionPreset')
+    },
+    write: {
+      kind: 'value',
+      command: 'intelligenceSources.saveProfile',
+      toPayload: (value, view) => ({
+        sourceId: readViewField(view, 'selectedSourceId'),
+        collectionPreset: value
+      })
+    },
+    // 只在「已经选中一个来源」时出现；没选中就没有这一行可读的值。
+    visibleWhen: (view) =>
+      typeof readViewField(view, 'selectedSourceId') === 'string' &&
+      readViewField(readViewField(view, 'detail'), 'profile') !== undefined,
+    copy: { labelKey: 'settings.intelligenceSources.collectionPolicy.collectionPreset' },
+    availability: 'live'
+  }
+])
+
+/**
  * 六格都必须有键：删掉某菜单（或整个菜单）从类型上报错，不会静默少一行。
  * 本笔只填菜单 5；其余空数组是「本笔不声明」，不是「永远没有」。
  * 菜单 1 的 `keyedBy: 'sourceId'` 已在类型里，行声明等读/写实例绑定落到契约后再进表。
  */
 export const settingRegistry: Readonly<Record<SettingMenuId, readonly SettingDescriptor[]>> = Object.freeze({
-  sources: Object.freeze([]),
+  sources: SOURCE_ROWS,
   content: Object.freeze([]),
   analysis: Object.freeze([]),
   briefing: Object.freeze([]),

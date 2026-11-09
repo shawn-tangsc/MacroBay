@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { intelligenceNotificationText } from '../../settings/intelligence-notification/text'
+import { productText } from '../i18n/productText'
 import { IpcChannels } from '@platform/desktop/ipc/channels'
 import type { SettingDescriptor, SettingMenuId, SettingWrite } from './registry'
 import { PLATFORM_COMMANDS, SETTING_MENUS, settingRegistry, validateSettingRegistry } from './registry'
@@ -120,16 +121,49 @@ describe('settings registry self-checks (G1–G7)', () => {
     expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'custom', codes: ['US'] } })).toBe(true)
   })
 
+  it('menu 1 declares a keyed template instead of a source list', () => {
+    // 模板只声明一条；实例数量由视图里的源列表决定，注册表里不许出现源清单。
+    expect(settingRegistry.sources).toHaveLength(1)
+    const row = settingRegistry.sources[0] as SettingDescriptor
+    expect(row.keyedBy).toBe('sourceId')
+    expect(row.key).toBe('setting:sources.collection-preset@<sourceId>')
+
+    const view = {
+      selectedSourceId: 'coindesk-rss',
+      detail: { profile: { sourceId: 'coindesk-rss', collectionPreset: 'balanced' } }
+    }
+    expect(row.read.command).toBe('intelligenceSources.getPageState')
+    expect(row.read.select(view)).toBe('balanced')
+    expect(row.visibleWhen?.(view)).toBe(true)
+    expect(row.visibleWhen?.({})).toBe(false)
+    if (row.write?.kind !== 'value') throw new Error('the preset row must be a value write')
+    // 写的是「选中来源的 profile」：sourceId 从视图拿，渲染层不另传第二个参数。
+    expect(row.write.toPayload('frequent', view)).toEqual({
+      sourceId: 'coindesk-rss',
+      collectionPreset: 'frequent'
+    })
+  })
+
   it('only existing copy keys: every labelKey / helpKey resolves in both locales', () => {
     const descriptors = Object.values(settingRegistry).flat()
     expect(descriptors.length).toBeGreaterThan(0)
     for (const descriptor of descriptors) {
       for (const locale of ['zh-CN', 'en-US'] as const) {
-        expect(intelligenceNotificationText[locale][descriptor.copy.labelKey] ?? '').not.toBe('')
+        expect(resolveCopyKey(locale, descriptor.copy.labelKey)).not.toBe('')
         if (descriptor.copy.helpKey) {
-          expect(intelligenceNotificationText[locale][descriptor.copy.helpKey] ?? '').not.toBe('')
+          expect(resolveCopyKey(locale, descriptor.copy.helpKey)).not.toBe('')
         }
       }
     }
   })
 })
+
+/** 两屏的文案表不同：通知页在 `intelligenceNotificationText`，来源页在 `productText.settings.*`。 */
+function resolveCopyKey(locale: 'zh-CN' | 'en-US', key: string): string {
+  if (!key.startsWith('settings.')) return intelligenceNotificationText[locale][key] ?? ''
+  let node: unknown = productText[locale]
+  for (const part of key.split('.')) {
+    node = typeof node === 'object' && node !== null ? (node as Record<string, unknown>)[part] : undefined
+  }
+  return typeof node === 'string' ? node : ''
+}
