@@ -265,8 +265,12 @@ describe('notification settings is two switches, one test button and a footer', 
     expect(sentence).toContain(text.testUnavailable)
     // 码只在折叠区：主句里 0 次，展开后恰 1 处，而且是返回值里的原码。
     expect(sentence).not.toContain('push-unavailable')
-    const details = container.querySelector('[data-send-test-result] details')
-    expect(details?.hasAttribute('open')).toBe(false)
-    expect(details?.textContent).toContain('push-unavailable')
+    // 折叠区现在是壳（`CollapsibleGroup`）：判「默认收起」看 `aria-expanded`，
+    // 判「码在折叠区里」看内容节点——壳为 `aria-controls` 让内容首帧挂载，收起用 `display: none`，
+    // 所以「在 DOM 里」不等于「读者看得见」。
+    const header = container.querySelector('[data-send-test-result] .ant-collapse-header')
+    expect(header?.getAttribute('aria-expanded')).toBe('false')
+    const body = container.querySelector('[data-send-test-result] .collapsible-group__body')
+    expect(body?.textContent).toContain('push-unavailable')
   })
 })

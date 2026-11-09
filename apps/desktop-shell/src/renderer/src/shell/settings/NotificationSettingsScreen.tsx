@@ -4,6 +4,7 @@ import { Button, Switch } from 'antd'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { useSingleFlightSend } from '@platform/ui/async/useSingleFlightSend'
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
@@ -185,10 +186,12 @@ export function NotificationSettingsScreen(props: {
                 </p>
                 {receipt.code === undefined ? null : (
                   // 原因码只在这里：默认收起、不进主句、不进 ⓘ。
-                  <details className="notification-settings-reason">
-                    <summary>{text.reasonCode}</summary>
+                  // 折叠头走壳：原生 `<summary>` 的三角在左、13 号，同屏会和壳头行分成两套。
+                  <CollapsibleGroup
+                    resolveText={(key) => key}
+                    titleText={text.reasonCode}>
                     <code>{receipt.code}</code>
-                  </details>
+                  </CollapsibleGroup>
                 )}
               </div>
             )}
