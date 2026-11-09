@@ -70,6 +70,9 @@ export default function AgentTaskCenterList({
             key={item.task.id}
             type="button"
             className={item.task.id === selectedTaskId ? 'agent-task-list-item active' : 'agent-task-list-item'}
+            // 整行只有一个结果：选中这条任务。行内没有别的按钮，所以保留整行可点；
+            // `aria-current` 把「现在选中的是哪一条」告诉读屏（视觉上只有底色）。
+            aria-current={item.task.id === selectedTaskId ? 'true' : undefined}
             onClick={() => onSelect(item.task.id)}>
             <span className={`agent-task-status-dot ${item.runtimeStatus}`} />
             <span>
