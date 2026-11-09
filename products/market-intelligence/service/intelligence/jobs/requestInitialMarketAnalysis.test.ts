@@ -10,6 +10,13 @@ import { createInitialMarketAnalysisRequest } from './requestInitialMarketAnalys
 
 const asOf = '2026-10-04T00:00:00.000Z'
 const cleanups: (() => void)[] = []
+
+/** A promise with its resolver kept out of the executor, the shape `Promise.withResolvers` would give. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}
 afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAllMocks() })
 
 function setup() {
@@ -90,7 +97,7 @@ describe('createInitialMarketAnalysisRequest', () => {
 
   it('answers a concurrent manual request with the in-flight run instead of refusing the click', async () => {
     const fixture = setup()
-    const gate = Promise.withResolvers<void>()
+    const gate = deferred()
     fixture.freeze.mockImplementation(() => gate.promise)
     const first = fixture.request(undefined, undefined, 'initial', 'manual')
     try {
@@ -110,7 +117,7 @@ describe('createInitialMarketAnalysisRequest', () => {
 
   it('does not start a second run after the UI wait times out while the job continues', async () => {
     const fixture = setup()
-    const gate = Promise.withResolvers<void>()
+    const gate = deferred()
     fixture.freeze.mockImplementation(() => gate.promise)
     const wait = vi.spyOn(fixture.jobRuntime, 'waitForRunTerminal').mockResolvedValue({ state: 'timeout' })
     try {
