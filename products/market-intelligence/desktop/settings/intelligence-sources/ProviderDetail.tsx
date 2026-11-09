@@ -86,6 +86,29 @@ export function healthBadgeView(
  * Right pane for a provider: lists every capability with its switch. Clicking a
  * capability drills into the existing source detail.
  */
+/**
+ * 一个源此刻的健康状态词。抽成具名函数（原来是内联立即执行），因为接下去要改这一行的结构：
+ * 内联 IIFE 切括号最容易切错，先把它变成有名字、可单独读的一段。
+ *
+ * 两条规则不变：
+ * - 没有 generic adapter 的源由产品自己的任务采集，管线对它无话可说，旧的手动失败记录
+ *   不该读成「这个源坏了」；
+ * - **「没有健康数据」不等于「健康」**：过去给已启用、无健康数据的日历源画绿的 healthy，
+ *   而 BLS 正是这种源——已启用、实际取不到。没有数据就不画药丸。
+ */
+function SourceHealthPill({ health, resolveText, unavailable }: {
+  health?: Readonly<{ runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'; consecutiveFailures?: number }>
+  resolveText: (key: string) => string
+  unavailable: boolean
+}): React.ReactElement | null {
+  if (unavailable) {
+    return <StatusPill labelKey="settings.intelligenceSources.unavailableShort" resolveText={resolveText} tone="muted" />
+  }
+  if (!health) return null
+  const view = healthBadgeView(health.runtimeStatus, health.consecutiveFailures ?? 0)
+  return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
+}
+
 function needsJob(source: SourceView): boolean {
   return source.collection === 'adapter'
     || source.collection === 'job'
@@ -332,20 +355,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               {[...new Set(tags)].map((tag) => <em key={tag}>{tag}</em>)}
               {source.requiresProxy && !proxyConfigured ? <em className="source-provider-detail__proxy">{labels.badges.proxy}</em> : null}
               {needsJob(source) ? <em className={`source-provider-detail__job${source.jobRegistered ? ' is-on' : ''}`}>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</em> : null}
-              {(() => {
-                // A source with no generic adapter is collected by the product's own job; the
-                // pipeline has nothing to say about it, and an old failure from a manual attempt
-                // would otherwise read as "this source is broken".
-                const health = source.collection === 'none' ? undefined : details[source.sourceId]?.health
-                // 「没有健康数据」不等于「健康」：过去这里给已启用、无健康数据的日历源画绿的 healthy，
-                // 而 BLS 正是这种源——已启用、实际取不到。没有数据就不画药丸。
-                if (unavailable) {
-                  return <StatusPill labelKey="settings.intelligenceSources.unavailableShort" resolveText={resolveText} tone="muted" />
-                }
-                if (!health) return null
-                const view = healthBadgeView(health.runtimeStatus, health.consecutiveFailures ?? 0)
-                return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
-              })()}
+              <SourceHealthPill
+                health={source.collection === 'none' ? undefined : details[source.sourceId]?.health}
+                resolveText={resolveText}
+                unavailable={Boolean(unavailable)} />
             </span>
             {/* 「不可用」不是失败：药丸之外必须给出同一句原因，读者才知道为什么取不到、数据有多旧。 */}
             {unavailable
