@@ -3,6 +3,7 @@ import { Info } from 'lucide-react'
 import { Button, Switch } from 'antd'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { useSingleFlightSend } from '@platform/ui/async/useSingleFlightSend'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
@@ -63,26 +64,41 @@ export function NotificationSettingsScreen(props: {
     setWriteFailed(!result.ok)
   }
 
-  const runTest = async (): Promise<void> => {
+  const runTest = async (): Promise<boolean> => {
     try {
       // `link` = 平台链路自检：走完整真实链路（含手机通道），样例固定、不绑任何情报事件。
       const result = await client.sendTest?.({ kind: 'link' })
       if (result === undefined) {
         // 没有这个方法（旧构建 / preload 没接）：只说没发出去，不给码。
         setReceipt({ sentence: text.testUnavailable })
-        return
+        return false
       }
       if (result.state === 'sent') {
         // 成功必须点名通道：「已发到 {通道名}（测试）」。
         setReceipt({ sentence: text.testSentToChannel(result.channelName) })
-        return
+        return true
       }
       // `link` 永远有样例，所以只剩「发不出去」；原因码进折叠区，不进主句。
       setReceipt({ sentence: text.testUnavailable, code: result.reasonCode })
+      return false
     } catch {
       // 连回执都没拿到：只说没发出去，不编一个码。
       setReceipt({ sentence: text.testUnavailable })
+      return false
     }
+  }
+
+  /**
+   * 连点守卫（用户 2026-11-09：点 4 次收到 4 条自检）。
+   *
+   * 单飞 + 成功冷却 10 秒；`runTest` 的返回值决定要不要冷却——失败不冷却，否则失败会把重试也堵住。
+   */
+  const sendGuard = useSingleFlightSend({ cooldownMs: 10_000, send: runTest })
+
+  const onSendTest = (): void => {
+    void sendGuard.run().then((outcome) => {
+      if (outcome === 'cooldown') setReceipt({ sentence: text.sendCooldown(sendGuard.cooldownSecondsLeft) })
+    })
   }
 
   return (
@@ -152,7 +168,11 @@ export function NotificationSettingsScreen(props: {
                 <strong>{text.sendTestRow}</strong>
               </span>
               <span className="notification-row-control">
-                <Button size="small" onClick={() => void runTest()} data-send-test>
+                <Button
+                  size="small"
+                  disabled={!sendGuard.canSend}
+                  onClick={onSendTest}
+                  data-send-test>
                   {text.sendTest}
                 </Button>
               </span>
@@ -175,11 +195,18 @@ export function NotificationSettingsScreen(props: {
           </section>
 
           <footer className="notification-footer">
-            <span>{text.footerLine}</span>
             <Popover
-              lines={[{ labelKey: 'notifications.center.desc' }, { labelKey: 'notifications.footer.hint' }]}
-              resolveText={(key: 'notifications.center.desc' | 'notifications.footer.hint') =>
-                key === 'notifications.center.desc' ? text.centerDesc : text.footerHint
+              lines={[
+                { labelKey: 'notifications.center.desc' },
+                { labelKey: 'notifications.footer.hint' },
+                { labelKey: 'notifications.footer.line' }
+              ]}
+              resolveText={(key: 'notifications.center.desc' | 'notifications.footer.hint' | 'notifications.footer.line') =>
+                key === 'notifications.center.desc'
+                  ? text.centerDesc
+                  : key === 'notifications.footer.line'
+                    ? text.footerLine
+                    : text.footerHint
               }
               trigger={(triggerProps) => (
                 <IconButton
@@ -236,7 +263,7 @@ function SwitchRow(props: {
           )}
         />
       </span>
-      <span className="notification-row-control">{props.control}</span>
+      {props.control}
     </div>
   )
 }
