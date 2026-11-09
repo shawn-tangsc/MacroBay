@@ -10,10 +10,20 @@ const fixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), 'fixtures
 const fixture = (file: string) => readFileSync(join(fixtureDirectory, file), 'utf8')
 const blsFixture = () => readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'bls-observations', 'fixtures', 'bls-six-series-2025-2026-2026-08-03.json'), 'utf8')
 
+
+/**
+ * 这个联合类型的两种结局用**两个不同字段**做判别（成功是 `kind`，失败是 `state`），所以直接写
+ * `result.kind` 在类型上不成立：不是每个成员都有 `kind`。收窄一次，别在每处断言里 `as`。
+ */
+function parsedEvidence(result: ReturnType<typeof parseMacroCalendarEvidence>) {
+  if (!('kind' in result)) throw new Error(`expected parsed evidence, got ${JSON.stringify(result)}`)
+  return result
+}
+
 describe('parseMacroCalendarEvidence', () => {
   it("dispatches raw accepted Fed schedule bytes and BEA's official New York schedule times", () => {
-    const fed = parseMacroCalendarEvidence({ descriptorId: 'macro-calendar-fed-schedule', body: fixture('fed-fomc-schedule-2026-08-03.html') })
-    const bea = parseMacroCalendarEvidence({ descriptorId: 'macro-calendar-bea-schedule', body: fixture('bea-release-schedule-2026-08-03.html') })
+    const fed = parsedEvidence(parseMacroCalendarEvidence({ descriptorId: 'macro-calendar-fed-schedule', body: fixture('fed-fomc-schedule-2026-08-03.html') }))
+    const bea = parsedEvidence(parseMacroCalendarEvidence({ descriptorId: 'macro-calendar-bea-schedule', body: fixture('bea-release-schedule-2026-08-03.html') }))
 
     expect(fed).toMatchObject({ providerId: 'macro-calendar-fed', descriptorId: 'macro-calendar-fed-schedule', parserId: 'fed-fomc-calendar-v1', kind: 'schedule-drafts' })
     expect(fed.kind === 'schedule-drafts' && fed.drafts.map((draft) => draft.eventKey)).toContain('US.FOMC.2026-12-09')
@@ -32,10 +42,10 @@ describe('parseMacroCalendarEvidence', () => {
   })
 
   it('dispatches raw BLS JSON to observed-only drafts', () => {
-    const result = parseMacroCalendarEvidence({
+    const result = parsedEvidence(parseMacroCalendarEvidence({
       descriptorId: 'macro-calendar-bls-values',
       body: blsFixture()
-    })
+    }))
 
     expect(result).toMatchObject({ providerId: 'macro-calendar-bls', descriptorId: 'macro-calendar-bls-values', parserId: 'bls-calendar-values-v1', kind: 'observed-value-drafts' })
     expect(result.kind === 'observed-value-drafts' && result.drafts).toHaveLength(5)
