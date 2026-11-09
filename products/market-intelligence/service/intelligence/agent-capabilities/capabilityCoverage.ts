@@ -166,6 +166,11 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligenceSources.getPanelView': excluded('internal-view'),
   'intelligenceSources.listDefinitions': exposed('list_intelligence_sources'),
   'intelligenceSources.listProfiles': exposed('list_intelligence_sources'),
+  /**
+   * **仅维护，读者端无入口**：这是出事之后「按新规则重算历史」的维护动作，产出不是给读者读的
+   * 东西——设置页那个壳已删（`8e72898`），能力与 IPC 原样保留。别照 `destructive` 反推出
+   * 「本来该有个入门」，然后给它补一个入口。
+   */
   'intelligenceSources.replayWindow': excluded('destructive'),
   'intelligenceSources.runNow': exposed('operate_intelligence_source'),
   'intelligenceSources.saveFocusSettings': exposed('configure_intelligence_source'),
