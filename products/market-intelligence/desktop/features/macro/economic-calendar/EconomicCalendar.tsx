@@ -40,6 +40,7 @@ import { DashboardPanelDrawer } from '../../../pages/intelligence/DashboardPanel
 import { economicCalendarMonthLoadingPolicy, toDetailEvent } from './economicCalendarMonthResult'
 import type { EconomicCalendarText } from './economicCalendarText'
 import { useEconomicCalendarMonthWindow, type EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
+import { calendarEventDay, readSelectedEvent } from './economicCalendarSelection'
 
 import './economicCalendar.css'
 
@@ -461,16 +462,4 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
 
 function toCanonicalUtcMillis(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}T${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(date.getUTCSeconds()).padStart(2, '0')}.${String(date.getUTCMilliseconds()).padStart(3, '0')}Z`
-}
-
-/** The calendar day an official event is drawn on, in the workspace's display zone. */
-function calendarEventDay(event: EconomicCalendarEventView, timeZone: string): string {
-  return event.scheduledAt ? calendarDisplayDate(event.scheduledAt, timeZone) : event.scheduledDate
-}
-
-function readSelectedEvent(state: EconomicCalendarMonthState, eventKey: string | undefined): { event: EconomicCalendarEventView; version: number } | undefined {
-  if (!eventKey) return undefined
-  if (state?.state !== 'available') return undefined
-  const event = state.events.find((candidate) => candidate.eventKey === eventKey)
-  return event ? { event, version: state.version } : undefined
 }
