@@ -927,7 +927,15 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     jobScheduleQueryService,
     refreshBuiltinSeedCopy
   )
-  registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, cacheAudit: { pruneAudit: () => cacheGovernanceService.pruneAudit() }, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
+  registerPlatformRetentionJobs({
+    jobRuntime,
+    assistantDatabase,
+    cacheAudit: { pruneAudit: () => cacheGovernanceService.pruneAudit() },
+    // 用 thunk 交给保留期组：事件总线是懒构造单例，注册时不该把它实例化。
+    eventBus: { pruneRetained: () => getEventBusRuntime().pruneRetained() },
+    notificationRuntime: getNotificationRuntime(),
+    timeZone: () => shellTimeZone.get()
+  })
 
   // 更新检查：源码启动与装好的包同一套逻辑，没有「开发态」分支；每天最多一次在服务里封顶。
   const updateCheck = await composeUpdateCheck({

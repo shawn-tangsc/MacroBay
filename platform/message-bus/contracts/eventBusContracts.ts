@@ -13,6 +13,11 @@ export type PlatformEventEnvelope<TPayload = unknown> = {
   recordedAt: string
   correlationId?: string
   causationId?: string
+  /**
+   * 发布去重键。**去重窗口与事件保留期相同**（30 天 / 5,000 条，见 `eventBusRetentionPolicy`）：
+   * 被裁掉的事件不再参与去重，同一键在窗口之外再次出现会被当作**新事件**接受。
+   * 想要「永远不重复」的调用方，必须自己保证键在窗口内不复用。
+   */
   idempotencyKey?: string
   payload: TPayload
   safeMetadata?: Record<string, unknown>
@@ -102,6 +107,12 @@ export type EventBusRuntime = {
   unregisterConsumer: (consumerId: string) => void
   dispatchPending: () => Promise<void>
   getDiagnostics: (query?: EventBusDiagnosticsQuery) => Promise<EventBusDiagnosticsPage>
+  /**
+   * 按保留期裁剪已落盘的事件与投递（幂等、可重入）。
+   *
+   * 启动时 hydration 之后自动跑一次，平台保留期任务每日再跑一次；`pending` 投递及其事件永不裁。
+   */
+  pruneRetained: (options?: { now?: string }) => Promise<{ removedEvents: number; removedDeliveries: number }>
 }
 
 export const DEFAULT_EVENT_CONSUMER_RETRY_POLICY: EventConsumerRetryPolicy = {
