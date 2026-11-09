@@ -406,7 +406,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
                     ariaLabelKey="settings.intelligenceSources.unavailableReasonCodeAria"
                     icon={Info}
                     resolveText={resolveText}
-                    size="sm" />
+                    size="sm"
+                    /* 圆形字形（Info / CircleHelp / HelpCircle）一律显式 plain：无框无底、悬停才出浅底；
+                       solid 只属于工具栏那一排（iconGlyphVariantGuard）。 */
+                    variant="plain" />
                 )} />
               : null}
             </span>
