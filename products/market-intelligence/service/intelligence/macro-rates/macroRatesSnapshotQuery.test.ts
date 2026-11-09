@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createMacroRatesSnapshotQuery } from './macroRatesSnapshotQuery'
+import type { MacroRatesSnapshot } from './macroRatesSnapshotQuery'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
 
 const now = Date.parse('2026-10-14T12:00:00.000Z')
@@ -20,13 +21,22 @@ function query(metrics: MetricIntelligenceEvent[]) {
   return createMacroRatesSnapshotQuery({ listMetricEvents: () => metrics, now: () => now })
 }
 
+/**
+ * The published half of the union. Reading a figure without saying what happens on `unavailable`
+ * is the narrowing this union exists to force, so each test states it here instead of casting.
+ */
+function published(snapshot: MacroRatesSnapshot) {
+  if (snapshot.state === 'unavailable') throw new Error('expected a published rates snapshot, got unavailable')
+  return snapshot
+}
+
 describe('macro rates snapshot query', () => {
   it('answers the admitted rate series with its level, prior trading day and observation date', () => {
-    const snapshot = query([
+    const snapshot = published(query([
       event(),
       event({ metricEventId: 'metric-2', metricKey: 'US_REAL_YIELD_10Y', metricName: 'US 10Y Real Yield', actual: 2.91, previous: 2.87 }),
       event({ metricEventId: 'metric-3', metricKey: 'US_2Y_YIELD', metricName: 'US 2Y Treasury Yield', actual: 4.8, previous: 4.72 })
-    ]).snapshot()
+    ]).snapshot())
 
     expect(snapshot.state).toBe('available')
     expect(snapshot.asOf).toBe('2026-10-14T12:00:00.000Z')
@@ -39,19 +49,19 @@ describe('macro rates snapshot query', () => {
   })
 
   it('keeps the newest stored observation of a series, not the order the store returned', () => {
-    const snapshot = query([
+    const snapshot = published(query([
       event({ metricEventId: 'old', actual: 5.28, previous: 5.3, period: '2026-10-07', releaseTime: '2026-10-07T00:00:00.000Z' }),
       event({ metricEventId: 'new', actual: 5.24, previous: 5.22, period: '2026-10-09', releaseTime: '2026-10-09T00:00:00.000Z' })
-    ]).snapshot()
+    ]).snapshot())
 
     expect(snapshot.readings).toHaveLength(1)
     expect(snapshot.readings[0]).toMatchObject({ actual: 5.24, previous: 5.22, period: '2026-10-09' })
   })
 
   it('drops an observation that was not yet visible at the read instant', () => {
-    const snapshot = query([
+    const snapshot = published(query([
       event({ metricEventId: 'future', actual: 9.99, period: '2026-10-20', releaseTime: '2026-10-20T00:00:00.000Z' })
-    ]).snapshot()
+    ]).snapshot())
 
     expect(snapshot.state).toBe('empty')
     expect(snapshot.readings).toEqual([])
@@ -79,7 +89,7 @@ describe('macro rates snapshot query', () => {
     ['a missing period', { period: undefined }],
     ['a release time that is not an instant', { releaseTime: '2026-10-09' }]
   ])('drops %s rather than printing it', (_name, overrides) => {
-    const snapshot = query([event(overrides)]).snapshot()
+    const snapshot = published(query([event(overrides)]).snapshot())
 
     expect(snapshot.state).toBe('empty')
     expect(snapshot.readings).toEqual([])
