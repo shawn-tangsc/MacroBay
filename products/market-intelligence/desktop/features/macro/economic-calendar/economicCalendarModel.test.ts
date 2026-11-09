@@ -135,7 +135,7 @@ function event(overrides: Partial<EconomicCalendarPublicEvent> = {}): EconomicCa
   return {
     eventKey: 'US.CPI.RELEASE.uid-1', releaseGroupKey: 'US.BLS.RELEASE.uid-1', eventFamily: 'cpi', titleKey: 'cpi',
     countryCode: 'US', importance: 'high', periodKey: 'release-2026-08-12', lifecycleState: 'scheduled', coverage: 'available',
-    scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z', detectedAt: '2026-08-05T00:00:00.000Z',
+    scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z', releaseTimeSource: 'official', detectedAt: '2026-08-05T00:00:00.000Z',
     consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'],
     caveats: ['official-period-not-published-in-ics', 'manual-ics-import'], ...overrides
   }
