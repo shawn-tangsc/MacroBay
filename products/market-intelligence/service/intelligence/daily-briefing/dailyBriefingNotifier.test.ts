@@ -61,8 +61,8 @@ describe('daily briefing notifier', () => {
     expect(ready).toMatchObject({
       dedupeKeyTemplate: 'briefing-ready:{date}:{periodId}:{locale}',
       dedupeUnit: 'occurrence',
-      // 完成类只进中心与（读者勾选的）手机：桌面只对「失败 / 需修正 / 系统状态」开放。
-      requestedDisruptionLevels: []
+      // 读者 2026-11-04 翻案恢复「完成推手机」，11-06 加桌面档；两档都申请，中心始终在。
+      requestedDisruptionLevels: ['channel', 'desktop']
     })
 
     const catalog = createNotificationEventCatalog({

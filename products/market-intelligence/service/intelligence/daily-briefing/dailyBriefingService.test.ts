@@ -1040,6 +1040,17 @@ describe('briefing notices', () => {
     expect(JSON.stringify(notices[0]?.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt/)
   })
 
+  it('does not submit again when a later read finds the stored edition', async () => {
+    // 触发点是「生成并落库之后」，不是每次读：同一个版次再读一次不该再响一声。
+    const { service, notices } = completedRun()
+
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const again = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(again.state).toBe('available')
+    expect(notices).toHaveLength(1)
+  })
+
   it('writes the completion record without delivering it when the reader regenerates', async () => {
     // The record is not a delivery: a manual run still states which edition exists, so "push to phone"
     // has something to check, while `deliver: false` keeps the surfaces silent until the reader asks.

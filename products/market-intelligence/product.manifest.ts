@@ -393,7 +393,10 @@ export const marketIntelligenceProductManifest = {
       category: 'completed',
       body: true,
       requiresUserAction: false,
-      requestedDisruptionLevels: [],
+      // 读者 2026-11-04 翻案恢复「完成推手机」，2026-11-06 又加了桌面档。批准表批了
+      // center + channel + desktop，声明也必须申请这两档，否则签过的那两格是死配置：
+      // 提交照常发生，运行时只会投到中心。手机仍受情报通知页那枚开关约束（默认关）。
+      requestedDisruptionLevels: ['channel', 'desktop'],
       // 一条版次一条提醒：键带日期、期号与语言，同一天两期（或同刻两种语言）各推一条。
       // 仍**不许**混入版本号、生成时刻或内容哈希——否则同一天重新生成会被当成新事件重推。
       dedupeKeyTemplate: 'briefing-ready:{date}:{periodId}:{locale}',
