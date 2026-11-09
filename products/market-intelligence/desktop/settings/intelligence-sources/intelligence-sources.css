@@ -656,12 +656,6 @@
   line-height: 1.4;
 }
 
-.intelligence-focus-market-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
 
 .intelligence-focus-market-save-failed {
   display: block;
@@ -680,19 +674,6 @@
   color: var(--text-primary);
 }
 
-.intelligence-focus-market-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--text-strong);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1;
-}
 
 .intelligence-focus-market-groups {
   display: grid;
