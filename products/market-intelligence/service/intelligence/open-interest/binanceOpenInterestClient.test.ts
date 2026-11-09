@@ -25,7 +25,7 @@ const json = (body: unknown, init: ResponseInit = {}) => new Response(JSON.strin
 
 describe('Binance open interest client', () => {
   it('asks for the 15m window exactly, through platformFetch, one symbol per request', async () => {
-    const platformFetch = vi.fn(async () => json(oiRows('BTCUSDT', 2)))
+    const platformFetch = vi.fn(async (_input: URL | RequestInfo) => json(oiRows('BTCUSDT', 2)))
     const client = createBinanceOpenInterestClient({ platformFetch })
 
     await expect(client.requestOpenInterest({ asset: 'btc', symbol: 'BTCUSDT', limit: 2 })).resolves.toHaveLength(2)
@@ -36,14 +36,14 @@ describe('Binance open interest client', () => {
   })
 
   it('passes endTime for the second cold-start segment', async () => {
-    const platformFetch = vi.fn(async () => json(oiRows('BTCUSDT', 2)))
+    const platformFetch = vi.fn(async (_input: URL | RequestInfo) => json(oiRows('BTCUSDT', 2)))
     const client = createBinanceOpenInterestClient({ platformFetch })
     await client.requestOpenInterest({ asset: 'btc', symbol: 'BTCUSDT', limit: 172, endTime: 1_790_000_000_000 })
-    expect(platformFetch.mock.calls[0]![0]).toContain('&endTime=1790000000000')
+    expect(String(platformFetch.mock.calls[0]![0])).toContain('&endTime=1790000000000')
   })
 
   it('normalises notional open interest and sorts ascending', async () => {
-    const platformFetch = vi.fn(async () => json([...oiRows('BTCUSDT', 3)].reverse()))
+    const platformFetch = vi.fn(async (_input: URL | RequestInfo) => json([...oiRows('BTCUSDT', 3)].reverse()))
     const client = createBinanceOpenInterestClient({ platformFetch })
     const rows = await client.requestOpenInterest({ asset: 'btc', symbol: 'BTCUSDT', limit: 3 })
     expect(rows).toEqual([
@@ -68,7 +68,7 @@ describe('Binance open interest client', () => {
   })
 
   it('drops the kline row that is still forming', async () => {
-    const platformFetch = vi.fn(async () => json([
+    const platformFetch = vi.fn(async (_input: URL | RequestInfo) => json([
       [nowMs - 1_800_000, '1', '1', '1', '79000', '100', nowMs - 900_000 - 1, '0', 1, '0', '0', '0'],
       [nowMs - 900_000, '1', '1', '1', '79100', '200', nowMs - 1, '0', 1, '0', '0', '0'],
       [nowMs, '1', '1', '1', '79200', '50', nowMs + 899_999, '0', 1, '0', '0', '0']
