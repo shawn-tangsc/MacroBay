@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 
 import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
-import { blsUnavailableSentence, readBlsUnavailable, type BlsScheduleFeedback, type BlsUnavailable } from './blsAvailability'
+import { blsRefreshBlockedSentence, blsUnavailableSentence, readBlsUnavailable, type BlsScheduleFeedback, type BlsUnavailable } from './blsAvailability'
 import type { EconomicCalendarText } from './economicCalendarText'
 
 /**
@@ -14,6 +14,8 @@ import type { EconomicCalendarText } from './economicCalendarText'
 export function useBlsAvailability(text: EconomicCalendarText): Readonly<{
   unavailable?: BlsUnavailable
   notice?: string
+  /** 置灰的 BLS 刷新键自己的行内句：为什么不能刷新、何时能好（若有）。 */
+  refreshBlocked?: string
   /** 官方日历腿的三态（宏观线在注册表那侧算好，这里只读，不遍历注册表）。 */
   feeds?: 'disabled' | 'enabled' | 'unavailable'
 }> {
@@ -29,9 +31,11 @@ export function useBlsAvailability(text: EconomicCalendarText): Readonly<{
     return () => { active = false }
   }, [])
   const notice = blsUnavailableSentence(text, unavailable)
+  const refreshBlocked = blsRefreshBlockedSentence(text, unavailable)
   return {
     ...(unavailable === undefined ? {} : { unavailable }),
     ...(notice === undefined ? {} : { notice }),
+    ...(refreshBlocked === undefined ? {} : { refreshBlocked }),
     ...(feeds === undefined ? {} : { feeds })
   }
 }

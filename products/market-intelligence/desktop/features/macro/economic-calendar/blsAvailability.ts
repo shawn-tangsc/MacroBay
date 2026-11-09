@@ -50,3 +50,15 @@ export function blsUnavailableSentence(text: EconomicCalendarText, unavailable: 
   if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
   return fillLabelParams(text.blsUnavailableNotice, { date: unavailable.lastSuccessDate ?? '' })
 }
+
+/**
+ * 置灰那颗刷新键自己的行内句（界面设计 2026-11-09）。
+ *
+ * 「不能刷新」与「自动同步停了」不是同一句话：前者是键按不动的原因，后者是后台的现状。
+ * 只置灰不说原因，读者只会以为界面坏了；所以这句话必须贴着那颗键说，并且说出**恢复条件**
+ * （今天：要等官方站点不再拒绝当前网络，恢复时间未知）。原因码从注册表那一份取，不在这里另写。
+ */
+export function blsRefreshBlockedSentence(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
+  if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
+  return fillLabelParams(text.blsRefresh.blocked, { code: unavailable.reasonCode })
+}

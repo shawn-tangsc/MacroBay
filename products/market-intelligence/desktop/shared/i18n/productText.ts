@@ -490,6 +490,9 @@ mi: miText['zh-CN'],
               settledAt: '费率结算于',
               legendLine: '线 = 持仓名义额',
               legendBar: '柱 = 8h 资金费率',
+              // 一条腿读不到时的整句：另半张图照常画，这句只说少了哪条腿、为什么。
+              fundingMissingLeg: '{asset} 资金费率历史未知（{reason}）',
+              fundingMissingReasons: { 'series-missing': '这次没有读到', 'value-invalid': '读到的值不合契约' },
               change1h: '1h',
               change24h: '24h',
               window7d: '7 天',
@@ -724,6 +727,8 @@ mi: miText['zh-CN'],
             },
             capitalConditions: {
               title: '资金面', loading: '正在加载资金面…', empty: '暂时没有可用的资金面数据。',
+              /* 形状/版本不符**不给重试**：点了必然再失败，比没有按钮更坏。这句只说读者能做的动作。 */
+              contractMismatch: '这块数据的格式来自另一个版本，这次读不出来。完全退出观潮后重新打开才会恢复——刷新页面不够。',
               /* The row name is drawn as two lines; the scope keeps its own brackets (and, in
                  English, the space before them), so the spoken name is the plain concatenation. */
               stablecoin: '稳定币', stablecoinScope: '（USDT + USDC）', asset: '资产', totalSupply: '总供给',
@@ -872,6 +877,8 @@ mi: miText['zh-CN'],
               title: '刷新 BLS 发布数据',
               confirmation: '将请求 BLS 官方数据并更新对应完整发布组：CPI 与核心 CPI，或非农、失业率与平均时薪。',
               confirm: '刷新', cancel: '取消', pending: '正在刷新 BLS 数据…',
+              /* 置灰的刷新键自己的行内句：为什么不能刷新、什么时候能好。{code} 来自源注册表，不另抄一份。 */
+              blocked: '暂时不能刷新：官方站点拒绝了当前网络（原因码 {code}），恢复时间未知。',
               updated: '已刷新对应完整 BLS 发布组的数据。', unchanged: '对应完整 BLS 发布组的数据已是最新。', unavailable: '对应完整 BLS 发布组的官方数据暂不可用，未保存任何值。'
             },
             blsScheduleSync: {
@@ -1838,6 +1845,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               settledAt: 'Rate settled at',
               legendLine: 'line = notional open interest',
               legendBar: 'bars = 8h funding rate',
+              fundingMissingLeg: '{asset} funding-rate history unknown ({reason})',
+              fundingMissingReasons: { 'series-missing': 'nothing came back this time', 'value-invalid': 'the value failed its contract' },
               change1h: '1h',
               change24h: '24h',
               window7d: '7 days',
@@ -2056,6 +2065,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             capitalConditions: {
               title: 'Capital conditions', loading: 'Loading capital conditions…', empty: 'Capital-conditions data is not available yet.',
+              contractMismatch: 'This data comes from another version of the app, so it cannot be read here. Quit the app completely and open it again to recover; reloading the page is not enough.',
               stablecoin: 'Stablecoins', stablecoinScope: ' (USDT + USDC)', asset: 'Asset', totalSupply: 'Total supply',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: 'Latest', windowDays: '{days}-day', coverage: '({days} days only)', streakColumn: 'Streak',
@@ -2193,6 +2203,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               title: 'Refresh BLS release data',
               confirmation: 'This requests official BLS data and updates the matching complete release family: CPI and Core CPI, or Nonfarm Payrolls, Unemployment Rate, and Average Hourly Earnings.',
               confirm: 'Refresh', cancel: 'Cancel', pending: 'Refreshing BLS data…',
+              blocked: 'Refreshing is unavailable: the official site rejects this network (reason code {code}); the recovery time is unknown.',
               updated: 'BLS data for the matching complete release family was refreshed.', unchanged: 'BLS data for the matching complete release family is already current.', unavailable: 'Official BLS data is unavailable for the matching complete release family. No values were saved.'
             },
             blsScheduleSync: {

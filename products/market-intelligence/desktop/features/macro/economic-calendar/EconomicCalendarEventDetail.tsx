@@ -82,7 +82,7 @@ function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalenda
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice }: {
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked }: {
   event: EconomicCalendarEventView
   /**
    * The official consensus, when the view carries one. The projection does not surface it today —
@@ -107,6 +107,13 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   refreshState: EconomicCalendarRefreshState | undefined; text: EconomicCalendarText
   /** 官方日历已停用时那一句说明；有它就把 BLS 刷新置灰，不再发请求。 */
   blsUnavailableNotice?: string
+  /**
+   * 那颗**被置灰的键自己**的行内句（界面设计 2026-11-09）：为什么按不动、什么时候能好。
+   *
+   * 与上一句分开是有意的：上一句说后台现状（自动同步已停、上次成功在何时），这一句说这颗键
+   * 为什么按不动。一句顶两句会把两个不同的处境说成同一件事。
+   */
+  blsRefreshBlocked?: string
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
@@ -175,7 +182,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
       })()}
     </div>
     {blsUnavailableNotice ? <p className="mi-economic-calendar__comparison-rule" data-bls-unavailable role="status">{blsUnavailableNotice}</p> : null}
-    {isBlsRefreshEligible(event, now()) ? <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} /> : null}
+    {/* 置灰也要说原因：句子与键同一行（界面设计 2026-11-09），不是第二个弹窗、也不是另起一段。 */}
+    {isBlsRefreshEligible(event, now()) ? <div className="mi-economic-calendar__refresh-row">
+      <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} />
+      {blsRefreshBlocked ? <span className="mi-economic-calendar__refresh-blocked" data-bls-refresh-blocked role="note">{blsRefreshBlocked}</span> : null}
+    </div> : null}
     {isFedFomcRefreshEligible(event, now()) ? <FedFomcRefreshAction disabled={fomcRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={fomcRefreshAction.pending} text={text} /> : null}
     {refreshState?.feedback && isRefreshStateFor(refreshState, event.eventKey, 'bls') ? <p className="mi-economic-calendar__comparison-rule" role="status">{text.blsRefresh[refreshState.feedback]}</p> : null}
     {refreshState?.feedback && isRefreshStateFor(refreshState, event.eventKey, 'fomc') ? <p className="mi-economic-calendar__comparison-rule" role="status">{refreshState.feedback === 'unavailable' && event.actual

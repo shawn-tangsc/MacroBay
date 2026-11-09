@@ -248,6 +248,9 @@
 .mi-economic-calendar__values [data-market-value='surprise'][data-surprise='miss'] strong { border-color: color-mix(in srgb, var(--danger) 54%, transparent); background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
 .mi-economic-calendar__values [data-market-value='surprise'][data-surprise='inline'] strong { color: var(--mi-economic-text); }
 .mi-economic-calendar__comparison-rule { padding-left: 12px; border-left: 3px solid var(--mi-economic-lime); color: var(--mi-economic-muted); font-size: 11px; line-height: 1.55; }
+/* 置灰的刷新键与它的原因同一行：键在前、句子贴着它，窄栏里自然换行，不留一段孤立解释。 */
+.mi-economic-calendar__refresh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mi-economic-calendar__refresh-blocked { color: var(--mi-economic-muted); font-size: var(--font-meta); line-height: 1.55; }
 .mi-economic-calendar__provenance { border-top: 1px solid var(--mi-economic-line); padding-top: 12px; }
 .mi-bls-ics-dialog .ant-modal-content { background: var(--mi-economic-surface); color: var(--mi-economic-text); }
 .mi-bls-ics-dialog .ant-modal-header { background: transparent; border-bottom-color: var(--mi-economic-line); }

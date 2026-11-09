@@ -414,6 +414,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />
       <CalendarDetailSurface
         blsUnavailableNotice={blsAvailability.notice}
+        blsRefreshBlocked={blsAvailability.refreshBlocked}
         client={client}
         contentId={detailContentId}
         detailState={detailState}
