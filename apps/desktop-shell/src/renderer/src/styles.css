@@ -4680,22 +4680,16 @@ h1 {
   background: color-mix(in srgb, var(--danger) 6%, var(--surface));
 }
 
-.agent-message-runtime-part summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  cursor: pointer;
-  list-style: none;
+/* 消息流与活动面板同属**密集流**（ui-rules §2）：头行 32、内距 12。
+   特异性压过壳自己的 44（`.collapsible-group .ant-collapse-header`），否则会被顶回去。 */
+.agent-message-runtime-part .collapsible-group .ant-collapse-header,
+.agent-message-runtime-group .collapsible-group .ant-collapse-header,
+.agent-message-runtime-group-item .collapsible-group .ant-collapse-header {
+  min-height: 32px;
 }
 
-.agent-message-runtime-part.reasoning.done summary {
+.agent-message-runtime-part.reasoning.done .collapsible-group__head {
   color: var(--muted);
-}
-
-.agent-message-runtime-part summary::-webkit-details-marker,
-.agent-message-runtime-group summary::-webkit-details-marker {
-  display: none;
 }
 
 .agent-message-runtime-part-icon {
@@ -4709,19 +4703,19 @@ h1 {
   background: var(--surface);
 }
 
-.agent-message-runtime-part summary strong {
+.agent-message-runtime-part .collapsible-group__head strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
-  font-size: 11.5px;
+  font-size: var(--font-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-message-runtime-part summary small {
+.agent-message-runtime-part .collapsible-group__head small {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: var(--font-meta);
   white-space: nowrap;
 }
 
@@ -4731,41 +4725,24 @@ h1 {
   width: min(720px, 100%);
   margin: 2px 0;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 999px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--surface-soft) 46%, transparent);
   color: var(--text);
 }
 
-.agent-message-runtime-group[open] {
-  gap: 7px;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
-}
-
-.agent-message-runtime-group summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  min-height: 28px;
-  padding: 4px 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-message-runtime-group summary strong {
+.agent-message-runtime-group .collapsible-group__head strong {
   min-width: 0;
   overflow: hidden;
   color: var(--muted-strong);
-  font-size: 11.5px;
+  font-size: var(--font-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-message-runtime-group summary small {
+.agent-message-runtime-group .collapsible-group__head small {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: var(--font-meta);
   white-space: nowrap;
 }
 
@@ -4795,38 +4772,25 @@ h1 {
   background: color-mix(in srgb, var(--danger) 5%, var(--surface));
 }
 
-.agent-message-runtime-group-item summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-message-runtime-group-item summary::-webkit-details-marker {
-  display: none;
-}
-
 /* The tool name keeps its width; the command truncates instead of collapsing the title. */
-.agent-message-runtime-group-item summary strong {
+.agent-message-runtime-group-item .collapsible-group__head strong {
   flex: 0 0 auto;
   max-width: 45%;
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
-  font-size: 11px;
+  font-size: var(--font-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-message-runtime-group-item summary small {
+.agent-message-runtime-group-item .collapsible-group__head small {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   margin-left: 4px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: var(--font-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4864,8 +4828,7 @@ h1 {
   gap: 6px;
 }
 
-.agent-message-runtime-part-details section,
-.agent-message-runtime-detail-fold {
+.agent-message-runtime-part-details section {
   display: grid;
   gap: 3px;
 }
@@ -4874,25 +4837,6 @@ h1 {
   color: var(--muted);
   font-size: 10.5px;
   font-weight: 600;
-}
-
-.agent-message-runtime-detail-fold {
-  padding: 5px 6px;
-  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-soft) 28%, transparent);
-}
-
-.agent-message-runtime-detail-fold summary {
-  color: var(--muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-message-runtime-detail-fold summary::-webkit-details-marker {
-  display: none;
 }
 
 .agent-message-runtime-part-details pre {
