@@ -1,3 +1,6 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
@@ -162,5 +165,40 @@ describe('AgentRuntimeActivityPanel', () => {
     expect(markup).toContain('class="agent-runtime-activity-group-item approval pending"')
     expect(markup).not.toContain('class="agent-runtime-activity-card ')
     expect(markup).not.toContain('class="agent-runtime-activity-group-item tool error" open=""')
+  })
+
+  it('auto-opens once when the turn starts running, and a manual collapse is not undone', async () => {
+    // 界面设计 2026-11-09 写死：「自动展开」是**进入状态时的一次动作**，不是每次渲染都执行。
+    // 读者手动收起之后，下一次渲染不许把面板重新弹开。
+    const card = {
+      key: 'tool:run',
+      kind: 'tool' as const,
+      title: 'Bash',
+      status: 'running' as const,
+      subtitle: '工具输入已就绪',
+      detail: 'python hello.py',
+      approvalId: null,
+      toolCallId: 'tool-run'
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const panel = () => (
+      <AgentRuntimeActivityPanel cards={[card]} onRuntimeSnapshotChange={() => undefined} running />
+    )
+    await act(async () => { root.render(panel()) })
+
+    const header = (): HTMLElement => host.querySelector<HTMLElement>('.ant-collapse-header')!
+    expect(header().getAttribute('aria-expanded')).toBe('true')
+
+    await act(async () => { header().click() })
+    expect(header().getAttribute('aria-expanded')).toBe('false')
+
+    // 仍是 running 的另一次渲染：不许把它弹回去。
+    await act(async () => { root.render(panel()) })
+    expect(header().getAttribute('aria-expanded')).toBe('false')
+
+    await act(async () => { root.unmount() })
+    host.remove()
   })
 })

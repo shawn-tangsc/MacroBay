@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { Button, Input } from 'antd'
-import { AlertTriangle, Brain, Check, ChevronDown, ShieldQuestion, TerminalSquare, X, Zap } from 'lucide-react'
+import { AlertTriangle, Brain, ShieldQuestion, TerminalSquare, Zap } from 'lucide-react'
 
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import { LoadingSpinner } from '@platform/ui/components/loading'
@@ -12,6 +12,7 @@ import { formatAgentElapsed } from '../agentElapsedText'
 import { resolveApprovalInputDraft } from '../agentRuntimeApprovalInput'
 import { useAgentLanguage, useAgentText } from '../agentTextProvider'
 import AgentAskUserQuestionCard from './AgentAskUserQuestionCard'
+import { ApprovalActions, resolveApproval } from './AgentRuntimeActivityApproval'
 
 /**
  * 壳的 `resolveText` 只被 `*Key` 用到。这些折叠区的头行全是**已解析的原文**
@@ -37,9 +38,21 @@ export default function AgentRuntimeActivityPanel({
 }: AgentRuntimeActivityPanelProps): React.ReactElement | null {
   const t = useAgentText()
   const language = useAgentLanguage()
-  if (cards.length === 0 && !failure && elapsedMs === undefined) return null
   const items = dedupeActivityCards(cards)
   const hasPendingApproval = items.some((card) => card.kind === 'approval' && card.status === 'pending')
+  /**
+   * 「运行中 / 待批准 / 失败」时自动展开——但这是**进入状态时的一次动作**，不是每次渲染都执行：
+   * 读者手动收起之后，不许被下一次渲染重新弹开（界面设计 2026-11-09 写死）。
+   */
+  const autoOpen = running || hasPendingApproval || Boolean(failure)
+  const [panelOpen, setPanelOpen] = useState(autoOpen)
+  const [groupOpen, setGroupOpen] = useState(autoOpen)
+  useEffect(() => {
+    if (!autoOpen) return
+    setPanelOpen(true)
+    setGroupOpen(true)
+  }, [autoOpen])
+  if (cards.length === 0 && !failure && elapsedMs === undefined) return null
   const groupKind = items.some((card) => card.kind !== 'reasoning') ? 'execution' : 'reasoning'
   const summary = running
     ? elapsedMs !== undefined
@@ -52,24 +65,24 @@ export default function AgentRuntimeActivityPanel({
         : t.runtimeActivity.completedSummary
 
   return (
-    <details
-      className="agent-runtime-activity-panel"
-      aria-label={t.runtimeActivity.title}
-      open={running || hasPendingApproval || Boolean(failure) || undefined}>
-      <summary className="agent-runtime-activity-heading">
-        <Zap size={13} />
-        <strong>{summary}</strong>
-        <ChevronDown className="agent-runtime-activity-chevron" size={13} aria-hidden="true" />
-      </summary>
+    <div className="agent-runtime-activity-panel" role="group" aria-label={t.runtimeActivity.title}>
+      <CollapsibleGroup
+        header={<><Zap size={13} aria-hidden="true" /><strong>{summary}</strong></>}
+        onOpenChange={setPanelOpen}
+        open={panelOpen}
+        resolveText={passthroughText}>
       {items.length > 0 || failure ? (
         <div className="agent-runtime-activity-list">
           {items.length > 0 ? (
-            <details className={`agent-runtime-activity-group ${groupKind}`} open={running || hasPendingApproval || Boolean(failure) || undefined}>
-              <summary>
+            <div className={`agent-runtime-activity-group ${groupKind}`}>
+            <CollapsibleGroup
+              header={<>
                 <span className="agent-runtime-activity-icon">{renderActivityGroupIcon(groupKind)}</span>
                 <strong>{groupKind === 'reasoning' ? t.runtimeActivity.reasoningGroupTitle : t.runtimeActivity.executionGroupTitle}</strong>
-                <ChevronDown className="agent-runtime-activity-chevron" size={12} aria-hidden="true" />
-              </summary>
+              </>}
+              onOpenChange={setGroupOpen}
+              open={groupOpen}
+              resolveText={passthroughText}>
               <div className="agent-runtime-activity-group-items">
                 {items.map((card) =>
                   card.kind === 'approval' && card.title === 'AskUserQuestion' && card.approvalInputText && card.approvalId ? (
@@ -102,7 +115,8 @@ export default function AgentRuntimeActivityPanel({
                   )
                 )}
               </div>
-            </details>
+            </CollapsibleGroup>
+            </div>
           ) : null}
           {failure ? (
             <div className="agent-chat-trace-failure" role="alert">
@@ -114,7 +128,8 @@ export default function AgentRuntimeActivityPanel({
           ) : null}
         </div>
       ) : null}
-    </details>
+      </CollapsibleGroup>
+    </div>
   )
 }
 
@@ -130,8 +145,9 @@ function ActivityItem({
   const errorPreview =
     isTool && (card.status === 'error' || card.status === 'denied') ? firstLine(card.detail) : null
   return (
-    <details className={`agent-runtime-activity-group-item ${card.kind} ${card.status}`}>
-      <summary>
+    <div className={`agent-runtime-activity-group-item ${card.kind} ${card.status}`}>
+      <CollapsibleGroup
+        header={<>
         <span className="agent-runtime-activity-row">
           <span className="agent-runtime-activity-icon">{renderCardIcon(card)}</span>
           <strong>{card.title}</strong>
@@ -143,7 +159,8 @@ function ActivityItem({
           <span className={`agent-runtime-activity-status ${card.status}`}>{statusLabel(card.status, t.runtimeActivity)}</span>
         </span>
         {errorPreview ? <span className="agent-runtime-activity-error">{errorPreview}</span> : null}
-      </summary>
+        </>}
+        resolveText={passthroughText}>
       {isTool ? null : <small>{card.subtitle}</small>}
       {card.kind === 'approval' && card.approvalNotice ? (
         <p className="agent-runtime-activity-approval-notice">{card.approvalNotice}</p>
@@ -172,7 +189,8 @@ function ActivityItem({
       {card.kind === 'approval' && card.approvalId ? (
         <ApprovalActions card={card} onRuntimeSnapshotChange={onRuntimeSnapshotChange} />
       ) : null}
-    </details>
+      </CollapsibleGroup>
+    </div>
   )
 }
 
@@ -204,116 +222,6 @@ function dedupeActivityCards(cards: AgentRuntimeActivityCard[]): AgentRuntimeAct
     })
   }
   return [...byTool.values()]
-}
-
-function ApprovalActions({
-  card,
-  onRuntimeSnapshotChange
-}: {
-  card: AgentRuntimeActivityCard
-  onRuntimeSnapshotChange: (snapshot: AgentSessionRuntimeSnapshot) => void
-}): React.ReactElement {
-  const t = useAgentText()
-  const approvalInputText = card.approvalInputText ?? null
-  const [draftInputText, setDraftInputText] = useState(approvalInputText ?? '')
-  /** 只存「有没有失败」，原因句在渲染时取——存句子会让它冻结在写入那一刻的语言。 */
-  const [inputInvalid, setInputInvalid] = useState(false)
-
-  useEffect(() => {
-    setDraftInputText(approvalInputText ?? '')
-    setInputInvalid(false)
-  }, [approvalInputText, card.approvalId])
-
-  const hasEditableInput = Boolean(approvalInputText)
-  const hasDraftChange =
-    hasEditableInput &&
-    draftInputText.trim().length > 0 &&
-    draftInputText.trim() !== approvalInputText!.trim()
-
-  return (
-    <>
-      {approvalInputText ? (
-        <label className="agent-runtime-activity-input-editor">
-          <span>{t.runtimeActivity.editInput}</span>
-          <Input.TextArea
-            value={draftInputText}
-            spellCheck={false}
-            autoSize={{ minRows: 3, maxRows: 8 }}
-            onChange={(event) => {
-              setDraftInputText(event.target.value)
-              setInputInvalid(false)
-            }}
-          />
-          {inputInvalid ? (
-            <span className="agent-runtime-activity-input-error">{t.runtimeActivity.invalidInputJson}</span>
-          ) : null}
-        </label>
-      ) : null}
-      <div className="agent-runtime-activity-actions">
-        <Button
-          className="ant-primary-button"
-          size="small"
-          icon={<Check size={13} />}
-          onClick={() => resolveApproval(card.approvalId!, { behavior: 'allow' }, onRuntimeSnapshotChange)}>
-          {approvalInputText ? t.runtimeActivity.allowOriginalInput : t.runtimeActivity.allow}
-        </Button>
-        {approvalInputText ? (
-          <Button
-            className="ant-secondary-button"
-            size="small"
-            icon={<Check size={13} />}
-            disabled={!hasDraftChange}
-            onClick={() => {
-              const resolution = resolveApprovalInputDraft(approvalInputText, draftInputText)
-              if (resolution.kind === 'invalid') {
-                setInputInvalid(true)
-                return
-              }
-              if (resolution.kind === 'original') {
-                resolveApproval(card.approvalId!, { behavior: 'allow' }, onRuntimeSnapshotChange)
-                return
-              }
-              resolveApproval(
-                card.approvalId!,
-                { behavior: 'allow', updatedInput: resolution.updatedInput },
-                onRuntimeSnapshotChange
-              )
-            }}>
-            {t.runtimeActivity.allowWithEditedInput}
-          </Button>
-        ) : null}
-        <Button
-          className="ant-secondary-button"
-          size="small"
-          icon={<X size={13} />}
-          onClick={() => {
-            resolveApproval(
-              card.approvalId!,
-              {
-                behavior: 'deny',
-                message: t.runtimeActivity.denyMessage
-              },
-              onRuntimeSnapshotChange
-            )
-          }}>
-          {t.runtimeActivity.deny}
-        </Button>
-      </div>
-    </>
-  )
-}
-
-async function resolveApproval(
-  approvalId: string,
-  decision: { behavior: 'allow'; updatedInput?: unknown } | { behavior: 'deny'; message: string },
-  onRuntimeSnapshotChange: (snapshot: AgentSessionRuntimeSnapshot) => void
-): Promise<void> {
-  const before = (await window.platform.agents.getRuntimeSnapshot()) as AgentSessionRuntimeSnapshot
-  if (!before.toolApprovals.some((approval) => approval.approvalId === approvalId)) {
-    throw new Error('这条审批已经处理过或已过期，请等待智能体刷新。')
-  }
-  const snapshot = await window.platform.agents.resolveToolApproval(approvalId, decision)
-  onRuntimeSnapshotChange(snapshot as AgentSessionRuntimeSnapshot)
 }
 
 function renderCardIcon(card: AgentRuntimeActivityCard): React.ReactElement {

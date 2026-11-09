@@ -5137,26 +5137,24 @@ h1 {
   color: var(--text-strong);
 }
 
+/* 运行时活动面板：**密集流档**（ui-rules §2：44 单行 / 60 两行 / 32 日志与消息流）。
+   这里原来有一条 `26px + 10px` 的空栅格轨——实测面板正文因此比同一条消息的正文右移 36px，
+   而栅格第一列没有任何内容（头像轨在更外层的 `.agent-message` 上），所以那条轨是遗留空轨，
+   取消后正文与消息正文回到同一条左缘。折叠头由壳画，行高 32、内距 12。 */
 .agent-runtime-activity-panel {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 720px);
-  gap: 10px;
-  justify-content: center;
+  display: block;
   width: 100%;
 }
 
-.agent-runtime-activity-heading {
-  grid-column: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
+/* 特异性要压过壳自己的 `.collapsible-group .ant-collapse-header`（同为两段时后者按加载顺序赢），
+   否则密集流这一档会被壳的默认 44 顶回去。 */
+.agent-runtime-activity-panel .collapsible-group .ant-collapse-header,
+.agent-runtime-activity-group .collapsible-group .ant-collapse-header,
+.agent-runtime-activity-group-item .collapsible-group .ant-collapse-header {
+  min-height: 32px;
 }
 
 .agent-runtime-activity-list {
-  grid-column: 2;
   display: grid;
   gap: 8px;
 }
@@ -5182,48 +5180,12 @@ h1 {
   background: color-mix(in srgb, var(--danger) 7%, var(--surface));
 }
 
+/* 胶囊取消（界面设计 2026-11-09）：展开时不变圆角、不换底色，点击区高 32、宽满行。 */
 .agent-runtime-activity-group {
   display: grid;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 999px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--surface-soft) 46%, transparent);
-}
-
-.agent-runtime-activity-group[open] {
-  gap: 7px;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
-}
-
-.agent-runtime-activity-group summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  min-height: 30px;
-  padding: 4px 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-runtime-activity-group summary::-webkit-details-marker {
-  display: none;
-}
-
-.agent-runtime-activity-group summary strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted-strong);
-  font-size: 11.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-runtime-activity-group summary small {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 10.5px;
-  white-space: nowrap;
 }
 
 .agent-runtime-activity-group-items {
@@ -5247,29 +5209,8 @@ h1 {
   background: color-mix(in srgb, var(--danger) 5%, var(--surface));
 }
 
-.agent-runtime-activity-group-item summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-runtime-activity-group-item summary::-webkit-details-marker {
-  display: none;
-}
-
-.agent-runtime-activity-group-item summary strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-runtime-activity-group-item summary .agent-runtime-activity-status.ant-tag {
+/* 条目头行里的状态词推到最右：壳的头行内距已经是 12，这里只管对齐。 */
+.agent-runtime-activity-group-item .collapsible-group__head .agent-runtime-activity-status {
   margin-left: auto;
 }
 
