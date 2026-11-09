@@ -272,7 +272,12 @@ describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式�
     const block = settingsIpcSource.slice(start, end === -1 ? undefined : end)
 
     expect(block).toContain('const next = await ports.settings.update(patch)')
-    expect(block).toContain('ports.notifyPreferencesChanged()')
+    // 保存与「重置设置」共用同一段副作用（2026-11-10）：先钉保存路径调了那段，再钉那段里有唯一一次通知。
+    expect(block).toContain('applyCommittedSideEffects(next)')
+    const sideEffectsStart = settingsIpcSource.indexOf('async function applyCommittedSideEffects')
+    expect(sideEffectsStart).toBeGreaterThan(-1)
+    const sideEffectsEnd = settingsIpcSource.indexOf('\n  }', sideEffectsStart)
+    expect(settingsIpcSource.slice(sideEffectsStart, sideEffectsEnd)).toContain('ports.notifyPreferencesChanged()')
     expect(block).toContain('return next')
   })
 

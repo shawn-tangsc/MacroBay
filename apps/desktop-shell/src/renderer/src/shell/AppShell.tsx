@@ -163,6 +163,29 @@ export function AppShell(): React.ReactElement {
  * 那个常量现在的**唯一触发条件**是「菜单里一页都没有」（解析器返回 `null`）；正常构建里内置页总在，
  * 所以它只是装配残缺时的最后兜底，不是「默认页」。判据见 `navigation/homeMenuKey.test.ts`。
  */
+/**
+ * 读取启动降级状态（`state` / `retry` / `reset`）。
+ *
+ * **必须功能探测**：升级途中、或旧 preload 配新渲染层时，`settings.recovery` 根本不存在。
+ * 那种情况下这里是 `undefined` 调用，整屏会直接崩（2026-11-10 全量 127 条用例就是这么红的）。
+ * 没有这个口 = 这台机器上没有"启动降级"这件事：返回 `null`，调用方按"没有降级"处理，
+ * 绝不再抛给上层。
+ */
+async function readSettingsRecovery(
+  action: 'state' | 'retry' | 'reset'
+): Promise<SettingsStartupReadState | null> {
+  const settings = window.platform?.settings as
+    | { recovery?: (next: 'state' | 'retry' | 'reset') => Promise<SettingsStartupReadState> }
+    | undefined
+  const recovery = settings?.recovery
+  if (typeof recovery !== 'function') return null
+  try {
+    return (await recovery.call(settings, action)) ?? null
+  } catch {
+    return null
+  }
+}
+
 const LANDING_NAV_KEY_FALLBACK = 'assistants'
 
 /** 主窗 shell 内容：语言变化时回传给 AppShell，供面板窗 error-shell/准备期壳兜底使用（P1-06h / N2）。 */
@@ -303,13 +326,13 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     return () => { cancelled = true }
   }, [])
 
-  // 启动降级状态：单独读一次，失败就当"正常"（不能因为查状态把界面拦住）。
+  // 启动降级状态：单独读一次。老 preload 没有这个口（`null`）或查询失败时，按"没有降级"处理——
+  // 横幅不出现，绝不让查状态本身把界面拦住或崩掉。
   useEffect(() => {
     let cancelled = false
-    void window.platform.settings
-      .recovery('state')
-      .then((state) => { if (!cancelled) setSettingsRecovery(state) })
-      .catch(() => undefined)
+    void readSettingsRecovery('state').then((state) => {
+      if (!cancelled && state !== null) setSettingsRecovery(state)
+    })
     return () => { cancelled = true }
   }, [])
 
@@ -321,23 +344,23 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     }
   }
 
-  /** 「重试读取」：读成功才换回真实设置，失败保持降级——**不抛**。 */
+  /** 「重试读取」：读成功才换回真实设置，失败/没有这个口都保持当前状态——**不抛**。 */
   async function retrySettingsRead(): Promise<void> {
     setSettingsReadRetrying(true)
     try {
-      const state = await window.platform.settings.recovery('retry')
+      const state = await readSettingsRecovery('retry')
+      if (state === null) return
       setSettingsRecovery(state)
       if (!state.unreadable) await reloadSettingsFromMain()
-    } catch {
-      // 查询本身失败：保持现有状态，别把降级画成正常。
     } finally {
       setSettingsReadRetrying(false)
     }
   }
 
-  /** 危险区确认后的重置：只在读者显式确认后调用（主进程写默认值）。 */
+  /** 危险区确认后的重置：只在读者显式确认后调用（主进程写默认值）；没有这个口就什么都不做。 */
   async function resetSettingsFile(): Promise<void> {
-    const state = await window.platform.settings.recovery('reset')
+    const state = await readSettingsRecovery('reset')
+    if (state === null) return
     setSettingsRecovery(state)
     await reloadSettingsFromMain()
   }

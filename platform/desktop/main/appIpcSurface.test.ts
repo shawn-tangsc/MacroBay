@@ -318,8 +318,8 @@ describe('desktop main IPC surface', () => {
 
   it('passes the model-service defaults through the product service seam', () => {
     // 默认翻译模型等默认值只读透出：产品不得自己读写 app settings。
-    expect(appSource).toContain('getModelDefaults: async () => (await settingsStore.get()).modelDefaults')
-    expect(appSource.indexOf('getModelDefaults: async () => (await settingsStore.get()).modelDefaults')).toBeGreaterThan(
+    expect(appSource).toContain('getModelDefaults: async () => (await settingsStore.readStartup()).modelDefaults')
+    expect(appSource.indexOf('getModelDefaults: async () => (await settingsStore.readStartup()).modelDefaults')).toBeGreaterThan(
       appSource.indexOf('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     )
     expect(generatedProductServicesSource).toContain('getModelDefaults: () => Promise<ModelDefaultsSettings>')
@@ -365,7 +365,7 @@ describe('desktop main IPC surface', () => {
     // 建窗/接线搬到 window/mainWindow.ts 后，启动顺序仍由这一行位置证明。
     const bootWindow = 'await mainWindowHost.createAndWire()'
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
-    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
+    const proxyApply = 'await applySessionProxySettings((await settingsStore.readStartup()).network, {'
     const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
     const rendererLoad = 'await mainWindowHost.loadAndMount()'
@@ -394,7 +394,7 @@ describe('desktop main IPC surface', () => {
   it('treats proxy application failure as a startup boundary before products and the normal renderer', () => {
     const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
-    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
+    const proxyApply = 'await applySessionProxySettings((await settingsStore.readStartup()).network, {'
     const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
     const rendererLoad = 'await mainWindowHost.loadAndMount()'
     const proxyApplyIndex = looseIndexOf(bootstrapSource, proxyApply)
