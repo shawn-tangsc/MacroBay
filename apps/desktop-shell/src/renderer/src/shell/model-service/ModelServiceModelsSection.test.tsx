@@ -128,9 +128,20 @@ function row(container: HTMLElement, modelId: string): HTMLElement | null {
   return container.querySelector<HTMLElement>(`[data-model-row="${modelId}"]`)
 }
 
+/** 类型筛选是平台 `Segmented`：按钮按闭集顺序排列，没有 `data-model-type-tab` 钩子。 */
+const TYPE_ORDER = ['all', 'deal', 'text', 'rerank', 'embedding', 'image', 'video', 'speech', 'transcription', 'ocr', 'vision']
+
+function typeButtons(container: HTMLElement): HTMLButtonElement[] {
+  return [...container.querySelectorAll<HTMLButtonElement>('[data-model-type-filter] [role="group"] button')]
+}
+
+function typeButton(container: HTMLElement, tab: string): HTMLButtonElement | undefined {
+  return typeButtons(container)[TYPE_ORDER.indexOf(tab)]
+}
+
 async function clickType(container: HTMLElement, tab: string): Promise<void> {
   await act(async () => {
-    container.querySelector<HTMLButtonElement>(`[data-model-type-tab="${tab}"]`)?.click()
+    typeButton(container, tab)?.click()
     await Promise.resolve()
   })
 }
@@ -188,28 +199,29 @@ describe('PLAT-82 模型行：能力 chip + 本会话检测结果', () => {
       ]
     }]
     const container = await mountGroups(six)
-    const pills = [...container.querySelectorAll<HTMLElement>('[data-model-type-tab]')]
+    const pills = typeButtons(container)
 
     expect(pills).toHaveLength(11)
     expect(pills.every((pill) => pill.querySelector('svg') !== null)).toBe(true)
+    // 计数仍可见：拼在标签后面（`Segmented` 没有单独的计数槽）。
     expect(pills.map((pill) => pill.textContent?.trim())).toEqual([
-      `${labels.typeAll}7`,
-      `${labels.typeDeal}0`,
-      `${labels.typeText}3`,
-      `${labels.typeRerank}0`,
-      `${labels.typeEmbedding}1`,
-      `${labels.typeImage}1`,
-      `${labels.typeVideo}1`,
-      `${labels.typeSpeech}1`,
-      `${labels.typeTranscription}0`,
-      `${labels.typeOcr}0`,
-      `${labels.typeVision}1`
+      `${labels.typeAll} 7`,
+      `${labels.typeDeal} 0`,
+      `${labels.typeText} 3`,
+      `${labels.typeRerank} 0`,
+      `${labels.typeEmbedding} 1`,
+      `${labels.typeImage} 1`,
+      `${labels.typeVideo} 1`,
+      `${labels.typeSpeech} 1`,
+      `${labels.typeTranscription} 0`,
+      `${labels.typeOcr} 0`,
+      `${labels.typeVision} 1`
     ])
-    expect(container.querySelector('[data-model-type-tab="all"]')?.getAttribute('data-active')).toBe('true')
+    expect(typeButton(container, 'all')?.getAttribute('aria-pressed')).toBe('true')
 
     await clickType(container, 'vision')
-    expect(container.querySelector('[data-model-type-tab="vision"]')?.getAttribute('data-active')).toBe('true')
-    expect(container.querySelector('[data-model-type-tab="all"]')?.getAttribute('data-active')).toBe('false')
+    expect(typeButton(container, 'vision')?.getAttribute('aria-pressed')).toBe('true')
+    expect(typeButton(container, 'all')?.getAttribute('aria-pressed')).toBe('false')
     expect(container.querySelectorAll('[data-model-row]')).toHaveLength(1)
 
     expect(container.querySelector('[data-models-runtime-advisory]')).toBeNull()
@@ -249,10 +261,9 @@ describe('PLAT-82 模型行：能力 chip + 本会话检测结果', () => {
     }]
     const container = await mountGroups(freeGroups)
 
-    expect(container.querySelector('[data-model-type-tab="deal"]')?.textContent)
-      .toContain(`${labels.typeDeal}3`)
+    expect(typeButton(container, 'deal')?.textContent).toContain(`${labels.typeDeal} 3`)
     await clickType(container, 'deal')
-    expect(container.querySelector('[data-model-type-tab="deal"]')?.getAttribute('data-active')).toBe('true')
+    expect(typeButton(container, 'deal')?.getAttribute('aria-pressed')).toBe('true')
     const rows = [...container.querySelectorAll<HTMLElement>('[data-model-row]')].map((entry) => entry.getAttribute('data-model-row'))
     expect(rows).toEqual(['zero-price', 'manual-free', 'discounted'])
   })

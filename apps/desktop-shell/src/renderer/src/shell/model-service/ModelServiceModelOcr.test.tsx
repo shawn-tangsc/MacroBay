@@ -81,9 +81,11 @@ describe('OCR as a first-class model type', () => {
       onChange: () => undefined
     }))
 
-    const ocrPill = container.querySelector<HTMLElement>('[data-model-type-tab="ocr"]')
+    const typeButtons = [...container.querySelectorAll<HTMLElement>('[data-model-type-filter] [role="group"] button')]
+    // 闭集顺序：all/deal/text/rerank/embedding/image/video/speech/transcription/ocr/vision
+    const ocrPill = typeButtons[9]
     expect(ocrPill).not.toBeNull()
-    expect(ocrPill?.textContent).toBe(`${labels.typeOcr}1`)
+    expect(ocrPill?.textContent).toBe(`${labels.typeOcr} 1`)
     expect(labels.typeOcr).toBe('OCR')
   })
 })

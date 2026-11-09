@@ -15,6 +15,8 @@ import {
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
 import { resolveModelPriceTag } from '@platform/ai/providers/modelPriceTag'
 
+import { Segmented } from '@platform/ui/components/segmented'
+
 import type { PlatformText } from '../../i18n/platformText'
 import { resolveModelCapabilities } from '@platform/ai/providers/modelCapabilityInference'
 
@@ -87,6 +89,15 @@ export function matchesModelType(model: ModelDefinition, tab: ModelTypeTab): boo
   return true
 }
 
+/** 这组按钮的可访问名（键）；`Segmented` 只收键，句子由下面这个解析器给。 */
+const GROUP_ARIA_KEY = 'modelService.modelTypeFilter'
+
+/**
+ * 模型类型筛选 → 平台 `Segmented`（界面 2026-11-09 判：这是**筛选**不是分页，不给 `Tabs`）。
+ *
+ * 语义由组件承担：`role="group"` + 每项 `aria-pressed`；左右只移动焦点、Enter/Space 才选中。
+ * 计数仍然可见——拼进标签文字里（数字由调用方格式化，组件不二次格式化），信息不因为换组件而丢。
+ */
 export function ModelServiceModelTypeFilter({
   labels,
   active,
@@ -98,22 +109,20 @@ export function ModelServiceModelTypeFilter({
   counts: Record<ModelTypeTab, number>
   onChange: (tab: ModelTypeTab) => void
 }): React.ReactElement {
+  const resolveText = (key: string): string => {
+    if (key === GROUP_ARIA_KEY) return labels.typeFilterLabel
+    const tab = TABS.find((candidate) => candidate.key === key)
+    return tab === undefined ? '' : `${labels[tab.labelKey] as string} ${counts[tab.key]}`
+  }
   return (
-    <div className="model-service-type-pills" data-model-type-filter>
-      {TABS.map(({ key, labelKey, Icon }) => (
-        <button
-          key={key}
-          type="button"
-          className="model-service-type-pill"
-          data-model-type-tab={key}
-          data-active={active === key}
-          aria-pressed={active === key}
-          onClick={() => onChange(key)}>
-          <Icon size={12} aria-hidden="true" />
-          <span>{labels[labelKey] as string}</span>
-          <small>{counts[key]}</small>
-        </button>
-      ))}
+    <div data-model-type-filter>
+      <Segmented
+        ariaLabelKey={GROUP_ARIA_KEY}
+        items={TABS.map(({ key, Icon }) => ({ value: key, labelKey: key, icon: Icon }))}
+        onChange={(value) => onChange(value as ModelTypeTab)}
+        resolveText={resolveText}
+        value={active}
+      />
     </div>
   )
 }
