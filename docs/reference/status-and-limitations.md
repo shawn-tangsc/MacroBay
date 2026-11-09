@@ -48,7 +48,8 @@ not accepted yet; Linux packaging is not configured. There is no auto-update cha
 
 ## Platform support
 
-- **macOS**: developed and verified.
+- **macOS**: arm64 is developed and verified; the x64 installer ships with each release but has not
+  been verified on Intel hardware.
 - **Windows / Linux**: the Electron code is expected to run, but end-to-end behavior has not been
   validated. Treat these platforms as experimental and report concrete failures.
 

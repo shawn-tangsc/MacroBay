@@ -61,6 +61,7 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 ## 下载
 
 **[macOS · Apple Silicon（.dmg）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-arm64.dmg)** ·
+**[macOS · Intel（.dmg）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64.dmg)** ·
 **[Windows · x64（.exe）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [全部版本](https://github.com/shawn-tangsc/MacroBay/releases)
 
@@ -73,6 +74,9 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
    **更多信息 → 仍要运行**。
 
 每次下载新版本都要重走这两步，直到发布签名版本。
+
+Intel 版是 `MacroBay-x64.dmg`：**已构建、已随版本发布，但还没有在 Intel 真机上验收**。上面 Apple
+Silicon 的下载链接不变；`latest-mac.yml` 只由 arm64 那条构建产出。
 
 <div align="center">
 
