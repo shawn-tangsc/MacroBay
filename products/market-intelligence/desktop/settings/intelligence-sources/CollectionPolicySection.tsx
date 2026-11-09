@@ -9,6 +9,8 @@ export type CollectionPolicyLabels = {
   manualPresetNote: string
   includeInSentiment: string
   plannedNotConfigurable?: string
+  /** 收起态头行那枚短标（这组现在不能改）；空/没给就不挂。 */
+  stoppedBadge?: string
   presets: Record<string, string>
 }
 

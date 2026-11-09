@@ -546,4 +546,67 @@ describe('ProviderDetail source details', () => {
     expect(rowSwitch?.disabled).toBe(true)
     expect(container.querySelectorAll('.collapsible-group__body [role="switch"]')).toHaveLength(0)
   })
+
+  it('marks a frozen policy group on its collapsed header, without moving the reason up there', async () => {
+    // 界面设计 2026-11-10：不可用源的策略组整组置灰，但收起态的头行看起来完全正常——读者点开才发现
+    // 里面全灰，会以为自己刚才点坏了。头行给一枚**短标**（这组现在不能改），整句原因仍只住展开区。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['macro-calendar-bls']),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          sources: [source({
+            providerId: 'bls',
+            sourceId: 'macro-calendar-bls',
+            displayName: 'BLS official schedule',
+            kind: 'official-calendar',
+            panels: ['economic-calendar'],
+            jobRegistered: false,
+            unavailable: {
+              reasonCode: 'official-endpoint-returned-403',
+              automaticSync: 'stopped',
+              lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z',
+              decidedAt: '2026-11-08'
+            }
+          })]
+        }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const header = container.querySelector('.collapsible-group__head')
+    expect(header?.textContent).toContain(settingsText.collectionPolicy.stoppedBadge)
+    // 「短标」不是「把整句搬上来」：那句长原因只在展开区里。
+    expect(header?.textContent).not.toContain(settingsText.collectionPolicyStopped)
+    expect(container.querySelector('.collapsible-group__body')?.textContent).toContain(settingsText.collectionPolicyStopped)
+  })
+
+  it('leaves a usable policy group unmarked', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['macro-calendar-fed']),
+        provider: fedProvider()
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.querySelector('.collapsible-group__head')?.textContent).not.toContain(settingsText.collectionPolicy.stoppedBadge)
+  })
 })

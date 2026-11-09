@@ -442,6 +442,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             ? <CollapsibleGroup
               resolveText={(key) => key === 'settings.intelligenceSources.collectionPolicy.title' ? policy.labels.title : ''}
               titleKey="settings.intelligenceSources.collectionPolicy.title"
+              /* 收起态头行只挂一枚**短标**（这组现在不能改）：不搬展开区那句原因，两处不重复。
+                 没有它，头行看起来完全正常，读者点开才发现里面全灰，会以为自己点坏了。
+                 用的是壳自己的 `meta` 槽（「共 N 条」那一格），不为这一枚标去改共享组件。 */
+              {...(unavailable ? { metaText: policy.labels.stoppedBadge } : {})}
             >
               {/* 不可用的源不该还能改采集策略：整组停用，并说清为什么、什么时候恢复。
                   这句是**通用结构**——所有不可用源同一句，不针对某一个源。 */}

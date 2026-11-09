@@ -348,6 +348,8 @@ export const intelligenceSourcesText = {
     plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
     productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由该来源那一行末尾的开关控制；采集预设不适用于它。',
     productOwnedNoteAria: '采集策略说明',
+    /* 收起态头行那枚短标：只说这组现在不能改，不搬展开区那句原因。 */
+    stoppedBadge: '暂不可改',
     includeInSentiment: '纳入情绪分析',
     presets: {
       manual: '手动',
@@ -787,6 +789,7 @@ export const intelligenceSourcesText = {
     plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
     productOwnedNote: 'A product-owned job collects this source; the switch at the end of its row controls it, while the collection preset does not apply.',
     productOwnedNoteAria: 'About this source’s collection policy',
+    stoppedBadge: 'Read-only for now',
     includeInSentiment: 'Include In Sentiment',
     presets: {
       manual: 'Manual',
