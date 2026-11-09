@@ -42,6 +42,7 @@ import {NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer} from './notifica
 import {NotificationBanner} from './notifications/NotificationBanner'
 import {useNotificationNavigation} from './notifications/notificationDeeplinkWiring'
 import {AppShellPreferencesPane} from './AppShellPreferencesPane'
+import {AppShellSettingsLayout} from './AppShellSettingsLayout'
 import {ModelServiceSection} from './model-service/ModelServiceSection'
 import {useModelServiceActions} from './model-service/useModelServiceActions'
 import {useModelServiceDrafts} from './model-service/useModelServiceDrafts'
@@ -501,88 +502,30 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   }
 
   function renderSettings(): React.ReactElement {
-    const productSettingsEntry = findProductSettingsEntry(settingsPanelKey, productSettingsEntries)
-
     return (
-      <div className="settings-layout">
-        <aside className="settings-nav" aria-label={t.nav.settings}>
-          {settingsNavGroups.map((group) => (
-            <section key={group.id} className="settings-nav-group" aria-label={group.title ?? undefined}>
-              {group.title ? <div className="settings-nav-group-title">{group.title}</div> : null}
-              {group.panels.map((panel) => {
-                const Icon = panel.icon
-                return (
-                  <button
-                    key={panel.key}
-                    type="button"
-                    className={settingsPanelKey === panel.key ? 'settings-nav-item active' : 'settings-nav-item'}
-                    onClick={() => setSettingsPanelKey(panel.key)}>
-                    <Icon size={17} />
-                    <span>{panel.label}</span>
-                  </button>
-                )
-              })}
-            </section>
-          ))}
-        </aside>
-
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'models' ? (
-          // 供应商列表是这一页的启动读数：等 / 读不到 / 有数据（刷新失败保留旧表）都由它统一判。
-          <ModelServiceLoadSurface
-            language={settings.language}
-            state={providersState}
-            onRetry={() => void reloadProviders()}>
-            <div className="model-service-with-defaults" data-model-service-with-defaults>
-              <ModelServiceDefaultModelsSection
-                labels={t.models}
-                providers={providers}
-                values={settings.modelDefaults}
-                onChange={(field, value) => {
-                  void updateSettings({ modelDefaults: { ...settings.modelDefaults, [field]: value } })
-                }}
-              />
-              {renderModelService()}
-            </div>
-          </ModelServiceLoadSurface>
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'assistant-library' ? (
-          <AssistantLibrarySettingsPage language={settings.language} onManageAssistants={() => setActiveNavKey('assistants')} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'web-search' ? (
-          <WebSearchSettingsPage language={settings.language} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'storage-cache' ? (
-          <StorageCacheSettingsPage language={settings.language} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'task-automation' ? (
-          <TaskAutomationSettingsPage language={settings.language} focusTaskId={focusEntityId} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'channels' ? (
-          <ChannelSettingsPage language={settings.language} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? (
-          <AppShellPreferencesPane
-            text={t}
-            settings={settings}
-            noticeText={noticeText}
-            resolveText={preferencesText}
-            proxySelfTest={proxySelfTest}
-            proxySelfTestView={proxySelfTestView}
-            onUpdateSettings={updateSettings}
-            onUpdateNetworkSettings={updateNetworkSettings}
-            onDraftSettingsChange={setSettings}
-            onRunProxySelfTest={runProxySelfTest}
-          />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'notifications' ? renderNotifications() : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'about' ? <AboutSettingsPage settings={settings} onUpdateSettings={updateSettings} productName={appInfo?.name ?? ''} /> : null}
-        {productSettingsEntry ? (
-          <ProductContributionHost
-            language={settings.language}
-            load={productSettingsEntry.load} focusEntityId={focusEntityId}
-          />
-        ) : null}
-      </div>
+      <AppShellSettingsLayout
+        t={t}
+        settings={settings}
+        noticeText={noticeText}
+        resolveText={preferencesText}
+        settingsPanelKey={settingsPanelKey}
+        onSelectPanel={setSettingsPanelKey}
+        navGroups={settingsNavGroups}
+        productSettingsEntries={productSettingsEntries}
+        providersState={providersState}
+        providers={providers}
+        onReloadProviders={() => void reloadProviders()}
+        onUpdateSettings={updateSettings}
+        onUpdateNetworkSettings={updateNetworkSettings}
+        onDraftSettingsChange={setSettings}
+        onRunProxySelfTest={runProxySelfTest}
+        onManageAssistants={() => setActiveNavKey('assistants')}
+        focusEntityId={focusEntityId}
+        appInfoName={appInfo?.name ?? ''}
+        proxySelfTest={proxySelfTest}
+        proxySelfTestView={proxySelfTestView}
+        modelService={renderModelService()}
+      />
     )
   }
 
@@ -601,16 +544,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         provider={providerActions}
         onSelectProvider={selectProvider}
         onOpenExternal={openProviderUrl}
-      />
-    )
-  }
-
-  function renderNotifications(): React.ReactElement {
-    return (
-      <NotificationSettingsScreen
-        title={t.settings.notifications}
-        notice={noticeText}
-        language={settings.language}
       />
     )
   }
