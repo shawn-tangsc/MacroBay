@@ -34,7 +34,7 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     'divergence-liquidity-leverage': '背离·弹药收缩而空头加仓',
     'divergence-flows-price': '背离·现货流出而价格未跌',
     'divergence-narrative-price': '背离·看空消息未计价',
-    'fear-greed-index': '恐惧贪婪指数',
+    'fear-greed-index': '恐惧与贪婪指数',
     'price-return-15m': '15 分钟价格收益',
     'price-return-2h': '2 小时价格收益',
     'price-return-24h': '24 小时价格收益',
