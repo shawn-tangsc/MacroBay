@@ -454,8 +454,9 @@ describe('NewsSentimentFeature', () => {
       const rowOpen = item.querySelector<HTMLButtonElement>('button.mi-news-drawer__row-open')
       expect(rowOpen).not.toBeNull()
       // 整行即动作：可访问名说明点开哪一条；键盘可达与焦点环由原生 button 提供，不另画。
+      // 前缀从文案表取，不在测试里硬拼中文——两语言都走同一个键。
       expect(rowOpen?.type).toBe('button')
-      expect(rowOpen?.getAttribute('aria-label')).toMatch(/^打开这条舆情：/)
+      expect(rowOpen?.getAttribute('aria-label')).toMatch(new RegExp(`^${text.openItem.split('{title}')[0]}`))
     }
 
     const more = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${text.drawer.moreActions}"]`)
