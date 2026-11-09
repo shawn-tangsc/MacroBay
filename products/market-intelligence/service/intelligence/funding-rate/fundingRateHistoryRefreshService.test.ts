@@ -36,14 +36,17 @@ describe('funding rate history refresh service', () => {
 
   it('keeps Binance history independent from any 0xRouter governance queue', async () => {
     const requestHistory = vi.fn(async () => ({ state: 'unavailable' as const }))
-    const queue = { enqueue: vi.fn() } as never
-    const refresh = createFundingRateHistoryRefreshService({
+    // 这个队列**不在**服务签名里，正是要证明它不会被碰：把多出来的这一格单独声明类型，
+    // 而不是把整个依赖对象 `as never`——后者会让 `queue.enqueue` 变成 never，断言等于没判。
+    const queue = { enqueue: vi.fn() }
+    const deps: Parameters<typeof createFundingRateHistoryRefreshService>[0] & { requestGovernanceQueue: typeof queue } = {
       isEnabled: async () => true,
       requestHistory,
       store: { upsert: vi.fn() },
       now: () => '2026-09-03T00:00:00.000Z',
-      ...(queue ? { requestGovernanceQueue: queue } : {})
-    } as never)
+      requestGovernanceQueue: queue
+    }
+    const refresh = createFundingRateHistoryRefreshService(deps)
     await expect(refresh.refresh()).resolves.toEqual({ state: 'unavailable' })
     expect(queue.enqueue).not.toHaveBeenCalled()
   })
