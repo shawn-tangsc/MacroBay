@@ -122,6 +122,7 @@ import { registerAssistantIpc } from './ipc/assistantIpc'
 import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
+import { pruneChannelRuntimeAudits } from '../../ai/agent-platform/channels/channelRuntimeAuditPrune'
 import { composeNotificationRuntimeForApp } from './composition/notifications'
 import { composeModelIpc } from './composition/model'
 import { composeAgentToolsIpc } from './composition/agentTools'
@@ -931,6 +932,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     // 用 thunk 交给保留期组：事件总线是懒构造单例，注册时不该把它实例化。
     eventBus: { pruneRetained: () => getEventBusRuntime().pruneRetained() },
     notificationRuntime: getNotificationRuntime(),
+    channelRuntimeAudits: { prune: () => pruneChannelRuntimeAudits(agentDatabase) },
     timeZone: () => shellTimeZone.get()
   })
 
