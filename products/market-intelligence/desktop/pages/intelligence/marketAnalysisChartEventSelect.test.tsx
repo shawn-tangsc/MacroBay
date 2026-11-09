@@ -9,6 +9,7 @@ import { createCrossAssetSnapshotQuery } from '../../../service/intelligence/cro
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
+import type { SelectedCalendarEvent } from './selectedCalendarEvent'
 
 /**
  * Clicking a line on the chart: the drawer opens, the event is recorded, and nothing else moves.
@@ -76,7 +77,7 @@ const dashboardProps = {
   }
 }
 
-async function renderSurface(extra: Record<string, unknown> = {}, monthEvents?: readonly unknown[], cardEvents?: readonly Record<string, unknown>[]): Promise<HTMLDivElement> {
+async function renderSurface(extra: Partial<Omit<Parameters<typeof MarketAnalysisDashboardLayout>[0], 'children'>> = {}, monthEvents?: readonly unknown[], cardEvents?: readonly Record<string, unknown>[]): Promise<HTMLDivElement> {
   const invoke = vi.fn(async (_product: string, method: string, payload?: unknown) => {
     if (method === 'intelligence.macro.economicCalendar.queryMonth') {
       const request = payload as { month?: string; asOf?: string }
@@ -95,14 +96,15 @@ async function renderSurface(extra: Record<string, unknown> = {}, monthEvents?: 
   const dashboard = monthEvents
     ? { ...dashboardProps, client: { queryMonth: vi.fn(async () => monthPage(monthEvents)) } }
     : dashboardProps
-  await act(async () => root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' },
+  await act(async () => root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children:
     createElement(MarketAnalysisDashboardLayout, {
       text: portal,
       calendarEventTitles: portal.analysisWorkspace.readableNames.eventName,
-      renderEventDetailDrawer: (selection: { eventKey: string; label: string }, onClose: () => void) =>
+      renderEventDetailDrawer: (selection: SelectedCalendarEvent, onClose: () => void) =>
         createElement('div', { 'data-test-event-drawer': selection.eventKey, onClick: onClose }, selection.label),
-      ...extra
-    }, createElement(CryptoIntelligenceDashboard, { ...dashboard } as never)))))
+      ...extra,
+      children: createElement(CryptoIntelligenceDashboard, { ...dashboard } as never)
+    }) })))
   for (let attempt = 0; attempt < 12; attempt += 1) await act(async () => { await Promise.resolve() })
   return host
 }
@@ -158,9 +160,9 @@ describe('a chart line selects a calendar event without opening the conversation
     const releasedAt = '2026-10-13T10:00:00.000Z'
     const provider = {
       eventKey: 'a1b2c3d4-0000-4000-8000-000000000001', title: '9月零售销售(月率)', countryCode: 'US',
-      eventType: 'economic-indicator', importance: 'high', scheduledAt: releasedAt,
+      eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: releasedAt,
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter', sourceObservedAt: releasedAt, coverage: 'observed-unverified'
+      source: '0xRouter' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
     }
     const readMarketEvents = vi.fn(async () => [provider])
     const host = await renderSurface({ readMarketEvents })
@@ -240,7 +242,7 @@ describe('the same release reads the same on the line and in its drawer', () => 
     const wire = { ...calendarEvent, eventKey: coreCpiKey, titleKey: 'core-cpi' }
     const client = pageClient({ state: 'available', asOf, event: coreCpiDetail }, [wire])
     const host = await renderSurface({
-      renderEventDetailDrawer: (selection: { eventKey: string }, onClose: () => void) =>
+      renderEventDetailDrawer: (selection: SelectedCalendarEvent, onClose: () => void) =>
         createElement(SelectedCalendarEventDrawer, { client: client as never, selection, now: () => new Date(asOf), text: portal.calendar, onClose })
     }, [wire])
 
@@ -262,14 +264,14 @@ describe('the same release reads the same on the line and in its drawer', () => 
     const releasedAt = '2026-10-13T10:00:00.000Z'
     const provider = {
       eventKey: 'a1b2c3d4-0000-4000-8000-000000000001', title: providerTitle, countryCode: 'US',
-      eventType: 'economic-indicator', importance: 'high', scheduledAt: releasedAt,
+      eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: releasedAt,
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter', sourceObservedAt: releasedAt, coverage: 'observed-unverified'
+      source: '0xRouter' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
     }
     const officialOnly = pageClient({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' })
     const host = await renderSurface({
       readMarketEvents: vi.fn(async () => [provider]),
-      renderEventDetailDrawer: (selection: { eventKey: string }, onClose: () => void) =>
+      renderEventDetailDrawer: (selection: SelectedCalendarEvent, onClose: () => void) =>
         createElement(SelectedCalendarEventDrawer, { client: officialOnly as never, selection, now: () => new Date(asOf), text: portal.calendar, onClose,
           readMarketMonth: async () => ({ events: [provider], sources: [] }) })
     })
