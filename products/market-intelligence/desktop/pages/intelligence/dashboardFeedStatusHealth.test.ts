@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import { dashboardFeedHealthPolicy, dashboardFeedRowHealth, projectDashboardFeedHealth, type DashboardFeedHealthPolicy } from './dashboardFeedStatusHealth'
-import { dashboardFeedRowText, type DashboardFeedRow, type DashboardFeedRowState } from './dashboardFeedStatusModel'
+import { dashboardFeedRowText, type DashboardFeedRow, type DashboardFeedRowState, type DashboardFeedText } from './dashboardFeedStatusModel'
 
 const asOfMs = Date.parse('2026-09-14T12:00:00.000Z')
 const zh = productText['zh-CN'].pages.intelligence.portal.dashboard
@@ -12,7 +12,9 @@ const en = productText['en-US'].pages.intelligence.portal.dashboard
 const row = (id: DashboardFeedRow['id'], state: DashboardFeedRowState, over: Partial<DashboardFeedRow> = {}): DashboardFeedRow =>
   Object.freeze({ id, state, sourceId: 'realmarketapi-market', manageSourceId: 'realmarketapi-market', ...over })
 
-const healthOf = (rows: readonly DashboardFeedRow[], text = zh.feedStatus, policy: DashboardFeedHealthPolicy = dashboardFeedHealthPolicy) =>
+// Annotated so the default does not narrow the parameter to the Chinese literals: the case below
+// passes the English table to prove the names come from whichever locale it is handed.
+const healthOf = (rows: readonly DashboardFeedRow[], text: DashboardFeedText = zh.feedStatus, policy: DashboardFeedHealthPolicy = dashboardFeedHealthPolicy) =>
   projectDashboardFeedHealth(rows, text, policy)
 
 /** The row as the reader sees it, so an assertion can quote the line the strip prints. */
