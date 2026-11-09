@@ -2,6 +2,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { resolveStateViewText } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { createElement } from 'react'
@@ -194,10 +196,23 @@ describe('positioning panel', () => {
     expect(markup).toContain('—')
   })
 
+  it('offers no retry when the shape cannot be read, and says what actually works', () => {
+    // 形状/版本不符：点了必然再失败。卡片不给假出路，改说读者唯一能做的动作。
+    const mismatch = render({ positioning: { state: 'unavailable', cause: 'contract-mismatch', onReload: () => undefined } })
+    expect(mismatch).toContain(text.contractMismatch)
+    // 动作是「重启应用」而不是「重试」：版本不符重试多少次都一样。
+    expect(mismatch).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.restart_app))
+    expect(mismatch).not.toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
+    // 「这次没读成」照旧给重试：读者点一下可能真的不一样。
+    const failed = render({ positioning: { state: 'unavailable', cause: 'query-failed', onReload: () => undefined } })
+    expect(failed).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
+    expect(failed).not.toContain(text.contractMismatch)
+  })
+
   it('tells a failed read from an empty one', () => {
     // Nothing collected is `empty`; a read that could not answer is `error`. Mixing them is how
     // "we have nothing" and "we could not look" start reading alike.
-    expect(render({ positioning: { state: 'unavailable', onReload: () => undefined } })).toContain('data-state="error"')
+    expect(render({ positioning: { state: 'unavailable', cause: 'query-failed', onReload: () => undefined } })).toContain('data-state="error"')
     expect(render({ positioning: { state: 'empty', onReload: () => undefined } })).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
   })
 
@@ -542,7 +557,7 @@ describe('the liquidation note: three states, one line, never two', () => {
     // 那是平台 `StateView` 的地盘：同一件事不许有两个出处，也不许两句话一起上屏。
     for (const state of [
       { state: 'empty' as const, onReload: () => undefined },
-      { state: 'unavailable' as const, onReload: () => undefined },
+      { state: 'unavailable' as const, cause: 'query-failed' as const, onReload: () => undefined },
       { state: 'loading' as const }
     ]) {
       expect(noteOf(state).count).toBe(0)

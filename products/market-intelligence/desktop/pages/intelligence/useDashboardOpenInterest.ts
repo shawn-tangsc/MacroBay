@@ -28,7 +28,7 @@ export function useDashboardOpenInterest(input: Readonly<{
     let active = true
     const asOf = readClock(mountInput.now)
     if (!asOf || typeof mountInput.client?.query !== 'function') {
-      setState({ state: 'unavailable', onReload: reload })
+      setState({ state: 'unavailable', cause: 'query-failed', onReload: reload })
       return () => { active = false }
     }
     setState({ state: 'loading' })
@@ -49,7 +49,7 @@ export function useDashboardOpenInterest(input: Readonly<{
           ? { ...projected, signal: chip, ...(analysis ? { signalAnalysis: analysis } : {}) }
           : projected)
       })
-      .catch(() => { if (active) setState({ state: 'unavailable', onReload: reload }) })
+      .catch(() => { if (active) setState({ state: 'unavailable', cause: 'query-failed', onReload: reload }) })
     return () => { active = false }
     // `mountInput` is captured once on purpose: the clock must not re-read on every render.
   }, [mountInput, window, attempt])

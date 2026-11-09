@@ -6,6 +6,8 @@ export type PositioningPanelText = Readonly<{
   loading: string
   empty: string
   unavailable: string
+  /** 形状/版本不符时的唯一出路（完全退出后重开）；这一种不给重试按钮。 */
+  contractMismatch: string
   observedAt: string
   stale: string
   /** " · {stale}" appended after the observed instant; the separator is punctuation, so it is per language. */

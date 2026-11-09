@@ -43,10 +43,18 @@ export type DashboardLiquidationMark = Readonly<{
   volumeMultiple: number
 }>
 
+export type DashboardPositioningUnavailableCause = 'contract-mismatch' | 'invalid-clock' | 'query-failed'
+
 export type DashboardPositioningViewState =
   | Readonly<{ state: 'loading' }>
   | Readonly<{ state: 'empty'; onReload: () => void }>
-  | Readonly<{ state: 'unavailable'; onReload: () => void }>
+  /**
+   * Why the card cannot show a reading. The three are told apart because only one of them is worth a
+   * retry: a shape from another app version fails the same way every time — the reader has to quit and
+   * reopen — while an invalid clock, a contract-reported failure and a client throw are "this read did
+   * not work", which a second attempt can fix.
+   */
+  | Readonly<{ state: 'unavailable'; cause: DashboardPositioningUnavailableCause; onReload: () => void }>
   | Readonly<{
       state: 'available'
       window: OpenInterestWindow
@@ -110,10 +118,10 @@ export const dashboardPositioningPresentationPolicy = Object.freeze({
 
 export function projectDashboardPositioning(value: unknown, asOf: string, window: OpenInterestWindow, onReload: () => void = () => undefined): DashboardPositioningViewState {
   try {
-    if (!isCanonicalOpenInterestTime(asOf)) return { state: 'unavailable', onReload }
-    if (!isOpenInterestHistoryResult(value, asOf, window)) return { state: 'unavailable', onReload }
+    if (!isCanonicalOpenInterestTime(asOf)) return { state: 'unavailable', cause: 'invalid-clock', onReload }
+    if (!isOpenInterestHistoryResult(value, asOf, window)) return { state: 'unavailable', cause: 'contract-mismatch', onReload }
     if (value.state === 'empty') return { state: 'empty', onReload }
-    if (value.state === 'unavailable') return { state: 'unavailable', onReload }
+    if (value.state === 'unavailable') return { state: 'unavailable', cause: 'query-failed', onReload }
 
     const latest = value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
     const staleSince = latest && Date.parse(asOf) - Date.parse(latest) > dashboardPositioningPresentationPolicy.staleAfterMs ? latest : undefined
@@ -133,7 +141,7 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
       ...(staleSince ? { staleSince } : {})
     }
   } catch {
-    return { state: 'unavailable', onReload }
+    return { state: 'unavailable', cause: 'query-failed', onReload }
   }
 }
 

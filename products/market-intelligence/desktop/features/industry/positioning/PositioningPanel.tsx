@@ -174,8 +174,20 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
     ? <LoadingState label={text.loading} minHeight={140} />
     : positioning.state === 'empty'
       ? <StateView state="empty" reasonCode="not-yet" size="md" />
-      : <StateView state="error" reasonCode="unavailable" size="md"
-          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: positioning.onReload }} />
+      : positioning.state === 'unavailable' && positioning.cause === 'contract-mismatch'
+        // A shape from another app version fails the same way every time: a retry button would be a
+        // false way out. The platform's `needs-restart` code + its relaunch action is the one path
+        // that actually changes the outcome; the sentence says why (and that reloading is not enough).
+        ? <>
+            <StateView state="error" reasonCode="needs-restart" size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void globalThis.window.platform.app.relaunch() } }} />
+            <p className="mi-positioning-panel__contract" role="status">{text.contractMismatch}</p>
+          </>
+        : positioning.state === 'unavailable'
+          ? <StateView state="error" reasonCode="unavailable" size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: positioning.onReload }} />
+          // `available` never reaches this slot (the chart is rendered instead).
+          : null
 
   return (
     <section className="mi-positioning-panel" data-state={positioning.state} data-funding-state={funding.state} data-window={window}
