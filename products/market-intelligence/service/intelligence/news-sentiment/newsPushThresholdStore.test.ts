@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -63,5 +63,57 @@ describe('news push threshold store', () => {
     store.write({ pushThreshold: 'high' })
     expect(store.write({ pushThreshold: 'low' }).pushThreshold).toBe('low')
     expect(createNewsPushThresholdStore(file).read().pushThreshold).toBe('low')
+  })
+})
+
+describe('news push threshold store · 读坏的文件不许被默认值覆盖', () => {
+  it('refuses the save, leaves the corrupt file byte-identical, and keeps a .corrupt-* copy', () => {
+    const file = tempFile()
+    const corrupt = '{"pushThreshold": "high"'
+    writeFileSync(file, corrupt, 'utf8')
+    const before = readFileSync(file)
+
+    // 读者设的是「高」，文件坏了：这一次保存必须失败，而不是把「中」写进去。
+    expect(() => createNewsPushThresholdStore(file).write({ pushThreshold: 'low' })).toThrow(/news-push-threshold-unreadable/)
+
+    // 原文件逐字节没变——「读失败」不是「从没配过」。
+    expect(readFileSync(file).equals(before)).toBe(true)
+
+    // 坏文件先留档：同一份字节，文件名带 .corrupt-<时间戳>。
+    const quarantined = readdirSync(join(file, '..')).filter((name) => name.includes('.corrupt-'))
+    expect(quarantined).toHaveLength(1)
+    expect(readFileSync(join(file, '..', quarantined[0]!)).equals(before)).toBe(true)
+  })
+
+  it('does not quietly fall back to Medium after a refused save: the next save still refuses', () => {
+    const file = tempFile()
+    writeFileSync(file, 'not json at all', 'utf8')
+
+    expect(() => createNewsPushThresholdStore(file).write({ pushThreshold: 'high' })).toThrow()
+    // 再开一个新实例（模拟重开设置页）：仍然读不到原值，保存仍然拒绝，而不是「中 → 高」地写下去。
+    expect(() => createNewsPushThresholdStore(file).write({ pushThreshold: 'high' })).toThrow()
+    expect(readFileSync(file, 'utf8')).toBe('not json at all')
+  })
+
+  it('fails closed when the corrupt copy cannot be kept: no copy, no write, file untouched', () => {
+    const file = tempFile()
+    writeFileSync(file, '{broken', 'utf8')
+    const before = readFileSync(file)
+    const dir = join(file, '..')
+    chmodSync(dir, 0o500)
+    try {
+      expect(() => createNewsPushThresholdStore(file).write({ pushThreshold: 'low' })).toThrow()
+    } finally {
+      chmodSync(dir, 0o700)
+    }
+    expect(readFileSync(file).equals(before)).toBe(true)
+    expect(readdirSync(dir).filter((name) => name.includes('.corrupt-'))).toHaveLength(0)
+  })
+
+  it('still writes when the file was never created — default tier, not a read failure', () => {
+    const file = tempFile()
+    expect(existsSync(file)).toBe(false)
+    expect(createNewsPushThresholdStore(file).write({ pushThreshold: 'high' })).toEqual({ pushThreshold: 'high' })
+    expect(createNewsPushThresholdStore(file).read()).toEqual({ pushThreshold: 'high' })
   })
 })
