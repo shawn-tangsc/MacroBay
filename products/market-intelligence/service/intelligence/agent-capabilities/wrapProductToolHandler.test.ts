@@ -163,7 +163,7 @@ describe('wrapProductToolHandler with action rules', () => {
         action: { type: 'string' },
         sourceId: { type: 'string' },
         enabled: { type: 'boolean' },
-        focusMarkets: { type: 'array', items: { type: 'string' } }
+        tags: { type: 'array', items: { type: 'string' } }
       },
       required: ['action']
     },
@@ -175,7 +175,7 @@ describe('wrapProductToolHandler with action rules', () => {
 
   const actionRules = {
     'set-enabled': ['sourceId', 'enabled'],
-    'save-focus-markets': ['focusMarkets']
+    'save-tags': ['tags']
   } as const
 
   it('rejects a field outside [action, ...allowed] through the wrapper', async () => {
@@ -183,7 +183,7 @@ describe('wrapProductToolHandler with action rules', () => {
     const handler = wrapProductToolHandler({ capability: writeCapability, handle, actionRules })
 
     await expect(
-      handler.handle({ action: 'set-enabled', focusMarkets: ['CN'] }, context)
+      handler.handle({ action: 'set-enabled', tags: ['CN'] }, context)
     ).rejects.toMatchObject({ code: 'invalid-action-fields' })
     expect(handle).not.toHaveBeenCalled()
   })

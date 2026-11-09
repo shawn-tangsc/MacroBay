@@ -202,7 +202,6 @@ describe('write capability catalog', () => {
   it('accepts every declared write action with its own fields', () => {
     const samples: ReadonlyArray<readonly [string, unknown]> = [
       ['configure_intelligence_source', { action: 'set-enabled', sourceId: 'coingecko-trending', enabled: true }],
-      ['configure_intelligence_source', { action: 'save-focus-markets', enabledFocusMarkets: ['digital-assets'] }],
       ['operate_intelligence_source', { action: 'run-now', sourceId: 'coingecko-trending' }],
       ['operate_intelligence_source', { action: 'test-connection', sourceId: 'coingecko-trending' }],
       ['operate_intelligence_source', { action: 'retry-assessment', itemId: 'item-1' }],

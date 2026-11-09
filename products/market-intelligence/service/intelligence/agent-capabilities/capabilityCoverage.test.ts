@@ -71,11 +71,7 @@ describe('intelligence capability coverage', () => {
       return decision?.state === 'exposed' ? decision.capabilityId : undefined
     }
 
-    for (const method of [
-      'intelligenceSources.saveProfile',
-      'intelligenceSources.setEnabled',
-      'intelligenceSources.saveFocusSettings'
-    ]) {
+    for (const method of ['intelligenceSources.saveProfile', 'intelligenceSources.setEnabled']) {
       expect(exposedCapability(method), method).toBe('configure_intelligence_source')
     }
     for (const method of [

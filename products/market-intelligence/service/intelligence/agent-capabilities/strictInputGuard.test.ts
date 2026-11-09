@@ -152,14 +152,14 @@ describe('validateCapabilityInput with action rules', () => {
       action: { type: 'string' },
       sourceId: { type: 'string' },
       enabled: { type: 'boolean' },
-      focusMarkets: { type: 'array' }
+      tags: { type: 'array' }
     },
     required: ['action']
   }
 
   const actionRules = {
     'set-enabled': ['sourceId', 'enabled'],
-    'save-focus-markets': ['focusMarkets']
+    'save-tags': ['tags']
   } as const
 
   it('accepts a declared action with only its allowed fields', () => {
@@ -177,7 +177,7 @@ describe('validateCapabilityInput with action rules', () => {
 
   it('rejects a field that belongs to a different action', () => {
     expect(
-      validateCapabilityInput({ action: 'set-enabled', focusMarkets: ['CN'] }, writeSchema, actionRules)
+      validateCapabilityInput({ action: 'set-enabled', tags: ['CN'] }, writeSchema, actionRules)
     ).toMatchObject({ ok: false, code: 'invalid-action-fields' })
   })
 
@@ -198,8 +198,8 @@ describe('validateCapabilityInput with action rules', () => {
   it('rejects an empty patch when the action rule requires at least one field', () => {
     const rules = {
       'save-settings': {
-        fields: ['sourceId', 'enabled', 'focusMarkets'],
-        anyOfRequired: ['sourceId', 'enabled', 'focusMarkets']
+        fields: ['sourceId', 'enabled', 'tags'],
+        anyOfRequired: ['sourceId', 'enabled', 'tags']
       }
     } as const
 

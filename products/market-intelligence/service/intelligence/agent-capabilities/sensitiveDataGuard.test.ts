@@ -74,7 +74,6 @@ describe('guardProductToolOutput', () => {
     const payload = {
       state: 'available',
       revision: 'abcdef123456',
-      focusMarkets: { enabledFocusMarkets: ['CN', 'US'] },
       sources: [
         {
           sourceId: 'source-a',

@@ -24,7 +24,6 @@ export const marketIntelligenceAgentApprovalFieldLabels = {
     sourceId: { 'zh-CN': '情报源', 'en-US': 'Source' },
     enabled: { 'zh-CN': '启用', 'en-US': 'Enabled' },
     monitoredSymbols: { 'zh-CN': '监控标的', 'en-US': 'Monitored symbols' },
-    enabledFocusMarkets: { 'zh-CN': '焦点市场', 'en-US': 'Focus markets' },
     itemId: { 'zh-CN': '情报条目', 'en-US': 'Item' },
     itemIds: { 'zh-CN': '情报条目', 'en-US': 'Items' },
     clusterIds: { 'zh-CN': '情报簇', 'en-US': 'Clusters' },

@@ -25,7 +25,6 @@ const fixture = vi.hoisted(() => ({
       updatedAt: '2026-10-01T00:00:00.000Z'
     }
   ],
-  focusMarkets: ['digital-assets'],
   settings: {
     autoTranslateEnabled: false,
     targetLocale: 'follow-app',
@@ -71,11 +70,7 @@ const fixture = vi.hoisted(() => ({
 const injectedModule = {
     sourcesService: {
       listDefinitions: () => [],
-      listProfiles: async () => fixture.profiles.map((profile) => ({ ...profile })),
-      getFocusSettings: async () => ({
-        enabledFocusMarkets: [...fixture.focusMarkets],
-        updatedAt: '2026-10-01T00:00:00.000Z'
-      })
+      listProfiles: async () => fixture.profiles.map((profile) => ({ ...profile }))
     },
     translationService: {
       getSettings: async () => ({

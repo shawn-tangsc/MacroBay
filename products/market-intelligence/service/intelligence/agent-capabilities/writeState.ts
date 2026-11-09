@@ -11,7 +11,6 @@ import type { WriteHandlerDeps, WriteSnapshot } from './writeAudit'
 export type SourceConfigurationState = {
   revision: string
   profiles: readonly IntelligenceSourceProfile[]
-  focusMarkets: readonly string[]
 }
 
 export type CalendarConfigurationState = {
@@ -25,17 +24,10 @@ export async function readSourceConfiguration(
   deps: WriteHandlerDeps
 ): Promise<SourceConfigurationState> {
   const sourcesService = deps.intelligenceModule.sourcesService
-  const [profiles, focusSettings] = await Promise.all([
-    sourcesService.listProfiles(),
-    sourcesService.getFocusSettings()
-  ])
+  const profiles = await sourcesService.listProfiles()
   return {
-    revision: computeConfigurationRevision({
-      profiles,
-      focusMarkets: focusSettings.enabledFocusMarkets
-    }),
-    profiles,
-    focusMarkets: [...focusSettings.enabledFocusMarkets]
+    revision: computeConfigurationRevision({ profiles }),
+    profiles
   }
 }
 
@@ -61,21 +53,12 @@ export function sourceConfigValue(
   }
 }
 
-export function focusMarketsValue(state: SourceConfigurationState): Record<string, unknown> {
-  return { enabledFocusMarkets: [...state.focusMarkets] }
-}
-
 export async function readSourceSnapshot(
   deps: WriteHandlerDeps,
   sourceId: string
 ): Promise<WriteSnapshot> {
   const state = await readSourceConfiguration(deps)
   return { revision: state.revision, value: sourceConfigValue(state, sourceId) }
-}
-
-export async function readFocusMarketsSnapshot(deps: WriteHandlerDeps): Promise<WriteSnapshot> {
-  const state = await readSourceConfiguration(deps)
-  return { revision: state.revision, value: focusMarketsValue(state) }
 }
 
 /** Operations that change no configuration still carry the revision they ran under. */

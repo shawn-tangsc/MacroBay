@@ -30,7 +30,6 @@ const sourceConfigOutputSchema = {
     state: { type: 'string', enum: ['saved'] },
     sourceId: { type: 'string' },
     enabled: { type: 'boolean' },
-    enabledFocusMarkets: { type: 'array', items: { type: 'string' } },
     ...auditProperties
   }
 } as const
@@ -113,7 +112,7 @@ export const configureIntelligenceSourceInputSchema = {
   additionalProperties: false,
   required: ['action'],
   properties: {
-    action: actionSchema(['save-profile', 'set-enabled', 'save-focus-markets']),
+    action: actionSchema(['save-profile', 'set-enabled']),
     sourceId: { type: 'string', 'x-maxStringLength': 160 },
     collectionPreset: { type: 'string', enum: ['manual', 'balanced', 'frequent'] },
     includeInSentiment: { type: 'boolean' },
@@ -123,14 +122,6 @@ export const configureIntelligenceSourceInputSchema = {
     autoReplayAfterParserUpgrade: { type: 'boolean' },
     monitoredSymbols: { type: 'array', maxItems: 200, items: { type: 'string' } },
     enabled: { type: 'boolean' },
-    enabledFocusMarkets: {
-      type: 'array',
-      maxItems: 7,
-      items: {
-        type: 'string',
-        enum: ['global-macro', 'digital-assets', 'cn-a-shares', 'us-equities', 'china-futures', 'fx', 'commodities']
-      }
-    },
     // Declared only so the action guard can name it; no action accepts it.
     credentialRef: { type: 'string' }
   }
@@ -266,8 +257,7 @@ export const intelligenceWriteActionRules: Readonly<Record<string, CapabilityAct
       ],
       required: ['sourceId']
     },
-    'set-enabled': { fields: ['sourceId', 'enabled'], required: ['sourceId', 'enabled'] },
-    'save-focus-markets': { fields: ['enabledFocusMarkets'], required: ['enabledFocusMarkets'] }
+    'set-enabled': { fields: ['sourceId', 'enabled'], required: ['sourceId', 'enabled'] }
   },
   operate_intelligence_source: {
     'run-now': { fields: ['sourceId'], required: ['sourceId'] },

@@ -57,16 +57,12 @@ export async function handleListIntelligenceSources(
 ): Promise<unknown> {
   const { domain = 'all', includeDisabled = false } = (input ?? {}) as ListSourcesInput
   const sourcesService = deps.intelligenceModule.sourcesService
-  const [definitions, profiles, focusSettings] = await Promise.all([
+  const [definitions, profiles] = await Promise.all([
     Promise.resolve(sourcesService.listDefinitions()),
-    sourcesService.listProfiles(),
-    sourcesService.getFocusSettings()
+    sourcesService.listProfiles()
   ])
   const definitionById = new Map(definitions.map((definition) => [definition.sourceId, definition]))
-  const revision = computeConfigurationRevision({
-    profiles,
-    focusMarkets: focusSettings.enabledFocusMarkets
-  })
+  const revision = computeConfigurationRevision({ profiles })
 
   const sources = profiles
     .filter((profile) => includeDisabled || profile.enabled === true)
@@ -80,7 +76,6 @@ export async function handleListIntelligenceSources(
   return {
     state: sources.length > 0 ? 'available' : 'empty',
     revision,
-    focusMarkets: { enabledFocusMarkets: [...focusSettings.enabledFocusMarkets] },
     sources
   }
 }
