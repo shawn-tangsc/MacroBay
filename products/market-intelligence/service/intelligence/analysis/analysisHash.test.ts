@@ -45,8 +45,10 @@ describe('analysisHash', () => {
   it('covers exactly the visible snapshot fields, so the derived change record cannot alter the hash', () => {
     const common = { profileId: 'crypto-market-analysis-v1', asOf: '2026-09-25T08:30:00.000Z', dataCutoff: '2026-09-25T08:30:00.000Z', facts: [{ factId: 'fact-1' }], missingDomains: [], caveats: [], evidenceRefs: [] }
     const change = { sequence: 2, previousSnapshotHash: 'h1', facts: [{ factId: 'fact-1', domain: 'macro', metric: 'actual', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: [], caveatsRemoved: [], evidenceRefsAdded: [], evidenceRefsRemoved: [] }
-    expect(snapshotHashInput({ ...common, change })).toEqual(common)
-    expect(buildAnalysisSnapshotHash(snapshotHashInput({ ...common, change }))).toBe(buildAnalysisSnapshotHash(common))
+    // 真实快照对象带着 `change`：先落成变量（多余属性在变量上不触发新鲜度检查），再喂给哈希输入。
+    const withChange = { ...common, change }
+    expect(snapshotHashInput(withChange)).toEqual(common)
+    expect(buildAnalysisSnapshotHash(snapshotHashInput(withChange))).toBe(buildAnalysisSnapshotHash(common))
   })
 
   it('canonicalizes snapshot caveat and missing-domain order', () => {
