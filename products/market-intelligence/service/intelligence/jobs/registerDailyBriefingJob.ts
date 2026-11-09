@@ -55,10 +55,10 @@ export function registerDailyBriefingJob(
     const periodId = periodIdOf(payload)
     const period = (await deps.getPeriods()).find((candidate) => candidate.id === periodId)
     if (!period) return
-    if (generationTimeZoneIssue(period.generationTimeZone)) return
     // 这一期自己的语言优先：定时触发的是"20:00 那一期（英文）"，不是"界面现在是什么语言"。
     const locale = period.language
-    const timeZone = period.generationTimeZone ?? deps.timeZone()
+    // 期只写时刻、不写钟：这次按读者当前显示时区解释，与排期用的是同一个钟。
+    const timeZone = deps.timeZone()
     const result = await deps.service.getToday({
       locale,
       timeZone,

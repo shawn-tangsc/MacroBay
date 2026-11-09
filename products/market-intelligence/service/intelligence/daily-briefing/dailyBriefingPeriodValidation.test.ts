@@ -68,7 +68,12 @@ describe('briefing period validation', () => {
     })
 
     expect(result.periods.map((period) => period.language)).toEqual(['en-US', 'zh-CN', 'zh-CN'])
-    expect(result.repaired).toBe(true)
+    // 写回按 id 补，一行一条：文件里只改这三行的 `language`，别的一律不动。
+    expect(result.languageRepairs).toEqual([
+      { id: 'period_en', language: 'en-US' },
+      { id: 'period_both', language: 'zh-CN' },
+      { id: 'period_never', language: 'zh-CN' }
+    ])
     // 只有从没生成过版次的那一期算推定；两语言那一期也在推定里（版次没有唯一答案）。
     expect(result.inferred).toEqual(['period_both', 'period_never'])
   })
@@ -80,7 +85,7 @@ describe('briefing period validation', () => {
       periods: [{ id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }]
     }, { fallbackLanguage: 'zh-CN', editionLocales: async () => { asked += 1; return new Map() } })
 
-    expect(result.repaired).toBe(false)
+    expect(result.languageRepairs).toEqual([])
     expect(result.inferred).toEqual([])
     expect(asked).toBe(0)
   })

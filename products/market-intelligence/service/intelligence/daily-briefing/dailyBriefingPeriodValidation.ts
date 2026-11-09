@@ -52,6 +52,9 @@ function readPeriod(entry: unknown): BriefingPeriod | undefined {
   })
 }
 
+/** One row whose `language` was missing in the file, and the value that replaces it. */
+export type BriefingPeriodLanguageRepair = Readonly<{ id: string; language: DailyBriefingLocale }>
+
 /**
  * Read whatever is on disk as periods, without writing anything back.
  *
@@ -62,8 +65,14 @@ function readPeriod(entry: unknown): BriefingPeriod | undefined {
  */
 export type BriefingPeriodsRepair = Readonly<{
   periods: readonly BriefingPeriod[]
-  /** At least one period got a language it did not carry; the caller writes the file back once. */
-  repaired: boolean
+  /**
+   * The rows that were missing a language, with the value to write for each.
+   *
+   * The caller writes back **only these values, by id**. It must not write `periods` above: that
+   * list is filtered — a row this build cannot run is left out of it — so writing it back would let
+   * one repaired row delete every unreadable row in the same file.
+   */
+  languageRepairs: readonly BriefingPeriodLanguageRepair[]
   /**
    * Period ids whose language came from the reader's interface language because no edition could
    * vouch for one. Kept out of the stored period: this is a note about how the value was chosen,
@@ -90,13 +99,13 @@ export async function readBriefingPeriodsWithRepair(
     editionLocales?: () => Promise<ReadonlyMap<string, ReadonlySet<DailyBriefingLocale>>>
   }>
 ): Promise<BriefingPeriodsRepair> {
-  if (!isRecord(value) || !Array.isArray(value.periods)) return Object.freeze({ periods: Object.freeze([]), repaired: false, inferred: Object.freeze([]) })
+  if (!isRecord(value) || !Array.isArray(value.periods)) return Object.freeze({ periods: Object.freeze([]), languageRepairs: Object.freeze([]), inferred: Object.freeze([]) })
   const needsLanguage = value.periods.some((entry) => isRecord(entry) && isMissingLanguage(entry.language))
   const editionLocales = needsLanguage && options.editionLocales ? await options.editionLocales().catch(() => new Map()) : new Map()
   const seen = new Set<string>()
   const periods: BriefingPeriod[] = []
+  const languageRepairs: BriefingPeriodLanguageRepair[] = []
   const inferred: string[] = []
-  let repaired = false
   for (const entry of value.periods) {
     if (!isRecord(entry)) continue
     const id = trimmed(entry.id)
@@ -110,7 +119,9 @@ export async function readBriefingPeriodsWithRepair(
         language = options.fallbackLanguage
         inferred.push(id)
       }
-      repaired = true
+      // Recorded before the row is validated: a row with a bad window is still in the file, and
+      // filling its language now is what stops the next read from repairing it again.
+      languageRepairs.push(Object.freeze({ id, language: language as DailyBriefingLocale }))
     }
     const draft: BriefingPeriodDraft = {
       generationTime: entry.generationTime as string,
@@ -120,21 +131,52 @@ export async function readBriefingPeriodsWithRepair(
     if (briefingPeriodDraftIssue(draft)) continue
     seen.add(id)
     const origin = readOrigin(entry.origin)
-    const zone = trimmed(entry.generationTimeZone)
     periods.push(Object.freeze({
       id,
       generationTime: draft.generationTime,
       windowHours: draft.windowHours as BriefingPeriod['windowHours'],
       language: draft.language,
-      ...(origin ? { origin } : {}),
-      ...(zone ? { generationTimeZone: zone } : {})
+      ...(origin ? { origin } : {})
     }))
   }
-  return Object.freeze({ periods: Object.freeze(periods), repaired, inferred: Object.freeze(inferred) })
+  return Object.freeze({ periods: Object.freeze(periods), languageRepairs: Object.freeze(languageRepairs), inferred: Object.freeze(inferred) })
 }
 
 function isMissingLanguage(value: unknown): boolean {
   return value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0)
+}
+
+/**
+ * Fill in the missing `language` of the named rows, in the document exactly as it is now.
+ *
+ * Everything else is returned untouched: rows this build cannot read, keys it does not know, a zone
+ * an older file carried. Writing the *filtered* list from the repair instead would let a read
+ * delete data — one row needing a language would take every unreadable row in the same file with
+ * it, and the reader would never see their configuration again.
+ *
+ * A row that has gained a language already (another writer repaired it, or the file moved) is left
+ * alone, which is what makes the write idempotent.
+ */
+export function applyPeriodLanguageRepairs(
+  value: unknown,
+  repairs: readonly BriefingPeriodLanguageRepair[]
+): Readonly<{ changed: boolean; value: unknown }> {
+  if (repairs.length === 0 || !isRecord(value) || !Array.isArray(value.periods)) {
+    return Object.freeze({ changed: false, value })
+  }
+  const languageById = new Map(repairs.map((repair) => [repair.id, repair.language]))
+  let changed = false
+  const periods = value.periods.map((entry) => {
+    if (!isRecord(entry) || !isMissingLanguage(entry.language)) return entry
+    const id = trimmed(entry.id)
+    const language = id === undefined ? undefined : languageById.get(id)
+    if (language === undefined) return entry
+    changed = true
+    return { ...entry, language }
+  })
+  return changed
+    ? Object.freeze({ changed, value: Object.freeze({ ...value, periods }) })
+    : Object.freeze({ changed: false, value })
 }
 
 export function readBriefingPeriods(value: unknown): readonly BriefingPeriod[] {

@@ -26,8 +26,8 @@ export async function missedScheduledPeriods(input: Readonly<{
   const missed: Array<Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>> = []
   for (const period of periods) {
     const id = period.id || DEFAULT_PERIOD_ID
-    const zone = period.generationTimeZone ?? input.readerTimeZone
-    // 未到点：别预告失败。计划时刻按**这一期自己的钟**算。
+    const zone = input.readerTimeZone
+    // 未到点：别预告失败。计划时刻按读者的钟算——期只写时刻，不写钟。
     const cutoff = briefingScheduledCutoff(input.today, period.generationTime, zone)
     if (cutoff === undefined || Date.parse(cutoff) > Date.parse(input.now)) continue
     const locale = period.language

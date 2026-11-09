@@ -17,6 +17,10 @@ import {
  * The id is the identity; the generation time is only a display value. It is issued when a period is
  * created, opaque, and never derived from the hour, so moving a period from 07:00 to 08:00 cannot
  * detach the editions already generated under it.
+ *
+ * Nothing here says which clock the hour is on: a period runs at the reader's display zone, so
+ * changing that zone moves the schedule with the reader. A per-period zone would be a second answer
+ * to "when does this fire", and the scheduler reads exactly one.
  */
 export type BriefingPeriodOrigin = 'user' | 'legacy-settings'
 
@@ -26,17 +30,6 @@ export type BriefingPeriod = Readonly<{
   generationTime: string
   windowHours: DailyBriefingWindowHours
   language: DailyBriefingLocale
-  /**
-   * Temporary, and it dies at a named point: **C15b deletes this field**, in the change that
-   * switches the settings read/write path onto the period store. It exists for one reason only —
-   * the older settings shape (`DailyBriefingPeriod`, which the settings surface still reads until
-   * C15b) must stay assignable to `BriefingPeriod` — and nothing else may grow a dependency on it.
-   *
-   * It must never be persisted: the periods file this build writes carries no zone (when an
-   * edition runs is decided by the reader's display zone), so no path may start storing a zone in
-   * `daily-briefing-periods.json` while this field is alive.
-   */
-  generationTimeZone?: string
   /** Only the one-time migration writes `legacy-settings`; a normal add is `user` (or absent). */
   origin?: BriefingPeriodOrigin
 }>

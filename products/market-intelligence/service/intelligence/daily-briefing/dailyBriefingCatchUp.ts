@@ -25,8 +25,8 @@ export type BriefingCatchUpDue = Readonly<{
 /**
  * 补跑的硬窗口：计划时刻之后 **1 小时**内才允许补（用户 2026-11-06）。
  *
- * 边界按 `≤ 60 分钟` 算——正好一小时仍补，61 分钟起彻底放弃这一天这一次。窗口按**那一期自己的
- * 时区**算（期带时区就按它）。
+ * 边界按 `≤ 60 分钟` 算——正好一小时仍补，61 分钟起彻底放弃这一天这一次。计划时刻与窗口都按
+ * 读者当前显示时区解释：期只写时刻，不写钟。
  */
 export const briefingCatchUpWindowMs = 60 * 60 * 1_000
 
@@ -36,8 +36,8 @@ export function briefingCatchUpDue(
   readerTimeZone: string,
   now: string
 ): BriefingCatchUpDue {
-  // 期自己的时区优先：它在哪个钟上排期，就在哪个钟上判"今天到点没有"。
-  const zone = period.generationTimeZone ?? readerTimeZone
+  // 期没有自己的钟：排期与补跑都按读者显示时区解释那个时刻。
+  const zone = readerTimeZone
   const today = localDate(now, zone)
   if (today === undefined) return undefined
   // 只问"今天这一期的计划时刻过去了没有"。补跑不回头补昨天：历史补生成是另一件事。
@@ -115,7 +115,7 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
       const cutoffMs = Date.parse(due.cutoff)
       const laterDue = periods.some((other) => {
         if (other.id === id) return false
-        const zone = other.generationTimeZone ?? readerTimeZone
+        const zone = readerTimeZone
         const date = localDate(now, zone)
         if (date === undefined) return false
         const otherCutoff = briefingScheduledCutoff(date, other.generationTime, zone)
@@ -167,7 +167,7 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
       // 同一刻重复调用是安全的：服务端按 (日期, 期号, 语言) 合并，第二次会并进正在跑的那一次。
       const result = await deps.run({
         date: due.date, locale, periodId: id,
-        timeZone: period.generationTimeZone ?? readerTimeZone,
+        timeZone: readerTimeZone,
         generationTime: period.generationTime,
         windowHours: period.windowHours
       }).catch((error: unknown) => ({ state: 'threw', failureCode: error instanceof Error ? error.message : String(error) }))

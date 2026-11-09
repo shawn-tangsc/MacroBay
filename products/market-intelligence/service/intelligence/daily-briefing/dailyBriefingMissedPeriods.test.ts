@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import { missedScheduledPeriods } from './dailyBriefingMissedPeriods'
 
 const ZONE = 'Asia/Shanghai'
@@ -8,7 +9,7 @@ const NOW = '2026-11-06T00:30:00.000Z'
 const TODAY = '2026-11-06'
 
 const harness = (input: Readonly<{
-  periods?: readonly Record<string, unknown>[]
+  periods?: readonly BriefingPeriod[]
   now?: string
   edition?: boolean
   attempts?: number
@@ -19,7 +20,7 @@ const harness = (input: Readonly<{
     async listAttempts() { return input.attempts === undefined ? [] : Array.from({ length: input.attempts }, () => ({})) as never },
     async wasEditionDeleted() { return input.deleted === true }
   },
-  periods: async () => (input.periods ?? [{ id: 'default', generationTime: '07:00', windowHours: 24 as const, language: 'zh-CN' as const }]) as never,
+  periods: async () => input.periods ?? [{ id: 'default', generationTime: '07:00', windowHours: 24 as const, language: 'zh-CN' as const }],
   today: TODAY,
   now: input.now ?? NOW,
   readerTimeZone: ZONE,
@@ -55,17 +56,16 @@ describe('a scheduled period that passed its cutoff with nothing to show gets a 
     expect(missed).toEqual([])
   })
 
-  it('reads each period on its own clock', async () => {
-    // 期带时区：UTC 20:00 此刻（00:30Z）已过；UTC 23:00 还没到。
-    const periods = [
-      { id: 'utc-midnight', generationTime: '00:00', windowHours: 24 as const, language: 'en-US' as const, generationTimeZone: 'UTC' },
-      { id: 'utc-evening', generationTime: '20:00', windowHours: 24 as const, language: 'en-US' as const, generationTimeZone: 'UTC' }
+  it('judges every period on the reader’s clock', async () => {
+    // 期只写时刻、不写钟：读取者在 UTC，当前 UTC 00:30——00:00 那期已过、20:00 还没到。
+    const periods: readonly BriefingPeriod[] = [
+      { id: 'utc-midnight', generationTime: '00:00', windowHours: 24 as const, language: 'en-US' as const },
+      { id: 'utc-evening', generationTime: '20:00', windowHours: 24 as const, language: 'en-US' as const }
     ]
-    // UTC 此刻 00:30：00:00 已过、20:00 还没到。
     const missed = await missedScheduledPeriods({
       store: { async get() { return undefined }, async listAttempts() { return [] }, async wasEditionDeleted() { return false } },
-      periods: async () => periods as never,
-      today: '2026-11-06', now: NOW, readerTimeZone: ZONE, fallbackLocale: 'zh-CN'
+      periods: async () => periods,
+      today: '2026-11-06', now: NOW, readerTimeZone: 'UTC', fallbackLocale: 'zh-CN'
     })
     expect(missed.map((row) => row.periodId)).toEqual(['utc-midnight'])
   })
