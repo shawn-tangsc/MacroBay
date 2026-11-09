@@ -170,7 +170,7 @@ export function NotificationSettingsScreen(props: {
               <span className="notification-row-control">
                 <Button
                   size="small"
-                  disabled={!sendGuard.canSend}
+                  disabled={sendGuard.sending}
                   onClick={onSendTest}
                   data-send-test>
                   {text.sendTest}
@@ -242,26 +242,32 @@ function SwitchRow(props: {
   return (
     <div className="notification-row" data-row={props.hintKey === HINT_KEY_TOAST ? 'toast' : 'desktop'}>
       <span className="notification-row-copy">
-        <strong>{props.name}</strong>
-        <Popover
-          labelKey={props.hintKey}
-          resolveText={(key: HintKey) => hintText(key, text)}
-          trigger={(triggerProps) => (
-            <IconButton
-              ariaLabelKey={props.hintKey}
-              icon={Info}
-              size="sm"
-              variant="plain"
-              resolveText={(key: string) => hintLabel(key, text)}
-              onSelect={triggerProps.onSelect}
-              onMouseEnter={triggerProps.onMouseEnter}
-              onMouseLeave={triggerProps.onMouseLeave}
-              onFocus={triggerProps.onFocus}
-              onBlur={triggerProps.onBlur}
-              expanded={triggerProps.expanded}
-            />
-          )}
-        />
+        {/*
+          * 标题与 ⓘ 包进同一个**行**容器：`.notification-row-copy` 是列布局，直接当兄弟放进去，
+          * 图标永远掉到下一行（用户截图那个缺陷）。
+          */}
+        <span className="notification-row-head">
+          <strong>{props.name}</strong>
+          <Popover
+            labelKey={props.hintKey}
+            resolveText={(key: HintKey) => hintText(key, text)}
+            trigger={(triggerProps) => (
+              <IconButton
+                ariaLabelKey={props.hintKey}
+                icon={Info}
+                size="sm"
+                variant="plain"
+                resolveText={(key: string) => hintLabel(key, text)}
+                onSelect={triggerProps.onSelect}
+                onMouseEnter={triggerProps.onMouseEnter}
+                onMouseLeave={triggerProps.onMouseLeave}
+                onFocus={triggerProps.onFocus}
+                onBlur={triggerProps.onBlur}
+                expanded={triggerProps.expanded}
+              />
+            )}
+          />
+        </span>
       </span>
       {props.control}
     </div>
