@@ -2,12 +2,9 @@ import {
   Activity,
   Bot,
   Database,
-  Globe2,
   Home,
   KeyRound,
-  Languages,
   Moon,
-  Palette,
   Plus,
   Settings,
   Sun
@@ -54,7 +51,8 @@ import { NotificationBell } from './notifications/NotificationBell'
 import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
 import { NotificationBanner } from './notifications/NotificationBanner'
 import { useNotificationNavigation } from './notifications/notificationDeeplinkWiring'
-import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
+import { AppShellPreferencesPane } from './AppShellPreferencesPane'
+import { proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
   describeProxySelfTest,
@@ -69,8 +67,6 @@ import {
 } from './navigation/mergeShellNavigation'
 import { resolveLocalizedTitle } from './navigation/shellIconRegistry'
 import { ProductContributionHost } from './workspace/ProductContributionHost'
-import { TimeZonePreference } from './settings/TimeZonePreference'
-import { SettingInfoPopover } from './settings/SettingInfoPopover'
 import { createBuiltInPageAdapters, type BuiltInPageMounts } from './workspace/builtInPageAdapters'
 import { createShellWorkspacePageRegistry, type ShellWorkspacePage } from './navigation/workspacePageRegistry'
 import { WorkspacePageHost } from './workspace/WorkspacePageHost'
@@ -79,11 +75,9 @@ import { WorkspaceTabStrip, type WorkspaceTabDraftGuard } from './workspace/Work
 import { useWorkspaceTabSession } from './workspace/useWorkspaceTabSession'
 import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
-import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
-import { LANGUAGE_LABEL_KEYS, LANGUAGE_SEGMENTED_KEY, resolvePreferencesText } from './shellOptionTables'
-import { THEME_LABEL_KEYS, THEME_SEGMENTED_KEY } from './shellOptionTables'
+import { resolveAntDesignLocale } from './shellOptionTables'
+import { resolvePreferencesText } from './shellOptionTables'
 import { ConfirmProvider } from '@platform/ui/components/confirm'
-import { Segmented } from '@platform/ui/components/segmented'
 
 export { resolveAntDesignLocale } from './shellOptionTables'
 import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
@@ -1116,7 +1110,20 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'channels' ? (
           <ChannelSettingsPage language={settings.language} />
         ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? renderPreferences() : null}
+        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? (
+          <AppShellPreferencesPane
+            text={t}
+            settings={settings}
+            noticeText={noticeText}
+            resolveText={preferencesText}
+            proxySelfTest={proxySelfTest}
+            proxySelfTestView={proxySelfTestView}
+            onUpdateSettings={updateSettings}
+            onUpdateNetworkSettings={updateNetworkSettings}
+            onDraftSettingsChange={setSettings}
+            onRunProxySelfTest={runProxySelfTest}
+          />
+        ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'notifications' ? renderNotifications() : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'about' ? <AboutSettingsPage settings={settings} onUpdateSettings={updateSettings} productName={appInfo?.name ?? ''} /> : null}
         {productSettingsEntry ? (
@@ -1320,148 +1327,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           </>
         )}
       />
-    )
-  }
-
-  function renderPreferences(): React.ReactElement {
-    return (
-      <section className="settings-detail-pane preferences-pane">
-        <div className="section-heading">
-          <span>{t.settings.basicSettings}</span>
-          {noticeText ? <small>{noticeText}</small> : null}
-        </div>
-
-        <div className="preference-section">
-          <div className="preference-heading">
-            <Languages size={18} />
-            <span>{t.preferences.language}</span>
-          </div>
-          <Segmented
-            ariaLabelKey={LANGUAGE_SEGMENTED_KEY}
-            items={languageOptions.map((option) => ({
-              value: option.value,
-              labelKey: LANGUAGE_LABEL_KEYS[option.value]
-            }))}
-            value={settings.language}
-            onChange={(value) => void updateSettings({ language: value as AppLanguage })}
-            resolveText={preferencesText}
-          />
-        </div>
-
-        <TimeZonePreference
-          language={settings.language}
-          value={settings.timeZone}
-          onChange={(value) => void updateSettings({ timeZone: value })}
-        />
-
-        <div className="preference-section">
-          <div className="preference-heading">
-            <Palette size={18} />
-            <span>{t.preferences.displayStyle}</span>
-          </div>
-          <Segmented
-            ariaLabelKey={THEME_SEGMENTED_KEY}
-            items={themeOptions.map((option) => ({
-              value: option.value,
-              labelKey: THEME_LABEL_KEYS[option.value],
-              icon: option.icon
-            }))}
-            value={settings.themeMode}
-            onChange={(value) => void updateSettings({ themeMode: value as ThemeMode })}
-            resolveText={preferencesText}
-          />
-        </div>
-
-        <div className="preference-section">
-          <div className="preference-heading">
-            <Globe2 size={18} />
-            <span>{t.preferences.proxyMode}</span>
-            {/*
-              * 说明句收进标题旁的 ⓘ（设置页每行只许「字段名 / 当前值 / 控件 / 状态」四类文本）。
-              * 是移出 DOM，不是藏：正文里已经没有这句话，读屏与全选都拿不到它。
-              */}
-            <SettingInfoPopover
-              hintKey="proxyRequestHint"
-              infoLabelKey="proxyRequestHintInfo"
-              resolveText={preferencesText}
-            />
-          </div>
-          <Select<ProxyMode>
-            className="preference-select"
-            value={settings.network.proxyMode}
-            options={proxyModeOptions.map((option) => ({
-              value: option.value,
-              label: t.preferences[option.labelKey]
-            }))}
-            onChange={(value) => void updateNetworkSettings({ proxyMode: value })}
-          />
-          <div className="preference-proxy-probe">
-            <Button
-              className="ant-secondary-button"
-              size="small"
-              loading={proxySelfTest.running}
-              disabled={proxySelfTest.running}
-              data-proxy-self-test
-              onClick={() => void runProxySelfTest()}>
-              {proxySelfTest.running ? t.preferences.proxySelfTestRunning : t.preferences.proxySelfTest}
-            </Button>
-            {proxySelfTestView !== null ? (
-              <p
-                className={`preference-proxy-probe-result ${proxySelfTestView.tone}`}
-                data-proxy-self-test-result
-                data-tone={proxySelfTestView.tone}>
-                {proxySelfTestView.line}
-                {proxySelfTestView.hint !== null ? (
-                  <>
-                    <br />
-                    <span className="preference-proxy-probe-hint">{proxySelfTestView.hint}</span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
-          </div>
-          {settings.network.proxyMode === 'custom' ? (
-            <div className="preference-fields">
-              <label className="preference-field">
-                <span>{t.preferences.proxyAddress}</span>
-                <Input
-                  value={settings.network.proxyUrl}
-                  placeholder={t.preferences.proxyAddressPlaceholder}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      network: { ...current.network, proxyUrl: event.target.value }
-                    }))
-                  }
-                  onBlur={(event) => void updateNetworkSettings({ proxyUrl: event.target.value.trim() })}
-                />
-                {proxyAddressUsesImplicitSocks5(settings.network.proxyUrl) ? (
-                  <p className="preference-hint" data-proxy-implicit-protocol>
-                    {t.preferences.proxySocks5Implicit}
-                  </p>
-                ) : null}
-              </label>
-              <label className="preference-field">
-                <span>{t.preferences.proxyBypassRules}</span>
-                <Input
-                  value={settings.network.proxyBypassRules}
-                  placeholder={t.preferences.proxyBypassPlaceholder}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      network: { ...current.network, proxyBypassRules: event.target.value }
-                    }))
-                  }
-                  onBlur={(event) =>
-                    void updateNetworkSettings({ proxyBypassRules: event.target.value.trim() })
-                  }
-                />
-              </label>
-            </div>
-          ) : null}
-        </div>
-
-      </section>
     )
   }
 
