@@ -342,7 +342,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           <Button aria-label={text.manualImport.action} className="mi-economic-calendar__import" icon={<Upload aria-hidden="true" size={15} />} onClick={() => void blsIcsImport.selectFile()} size="small">
             {text.manualImport.action}
           </Button>
-          <button aria-label={text.monthNavigation.previous} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, -1))} type="button"><ChevronLeft aria-hidden="true" size={15} />{text.monthNavigation.previous}</button>
+          <Button aria-label={text.monthNavigation.previous} icon={<ChevronLeft aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, -1))}>{text.monthNavigation.previous}</Button>
           <DatePicker
             allowClear={economicCalendarMonthPickerPolicy.allowClear}
             aria-label={text.monthNavigation.picker}
@@ -357,11 +357,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             picker={economicCalendarMonthPickerPolicy.picker}
             value={toEconomicCalendarMonthPickerValue(selectedMonth)}
           />
-          <button aria-label={text.monthNavigation.next} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))} type="button"><ChevronRight aria-hidden="true" size={15} />{text.monthNavigation.next}</button>
-          <button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)} type="button">{text.monthNavigation.current}</button>
+          <Button aria-label={text.monthNavigation.next} icon={<ChevronRight aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))}>{text.monthNavigation.next}</Button>
+          <Button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)}>{text.monthNavigation.current}</Button>
           <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => setCalendarPanelOpen(true)}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
-          <button onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}</button>
+          <Button icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack}>{text.backToDashboard}</Button>
         </div>
       </header>
       {shouldShowMarketCalendarProxyNotice(market.sources) ? <NetworkProxyBanner onOpenProxySettings={openProxySettings} /> : null}
