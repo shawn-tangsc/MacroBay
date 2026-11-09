@@ -1167,6 +1167,15 @@
   background: var(--accent);
 }
 
+/* 目录点按健康色调（判据在 `sourceHealthTone`）：黄 = 降级，红 = 这次失败。 */
+.intelligence-provider-state i.is-warn {
+  background: var(--warning);
+}
+
+.intelligence-provider-state i.is-bad {
+  background: var(--danger);
+}
+
 .intelligence-catalog-group + .intelligence-catalog-group {
   margin-top: 12px;
 }
@@ -1389,3 +1398,11 @@
   border-bottom: 1px solid var(--border, #22252d);
 }
 .intelligence-sources-view-body { grid-column: 1 / -1; min-height: 0; }
+
+/* 不可用源的采集策略组：整组停用后，说明为什么、什么时候恢复（通用句，不针对某个源）。 */
+.source-provider-detail__policy-stopped {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}

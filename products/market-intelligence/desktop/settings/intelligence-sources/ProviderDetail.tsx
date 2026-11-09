@@ -53,6 +53,8 @@ export type ProviderDetailLabels = {
   unavailableReasonCode: string
   /** ⓘ 的名字（与正文那句分开：一个是名字，一个是句子）。 */
   unavailableReasonCodeAria: string
+  /** 不可用源策略组停用时那一句（通用）。 */
+  collectionPolicyStopped: string
   automaticSyncStopped: string
   lastSuccessfulSync: string
 }
@@ -428,10 +430,15 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               resolveText={(key) => key === 'settings.intelligenceSources.collectionPolicy.title' ? policy.labels.title : ''}
               titleKey="settings.intelligenceSources.collectionPolicy.title"
             >
+              {/* 不可用的源不该还能改采集策略：整组停用，并说清为什么、什么时候恢复。
+                  这句是**通用结构**——所有不可用源同一句，不针对某一个源。 */}
+              {unavailable
+                ? <p className="source-provider-detail__policy-stopped">{labels.collectionPolicyStopped}</p>
+                : null}
               <CollectionPolicySection
-                configurable={source.collection !== 'none' && source.visibility !== 'pending'}
+                configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
                 draftProfile={policy.profiles[source.sourceId]!}
-                enabledConfigurable={source.visibility !== 'pending'}
+                enabledConfigurable={source.visibility !== 'pending' && !unavailable}
                 labels={policy.labels}
                 onChange={(patch) => policy.onChange(source.sourceId, patch)}
                 onEnabledChange={(enabled) => void toggle(source, enabled)}
