@@ -8,7 +8,12 @@ export const marketCalendarPublicPolicy = Object.freeze({
   opaquePattern: /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
   kinds: ['economic-indicator', 'financial-event', 'central-bank-activity'],
   importance: ['high', 'medium', 'low'], countryCodePattern: /^[A-Z]{2,3}$/, forbiddenCountryCodes: ['ZZ'],
-  statuses: ['success', 'success-empty', 'all-skipped', 'partial', 'unavailable'],
+  /**
+   * `no-locale-rows`：这条来源**根本不发布该语言**（今天：`financial-events` /
+   * `central-bank-activities` 的 en 请求永远返回空数组）。它与 `success-empty`
+   * （这个月确实没有事件）是两件事，不能合成一句——前者去换语言或换来源，后者就是没有。
+   */
+  statuses: ['success', 'success-empty', 'all-skipped', 'partial', 'unavailable', 'no-locale-rows'],
   /** Batch-level verdicts. `storage-pressure` is a refused write (the shared calendar is full),
    *  not a transport failure, so a reader can tell "wait" from "storage is down". */
   refreshFailures: ['input-invalid', 'disabled', 'credential-not-configured', 'readiness-unavailable', 'busy', 'storage-unavailable', 'storage-pressure'],

@@ -75,16 +75,38 @@ export const zeroXRouterCalendarEvidenceAdmissionPolicy = Object.freeze({
     'macro-calendar-0xrouter-central-bank-activities': 'central-bank-activities'
   }),
   locales: Object.freeze(['zh', 'en'] as const),
+  /**
+   * 每条日历**实际发布**哪些语言。2026-11-09 用证据归档实测：`financial-events` 与
+   * `central-bank-activities` 的 `locale=en` 请求返回的是同一个 38 字节空载荷
+   * `{"code":200,"msg":"success","data":[]}`（两个 descriptor 的 body 哈希相同），而
+   * `economic-data` 同月 en 返回 316 行。也就是说前两条**没有英文条目**，再请求只是空转
+   * （569+565 次"成功但 0 行"）。
+   *
+   * 自动采集只请求这里列出的语言；手动请求仍放行，但批次判定会把它标成 `no-locale-rows`
+   * 而不是 `success-empty`——「来源没有这种语言」与「这个月没有事件」必须分开。
+   */
+  publishedLocales: Object.freeze({
+    'macro-calendar-0xrouter-economic-data': Object.freeze(['zh', 'en'] as const),
+    'macro-calendar-0xrouter-financial-events': Object.freeze(['zh'] as const),
+    'macro-calendar-0xrouter-central-bank-activities': Object.freeze(['zh'] as const)
+  }),
   currentUtcMonthParameterNames: Object.freeze({ start: 'startTime', end: 'endTime', locale: 'locale' })
 })
 
 export const zeroXRouterCalendarTransportPolicy = Object.freeze({
   descriptorPaths: zeroXRouterCalendarEvidenceAdmissionPolicy.paths,
   locales: zeroXRouterCalendarEvidenceAdmissionPolicy.locales,
+  publishedLocales: zeroXRouterCalendarEvidenceAdmissionPolicy.publishedLocales,
   monthPattern: /^\d{4}-(?:0[1-9]|1[0-2])$/,
   parameterNames: zeroXRouterCalendarEvidenceAdmissionPolicy.currentUtcMonthParameterNames,
   successEnvelope: Object.freeze({ code: 200, msg: 'string', data: 'array' })
 })
+
+/** 这条日历是否发布该语言。自动采集据此过滤，批次判定据此把空结果与"本月无事件"分开。 */
+export function zeroXRouterCalendarPublishesLocale(descriptorId: string, locale: string): boolean {
+  const published = (zeroXRouterCalendarEvidenceAdmissionPolicy.publishedLocales as Record<string, readonly string[]>)[descriptorId]
+  return published === undefined ? true : published.includes(locale)
+}
 
 export function isZeroXRouterSource(sourceId: string): sourceId is typeof zeroXRouterSourcePolicy.sourceId {
   return sourceId === zeroXRouterSourcePolicy.sourceId
