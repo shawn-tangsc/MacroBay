@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { type FocusEvent } from 'react'
 
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
@@ -80,13 +81,14 @@ export function ModelServiceKeySection({
 
       <div className="model-service-helper-row">
         {getKeyUrl ? (
-          <button
-            type="button"
-            className="model-service-link"
+          <Button
+            type="text"
+            size="small"
+            className="text-action"
             data-get-api-key
             onClick={() => onOpenExternal(getKeyUrl)}>
             {getKeyFromConsole ? labels.getKeyFromConsole : labels.getApiKeyHere}
-          </button>
+          </Button>
         ) : (
           <span />
         )}

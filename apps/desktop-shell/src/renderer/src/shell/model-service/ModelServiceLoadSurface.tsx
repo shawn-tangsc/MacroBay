@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Button } from 'antd'
 
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
@@ -50,9 +51,10 @@ export function ModelServiceLoadSurface(props: {
         // 「刷新失败、旧数据还在」不是「读不到」：页面级错误会把用户手里的列表换成空白。
         <p className="model-service-stale" role="status">
           <span>{t.models.providersStaleNotice}</span>
-          <button type="button" onClick={props.onRetry}>
+          {/* 句内动作 → antd 文本档 `Button` + `.text-action`。 */}
+          <Button type="text" size="small" className="text-action" onClick={props.onRetry}>
             {resolveStateViewText(props.language, STATE_VIEW_ACTION_KEYS.refresh)}
-          </button>
+          </Button>
         </p>
       ) : null}
       {props.children}
