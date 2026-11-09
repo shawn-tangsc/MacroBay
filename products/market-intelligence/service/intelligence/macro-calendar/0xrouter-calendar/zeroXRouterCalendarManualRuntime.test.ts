@@ -81,7 +81,9 @@ describe('MC-V1 manual archive and SQLite composition', () => {
       'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'
     ])
     expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations').get()?.n).toBeGreaterThan(0)
-    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_collections').get()?.n).toBe(6)
+    // 三个 feed，但 `financial-events` 与 `central-bank-activities` 不发布英文：一次采集是
+    // 3 个 zh + 1 个 economic-data en = 4 个作用域，所以落库 4 行，不是 6 行。
+    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_collections').get()?.n).toBe(4)
   })
 
   it('reports a deadline as timeout, never as a collection failure', async () => {
