@@ -434,11 +434,6 @@ export const intelligenceSourcesText = {
   actions: {
     save: '保存'
   },
-  collectionHint: {
-    title: '需要手动采集',
-    body: '当前为手动模式：启用后不会自动拉取数据。点击「立即运行」后，情报页才会出现内容。',
-    action: '立即运行'
-  },
   translationPreferences: {
     title: '翻译偏好',
     loading: '正在读取翻译设置…',
@@ -888,11 +883,6 @@ export const intelligenceSourcesText = {
   },
   actions: {
     save: 'Save'
-  },
-  collectionHint: {
-    title: 'Manual collection required',
-    body: 'Manual mode does not pull data automatically. Run Now before expecting items on the Intelligence page.',
-    action: 'Run Now'
   },
   translationPreferences: {
     title: 'Translation Preferences',
