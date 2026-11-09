@@ -5,6 +5,7 @@
  * 退出后立即回到真实模式。
  */
 
+import { Button } from 'antd'
 import { ArrowRight, FlaskConical, LogOut } from 'lucide-react'
 
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -38,14 +39,16 @@ export function SampleModeBanner({ text, scenarioNow, busy, onExit, onConnect }:
         <span className="mi-sample-banner__meta">{text.noUpdate}</span>
       </div>
       <div className="mi-sample-banner__actions">
-        <button className="mi-sample-banner__button" disabled={busy} onClick={onExit} type="button">
+        {/* 图标留在原位、不换成 `icon=`：两颗按钮的图形一前一后，`icon=` 会把「接入」那颗的箭头
+            挪到文字前面，那是可见的顺序变化。 */}
+        <Button className="mi-sample-banner__button" disabled={busy} onClick={onExit} size="small" type="default">
           <LogOut aria-hidden="true" size={13} strokeWidth={1.8} />
           {text.exit}
-        </button>
-        <button className="mi-sample-banner__button is-primary" disabled={busy} onClick={onConnect} type="button">
+        </Button>
+        <Button className="mi-sample-banner__button is-primary" disabled={busy} onClick={onConnect} size="small" type="default">
           {text.connect}
           <ArrowRight aria-hidden="true" size={13} strokeWidth={1.8} />
-        </button>
+        </Button>
       </div>
     </div>
   )
