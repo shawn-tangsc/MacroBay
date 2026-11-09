@@ -19,7 +19,7 @@ vi.mock('../../shared/ipc/intelligenceSourcesClient', () => ({
   }
 }))
 
-import { panelView } from '../../../service/intelligence/application/sourceProjection'
+import { panelView, type PanelView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { productText } from '../../shared/i18n/productText'
 import { DashboardPanelDrawer } from './DashboardPanelDrawer'
 
@@ -82,6 +82,81 @@ describe('DashboardPanelDrawer read failure', () => {
     expect(document.body.querySelector('.intelligence-catalog-list')).not.toBeNull()
   })
 })
+
+/**
+ * 左栏目录点只许表达**健康**：绿 = 已启用且每个启用源都健康。
+ *
+ * 之前它只看「已启用数 > 0」，于是 BLS 403（启用但不可用）和 Fed（正常）看起来一模一样——
+ * 读者在目录里分不出谁坏了。判据不许另写：色调一律来自 `sourceHealthTone`。
+ */
+describe('DashboardPanelDrawer catalog health dot', () => {
+  it('lights only when every enabled source is connected and fresh', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'healthy' }))
+    await openDrawer(false)
+
+    expect(dot(0).classList.contains('is-on')).toBe(true)
+  })
+
+  it('does not light for an enabled source that is unavailable', async () => {
+    mockGetPanelView.mockResolvedValue(
+      viewWithSource({
+        enabled: true,
+        health: 'healthy',
+        unavailable: {
+          reasonCode: 'official-endpoint-returned-403',
+          automaticSync: 'stopped',
+          decidedAt: '2026-11-09'
+        }
+      })
+    )
+    await openDrawer(false)
+
+    // 不可用不是「健康」，也不是「失败」：中性点（不亮、不红）。
+    expect(dot(0).classList.contains('is-on')).toBe(false)
+    expect(dot(0).classList.contains('is-bad')).toBe(false)
+  })
+
+  it('stays neutral when nothing is enabled', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: false, health: 'healthy' }))
+    await openDrawer(false)
+
+    expect(dot(0).classList.contains('is-on')).toBe(false)
+  })
+
+  it('turns red for a failed enabled source, and the expanded detail names that source', async () => {
+    const source = firstSource()
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'failed' }))
+    await openDrawer(false)
+
+    expect(dot(0).classList.contains('is-bad')).toBe(true)
+    // 红了必须能定位：展开项里点名那个源（而不是只让读者知道「这组坏了」）。
+    const sourceNames = productText['zh-CN'].settings.intelligenceSources.sourceNames as Readonly<Record<string, string>>
+    const named = sourceNames[source.sourceId] ?? source.displayName
+    expect(document.body.textContent).toContain(named)
+  })
+})
+
+function firstProvider(): PanelView['providers'][number] {
+  return dashboardView.providers[0]!
+}
+
+function firstSource(): SourceView {
+  return firstProvider().sources[0]!
+}
+
+/** 用一个受控源替换首个 provider 的源列表：其余字段取真实投影，避免手写整份视图。 */
+function viewWithSource(patch: Partial<SourceView>): PanelView {
+  const provider = firstProvider()
+  const source = { ...firstSource(), ...patch }
+  return { ...dashboardView, providers: [{ ...provider, sources: [source] }] }
+}
+
+function dot(index: number): HTMLElement {
+  const dots = [...document.body.querySelectorAll<HTMLElement>('.intelligence-provider-state i')]
+  const found = dots[index]
+  if (!found) throw new Error(`Expected a catalog dot at ${index}`)
+  return found
+}
 
 async function openDrawer(sampleActive: boolean): Promise<void> {
   const container = document.createElement('div')

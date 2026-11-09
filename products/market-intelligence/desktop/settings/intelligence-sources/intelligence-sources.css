@@ -1169,7 +1169,8 @@
 
 /* 目录点按健康色调（判据在 `sourceHealthTone`）：黄 = 降级，红 = 这次失败。 */
 .intelligence-provider-state i.is-warn {
-  background: var(--warning);
+  /* 带 fallback：这张表的守卫禁止裸用 warning token（历史：产品表曾经自己没定义它）。 */
+  background: var(--warning, var(--caution));
 }
 
 .intelligence-provider-state i.is-bad {
