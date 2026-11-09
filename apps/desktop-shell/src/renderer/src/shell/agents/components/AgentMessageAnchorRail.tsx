@@ -39,6 +39,8 @@ export default function AgentMessageAnchorRail({
               key={item.id}
               type="button"
               className={active ? 'agent-message-anchor-item active' : 'agent-message-anchor-item'}
+              // 整行一个结果：跳到这条消息。行内没有独立按钮；`aria-current` 让读屏知道当前在哪一条。
+              aria-current={active ? 'true' : undefined}
               onClick={() => onSelectMessage(item.id)}>
               <span className={`agent-message-anchor-dot ${item.role} ${item.status}`} />
               <span className="agent-message-anchor-copy">
