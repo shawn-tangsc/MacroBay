@@ -15,7 +15,6 @@ export const EYE_SHOW_KEY = 'webSearch.showApiKey'
 export const EYE_HIDE_KEY = 'webSearch.hideApiKey'
 
 const ALL_MASK = '••••••••'
-export const API_KEY_REVEAL_TIMEOUT_MS = 30_000
 
 type WebSearchApiKeyFieldProps = {
   labels: PlatformText['webSearch']
@@ -33,9 +32,12 @@ type WebSearchApiKeyFieldProps = {
 }
 
 /**
- * API Key 控件。
- * - 已保存：掩码直接作为 input 的 value（不做覆盖层），hover/focus 不改变显示；
- *   点眼睛才按需读取完整 Key，30s 自动回掩码、失焦/卸载/切换供应商立即清除。
+ * API Key 控件（口径与模型服务侧 `ModelProviderApiKeyField` 一致，用户 2026-11-01 拍板三句）：
+ * - 已保存：**默认掩码**（掩码直接作为 input 的 value，不做覆盖层），hover/focus 不改变显示；
+ *   点眼睛才按需读取完整 Key，**不设查看时限、失焦不回掩码**——一直明文，直到读者自己收起。
+ *   （此前的「30 秒自动回掩码 + 失焦回掩码」是用户已撤掉的旧做法，别再写回来。）
+ * - **掩码态也能复制**：复制按钮两种状态都在；掩码态点它按需读一次真值再写剪贴板，
+ *   绝不复制 `••••`/预览串；复制不切换显示。切换供应商/卸载仍清除内存明文。
  * - 无已保存 Key：普通密码输入；眼睛切换草稿可见性。
  */
 export function WebSearchApiKeyField({
@@ -65,7 +67,6 @@ export function WebSearchApiKeyField({
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [copied, setCopied] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const hasDraft = value.length > 0
@@ -75,10 +76,6 @@ export function WebSearchApiKeyField({
   const canToggle = hasApiKey || hasDraft
 
   function clearReveal(): void {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
-    }
     markUncopied()
     setRevealedKey(null)
   }
@@ -92,9 +89,21 @@ export function WebSearchApiKeyField({
     setCopied(false)
   }
 
-  async function copyRevealedKey(): Promise<void> {
-    if (revealedKey === null) return
-    await copyTextToClipboard(revealedKey)
+  /**
+   * 复制已保存的 Key：**掩码态也能复制**（2026-11-01 拍板）。
+   *
+   * 掩码态没有明文可用，所以点复制时才按需读一次真值——绝不去复制界面上的 `••••`/预览串。
+   * 复制本身不切换显示。
+   */
+  async function copyKey(): Promise<void> {
+    let key = revealedKey
+    if (key === null) {
+      if (!hasApiKey) return
+      // 走「只读值、不写显示状态」的那一支：复制不许把明文带进输入框。
+      key = await fetchSavedKey()
+    }
+    if (key === null) return
+    await copyTextToClipboard(key)
     setCopied(true)
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
     copiedTimerRef.current = setTimeout(() => {
@@ -105,7 +114,6 @@ export function WebSearchApiKeyField({
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
     }
   }, [])
@@ -133,36 +141,39 @@ export function WebSearchApiKeyField({
     setEditing(false)
   }
 
-  async function reveal(): Promise<void> {
-    if (revealing) return
+  /** 读一次真值（**不改显示状态**）：掩码态复制走这里，避免把明文带进输入框。 */
+  async function fetchSavedKey(): Promise<string | null> {
+    if (revealing) return null
     setRevealError(null)
     // 旧 preload：桥不存在时直接给可诊断文案，不能和“主进程报错/没有 Key”混为一谈。
     if (typeof window.platform?.webSearch?.revealApiKey !== 'function') {
       setRevealError({ text: labels.revealApiKeyUnavailable, retryable: false })
-      return
+      return null
     }
     setRevealing(true)
     try {
       const key = await onReveal()
       if (key === null) {
         setRevealError({ text: labels.revealApiKeyMissing, retryable: false })
-        return
+        return null
       }
       if (typeof key !== 'string' || key.length === 0) {
         setRevealError({ text: labels.revealApiKeyFailed, retryable: false })
-        return
+        return null
       }
-      setRevealedKey(key)
-      if (timerRef.current) clearTimeout(timerRef.current)
-      timerRef.current = setTimeout(() => {
-        setRevealedKey(null)
-        timerRef.current = null
-      }, API_KEY_REVEAL_TIMEOUT_MS)
+      return key
     } catch {
       setRevealError({ text: labels.revealApiKeyBridgeFailed, retryable: true })
+      return null
     } finally {
       setRevealing(false)
     }
+  }
+
+  /** 眼睛展开：读一次并切明文。**不设时限、失焦不回掩码**，直到读者自己收起。 */
+  async function reveal(): Promise<void> {
+    const key = await fetchSavedKey()
+    if (key !== null) setRevealedKey(key)
   }
 
   function toggleEye(): void {
@@ -205,7 +216,7 @@ export function WebSearchApiKeyField({
         className="web-search-api-key-control"
         onBlur={(event) => {
           if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-          clearReveal()
+          // 失焦**不回掩码**（2026-11-01 拍板）：展开后一直明文，直到读者自己收起。
           // 编辑态失焦 = 取消：不写入草稿，回到已保存掩码。
           if (editing && hasApiKey) cancelEditing()
         }}>
@@ -250,11 +261,13 @@ export function WebSearchApiKeyField({
                   />
                 )
               ) : null}
-              {revealedKey ? (
+              {hasApiKey ? (
+                // 掩码态与明文态**都在**：掩码态点它按需读真值再复制（2026-11-01 拍板）。
                 <IconButton
                   ariaLabelKey={copied ? COPY_DONE_KEY : COPY_KEY}
+                  disabled={disabled}
                   icon={copied ? Check : Copy}
-                  onSelect={() => void copyRevealedKey()}
+                  onSelect={() => void copyKey()}
                   resolveText={(key) => {
                     if (key === COPY_KEY) return labels.copyApiKey
                     if (key === COPY_DONE_KEY) return labels.apiKeyCopied

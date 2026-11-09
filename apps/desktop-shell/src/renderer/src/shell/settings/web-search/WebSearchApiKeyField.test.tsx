@@ -7,7 +7,7 @@ import { maskSecret as modelMaskSecret } from '@platform/ai/providers/providerSt
 import { maskSecret as webSearchMaskSecret } from '@platform/ai/web-search/runtime/WebSearchCredentialStore'
 
 import { platformText } from '../../../i18n/platformText'
-import { API_KEY_REVEAL_TIMEOUT_MS, WebSearchApiKeyField } from './WebSearchApiKeyField'
+import { WebSearchApiKeyField } from './WebSearchApiKeyField'
 
 const labels = platformText['zh-CN'].webSearch
 
@@ -133,37 +133,60 @@ describe('PLAT-55 masked API key field', () => {
     expect(container.innerHTML).not.toContain(savedKey)
   })
 
-  it('copies the revealed key and takes the copy affordance away with the mask', async () => {
+  it('copies the saved key from the masked state, and never copies the preview', async () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const onReveal = vi.fn(async () => savedKey)
+    const container = await mount({ onReveal })
+
+    // 掩码态就有复制入口（2026-11-01 拍板：展开后允许复制；掩码态点它按需读真值）。
+    expect(copyButton(container)).not.toBeNull()
+
+    await click(container, `[aria-label="${labels.copyApiKey}"]`)
+
+    expect(onReveal).toHaveBeenCalledTimes(1)
+    expect(writeText).toHaveBeenCalledWith(savedKey)
+    expect(writeText).not.toHaveBeenCalledWith(preview)
+    expect(writeText).not.toHaveBeenCalledWith('••••••••')
+    // 复制不切换显示：输入框仍是掩码，完整 Key 不进 DOM。
+    expect(inputOf(container).value).toBe(preview)
+    expect(container.innerHTML).not.toContain(savedKey)
+    expect(container.textContent).toContain(labels.apiKeyCopied)
+  })
+
+  it('keeps the copy action after the reader collapses the plaintext', async () => {
     const writeText = vi.fn(async () => undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     const container = await mount()
 
-    // 掩码态没有复制：看不到就不该能复制。
-    expect(copyButton(container)).toBeNull()
-
     await click(container, eyeSelector)
+    expect(inputOf(container).value).toBe(savedKey)
+
+    // 读者自己收起：回掩码，但复制入口还在。
+    await click(container, eyeSelector)
+    expect(inputOf(container).value).toBe(preview)
+    expect(copyButton(container)).not.toBeNull()
+
     await click(container, `[aria-label="${labels.copyApiKey}"]`)
     expect(writeText).toHaveBeenCalledWith(savedKey)
-
-    await click(container, eyeSelector)
-    expect(copyButton(container)).toBeNull()
   })
 
-  it('auto-hides the revealed key after 30 seconds', async () => {
+  it('keeps the key on screen past the old 30s window (no time limit)', async () => {
     vi.useFakeTimers()
     const container = await mount()
     await click(container, eyeSelector)
     expect(inputOf(container).value).toBe(savedKey)
 
     await act(async () => {
-      vi.advanceTimersByTime(API_KEY_REVEAL_TIMEOUT_MS)
+      vi.advanceTimersByTime(35_000)
     })
 
-    expect(inputOf(container).value).toBe(preview)
-    expect(container.innerHTML).not.toContain(savedKey)
+    // 30 秒自动回掩码是用户已撤掉的做法：不设时限，直到读者自己收起。
+    expect(inputOf(container).value).toBe(savedKey)
+    expect(container.innerHTML).toContain(savedKey)
   })
 
-  it('hides the revealed key on blur', async () => {
+  it('keeps the revealed key on blur (no auto-remask)', async () => {
     const container = await mount()
     const input = inputOf(container)
     await click(container, eyeSelector)
@@ -174,8 +197,8 @@ describe('PLAT-55 masked API key field', () => {
       input.blur()
     })
 
-    expect(input.value).toBe(preview)
-    expect(container.innerHTML).not.toContain(savedKey)
+    expect(input.value).toBe(savedKey)
+    expect(container.innerHTML).toContain(savedKey)
   })
 
   it('clears a revealed key when switching provider and on unmount', async () => {
