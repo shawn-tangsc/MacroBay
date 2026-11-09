@@ -110,12 +110,12 @@ describe('BLS schedule and latest values workflow', () => {
     expect(refreshAutomatic).toHaveBeenCalledOnce()
   })
 
-  it('does not accept a mismatched member identity as a complete current family', async () => {
+  it('leaves the family decision to the refresh service and never reads the repository itself', async () => {
     const refreshAutomatic = vi.fn(async () => ({ state: 'updated' as const }))
+    const getEffectiveEventAsOf = vi.fn()
     const workflow = createBlsScheduleAndLatestValuesSyncWorkflow({
       schedule: { sync: vi.fn(async () => ({ state: 'completed' as const, schedule: 'unchanged' as const, groups: [groups[0]!] })) },
-      // This workflow never reads `repository` (the refresh service does), so there is no fixture to state.
-      repository: { getEffectiveEventAsOf: vi.fn() },
+      repository: { getEffectiveEventAsOf },
       refresh: { refreshAutomatic }, now: () => '2026-08-19T00:00:00.000Z'
     })
 
@@ -123,6 +123,11 @@ describe('BLS schedule and latest values workflow', () => {
       state: 'completed', schedule: 'unchanged', values: { cpi: 'updated', employment: 'not-required' }
     })
     expect(refreshAutomatic).toHaveBeenCalledOnce()
+    // This layer only chooses candidates and maps the answer; whether a member identity makes a
+    // complete family is decided inside the service, and that has its own judgement:
+    // `blsEmploymentMvpRefreshService.test.ts` -> "rejects a lock-internal family whose repository
+    // member has a mismatched event key".
+    expect(getEffectiveEventAsOf).not.toHaveBeenCalled()
   })
 })
 
