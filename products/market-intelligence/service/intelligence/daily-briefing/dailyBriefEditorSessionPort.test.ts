@@ -247,3 +247,17 @@ describe('claiming the briefing sessions that were created without an identity',
       .filter(session => (session.origin ?? 'reader') !== 'automation' && session.name.includes('11-09'))).toHaveLength(0)
   })
 })
+
+  it('skips links whose session is gone instead of aborting the whole migration', async () => {
+    const d = deps()
+    await d.links.put({ editionDate: '2026-11-09', periodId: DEFAULT_PERIOD_ID, locale: 'zh-CN', sessionId: 'deleted-session', state: 'running', createdAt: '2026-11-09T00:00:00.000Z', updatedAt: '2026-11-09T00:00:00.000Z' })
+    const result = await claimExistingBriefingSessions({
+      links: d.links,
+      agentId: 'daily-brief-editor',
+      findAgentSessionByAutomationRef: d.findAgentSessionByAutomationRef,
+      updateAgentSession: d.updateAgentSession as never,
+      getAgentSession: async (sessionId) => (d.sessions.has(sessionId) ? { id: sessionId } : null)
+    })
+    // 真实库里就有 4 条链接指向已删除的会话：跳过并计数，不能因此中断整趟迁移。
+    expect(result).toEqual({ updated: 0, skipped: 0, missing: 1 })
+  })

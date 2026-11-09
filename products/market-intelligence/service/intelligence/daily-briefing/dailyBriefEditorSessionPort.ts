@@ -108,8 +108,10 @@ export async function claimExistingBriefingSessions(deps: Readonly<{
   agentId: string
   findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<Pick<AgentSessionEntity, 'id' | 'originState'> | null>
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<unknown>
-}>): Promise<{ updated: number; skipped: number }> {
-  if (!deps.findAgentSessionByAutomationRef || !deps.updateAgentSession) return { updated: 0, skipped: 0 }
+  /** 只读：链接表里可能有已经被删掉的会话；查不到就跳过并计数，不能因此中断整趟迁移。 */
+  getAgentSession?: (sessionId: string) => Promise<Pick<AgentSessionEntity, 'id'> | null>
+}>): Promise<{ updated: number; skipped: number; missing: number }> {
+  if (!deps.findAgentSessionByAutomationRef || !deps.updateAgentSession) return { updated: 0, skipped: 0, missing: 0 }
   // 链接表按「期 + locale」一行一次生成；用远未来日期取全部，不新增枚举口子。
   const links = await deps.links.listBefore('9999-12-31')
   type Link = (typeof links)[number]
@@ -123,6 +125,7 @@ export async function claimExistingBriefingSessions(deps: Readonly<{
 
   let updated = 0
   let skipped = 0
+  let missing = 0
   for (const [originRef, bucket] of byEdition) {
     const ordered = [...bucket].sort((left, right) => {
       const byTime = left.createdAt.localeCompare(right.createdAt)
@@ -130,6 +133,10 @@ export async function claimExistingBriefingSessions(deps: Readonly<{
     })
     const canonical = ordered[ordered.length - 1]
     for (const link of ordered) {
+      if (deps.getAgentSession && (await deps.getAgentSession(link.sessionId)) === null) {
+        missing += 1
+        continue
+      }
       // 正式身份只有一条：最新那次生成。它若已被别的会话占着，这条本身就是历史副本。
       const wantsCanonical = link === canonical
       const canonicalOwner = wantsCanonical
@@ -161,5 +168,5 @@ export async function claimExistingBriefingSessions(deps: Readonly<{
       updated += 1
     }
   }
-  return { updated, skipped }
+  return { updated, skipped, missing }
 }
