@@ -11,8 +11,15 @@ import type { Catalog } from './channelSettingsPresentation'
  */
 export type ChannelPlatformType = ChannelTypeName
 
-// 顺序照设计固定：飞书 → Telegram → QQ → 微信 → Discord → Slack（不按接入状态重排）。
-const PLATFORM_ORDER: readonly ChannelPlatformType[] = ['feishu', 'telegram', 'qq', 'wechat', 'discord', 'slack']
+/**
+ * 只列**现在真的能开**的平台（产品 2026-11-09 定）：可选列表回答的是「我现在能用哪个」，
+ * 不是「以后会支持什么」。未实现的四个（飞书 / QQ / 微信 / Discord）已从列表撤下——
+ * 留着按不动的项只会教读者「这个列表不可信」。**不新增「敬请期待」入口**，支持现状只写在
+ * 「已知限制」与版本说明里。
+ *
+ * 顺序照设计固定：Telegram → Slack（不按接入状态重排）。
+ */
+const PLATFORM_ORDER: readonly ChannelPlatformType[] = ['telegram', 'slack']
 
 export function ChannelPlatformList(props: {
   labels: PlatformText['settings']
