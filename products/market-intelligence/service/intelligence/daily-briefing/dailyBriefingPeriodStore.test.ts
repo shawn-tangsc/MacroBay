@@ -46,6 +46,16 @@ describe('briefing period store', () => {
     expect((await store(storage).list()).map((period) => period.id)).toEqual(['default', 'period_new'])
   })
 
+  it('never writes the transitional zone field into the periods file', async () => {
+    // `generationTimeZone` exists only so the older settings shape stays assignable until C15b
+    // deletes it. A zone stored now would outlive the field and have no owner on the next read, so
+    // no write path may put one into the file.
+    const storage = memoryStorage()
+    await store(storage).create({ generationTime: '09:00', windowHours: 12, language: 'en-US' })
+    await store(storage).update('period_new', { generationTime: '10:00', windowHours: 24, language: 'zh-CN' })
+    for (const period of storage.stored().periods) expect(period).not.toHaveProperty('generationTimeZone')
+  })
+
   it('refuses a duplicate and names the row it collides with, leaving the file untouched', async () => {
     const storage = memoryStorage({ version: 1, periods: [{ id: 'period_a', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }] })
     const result = await store(storage).create({ generationTime: '07:00', windowHours: 24, language: 'zh-CN' })

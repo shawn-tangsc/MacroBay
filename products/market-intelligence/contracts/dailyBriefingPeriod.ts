@@ -27,9 +27,14 @@ export type BriefingPeriod = Readonly<{
   windowHours: DailyBriefingWindowHours
   language: DailyBriefingLocale
   /**
-   * The reader's raw zone for this period, when a file carried one. The period file this build
-   * writes has no zone (the reader's display zone decides); the field is kept so the older
-   * settings-shaped periods remain assignable during the type unification.
+   * Temporary, and it dies at a named point: **C15b deletes this field**, in the change that
+   * switches the settings read/write path onto the period store. It exists for one reason only —
+   * the older settings shape (`DailyBriefingPeriod`, which the settings surface still reads until
+   * C15b) must stay assignable to `BriefingPeriod` — and nothing else may grow a dependency on it.
+   *
+   * It must never be persisted: the periods file this build writes carries no zone (when an
+   * edition runs is decided by the reader's display zone), so no path may start storing a zone in
+   * `daily-briefing-periods.json` while this field is alive.
    */
   generationTimeZone?: string
   /** Only the one-time migration writes `legacy-settings`; a normal add is `user` (or absent). */
