@@ -9,7 +9,7 @@
  * - 黄只给 `stale`（数据偏旧）；
  * - `off`（没启用 / 取不到 / 没有健康读数）→ 灰。**「不可用」与「没有数据」都不画红。**
  */
-import type { SourceHealthState } from '../../../service/intelligence/application/sourceProjection'
+import type { SourceHealthMarker, SourceHealthState } from '../../../service/intelligence/application/sourceProjection'
 
 export type SourceHealthTone = 'muted' | 'warn' | 'bad' | 'ok'
 
@@ -21,17 +21,12 @@ export function sourceHealthTone(state: SourceHealthState): SourceHealthTone {
 }
 
 /**
- * 目录标记的**唯一判据**（界面设计 2026-11-10 终稿）：形状 + 颜色双编码，灰度屏也分得清。
- *
- * - `bad` → 实心红；`warn` → 实心黄；
- * - `muted` → **空心环**，但**只在「已启用且该源判定不可用」时**画：`muted` 同时盖着
- *   「未启用 / 没数据」，那两个什么都不画，所以画不画不能只看 tone；
- * - `ok` → 什么都不画（常驻的绿点会被读成选中标记）。
+ * 标记档 → CSS 类。**纯映射**（架构师 2026-11-10）：判据在 `sourceProjection.sourceHealthMarker`，
+ * 这里不接收第二个输入、不再看 `enabled`/`unavailable`。
  */
-export type CatalogMarker = 'bad' | 'warn' | 'muted'
-
-export function catalogMarkerKind(state: SourceHealthState, hasUnavailableEnabled: boolean): CatalogMarker | undefined {
-  const tone = sourceHealthTone(state)
-  if (tone === 'bad' || tone === 'warn') return tone
-  return tone === 'muted' && hasUnavailableEnabled ? 'muted' : undefined
+export function catalogMarkerClass(marker: SourceHealthMarker): 'is-bad' | 'is-warn' | 'is-muted' | undefined {
+  if (marker === 'bad') return 'is-bad'
+  if (marker === 'warn') return 'is-warn'
+  if (marker === 'ring') return 'is-muted'
+  return undefined
 }

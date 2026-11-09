@@ -31,13 +31,18 @@ describe('SettingsSourceTree', () => {
       root = createRoot(host)
       const source = {
         sourceId: 'demo-source', displayName: 'Demo', providerId: 'demo', panels: ['dashboard'], visibility: 'visible',
-        kind: 'adapter', enabled: true, healthState: entry.state,
+        kind: 'adapter', enabled: true, healthState: entry.state, healthMarker: entry.marker === null ? 'none' : entry.marker === 'is-muted' ? 'ring' : entry.marker === 'is-warn' ? 'warn' : 'bad',
         ...(entry.unavailable === true ? { unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-09' } } : {})
       }
       const view = {
         groups: [{
           category: 'macro',
-          providers: [{ providerId: 'demo', displayName: 'Demo', category: 'macro', credential: 'none', sources: [source] }]
+          providers: [{
+            providerId: 'demo', displayName: 'Demo', category: 'macro', credential: 'none',
+            sources: [source],
+            // provider 级标记由投影聚合；这里按同一形状给出。
+            healthMarker: source.healthMarker
+          }]
         }],
         counts: { total: 1, enabled: 1, pending: 0, failed: 0 }
       }

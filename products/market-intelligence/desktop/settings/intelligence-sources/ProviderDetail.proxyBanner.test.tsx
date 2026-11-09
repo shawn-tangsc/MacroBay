@@ -53,6 +53,7 @@ function routerProvider(requiresProxy = true): ProviderView {
     displayName: '0xRouter',
     category: 'aggregate',
     credential: 'api-key',
+    healthMarker: 'none',
     sources: [{
       sourceId: '0xrouter-aggregate-provider',
       providerId: '0xrouter',
@@ -66,7 +67,8 @@ function routerProvider(requiresProxy = true): ProviderView {
       readiness: 'live',
       requiresProxy,
       enabled: true,
-      healthState: 'healthy' as const
+      healthState: 'healthy' as const,
+      healthMarker: 'none' as const
     }]
   }
 }
@@ -241,7 +243,8 @@ function calendarPanelProvider(): ProviderView {
     readiness: 'live' as const,
     requiresProxy: true,
     enabled: true,
-    healthState: 'healthy' as const
+    healthState: 'healthy' as const,
+    healthMarker: 'none' as const
   })
   return {
     providerId: '0xrouter',
@@ -249,6 +252,7 @@ function calendarPanelProvider(): ProviderView {
     category: 'aggregate',
     credential: 'api-key',
     credentialSourceId: '0xrouter-aggregate-provider',
+    healthMarker: 'none',
     sources: [
       calendar('macro-calendar-0xrouter-economic-data', '0xRouter 经济数据'),
       calendar('macro-calendar-0xrouter-financial-events', '0xRouter 财经事件'),

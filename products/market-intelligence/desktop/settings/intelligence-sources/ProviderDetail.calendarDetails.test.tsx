@@ -61,6 +61,8 @@ function source(input: Partial<SourceView> & Pick<SourceView, 'sourceId' | 'disp
     enabled: true,
     // 健康态由服务端投影成一句话（`SourceHealthState`），调用方不再自己拼 runtimeStatus/失败数。
     healthState: 'healthy',
+    // 目录标记档同样由投影给出（与五态同一处派生），夹具照投影形状给。
+    healthMarker: 'none',
     ...input
   }
 }
@@ -71,6 +73,7 @@ function fedProvider(): ProviderView {
     displayName: 'Federal Reserve Board (Fed)',
     category: 'macro',
     credential: 'none',
+    healthMarker: 'none',
     sources: [
       source({ sourceId: 'macro-calendar-fed', displayName: 'Fed official schedule', kind: 'official-calendar', panels: ['dashboard', 'economic-calendar'] }),
       source({ sourceId: 'federal-reserve-rss', displayName: 'Fed RSS', collection: 'adapter', kind: 'feed' })
@@ -149,6 +152,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Bureau of Labor Statistics (BLS)',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [source({
             providerId: 'bls',
             sourceId: 'macro-calendar-bls',
@@ -182,6 +186,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Bureau of Labor Statistics (BLS)',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [source({
             providerId: 'bls',
             sourceId: 'macro-calendar-bls',
@@ -235,6 +240,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Bureau of Labor Statistics (BLS)',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [source({
             providerId: 'bls',
             sourceId: 'macro-calendar-bls',
@@ -310,6 +316,7 @@ describe('ProviderDetail source details', () => {
             displayName: 'Bureau of Labor Statistics (BLS)',
             category: 'macro',
             credential: 'none',
+            healthMarker: 'none',
             sources: [source({
               providerId: 'bls',
               sourceId: 'macro-calendar-bls',
@@ -352,6 +359,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Bureau of Labor Statistics (BLS)',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [source({
             providerId: 'bls',
             sourceId: 'macro-calendar-bls',
@@ -400,6 +408,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Bureau of Labor Statistics (BLS)',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [source({
             providerId: 'bls',
             sourceId: 'macro-calendar-bls',
@@ -451,6 +460,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Bureau of Labor Statistics (BLS)',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [
             source({ providerId: 'bls', sourceId: 'macro-calendar-bls', displayName: 'BLS official schedule', kind: 'official-calendar', panels: ['economic-calendar'], unavailable }),
             source({ providerId: 'bls', sourceId: 'macro-calendar-bls-backup', displayName: 'BLS mirror', kind: 'official-calendar', panels: ['economic-calendar'], unavailable })
@@ -537,6 +547,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Closed provider',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [source({ providerId: 'closed', sourceId: 'closed-source', displayName: 'Closed source', visibility: 'pending', readiness: 'planned' })]
         }
       }))
@@ -566,6 +577,7 @@ describe('ProviderDetail source details', () => {
           displayName: 'Bureau of Labor Statistics (BLS)',
           category: 'macro',
           credential: 'none',
+          healthMarker: 'none',
           sources: [source({
             providerId: 'bls',
             sourceId: 'macro-calendar-bls',

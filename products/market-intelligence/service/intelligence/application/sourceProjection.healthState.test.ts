@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   isFailingHealthState,
   panelView,
+  providerHealthMarker,
   providerHealthState,
+  sourceHealthMarker,
   sourceHealthState,
   type SourceHealthState
 } from './sourceProjection'
@@ -67,5 +69,38 @@ describe('the projection carries the one state every surface reads', () => {
     expect(states).toContainEqual(['defillama-stablecoins', 'healthy'])
     // 没有任何健康读数的源落不亮，不会被当成健康。
     expect(states.filter(([, state]) => state === 'healthy')).toHaveLength(1)
+  })
+})
+
+describe('sourceHealthMarker', () => {
+  it('gives the ring to "enabled and unavailable", and to nothing else', () => {
+    expect(sourceHealthMarker({ enabled: true, unavailable: true, state: 'off' })).toBe('ring')
+    // 反向一：未启用 → 环必须消失（unavailable 还在也一样）。
+    expect(sourceHealthMarker({ enabled: false, unavailable: true, state: 'off' })).toBe('none')
+    // 反向二：有健康读数只是不健康 → 不是环（环只属于「取不到」）。
+    expect(sourceHealthMarker({ enabled: true, unavailable: false, state: 'stale' })).toBe('warn')
+    expect(sourceHealthMarker({ enabled: true, state: 'failed' })).toBe('bad')
+    // 没读数、没 unavailable：什么都不画。
+    expect(sourceHealthMarker({ enabled: true, state: 'off' })).toBe('none')
+  })
+
+  it('takes the worst provider marker, ring included', () => {
+    expect(providerHealthMarker([{ healthMarker: 'none' }, { healthMarker: 'ring' }])).toBe('ring')
+    expect(providerHealthMarker([{ healthMarker: 'ring' }, { healthMarker: 'warn' }])).toBe('warn')
+    expect(providerHealthMarker([{ healthMarker: 'warn' }, { healthMarker: 'bad' }])).toBe('bad')
+    expect(providerHealthMarker([{ healthMarker: 'none' }])).toBe('none')
+    expect(providerHealthMarker([])).toBe('none')
+  })
+
+  it('projects the ring for an enabled unavailable source, and drops it when disabled', () => {
+    const enabled = panelView('economic-calendar', { enabledById: { 'macro-calendar-bls': true } })
+    const bls = enabled!.providers.flatMap((provider) => provider.sources).find((source) => source.sourceId === 'macro-calendar-bls')
+    expect(bls?.healthMarker).toBe('ring')
+    expect(bls?.healthState).toBe('off')
+
+    const disabled = panelView('economic-calendar', { enabledById: { 'macro-calendar-bls': false } })
+    const offBsl = disabled!.providers.flatMap((provider) => provider.sources).find((source) => source.sourceId === 'macro-calendar-bls')
+    // 反向：不启用就没有环（同一个 unavailable 事实仍在注册表里）。
+    expect(offBsl?.healthMarker).toBe('none')
   })
 })

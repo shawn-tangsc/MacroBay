@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { sourceHealthState } from '../../../service/intelligence/application/sourceProjection'
-import { catalogMarkerKind, sourceHealthTone } from './sourceHealthTone'
+import { catalogMarkerClass, sourceHealthTone } from './sourceHealthTone'
 
 describe('sourceHealthTone', () => {
   it('gives the healthy state the only green', () => {
@@ -25,13 +25,11 @@ describe('sourceHealthTone', () => {
     expect(sourceHealthTone(sourceHealthState({ enabled: true, health: { runtimeStatus: 'degraded', consecutiveFailures: 3 } }))).toBe('bad')
   })
 
-  it('draws the catalog marker by shape: ring only for "enabled but unavailable"', () => {
-    expect(catalogMarkerKind('stale', false)).toBe('warn')
-    expect(catalogMarkerKind('failed', false)).toBe('bad')
-    expect(catalogMarkerKind('repeated-failures', false)).toBe('bad')
-    expect(catalogMarkerKind('healthy', false)).toBeUndefined()
-    // muted 是个桶（未启用 / 没数据 / 不可用）：只有「已启用且不可用」才画空心环。
-    expect(catalogMarkerKind('off', true)).toBe('muted')
-    expect(catalogMarkerKind('off', false)).toBeUndefined()
+  it('maps the projected marker tier to a class, and never decides it again', () => {
+    // 纯映射：判据在 `sourceProjection.sourceHealthMarker`，这里不接收第二个输入。
+    expect(catalogMarkerClass('warn')).toBe('is-warn')
+    expect(catalogMarkerClass('bad')).toBe('is-bad')
+    expect(catalogMarkerClass('ring')).toBe('is-muted')
+    expect(catalogMarkerClass('none')).toBeUndefined()
   })
 })

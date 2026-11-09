@@ -3,6 +3,8 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { providerHealthMarker } from '../../../service/intelligence/application/sourceProjection'
+
 const { mockGetPanelView, mockGetPageState } = vi.hoisted(() => ({
   mockGetPanelView: vi.fn(),
   mockGetPageState: vi.fn()
@@ -94,7 +96,7 @@ describe('DashboardPanelDrawer catalog health dot', () => {
   const providerName = () => (settings().providerNames as Readonly<Record<string, string>>)[firstProvider().providerId] ?? firstProvider().displayName
 
   it('draws nothing for a healthy provider, and leaves the row without a health name', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'healthy' }))
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'healthy', healthMarker: 'none' }))
     await openDrawer(false)
 
     expect(dot()).toBeNull()
@@ -106,6 +108,7 @@ describe('DashboardPanelDrawer catalog health dot', () => {
     mockGetPanelView.mockResolvedValue(viewWithSource({
       enabled: true,
       healthState: 'off',
+      healthMarker: 'ring',
       unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-09' }
     }))
     await openDrawer(false)
@@ -123,6 +126,7 @@ describe('DashboardPanelDrawer catalog health dot', () => {
     mockGetPanelView.mockResolvedValue(viewWithSource({
       enabled: false,
       healthState: 'off',
+      healthMarker: 'none',
       unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-09' }
     }))
     await openDrawer(false)
@@ -133,7 +137,7 @@ describe('DashboardPanelDrawer catalog health dot', () => {
   })
 
   it('draws nothing for an enabled source whose health is simply unknown', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'off' }))
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'off', healthMarker: 'none' }))
     await openDrawer(false)
 
     // 「没有健康读数」不等于「不可用」：没有 unavailable 就什么都不画。
@@ -141,7 +145,7 @@ describe('DashboardPanelDrawer catalog health dot', () => {
   })
 
   it('fills red for a failed source, with provider + tone word as the name', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'failed' }))
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'failed', healthMarker: 'bad' }))
     await openDrawer(false)
 
     expect(dot()?.classList.contains('is-bad')).toBe(true)
@@ -150,7 +154,7 @@ describe('DashboardPanelDrawer catalog health dot', () => {
   })
 
   it('fills red for repeated failures too (it is a failure the reader can still fix)', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'repeated-failures' }))
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'repeated-failures', healthMarker: 'bad' }))
     await openDrawer(false)
 
     expect(dot()?.classList.contains('is-bad')).toBe(true)
@@ -158,7 +162,7 @@ describe('DashboardPanelDrawer catalog health dot', () => {
   })
 
   it('fills yellow for stale data, with the same provider + tone word name', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'stale' }))
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'stale', healthMarker: 'warn' }))
     await openDrawer(false)
 
     expect(dot()?.classList.contains('is-warn')).toBe(true)
@@ -186,7 +190,8 @@ function firstSource(): SourceView {
 function viewWithSource(patch: Partial<SourceView>): PanelView {
   const provider = firstProvider()
   const source = { ...firstSource(), ...patch }
-  return { ...dashboardView, providers: [{ ...provider, sources: [source] }] }
+  // provider 级标记由投影聚合（`providerHealthMarker`），夹具照投影的形状给出，组件不再自己算。
+  return { ...dashboardView, providers: [{ ...provider, sources: [source], healthMarker: providerHealthMarker([source]) }] }
 }
 
 function dot(): HTMLElement | null {

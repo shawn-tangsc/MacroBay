@@ -86,12 +86,35 @@ export function providerHealthState(sources: readonly Readonly<{ enabled: boolea
 }
 
 /**
- * 目录点画不画空心环的**唯一**判据：`muted` 同时覆盖「未启用 / 不可用 / 没有健康读数」三种，
- * 只有「已启用**且**有这个源判定不可用」才画环；未启用、没数据什么都不画。
- * 它只汇总一个事实（有没有不可用的已启用源），不判健康——健康仍是 `sourceHealthState`。
+ * 目录标记档：**第二个通道（形状），但和五态出自同一处派生**（架构师 2026-11-10）。
+ *
+ * 消费者只拿这个值，不再自己看 `enabled && unavailable`——判据只有这里一份：
+ * - `bad` / `warn` 直接来自五态（红/黄实心）；
+ * - `ring` = **已启用且这个源判定不可用**。`off` 同时盖着「未启用 / 取不到 / 没有读数」，
+ *   所以不能只按状态画环：未启用、没数据都落 `none`；
+ * - `none` = 不画。
  */
-export function providerHasUnavailableEnabled(sources: readonly Readonly<{ enabled: boolean; unavailable?: unknown }>[]): boolean {
-  return sources.some((source) => source.enabled && source.unavailable !== undefined)
+export type SourceHealthMarker = 'none' | 'ring' | 'warn' | 'bad'
+
+export function sourceHealthMarker(input: Readonly<{
+  enabled: boolean
+  unavailable?: boolean
+  state: SourceHealthState
+}>): SourceHealthMarker {
+  if (isFailingHealthState(input.state)) return 'bad'
+  if (input.state === 'stale') return 'warn'
+  return input.enabled && input.unavailable === true ? 'ring' : 'none'
+}
+
+const MARKER_SEVERITY: Record<SourceHealthMarker, number> = { none: 0, ring: 1, warn: 2, bad: 3 }
+
+/** 一个 provider 的目录标记：已启用源里最差的一档（同样只排顺序，不再判一次）。 */
+export function providerHealthMarker(sources: readonly Readonly<{ healthMarker: SourceHealthMarker }>[]): SourceHealthMarker {
+  let worst: SourceHealthMarker = 'none'
+  for (const source of sources) {
+    if (MARKER_SEVERITY[source.healthMarker] > MARKER_SEVERITY[worst]) worst = source.healthMarker
+  }
+  return worst
 }
 
 /** 红色两档的判据：这次失败、还能修。其余状态都不是「坏了」。 */
@@ -112,7 +135,11 @@ export type SourceView = SourceDefinition & {
   jobRegistered?: boolean
   /** 五态结论，与其他面读的是同一个字段（见 `sourceHealthState`）。 */
   healthState: SourceHealthState
+  /** 目录标记档，与五态同一处派生（见 `sourceHealthMarker`）；消费者不再自己判。 */
+  healthMarker: SourceHealthMarker
 }
+
+/** ProviderView 的目录标记：由它的源聚合，仍是同一份派生，组件不再二次判断。 */
 
 export type ProviderView = {
   providerId: string
@@ -129,6 +156,8 @@ export type ProviderView = {
   signupUrl?: string
   invite?: boolean
   sources: SourceView[]
+  /** 目录标记档（provider 级，源里最差的一档）。 */
+  healthMarker: SourceHealthMarker
 }
 
 export type CategoryGroupView = {
@@ -169,20 +198,22 @@ const categoryOrder: SourceCategory[] = ['macro', 'crypto', 'aggregate', 'system
 function toView(source: SourceDefinition, state: ProjectionState): SourceView {
   const enabled = state.enabledById?.[source.sourceId] === true
   const health = state.healthById?.[source.sourceId]
+  const healthState = sourceHealthState({
+    enabled,
+    ...(source.unavailable === undefined ? {} : { unavailable: true }),
+    ...(health === undefined ? {} : { health })
+  })
   return {
     ...source,
     enabled,
-    healthState: sourceHealthState({
-      enabled,
-      ...(source.unavailable === undefined ? {} : { unavailable: true }),
-      ...(health === undefined ? {} : { health })
-    }),
+    healthState,
+    healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),
     ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {})
   }
 }
 
 function groupByProvider(sources: SourceView[]): ProviderView[] {
-  const providers = new Map<string, ProviderView>()
+  const providers = new Map<string, Omit<ProviderView, 'healthMarker'>>()
   for (const source of sources) {
     const provider = getProvider(source.providerId)
     if (!provider) continue
@@ -204,7 +235,7 @@ function groupByProvider(sources: SourceView[]): ProviderView[] {
       })
     }
   }
-  return [...providers.values()]
+  return [...providers.values()].map((provider) => ({ ...provider, healthMarker: providerHealthMarker(provider.sources) }))
 }
 
 function countView(sources: SourceView[]) {

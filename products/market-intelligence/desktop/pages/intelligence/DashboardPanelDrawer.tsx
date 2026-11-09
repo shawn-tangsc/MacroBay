@@ -14,16 +14,12 @@ import { openIntelligenceSourcesSettings } from '../../shared/navigation/product
 import { ProviderDetail } from '../../settings/intelligence-sources/ProviderDetail'
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
 import '../../settings/intelligence-sources/intelligence-sources.css'
-import { panelView, providerHasUnavailableEnabled, providerHealthState, type PanelView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
-import { catalogMarkerKind, type CatalogMarker } from '../../settings/intelligence-sources/sourceHealthTone'
+import { panelView, type PanelView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { catalogMarkerClass } from '../../settings/intelligence-sources/sourceHealthTone'
 import type { PanelId } from '../../../service/intelligence/application/providerRegistry'
 
 function isCalendar(source: SourceView): boolean {
   return source.kind === 'official-calendar' || source.kind === 'market-calendar'
-}
-
-function toneClass(marker: CatalogMarker): string {
-  return marker === 'bad' ? 'is-bad' : marker === 'warn' ? 'is-warn' : 'is-muted'
 }
 
 /**
@@ -139,14 +135,15 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
                 const providerName = (settingsText.providerNames as Readonly<Record<string, string>>)[provider.providerId] ?? provider.displayName
                 const enabled = provider.sources.filter((source) => source.enabled).length
                 const summary = settingsText.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
-                // 五态在 `sourceProjection` 判一次，标记形态在 `catalogMarkerKind` 判一次（两个目录点共用）。
-                const marker = catalogMarkerKind(providerHealthState(provider.sources), providerHasUnavailableEnabled(provider.sources))
+                // 标记档由投影给出（`provider.healthMarker`）：组件不看 enabled/unavailable，也不再拼第二个输入。
+                const marker = provider.healthMarker
+                const markerClass = catalogMarkerClass(marker)
                 // 颜色之外必须有语义：档位词进目录项的可访问名，读屏不靠颜色；名字不带配置摘要。
                 const healthWord = marker === 'bad'
                   ? settingsText.health.statuses.failed
                   : marker === 'warn'
                     ? settingsText.health.statuses['data-stale']
-                    : marker === 'muted' ? settingsText.unavailableShort : null
+                    : marker === 'ring' ? settingsText.unavailableShort : null
                 return <section className="intelligence-provider-group" key={provider.providerId}>
                   <button
                     aria-label={healthWord === null ? undefined : `${providerName} ${healthWord}`}
@@ -156,7 +153,7 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
                   >
                     <span className={`intelligence-source-avatar${provider.sources.every((source) => source.panels.length === 0) ? ' is-unused' : ''}`} aria-hidden="true">{providerName.slice(0, 1).toUpperCase()}</span>
                     <span className="intelligence-provider-main"><strong>{providerName}</strong><small>{summary}</small></span>
-                    <span className="intelligence-provider-state">{marker === undefined ? null : <i className={toneClass(marker)} aria-hidden="true" />}<ChevronRight aria-hidden="true" size={13} /></span>
+                    <span className="intelligence-provider-state">{markerClass === undefined ? null : <i className={markerClass} aria-hidden="true" />}<ChevronRight aria-hidden="true" size={13} /></span>
                   </button>
                 </section>
               })}
