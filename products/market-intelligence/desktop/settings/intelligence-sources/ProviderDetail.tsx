@@ -300,10 +300,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const hasProxySource = provider.sources.some((source) => source.requiresProxy)
 
   return <section className="source-provider-detail">
-    {/* 要求在前、探测只把措辞收紧；读者配好代理后不再显示「去配代理」，只在真失败时回来。 */}
-    {hasProxySource && (!proxyConfigured || networkFailure) ? <NetworkProxyBanner
-      tone={networkFailure ? 'failed' : 'requires'}
-      configured={proxyConfigured}
+    {/* 分工（2026-11-10 界面设计定）：**横幅只管「配了没通」**，未配代理由行尾那颗「需要代理」
+        药丸承担——同一件事不许两处说，未配时代理只需要一个入口。所以这里是 `proxyConfigured`
+        **且** `networkFailure`，不再是「未配或失败」。 */}
+    {hasProxySource && proxyConfigured && networkFailure ? <NetworkProxyBanner
+      tone="failed"
+      configured
       onOpenProxySettings={openProxySettings}
     /> : null}
     <header className="source-provider-detail__header">
