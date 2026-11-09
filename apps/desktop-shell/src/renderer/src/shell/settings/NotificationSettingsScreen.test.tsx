@@ -101,6 +101,16 @@ describe('notification settings is two switches, one test button and a footer', 
     expect(container.querySelector('[data-send-test]')).not.toBeNull()
     // 页脚那句是**说明**：不在正文里，收在右边那颗 ⓘ（点开才读得到，原文一字不改）。
     expect(container.querySelector('.notification-footer')?.textContent).not.toContain(text.footerLine)
+    const footerInfo = container.querySelector<HTMLButtonElement>(
+      `.notification-footer button[aria-label="${text.footerHintLabel}"]`
+    )
+    expect(footerInfo).not.toBeNull()
+    await act(async () => {
+      footerInfo?.click()
+      await Promise.resolve()
+    })
+    // 点开之后原句出现（浮层挂在 body 上），且一字不改。
+    await vi.waitFor(() => expect(document.body.textContent).toContain(text.footerLine))
 
     // 订阅层 v2.20 撤销后，这些对象一个都不该留在屏上。
     expect(container.textContent).not.toContain('固定开启')
