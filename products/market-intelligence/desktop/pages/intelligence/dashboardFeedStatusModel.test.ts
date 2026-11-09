@@ -65,6 +65,41 @@ describe('dashboard feed rows', () => {
     expect(textOf(rowOf(unconfigured, 'rates')).status).not.toContain(zh.feedStatus.states.loading)
   })
 
+  it('keeps the dollar row loading even after the source list arrives but its reading has not', () => {
+    // 界面设计 2026-11-09：「结算完成后才允许出现状态词」。源状态先到、读数还没到不算结算——
+    // 以前这时会给「等待采集」，那是先给一个结论。
+    const rows = project({
+      macroState: 'loading',
+      feed: feedFor([feedSource('realmarketapi-market')])
+    })
+    expect(rowOf(rows, 'dollar').state).toBe('loading')
+    expect(textOf(rowOf(rows, 'dollar')).status).not.toContain(zh.feedStatus.states['awaiting-collection'])
+    // 源自己给了确定原因时例外：那是配置事实，不是猜读数。
+    const unconfigured = project({
+      macroState: 'loading',
+      feed: feedFor([feedSource('realmarketapi-market', { hasCredential: false })])
+    })
+    expect(rowOf(unconfigured, 'dollar').state).toBe('unconfigured')
+  })
+
+  it('shows nothing but loading on the first render of every row', () => {
+    // 界面设计 2026-11-09 的判据：**第一次渲染里不允许出现失败态或任何结论数字，只有 loading**。
+    // 首次渲染的入参就是全部未到：macro / rates 在读、两路来源状态与指数快照都还没有。
+    const first = project({ macroState: 'loading', ratesState: 'loading', indexLoading: true })
+    expect(first.map(row => `${row.id}:${row.state}`)).toEqual(['dollar:loading', 'gold:loading', 'rates:loading', 'index:loading'])
+    for (const row of first) {
+      const printed = textOf(row)
+      expect(printed.status, row.id).toContain(zh.feedStatus.states.loading)
+      // 一个字的结论都不许先出现：失败、未配置、未启用、等待采集、采集正常，全部排除。
+      for (const state of ['unavailable', 'unconfigured', 'configured-disabled', 'failed', 'awaiting-collection', 'stale-fallback', 'ok'] as const) {
+        expect(printed.status, `${row.id} 首帧不许出现 ${state}`).not.toContain(zh.feedStatus.states[state])
+      }
+      // 也不许报任何时刻：`atMs` / `period` 都是结算之后才有的东西。
+      expect(row.atMs, row.id).toBeUndefined()
+      expect(row.period, row.id).toBeUndefined()
+    }
+  })
+
   it('gives every feed that feeds the board its own row, in reading order', () => {
     const rows = project({
       macro: macroSnapshot([dxySynthetic(asOfMs), goldReading(asOfMs)]),
