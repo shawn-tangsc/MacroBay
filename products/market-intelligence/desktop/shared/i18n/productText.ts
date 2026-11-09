@@ -305,7 +305,6 @@ mi: miText['zh-CN'],
             description: '按资金、宏观、加密风险偏好、杠杆顺序阅读；没有覆盖时保留 partial，不以中性填补。',
             /** 标题旁那颗 ⓘ 的读屏名：句子本身是 `description`，这里只给它一个短名字。 */
             descriptionLabel: '这张看板怎么读',
-            backToAgents: '返回 Agent',
             configureSources: '配置情报源',
             /** One sentence per failure code, shared by every card that reads module signals. */
             signalRead: {
@@ -1666,7 +1665,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             description: 'Read capital, macro, crypto risk appetite, then leverage. Keep partial when coverage is missing; do not fill it as neutral.',
             /** The ⓘ beside the title: the sentence is `description`, this is only its short name. */
             descriptionLabel: 'How to read this board',
-            backToAgents: 'Back to Agents',
             configureSources: 'Configure intelligence sources',
             signalRead: {
               'query-failed': 'We could not check whether this signal has been analysed. The numbers above are unaffected.',

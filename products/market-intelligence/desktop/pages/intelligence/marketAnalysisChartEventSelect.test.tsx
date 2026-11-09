@@ -66,7 +66,6 @@ const dashboardProps = {
   fearGreedClient: { querySnapshot: never } as never,
   fundingRateClient: { query: never } as never,
   now: () => new Date(asOf),
-  onBack: () => undefined,
   onConfigureSources: () => undefined,
   onManageSource: () => undefined,
   onOpenCalendar: () => undefined,

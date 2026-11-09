@@ -118,18 +118,15 @@
 .mi-crypto-dashboard__title-row > h1 { min-width: 0; }
 .mi-crypto-dashboard__title-row > .ant-btn { flex: none; }
 .mi-crypto-dashboard__tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-/* 三处页头命令按钮已是 antd `Button`：选择器带上 `.ant-btn` 才压得住它自带的
-   padding/height/border-radius。**尺寸与字号仍是原来那几个数**，换的只是交互元素。 */
+/* 两处页头命令按钮已是 antd `Button`：选择器带上 `.ant-btn` 才压得住它自带的
+   padding/height/border-radius。**尺寸与字号仍是原来那几个数**，换的只是交互元素。
+   第三颗「返回 Agent」用户 2026-11-09 定删掉，它的 `__back` 规则随按钮一起删除。 */
 .mi-crypto-dashboard__briefing.ant-btn,
-.mi-crypto-dashboard__configure.ant-btn,
-.mi-crypto-dashboard__back.ant-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
+.mi-crypto-dashboard__configure.ant-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
 .mi-crypto-dashboard__briefing.ant-btn,
-.mi-crypto-dashboard__configure.ant-btn,
-.mi-crypto-dashboard__back.ant-btn { cursor: pointer; }
+.mi-crypto-dashboard__configure.ant-btn { cursor: pointer; }
 .mi-crypto-dashboard__configure.ant-btn { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
-.mi-crypto-dashboard__back.ant-btn { color: var(--mi-dashboard-muted); }
-.mi-crypto-dashboard__configure.ant-btn:focus-visible,
-.mi-crypto-dashboard__back.ant-btn:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+.mi-crypto-dashboard__configure.ant-btn:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 .mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-align: left; }
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
