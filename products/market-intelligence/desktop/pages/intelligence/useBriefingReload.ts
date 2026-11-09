@@ -22,7 +22,11 @@ export function useBriefingReload(deps: Readonly<{
   reloadKey: number
   todayDate: string
   pinnedDate: string | undefined
-  readEdition: (date: string, locale: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean; periodId?: string }>) => Promise<Readonly<{ kind: string }>>
+  readEdition: (date: string, locale: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean; periodId?: string }>) => Promise<Readonly<{
+    kind: 'available' | 'missing' | 'failed' | 'unknown'
+    failureCode?: string
+    generationTrace?: GenerationTrace
+  }>>
   takeSkipGenerate: () => boolean
   setView: (next: ViewState) => void
   setEditions: (next: readonly DailyBriefingEditionSummary[]) => void
@@ -43,12 +47,14 @@ export function useBriefingReload(deps: Readonly<{
   openEditionRef: { current: (date: string, locale: 'zh-CN' | 'en-US', row?: DailyBriefingEditionSummary) => void }
   periodDateRef: { current: string | null }
   timeZoneRef: { current: string }
+  /** 读者当前选中的期号：收尾重读只刷新他看的那一版，不被默认期替换。 */
+  pickedPeriodIdRef: { current: string | undefined }
 }>): void {
   const { client, reloadKey, todayDate, pinnedDate, readEdition, takeSkipGenerate } = deps
   const { setView, setEditions, setRailDates, setEditionsLoading, setEditionsFailed, setRegenerateFailure, setRegenerating, setShowingStale } = deps
   const { setPickedLocale, setPickedPeriodId, setPinnedDate } = deps
   const { afterDeleteLocaleRef, afterDeleteRef, effectiveLocaleRef, loadedLocaleRef } = deps
-  const { lastReadyRef, openEditionRef, periodDateRef, timeZoneRef } = deps
+  const { lastReadyRef, openEditionRef, periodDateRef, timeZoneRef, pickedPeriodIdRef } = deps
 
   useEffect(() => {
   let active = true
@@ -135,13 +141,49 @@ export function useBriefingReload(deps: Readonly<{
       // 只回写**读到的那一行**（日期 + 期号 + 语言）：按日期整片替换会把同一天另一种语言的行
       // 也写成这一版，两行于是同键同语言，React 会把它们当同一行复用，右键与删除落到另一行上。
       rows = mergeEditionSummary(rows, today.document)
+      const todayPeriodId = today.document.edition.periodId ?? 'default'
+      /**
+       * 读者已经选过**别的**那一版（别的日期，或同一天别的期号）：这次重读只刷新他看的那一版。
+       *
+       * 定时触发或别的窗口发起的一跑，跑完会让本页重读；以前这里无条件把选中项换成 `getToday`
+       * 的默认期。读者点开的是那一跑自己的「生成中」行，跑完就被顶到默认期——他刚等的正文不见了，
+       * 右边也不再是原来那一行（用户 2026-11-05 报的「跑完不清期号」）。
+       */
+      const pinnedElsewhere = pinnedDate !== undefined
+        && (pinnedDate !== today.document.edition.date
+          || (pickedPeriodIdRef.current !== undefined && pickedPeriodIdRef.current !== todayPeriodId))
+      if (pinnedElsewhere) {
+        const pinnedPeriodId = pickedPeriodIdRef.current
+        const pinnedRow = rows.find((row) => row.date === pinnedDate
+          && (pinnedPeriodId === undefined || row.periodId === pinnedPeriodId))
+        const pinnedLocale = pinnedRow?.locale ?? effectiveLocaleRef.current
+        const periodId = pinnedRow?.periodId ?? pinnedPeriodId
+        setPickedLocale(pinnedLocale)
+        if (periodId !== undefined) setPickedPeriodId(periodId)
+        const pinnedRead = await readEdition(pinnedDate, pinnedLocale, { fresh: true, ...(periodId === undefined ? {} : { periodId }) })
+        if (!active) return
+        if (pinnedRead.kind === 'available') {
+          setRegenerateFailure(null)
+          return
+        }
+        // 这一版还没读出来（还在跑 / 失败）：停在**这一行自己的状态**，不落成"本期没有简报"。
+        setView({
+          status: 'no-edition',
+          date: pinnedDate,
+          failed: pinnedRead.kind === 'failed',
+          ...(pinnedRead.kind === 'failed' && pinnedRead.failureCode ? { failureCode: pinnedRead.failureCode } : {}),
+          ...(pinnedRead.kind === 'failed' && pinnedRead.generationTrace ? { generationTrace: pinnedRead.generationTrace } : {})
+        })
+        setRegenerateFailure(null)
+        setRegenerating(false)
+        return
+      }
       /**
        * ① 打开/重载时默认选**列表最上面那条有正文的行**（用户 2026-11-06 拍板）：同一天有多期时，
        * 最新那一期可能是手动期，而 `getToday` 读的是默认期。只认有正文的行——生成中的临时行、
        * 失败行都不自动选（读者手点可以）；读者已经选过（`pinnedDate` 有值）就不动他的位置。
        */
       const newestWithBody = rows.find((row) => row.state !== 'missing' && row.availableLocales.includes(localeForLoad))
-      const todayPeriodId = today.document.edition.periodId ?? 'default'
       if (pinnedDate === undefined && newestWithBody !== undefined
         && (newestWithBody.date !== today.document.edition.date || newestWithBody.periodId !== todayPeriodId)) {
         setPinnedDate(newestWithBody.date)

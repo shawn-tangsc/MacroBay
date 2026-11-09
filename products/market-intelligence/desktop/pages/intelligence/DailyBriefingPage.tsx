@@ -139,6 +139,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // Which edition is on screen: language is part of its identity now, chosen by the row badges.
   const [pickedLocale, setPickedLocale] = useState<'zh-CN' | 'en-US' | undefined>(undefined)
   const [pickedPeriodId, setPickedPeriodId] = useState<string | undefined>(undefined)
+  // 收尾重读要认"读者现在看的是哪一期"：用 ref 读最新值，别让它进 effect 依赖（点一行不该触发整页重读）。
+  const pickedPeriodIdRef = useRef(pickedPeriodId)
+  pickedPeriodIdRef.current = pickedPeriodId
   // 删除一个入口、一套行为：工具栏第五颗与行右键都走这里；"删哪一版"和"是否正在删"各只有一个答案。
   const { deleteOutcome, deleting, deleteEdition, takeSkipGenerate, retryDelete } = useBriefingEditionDelete({
     client, editions, afterDeleteLocaleRef, afterDeleteRef, onSettled: () => setReloadKey((key) => key + 1)
@@ -231,7 +234,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     client, reloadKey, todayDate, pinnedDate, readEdition, takeSkipGenerate,
     setView, setEditions, setRailDates, setEditionsLoading, setEditionsFailed, setRegenerateFailure, setRegenerating, setShowingStale,
     setPickedLocale, setPickedPeriodId, setPinnedDate,
-    afterDeleteLocaleRef, afterDeleteRef, effectiveLocaleRef, loadedLocaleRef, lastReadyRef, openEditionRef, periodDateRef, timeZoneRef
+    afterDeleteLocaleRef, afterDeleteRef, effectiveLocaleRef, loadedLocaleRef, lastReadyRef, openEditionRef, periodDateRef, timeZoneRef,
+    pickedPeriodIdRef
   })
   const { selectEdition, selectLocale } = briefingEditionSelection({
     editions, effectiveLocale: () => effectiveLocaleRef.current, openEdition, setPickedLocale, setPickedPeriodId
