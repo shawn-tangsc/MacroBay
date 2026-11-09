@@ -29,29 +29,6 @@ type ActiveSelection = {
   activeSessionId: string | null
 }
 
-/**
- * 一次性数据处置：`origin='automation'` 却没有 `originRef` 的会话**没有身份**，永远不可能是
- * 「当前身份」——标成 `superseded` 从自动会话块隐去。不发明 ref、不删行、不动消息，
- * **也不动 `updated_at`**（只改身份/可见性字段）。
- *
- * 幂等：只更新还不是 superseded 的行；有变更才打一条带条数的结构化日志，供事后对账。
- * 起因：平台 `createAgentSession` 曾丢 `originRef`，留下一批只带上下文卡片的 run 会话。
- */
-export function markIdentitylessAutomationSessionsSuperseded(database: AgentPlatformDatabase): number {
-  const connection = database.connection
-  const rows = connection
-    .prepare("select id from agent_sessions where origin = 'automation' and (origin_ref is null or origin_ref = '') and origin_state <> 'superseded'")
-    .all() as Array<{ id: string }>
-  if (rows.length === 0) return 0
-  database.transact(() => {
-    connection
-      .prepare("update agent_sessions set origin_state = 'superseded' where origin = 'automation' and (origin_ref is null or origin_ref = '') and origin_state <> 'superseded'")
-      .run()
-  })
-  console.log(JSON.stringify({ marker: 'AGENT_IDENTITYLESS_AUTOMATION_SUPERSEDED', count: rows.length }))
-  return rows.length
-}
-
 export function createAgentSqliteStore(database: AgentPlatformDatabase, seed: AgentStoreSeed = {}): AgentPersistentStore {
   return createAgentSqliteStoreWithOptions(database, seed, {})
 }
@@ -73,8 +50,6 @@ export function createAgentSqliteStoreWithOptions(
 
   async function load(): Promise<AgentStoreState> {
     if (state) return state
-
-    markIdentitylessAutomationSessionsSuperseded(database)
 
     const hadPersistedState = hasPersistedStorage(database) && !hasPendingChannelFallbackScrub(database)
     migrateLegacyTaskChannelState(database, repositories)
