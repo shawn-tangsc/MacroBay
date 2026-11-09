@@ -1,6 +1,6 @@
 import { DEFAULT_PERIOD_ID, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { briefingScheduledCutoff, localDate } from './dailyBriefingWindow'
-import type { DailyBriefingPeriod } from './dailyBriefingGenerationSettings'
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 
 /**
  * 错过了就补跑一次。
@@ -32,7 +32,7 @@ export const briefingCatchUpWindowMs = 60 * 60 * 1_000
 
 /** 这一期今天到点了没有；到点了才谈得上补。 */
 export function briefingCatchUpDue(
-  period: DailyBriefingPeriod & Readonly<{ language?: DailyBriefingLocale }>,
+  period: BriefingPeriod,
   readerTimeZone: string,
   now: string
 ): BriefingCatchUpDue {
@@ -49,7 +49,7 @@ export function briefingCatchUpDue(
 
 export type BriefingCatchUpDeps = Readonly<{
   /** The saved periods, read at the moment of the check — never a cached copy from startup. */
-  getPeriods: () => Promise<readonly (DailyBriefingPeriod & Readonly<{ language?: DailyBriefingLocale }>)[]>
+  getPeriods: () => Promise<readonly BriefingPeriod[]>
   getLocale: () => Promise<DailyBriefingLocale>
   readerTimeZone: () => string
   now: () => string
@@ -93,7 +93,6 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
     const periods = await deps.getPeriods().catch(() => [])
     const readerTimeZone = deps.readerTimeZone()
     const now = deps.now()
-    const fallbackLocale = await deps.getLocale().catch(() => 'zh-CN' as const)
     const ran: string[] = []
     const skipped: Array<{ periodId: string; why: 'not-due' | 'window-expired' | 'has-edition' | 'has-attempt' | 'deleted-by-reader' | 'next-period-due' }> = []
     const failed: Array<{ periodId: string; failureCode?: string }> = []
@@ -110,7 +109,7 @@ export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Pr
         skipped.push({ periodId: id, why: 'window-expired' })
         continue
       }
-      const locale = period.language ?? fallbackLocale
+      const locale = period.language
       // **后面那一期已经到点，就不补前面这一期**（用户 2026-11-06：20:04 去补 07:00、而 20:00 那期
       // 20:01 已经跑完，没有意义）。判定用同一天所有期的计划时刻排序，不是只看当前这一期。
       const cutoffMs = Date.parse(due.cutoff)

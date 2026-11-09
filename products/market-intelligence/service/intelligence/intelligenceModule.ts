@@ -8,6 +8,7 @@ import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
+import type { DailyBriefingLocale } from '../../contracts/dailyBriefing'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
@@ -775,7 +776,25 @@ export function getIntelligenceModule(
     })
     // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
     // settings surface, but it no longer decides when an edition runs.
-    const briefingPeriodsSource = createBriefingPeriodsSource({ filePath: join(dataDir, 'daily-briefing-periods.json'), locale: getAppLanguage })
+    const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
+    // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
+    // settings surface, but it no longer decides when an edition runs.
+    const briefingPeriodsSource = createBriefingPeriodsSource({
+      filePath: join(dataDir, 'daily-briefing-periods.json'),
+      locale: getAppLanguage,
+      // Asked only when a stored period predates "language belongs to a period": one read of the
+      // links before today, then periodId → the languages its editions were actually written in.
+      editionLocales: async () => {
+        const links = await dailyBriefSessionLinks.listBefore(new Date(Date.now() + 86_400_000).toISOString().slice(0, 10))
+        const byPeriod = new Map<string, Set<DailyBriefingLocale>>()
+        for (const link of links) {
+          const languages = byPeriod.get(link.periodId) ?? new Set<DailyBriefingLocale>()
+          languages.add(link.locale)
+          byPeriod.set(link.periodId, languages)
+        }
+        return byPeriod
+      }
+    })
     const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
       storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
       onSaved: () => { void briefingPeriodsSource.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
@@ -787,7 +806,6 @@ export function getIntelligenceModule(
       generation: dailyBriefingGenerationSettings,
       language: dailyBriefingLanguageSettings
     })
-    const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
     const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions
       ? createDailyBriefEditorSessionPort({
         links: dailyBriefSessionLinks,

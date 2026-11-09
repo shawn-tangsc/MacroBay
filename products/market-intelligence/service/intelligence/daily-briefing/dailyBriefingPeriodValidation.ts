@@ -60,6 +60,83 @@ function readPeriod(entry: unknown): BriefingPeriod | undefined {
  * default, because silently turning "07:15" into 07:00 would move a real schedule without telling
  * anyone. An older shape with no `periods` array reads as no periods.
  */
+export type BriefingPeriodsRepair = Readonly<{
+  periods: readonly BriefingPeriod[]
+  /** At least one period got a language it did not carry; the caller writes the file back once. */
+  repaired: boolean
+  /**
+   * Period ids whose language came from the reader's interface language because no edition could
+   * vouch for one. Kept out of the stored period: this is a note about how the value was chosen,
+   * not a second copy of the value.
+   */
+  inferred: readonly string[]
+}>
+
+/**
+ * Read the file and repair a period that was written before language belonged to a period.
+ *
+ * Three tiers, and the middle one is a fact rather than a guess:
+ * 1. the links of the editions that period actually generated name exactly one language → use it;
+ * 2. no links, or links in both languages (the editions cannot name one) → the reader's interface
+ *    language, recorded in `inferred` as a guess;
+ * 3. never "unknown": the language is required, and a blank would fail the next read.
+ *
+ * The link map is asked for lazily, once, and only when a period is actually missing a language.
+ */
+export async function readBriefingPeriodsWithRepair(
+  value: unknown,
+  options: Readonly<{
+    fallbackLanguage: DailyBriefingLocale
+    editionLocales?: () => Promise<ReadonlyMap<string, ReadonlySet<DailyBriefingLocale>>>
+  }>
+): Promise<BriefingPeriodsRepair> {
+  if (!isRecord(value) || !Array.isArray(value.periods)) return Object.freeze({ periods: Object.freeze([]), repaired: false, inferred: Object.freeze([]) })
+  const needsLanguage = value.periods.some((entry) => isRecord(entry) && isMissingLanguage(entry.language))
+  const editionLocales = needsLanguage && options.editionLocales ? await options.editionLocales().catch(() => new Map()) : new Map()
+  const seen = new Set<string>()
+  const periods: BriefingPeriod[] = []
+  const inferred: string[] = []
+  let repaired = false
+  for (const entry of value.periods) {
+    if (!isRecord(entry)) continue
+    const id = trimmed(entry.id)
+    if (!id || seen.has(id)) continue
+    let language = entry.language
+    if (isMissingLanguage(language)) {
+      const fromEditions = editionLocales.get(id)
+      if (fromEditions !== undefined && fromEditions.size === 1) {
+        language = [...fromEditions][0]
+      } else {
+        language = options.fallbackLanguage
+        inferred.push(id)
+      }
+      repaired = true
+    }
+    const draft: BriefingPeriodDraft = {
+      generationTime: entry.generationTime as string,
+      windowHours: entry.windowHours as number,
+      language: language as DailyBriefingLocale
+    }
+    if (briefingPeriodDraftIssue(draft)) continue
+    seen.add(id)
+    const origin = readOrigin(entry.origin)
+    const zone = trimmed(entry.generationTimeZone)
+    periods.push(Object.freeze({
+      id,
+      generationTime: draft.generationTime,
+      windowHours: draft.windowHours as BriefingPeriod['windowHours'],
+      language: draft.language,
+      ...(origin ? { origin } : {}),
+      ...(zone ? { generationTimeZone: zone } : {})
+    }))
+  }
+  return Object.freeze({ periods: Object.freeze(periods), repaired, inferred: Object.freeze(inferred) })
+}
+
+function isMissingLanguage(value: unknown): boolean {
+  return value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0)
+}
+
 export function readBriefingPeriods(value: unknown): readonly BriefingPeriod[] {
   if (!isRecord(value) || !Array.isArray(value.periods)) return Object.freeze([])
   const seen = new Set<string>()

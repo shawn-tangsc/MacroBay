@@ -18,11 +18,17 @@ export function createBriefingPeriodsSource(input: Readonly<{
   filePath: string
   /** The reader's interface language, asked lazily: the answer can change between calls. */
   locale: () => Promise<DailyBriefingLocale>
+  /**
+   * Lazy, and only read when a stored period is missing its language: the links of every edition
+   * before today, as periodId → the languages those editions were written in.
+   */
+  editionLocales?: () => Promise<ReadonlyMap<string, ReadonlySet<DailyBriefingLocale>>>
 }>): Readonly<{ getPeriods: () => Promise<readonly BriefingPeriod[]> }> {
   const store = createBriefingPeriodStore({
     storage: createJsonFileStorage<unknown>(input.filePath, undefined),
     // Only reached when the caller passes no language; every call below passes the reader's own.
-    defaultLanguage: () => 'zh-CN'
+    defaultLanguage: () => 'zh-CN',
+    ...(input.editionLocales ? { editionLocales: input.editionLocales } : {})
   })
   return Object.freeze({
     getPeriods: async () => store.list(await input.locale())

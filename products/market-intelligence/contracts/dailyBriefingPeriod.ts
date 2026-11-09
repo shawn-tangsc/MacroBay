@@ -26,6 +26,12 @@ export type BriefingPeriod = Readonly<{
   generationTime: string
   windowHours: DailyBriefingWindowHours
   language: DailyBriefingLocale
+  /**
+   * The reader's raw zone for this period, when a file carried one. The period file this build
+   * writes has no zone (the reader's display zone decides); the field is kept so the older
+   * settings-shaped periods remain assignable during the type unification.
+   */
+  generationTimeZone?: string
   /** Only the one-time migration writes `legacy-settings`; a normal add is `user` (or absent). */
   origin?: BriefingPeriodOrigin
 }>

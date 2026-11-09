@@ -50,3 +50,67 @@ describe('the runtime period source', () => {
     expect(await source.getPeriods()).toEqual([])
   })
 })
+
+describe('periods written before the language was part of a period', () => {
+  const legacyFile = async (): Promise<string> => {
+    const filePath = await tempFile('daily-briefing-periods.json')
+    await writeFile(filePath, JSON.stringify({
+      version: 1,
+      periods: [
+        { id: 'default', generationTime: '07:00', windowHours: 24 },
+        { id: 'period_evening', generationTime: '21:30', windowHours: 12 }
+      ]
+    }), 'utf8')
+    return filePath
+  }
+
+  it('fills the language from the edition each period actually generated, and falls back once otherwise', async () => {
+    const filePath = await legacyFile()
+    const source = createBriefingPeriodsSource({
+      filePath,
+      locale: async () => 'zh-CN',
+      // 只有 evening 这一期真的生成过版次（链接表里恰好一种语言）；default 一次都没有。
+      editionLocales: async () => new Map([['period_evening', new Set(['en-US'] as const)]])
+    })
+
+    const periods = await source.getPeriods()
+
+    // 期数与时刻都不许变：类型收紧最怕的就是这一条旧数据被当成不合法丢掉。
+    expect(periods.map((period) => period.id)).toEqual(['default', 'period_evening'])
+    expect(periods.map((period) => period.generationTime)).toEqual(['07:00', '21:30'])
+    // 有版次的用版次自己的语言（事实）；从没生成过的才用当前界面语言（推定）。
+    expect(periods.map((period) => period.language)).toEqual(['zh-CN', 'en-US'])
+    const written = JSON.parse(await readFile(filePath, 'utf8')) as { periods: readonly { language?: string }[] }
+    expect(written.periods.map((entry) => entry.language)).toEqual(['zh-CN', 'en-US'])
+  })
+
+  it('writes the repair once and leaves the second read untouched', async () => {
+    const filePath = await legacyFile()
+    const source = createBriefingPeriodsSource({
+      filePath,
+      locale: async () => 'zh-CN',
+      editionLocales: async () => new Map()
+    })
+
+    const first = await source.getPeriods()
+    const afterFirst = await readFile(filePath, 'utf8')
+    const second = await source.getPeriods()
+
+    expect(second).toEqual(first)
+    expect(await readFile(filePath, 'utf8')).toBe(afterFirst)
+  })
+
+  it('does not rewrite a file whose periods all carry a language', async () => {
+    const filePath = await tempFile('daily-briefing-periods.json')
+    await writeFile(filePath, JSON.stringify({
+      version: 1,
+      periods: [{ id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }]
+    }), 'utf8')
+    const before = await readFile(filePath, 'utf8')
+    const source = createBriefingPeriodsSource({ filePath, locale: async () => 'zh-CN' })
+
+    await source.getPeriods()
+
+    expect(await readFile(filePath, 'utf8')).toBe(before)
+  })
+})

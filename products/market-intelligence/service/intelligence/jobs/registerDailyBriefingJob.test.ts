@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
-import type { DailyBriefingPeriod } from '../daily-briefing/dailyBriefingGenerationSettings'
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import { applyDailyBriefingSchedules, registerDailyBriefingJob } from './registerDailyBriefingJob'
 import { syncDailyBriefingSchedules } from './dailyBriefingSchedules'
 import { INTELLIGENCE_DAILY_BRIEFING_JOB } from './intelligenceJobIds'
@@ -28,10 +28,13 @@ function runtime() {
   }
 }
 
-const period = (overrides: Partial<DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }>> = {}): DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }> => ({
+const period = (overrides: Partial<BriefingPeriod> = {}): BriefingPeriod => ({
   id: 'default',
   generationTime: '08:00',
   windowHours: 24 as never,
+  // A period always carries its language now; the fixture starts in the interface language and
+  // each case that cares overrides it.
+  language: 'zh-CN',
   ...overrides
 })
 

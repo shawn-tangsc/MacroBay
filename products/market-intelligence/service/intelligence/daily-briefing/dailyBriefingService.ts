@@ -9,6 +9,7 @@ import type {
   DailyBriefingLocale,
   DailyBriefingProgressResult
 } from '../../../contracts/dailyBriefing'
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import {
   DEFAULT_PERIOD_ID,
   briefingGenerationStageIds,
@@ -357,7 +358,7 @@ export function createDailyBriefingService(deps: Readonly<{
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
   /** 期配置列表：`regenerate` 按 `periodId` 取这一期自己的时刻、窗口与语言（缺省退回旧口径）。 */
-  readPeriods?: () => Promise<readonly Readonly<{ id: string; generationTime: string; windowHours: 12 | 24 | 48; language?: DailyBriefingLocale }>[]>
+  readPeriods?: () => Promise<readonly BriefingPeriod[]>
   noticeSubmit?: DailyBriefingNoticeSubmit
   /** 结构化诊断（appLog）：导读被扣时那条日志走它；缺省时只是不记。 */
   log?: import('./dailyBriefReadinessGate').BriefingDiagnosticLog

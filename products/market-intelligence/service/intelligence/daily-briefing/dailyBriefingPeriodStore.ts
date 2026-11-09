@@ -9,7 +9,7 @@ import {
 import {
   briefingPeriodConflict,
   briefingPeriodDraftIssue,
-  readBriefingPeriods,
+  readBriefingPeriodsWithRepair,
   type BriefingPeriodDraftIssue
 } from './dailyBriefingPeriodValidation'
 
@@ -61,6 +61,12 @@ export function createBriefingPeriodStore(deps: Readonly<{
   defaultLanguage: () => DailyBriefingLocale
   /** Test seams; production takes a random opaque id. */
   newId?: () => string
+  /**
+   * The languages the editions of a period were actually written in, read lazily and only when a
+   * period from before the language belonged to a period needs one. A set with exactly one entry
+   * is a fact; anything else cannot name a language.
+   */
+  editionLocales?: () => Promise<ReadonlyMap<string, ReadonlySet<DailyBriefingLocale>>>
 }>): BriefingPeriodStore {
   const newId = deps.newId ?? (() => `period_${randomUUID()}`)
 
@@ -71,7 +77,15 @@ export function createBriefingPeriodStore(deps: Readonly<{
     if (raw === undefined) return Object.freeze([createDefaultBriefingPeriod(language ?? deps.defaultLanguage())])
     // Configured and empty: the reader deleted every period. Inventing a default here would put a
     // 07:00 row back that nobody configured — the same class of lie as made-up data.
-    return readBriefingPeriods(raw)
+    // The one exception to "reads never write": a period written before language belonged to a
+    // period gets one (fact from its editions, otherwise the interface language) and the repaired
+    // file is written back **once**. The next read finds every language present and stops.
+    const repairedRead = await readBriefingPeriodsWithRepair(raw, {
+      fallbackLanguage: language ?? deps.defaultLanguage(),
+      ...(deps.editionLocales ? { editionLocales: deps.editionLocales } : {})
+    })
+    if (repairedRead.repaired) await deps.storage.write({ version: 1, periods: repairedRead.periods })
+    return repairedRead.periods
   }
 
   const persist = async (periods: readonly BriefingPeriod[]): Promise<readonly BriefingPeriod[]> => {
