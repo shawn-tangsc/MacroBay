@@ -19,8 +19,23 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-/** rows 模式的 props：`children` 模式有自己的形状，两者互斥，helper 也分开。 */
-type RowsModeProps = Extract<CollapsibleGroupProps, { rows: readonly CollapsibleGroupRow[] }>
+/**
+ * rows 模式的 props：`children` 模式有自己的形状，两者互斥，helper 也分开。
+ *
+ * 这里逐项写出**具体那一支**而不是 `Extract<Props, { rows }>`：壳的头部现在本身是
+ * 「键 / 原文」的联合，`Extract` 会在联合上分发成四个分支，`Partial<>` 再分发一次，
+ * 造出来的对象类型对不上——测试 helper 就该是实打实的一种形状。
+ */
+type RowsModeProps = {
+  titleKey: string
+  metaKey?: string
+  metaParams?: Readonly<Record<string, string>>
+  resolveText: (key: string) => string
+  maxBodyHeight?: number | null
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  rows: readonly CollapsibleGroupRow[]
+}
 
 function props(overrides: Partial<RowsModeProps> = {}): RowsModeProps {
   return {
@@ -234,6 +249,41 @@ describe('CollapsibleGroup', () => {
       uncontrolled.querySelector<HTMLElement>('.collapsible-group__title')!.click()
     })
     expect(ownHeader.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('takes a group title from data as well as from a key, without asking the resolver', async () => {
+    // 日期（「11-07」）是数据不是文案键：`titleKey` 收不了它。与行标题同一规则——
+    // 文案走键、数据走原文，解析器不被拿数据去查。
+    const resolveText = vi.fn((value: string) => value)
+    const host = await renderGroup({
+      titleText: '11-07',
+      metaText: '共 41 条',
+      resolveText,
+      rows: [{ key: 'r1', labelText: '会话名', metaText: '20:45' }]
+    })
+
+    expect(host.querySelector('.collapsible-group__title')!.textContent).toBe('11-07')
+    expect(host.querySelector('.collapsible-group__meta')!.textContent).toBe('共 41 条')
+    expect(resolveText).not.toHaveBeenCalled()
+  })
+
+  it('leaves the body uncapped when the caller says so, so a parent can own the scroll', async () => {
+    // 两层折叠：外层展开区自滚（上限 320），内层每天一组不设上限——否则同一条列表上
+    // 会出现两条互相套着的滚动条，滚到一半就卡在里层。
+    const host = await renderGroup({
+      titleText: '今天',
+      resolveText: keys,
+      maxBodyHeight: null,
+      rows: [{ key: 'r1', labelText: '会话名' }]
+    })
+    await act(async () => {
+      host.querySelector<HTMLElement>('.collapsible-group__title')!.click()
+    })
+
+    const body = host.querySelector<HTMLElement>('.collapsible-group__body')!
+    expect(body.style.maxHeight).toBe('')
+    // 溢出仍然不裁：上限交给外层，CSS 的 `overflow: auto` 在外层有上限时才会滚。
+    expect(host.querySelector<HTMLElement>('.collapsible-group__title')!.closest('.collapsible-group__body')).toBeNull()
   })
 
   it('renders a row as a button only when the row has an action', async () => {

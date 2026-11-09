@@ -56,15 +56,29 @@ export type CollapsibleGroupRow = {
   onSelect?: (key: string) => void
 } & RowLabel & RowMeta
 
+/**
+ * 头行标题，与行标题同一规则——**文案走键、数据走原文**，二选一：
+ * - `titleKey`：分组名这类文案（「自动会话」「采集策略」）；
+ * - `titleText`：日期、「今天」这类调用方已经拿到的原文（`2026-11-07` 是从数据切出来的，不是键）。
+ *
+ * 为什么必须分开：把数据当键传进来，解析器会拿它去查表，翻不到就印空串或键名本身。
+ */
+type GroupTitle = { titleKey: string; titleText?: never } | { titleText: string; titleKey?: never }
+
+/** 头行右侧的计数，同样两种来源二选一；不传就不显示。 */
+type GroupMeta =
+  | { metaKey?: string; metaParams?: Readonly<Record<string, string>>; metaText?: never }
+  | { metaText: string; metaKey?: never; metaParams?: never }
+
 /** 两种内容形态共用的那部分。 */
-type CollapsibleGroupBaseProps = {
-  titleKey: string
-  /** 头行右侧的计数（如「共 41 条」），同样只收键；不传就不显示。 */
-  metaKey?: string
-  metaParams?: Readonly<Record<string, string>>
+type CollapsibleGroupBaseProps = GroupTitle & GroupMeta & {
   resolveText: (key: string) => string
-  /** 展开区的自滚上限，默认 `COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT`。 */
-  maxBodyHeight?: number
+  /**
+   * 展开区的自滚上限（px），默认 `COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT`。
+   * 传 `null` 表示**不设上限**，由外层容器负责滚——两层折叠时内层必须这样，
+   * 否则同一条列表上会套出两条滚动条。
+   */
+  maxBodyHeight?: number | null
   /**
    * 受控开合（可选）。不传就是非受控——内部自己记，行为与以前一字不差。
    * 传了就必须由调用方回写：组件只发 `onOpenChange`，不偷偷改内部状态。
@@ -86,7 +100,7 @@ export type CollapsibleGroupProps = CollapsibleGroupBaseProps & (
 )
 
 export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactElement {
-  const { titleKey, metaKey, metaParams, resolveText, maxBodyHeight = COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT } = props
+  const { metaParams, resolveText, maxBodyHeight = COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT } = props
   const rows = props.rows ?? []
   // 受控 / 非受控两条路：`open` 给了就以它为准（组件不改它），没给就用内部状态。
   const [internalOpen, setInternalOpen] = useState(false)
@@ -95,8 +109,10 @@ export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactEleme
     if (props.open === undefined) setInternalOpen(next)
     props.onOpenChange?.(next)
   }
-  const title = resolveText(titleKey)
-  const meta = metaKey === undefined ? null : fillLabelParams(resolveText(metaKey), metaParams)
+  // 数据走原文、文案走键：`titleText` 在时一律用它，不拿数据去查解析器（同 `labelText`）。
+  const title = props.titleText ?? resolveText(props.titleKey ?? '')
+  const meta = props.metaText
+    ?? (props.metaKey === undefined ? null : fillLabelParams(resolveText(props.metaKey), metaParams))
   /**
    * `aria-controls` 必须指向**确实存在**的节点：rc-collapse 只给 `aria-expanded`（`Panel.js:53`），
    * 不给 `aria-controls`。所以 id 由这里生成、挂到展开区上，再把 header 指过来。
@@ -139,7 +155,7 @@ export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactEleme
           </span>
         ),
         children: (
-          <div className="collapsible-group__body" id={bodyId} style={{ maxHeight: maxBodyHeight }}>
+          <div className="collapsible-group__body" id={bodyId} style={{ maxHeight: maxBodyHeight ?? undefined }}>
             {props.children !== undefined ? props.children : rows.map((row) => {
               const rowTitle = 'labelText' in row && row.labelText !== undefined ? row.labelText : resolveText(row.labelKey)
               const rowMeta = 'metaText' in row && row.metaText !== undefined
