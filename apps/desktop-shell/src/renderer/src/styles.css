@@ -1360,30 +1360,25 @@ h1 {
 }
 
 /* PLAT-60 二级 Tab：原型 底边 2px accent / 未选中 muted / 选中 600。 */
-.web-search-settings-tabs {
+/* 页签内容：动作条固定在面板顶部（不随内容滚动），内容在它下面。 */
+.web-search-panel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.web-search-panel-actions {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
-  gap: 2px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid var(--border);
-}
-
-.web-search-settings-tab {
-  padding: 7px 14px;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.web-search-settings-tab:hover {
-  color: var(--text-strong);
-}
-
-.web-search-settings-tab.on {
-  border-bottom-color: var(--accent);
-  color: var(--text);
-  font-weight: 600;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 0;
+  background: var(--surface);
 }
 
 .web-search-detail-pane {
@@ -3752,6 +3747,40 @@ h1 {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+/*
+ * 助手侧栏：按页签变化的动作条进面板（`ui-conventions.md`「A per-tab action bar belongs to its panel」）。
+ *
+ * 每个面板 = `[动作条][可滚动内容]`：动作条是面板第一行、不随内容滚动，间距 8px 由
+ * `.agent-side-panel-action` 自己的 margin 承担；内容在 `minmax(0, 1fr)` 里滚。
+ * 两条都是 0 行高、1fr 的网格，动作条因此不会被内容挤走。
+ */
+.agent-side-panel.assistant-side-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-side-panel.assistant-side-panel > .tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel.assistant-side-panel .tabs__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel.assistant-side-panel .tabs__panel[hidden] {
+  /* `Tabs` 用原生 hidden 表达非活动面板；显式写下是为了不和上面那条 flex 打架。 */
+  display: none;
+}
+
+.assistant-side-panel-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
 }
 
 .agent-session-search {

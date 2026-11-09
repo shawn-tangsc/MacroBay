@@ -104,7 +104,11 @@ describe('AssistantSidePanel', () => {
     expect(markup).toContain('>话题<')
     expect(markup).toContain('添加助手')
     expect(markup).toContain('商业数据分析')
-    expect(markup).not.toContain('BTC 复盘')
+    // `Tabs` 会**挂载**所有面板、只把非活动的置为 hidden（切回来时不丢滚动与选中）。
+    // 所以判据从「不在标记里」改成「在标记里但不可见」——后者才是读者看到的事实。
+    expect(markup).toContain('aria-label="助手"')
+    const hiddenPanels = markup.match(/class="tabs__panel" hidden=""/g) ?? []
+    expect(hiddenPanels).toHaveLength(1)
   })
 
   it('shows the standard ring instead of an empty list while the first read is in flight', () => {
@@ -171,7 +175,8 @@ describe('AssistantSidePanel', () => {
 
     expect(topicsMarkup).toContain('Delete conversation')
     expect(topicsMarkup).toContain('More conversation actions')
-    expect(assistantsMarkup).not.toContain('More conversation actions')
+    // 助手页签下，话题面板是 hidden：菜单按钮虽然随面板一起挂载，但不在可交互表面上。
+    expect(assistantsMarkup).toContain('tabs__panel" hidden=""')
   })
 
   it('dispatches the more-menu delete action through Dropdown and suppresses duplicate confirmation submits', async () => {
