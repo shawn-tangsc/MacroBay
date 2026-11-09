@@ -23,6 +23,7 @@ import { ChannelEditDialog } from './ChannelEditDialog'
 import type { ChannelPolicyPresence } from './ChannelFields'
 import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { encryptChannelHandoff } from './secureCredentialHandoff'
+import { ChannelPlatformList, type ChannelPlatformType } from './ChannelPlatformList'
 import { ChannelRow } from './ChannelRow'
 import { useChannelConversationEntry } from './useChannelConversationEntry'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
@@ -37,10 +38,6 @@ import {
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
 import type { AgentWorkspaceChoice } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 
-type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
-
-// 顺序照设计固定：飞书 → Telegram → QQ → 微信 → Discord → Slack（不按接入状态重排）。
-const PLATFORM_ORDER: readonly CatalogType[] = ['feishu', 'telegram', 'qq', 'wechat', 'discord', 'slack']
 
 /**
  * 设置 → 频道（原型 A：列表与行）。
@@ -59,7 +56,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [agents, setAgents] = useState<Agent[]>([])
   /** 读者已有的工作区（只列 `user` 那一类）：工作目录下拉的真实选项。 */
   const [workspaces, setWorkspaces] = useState<readonly AgentWorkspaceChoice[]>([])
-  const [selectedType, setSelectedType] = useState<CatalogType>('telegram')
+  const [selectedType, setSelectedType] = useState<ChannelPlatformType>('telegram')
   const [initialLoading, setInitialLoading] = useState(true)
   const [readError, setReadError] = useState(false)
   const [stale, setStale] = useState(false)
@@ -314,31 +311,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   return (
     <section className="channel-settings-page">
-      <nav aria-label={labels.channels} className="channel-platform-list">
-        {/* 原型里中列最上方有一行「频道」，与左导航的分组标题同一级：小号、次要色。 */}
-        <p className="channel-platform-heading">{labels.channels}</p>
-        {PLATFORM_ORDER.map((type) => (
-          /**
-           * **例外（登记在案）**：这里保留原生 `<button>`，不换 antd 也不换 `IconButton`。
-           * 原因是它**两行内容**（平台 logo 图形 + 平台名）且是列表项的整行点击区：
-           * 换组件会改掉行高与排印。可访问性已具备——`aria-current` 标当前项，名字取自行内文字，
-           * logo `aria-hidden`。改这一处要同时改中列的行模型，不属于「只换交互元素」。
-           */
-          <button
-            aria-current={type === selectedType}
-            className="channel-platform-item"
-            data-implemented={catalog.find((entry) => entry.type === type)?.implemented === true}
-            key={type}
-            onClick={() => setSelectedType(type)}
-            type="button"
-          >
-            <span aria-hidden="true" className="channel-platform-logo" data-platform-logo={type}>
-              {CHANNEL_PLATFORM_LOGOS[type]()}
-            </span>
-            <span>{CHANNEL_DISPLAY_NAME[type][language]}</span>
-          </button>
-        ))}
-      </nav>
+      <ChannelPlatformList
+        labels={labels}
+        selectedType={selectedType}
+        onSelect={setSelectedType}
+        catalog={catalog}
+        language={language}
+      />
 
       <div className="channel-detail">
         {error === null ? null : (
