@@ -1543,6 +1543,16 @@ const migrations: AgentPlatformMigration[] = [
     up: `
       alter table agent_sessions add column origin_ref text;
     `
+  },
+  {
+    id: '0049_agent_session_message_owner_boot_id',
+    // 这条 `pending` 是哪个主进程启动批次写的。崩溃收尾只收「不是本批次」的行：
+    // 同一份 userData 同时只有一个进程（单实例锁），所以「不是本批次」= 上一个已死的进程。
+    // 只追加、可空、不回填：老行是 NULL，读侧按「上一个进程」处理。**不用时间判**
+    // （boot 期间刚起的那次运行，开始时刻也早于收敛那一刻）。
+    up: `
+      alter table agent_session_messages add column owner_boot_id text;
+    `
   }
 ]
 

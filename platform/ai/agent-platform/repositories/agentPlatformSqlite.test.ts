@@ -1778,4 +1778,37 @@ describe('agent platform sqlite repositories', () => {
       activeSessionId: null
     })
   })
+
+  it('reads rows written before owner_boot_id existed, and stamps only pending rows', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-message-owner-'))
+    try {
+      const path = join(dir, 'agent.sqlite')
+      const db = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(db, { bootId: 'boot-current' })
+      repos.agents.upsert(agent)
+      repos.workspaces.upsert(workspace)
+      repos.sessions.upsert(sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Session' }))
+
+      // 上一版写的行：字段加上之前没有 owner_boot_id，直接按 NULL 落一条，模拟老数据。
+      db.connection
+        .prepare(
+          `insert into agent_session_messages (id, session_id, role, data_json, searchable_text, status, created_at, updated_at)
+           values ('m-old', 'session-1', 'assistant', '{"parts":[]}', '', 'pending', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`
+        )
+        .run()
+
+      // 读侧：老行的 `ownerBootId` 是「没有」，不是空串——收尾按「上一个进程」处理它。
+      expect(repos.messages.listAll().find((message) => message.id === 'm-old')?.ownerBootId).toBeUndefined()
+
+      // 写侧：本进程写 pending 但没带批次，仓储补本批次；收尾成 success 后不再带。
+      repos.messages.upsert(messageFixture({ id: 'm-new', sessionId: 'session-1', createdAt: '2026-01-01T00:00:01.000Z', text: '半截', status: 'pending' }))
+      expect(repos.messages.listAll().find((message) => message.id === 'm-new')?.ownerBootId).toBe('boot-current')
+
+      repos.messages.upsert({ ...messageFixture({ id: 'm-new', sessionId: 'session-1', createdAt: '2026-01-01T00:00:01.000Z', text: '完整', status: 'success' }) })
+      expect(repos.messages.listAll().find((message) => message.id === 'm-new')?.ownerBootId).toBeUndefined()
+      db.connection.close()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

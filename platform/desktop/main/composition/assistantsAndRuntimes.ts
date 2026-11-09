@@ -1,5 +1,7 @@
 import type { BrowserWindow } from 'electron'
 
+import { processBootId } from '../processBootId'
+
 import { ClaudeCodeRuntimeDriver } from '../../../ai/agent-platform/runtime/drivers/claudeCode'
 import type { AgentTaskSchedulerRuntimeService } from '../../../ai/agent-platform/runtime/tasks'
 import { mergeAgentRuntimeSessionState, type AgentStoreState } from '../../../ai/agent-platform/store/agentStore'
@@ -154,6 +156,7 @@ export function createAssistantsAndRuntimes(ports: AssistantsAndRuntimesPorts): 
   }
   const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
     loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
+    ownerBootId: processBootId,
     getProviderState: providerStore.getState,
     getAgentState: () => agentStore.getState(),
     saveAgentState: async (state, options) => {

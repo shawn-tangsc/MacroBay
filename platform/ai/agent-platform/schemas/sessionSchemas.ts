@@ -80,6 +80,16 @@ export type AgentSessionMessageEntity = {
   modelSnapshot: ModelSnapshot | null
   stats: MessageStats | null
   runtimeResumeToken: string | null
+  /**
+   * 写这条 `pending` 的主进程**启动批次**（boot id，主进程启动时生成一次）。
+   *
+   * 崩溃恢复只收「不是本批次」的 pending：同一份 userData 同时只有一个进程（单实例锁），
+   * 所以「不是本批次」就等于「上一个已经死掉的进程」。**不用时间判**——boot 期间刚起的那次
+   * 运行，开始时刻也早于收敛那一刻，按时间判会把它一起收掉；改系统时间同样会误收。
+   *
+   * 老行为 `undefined`：字段是在崩溃收尾之后才加的，读侧按「上一个进程」处理。
+   */
+  ownerBootId?: string
   createdAt: string
   updatedAt: string
 }
@@ -87,6 +97,8 @@ export type AgentSessionMessageEntity = {
 export type CreateAgentSessionMessageDto = {
   id?: string
   role: MessageRole
+  /** 写这条 pending 的主进程启动批次；只有 pending 有意义，缺省由仓储补本批次。 */
+  ownerBootId?: string
   data: MessageData
   status?: MessageStatus
   modelId?: UniqueModelId | null

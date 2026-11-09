@@ -72,37 +72,6 @@ export class AgentSessionMessageService {
     return this.store.update((state) => clearAgentSessionMessages(state, sessionId))
   }
 
-  async findPendingAssistantMessageIds(): Promise<string[]> {
-    const state = await this.store.getState()
-    return Object.values(state.messagesBySessionId)
-      .flat()
-      .filter((message) => message.role === 'assistant' && message.status === 'pending')
-      .map((message) => message.id)
-  }
-
-  async markMessagesError(ids: string[]): Promise<void> {
-    const idSet = new Set(ids)
-    if (idSet.size === 0) return
-    const now = new Date().toISOString()
-    await this.store.update((state) => ({
-      ...state,
-      messagesBySessionId: Object.fromEntries(
-        Object.entries(state.messagesBySessionId).map(([sessionId, messages]) => [
-          sessionId,
-          messages.map((message) =>
-            idSet.has(message.id)
-              ? {
-                  ...message,
-                  status: 'error' as const,
-                  updatedAt: now
-                }
-              : message
-          )
-        ])
-      )
-    }))
-  }
-
   async getLastRuntimeResumeToken(sessionId: string): Promise<string | null> {
     const messages = (await this.store.getState()).messagesBySessionId[sessionId] ?? []
     return [...messages]
@@ -134,6 +103,7 @@ function upsertMessageInState(
         modelSnapshot: params.message.modelSnapshot === undefined ? existing.modelSnapshot : params.message.modelSnapshot,
         stats: params.message.stats === undefined ? existing.stats : params.message.stats,
         runtimeResumeToken: params.runtimeResumeToken ?? existing.runtimeResumeToken,
+        ...(params.message.ownerBootId ? { ownerBootId: params.message.ownerBootId } : {}),
         updatedAt: now
       }
     : {
@@ -147,6 +117,7 @@ function upsertMessageInState(
         modelSnapshot: params.message.modelSnapshot ?? null,
         stats: params.message.stats ?? null,
         runtimeResumeToken: params.runtimeResumeToken ?? null,
+        ...(params.message.ownerBootId ? { ownerBootId: params.message.ownerBootId } : {}),
         createdAt: now,
         updatedAt: now
       }

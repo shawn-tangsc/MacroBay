@@ -25,6 +25,7 @@ import { ToolApprovalRegistry } from '../../ai/agent-platform/runtime/policy'
 import { createAgentPlatformServices } from '../../ai/agent-platform/services'
 import { McpRuntimeService } from '../../ai/agent-platform/mcp'
 import { mergeAgentRuntimeSessionState, reconcileStalePendingMessages, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
+import { processBootId } from './processBootId'
 import { createAgentPlatformDatabase } from '../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
@@ -1116,8 +1117,10 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   )
   const seededState = mergeAgentStoreSeeds(await agentStore.getState(), productSeed)
   await replaceAgentState(
+    // 收尾只认「不是本进程启动批次」的 pending：按 bootId 判，不按时间、不按「全局没有流」。
     reconcileStalePendingMessages(
-      localizeBuiltinSeedCopy(seededState, language, buildBuiltinSeedVariants(providers))
+      localizeBuiltinSeedCopy(seededState, language, buildBuiltinSeedVariants(providers)),
+      { ownerBootId: processBootId }
     )
   )
   await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()

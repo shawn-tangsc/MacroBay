@@ -532,6 +532,7 @@ export function addAgentSessionMessage(
     modelSnapshot: payload.modelSnapshot ?? null,
     stats: payload.stats ?? null,
     runtimeResumeToken: null,
+    ...(payload.ownerBootId ? { ownerBootId: payload.ownerBootId } : {}),
     createdAt: now,
     updatedAt: now
   }
@@ -611,10 +612,22 @@ export function clearAgentSessionMessages(state: AgentStoreState, sessionId: str
   }
 }
 
+/**
+ * 崩溃收尾：把**不是本进程启动批次**留下的 `pending` 收成「中断」。
+ *
+ * 判据是 `ownerBootId`，不是时间、不是「全局没有流」：
+ * - 缺失（字段加上之前写的行）按「上一个进程」处理；
+ * - 等于本批次 ⇒ 本进程正在跑的运行，**一条都不动**；
+ * - 小于/不等于本批次 ⇒ 上一个进程死了，收尾。
+ *
+ * 只许在 **boot 那一趟、窗口创建之前**调用：运行期再扫一次，会把别的窗口正在跑的会话收掉。
+ * 半截正文保留（`searchableText` 非空就沿用原来的 `data`），只有完全没收到字时才写中断说明。
+ */
 export function reconcileStalePendingMessages(
   state: AgentStoreState,
-  stoppedText = '上次运行已中断。'
+  options: Readonly<{ ownerBootId: string; stoppedText?: string }>
 ): AgentStoreState {
+  const stoppedText = options.stoppedText ?? '上次运行已中断。'
   let changed = false
   const now = new Date().toISOString()
   const messagesBySessionId = Object.fromEntries(
@@ -622,6 +635,8 @@ export function reconcileStalePendingMessages(
       sessionId,
       messages.map((message) => {
         if (message.status !== 'pending') return message
+        // 本批次写的那条：本进程正在跑，绝不动。
+        if (message.ownerBootId === options.ownerBootId) return message
         changed = true
         const nextData = message.searchableText.trim() ? message.data : textData(stoppedText)
         return {

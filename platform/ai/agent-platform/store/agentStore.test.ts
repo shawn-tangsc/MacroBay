@@ -585,7 +585,7 @@ describe('agent store', () => {
       }
     )
 
-    const next = reconcileStalePendingMessages(state, 'stopped')
+    const next = reconcileStalePendingMessages(state, { ownerBootId: 'boot-current', stoppedText: 'stopped' })
 
     expect(next.messagesBySessionId['session-1']).toEqual([
       expect.objectContaining({ id: 'message-1', status: 'paused', searchableText: 'partial answer' }),

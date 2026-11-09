@@ -279,6 +279,8 @@ export type ClaudeAgentSdkExecutorDependencies = {
   getProviderState: () => Promise<ProviderState>
   getAgentState: () => Promise<AgentStoreState>
   saveAgentState: (state: AgentStoreState, options?: { mergeSessionId?: string }) => Promise<void>
+  /** 主进程启动批次：写 pending 时落在消息上，崩溃收尾据此判「是不是本进程的」。 */
+  ownerBootId?: string
   warmQueryIdleTimeoutMs?: number
   /**
    * Optional WQ-2 audit sink. Absent by default: no sink means no diagnostics and no
@@ -674,7 +676,8 @@ export function createClaudeAgentSdkRuntime(deps: ClaudeAgentSdkExecutorDependen
       sessionId: input.request.sessionId,
       assistantMessageId,
       modelId: input.composition.modelId,
-      modelName: input.composition.modelName
+      modelName: input.composition.modelName,
+      ...(deps.ownerBootId ? { ownerBootId: deps.ownerBootId } : {})
     })
     await deps.saveAgentState(withPending, { mergeSessionId: input.request.sessionId })
     let lastObservedRuntimeResumeToken: string | null = null

@@ -121,6 +121,7 @@ type MessageRow = {
   model_snapshot_json: string | null
   stats_json: string | null
   runtime_resume_token: string | null
+  owner_boot_id: string | null
   created_at: string
   updated_at: string
 }
@@ -266,7 +267,10 @@ type AgentSkillBindingRow = {
   is_enabled: number
 }
 
-export function createAgentPlatformRepositories(database: AgentPlatformDatabase) {
+export function createAgentPlatformRepositories(
+  database: AgentPlatformDatabase,
+  options: Readonly<{ bootId?: string }> = {}
+) {
   const db = database.connection
 
   const agents = {
@@ -654,8 +658,8 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
       db.prepare(
         `insert into agent_session_messages (
           id, session_id, role, data_json, searchable_text, status, model_id, model_snapshot_json, stats_json,
-          runtime_resume_token, created_at, updated_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          runtime_resume_token, owner_boot_id, created_at, updated_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(id) do update set
           session_id = excluded.session_id,
           role = excluded.role,
@@ -666,6 +670,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
           model_snapshot_json = excluded.model_snapshot_json,
           stats_json = excluded.stats_json,
           runtime_resume_token = excluded.runtime_resume_token,
+          owner_boot_id = excluded.owner_boot_id,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at`
       ).run(
@@ -679,6 +684,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         entity.modelSnapshot ? JSON.stringify(entity.modelSnapshot) : null,
         entity.stats ? JSON.stringify(entity.stats) : null,
         entity.runtimeResumeToken ?? null,
+        resolveMessageOwnerBootId(entity, options.bootId),
         entity.createdAt,
         entity.updatedAt
       )
@@ -689,7 +695,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         .prepare(
           `select
              id, session_id, role, data_json, searchable_text, status, model_id, model_snapshot_json, stats_json,
-             runtime_resume_token, created_at, updated_at
+             runtime_resume_token, owner_boot_id, created_at, updated_at
            from agent_session_messages
            order by created_at asc, id asc`
         )
@@ -2243,6 +2249,22 @@ function parseAllowedTools(value: string | null | undefined): string[] {
   }
 }
 
+/**
+ * 一条消息写库时的 `ownerBootId`：**进 pending 的那一次**写，pending 生命周期内不变。
+ *
+ * 写 pending 的落点不止一处（两个运行时 + 仓储），把补写放在仓储这一层，新调用点不会漏；
+ * 复用同一条消息重新进入 pending 时覆盖成当前批次（值幂等，不需要额外去重）。
+ * 非 pending 不带 owner：收尾之后这个字段没有意义。
+ */
+function resolveMessageOwnerBootId(
+  entity: AgentSessionMessageEntity,
+  bootId: string | undefined
+): string | null {
+  if (entity.ownerBootId) return entity.ownerBootId
+  if (entity.status !== 'pending') return null
+  return bootId ?? null
+}
+
 function mapMessageEntity(row: MessageRow): AgentSessionMessageEntity {
   return {
     id: row.id,
@@ -2257,6 +2279,7 @@ function mapMessageEntity(row: MessageRow): AgentSessionMessageEntity {
       : null,
     stats: row.stats_json ? (JSON.parse(row.stats_json) as AgentSessionMessageEntity['stats']) : null,
     runtimeResumeToken: row.runtime_resume_token,
+    ...(row.owner_boot_id ? { ownerBootId: row.owner_boot_id } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }

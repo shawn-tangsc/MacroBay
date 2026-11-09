@@ -16,6 +16,7 @@ import { describeActiveProxy } from '../../../network/activeProxyState'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createAgentPlatformRepositories } from '../../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../../ai/agent-platform/store/agentSqliteStore'
+import { processBootId } from '../processBootId'
 import { createDefaultAgentPersistentState } from '../../../ai/agent-platform/store/agentPersistentStore'
 import { testModelProviderConnection } from '../../../ai/providers/providerConnection'
 import { createInUseModelPatrolRuntime } from '../../../ai/providers/inUseModelPatrolRuntime'
@@ -43,7 +44,7 @@ const legacyAgentStorage = createJsonFileStorage<AgentStoreState>(
 )
 const agentDatabase = createAgentPlatformDatabase(join(userDataPath, 'platform', 'agents.sqlite'))
 const assistantDatabase = createAssistantPlatformDatabase(join(userDataPath, 'platform', 'assistants.sqlite'))
-const agentRepositories = createAgentPlatformRepositories(agentDatabase)
+const agentRepositories = createAgentPlatformRepositories(agentDatabase, { bootId: processBootId })
 const assistantRepositories = createAssistantPlatformRepositories(assistantDatabase)
 /**
  * T1/T2：生成图片落 `userData/generated-images/`（文件名 = 内容 hash），消息只存引用；

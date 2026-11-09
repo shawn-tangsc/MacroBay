@@ -100,6 +100,8 @@ export type AgentChatRuntimeDependencies = {
   }) => Promise<string | null> | string | null
   /** 模型服务页「默认智能体模型」；智能体没有显式模型时使用。 */
   getDefaultAgentModelId?: () => Promise<string | null> | string | null
+  /** 主进程启动批次：写 pending 时落在消息上，崩溃收尾据此判「是不是本进程的」。 */
+  ownerBootId?: string
 }
 
 type ChatCompletionMessage = {
@@ -258,7 +260,8 @@ async function executeTurn(input: {
     sessionId: input.session.id,
     assistantMessageId,
     modelId: agent.model,
-    modelName: agent.modelName
+    modelName: agent.modelName,
+    ...(input.deps.ownerBootId ? { ownerBootId: input.deps.ownerBootId } : {})
   })
   await input.deps.saveAgentState(withPending, { mergeSessionId: input.session.id })
 
