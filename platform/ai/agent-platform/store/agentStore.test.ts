@@ -594,6 +594,22 @@ describe('agent store', () => {
   })
 
 
+
+  it('keeps at most one current session per (agent, originRef) in a single state update', () => {
+    let state = createAgentStoreState({ agents, sessions: [], workspaces: [workspace] })
+    const base = { agentId: agents[0]!.id, workspace: { type: 'system' as const }, origin: 'automation' as const, originGroup: 'daily-briefing', originRef: 'daily-brief:2026-11-09:default:zh-CN' }
+    state = createAgentSession(state, { ...base, name: 'first' })
+    const firstId = state.sessions[0]!.id
+
+    state = createAgentSession(state, { ...base, name: 'second' })
+    const sameIdentity = state.sessions.filter((session) => session.originRef === base.originRef)
+    // 同一次更新里：新的 current，旧的 superseded——不变量成立，且没有中间态可渲染成两行。
+    expect(sameIdentity).toHaveLength(2)
+    expect(sameIdentity.filter((session) => session.originState !== 'superseded')).toHaveLength(1)
+    expect(sameIdentity.find((session) => session.id === firstId)?.originState).toBe('superseded')
+    expect(sameIdentity.find((session) => session.id !== firstId)?.originState).toBeUndefined()
+  })
+
   it('keeps the automation visibility state on create, and updates it when asked', () => {
     let state = createAgentStoreState({ agents, sessions: [], workspaces: [workspace] })
     state = createAgentSession(state, {

@@ -246,6 +246,27 @@ export function createAgentSession(state: AgentStoreState, payload: CreateAgentS
   if (!workspaceResult) return state
   const { workspace, workspaces } = workspaceResult
 
+  // 写入侧不变量：同一 (agentId, originRef) 至多一条 current。新建一条 current 的自动会话时，
+  // 把同身份的旧 current **在这一次状态更新里**标成 superseded——两件事同一个返回值，不存在
+  // 「新旧都 current」的中间态（分两次写会在那一次渲染里出两行，第二次失败则永久两行）。
+  const supersededById = new Set<string>()
+  const wantedRef = normalizeSessionOriginRef(payload.originRef)
+  if (
+    normalizeSessionOrigin(payload.origin) === 'automation' &&
+    wantedRef !== undefined &&
+    payload.originState !== 'superseded'
+  ) {
+    for (const existing of state.sessions) {
+      if (
+        existing.agentId === payload.agentId &&
+        normalizeSessionOriginRef(existing.originRef) === wantedRef &&
+        normalizeSessionOriginState(existing.originState) === 'current'
+      ) {
+        supersededById.add(existing.id)
+      }
+    }
+  }
+
   const session: AgentSessionEntity = {
     id: createId('session'),
     agentId: payload.agentId,
@@ -270,10 +291,13 @@ export function createAgentSession(state: AgentStoreState, payload: CreateAgentS
     updatedAt: now
   }
 
+  const sessions = [session, ...state.sessions].map((candidate) =>
+    supersededById.has(candidate.id) ? { ...candidate, originState: 'superseded' as const } : candidate
+  )
   return {
     ...state,
     workspaces,
-    sessions: sortSessions([session, ...state.sessions], state.sessionPins),
+    sessions: sortSessions(sessions, state.sessionPins),
     activeAgentId: payload.agentId,
     activeSessionId: session.id
   }
