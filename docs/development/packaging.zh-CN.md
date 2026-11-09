@@ -36,11 +36,9 @@ git push origin vX.Y.Z
 密钥。`latest-mac.yml` 只由 arm64 job 产出并上传，所以 `MacroBay-arm64.dmg` 的永久链接不会被 x64
 包顶掉。
 
-Release 页面上的文字不是发布之后手写上去的：它是仓库里的两个文件——
-`docs/reference/release-notes/<version>.release-body.md` 与 `<version>.release-body.zh-CN.md`——
-按这个顺序拼成一份正文。应用「关于我们」页显示的就是同一份正文，因此两处读到的是同一批字；正文
-缺一份时，打包流程会直接停下，而不是发一个没有说明的 Release。`pnpm release:preflight` 会在打 tag
-之前检查这两份，包括两份合计不超过「关于我们」页的字数上限。
+Release 页面上的文字**由人在 Release 页上手写**（用户 2026-11-10 定）。打包作业只负责挂产物：
+创建 Release 时正文留空，重跑同一个 tag 只替换产物、**不覆盖人写的正文**。应用「关于我们」页显示的
+就是已发布 Release 的正文，所以改一句话就去改 Release 页本身——永远不靠移动 tag 来改文字。
 
 dmg 与安装器的文件名不含版本号，所以 README 可以长期链接
 `releases/latest/download/MacroBay-arm64.dmg`、`.../MacroBay-x64.dmg` 和
