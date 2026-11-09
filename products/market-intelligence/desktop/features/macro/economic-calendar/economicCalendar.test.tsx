@@ -11,6 +11,7 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
 import { EconomicCalendar } from './index'
 import { economicCalendarPresentationPolicy } from './economicCalendarModel'
+import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
 import { marketCalendarClient } from '../../../shared/ipc/marketCalendarClient'
 import type { MarketCalendarEvent, MarketCalendarPage } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
@@ -1350,25 +1351,64 @@ describe('macro economic calendar', () => {
     expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
   })
 
-  it('routes an empty month to the data sources settings without issuing calendar queries', async () => {
+  it('A：一条官方腿都没启用 → 「去启用」，点它落到情报源设置，且不摆「本月没有」', async () => {
     const navigation = vi.fn()
     window.addEventListener('app-shell:navigate', navigation)
-    const { container, client } = await renderCalendar({
+    const { container } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
-      getEventDetail: async () => unavailableDetail()
+      getEventDetail: async () => unavailableDetail(),
+      officialFeeds: 'disabled'
     })
 
     await flush()
-    await act(async () => container.querySelector<HTMLElement>('.mi-economic-calendar__empty-state button')!.click())
+    // A 那一态：disabled 外壳 + 产品句「日历来源都没有启用」，不是「本月没有任何事件」。
+    const state = container.querySelector('.mi-economic-calendar__no-source-state')
+    expect(state).not.toBeNull()
+    expect(state?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.noSourceEnabled)
+    expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+    expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
 
+    // 动作只有一个：「去启用」→ 情报源设置面板。
+    const action = state?.querySelector<HTMLElement>('button')
+    expect(action?.textContent).toContain('去启用')
+    await act(async () => action!.click())
     expect(navigation).toHaveBeenCalledTimes(1)
     expect(navigation.mock.calls[0]?.[0].detail).toEqual({
       navKey: 'settings',
       settingsPanelKey: 'market-intelligence.intelligence-sources'
     })
-    expect(client.queryMonth).toHaveBeenCalledTimes(3)
-    expect(client.getEventDetail).not.toHaveBeenCalled()
     window.removeEventListener('app-shell:navigate', navigation)
+  })
+
+  it('B：有可用腿、两边都读到且都为空 → 「本月没有任何事件」，且**不给动作**', async () => {
+    const { container } = await renderCalendar({
+      queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+      getEventDetail: async () => unavailableDetail(),
+      officialFeeds: 'enabled'
+    })
+
+    await flush()
+    const state = container.querySelector('.mi-economic-calendar__empty-state')
+    expect(state).not.toBeNull()
+    expect(state?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
+    // 这一态没有「范围」可扩大：页头的上个月/下个月/回到本月已经在屏上，再放一颗就是同一屏两处入口。
+    expect(state?.querySelector('button')).toBeNull()
+    expect(container.querySelector('.mi-economic-calendar__no-source-state')).toBeNull()
+  })
+
+  it('反向：来源全关但当月有行 → 照常列出来，两态都不得命中', async () => {
+    const { container } = await renderCalendar({
+      // 用真实事件夹具（2026-08-12），页面打开的就是这个月；「有行」才有意义。
+      queryMonth: async () => ({ state: 'available' as const, asOf, events: [blsEvent()] }),
+      getEventDetail: async () => unavailableDetail(),
+      officialFeeds: 'disabled'
+    })
+
+    await flush()
+    expect(container.querySelector('.mi-economic-calendar__no-source-state')).toBeNull()
+    expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+    // 行照常渲染：网格里至少有一条事件（不看内部键——卡面本来就不印它）。
+    expect(container.querySelectorAll('[data-event-key]')).not.toHaveLength(0)
   })
 
   it('starts only the existing file picker from the empty month import action', async () => {
@@ -1937,6 +1977,8 @@ async function renderCalendar(client: {
     refreshBlsEmploymentRelease?: () => unknown
   refreshFedFomcDecision?: () => unknown
   syncBlsEmploymentSchedule?: () => unknown
+  /** 官方日历腿的三态（注册表那侧算出来的）；默认「有可用腿」。 */
+  officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
   now?: () => Date
   strict?: boolean
   openTarget?: { month: string; eventKey?: string }
@@ -1953,6 +1995,11 @@ async function renderCalendar(client: {
     refreshFedFomcDecision: vi.fn(client.refreshFedFomcDecision ?? (async () => ({ state: 'unavailable' as const }))),
     syncBlsEmploymentSchedule: vi.fn(client.syncBlsEmploymentSchedule ?? (async () => ({ state: 'unavailable' as const })))
   }
+  // 官方腿三态来自注册表投影：这里替成可控值，默认「有可用腿」，页面因此走既有的空/列表分支。
+  vi.spyOn(intelligenceSourcesClient, 'getPanelView').mockResolvedValue({
+    calendarOfficialFeeds: { state: client.officialFeeds ?? 'enabled' },
+    providers: []
+  } as never)
   root = localRoot
   // 显示时区由窗口级 provider 提供；测试固定 Asia/Shanghai，断言才与宿主时区无关。
   // 刷新前的确认框由树内的 Modal 实例渲染（`useConfirm`），所以页面必须挂在 `ConfirmProvider` 下；

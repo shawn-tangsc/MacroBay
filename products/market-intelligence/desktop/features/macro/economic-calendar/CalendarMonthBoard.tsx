@@ -6,6 +6,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { StateView } from '@platform/ui/components/state'
 import { CalendarEmptyMonthState } from './CalendarEmptyMonthState'
+import { CalendarNoSourceEnabledState } from './CalendarNoSourceEnabledState'
 import { CalendarEventRow } from './CalendarEventRow'
 import { unifiedCalendarDay, type CalendarDayCoverage, type CalendarDayItem } from './economicCalendarDayModel'
 import { createEconomicCalendarProjection, type EconomicCalendarEventView, type EconomicCalendarProjection } from './economicCalendarModel'
@@ -26,7 +27,7 @@ const economicCalendarEmptyStateActionPolicy = { emptyEventCount: 0 } as const
  * state: every value arrives as a prop, so the grid can be reasoned about — and tested — without the
  * page's effects.
  */
-export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable }: {
+export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable, officialFeeds }: {
   statusNow: string
   today: string
   asOf: string
@@ -42,6 +43,8 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   text: EconomicCalendarText
   /** 官方源停用时那一句；有它就按「拿不到」画，而不是按「没有」。 */
   officialUnavailable?: string
+  /** 官方日历腿的三态（注册表那侧算好的）：全关 / 可用 / 取不到。 */
+  officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
 }): ReactElement {
   let status: string | undefined = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
   /**
@@ -49,6 +52,15 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
    * - 市场侧也没有行 → 错误态，**不给动作**（再试必失败、去设置也改不了 403）；
    * - 市场侧有行 → 正常列出来，另加一条 muted 说明；摆空态会把「还有数据」说成「什么都没有」。
    */
+  /**
+   * 先判「一条官方腿都没启用」（A），再判「取不到」，最后才轮到「本月确实没有」（B）。
+   * 三态互斥，绝不并排：A 与 B 说的事情不一样，同时出现等于两种处境混回一个框。
+   */
+  // 全关只在「两边都没有行」时才画整页空态：库里可能还留着停用前采集到的行，
+  // 有行就照常列出——把「还有数据」说成「什么都没开」与另一种空态犯的是同一个错。
+  if (officialFeeds === 'disabled' && events.length === 0 && marketEvents.length === 0) {
+    return <CalendarNoSourceEnabledState text={text} />
+  }
   const surface = monthSurface({ officialUnavailable: officialUnavailable !== undefined, officialCount: events.length, marketCount: marketEvents.length })
   if (surface === 'official-unavailable') return <CalendarState month={month} text={officialUnavailable!} loading={false} unavailable />
   /**
