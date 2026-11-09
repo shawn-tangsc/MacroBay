@@ -3,7 +3,11 @@ import { act, useEffect, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
+import type {
+  MacroEconomicCalendarClient,
+  MacroEconomicCalendarMonthResult
+} from '../../../shared/ipc/macroEconomicCalendarClient'
+import type { MacroEconomicCalendarEventView } from '../../../../contracts/macro/economicCalendarQueryContracts'
 import type { EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
 
 const host = document.createElement('div')
@@ -11,9 +15,11 @@ let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.useRealTimers() })
 
 const asOf = '2026-08-05T00:00:00.000Z'
-const page = (month: string, events: readonly unknown[] = []) => ({ state: 'available' as const, asOf, events })
+// 夹具按真实月结果类型写：桩的返回形状就是页面拿到的东西，不再让它退化成 `unknown[]`。
+const page = (_month: string, events: readonly MacroEconomicCalendarEventView[] = []): MacroEconomicCalendarMonthResult =>
+  ({ state: 'available', asOf, events })
 
-function event(overrides: Record<string, unknown> = {}) {
+function event(overrides: Partial<MacroEconomicCalendarEventView> = {}): MacroEconomicCalendarEventView {
   return {
     eventKey: 'US.CPI.RELEASE.AUGUST', releaseGroupKey: 'US.BLS.RELEASE.AUGUST', eventFamily: 'cpi', titleKey: 'cpi',
     countryCode: 'US', importance: 'high', periodKey: 'release-2026-08-12', lifecycleState: 'scheduled',
@@ -23,7 +29,7 @@ function event(overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function renderWindow(client: Partial<MacroEconomicCalendarClient>) {
+async function renderWindow(client: { queryMonth: MacroEconomicCalendarClient['queryMonth'] }) {
   const { useEconomicCalendarMonthWindow } = await import('./useEconomicCalendarMonthWindow')
   let state!: { monthState: EconomicCalendarMonthState; loadMonth: (month: string, refresh?: boolean, nextAsOf?: string) => void }
   function Harness({ month }: { month: string }) {
@@ -61,9 +67,9 @@ it('keeps the month when only a neighbour fails, and reports the month alone whe
 })
 
 it('ignores a month that finished after the reader moved on', async () => {
-  let settleAugust!: (value: unknown) => void
+  let settleAugust!: (value: MacroEconomicCalendarMonthResult) => void
   const client = { queryMonth: vi.fn(({ month }: { month: string }) => month === '2026-08'
-    ? new Promise(resolve => { settleAugust = resolve })
+    ? new Promise<MacroEconomicCalendarMonthResult>(resolve => { settleAugust = resolve })
     : Promise.resolve(page(month))) }
   const window = await renderWindow(client)
   await window.rerender('2026-10')
@@ -78,7 +84,7 @@ it('ignores a month that finished after the reader moved on', async () => {
 it('uses what arrived when a neighbour never answers, instead of blanking the month', async () => {
   vi.useFakeTimers()
   const client = { queryMonth: vi.fn(({ month }: { month: string }) => month === '2026-09'
-    ? new Promise(() => undefined)
+    ? new Promise<MacroEconomicCalendarMonthResult>(() => undefined)
     : Promise.resolve(page(month, month === '2026-08' ? [event()] : []))) }
   const window = await renderWindow(client)
   await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
