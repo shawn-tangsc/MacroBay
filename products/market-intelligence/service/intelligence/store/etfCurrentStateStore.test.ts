@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildEtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
-import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage, etfCurrentStateStorePolicy } from './etfCurrentStateStore'
+import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage, etfCurrentStateStorePolicy, type EtfCurrentState, type EtfCurrentStateStorage } from './etfCurrentStateStore'
 
 const firstWindow = windowFor(1)
 const revisedWindow = windowFor(10)
@@ -91,13 +91,17 @@ describe('ETF current-state store', () => {
 
   it('fails closed without caching or exposing an illegal parsed state', async () => {
     const invalidWindow = { ...firstWindow, windowEnd: '2026-08-31' }
+    // The payload fits the state shape but its window is not a canonical trading day. Declaring it as
+    // `EtfCurrentState` is what the storage port promises; the value rule that it breaks is decided by
+    // the store, so the illegal value is a fixture rather than something the type could catch.
+    const persisted: EtfCurrentState = {
+      schemaVersion: etfCurrentStateStorePolicy.schemaVersion,
+      snapshot: { window: invalidWindow, verifiedAt: '2026-08-31T00:00:00.000Z' },
+      health: { lastAttemptAt: '2026-08-31T00:00:00.000Z', lastSuccessAt: '2026-08-31T00:00:00.000Z', snapshotReplaceCount: 1, snapshotNoWriteCount: 0, rejectionCount: 0 }
+    }
     const storage = {
-      read: vi.fn(async () => ({
-        schemaVersion: 1,
-        snapshot: { window: invalidWindow, verifiedAt: '2026-08-31T00:00:00.000Z' },
-        health: { lastAttemptAt: '2026-08-31T00:00:00.000Z', lastSuccessAt: '2026-08-31T00:00:00.000Z', snapshotReplaceCount: 1, snapshotNoWriteCount: 0, rejectionCount: 0 }
-      })),
-      write: vi.fn()
+      read: vi.fn<EtfCurrentStateStorage['read']>(async () => persisted),
+      write: vi.fn<EtfCurrentStateStorage['write']>(async () => undefined)
     }
     const store = createEtfCurrentStateStore({ storage })
 
@@ -108,14 +112,17 @@ describe('ETF current-state store', () => {
   })
 
   it('fails closed for an otherwise valid state with an unknown persisted field', async () => {
+    // An older or corrupt file can carry a key the store does not allow. The declared type says so
+    // explicitly, so the extra field is part of the fixture instead of being smuggled past the checker.
+    const persisted: EtfCurrentState & Readonly<{ unexpected: boolean }> = {
+      schemaVersion: etfCurrentStateStorePolicy.schemaVersion,
+      snapshot: { window: firstWindow, verifiedAt: '2026-08-31T00:00:00.000Z' },
+      health: { lastAttemptAt: '2026-08-31T00:00:00.000Z', lastSuccessAt: '2026-08-31T00:00:00.000Z', snapshotReplaceCount: 1, snapshotNoWriteCount: 0, rejectionCount: 0 },
+      unexpected: true
+    }
     const storage = {
-      read: vi.fn(async () => ({
-        schemaVersion: 1,
-        snapshot: { window: firstWindow, verifiedAt: '2026-08-31T00:00:00.000Z' },
-        health: { lastAttemptAt: '2026-08-31T00:00:00.000Z', lastSuccessAt: '2026-08-31T00:00:00.000Z', snapshotReplaceCount: 1, snapshotNoWriteCount: 0, rejectionCount: 0 },
-        unexpected: true
-      })),
-      write: vi.fn()
+      read: vi.fn<EtfCurrentStateStorage['read']>(async () => persisted),
+      write: vi.fn<EtfCurrentStateStorage['write']>(async () => undefined)
     }
     const store = createEtfCurrentStateStore({ storage })
 
