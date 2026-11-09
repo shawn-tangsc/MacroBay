@@ -570,10 +570,14 @@ describe('ModelPicker panel', () => {
       .toBe(labels.pickerFilteredCount(1))
     expect(document.querySelector<HTMLElement>('[data-model-picker-filters]')?.style.display).toBe('none')
 
+    // 清除筛选已换成平台图标按钮：读屏名从键解析，不再挂原生 title（否则读屏与悬浮各说一份）。
+    const clearFilters = document.querySelector<HTMLElement>('[data-model-picker-clear-filters]')
+    expect(clearFilters?.classList.contains('icon-button')).toBe(true)
+    expect(clearFilters?.getAttribute('aria-label')).toBe(labels.pickerClearFilters)
+    expect(clearFilters?.hasAttribute('title')).toBe(false)
+
     await act(async () => {
-      document.querySelector<HTMLElement>('[data-model-picker-clear-filters]')?.dispatchEvent(
-        new MouseEvent('click', { bubbles: true })
-      )
+      clearFilters?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await Promise.resolve()
     })
     expect(document.querySelector('[data-model-picker-filter-toggle]')?.getAttribute('data-active')).toBe('false')
