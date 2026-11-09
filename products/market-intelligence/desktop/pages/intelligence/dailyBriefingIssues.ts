@@ -36,7 +36,7 @@ export type BriefingIssueTemplate =
   | 'backfill-done' | 'backfill-generic'
   | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure' | 'document-invalid'
   | 'evidence-gap' | 'evidence-caveat' | 'evidence-no-citation' | 'evidence-conflict' | 'evidence-none'
-  | 'timing-late'
+  | 'timing-late' | 'macro-quiet'
 
 /** The stable code behind a template; two templates may share a code but never a group. */
 export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
@@ -55,7 +55,9 @@ export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, 
   'system-failure': 'generation-failure', 'document-invalid': 'document-invalid',
   'evidence-gap': 'data-gap', 'evidence-caveat': 'data-caveat', 'evidence-no-citation': 'uncited-counter-evidence',
   'evidence-conflict': 'source-conflict', 'evidence-none': 'no-citations',
-  'timing-late': 'late-generation'
+  'timing-late': 'late-generation',
+  // A quiet window is not a gap: its own code so it can never merge with an unreadable calendar.
+  'macro-quiet': 'macro-quiet'
 }
 
 export type BriefingIssue = Readonly<{
@@ -296,6 +298,21 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
     macroEmptyCodes: text.macroEmptyCodes,
     macroUnreadable: text.macroUnreadable
   })
+  // 「确实没有高影响事件」：正文不印（`briefingMacroEmptyCopy` 仍返回 null），这里只记一条
+  // info 留痕，让查账的人看出不是漏了。没有动作、不是告警，也不与「读不到」共用一个码。
+  if (document.news.notes.macroEmpty === 'past-24h-no-high-impact-release') {
+    const hours = document.edition.windowHours ?? 24
+    add({
+      id: 'data:macro:quiet',
+      severity: 'info',
+      category: 'data',
+      template: 'macro-quiet',
+      source: text.limits.sources.calendar,
+      at,
+      title: text.limits.macroQuiet.replace('{hours}', String(hours)),
+      advice: text.limits.advice.macroQuiet
+    })
+  }
   if (macroEmpty?.unreadable) {
     const code = document.news.notes.macroEmpty ?? 'calendar-unavailable'
     add({ id: `data:calendar:${code}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: macroEmpty.sentence, advice: text.limits.advice.checkCalendar })
