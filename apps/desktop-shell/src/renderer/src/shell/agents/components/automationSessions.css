@@ -8,10 +8,16 @@
   border-top: 1px solid var(--border);
 }
 
-/* 展开全部：行内文字动作，11 / 400 / muted。放在外层展开区末尾，随内容滚走。 */
+/* 每天一组：整块进一层 12。块头在 12，日头与行内容都落在 24——**只进一层**，
+   行内容不许再叠 12 变成 36（界面设计 2026-11-09 写死的判据）。 */
+.agent-auto-sessions__day {
+  padding-left: 12px;
+}
+
+/* 展开全部：行内文字动作，11 / 400 / muted，左缘与日头、行内容同一档（24），随内容滚走。 */
 .agent-auto-sessions__all {
   display: block;
-  padding: 4px 0 4px 12px;
+  padding: 4px 0 4px 24px;
   border: 0;
   background: none;
   color: var(--muted);

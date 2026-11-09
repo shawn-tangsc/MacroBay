@@ -118,16 +118,22 @@ export default function AutomationSessions({ sessions, onSelectSession }: Automa
           })
 
           return (
-            <CollapsibleGroup
-              key={group.key}
-              // 外层已经给了滚动上限（320）：内层再套一个就成两条互相套着的滚动条。
-              maxBodyHeight={null}
-              onOpenChange={(open) => toggleDay(group.key, open)}
-              open={openDays.has(group.key)}
-              resolveText={passthroughText}
-              rows={rows}
-              titleText={dayLabel(group.key)}
-            />
+            /*
+              每天一组外面包一层：块头在 12，日头与行内容都进到 24——**只进一层**。
+              壳的缩进是「头行与行各自 12」，两层直接嵌会全停在 12、日头与行并排、看不出层级；
+              在这里补一层 12 正好是 24，再往上叠就成 36（界面设计 2026-11-09 写死的判据）。
+            */
+            <div className="agent-auto-sessions__day" key={group.key}>
+              <CollapsibleGroup
+                // 外层已经给了滚动上限（320）：内层再套一个就成两条互相套着的滚动条。
+                maxBodyHeight={null}
+                onOpenChange={(open) => toggleDay(group.key, open)}
+                open={openDays.has(group.key)}
+                resolveText={passthroughText}
+                rows={rows}
+                titleText={dayLabel(group.key)}
+              />
+            </div>
           )
         })}
         {groups.length > 1 || !openDays.has(todayKey) ? (

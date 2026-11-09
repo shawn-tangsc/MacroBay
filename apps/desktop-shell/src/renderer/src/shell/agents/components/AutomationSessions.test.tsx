@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -201,5 +204,20 @@ describe('automation sessions block', () => {
 
     const dayBody = dom.querySelectorAll<HTMLElement>('.collapsible-group__body')[1]!
     expect(dayBody.style.maxHeight).toBe('')
+  })
+
+  it('indents days exactly one level, so a row never stacks a third', () => {
+    // 界面设计 2026-11-09 写死的判据：块 12 + 日 12 = 24，行内容与日头**对齐在 24**；
+    // 行不许再叠一层变成 36。壳的缩进是「头行与行各自 12」，所以这层 12 只能由本块补，
+    // 且只能补一次——测的是这条规则本身，不是某一行的行内样式值。
+    const css = readFileSync(join(__dirname, 'automationSessions.css'), 'utf8')
+    const rule = (selector: string): string => {
+      const start = css.indexOf(`${selector} {`)
+      expect(start).toBeGreaterThan(-1)
+      return css.slice(start, css.indexOf('}', start))
+    }
+    expect(rule('.agent-auto-sessions__day')).toContain('padding-left: 12px')
+    // 「查看全部」在同一左缘（24），不是跟更外层对齐。
+    expect(rule('.agent-auto-sessions__all')).toContain('padding: 4px 0 4px 24px')
   })
 })
