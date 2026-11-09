@@ -74,6 +74,9 @@
 }
 .mi-news-sentiment__driver-line { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
 .mi-news-sentiment__drivers button:last-child { border-bottom: 0; }
+/* 整行即动作的行需要悬停反馈（ui-spec「可点击行」第②条：不能靠读者猜）。
+   只借既有的 `--surface-soft` 底色，不改尺寸、间距与字色。 */
+.mi-news-sentiment__drivers button:hover { background: var(--surface-soft); }
 .mi-news-sentiment__drivers i { flex: none; width: 6px; height: 6px; margin-top: 5px; border-radius: 50%; background: var(--mi-news-neutral); }
 .mi-news-sentiment__drivers i.is-bullish { background: var(--mi-news-positive); }
 .mi-news-sentiment__drivers i.is-bearish { background: var(--mi-news-negative); }

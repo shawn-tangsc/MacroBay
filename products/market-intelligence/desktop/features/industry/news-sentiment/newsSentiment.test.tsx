@@ -341,8 +341,19 @@ describe('NewsSentimentFeature', () => {
   it('shows the summary and the top drivers', async () => {
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     expect(container.querySelector('[data-news-sentiment-card]')?.textContent).toContain('偏多')
-    expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(2)
+    const drivers = [...container.querySelectorAll<HTMLButtonElement>('.mi-news-sentiment__drivers button')]
+    expect(drivers).toHaveLength(2)
     expect(container.textContent).toContain('SEC Approves Spot Ethereum ETF Options')
+    // 整行即动作：每行是可访问名说明「点开哪一条」的原生按钮，键盘与焦点环不另画。
+    expect(drivers[0]?.getAttribute('aria-label')).toBe(
+      text.openItem.replace('{title}', 'SEC Approves Spot Ethereum ETF Options')
+    )
+    expect(drivers[1]?.getAttribute('aria-label')).toBe(
+      text.openItem.replace('{title}', 'Binance Will Delist XYZ Perpetual')
+    )
+    for (const driver of drivers) {
+      expect(driver.type).toBe('button')
+    }
   })
 
   it('opens the drawer and lists every item', async () => {

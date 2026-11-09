@@ -242,6 +242,8 @@ mi: miText['zh-CN'],
             engine: { model: '模型', rules: '规则' },
             neutralFilter: { label: '中性', all: '带中性', exclude: '不带中性' },
             openAll: '查看舆情列表',
+            // 仅用于「整行即动作」那两处的可访问名（`aria-label`），不显示在界面上。
+            openItem: '打开这条舆情：{title}',
             // 与「数据已过期 · 最后更新 {time}」同一个字段（latestKnownItemAt）、同一个格式化器，
             // 两处永远指向同一时刻。
             updatedAt: '更新于 {time}',
@@ -1600,6 +1602,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             engine: { model: 'Model', rules: 'Rules' },
             neutralFilter: { label: 'Neutral', all: 'With neutral', exclude: 'Without neutral' },
             openAll: 'Open sentiment list',
+            // Accessible name only (aria-label) for the two whole-row actions; it never appears on screen.
+            openItem: 'Open this story: {title}',
             updatedAt: 'Updated {time}',
             settings: 'Sentiment settings',
 
