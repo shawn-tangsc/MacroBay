@@ -4,6 +4,7 @@ import type { MenuProps } from 'antd'
 import { Edit3, MoreHorizontal, Pin, PinOff, Trash2, X } from 'lucide-react'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { displaySessionName } from '@platform/ai/agent-platform/schemas/sessionDisplayName'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { AgentSessionPanelPosition } from '@platform/settings/schema/appSettings'
 
@@ -46,6 +47,9 @@ export default function SessionItem({
   onStateChange
 }: SessionItemProps): React.ReactElement {
   const t = useAgentText()
+  // 库里可能把身份当名字存下来（老的自动会话就是运行 id）。展示与确认文案都用这个名字；
+  // 读者仍能通过「重命名」改掉它——输入框里放的是库里真正存的值，不是这里的兜底文案。
+  const displayName = displaySessionName(session) ?? t.sidePanel.unnamedSession
   const confirm = useConfirm()
   const tooltipKeys = {
     deleteShortcut: 'sessionItem.deleteShortcut',
@@ -104,7 +108,7 @@ export default function SessionItem({
       onClick: () => {
         confirm({
           title: t.sessionItem.delete,
-          description: t.sessionItem.confirmDeleteSession(session.name),
+          description: t.sessionItem.confirmDeleteSession(displayName),
           confirmLabel: t.sessionItem.delete,
           cancelLabel: t.common.cancel,
           tone: 'danger',
@@ -207,7 +211,7 @@ export default function SessionItem({
                   />
                 ) : null}
                 {pinned ? <Pin size={11} /> : null}
-                <strong>{session.name}</strong>
+                <strong>{displayName}</strong>
               </span>
               <span className="agent-session-actions">
                 <IconButton

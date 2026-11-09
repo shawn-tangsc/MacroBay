@@ -88,6 +88,50 @@ describe('automation sessions block', () => {
     expect(dom.querySelectorAll('.agent-auto-sessions__item')).toHaveLength(0)
   })
 
+  it('keeps one time per row: a name that already carries the clock does not repeat it', async () => {
+    // 自动生成的会话名里常常带时刻（`2026/11/9 20:45 …`）。分组标题已经表达了日期，
+    // 行尾再印一遍时刻就是同一行两个时间——所以名字里已有这个时刻时，行尾不再重复。
+    const named = `2026/11/9 20:45 ${'持仓骤降 · 15 分钟'}`
+    const { dom } = await render([
+      session('a1', named, '2026-11-09T20:45:00.000Z'),
+      session('a2', '读者自己起的名字', '2026-11-09T20:45:00.000Z')
+    ])
+
+    const head = dom.querySelector('.agent-auto-sessions__head') as HTMLButtonElement
+    await act(async () => {
+      head.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    const rows = [...dom.querySelectorAll<HTMLElement>('.agent-auto-sessions__item')]
+    const byName = (text: string): HTMLElement => rows.find((row) => row.textContent?.includes(text))!
+    // 名字自带时刻：整行只出现一次「20:45」。
+    expect(byName(named).textContent?.match(/20:45/gu)).toHaveLength(1)
+    // 名字里没有时刻：行尾补上，且仍然只有一次。
+    expect(byName('读者自己起的名字').textContent).toContain('20:45')
+    expect(byName('读者自己起的名字').textContent?.match(/20:45/gu)).toHaveLength(1)
+  })
+
+  it('never renders the run id as a row title when the stored name is that run id', async () => {
+    // 老的自动会话把运行 id 当名字存了下来（`mi-ar-<uuid>`）。列表照 `name` 渲染，
+    // 读者就在「自动会话」里看到我们的账本编号；这种行只许显示中性文案。
+    const runId = 'mi-ar-96eb9b12-005d-4e07-a61c-a98604a962f6'
+    const { dom } = await render([
+      { ...session('a1', runId, todayAt), originRef: runId }
+    ])
+
+    const head = dom.querySelector('.agent-auto-sessions__head') as HTMLButtonElement
+    await act(async () => {
+      head.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    const rows = [...dom.querySelectorAll<HTMLElement>('.agent-auto-sessions__item')]
+    expect(rows).toHaveLength(1)
+    expect(rows[0].textContent).not.toContain('mi-ar-')
+    expect(rows[0].textContent).toContain('未命名会话')
+  })
+
   it('expands into day sections: today open, earlier days closed, and rows select', async () => {
     const onSelectSession = vi.fn()
     const { dom } = await render([

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { displaySessionName } from '@platform/ai/agent-platform/schemas/sessionDisplayName'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock, formatShellDay } from '@platform/ui/time/shellTimeFormat'
 
@@ -21,6 +22,13 @@ type AutomationSessionsProps = {
  *
  * 分节按**显示时区**的日算（`formatShellDay`），不用 UTC 日：否则东八区的早晨会被分到前一天。
  */
+/** 行尾该显示的时刻；名字里已经有这个时刻时返回 `null`（同一行不许出现两次时间）。 */
+function rowClock(session: AgentSessionEntity, timeZone: string): string | null {
+  const clock = formatShellClock(session.createdAt, { timeZone })
+  if (clock === null) return null
+  return session.name.includes(clock) ? null : clock
+}
+
 export default function AutomationSessions({ sessions, onSelectSession }: AutomationSessionsProps): React.ReactElement | null {
   const t = useAgentText()
   const text = t.sidePanel.automationSessions
@@ -97,10 +105,22 @@ export default function AutomationSessions({ sessions, onSelectSession }: Automa
                   onClick={() => onSelectSession(session.id)}
                   type="button"
                 >
-                  <span className="agent-auto-sessions__item-title">{session.name}</span>
-                  <span className="agent-auto-sessions__item-meta">
-                    {formatShellClock(session.createdAt, { timeZone }) ?? session.createdAt}
+                  {/*
+                    名字一律经 `displaySessionName`：库里的老行把运行 id 当名字存了下来，
+                    直接印 `session.name` 就是把 `mi-ar-<uuid>` 给读者看。名字读不出来时给中性文案，
+                    **绝不回落到 id**——宁可说「未命名会话」，也不印账本编号。
+                  */}
+                  <span className="agent-auto-sessions__item-title">
+                    {displaySessionName(session) ?? t.sidePanel.unnamedSession}
                   </span>
+                  {/*
+                    同一行只出现一次时间：自动会话的名字里常常已经带了时刻（`2026/11/9 20:45 …`），
+                    行尾再印一遍就是两个时间。名字里已经有这个时刻时，行尾不再重复；
+                    名字里没有（读者自己起的名字）才补上时刻——分组标题已经表达了日期，所以只留时刻。
+                  */}
+                  {rowClock(session, timeZone) === null ? null : (
+                    <span className="agent-auto-sessions__item-meta">{rowClock(session, timeZone)}</span>
+                  )}
                 </button>
               )) : null}
             </div>

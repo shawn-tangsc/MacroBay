@@ -4,6 +4,7 @@ import type { ChangeEvent } from 'react'
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentRuntimeCompatibilityResult } from '@platform/ai/agent-platform/runtime/compatibility/agentRuntimeCompatibilityTypes'
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { displaySessionName } from '@platform/ai/agent-platform/schemas/sessionDisplayName'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import { claudeCodeBuiltinTools } from '@platform/ai/agent-platform/tools/builtinClaudeTools'
 import { getBuiltinSlashCommands } from '@platform/ai/agent-platform/tools/slashCommands'
@@ -126,7 +127,7 @@ export default function AgentSessionInputbar({
     onClearMessages: () => {
       confirm({
         title: t.chatNavbar.clearMessages,
-        description: t.input.confirmClearMessages(session.name),
+        description: t.input.confirmClearMessages(displaySessionName(session) ?? t.sidePanel.unnamedSession),
         confirmLabel: t.chatNavbar.clearMessages,
         cancelLabel: t.common.cancel,
         tone: 'danger',

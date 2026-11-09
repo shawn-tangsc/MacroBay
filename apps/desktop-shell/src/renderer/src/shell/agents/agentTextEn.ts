@@ -30,6 +30,7 @@ export const agentTextEn: AgentText = {
     sessionsTab: 'Sessions',
     newSession: 'New session',
     defaultSessionName: 'New agent session',
+    unnamedSession: 'Untitled session',
     clearFilteredSessions: 'Clear filtered sessions',
     confirmDeleteFilteredSessions: (count) => `Delete ${count} filtered session${count === 1 ? '' : 's'}?`,
     searchSessions: 'Search sessions',

@@ -8,7 +8,12 @@ import { createAgentStoreState } from '@platform/ai/agent-platform/store/agentSt
 import { buildAgentSearchResults } from './agentSearchResults'
 
 const createdAt = '2026-01-01T00:00:00.000Z'
-const copy = { agentLabel: 'Agent', unboundAgent: 'Unbound agent', noDescription: 'No description' }
+const copy = {
+  agentLabel: 'Agent',
+  unboundAgent: 'Unbound agent',
+  noDescription: 'No description',
+  unnamedSession: 'Untitled session'
+}
 
 const workspace: AgentWorkspaceEntity = {
   id: 'workspace-1',
@@ -85,5 +90,23 @@ describe('agent search results', () => {
     expect(agentResults[0]).toMatchObject({ type: 'agent', title: 'Research Agent' })
     expect(sessionResults.map((item) => item.type)).toEqual(['session'])
     expect(sessionResults[0]).toMatchObject({ excerpt: 'special keyword' })
+  })
+
+  it('never titles a result with the session identity when the stored name is that identity', () => {
+    // 老的自动会话把运行 id 当名字存了下来（`mi-ar-<uuid>`）。结果标题里出现它，
+    // 就是把账本编号印给读者；这种行一律显示中性文案。
+    const runId = 'mi-ar-96eb9b12-005d-4e07-a61c-a98604a962f6'
+    const legacy = createAgentStoreState({
+      agents: [agent],
+      sessions: [{ ...session, id: 'session-legacy', name: runId, origin: 'automation', originRef: runId }],
+      workspaces: [workspace],
+      messagesBySessionId: {}
+    })
+
+    const results = buildAgentSearchResults(legacy, '', copy)
+    const sessionResult = results.find((item) => item.type === 'session')
+
+    expect(sessionResult).toMatchObject({ title: 'Untitled session' })
+    expect(JSON.stringify(results)).not.toContain('mi-ar-')
   })
 })

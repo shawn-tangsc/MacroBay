@@ -33,9 +33,10 @@ export default function AgentSearchModal({
       buildAgentSearchResults(state, keyword, {
         agentLabel: t.common.agent,
         unboundAgent: t.search.unboundAgent,
-        noDescription: t.common.noDescription
+        noDescription: t.common.noDescription,
+        unnamedSession: t.sidePanel.unnamedSession
       }),
-    [keyword, state, t.common.agent, t.common.noDescription, t.search.unboundAgent]
+    [keyword, state, t.common.agent, t.common.noDescription, t.search.unboundAgent, t.sidePanel.unnamedSession]
   )
 
   return (

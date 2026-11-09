@@ -40,6 +40,8 @@ export type AgentText = {
     sessionsTab: string
     newSession: string
     defaultSessionName: string
+    /** 会话名读不出人名（为空、或存的就是它自己的编号）时显示的中性文案；**绝不回落到 id**。 */
+    unnamedSession: string
     clearFilteredSessions: string
     confirmDeleteFilteredSessions: (count: number) => string
     searchSessions: string

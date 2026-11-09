@@ -30,6 +30,7 @@ export const agentTextZh: AgentText = {
     sessionsTab: '会话',
     newSession: '新建会话',
     defaultSessionName: '新的智能体会话',
+    unnamedSession: '未命名会话',
     clearFilteredSessions: '清空当前筛选会话',
     confirmDeleteFilteredSessions: (count) => `确认删除当前筛选出的 ${count} 个会话？`,
     searchSessions: '搜索会话',
