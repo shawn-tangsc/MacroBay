@@ -1,4 +1,8 @@
 import {
+  officialCalendarFeedsAvailability,
+  type CalendarOfficialFeedsAvailability
+} from './officialCalendarAvailability'
+import {
   agentRegistry,
   allSources,
   getAgent,
@@ -82,6 +86,11 @@ export type PanelView = {
   panel: PanelDefinition
   providers: ProviderView[]
   counts: { sources: number; enabled: number }
+  /**
+   * 官方日历腿的三态（只在经济日历这个面板上出现）。日历页据此把「来源全关 / 本月确实没有 /
+   * 取不到」拆开；一处算、一处读——页面不再自己遍历注册表。
+   */
+  calendarOfficialFeeds?: CalendarOfficialFeedsAvailability
 }
 
 const categoryOrder: SourceCategory[] = ['macro', 'crypto', 'aggregate', 'system']
@@ -183,7 +192,10 @@ export function panelView(panelId: PanelId, state: ProjectionState = {}): PanelV
   return {
     panel,
     providers: groupByProvider(sources),
-    counts: { sources: sources.length, enabled: sources.filter((source) => source.enabled).length }
+    counts: { sources: sources.length, enabled: sources.filter((source) => source.enabled).length },
+    ...(panelId === 'economic-calendar'
+      ? { calendarOfficialFeeds: officialCalendarFeedsAvailability(sources) }
+      : {})
   }
 }
 
