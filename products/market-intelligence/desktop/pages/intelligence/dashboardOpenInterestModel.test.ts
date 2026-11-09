@@ -64,6 +64,20 @@ const available = (overrides: Record<string, unknown> = {}) => ({
   ...overrides
 })
 
+it('hands the card both instants from one place: the folded point and the newest reading', () => {
+  // 卡面那段「观测时间 X · 最新读数 Y」不许各算一处：投影里一次给出两个时刻（同源），
+  // 否则窗口切换时会冒出「显示 01:00 · 01:45 但曲线末点其实不是 01:00」的第三类错。
+  const view = projectDashboardPositioning(available({ newestReadingAt: '2026-11-10T01:45:00.000Z' }), '2026-11-10T01:50:00.000Z', '7d')
+  if (view.state !== 'available') throw new Error('expected available')
+  expect(view.pointAt).toBe('2026-11-10T01:00:00.000Z')
+  expect(view.newestReadingAt).toBe('2026-11-10T01:45:00.000Z')
+  // 老载荷没有最新读数：两个时刻相等（同一个来源），卡面因此只写一段。
+  const legacy = projectDashboardPositioning(available(), '2026-11-10T01:50:00.000Z', '7d')
+  if (legacy.state !== 'available') throw new Error('expected available')
+  expect(legacy.pointAt).toBe('2026-11-10T01:00:00.000Z')
+  expect(legacy.newestReadingAt).toBe(legacy.pointAt)
+})
+
 it('does not call the data stale when the reading behind the folded hour is newer', () => {
   // 折叠点的时刻是 01:00，但那一格承载的最新读数是 01:45 —— 数据只差 5 分钟，不是「已滞后」。
   const fresh = projectDashboardPositioning(available({ newestReadingAt: '2026-11-10T01:45:00.000Z' }), '2026-11-10T01:50:00.000Z', '7d')

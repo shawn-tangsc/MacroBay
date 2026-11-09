@@ -9,6 +9,8 @@ export type PositioningPanelText = Readonly<{
   /** 形状/版本不符时的唯一出路（完全退出后重开）；这一种不给重试按钮。 */
   contractMismatch: string
   observedAt: string
+  /** 「最新读数」：7 天窗口的折叠点比真实最新读数早，卡面在两段不同时写第二段。 */
+  newestReading: string
   stale: string
   /** " · {stale}" appended after the observed instant; the separator is punctuation, so it is per language. */
   staleSuffix: string

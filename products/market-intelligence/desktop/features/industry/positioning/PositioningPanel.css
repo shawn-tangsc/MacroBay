@@ -9,7 +9,9 @@
 
 .mi-positioning-panel__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .mi-positioning-panel h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 13px; font-weight: 650; }
-.mi-positioning-panel__asof { margin-left: auto; color: var(--mi-dashboard-muted); font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* 两段时刻同一档 meta（`--font-meta` / `--line-meta` / 400 / `--muted`）；数字对齐靠 `tabular-nums`，
+   不是靠 monospace 字族——对齐是数字的事（界面设计 2026-11-10）。 */
+.mi-positioning-panel__asof { margin-left: auto; color: var(--muted); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 400; font-variant-numeric: tabular-nums; }
 
 /* Placement only: the segmented base owns its frame, selected state and focus ring. */
 .mi-positioning-panel__tabs { margin-left: auto; }

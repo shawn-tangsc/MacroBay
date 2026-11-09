@@ -167,7 +167,10 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       }).join(' · ')
     : ''
   const available = positioning.state === 'available'
-  const latest = available ? positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt : undefined
+  // 两个时刻都来自投影（同源）：曲线末点与折叠前的最新读数。这里不再 `at(-1)` 现取——
+  // 各算一处，窗口切换时就会出现「写着 01:00 · 01:45，但曲线末点其实不是 01:00」。
+  const pointAt = available ? positioning.pointAt : undefined
+  const newestReadingAt = available ? positioning.newestReadingAt ?? positioning.pointAt : undefined
   // Two different facts, two different states: nothing collected yet is empty, a failed read is an
   // error. The platform owns both sentences and the shape; the card only says which happened.
   const status = (positioning.state === 'loading' || funding.state === 'loading')
@@ -194,8 +197,15 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       data-stale={available && positioning.staleSince ? 'true' : undefined}>
       {header(
         <>
-          {latest
-            ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(latest)}{available && positioning.staleSince ? text.staleSuffix.replace('{stale}', text.stale) : ''}</small>
+          {pointAt
+            ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(pointAt)}
+                {/* 界面设计 2026-11-10：两个时刻不同才写第二段（7 天窗口的折叠点最多比最新读数早 45 分钟）。
+                    不用括号——括号读作「补充/次要」，而「最新读数更晚」在这个窗口是同等级的关键事实；
+                    也不加第三套词，只用「观测时间」「最新读数」这两段。 */}
+                {pointAt && newestReadingAt && newestReadingAt !== pointAt
+                  ? <> · {text.newestReading} {formatTime(newestReadingAt)}</>
+                  : null}
+                {available && positioning.staleSince ? text.staleSuffix.replace('{stale}', text.stale) : ''}</small>
             : null}
         </>
       )}

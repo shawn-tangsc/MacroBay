@@ -62,6 +62,15 @@ export type DashboardPositioningViewState =
       eth: readonly DashboardPositioningPoint[]
       changeBtc?: Readonly<{ h1Pct?: number; h24Pct?: number }>
       changeEth?: Readonly<{ h1Pct?: number; h24Pct?: number }>
+      /**
+       * 曲线**末点**的时刻：7 天窗口按小时折叠，它盖的是那个小时的开头。卡面「观测时间」用它。
+       */
+      pointAt?: string
+      /**
+       * 窗口内**折叠前的最新读数**时刻。卡面只在它与 `pointAt` 不同时才写第二段「最新读数」；
+       * 两者由这一处投影同时给出，卡面不再各自现取（`at(-1).observedAt` 那种写法会漂）。
+       */
+      newestReadingAt?: string
       /** Set when the newest reading is older than the staleness bound. */
       staleSince?: string
       /** 当前窗口内的全部命中，图上逐个画点（查询已按 window 裁剪）。 */
@@ -128,8 +137,13 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
      * 承载的读数早 45 分钟。拿折叠点判滞后，01:45 的新数据会被标成「已滞后」（用户 2026-11-10 现场）。
      * `newestReadingAt` 是读侧带来的真实读数时刻；老载荷没有它时退回折叠点，行为不变。
      */
-    const latest = value.newestReadingAt ?? value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
-    const staleSince = latest && Date.parse(asOf) - Date.parse(latest) > dashboardPositioningPresentationPolicy.staleAfterMs ? latest : undefined
+    // 两个时刻在**这一处**同时给出：曲线末点（折叠点）与折叠前的最新读数。卡面只读这两个字段。
+    const pointAt = value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
+    const newestReadingAt = value.newestReadingAt ?? pointAt
+    // 滞后只拿最新读数判：拿折叠点判会把 01:45 的新数据说成「已滞后」（用户 2026-11-10 现场）。
+    const staleSince = newestReadingAt && Date.parse(asOf) - Date.parse(newestReadingAt) > dashboardPositioningPresentationPolicy.staleAfterMs
+      ? newestReadingAt
+      : undefined
     return {
       state: 'available',
       window,
@@ -143,6 +157,8 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
       hiddenHits: Math.max(0, (value.liquidationHintsTotal ?? value.liquidationHints?.length ?? 0) - (value.liquidationHints?.length ?? 0)),
       signal: { state: 'hidden' },
       onReload,
+      ...(pointAt ? { pointAt } : {}),
+      ...(newestReadingAt ? { newestReadingAt } : {}),
       ...(staleSince ? { staleSince } : {})
     }
   } catch {

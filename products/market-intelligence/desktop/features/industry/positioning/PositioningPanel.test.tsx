@@ -6,6 +6,7 @@ import { resolveStateViewText } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellInstant } from '@platform/ui/time/shellTimeFormat'
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
@@ -113,6 +114,27 @@ async function openReadings(): Promise<{ host: HTMLElement; entry: HTMLButtonEle
 function dialog(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[role="dialog"]')
 }
+
+/**
+ * 界面设计 2026-11-10（口径已定）：`观测时间 01:00 · 最新读数 01:45`，**只在两者不同时**出现第二段；
+ * 24 小时 / 1 小时窗口下两点相同，只留「观测时间」。不用括号（那是"补充/次要"），也不加第三套词。
+ */
+it('adds 最新读数 only when it differs from the folded point', () => {
+  const fmt = (instant: string) => formatShellInstant(instant, { timeZone: 'UTC', locale: 'zh-CN' })
+  const sevenDay = render({ positioning: { ...availablePositioning, pointAt: at(60), newestReadingAt: at(15) } })
+  expect(sevenDay).toContain(`${text.observedAt} ${fmt(at(60))}`)
+  expect(sevenDay).toContain(` · ${text.newestReading} ${fmt(at(15))}`)
+  // 不用括号，也不许冒出第三个词。
+  const asOfLine = /<small class="mi-positioning-panel__asof">([\s\S]*?)<\/small>/u.exec(sevenDay)?.[1] ?? ''
+  expect(asOfLine).not.toContain('（')
+  expect(asOfLine).toContain(` · ${text.newestReading} `)
+  expect(sevenDay).not.toContain('曲线末点')
+
+  // 两个时刻相同（24h / 1h 窗口，或老载荷）：一个字都不多。
+  const same = render({ positioning: { ...availablePositioning, pointAt: at(15), newestReadingAt: at(15) } })
+  expect(same).toContain(`${text.observedAt} ${fmt(at(15))}`)
+  expect(same).not.toContain(text.newestReading)
+})
 
 describe('positioning panel', () => {
   it('keeps the leg that has funding history and names the other as unknown with its reason', () => {
@@ -230,7 +252,9 @@ describe('positioning panel', () => {
   })
 
   it('flags a stale reading without dropping it', () => {
-    const markup = render({ positioning: { ...availablePositioning, staleSince: at(120) } })
+    // 投影给 available 视图同时带上两个时刻（`pointAt` / `newestReadingAt`）；滞后判的是最新读数，
+    // 这个夹具里两者相同——这正是「读数确实旧了」的样子。
+    const markup = render({ positioning: { ...availablePositioning, pointAt: at(120), newestReadingAt: at(120), staleSince: at(120) } })
     expect(markup).toContain('data-stale="true"')
     expect(markup).toContain(text.stale)
     expect(markup).toMatch(/\$8\.8\dB/)
