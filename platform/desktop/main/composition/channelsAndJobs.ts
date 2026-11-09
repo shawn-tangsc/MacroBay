@@ -29,6 +29,8 @@ import {
 } from '../../../ai/agent-platform/channels'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
+import { pruneChannelRuntimeAudits } from '../../../ai/agent-platform/channels/channelRuntimeAuditPrune'
+import { setChannelRuntimeAuditPrune } from './slots'
 import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../../ai/agent-platform/channels/channelRuntimeFailureMirror'
 import { channelConversationTitle } from '../../../ai/agent-platform/channels/channelConversationName'
 import { channelAdapterDescriptor } from '../../../ai/agent-platform/channels/channelAdapterDescriptors'
@@ -168,6 +170,9 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   })
   // 设置页「发一条测试消息」要走真投递：装在这儿而不是 app.ts（那是只减不增的基线文件）。
   channelManagementService.setDelivery(channelDeliveryService)
+  // 运行审计的批量裁剪（0.4.3 B3）：库句柄在这里，保留期任务在别处注册——经槽传过去，
+  // 不让 `app.ts` 为它多两行（受保护接缝只能变小）。
+  setChannelRuntimeAuditPrune(() => pruneChannelRuntimeAudits(agentDatabase))
   const channelDispatchRuns = new ChannelDispatchRunRepository(agentDatabase)
   const channelInboundExecutionCoordinator = new ChannelInboundExecutionCoordinator({
     inbound: channelInboundRepository,

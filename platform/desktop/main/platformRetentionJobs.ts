@@ -10,7 +10,7 @@ import type { CacheAuditRetentionTarget } from '../../storage/cache-governance/c
 import { registerEventBusRetentionJob } from '../../message-bus/runtime/eventBusRetentionJob'
 import type { EventBusRetentionTarget } from '../../message-bus/runtime/eventBusRetentionJob'
 import { registerChannelRuntimeAuditRetentionJob } from '../../ai/agent-platform/channels/channelRuntimeAuditRetentionJob'
-import type { ChannelRuntimeAuditRetentionTarget } from '../../ai/agent-platform/channels/channelRuntimeAuditRetentionJob'
+import { getChannelRuntimeAuditPrune } from './composition/slots'
 
 export type PlatformRetentionInput = Readonly<{
   jobRuntime: JobRuntime
@@ -21,8 +21,6 @@ export type PlatformRetentionInput = Readonly<{
   cacheAudit: CacheAuditRetentionTarget
   /** 事件总线运行时：写侧原先无上限，保留期任务每天裁一次（`MI-11-R16`）。 */
   eventBus: EventBusRetentionTarget
-  /** 通道运行审计：写入时只裁当前频道，这里每天把所有频道都裁一遍（0.4.3 B3）。 */
-  channelRuntimeAudits: ChannelRuntimeAuditRetentionTarget
   /** 读者时区：保留期按「读者的一天」算，不按机器时区。 */
   timeZone: () => string
 }>
@@ -51,7 +49,8 @@ export function registerPlatformRetentionJobs(input: PlatformRetentionInput): vo
     timeZone: input.timeZone
   })
   registerChannelRuntimeAuditRetentionJob(input.jobRuntime, {
-    audits: () => input.channelRuntimeAudits,
+    // 库句柄在通道组合根里，经槽取——`app.ts` 不为这条任务多一行装配。
+    audits: () => ({ prune: getChannelRuntimeAuditPrune() }),
     timeZone: input.timeZone
   })
 }
