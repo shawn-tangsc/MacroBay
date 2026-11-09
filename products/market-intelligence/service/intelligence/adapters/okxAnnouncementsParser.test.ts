@@ -110,7 +110,7 @@ describe('parseOkxAnnouncementPayload', () => {
 
 describe('htmlPagePollerAdapter OKX collection', () => {
   it('collects one raw record per announcement through the injected transport', async () => {
-    const fetchText = vi.fn(async () => loadFixture('okx-announcements-api-sample.json'))
+    const fetchText = vi.fn(async (_url: string) => loadFixture('okx-announcements-api-sample.json'))
     const records = await htmlPagePollerAdapter.collect({
       config: runtimeConfig('okx-api-announcements'),
       runId: 'run-okx-api',
@@ -139,7 +139,7 @@ describe('htmlPagePollerAdapter OKX collection', () => {
   })
 
   it('omits annType for the latest-announcements source, which is OKX own aggregate query', async () => {
-    const fetchText = vi.fn(async () => loadFixture('okx-announcements-latest-sample.json'))
+    const fetchText = vi.fn(async (_url: string) => loadFixture('okx-announcements-latest-sample.json'))
     const config = runtimeConfig('okx-latest-announcements')
     const records = await htmlPagePollerAdapter.collect({ config, runId: 'run-okx-latest', fetchText })
 
