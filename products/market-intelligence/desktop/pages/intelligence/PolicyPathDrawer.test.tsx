@@ -16,6 +16,7 @@ const settlement: PolicyPathSettlement = {
   actualOutcome: 'hike-25',
   priced: 0.38,
   pricedOutcome: 'no-change',
+  pricingBasis: 'pre-decision',
   conclusion: { kind: 'relative', direction: 'hawkish', surprisePp: 62 },
   pricedDistribution: {
     'no-change': 0.59, 'hike-25': 0.38, 'hike-50-plus': 0.01, 'cut-25': 0.01, 'cut-50-plus': 0.01
