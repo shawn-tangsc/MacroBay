@@ -90,59 +90,80 @@ describe('DashboardPanelDrawer read failure', () => {
  * 读者在目录里分不出谁坏了。判据不许另写：色调一律来自 `sourceHealthTone`。
  */
 describe('DashboardPanelDrawer catalog health dot', () => {
-  it('draws no marker for a healthy provider (a always-on dot is decoration, not information)', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'healthy' }))
+  const settings = () => productText['zh-CN'].settings.intelligenceSources
+  const providerName = () => (settings().providerNames as Readonly<Record<string, string>>)[firstProvider().providerId] ?? firstProvider().displayName
+
+  it('draws nothing for a healthy provider, and leaves the row without a health name', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'healthy' }))
     await openDrawer(false)
 
     expect(dot()).toBeNull()
-    // 没标记就不要在可访问名里加健康词：健康是默认状态，说它只会加噪。
-    expect(rowName()).not.toContain(productText['zh-CN'].settings.intelligenceSources.health.statuses.healthy)
+    // 健康是默认状态：不画标记，也不在可访问名里加健康词（不为快速扫读的一列加噪）。
+    expect(document.querySelector<HTMLElement>('.intelligence-provider-row')?.getAttribute('aria-label')).toBeNull()
   })
 
-  it('draws no marker for an enabled but unavailable source (muted stays quiet)', async () => {
-    mockGetPanelView.mockResolvedValue(
-      viewWithSource({
-        enabled: true,
-        health: 'healthy',
-        unavailable: {
-          reasonCode: 'official-endpoint-returned-403',
-          automaticSync: 'stopped',
-          decidedAt: '2026-11-09'
-        }
-      })
-    )
+  it('rings an enabled but unavailable source instead of colouring it (shape, not hue)', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({
+      enabled: true,
+      healthState: 'off',
+      unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-09' }
+    }))
     await openDrawer(false)
 
-    // 不可用 = muted = 不画点；但它**不是**「健康」，只是这一层不发声（详情里逐源说明）。
+    // 「根本拿不到数据」必须看得见，但不用红吓人：空心环 + 第二行的原因句。
+    expect(dot()?.classList.contains('is-muted')).toBe(true)
+    expect(dot()?.classList.contains('is-warn')).toBe(false)
+    expect(dot()?.classList.contains('is-bad')).toBe(false)
+    // 名字恰为「供应商名 + 档位词」：不带配置摘要、不重复「来源健康」。
+    expect(rowName()).toBe(`${providerName()} ${settings().unavailableShort}`)
+    expect(rowName()).not.toContain(settings().providerSummary.replace('{total}', '').replace('{enabled}', '').trim() || '\u0000')
+  })
+
+  it('draws nothing when nothing is enabled, even with an unavailable source present', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({
+      enabled: false,
+      healthState: 'off',
+      unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-09' }
+    }))
+    await openDrawer(false)
+
+    // muted 是个桶：未启用也在里面，所以不能按 tone 画环。
+    expect(dot()).toBeNull()
+    expect(document.querySelector<HTMLElement>('.intelligence-provider-row')?.getAttribute('aria-label')).toBeNull()
+  })
+
+  it('draws nothing for an enabled source whose health is simply unknown', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'off' }))
+    await openDrawer(false)
+
+    // 「没有健康读数」不等于「不可用」：没有 unavailable 就什么都不画。
     expect(dot()).toBeNull()
   })
 
-  it('draws no marker when nothing is enabled', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: false, health: 'healthy' }))
-    await openDrawer(false)
-
-    expect(dot()).toBeNull()
-  })
-
-  it('turns red for a failed enabled source, and the marker has a name (not colour alone)', async () => {
-    const source = firstSource()
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'failed' }))
+  it('fills red for a failed source, with provider + tone word as the name', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'failed' }))
     await openDrawer(false)
 
     expect(dot()?.classList.contains('is-bad')).toBe(true)
-    // 颜色之外必须带语义：档位进目录项的可访问名，读屏不靠颜色也能拿到。
-    expect(rowName()).toContain(productText['zh-CN'].settings.intelligenceSources.health.statuses.failed)
-    // 红了还要能定位到是哪个源：展开项里点名那个源。
-    const sourceNames = productText['zh-CN'].settings.intelligenceSources.sourceNames as Readonly<Record<string, string>>
-    expect(document.body.textContent).toContain(sourceNames[source.sourceId] ?? source.displayName)
+    expect(dot()?.classList.contains('is-muted')).toBe(false)
+    expect(rowName()).toBe(`${providerName()} ${settings().health.statuses.failed}`)
   })
 
-  it('marks a degraded provider as a warning, with the same name-based semantics', async () => {
-    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'degraded' }))
+  it('fills red for repeated failures too (it is a failure the reader can still fix)', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'repeated-failures' }))
+    await openDrawer(false)
+
+    expect(dot()?.classList.contains('is-bad')).toBe(true)
+    expect(rowName()).toBe(`${providerName()} ${settings().health.statuses.failed}`)
+  })
+
+  it('fills yellow for stale data, with the same provider + tone word name', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, healthState: 'stale' }))
     await openDrawer(false)
 
     expect(dot()?.classList.contains('is-warn')).toBe(true)
-    expect(rowName()).toContain(productText['zh-CN'].settings.intelligenceSources.health.statuses['data-stale'])
+    expect(dot()?.classList.contains('is-muted')).toBe(false)
+    expect(rowName()).toBe(`${providerName()} ${settings().health.statuses['data-stale']}`)
   })
 })
 

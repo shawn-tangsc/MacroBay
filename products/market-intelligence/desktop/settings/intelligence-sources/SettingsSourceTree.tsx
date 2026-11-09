@@ -4,8 +4,9 @@ import { Segmented } from '@platform/ui/components/segmented'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import { catalogMarkerKind } from './sourceHealthTone'
 
-import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
+import { providerHasUnavailableEnabled, providerHealthState, type SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import type { SourceCategory } from '../../../service/intelligence/application/providerRegistry'
 
 export type SourceFilter = 'all' | 'calendar' | 'dashboard' | 'pending' | 'advanced'
@@ -79,6 +80,8 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
           {providers.map((provider) => {
             const enabled = provider.sources.filter((source) => source.enabled).length
             const summary = labels.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
+            // 与抽屉目录点读同一个字段、同一套标记规则（五态判一次、标记判一次）。
+            const marker = catalogMarkerKind(providerHealthState(provider.sources), providerHasUnavailableEnabled(provider.sources))
             return <section className="intelligence-provider-group" key={provider.providerId}>
               {/* 例外登记（ui-spec R1）：这是**两行内容 + 选中态的行容器**，不是命令按钮。
                   antd `Button` 会把子节点包进自己的 span 并带 padding/height，可见形状会变，
@@ -98,7 +101,7 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
                   <small>{summary}</small>
                 </span>
                 <span className="intelligence-provider-state">
-                  <i className={enabled > 0 ? 'is-on' : ''} aria-hidden="true" />
+                  {marker === undefined ? null : <i className={marker === 'bad' ? 'is-bad' : marker === 'warn' ? 'is-warn' : 'is-muted'} aria-hidden="true" />}
                   <ChevronRight aria-hidden="true" size={13} />
                 </span>
               </button>

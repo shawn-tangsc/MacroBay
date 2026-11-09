@@ -1171,6 +1171,12 @@
 
 /* 目录标记只在要人看一眼的两档出现（判据在 `sourceHealthTone`）：黄 = 降级，红 = 这次失败。
    ok / muted 不画点：常驻的绿点会被读成选中标记，两天就被无视。档位同时写进目录项可访问名。 */
+/* 空心环：muted 里只有「已启用且不可用」才画（形状与颜色双编码，灰度屏也分得清）。 */
+.intelligence-provider-state i.is-muted {
+  border: 1px solid var(--muted);
+  background: transparent;
+}
+
 .intelligence-provider-state i.is-warn {
   /* 带 fallback：这张表的守卫禁止裸用 warning token（历史：产品表曾经自己没定义它）。 */
   background: var(--warning, var(--caution));

@@ -1,7 +1,8 @@
 import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 
 import { listIntelligenceSourceDefinitions, getIntelligenceSourceDefinition } from './sourceCatalog'
-import { agentView, panelView, settingsView, type AgentView, type PanelView, type SettingsView } from './sourceProjection'
+import { agentView, panelView, settingsView, type AgentView, type PanelView, type SettingsView, type SourceHealthFact
+} from './sourceProjection'
 import { allSources, type AgentId, type PanelId } from './providerRegistry'
 import { projectJobRegistration } from './sourceJobRegistration'
 import { getIntelligenceAdapter } from '../adapters/adapterRegistry'
@@ -247,12 +248,25 @@ export function createIntelligenceSourcesService(deps: {
       return { apiKey: credential?.apiKey ?? null }
     },
 
+    /**
+     * 每个源的健康读数，只作为五态派生的输入（`sourceProjection` 一处判五态）。
+     * 与 `getPageState` 同一份 `getHealth`，不给两头各读一套。
+     */
+    async healthFacts(): Promise<Record<string, SourceHealthFact>> {
+      const definitions = this.listDefinitions()
+      const facts = await Promise.all(definitions.map(async (definition) => {
+        const health = await this.getHealth({ sourceId: definition.sourceId })
+        return [definition.sourceId, { runtimeStatus: health.runtimeStatus, consecutiveFailures: health.consecutiveFailures }] as const
+      }))
+      return Object.fromEntries(facts)
+    },
+
     async getSettingsView(): Promise<SettingsView> {
       const profiles = await deps.profileStore.listProfiles()
       const enabledById: Record<string, boolean> = {}
       for (const profile of profiles) enabledById[profile.sourceId] = profile.enabled === true
       const knownSourceIds = new Set(profiles.map((profile) => profile.sourceId))
-      return settingsView({ enabledById, jobRegisteredById: jobRegistration(), knownSourceIds })
+      return settingsView({ enabledById, healthById: await this.healthFacts(), jobRegisteredById: jobRegistration(), knownSourceIds })
     },
 
     async getAgentView(input: { agentId: string }): Promise<AgentView | undefined> {
@@ -266,7 +280,7 @@ export function createIntelligenceSourcesService(deps: {
       const profiles = await deps.profileStore.listProfiles()
       const enabledById: Record<string, boolean> = {}
       for (const profile of profiles) enabledById[profile.sourceId] = profile.enabled === true
-      return panelView(input.panelId as PanelId, { enabledById, jobRegisteredById: jobRegistration() })
+      return panelView(input.panelId as PanelId, { enabledById, healthById: await this.healthFacts(), jobRegisteredById: jobRegistration() })
     },
 
     async getPageState(input?: { sourceId?: string }) {

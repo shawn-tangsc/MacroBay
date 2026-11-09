@@ -14,62 +14,16 @@ import { openIntelligenceSourcesSettings } from '../../shared/navigation/product
 import { ProviderDetail } from '../../settings/intelligence-sources/ProviderDetail'
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
 import '../../settings/intelligence-sources/intelligence-sources.css'
-import { panelView, type PanelView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
-import { sourceHealthTone, type SourceHealthTone } from '../../settings/intelligence-sources/sourceHealthTone'
+import { panelView, providerHasUnavailableEnabled, providerHealthState, type PanelView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { catalogMarkerKind, type CatalogMarker } from '../../settings/intelligence-sources/sourceHealthTone'
 import type { PanelId } from '../../../service/intelligence/application/providerRegistry'
 
 function isCalendar(source: SourceView): boolean {
   return source.kind === 'official-calendar' || source.kind === 'market-calendar'
 }
 
-/** 色调严重度：取「已启用源里最差的一档」（`ok < muted < warn < bad`）。只排顺序，不再判一次健康。 */
-const TONE_SEVERITY: Record<SourceHealthTone, number> = { ok: 0, muted: 1, warn: 2, bad: 3 }
-
-/**
- * 面板视图的健康是粗档字符串，而色调函数收的是运行时健康对象。
- * 这里只做**形状映射**，判断（亮/警示/红/中性）全部留给 `sourceHealthTone` 那一处。
- */
-function toneHealth(
-  health: SourceView['health']
-): { runtimeStatus: 'healthy' | 'degraded' | 'failed' } | undefined {
-  if (health === 'healthy') return { runtimeStatus: 'healthy' }
-  if (health === 'degraded') return { runtimeStatus: 'degraded' }
-  if (health === 'failed') return { runtimeStatus: 'failed' }
-  // `never-run` / 缺数据：不给健康对象，函数会判成 muted（「没有数据」不等于健康）。
-  return undefined
-}
-
-/**
- * 目录点的色调：**只有每一个已启用源都健康才绿**。
- *
- * 之前它只看「已启用数 > 0」，于是 BLS（启用但 403 不可用）和 Fed（正常）长得一模一样。
- * 不可用/没数据 → muted（灰）；失败 → bad（红）；降级 → warn（黄）。没启用 → muted。
- */
-function catalogTone(sources: readonly SourceView[]): SourceHealthTone {
-  const enabled = sources.filter((source) => source.enabled)
-  if (enabled.length === 0) return 'muted'
-  let worst: SourceHealthTone = 'ok'
-  for (const source of enabled) {
-    const tone = sourceHealthTone({
-      enabled: true,
-      unavailable: Boolean(source.unavailable),
-      health: toneHealth(source.health)
-    })
-    if (TONE_SEVERITY[tone] > TONE_SEVERITY[worst]) worst = tone
-  }
-  return worst
-}
-
-/**
- * 目录标记只在「要人看一眼」的两档出现：降级（黄）与失败（红）。
- * ok 与 muted（未启用 / 不可用 / 没数据）**都不画点**——常驻的绿点会被读成选中标记，两天就被无视。
- */
-function needsMarker(tone: SourceHealthTone): tone is 'warn' | 'bad' {
-  return tone === 'warn' || tone === 'bad'
-}
-
-function toneClass(tone: 'warn' | 'bad'): string {
-  return tone === 'warn' ? 'is-warn' : 'is-bad'
+function toneClass(marker: CatalogMarker): string {
+  return marker === 'bad' ? 'is-bad' : marker === 'warn' ? 'is-warn' : 'is-muted'
 }
 
 /**
@@ -185,23 +139,24 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
                 const providerName = (settingsText.providerNames as Readonly<Record<string, string>>)[provider.providerId] ?? provider.displayName
                 const enabled = provider.sources.filter((source) => source.enabled).length
                 const summary = settingsText.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
-                const tone = catalogTone(provider.sources)
-                // 颜色之外必须有语义：要出标记的两档把档位词写进目录项的可访问名（读屏不靠颜色）。
-                const healthWord = tone === 'bad'
+                // 五态在 `sourceProjection` 判一次，标记形态在 `catalogMarkerKind` 判一次（两个目录点共用）。
+                const marker = catalogMarkerKind(providerHealthState(provider.sources), providerHasUnavailableEnabled(provider.sources))
+                // 颜色之外必须有语义：档位词进目录项的可访问名，读屏不靠颜色；名字不带配置摘要。
+                const healthWord = marker === 'bad'
                   ? settingsText.health.statuses.failed
-                  : tone === 'warn'
+                  : marker === 'warn'
                     ? settingsText.health.statuses['data-stale']
-                    : null
+                    : marker === 'muted' ? settingsText.unavailableShort : null
                 return <section className="intelligence-provider-group" key={provider.providerId}>
                   <button
-                    aria-label={healthWord === null ? undefined : `${providerName} ${summary} ${settingsText.health.title} ${healthWord}`}
+                    aria-label={healthWord === null ? undefined : `${providerName} ${healthWord}`}
                     className={`intelligence-provider-row${provider.providerId === providerId ? ' selected' : ''}`}
                     type="button"
                     onClick={() => setProviderId(provider.providerId)}
                   >
                     <span className={`intelligence-source-avatar${provider.sources.every((source) => source.panels.length === 0) ? ' is-unused' : ''}`} aria-hidden="true">{providerName.slice(0, 1).toUpperCase()}</span>
                     <span className="intelligence-provider-main"><strong>{providerName}</strong><small>{summary}</small></span>
-                    <span className="intelligence-provider-state">{needsMarker(tone) ? <i className={toneClass(tone)} aria-hidden="true" /> : null}<ChevronRight aria-hidden="true" size={13} /></span>
+                    <span className="intelligence-provider-state">{marker === undefined ? null : <i className={toneClass(marker)} aria-hidden="true" />}<ChevronRight aria-hidden="true" size={13} /></span>
                   </button>
                 </section>
               })}

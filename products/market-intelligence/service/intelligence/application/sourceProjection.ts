@@ -27,11 +27,81 @@ import {
  */
 export const SOURCE_REPEATED_FAILURE_THRESHOLD = 3
 
-export type SourceHealth = 'healthy' | 'degraded' | 'failed' | 'never-run'
+/**
+ * 一个源此刻的健康读数（管线投影出来的那几项）。**只作为派生五态的输入**，不直接上界面：
+ * 界面读 `SourceView.healthState`，不要再自己拿 `runtimeStatus`/`consecutiveFailures` 判一遍。
+ */
+export type SourceHealthFact = Readonly<{
+  runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'
+  consecutiveFailures: number
+}>
+
+/**
+ * 一个源对读者呈现的五态（C6，2026-11-10）：**全仓只在这里判一次**。
+ *
+ * - `healthy`：启用、可用、健康读数说 healthy → 绿；
+ * - `repeated-failures`：降级且连续失败到阈值 → 红（「多次失败」，不是「数据偏旧」）；
+ * - `stale`：降级但没到阈值 → 黄（「数据偏旧」）；
+ * - `failed`：健康读数说 failed → 红；
+ * - `off`：**不亮的那一档**——没启用，或已启用但现在取不到（`unavailable`，如 BLS 403），
+ *   或根本没有健康读数。「没有数据不等于健康」，所以它也落这一档，而不是绿。
+ *
+ * `off` 只说**颜色上不亮**，不等于「读者关掉了」：不可用的读者用词由各自那句给（源行「不可用」），
+ * 这一层不给词。
+ */
+export type SourceHealthState = 'healthy' | 'repeated-failures' | 'stale' | 'failed' | 'off'
+
+export function sourceHealthState(input: Readonly<{
+  enabled: boolean
+  unavailable?: boolean
+  health?: SourceHealthFact
+}>): SourceHealthState {
+  if (!input.enabled) return 'off'
+  // 「取不到」不是「失败」：不可用按不亮处理，不给红（红只给这次失败、能修的那种）。
+  if (input.unavailable === true) return 'off'
+  const health = input.health
+  if (health === undefined) return 'off'
+  if (health.runtimeStatus === 'healthy') return 'healthy'
+  if (health.runtimeStatus === 'failed') return 'failed'
+  if (health.runtimeStatus === 'paused') return 'off'
+  return health.consecutiveFailures >= SOURCE_REPEATED_FAILURE_THRESHOLD ? 'repeated-failures' : 'stale'
+}
+
+/** 五态的严重度：目录点取「已启用源里最差的一档」时只排顺序，不再判一次健康。 */
+const HEALTH_STATE_SEVERITY: Record<SourceHealthState, number> = {
+  healthy: 0, off: 1, stale: 2, 'repeated-failures': 3, failed: 3
+}
+
+/**
+ * 一个 provider 在左栏目录里该显示的态：已启用源里最差的一档；一个都没启用＝`off`。
+ * 目录点与设置页左树都读它，两处不再各写一份「取最差」。
+ */
+export function providerHealthState(sources: readonly Readonly<{ enabled: boolean; healthState: SourceHealthState }>[]): SourceHealthState {
+  let worst: SourceHealthState | undefined
+  for (const source of sources) {
+    if (!source.enabled) continue
+    if (worst === undefined || HEALTH_STATE_SEVERITY[source.healthState] > HEALTH_STATE_SEVERITY[worst]) worst = source.healthState
+  }
+  return worst ?? 'off'
+}
+
+/**
+ * 目录点画不画空心环的**唯一**判据：`muted` 同时覆盖「未启用 / 不可用 / 没有健康读数」三种，
+ * 只有「已启用**且**有这个源判定不可用」才画环；未启用、没数据什么都不画。
+ * 它只汇总一个事实（有没有不可用的已启用源），不判健康——健康仍是 `sourceHealthState`。
+ */
+export function providerHasUnavailableEnabled(sources: readonly Readonly<{ enabled: boolean; unavailable?: unknown }>[]): boolean {
+  return sources.some((source) => source.enabled && source.unavailable !== undefined)
+}
+
+/** 红色两档的判据：这次失败、还能修。其余状态都不是「坏了」。 */
+export function isFailingHealthState(state: SourceHealthState): state is 'failed' | 'repeated-failures' {
+  return state === 'failed' || state === 'repeated-failures'
+}
 
 export type ProjectionState = {
   enabledById?: Readonly<Record<string, boolean>>
-  healthById?: Readonly<Record<string, SourceHealth>>
+  healthById?: Readonly<Record<string, SourceHealthFact>>
   jobRegisteredById?: Readonly<Record<string, boolean>>
   /** Sources that already have a profile, including disabled ones. */
   knownSourceIds?: ReadonlySet<string>
@@ -40,7 +110,8 @@ export type ProjectionState = {
 export type SourceView = SourceDefinition & {
   enabled: boolean
   jobRegistered?: boolean
-  health?: SourceHealth
+  /** 五态结论，与其他面读的是同一个字段（见 `sourceHealthState`）。 */
+  healthState: SourceHealthState
 }
 
 export type ProviderView = {
@@ -96,11 +167,17 @@ export type PanelView = {
 const categoryOrder: SourceCategory[] = ['macro', 'crypto', 'aggregate', 'system']
 
 function toView(source: SourceDefinition, state: ProjectionState): SourceView {
+  const enabled = state.enabledById?.[source.sourceId] === true
+  const health = state.healthById?.[source.sourceId]
   return {
     ...source,
-    enabled: state.enabledById?.[source.sourceId] === true,
-    ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {}),
-    ...(state.healthById?.[source.sourceId] ? { health: state.healthById[source.sourceId] } : {})
+    enabled,
+    healthState: sourceHealthState({
+      enabled,
+      ...(source.unavailable === undefined ? {} : { unavailable: true }),
+      ...(health === undefined ? {} : { health })
+    }),
+    ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {})
   }
 }
 
@@ -135,7 +212,7 @@ function countView(sources: SourceView[]) {
     total: sources.length,
     enabled: sources.filter((source) => source.enabled).length,
     pending: sources.filter((source) => source.visibility === 'pending').length,
-    failed: sources.filter((source) => source.health === 'failed').length
+    failed: sources.filter((source) => isFailingHealthState(source.healthState)).length
   }
 }
 
