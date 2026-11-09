@@ -3662,43 +3662,6 @@ h1 {
   margin-bottom: 8px;
 }
 
-.agent-side-panel-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  min-height: 30px;
-  margin-bottom: 8px;
-  padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 58%, transparent);
-}
-
-.agent-side-panel-tabs button {
-  min-width: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted-strong);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
-  transition:
-    background 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease;
-}
-
-.agent-side-panel-tabs button:hover {
-  color: var(--text-strong);
-}
-
-.agent-side-panel-tabs button.active {
-  background: var(--surface);
-  color: var(--text-strong);
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 5%, transparent);
-}
-
 .agent-new-agent-button.ant-btn {
   flex: 1;
   justify-content: flex-start;
@@ -3777,6 +3740,33 @@ h1 {
 }
 
 .assistant-side-panel-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+/* 智能体侧栏同一形状：`Tabs` 填满剩余高度，面板内 `[动作条][可滚动内容]` 两行。 */
+.agent-side-panel.agent-side-panel--tabbed {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-side-panel--tabbed > .tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel--tabbed .tabs__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel--tabbed .tabs__panel[hidden] {
+  display: none;
+}
+
+.agent-side-panel-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;

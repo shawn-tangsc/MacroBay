@@ -6,6 +6,7 @@ import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/ch
 import type { AgentSessionRuntimeStateBySessionId } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { AgentSessionPanelPosition } from '@platform/settings/schema/appSettings'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
+import { Tabs } from '@platform/ui/components/tabs'
 
 import AgentRoster from './components/AgentRoster'
 import Sessions from './components/Sessions'
@@ -22,6 +23,11 @@ import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } fr
 import { startDefaultSession } from './startDefaultSession'
 
 type AgentSidePanelTab = 'agents' | 'sessions'
+
+/** 页签与整组的读屏名：句子在 `agentText.sidePanel` 里，键只回答「哪一句」。 */
+const TAB_AGENTS_KEY = 'agent.sidePanel.tabAgents'
+const TAB_SESSIONS_KEY = 'agent.sidePanel.tabSessions'
+const TAB_GROUP_KEY = 'agent.sidePanel.tabGroup'
 
 type AgentSidePanelProps = {
   state: AgentStoreState
@@ -132,122 +138,120 @@ export default function AgentSidePanel({
   }
 
   return (
-    <aside ref={panelRef} className="agent-side-panel">
-      <div className="agent-side-panel-tabs" role="tablist" aria-label={t.sidePanel.navigationTabs}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'agents'}
-          className={activeTab === 'agents' ? 'active' : ''}
-          onClick={() => setActiveTab('agents')}>
-          {t.sidePanel.agentsTab}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'sessions'}
-          className={activeTab === 'sessions' ? 'active' : ''}
-          onClick={() => setActiveTab('sessions')}>
-          {t.sidePanel.sessionsTab}
-        </button>
-      </div>
-
-      <div className="agent-side-panel-action">
-        {activeTab === 'agents' ? (
-          <Tooltip labelKey={tooltipKeys.createAgent} resolveText={resolveText}>
-            <Button className="agent-side-panel-add-button" icon={<Bot size={15} />} onClick={onCreateAgent}>
-              {t.navbar.createAgent}
-            </Button>
-          </Tooltip>
-        ) : (
-          <>
-            <DisabledHint
-              labelKey={disabledHintKeys.newSession}
-              resolveText={resolveHintText}>
-              <Button
-                className="agent-side-panel-add-button"
-                icon={<MessageSquarePlus size={15} />}
-                disabled={!activeAgentId}
-                onClick={createDefaultSession}>
-                {t.sidePanel.newSession}
-              </Button>
-            </DisabledHint>
-            <DisabledHint
-              labelKey={disabledHintKeys.deleteFiltered}
-              resolveText={resolveHintText}>
-              <Button
-                className="ant-shell-icon-button"
-                type="text"
-                size="small"
-                icon={<Trash2 size={15} />}
-                aria-label={t.sidePanel.deleteFiltered}
-                disabled={filteredSessions.length === 0}
-                onClick={() => {
-                  const ids = filteredSessions.map((session) => session.id)
-                  confirm({
-                    title: t.sidePanel.deleteFiltered,
-                    description: t.sidePanel.confirmDeleteFilteredSessions(ids.length),
-                    confirmLabel: t.sidePanel.deleteFiltered,
-                    cancelLabel: t.common.cancel,
-                    tone: 'danger',
-                    onConfirm: () => {
-                      void deleteSessionsViaApi(window.platform, ids).catch(() => {
-                        onStateChange((current) => deleteSessions(current, ids))
-                      })
-                    }
-                  })
-                }}
+    <aside ref={panelRef} className="agent-side-panel agent-side-panel--tabbed">
+      <Tabs
+        ariaLabelKey={TAB_GROUP_KEY}
+        items={[
+          { value: 'agents', labelKey: TAB_AGENTS_KEY },
+          { value: 'sessions', labelKey: TAB_SESSIONS_KEY }
+        ]}
+        onChange={(value) => setActiveTab(value === 'agents' ? 'agents' : 'sessions')}
+        panels={{
+          // 动作条属于面板（`ui-conventions.md`）：面板第一行是该页签自己的动作，下面是可滚动内容。
+          agents: (
+            <div className="agent-side-panel-panel">
+              <div className="agent-side-panel-action">
+                <Tooltip labelKey={tooltipKeys.createAgent} resolveText={resolveText}>
+                  <Button className="agent-side-panel-add-button" icon={<Bot size={15} />} onClick={onCreateAgent}>
+                    {t.navbar.createAgent}
+                  </Button>
+                </Tooltip>
+              </div>
+              <div className="agent-side-panel-content">
+              <AgentRoster
+                agents={state.agents}
+                activeAgentId={activeAgentId}
+                sessionCountByAgentId={sessionCountByAgentId}
+                onSelectAgent={selectAgent}
+                onEditAgent={onEditAgent}
               />
-            </DisabledHint>
-          </>
-        )}
-      </div>
-
-      <div className="agent-side-panel-content">
-        {activeTab === 'agents' ? (
-          <AgentRoster
-            agents={state.agents}
-            activeAgentId={activeAgentId}
-            sessionCountByAgentId={sessionCountByAgentId}
-            onSelectAgent={selectAgent}
-            onEditAgent={onEditAgent}
-          />
-        ) : (
-          <>
-            <div className="agent-session-search">
-              <Input
-                value={keyword}
-                size="small"
-                prefix={<Search size={13} />}
-                placeholder={t.sidePanel.searchSessions}
-                allowClear
-                onChange={(event) => setKeyword(event.target.value)}
-              />
-              <span>{t.sidePanel.sessionCount(filteredSessions.length)}</span>
+              </div>
             </div>
+          ),
+          sessions: (
+            <div className="agent-side-panel-panel">
+              <div className="agent-side-panel-action">
+                  <DisabledHint
+                    labelKey={disabledHintKeys.newSession}
+                    resolveText={resolveHintText}>
+                    <Button
+                      className="agent-side-panel-add-button"
+                      icon={<MessageSquarePlus size={15} />}
+                      disabled={!activeAgentId}
+                      onClick={createDefaultSession}>
+                      {t.sidePanel.newSession}
+                    </Button>
+                  </DisabledHint>
+                  <DisabledHint
+                    labelKey={disabledHintKeys.deleteFiltered}
+                    resolveText={resolveHintText}>
+                    <Button
+                      className="ant-shell-icon-button"
+                      type="text"
+                      size="small"
+                      icon={<Trash2 size={15} />}
+                      aria-label={t.sidePanel.deleteFiltered}
+                      disabled={filteredSessions.length === 0}
+                      onClick={() => {
+                        const ids = filteredSessions.map((session) => session.id)
+                        confirm({
+                          title: t.sidePanel.deleteFiltered,
+                          description: t.sidePanel.confirmDeleteFilteredSessions(ids.length),
+                          confirmLabel: t.sidePanel.deleteFiltered,
+                          cancelLabel: t.common.cancel,
+                          tone: 'danger',
+                          onConfirm: () => {
+                            void deleteSessionsViaApi(window.platform, ids).catch(() => {
+                              onStateChange((current) => deleteSessions(current, ids))
+                            })
+                          }
+                        })
+                      }}
+                    />
+                  </DisabledHint>
+              </div>
+              <div className="agent-side-panel-content">
+                <div className="agent-session-search">
+                  <Input
+                    value={keyword}
+                    size="small"
+                    prefix={<Search size={13} />}
+                    placeholder={t.sidePanel.searchSessions}
+                    allowClear
+                    onChange={(event) => setKeyword(event.target.value)}
+                  />
+                  <span>{t.sidePanel.sessionCount(filteredSessions.length)}</span>
+                </div>
 
-            <Sessions
-              sessions={filteredSessions}
-              // 搜索只作用于读者自己的列表；自动块不受关键词影响（本批不覆盖搜索，见原型「没覆盖」）。
-              automationSessions={automationSessions}
-              activeSessionId={state.activeSessionId}
-              pinnedSessionIds={new Set(state.sessionPins.map((pin) => pin.sessionId))}
-              messagesBySessionId={state.messagesBySessionId}
-              runtimeStateBySessionId={runtimeStateBySessionId}
-              channelTypeBySessionId={channelTypeBySessionId}
-              channelRuntimeSnapshot={channelRuntimeSnapshot}
-              sessionPanelPosition={sessionPanelPosition}
-              onUpdateSessionPanelPosition={onUpdateSessionPanelPosition}
-              onSelectSession={(sessionId) => {
-                void selectSessionViaApi(window.platform, sessionId).catch(() => {
-                  onStateChange((current) => selectSession(current, sessionId))
-                })
-              }}
-              onStateChange={onStateChange}
-            />
-          </>
-        )}
-      </div>
+                <Sessions
+                  sessions={filteredSessions}
+                  // 搜索只作用于读者自己的列表；自动块不受关键词影响（本批不覆盖搜索，见原型「没覆盖」）。
+                  automationSessions={automationSessions}
+                  activeSessionId={state.activeSessionId}
+                  pinnedSessionIds={new Set(state.sessionPins.map((pin) => pin.sessionId))}
+                  messagesBySessionId={state.messagesBySessionId}
+                  runtimeStateBySessionId={runtimeStateBySessionId}
+                  channelTypeBySessionId={channelTypeBySessionId}
+                  channelRuntimeSnapshot={channelRuntimeSnapshot}
+                  sessionPanelPosition={sessionPanelPosition}
+                  onUpdateSessionPanelPosition={onUpdateSessionPanelPosition}
+                  onSelectSession={(sessionId) => {
+                    void selectSessionViaApi(window.platform, sessionId).catch(() => {
+                      onStateChange((current) => selectSession(current, sessionId))
+                    })
+                  }}
+                  onStateChange={onStateChange}
+                />
+              </div>
+            </div>
+          )
+        }}
+        resolveText={(key) =>
+          key === TAB_AGENTS_KEY ? t.sidePanel.agentsTab : key === TAB_SESSIONS_KEY ? t.sidePanel.sessionsTab : t.sidePanel.navigationTabs
+        }
+        value={activeTab}
+      />
+
     </aside>
   )
 }
