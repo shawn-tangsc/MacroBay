@@ -24,7 +24,7 @@ describe('dashboard capital conditions model', () => {
     }, asOf)
 
     expect(result).toEqual({
-      state: 'available', conclusion: 'partial', etf: 'unavailable', etfReading: { state: 'unreadable', missing: { btc: 'source-unreadable', eth: 'source-unreadable' }, comparison: { state: 'unaligned', reason: 'source-unreadable' }, coverage: [] }, observedAt: '2026-08-18T07:00:00.000Z',
+      state: 'available', conclusion: 'partial', etfReading: { state: 'unreadable', missing: { btc: 'source-unreadable', eth: 'source-unreadable' }, comparison: { state: 'unaligned', reason: 'source-unreadable' }, coverage: [] }, observedAt: '2026-08-18T07:00:00.000Z',
       currentUsd: '$254.9B', change1dUsd: '+$82.4M', change1dPercent: '+0.03%', change7dUsd: '+$82.4M', change7dPercent: '+0.03%',
       change30dUsd: '-$500M', change30dPercent: '-0.21%'
     })
@@ -42,16 +42,16 @@ describe('dashboard capital conditions model', () => {
       coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 254_900_000_000, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 1, change30dPercent: 0.01 }
     }, asOf)
 
-    if (result.state !== 'available' || result.etf === 'unavailable') throw new Error('expected safe ETF presentation')
-    expect(result.etf.btc.cumulative).toEqual([
+    if (result.state !== 'available' || !result.etfReading.btc || !result.etfReading.eth) throw new Error('expected safe ETF presentation')
+    expect(result.etfReading.btc!.cumulative).toEqual([
       { windowDays: 5, coveredDays: 5, netFlowUsd: '+$111', complete: true },
       { windowDays: 20, coveredDays: 20, netFlowUsd: '+$381', complete: true }
     ])
-    expect(result.etf.eth.cumulative).toEqual([
+    expect(result.etfReading.eth!.cumulative).toEqual([
       { windowDays: 5, coveredDays: 5, netFlowUsd: '-$111', complete: true },
       { windowDays: 20, coveredDays: 20, netFlowUsd: '-$381', complete: true }
     ])
-    expect(result.etf.coverage).toEqual([
+    expect(result.etfReading.coverage).toEqual([
       { windowDays: 5, coveredDays: 5, complete: true },
       { windowDays: 20, coveredDays: 20, complete: true }
     ])
@@ -63,16 +63,16 @@ describe('dashboard capital conditions model', () => {
       coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }
     }, asOf)
 
-    if (result.state !== 'available' || result.etf === 'unavailable') throw new Error('expected safe ETF presentation')
-    expect(result.etf.btc.cumulative).toEqual([
+    if (result.state !== 'available' || !result.etfReading.btc || !result.etfReading.eth) throw new Error('expected safe ETF presentation')
+    expect(result.etfReading.btc!.cumulative).toEqual([
       { windowDays: 5, coveredDays: 5, netFlowUsd: '+$50', complete: true },
       { windowDays: 20, coveredDays: 12, netFlowUsd: '+$78', complete: false }
     ])
-    expect(result.etf.eth.cumulative).toEqual([
+    expect(result.etfReading.eth!.cumulative).toEqual([
       { windowDays: 5, coveredDays: 5, netFlowUsd: '-$50', complete: true },
       { windowDays: 20, coveredDays: 12, netFlowUsd: '-$78', complete: false }
     ])
-    expect(result.etf.coverage).toEqual([
+    expect(result.etfReading.coverage).toEqual([
       { windowDays: 5, coveredDays: 5, complete: true },
       { windowDays: 20, coveredDays: 12, complete: false }
     ])
@@ -84,7 +84,7 @@ describe('dashboard capital conditions model', () => {
       coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }
     }, asOf)
 
-    expect(result).toMatchObject({ state: 'available', etf: 'unavailable' })
+    expect(result).toMatchObject({ state: 'available', etfReading: { state: 'unreadable' } })
     expect(JSON.stringify(result)).not.toContain('cumulative')
   })
 
@@ -96,16 +96,16 @@ describe('dashboard capital conditions model', () => {
 
     expect(result).toMatchObject({
       state: 'available',
-      etf: {
+      etfReading: {
         state: 'available',
         btc: { asset: 'BTC', latestNetFlowUsd: '+$30', observedAt: '2026-08-18T07:00:00.000Z' },
         eth: { asset: 'ETH', latestNetFlowUsd: '-$30', observedAt: '2026-08-18T07:00:00.000Z' }
       }
     })
-    if (result.state !== 'available' || result.etf === 'unavailable') throw new Error('expected safe ETF presentation')
-    expect(result.etf.btc.rows).toHaveLength(30)
-    expect(result.etf.eth.rows).toHaveLength(30)
-    expect(result.etf.btc.rows.at(-2)).toMatchObject({ direction: 'zero', magnitudePercent: 0 })
+    if (result.state !== 'available' || !result.etfReading.btc || !result.etfReading.eth) throw new Error('expected safe ETF presentation')
+    expect(result.etfReading.btc!.rows).toHaveLength(30)
+    expect(result.etfReading.eth!.rows).toHaveLength(30)
+    expect(result.etfReading.btc!.rows.at(-2)).toMatchObject({ direction: 'zero', magnitudePercent: 0 })
     if (result.flowHistory?.state !== 'available') throw new Error('expected a readable flow history')
     expect(result.flowHistory.rows[0]).toEqual({ tradingDate: '2026-08-11', funds: -23, btc: 24, eth: -24 })
     expect(result.flowHistory.rows).toHaveLength(7)
@@ -160,7 +160,8 @@ describe('dashboard capital conditions model', () => {
       coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 254_900_000_000, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 1, change30dPercent: 0.01 }
     }, asOf)
 
-    expect(result).toMatchObject({ state: 'available', currentUsd: '$254.9B', etf: 'unavailable' })
+    // 一支 DTO 的资产标错（ETH 位置写着 BTC）是**整包**不合契约：校验在资产标签上就拒了，两支都读不到。
+    expect(result).toMatchObject({ state: 'available', currentUsd: '$254.9B', etfReading: { state: 'unreadable', missing: { btc: 'source-unreadable', eth: 'source-unreadable' } } })
   })
 
   it('keeps a complete zero-flow ETF window available for explicit zero-axis bars', () => {
@@ -177,10 +178,10 @@ describe('dashboard capital conditions model', () => {
 
     expect(result).toMatchObject({
       state: 'available',
-      etf: { state: 'available', btc: { latestNetFlowUsd: '$0' }, eth: { latestNetFlowUsd: '$0' } }
+      etfReading: { state: 'available', btc: { latestNetFlowUsd: '$0' }, eth: { latestNetFlowUsd: '$0' } }
     })
-    if (result.state !== 'available' || result.etf === 'unavailable') throw new Error('expected zero-flow ETF presentation')
-    expect(result.etf.btc.rows.every((row) => row.direction === 'zero' && row.magnitudePercent === 0)).toBe(true)
+    if (result.state !== 'available' || !result.etfReading.btc) throw new Error('expected zero-flow ETF presentation')
+    expect(result.etfReading.btc.rows.every((row) => row.direction === 'zero' && row.magnitudePercent === 0)).toBe(true)
   })
 
   it.each([
@@ -198,7 +199,7 @@ describe('dashboard capital conditions model', () => {
       state: 'available', asOf, etf: { state: 'unavailable' }, conclusion: 'partial',
       coreStablecoins: { observedAt: asOf, verifiedAt: asOf, currentUsd: 1, change1dUsd: -0, change1dPercent: -0, change7dUsd: -0, change7dPercent: -0, change30dUsd: -0, change30dPercent: -0 }
     }, asOf)).toEqual({
-      state: 'available', conclusion: 'partial', etf: 'unavailable', etfReading: { state: 'unreadable', missing: { btc: 'source-unreadable', eth: 'source-unreadable' }, comparison: { state: 'unaligned', reason: 'source-unreadable' }, coverage: [] }, observedAt: asOf, currentUsd: '$1',
+      state: 'available', conclusion: 'partial', etfReading: { state: 'unreadable', missing: { btc: 'source-unreadable', eth: 'source-unreadable' }, comparison: { state: 'unaligned', reason: 'source-unreadable' }, coverage: [] }, observedAt: asOf, currentUsd: '$1',
       change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%'
     })
   })

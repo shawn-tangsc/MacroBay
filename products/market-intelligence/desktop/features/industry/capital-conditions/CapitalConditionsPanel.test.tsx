@@ -141,8 +141,6 @@ describe('CapitalConditionsPanel', () => {
       state: {
         state: 'available', conclusion: 'partial', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
         flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1_000_000, btc: 2_000_000, eth: -3_000_000 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
-        // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
-        etf: 'unavailable' as const,
         etfReading: {
           state: 'available',
           comparison: { state: 'aligned' },
@@ -291,7 +289,7 @@ describe('CapitalConditionsPanel', () => {
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, {
       text,
-      state: { state: 'available', conclusion: 'partial', etf: 'unavailable' as const, etfReading: unreadableReading(), observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
+      state: { state: 'available', conclusion: 'partial', etfReading: unreadableReading(), observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
     })))
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() })))
 
@@ -720,8 +718,6 @@ function flowState(rows: readonly { tradingDate: string; funds: number; btc: num
     change30dUsd: '$0',
     change30dPercent: '0.00%',
     flowHistory: { state: 'available' as const, rows },
-    // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
-    etf: 'unavailable' as const,
     etfReading: {
       state: 'available' as const,
       comparison: { state: 'aligned' as const },
@@ -744,8 +740,6 @@ function fullState() {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
     // Mirrors the projection: it already cut the window to the last seven days before the panel sees it.
     flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: (index - 10) * 1_000_000, btc: (index + 1) * 1_000_000, eth: -(index + 1) * 1_000_000 })).slice(-7) },
-    // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
-    etf: 'unavailable' as const,
     etfReading: {
       state: 'available' as const,
       comparison: { state: 'aligned' as const },
@@ -766,8 +760,6 @@ function streakState() {
   const ethRows = btcRows.map((row) => ({ ...row, direction: 'outflow' as const }))
   return {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
-    // 过渡：模型侧还没把 `etf` 去掉，这里只满足类型；展示层已经不再读它。
-    etf: 'unavailable' as const,
     etfReading: {
       state: 'available' as const,
       comparison: { state: 'aligned' as const },

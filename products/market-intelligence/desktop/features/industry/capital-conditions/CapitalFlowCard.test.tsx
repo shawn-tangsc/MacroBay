@@ -55,8 +55,6 @@ function state(rows: readonly FlowChartRow[]) {
     change30dUsd: '-$88.2M',
     change30dPercent: '-0.03%',
     flowHistory: { state: 'available' as const, rows },
-    // 过渡：模型侧还没去掉 `etf`，这里只满足类型；展示层已不再读它。
-    etf: 'unavailable' as const,
     etfReading: {
       state: 'available' as const,
       comparison: { state: 'aligned' as const },

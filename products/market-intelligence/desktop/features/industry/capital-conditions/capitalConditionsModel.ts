@@ -38,7 +38,6 @@ export type DashboardEtfCumulativeWindow = { windowDays: number; coveredDays: nu
 export type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: string; observedAt: string; cumulative: readonly DashboardEtfCumulativeWindow[]; rows: readonly DashboardEtfFlowRow[] }
 /** BTC/ETH rows are date-aligned by contract, so the table header can state one coverage per window. */
 export type DashboardEtfCumulativeCoverage = { windowDays: number; coveredDays: number; complete: boolean }
-type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[]; verifiedAt: string }
 /**
  * The chip the capital-conditions card may draw beside its title.
  *
@@ -145,18 +144,8 @@ export type DashboardCapitalConditionsState =
        */
       stale?: true
       conclusion: 'partial' | 'unavailable'
-      /**
-       * 旧出口：两支都有值才给形状，否则 `'unavailable'`。**只保留给还没切换的展示侧**，
-       * 新读数走 `etfReading`；等组件线切完这一格删掉（加字段 → 换消费方 → 删旧字段）。
-       */
-      etf: DashboardEtfFlow | 'unavailable'
-      /**
-       * 那两格真正的读数：逐资产的值、缺的原因、能不能对比。
-       *
-       * **本阶段可选**：模型总是填它，但展示侧还没切换——在这条三段式的第一段（加字段）里把它写成必填，
-       * 等于强制改动展示侧的每一处夹具。组件线切到 `etfReading`、旧的 `etf` 删掉时，这里转必填。
-       */
-      etfReading?: DashboardEtfReading
+      /** 那两格真正的读数：逐资产的值、缺的原因、能不能对比。三段式的第三段：旧 `etf` 已删，这里必填。 */
+      etfReading: DashboardEtfReading
       /** Absent when the card could not read at all; `hidden` when the rule had nothing to say. */
       etfSignal?: DashboardEtfSignalChip
       /**
@@ -199,10 +188,9 @@ export function projectDashboardCapitalConditionsSnapshot(value: unknown, asOf: 
     if (!currentUsd || !change1dUsd || !change1dPercent || !change7dUsd || !change7dPercent || !change30dUsd || !change30dPercent) return { state: 'unavailable', reason: 'value-unformattable' }
     const dailyFlows = isValidCapitalConditionsDailyFlows(core.dailyFlows, asOf) ? core.dailyFlows : undefined
     const etfReading = projectEtf(value.etf, asOf)
-    const etf = legacyEtfProjection(etfReading)
     const flowHistory = projectFlowHistory(dailyFlows, etfReading)
     return {
-      state: 'available', conclusion: value.conclusion, etf, etfReading, ...(flowHistory === 'unavailable' ? {} : { flowHistory }), observedAt: core.observedAt,
+      state: 'available', conclusion: value.conclusion, etfReading, ...(flowHistory === 'unavailable' ? {} : { flowHistory }), observedAt: core.observedAt,
       currentUsd, change1dUsd, change1dPercent, change7dUsd, change7dPercent, change30dUsd, change30dPercent,
       ...(dailyFlows ? { dailyFlows } : {})
     }
@@ -314,13 +302,6 @@ function etfCoverage(
     const coveredDays = missingWindow ? 0 : Math.min(...covered.map((window) => window.coveredDays))
     return { windowDays: days, coveredDays, complete: !missingWindow && covered.every((window) => window.complete) }
   })
-}
-
-/** 旧出口只从「两支都有值」的读数派生，别的状态一律 `'unavailable'`（现面板就认这一个词）。 */
-function legacyEtfProjection(reading: DashboardEtfReading): DashboardEtfFlow | 'unavailable' {
-  if (reading.state !== 'available' || !reading.btc || !reading.eth || !reading.verifiedAt) return dashboardCapitalConditionsPresentationPolicy.etfState
-  // 旧出口不再自己算覆盖：直接从读数派生，旧字段删除时这份派生一起收掉。
-  return { state: 'available', btc: reading.btc, eth: reading.eth, coverage: reading.coverage, verifiedAt: reading.verifiedAt }
 }
 
 function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[] | undefined, etf: DashboardEtfReading): DashboardFlowHistory | 'unavailable' {
