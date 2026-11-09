@@ -74,7 +74,7 @@ const injectedModule = {
         )
         return { profile: next }
       },
-      setEnabled: async (input: Record<string, unknown>) => {
+      setEnabled: async (input: { sourceId: string; enabled: boolean }) => {
         fixture.enables.push(input)
         const next = {
           ...fixture.profile(),
