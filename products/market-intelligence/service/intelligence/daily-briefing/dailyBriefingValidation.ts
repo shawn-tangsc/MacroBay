@@ -73,6 +73,8 @@ export type DailyBriefingValidationFailure =
   | 'forbidden-forecast'
   | 'invalid-number-format'
   | 'asset-equality-claim'
+  /** 读者能看到的文字与本期语言不一致（按渲染结果扫，`04` §3.4.2）。 */
+  | 'invalid-output-language'
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>

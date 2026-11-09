@@ -54,6 +54,13 @@ export async function runEditorialGate(input: Readonly<{
   repairPrompt: (code: string, detail: string | undefined, failures: readonly Readonly<{ code: string; detail?: string }>[] | undefined) => string
   validate: (parsed: unknown) => DailyBriefingValidation
   apply: (value: DailyBriefingEditorialOutput) => DailyBriefingDocument
+  /**
+   * 按**渲染结果**扫语言（`04` §3.4.2）：拿到已经构建出来的文档，返回命中的叶子（路径点名）。
+   *
+   * 命中不丢段、不翻译：按一次修复重写处理；重写仍命中，这一版以 `invalid-output-language`
+   * 失败——读者看到失败行与原因，可以重试。
+   */
+  checkLanguage?: (document: DailyBriefingDocument) => readonly Readonly<{ path: string }>[]
 }>): Promise<EditorialGateOutcome> {
   const stage = input.stage
   const tools = [...input.toolInvocations]
@@ -71,12 +78,22 @@ export async function runEditorialGate(input: Readonly<{
     if (parsed) {
       const validation = input.validate(parsed)
       if (validation.ok) {
-        stage({ stage: 'validation', state: 'success' })
-        return { state: 'accepted', document: input.apply(validation.value), toolInvocations: Object.freeze(tools) }
+        const document = input.apply(validation.value)
+        // 语言只在**构建出来的文档**上判（读者看的是这一份，不是模型那份 JSON）：字段清单式校验
+        // 会随字段增加而漏，按渲染结果扫就不会。
+        const breaches = input.checkLanguage?.(document) ?? []
+        if (breaches.length === 0) {
+          stage({ stage: 'validation', state: 'success' })
+          return { state: 'accepted', document, toolInvocations: Object.freeze(tools) }
+        }
+        failureCode = 'invalid-output-language'
+        failureDetail = breaches[0]!.path
+        lastFailures = undefined
+      } else {
+        failureCode = validation.failureCode
+        failureDetail = validation.detail
+        lastFailures = validation.failures
       }
-      failureCode = validation.failureCode
-      failureDetail = validation.detail
-      lastFailures = validation.failures
     }
     // Every defect, not just the first: the code names the kind of problem, the detail names the fields,
     // and a reader who only ever sees the kind cannot act on it.

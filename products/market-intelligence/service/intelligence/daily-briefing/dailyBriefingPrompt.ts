@@ -343,5 +343,10 @@ export function repairPromptFor(
     const lines = failures.map((failure) => `- ${failure.code}${failure.detail ? `: ${failure.detail}` : ''}`).join('\n')
     return `Your previous JSON failed validation in ${failures.length} places:\n${lines}\nFix every item above and rewrite the full JSON, using only facts from the prompt.`
   }
+  if (failureCode === 'invalid-output-language') {
+    // 写成**要求**，不是句式规则（用户 2026-11-08）：每一段读者能看到的文字都用本期语言；
+    // 逐字引用的新闻标题、专有名词、机构名、URL 与数字保留原文，不要翻译；拿不准就保留原文。
+    return `Your previous JSON contains text that is not written in this edition's language${failureDetail ? ` (first at ${failureDetail})` : ''}. Rewrite the full JSON so that every piece of text the reader can see is written in this edition's language. Verbatim quotations — news headlines, proper names, institution names, URLs and numbers — stay exactly as they are and are not translation targets. When you are unsure whether a word should be translated, keep it as it is.`
+  }
   return `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`
 }

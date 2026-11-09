@@ -45,6 +45,7 @@ export function failureAdvice(code: string | undefined): BriefFailureAdvice {
     case 'editorial-timeout':
     case 'agent-turn-output-truncated':
     case 'timeout':
+    case 'invalid-output-language':
       return 'retryOrModel'
     case 'source-failed':
     case 'candidate-overflow':

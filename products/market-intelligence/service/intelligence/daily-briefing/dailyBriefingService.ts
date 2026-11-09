@@ -224,7 +224,8 @@ export type DailyBriefingTodayFailureCode =
   | 'model-not-ready' | 'provider-disabled' | 'missing-api-key' | 'cancelled' | 'rate-limited'
   | 'provider-error' | 'invalid-json' | 'schema-validation-failed' | 'invalid-translation'
   | 'agent-turn-output-truncated' | 'direction-conflict' | 'row-set-mismatch' | 'model-unavailable' | 'date-out-of-window'
-  | 'run-interrupted' | 'not-generated' // 后者不是失败：只读打开时还没写过这一期。
+  | 'run-interrupted' | 'invalid-output-language' // 后者：读者能看到的文字不是本期语言，重写仍不合规。
+  | 'not-generated' // 不是失败：只读打开时还没写过这一期。
 
 export type DailyBriefingTodayResult =
   | Readonly<{
