@@ -324,36 +324,25 @@ describe('app settings', () => {
       webSearch: createDefaultAppSettings().webSearch,
       updates: createDefaultAppSettings().updates
     })
-    expect(writes).toEqual([
-      {
-        language: 'en-US',
-        themeMode: 'light',
-        accentColor: 'violet',
-        timeZone: 'system',
-        network: defaultNetwork,
-        agent: {
-          sessionPanelPosition: 'right',
-          sessionNamingEnabled: true,
-          sessionNamingPrompt: '',
-          sessionNamingModelId: '',
-          taskAutomation: { policyPreset: 'balanced' }
-        },
-        assistant: createDefaultAppSettings().assistant,
-      modelDefaults: createDefaultAppSettings().modelDefaults,
-        chat: {
-          messageStyle: 'bubble',
-          fontSize: 18,
-          sendShortcut: 'mod-enter',
-          confirmDeleteMessage: false,
-          messageNavigation: 'anchor',
-          narrowMode: true
-        },
-        notifications: createDefaultAppSettings().notifications,
-        observability: createDefaultAppSettings().observability,
-        webSearch: createDefaultAppSettings().webSearch,
-      updates: createDefaultAppSettings().updates
-      }
-    ])
+    // 落盘只写「这次真正改的顶层字段」：旧文件里没被点到的字段保持原文，连类型不认识的
+    // 字段一起留着。读时归一（上面那些 `get()` 的期望）只发生在内存里。
+    expect(writes).toHaveLength(1)
+    const written = writes[0] as Record<string, unknown>
+    expect(written.themeMode).toBe('light')
+    // 旧文件里 `themeMode` 是非法值、`agent` 是半截对象：这次没点它们，原文原样写回。
+    expect(written.agent).toEqual({ sessionPanelPosition: 'right' })
+    expect(written.chat).toEqual({
+      messageStyle: 'bubble',
+      fontSize: 18,
+      sendShortcut: 'mod-enter',
+      confirmDeleteMessage: false,
+      messageNavigation: 'anchor',
+      narrowMode: true
+    })
+    // 归一后新增的顶层键必须补齐，否则下一次读又要走一遍默认值。
+    expect(Object.keys(written).sort()).toEqual(Object.keys(createDefaultAppSettings()).sort())
+    // 而且它绝不把归一后的「新形状」写回去掩盖旧值（旧主题值仍在内存里被解释成 dark）。
+    expect(written.accentColor).toBe('violet')
   })
 
   it('normalizes web search settings without persisting raw provider secrets', async () => {
@@ -665,5 +654,43 @@ describe('unknown notification fields: kept, but reported once', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
+  })
+})
+
+describe('读时归一不落盘（2026-11-09 缺陷）', () => {
+  it('keeps a legacy proxy block verbatim on disk when another key is saved', async () => {
+    // 旧代理三联会被读时归一当成历史默认值（折成 `system` + 空地址）。读者只改了主题，
+    // 磁盘上那条 `socks5://127.0.0.1:1080` 必须原样留着——否则他的代理设置在不知情时被改写。
+    const legacyNetwork = { proxyMode: 'system', proxyUrl: 'socks5://127.0.0.1:1080', proxyBypassRules: 'localhost,127.0.0.1,::1' }
+    const writes: unknown[] = []
+    const store = createSettingsStore({
+      read: async () => ({ language: 'zh-CN', themeMode: 'light', network: { ...legacyNetwork } }),
+      write: async (value) => {
+        writes.push(value)
+      }
+    })
+
+    // 内存里是归一的（旧三联被解释成默认：system + 空地址）。
+    await expect(store.get()).resolves.toMatchObject({ network: { proxyMode: 'system', proxyUrl: '' } })
+
+    await store.update({ themeMode: 'dark' })
+
+    expect(writes).toHaveLength(1)
+    const written = writes[0] as Record<string, unknown>
+    expect(written.themeMode).toBe('dark')
+    expect(written.network).toEqual(legacyNetwork)
+  })
+
+  it('never writes while only reading', async () => {
+    const writes: unknown[] = []
+    const store = createSettingsStore({
+      read: async () => ({ language: 'en-US' }),
+      write: async (value) => {
+        writes.push(value)
+      }
+    })
+    await store.get()
+    await store.get()
+    expect(writes).toEqual([])
   })
 })

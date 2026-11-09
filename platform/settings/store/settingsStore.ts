@@ -130,7 +130,15 @@ export function createSettingsStore(
       const operation = updateQueue.then(async () => {
         const previous = await load()
         const next = updateAppSettings(previous, patch, reportUnknownField)
-        await storage?.write(next)
+        // 落盘只写「读者这次真正改的顶层字段」，其余字段按**磁盘上的原文**原样写回。
+        //
+        // 为什么不是直接写 `next`：`normalizeAppSettings` 是**读时归一**，它会把旧形状改写成
+        // 新形状（例如旧代理三联 `system + socks5://127.0.0.1:1080 + 默认绕过` 被当成历史默认值
+        // 折成 `system + 空地址`）。把归一后的整份对象写回去，等于读者只改了一次主题，却把
+        // 他从未碰过的代理设置也静默落盘成了新值——旧值再也拿不回来。所以：
+        // - 内存里始终用归一后的 `next`（读的人拿到的是一份自洽的设置）；
+        // - 磁盘上没被 `patch` 点到的顶层字段保持原样，连类型不认识的字段一起留着。
+        await storage?.write(await mergePatchedOntoDisk(storage, patch, next))
         settings = next
         pending = { previous, next, patch, changedKeys: changedSettingKeys(previous, next) }
         return next
@@ -158,6 +166,38 @@ export function createSettingsStore(
       }
     }
   }
+}
+
+/**
+ * 把「这次改的顶层字段」叠到**磁盘原文**上：点到的字段用归一后的新值，其余原样。
+ *
+ * `storage.read()` 拿到的是磁盘上真实的 JSON；读失败/缺文件时退回归一后的整份文档
+ * （新装用户的第一次保存不该因为「没有原文」而被拦下）。
+ */
+async function mergePatchedOntoDisk(
+  storage: SettingsStorage | undefined,
+  patch: AppSettingsPatch,
+  next: AppSettings
+): Promise<AppSettings> {
+  if (!storage) return next
+  let raw: unknown
+  try {
+    raw = await storage.read()
+  } catch {
+    return next
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return next
+  const rawRecord = raw as Record<string, unknown>
+  const merged: Record<string, unknown> = { ...rawRecord }
+  for (const key of Object.keys(patch)) {
+    merged[key] = (next as unknown as Record<string, unknown>)[key]
+  }
+  // 顶层字段集以归一后的文档为准：新版本新增的顶层键即使文件里没有，也要写全，
+  // 否则下一次读会因为缺字段再走一遍默认值。
+  for (const key of Object.keys(next)) {
+    if (!(key in merged)) merged[key] = (next as unknown as Record<string, unknown>)[key]
+  }
+  return merged as unknown as AppSettings
 }
 
 /** 顶层字段里真正变了的那些；用同一份比较，订阅方就不必自己再比一遍。 */
