@@ -246,7 +246,8 @@ describe('sources settings page states', () => {
     expect(dom.textContent).toContain(zhText.collectionPolicy.title)
     const collapsedGrid = dom.querySelector<HTMLElement>('.intelligence-setting-grid')
     expect(collapsedGrid?.closest<HTMLElement>('.ant-collapse-content')?.style.display).toBe('none')
-    const header = [...dom.querySelectorAll<HTMLElement>('.intelligence-policy-disclosure__head')]
+    // 壳 `CollapsibleGroup` 到了自定义内容形态：头行由壳负责（档位、箭头、`aria-controls`）。
+    const header = [...dom.querySelectorAll<HTMLElement>('.collapsible-group .ant-collapse-header')]
       .find((element) => element.textContent?.includes(zhText.collectionPolicy.title))!
     await act(async () => { header.click() })
     await act(async () => { await Promise.resolve() })

@@ -368,14 +368,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
           {/* 采集策略（频率档 / 范围 / 是否纳入舆情）：每个源常显，读者不必先选中它。
               产品自有采集的源只留启用开关，预设与范围不适用（组件自己写那句说明）。 */}
           {/* 采集策略（频率档 / 范围 / 纳入情绪分析）：每个源一组，**默认收起**。
-              七个源就是近三十行，平铺会把详情面板的滚动撑散（界面设计 2026-11-09）。
-              用平台 `CollapsibleGroup` 的 `children` 模式：头行档位、箭头、`aria-*`、整行可点、
-              默认收起、展开区自滚都由壳给；这里四行控件是自定义内容，不是行列表。 */}
+              壳 `CollapsibleGroup` 已有自定义内容形态，头行档位、箭头、`aria-controls`、缩进都由
+              壳提供（另一条线 e20dd88 落地），本页不再自绘折叠头。 */}
           {policy && policy.profiles[source.sourceId]
             ? <CollapsibleGroup
-              titleKey={policy.labels.title}
-              // 这一处的标题来自产品自己的文案表（已解析），不是平台键表；恒等解析器只做转交。
-              resolveText={(value) => value}
+              resolveText={(key) => key === 'settings.intelligenceSources.collectionPolicy.title' ? policy.labels.title : ''}
+              titleKey="settings.intelligenceSources.collectionPolicy.title"
             >
               <CollectionPolicySection
                 configurable={source.collection !== 'none' && source.visibility !== 'pending'}
