@@ -45,6 +45,7 @@
     "check:hex-color": "tsx scripts/check-hex-color.mts",
     "check:undefined-token": "tsx scripts/check-undefined-token.mts",
     "check:font-weight": "tsx scripts/check-font-weight.mts",
+    "check:font-size-literals": "tsx scripts/check-font-size-literals.mts",
     "seed:briefing-history": "tsx scripts/seed-daily-briefing-history.mts",
     "seed:analysis-quota": "tsx scripts/seed-analysis-quota.mts",
     "check:async-initial-state": "tsx scripts/check-async-initial-state.mts",

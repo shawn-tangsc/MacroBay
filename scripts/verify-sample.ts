@@ -58,6 +58,7 @@ export const VERIFY_CHECKS = [
   'check:hex-color',
   'check:undefined-token',
   'check:font-weight',
+  'check:font-size-literals',
   'check:components-ownership',
   'check:async-initial-state',
   'check:state-content-ternary',
