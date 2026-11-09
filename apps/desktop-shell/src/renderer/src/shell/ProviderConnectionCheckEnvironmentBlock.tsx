@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from 'antd'
 
 import type { ProxyMode } from '@platform/settings/schema/appSettings'
 
@@ -84,9 +85,13 @@ export function ProviderConnectionCheckEnvironmentBlock({
       {showProxyHint ? (
         <div className="connection-check-env-hint" data-env-proxy-hint>
           <p>{labels.networkFailureHint(proxyModeLabel)}</p>
-          <button type="button" className="connection-check-env-action" data-env-open-proxy onClick={onOpenProxySettings}>
+          <Button
+            className="connection-check-env-action ant-secondary-button"
+            data-env-open-proxy
+            onClick={onOpenProxySettings}
+            size="small">
             {labels.openProxySettings}
-          </button>
+          </Button>
         </div>
       ) : null}
       {showCustomProxyHint ? (
