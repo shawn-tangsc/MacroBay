@@ -15,7 +15,7 @@ export type AgentPlatformMigration = {
   up: string | ((connection: DatabaseSync) => void)
 }
 
-const migrations: AgentPlatformMigration[] = [
+export const migrations: AgentPlatformMigration[] = [
   {
     id: '0001_agent_platform_core',
     up: `
