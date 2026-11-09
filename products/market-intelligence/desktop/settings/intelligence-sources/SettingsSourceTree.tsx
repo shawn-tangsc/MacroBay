@@ -78,7 +78,12 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
             const enabled = provider.sources.filter((source) => source.enabled).length
             const summary = labels.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
             return <section className="intelligence-provider-group" key={provider.providerId}>
+              {/* 例外登记（ui-spec R1）：这是**两行内容 + 选中态的行容器**，不是命令按钮。
+                  antd `Button` 会把子节点包进自己的 span 并带 padding/height，可见形状会变，
+                  所以保留原生按钮、不覆写内联样式去模拟；可访问语义补齐：名字取行内文本、
+                  键盘可达（原生按钮）、选中态用 `aria-current`。 */}
               <button
+                aria-current={provider.providerId === selectedProviderId ? 'true' : undefined}
                 className={`intelligence-provider-row${provider.providerId === selectedProviderId ? ' selected' : ''}`}
                 type="button"
                 onClick={() => onSelectProvider(provider.providerId)}

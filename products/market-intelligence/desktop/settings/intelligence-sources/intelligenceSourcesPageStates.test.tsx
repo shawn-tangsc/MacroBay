@@ -256,6 +256,22 @@ describe('sources settings page states', () => {
     expect(updateSourceProfile).toHaveBeenCalledWith('s1', { includeInSentiment: false })
   })
 
+  it('marks which provider row is selected for assistive tech', async () => {
+    // 例外登记（ui-spec R1）：provider 行是「两行内容 + 选中态的行容器」，保留原生按钮；
+    // 那它就必须自己把语义补齐——选中态用 `aria-current`，名字取行内文本、键盘用原生可达。
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({ loading: false, settingsView: settingsViewOneProvider() }) as never
+    )
+    const dom = await render()
+
+    const rows = [...dom.querySelectorAll<HTMLButtonElement>('.intelligence-provider-row')]
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.filter((row) => row.getAttribute('aria-current') === 'true')).toHaveLength(1)
+    expect(rows[0]?.getAttribute('aria-current')).toBe('true')
+    // 名字来自行内文本（provider 名 + 能力摘要），不是空按钮。
+    expect(rows[0]?.textContent).toContain('P1')
+  })
+
   it('draws the page once the read is done', async () => {
     vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
       sourcesState({
