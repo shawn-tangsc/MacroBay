@@ -4,7 +4,7 @@ import { intelligenceNotificationText } from '../../settings/intelligence-notifi
 import { productText } from '../i18n/productText'
 import { IpcChannels } from '@platform/desktop/ipc/channels'
 import type { SettingDescriptor, SettingMenuId, SettingWrite } from './registry'
-import { PLATFORM_COMMANDS, SETTING_MENUS, settingRegistry, validateSettingRegistry } from './registry'
+import { PLATFORM_COMMANDS, SETTING_MENUS, SETTING_OPTION_SETS, settingRegistry, validateSettingRegistry } from './registry'
 
 type Registry = Readonly<Record<SettingMenuId, readonly SettingDescriptor[]>>
 
@@ -129,8 +129,8 @@ describe('settings registry self-checks (G1–G7)', () => {
     expect(row.key).toBe('setting:sources.collection-preset@<sourceId>')
 
     const view = {
-      selectedSourceId: 'coindesk-rss',
-      detail: { profile: { sourceId: 'coindesk-rss', collectionPreset: 'balanced' } }
+      sourceId: 'coindesk-rss',
+      profile: { sourceId: 'coindesk-rss', collectionPreset: 'balanced' }
     }
     expect(row.read.command).toBe('intelligenceSources.getPageState')
     expect(row.read.select(view)).toBe('balanced')
@@ -142,6 +142,42 @@ describe('settings registry self-checks (G1–G7)', () => {
       sourceId: 'coindesk-rss',
       collectionPreset: 'frequent'
     })
+  })
+
+  it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
+    const surfaces = settingRegistry.notifications.find(
+      (row) => row.key === 'setting:notifications.surfaces'
+    ) as SettingDescriptor
+    expect(surfaces.field).toEqual({ kind: 'multiSelect', optionsFrom: 'notification-surfaces' })
+    expect(surfaces.level).toBe('platform')
+    if (surfaces.write?.kind !== 'command') throw new Error('the surfaces row must be a command write')
+
+    const before = { selection: { channel: true, toast: false } }
+    // 一次点击只变一个面：只发那一个面的增量，不整份覆盖。
+    expect(surfaces.write.toArgs?.({ channel: true, toast: true }, before)).toEqual({
+      eventTypeId: 'calendar-events',
+      surfaces: { toast: true }
+    })
+    // 中心恒收：即使有人把 center 变了，也不算增量。
+    expect(surfaces.write.toArgs?.({ center: false, channel: true, toast: false }, { selection: { center: true, channel: true, toast: false } })).toEqual({
+      eventTypeId: 'calendar-events',
+      surfaces: {}
+    })
+    expect(SETTING_OPTION_SETS['notification-surfaces']).toContainEqual({ value: 'center', locked: true })
+  })
+
+  it('every optionsFrom names a set that actually exists, and no set is orphaned', () => {
+    const used = new Set<string>()
+    for (const rows of Object.values(settingRegistry)) {
+      for (const row of rows) {
+        if ('optionsFrom' in row.field) {
+          used.add(row.field.optionsFrom)
+          expect(SETTING_OPTION_SETS[row.field.optionsFrom].length).toBeGreaterThan(0)
+        }
+      }
+    }
+    // 集合只给声明用：多出来的集合是没人读的第二份数据。
+    expect(Object.keys(SETTING_OPTION_SETS).sort()).toEqual([...used].sort())
   })
 
   it('only existing copy keys: every labelKey / helpKey resolves in both locales', () => {

@@ -1,0 +1,256 @@
+import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../../contracts/notificationEventKeys'
+import { CALENDAR_REMINDER_GROUP_KEY, type CalendarLandedFilter, type CalendarReminderLeadMinutes } from '../../../../contracts/calendarEventReminder'
+import type { NewsSentimentTierThreshold } from '../../../../contracts/newsSentimentTiers'
+
+import type { SettingDescriptor } from '../descriptorTypes'
+import { firstChangedSurface, readSelection, readViewField } from '../descriptorTypes'
+
+export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
+  {
+    key: 'setting:notifications.channel-event.signal-triggered',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.signalTriggered)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.signalTriggered, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.signalTriggered.title',
+      helpKey: 'pages.intelligence.notification.rows.signalTriggered.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.channel-event.briefing-ready',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.briefingReady)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.briefingReady, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.briefingReady.title',
+      helpKey: 'pages.intelligence.notification.rows.briefingReady.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.channel-event.sentiment-alert',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.sentimentAlert.title',
+      helpKey: 'pages.intelligence.notification.rows.sentimentAlert.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.channel-event.calendar',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.calendarEventUpcoming)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.calendarEventUpcoming, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.calendar.title',
+      helpKey: 'pages.intelligence.notification.rows.calendar.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.push-threshold',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'select', optionsFrom: 'news-push-thresholds' },
+    read: { command: 'intelligence.getNewsPushThreshold', select: (view) => readViewField(view, 'pushThreshold') },
+    write: {
+      kind: 'value',
+      command: 'intelligence.saveNewsPushThreshold',
+      toPayload: (value) => ({ pushThreshold: value as NewsSentimentTierThreshold })
+    },
+    defaultValueFrom: 'newsPushThreshold',
+    copy: {
+      labelKey: 'pages.intelligence.notification.threshold.row',
+      helpKey: 'pages.intelligence.notification.threshold.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.lead',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'select', optionsFrom: 'calendar-reminder-leads' },
+    read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'leadMinutes') },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value) => ({ leadMinutes: value as CalendarReminderLeadMinutes })
+    },
+    defaultValueFrom: 'calendarReminder.leadMinutes',
+    // 契约：只在「开始前」开着时出现；关着时只留一行状态摘要。
+    visibleWhen: (view) => readViewField(view, 'enabled') === true,
+    copy: {
+      labelKey: 'pages.intelligence.notification.calendar.lead',
+      helpKey: 'pages.intelligence.notification.calendar.beforeNote'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.importance',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'multiSelect', optionsFrom: 'calendar-reminder-importance' },
+    read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'importance') },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value) => ({ importance: value })
+    },
+    defaultValueFrom: 'calendarReminder.importance',
+    visibleWhen: (view) => readViewField(view, 'enabled') === true,
+    copy: {
+      labelKey: 'pages.intelligence.notification.calendar.importance',
+      helpKey: 'pages.intelligence.notification.calendar.beforeNote'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.landed-filter',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'select', optionsFrom: 'calendar-landed-filter' },
+    read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'landedFilter') },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value) => ({ landedFilter: value as CalendarLandedFilter })
+    },
+    defaultValueFrom: 'calendarReminder.landedFilter',
+    copy: {
+      labelKey: 'pages.intelligence.notification.calendar.landedRow',
+      helpKey: 'pages.intelligence.notification.landed.cost'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.landed-countries.scope',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'select', optionsFrom: 'calendar-landed-scopes' },
+    read: {
+      command: 'intelligence.getCalendarReminderSettings',
+      select: (view) => readViewField(readViewField(view, 'landedCountries'), 'scope')
+    },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value, view) => ({
+        // 两格是一份对象：改范围不能把读者已勾的国家清掉（非 custom 时服务端本来也只存空）。
+        landedCountries: {
+          scope: value,
+          codes: value === 'custom' ? readViewField(readViewField(view, 'landedCountries'), 'codes') ?? [] : []
+        }
+      })
+    },
+    defaultValueFrom: 'calendarReminder.landedCountryScope',
+    copy: {
+      labelKey: 'pages.intelligence.notification.countries.row',
+      helpKey: 'pages.intelligence.notification.countries.scopeNote'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.landed-countries.codes',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'multiSelect', optionsFrom: 'calendar-landed-country-codes' },
+    read: {
+      command: 'intelligence.getCalendarReminderSettings',
+      select: (view) => readViewField(readViewField(view, 'landedCountries'), 'codes')
+    },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value) => ({ landedCountries: { scope: 'custom', codes: value } })
+    },
+    // 契约：仅「自选国家」时出现（`calendarLandedCountries.ts` 的 scope 条件多选）。
+    visibleWhen: (view) => readViewField(readViewField(view, 'landedCountries'), 'scope') === 'custom',
+    copy: {
+      labelKey: 'pages.intelligence.notification.countries.customTitle',
+      helpKey: 'pages.intelligence.notification.countries.customCost'
+    },
+    availability: 'live'
+  },
+  {
+    // 触达面：读者看到的是「一件事」，控件就是一份多选；平台命令收的却是「单个面的增量」，
+    // 所以增量在 `toArgs` 里算（一次点击本来也只变一个面），不为了命令形状拆成四个开关。
+    key: 'setting:notifications.surfaces',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'multiSelect', optionsFrom: 'notification-surfaces' },
+    read: {
+      command: 'platform:notifications-get-surface-selection',
+      select: (view) => readViewField(view, 'selection')
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-surface-selection',
+      toArgs: (value, view) => {
+        const before = readViewField(view, 'selection')
+        const changed = firstChangedSurface(before, value)
+        // 中心恒收：它永远不算增量，即使调用方把整份选择原样传上来。
+        return {
+          eventTypeId: CALENDAR_REMINDER_GROUP_KEY,
+          surfaces: changed === undefined || changed === 'center'
+            ? {}
+            : { [changed]: readSelection(value, changed) === true }
+        }
+      }
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.calendar.surfaceRow',
+      helpKey: 'pages.intelligence.notification.calendar.surfacesNote'
+    },
+    availability: 'live'
+  }
+])
