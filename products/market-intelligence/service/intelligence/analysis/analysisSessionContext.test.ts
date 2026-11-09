@@ -6,7 +6,7 @@ import { slotInstantAtOrBefore } from './analysisSlotCoverage'
 import type { EvidenceSnapshot } from '../../../contracts/marketAnalysisContracts'
 
 const snapshot: EvidenceSnapshot = {
-  id: 'mi-es-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', asOf: '2026-10-14T09:05:00.000Z',
+  id: 'mi-es-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotHash: 'snapshot-hash', asOf: '2026-10-14T09:05:00.000Z',
   dataCutoff: '2026-10-14T09:05:00.000Z', profileId: 'crypto-market-analysis-v1', facts: [], missingDomains: [],
   caveats: [], evidenceRefs: [], sourceHealth: [], createdAt: '2026-10-14T09:05:00.000Z',
   policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'

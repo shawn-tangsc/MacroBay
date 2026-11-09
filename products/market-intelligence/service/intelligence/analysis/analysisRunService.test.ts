@@ -160,5 +160,5 @@ function makeSnapshot(id: string, eventGroupId: string, createdAt: string, snaps
 }
 
 function makeRun(id: string, eventGroupId: string, snapshotId: string, snapshotHash: string): AnalysisRun {
-  return { id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: id, status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1', promptVersion: 'market-analysis-v1', skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null }
+  return { id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: id, status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1', promptVersion: 'market-analysis-v1', skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null }
 }
