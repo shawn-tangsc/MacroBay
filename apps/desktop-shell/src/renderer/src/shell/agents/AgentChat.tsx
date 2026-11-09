@@ -167,9 +167,9 @@ export default function AgentChat({
           title={t.chat.modelServiceUnavailableTitle}
           description={t.chat.modelServiceUnavailableReasons[pageStatus.reason]}
           actions={
-            <button
-              type="button"
-              className="secondary-button compact"
+            <Button
+              className="ant-secondary-button"
+              size="small"
               onClick={() => {
                 window.dispatchEvent(
                   new CustomEvent('app-shell:navigate', {
@@ -178,7 +178,7 @@ export default function AgentChat({
                 )
               }}>
               {t.chat.openModelService}
-            </button>
+            </Button>
           }
         />
       </main>
