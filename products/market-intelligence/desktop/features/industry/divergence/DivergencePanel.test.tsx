@@ -79,6 +79,24 @@ const answer = (rows: readonly (typeof row | typeof observedRow | typeof boundRo
 
 const sentimentReason = text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment)
 
+/**
+ * 界面设计 2026-11-09 对行 48 的边界：顺序对（先读数、再口径），但**弹窗里不许再加第二颗 ⓘ**——
+ * 一张卡上两个解释入口就是又回到「一个读数两个入口」。
+ */
+it('keeps exactly one help trigger on the card, and it lives inside the expanded reading', () => {
+  const source = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.tsx', 'utf8')
+  // 入口是牌子自己（原生按钮 + `aria-expanded` / `aria-controls`），卡面没有第二颗图标触发器。
+  expect((source.match(/<IconButton/gu) ?? [])).toHaveLength(1)
+  expect((source.match(/<Popover/gu) ?? [])).toHaveLength(1)
+  expect(source).toContain('aria-expanded={expanded}')
+  expect(source).toContain('aria-controls={detailId}')
+  // 那颗 ⓘ 在展开区里（`data-divergence-detail` 之后），不在卡面上。
+  const detailAt = source.indexOf('data-divergence-detail')
+  const helpAt = source.indexOf('<IconButton')
+  expect(detailAt).toBeGreaterThan(-1)
+  expect(helpAt).toBeGreaterThan(detailAt)
+})
+
 describe('divergence panel · the one summary line', () => {
   /**
    * 五态一张表（界面设计 v2 §二）：每一行给「输入 + 该出现的那句 + 该缺席的几句」。

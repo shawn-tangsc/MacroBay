@@ -336,7 +336,15 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
             resolveText={(key) => key === crossAssetTextKeys.refresh ? text.refresh : key} /></div></div>
         {/* 整块来源状态那枚药丸已撤掉（读者 2026-11-03）：曲线是已存下来的收盘，实时流断了它照样画，
             而药丸整块写「不可用」，读者只会读成「这张图坏了」。逐资产的读数仍在下一行，那才是读者要的答案。 */}
-        {snapshot?.quotes ? <div className="mi-cross-asset__status">{(['btc', 'eth'] as const).filter(asset => snapshot.quotes![asset].state !== 'live').map(asset => <small key={asset} data-quote-asset={asset}>{text.assets[asset]} {text.states[snapshot.quotes![asset].state]}</small>)}</div> : null}
+        {/* 只有「有需要说明的报价」时才画这一行：两条都实时时这里什么也不说，就不该留一个空容器
+            （界面设计 2026-11-09 对行 26 的边界：删掉药丸后不留空白容器）。 */}
+        {(() => {
+          const explained = snapshot?.quotes
+            ? (['btc', 'eth'] as const).filter(asset => snapshot.quotes![asset].state !== 'live')
+            : []
+          if (explained.length === 0) return null
+          return <div className="mi-cross-asset__status">{explained.map(asset => <small key={asset} data-quote-asset={asset}>{text.assets[asset]} {text.states[snapshot!.quotes![asset].state]}</small>)}</div>
+        })()}
         {/* The legend and the tooltip carry the same name the row does: one panel, one instrument name
             per figure, so a legend reading 「纳斯达克 100」 can never sit above `QQQUSDT`'s curve. */}
         {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}

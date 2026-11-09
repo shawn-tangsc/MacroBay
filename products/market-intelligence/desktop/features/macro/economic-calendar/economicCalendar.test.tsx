@@ -59,6 +59,25 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
+/**
+ * 界面设计 2026-11-09 对行 59 的边界：页头那一排按钮必须**同一档高度**，不许 default 与 small 混排。
+ * 判据落在样式表：`.tools` 的直接子元素（时段、按钮、antd 按钮、月份选择器）由同一条规则给高度，
+ * 且 32px 是唯一取值。
+ */
+it('gives every control in the calendar toolbar the same one height', () => {
+  const css = readFileSync('products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css', 'utf8')
+  const block = /\.mi-economic-calendar__tools > \.ant-picker \{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(block).toContain('height: 32px')
+  for (const selector of ['> span', '> button', '> .ant-btn', '> .ant-picker']) {
+    expect(css).toContain(`.mi-economic-calendar__tools ${selector}`)
+  }
+  // 直接子元素里不许再冒出第二个高度（内层输入框的 30px 不算：它不是这一排控件）。
+  const directChildRules = [...css.matchAll(/\.mi-economic-calendar__tools > [^{]+\{([^}]*)\}/gu)].map(match => match[1] ?? '')
+  for (const rule of directChildRules) {
+    expect(rule.match(/height:\s*([^;]+);/u)?.[1]?.trim() ?? '32px').toBe('32px')
+  }
+})
+
 describe('macro economic calendar', () => {
   it.each([false, true])('does not attach a new source snapshot to an old detail after a later page fails (linked=%s)', async (isLinked) => {
     const official = blsEvent({ eventKey: 'US.CPI.RELEASE.failed-page', scheduledDate: '2026-08-12', scheduledAt: marketEvent.scheduledAt })

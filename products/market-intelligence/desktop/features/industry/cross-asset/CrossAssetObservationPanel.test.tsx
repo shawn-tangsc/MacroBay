@@ -143,6 +143,30 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()) }
   })
 
+  it('draws no empty quote-status container once both quotes are live', async () => {
+    // 界面设计 2026-11-09 对行 26 的边界：删块级药丸之后**不留空白容器**。这条线只在「有报价需要说明」
+    // 时才该存在；两条都实时时它不该留在 DOM 里。
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const now = Date.now()
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: now + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      release: vi.fn(async () => ({ state: 'released' })),
+      query: async () => createCrossAssetSnapshotQuery({ now: () => now, store: { revision: 0, queryAt: () => [] },
+        live: () => ({ state: 'live', quotes: {
+          index: { state: 'live', price: '712.30', tradedAtMs: now, receivedAtMs: now },
+          btc: { state: 'live', price: '61230.10', tradedAtMs: now, receivedAtMs: now },
+          eth: { state: 'live', price: '2411.20', tradedAtMs: now, receivedAtMs: now }
+        } }) }).query({ range: '24h' })
+    }
+    try {
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      expect(host.querySelector('.mi-cross-asset__status')).toBeNull()
+    } finally { await act(async () => root.unmount()); host.remove() }
+  })
+
   it('waits for the macro and rates reads instead of claiming 未接入 first', async () => {
     // 用户 11-02 报过「先闪一下获取失败再出数据」，同类：四行在 macro / rates 未结算时曾落回注册表的
     // `planned`（未接入），读完再变「已接入」。未结算就是加载态，不许先给一个结论。
