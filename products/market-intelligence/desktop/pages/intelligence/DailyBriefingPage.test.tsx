@@ -2262,8 +2262,13 @@ it('keeps the stored edition under a one-line failure mark when a retry fails af
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
-it('names a calendar that could not be read in the audit column only, with a re-read on that row', async () => {
-  // v2.124：正文不画"读不到"，读不到只在右列「数据缺口与限制」里说，重试挂在那一条上且只重读。
+it('names a calendar that could not be read in the paper and in the audit column, with a re-read on that row', async () => {
+  /*
+   * 口径已变（`8beefb1`，简报线 2026-11-09 02:42）：v2.124 的「正文一个字都不说、只在右列说」
+   * 被推翻了——正文现在用**一句话**说清为什么这一栏是空的，且这句话与右列**同一句**。
+   * 这里按新事实改断言，不是把红的改绿：正文出现的是「暂时读不到：<原因>」，不是「没数据」；
+   * 右列那条缺口与「只重读、不起 run」的判据原样保留。
+   */
   const doc = briefingDocument()
   const client = fakeClient({
     getToday: vi.fn(async () => ({
@@ -2272,8 +2277,12 @@ it('names a calendar that could not be read in the audit column only, with a re-
     }))
   })
   const dom = await renderPage(client)
-  // 正文：该栏节点数 0，且没有一个"读不到"字样。
-  expect(dom.querySelector('.mi-daily-briefing-page__paper .mi-brief-poster__macro-head')).toBeNull()
+  // 正文：这一栏保留标题，并在栏内说出原因——不是三句「没有」中的任何一句。
+  expect(dom.querySelector('.mi-daily-briefing-page__paper .mi-brief-poster__macro-head')).not.toBeNull()
+  const emptyLine = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper [data-macro-empty="unreadable"]')
+  expect(emptyLine).not.toBeNull()
+  expect(emptyLine!.textContent).toContain(text.macroUnreadable)
+  expect(emptyLine!.textContent).toContain(text.macroEmptyCodes['calendar-stale']!.replace('{hours}', '42'))
   for (const word of ['没数据', '没拿到', '未拿到', '未公布']) {
     expect(dom.querySelector('.mi-daily-briefing-page__paper')!.textContent).not.toContain(word)
   }
