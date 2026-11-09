@@ -145,6 +145,15 @@ describe('daily briefing markdown', () => {
     expect(normal).not.toContain(options.labels.denseDay)
   })
 
+  it('marks the index row as a perpetual proxy when it is one', () => {
+    const base = document()
+    const indexRow = { ...base.data.market[0]!, id: 'index' as const, labelKey: 'dailyBriefing.row.index' }
+    const proxied = dailyBriefingToMarkdown({ ...base, data: { ...base.data, market: [...base.data.market, { ...indexRow, indexSource: 'proxy' as const }] } }, options)
+    expect(proxied).toContain(options.labels.indexProxy)
+    const real = dailyBriefingToMarkdown({ ...base, data: { ...base.data, market: [...base.data.market, { ...indexRow, indexSource: 'real' as const }] } }, options)
+    expect(real).not.toContain(options.labels.indexProxy)
+  })
+
   it('marks the perpetual contract on the copied price rows, like the card does', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     const btc = markdown.split('\n').find((line) => line.startsWith('- BTC'))

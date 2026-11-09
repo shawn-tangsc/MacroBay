@@ -23,6 +23,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   perpetualContract: string
   /** 必须显示的读数超过阈值时说的那句「今天信息较多」。 */
   denseDay: string
+  /** 纳指那行读的是代币化永续代理时，标题后带的那句（正文卡片也用它）。 */
+  indexProxy: string
   /** 中文版没有译文时标在标题后的两个字；英文版是 "Original"。 */
   newsOriginal: string
   noValue: string
@@ -288,7 +290,11 @@ function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBrief
   // 价格那两行读的是币安 U 本位**永续合约**，不是现货；正文卡片标了、复制文本没标，读者会把两个
   // 市场当成一个。只有 BTC/ETH 两行加：纳指走真指数或代币化永续，它有自己的代理标记。
   const perpetual = row.id === 'btc' || row.id === 'eth' ? ` · ${options.labels.perpetualContract}` : ''
-  const label = `${rowLabel(row.labelKey, options.labels)}${perpetual}`
+  // 纳指走代币化永续的那些天，点位不是纳指自己的；正文卡片标了，复制出去也要标，否则读者把
+  // QQQ 的点位当成纳指的点位用。
+  // 文案本身带着括号与英文前的空格（与海报同一个键），这里不再补空格。
+  const proxy = 'indexSource' in row && row.indexSource === 'proxy' ? options.labels.indexProxy : ''
+  const label = `${rowLabel(row.labelKey, options.labels)}${perpetual}${proxy}`
   if (row.state === 'available' || row.state === 'stale') {
     const copy = changeLedRowCopy(row, options.labels, options.locale)
     if (copy) {
