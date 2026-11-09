@@ -45,6 +45,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `resolveText` | `(key: string) => string` | 是 | 调用方的文案解析入口；组件内零文案、不 import i18n。 |
 | `disabled` | `boolean` | 否 | 原生 `disabled`：不进 Tab 序列、点了不触发。与 `tooltipKey` 不能并存，一起传编译不过。 |
 | `variant` | `'plain' \| 'solid' \| 'overlay'` | 否，默认 `plain` | `plain` 透明（行内）；`solid` 是工具栏那一排：边框加浅底；`overlay` 给**绝对定位挂在内容之上**的图标按钮——边框、圆角 5、**刻意半透明的底**（透出一点下面的内容才像浮在上面），hover 转不透明。判据：凡是挂在任意内容之上的，一律 `overlay`，不划到透明档。 |
+| `tone` | `'danger'` | 否 | 这一下是破坏性的动作。**只换颜色**：22/24 的尺寸与档位都不动，可与 `ariaLabelKey` 及 `plain`/`solid`/`overlay` 并存。危险色**静止可见**——红字，有边框的档位同时给红边——不靠 hover 才出现：只在悬停时才变红的破坏性动作，对键盘和触屏读者等于没有提示。闭集：`danger` 以外的值编译不过。 |
 | `loading` | `boolean` | 否 | 这次点击还在等结果：按钮 disabled、图形换成平台唯一的转圈（`LoadingSpinner`，`sm` 档）、不再触发 `onSelect`。**读屏名与 22/24 尺寸不变**——用户要知道是哪个按钮在忙。它不是第三个尺寸，也不是新变体。 |
 | `tooltipKey` | `string` | 否 | 悬停**和聚焦**都出现的解释，同样只收键。不用原生 `title`；禁用时不许传。 |
 | `variant` | `'plain' \| 'solid'` | 否，默认 `plain` | `solid` 给工具栏一排加边框与底色。 |

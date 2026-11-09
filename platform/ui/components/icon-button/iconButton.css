@@ -74,6 +74,37 @@
   transform: none;
 }
 
+/*
+ * 危险档（tone="danger"）：**只换颜色**，尺寸、圆角、焦点环、档位形状都不动。
+ *
+ * 静止可见：默认态就是红字，描边档（solid/overlay）再给红边——不靠 hover 才出现。
+ * 靠悬停才变红的破坏性动作，在键盘与触屏上等于没有提示，而这类动作恰恰最不该被误点。
+ *
+ * 文字色与 `contextMenu.css` 的危险项同一条来源：纯 `--danger` 在深色下 3.25–3.94，
+ * 够图形门槛 3:1、不够文字 4.5，所以混 82% `--danger` + `--text-strong`。
+ * 这里图标本身是图形（门槛 3:1），按同一条混法只是与菜单行保持一致，不是因为不够。
+ */
+.icon-button--danger {
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-strong));
+}
+
+/* 描边档：边也用危险色。非文字元素门槛 3:1，`--danger` 本身在两个主题下都过。 */
+.icon-button--danger.icon-button--solid.ant-btn:not(:disabled),
+.icon-button--danger.icon-button--overlay.ant-btn:not(:disabled) {
+  border-color: var(--danger);
+}
+
+/* hover 的中性规则会把字压回 `--text-strong`（`.icon-button:hover` 特异性更高），
+ * 这里按同一条特异性把危险色保持住；底色仍是中性的 `--surface-soft`，不引入新的红色底。 */
+.icon-button--danger.ant-btn:not(:disabled):hover {
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-strong));
+}
+
+.icon-button--danger.icon-button--solid.ant-btn:not(:disabled):hover,
+.icon-button--danger.icon-button--overlay.ant-btn:not(:disabled):hover {
+  border-color: var(--danger);
+}
+
 /* 焦点环是全仓统一的一处：2px accent、offset 2。不许 outline:none 而无替代。 */
 /*
  * 特异性要压过 antd：它自带
