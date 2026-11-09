@@ -17,6 +17,9 @@ const bls = (enabled: boolean, unavailable?: { reasonCode: string }) => ({
  *   也不许被当成「本月没有」。
  */
 describe('official calendar feeds availability', () => {
+  // 这份清单在这里是**唯一**一处逐字写下的：实现改成读注册表（`kind: 'official-calendar'` 且挂
+  // `economic-calendar`），所以这条用例就是那个集合的钉子——注册表加了第四条官方源，它会红，提醒
+  // 看一眼三态口径要不要一起动。
   it('names exactly the three official calendar sources', () => {
     expect([...OFFICIAL_CALENDAR_SOURCE_IDS]).toEqual(['macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls'])
   })

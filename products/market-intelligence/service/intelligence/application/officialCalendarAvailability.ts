@@ -1,3 +1,5 @@
+import { allSources } from './providerRegistry'
+
 /**
  * 「官方日历腿现在是什么处境」——一处算、一处读（经济日历页的两/三态拆分用）。
  *
@@ -12,11 +14,21 @@
  *
  * 判据只读注册表的 `unavailable` 与读者的 `enabled`，不碰健康记录、不碰采集状态。
  */
-export const OFFICIAL_CALENDAR_SOURCE_IDS = Object.freeze([
-  'macro-calendar-fed',
-  'macro-calendar-bea',
-  'macro-calendar-bls'
-] as const)
+/**
+ * 官方日历腿的 `sourceId` 集合：**从注册表派生，不在这里抄第二份**。
+ *
+ * 判据就是注册表的那两个字段（`kind: 'official-calendar'` 且挂在这张面板上），与「哪些源算官方日历腿」
+ * 的定义同处一地——哪天加第四条官方源，这里自动跟上，不会静默漏掉。原来这里是一份写死的三条清单，
+ * 加源的人只要没同时改这里，这一档就会把新源当成"不是官方腿"（`disabled` 判错、也永远等不到它可用）。
+ *
+ * 钉住的地方在用例：`officialCalendarAvailability.test.ts` 里逐字写着那三条 `sourceId`，注册表真变了
+ * 它会红——提醒看的人「官方腿的集合变了，三态口径要不要一起看」。
+ */
+export const OFFICIAL_CALENDAR_SOURCE_IDS: readonly string[] = Object.freeze(
+  allSources()
+    .filter((source) => source.kind === 'official-calendar' && source.panels.includes('economic-calendar'))
+    .map((source) => source.sourceId)
+)
 
 export type CalendarOfficialFeedsAvailability =
   | Readonly<{ state: 'disabled' }>
