@@ -177,6 +177,32 @@ describe('CollapsibleGroup', () => {
     expect(body.querySelector('.collapsible-group__row')).toBeNull()
   })
 
+  it('takes a row label from a copy key, and a data label as the literal text', async () => {
+    // 文案走键、数据走原文：会话名这类运行时字符串不是键，当键传进去会让解析器把数据翻成空串。
+    const resolveText = vi.fn((value: string) => (value === 'ui.test.rowKey' ? '来自文案表' : ''))
+    const host = await mount({
+      rows: [
+        { key: 'copy', labelKey: 'ui.test.rowKey' },
+        { key: 'data', labelText: '2026/11/9 20:45 持仓骤降', metaText: '20:45' }
+      ],
+      resolveText
+    })
+    await act(async () => {
+      host.querySelector<HTMLElement>('.collapsible-group__title')!.click()
+    })
+
+    const rows = [...host.querySelectorAll<HTMLElement>('.collapsible-group__row')]
+    const copyRow = rows.find((row) => row.textContent?.includes('来自文案表'))!
+    const dataRow = rows.find((row) => row.textContent?.includes('持仓骤降'))!
+    // 文案行：解析器被调用，且行里是解析结果。
+    expect(copyRow).toBeDefined()
+    expect(resolveText).toHaveBeenCalledWith('ui.test.rowKey')
+    // 数据行：原文进 DOM，**解析器没有被拿它的文字去查**（不被当成键）。
+    expect(dataRow.textContent).toContain('2026/11/9 20:45 持仓骤降')
+    expect(dataRow.textContent).toContain('20:45')
+    expect(resolveText).not.toHaveBeenCalledWith('2026/11/9 20:45 持仓骤降')
+  })
+
   it('renders a row as a button only when the row has an action', async () => {
     const onSelect = vi.fn()
     const host = await mount({

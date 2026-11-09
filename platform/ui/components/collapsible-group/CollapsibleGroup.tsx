@@ -32,19 +32,29 @@ export const COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT = 320
 
 const CHEVRON_SIZE = 14
 
-/** 一行展开项。标题与时间都只收键；时间**只出现一次**，由调用方保证不会在标题里再写一遍。 */
+/**
+ * 一行展开项。标题与时间各收两种来源之一，**互斥**：
+ * - `labelKey` / `metaKey`：**文案**，经调用方解析器取句子；
+ * - `labelText` / `metaText`：**数据**，调用方已经拿到的原文（会话名、时刻）。
+ *
+ * 为什么必须分开：会话名这类字符串是运行时数据，不是文案键。把它当键传进来，等于让「数据」冒充
+ * 「文案」——键守卫迟早红，而且解析器会把一个不存在的键翻成空串或键名。**数据走 Text，文案走 Key。**
+ * 时间**只出现一次**，由调用方保证（标题里已带时刻就不再传 `meta*`）。
+ */
+type RowLabel = { labelKey: string; labelText?: never } | { labelText: string; labelKey?: never }
+type RowMeta =
+  | { metaKey?: string; metaParams?: Readonly<Record<string, string>>; metaText?: never }
+  | { metaText: string; metaKey?: never; metaParams?: never }
+
 export type CollapsibleGroupRow = {
   key: string
-  labelKey: string
-  metaKey?: string
-  metaParams?: Readonly<Record<string, string>>
   status?: { tone: StatusPillTone; labelKey: string }
   /**
    * 整行即动作时传：整行渲染成 `<button>`（行容器规则：只有一个动作 → 整行可点）。
    * 不传就是不可交互的一行文本——**不假点击**：没有动作的行不许长成按钮。
    */
   onSelect?: (key: string) => void
-}
+} & RowLabel & RowMeta
 
 /** 两种内容形态共用的那部分。 */
 type CollapsibleGroupBaseProps = {
@@ -116,8 +126,12 @@ export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactEleme
         children: (
           <div className="collapsible-group__body" id={bodyId} style={{ maxHeight: maxBodyHeight }}>
             {props.children !== undefined ? props.children : rows.map((row) => {
-              const rowTitle = resolveText(row.labelKey)
-              const rowMeta = row.metaKey === undefined ? null : fillLabelParams(resolveText(row.metaKey), row.metaParams)
+              const rowTitle = 'labelText' in row && row.labelText !== undefined ? row.labelText : resolveText(row.labelKey)
+              const rowMeta = 'metaText' in row && row.metaText !== undefined
+                ? row.metaText
+                : row.metaKey === undefined
+                  ? null
+                  : fillLabelParams(resolveText(row.metaKey), row.metaParams)
               const inner = (
                 <>
                   <span className="collapsible-group__row-title">{rowTitle}</span>
