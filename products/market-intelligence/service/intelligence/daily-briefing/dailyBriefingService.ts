@@ -227,6 +227,22 @@ export type DailyBriefingTodayFailureCode =
   | 'run-interrupted' | 'invalid-output-language' // 后者：读者能看到的文字不是本期语言，重写仍不合规。
   | 'not-generated' // 不是失败：只读打开时还没写过这一期。
 
+/**
+ * 模型类失败：读者这一天本该有日报，问题既不在数据也不在这份报纸。
+ *
+ * 与「输出质量失败」分开：后者是稿子不能给读者（结构不合规、编了不存在的数、语言不符），
+ * 仍按 2026-11-06 的决定不发；这一类照发事实层版次，由 provenance 与页面说明"只有数据"。
+ */
+const modelFailureCodes: readonly string[] = Object.freeze([
+  'model-unavailable',
+  'model-not-ready',
+  'provider-disabled',
+  'missing-api-key',
+  'rate-limited',
+  'provider-error',
+  'editorial-timeout'
+])
+
 export type DailyBriefingTodayResult =
   | Readonly<{
     state: 'available'
@@ -637,10 +653,17 @@ export function createDailyBriefingService(deps: Readonly<{
       // AI off is the fact-layer edition too: published, with the reason in the provenance.
       document = markEditorialFailure(document, 'editorial-disabled')
     }
-    // 写作没出来就**不发布**（用户 2026-11-06 拍板）：模板版一旦落库，页面就有正文可开、库里还记成功。
-    // 只有读者自己关掉 AI 编辑（`editorial-disabled`）才继续发事实层版次——那不是失败，是配置。
+    // 写作没出来要不要发：分两类（r17 `A1` + 用户 2026-11-06 的顾虑一起满足）。
+    //
+    // - **模型类原因**（没配模型、模型不可用、限流、供应商报错、超时、缺 Key）：读者这一天本该有
+    //   一份日报，问题不在数据、也不在这份报纸——**照发事实层版次**，并在 provenance 里写下原因，
+    //   页面据此说「本期只有数据，没有 AI 写的解读」。它**不记成功**（见 `publishDailyBriefingEdition`：
+    //   有 editorialFailure 时这次尝试记 failed），所以不是"悄悄发一份看起来完整的模板版"。
+    // - **输出质量原因**（结构不合规、引用了不存在的事实、语言不符…）：那是这一版稿子不能给读者，
+    //   仍按 2026-11-06 的决定**不发**，返回失败、留失败行。
     const editorialFailure = document.provenance.editorialFailure
-    if (editorialFailure !== undefined && editorialFailure !== 'editorial-disabled') {
+    const modelFailurePublish = editorialFailure !== undefined && modelFailureCodes.includes(editorialFailure)
+    if (editorialFailure !== undefined && editorialFailure !== 'editorial-disabled' && !modelFailurePublish) {
       return abandonDailyBriefingEditorial({
         failureCode: editorialFailure, attempts, run, recorder, now,
         locale: input.locale, asOf: input.asOf, timeZone: input.timeZone,

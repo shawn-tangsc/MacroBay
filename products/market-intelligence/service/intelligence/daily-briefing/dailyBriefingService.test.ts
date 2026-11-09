@@ -383,7 +383,7 @@ describe('daily briefing service', () => {
     expect(store.rows.size).toBe(0)
   })
 
-  it('cancels the runtime session and abandons its link when the editorial deadline fires', async () => {
+  it('cancels the runtime session, and still publishes the data with the reason when the editorial deadline fires', async () => {
     vi.useFakeTimers()
     try {
       const store = memoryStore()
@@ -406,11 +406,15 @@ describe('daily briefing service', () => {
       const result = await pending
 
       expect(cancelAgentSession).toHaveBeenCalledWith('s-timeout')
-      // 会话被丢弃之外，这一跑也不许留下"看起来正常"的版次。
-      expect(result.state).toBe('unavailable')
-      expect(store.rows.size).toBe(0)
+      // 超时属模型类原因（r17 情形二）：版次照发（读者拿到数据），但原因写进 provenance、
+      // 这次尝试记失败——不是"悄悄发一份看起来完整的模板版"。
+      expect(result.state).toBe('available')
+      expect(store.rows.size).toBe(1)
       expect((await links.findBySession('s-timeout'))?.state).toBe('abandoned')
-      if (result.state === 'unavailable') expect(result.failureCode).toBe('editorial-timeout')
+      if (result.state === 'available') {
+        expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
+        expect(result.document.lede.source).not.toBe('agent')
+      }
     } finally {
       vi.useRealTimers()
     }
@@ -435,9 +439,10 @@ describe('daily briefing service', () => {
       const result = await pending
 
       expect(finish).not.toHaveBeenCalled()
-      expect(result.state).toBe('unavailable')
-      if (result.state === 'unavailable') expect(result.failureCode).toBe('editorial-timeout')
-      expect(store.rows.size).toBe(0)
+      // 会话都没建起来也一样：数据是真拿到的，版次照发，原因记在 provenance。
+      expect(result.state).toBe('available')
+      expect(store.rows.size).toBe(1)
+      if (result.state === 'available') expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
     } finally {
       vi.useRealTimers()
     }
@@ -486,7 +491,7 @@ describe('daily briefing service', () => {
     }
   })
 
-  it('publishes nothing when no model can be called, and says why', async () => {
+  it('publishes the data with the reason when no model can be called', async () => {
     const store = memoryStore()
     const starts: number[] = []
     const service = createDailyBriefingService({
@@ -497,10 +502,30 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    // 模型不可用是失败，不是"发一份没解读的版次"：原因码会走到右列与失败面板。
-    expect(store.rows.size).toBe(0)
-    expect(result.state).toBe('unavailable')
-    if (result.state === 'unavailable') expect(result.failureCode).toBe('model-unavailable')
+    // r17 情形一（2026-11-09 翻 11-06 的"干脆不出"）：没配模型的读者也要拿到这一天——
+    // 数据照发，provenance 写下原因，页面据此说「本期只有数据，没有 AI 写的解读」。
+    expect(store.rows.size).toBe(1)
+    expect(result.state).toBe('available')
+    if (result.state === 'available') {
+      expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
+      expect(result.document.lede.source).not.toBe('agent')
+    }
+  })
+
+  it('records the data-only edition and its failed attempt in the same write', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      agentRunner: acceptingAgentRunner(),
+      agentModel: async () => ({ state: 'unavailable', reason: 'default-unavailable' })
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    // 版次在、这次尝试记 failed：读者拿到数据，审计里也看得出"解读没出来"。
+    expect(await store.get('2026-10-30', 'zh-CN')).toBeTruthy()
+    const attempts = await store.listAttempts!('2026-10-30', 'zh-CN')
+    expect(attempts.map((attempt) => attempt.state)).toContain('failed')
   })
 
   it('fails closed without starting a session when model readiness cannot be resolved', async () => {
@@ -514,10 +539,10 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    // 同样是失败：不发布、不记成功（用户 2026-11-06）。
-    expect(store.rows.size).toBe(0)
-    expect(result.state).toBe('unavailable')
-    if (result.state === 'unavailable') expect(result.failureCode).toBe('model-unavailable')
+    // 解析不出模型可用性也是模型类原因：照发数据，原因写进 provenance（不记成功）。
+    expect(store.rows.size).toBe(1)
+    expect(result.state).toBe('available')
+    if (result.state === 'available') expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
   })
 
   it('regenerates the same day, overwrites the row and applies the agent editorial', async () => {

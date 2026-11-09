@@ -44,7 +44,15 @@ export async function publishDailyBriefingEdition(input: Readonly<{
       windowEnd: traced.edition.windowEnd,
       document: traced
     }
-    const settled = attempts.build('succeeded', traced.provenance.generationTrace?.finishedAt ?? input.now())
+    // 有 editorialFailure 的版次是"数据在、解读没出来"：版次照发，但这次尝试**记失败**并带上原因。
+    // 否则库里就是"发了、还记了成功"，与页面上那句说明互相打架（用户 2026-11-06 指出的那件事）。
+    const editorialFailure = traced.provenance.editorialFailure
+    const recordedFailure = editorialFailure !== undefined && editorialFailure !== 'editorial-disabled' ? editorialFailure : undefined
+    const settled = attempts.build(recordedFailure ? 'failed' : 'succeeded', traced.provenance.generationTrace?.finishedAt ?? input.now(), {
+      ...(recordedFailure ? { failureCode: recordedFailure } : {}),
+      // 只有失败才把阶段表写进尝试记录：成功的版次原本不带，别在这一笔里改变它的形状。
+      ...(recordedFailure && traced.provenance.generationTrace ? { trace: traced.provenance.generationTrace } : {})
+    })
     // The edition row and the attempt that wrote it are one write: a reader never sees one without
     // the other.
     if (store.publishEdition) {
