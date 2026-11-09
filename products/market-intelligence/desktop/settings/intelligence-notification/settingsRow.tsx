@@ -25,7 +25,8 @@ export function SettingsRow(props: Readonly<{
 }>): ReactElement {
   return <div className={`intelligence-notification-form-row${props.last === true ? ' is-last' : ''}`}>
     <span className="intelligence-notification-form-label">
-      {props.label}
+      {/* 标题与 ⓘ 同一行：长标题压标题，图标 flex: none 不被挤下去。 */}
+      <span className="intelligence-notification-form-label-text">{props.label}</span>
       {props.info === undefined ? null : <SettingsInfo {...props.info} />}
     </span>
     <div className="intelligence-notification-form-control">

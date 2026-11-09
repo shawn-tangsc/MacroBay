@@ -2173,7 +2173,15 @@ h1 {
 .web-search-drawer-title {
   display: inline-flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 10px;
+  min-width: 0;
+}
+
+/* ⓘ 跟着标题走：窄下去只压文字，图标不换行、不缩。 */
+.web-search-drawer-title > .platform-icon-button,
+.web-search-drawer-title > button {
+  flex: none;
 }
 
 .web-search-drawer-readonly {
@@ -3493,6 +3501,20 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+/* 「文字 + ⓘ」在同一行：窄的时候文字先缩，图标不换行。 */
+.assistant-settings-toggle > span {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assistant-settings-toggle > span > .platform-icon-button,
+.assistant-settings-toggle > span > button {
+  flex: none;
 }
 
 .agent-navbar {
@@ -9123,7 +9145,9 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .preference-heading {
   display: inline-flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 8px;
+  min-width: 0;
   color: var(--muted-strong);
 }
 

@@ -99,6 +99,48 @@ async function openInfo(ariaLabel: string): Promise<string> {
   return content?.textContent ?? ''
 }
 
+describe('the ⓘ sits on the same line as its title', () => {
+  it('keeps the label and its info button as siblings in one non-wrapping row', async () => {
+    // 缺陷（用户截图）：图标掉到标题下一行。容器是行、标题与图标是兄弟，才算同一行。
+    await mount(<CalendarLandedCountriesRow
+      onChange={() => undefined}
+      resolveText={(name) => zh[name] ?? ''}
+      saving={false}
+      selection={{ codes: [], scope: 'custom' }}
+      text={zh}
+    />)
+
+    const labels = [...container.querySelectorAll<HTMLElement>('.intelligence-notification-form-label')]
+    expect(labels.length).toBeGreaterThan(0)
+    for (const label of labels) {
+      const children = [...label.children]
+      expect(children[0]?.classList.contains('intelligence-notification-form-label-text')).toBe(true)
+      // 带 ⓘ 的那些行：图标（`Popover` 的锚点里那颗按钮）必须是同一个容器的第二个子项，
+      // 不是下一行的兄弟——原来它掉下去，正是因为它是列容器的另一个子项。
+      if (children.length > 1) expect(children[1]?.querySelector('button')).not.toBeNull()
+      expect(children.length).toBeLessThanOrEqual(2)
+    }
+  })
+
+  it('declares a non-wrapping label that shrinks the title, not the icon', async () => {
+    // happy-dom 没有排版：按规则断言——容器不换行、标题可缩（省略号）、图标 flex: none。
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const css = readFileSync(join(
+      process.cwd(),
+      'products/market-intelligence/desktop/settings/intelligence-notification/intelligence-notification.css'
+    ), 'utf8')
+    const rule = (selector: string): string => {
+      const start = css.indexOf(selector + ' {')
+      expect(start).toBeGreaterThanOrEqual(0)
+      return css.slice(start, css.indexOf('}', start))
+    }
+    expect(rule('.intelligence-notification-form-label')).toContain('flex-wrap: nowrap')
+    expect(rule('.intelligence-notification-form-label')).toContain('min-width: 0')
+    expect(rule('.intelligence-notification-form-label-text')).toContain('text-overflow: ellipsis')
+  })
+})
+
 describe('settings rows carry no explanatory sentence in the body', () => {
   it('keeps the country scope and its costs inside the ⓘ, not under the control', async () => {
     await mount(<CalendarLandedCountriesRow
