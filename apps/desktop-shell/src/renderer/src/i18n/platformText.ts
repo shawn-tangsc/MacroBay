@@ -829,6 +829,8 @@ export type PlatformText = {
     /** 默认模型条底部：说清哪些默认值由平台入口直接用、哪些只供产品功能读取。 */
     defaultModelsConsumerHint: string
     copyModelId: string
+    /** API Key 的复制入口读屏名：掩码态与明文态都在（2026-11-01 拍板「展开后允许复制」）。 */
+    copyApiKey: string
     copied: string
     nonChatModelHint: string
     modelDiscountBadge: string
@@ -2261,6 +2263,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelsConsumerHint:
         '助手、智能体、绘画由对应入口直接使用；快速与翻译模型只作为共用默认值被产品功能读取。没有产品用到时，选了也不会有可见效果。',
       copyModelId: '复制',
+      copyApiKey: '复制密钥',
       copied: '已复制',
       nonChatModelHint: '非聊天模型不会出现在对话模型选择中',
       modelDiscountBadge: '特惠',
@@ -3624,6 +3627,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelsConsumerHint:
         'Assistant, agent, and image defaults are used directly by their own entry points. The fast and translation defaults are shared values read by product features only, so they have no visible effect until a product uses them.',
       copyModelId: 'Copy',
+      copyApiKey: 'Copy key',
       copied: 'Copied',
       nonChatModelHint: 'Non-chat models do not appear in chat model selection.',
       modelDiscountBadge: 'Deal',

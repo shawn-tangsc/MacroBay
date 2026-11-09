@@ -12,7 +12,7 @@ import {
 /**
  * PLAT-61：API 密钥分区。
  *
- * - 单框：复用既有 `ModelProviderApiKeyField`（掩码预览 / 眼睛按需 reveal / 30s / 失焦回掩码），
+ * - 单框：复用既有 `ModelProviderApiKeyField`（掩码预览 / 眼睛按需 reveal、展开后一直明文 / 掩码态也能复制），
  *   不重写掩码与 reveal 语义；
  * - 行内只保留 `👁`（组件自带）；连接检查已并入连接检查抽屉（入口在品牌块 `data-provider-connection-check`）；
  * - 辅助行左「点击这里获取密钥」（URL 来自 preset 的 `websites.apiKey`），右「多个密钥使用逗号分隔」；

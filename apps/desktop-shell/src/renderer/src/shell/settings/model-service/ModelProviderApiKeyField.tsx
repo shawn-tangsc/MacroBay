@@ -14,19 +14,18 @@ import { copyTextToClipboard } from '../../clipboard'
  * 眼睛用组件自带的 `visibilityToggle`，**不自绘按钮、不自绘边框容器、不写 `!important`**；
  * 高度/边框/圆角/内边距全部来自主题 token（`controlHeight: 32` / `borderRadius: 8`）。
  *
- * 交互口径（与 web-search 的 `WebSearchApiKeyField` 一致）：
- * 1. 掩码态点击输入框 ⇒ 清空为草稿、进入编辑态（这一步**不** reveal）；
- * 2. 编辑态可正常输入/删除；`Escape` 或「失焦且草稿为空」⇒ 回掩码、不写入；
- * 3. 失焦且草稿非空 ⇒ 退出编辑态但**保留草稿**，由外层（失焦即存）负责保存；
- * 4. 眼睛只负责「查看已保存的完整 Key」：自带 `visibilityToggle` 的一次切换驱动**一次**按需 IPC 读取
- *    （受控 `visible ? plain : masked`），30 秒自动回掩码、失焦回掩码、切换供应商/卸载即清除
- *    （含在途请求序号作废）；
- * 5. 掩码直接作为 `value`，不做绝对定位覆盖层；**不写日志**。
- * 6. 公开承诺（AGENTS.md Model Service Rules）：默认掩码 → 可按需展开 → **展开后可复制**。
- *    复制按钮只在明文可见时出现，复制的就是这次读到的完整 Key；回掩码后按钮一起消失，
- *    避免「看不到还能复制」这种自相矛盾的状态。
+ * 交互口径（2026-11-01 用户拍板三句，与 AGENTS.md 的凭据规则一致）：
+ * 1. **默认掩码**：未展开时显示 `apiKeyPreview`，完整 Key 不进 DOM、也不读 IPC；
+ * 2. **按需展开后可查看**：眼睛每次展开按需读一次完整 Key（受控 `visible ? plain : masked`），
+ *    **不设查看时限、失焦不回掩码**——一直明文，直到读者自己收起。
+ *    （此前的「30 秒自动回掩码 + 失焦回掩码」是用户已撤掉的旧做法，别再写回来。）
+ * 3. **展开后允许复制，掩码态也能复制**：复制按钮两种状态都在；掩码态点击时才按需读取真值再写剪贴板，
+ *    绝不把 `••••` 或预览串复制出去。切换供应商/卸载清除内存里的明文（含在途请求序号作废）。
+ * 4. 掩码直接作为 `value`，不做绝对定位覆盖层；**不写日志**（唯一硬要求）。
+ * 5. 编辑口径：掩码态点击输入框 ⇒ 清空为草稿进编辑态（这一步**不** reveal）；`Escape` 或
+ *    「失焦且草稿为空」⇒ 回掩码、不写入；失焦且草稿非空 ⇒ 退出编辑态但**保留草稿**，
+ *    由外层（失焦即存）负责保存。
  */
-export const MODEL_PROVIDER_API_KEY_AUTO_HIDE_MS = 30_000
 
 const ALL_MASK = '••••••••'
 
@@ -41,8 +40,6 @@ type ModelProviderApiKeyFieldProps = {
   value: string
   onChange: (value: string) => void
   revealApiKey: RevealModelProviderApiKey
-  /** 测试注入用的自动回掩码时长；生产使用具名常量。 */
-  autoHideMs?: number
 }
 
 export function ModelProviderApiKeyField({
@@ -52,8 +49,7 @@ export function ModelProviderApiKeyField({
   apiKeyPreview,
   value,
   onChange,
-  revealApiKey,
-  autoHideMs = MODEL_PROVIDER_API_KEY_AUTO_HIDE_MS
+  revealApiKey
 }: ModelProviderApiKeyFieldProps): React.ReactElement {
   const [editing, setEditing] = useState(false)
   /** 眼睛的受控可见性：只有它为 true 且确实读到过 Key 时 value 才是明文。 */
@@ -74,16 +70,6 @@ export function ModelProviderApiKeyField({
     setRevealPending(false)
     setPlainVisible(false)
   }, [providerId])
-
-  // 30 秒自动回掩码；卸载或重新揭示时清掉旧定时器。
-  useEffect(() => {
-    if (revealedApiKey === null) return
-    const timer = setTimeout(() => {
-      setRevealedApiKey(null)
-      setPlainVisible(false)
-    }, autoHideMs)
-    return () => clearTimeout(timer)
-  }, [autoHideMs, revealedApiKey])
 
   const hasDraft = value.length > 0
   const canToggle = hasApiKey || hasDraft
@@ -119,9 +105,9 @@ export function ModelProviderApiKeyField({
     setCopied(false)
   }
 
-  async function copyRevealedKey(): Promise<void> {
-    if (revealedApiKey === null) return
-    await copyTextToClipboard(revealedApiKey)
+  /** 复制真正写进剪贴板的那一步：`key` 一定是完整真值，调用方不许把预览串传进来。 */
+  async function writeKeyToClipboard(key: string): Promise<void> {
+    await copyTextToClipboard(key)
     setCopied(true)
     if (copiedTimer.current) clearTimeout(copiedTimer.current)
     copiedTimer.current = setTimeout(() => {
@@ -130,44 +116,61 @@ export function ModelProviderApiKeyField({
     }, 2_000)
   }
 
-  /** 按需读取完整 Key：成功 ⇒ true（调用方据此把眼睛切到明文）。 */
-  async function revealSavedKey(): Promise<boolean> {
-    if (revealPending) return false
+  /**
+   * 复制已保存的 Key：**掩码态也能复制**（2026-11-01 拍板）。
+   *
+   * 掩码态没有明文可用，所以点复制时才按需读一次真值——绝不去复制界面上的 `••••`/预览串。
+   * 复制本身不切换显示：读者要看得见还得自己展开（那是另一件事）。
+   */
+  async function copyKey(): Promise<void> {
+    let key = revealedApiKey
+    if (key === null) {
+      if (!hasApiKey) return
+      key = await readSavedKey()
+    }
+    if (key === null) return
+    await writeKeyToClipboard(key)
+  }
+
+  /** 按需读取完整 Key：成功 ⇒ 真值（并记住它，避免重复 IPC）；读不到 ⇒ `null`（原因已写进 `revealError`）。 */
+  async function readSavedKey(): Promise<string | null> {
     const sequence = requestSequence.current + 1
     requestSequence.current = sequence
     setRevealPending(true)
     setRevealError(null)
     try {
       const result = await revealApiKey(providerId)
-      if (requestSequence.current !== sequence) return false
+      if (requestSequence.current !== sequence) return null
       if (typeof result?.apiKey === 'string' && result.apiKey.length > 0) {
         setRevealedApiKey(result.apiKey)
-        return true
+        return result.apiKey
       }
       setRevealError(labels.revealApiKeyFailed)
-      return false
+      return null
     } catch {
       if (requestSequence.current === sequence) setRevealError(labels.revealApiKeyFailed)
-      return false
+      return null
     } finally {
       if (requestSequence.current === sequence) setRevealPending(false)
     }
   }
 
   /**
-   * antd 自带眼睛的一次切换：关 ⇒ 立刻回掩码；开 ⇒ 需要时**读取一次** IPC 再切明文
-   * （没有已保存 Key 时只是显示用户自己输入的草稿，不读 IPC）。
+   * antd 自带眼睛的一次切换：关 ⇒ 立刻回掩码（明文只从 `value` 离开 DOM，内存里留着真值供复制）；
+   * 开 ⇒ 需要时**读取一次** IPC 再切明文（没有已保存 Key 时只是显示用户自己输入的草稿，不读 IPC）。
+   *
+   * 这里**不设时限、也不在失焦时回掩码**：读者不收起就一直明文。
    */
   async function handleVisibleChange(next: boolean): Promise<void> {
     if (!next) {
-      clearReveal()
+      setPlainVisible(false)
       return
     }
     if (!hasApiKey || revealedApiKey !== null) {
       setPlainVisible(true)
       return
     }
-    setPlainVisible(await revealSavedKey())
+    if ((await readSavedKey()) !== null) setPlainVisible(true)
   }
 
   function startEditing(): void {
@@ -199,7 +202,7 @@ export function ModelProviderApiKeyField({
     const nextTarget = event.relatedTarget
     // 焦点还在本行内（例如点「检测」）不算离开。
     if (nextTarget instanceof Node && event.currentTarget.parentElement?.contains(nextTarget)) return
-    if (revealedApiKey !== null) clearReveal()
+    // 失焦**不回掩码**（2026-11-01 拍板）：展开后一直明文，直到读者自己收起。
     if (!editing) return
     // 失焦 = 退出编辑态；草稿非空时保留草稿（外层失焦即存），空草稿回掩码且不写入。
     setEditing(false)
@@ -224,21 +227,22 @@ export function ModelProviderApiKeyField({
         onBlur={handleBlur}
         suffix={(
           <span className="provider-api-key-actions">
-            {plainVisible && revealedApiKey !== null ? (
+            {hasApiKey ? (
               // 图标按钮一律走平台组件：读屏名收键、尺寸只有 22/24 两档、焦点环与图形一致性由组件管。
+              // 掩码态与明文态**都在**：掩码态点它按需读真值再复制（2026-11-01 拍板）。
               <IconButton
-                ariaLabelKey={copied ? 'modelService.copied' : 'modelService.copyModelId'}
+                ariaLabelKey={copied ? 'modelService.copied' : 'modelService.copyApiKey'}
                 icon={copied ? Check : Copy}
-                onSelect={() => void copyRevealedKey()}
+                onSelect={() => void copyKey()}
                 resolveText={(key) =>
                   key === 'modelService.copied'
                     ? labels.copied
-                    : key === 'modelService.copyModelId'
-                      ? labels.copyModelId
+                    : key === 'modelService.copyApiKey'
+                      ? labels.copyApiKey
                       : ''
                 }
                 size="sm"
-                tooltipKey={copied ? 'modelService.copied' : 'modelService.copyModelId'}
+                tooltipKey={copied ? 'modelService.copied' : 'modelService.copyApiKey'}
                 dataAttributes={{ 'data-provider-api-key-copy': 'true' }}
               />
             ) : null}
