@@ -62,8 +62,10 @@ describe('dashboard conclusion slot', () => {
 
     // Mirrors index.tsx: the layout injects its mount point into the dashboard child.
     function Surface(): React.ReactElement {
-      return createElement(MarketAnalysisDashboardLayout, { text: portal },
-        createElement(CryptoIntelligenceDashboard, { ...dashboardProps } as never))
+      return createElement(MarketAnalysisDashboardLayout, {
+        text: portal,
+        children: createElement(CryptoIntelligenceDashboard, { ...dashboardProps } as never)
+      })
     }
     const container = document.createElement('div')
     document.body.append(container)
@@ -131,8 +133,10 @@ describe('dashboard conclusion slot', () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
-    await act(async () => root?.render(createElement(MarketAnalysisDashboardLayout, { text: portal },
-      createElement(CryptoIntelligenceDashboard, { ...dashboardProps } as never))))
+    await act(async () => root?.render(createElement(MarketAnalysisDashboardLayout, {
+      text: portal,
+      children: createElement(CryptoIntelligenceDashboard, { ...dashboardProps } as never)
+    })))
     await act(async () => {})
 
     const card = container.querySelector('.mi-analysis-conclusion-card')!
