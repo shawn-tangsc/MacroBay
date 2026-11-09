@@ -47,7 +47,8 @@ describe('parseBlsObservedValues', () => {
     ['unavailable selected observation', (value: any) => { value.Results.series.find((series: { seriesID: string }) => series.seriesID === 'CUUR0000SA0').data[0].value = '-' }, { family: 'cpi', period: '2026-M06' }],
     ['noncanonical selected decimal', (value: any) => { value.Results.series.find((series: { seriesID: string }) => series.seriesID === 'CES0500000003').data[0].value = '1e2' }, { family: 'employment', period: '2026-M06' }],
     ['M13 selected period', (_value: any) => {}, { family: 'employment', period: '2026-M13' }]
-  ])('fails closed for exact family input with %s', (_name, mutate, selected) => {
+    // 用例表要保留字面量：`family` 收的是闭集 `'cpi' | 'employment'`，写成 `as const` 才不会被拓宽成 string。
+  ] as const)('fails closed for exact family input with %s', (_name, mutate, selected) => {
     const payload = familyPayload(selected.family)
     mutate(payload)
     expect(parseBlsCalendarFamilyValues(payload, selected)).toEqual({ state: 'unavailable' })
