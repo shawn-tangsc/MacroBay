@@ -68,6 +68,21 @@ describe('the derived panels match what the registry declared before purposes ex
   //
   // 还没接上的源（`planned` / `fixture-ready`）与被藏起来的源（`hidden` / `pending`）不在此列：
   // 它们今天根本不产出，`visibility`/`readiness` 已经把「为什么是空」说清楚了，再要一个标记是重复。
+  // 方向二（与上一条成对，**对所有源无差别判**）：标记说的是「今天没有读者可见消费」，
+  // 与这个源此刻可不可见、可不可采**无关**。所以带标记的源只许声明 `analysis`
+  // （它不驱动任何读者可见内容），不许出现 dashboard / calendar / briefing / sentiment。
+  //
+  // 只判可见源是不够的：一个今天的 `pending` 源日后被点亮、顺手加了 `dashboard`，
+  // 没有任何东西会红——标记就退化成注释了，而防这件事正是它存在的理由。
+  it('never lets a maintenance-marked source claim a reader-visible purpose', () => {
+    const readerVisible: readonly string[] = ['dashboard', 'calendar', 'briefing', 'sentiment']
+    const offenders = allSources()
+      .filter((source) => source.maintenanceOnly === true)
+      .filter((source) => (source.purposes ?? []).some((purpose) => readerVisible.includes(purpose)))
+      .map((source) => source.sourceId)
+    expect(offenders).toEqual([])
+  })
+
   it('gives every live, visible source either a purpose or the maintenance marker', () => {
     const undefended = allSources()
       .filter((source) => source.readiness === 'live' && source.visibility === 'visible')
