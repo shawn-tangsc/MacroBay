@@ -145,6 +145,14 @@ const migrations: AssistantPlatformMigration[] = [
       create index if not exists idx_assistant_retention_audits_ran_at
         on assistant_retention_audits(ran_at desc);
     `
+  },
+  {
+    id: '0004_assistant_message_owner_boot_id',
+    // 这条 `pending` 是哪个主进程启动批次写的。口径与 agent 侧一致：只追加、可空、不回填，
+    // 老行 NULL 按「上一个进程」处理；不用时间判。
+    up: `
+      alter table assistant_messages add column owner_boot_id text;
+    `
   }
 ]
 

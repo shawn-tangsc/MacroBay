@@ -114,6 +114,12 @@ export type AssistantMessageEntity = {
   modelId: string | null
   modelSnapshot: AssistantModelSnapshot | null
   stats: AssistantMessageStats | null
+  /**
+   * 写这条 `pending` 的主进程启动批次。崩溃收尾只收「不是本批次」的行：
+   * 同一份 userData 同时只有一个进程（单实例锁），「不是本批次」= 上一个已死的进程。
+   * 老行为 `undefined`，读侧按「上一个进程」处理。
+   */
+  ownerBootId?: string
   createdAt: string
   updatedAt: string
 }

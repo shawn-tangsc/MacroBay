@@ -327,6 +327,7 @@ export function createAssistantsAndRuntimes(ports: AssistantsAndRuntimesPorts): 
   })
 
   const assistantChatRuntime = createAssistantChatRuntimeService({
+    ownerBootId: processBootId,
     // 凭据判定信号：进程级依赖，**只在这里注入一次**（AI 运行时不许 import 通知包）。
     // 请求路径上不携带；翻转去重交给 `reportProviderCredential` 自己的 changed。
     // 名字在组合根取：通知那边只有 id，且**不许印 id**。取不到名字就不发（返回 undefined 即可），

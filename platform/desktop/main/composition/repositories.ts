@@ -45,7 +45,7 @@ const legacyAgentStorage = createJsonFileStorage<AgentStoreState>(
 const agentDatabase = createAgentPlatformDatabase(join(userDataPath, 'platform', 'agents.sqlite'))
 const assistantDatabase = createAssistantPlatformDatabase(join(userDataPath, 'platform', 'assistants.sqlite'))
 const agentRepositories = createAgentPlatformRepositories(agentDatabase, { bootId: processBootId })
-const assistantRepositories = createAssistantPlatformRepositories(assistantDatabase)
+const assistantRepositories = createAssistantPlatformRepositories(assistantDatabase, { bootId: processBootId })
 /**
  * T1/T2：生成图片落 `userData/generated-images/`（文件名 = 内容 hash），消息只存引用；
  * 渲染层通过 `app-image://generated-images/<hash>.<ext>` 读图（协议见 generatedImageProtocol.ts）。

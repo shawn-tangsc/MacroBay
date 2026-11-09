@@ -16,7 +16,8 @@ export type AssistantPlatformRepositories = {
 }
 
 export function createAssistantPlatformRepositories(
-  db: AssistantPlatformDatabase
+  db: AssistantPlatformDatabase,
+  options: Readonly<{ bootId?: string }> = {}
 ): AssistantPlatformRepositories {
   const topics = createTopicRepository(db)
   return {
@@ -24,7 +25,7 @@ export function createAssistantPlatformRepositories(
     assistants: createAssistantRepository(db),
     templateInstalls: createAssistantTemplateInstallRepository(db),
     topics,
-    messages: createMessageRepository(db, topics)
+    messages: createMessageRepository(db, topics, options)
   }
 }
 
