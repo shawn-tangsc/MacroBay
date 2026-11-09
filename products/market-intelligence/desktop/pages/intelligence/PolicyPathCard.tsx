@@ -2,6 +2,8 @@ import { Button } from 'antd'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { policyPathDay } from './policyPathMonth'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
@@ -144,15 +146,17 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
 
   const conclusion = conclusionView(settlement, text)
   const judged = judgedView(settlement, text)
+  // 会议日与 SEP 观测日都是**日历日**：交给同一个格式化（语言决定写法），不自己切字符串。
+  const locale = useShellLanguage()
   const meetingValue = (date: string, days: number) => <>
-    {date.slice(5)}<span className="mi-policy-card__muted"> · {text.daysAway.replace('{days}', String(days))}</span>
+    {policyPathDay(date, locale)}<span className="mi-policy-card__muted"> · {text.daysAway.replace('{days}', String(days))}</span>
   </>
   const rangeValue = reading.targetRange
     ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%`
     : '—'
   const sepMedianValue = reading.sep?.medianCurrentYear === undefined
     ? '—'
-    : <>{reading.sep.medianCurrentYear.toFixed(1)}%<span className="mi-policy-card__muted">（{reading.sep.asOf.slice(5)}）</span></>
+    : <>{reading.sep.medianCurrentYear.toFixed(1)}%<span className="mi-policy-card__muted">（{policyPathDay(reading.sep.asOf, locale)}）</span></>
 
   const facts: ReadonlyArray<Readonly<{ label: string; value: React.ReactNode; hintParams?: Readonly<Record<string, string>> }>> = strip
     ? [
@@ -198,7 +202,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     {strip
       ? <p className="mi-policy-card__settle">
           <b>{text.outcomes[strip.actualOutcome]}</b>
-          <span>{text.settlementActual.replace('{date}', strip.decidedMeetingDate.slice(5))}</span>
+          <span>{text.settlementActual.replace('{date}', policyPathDay(strip.decidedMeetingDate, locale))}</span>
           {conclusion === undefined ? null : <span className="mi-policy-card__verdict" data-direction={conclusion.direction}>
             {conclusion.label}
           </span>}

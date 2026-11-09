@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -6,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+import { policyPathDay } from './policyPathMonth'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
@@ -54,13 +56,21 @@ const render = async (candidate: PolicyPathReading) => {
   return host
 }
 
+/** 红线第 4 条：抽屉里同样不许自己切日期、也不许把 ISO 切成 19 位再显示。 */
+it('builds no date or clock string of its own', () => {
+  const drawer = readFileSync('products/market-intelligence/desktop/pages/intelligence/PolicyPathDrawer.tsx', 'utf8')
+  expect(drawer).not.toMatch(/\.slice\(\s*5\b/u)
+  expect(drawer).not.toMatch(/\.slice\(\s*0,\s*19\s*\)/u)
+  expect(drawer).not.toMatch(/replace\('T', ' '\)/u)
+})
+
 describe('policy path drawer settlement', () => {
   it('adds the settlement section with the realised band, the price before it and the gap', async () => {
     const rendered = await render(reading)
     const section = rendered.querySelector('[data-settlement]')
     expect(section).not.toBeNull()
     expect(section?.textContent).toContain(text.settlementTitle)
-    expect(section?.textContent).toContain('12-09 · 加息 25bp')
+    expect(section?.textContent).toContain(`${policyPathDay('2026-12-09', 'zh-CN')} · 加息 25bp`)
     expect(section?.textContent).toContain('9–3')
     // Leading band, realised band, and everything else as one number: no five-bucket ladder.
     expect(section?.textContent).toContain('维持利率 59.0% · 加息 25bp 38.0% · 其他 3.0%')

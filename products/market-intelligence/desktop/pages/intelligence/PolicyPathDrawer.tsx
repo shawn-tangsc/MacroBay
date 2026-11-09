@@ -3,6 +3,9 @@ import { ExternalLink } from 'lucide-react'
 import { StateView } from '@platform/ui/components/state'
 
 import { MiSideDrawer } from './MiSideDrawer'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { policyPathDay, policyPathMonth } from './policyPathMonth'
 
 import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES, namedOutcomes } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -73,6 +76,10 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
   text: PolicyPathDrawerText
   onClose: () => void
 }>): React.ReactElement {
+  // 日历日按读者语言写（`policyPathDay`），概率快照的时刻按统一格式化（`formatTime`）——
+  // 两处都不许自己切字符串（红线第 4 条）。
+  const locale = useShellLanguage()
+  const formatTime = useShellTimeFormat()
   const probability = reading.probability
   const vote = reading.lastDecision?.vote
   // On the decision day the next meeting is the one after the realised one; the calendar still
@@ -82,7 +89,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
   const daysAway = nextMeeting?.daysUntil ?? reading.daysUntilMeeting
   return <MiSideDrawer title={text.title} closeLabel={text.close} onClose={onClose}
     meta={<>
-      <span>{text.meeting} {meetingDate.slice(5)} · {text.daysAway.replace('{days}', String(daysAway))}</span>
+      <span>{text.meeting} {policyPathDay(meetingDate, locale)} · {text.daysAway.replace('{days}', String(daysAway))}</span>
       {reading.hasProjectionMaterials ? <em className="mi-policy-drawer__chip">{text.projection}</em> : null}
     </>}>
 
@@ -92,7 +99,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       <span className="mi-policy-drawer__value">{probability ? percentOf(probability.value) : '—'}</span>
       <span className="mi-policy-drawer__hero-label">{probability
         ? text.outcomeLead
-          .replace('{month}', String(Number(reading.meetingDate.slice(5, 7))))
+          .replace('{month}', policyPathMonth(reading.meetingDate, locale))
           .replace('{outcome}', text.outcomes[probability.outcome])
         : ''}</span>
       {probability?.changeInPp24h === undefined ? null : <span className="mi-policy-drawer__delta" data-direction={probability.changeInPp24h > 0 ? 'up' : probability.changeInPp24h < 0 ? 'down' : 'flat'}>
@@ -201,7 +208,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
           ? <a href={probability.marketUrl} rel="noreferrer" target="_blank">{probability.venue}<ExternalLink aria-hidden="true" size={11} /></a>
           : probability?.venue ?? '—'}</dd></div>
         <div><dt>{text.range}</dt><dd>{reading.targetRange ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%` : '—'}</dd></div>
-        {probability?.asOf ? <div><dt>{text.asOf}</dt><dd>{probability.asOf.replace('T', ' ').slice(0, 19)}</dd></div> : null}
+        {probability?.asOf ? <div><dt>{text.asOf}</dt><dd>{formatTime(probability.asOf)}</dd></div> : null}
       </dl>
       {/* The card used to hide this behind a hand-drawn "?" bubble; the basis is where a reader looks
           for it, and a sentence that says what the number is not should not need a hover. */}
@@ -220,6 +227,8 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
  */
 function SettlementSection({ reading, text }: Readonly<{ reading: PolicyPathReading; text: PolicyPathDrawerText }>): React.ReactElement | null {
   const settlement = reading.settlement
+  // 已定的会议日同样是**日历日**：按读者语言写，不切字符串。
+  const locale = useShellLanguage()
   if (!settlement) return null
   const conclusion = conclusionView(settlement, text)
   const vote = reading.lastDecision?.vote
@@ -238,7 +247,7 @@ function SettlementSection({ reading, text }: Readonly<{ reading: PolicyPathRead
     <dl className="mi-policy-drawer__kv">
       <div>
         <dt>{text.settlementActualLabel}</dt>
-        <dd>{settlement.decidedMeetingDate.slice(5)} · <b>{text.outcomes[settlement.actualOutcome]}</b></dd>
+        <dd>{policyPathDay(settlement.decidedMeetingDate, locale)} · <b>{text.outcomes[settlement.actualOutcome]}</b></dd>
       </div>
       {vote ? <div><dt>{text.voteTally}</dt><dd>{vote.for}–{vote.against}</dd></div> : null}
       {distribution && leading && otherShare !== undefined ? <div>
