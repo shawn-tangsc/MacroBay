@@ -114,9 +114,9 @@ export function WebSearchProvidersPage({
             ))}
           </tbody>
         </table>
+        {/* 展开/收起是命令型动作：换 antd `Button`，类名与 `aria-expanded` 原样保留（外观由类决定）。 */}
         {deferred.length > 0 ? (
-          <button
-            type="button"
+          <Button
             className="web-search-providers-more"
             data-web-search-more-providers
             aria-expanded={showDeferred}
@@ -125,7 +125,7 @@ export function WebSearchProvidersPage({
             <span className="web-search-providers-more-caret" aria-hidden="true">
               ›
             </span>
-          </button>
+          </Button>
         ) : null}
         {showDeferred ? (
           <div className="web-search-deferred-list">
