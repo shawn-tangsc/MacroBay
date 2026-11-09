@@ -13,6 +13,16 @@ const detectedAt = '2026-08-04T00:00:00.000Z'
 const fixtureDirectory = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const fixture = (file: string) => readFileSync(join(fixtureDirectory, file), 'utf8')
 
+
+type ScheduleRevisions = typeof createMacroCalendarScheduleRevisions
+/**
+ * 这一组用例喂的是**故意做坏的输入**（错 descriptor / 错 provider / 重复键 / 空批次），
+ * 它们的类型当然不合契约——工厂的职责就是拒绝它们。所以只在调用边界声明一次"这是非法输入"，
+ * 不在里面改断言，也不放宽产品类型。
+ */
+const malformedParsed = (value: unknown) => value as Parameters<ScheduleRevisions>[0]
+const malformedEvidence = (value: unknown) => value as Parameters<ScheduleRevisions>[1]
+
 describe('createMacroCalendarScheduleRevisions', () => {
   it('maps accepted Fed and BEA schedule results into deterministic internal schedule revisions', () => {
     const fed = scheduleResult('macro-calendar-fed-schedule', fixture('fed-fomc-schedule-2026-08-03.html'))
@@ -99,7 +109,7 @@ describe('createMacroCalendarScheduleRevisions', () => {
     ['hash', { evidenceHash: '  ' }]
   ])('rejects corrupted evidence %s without producing revisions', (_label, patch) => {
     const parsed = scheduleResult('macro-calendar-fed-schedule', fixture('fed-fomc-schedule-2026-08-03.html'))
-    expect(createMacroCalendarScheduleRevisions(parsed, { ...evidence('macro-calendar-fed-schedule'), ...patch })).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
+    expect(createMacroCalendarScheduleRevisions(parsed, malformedEvidence({ ...evidence('macro-calendar-fed-schedule'), ...patch }))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
   })
 
   it('rejects parsed and draft mismatches, duplicate event keys, and BLS observed values', () => {
@@ -114,8 +124,8 @@ describe('createMacroCalendarScheduleRevisions', () => {
       body: readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'bls-observations', 'fixtures', 'bls-six-series-2025-2026-2026-08-03.json'), 'utf8')
     })
 
-    expect(createMacroCalendarScheduleRevisions(mismatchedDraft, evidence('macro-calendar-fed-schedule'))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
-    expect(createMacroCalendarScheduleRevisions(mismatchedDraftProvider, evidence('macro-calendar-fed-schedule'))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
+    expect(createMacroCalendarScheduleRevisions(malformedParsed(mismatchedDraft), evidence('macro-calendar-fed-schedule'))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
+    expect(createMacroCalendarScheduleRevisions(malformedParsed(mismatchedDraftProvider), evidence('macro-calendar-fed-schedule'))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
     expect(createMacroCalendarScheduleRevisions(mismatchedDraftParser, evidence('macro-calendar-fed-schedule'))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
     expect(createMacroCalendarScheduleRevisions(mismatchedParser, evidence('macro-calendar-fed-schedule'))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
     expect(createMacroCalendarScheduleRevisions(duplicateDraft, evidence('macro-calendar-fed-schedule'))).toEqual({ state: 'failed', failureCode: 'schedule-input-invalid' })
@@ -133,7 +143,8 @@ describe('createMacroCalendarScheduleRevisions', () => {
 
 function scheduleResult(descriptorId: 'macro-calendar-fed-schedule' | 'macro-calendar-bea-schedule', body: string) {
   const result = parseMacroCalendarEvidence({ descriptorId, body })
-  if (result.kind !== 'schedule-drafts') throw new Error('expected accepted schedule result')
+  // 联合类型的成功支用 `kind` 判别、失败支用 `state`，所以先收窄再读 `kind`。
+  if (!('kind' in result) || result.kind !== 'schedule-drafts') throw new Error('expected accepted schedule result')
   return result
 }
 
