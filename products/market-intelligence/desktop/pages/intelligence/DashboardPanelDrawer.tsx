@@ -60,11 +60,16 @@ function catalogTone(sources: readonly SourceView[]): SourceHealthTone {
   return worst
 }
 
-function toneClass(tone: SourceHealthTone): string {
-  if (tone === 'ok') return 'is-on'
-  if (tone === 'warn') return 'is-warn'
-  if (tone === 'bad') return 'is-bad'
-  return ''
+/**
+ * 目录标记只在「要人看一眼」的两档出现：降级（黄）与失败（红）。
+ * ok 与 muted（未启用 / 不可用 / 没数据）**都不画点**——常驻的绿点会被读成选中标记，两天就被无视。
+ */
+function needsMarker(tone: SourceHealthTone): tone is 'warn' | 'bad' {
+  return tone === 'warn' || tone === 'bad'
+}
+
+function toneClass(tone: 'warn' | 'bad'): string {
+  return tone === 'warn' ? 'is-warn' : 'is-bad'
 }
 
 /**
@@ -180,15 +185,23 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
                 const providerName = (settingsText.providerNames as Readonly<Record<string, string>>)[provider.providerId] ?? provider.displayName
                 const enabled = provider.sources.filter((source) => source.enabled).length
                 const summary = settingsText.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
+                const tone = catalogTone(provider.sources)
+                // 颜色之外必须有语义：要出标记的两档把档位词写进目录项的可访问名（读屏不靠颜色）。
+                const healthWord = tone === 'bad'
+                  ? settingsText.health.statuses.failed
+                  : tone === 'warn'
+                    ? settingsText.health.statuses['data-stale']
+                    : null
                 return <section className="intelligence-provider-group" key={provider.providerId}>
                   <button
+                    aria-label={healthWord === null ? undefined : `${providerName} ${summary} ${settingsText.health.title} ${healthWord}`}
                     className={`intelligence-provider-row${provider.providerId === providerId ? ' selected' : ''}`}
                     type="button"
                     onClick={() => setProviderId(provider.providerId)}
                   >
                     <span className={`intelligence-source-avatar${provider.sources.every((source) => source.panels.length === 0) ? ' is-unused' : ''}`} aria-hidden="true">{providerName.slice(0, 1).toUpperCase()}</span>
                     <span className="intelligence-provider-main"><strong>{providerName}</strong><small>{summary}</small></span>
-                    <span className="intelligence-provider-state"><i className={toneClass(catalogTone(provider.sources))} aria-hidden="true" /><ChevronRight aria-hidden="true" size={13} /></span>
+                    <span className="intelligence-provider-state">{needsMarker(tone) ? <i className={toneClass(tone)} aria-hidden="true" /> : null}<ChevronRight aria-hidden="true" size={13} /></span>
                   </button>
                 </section>
               })}

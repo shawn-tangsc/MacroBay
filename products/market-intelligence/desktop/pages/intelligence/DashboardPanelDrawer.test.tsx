@@ -90,14 +90,16 @@ describe('DashboardPanelDrawer read failure', () => {
  * 读者在目录里分不出谁坏了。判据不许另写：色调一律来自 `sourceHealthTone`。
  */
 describe('DashboardPanelDrawer catalog health dot', () => {
-  it('lights only when every enabled source is connected and fresh', async () => {
+  it('draws no marker for a healthy provider (a always-on dot is decoration, not information)', async () => {
     mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'healthy' }))
     await openDrawer(false)
 
-    expect(dot(0).classList.contains('is-on')).toBe(true)
+    expect(dot()).toBeNull()
+    // 没标记就不要在可访问名里加健康词：健康是默认状态，说它只会加噪。
+    expect(rowName()).not.toContain(productText['zh-CN'].settings.intelligenceSources.health.statuses.healthy)
   })
 
-  it('does not light for an enabled source that is unavailable', async () => {
+  it('draws no marker for an enabled but unavailable source (muted stays quiet)', async () => {
     mockGetPanelView.mockResolvedValue(
       viewWithSource({
         enabled: true,
@@ -111,30 +113,45 @@ describe('DashboardPanelDrawer catalog health dot', () => {
     )
     await openDrawer(false)
 
-    // 不可用不是「健康」，也不是「失败」：中性点（不亮、不红）。
-    expect(dot(0).classList.contains('is-on')).toBe(false)
-    expect(dot(0).classList.contains('is-bad')).toBe(false)
+    // 不可用 = muted = 不画点；但它**不是**「健康」，只是这一层不发声（详情里逐源说明）。
+    expect(dot()).toBeNull()
   })
 
-  it('stays neutral when nothing is enabled', async () => {
+  it('draws no marker when nothing is enabled', async () => {
     mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: false, health: 'healthy' }))
     await openDrawer(false)
 
-    expect(dot(0).classList.contains('is-on')).toBe(false)
+    expect(dot()).toBeNull()
   })
 
-  it('turns red for a failed enabled source, and the expanded detail names that source', async () => {
+  it('turns red for a failed enabled source, and the marker has a name (not colour alone)', async () => {
     const source = firstSource()
     mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'failed' }))
     await openDrawer(false)
 
-    expect(dot(0).classList.contains('is-bad')).toBe(true)
-    // 红了必须能定位：展开项里点名那个源（而不是只让读者知道「这组坏了」）。
+    expect(dot()?.classList.contains('is-bad')).toBe(true)
+    // 颜色之外必须带语义：档位进目录项的可访问名，读屏不靠颜色也能拿到。
+    expect(rowName()).toContain(productText['zh-CN'].settings.intelligenceSources.health.statuses.failed)
+    // 红了还要能定位到是哪个源：展开项里点名那个源。
     const sourceNames = productText['zh-CN'].settings.intelligenceSources.sourceNames as Readonly<Record<string, string>>
-    const named = sourceNames[source.sourceId] ?? source.displayName
-    expect(document.body.textContent).toContain(named)
+    expect(document.body.textContent).toContain(sourceNames[source.sourceId] ?? source.displayName)
+  })
+
+  it('marks a degraded provider as a warning, with the same name-based semantics', async () => {
+    mockGetPanelView.mockResolvedValue(viewWithSource({ enabled: true, health: 'degraded' }))
+    await openDrawer(false)
+
+    expect(dot()?.classList.contains('is-warn')).toBe(true)
+    expect(rowName()).toContain(productText['zh-CN'].settings.intelligenceSources.health.statuses['data-stale'])
   })
 })
+
+/** 目录项（provider 行）的可访问名：读屏听到的那一句。 */
+function rowName(): string {
+  const row = document.querySelector<HTMLElement>('.intelligence-provider-row')
+  if (!row) throw new Error('Expected a catalog row')
+  return row.getAttribute('aria-label') ?? row.textContent ?? ''
+}
 
 function firstProvider(): PanelView['providers'][number] {
   return dashboardView.providers[0]!
@@ -151,11 +168,8 @@ function viewWithSource(patch: Partial<SourceView>): PanelView {
   return { ...dashboardView, providers: [{ ...provider, sources: [source] }] }
 }
 
-function dot(index: number): HTMLElement {
-  const dots = [...document.body.querySelectorAll<HTMLElement>('.intelligence-provider-state i')]
-  const found = dots[index]
-  if (!found) throw new Error(`Expected a catalog dot at ${index}`)
-  return found
+function dot(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>('.intelligence-provider-state i')
 }
 
 async function openDrawer(sampleActive: boolean): Promise<void> {
