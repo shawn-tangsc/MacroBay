@@ -156,8 +156,9 @@
 }
 
 /* 两颗按钮已是 antd `Button`（默认档）：选择器带上 `.ant-btn` 才压得住它自带的字号、内距与高度，
-   另补 `height: auto` / `line-height: inherit` —— 这一行本来就是 3px 内距的小按钮，antd 的 24px
-   档会把它撑高。字号与留白仍是原来的数。 */
+   另补 `height: auto` —— 这一行本来就是 3px 内距的小按钮，antd 的 24px 档会把它撑高。
+   行高写 `inherit` 与替换前一致：壳层 reset 的 `font: inherit`（`styles.css:112-123`）已经把按钮的
+   行高设成继承值，这条规则原来没写行高，算出来就是继承值。字号与内距仍是原来的数。 */
 .mi-sample-banner__button.ant-btn {
   display: inline-flex;
   align-items: center;

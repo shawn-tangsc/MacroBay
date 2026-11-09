@@ -335,9 +335,11 @@ button.mi-agent-card__status:focus-visible {
 }
 
 /* 进度与它旁边的动作已是 antd `Button`（text 档）：选择器带上 `.ant-btn` 才压得住它自带的字号与内距，
-   另补 `height: auto` / `line-height: inherit`（这是卡内 9px 的行内字，antd 的 24px 档会撑高卡片），
-   以及 hover 的透明底（原来只有颜色变化）。字号、下划线、留白仍是原来的数。 */
+   另补 `height: auto` / `line-height: inherit`（这是卡内 9px 的行内字，antd 的 24px 档会撑高卡片）、
+   `display: revert`（回到替换前的 UA `inline-block`，antd 是 `inline-flex`）与 hover 的透明底
+   （原来只有颜色变化）。两处 `padding: 0` 是**替换前就有的**，不是这一批新加。 */
 .mi-agent-card__progress.ant-btn {
+  display: revert;
   position: relative;
   z-index: 2;
   flex: 0 0 auto;
@@ -393,6 +395,7 @@ button.mi-agent-card__status:focus-visible {
 }
 
 .mi-agent-card__activation-action.ant-btn {
+  display: revert;
   height: auto;
   line-height: inherit;
   padding: 0;

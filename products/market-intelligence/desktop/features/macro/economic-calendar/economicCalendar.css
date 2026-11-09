@@ -212,9 +212,19 @@
 .mi-economic-calendar__empty-state { display: flex; align-items: center; justify-content: space-between; gap: var(--mi-economic-gap); padding: 14px; border-top: 1px solid var(--mi-economic-line); background: var(--mi-economic-surface-strong); }
 .mi-economic-calendar__empty-state-title { color: var(--mi-economic-text); font-size: 12px; font-weight: 650; }
 .mi-economic-calendar__empty-state-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-/* 「还有 N 条」已是 antd `Button`（text 档）：选择器带上 `.ant-btn` 才压得住它自带的字号与内距，
-   另补 `padding: 0` / `line-height: inherit` 与 hover 的透明底，好让这一行的高度和留白保持原样。 */
-.mi-economic-calendar__more-button.ant-btn { height: var(--mi-calendar-row-height); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: fit-content; border: 0; background: transparent; cursor: pointer; font-size: var(--mi-calendar-time-size); line-height: inherit; padding: 0; text-align: left; }
+/*
+ * 「还有 N 条」已是 antd `Button`（text 档）。这一行里两个 `revert` 是**回到替换前**，不是新取值：
+ * 替换前这条规则没写 `padding` 与 `display`，而壳层 reset 只清 `font` 与 `border`
+ * （`apps/desktop-shell/src/renderer/src/styles.css:112-123`），所以它们来自浏览器 UA——
+ * Chromium 的 `button` 是 `padding: 1px 6px`、`display: inline-block`。antd 会把它们改成自己的
+ * （内距 `0 7px`、`inline-flex`），后者还会让文字落进 flex 子项，`text-overflow: ellipsis` 截不出省略号。
+ *
+ * **第一版这里写的是 `padding: 0`，把左内距从约 6px 抹成 0（可见位移）**，审计 2026-11-09 抓到；
+ * 现在改回 `revert`：不抄 Chromium 的默认数字，就不会在浏览器换掉默认值时再错一次。
+ * `line-height: inherit` **不是**这一类的改动：壳层 reset 的 `font: inherit` 已经把行高设成继承值，
+ * 替换前算出来就是继承值，写 `inherit` 与原来一致（写法上留个显式声明，免得再有人以为它是 UA 的 `normal`）。
+ */
+.mi-economic-calendar__more-button.ant-btn { display: revert; height: var(--mi-calendar-row-height); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: fit-content; border: 0; background: transparent; cursor: pointer; font-size: var(--mi-calendar-time-size); line-height: inherit; padding: revert; text-align: left; }
 .mi-economic-calendar__more-button.ant-btn:hover { background: transparent; color: var(--mi-economic-text); text-decoration: underline; }
 .mi-economic-calendar__inspector { display: grid; align-content: start; gap: 15px; padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
 .mi-economic-calendar h2, .mi-calendar-detail h2 { font-size: 20px; font-weight: 650; line-height: 1.3; }
