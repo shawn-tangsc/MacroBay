@@ -173,13 +173,17 @@ describe('daily briefing conclusion wording', () => {
     expect(validate(repeated)).toMatchObject({ ok: false, failureCode: 'repeated-direction' })
   })
 
+  // 句式判据已删（2026-11-09 用户口径：不许用句式判 AI 输出）：价格目标、买卖建议这类
+  // 说法不再由正则拦，交给提示词与契约。但**编造的数仍然要拒**——下面两条钉住事实判据。
   it.each([
-    ['目标价', '目标价 12 万美元，建议等待回调。'],
-    ['建议买入', '建议买入 BTC，等待反弹。']
-  ])('rejects the prohibited forecast %s', (term, sentence) => {
-    const result = validate(chinese({ summary: `${chinese().summary}${sentence}` }))
-    expect(result).toMatchObject({ ok: false, failureCode: 'forbidden-forecast' })
-    if (!result.ok) expect(result.detail).toContain(term.split(' ')[0]!.replace('%', ''))
+    ['summary', 'ETF 流出 -9.99 亿美元。'],
+    ['conditions', '稳定币总量降到 12.34 亿美元。']
+  ])('still rejects a fabricated number in %s', (field, sentence) => {
+    const base = chinese()
+    const result = validate(field === 'summary'
+      ? { ...base, summary: `${base.summary}${sentence}` }
+      : { ...base, conditions: [...base.conditions, sentence] })
+    expect(result).toMatchObject({ ok: false, failureCode: 'unknown-number' })
   })
 
   it.each([
@@ -238,52 +242,6 @@ describe('daily briefing conclusion wording', () => {
   it('rejects a falsifier that is not a condition with a number', () => {
     const noCondition = chinese({ counterEvidence: ['ETF 流出 -6.43 亿美元。'] })
     expect(validate(noCondition)).toMatchObject({ ok: false, failureCode: 'missing-outlook' })
-  })
-
-  it.each([
-    ['窗口', '窗口内 BTC 偏空。'],
-    ['多数判断', '多数判断偏空，BTC 下跌 1.10%。'],
-    ['23:09', '23:09 前后一度转为偏空，BTC 下跌 1.10%。'],
-    ['冻结数据', '冻结数据仍显示 BTC 下跌 1.10%。'],
-    ['前提被削弱', '前提被削弱，BTC 下跌 1.10%。'],
-    ['AI', 'AI 维持 BTC 偏空。'],
-    ['模型', '模型维持 BTC 偏空。'],
-    ['结论', '结论是 BTC 偏空。'],
-    ['时间线', '时间线显示 BTC 偏空。']
-  ])('rejects the internal Chinese phrase %s', (term, summary) => {
-    expectBanned(chinese({ summary }), [term])
-  })
-
-  it.each([
-    ['window', 'During the window, BTC fell 1.10%.'],
-    ['Most calls', 'Most calls were bearish on BTC.'],
-    ['23:09', 'At 23:09 BTC turned bearish.'],
-    ['frozen data', 'The frozen data showed BTC down 1.10%.'],
-    ['premise was weakened', 'The premise was weakened by the CPI print.'],
-    ['AI', 'The AI was bearish on BTC.'],
-    ['model', 'The model kept BTC bearish.'],
-    ['conclusion', 'The conclusion stayed bearish on BTC.'],
-    ['timeline', 'The timeline shows BTC bearish.']
-  ])('rejects the internal English phrase %s', (term, summary) => {
-    expectBanned(english({ summary }), [term])
-  })
-
-  it('rejects the current window/vote-count/clock/frozen-data summary in both languages', () => {
-    expectBanned(
-      chinese({ summary: '窗口内多数判断偏空，23:09 前后一度转为分化，冻结数据让前提被削弱，AI 维持结论不变。' }),
-      ['窗口']
-    )
-    expectBanned(
-      english({ summary: 'During the window, most calls were bearish. Around 23:09 the view briefly flipped to mixed, but the frozen data weakened the premise, so the model kept the conclusion bearish.' }),
-      ['window']
-    )
-  })
-
-  it('adds a repair instruction that names the market event, its number and the date', () => {
-    const result = validate(chinese({ summary: '窗口内 BTC 偏空。' }))
-    expect(result).toMatchObject({ ok: false, failureCode: 'forbidden-content' })
-    if (result.ok) return
-    expect(result.detail).toContain('Rewrite it as the market event or data, its number from FACTS, and the date.')
   })
 
   it('allows a clock time only when the sentence names the scheduled market event', () => {
