@@ -81,6 +81,10 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       {expandable ? (
+        /* 整行即动作（展开/收起），同 `CalendarEventRow` 那类例外：`Choice` 会把它变成可选中项，
+           平台按钮会把「结论 + `›`」包成一颗文字按钮。原生 `<button>` 带 `aria-expanded` /
+           `aria-controls`、行内文字就是它的可访问名，`:hover` 与 `:focus-visible` 各有自己的规则
+           （`.mi-divergence__summary:hover` / `:focus-visible`）。别换成平台组件。 */
         <button aria-controls={detailId} aria-expanded={expanded} className="mi-divergence__summary"
           onClick={() => setExpanded(current => !current)} type="button">
           <span className="mi-divergence__summary-text">{summary}</span>
