@@ -1,6 +1,6 @@
 import { Button } from 'antd'
 import { useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Info } from 'lucide-react'
 
 import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
 import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
@@ -33,7 +33,10 @@ import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnap
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
 import type { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
@@ -80,6 +83,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
 }): React.ReactElement {
+  const resolveProductKey = useProductTextKey()
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, now })
   const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
@@ -151,8 +155,17 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       <header className="mi-crypto-dashboard__header">
         <div className="mi-crypto-dashboard__heading">
           <p className="mi-crypto-dashboard__label">{text.workspaceLabel}</p>
-          <h1>{text.title}</h1>
-          <p>{text.description}</p>
+          {/* 标题与它自己的 ⓘ 是一组，图标紧跟标题文字（行内 gap 4px、不换行）：不推到行尾、也不
+              单独占一行。读法那句（阅读顺序 + partial 口径）收进浮层，正文只留标题——
+              它说的是「怎么读这张表」，不是读者这一刻要知道的状态。 */}
+          <div className="mi-crypto-dashboard__title-row">
+            <h1>{text.title}</h1>
+            <Popover labelKey="pages.intelligence.portal.dashboard.description" resolveText={resolveProductKey}
+              trigger={triggerProps => (
+                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.descriptionLabel"
+                  icon={Info} resolveText={resolveProductKey} size="sm" variant="plain" />
+              )} />
+          </div>
         </div>
         <div className="mi-crypto-dashboard__tools">
           {/* 三处页头命令按钮：换 antd `Button` 默认档，className 原样保留——尺寸/字重仍由

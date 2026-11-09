@@ -112,7 +112,11 @@
 .mi-crypto-dashboard__heading { min-width: 0; }
 .mi-crypto-dashboard__label { margin: 0 0 10px; color: var(--mi-dashboard-lime); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; letter-spacing: .14em; }
 .mi-crypto-dashboard h1 { color: #fff; font-size: 30px; font-weight: 650; letter-spacing: -.035em; line-height: 1.16; }
-.mi-crypto-dashboard__heading > p:last-child { max-width: 660px; margin-top: 8px; color: var(--mi-dashboard-muted); font-size: 14px; line-height: 1.5; }
+/* 标题与它的 ⓘ 同一行：`flex` + `nowrap`，图标 `flex:none`。窄容器里让标题去截断，而不是把图标
+   一个人甩到下一行（那段读法说明原来在正文，现在收进这颗 ⓘ）。 */
+.mi-crypto-dashboard__title-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; min-width: 0; }
+.mi-crypto-dashboard__title-row > h1 { min-width: 0; }
+.mi-crypto-dashboard__title-row > .ant-btn { flex: none; }
 .mi-crypto-dashboard__tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 /* 三处页头命令按钮已是 antd `Button`：选择器带上 `.ant-btn` 才压得住它自带的
    padding/height/border-radius。**尺寸与字号仍是原来那几个数**，换的只是交互元素。 */
