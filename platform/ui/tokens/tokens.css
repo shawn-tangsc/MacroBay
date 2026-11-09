@@ -1,5 +1,5 @@
 /*
- * UI tokens — the one place a UI colour name is given a value.
+ * UI tokens — the one place a UI token is given a value.
  *
  * Every token is defined in both theme blocks. A token that exists in only one
  * block is not a token: the other theme silently falls back to whatever the
@@ -32,6 +32,31 @@
   --font-metric-sm: 24px;
   --font-metric-md: 30px;
   --font-metric-lg: 42px;
+
+  /*
+   * Reading type scale: the two list-row tiers and the group heading between them, each with its
+   * line height. Body copy is `--font-body`; a row's title uses it too, because a list row's title
+   * is body text — the row is told apart by weight and colour, not by a third size.
+   *
+   * Why the values are here and not in each product: the same row shape appears in the shell's
+   * lists and in product pages, and the shell cannot read a product token. One definition serves
+   * both, so "the title is 12 and the meta is 11" has exactly one place to be true.
+   *
+   * `--line-*` is a **line height**, never a border: borders are `--border*`. Unitless, so it
+   * scales with the size above it instead of pinning a pixel ratio that goes stale when the size
+   * changes.
+   *
+   * Weights are not tokens — there are exactly four, written as `font-weight` literals:
+   * 400 body / meta, 500 row title, 600 group heading, 650 a figure or a strong emphasis inside
+   * running text. 620 / 680 / 700 / 750 are not a fifth tier; they are "a bit bolder" and fold
+   * back into these four.
+   */
+  --font-body: 12px;
+  --line-body: 1.5;
+  --font-meta: 11px;
+  --line-meta: 1.5;
+  --font-section: 11.5px;
+  --line-section: 1.6;
 
   /*
    * Motion: durations and easing live here and nowhere else. A component that writes `180ms` or
@@ -85,6 +110,15 @@
   --font-metric-sm: 24px;
   --font-metric-md: 30px;
   --font-metric-lg: 42px;
+
+  /* Same six values as the dark block: a size does not change with the theme, and a token that
+   * lives in only one block is not a token (see the header). */
+  --font-body: 12px;
+  --line-body: 1.5;
+  --font-meta: 11px;
+  --line-meta: 1.5;
+  --font-section: 11.5px;
+  --line-section: 1.6;
 
   --warning: var(--caution);
 }
