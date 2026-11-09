@@ -470,3 +470,44 @@ describe('tombstones stay inside their own period', () => {
     expect((await store.listAttempts!(base.date, base.locale, 'p_morning')).map((row) => row.attemptNo)).toEqual([morning])
   })
 })
+
+/**
+ * 事故回归（2026-11-09）：存储版本从 3 提到 4 之后，读侧只认「当前版本 + 2」，
+ * 把上一版（3）写的每一行整批藏了起来——历史 10/30–11/02 和今天的中文版一起消失。
+ *
+ * 判据：存储版本不是文档版本，**2..当前版本都必须读得出来**；只拒绝未来版本（这个 build
+ * 不认识它）。直接插行，绕过写入路径，钉住读侧这一条。
+ */
+describe('reading editions written by an earlier storage version', () => {
+  let directory: string | undefined
+
+  afterEach(() => {
+    if (directory !== undefined) rmSync(directory, { recursive: true, force: true })
+    directory = undefined
+  })
+
+  it('reads every earlier storage version and still rejects a future one', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'briefing-storage-version-'))
+    const filePath = join(directory, 'daily-briefings.sqlite')
+    const store = createDailyBriefingSqliteStore(filePath)
+    const db = openSqliteDatabase(filePath)
+    const insert = db.prepare(`insert into daily_briefings
+      (edition_date, period_id, locale, generated_at, window_start, window_end, document_json, schema_version)
+      values (?, 'default', 'zh-CN', ?, ?, ?, ?, ?)`)
+    for (const version of [2, 3, 4, 5]) {
+      const date = `2026-10-0${version}`
+      insert.run(date, `${date}T00:30:00.000Z`, `${date}T00:00:00.000Z`, `${date}T00:30:00.000Z`,
+        JSON.stringify(document(date, `v${version}`)), version)
+    }
+    db.close()
+
+    // `list`：2 / 3 / 4 都在，5（未来版本）不在。
+    const listed = await store.list('2026-10-01', '2026-10-06', 'zh-CN')
+    expect(listed.map((row) => `${row.date}:${row.document.lede.text}`)).toEqual([
+      '2026-10-02:v2', '2026-10-03:v3', '2026-10-04:v4'
+    ])
+    // `get`：今天那一版就是走这条路读的，旧存储版本同样要读得出来。
+    expect((await store.get('2026-10-03', 'zh-CN', 'default'))?.document.lede.text).toBe('v3')
+    expect(await store.get('2026-10-05', 'zh-CN', 'default')).toBeUndefined()
+  })
+})

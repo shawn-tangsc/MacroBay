@@ -469,7 +469,10 @@ function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined 
   if (!row) return undefined
   // A row written before the upgrade carries the old storage version; its document shape is the
   // same, so the version only tells us which table it came from.
-  if (row.schema_version !== dailyBriefingStoragePolicy.schemaVersion && row.schema_version !== 2) return undefined
+  // **存储版本不是文档版本**：bump 之后必须继续读得动上一版写的行（2..当前版本），否则升级那一刻
+  // 上一版写的历史会整批消失（2026-11-09 事故：3→4 把 10/30–11/02 与今天的中文版一起藏了起来）。
+  // 只拒绝未来版本——这个 build 读不懂还不存在的形状。
+  if (row.schema_version < 2 || row.schema_version > dailyBriefingStoragePolicy.schemaVersion) return undefined
   let document: DailyBriefingDocument
   try {
     document = JSON.parse(row.document_json) as DailyBriefingDocument
