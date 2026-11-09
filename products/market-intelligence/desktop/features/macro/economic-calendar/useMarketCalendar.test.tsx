@@ -2,18 +2,34 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { MarketCalendarPage } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import type { MarketCalendarFreshness, MarketCalendarPage, MarketCalendarRefreshNowResult } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import type { MarketCalendarClient } from '../../../shared/ipc/marketCalendarClient'
 
 const host = document.createElement('div')
 let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined })
 const now = () => new Date('2026-09-10T00:00:00.000Z')
+/**
+ * The hook's port is `MarketCalendarClient` — four methods. These cases drive reading and the manual
+ * refresh, so the freshness and catch-up ports are declared here once instead of being left out of the
+ * fake: `unavailable` and `unchanged` are the port's own answers for "cannot tell" and "nothing to do",
+ * so a case that starts depending on them would have to say so instead of reading `undefined`.
+ */
+function calendarClient<Parts extends Pick<MarketCalendarClient, 'queryMonth' | 'refresh'>>(
+  parts: Parts
+): Parts & MarketCalendarClient {
+  return {
+    ...parts,
+    getCollectionFreshness: vi.fn(async (): Promise<MarketCalendarFreshness> => ({ state: 'unavailable', failureCode: 'query-unavailable' })),
+    refreshNow: vi.fn(async (): Promise<MarketCalendarRefreshNowResult> => ({ state: 'unchanged' }))
+  }
+}
 it('reads locally, refreshes only on demand and ignores completed requests from a superseded scope', async () => {
   const { useMarketCalendar } = await import('./useMarketCalendar')
   const empty = (month: string): MarketCalendarPage => ({ state: 'available', month, locale: 'zh', asOf: now().toISOString(), events: [], sources: [] })
   let resolve!: (page: MarketCalendarPage) => void
-  const client = { queryMonth: vi.fn().mockImplementationOnce(() => new Promise(done => { resolve = done })).mockResolvedValue(empty('2026-10')),
-    refresh: vi.fn().mockResolvedValue({ state: 'completed', sources: [] }) }
+  const client = calendarClient({ queryMonth: vi.fn().mockImplementationOnce(() => new Promise(done => { resolve = done })).mockResolvedValue(empty('2026-10')),
+    refresh: vi.fn().mockResolvedValue({ state: 'completed', sources: [] }) })
   let state!: ReturnType<typeof useMarketCalendar>
   function Harness({ month }: { month: string }) { state = useMarketCalendar({ months: [month], locale: 'zh', now, client }); return null }
   root = createRoot(host)
@@ -31,8 +47,8 @@ it('reads locally, refreshes only on demand and ignores completed requests from 
 it('does not read again when an in-flight refresh completes after unmount', async () => {
   const { useMarketCalendar } = await import('./useMarketCalendar')
   let complete!: (value: { state: 'unavailable'; sources: [] }) => void
-  const client = { queryMonth: vi.fn().mockResolvedValue({ state: 'unavailable', failureCode: 'query-unavailable' }),
-    refresh: vi.fn().mockImplementation(() => new Promise(resolve => { complete = resolve })) }
+  const client = calendarClient({ queryMonth: vi.fn().mockResolvedValue({ state: 'unavailable', failureCode: 'query-unavailable' }),
+    refresh: vi.fn().mockImplementation(() => new Promise(resolve => { complete = resolve })) })
   let state!: ReturnType<typeof useMarketCalendar>
   function Harness() { state = useMarketCalendar({ months: ['2026-09'], locale: 'zh', now, client }); return null }
   root = createRoot(host)
@@ -48,9 +64,9 @@ it('does not read again when an in-flight refresh completes after unmount', asyn
 it('bounds empty continuation pages even when every cursor is different', async () => {
   const { useMarketCalendar } = await import('./useMarketCalendar')
   let calls = 0
-  const client = { queryMonth: vi.fn(async () => ({ state: 'available' as const, month: '2026-09', locale: 'zh' as const,
+  const client = calendarClient({ queryMonth: vi.fn(async () => ({ state: 'available' as const, month: '2026-09', locale: 'zh' as const,
     asOf: now().toISOString(), events: [], sources: [], ...(++calls <= 3010 ? { nextCursor: String(calls) } : {}) })),
-    refresh: vi.fn() }
+    refresh: vi.fn() })
   let state!: ReturnType<typeof useMarketCalendar>
   function Harness() { state = useMarketCalendar({ months: ['2026-09'], locale: 'zh', now, client }); return null }
   root = createRoot(host)
@@ -62,10 +78,10 @@ it('bounds empty continuation pages even when every cursor is different', async 
 it.each(['resolve', 'reject'] as const)('ignores a stale refresh %s after leaving and returning to the same scope', async (settlement) => {
   const { useMarketCalendar } = await import('./useMarketCalendar')
   let complete!: () => void
-  const client = { queryMonth: vi.fn(async (input) => ({ state: 'available' as const, ...input, events: [], sources: [] })),
+  const client = calendarClient({ queryMonth: vi.fn(async (input) => ({ state: 'available' as const, ...input, events: [], sources: [] })),
     refresh: vi.fn(() => new Promise<never>((resolve, reject) => {
       complete = () => settlement === 'reject' ? reject(new Error('derived failure')) : resolve({ state: 'completed', sources: [] } as never)
-    })) }
+    })) })
   let state!: ReturnType<typeof useMarketCalendar>
   function Harness({ month }: { month: string }) { state = useMarketCalendar({ months: [month], locale: 'zh', now, client }); return null }
   root = createRoot(host)
@@ -86,8 +102,8 @@ it('reads every month the grid draws and keeps a repeated observation once', asy
   const event = { eventKey: 'shared-observation', title: 'Shared', countryCode: null, eventType: 'economic-indicator' as const,
     importance: 'high' as const, scheduledAt: '2026-09-01T10:00:00.000Z', consensus: null, providerActual: null, providerPrevious: null,
     source: '0xRouter' as const, sourceObservedAt: '2026-08-01T00:00:00.000Z', coverage: 'observed-unverified' as const }
-  const client = { queryMonth: vi.fn(async ({ month }: { month: string }) => ({ state: 'available' as const, month, locale: 'zh' as const,
-    asOf: now().toISOString(), events: month === '2026-09' || month === '2026-08' ? [event] : [], sources: [] })), refresh: vi.fn() }
+  const client = calendarClient({ queryMonth: vi.fn(async ({ month }: { month: string }) => ({ state: 'available' as const, month, locale: 'zh' as const,
+    asOf: now().toISOString(), events: month === '2026-09' || month === '2026-08' ? [event] : [], sources: [] })), refresh: vi.fn() })
   let state!: ReturnType<typeof useMarketCalendar>
   function Harness() { state = useMarketCalendar({ months: ['2026-09', '2026-08', '2026-10'], locale: 'zh', now, client }); return null }
   root = createRoot(host)
