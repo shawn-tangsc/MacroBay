@@ -266,6 +266,7 @@ export function ModelServiceModelRow({
         {isAvailabilityProbeModel(model) ? (
           <IconButton
             ariaLabelKey="modelService.testModel"
+            {...(testDisabled ? {} : { tooltipKey: 'modelService.testModel' })}
             dataAttributes={{ 'data-model-row-test': true }}
             disabled={testDisabled}
             icon={FlaskConical}
@@ -277,6 +278,7 @@ export function ModelServiceModelRow({
         ) : null}
         <IconButton
           ariaLabelKey="modelService.editModel"
+          tooltipKey="modelService.editModel"
           dataAttributes={{ 'data-model-row-settings': true }}
           icon={Settings}
           onSelect={() => onEditModel(model)}
@@ -286,6 +288,7 @@ export function ModelServiceModelRow({
         {/* 危险图标：`tone="danger"`（闭集，颜色静止可见；尺寸仍只许 sm/md）。 */}
         <IconButton
           ariaLabelKey="modelService.removeModel"
+          {...(isRemovingModel ? {} : { tooltipKey: 'modelService.removeModel' })}
           dataAttributes={{ 'data-model-row-remove': true }}
           disabled={isRemovingModel}
           icon={Minus}
