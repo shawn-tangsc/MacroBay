@@ -65,7 +65,8 @@ function routerProvider(requiresProxy = true): ProviderView {
       capabilities: { runNow: 'adapter', testConnection: true },
       readiness: 'live',
       requiresProxy,
-      enabled: true
+      enabled: true,
+      healthState: 'healthy' as const
     }]
   }
 }
@@ -239,7 +240,8 @@ function calendarPanelProvider(): ProviderView {
     capabilities: { runNow: 'job' as const, testConnection: true },
     readiness: 'live' as const,
     requiresProxy: true,
-    enabled: true
+    enabled: true,
+    healthState: 'healthy' as const
   })
   return {
     providerId: '0xrouter',

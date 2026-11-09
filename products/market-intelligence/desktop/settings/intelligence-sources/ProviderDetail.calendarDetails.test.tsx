@@ -59,6 +59,8 @@ function source(input: Partial<SourceView> & Pick<SourceView, 'sourceId' | 'disp
     capabilities: { runNow: 'provider', testConnection: true },
     readiness: 'live',
     enabled: true,
+    // 健康态由服务端投影成一句话（`SourceHealthState`），调用方不再自己拼 runtimeStatus/失败数。
+    healthState: 'healthy',
     ...input
   }
 }
