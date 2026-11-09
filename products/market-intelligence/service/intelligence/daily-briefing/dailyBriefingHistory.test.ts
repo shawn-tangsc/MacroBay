@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingPeriodRun, DailyBriefingStoredEdition } from './dailyBriefingService'
-import { briefingAttemptPeriodTime, briefingHistorySummaries, briefingRailDates, readBriefingHistory } from './dailyBriefingHistory'
+import { briefingAttemptPeriodTime, briefingHistorySummaries, readBriefingHistory } from './dailyBriefingHistory'
+import { briefingRailDates } from './dailyBriefingRailDates'
 
 /**
  * Guard: "incomplete" comes from the run's intent, not from counting the rows that exist.
@@ -30,7 +31,7 @@ const edition = (locale: 'zh-CN' | 'en-US', date = '2026-11-02'): DailyBriefingS
 })
 
 const run = (expectedLocales: readonly ('zh-CN' | 'en-US')[]): DailyBriefingPeriodRun => ({
-  date: '2026-11-02', periodId: 'default', expectedLocales,
+  date: '2026-11-02', periodId: 'default', locale: 'zh-CN', expectedLocales,
   primaryRequested: 'zh-CN', primaryUsed: 'zh-CN',
   snapshotId: 'bs_x', snapshotHash: 'h', contentVersion: 1, writingRounds: 1,
   direction: 'undecided', editionRows: [], state: 'running', startedAt: '2026-11-02T00:00:00.000Z'

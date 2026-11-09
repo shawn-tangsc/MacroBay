@@ -12,6 +12,7 @@ import type {
   DailyBriefingStore,
   DailyBriefingStoredEdition
 } from './dailyBriefingService'
+import { parseRun, type RunRow } from './dailyBriefingRunRow'
 import {
   DAILY_BRIEFING_STORAGE_VERSION,
   createAttemptsSql,
@@ -463,70 +464,6 @@ type Row = Readonly<{
   schema_version: number
   trace_json?: string | null
 }>
-
-type RunRow = Readonly<{
-  edition_date: string
-  period_id: string
-  /** 旧形状没有这一列；迁到 v4 之后每行都有（坏数据兜底为 `'unknown'`）。 */
-  locale?: string
-  expected_locales: string
-  primary_requested: string
-  primary_used: string
-  fallback_reason: string | null
-  snapshot_id: string
-  snapshot_hash: string
-  content_version: number
-  writing_rounds: number
-  direction: string | null
-  edition_rows: string | null
-  state: string
-  started_at: string
-  finished_at: string | null
-}>
-
-const runStates = ['running', 'published', 'partial', 'failed'] as const
-
-function parseRun(row: RunRow | undefined): DailyBriefingPeriodRun | undefined {
-  if (!row) return undefined
-  let locales: unknown
-  try {
-    locales = JSON.parse(row.expected_locales)
-  } catch {
-    return undefined
-  }
-  if (!Array.isArray(locales) || locales.length === 0 || locales.some((locale) => locale !== 'zh-CN' && locale !== 'en-US')) return undefined
-  const state = runStates.find((value) => value === row.state)
-  if (!state) return undefined
-  return Object.freeze({
-    date: row.edition_date,
-    periodId: row.period_id,
-    // 旧形状（迁移没跑成）没有这一列：读作 `unknown`，不假装是哪一种语言。
-    locale: row.locale === 'zh-CN' || row.locale === 'en-US' ? row.locale : 'unknown',
-    expectedLocales: Object.freeze(locales as DailyBriefingLocale[]),
-    primaryRequested: row.primary_requested,
-    primaryUsed: row.primary_used === 'en-US' ? 'en-US' : 'zh-CN',
-    ...(row.fallback_reason ? { fallbackReason: row.fallback_reason } : {}),
-    snapshotId: row.snapshot_id,
-    snapshotHash: row.snapshot_hash,
-    contentVersion: Number(row.content_version),
-    writingRounds: Number(row.writing_rounds),
-    direction: (row.direction ?? 'undecided') as DailyBriefingPeriodRun['direction'],
-    editionRows: Object.freeze(parseRows(row.edition_rows)),
-    state,
-    startedAt: row.started_at,
-    ...(row.finished_at ? { finishedAt: row.finished_at } : {})
-  })
-}
-
-function parseRows(value: string | null): string[] {
-  if (!value) return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
-  } catch {
-    return []
-  }
-}
 
 function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined {
   if (!row) return undefined
