@@ -68,6 +68,7 @@ and whatever could not be collected is reported as a gap instead of being quietl
 ## Download
 
 **[macOS · Apple Silicon (.dmg)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-arm64.dmg)** ·
+**[macOS · Intel (.dmg)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64.dmg)** ·
 **[Windows · x64 (.exe)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [All releases](https://github.com/shawn-tangsc/MacroBay/releases)
 
@@ -81,6 +82,9 @@ This build is **not code-signed and not notarized**, so the first launch takes t
    **More info → Run anyway**.
 
 Every update you download repeats those same two steps, until a signed build ships.
+
+The Intel build is `MacroBay-x64.dmg`: **built, but not yet verified on Intel hardware**. The Apple
+Silicon download link above is unchanged, and `latest-mac.yml` is produced only by the arm64 job.
 
 <div align="center">
 

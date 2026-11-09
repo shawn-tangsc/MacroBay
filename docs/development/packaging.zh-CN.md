@@ -9,7 +9,9 @@
 
 ## 当前支持范围
 
-- **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染。
+- **macOS（arm64 + x64）**：`pnpm dist:mac` 产出 arm64 的 `.dmg`；`pnpm dist:mac:x64` 产出 x64 的
+  `.dmg`（必须在 Intel 机器上跑，或先装 x64 的 agent CLI 再交叉构建）。arm64 已验证从挂载到看板正常
+  渲染；x64 只做到构建与文件架构校验，**尚未在 Intel 真机上验收**。
 - **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。发布 workflow 在 `windows-latest` 上构建
   它，构建也已在 Windows 11 x64 真机上跑通。安装后的运行态尚未验收。
 - **Linux**：尚未配置打包。
@@ -28,13 +30,15 @@ git tag -a vX.Y.Z -m "MacroBay X.Y.Z (alpha)"
 git push origin vX.Y.Z
 ```
 
-它在 `macos-latest` 上产出 `release/MacroBay-arm64.dmg`、在 `windows-latest` 上产出 NSIS
-安装器，然后把这两个文件、各自的 blockmap 和自动更新元数据挂到同一个 GitHub Release。两条链路都
-不需要签名密钥。
+它在 `macos-latest` 上产出 `release/MacroBay-arm64.dmg`、在 Intel runner（`macos-13`；退役则用
+`macos-15-intel`）上产出 `release/MacroBay-x64.dmg`、在 `windows-latest` 上产出 NSIS 安装器，
+然后把三个文件、各自的 blockmap 和自动更新元数据挂到同一个 GitHub Release。两条链路都不需要签名
+密钥。`latest-mac.yml` 只由 arm64 job 产出并上传，所以 `MacroBay-arm64.dmg` 的永久链接不会被 x64
+包顶掉。
 
 dmg 与安装器的文件名不含版本号，所以 README 可以长期链接
-`releases/latest/download/MacroBay-arm64.dmg` 和 `.../MacroBay-x64-setup.exe`；任一名字变化，
-打包 job 会直接失败。
+`releases/latest/download/MacroBay-arm64.dmg`、`.../MacroBay-x64.dmg` 和
+`.../MacroBay-x64-setup.exe`；任一名字变化，打包 job 会直接失败。
 
 - tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 `check-release-version.mjs` 会在打包前
   让 job 停下。应用版本来自 manifest，不来自 tag。
@@ -69,8 +73,10 @@ out/renderer/   React 渲染层
 
 ```bash
 pnpm install
-pnpm dist:mac        # 先构建 bundle，再产出 release/MacroBay-arm64.dmg
-pnpm dist:mac:dir    # 先构建 bundle，只产出 release/mac-arm64/MacroBay.app
+pnpm dist:mac          # 先构建 bundle，再产出 release/MacroBay-arm64.dmg
+pnpm dist:mac:dir      # 先构建 bundle，只产出 release/mac-arm64/MacroBay.app
+pnpm dist:mac:x64      # 仅限 Intel 机器：产出 release/MacroBay-x64.dmg（见「架构」）
+pnpm dist:mac:dir:x64  # 仅限 Intel 机器：只产出 release/mac/MacroBay.app
 ```
 
 `dist:mac` 会先跑 `pnpm build`，因此产品注册表和 Vite bundle 一定是最新的。产物目录是
@@ -84,7 +90,8 @@ pnpm dist:mac:dir    # 先构建 bundle，只产出 release/mac-arm64/MacroBay.a
   从这里读取内置技能；
 - `resources/icon.icns` 作为应用图标；
 - 智能体运行时：`@anthropic-ai/claude-agent-sdk` 及其平台原生 CLI
-  （`@anthropic-ai/claude-agent-sdk-darwin-arm64/claude`，约 237 MB）。
+  （`@anthropic-ai/claude-agent-sdk-darwin-<arch>/claude`，约 237 MB）。CLI 由 pnpm 按宿主架构安装，
+  所以 x64 包必须在 x64 runner 上打（或先装 darwin-x64 的 CLI 再交叉构建）。
 
 ### 为什么应用目录不归档（`asar: false`）
 
@@ -113,12 +120,13 @@ Windows 的安装器同样未签名：SmartScreen 会显示「Windows 已保护�
 并启用 `hardenedRuntime`。公证还需要 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 和
 `APPLE_TEAM_ID`。两者都不属于本次发布范围。
 
-### 其他架构
+### 架构与本地 x64 构建
 
-当前目标架构是 arm64，因为这是已验证的机器。构建 x64 或 universal 还需要智能体 CLI 对应平台的
-可选包，pnpm 不会自动为其他平台安装它。先安装该可选包，确认
-`node_modules/@anthropic-ai/claude-agent-sdk-darwin-x64/claude` 存在，再运行
-`pnpm exec electron-builder --mac --x64`。
+发布同时产出 arm64 与 x64。**x64 要在 Intel 机器上打**（`pnpm dist:mac:x64`）：pnpm 只为宿主架构
+安装 agent CLI，在 Apple Silicon 上交叉打出的 x64 包会静默带上 arm64 的 CLI。确需交叉构建时，先
+安装对应可选包，确认 `node_modules/@anthropic-ai/claude-agent-sdk-darwin-x64/claude` 存在（且
+`file` 报 `x86_64`），再运行 `pnpm exec electron-builder --mac --x64`；发布 workflow 会同时断言主程序
+与打包内 CLI 都是 x86_64，缺 CLI 的交叉构建会直接失败。
 
 ### 下载镜像（可选）
 
@@ -138,6 +146,10 @@ pnpm dist:mac
 3. `hdiutil verify release/MacroBay-arm64.dmg`，挂载后把应用拖进 Applications，再从那里
    启动。
 4. `0.1.0` 在 arm64 上的参考体积：`.dmg` 约 184 MB，安装后约 550 MB。
+5. x64 目前**只做到构建级验证**：`hdiutil verify release/MacroBay-x64.dmg`，并用 `file` 确认
+   `release/mac/MacroBay.app/Contents/MacOS/MacroBay` 与打包内的
+   `.../claude-agent-sdk-darwin-x64/claude` 都是 `x86_64`。还没有 Intel 真机运行记录，不许声称
+   已验。
 
 ## 打 Windows 包
 

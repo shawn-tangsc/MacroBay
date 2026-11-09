@@ -10,8 +10,10 @@ and live outside this repository's public docs, so nothing here restates them a 
 
 ## Current support
 
-- **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
-  dashboard.
+- **macOS (arm64 + x64)**: `pnpm dist:mac` produces the arm64 `.dmg`; `pnpm dist:mac:x64`
+  produces the x64 `.dmg` (run it on an Intel machine, or cross-build after installing the x64 agent
+  CLI). The arm64 build is verified from mount to a running dashboard; the x64 build is built and
+  checked at the file-architecture level, but **not yet verified on Intel hardware**.
 - **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. The release workflow builds it on
   `windows-latest`, and the build also runs through on Windows 11 x64 hardware. The *installed* app
   is not accepted yet.
@@ -32,13 +34,16 @@ git tag -a vX.Y.Z -m "MacroBay X.Y.Z (alpha)"
 git push origin vX.Y.Z
 ```
 
-That builds `release/MacroBay-arm64.dmg` on `macos-latest` and the NSIS installer on
-`windows-latest`, then publishes one GitHub Release with both files, their blockmaps and the
-auto-update metadata attached. Neither lane needs signing secrets.
+That builds `release/MacroBay-arm64.dmg` on `macos-latest`, `release/MacroBay-x64.dmg` on an Intel
+runner (`macos-13`; fall back to `macos-15-intel` if that label is retired), and the NSIS installer on
+`windows-latest`, then publishes one GitHub Release with all three files, their blockmaps and the
+auto-update metadata attached. Neither lane needs signing secrets. `latest-mac.yml` is produced and
+uploaded only by the arm64 job, so the permanent `MacroBay-arm64.dmg` link keeps pointing at the
+arm64 build.
 
 The dmg and installer file names carry no version, so the README links
-`releases/latest/download/MacroBay-arm64.dmg` and `.../MacroBay-x64-setup.exe` permanently; the
-packaging job fails if either name changes.
+`releases/latest/download/MacroBay-arm64.dmg`, `.../MacroBay-x64.dmg` and `.../MacroBay-x64-setup.exe`
+permanently; the packaging job fails if a name changes.
 
 - The tag must be `v` plus the `version` in `package.json`; `check-release-version.mjs` stops the
   job before packaging otherwise. The app version comes from the manifest, not from the tag.
@@ -76,8 +81,10 @@ Prerequisites: a macOS host, Node.js 22, pnpm 10, and the Xcode command line too
 
 ```bash
 pnpm install
-pnpm dist:mac        # build bundles, then release/MacroBay-arm64.dmg
-pnpm dist:mac:dir    # build bundles, then release/mac-arm64/MacroBay.app only
+pnpm dist:mac          # build bundles, then release/MacroBay-arm64.dmg
+pnpm dist:mac:dir      # build bundles, then release/mac-arm64/MacroBay.app only
+pnpm dist:mac:x64      # Intel host only: release/MacroBay-x64.dmg (see "Architectures")
+pnpm dist:mac:dir:x64  # Intel host only: release/mac/MacroBay.app only
 ```
 
 `dist:mac` runs `pnpm build` first, so the generated product registry and Vite bundles are always
@@ -91,7 +98,9 @@ current. The output directory is `release/`, which is ignored by git.
   the main process reads built-in skills from a packaged app;
 - `resources/icon.icns` as the bundle icon;
 - the agent runtime: `@anthropic-ai/claude-agent-sdk` plus its platform-native CLI
-  (`@anthropic-ai/claude-agent-sdk-darwin-arm64/claude`, about 237 MB).
+  (`@anthropic-ai/claude-agent-sdk-darwin-<arch>/claude`, about 237 MB). The CLI is installed by pnpm
+  for the host architecture, so the x64 package must be built on an x64 runner (or cross-built after
+  installing the darwin-x64 CLI package).
 
 ### Why the application directory is not archived (`asar: false`)
 
@@ -124,13 +133,14 @@ To sign, set `CSC_LINK`/`CSC_KEY_PASSWORD` (or install the identity in the keych
 `identity: null` with that identity, and enable `hardenedRuntime`. Notarization additionally needs
 `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Neither is part of this release.
 
-### Other architectures
+### Architectures and local x64 builds
 
-The configured target is arm64 because that is the verified machine. Building x64 or universal also
-requires the matching platform package for the agent CLI, which pnpm does not install for a different
-platform automatically. Install that optional package first, confirm
-`node_modules/@anthropic-ai/claude-agent-sdk-darwin-x64/claude` exists, then run
-`pnpm exec electron-builder --mac --x64`.
+The release builds both arm64 and x64. **Build x64 on an Intel machine** (`pnpm dist:mac:x64`):
+pnpm installs the agent CLI for the host architecture only, so an x64 build made on Apple Silicon
+would silently ship an arm64 CLI. If you must cross-build, install the optional package first, confirm
+`node_modules/@anthropic-ai/claude-agent-sdk-darwin-x64/claude` exists (and `file` reports `x86_64`),
+then run `pnpm exec electron-builder --mac --x64`; the release workflow asserts both the app binary and
+the bundled CLI are x86_64, so a cross-build that misses the CLI fails the job.
 
 ### Download mirrors (optional)
 
@@ -151,6 +161,10 @@ pnpm dist:mac
    launch it from there.
 4. Reference sizes for `0.1.0` on arm64: about 184 MB for the `.dmg`, about 550 MB for the installed
    bundle.
+5. x64 is **build-level verified only** so far: `hdiutil verify release/MacroBay-x64.dmg`, and `file`
+   must report `x86_64` for both `release/mac/MacroBay.app/Contents/MacOS/MacroBay` and the bundled
+   `.../claude-agent-sdk-darwin-x64/claude`. No Intel-hardware run has been recorded yet; do not claim
+   one.
 
 ## Build the Windows package
 

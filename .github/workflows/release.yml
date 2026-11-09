@@ -82,7 +82,7 @@ jobs:
         run: pnpm build:info "$BUILD_PLATFORM" "$BUILD_ARCH" --require-clean
 
       - name: Package macOS dmg
-        run: pnpm exec electron-builder --mac --arm64 --publish never
+        run: pnpm exec electron-builder --mac dmg --arm64 --publish never
 
       - name: Verify the disk image
         run: hdiutil verify release/*.dmg
@@ -101,6 +101,83 @@ jobs:
             release/*.dmg
             release/*.dmg.blockmap
             release/latest-mac.yml
+          if-no-files-found: error
+
+  macos-x64:
+    name: macOS x64 dmg
+    # Intel runner. If `macos-13` is retired, use `macos-15-intel`; if neither exists,
+    # cross-build on `macos-latest` with pnpm `supportedArchitectures` for darwin/x64 and
+    # keep the CLI-architecture assertion below (do not drop it).
+    runs-on: macos-13
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check the tag matches the app version
+        if: env.PUBLISH == 'true'
+        run: node scripts/check-release-version.mjs "${{ env.BUILD_REF }}"
+
+      # The agent CLI is installed by pnpm for the host architecture only. An arm64 runner
+      # would pack an arm64 CLI into an x64 app and nothing downstream would notice until a
+      # user launched it — so this job must run on Intel.
+      - name: Assert an x64 runner
+        run: test "$(uname -m)" = x86_64
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Write build info
+        env:
+          BUILD_PLATFORM: darwin
+          BUILD_ARCH: x64
+        run: pnpm build:info "$BUILD_PLATFORM" "$BUILD_ARCH" --require-clean
+
+      - name: Package macOS dmg
+        run: pnpm exec electron-builder --mac dmg --x64 --publish never
+
+      - name: Verify the disk image
+        run: hdiutil verify release/MacroBay-x64.dmg
+
+      # Build-level acceptance only: the app must be x86_64 and the bundled agent CLI must
+      # be x86_64 too. This job does not launch the app.
+      - name: Assert the app and the bundled agent CLI are x86_64
+        run: |
+          set -euo pipefail
+          test -f release/MacroBay-x64.dmg
+          file release/mac/MacroBay.app/Contents/MacOS/MacroBay | grep -q 'x86_64'
+          cli="$(find release/mac/MacroBay.app/Contents/Resources -path '*claude-agent-sdk-darwin-x64/claude' -type f | head -1)"
+          test -n "$cli"
+          file "$cli" | grep -q 'x86_64'
+
+      # `latest-mac.yml` is owned by the arm64 job: uploading it from here would point
+      # `releases/latest/download/MacroBay-arm64.dmg` at the x64 build.
+      - name: Upload disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: macrobay-macos-x64
+          path: |
+            release/MacroBay-x64.dmg
+            release/MacroBay-x64.dmg.blockmap
           if-no-files-found: error
 
   windows:
@@ -168,7 +245,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [macos, windows]
+    needs: [macos, macos-x64, windows]
     if: github.event_name == 'push' || github.event.inputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
