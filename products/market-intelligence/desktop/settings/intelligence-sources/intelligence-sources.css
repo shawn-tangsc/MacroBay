@@ -1163,10 +1163,13 @@
   color: var(--text-secondary);
 }
 
+/* 目录标记的统一外形（界面设计 2026-11-10）：8×8 的正圆，三档只换填充/描边。
+   `box-sizing: border-box` 是为了空心环：1px 描边不把外框撑成 10px，三档尺寸才一致。 */
 .intelligence-provider-state i {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 /* 目录标记只在要人看一眼的两档出现（判据在 `sourceHealthTone`）：黄 = 降级，红 = 这次失败。
