@@ -80,6 +80,7 @@ export async function requestResponsesChatCompletion(input: ResponsesChatRequest
         phase: 'response',
         summary: failure.summary,
         httpStatus: response.status,
+        ...(failure.upstreamCode === undefined ? {} : { upstreamCode: failure.upstreamCode }),
         ...(failure.body ? { body: failure.body } : {})
       })
     }

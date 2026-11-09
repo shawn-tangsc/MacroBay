@@ -282,3 +282,21 @@ export function describeTransportFailure(error: unknown, apiKey: string): string
   return safe || ProviderConnectionFailurePolicy.message
 }
 
+/**
+ * 余额类**上游机器码**的闭集（契约：只认结构字段 `error.code` / `error.type`，绝不匹配文案）。
+ *
+ * 这几条是上游自己给出的可判定标识：OpenAI 兼容端点用 `insufficient_quota`，
+ * 一些网关用 `credit_balance_exhausted` / `billing_hard_limit_reached` / `billing_not_active`。
+ * 新增一条必须仍是「机器码」—— 一旦写成一句话，就从判据退化成猜测（红线二）。
+ */
+export const ACCOUNT_BALANCE_UPSTREAM_CODES = [
+  'insufficient_quota',
+  'credit_balance_exhausted',
+  'billing_hard_limit_reached',
+  'billing_not_active'
+] as const
+
+export function isAccountBalanceUpstreamCode(code: string | null | undefined): boolean {
+  if (typeof code !== 'string') return false
+  return (ACCOUNT_BALANCE_UPSTREAM_CODES as readonly string[]).includes(code.trim().toLowerCase())
+}

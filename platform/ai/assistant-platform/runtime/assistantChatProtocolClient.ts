@@ -143,6 +143,7 @@ function toAssistantFailure(error: unknown, input: AssistantChatProtocolRequest)
     ...(input.providerId ? { providerId: input.providerId } : {}),
     modelId: input.modelId,
     ...(error.evidence.httpStatus === undefined ? {} : { httpStatus: error.evidence.httpStatus }),
+    ...(error.evidence.upstreamCode === undefined ? {} : { upstreamCode: error.evidence.upstreamCode }),
     ...(error.evidence.body ? { body: error.evidence.body } : {})
   })
 }
