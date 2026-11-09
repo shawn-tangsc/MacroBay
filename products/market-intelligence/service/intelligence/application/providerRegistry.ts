@@ -1,5 +1,13 @@
 export type AgentId = 'crypto' | 'stocks' | 'futures'
 export type PanelId = 'dashboard' | 'economic-calendar'
+/**
+ * 一个源**供给哪些模块**。这是唯一的声明；`panels` 由它派生（见 `src()`），
+ * 所以「这个源出现在哪一屏」只有一处事实，不会两处各写一份。
+ *
+ * `briefing` / `sentiment` 对应的是日报与舆情两条**消费线**，它们没有「面板」这一层，
+ * 因此不映射到任何 `PanelId`——把其中一个映射成面板，会让源凭空出现在看板上。
+ */
+export type SourcePurpose = 'dashboard' | 'calendar' | 'briefing' | 'sentiment'
 export type SourceCategory = 'macro' | 'crypto' | 'aggregate' | 'system'
 export type SourceVisibility = 'visible' | 'pending' | 'advanced' | 'hidden'
 export type SourceCollection = 'adapter' | 'provider' | 'job' | 'none'
@@ -18,6 +26,15 @@ export type SourceDefinition = {
   providerId: string
   displayName: string
   agents: AgentId[]
+  /**
+   * 供给哪些模块。唯一声明；`panels` 是它的投影，见 `src()`。
+   *
+   * **定义上可选**：`src()` 总会填（真实数据没有 undefined），但全仓很多测试夹具在直接构造
+   * `SourceDefinition`，把它设成必填会让那些文件变红——而它们不是这条的判据。
+   * 判据是那条「39 个源的派生 `panels` 与改前逐项相等」的快照守卫。
+   */
+  purposes?: SourcePurpose[]
+  /** 派生的显示位置，不单独声明：`dashboard → ['dashboard']`、`calendar → ['economic-calendar']`。 */
   panels: PanelId[]
   visibility: SourceVisibility
   collection: SourceCollection
@@ -84,18 +101,20 @@ export type PanelDefinition = {
   displayName: string
 }
 
-type SourceInput = Omit<SourceDefinition, 'providerId'>
+/** `src()` 的输入：`purposes` 必填（注册表作者不许漏），其余字段可省略走默认。 */
+type SourceInput = Omit<SourceDefinition, 'providerId' | 'purposes'> & { purposes: SourcePurpose[] }
 
-function src(input: Partial<SourceInput> & Pick<SourceInput, 'sourceId' | 'displayName'>): SourceInput {
+function src(input: Partial<Omit<SourceInput, 'purposes'>> & Pick<SourceInput, 'sourceId' | 'displayName' | 'purposes'>): SourceInput {
   return {
     agents: ['crypto'],
-    panels: [],
     visibility: 'visible',
     collection: 'adapter',
     kind: 'feed',
     capabilities: { runNow: 'adapter', testConnection: false },
     readiness: 'live',
-    ...input
+    ...input,
+    // 派生，不接收调用方的 panels：声明只看 `purposes` 一处。
+    panels: input.purposes.flatMap((purpose) => purpose === 'dashboard' ? ['dashboard' as const] : purpose === 'calendar' ? ['economic-calendar' as const] : [])
   }
 }
 
@@ -112,7 +131,8 @@ function provider(input: {
   }
 }
 
-const dashboardAndCalendar: PanelId[] = ['dashboard', 'economic-calendar']
+/** 同时供给看板与经济日历的源：两个 purpose 一起声明。 */
+const dashboardAndCalendar: SourcePurpose[] = ['dashboard', 'calendar']
 
 const providerDefinitions: readonly ProviderDefinition[] = [
   provider({
@@ -121,8 +141,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'macro',
     credential: 'none',
     sources: [
-      src({ sourceId: 'macro-calendar-fed', displayName: 'Fed official schedule', panels: dashboardAndCalendar, collection: 'provider', kind: 'official-calendar', capabilities: { runNow: 'provider', testConnection: true } }),
-      src({ sourceId: 'federal-reserve-rss', displayName: 'Fed RSS', adapterRef: 'federal-reserve-rss' })
+      src({ sourceId: 'macro-calendar-fed', displayName: 'Fed official schedule', purposes: dashboardAndCalendar, collection: 'provider', kind: 'official-calendar', capabilities: { runNow: 'provider', testConnection: true } }),
+      src({ purposes: [], sourceId: 'federal-reserve-rss', displayName: 'Fed RSS', adapterRef: 'federal-reserve-rss' })
     ]
   }),
   provider({
@@ -131,8 +151,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'macro',
     credential: 'none',
     sources: [
-      src({ sourceId: 'macro-calendar-bea', displayName: 'BEA official releases', panels: dashboardAndCalendar, collection: 'provider', kind: 'official-calendar', capabilities: { runNow: 'provider', testConnection: true } }),
-      src({ sourceId: 'bea-economic-series', displayName: 'BEA economic series', visibility: 'pending', collection: 'none', readiness: 'planned', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'bea-economic-series' })
+      src({ sourceId: 'macro-calendar-bea', displayName: 'BEA official releases', purposes: dashboardAndCalendar, collection: 'provider', kind: 'official-calendar', capabilities: { runNow: 'provider', testConnection: true } }),
+      src({ purposes: [], sourceId: 'bea-economic-series', displayName: 'BEA economic series', visibility: 'pending', collection: 'none', readiness: 'planned', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'bea-economic-series' })
     ]
   }),
   provider({
@@ -147,14 +167,14 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       src({
         sourceId: 'macro-calendar-bls',
         displayName: 'BLS official schedule',
-        panels: dashboardAndCalendar,
+        purposes: dashboardAndCalendar,
         collection: 'provider',
         kind: 'official-calendar',
         capabilities: { runNow: 'provider', testConnection: true, blsSync: true },
         unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped',
           lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z', decidedAt: '2026-11-08' }
       }),
-      src({ sourceId: 'bls-economic-series', displayName: 'BLS economic series', visibility: 'pending', collection: 'none', readiness: 'fixture-ready', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'bls-economic-series' })
+      src({ purposes: [], sourceId: 'bls-economic-series', displayName: 'BLS economic series', visibility: 'pending', collection: 'none', readiness: 'fixture-ready', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'bls-economic-series' })
     ]
   }),
   provider({
@@ -167,7 +187,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     sources: [src({
       sourceId: 'policy-path-market',
       displayName: 'FOMC decision market',
-      panels: ['dashboard'],
+      purposes: ['dashboard'],
       collection: 'none',
       capabilities: { runNow: 'none', testConnection: true },
       adapterRef: 'policy-path-market'
@@ -179,8 +199,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'macro',
     credential: 'api-key',
     sources: [
-      src({ sourceId: 'fred-rates-liquidity', displayName: 'FRED rates & liquidity', panels: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'fred-rates-liquidity' }),
-      src({ sourceId: 'fred', displayName: 'FRED (deprecated)', visibility: 'hidden', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'fred' })
+      src({ sourceId: 'fred-rates-liquidity', displayName: 'FRED rates & liquidity', purposes: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'fred-rates-liquidity' }),
+      src({ purposes: [], sourceId: 'fred', displayName: 'FRED (deprecated)', visibility: 'hidden', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'fred' })
     ]
   }),
   provider({
@@ -189,7 +209,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'macro',
     credential: 'none',
     sources: [
-      src({ sourceId: 'treasury-fiscal-data', displayName: 'Treasury fiscal data', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'treasury-fiscal-data' })
+      src({ purposes: [], sourceId: 'treasury-fiscal-data', displayName: 'Treasury fiscal data', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'treasury-fiscal-data' })
     ]
   }),
   provider({
@@ -197,14 +217,14 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'SEC',
     category: 'macro',
     credential: 'none',
-    sources: [src({ sourceId: 'sec-rss', displayName: 'SEC press releases', visibility: 'advanced', panels: ['dashboard'], adapterRef: 'sec-rss' })]
+    sources: [src({ sourceId: 'sec-rss', displayName: 'SEC press releases', visibility: 'advanced', purposes: ['dashboard'], adapterRef: 'sec-rss' })]
   }),
   provider({
     providerId: 'cftc',
     displayName: 'CFTC',
     category: 'macro',
     credential: 'none',
-    sources: [src({ sourceId: 'cftc-rss', displayName: 'CFTC press releases', visibility: 'advanced', adapterRef: 'cftc-rss' })]
+    sources: [src({ purposes: [], sourceId: 'cftc-rss', displayName: 'CFTC press releases', visibility: 'advanced', adapterRef: 'cftc-rss' })]
   }),
   provider({
     providerId: 'binance',
@@ -212,11 +232,11 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'binance-announcements', displayName: 'Binance announcements', panels: ['dashboard'], requiresProxy: true, adapterRef: 'binance-announcements' }),
-      src({ sourceId: 'binance-api-updates', displayName: 'Binance API updates', requiresProxy: true, adapterRef: 'binance-api-updates' }),
-      src({ sourceId: 'binance-spot-market', displayName: 'Binance spot market', requiresProxy: true, adapterRef: 'binance-spot-market' }),
-      src({ sourceId: 'binance-futures-positioning', displayName: 'Binance futures positioning', panels: ['dashboard'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' }),
-      src({ sourceId: 'binance-asset-page', displayName: 'Binance asset page', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'binance-asset-page' })
+      src({ sourceId: 'binance-announcements', displayName: 'Binance announcements', purposes: ['dashboard'], requiresProxy: true, adapterRef: 'binance-announcements' }),
+      src({ purposes: [], sourceId: 'binance-api-updates', displayName: 'Binance API updates', requiresProxy: true, adapterRef: 'binance-api-updates' }),
+      src({ purposes: [], sourceId: 'binance-spot-market', displayName: 'Binance spot market', requiresProxy: true, adapterRef: 'binance-spot-market' }),
+      src({ sourceId: 'binance-futures-positioning', displayName: 'Binance futures positioning', purposes: ['dashboard'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' }),
+      src({ purposes: [], sourceId: 'binance-asset-page', displayName: 'Binance asset page', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'binance-asset-page' })
     ]
   }),
   provider({
@@ -225,8 +245,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'okx-latest-announcements', displayName: 'OKX latest announcements', panels: ['dashboard'], requiresProxy: true, adapterRef: 'okx-latest-announcements' }),
-      src({ sourceId: 'okx-api-announcements', displayName: 'OKX API announcements', requiresProxy: true, adapterRef: 'okx-api-announcements' })
+      src({ sourceId: 'okx-latest-announcements', displayName: 'OKX latest announcements', purposes: ['dashboard'], requiresProxy: true, adapterRef: 'okx-latest-announcements' }),
+      src({ purposes: [], sourceId: 'okx-api-announcements', displayName: 'OKX API announcements', requiresProxy: true, adapterRef: 'okx-api-announcements' })
     ]
   }),
   provider({
@@ -234,7 +254,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'CoinGecko',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'coingecko-market', displayName: 'CoinGecko market', adapterRef: 'coingecko-market' })]
+    sources: [src({ purposes: [], sourceId: 'coingecko-market', displayName: 'CoinGecko market', adapterRef: 'coingecko-market' })]
   }),
   provider({
     providerId: 'defillama',
@@ -242,8 +262,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'defillama-stablecoins', displayName: 'DeFiLlama stablecoins', panels: ['dashboard'], requiresProxy: true, adapterRef: 'defillama-stablecoins' }),
-      src({ sourceId: 'defillama-tvl', displayName: 'DeFiLlama TVL', requiresProxy: true, adapterRef: 'defillama-tvl' })
+      src({ sourceId: 'defillama-stablecoins', displayName: 'DeFiLlama stablecoins', purposes: ['dashboard'], requiresProxy: true, adapterRef: 'defillama-stablecoins' }),
+      src({ purposes: [], sourceId: 'defillama-tvl', displayName: 'DeFiLlama TVL', requiresProxy: true, adapterRef: 'defillama-tvl' })
     ]
   }),
   provider({
@@ -251,28 +271,28 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Alternative.me',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'alternative-fear-greed', displayName: 'Fear & Greed Index', panels: ['dashboard'], adapterRef: 'alternative-fear-greed' })]
+    sources: [src({ sourceId: 'alternative-fear-greed', displayName: 'Fear & Greed Index', purposes: ['dashboard'], adapterRef: 'alternative-fear-greed' })]
   }),
   provider({
     providerId: 'coindesk',
     displayName: 'CoinDesk',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', panels: ['dashboard'], requiresProxy: true, adapterRef: 'coindesk-rss' })]
+    sources: [src({ sourceId: 'coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', purposes: ['dashboard'], requiresProxy: true, adapterRef: 'coindesk-rss' })]
   }),
   provider({
     providerId: 'ethereum-foundation',
     displayName: 'Ethereum Foundation',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'ethereum-foundation-blog', displayName: 'Ethereum Foundation blog', visibility: 'advanced', adapterRef: 'ethereum-foundation-blog' })]
+    sources: [src({ purposes: [], sourceId: 'ethereum-foundation-blog', displayName: 'Ethereum Foundation blog', visibility: 'advanced', adapterRef: 'ethereum-foundation-blog' })]
   }),
   provider({
     providerId: 'cryptopanic',
     displayName: 'CryptoPanic',
     category: 'crypto',
     credential: 'api-key',
-    sources: [src({ sourceId: 'cryptopanic', displayName: 'CryptoPanic news', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'cryptopanic' })]
+    sources: [src({ purposes: [], sourceId: 'cryptopanic', displayName: 'CryptoPanic news', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'cryptopanic' })]
   }),
   provider({
     providerId: 'coinmarketcal',
@@ -280,8 +300,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'api-key',
     sources: [
-      src({ sourceId: 'coinmarketcal', displayName: 'CoinMarketCal news (superseded)', visibility: 'hidden', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'coinmarketcal' }),
-      src({ sourceId: 'macro-calendar-coinmarketcal', displayName: 'CoinMarketCal events', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, kind: 'market-calendar' })
+      src({ purposes: [], sourceId: 'coinmarketcal', displayName: 'CoinMarketCal news (superseded)', visibility: 'hidden', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'coinmarketcal' }),
+      src({ purposes: [], sourceId: 'macro-calendar-coinmarketcal', displayName: 'CoinMarketCal events', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, kind: 'market-calendar' })
     ]
   }),
   provider({
@@ -290,10 +310,10 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'aggregate',
     credential: 'api-key',
     sources: [
-      src({ sourceId: '0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', panels: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
+      src({ sourceId: '0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
+      src({ sourceId: 'macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
+      src({ sourceId: 'macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
+      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
     ]
   }),
   provider({
@@ -301,21 +321,21 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'RealMarketAPI',
     category: 'aggregate',
     credential: 'api-key',
-    sources: [src({ sourceId: 'realmarketapi-market', displayName: 'RealMarketAPI DXY', panels: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: 'realmarketapi-market' })]
+    sources: [src({ sourceId: 'realmarketapi-market', displayName: 'RealMarketAPI DXY', purposes: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: 'realmarketapi-market' })]
   }),
   provider({
     providerId: 'twelve-data',
     displayName: 'Twelve Data',
     category: 'aggregate',
     credential: 'api-key',
-    sources: [src({ sourceId: 'twelve-data-market', displayName: 'Twelve Data macro market', panels: ['dashboard'], visibility: 'hidden', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'twelve-data-market' })]
+    sources: [src({ sourceId: 'twelve-data-market', displayName: 'Twelve Data macro market', purposes: ['dashboard'], visibility: 'hidden', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'twelve-data-market' })]
   }),
   provider({
     providerId: 'coinbase',
     displayName: 'Coinbase',
     category: 'system',
     credential: 'none',
-    sources: [src({ sourceId: 'coinbase-status', displayName: 'Coinbase status', visibility: 'advanced', kind: 'status', adapterRef: 'coinbase-status' })]
+    sources: [src({ purposes: [], sourceId: 'coinbase-status', displayName: 'Coinbase status', visibility: 'advanced', kind: 'status', adapterRef: 'coinbase-status' })]
   }),
   provider({
     providerId: 'kraken',
@@ -323,8 +343,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'system',
     credential: 'none',
     sources: [
-      src({ sourceId: 'kraken-status', displayName: 'Kraken status', visibility: 'advanced', kind: 'status', adapterRef: 'kraken-status' }),
-      src({ sourceId: 'kraken-system-status', displayName: 'Kraken system status', visibility: 'advanced', kind: 'status', adapterRef: 'kraken-system-status' })
+      src({ purposes: [], sourceId: 'kraken-status', displayName: 'Kraken status', visibility: 'advanced', kind: 'status', adapterRef: 'kraken-status' }),
+      src({ purposes: [], sourceId: 'kraken-system-status', displayName: 'Kraken system status', visibility: 'advanced', kind: 'status', adapterRef: 'kraken-system-status' })
     ]
   }),
   provider({
@@ -332,14 +352,14 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Solana',
     category: 'system',
     credential: 'none',
-    sources: [src({ sourceId: 'solana-status', displayName: 'Solana status', visibility: 'advanced', kind: 'status', adapterRef: 'solana-status' })]
+    sources: [src({ purposes: [], sourceId: 'solana-status', displayName: 'Solana status', visibility: 'advanced', kind: 'status', adapterRef: 'solana-status' })]
   }),
   provider({
     providerId: 'github',
     displayName: 'GitHub',
     category: 'system',
     credential: 'none',
-    sources: [src({ sourceId: 'github-releases', displayName: 'GitHub releases', visibility: 'advanced', adapterRef: 'github-releases' })]
+    sources: [src({ purposes: [], sourceId: 'github-releases', displayName: 'GitHub releases', visibility: 'advanced', adapterRef: 'github-releases' })]
   })
 ]
 
