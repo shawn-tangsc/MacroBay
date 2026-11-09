@@ -504,11 +504,11 @@ function validModelOutput(factId: string, evidenceRefId: string) {
   }
 }
 
-/** The five-window closed-return ladder the snapshot publishes, with the 24h value under test. */
+/** The six-window closed-return ladder the snapshot publishes, with the 24h value under test. */
 const closedReturns = (fiveMinute: number, oneHour: number, oneDay: number) => ({
   '5m': { state: 'available' as const, value: fiveMinute }, '15m': { state: 'available' as const, value: fiveMinute * 2 },
   '1h': { state: 'available' as const, value: oneHour }, '4h': { state: 'available' as const, value: oneHour * 2 },
-  '24h': { state: 'available' as const, value: oneDay }
+  '24h': { state: 'available' as const, value: oneDay }, '7d': { state: 'available' as const, value: oneDay * 2 }
 })
 
 function crossAssetSnapshot(asOf: string, range: '1h' | '24h' | '7d', btcReturn: number) {
@@ -606,6 +606,8 @@ describe('market analysis runtime sentiment wiring', () => {
       expect(snapshot!.evidenceRefs.some(ref => ref.evidenceRefId === 'ev-news-1')).toBe(true)
       // The rotation is not a market change, even end to end.
       const frozen = appendSnapshot.mock.calls[0]![0]
+      // The run records the change it measured; without one this case could not say anything about it.
+      if (!frozen.change) throw new Error('the frozen run must carry the change it measured')
       expect(frozen.change.facts.some(candidate => candidate.metric === 'news-sentiment')).toBe(false)
       expect(enqueueDefinition).toHaveBeenCalledWith(expect.objectContaining({ handlerId: RUN_MARKET_ANALYSIS_JOB }))
     } finally {
