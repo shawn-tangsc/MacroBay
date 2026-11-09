@@ -63,6 +63,16 @@ export const DELIVERY_NOT_SHOWN_CODES: ReadonlySet<string> = new Set([
   'channel-delivery-skipped'
 ])
 
+/**
+ * 投递审计里**被规则挡下**的码：它们是平台的限制或策略，不是通道故障。
+ *
+ * 现在只有限流一条：它自己会重试，把它画成红色故障，读者会去查一个不存在的坏通道。
+ * 判据是「这条发送有没有违背谁的意愿」——被限流没有，被平台拒绝/目标非法/宿主没在运行才算是故障。
+ */
+export const DELIVERY_BY_RULE_CODES: ReadonlySet<string> = new Set([
+  'delivery-rate-limited'
+])
+
 export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels): ChannelLogRow[] {
   const rows: ChannelLogRow[] = []
 
@@ -127,6 +137,8 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     // 「交出去了、拿不到回执」既不是成功也不是失败：它是「不确定」，不进「发送失败」那一类。
     // 面板上仍要能看见它，所以单独用 WARN 行，前缀也说「不确定」。
     const uncertain = entry.code === 'unknown-after-send'
+    // 「被规则挡下」既不是失败也不是不确定：级别降为 WARN，前缀单列（它自己没有错）。
+    const byRule = DELIVERY_BY_RULE_CODES.has(entry.code)
     // 主句：码 → 人话。平台的原始说明（已脱敏截断）只跟在后面括注——**它是补充，不是原因**，
     // 所以既不进前缀、也不许在没有主句时单独立着。
     const sentence = uncertain
@@ -139,8 +151,8 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     rows.push({
       id: `delivery-${entry.id}`,
       at: entry.createdAt,
-      level: uncertain ? 'WARN' : 'ERROR',
-      text: `${uncertain ? labels.channelLogUncertainPrefix : labels.channelLogDeliveryPrefix}${sentence}${
+      level: uncertain || byRule ? 'WARN' : 'ERROR',
+      text: `${uncertain ? labels.channelLogUncertainPrefix : byRule ? labels.channelLogByRulePrefix : labels.channelLogDeliveryPrefix}${sentence}${
         detail === null ? '' : `（${detail}）`
       }`
     })

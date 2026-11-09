@@ -261,7 +261,6 @@ describe('a failed send names its reason instead of saying "no further explanati
   it.each([
     ['delivery-provider-rejected'],
     ['delivery-target-invalid'],
-    ['delivery-rate-limited'],
     ['delivery-host-unavailable']
   ])('translates %s', async (code) => {
     const container = await mount({
@@ -321,6 +320,22 @@ describe('the platform\'s own words ride along as a note, never as the reason', 
     expect(text.indexOf(labels.channelLogDeliveryText['delivery-provider-rejected'])).toBeLessThan(
       text.indexOf('Bad Request: chat not found')
     )
+  })
+
+  it('paints a rule-held send as WARN with its own prefix, never as a red failure', async () => {
+    // 「被平台限流」是规则挡下、会自动重试：它没有错，画成红故障会让读者去查一个不存在的坏通道。
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [{ id: 'd13', attemptId: 'x', code: 'delivery-rate-limited', createdAt: '2026-11-04T09:06:38.000Z' }]
+      }))
+    })
+    const row = container.querySelector('[data-log-level]')
+    expect(row?.getAttribute('data-log-level')).toBe('WARN')
+    const text = container.textContent ?? ''
+    expect(text).toContain(labels.channelLogByRulePrefix)
+    expect(text).toContain(labels.channelLogDeliveryText['delivery-rate-limited'])
+    expect(text).not.toContain(labels.channelLogDeliveryPrefix)
   })
 
   it('draws no brackets when there is nothing to append', async () => {

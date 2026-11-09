@@ -347,6 +347,8 @@ export type PlatformText = {
     channelLogDeliveryPrefix: string
     /** 「交出去了、没拿到回执」不是失败：单独一类前缀，别并入「发送失败」。 */
     channelLogUncertainPrefix: string
+    /** 「被规则挡下」：不是故障，也不确定——单独一类前缀，别和「发送失败：」混。 */
+    channelLogByRulePrefix: string
     /** 闭集：动作码 → 人话。查不到走 `channelLogsUnknownCode`。 */
     channelLogActionText: Readonly<Record<ChannelManagementAuditCopyKey, string>>
     channelLogRuntimeText: Readonly<Record<ChannelRuntimeAuditCopyKey, string>>
@@ -1775,6 +1777,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogLifecyclePrefix: '运行：',
       channelLogDeliveryPrefix: '发送失败：',
       channelLogUncertainPrefix: '不确定：',
+      channelLogByRulePrefix: '按规则未发送：',
       channelLogActionText: Object.freeze({
         actionCreate: '创建了这个频道',
         actionUpdate: '修改了频道设置',
@@ -3131,6 +3134,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogLifecyclePrefix: 'Runtime: ',
       channelLogDeliveryPrefix: 'Send failed: ',
       channelLogUncertainPrefix: 'Uncertain: ',
+      channelLogByRulePrefix: 'Not sent (held by a rule): ',
       channelLogActionText: Object.freeze({
         actionCreate: 'created this channel',
         actionUpdate: 'changed the channel settings',
