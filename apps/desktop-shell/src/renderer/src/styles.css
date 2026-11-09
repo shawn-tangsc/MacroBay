@@ -7838,6 +7838,58 @@ h1 {
   background: var(--bg);
 }
 
+/* 设置页外壳：顶部降级横幅 / 中间设置网格 / 底部危险区，三者纵向排列。
+   读正常时两个附加块都不渲染，外壳只剩中间那一格。 */
+.settings-layout-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-layout-shell > .settings-layout {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+/* 设置文件读不到：一行事实 + 第二行副本路径（等宽、可选中复制，不进 ⓘ）。 */
+.settings-file-recovery {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  font-size: var(--font-meta);
+}
+
+.settings-file-recovery__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-file-recovery__path {
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* 底部危险区：只在降级时出现，右对齐一颗静止红按钮（不与「重试读取」并排）。 */
+.settings-reset-danger {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
 .settings-nav {
   display: grid;
   align-content: start;

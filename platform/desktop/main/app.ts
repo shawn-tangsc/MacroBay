@@ -1022,7 +1022,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       return true
     },
     preferences: {
-      getLanguage: async () => (await settingsStore.get()).language,
+      getLanguage: async () => (await settingsStore.readStartup()).language,
       getTheme: () => readWorkspaceContextTheme(settingsStore, nativeTheme), // P1-06h N3：与 shell 同源（settings.themeMode），只有 system 才回退 OS
       // 显示时区与 shell 同源（settings.timeZone），只有 system 才回退运行时 IANA 时区
       // 运行时 IANA 时区只在 shellTimeZone 提供者内部读取；这里只取它解析好的结果
@@ -1036,7 +1036,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
 
   await mainWindowHost.createAndWire()
   tray = createAppTray(getMainWindow)
-  await applySessionProxySettings((await settingsStore.get()).network, {
+  await applySessionProxySettings((await settingsStore.readStartup()).network, {
     // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
@@ -1048,12 +1048,12 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               eventBusRuntime: getEventBusRuntime(),
               getProviderState: providerStore.getState,
               getAppLanguage: async () => {
-                const settings = await settingsStore.get()
+                const settings = await settingsStore.readStartup()
                 return settings.language
               },
-              getModelDefaults: async () => (await settingsStore.get()).modelDefaults,
+              getModelDefaults: async () => (await settingsStore.readStartup()).modelDefaults,
               getNetworkSettings: async () => {
-                const settings = await settingsStore.get()
+                const settings = await settingsStore.readStartup()
                 return settings.network
               },
               log: appLog.log,
@@ -1107,7 +1107,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   assistantChatRuntime.reconcileStalePending()
   await syncBuiltinSkills()
   const providers = await providerStore.list()
-  const language = (await settingsStore.get()).language
+  // 启动期：设置文件读不到就用默认值起来（`readStartup`），绝不让引导因此落到启动失败页。
+  const language = (await settingsStore.readStartup()).language
   const productSeed = mergeAgentSeeds(
     ...builtinSeedFactories.map((factory) => factory.create(providers, { language }))
   )

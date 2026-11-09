@@ -6,6 +6,7 @@ import {useEffect, useLayoutEffect, useMemo, useState} from 'react'
 
 
 import type {AppLanguage, AppSettings, AppSettingsPatch, NetworkSettings} from '@platform/settings/schema/appSettings'
+import type {SettingsStartupReadState} from '@platform/settings/store/settingsStore'
 import {createDefaultAppSettings} from '@platform/settings/schema/appSettings'
 import {resolveThemeMode, toThemeAttributes} from '@platform/ui/theme/themeModel'
 import {AppShellToastLayer} from './window/AppShellToastLayer'
@@ -185,6 +186,12 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     setNotificationCenterOpen
   })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
+  /**
+   * 启动期设置文件读不到：当前跑在默认值上，横幅要说出来。
+   * 状态由主进程给（`settings.recovery('state')`），渲染层不自己推断"是不是读失败"。
+   */
+  const [settingsRecovery, setSettingsRecovery] = useState<SettingsStartupReadState>({ unreadable: false, copyPath: null })
+  const [settingsReadRetrying, setSettingsReadRetrying] = useState(false)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [products, setProducts] = useState<ProductSummary[]>([])
@@ -295,6 +302,45 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     ]).catch(() => undefined)
     return () => { cancelled = true }
   }, [])
+
+  // 启动降级状态：单独读一次，失败就当"正常"（不能因为查状态把界面拦住）。
+  useEffect(() => {
+    let cancelled = false
+    void window.platform.settings
+      .recovery('state')
+      .then((state) => { if (!cancelled) setSettingsRecovery(state) })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [])
+
+  async function reloadSettingsFromMain(): Promise<void> {
+    try {
+      setSettings((await window.platform.settings.get()) as AppSettings)
+    } catch {
+      // 仍在降级：保留默认值，横幅继续显示。
+    }
+  }
+
+  /** 「重试读取」：读成功才换回真实设置，失败保持降级——**不抛**。 */
+  async function retrySettingsRead(): Promise<void> {
+    setSettingsReadRetrying(true)
+    try {
+      const state = await window.platform.settings.recovery('retry')
+      setSettingsRecovery(state)
+      if (!state.unreadable) await reloadSettingsFromMain()
+    } catch {
+      // 查询本身失败：保持现有状态，别把降级画成正常。
+    } finally {
+      setSettingsReadRetrying(false)
+    }
+  }
+
+  /** 危险区确认后的重置：只在读者显式确认后调用（主进程写默认值）。 */
+  async function resetSettingsFile(): Promise<void> {
+    const state = await window.platform.settings.recovery('reset')
+    setSettingsRecovery(state)
+    await reloadSettingsFromMain()
+  }
 
   // PLAT-82：检测结束会把「本次实测通过」的协议写回模型 ⇒ 重新拉一次供应商列表，
   // 行内协议 chip / 协议 pill 才能立刻反映新证据（状态文案仍在内存，不参与刷新）。
@@ -411,6 +457,10 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       <AppShellSettingsLayout
         t={t}
         settings={settings}
+        settingsRecovery={settingsRecovery}
+        settingsReadRetrying={settingsReadRetrying}
+        onRetrySettingsRead={() => void retrySettingsRead()}
+        onResetSettingsFile={resetSettingsFile}
         noticeText={noticeText}
         resolveText={preferencesText}
         settingsPanelKey={settingsPanelKey}

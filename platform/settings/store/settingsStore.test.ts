@@ -759,3 +759,76 @@ describe('设置文件损坏：真实文件层（先留档、原文件不动）'
     }
   })
 })
+
+describe('启动期读不到设置：用默认值起来，不崩（2026-11-10）', () => {
+  it('starts on defaults, keeps the copy path, and leaves get() throwing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'settings-startup-'))
+    try {
+      const file = join(dir, 'settings.json')
+      const corrupt = '{"language":"zh-CN", "themeMode": '
+      writeFileSync(file, corrupt, 'utf8')
+      const store = createSettingsStore(createJsonFileStorage(file, createDefaultAppSettings()))
+
+      // 应用能起来：拿到的是默认语言/主题，不是异常。
+      const startup = await store.readStartup()
+      expect(startup.language).toBe('zh-CN')
+      expect(startup.themeMode).toBe('dark')
+
+      // 状态要说清「读不到 + 副本在哪」，且副本真的在磁盘上、内容与原文件一致。
+      const state = store.startupState()
+      expect(state.unreadable).toBe(true)
+      expect(state.copyPath).not.toBeNull()
+      expect(readFileSync(state.copyPath!, 'utf8')).toBe(corrupt)
+
+      // 契约没变：`get()` 仍然抛，保存路径继续 fail-closed。
+      await expect(store.get()).rejects.toThrow('settings-storage-unreadable')
+      await expect(store.update({ themeMode: 'light' })).rejects.toThrow('settings-storage-unreadable')
+
+      // 重试仍然失败：状态还在、不抛。
+      const retried = await store.retryStartupRead()
+      expect(retried.unreadable).toBe(true)
+      expect(retried.copyPath).toBe(state.copyPath)
+
+      // 降级本身绝不写盘：原文件逐字节未变。
+      expect(readFileSync(file, 'utf8')).toBe(corrupt)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rebuilds the file only when the reader explicitly resets', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'settings-reset-'))
+    try {
+      const file = join(dir, 'settings.json')
+      writeFileSync(file, '{"language": ', 'utf8')
+      const store = createSettingsStore(createJsonFileStorage(file, createDefaultAppSettings()))
+      await store.readStartup()
+      const copyPath = store.startupState().copyPath
+      expect(copyPath).not.toBeNull()
+
+      const rebuilt = await store.resetAfterUnreadable()
+      expect(rebuilt).toEqual(createDefaultAppSettings())
+      expect(store.startupState()).toEqual({ unreadable: false, copyPath: null })
+
+      // 文件被重建为可读的默认值；坏文件副本仍在（读者唯一的证据）。
+      const parsed = JSON.parse(readFileSync(file, 'utf8')) as { language?: string }
+      expect(parsed.language).toBe('zh-CN')
+      expect(readFileSync(copyPath!, 'utf8')).toBe('{"language": ')
+      await expect(store.get()).resolves.toEqual(createDefaultAppSettings())
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reports copyPath null when the corrupt copy could not be kept', async () => {
+    const store = createSettingsStore({
+      read: async () => {
+        throw new SyntaxError('bad json')
+      },
+      write: async () => undefined,
+      preserveCorruptCopy: async () => undefined
+    })
+    await store.readStartup()
+    expect(store.startupState()).toEqual({ unreadable: true, copyPath: null })
+  })
+})

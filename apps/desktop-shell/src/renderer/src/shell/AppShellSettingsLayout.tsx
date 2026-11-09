@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import type { AppSettings, AppSettingsPatch, NetworkSettings } from '@platform/settings/schema/appSettings'
+import type { SettingsStartupReadState } from '@platform/settings/store/settingsStore'
 
 import type { PlatformText } from '../i18n/platformText'
 import type { ProxySelfTestResult, ProxySelfTestView } from './proxySelfTestDisplay'
@@ -17,6 +18,7 @@ import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheS
 import { TaskAutomationSettingsPage } from './settings/task-automation/TaskAutomationSettingsPage'
 import { WebSearchSettingsPage } from './settings/web-search/WebSearchSettingsPage'
 import { AppShellPreferencesPane } from './AppShellPreferencesPane'
+import { SettingsReadFailureBanner, SettingsResetDangerZone } from './settings/SettingsFileRecovery'
 import { ProductContributionHost } from './workspace/ProductContributionHost'
 import { ModelServiceDefaultModelsSection } from './model-service/ModelServiceDefaultModelsSection'
 import { ModelServiceLoadSurface } from './model-service/ModelServiceLoadSurface'
@@ -26,6 +28,11 @@ import type { useModelServiceProviders } from './model-service/useModelServicePr
 export type AppShellSettingsLayoutProps = {
   t: PlatformText
   settings: AppSettings
+  /** 启动期设置文件读不到时，整页顶部一行事实 + 底部危险区；正常时两者都不渲染。 */
+  settingsRecovery: SettingsStartupReadState
+  settingsReadRetrying: boolean
+  onRetrySettingsRead: () => void
+  onResetSettingsFile: () => Promise<void>
   noticeText: string | null
   resolveText: (key: string) => string
   settingsPanelKey: string
@@ -49,7 +56,8 @@ export type AppShellSettingsLayoutProps = {
 
 export function AppShellSettingsLayout(props: AppShellSettingsLayoutProps): React.ReactElement {
   const {
-    t, settings, noticeText, resolveText: preferencesText, settingsPanelKey, onSelectPanel, navGroups: settingsNavGroups,
+    t, settings, settingsRecovery, settingsReadRetrying, onRetrySettingsRead, onResetSettingsFile,
+    noticeText, resolveText: preferencesText, settingsPanelKey, onSelectPanel, navGroups: settingsNavGroups,
     productSettingsEntries, providersState, providers, onReloadProviders: reloadProviders,
     onUpdateSettings: updateSettings, onUpdateNetworkSettings: updateNetworkSettings,
     onDraftSettingsChange: setSettings, onRunProxySelfTest: runProxySelfTest, onManageAssistants,
@@ -60,6 +68,15 @@ export function AppShellSettingsLayout(props: AppShellSettingsLayoutProps): Reac
   const setActiveNavKey = (_key: string): void => onManageAssistants()
 
   return (
+    <div className="settings-layout-shell">
+      {settingsRecovery.unreadable ? (
+        <SettingsReadFailureBanner
+          copyPath={settingsRecovery.copyPath}
+          onRetry={onRetrySettingsRead}
+          retrying={settingsReadRetrying}
+          text={t.settings}
+        />
+      ) : null}
       <div className="settings-layout">
         <aside className="settings-nav" aria-label={t.nav.settings}>
           {settingsNavGroups.map((group) => (
@@ -144,6 +161,10 @@ export function AppShellSettingsLayout(props: AppShellSettingsLayoutProps): Reac
           />
         ) : null}
       </div>
-
+      {/* 危险区只在降级时出现：正常设置页不该天天摆一个「重置设置」。 */}
+      {settingsRecovery.unreadable ? (
+        <SettingsResetDangerZone copyPath={settingsRecovery.copyPath} onReset={onResetSettingsFile} text={t.settings} />
+      ) : null}
+    </div>
   )
 }

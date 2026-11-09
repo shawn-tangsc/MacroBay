@@ -46,7 +46,11 @@ function settingsPorts(overrides: Partial<SettingsCompositionPorts> = {}) {
       values = { ...values, ...patch } as typeof values
       return values
     }),
-    notifyCommitted: vi.fn()
+    notifyCommitted: vi.fn(),
+    readStartup: vi.fn(async () => values),
+    startupState: vi.fn(() => ({ unreadable: false, copyPath: null })),
+    retryStartupRead: vi.fn(async () => ({ unreadable: false, copyPath: null })),
+    resetAfterUnreadable: vi.fn(async () => values)
   }
   const base: SettingsCompositionPorts = {
     settings,
@@ -63,7 +67,7 @@ describe('settings and storage composition', () => {
     const { channels, ipcMain } = record()
     composeSettingsIpc(ipcMain as never, settingsPorts().ports)
 
-    expect(channels).toEqual(['platform:settings-get', 'platform:settings-update'])
+    expect(channels).toEqual(['platform:settings-get', 'platform:settings-update', 'platform:settings-recovery'])
   })
 
   it('a language save reaches the host that exists at that moment, once', async () => {

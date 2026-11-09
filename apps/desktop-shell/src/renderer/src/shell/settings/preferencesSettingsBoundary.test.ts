@@ -31,7 +31,13 @@ describe('preferences settings boundary', () => {
     expect(settingsUpdateStart).toBeGreaterThan(-1)
     const settingsUpdateHandler = mainSource.slice(settingsUpdateStart)
     const nextHandlerStart = settingsUpdateHandler.indexOf('ipcMain.handle(', 'ipcMain.handle('.length)
-    expect(settingsUpdateHandler.slice(0, nextHandlerStart)).toContain('notifyPreferencesChanged()')
+    // 保存与「重置设置」共用同一段副作用（2026-11-10 抽出）。判据不是弱化：先钉「保存路径调了那段」，
+    // 再钉「那段里确实有唯一的一次偏好通知」——两跳都在同一个文件里，挪走任何一环都会红。
+    expect(settingsUpdateHandler.slice(0, nextHandlerStart)).toContain('applyCommittedSideEffects(next)')
+    const sideEffectsStart = mainSource.indexOf('async function applyCommittedSideEffects')
+    expect(sideEffectsStart).toBeGreaterThan(-1)
+    const sideEffectsBody = mainSource.slice(sideEffectsStart, mainSource.indexOf('\n  }', sideEffectsStart))
+    expect(sideEffectsBody).toContain('notifyPreferencesChanged()')
     expect(source).not.toContain('broadcastWorkspacePreferenceChange')
     const updateSettingsStart = source.indexOf('async function updateSettings')
     expect(updateSettingsStart).toBeGreaterThan(-1)
