@@ -338,6 +338,9 @@ export function NewsSentimentDrawer(props: {
               >
               <button
                 aria-current={row.itemId === activeId}
+                // 整行即动作（ui-spec「可点击行」）：原生 button 保留，antd `Button` 表达不了这种
+                // 多行富内容；可访问名说明点开哪一条，键盘与焦点环由原生 button + 全仓 `:focus-visible` 提供。
+                aria-label={text.openItem.replace('{title}', translatedTitles[row.itemId] ?? row.displayTitle ?? row.title)}
                 className="mi-news-drawer__row-open"
                 onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
                 onContextMenu={translationEnabled ? (event) => { event.preventDefault(); openContextMenu(row.itemId, event.clientX, event.clientY) } : undefined}

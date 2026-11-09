@@ -130,6 +130,9 @@
 .mi-news-drawer__source { margin-left: auto; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-news-drawer__row .mi-news-sentiment__pill { white-space: nowrap; flex: none; flex: none; }
 .mi-news-drawer__row.is-selected { background: color-mix(in srgb, var(--accent, #d9f67f) 6%, transparent); box-shadow: inset 2px 0 0 var(--accent, #d9f67f); }
+/* 整行即动作：悬停给一层底（ui-spec「可点击行」第②条），选中态保持原样、不与悬停混在一起。
+   只借既有的 `--surface-soft`，不改尺寸、间距与字色。 */
+.mi-news-drawer__row:hover:not(.is-selected) { background: var(--surface-soft); }
 .mi-news-drawer__row time, .mi-news-drawer__row small { font-size: 9.5px; font-variant-numeric: tabular-nums; }
 .mi-news-drawer__title {
   white-space: normal; overflow: visible; text-overflow: clip;

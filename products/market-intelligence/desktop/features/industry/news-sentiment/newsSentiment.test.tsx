@@ -451,7 +451,11 @@ describe('NewsSentimentFeature', () => {
     expect(items).toHaveLength(2)
     for (const item of items) {
       expect(item.tagName).not.toBe('BUTTON')
-      expect(item.querySelector('button.mi-news-drawer__row-open')).not.toBeNull()
+      const rowOpen = item.querySelector<HTMLButtonElement>('button.mi-news-drawer__row-open')
+      expect(rowOpen).not.toBeNull()
+      // 整行即动作：可访问名说明点开哪一条；键盘可达与焦点环由原生 button 提供，不另画。
+      expect(rowOpen?.type).toBe('button')
+      expect(rowOpen?.getAttribute('aria-label')).toMatch(/^打开这条舆情：/)
     }
 
     const more = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${text.drawer.moreActions}"]`)
