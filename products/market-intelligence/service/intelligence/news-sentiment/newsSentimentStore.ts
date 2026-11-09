@@ -16,14 +16,71 @@ import { NEWS_SENTIMENT_LIMITS, isNewsPolarity, isNewsSymbol } from '../schema/n
 export const newsSentimentStoragePolicy = Object.freeze({
   fileName: 'intelligence-news-sentiment.sqlite',
   /**
-   * 升版即重建：这个库没有迁移路径（见 `openOrReset` 与下面的 `drop table`）。
+   * 存储版本：**只升级、不重建**。
    *
-   * v3 加了 `entities_json` / `story_key` / `why_text`。重建的代价是 377 篇正文与 427 条评分
-   * 重跑一轮——**推送账本因此不能放在这里**，独立存在 `intelligence-news-push-ledger.sqlite`，
-   * 否则一次重建就把「推过没有」抹掉，历史会被整批重推。
+   * 判断是读者复盘要用的历史（`scored_at <= asOf` 取当天可见的那条），重建不出来——采集能重跑，
+   * 但「那天模型怎么判的」重跑不会给出同一份答案。所以：
+   * - **旧版本按列迁移**：v3 补 `entities_json` / `story_key` / `why_text`；最早一版还多一列
+   *   `news_document.extraction_version`（not null、无默认），迁移时去掉，否则新写入必失败；
+   * - **比当前更新的版本直接拒绝**：列的含义可能已经变了，盲读等于把别人的格式当自己的事实；
+   * - **两种情况都不删一行**。推送账本仍独立存放（`intelligence-news-push-ledger.sqlite`），
+   *   不随这里的版本走。
    */
   schemaVersion: 3
 })
+
+/** 表本身与版本无关；列补齐在 `upgradeLegacyShape`，索引要等列补齐之后才能建。 */
+const CREATE_TABLES_SQL = `
+  create table if not exists news_document (
+    item_id text primary key,
+    source_id text not null,
+    url text not null,
+    fetched_at text not null,
+    body_text text,
+    body_chars integer not null,
+    state text not null check (state in ('available','too-short','failed')),
+    failure_code text
+  );
+  create table if not exists news_sentiment (
+    item_id text not null,
+    source_id text not null,
+    published_at text not null,
+    scored_at text not null,
+    polarity text not null check (polarity in ('bullish','bearish','neutral','mixed')),
+    strength integer not null check (strength between 1 and 5),
+    confidence integer not null check (confidence between 0 and 100),
+    symbols_json text not null,
+    reason_code text not null,
+    evidence_quote text,
+    engine text not null check (engine in ('model','rules')),
+    model_ref text,
+    prompt_version text,
+    rule_id text,
+    caveats_json text not null,
+    entities_json text not null default '[]',
+    story_key text,
+    why_text text,
+    primary key (item_id, scored_at)
+  );
+  create table if not exists news_body_translation (
+    item_id text primary key,
+    body_hash text not null,
+    target_locale text not null,
+    state text not null check (state in ('translated','failed')),
+    title_text text,
+    body_text text,
+    provider_id text,
+    model_id text,
+    error_code text,
+    translated_at text not null
+  );
+`
+
+/** 旧版的 `news_sentiment` 没有 `story_key`，所以这一步必须在列补齐之后跑。 */
+const CREATE_INDEXES_SQL = `
+  create index if not exists idx_news_sentiment_published on news_sentiment(published_at);
+  create index if not exists idx_news_sentiment_story on news_sentiment(story_key, published_at);
+`
 
 export type NewsSentimentStore = ReturnType<typeof createNewsSentimentSqliteStore>
 
@@ -37,60 +94,33 @@ export function createNewsSentimentSqliteStore(filePath: string) {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
   const db = openOrReset(filePath)
   db.exec('pragma synchronous = full;')
-  const storedVersion = Number((db.prepare('pragma user_version').get() as { user_version?: number }).user_version ?? 0)
-  if (storedVersion !== newsSentimentStoragePolicy.schemaVersion) {
-    // One schema, no upgrade paths: derived rows are rebuilt from the pipeline instead.
-    db.exec('drop table if exists news_sentiment; drop table if exists news_document;')
+  const storedVersion = readStorageVersion(db)
+  if (storedVersion > newsSentimentStoragePolicy.schemaVersion) {
+    // Fail closed. A newer shape may have redefined a column; reading it as today's would turn
+    // another build's format into our facts. Leave every row for the newer build to read.
+    throw new Error(`news-sentiment-storage-version-newer:${storedVersion}`)
   }
-  db.exec(`
-    create table if not exists news_document (
-      item_id text primary key,
-      source_id text not null,
-      url text not null,
-      fetched_at text not null,
-      body_text text,
-      body_chars integer not null,
-      state text not null check (state in ('available','too-short','failed')),
-      failure_code text
-    );
-    create table if not exists news_sentiment (
-      item_id text not null,
-      source_id text not null,
-      published_at text not null,
-      scored_at text not null,
-      polarity text not null check (polarity in ('bullish','bearish','neutral','mixed')),
-      strength integer not null check (strength between 1 and 5),
-      confidence integer not null check (confidence between 0 and 100),
-      symbols_json text not null,
-      reason_code text not null,
-      evidence_quote text,
-      engine text not null check (engine in ('model','rules')),
-      model_ref text,
-      prompt_version text,
-      rule_id text,
-      caveats_json text not null,
-      entities_json text not null default '[]',
-      story_key text,
-      why_text text,
-      primary key (item_id, scored_at)
-    );
-    create index if not exists idx_news_sentiment_published on news_sentiment(published_at);
-    create index if not exists idx_news_sentiment_story on news_sentiment(story_key, published_at);
-    create table if not exists news_body_translation (
-      item_id text primary key,
-      body_hash text not null,
-      target_locale text not null,
-      state text not null check (state in ('translated','failed')),
-      title_text text,
-      body_text text,
-      provider_id text,
-      model_id text,
-      error_code text,
-      translated_at text not null
-    );
-  `)
+  if (storedVersion < newsSentimentStoragePolicy.schemaVersion) {
+    // One transaction: rows stay, only missing columns are added. A failed upgrade rolls the
+    // version back together with the DDL, so the next start retries instead of calling the file
+    // current while it is only half migrated.
+    db.exec('begin immediate')
+    try {
+      db.exec(CREATE_TABLES_SQL)
+      upgradeLegacyShape(db)
+      db.exec(`pragma user_version = ${newsSentimentStoragePolicy.schemaVersion}`)
+      db.exec('commit')
+    } catch (error) {
+      db.exec('rollback')
+      throw error
+    }
+  } else {
+    // Already current: creating if absent is the only thing left to do (a `:memory:` store and a
+    // file touched by an earlier run both take this path).
+    db.exec(CREATE_TABLES_SQL)
+  }
+  db.exec(CREATE_INDEXES_SQL)
   try { db.exec('alter table news_body_translation add column title_text text') } catch { /* already migrated */ }
-  db.exec(`pragma user_version = ${newsSentimentStoragePolicy.schemaVersion}`)
 
   return {
     clearAll(): void {
@@ -274,6 +304,33 @@ function openOrReset(filePath: string): DatabaseSync {
     for (const suffix of ['', '-wal', '-shm']) rmSync(filePath + suffix, { force: true })
     return openSqliteDatabase(filePath)
   }
+}
+
+function readStorageVersion(db: DatabaseSync): number {
+  return Number((db.prepare('pragma user_version').get() as { user_version?: number }).user_version ?? 0)
+}
+
+function hasColumn(db: DatabaseSync, table: string, column: string): boolean {
+  const rows = db.prepare(`pragma table_info(${table})`).all() as Array<{ name?: unknown }>
+  return rows.some((row) => row.name === column)
+}
+
+/** Idempotent on purpose: an interrupted migration must be safe to re-run on the next start. */
+function upgradeLegacyShape(db: DatabaseSync): void {
+  addColumnIfMissing(db, 'news_sentiment', 'entities_json', "text not null default '[]'")
+  addColumnIfMissing(db, 'news_sentiment', 'story_key', 'text')
+  addColumnIfMissing(db, 'news_sentiment', 'why_text', 'text')
+  // The earliest shape carried `news_document.extraction_version` as `not null` with no default.
+  // Today's writes do not supply it, so the column has to go before the first document insert —
+  // otherwise an upgraded file accepts reads and rejects every new body.
+  if (hasColumn(db, 'news_document', 'extraction_version')) {
+    db.exec('alter table news_document drop column extraction_version')
+  }
+}
+
+function addColumnIfMissing(db: DatabaseSync, table: string, column: string, declaration: string): void {
+  if (hasColumn(db, table, column)) return
+  db.exec(`alter table ${table} add column ${column} ${declaration}`)
 }
 
 function toDocument(row: Record<string, unknown>): NewsDocumentRecord {
