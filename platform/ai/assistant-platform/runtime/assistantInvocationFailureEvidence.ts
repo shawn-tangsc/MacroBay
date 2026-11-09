@@ -11,6 +11,8 @@ export const ASSISTANT_INVOCATION_FAILURE_EVIDENCE_V1 = {
 export type AssistantInvocationFailureEvidence = {
   phase: 'request' | 'response'
   summary: string
+  /** 上游机器码（`error.code`/`error.type`）：只做闭集比较，不当文案读。 */
+  upstreamCode?: string
   providerId?: string
   modelId?: string
   httpStatus?: number
@@ -39,6 +41,7 @@ export function normalizeAssistantInvocationFailureEvidence(
     ...(evidence.providerId ? { providerId: evidence.providerId } : {}),
     ...(evidence.modelId ? { modelId: evidence.modelId } : {}),
     ...(evidence.httpStatus ? { httpStatus: evidence.httpStatus } : {}),
+    ...(evidence.upstreamCode ? { upstreamCode: evidence.upstreamCode } : {}),
     ...(body.value ? { body: body.value } : {}),
     ...(evidence.truncated || summary.truncated || body.truncated ? { truncated: true } : {})
   }

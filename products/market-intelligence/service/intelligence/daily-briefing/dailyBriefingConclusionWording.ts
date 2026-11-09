@@ -18,31 +18,6 @@ export const maximumRationaleLength = 200
 export const maximumRegimeMarkerLength = 48
 
 /**
- * Wording that only makes sense to the system that produced the brief.
- *
- * The conclusion is read by a trader who never saw the packet: a window, a vote count, frozen data,
- * an earlier AI view or a process clock time explains the machinery, not the market. Each pattern
- * carries the concrete replacement the repair round must use.
- */
-export const internalWordingPatterns: readonly Readonly<{ pattern: RegExp; repair: string }>[] = [
-  { pattern: /窗口/, repair: 'name the day or session and the market move instead' },
-  { pattern: /多数(?:判断|观点|结论|看法)|大部分(?:判断|观点|结论|看法)/, repair: 'state the market fact that carries the day, not a vote count' },
-  { pattern: /冻结(?:数据|快照|事实|文档)/, repair: 'cite the actual release or flow and its number' },
-  { pattern: /前提[^。；;!?]{0,6}削弱/, repair: 'say which price, flow or print changed and by how much' },
-  { pattern: /(?<![A-Za-z])AI(?![A-Za-z])|人工智能/, repair: 'describe the market, not who produced an earlier view' },
-  { pattern: /模型/, repair: 'describe the market, not the forecasting tool' },
-  { pattern: /结论/, repair: 'state the call and its drivers directly' },
-  { pattern: /时间线/, repair: 'drop the chronology; keep only the market event that matters' },
-  { pattern: /\b(?:windows?)\b(?!\s+dressing)/i, repair: 'name the day or session and the market move instead' },
-  { pattern: /\b(?:most|majority)\s+(?:of\s+)?(?:the\s+)?(?:calls?|views?|judg[ae]?ments?|conclusions?)\b/i, repair: 'state the market fact that carries the day, not a vote count' },
-  { pattern: /\bfrozen\s+(?:data|snapshot|facts?|document)\b/i, repair: 'cite the actual release or flow and its number' },
-  { pattern: /\bpremises?\b[^.]{0,30}\b(?:weakened|undermined)\b|\b(?:weakened|undermined)\s+premises?\b/i, repair: 'say which price, flow or print changed and by how much' },
-  { pattern: /\bmodels?\b/i, repair: 'describe the market, not the forecasting tool' },
-  { pattern: /\bconclusions?\b/i, repair: 'state the call and its drivers directly' },
-  { pattern: /\btimelines?\b/i, repair: 'drop the chronology; keep only the market event that matters' }
-]
-
-/**
  * Labels that say nothing until they name the object that moved and the number it moved by. The
  * same sentence must carry a concrete market object or a number, otherwise the label is filler.
  */
@@ -84,15 +59,3 @@ export const relativeStrengthPattern = new RegExp(
   'i'
 )
 export const conditionalPattern = /若|如果|一旦|假如|假若|除非|\bif\b|\bwhen\b|\bunless\b/i
-
-/**
- * Prohibited forecasts. Directional calls and conditions are the point; a price target, a trade
- * instruction or an invented probability is not. Precision is the tell: a fabricated `70%` claim
- * dresses an opinion as a measurement.
- */
-export const forbiddenForecastPatterns: readonly Readonly<{ pattern: RegExp; repair: string }>[] = [
-  { pattern: /目标价|目标位|目标价位|上看|下看|止盈|止损/, repair: 'drop the price target or trade instruction; state the direction, the mechanism and the condition that would flip it instead' },
-  { pattern: /\b(?:price\s+target|target\s+price|stop[-\s]?loss|take[-\s]?profit)\b/i, repair: 'drop the price target or trade instruction; state the direction, the mechanism and the condition that would flip it instead' },
-  { pattern: /建议\s*(?:买入|卖出|加仓|减仓|做多|做空)|(?:买入|卖出|加仓|减仓)\s*建议/, repair: 'drop the recommendation; write the directional bias and the condition that would invalidate it' },
-  { pattern: /\b(?:buy|sell|long|short)\s+(?:btc|eth|bitcoin|ether|ethereum|the\s+dip)\b/i, repair: 'drop the recommendation; write the directional bias and the condition that would invalidate it' },
-]

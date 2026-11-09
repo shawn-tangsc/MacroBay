@@ -33,7 +33,7 @@ export type NewsSentimentClient = Readonly<{
   getSettings: () => Promise<NewsSentimentSettingsView>
   saveSettings: (patch: Partial<NewsSentimentSettings>) => Promise<NewsSentimentSettingsView>
   rescore: () => Promise<{ queued: boolean }>
-  rebuild: () => Promise<{ queued: boolean }>
+  rebuild: () => Promise<{ queued: boolean; quarantinedCopy?: string }>
   translateBody: (itemId: string, force?: boolean) => Promise<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string; title?: string; errorCode?: string }>
 }>
 
@@ -53,7 +53,7 @@ export function createNewsSentimentClient(invoke: Invoke = platformInvoke): News
     getSettings: () => call<NewsSentimentSettingsView>('intelligence.getNewsSentimentSettings'),
     saveSettings: (patch) => call<NewsSentimentSettingsView>('intelligence.saveNewsSentimentSettings', patch),
     rescore: () => call<{ queued: boolean }>('intelligence.rescoreNewsSentiment'),
-    rebuild: () => call<{ queued: boolean }>('intelligence.rebuildNewsSentiment'),
+    rebuild: () => call<{ queued: boolean; quarantinedCopy?: string }>('intelligence.rebuildNewsSentiment'),
     translateBody: (itemId, force) => call<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string; title?: string; errorCode?: string }>('intelligence.translateNewsSentimentBody', { itemId, force })
   }
 }

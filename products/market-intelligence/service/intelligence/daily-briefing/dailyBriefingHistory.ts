@@ -9,6 +9,7 @@ import {
   type DailyBriefingRunTrigger
 } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPeriodRun, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
+import { briefingRailDates } from './dailyBriefingRailDates'
 
 /**
  * Whether a period still exists in the configuration.
@@ -19,24 +20,6 @@ import type { DailyBriefingPeriodRun, DailyBriefingStore, DailyBriefingStoredEdi
 export type DailyBriefingPeriodPresence = 'found' | 'absent' | 'unreadable'
 
 /** The stored rows of one reader's history window, grouped into rail rows. */
-/**
- * 天头要画哪些日子（`02` v2.91）：
- *
- * **有版次 ∨ 有过尝试记录（`daily_briefing_attempts`）∨ 这一天是今天。**
- * **仅"被排期覆盖"不算**——排期每天重复（07:00 天天都有），按它算等于每天都成立，14 天会全被铺出来。
- * 只放行"今天"一天，是把读者正看着的那一天放进来，不是把窗口放宽：其余无痕迹的日子照旧不出现。
- */
-export function briefingRailDates(input: Readonly<{
-  dates: readonly string[]
-  editionDates: ReadonlySet<string>
-  runDates: ReadonlySet<string>
-  today: string
-}>): readonly string[] {
-  // 新到旧：读者第一眼要看的是今天（与列表按天倒序一致）。
-  return Object.freeze(input.dates
-    .filter((date) => input.editionDates.has(date) || input.runDates.has(date) || date === input.today)
-    .reverse())
-}
 
 /**
  * 某一期的计划生成时刻，按期为键。
@@ -136,6 +119,17 @@ function lastDays(today: string, days: number): readonly string[] {
     new Date(start - (days - 1 - index) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)))
 }
 
+/**
+ * 没有版次的那一行用哪个时刻：优先这一次跑的**名义截止**（`nominal_at`，也就是那次的 `asOf`），
+ * 老记录缺这一列才回退**发起时刻**（`started_at`）；两者都没有就返回 `undefined`，界面写
+ * 「未记录」——**不拿当前设置回填**（0.4.2 #19）。
+ */
+export function briefingAttemptPeriodTime(
+  attempt: Readonly<{ nominalAt?: string; startedAt?: string }>
+): string | undefined {
+  return attempt.nominalAt ?? attempt.startedAt
+}
+
 /** One (day, period) with every language row of it; the map keeps the primary language last. */
 type PeriodRows = Readonly<{
   date: string
@@ -148,11 +142,13 @@ type PeriodRows = Readonly<{
   /** 排期过了点、今天该有却没有：第二行写「到点时没能生成」，不写内部原因、不带按钮。 */
   missedAtCutoff?: boolean
   /**
-   * 没有版次的那一行，身份来自**它自己那次尝试**：什么时候发起的、怎么触发、覆盖多长。
+   * 没有版次的那一行，身份来自**它自己那次尝试**：名义截止（缺则发起时刻）、怎么触发、覆盖多长。
    * 用户 2026-11-06：列表每一行要自己说清身份，不许拿默认期的 07:00 或当前设置顶上。
    */
   attemptIdentity?: Readonly<{
     startedAt: string
+    /** 那一次跑的名义截止（`asOf`）；老记录没有这一列，读出来是 `undefined`。 */
+    nominalAt?: string
     trigger?: string
     windowHours?: number
     locale: DailyBriefingLocale
@@ -184,6 +180,8 @@ export async function briefingHistorySummaries(input: Readonly<{
     locale: DailyBriefingLocale
     state: 'running' | 'succeeded' | 'failed'
     startedAt: string
+    /** 那一次跑的名义截止（`asOf`）；老记录没有这一列，读出来是 `undefined`。 */
+    nominalAt?: string
     trigger?: string
     windowHours?: number
     /** 失败那一次的原因码：`cancelled`（读者的动作）与普通失败必须分开（`02` v2.176）。 */
@@ -213,6 +211,7 @@ export async function briefingHistorySummaries(input: Readonly<{
     if (attempt.state !== 'succeeded') attemptStateByKey.set(`${attempt.date}:${attempt.periodId}:${attempt.locale}`, attemptStateOf(attempt))
     attemptByKey.set(`${attempt.date}:${attempt.periodId}:${attempt.locale}`, {
       startedAt: attempt.startedAt, locale: attempt.locale,
+      ...(attempt.nominalAt === undefined ? {} : { nominalAt: attempt.nominalAt }),
       ...(attempt.trigger === undefined ? {} : { trigger: attempt.trigger }),
       ...(attempt.windowHours === undefined ? {} : { windowHours: attempt.windowHours })
     })
@@ -333,9 +332,11 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
   const shown = rows.get(input.primary)
   const availableLocales = [...rows.keys()]
   const identity = identityOf(shown ?? [...rows.values()][0])
+  // 没有版次的那一行：时刻 = 这一次跑的**名义截止**；老记录没有这一列才回退发起时刻；两者都没有
+  // 就空着，界面写「未记录」。来源与窗口照旧取它自己写下的那两个字段。
+  const attemptPeriodTime = period.attemptIdentity === undefined ? undefined : briefingAttemptPeriodTime(period.attemptIdentity)
   const attemptIdentity: Partial<DailyBriefingEditionSummary> = shown || period.attemptIdentity === undefined ? {} : {
-    // 没有版次的那一行：时刻 = 这次尝试的**发起时刻**，来源与窗口取它自己写下的那两个字段。
-    periodTime: period.attemptIdentity.startedAt,
+    ...(attemptPeriodTime === undefined ? {} : { periodTime: attemptPeriodTime }),
     // 手动期没有截止，第一行要写「发起」——期次类型据来源推，别让它落到"定时"那边写成「截止」。
     periodKind: period.attemptIdentity.trigger === 'manual' ? 'manual' as const : 'scheduled' as const,
     ...(period.attemptIdentity.trigger === undefined ? {} : { runTrigger: period.attemptIdentity.trigger as DailyBriefingRunTrigger }),

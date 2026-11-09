@@ -10,6 +10,8 @@ import {
   getAgentTextParts
 } from '../schemas/messageDataHelpers'
 import { addAgentSessionMessage, getSessionMessages, replaceAgentSessionMessage, type AgentStoreState } from '../store/agentStore'
+export { pendingOwnerFields } from '../schemas/pendingTurnOwnership'
+export type { PendingTurnOwnership } from '../schemas/pendingTurnOwnership'
 import { buildAgentSessionAutoTitle, shouldAutoRenameAgentSession } from './agentSessionAutoTitle'
 import type { AgentChatContextReference, AgentChatRuntimeResult } from './agentChatRuntime'
 import type { AgentSessionNamingResult } from './naming'
@@ -69,6 +71,8 @@ export function addPendingAssistantMessageToState(
     assistantMessageId: string
     modelId: UniqueModelId | null
     modelName: string | null
+    /** 写这条 pending 的主进程启动批次；崩溃收尾据此只收「不是本批次」的行。 */
+    ownerBootId?: string
   }
 ): AgentStoreState {
   return addAgentSessionMessage(state, input.sessionId, {
@@ -77,7 +81,8 @@ export function addPendingAssistantMessageToState(
     status: 'pending',
     modelId: input.modelId,
     modelSnapshot: input.modelId ? modelSnapshotFromUniqueId(input.modelId, input.modelName) : null,
-    data: createRuntimeTextDataFromDescriptor(runtimeStatusText.connecting)
+    data: createRuntimeTextDataFromDescriptor(runtimeStatusText.connecting),
+    ...(input.ownerBootId ? { ownerBootId: input.ownerBootId } : {})
   })
 }
 

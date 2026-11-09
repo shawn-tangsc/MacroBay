@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto'
 import { isMarketCalendarEvent, isMarketCalendarPage, isMarketCalendarQuery, marketCalendarPublicPolicy as policy,
   type MarketCalendarEvent, type MarketCalendarPage, type MarketCalendarQuery, type MarketCalendarSource, type MarketCalendarScope, type MarketCalendarRefreshAttempt
 } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { marketCalendarSourceStatus } from './marketCalendarSourceStatus'
 import type { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import type { MarketRow } from './marketCalendarStorageValidation'
 import { preferredObservation, type MarketObservationCandidate } from './marketCalendarObservationPrecedence'
@@ -85,7 +86,9 @@ export function createMarketCalendarPublicQueryService(deps: {
             // The newest batch is what the source status reports, even when it stored nothing.
             const newest = rows[0]
             const attempt = deps.readRefreshAttempt?.({ month, locale }, eventType)
-            return { ...(newest ? { eventType, status: newest.status as MarketCalendarSource['status'],
+            // 「这条来源不发布这种语言」与「这个月没有事件」分开说：前者是来源能力，后者是确实没有。
+            return { ...(newest ? { eventType,
+              status: marketCalendarSourceStatus(String(newest.status), policy.descriptors[index]!, locale),
               sourceObservedAt: String(newest.detected_at) } : { eventType, status: 'unavailable' as const, sourceObservedAt: null }),
               ...(attempt && attempt.attemptedAt <= asOf ? { latestAttempt: attempt } : {}) }
           })

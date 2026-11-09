@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { productText } from '../../../shared/i18n/productText'
+// 文案端口是组件 prop 的类型（两种语言的联合），测试的 render 助手要用它，不能绑死在中文那份上。
+import type { EconomicCalendarText } from './economicCalendarText'
 import type { CalendarDayItem } from './economicCalendarDayModel'
 
 // These cases mount the real row component (and read the stylesheet) instead of asserting data
@@ -151,7 +153,7 @@ it('marks a high-importance row before its name, on the calendar cell and the da
   const official = { key: 'official:cpi', source: 'official', date: '2026-09-10', time: '08:30',
     event: { eventKey: 'US.CPI.RELEASE.2026-M09', labelKey: 'cpi' } } as CalendarDayItem
   // Both surfaces draw this same row, so one mark covers the cell and the standing day list.
-  const render = async (item: CalendarDayItem, copy = text) => {
+  const render = async (item: CalendarDayItem, copy: EconomicCalendarText = text) => {
     await act(async () => root.render(<CalendarEventRow item={item} text={copy} statusNow="2026-09-10T12:00:00.000Z" onSelect={() => {}} />))
   }
   try {
@@ -194,7 +196,7 @@ it('leads every row with a glyph for its kind, on the calendar cell and the day 
     event: { eventKey: eventType, title: 'Derived topic', importance: 'high' as const, eventType } }) as CalendarDayItem
   const official = { key: 'official:cpi', source: 'official', date: '2026-09-10', time: '08:30',
     event: { eventKey: 'US.CPI.RELEASE.2026-M09', labelKey: 'cpi' } } as CalendarDayItem
-  const render = async (item: CalendarDayItem, copy = text) => {
+  const render = async (item: CalendarDayItem, copy: EconomicCalendarText = text) => {
     await act(async () => root.render(<CalendarEventRow item={item} text={copy} statusNow="2026-09-10T12:00:00.000Z" onSelect={() => {}} />))
   }
   try {

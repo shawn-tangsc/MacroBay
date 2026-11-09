@@ -1,11 +1,10 @@
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
-import { Info } from 'lucide-react'
+import { ChevronRight, Info } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
-import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useId, useState } from 'react'
 
@@ -42,11 +41,12 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   onRetry: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  const zoneLabel = formatShellTimeZoneLabel(useShellTimeZone())
   const resolveProductKey = useProductTextKey()
   const detailId = useId()
   const [expanded, setExpanded] = useState(false)
-  const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
+  // 契约保证 `observedAt` 是规范 UTC（`isCanonicalDivergenceTime`），直接交给统一格式化；
+  // 不再先切片再补 `Z`——那是在调用点重造一个时刻。
+  const when = (value: string) => formatTime(value)
 
   const rows = state.state === 'available' ? state.rows : []
   const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
@@ -81,11 +81,17 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       {expandable ? (
+        /* 整行即动作（展开/收起），同 `CalendarEventRow` 那类例外：`Choice` 会把它变成可选中项，
+           平台按钮会把「结论 + `›`」包成一颗文字按钮。原生 `<button>` 带 `aria-expanded` /
+           `aria-controls`、行内文字就是它的可访问名，`:hover` 与 `:focus-visible` 各有自己的规则
+           （`.mi-divergence__summary:hover` / `:focus-visible`）。别换成平台组件。 */
         <button aria-controls={detailId} aria-expanded={expanded} className="mi-divergence__summary"
           onClick={() => setExpanded(current => !current)} type="button">
+          {/* 界面设计 2026-11-10：入口要**同时**给三个可见线索——左侧 14px 箭头（展开转 90°）、整行 44 高
+              可点、悬停整行变色。原来右侧那颗 8px 的字符 `›` 像装饰，用户实测「看不出区别」。
+              展开时只转箭头，文案仍是那一句事实：换成「收起」等于行里少一个信息。 */}
+          <ChevronRight aria-hidden="true" className="mi-divergence__summary-chevron" size={14} />
           <span className="mi-divergence__summary-text">{summary}</span>
-          {/* 8px 的 `›` 用字符画，不用图标组件：摘要行里不许出现 `<svg>`（界面设计 v2 §四）。 */}
-          <span aria-hidden="true" className="mi-divergence__summary-chevron">›</span>
         </button>
       ) : (
         <p className="mi-divergence__summary mi-divergence__summary--static">{summary}</p>
@@ -135,7 +141,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
                       {/* 每条腿各自的截至时刻：一条腿的「截至」不能替另一条腿作证。 */}
                       {/* 顺序固定：截至 → 规则（→ 还差）。「还差」要投影层给，今天没有这一项就不显示，
                           不许拿规则反推一个距离。 */}
-                      <p className="mi-divergence__asof">{factsLine({ text, row, when, zoneLabel })}</p>
+                      <p className="mi-divergence__asof">{factsLine({ text, row, when })}</p>
                     </li>
                   </Tooltip>
                 )
@@ -194,11 +200,11 @@ export function factsLine(input: Readonly<{
   text: DivergencePanelText
   row: Readonly<{ legs: readonly Readonly<{ id: DivergenceLegId; observedAt: string }>[]; bound?: DivergenceBound }>
   when: (value: string) => string
-  zoneLabel: string
 }>): string {
-  const { text, row, when, zoneLabel } = input
-  // `when()` 自带一个 `GMT` 尾巴；这里只保留一处偏移写法，所以先摘掉再补时区标签。
-  const stamp = (value: string): string => `${when(value).replace(/\s*GMT$/, '')} ${zoneLabel}`
+  const { text, row, when } = input
+  // 统一格式化自带 `GMT±n` 尾巴，这里不再「摘尾再补标签」：那条正则只匹配**裸 `GMT`**，
+  // 非 UTC 读者会看到「… 18:00 GMT+8 GMT+8」——同一行两遍偏移。
+  const stamp = (value: string): string => when(value)
   const parts = row.legs.map(leg => `${text.legNames[leg.id]} ${text.chipAsOf.replace('{at}', stamp(leg.observedAt))}`)
   if (row.bound !== undefined) parts.push(boundRuleClause(text, row.bound))
   return parts.join(' · ')

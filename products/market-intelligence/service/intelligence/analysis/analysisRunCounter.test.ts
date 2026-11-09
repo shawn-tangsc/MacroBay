@@ -67,3 +67,20 @@ it('tolerates a repository without the optional readers', () => {
   expect(countAnalysisRuns({}, now)).toEqual({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 })
   expect(lastAutoRunAt({}, 'a', now)).toBeNull()
 })
+
+it('counts a delivered signal and a delivered item change on the event line', () => {
+  // 两条路径都在同一种「已入队、不是补跑」的账本行上：信号由 requestSignalAnalysis 写一行
+  // queued，条目触发由 registerMarketAnalysisRuntime 写一行 queued。谁漏写这一行，谁就在
+  // 花模型调用却不占额度——这条用例把「该计的没计」钉在这里。
+  const counts = countAnalysisRuns(repository({
+    a: [
+      row({ triggerKey: 'signal.open-interest.rule-1', reasonCode: 'signal-high-triggered' }),
+      row({ triggerKey: 'macro.actual.first-confirmed', reasonCode: 'severity-confirmed' })
+    ],
+    b: [row({ id: 'mi-ledger-row-2', triggerKey: 'market-reaction.15m', reasonCode: 'market-reaction-confirmed' })]
+  }), now)
+  expect(counts.eventRunsToday).toBe(3)
+  expect(counts.eventRunsThisHour).toBe(3)
+  expect(counts.calendarRunsToday).toBe(0)
+  expect(counts.dayRuns).toBe(3)
+})

@@ -6,6 +6,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
+import { editorialNotice } from './dailyBriefingEditorialNotice'
 import { BRIEFING_PAPER_WIDTH, briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { briefingTextForLocale, type DailyBriefingText } from './dailyBriefingText'
 import { withWindowHours } from './dailyBriefingWindowText'
@@ -79,6 +80,7 @@ export function useBriefingShareActions(deps: Readonly<{
   const copy = async (): Promise<void> => {
     if (!briefing) return
     try {
+      const baseForNotice = withWindowHours(briefing.edition.locale === locale ? text : briefingTextForLocale(briefing.edition.locale), briefing.edition.windowHours ?? 24)
       const markdown = dailyBriefingToMarkdown(briefing, {
         labels: (() => {
           const base = withWindowHours(briefing.edition.locale === locale ? text : briefingTextForLocale(briefing.edition.locale), briefing.edition.windowHours ?? 24)
@@ -86,6 +88,7 @@ export function useBriefingShareActions(deps: Readonly<{
           return { ...base, languageNames: base.settings.languageNames as Readonly<Record<string, string>> }
         })(),
         locale: briefing.edition.locale,
+        ...(editorialNotice(briefing.provenance.editorialFailure, baseForNotice) ? { editorialNotice: editorialNotice(briefing.provenance.editorialFailure, baseForNotice)!.sentence } : {}),
         direction: (term) => localizedDirectionTerm(term, briefing.edition.locale),
         ...(eventTitles ? { eventTitle: (item) => item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title } : {}),
         formatTime: (value) => formatTime(value, 'minute')

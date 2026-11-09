@@ -13,7 +13,6 @@ import {
   isDefillamaStablecoinRetiredPath,
   listIntelligenceSourceDefinitions
 } from './sourceCatalog'
-import { isSourceApplicableToFocusMarkets } from './intelligenceSourceApplicability'
 import type { IntelligencePipeline } from './intelligencePipeline'
 import type {
   IntelligenceSentimentAggregateRow,
@@ -117,7 +116,6 @@ export function buildWorkspaceStatus(input: {
   profileById: Map<string, IntelligenceSourceProfile>
   pipeline: IntelligencePipeline
   totalTimelineCount: number
-  enabledFocusMarkets?: IntelligenceFocusMarket[]
 }): IntelligenceWorkspaceStatusView {
   const definitions = listIntelligenceSourceDefinitions().filter(
     (definition) => !isDefillamaStablecoinRetiredPath(definition.sourceId)
@@ -127,33 +125,29 @@ export function buildWorkspaceStatus(input: {
     const profile = input.profileById.get(definition.sourceId)
     const enabled = profile?.enabled ?? false
     const health = input.pipeline.getHealth(definition.sourceId)
-    const focusMarketActive =
-      !input.enabledFocusMarkets || isSourceApplicableToFocusMarkets(definition, input.enabledFocusMarkets)
     return {
       definition,
       profile,
       enabled,
-      focusMarketActive,
       runtimeStatus: resolveSourceFreshnessStatus(enabled, health),
       lastSuccessAt: health?.lastSuccessAt
     }
   })
 
-  const focusScopedRows = sourceRows.filter((row) => row.focusMarketActive)
-  const runnableSources = focusScopedRows.filter((row) => row.definition.readiness === 'live')
+  const runnableSources = sourceRows.filter((row) => row.definition.readiness === 'live')
   const enabledRunnable = runnableSources.filter((row) => row.enabled)
   const liveSourceCount = enabledRunnable.filter(
     (row) => row.runtimeStatus === 'healthy' || row.runtimeStatus === 'degraded'
   ).length
   const pendingSourceCount = enabledRunnable.filter((row) => row.runtimeStatus === 'pending').length
   const failedSourceCount = enabledRunnable.filter((row) => row.runtimeStatus === 'failed').length
-  const plannedSourceCount = focusScopedRows.filter((row) => row.definition.readiness === 'planned').length
-  const fixtureReadySourceCount = focusScopedRows.filter(
+  const plannedSourceCount = sourceRows.filter((row) => row.definition.readiness === 'planned').length
+  const fixtureReadySourceCount = sourceRows.filter(
     (row) => row.definition.readiness === 'fixture-ready'
   ).length
 
-  const attentionItems = buildAttentionItems(focusScopedRows)
-  const latestSuccessAt = focusScopedRows
+  const attentionItems = buildAttentionItems(sourceRows)
+  const latestSuccessAt = sourceRows
     .map((row) => row.lastSuccessAt)
     .filter(Boolean)
     .sort((left, right) => right!.localeCompare(left!))[0]
@@ -184,8 +178,7 @@ export function buildWorkspaceStatus(input: {
     fearGreed: buildFearGreedStatus(
       input.pipeline,
       input.profileById.get(FEAR_GREED_SOURCE_ID),
-      effectiveRows,
-      input.enabledFocusMarkets
+      effectiveRows
     )
   }
 }
@@ -194,12 +187,9 @@ export function buildLayerDesk(input: {
   timelineRows: IntelligenceTimelineRow[]
   profileById: Map<string, IntelligenceSourceProfile>
   pipeline: IntelligencePipeline
-  enabledFocusMarkets?: IntelligenceFocusMarket[]
 }): IntelligenceLayerDeskColumn[] {
   const definitions = listIntelligenceSourceDefinitions().filter(
-    (definition) =>
-      !isDefillamaStablecoinRetiredPath(definition.sourceId) &&
-      (!input.enabledFocusMarkets || isSourceApplicableToFocusMarkets(definition, input.enabledFocusMarkets))
+    (definition) => !isDefillamaStablecoinRetiredPath(definition.sourceId)
   )
 
   return DESK_LAYERS.map((layer) => {
@@ -377,14 +367,10 @@ function buildActiveFilterTokens(filters: IntelligenceWorkspaceFilters): Array<{
 function buildFearGreedStatus(
   pipeline: IntelligencePipeline,
   profile: IntelligenceSourceProfile | undefined,
-  effectiveRows: IntelligenceSentimentAggregateRow[],
-  enabledFocusMarkets?: IntelligenceFocusMarket[]
+  effectiveRows: IntelligenceSentimentAggregateRow[]
 ): IntelligenceWorkspaceStatusView['fearGreed'] {
   const definition = getIntelligenceSourceDefinition(FEAR_GREED_SOURCE_ID)
   if (!definition) return undefined
-  if (enabledFocusMarkets && !isSourceApplicableToFocusMarkets(definition, enabledFocusMarkets)) {
-    return undefined
-  }
 
   const enabled = profile?.enabled ?? false
   const health = pipeline.getHealth(FEAR_GREED_SOURCE_ID)

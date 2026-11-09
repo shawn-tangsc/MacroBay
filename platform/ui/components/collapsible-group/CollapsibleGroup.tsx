@@ -1,0 +1,227 @@
+import { Collapse } from 'antd'
+import type { ReactNode } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+
+import { fillLabelParams } from '../textKeyParams'
+import { StatusPill, type StatusPillTone } from '../status-pill'
+
+import './collapsibleGroup.css'
+
+/**
+ * 可折叠分组（界面设计 2026-11-09 定稿）：**自绘头行与箭头只许出现在这里**。
+ *
+ * 壳里固定四件事，应用侧不许再各写一套：
+ * 1. **箭头在最右**，展开时转 180°；
+ * 2. **展开动画**由 antd `Collapse`（`ghost`）提供，不自己补 transition 到高度上；
+ * 3. **`aria-expanded` + `aria-controls`** 由底层给出，头行是整行的可聚焦按钮；
+ * 4. **整行可点**——点在标题、计数或箭头上都算，不必瞄准一个 14px 的箭头。
+ *
+ * 三条实现约束：
+ * - **多组各自独立**：每组一个 `Collapse`，不做手风琴（`accordion` 会让后开的那组把前一组关掉）；
+ * - **默认收起、展开态不持久化**：不进 localStorage、不进 URL——这是视图状态，不是读者设置；
+ * - **展开区自己滚**：41 条实数据时头行不许滚走，滚动条只出现在展开区里（`maxBodyHeight` 是那个上限）。
+ *
+ * 头行：标题**分组档** 11.5/600/muted-strong（`ui-rules` §2：可折叠头与分组标题同类）+
+ * 右侧「共 N 条」11/400/muted/tabular-nums + 最右 `ChevronDown` 14。
+ * 展开项：标题 12/500 单行省略 + 时间右对齐 11/400/muted/tabular-nums + `StatusPill`；行高 44/60。
+ */
+
+/** 展开区自滚的上限（px）。与 `--font-*` 一样是组件自己的决定，不是调用方传的排版参数。 */
+export const COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT = 320
+
+const CHEVRON_SIZE = 14
+
+/**
+ * 一行展开项。标题与时间各收两种来源之一，**互斥**：
+ * - `labelKey` / `metaKey`：**文案**，经调用方解析器取句子；
+ * - `labelText` / `metaText`：**数据**，调用方已经拿到的原文（会话名、时刻）。
+ *
+ * 为什么必须分开：会话名这类字符串是运行时数据，不是文案键。把它当键传进来，等于让「数据」冒充
+ * 「文案」——键守卫迟早红，而且解析器会把一个不存在的键翻成空串或键名。**数据走 Text，文案走 Key。**
+ * 时间**只出现一次**，由调用方保证（标题里已带时刻就不再传 `meta*`）。
+ */
+type RowLabel = { labelKey: string; labelText?: never } | { labelText: string; labelKey?: never }
+type RowMeta =
+  | { metaKey?: string; metaParams?: Readonly<Record<string, string>>; metaText?: never }
+  | { metaText: string; metaKey?: never; metaParams?: never }
+
+export type CollapsibleGroupRow = {
+  key: string
+  status?: { tone: StatusPillTone; labelKey: string }
+  /**
+   * 整行即动作时传：整行渲染成 `<button>`（行容器规则：只有一个动作 → 整行可点）。
+   * 不传就是不可交互的一行文本——**不假点击**：没有动作的行不许长成按钮。
+   */
+  onSelect?: (key: string) => void
+} & RowLabel & RowMeta
+
+/**
+ * 头行标题，与行标题同一规则——**文案走键、数据走原文**，二选一：
+ * - `titleKey`：分组名这类文案（「自动会话」「采集策略」）；
+ * - `titleText`：日期、「今天」这类调用方已经拿到的原文（`2026-11-07` 是从数据切出来的，不是键）。
+ *
+ * 为什么必须分开：把数据当键传进来，解析器会拿它去查表，翻不到就印空串或键名本身。
+ */
+type GroupTitle =
+  | { titleKey: string; titleText?: never }
+  | { titleText: string; titleKey?: never }
+  /** 两者都不给：头行内容由 `header` 提供（见下）。 */
+  | { titleKey?: undefined; titleText?: undefined }
+
+/** 头行右侧的计数，同样两种来源二选一；不传就不显示。 */
+type GroupMeta =
+  | { metaKey?: string; metaParams?: Readonly<Record<string, string>>; metaText?: never }
+  | { metaText: string; metaKey?: never; metaParams?: never }
+
+/** 两种内容形态共用的那部分。 */
+type CollapsibleGroupBaseProps = GroupTitle & GroupMeta & {
+  resolveText: (key: string) => string
+  /**
+   * 展开区的自滚上限（px），默认 `COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT`。
+   * 传 `null` 表示**不设上限**，由外层容器负责滚——两层折叠时内层必须这样，
+   * 否则同一条列表上会套出两条滚动条。
+   */
+  maxBodyHeight?: number | null
+  /**
+   * 受控开合（可选）。不传就是非受控——内部自己记，行为与以前一字不差。
+   * 传了就必须由调用方回写：组件只发 `onOpenChange`，不偷偷改内部状态。
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+/**
+ * 两种内容形态，**互斥**：
+ * - `rows`：一组行，壳负责行级语义（整行即动作、时间、`StatusPill` 槽）；
+ * - `children`：调用方自定义内容（表格、表单、说明块）。**壳只提供行为**：头行档位、箭头、`aria-*`、
+ *   整行可点、默认收起、展开区自滚、头行不滚走。**不提供行级语义**——需要「整行可点 + `StatusPill`」
+ *   的列表仍用 `rows`；`children` 里内容的可访问性由作者自己负责。
+ */
+/**
+ * `children` 模式下的**头行内容槽**（行仍然归壳）。
+ *
+ * 加它的理由：组头 / 条目行的头行常常是「图标 + 标题 + 副标题 + 状态词 + 一行错误预览」，
+ * 单靠 `title` + `meta` 装不下；装不下就会有人退回自绘，同屏又出现两种折叠头。
+ *
+ * ## 边界（写死，违反即不是这套组件）
+ *
+ * **壳持有**：整行点击、箭头（最右、展开转 180°）、`aria-expanded` / `aria-controls`、
+ * 左右内距 12、头行档位（`--font-section` / 1.6 / 600 / `--muted-strong`）。
+ *
+ * **作者只在行内放内容**：
+ * 1. **不许出现任何可聚焦元素**（`IconButton`、链接、开关、第二颗箭头）。头行整行就是按钮，
+ *    里面再放按钮/链接就是嵌套可聚焦元素——HTML 不合法，键盘会卡在陷阱里（Tab 进去出不来、
+ *    回车不知道触发哪个）。**需要动作的一律放到展开区。** 判据：头行子树里
+ *    `querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')`
+ *    必须为空。
+ * 2. **收起态的「一行状态预览」最多一行**，纯文本或 `StatusPill`，不许换行成两行——
+ *    它替代的是「必须展开才知道出了什么事」，不是第二个副标题。
+ * 3. 行内元素仍受 `ui-rules` 管：字号取档、状态词走 `StatusPill`、图标按钮走 `IconButton`
+ *    （放展开区）。
+ *
+ * 一句话：**壳持有行与箭头，内容归作者。**
+ */
+export type CollapsibleGroupProps = CollapsibleGroupBaseProps & (
+  | { rows: readonly CollapsibleGroupRow[]; children?: never; header?: never }
+  | { children: ReactNode; rows?: never; header?: ReactNode }
+)
+
+export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactElement {
+  const { metaParams, resolveText, maxBodyHeight = COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT } = props
+  const rows = props.rows ?? []
+  // 受控 / 非受控两条路：`open` 给了就以它为准（组件不改它），没给就用内部状态。
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = props.open ?? internalOpen
+  const requestOpen = (next: boolean): void => {
+    if (props.open === undefined) setInternalOpen(next)
+    props.onOpenChange?.(next)
+  }
+  // 数据走原文、文案走键：`titleText` 在时一律用它，不拿数据去查解析器（同 `labelText`）。
+  const title = props.titleText ?? resolveText(props.titleKey ?? '')
+  const meta = props.metaText
+    ?? (props.metaKey === undefined ? null : fillLabelParams(resolveText(props.metaKey), metaParams))
+  /**
+   * `aria-controls` 必须指向**确实存在**的节点：rc-collapse 只给 `aria-expanded`（`Panel.js:53`），
+   * 不给 `aria-controls`。所以 id 由这里生成、挂到展开区上，再把 header 指过来。
+   *
+   * 展开区必须从首帧就存在（`forceRender`）：懒挂载时收起态指向一个不存在的 id，
+   * 比不写更糟。41 行是一屏内的文本，渲染成本低于「读屏指了个空 id」。
+   */
+  const bodyId = useId()
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = rootRef.current
+    if (root === null) return
+    root.querySelector<HTMLElement>('.ant-collapse-header')?.setAttribute('aria-controls', bodyId)
+  }, [bodyId])
+
+  return (
+    <div ref={rootRef}>
+    <Collapse
+      className="collapsible-group"
+      expandIconPosition="end"
+      expandIcon={({ isActive }) => (
+        <ChevronDown
+          aria-hidden="true"
+          className="collapsible-group__chevron"
+          data-open={isActive ? 'true' : 'false'}
+          size={CHEVRON_SIZE}
+          strokeWidth={1.8}
+        />
+      )}
+      ghost
+      activeKey={open ? ['group'] : []}
+      onChange={(keys) => requestOpen(keys.length > 0)}
+      items={[{
+        key: 'group',
+        forceRender: true,
+        label: (
+          <span className="collapsible-group__head" data-collapsible-header>
+            {props.header !== undefined
+              ? props.header
+              : <>
+                <span className="collapsible-group__title" title={title}>{title}</span>
+                {meta === null ? null : <span className="collapsible-group__meta">{meta}</span>}
+              </>}
+          </span>
+        ),
+        children: (
+          <div className="collapsible-group__body" id={bodyId} style={{ maxHeight: maxBodyHeight ?? undefined }}>
+            {props.children !== undefined ? props.children : rows.map((row) => {
+              const rowTitle = 'labelText' in row && row.labelText !== undefined ? row.labelText : resolveText(row.labelKey)
+              const rowMeta = 'metaText' in row && row.metaText !== undefined
+                ? row.metaText
+                : row.metaKey === undefined
+                  ? null
+                  : fillLabelParams(resolveText(row.metaKey), row.metaParams)
+              const inner = (
+                <>
+                  <span className="collapsible-group__row-title">{rowTitle}</span>
+                  {rowMeta === null ? null : <span className="collapsible-group__row-meta">{rowMeta}</span>}
+                  {row.status === undefined ? null : (
+                    <StatusPill resolveText={resolveText} tone={row.status.tone} labelKey={row.status.labelKey} />
+                  )}
+                </>
+              )
+              // 行容器规则：只有一个动作 ⇒ 整行可点并补可访问名；多个动作 ⇒ 调用方不该把动作塞进这里。
+              return row.onSelect === undefined ? (
+                <div className="collapsible-group__row" key={row.key}>{inner}</div>
+              ) : (
+                <button
+                  aria-label={rowTitle}
+                  className="collapsible-group__row collapsible-group__row--action"
+                  key={row.key}
+                  onClick={() => row.onSelect?.(row.key)}
+                  type="button">
+                  {inner}
+                </button>
+              )
+            })}
+          </div>
+        )
+      }]}
+    />
+    </div>
+  )
+}

@@ -37,6 +37,15 @@ export type BriefingAttemptRun = Readonly<{
   state: 'running' | 'succeeded' | 'failed'
   /** 这次尝试的发起时刻：没有版次的那一行，第一行的时刻就用它（手动期写「{HH:MM} 发起」）。 */
   startedAt: string
+  /**
+   * 这一次跑的名义截止时刻（那一版的 `asOf`／窗口右端）。
+   *
+   * 有版次时身份写在正文里；**没有版次的行**（失败、跑不完）只能从尝试记录取。以前没有这一列，
+   * 界面只好拿 `startedAt` 顶上去，于是 09:30 重跑一个 07:00 的期，失败行会被印成「截止 09:30」——
+   * 发起时刻被当成了截止。老记录这一列是空的，读出来 `undefined`，投影回退 `startedAt`，
+   * 界面写「未记录」，**不拿当前设置回填**。
+   */
+  nominalAt?: string
   trigger?: string
   windowHours?: number
 }>

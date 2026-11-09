@@ -36,6 +36,9 @@ export function AssistantLibraryCategoryRail({
               key={group.id}
               type="button"
               className={active ? 'assistant-library-rail-item active' : 'assistant-library-rail-item'}
+              // 整行只有一个结果：切到这个分类。行内没有独立按钮，所以整行可点；
+              // `aria-current` 把「当前分类」告诉读屏（此前只有底色）。
+              aria-current={active ? 'true' : undefined}
               onClick={() => onSelectGroup(group.id)}>
               <Icon size={17} />
               <span>{labels.groups[group.id]}</span>
@@ -52,6 +55,7 @@ export function AssistantLibraryCategoryRail({
               key={product.id}
               type="button"
               className={selectedProductId === product.id ? 'assistant-library-rail-item active' : 'assistant-library-rail-item'}
+              aria-current={selectedProductId === product.id ? 'true' : undefined}
               onClick={() => onSelectProduct(product.id)}>
               <Boxes size={17} />
               <span>{product.name}</span>

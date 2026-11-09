@@ -31,7 +31,11 @@ if (preflight !== 0) {
 // ② 检查：第一处失败即停，但**一定要走到 ③**。
 let failed: string | null = null
 for (const check of VERIFY_CHECKS) {
+  const startedAt = Date.now()
   const code = run('pnpm', [check])
+  // 每项单独计时：CI runner 与本机的速度差可能到两三倍，均摊到整条链里就分不出是哪一项慢。
+  const seconds = ((Date.now() - startedAt) / 1000).toFixed(1)
+  console.log(`[verify] ${check}: ${seconds}s (${code === 0 ? 'ok' : 'failed'})`)
   if (code !== 0) {
     failed = check
     break

@@ -48,15 +48,19 @@ describe('zeroXRouter calendar scheduler', () => {
       readReadiness: () => ({ enabled: true, hasCredential: true }),
       refreshAutomatic: async () => ({ state: 'succeeded', items: [] })
     })
-    await scheduler.initialize()
+    try {
+      await scheduler.initialize()
 
-    expect(started).toHaveLength(3)
-    expect(started.map((item) => item.id)).toContain(firstJobId)
-    expect(started[0]).toMatchObject({ trigger: { kind: 'startup' } })
-    // The interval must still be armed for later ticks.
-    await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs + 1)
-    expect(enqueued.length).toBeGreaterThan(0)
-    scheduler.dispose()
+      expect(started).toHaveLength(3)
+      expect(started.map((item) => item.id)).toContain(firstJobId)
+      expect(started[0]).toMatchObject({ trigger: { kind: 'startup' } })
+      // The interval must still be armed for later ticks.
+      await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs + 1)
+      expect(enqueued.length).toBeGreaterThan(0)
+    } finally {
+      scheduler.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the interval armed when the startup run cannot be queued', async () => {
@@ -68,10 +72,14 @@ describe('zeroXRouter calendar scheduler', () => {
       readReadiness: () => ({ enabled: true, hasCredential: true }),
       refreshAutomatic: async () => ({ state: 'succeeded', items: [] })
     })
-    await expect(scheduler.initialize()).resolves.toBeUndefined()
-    await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs + 1)
-    expect(enqueued.length).toBeGreaterThan(0)
-    scheduler.dispose()
+    try {
+      await expect(scheduler.initialize()).resolves.toBeUndefined()
+      await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs + 1)
+      expect(enqueued.length).toBeGreaterThan(0)
+    } finally {
+      scheduler.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it('actually enqueues a tick on its interval, without waiting for a completion', async () => {
@@ -82,13 +90,17 @@ describe('zeroXRouter calendar scheduler', () => {
       readReadiness: () => ({ enabled: true, hasCredential: true }),
       refreshAutomatic: async () => ({ state: 'succeeded', items: [] })
     })
-    await scheduler.initialize()
+    try {
+      await scheduler.initialize()
 
-    expect(enqueued).toHaveLength(0)
-    await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs + 1)
-    expect(enqueued.length).toBeGreaterThan(0)
-    expect(enqueued[0]?.id).toBe(firstJobId)
-    scheduler.dispose()
+      expect(enqueued).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs + 1)
+      expect(enqueued.length).toBeGreaterThan(0)
+      expect(enqueued[0]?.id).toBe(firstJobId)
+    } finally {
+      scheduler.dispose()
+      vi.useRealTimers()
+    }
   })
 
   it('spends no request when the 0xRouter source is disabled or has no credential', async () => {
@@ -177,10 +189,16 @@ describe('zeroXRouter calendar scheduler', () => {
       readReadiness: () => ({ enabled: true, hasCredential: true }),
       refreshAutomatic: async () => ({ state: 'succeeded', items: [] })
     })
-    await scheduler.initialize()
-    scheduler.dispose()
-    await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs * 3)
-    expect(enqueued).toHaveLength(0)
+    try {
+      await scheduler.initialize()
+      scheduler.dispose()
+      await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs * 3)
+      expect(enqueued).toHaveLength(0)
+    } finally {
+      // dispose 已经在用例里调过；这里再调一次是幂等的，保证红的时候也不会把排期留给下一个用例。
+      scheduler.dispose()
+      vi.useRealTimers()
+    }
   })
 
   // 读者在通知中心看到的是英文内部名（`Refresh 0xRouter market calendar: central-bank-activities`）。

@@ -7,6 +7,8 @@ import type { NotificationRuntime } from '../../notifications/runtime/notificati
 import { registerNotificationRetentionJob } from '../../notifications/jobs/notificationRetentionJob'
 import { registerCacheAuditRetentionJob } from '../../storage/cache-governance/cacheAuditRetentionJob'
 import type { CacheAuditRetentionTarget } from '../../storage/cache-governance/cacheAuditRetentionJob'
+import { registerEventBusRetentionJob } from '../../message-bus/runtime/eventBusRetentionJob'
+import type { EventBusRetentionTarget } from '../../message-bus/runtime/eventBusRetentionJob'
 
 export type PlatformRetentionInput = Readonly<{
   jobRuntime: JobRuntime
@@ -15,12 +17,14 @@ export type PlatformRetentionInput = Readonly<{
   notificationRuntime: NotificationRuntime
   /** 缓存操作审计仓储：这张表原先只增不减，裁剪必须有定时调用者（`MI-11-R16`）。 */
   cacheAudit: CacheAuditRetentionTarget
+  /** 事件总线运行时：写侧原先无上限，保留期任务每天裁一次（`MI-11-R16`）。 */
+  eventBus: EventBusRetentionTarget
   /** 读者时区：保留期按「读者的一天」算，不按机器时区。 */
   timeZone: () => string
 }>
 
 /**
- * 平台自己拥有的保留期任务：会话历史、通知记录、缓存操作审计。
+ * 平台自己拥有的保留期任务：会话历史、通知记录、缓存操作审计、事件总线。
  *
  * 两处都挂在同一个 `@platform/jobs` 运行时上，都不许自造定时器。放在这里而不是 `app.ts`，
  * 是因为 `app.ts` 是受保护的装配接缝：每加一个平台任务就在里面多五行，久了没人看得出
@@ -36,6 +40,10 @@ export function registerPlatformRetentionJobs(input: PlatformRetentionInput): vo
   })
   registerCacheAuditRetentionJob(input.jobRuntime, {
     audit: () => input.cacheAudit,
+    timeZone: input.timeZone
+  })
+  registerEventBusRetentionJob(input.jobRuntime, {
+    eventBus: () => input.eventBus,
     timeZone: input.timeZone
   })
 }

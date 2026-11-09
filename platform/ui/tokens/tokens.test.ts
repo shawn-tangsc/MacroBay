@@ -21,6 +21,24 @@ describe('UI token file', () => {
     }
   })
 
+  /**
+   * 阅读字号三档与它们的行高：列表行的标题 12、meta 11、分组标题 11.5。
+   *
+   * 这几个数以前在壳层与产品里各写各的，同一屏出现三档、同一张卡两处差 0.5px。它们现在只在
+   * 这里出现一次——两个主题块都要有，且值就是这个数：改值等于改所有列表行的排版，必须是
+   * 一次带着界面签字的独立改动，不是顺手调一点。
+   */
+  it('defines the reading type scale and its line heights in both theme blocks', () => {
+    for (const block of [dark, light]) {
+      expect(block).toMatch(/--font-body:\s*12px;/)
+      expect(block).toMatch(/--line-body:\s*1\.5;/)
+      expect(block).toMatch(/--font-meta:\s*11px;/)
+      expect(block).toMatch(/--line-meta:\s*1\.5;/)
+      expect(block).toMatch(/--font-section:\s*11\.5px;/)
+      expect(block).toMatch(/--line-section:\s*1\.6;/)
+    }
+  })
+
   it('keeps --warning as an alias of --caution, not a second yellow', () => {
     expect(dark).toMatch(/--warning:\s*var\(--caution\);/)
     expect(light).toMatch(/--warning:\s*var\(--caution\);/)

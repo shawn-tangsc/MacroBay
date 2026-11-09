@@ -89,7 +89,10 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     requiresUserAction: false,
     requestedDisruptionLevels: ['toast'],
     dedupeKeyTemplate: 'quota-exhausted:{date}',
-    dedupeUnit: 'occurrence'
+    dedupeUnit: 'occurrence',
+    // 两个闸门各有一个原因码，正文按「哪个闸门拒的」选变体：按线拒绝说线名，全局兜底不带线名
+    // （否则读者一算就不平）。路由表不动：同一条事件、同一档打扰。
+    bodyVariants: ['line', 'global']
   }),
   // P4a 供应商凭据失效：同一供应商 1 小时内合并；恢复是独立事件，不改这条的正文。
   declaration('platform.provider.credential-invalid', {

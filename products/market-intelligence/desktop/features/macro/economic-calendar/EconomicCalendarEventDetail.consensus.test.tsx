@@ -60,6 +60,69 @@ async function render(detail: Parameters<typeof EconomicCalendarEventDetail>[0])
 
 const base = { event: event(), now: () => new Date(asOf), onRefresh: async () => undefined, onReleaseTimeChanged: async () => undefined, releaseTimeClient: client, refreshState: undefined, text }
 
+describe('a missing value is never one sentence', () => {
+  /**
+   * 「没有」与「拿不到」分开：这一层能分的是「还没到」和「已到点但源没给」。第三种（读不到）
+   * 由整块读失败态给句子，不是某一行缺值。三句不许并成「暂无」。
+   */
+  it('says "not released yet" before the release instant', async () => {
+    const host = await render({
+      ...base,
+      event: event({ lifecycleState: 'scheduled', scheduledAt: '2026-11-20T13:30:00.000Z', actual: undefined, previous: { displayValue: '29' } }),
+      officialConsensus: null,
+      linkedConsensus: undefined
+    })
+    expect(host.textContent).toContain(text.details.valueNotYet)
+    expect(host.textContent).not.toContain(text.details.valueNotProvided)
+  })
+
+  it('says "source did not provide it" once the release instant has passed', async () => {
+    const host = await render({
+      ...base,
+      event: event({ lifecycleState: 'scheduled', scheduledAt: '2026-11-01T13:30:00.000Z', actual: undefined, previous: { displayValue: '29' } }),
+      officialConsensus: null,
+      linkedConsensus: undefined
+    })
+    expect(host.textContent).toContain(text.details.valueNotProvided)
+    expect(host.textContent).not.toContain(text.details.valueNotYet)
+  })
+})
+
+describe('the record times on the detail', () => {
+  /**
+   * R36：创建时间 = 第一次落库（修订不改变它）；实际值时间 = 第一次拿到非空现值那一刻的
+   * **来源观测时刻**。三条时间故意互不相等：发布 10-28 18:00、观测 10-30 14:40、创建 10-30 08:35，
+   * 显示成哪个都不会靠巧合对上。
+   */
+  it('shows when the record was created and when the value was received, never the publication time', async () => {
+    const host = await render({
+      ...base,
+      event: event({
+        createdAt: '2026-10-30T08:35:28.000Z',
+        actualDetectedAt: '2026-10-30T14:40:21.000Z',
+        publishedAt: '2026-10-28T18:00:00.000Z'
+      }),
+      officialConsensus: null,
+      linkedConsensus: undefined
+    })
+    const rows = Array.from(host.querySelectorAll('dt'))
+    const valueOf = (label: string): string | null =>
+      rows.find((dt) => dt.textContent === label)?.nextElementSibling?.textContent ?? null
+
+    expect(valueOf(text.recordTimes.createdAt)).toContain('08:35')
+    expect(valueOf(text.recordTimes.actualDetectedAt)).toContain('14:40')
+    // 观测时刻不是发布时刻：页面里不许出现 18:00 被当成「拿到值的时间」。
+    expect(valueOf(text.recordTimes.actualDetectedAt)).not.toContain('18:00')
+  })
+
+  it('omits both rows when the record carries neither time', async () => {
+    const host = await render({ ...base, officialConsensus: null, linkedConsensus: undefined })
+    const labels = Array.from(host.querySelectorAll('dt')).map((dt) => dt.textContent)
+    expect(labels).not.toContain(text.recordTimes.createdAt)
+    expect(labels).not.toContain(text.recordTimes.actualDetectedAt)
+  })
+})
+
 describe('the official detail’s expectation row', () => {
   it('uses the official consensus when there is one, without a source note', async () => {
     const host = await render({ ...base, officialConsensus: { displayValue: '180' } })

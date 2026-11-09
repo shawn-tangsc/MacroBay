@@ -24,7 +24,8 @@ const INPUTBAR_KEYS = {
   tools: 'agent.inputbar.tools',
   commands: 'agent.inputbar.commands',
   expand: 'agent.inputbar.expand',
-  collapse: 'agent.inputbar.collapse'
+  collapse: 'agent.inputbar.collapse',
+  stop: 'agent.inputbar.stop'
 } as const
 
 type AgentSessionInputbarFooterProps = {
@@ -94,6 +95,8 @@ export default function AgentSessionInputbarFooter({
         return labels.expand
       case INPUTBAR_KEYS.collapse:
         return labels.collapse
+      case INPUTBAR_KEYS.stop:
+        return labels.stop
       default:
         return key
     }
@@ -170,10 +173,21 @@ export default function AgentSessionInputbarFooter({
       <div className="agent-inputbar-actions">
         {modelPicker ? <div className="agent-inputbar-model">{modelPicker}</div> : null}
         {isStreaming ? (
-          <button type="button" className="agent-send-button stop" aria-label={labels.stop} title={labels.stop} onClick={onStop}>
-            <StopCircle size={16} />
-          </button>
+          <IconButton
+            ariaLabelKey={INPUTBAR_KEYS.stop}
+            icon={StopCircle}
+            size="sm"
+            tone="danger"
+            tooltipKey={INPUTBAR_KEYS.stop}
+            onSelect={onStop}
+            resolveText={resolveText}
+          />
         ) : null}
+        {/*
+          发送**暂不迁**：`IconButton` 目前只有 plain / solid / overlay 三档，solid 是中性底
+          （`--surface-soft` + 描边），没有承载主操作强调的档；换成 22px 无底色图标按钮等于把
+          这一屏的主操作降成次级。等组件补上强调档再迁，届时不改外观、只换元素。
+        */}
         <button
           type="button"
           className="agent-send-button"

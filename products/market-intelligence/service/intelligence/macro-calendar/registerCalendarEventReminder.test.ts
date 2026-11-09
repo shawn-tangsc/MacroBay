@@ -69,8 +69,8 @@ describe('the landed filter the refresh path reads', () => {
     const read = landedFilterReader({
       read: () => DEFAULT_CALENDAR_REMINDER_SETTINGS,
       write: () => DEFAULT_CALENDAR_REMINDER_SETTINGS,
-      readWithStatus: () => ({ state: 'unreadable' as const }),
-      writeWithStatus: () => ({ state: 'not-saved' as const, settings: DEFAULT_CALENDAR_REMINDER_SETTINGS })
+      readWithStatus: () => ({ state: 'unreadable' as const, reason: 'corrupt' as const }),
+      writeWithStatus: () => ({ state: 'not-saved' as const, reason: 'write-failed' as const, settings: DEFAULT_CALENDAR_REMINDER_SETTINGS })
     })
     expect(read()).toEqual({ includeMatched: false, importance: ['high'], landedCountries: { scope: 'us', codes: [] } })
   })

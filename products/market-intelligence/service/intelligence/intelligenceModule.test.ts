@@ -23,14 +23,17 @@ vi.mock('electron', () => ({
 import { createJobRuntime } from '@platform/jobs'
 import { net } from 'electron'
 
-import { getIntelligenceModule, resetIntelligenceModuleForTests } from './intelligenceModule'
+import { getIntelligenceModule, resetIntelligenceModuleForTests, type IntelligenceModulePlatformHooks } from './intelligenceModule'
+import type { CapitalConditionsPlatformFetch } from './capital-conditions/capitalConditionsHttpClient'
 import { intelligenceCollectJobId } from './application/sourceRuntimeOrchestrator'
 import { INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB } from './jobs/intelligenceJobIds'
 import { RECOVER_MARKET_ANALYSIS_RUNS_JOB, GROUP_MARKET_ANALYSIS_CHANGE_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RUN_MARKET_ANALYSIS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB } from './jobs/marketAnalysisJobIds'
 import { access } from 'node:fs/promises'
 
 /** The module now requires its platform hooks on the first call; the mocked net.fetch stands in. */
-const platformHooks = () => ({ platformFetch: net.fetch as unknown as typeof fetch })
+const platformHooks = (
+  platformFetch: CapitalConditionsPlatformFetch = net.fetch
+): IntelligenceModulePlatformHooks => ({ platformFetch, getTimeZone: () => 'UTC' })
 
 beforeEach(async () => {
   resetIntelligenceModuleForTests()
@@ -275,7 +278,7 @@ describe('intelligence module calendar evidence composition', () => {
     ] }), { status: 200, headers: { 'content-type': 'application/json' } }))
     const jobRuntime = createJobRuntime()
 
-    getIntelligenceModule(jobRuntime, { platformFetch })
+    getIntelligenceModule(jobRuntime, platformHooks(platformFetch))
 
     await vi.waitFor(() => {
       expect(jobRuntime.listRuns({ definitionId: intelligenceCollectJobId('defillama-stablecoins') })).toHaveLength(1)
@@ -297,7 +300,7 @@ describe('intelligence module calendar evidence composition', () => {
     ] }), {
       status: 200, headers: { 'content-type': 'application/json' }
     }))
-    const module = getIntelligenceModule(createJobRuntime(), { platformFetch })
+    const module = getIntelligenceModule(createJobRuntime(), platformHooks(platformFetch))
 
     await expect(module.capitalConditions.refresh()).resolves.toEqual({ state: 'updated' })
     expect(platformFetch).toHaveBeenCalledTimes(2)
@@ -405,8 +408,10 @@ describe('a repeat call cannot silently rebind a singleton hook', () => {
     const jobRuntime = createJobRuntime()
     getIntelligenceModule(jobRuntime, platformHooks())
 
-    const otherFetch = (() => Promise.reject(new Error('other'))) as unknown as typeof fetch
-    expect(() => getIntelligenceModule(jobRuntime, { platformFetch: otherFetch }))
+    // A different fetch reference is the whole point; the zone is a per-call closure and is not one of
+    // the singleton fields, so building it through the same helper cannot mask the rebind.
+    const otherFetch: CapitalConditionsPlatformFetch = () => Promise.reject(new Error('other'))
+    expect(() => getIntelligenceModule(jobRuntime, platformHooks(otherFetch)))
       .toThrow('intelligence-module-hooks-already-bound: platformFetch')
   })
 

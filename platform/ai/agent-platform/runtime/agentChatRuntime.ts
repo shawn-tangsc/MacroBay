@@ -29,6 +29,7 @@ import {
   createRuntimeUserMessageData,
   maybeAutoRenameSessionAfterTurn,
   patchRuntimeAssistantMessage,
+  pendingOwnerFields, type PendingTurnOwnership,
   type AgentSessionAiNamingHook
 } from './agentTurnPersistence'
 import { createRuntimeTextDataFromDescriptor, createRuntimeTextDescriptor, runtimeStatusText } from './runtimeText'
@@ -86,7 +87,7 @@ export type AgentChatRuntime = {
   cancelSession: (sessionId: string, reason?: AgentRuntimeStopReason) => boolean
 }
 
-export type AgentChatRuntimeDependencies = {
+export type AgentChatRuntimeDependencies = PendingTurnOwnership & {
   /** 凭据判定信号（进程级依赖，由组合根注入一次）；不注入时行为与之前完全一致。 */
   onProviderCredentialSignal?: (input: { providerId: string; state: 'ok' | 'invalid' }) => void
   getAgentState: () => Promise<AgentStoreState>
@@ -258,7 +259,8 @@ async function executeTurn(input: {
     sessionId: input.session.id,
     assistantMessageId,
     modelId: agent.model,
-    modelName: agent.modelName
+    modelName: agent.modelName,
+    ...pendingOwnerFields(input.deps.ownerBootId)
   })
   await input.deps.saveAgentState(withPending, { mergeSessionId: input.session.id })
 

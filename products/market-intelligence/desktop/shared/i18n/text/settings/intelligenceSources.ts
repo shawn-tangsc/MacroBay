@@ -114,6 +114,7 @@ export const intelligenceSourcesText = {
     allTasks: '全部任务',
     allSourcesNote: '—',
     noSourceHint: '该任务不直接读取某个来源：它读已存记录，或一次读全部来源',
+    infoAria: '运行记录这一块的说明',
     allSources: '全部来源',
     sourceFilterNone: '无来源',
     truncatedNotice: '已取回最近 {count} 条，本窗口还有更多',
@@ -203,8 +204,9 @@ export const intelligenceSourcesText = {
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
   proxyNotice: {
     title: '这个来源要走本地代理才能连',
-    failedTitle: '连接失败：请先打开 VPN / 本地代理，再回来重试。',
-    // 已配好代理却仍连不上：不让他去「打开 VPN」，而是查地址/端口/代理是否在跑。
+    failedTitle: '连接失败：请先打开本地代理，再回来重试。',
+    // 读者配的是代理，不是 本地代理：整页只写「本地代理」（已配好却仍连不上时不让他去「打开代理」，
+    // 而是查地址/端口/代理是否在跑）。
     configuredFailedTitle: '代理没通：这次没连上',
     configuredFailedBody: '检查代理地址与端口是否正确、代理程序是否正在运行，然后回来重试。',
     body: '去「设置 → 基础设置 → 代理模式」选「自定义代理」，填入本地地址（例如 http://127.0.0.1:7888），保存后回来重试。',
@@ -250,24 +252,6 @@ export const intelligenceSourcesText = {
   runSucceeded: '采集成功。',
   testFailed: '凭证测试失败，请重试。',
   replayFailed: '重放请求失败，请重试。',
-  focusMarkets: {
-    title: '默认覆盖范围',
-    description: '每个信息源都有内置覆盖范围，系统会按默认规则工作。通常无需调整；只有需要强行改变采集覆盖时再自定义。',
-    defaultSummary: '当前来源',
-    customize: '高级自定义',
-    customizeDone: '完成',
-    saving: '保存中…',
-    plannedHint: '待实现',
-    markets: {
-      'global-macro': '全球宏观',
-      'digital-assets': '数字资产',
-      'cn-a-shares': 'A 股',
-      'us-equities': '美股',
-      'china-futures': '国内期货',
-      fx: '外汇',
-      commodities: '大宗商品'
-    }
-  },
   focusGroups: {
     globalMacro: '宏观与监管',
     digitalAssets: '加密市场',
@@ -359,22 +343,16 @@ export const intelligenceSourcesText = {
   },
   collectionPolicy: {
     title: '采集策略',
-    enabled: '启用',
     collectionPreset: '采集预设',
     manualPresetNote: '手动模式启用后不会自动采集，需点击「立即运行」。',
     plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
-    productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由这里控制；采集预设与范围策略不适用于它。',
+    productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由该来源那一行末尾的开关控制；采集预设不适用于它。',
+    productOwnedNoteAria: '采集策略说明',
     includeInSentiment: '纳入情绪分析',
-    scopePolicy: '范围策略',
     presets: {
       manual: '手动',
       balanced: '均衡',
       frequent: '高频'
-    },
-    scopePolicies: {
-      all: '全部',
-      'watchlist-priority': '自选优先',
-      'active-position-priority': '持仓优先'
     }
   },
   credentials: {
@@ -418,6 +396,10 @@ export const intelligenceSourcesText = {
    */
   unavailableShort: '官方源暂时不可用',
   unavailableReasonCode: '原因码：{code}',
+  /** 只给 ⓘ 的可访问名用：它是名字，不是句子（句子那个带 `{code}`）。 */
+  unavailableReasonCodeAria: '原因码',
+  /** 不可用源的策略组整组停用：**通用结构**，任何不可用源都同一句，不针对某个源。 */
+  collectionPolicyStopped: '同步已停止，恢复后才生效',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
   health: {
@@ -438,11 +420,6 @@ export const intelligenceSourcesText = {
   },
   actions: {
     save: '保存'
-  },
-  collectionHint: {
-    title: '需要手动采集',
-    body: '当前为手动模式：启用后不会自动拉取数据。点击「立即运行」后，情报页才会出现内容。',
-    action: '立即运行'
   },
   translationPreferences: {
     title: '翻译偏好',
@@ -583,6 +560,7 @@ export const intelligenceSourcesText = {
     allTasks: 'All tasks',
     allSourcesNote: '—',
     noSourceHint: 'This task names no single source: it reads stored records or all sources at once',
+    infoAria: 'About this run log',
     allSources: 'All sources',
     sourceFilterNone: 'No source',
     truncatedNotice: 'Loaded the latest {count} runs; this window holds more',
@@ -667,7 +645,7 @@ export const intelligenceSourcesText = {
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
   proxyNotice: {
     title: 'This source needs a local proxy to connect',
-    failedTitle: 'Connection failed: turn on your VPN / local proxy, then try again.',
+    failedTitle: 'Connection failed: turn on your local proxy, then try again.',
     configuredFailedTitle: 'The proxy is not reachable: this attempt did not connect',
     configuredFailedBody: 'Check the proxy address and port, and that the proxy program is running, then try again.',
     body: 'Set “Proxy mode” to “Custom proxy” under Settings → Basic settings and enter your local address (for example http://127.0.0.1:7888), then try again.',
@@ -713,25 +691,6 @@ export const intelligenceSourcesText = {
   runSucceeded: 'Collection succeeded.',
   testFailed: 'Credential test failed. Try again.',
   replayFailed: 'Replay request failed. Try again.',
-  focusMarkets: {
-    title: 'Default Coverage',
-    description:
-      'Each source has built-in coverage and works with its default rules. You usually do not need to change this; customize only when overriding collection scope.',
-    defaultSummary: 'Current source',
-    customize: 'Advanced customize',
-    customizeDone: 'Done',
-    saving: 'Saving…',
-    plannedHint: 'Planned',
-    markets: {
-      'global-macro': 'Global Macro',
-      'digital-assets': 'Digital Assets',
-      'cn-a-shares': 'A-shares',
-      'us-equities': 'US Equities',
-      'china-futures': 'China Futures',
-      fx: 'FX',
-      commodities: 'Commodities'
-    }
-  },
   focusGroups: {
     globalMacro: 'Macro & regulation',
     digitalAssets: 'Crypto market',
@@ -823,22 +782,16 @@ export const intelligenceSourcesText = {
   },
   collectionPolicy: {
     title: 'Collection Policy',
-    enabled: 'Enable',
     collectionPreset: 'Collection Preset',
     manualPresetNote: 'Manual mode does not collect automatically after enable. Use Run Now.',
     plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
-    productOwnedNote: 'A product-owned job collects this source; the enable switch below controls it, while the collection preset and scope policy do not apply.',
+    productOwnedNote: 'A product-owned job collects this source; the switch at the end of its row controls it, while the collection preset does not apply.',
+    productOwnedNoteAria: 'About this source’s collection policy',
     includeInSentiment: 'Include In Sentiment',
-    scopePolicy: 'Scope Policy',
     presets: {
       manual: 'Manual',
       balanced: 'Balanced',
       frequent: 'Frequent'
-    },
-    scopePolicies: {
-      all: 'All',
-      'watchlist-priority': 'Watchlist Priority',
-      'active-position-priority': 'Active Position Priority'
     }
   },
   credentials: {
@@ -878,6 +831,8 @@ export const intelligenceSourcesText = {
   },
   unavailableShort: 'The official source is temporarily unavailable',
   unavailableReasonCode: 'Reason code: {code}',
+  unavailableReasonCodeAria: 'Reason code',
+  collectionPolicyStopped: 'Sync has stopped; this applies again once it resumes',
   automaticSyncStopped: 'Automatic sync stopped',
   lastSuccessfulSync: 'Last successful sync: {date}',
   health: {
@@ -898,11 +853,6 @@ export const intelligenceSourcesText = {
   },
   actions: {
     save: 'Save'
-  },
-  collectionHint: {
-    title: 'Manual collection required',
-    body: 'Manual mode does not pull data automatically. Run Now before expecting items on the Intelligence page.',
-    action: 'Run Now'
   },
   translationPreferences: {
     title: 'Translation Preferences',

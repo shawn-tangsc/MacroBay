@@ -5,7 +5,7 @@ import type { CalendarCardRow } from './projectUpcomingCalendarCard'
 const text = { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', metric: { actual: '实际值', consensus: '市场预期', previous: '前值' } }
 const row = (overrides: Partial<CalendarCardRow> = {}): CalendarCardRow => ({
   eventKey: 'e-1', titleKey: 'cpi', month: '2026-10', date: '2026-10-13', at: '2026-10-13T12:30:00.000Z',
-  importance: 'high', category: 'economic-indicator', kind: 'released-changed', actual: '0.3%', previous: '0.1%', consensus: '0.2%',
+  importance: 'high', category: 'economic-indicator', kind: 'released-changed', awaitingData: false, actual: '0.3%', previous: '0.1%', consensus: '0.2%',
   surprise: { direction: 'beat', value: 0.1, unit: 'pp', reason: null }, ...overrides
 })
 const input = (overrides: Partial<CalendarCardRow> = {}, related: readonly CalendarCardRow[] = []) => ({

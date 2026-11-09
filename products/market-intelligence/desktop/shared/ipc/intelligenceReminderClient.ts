@@ -25,10 +25,14 @@ export type CalendarReminderSettingsView = Readonly<{
   landedCountries: CalendarLandedCountrySelection
 }>
 
-/** 写的两个结果：存上了、没存上。页面在后者保留读者刚选的值，并说"这次没存上"。 */
+/**
+ * 写的两个结果：存上了、没存上。「没存上」再分两种——读不到（我们**拒绝覆盖**原文件，盘上那份
+ * 可能坏了）与写盘失败；前者没有 settings 可回，页面该显示「读不到」而不是「没存上」。
+ */
 export type CalendarReminderWriteOutcome =
   | Readonly<{ state: 'saved'; settings: CalendarReminderSettingsView }>
-  | Readonly<{ state: 'not-saved'; settings: CalendarReminderSettingsView }>
+  | Readonly<{ state: 'not-saved'; reason: 'unreadable' }>
+  | Readonly<{ state: 'not-saved'; reason: 'write-failed'; settings: CalendarReminderSettingsView }>
 
 type Invoke = (productId: string, method: string, payload?: unknown) => Promise<unknown>
 
@@ -67,8 +71,10 @@ export const intelligenceReminderClient: CalendarReminderClient = {
     const raw = await send(PRODUCT_ID, 'intelligence.setCalendarReminderSettings', patch)
     // 服务端回的是判别式结果；形状不对就当作失败，不猜成"存上了"。
     if (!raw || typeof raw !== 'object') throw new Error('calendar reminder settings: unexpected write result')
-    const record = raw as { state?: unknown; settings?: unknown }
-    const settings = toView(record.settings)
-    return record.state === 'saved' ? { state: 'saved', settings } : { state: 'not-saved', settings }
+    const record = raw as { state?: unknown; reason?: unknown; settings?: unknown }
+    if (record.state === 'saved') return { state: 'saved', settings: toView(record.settings) }
+    // 读不到：原文件没被动过，所以没有「服务端认下的那份」可回。
+    if (record.reason === 'unreadable') return { state: 'not-saved', reason: 'unreadable' }
+    return { state: 'not-saved', reason: 'write-failed', settings: toView(record.settings) }
   }
 }

@@ -35,6 +35,9 @@ export default function AgentRoster({
             <button
               type="button"
               className="agent-roster-main"
+              // 行容器本身是非交互 `div`，主动作与「设置」各是独立按钮——正是判据要的形状。
+              // 这里只补选中态：读屏能听出当前是哪个智能体（此前只有底色）。
+              aria-current={agent.id === activeAgentId ? 'true' : undefined}
               onClick={() => onSelectAgent(agent.id)}>
               <span className="agent-roster-avatar">{getAgentAvatar(agent)}</span>
               <span className="agent-roster-copy">

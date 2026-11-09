@@ -30,6 +30,7 @@ import type { AgentSessionWorkspaceSource, CreateAgentWorkspaceDto, UpdateAgentW
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
 import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
 import { normalizeSessionOrigin, normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
+import { isAbandonedPendingMessage } from '../schemas/pendingTurnOwnership'
 import {
   normalizeMessagePageLimit,
   normalizePageLimit,
@@ -532,6 +533,7 @@ export function addAgentSessionMessage(
     modelSnapshot: payload.modelSnapshot ?? null,
     stats: payload.stats ?? null,
     runtimeResumeToken: null,
+    ...(payload.ownerBootId ? { ownerBootId: payload.ownerBootId } : {}),
     createdAt: now,
     updatedAt: now
   }
@@ -611,22 +613,36 @@ export function clearAgentSessionMessages(state: AgentStoreState, sessionId: str
   }
 }
 
+/**
+ * 崩溃收尾：把**不是本进程启动批次**留下的 `pending` 收成「中断」。
+ *
+ * 判据是 `ownerBootId`，不是时间、不是「全局没有流」：
+ * - 缺失（字段加上之前写的行）按「上一个进程」处理；
+ * - 等于本批次 ⇒ 本进程正在跑的运行，**一条都不动**；
+ * - 小于/不等于本批次 ⇒ 上一个进程死了，收尾。
+ *
+ * 只许在 **boot 那一趟、窗口创建之前**调用：运行期再扫一次，会把别的窗口正在跑的会话收掉。
+ * 半截正文保留（`searchableText` 非空就沿用原来的 `data`），只有完全没收到字时才写中断说明。
+ */
 export function reconcileStalePendingMessages(
   state: AgentStoreState,
-  stoppedText = '上次运行已中断。'
+  options: Readonly<{ ownerBootId: string; stoppedText?: string }>
 ): AgentStoreState {
+  const stoppedText = options.stoppedText ?? '上次运行已中断，可以重新发一次。'
   let changed = false
   const now = new Date().toISOString()
   const messagesBySessionId = Object.fromEntries(
     Object.entries(state.messagesBySessionId).map(([sessionId, messages]) => [
       sessionId,
       messages.map((message) => {
-        if (message.status !== 'pending') return message
+        if (!isAbandonedPendingMessage(message, options.ownerBootId)) return message
         changed = true
         const nextData = message.searchableText.trim() ? message.data : textData(stoppedText)
         return {
           ...message,
-          status: 'paused' as const,
+          // `error` 而不是 `paused`：这条消息**继续不了**（写它的进程已经没了），
+          // `paused` 旁边读者会等一个「继续」按钮，那正是假控件。
+          status: 'error' as const,
           data: nextData,
           searchableText: messageDataToSearchableText(nextData),
           updatedAt: now
@@ -636,6 +652,39 @@ export function reconcileStalePendingMessages(
   )
 
   return changed ? { ...state, messagesBySessionId } : state
+}
+
+/**
+ * 同进程卡死：只把**这一个会话**里残留的 `pending` 收成失败。
+ *
+ * 判据由调用方给（该会话的运行不在本进程运行表里），这里只管「收这一个会话」——
+ * 绝不做全局扫描：别的会话可能正在跑，那正是另一个窗口的回合被误收的路径。
+ */
+export function settleSessionPendingMessages(
+  state: AgentStoreState,
+  sessionId: string,
+  stoppedText = '上次运行已中断，可以重新发一次。'
+): AgentStoreState {
+  const messages = state.messagesBySessionId[sessionId] ?? []
+  if (!messages.some((message) => message.status === 'pending')) return state
+  const now = new Date().toISOString()
+  return {
+    ...state,
+    messagesBySessionId: {
+      ...state.messagesBySessionId,
+      [sessionId]: messages.map((message) => {
+        if (message.status !== 'pending') return message
+        const nextData = message.searchableText.trim() ? message.data : textData(stoppedText)
+        return {
+          ...message,
+          status: 'error' as const,
+          data: nextData,
+          searchableText: messageDataToSearchableText(nextData),
+          updatedAt: now
+        }
+      })
+    }
+  }
 }
 
 export function mergeAgentRuntimeSessionState(

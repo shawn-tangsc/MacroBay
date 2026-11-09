@@ -9,6 +9,18 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { SyncRunSection } from './SyncRunSection'
 
 const text = productText['zh-CN'].settings.intelligenceSources.syncRun
+
+/** 点开某颗 ⓘ，读它自己指向的浮层内容（关着的浮层也留在文档里，所以按 id 取）。 */
+async function openInfo(ariaLabel: string): Promise<string> {
+  const trigger = [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .find((button) => button.getAttribute('aria-label') === ariaLabel)
+  expect(trigger).toBeDefined()
+  await act(async () => { trigger!.click() })
+  await act(async () => { await Promise.resolve() })
+  const describedBy = trigger!.getAttribute('aria-describedby') ?? ''
+  const node = describedBy.split(' ').map((id) => document.getElementById(id)).find((each) => each !== null)
+  return node?.textContent ?? ''
+}
 let root: Root | undefined
 let host: HTMLDivElement | undefined
 
@@ -237,13 +249,20 @@ describe('sync run section', () => {
     expect(dom.textContent).not.toContain('model.rate-limited')
   })
 
-  it('writes no numbers for a run that predates the tally, and says so once for the table', async () => {
+  it('writes no numbers for a run that predates the tally, and keeps the explanations off the body', async () => {
     const dom = await render()
-    // The fixture runs carry no tally: no zeroes anywhere, and the old-record sentence appears once.
+    // The fixture runs carry no tally: no zeroes anywhere.
     expect(dom.textContent).not.toContain('0 条中成功')
-    const notes = [...dom.querySelectorAll('.mi-sync-run__legend--tally')]
-    expect(notes).toHaveLength(1)
-    expect(notes[0]?.textContent).toBe(text.oldRecordNote)
+    // 三句说明（来源列为什么空 / 旧记录为什么没有条数 / 保留期）**不在正文**，而是标题旁的 ⓘ：
+    // 2026-11-08 起设置页正文只留字段名、当前值和状态。断言的是整块 `body`，不是 CSS 隐藏。
+    // 断言整页 `document.body`：浮层没打开就没进 DOM，所以是「移出去了」，不是 CSS 藏起来。
+    for (const sentence of [text.oldRecordNote, text.noSourceHint, text.retention]) {
+      expect(document.body.textContent).not.toContain(sentence)
+    }
+    const info = await openInfo(text.infoAria)
+    expect(info).toContain(text.noSourceHint)
+    expect(info).toContain(text.oldRecordNote)
+    expect(info).toContain(text.retention)
   })
 
   it('falls back to one sentence for a code it does not know', async () => {

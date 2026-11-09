@@ -12,11 +12,14 @@ export type DailyBriefingAttemptStart = Readonly<{
   locale: DailyBriefingLocale
   startedAt: string
   /**
-   * 这一次跑是怎么来的、覆盖多长的窗口：写进尝试记录，列表据此说清这一行的身份
-   * （用户 2026-11-06）。缺省表示调用方不知道——老记录与旧调用点，界面写「未记录」。
+   * 这一次跑是怎么来的、覆盖多长的窗口、名义截止是哪一刻：写进尝试记录，列表据此说清这一行的
+   * 身份（用户 2026-11-06；`nominalAt` 是 0.4.2 #19 补的）。缺省表示调用方不知道——老记录与
+   * 旧调用点，界面写「未记录」，绝不拿当前设置回填。
    */
   trigger?: DailyBriefingRunTrigger
   windowHours?: number
+  /** 这一次跑的窗口右端（`asOf`）：失败行没有正文，只能从这里知道自己该写哪个截止。 */
+  nominalAt?: string
 }>
 
 /** The same row, settled. It is updated in place, never deleted: the attempt is history. */
@@ -63,9 +66,10 @@ export function createDailyBriefingAttemptJournal(
     periodId: string
     locale: DailyBriefingLocale
     now: () => string
-    /** 这一次跑的来源与窗口：写进尝试记录，列表据此说清这一行的身份。 */
+    /** 这一次跑的来源、窗口与名义截止：写进尝试记录，列表据此说清这一行的身份。 */
     trigger?: DailyBriefingRunTrigger
     windowHours?: number
+    nominalAt?: string
   }>
 ): DailyBriefingAttemptJournal {
   let attemptNo: number | undefined
@@ -102,7 +106,8 @@ export function createDailyBriefingAttemptJournal(
           locale: input.locale,
           startedAt: input.now(),
           ...(input.trigger === undefined ? {} : { trigger: input.trigger }),
-          ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours })
+          ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours }),
+          ...(input.nominalAt === undefined ? {} : { nominalAt: input.nominalAt })
         })
         return true
       } catch {

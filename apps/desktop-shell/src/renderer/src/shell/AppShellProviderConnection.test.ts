@@ -13,7 +13,8 @@ const shellRoot = 'apps/desktop-shell/src/renderer/src/shell'
  */
 describe('AppShell provider connection testing', () => {
   it('drops the inline test button and keeps draft testability on the check drawer', () => {
-    const shell = readSource(`${shellRoot}/AppShell.tsx`)
+    // 2026-11-09：连接检查的接线搬到 model-service 的动作模块，判据不变，只换读取的文件。
+    const shell = readSource(`${shellRoot}/model-service/useModelServiceProviderActions.ts`)
     const page = readSource(`${shellRoot}/model-service/ModelServiceProviderPage.tsx`)
     const keySection = readSource(`${shellRoot}/model-service/ModelServiceKeySection.tsx`)
     const brandBlock = readSource(`${shellRoot}/model-service/ModelServiceBrandBlock.tsx`)

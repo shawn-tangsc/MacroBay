@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.4.1`. This page describes what is usable today and what is intentionally not
+MacroBay is at `0.4.2`. This page describes what is usable today and what is intentionally not
 supported yet.
 
 ## Usable from source
@@ -11,8 +11,8 @@ supported yet.
 - Model providers can be added, enabled, and given an API key.
 - A default model can be selected for agents and assistants.
 - Agent sessions can run with the bundled `market-intelligence` product.
-- The intelligence portal, dashboard, macro calendar, source configuration, and analyst agent are
-  reachable from the product.
+- The dashboard, macro calendar, source configuration, and analyst agent are reachable from the
+  product.
 - The daily briefing reads the collected evidence and can be generated from the briefing page.
 - Structured agent questions and tool approvals are rendered in the conversation.
 - The repository passes `pnpm verify`.
@@ -88,10 +88,12 @@ hiding it.
 - There is no order execution, portfolio management, or brokerage connection.
 - Analysis quality depends on the sources, credentials, and data the user configures.
 - A missing source produces an explicit gap; it is not silently replaced.
+- The agent selection page has no entry point right now: **Intelligence** lands directly on the
+  dashboard.
 
 ## API and configuration stability
 
-The `0.4.1` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.4.2` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 

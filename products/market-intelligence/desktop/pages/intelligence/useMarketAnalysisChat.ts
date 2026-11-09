@@ -241,6 +241,8 @@ export function useMarketAnalysisChat(
   return {
     agent,
     sessionId,
+    /** 会话历史的读取状态：未结算 ≠ 空，读失败 ≠ 空。 */
+    historyState: (failed ? 'failed' : state === undefined ? 'loading' : 'ready') as 'loading' | 'ready' | 'failed',
     currentSession,
     sessions,
     messages,

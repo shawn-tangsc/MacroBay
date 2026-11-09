@@ -181,15 +181,16 @@ describe('the macro-market collector', () => {
     target.close()
   })
 
-  it('returns the change over the window the clock asks for, and refuses a window with a hole', () => {
+  it('returns the change over the window the newest stored bar can answer, and refuses a window with a hole', () => {
     const target = store()
     const point = (minute: number, value: number) => ({ series: 'dxy-synthetic', atMs: at(6, 0) + 0 + minute * 60_000, value, observedAtMs: at(6, minute) })
     target.append([point(-120, 100), point(-60, 101), point(-45, 101.5), point(0, 102)])
-    const now = at(6, 0)
-    expect(macroMarketReturn(target, 'dxy-synthetic', '1h', now)).toEqual({ state: 'available', percent: (102 / 101 - 1) * 100 })
+    // The window is anchored on the newest bar, not on a clock argument: the fixture's newest bar is
+    // the 6:00 point, so these three answers are the same as when the call took `now`.
+    expect(macroMarketReturn(target, 'dxy-synthetic', '1h')).toEqual({ state: 'available', percent: (102 / 101 - 1) * 100 })
     // 15m needs the bar at -15m, which was never stored: "insufficient", never the change since -45m.
-    expect(macroMarketReturn(target, 'dxy-synthetic', '15m', now)).toEqual({ state: 'unavailable', reason: 'insufficient' })
-    expect(macroMarketReturn(target, 'missing-series', '1h', now)).toEqual({ state: 'unavailable', reason: 'missing' })
+    expect(macroMarketReturn(target, 'dxy-synthetic', '15m')).toEqual({ state: 'unavailable', reason: 'insufficient' })
+    expect(macroMarketReturn(target, 'missing-series', '1h')).toEqual({ state: 'unavailable', reason: 'missing' })
     target.close()
   })
 })

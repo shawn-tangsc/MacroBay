@@ -1,4 +1,5 @@
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
+import { displaySessionName } from '@platform/ai/agent-platform/schemas/sessionDisplayName'
 
 export type AgentSearchResult =
   | {
@@ -19,7 +20,7 @@ export type AgentSearchResult =
 export function buildAgentSearchResults(
   state: AgentStoreState,
   keyword: string,
-  copy: { agentLabel: string; unboundAgent: string; noDescription: string }
+  copy: { agentLabel: string; unboundAgent: string; noDescription: string; unnamedSession: string }
 ): AgentSearchResult[] {
   const trimmed = keyword.trim().toLowerCase()
   const agentResults = buildAgentResults(state, trimmed, copy)
@@ -49,7 +50,7 @@ function buildAgentResults(
 function buildSessionResults(
   state: AgentStoreState,
   keyword: string,
-  copy: { unboundAgent: string }
+  copy: { unboundAgent: string; unnamedSession: string }
 ): AgentSearchResult[] {
   return state.sessions
     .map((session) => {
@@ -61,7 +62,8 @@ function buildSessionResults(
       return {
         type: 'session' as const,
         sessionId: session.id,
-        title: session.name,
+        // 结果标题也走展示名：老自动会话的 `name` 是运行 id，直接当标题就是把编号给读者看。
+        title: displaySessionName(session) ?? copy.unnamedSession,
         subtitle: agent?.name ?? copy.unboundAgent,
         excerpt: matchedMessage?.searchableText || session.description || agent?.description || session.workspace.name
       }

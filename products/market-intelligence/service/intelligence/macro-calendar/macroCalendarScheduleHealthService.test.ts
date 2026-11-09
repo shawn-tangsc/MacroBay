@@ -65,6 +65,9 @@ describe('macroCalendarScheduleHealthService', () => {
     })
   })
 
+  // 最后三条**故意喂运行期非法的工作流返回值**（`null`、错 provider、错 descriptor）：这不是类型能拦的，
+  // 而是服务自己的守卫（`healthRevision(outcome: unknown, …)`）要拒的；端口收 `unknown` 就是为此。
+  // 正向那一支由上面「persisted → healthy」那组用例覆盖，所以这里的「拒」不是把端口改成永不过。
   it.each([
     { descriptorId: 'unknown' },
     { descriptorId: 'macro-calendar-bls-values' },

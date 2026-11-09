@@ -57,10 +57,10 @@ describe('示例场景回放', () => {
       const capital = await intelligenceCapitalConditionsClient.querySnapshot({ asOf: '2026-10-27T09:50:00.000Z' })
       expect(capital, `${locale} capital`).toMatchObject({ state: 'available' })
 
-      const market = await createMacroMarketSnapshotClient().query({ asOf: '2026-10-27T09:50:00.000Z' } as never)
+      const market = await createMacroMarketSnapshotClient().query()
       expect(market, `${locale} macro market`).toMatchObject({ state: 'available' })
 
-      const rates = await createMacroRatesSnapshotClient().query({ asOf: '2026-10-27T09:50:00.000Z' } as never)
+      const rates = await createMacroRatesSnapshotClient().query()
       expect(rates, `${locale} macro rates`).toMatchObject({ state: 'available' })
 
       const calendar = await macroEconomicCalendarClient.queryMonth({ month: '2026-10', asOf: '2026-10-27T09:50:00.000Z' } as never)

@@ -1,10 +1,13 @@
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
+import type { DashboardFundingRateHistoryMissingReason } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 
 export type PositioningPanelText = Readonly<{
   pairTitle: string
   loading: string
   empty: string
   unavailable: string
+  /** 形状/版本不符时的唯一出路（完全退出后重开）；这一种不给重试按钮。 */
+  contractMismatch: string
   observedAt: string
   stale: string
   /** " · {stale}" appended after the observed instant; the separator is punctuation, so it is per language. */
@@ -17,6 +20,10 @@ export type PositioningPanelText = Readonly<{
   settledAt: string
   legendLine: string
   legendBar: string
+  /** 一条资金费率历史读不到时的整句：`{asset}` 与 `{reason}` 由调用点填。 */
+  fundingMissingLeg: string
+  /** 缺的原因各一句；两句不许混成一句，读者据此决定要不要再等。 */
+  fundingMissingReasons: Readonly<Record<DashboardFundingRateHistoryMissingReason, string>>
   assets: Readonly<Record<'btc' | 'eth', string>>
   paymentDirections: Readonly<Record<'long-pays-short' | 'short-pays-long' | 'neutral', string>>
   change1h: string

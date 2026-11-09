@@ -2,7 +2,7 @@ import { statSync } from 'node:fs'
 
 import type { DatabaseSync } from 'node:sqlite'
 
-import { DEFAULT_PERIOD_ID } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 
 /** The handle the store owns; the migration needs nothing beyond it. */
 export type SqliteDatabase = DatabaseSync
@@ -26,7 +26,7 @@ export type SqliteDatabase = DatabaseSync
  * initialized, and a v2 one is upgraded once.
  */
 
-export const DAILY_BRIEFING_STORAGE_VERSION = 3
+export const DAILY_BRIEFING_STORAGE_VERSION = 4
 
 /** The single issue every row belongs to before issue numbers existed. */
 export const DEFAULT_PERIOD_ID_VALUE = DEFAULT_PERIOD_ID
@@ -34,17 +34,26 @@ export const DEFAULT_PERIOD_ID_VALUE = DEFAULT_PERIOD_ID
 /** Beside the database, one fixed name: the only thing a reader needs to go back to 0.3.x. */
 export const DAILY_BRIEFING_BACKUP_SUFFIX = '.bak-v2'
 
+/**
+ * 从 v3 升到 v4（运行记录换主键）之前的副本。与 `.bak-v2` 一样只读、不参与迁移、不自动恢复；
+ * 同名已存在时改用带 UTC 时间戳的名字，**绝不覆盖**。
+ */
+export const DAILY_BRIEFING_RUN_BACKUP_SUFFIX = '.bak-v3'
+
 const EDITIONS = 'daily_briefings'
 const ATTEMPTS = 'daily_briefing_attempts'
+const PERIOD_RUNS = 'daily_briefing_period_runs'
 const NEXT_EDITIONS = `${EDITIONS}_v3`
 const NEXT_ATTEMPTS = `${ATTEMPTS}_v3`
+const NEXT_PERIOD_RUNS = `${PERIOD_RUNS}_v4`
 
 export type DailyBriefingMigrationSkipReason = 'backup-failed' | 'migration-failed'
 
 export type DailyBriefingMigrationOutcome =
   | Readonly<{ status: 'current'; version: number }>
   | Readonly<{ status: 'initialized'; version: number }>
-  | Readonly<{ status: 'migrated'; version: number; backupPath: string }>
+  /** `unknownLocales`: 回填时连 `primary_used` 都推不出语言的行数（坏数据兜底，必须进诊断）。 */
+  | Readonly<{ status: 'migrated'; version: number; backupPath: string; unknownLocales: number }>
   | Readonly<{ status: 'skipped'; version: number; reason: DailyBriefingMigrationSkipReason }>
 
 /** The editions table, under any name: the migration builds it beside the old one, then swaps. */
@@ -91,14 +100,17 @@ export function createAttemptsIndexSql(table: string): string {
 }
 
 /**
- * One row per generated period: what the run expected, which frozen facts it wrote from, and how
- * far it got. It is created beside the two migrated tables, not by a migration: an empty table
- * starts clean and old data has nothing to copy into it.
+ * One row per generated period **per language** (0.4.2 #18 / §7.1): what the run expected, which
+ * frozen facts it wrote from, and how far it got. The language is part of the key because the two
+ * languages of an issue are two runs; sharing one row made the second overwrite the first.
+ *
+ * A fresh database builds it directly; a v3 one rebuilds it in `upgradePeriodRuns` below.
  */
 export function createPeriodRunsSql(table: string): string {
   return `create table if not exists ${table} (
   edition_date text not null,
   period_id text not null,
+  locale text not null,
   expected_locales text not null,
   primary_requested text not null,
   primary_used text not null,
@@ -112,7 +124,7 @@ export function createPeriodRunsSql(table: string): string {
   state text not null check(state in ('running','published','partial','failed')),
   started_at text not null,
   finished_at text,
-  primary key (edition_date, period_id)
+  primary key (edition_date, period_id, locale)
 );`
 }
 
@@ -125,13 +137,13 @@ type MigrationInput = Readonly<{
 export function migrateDailyBriefingStorage(input: MigrationInput): DailyBriefingMigrationOutcome {
   const { db, filePath } = input
   const version = currentVersion(db)
-  if (hasColumn(db, EDITIONS, 'period_id')) return { status: 'current', version }
+  if (hasColumn(db, EDITIONS, 'period_id')) return upgradePeriodRuns({ db, filePath, status: 'current' })
   if (!tableExists(db, EDITIONS)) {
     db.exec(createEditionsSql(EDITIONS))
     db.exec(createAttemptsSql(ATTEMPTS))
     db.exec(createAttemptsIndexSql(ATTEMPTS))
     db.exec(`pragma user_version = ${DAILY_BRIEFING_STORAGE_VERSION};`)
-    return { status: 'initialized', version: DAILY_BRIEFING_STORAGE_VERSION }
+    return upgradePeriodRuns({ db, filePath, status: 'initialized' })
   }
 
   const backupPath = `${filePath}${DAILY_BRIEFING_BACKUP_SUFFIX}`
@@ -167,7 +179,153 @@ export function migrateDailyBriefingStorage(input: MigrationInput): DailyBriefin
     return { status: 'skipped', version, reason: 'migration-failed' }
   }
 
-  return { status: 'migrated', version: DAILY_BRIEFING_STORAGE_VERSION, backupPath }
+  return upgradePeriodRuns({ db, filePath, status: 'migrated', previousBackupPath: backupPath })
+}
+
+type PeriodRunsUpgrade = Readonly<{
+  db: SqliteDatabase
+  filePath: string
+  status: 'current' | 'initialized' | 'migrated'
+  /** v2→v3 那一步留下的副本；只在前面的升级真的写过它时存在。 */
+  previousBackupPath?: string
+}>
+
+/**
+ * v3 → v4：运行记录表主键补上 `locale`（0.4.2 #18 / §7.1）。
+ *
+ * 只追加一个分支，不动已发布的 v2→v3 迁移与 `.bak-v2`。门有两道——`user_version` 与主键形状
+ * （`pragma table_info` 里 `locale` 是不是主键的一部分）；已是新形状直接 `current`，半成品
+ * `_v4` 先删。旧表存在而形状不对时：先 `vacuum into .bak-v3`（同名用 UTC 时间戳，绝不覆盖），
+ * 再在一个事务里建新表→逐行回填 locale→计数与键核对→换名；任何一步失败都回滚，旧表与
+ * `user_version` 原样，应用继续在旧形状上跑（读写侧有旧形状分支）。
+ */
+function upgradePeriodRuns(input: PeriodRunsUpgrade): DailyBriefingMigrationOutcome {
+  const { db, filePath, status } = input
+  const version = DAILY_BRIEFING_STORAGE_VERSION
+  if (periodRunKeyHasLocale(db)) {
+    if (currentVersion(db) < version) db.exec(`pragma user_version = ${version};`)
+    return finishedOutcome(status, version, input.previousBackupPath ?? '', 0)
+  }
+  if (!tableExists(db, PERIOD_RUNS)) {
+    // 全新库（或从未写过运行记录）：直接按新主键建，没有旧行要回填，也不需要副本。
+    db.exec(`drop table if exists ${NEXT_PERIOD_RUNS};`)
+    db.exec(createPeriodRunsSql(PERIOD_RUNS))
+    db.exec(`pragma user_version = ${version};`)
+    return finishedOutcome(status, version, input.previousBackupPath ?? '', 0)
+  }
+
+  let backupPath = ''
+  if (filePath !== ':memory:') {
+    backupPath = unusedBackupPath(filePath, DAILY_BRIEFING_RUN_BACKUP_SUFFIX)
+    try {
+      db.exec(`vacuum into '${backupPath.replaceAll("'", "''")}'`)
+    } catch {
+      return { status: 'skipped', version: currentVersion(db), reason: 'backup-failed' }
+    }
+  }
+
+  db.exec('begin immediate')
+  try {
+    // 我们自己的临时物：上一次失败留下的半成品先删再建。
+    db.exec(`drop table if exists ${NEXT_PERIOD_RUNS};`)
+    db.exec(createPeriodRunsSql(NEXT_PERIOD_RUNS))
+    const { copied, unknownLocales } = copyPeriodRuns(db)
+    if (copied !== count(db, PERIOD_RUNS) || distinctRunKeys(db, NEXT_PERIOD_RUNS) !== distinctRunKeys(db, PERIOD_RUNS)) {
+      throw new Error('daily-briefing-run-migration-row-count-mismatch')
+    }
+    db.exec(`drop table ${PERIOD_RUNS}; alter table ${NEXT_PERIOD_RUNS} rename to ${PERIOD_RUNS};`)
+    db.exec(`pragma user_version = ${version};`)
+    db.exec('commit')
+    return { status: 'migrated', version, backupPath, unknownLocales }
+  } catch {
+    rollbackQuietly(db)
+    return { status: 'skipped', version: currentVersion(db), reason: 'migration-failed' }
+  }
+}
+
+function finishedOutcome(
+  status: PeriodRunsUpgrade['status'],
+  version: number,
+  backupPath: string,
+  unknownLocales: number
+): DailyBriefingMigrationOutcome {
+  return status === 'migrated'
+    ? { status, version, backupPath, unknownLocales }
+    : { status, version }
+}
+
+/** `user_version` 门之外的第二道：`locale` 必须真的在主键里，而不只是存在这一列。 */
+function periodRunKeyHasLocale(db: SqliteDatabase): boolean {
+  if (!tableExists(db, PERIOD_RUNS)) return false
+  const rows = db.prepare(`pragma table_info(${PERIOD_RUNS})`).all() as Array<{ name?: unknown; pk?: unknown }>
+  return rows.some((row) => row.name === 'locale' && Number(row.pk ?? 0) > 0)
+}
+
+/** 同名副本已存在时换一个带 UTC 时间戳的名字；任何情况下都不覆盖已有副本。 */
+function unusedBackupPath(filePath: string, suffix: string): string {
+  const base = `${filePath}${suffix}`
+  if (!isRegularFile(base)) return base
+  const stamp = new Date().toISOString().replace(/[-:.]/g, '')
+  let candidate = `${base}-${stamp}`
+  let index = 1
+  while (isRegularFile(candidate)) candidate = `${base}-${stamp}-${index++}`
+  return candidate
+}
+
+function copyPeriodRuns(db: SqliteDatabase): Readonly<{ copied: number; unknownLocales: number }> {
+  const columns = tableColumns(db, PERIOD_RUNS)
+  // `direction` / `edition_rows` 是后加的两列：老库可能还没补上，回填时用与读取侧相同的默认值。
+  const direction = columns.includes('direction') ? "coalesce(direction, 'undecided')" : "'undecided'"
+  const editionRows = columns.includes('edition_rows') ? "coalesce(edition_rows, '[]')" : "'[]'"
+  const rows = db.prepare(`select edition_date, period_id, expected_locales, primary_requested, primary_used,
+      fallback_reason, snapshot_id, snapshot_hash, content_version, writing_rounds, ${direction} as direction,
+      ${editionRows} as edition_rows, state, started_at, finished_at from ${PERIOD_RUNS}`).all() as Array<Record<string, unknown>>
+  const insert = db.prepare(`insert into ${NEXT_PERIOD_RUNS}
+    (edition_date, period_id, locale, expected_locales, primary_requested, primary_used, fallback_reason,
+     snapshot_id, snapshot_hash, content_version, writing_rounds, direction, edition_rows, state, started_at, finished_at)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  let unknownLocales = 0
+  for (const row of rows) {
+    const locale = runLocaleOf(row)
+    if (locale === 'unknown') unknownLocales += 1
+    insert.run(
+      String(row.edition_date), String(row.period_id), locale, String(row.expected_locales),
+      String(row.primary_requested), String(row.primary_used),
+      row.fallback_reason === null || row.fallback_reason === undefined ? null : String(row.fallback_reason),
+      String(row.snapshot_id), String(row.snapshot_hash), Number(row.content_version), Number(row.writing_rounds),
+      String(row.direction), String(row.edition_rows), String(row.state), String(row.started_at),
+      row.finished_at === null || row.finished_at === undefined ? null : String(row.finished_at)
+    )
+  }
+  return Object.freeze({ copied: rows.length, unknownLocales })
+}
+
+/**
+ * 旧行的语言：`expected_locales` 的**唯一**合法元素 → `primary_used` → `unknown`。
+ * 被覆盖掉的那一轮已经不在库里，迁移不补行——报告里写明丢的是哪几轮，不冒充已恢复。
+ */
+function runLocaleOf(row: Record<string, unknown>): DailyBriefingLocale | 'unknown' {
+  const expected = singleExpectedLocale(row.expected_locales)
+  if (expected !== undefined) return expected
+  const used = row.primary_used
+  return used === 'zh-CN' || used === 'en-US' ? used : 'unknown'
+}
+
+function singleExpectedLocale(value: unknown): DailyBriefingLocale | undefined {
+  if (typeof value !== 'string') return undefined
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed) || parsed.length !== 1) return undefined
+    const only = parsed[0]
+    return only === 'zh-CN' || only === 'en-US' ? only : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function distinctRunKeys(db: SqliteDatabase, table: string): number {
+  const row = db.prepare(`select count(*) as keys from (select distinct edition_date, period_id from ${table})`).get() as { keys?: unknown } | undefined
+  return Number(row?.keys ?? 0)
 }
 
 function isRegularFile(path: string): boolean {

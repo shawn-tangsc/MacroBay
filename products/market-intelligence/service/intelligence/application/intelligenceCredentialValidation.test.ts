@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { httpRequest } from '@platform/jobs'
+import { httpRequest, type HttpClientResponse } from '@platform/jobs'
 
 import { validateIntelligenceCredential } from './intelligenceCredentialValidation'
 
@@ -21,6 +21,11 @@ vi.mock('@platform/jobs', async () => {
 
 const mockedHttpRequest = vi.mocked(httpRequest)
 
+/** A complete transport answer: the probe only reads `status` and `bodyText`, but the type carries all four. */
+function answer(status: number, bodyText: string): HttpClientResponse {
+  return { status, bodyText, headers: {}, byteSize: bodyText.length }
+}
+
 describe('validateIntelligenceCredential', () => {
   it('rejects empty credentials', async () => {
     await expect(
@@ -32,7 +37,7 @@ describe('validateIntelligenceCredential', () => {
   })
 
   it('verifies fred-rates-liquidity with api_key on the canonical probe request', async () => {
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: '{}' })
+    mockedHttpRequest.mockResolvedValueOnce(answer(200, '{}'))
 
     await expect(
       validateIntelligenceCredential({ sourceId: 'fred-rates-liquidity', apiKey: 'demo-key' })
@@ -51,7 +56,7 @@ describe('validateIntelligenceCredential', () => {
   })
 
   it('verifies bea-economic-series with UserID on the probe request', async () => {
-    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: '{}' })
+    mockedHttpRequest.mockResolvedValueOnce(answer(200, '{}'))
 
     await expect(
       validateIntelligenceCredential({ sourceId: 'bea-economic-series', apiKey: 'bea-user' })
@@ -69,7 +74,7 @@ describe('validateIntelligenceCredential', () => {
   })
 
   it('returns provider rejection messages for failed checks', async () => {
-    mockedHttpRequest.mockResolvedValueOnce({ status: 403, bodyText: 'forbidden' })
+    mockedHttpRequest.mockResolvedValueOnce(answer(403, 'forbidden'))
 
     await expect(
       validateIntelligenceCredential({ sourceId: 'github-releases', apiKey: 'bad-token' })

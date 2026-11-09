@@ -23,11 +23,19 @@ describe('metricRestApiAdapter macro parsers', () => {
         profile: createDefaultSourceProfile(definition)
       })
       const fixtureName = macroFixtureForSource(sourceId)
+      // The parser takes the record the pipeline stores, not just the body: every required field is
+      // stated so a new one cannot slip in unset.
       const rawRecord = {
         rawRecordId: `raw-${sourceId}`,
         sourceId,
+        runId: `run-${sourceId}`,
         detectedAt: '2026-07-08T10:00:00.000Z',
+        payloadFormat: 'json' as const,
+        payloadRefType: 'inline' as const,
         payloadBody: loadFixture(fixtureName),
+        payloadHash: `hash-${sourceId}`,
+        sourceDedupeKey: `fixture-${sourceId}`,
+        parserVersion: 'metric-rest-api-v1',
         payloadMetaJson: macroPayloadMetaForSource(sourceId, fixtureName)
       }
 

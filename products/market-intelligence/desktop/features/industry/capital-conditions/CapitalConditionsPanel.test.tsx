@@ -119,7 +119,7 @@ describe('CapitalConditionsPanel', () => {
 
   it.each(['zh-CN', 'en-US'] as const)('shows the %s ETF table as unavailable without inventing numbers', (locale) => {
     const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
-    const state = { ...fullState(), etf: 'unavailable' as const }
+    const state = { ...fullState(), etfReading: unreadableReading() }
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
     const body = etfTableBody(markup)
 
@@ -141,8 +141,9 @@ describe('CapitalConditionsPanel', () => {
       state: {
         state: 'available', conclusion: 'partial', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
         flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1_000_000, btc: 2_000_000, eth: -3_000_000 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
-        etf: {
+        etfReading: {
           state: 'available',
+          comparison: { state: 'aligned' },
           coverage: [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }],
           btc: { asset: 'BTC', latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [{ tradingDate: '2026-08-17', direction: 'inflow', magnitudePercent: 100 }, { tradingDate: '2026-08-18', direction: 'zero', magnitudePercent: 0 }] },
           eth: { asset: 'ETH', latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [{ tradingDate: '2026-08-18', direction: 'outflow', magnitudePercent: 100 }] }
@@ -288,7 +289,7 @@ describe('CapitalConditionsPanel', () => {
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, {
       text,
-      state: { state: 'available', conclusion: 'partial', etf: 'unavailable', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
+      state: { state: 'available', conclusion: 'partial', etfReading: unreadableReading(), observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
     })))
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() })))
 
@@ -297,7 +298,7 @@ describe('CapitalConditionsPanel', () => {
 
   it.each(['zh-CN', 'en-US'] as const)('does not fabricate an observation time for the %s non-available states', (locale) => {
     const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
-    for (const state of [{ state: 'loading' as const }, { state: 'empty' as const }, { state: 'unavailable' as const }]) {
+    for (const state of [{ state: 'loading' as const }, { state: 'empty' as const }, { state: 'unavailable' as const, reason: 'query-failed' as const }]) {
       const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
       expect(markup).not.toContain(text.observedAt)
       expect(markup).not.toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2} GMT/)
@@ -319,7 +320,7 @@ describe('CapitalConditionsPanel', () => {
 
   it('tells a failed read apart from an empty one, through the platform error state', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
-    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' } }))
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' } }))
 
     // "Could not read" is an error, never an empty: a panel that says "nothing here" when the
     // query failed tells the reader the opposite of what happened.
@@ -369,8 +370,8 @@ describe('CapitalConditionsPanel', () => {
 
     // 聚焦即展开，Esc 收起并回焦。
     await act(async () => { info.focus() })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-    expect(info.getAttribute('aria-expanded')).toBe('true')
+    // 等「展开」这个事实出现，不等一个固定毫秒：浮层是在 focus 之后异步挂上的。
+    await vi.waitFor(() => expect(info.getAttribute('aria-expanded')).toBe('true'))
     expect(document.body.textContent).toContain(text.signalInsufficientReason)
     // 说明关系是真的：触发件指到的那个 id 必须**查得到节点**、且节点里就是那段说明。
     // 只断言「属性存在」会恒真（antd 触发层自己会挂一个指向 `test-id` 的值），所以查三层：
@@ -383,8 +384,7 @@ describe('CapitalConditionsPanel', () => {
     await act(async () => {
       info.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-    expect(info.getAttribute('aria-expanded')).toBe('false')
+    await vi.waitFor(() => expect(info.getAttribute('aria-expanded')).toBe('false'))
     expect(document.activeElement).toBe(info)
     // 一处只有一颗：牌位里没有第二颗说明图标。
     expect(header.querySelectorAll('button.icon-button').length).toBe(1)
@@ -510,10 +510,8 @@ describe('CapitalConditionsPanel', () => {
     const info = body.querySelector<HTMLButtonElement>('.icon-button')!
     expect(info).not.toBeNull()
     await act(async () => { info.focus() })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-
-    // 逐句：这句落款（含两个分句）在浮层里整句出现。
-    expect(document.body.textContent).toContain(text.signalDetailNote)
+    // 等那句话本身出现；固定毫秒只是在赌它多快挂上。
+    await vi.waitFor(() => expect(document.body.textContent).toContain(text.signalDetailNote))
     expect(document.querySelector('.mi-capital-signal-dialog')).not.toBeNull()
   })
 
@@ -605,9 +603,8 @@ describe('CapitalConditionsPanel', () => {
     expect(document.body.textContent).not.toContain(text.signalRuleName)
 
     await act(async () => { chip.focus() })
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+    await vi.waitFor(() => expect(document.body.textContent).toContain(text.signalRuleName))
 
-    expect(document.body.textContent).toContain(text.signalRuleName)
     expect(document.body.textContent).toContain(text.signalRuleWindow)
   })
 
@@ -639,7 +636,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh })))
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
     const action = container.querySelector<HTMLButtonElement>('.state-view__action')!
     expect(action).not.toBeNull()
     await act(async () => action.click())
@@ -653,7 +650,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    const state = { ...fullState(), etf: 'unavailable' as const }
+    const state = { ...fullState(), etfReading: unreadableReading() }
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh })))
     const actions = [...container.querySelectorAll<HTMLButtonElement>('.state-view__action')]
     expect(actions).toHaveLength(2)
@@ -669,7 +666,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh })))
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
     const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__refresh')!
     expect(button.textContent).toBe(text.refresh)
     await act(async () => button.click())
@@ -699,7 +696,7 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh: () => undefined, refreshFailed: true })))
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh: () => undefined, refreshFailed: true })))
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(text.refreshFailed)
 
     // `loading` already means a read is in flight, so the control must not start a second one.
@@ -721,8 +718,9 @@ function flowState(rows: readonly { tradingDate: string; funds: number; btc: num
     change30dUsd: '$0',
     change30dPercent: '0.00%',
     flowHistory: { state: 'available' as const, rows },
-    etf: {
+    etfReading: {
       state: 'available' as const,
+      comparison: { state: 'aligned' as const },
       coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [] },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [] }
@@ -742,8 +740,9 @@ function fullState() {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
     // Mirrors the projection: it already cut the window to the last seven days before the panel sees it.
     flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: (index - 10) * 1_000_000, btc: (index + 1) * 1_000_000, eth: -(index + 1) * 1_000_000 })).slice(-7) },
-    etf: {
+    etfReading: {
       state: 'available' as const,
+      comparison: { state: 'aligned' as const },
       coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: rows.map((row) => ({ ...row, direction: row.direction === 'zero' ? 'zero' as const : 'outflow' as const })) }
@@ -761,8 +760,9 @@ function streakState() {
   const ethRows = btcRows.map((row) => ({ ...row, direction: 'outflow' as const }))
   return {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
-    etf: {
+    etfReading: {
       state: 'available' as const,
+      comparison: { state: 'aligned' as const },
       coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: btcRows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: ethRows }
@@ -772,12 +772,12 @@ function streakState() {
 
 function degradedState() {
   const state = fullState()
-  state.etf.coverage = [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 12, complete: false }]
-  state.etf.btc.cumulative = [
+  state.etfReading.coverage = [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 12, complete: false }]
+  state.etfReading.btc.cumulative = [
     { windowDays: 5, coveredDays: 5, netFlowUsd: '+$50', complete: true },
     { windowDays: 20, coveredDays: 12, netFlowUsd: '+$78', complete: false }
   ]
-  state.etf.eth.cumulative = [
+  state.etfReading.eth.cumulative = [
     { windowDays: 5, coveredDays: 5, netFlowUsd: '-$50', complete: true },
     { windowDays: 20, coveredDays: 12, netFlowUsd: '-$78', complete: false }
   ]
@@ -787,6 +787,12 @@ function degradedState() {
 function completeCoverage() {
   return [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }]
 }
+
+const unreadableReading = () => ({
+  state: 'unreadable' as const,
+  comparison: { state: 'aligned' as const },
+  coverage: []
+})
 
 function cumulativeWindows(amount: string) {
   return [

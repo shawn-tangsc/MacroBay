@@ -34,10 +34,10 @@ describe('briefing issue deletion', () => {
     const deletePeriod = vi.fn(async () => ({ editions: 2, attempts: 1, periodRuns: 1, sessionLinks: 0, remaining: 3, allDone: false }))
     const deletion = render({ deletePeriod }, onSettled)
 
-    await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }) })
+    await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' }) })
 
-    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
-    expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }, kind: 'partial', remaining: 3 })
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' })
+    expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' }, kind: 'partial', remaining: 3 })
     // The list is read again either way: a row that survived the delete must still be on screen.
     expect(onSettled).toHaveBeenCalledTimes(1)
     // Half of it went through, so the reload must not generate either.
@@ -50,9 +50,9 @@ describe('briefing issue deletion', () => {
     const deletePeriod = vi.fn(async () => { throw new Error('ipc-down') })
     const deletion = render({ deletePeriod }, vi.fn())
 
-    await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'en-US' }) })
+    await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'en-US', entry: 'toolbar' }) })
 
-    expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'en-US' }, kind: 'partial', remaining: null })
+    expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'en-US', entry: 'toolbar' }, kind: 'partial', remaining: null })
     // Nothing was deleted: the reload behaves like any other reload.
     expect(deletion().takeSkipGenerate()).toBe(false)
   })
@@ -61,23 +61,23 @@ describe('briefing issue deletion', () => {
     const empty = vi.fn(async () => ({ editions: 0, attempts: 0, periodRuns: 0, sessionLinks: 0, remaining: 0, allDone: true }))
     const deletion = render({ deletePeriod: empty }, vi.fn())
 
-    await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }) })
+    await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' }) })
 
     // The reply removed no edition: the note must say so, not "deleted".
-    expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }, kind: 'nothing', remaining: 0 })
+    expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' }, kind: 'nothing', remaining: 0 })
   })
 
   it('reports a finished delete once, and does nothing without a port', async () => {
     const done = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 0, remaining: 0, allDone: true }))
     const withPort = render({ deletePeriod: done }, vi.fn())
-    await act(async () => { await withPort().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }) })
+    await act(async () => { await withPort().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' }) })
     // A finished delete still says what happened — once — while the pane it lands on stays the
     // ordinary empty state.
-    expect(withPort().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }, kind: 'done', remaining: 0 })
+    expect(withPort().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' }, kind: 'done', remaining: 0 })
     expect(withPort().takeSkipGenerate()).toBe(true)
 
     const noPort = render({}, vi.fn())
-    await act(async () => { await noPort().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }) })
+    await act(async () => { await noPort().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' }) })
     expect(noPort().outcome).toBeNull()
     expect(noPort().takeSkipGenerate()).toBe(false)
   })

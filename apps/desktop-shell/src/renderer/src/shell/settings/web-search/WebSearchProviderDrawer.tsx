@@ -11,6 +11,7 @@ import type {
   WebSearchCheckProviderResponse
 } from '@platform/ai/web-search/contracts/webSearchContracts'
 import type { PlatformText } from '../../../i18n/platformText'
+import { SettingInfoPopover } from '../SettingInfoPopover'
 import { WebSearchApiKeyField } from './WebSearchApiKeyField'
 import { WebSearchFormRow } from './WebSearchFormGrid'
 import { useProviderSettingsDraft } from './useProviderSettingsDraft'
@@ -62,7 +63,12 @@ export function WebSearchProviderDrawer({
           <span className="web-search-badge" data-web-search-drawer-capabilities>
             {capabilities}
           </span>
-          <span className="web-search-drawer-readonly">{labels.drawerDefaultHint}</span>
+          {/* 说明句收进标题旁的 ⓘ：标题行只留能力标签，解释按需展开。 */}
+          <SettingInfoPopover
+            hintKey="drawerDefaultHint"
+            infoLabelKey="drawerDefaultHintInfo"
+            resolveText={(key: string) => (labels as unknown as Record<string, string>)[key] ?? ''}
+          />
         </span>
       }
       footer={

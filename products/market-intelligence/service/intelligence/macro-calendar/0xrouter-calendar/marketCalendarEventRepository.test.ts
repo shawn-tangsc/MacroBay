@@ -6,12 +6,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMarketCalendarEventRepository, ManualCalendarCapacityPolicy } from './marketCalendarEventRepository'
 import { parseZeroXRouterEconomicData } from './zeroXRouterEconomicDataParser'
 import { prepareMarketCollection, zeroXRouterCalendarStoragePolicy as policy } from './marketCalendarStorageValidation'
+import type { ZeroXRouterCalendarDescriptor } from './zeroXRouterCalendarContracts'
 
 const databases: DatabaseSync[] = []
 const descriptorId = 'macro-calendar-0xrouter-economic-data' as const
 const scope = { providerId: '0xrouter' as const, descriptorId, locale: 'zh' as const, month: '2026-09' }
 const detectedAt = '2026-09-08T00:00:00.000Z'
-const evidence = { providerId: '0xrouter', descriptorId, rawRecordId: 'raw-one', evidenceHash: 'a'.repeat(64) }
+/**
+ * The storage contract takes `descriptorId: string`, so this fixture is declared at that width instead
+ * of being pinned to the one id this file collects: the mismatched-evidence case below needs a second
+ * valid descriptor id, and pinning it to one only typechecked a forgery that cannot exist.
+ */
+const evidence: Readonly<{ providerId: string; descriptorId: ZeroXRouterCalendarDescriptor; rawRecordId: string; evidenceHash: string }> =
+  { providerId: '0xrouter', descriptorId, rawRecordId: 'raw-one', evidenceHash: 'a'.repeat(64) }
 // Derived contract inputs, not provider evidence fixtures.
 function row(id = 1) {
   return { calendarId: 'candidate', id, calendarName: 'Derived event', locale: 'zh', star: 3,
@@ -155,7 +162,8 @@ describe('market calendar independent observations', () => {
         expect(repository.listCollections({ ...scope, asOf: detectedAt, limit: 1 }).state).toBe('succeeded')
         peakRss = Math.max(peakRss, process.memoryUsage().rss)
       }
-      const p95 = (values: number[]) => values.toSorted((a, b) => a - b)[Math.ceil(values.length * .95) - 1]!
+      // `toSorted` is ES2023 and this repo's lib is ES2022: copy then sort, same non-mutating result.
+      const p95 = (values: number[]) => [...values].sort((a, b) => a - b)[Math.ceil(values.length * .95) - 1]!
       const metrics = { logicalBytes, largestRowBytes: largest, collections: countBefore, queryP95Ms: p95(readings),
         appendP95Ms: p95(appends), startupP95Ms: p95(startups), incrementalRssBytes: peakRss - baselineRss }
       process.stdout.write(`MC-V1 derived near-capacity (no forced GC or cold-cache claim): ${JSON.stringify(metrics)}\n`)
@@ -284,7 +292,10 @@ describe('market calendar independent observations', () => {
     const original = structuredClone(input)
     const repository = createMarketCalendarEventRepository({ database,
       resolveCollectionContext: () => {
-        if (input.parseResult.state === 'succeeded') input.parseResult.drafts[0] = { ...input.parseResult.drafts[0], displayName: 'Changed by resolver' }
+        // The drafts are typed readonly (the parser hands them out frozen as a contract), and this case
+        // is exactly the caller that ignores that: it writes into what it already handed over. Replacing
+        // the object would need a cast into a readonly slot, so mutate it the way such a caller would.
+        if (input.parseResult.state === 'succeeded') Object.assign(input.parseResult.drafts[0], { displayName: 'Changed by resolver' })
         return context
       },
       now: () => { context.evidence = { ...evidence, rawRecordId: 'changed-by-clock' }; return detectedAt },
@@ -513,7 +524,10 @@ describe('market calendar independent observations', () => {
     const missing = createMarketCalendarEventRepository({ database })
     expect(missing.appendCollection(batch())).toEqual({ state: 'unavailable', failureCode: 'context-unavailable' })
     const { repository, context } = setup()
-    context.evidence = { ...evidence, descriptorId: 'forged' } as typeof evidence
+    // A real descriptor id belonging to another feed: the evidence is well-formed, it just does not
+    // describe the batch it is handed with. That is the mismatch the guard rejects — a string outside
+    // the union would only prove the parser rejects nonsense.
+    context.evidence = { ...evidence, descriptorId: 'macro-calendar-0xrouter-financial-events' }
     expect(repository.appendCollection(batch())).toEqual({ state: 'unavailable', failureCode: 'invalid-input' })
   })
 

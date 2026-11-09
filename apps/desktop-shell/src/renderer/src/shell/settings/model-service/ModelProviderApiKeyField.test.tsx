@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { platformText } from '../../../i18n/platformText'
 
 import {
-  MODEL_PROVIDER_API_KEY_AUTO_HIDE_MS,
   ModelProviderApiKeyField,
   type RevealModelProviderApiKey
 } from './ModelProviderApiKeyField'
@@ -148,30 +147,55 @@ describe('PLAT-58 model provider API key reveal field', () => {
     expect(eyeButton(container).getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('offers copy only while the key is on screen, and copies the revealed value', async () => {
+  it('copies the saved key from the masked state, and never copies the preview', async () => {
     const writeText = vi.fn(async () => undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    const container = await mount({ revealApiKey: async () => ({ apiKey: savedKey }) })
+    const reveal = vi.fn(async () => ({ apiKey: savedKey }))
+    const container = await mount({ revealApiKey: reveal })
 
-    // 掩码态没有复制入口：看不到就不该能复制。
-    expect(container.querySelector('[data-provider-api-key-copy]')).toBeNull()
-
-    await clickEye(container)
+    // 掩码态就有复制入口（2026-11-01 拍板：展开后允许复制；掩码态点它按需读真值）。
     const copy = container.querySelector<HTMLElement>('[data-provider-api-key-copy]')
     expect(copy).not.toBeNull()
 
     await act(async () => {
       copy!.click()
+      await Promise.resolve()
     })
-    expect(writeText).toHaveBeenCalledWith(savedKey)
-    expect(container.textContent).toContain(labels.copied)
 
-    // 收起明文后复制入口一起消失，不会出现「掩码还能复制」的状态。
-    await clickEye(container)
-    expect(container.querySelector('[data-provider-api-key-copy]')).toBeNull()
+    expect(reveal).toHaveBeenCalledTimes(1)
+    expect(writeText).toHaveBeenCalledWith(savedKey)
+    expect(writeText).not.toHaveBeenCalledWith(preview)
+    expect(writeText).not.toHaveBeenCalledWith('••••••••')
+    // 复制不切换显示：读者要看得见仍得自己展开。
+    expect(apiKeyInput(container).value).toBe(preview)
+    expect(container.textContent).toContain(labels.copied)
   })
 
-  it('returns to the mask after the named 30s auto-hide window and drops the key from the DOM', async () => {
+  it('keeps the copy action after the reader collapses the plaintext', async () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const reveal = vi.fn(async () => ({ apiKey: savedKey }))
+    const container = await mount({ revealApiKey: reveal })
+
+    await clickEye(container)
+    expect(apiKeyInput(container).value).toBe(savedKey)
+    // 读者自己收起：回掩码，但复制入口还在。
+    await clickEye(container)
+    expect(apiKeyInput(container).value).toBe(preview)
+
+    const copy = container.querySelector<HTMLElement>('[data-provider-api-key-copy]')
+    expect(copy).not.toBeNull()
+    await act(async () => {
+      copy!.click()
+      await Promise.resolve()
+    })
+
+    // 收起后复制走内存里已读到的真值，不再多读一次 IPC。
+    expect(writeText).toHaveBeenCalledWith(savedKey)
+    expect(reveal).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the key on screen past the old 30s window (no time limit)', async () => {
     vi.useFakeTimers()
     const container = await mount()
 
@@ -179,15 +203,15 @@ describe('PLAT-58 model provider API key reveal field', () => {
     expect(apiKeyInput(container).value).toBe(savedKey)
 
     await act(async () => {
-      vi.advanceTimersByTime(MODEL_PROVIDER_API_KEY_AUTO_HIDE_MS)
+      vi.advanceTimersByTime(35_000)
     })
 
-    expect(MODEL_PROVIDER_API_KEY_AUTO_HIDE_MS).toBe(30_000)
-    expect(apiKeyInput(container).value).toBe(preview)
-    expect(container.innerHTML).not.toContain(savedKey)
+    // 30 秒自动回掩码是用户已撤掉的做法：不设时限，直到读者自己收起。
+    expect(apiKeyInput(container).value).toBe(savedKey)
+    expect(container.innerHTML).toContain(savedKey)
   })
 
-  it('hides the revealed key immediately on blur', async () => {
+  it('keeps the revealed key on blur (no auto-remask)', async () => {
     const container = await mount()
 
     await clickEye(container)
@@ -195,8 +219,8 @@ describe('PLAT-58 model provider API key reveal field', () => {
 
     await blurField(container)
 
-    expect(apiKeyInput(container).value).toBe(preview)
-    expect(container.innerHTML).not.toContain(savedKey)
+    expect(apiKeyInput(container).value).toBe(savedKey)
+    expect(container.innerHTML).toContain(savedKey)
   })
 
   it('clears a revealed key when switching providers', async () => {
@@ -213,8 +237,7 @@ describe('PLAT-58 model provider API key reveal field', () => {
     expect(eyeButton(container).getAttribute('aria-label')).toBe(labels.showApiKey)
   })
 
-  it('drops the revealed key from the DOM on unmount without firing the auto-hide timer', async () => {
-    vi.useFakeTimers()
+  it('drops the revealed key from the DOM on unmount', async () => {
     const container = await mount()
 
     await clickEye(container)
@@ -226,9 +249,6 @@ describe('PLAT-58 model provider API key reveal field', () => {
     })
 
     expect(container.innerHTML).not.toContain(savedKey)
-    await act(async () => {
-      vi.advanceTimersByTime(MODEL_PROVIDER_API_KEY_AUTO_HIDE_MS)
-    })
   })
 
   it('keeps the mask and shows an inline error when reveal fails', async () => {

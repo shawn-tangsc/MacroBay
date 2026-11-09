@@ -60,9 +60,11 @@ describe('market storage source and value validation', () => {
     for (const count of [0, 1, 2, 1000]) {
       const base = input()
       if (base.parseResult.state !== 'succeeded') throw new Error('expected draft')
+      // 收窄只在本函数体内有效，闭包里要读的是这个局部常量（判别式收窄不跨函数边界）。
+      const parsed = base.parseResult
       const drafts = Array.from({ length: count }, (_, index) => {
         const sourceEventId = JSON.stringify(['candidate', index + 1])
-        const draft = { ...base.parseResult.drafts[0], sourceEventId,
+        const draft = { ...parsed.drafts[0], sourceEventId,
           marketFactKey: JSON.stringify(['0xrouter', scope.descriptorId, 'zh', sourceEventId]),
           displayName: 'Quoted "value" \\ 中文 😀 \ud800',
           ...(index % 2 ? { consensus: { displayValue: '0' }, providerImpact: { code: 'C', label: 'Impact' } } : {}) }
@@ -144,17 +146,19 @@ describe('market storage source and value validation', () => {
   it('rejects duplicate valid candidates, unauthorized row fields and oversized observation serialization', () => {
     const batch = input()
     if (batch.parseResult.state !== 'succeeded') throw new Error('expected draft')
-    const draft = batch.parseResult.drafts[0]!
+    // 同上：这些断言都写在闭包里，收窄后的值先取出来。
+    const parsed = batch.parseResult
+    const draft = parsed.drafts[0]!
     for (const bad of [{ ...draft, collectionId: 'another' }, { ...draft, sourceEventId: '["candidate",0]' },
       { ...draft, countryCode: '' }, { ...draft, scheduledDate: '2026-01-01' }, { ...draft, officialLink: 'enabled' }]) {
-      expect(() => prepareMarketCollection({ ...batch, parseResult: { ...batch.parseResult, drafts: [bad] } }, context)).toThrow('invalid-input')
+      expect(() => prepareMarketCollection({ ...batch, parseResult: { ...parsed, drafts: [bad] } }, context)).toThrow('invalid-input')
     }
-    expect(() => prepareMarketCollection({ ...batch, parseResult: { ...batch.parseResult, drafts: [draft, draft],
-      diagnostics: { ...batch.parseResult.diagnostics, inputRows: 2 } } }, context)).toThrow('invalid-input')
+    expect(() => prepareMarketCollection({ ...batch, parseResult: { ...parsed, drafts: [draft, draft],
+      diagnostics: { ...parsed.diagnostics, inputRows: 2 } } }, context)).toThrow('invalid-input')
     const wide = { ...draft, displayName: 'é'.repeat(512), countryName: 'é'.repeat(512),
       consensus: { displayValue: 'é'.repeat(512) }, providerPrevious: { displayValue: 'é'.repeat(512) },
       providerActual: { displayValue: 'é'.repeat(512) }, providerImpact: { label: 'é'.repeat(512), code: 'é'.repeat(512) } }
-    expect(() => prepareMarketCollection({ ...batch, parseResult: { ...batch.parseResult, drafts: [wide] } }, context)).toThrow('row-too-large')
+    expect(() => prepareMarketCollection({ ...batch, parseResult: { ...parsed, drafts: [wide] } }, context)).toThrow('row-too-large')
     expect(policy.observationBytes).toBe(8192)
   })
 

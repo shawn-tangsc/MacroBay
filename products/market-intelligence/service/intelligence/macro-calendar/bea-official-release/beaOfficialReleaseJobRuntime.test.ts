@@ -1,22 +1,45 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { beaOfficialReleaseJobPolicy, createBeaOfficialReleaseJobRuntime } from './beaOfficialReleaseJobRuntime'
+import { jobTitleText, type JobDefinition, type JobHandler, type JobRunRecord } from '@platform/jobs'
 
-type Handler = (payload: unknown, context: { jobRunId: string; signal: AbortSignal }) => Promise<void>
+import { beaOfficialReleaseJobPolicy, createBeaOfficialReleaseJobRuntime } from './beaOfficialReleaseJobRuntime'
+import { defaultMacroCalendarProviderProfile } from '../macroCalendarProviderProfile'
+
+type Refresh = Parameters<typeof createBeaOfficialReleaseJobRuntime>[0]['refresh']['refresh']
+
+/** What the runtime hands back for a queued definition; this test only ever reads `id`. */
+function queuedRun(definition: JobDefinition): JobRunRecord {
+  return {
+    id: 'startup-run',
+    definitionId: definition.id,
+    handlerId: definition.handlerId,
+    owner: definition.owner,
+    productId: definition.productId,
+    title: jobTitleText(definition.title),
+    status: 'queued',
+    trigger: definition.trigger,
+    payload: definition.payload,
+    concurrencyKey: definition.concurrencyKey,
+    attempt: 1,
+    maxAttempts: definition.retryPolicy?.maxAttempts ?? 1,
+    createdAt: new Date(0).toISOString(),
+    logs: []
+  }
+}
 
 function harness(options: { enabled?: boolean; startupError?: Error } = {}) {
-  const handlers = new Map<string, Handler>()
-  const registerHandler = vi.fn((id: string, handler: Handler) => handlers.set(id, handler))
+  const handlers = new Map<string, JobHandler>()
+  const registerHandler = vi.fn((id: string, handler: JobHandler) => { handlers.set(id, handler) })
   const setSchedule = vi.fn()
   const removeSchedule = vi.fn()
-  const enqueueDefinition = vi.fn(async () => {
+  const enqueueDefinition = vi.fn(async (definition: JobDefinition) => {
     if (options.startupError) throw options.startupError
-    return { id: 'startup-run' }
+    return queuedRun(definition)
   })
-  const refresh = vi.fn(async () => ({ state: 'unchanged' as const }))
+  const refresh = vi.fn<Refresh>(async () => ({ state: 'unchanged' as const }))
   const runtime = createBeaOfficialReleaseJobRuntime({
     jobRuntime: { registerHandler, setSchedule, removeSchedule, enqueueDefinition },
-    profiles: { list: vi.fn(async () => [{ providerId: 'macro-calendar-bea', enabled: options.enabled ?? true }]) },
+    profiles: { list: vi.fn(async () => [{ ...defaultMacroCalendarProviderProfile('macro-calendar-bea'), enabled: options.enabled ?? true }]) },
     refresh: { refresh }
   })
   return { runtime, handlers, registerHandler, setSchedule, removeSchedule, enqueueDefinition, refresh }
@@ -72,7 +95,7 @@ describe('BEA official-release job runtime', () => {
       return { state: 'unchanged' as const }
     })
     const controller = new AbortController()
-    const running = handler({}, { jobRunId: 'run-1', signal: controller.signal })
+    const running = handler({}, { jobRunId: 'run-1', signal: controller.signal, log: async () => undefined, progress: async () => undefined })
     await vi.waitFor(() => expect(fixture.refresh).toHaveBeenCalledOnce())
     let disposed = false
     const disposing = fixture.runtime.dispose().then(() => { disposed = true })

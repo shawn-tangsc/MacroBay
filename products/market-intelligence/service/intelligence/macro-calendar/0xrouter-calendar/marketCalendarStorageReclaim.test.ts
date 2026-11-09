@@ -122,8 +122,9 @@ describe('the write model stores a sample only when the values changed', () => {
       current = '2026-10-01T03:00:00.000Z'
       const changed = parsedFixture()
       if (changed.state !== 'succeeded') throw new Error('fixture must parse')
-      for (const draft of changed.drafts) if (cpiNames.includes(draft.displayName)) draft.providerActual = { displayValue: '9.9%' }
-      expect(repository.appendCollection({ ...batch('run-b'), parseResult: changed })).toMatchObject({ state: 'succeeded' })
+      // 解析结果是只读的：改值就重建一份，而不是就地写（就地写会掩盖「同一份结果被复用」的 bug）。
+      const withChange = { ...changed, drafts: changed.drafts.map((draft) => cpiNames.includes(draft.displayName) ? { ...draft, providerActual: { displayValue: '9.9%' } } : draft) }
+      expect(repository.appendCollection({ ...batch('run-b'), parseResult: withChange })).toMatchObject({ state: 'succeeded' })
       current = '2026-10-01T04:00:00.000Z'; expect(repository.appendCollection(batch('run-a4'))).toMatchObject({ state: 'succeeded' })
       current = '2026-10-01T05:00:00.000Z'; expect(repository.appendCollection(batch('run-a5'))).toMatchObject({ state: 'succeeded' })
 
@@ -154,8 +155,8 @@ describe('the write model stores a sample only when the values changed', () => {
       // A real value change under the same collection id is not an exact retry.
       const conflict = parsedFixture()
       if (conflict.state !== 'succeeded') throw new Error('fixture must parse')
-      conflict.drafts[0]!.providerActual = { displayValue: '9.9%' }
-      expect(repository.appendCollection({ ...batch('replay'), parseResult: conflict }))
+      const conflicting = { ...conflict, drafts: conflict.drafts.map((draft, index) => index === 0 ? { ...draft, providerActual: { displayValue: '9.9%' } } : draft) }
+      expect(repository.appendCollection({ ...batch('replay'), parseResult: conflicting }))
         .toEqual({ state: 'unavailable', failureCode: 'collection-conflict' })
     } finally { database.close() }
   }, 120_000)
@@ -181,8 +182,8 @@ describe('retention converges without touching authoritative data', () => {
         const changed = parsedFixture()
         if (changed.state !== 'succeeded') throw new Error('fixture must parse')
         // Each day really changes a value, so each day is its own stored observation.
-        for (const draft of changed.drafts) if (cpiNames.includes(draft.displayName)) draft.providerActual = { displayValue: `${index}%` }
-        expect(repository.appendCollection({ ...batch(`old-${index}`), parseResult: changed })).toMatchObject({ state: 'succeeded' })
+        const withChange = { ...changed, drafts: changed.drafts.map((draft) => cpiNames.includes(draft.displayName) ? { ...draft, providerActual: { displayValue: `${index}%` } } : draft) }
+        expect(repository.appendCollection({ ...batch(`old-${index}`), parseResult: withChange })).toMatchObject({ state: 'succeeded' })
       }
       current = '2026-10-14T00:00:00.000Z'
       expect(repository.appendCollection(batch('recent'))).toMatchObject({ state: 'succeeded' })
@@ -218,8 +219,8 @@ describe('retention converges without touching authoritative data', () => {
         current = `2026-01-0${index + 1}T00:00:00.000Z`
         const changed = parsedFixture()
         if (changed.state !== 'succeeded') throw new Error('fixture must parse')
-        for (const draft of changed.drafts) if (cpiNames.includes(draft.displayName)) draft.providerActual = { displayValue: `${index}%` }
-        expect(repository.appendCollection({ ...batch(`bound-${index}`), parseResult: changed })).toMatchObject({ state: 'succeeded' })
+        const withChange = { ...changed, drafts: changed.drafts.map((draft) => cpiNames.includes(draft.displayName) ? { ...draft, providerActual: { displayValue: `${index}%` } } : draft) }
+        expect(repository.appendCollection({ ...batch(`bound-${index}`), parseResult: withChange })).toMatchObject({ state: 'succeeded' })
       }
       const bounded = reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T12:00:00.000Z'), maximumRowsPerRun: 1 })
       expect(bounded.limited).toBe(true)

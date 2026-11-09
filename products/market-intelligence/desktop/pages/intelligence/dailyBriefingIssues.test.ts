@@ -8,6 +8,7 @@ import type {
 } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
+import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 
 const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const enText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -41,6 +42,36 @@ function document(overrides: Partial<DailyBriefingDocument> = {}): DailyBriefing
     ...overrides
   }
 }
+
+it('records "really nothing" as an info trace entry while the body stays silent', () => {
+  // 用户 2026-11-09：正文一个字不印（现状不动），但留痕区要能看出「不是漏了，是确实没有」。
+  const base = document()
+  const doc = document({
+    edition: { ...base.edition, windowHours: 24 },
+    news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } }
+  })
+  const issues = briefingIssues({ document: doc, text: zhText, formatTime })
+  const quiet = issues.find((issue) => issue.template === 'macro-quiet')!
+  expect(quiet).toMatchObject({
+    severity: 'info',
+    category: 'data',
+    title: '近 24 小时内没有高影响事件',
+    advice: '无需处理；记在这里是为了说明这一栏确实为空。'
+  })
+  // 分组行有名字，不是一个只有严重度的空标签。
+  const group = groupBriefingIssues(issues, zhText).find((item) => item.template === 'macro-quiet')!
+  expect(group.label).toBe('确实没有高影响事件')
+  // 英文同一句，不是中文模板套英文界面。
+  const enQuiet = briefingIssues({ document: doc, text: enText, formatTime }).find((issue) => issue.template === 'macro-quiet')!
+  expect(enQuiet.title).toBe('No high-impact event in the past 24 hours')
+  expect(enQuiet.advice).toBe('Nothing to do; recorded so an empty section is not mistaken for a gap.')
+
+  // 正文那句仍然一个字不印——这条守卫没改。
+  expect(briefingMacroEmptyCopy(doc, {
+    macroEmptyCodes: zhText.macroEmptyCodes,
+    macroUnreadable: zhText.macroUnreadable
+  })).toBeNull()
+})
 
 function pulse(overrides: Partial<BriefingPulseRow> = {}): BriefingPulseRow {
   return {

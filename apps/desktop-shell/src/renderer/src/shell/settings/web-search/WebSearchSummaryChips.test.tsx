@@ -52,10 +52,13 @@ describe('PLAT-60 summary chips', () => {
   it('keeps the chips consistent on both tabs', async () => {
     stubPlatform(createTestSettings(), createTestProviders())
     const container = await mountPage()
-    const policyChips = [...container.querySelectorAll('[data-web-search-summary-chip]')].map((chip) => chip.textContent)
+    const visibleChips = (): (string | null)[] =>
+      [...(container.querySelector('.tabs__panel:not([hidden])')?.querySelectorAll('[data-web-search-summary-chip]') ?? [])]
+        .map((chip) => chip.textContent)
+    const policyChips = visibleChips()
 
-    await click(container, '[data-web-search-tab="providers"]')
-    const providerChips = [...container.querySelectorAll('[data-web-search-summary-chip]')].map((chip) => chip.textContent)
+    await clickTab(container, labels.providersTab)
+    const providerChips = visibleChips()
 
     expect(providerChips).toEqual(policyChips)
   })
@@ -92,7 +95,8 @@ describe('PLAT-60 summary chips', () => {
     await act(async () => warning?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await settle()
 
-    expect(container.querySelector('[data-web-search-tab="providers"]')?.getAttribute('aria-selected')).toBe('true')
+    const tabs = [...container.querySelectorAll('[role="tab"]')]
+    expect(tabs.find((tab) => tab.textContent?.trim() === labels.providersTab)?.getAttribute('aria-selected')).toBe('true')
     const drawer = document.querySelector('.web-search-provider-drawer')
     expect(drawer).not.toBeNull()
     expect(drawer?.textContent).toContain(labels.drawerTitle('Tavily'))
@@ -142,6 +146,15 @@ async function mountPage(): Promise<HTMLElement> {
   await act(async () => root?.render(createElement(WebSearchSettingsPage, { language: 'zh-CN' })))
   await settle()
   return container
+}
+
+/** 页签换成平台 `Tabs` 之后按**名字**点（手写的 `data-web-search-tab` 已随组件删掉）。 */
+async function clickTab(container: ParentNode, label: string): Promise<void> {
+  const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+    .find((candidate) => candidate.textContent?.trim() === label)
+  expect(tab, `no tab named ${label}`).toBeDefined()
+  await act(async () => tab?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await settle()
 }
 
 async function click(container: ParentNode, selector: string): Promise<void> {

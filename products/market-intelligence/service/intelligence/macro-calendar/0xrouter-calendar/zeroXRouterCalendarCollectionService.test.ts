@@ -169,15 +169,17 @@ describe('unregistered calendar complete collection unit (derived contracts)', (
     expect(h.reservations.size).toBe(0)
   })
 
-  it('deduplicates the automatic batch while the bound consumer archives every endpoint and locale', async () => {
+  it('deduplicates the automatic batch while the bound consumer archives every endpoint and published locale', async () => {
     const h = await setup()
     const batch = h.service.requestAutomatic()
     expect(h.service.requestAutomatic()).toBe(batch)
     const { results } = await batch
-    expect(results).toHaveLength(6)
+    // 三个 feed，但 `financial-events` 与 `central-bank-activities` 不发布英文：
+    // 自动采集只排 3 个 zh + 1 个 economic-data en = 4 个作用域，不再为空转的 en 请求花配额。
+    expect(results).toHaveLength(4)
     expect(results.every(result => result.state === 'succeeded')).toBe(true)
-    expect(h.evidence.append).toHaveBeenCalledTimes(6)
-    expect(h.database.prepare('select count(*) as count from mi_macro_calendar_market_event_collections').get()?.count).toBe(6)
+    expect(h.evidence.append).toHaveBeenCalledTimes(4)
+    expect(h.database.prepare('select count(*) as count from mi_macro_calendar_market_event_collections').get()?.count).toBe(4)
     expect(h.reservations.size).toBe(0)
   })
 

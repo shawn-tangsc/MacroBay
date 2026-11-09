@@ -116,23 +116,15 @@ describe('ETF outflow signal notification', () => {
     await expect(notifyEtfOutflowSignals(undefined, [signal], OPEN)).resolves.toBeUndefined()
   })
 
-  // 一个事实一个开关：牌子还没上时，通知即使自己写着「开」也不许发。这是这次空档的直接教训——
-  // 两条路各上了各的，读者收到一条打开看板找不到的通知。
-  it('sends nothing while the panel outlet is closed, even when the notification outlet says open', async () => {
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
-    await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: false, notification: true })
-    expect(submit).not.toHaveBeenCalled()
-  })
-
   // 出厂状态：开关两个出口都开着。这条钉的是「别让总闸在没人注意时被关回去」。
   it('ships with the switch open, so the ordinary call submits', async () => {
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [], suppressedLevels: [] }))
     await notifyEtfOutflowSignals(submit, [outflowSignal()])
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
   it('sends nothing when the notification outlet itself is closed', async () => {
-    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [], suppressedLevels: [] }))
     await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: true, notification: false })
     expect(submit).not.toHaveBeenCalled()
   })

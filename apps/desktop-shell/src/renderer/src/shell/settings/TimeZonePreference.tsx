@@ -11,6 +11,7 @@ import {
 import { formatShellTimeZoneLabel, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
 import { platformText } from '../../i18n/platformText'
+import { SettingInfoPopover } from './SettingInfoPopover'
 
 /**
  * Owner: apps/desktop-shell renderer / shell（基础设置 · 时区）。
@@ -44,6 +45,12 @@ export function TimeZonePreference(props: {
       <div className="preference-heading">
         <Globe2 size={18} />
         <span>{t.timeZone}</span>
+        {/* 说明句收进行标题旁的 ⓘ：正文只留字段名、当前值与控件（状态句仍在下方的条件提示里）。 */}
+        <SettingInfoPopover
+          hintKey="timeZoneOpenTimesHint"
+          infoLabelKey="timeZoneOpenTimesHintInfo"
+          resolveText={(key: string) => (t as unknown as Record<string, string>)[key] ?? ''}
+        />
       </div>
       <Select<TimeZoneSetting>
         className="preference-select"
@@ -54,8 +61,6 @@ export function TimeZonePreference(props: {
         filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
         onChange={props.onChange}
       />
-      {/* 常驻说明：开盘时刻跟这项设置走。与上面的「读不到系统时区」提示条件不同，这条始终显示。 */}
-      <p className="preference-hint">{t.timeZoneOpenTimesHint}</p>
       {systemTimeZone === fallbackTimeZone && props.value === systemTimeZoneSetting ? (
         <p className="preference-hint">{t.timeZoneUnavailable}</p>
       ) : null}

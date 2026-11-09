@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 import { createMacroCalendarSqlite } from './macroCalendarSqlite'
 
-import type { MacroCalendarRevision } from './macroCalendarContracts'
+import type { MacroCalendarEvidenceRef, MacroCalendarRevision } from './macroCalendarContracts'
 import { macroCalendarStoragePolicy } from './macroCalendarPolicy'
 import { createMacroCalendarRepository, macroCalendarSnapshotHash } from './macroCalendarRepository'
 
@@ -359,7 +359,7 @@ function revision(overrides: Partial<MacroCalendarRevision> = {}): MacroCalendar
   }
 }
 
-function evidence(evidenceHash: string, fieldKind: 'schedule' | 'actual') {
+function evidence(evidenceHash: string, fieldKind: 'schedule' | 'actual'): MacroCalendarEvidenceRef {
   return { providerId: 'macro-calendar-bls', descriptorId: 'fixture-bls-schedule', sourceUrl: 'https://official.invalid/release', evidenceHash, detectedAt: '2026-08-01T12:00:00.000Z', fieldKinds: [fieldKind] }
 }
 

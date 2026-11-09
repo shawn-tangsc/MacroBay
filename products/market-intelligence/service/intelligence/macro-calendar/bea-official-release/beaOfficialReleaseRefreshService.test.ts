@@ -6,7 +6,7 @@ import type { MacroCalendarRevision } from '../macroCalendarContracts'
 
 const detectedAt = '2026-08-26T12:45:00.000Z'
 function schedule(patch: Partial<MacroCalendarRevision> = {}): MacroCalendarRevision { return { revisionId: 'pce', eventKey: 'US.PCE.2026-07', releaseGroupKey: 'US.BEA.PCE.2026-07', eventFamily: 'pce', eventNameKey: 'pce', countryCode: 'US', importance: 'high', periodKey: '2026-07', lifecycleState: 'scheduled', revisionKind: 'schedule', scheduledDate: '2026-08-26', scheduledAt: '2026-08-26T12:30:00.000Z', detectedAt: '2026-08-01T00:00:00.000Z', recordedAt: '2026-08-01T00:00:00.000Z', providerId: 'macro-calendar-bea', descriptorId: 'macro-calendar-bea-schedule', sourceUrl: 'https://www.bea.gov/news/schedule', evidenceHash: 'schedule', evidenceRefs: [], snapshotHash: 'schedule', parserVersion: 'schedule', caveats: [], ...patch } }
-const core = () => schedule({ revisionId: 'core', eventKey: 'US.CORE_PCE.2026-07', eventFamily: 'core-pce', eventNameKey: 'core-pce' })
+const core = (patch: Partial<MacroCalendarRevision> = {}) => schedule({ revisionId: 'core', eventKey: 'US.CORE_PCE.2026-07', eventFamily: 'core-pce', eventNameKey: 'core-pce', ...patch })
 const gdp = () => schedule({ revisionId: 'gdp', eventKey: 'US.GDP.2026-Q2.SECOND', releaseGroupKey: 'US.BEA.GDP.2026-Q2.SECOND', eventFamily: 'gdp', eventNameKey: 'gdp', periodKey: '2026-Q2' })
 const pioPage = readFileSync(new URL('./fixtures/bea-pio-july-2026.html', import.meta.url), 'utf8')
 const gdpPage = readFileSync(new URL('./fixtures/bea-gdp-second-q2-2026.html', import.meta.url), 'utf8')
@@ -30,7 +30,8 @@ describe('BEA official-release refresh service', () => {
   })
 
   it('writes the cleaned official PIO and GDP Second facts after their matching RSS identities and pages', async () => {
-    const appendManyIfNew = vi.fn((revisions: MacroCalendarRevision[]) => ({ insertedCount: revisions.length, dedupedCount: 0 }))
+    // 端口收的是 `readonly MacroCalendarRevision[]`：mock 参数按它写，宽的可变数组在这里不可赋给。
+    const appendManyIfNew = vi.fn((revisions: readonly MacroCalendarRevision[]) => ({ insertedCount: revisions.length, dedupedCount: 0 }))
     const requestPage = vi.fn(async (url: string) => {
       const body = url.endsWith('gdp-second-estimate-and-corporate-profits-2nd-quarter-2026') ? gdpPage : pioPage
       return { ok: true as const, descriptorId: 'macro-calendar-bea-release-page', status: 200, acceptedBytes: Buffer.byteLength(body), body, contentType: 'text/html; charset=UTF-8' }
@@ -61,10 +62,10 @@ describe('BEA official-release refresh service', () => {
   it('re-reads the effective group immediately before writing and fails closed on a new official conflict', async () => {
     const appendManyIfNew = vi.fn(() => ({ insertedCount: 2, dedupedCount: 0 }))
     let reads = 0
-    const conflicting = schedule({ revisionId: 'official', revisionKind: 'official-release', lifecycleState: 'released', actual: { numericValue: 9, unit: 'percent-yoy', display: '9%' }, publishedAt: '2026-08-26T12:30:00.000Z' })
+    const conflicting = schedule({ revisionId: 'official', revisionKind: 'official-release', lifecycleState: 'released', actual: { numericValue: 9, unit: 'percent-yoy', displayValue: '9%' }, publishedAt: '2026-08-26T12:30:00.000Z' })
     const service = createBeaOfficialReleaseRefreshService({
       repository: {
-        listEffectiveMonthAsOf: () => { reads += 1; return reads === 1 ? [schedule(), core()] : [conflicting, core({ revisionKind: 'official-release', lifecycleState: 'released', actual: { numericValue: 9, unit: 'percent-yoy', display: '9%' }, publishedAt: '2026-08-26T12:30:00.000Z' })] },
+        listEffectiveMonthAsOf: () => { reads += 1; return reads === 1 ? [schedule(), core()] : [conflicting, core({ revisionKind: 'official-release', lifecycleState: 'released', actual: { numericValue: 9, unit: 'percent-yoy', displayValue: '9%' }, publishedAt: '2026-08-26T12:30:00.000Z' })] },
         appendManyIfNew, recordBeaObservationAttemptIfDue: () => true, clearBeaObservation: vi.fn(), clearExpiredBeaObservations: vi.fn()
       },
       http: { requestRss: async () => ({ ok: true as const, descriptorId: 'macro-calendar-bea-release-rss', status: 200, acceptedBytes: Buffer.byteLength(rss), body: rss, contentType: 'application/rss+xml' }), requestPage: async () => ({ ok: true as const, descriptorId: 'macro-calendar-bea-release-page', status: 200, acceptedBytes: Buffer.byteLength(pioPage), body: pioPage, contentType: 'text/html' }) },

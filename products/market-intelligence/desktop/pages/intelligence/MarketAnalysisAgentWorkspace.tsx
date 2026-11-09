@@ -142,13 +142,15 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
           <small>{chat.agent?.modelName ?? t.loading}</small>
           <MarketAnalysisSessionMenu
             sessions={chat.sessions}
+            historyState={chat.historyState}
             currentSessionId={chat.sessionId}
             text={{
               newChat: t.newChatAction,
               history: t.sessionHistory,
               delete: t.deleteSession,
               deleteConfirm: t.deleteSessionConfirm,
-              cancel: t.cancel
+              cancel: t.cancel,
+              untitledSession: t.untitledSession
             }}
             onNewConversation={() => void chat.startNewConversation()}
             onSelectConversation={chat.selectConversation}

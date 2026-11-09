@@ -1,88 +1,43 @@
-/* 自动会话块：独立一块、左竖线 + 缩进、灰字。
-   不靠颜色区分——灰度下它仍然与正文列表分开，因为位置和结构不同（原型验收口径）。 */
+/* 自动会话块：独立一块、顶部分隔线。
+   块里的两层折叠头（整块 / 每天）都由 `CollapsibleGroup` 画——头行档位、箭头、`aria-controls`、
+   缩进、展开区自滚都在壳里，这里不再复刻第二套样式（同一个列表上两个长得不一样的可折叠头
+   正是用户第三次投诉的那类问题）。 */
 .agent-auto-sessions {
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
-.agent-auto-sessions__head {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  width: 100%;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+/* 本块的展开区**不自带滚动**：`CollapsibleGroup` 给展开区的是 `overflow: auto`（壳的通用规则），
+   这里按界面设计 2026-11-10 的判据覆盖成不滚——滚动交给侧栏唯一的 `.agent-session-list`，
+   同一列上不许出现第二条滚动条。上限由外层 `maxBodyHeight={null}` 一并去掉；
+   组件默认值 320 不动（通知、情报源详情、运行活动面板还在用）。 */
+.agent-auto-sessions .collapsible-group__body {
+  overflow-y: visible;
+  overflow-x: visible;
+  max-height: none;
 }
 
-.agent-auto-sessions__title { font-weight: 600; }
-.agent-auto-sessions__meta { color: var(--muted); font-size: 11px; }
-
+/* 每天一组：整块进一层 12。块头在 12，日头与行内容都落在 24——**只进一层**，
+   行内容不许再叠 12 变成 36（界面设计 2026-11-09 写死的判据）。 */
 .agent-auto-sessions__day {
-  margin-left: 2px;
-  padding-left: 6px;
-  border-left: 2px solid var(--border);
+  padding-left: 12px;
 }
 
-.agent-auto-sessions__day-head {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  padding: 3px 0 3px 8px;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.agent-auto-sessions__item {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 3px 0 3px 10px;
-  border: 0;
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.agent-auto-sessions__item-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-auto-sessions__item-meta {
-  color: var(--muted);
-  font-size: 10.5px;
-  white-space: nowrap;
-}
-
+/* 展开全部：行内文字动作，11 / 400 / muted，左缘与日头、行内容同一档（24），随内容滚走。 */
 .agent-auto-sessions__all {
-  padding: 4px 0 0 16px;
+  display: block;
+  padding: 4px 0 4px 24px;
   border: 0;
   background: none;
   color: var(--muted);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--font-meta);
+  font-weight: 400;
   text-decoration: underline;
   cursor: pointer;
 }
 
-.agent-auto-sessions__head:focus-visible,
-.agent-auto-sessions__day-head:focus-visible,
-.agent-auto-sessions__item:focus-visible,
 .agent-auto-sessions__all:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

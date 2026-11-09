@@ -45,6 +45,7 @@ export function failureAdvice(code: string | undefined): BriefFailureAdvice {
     case 'editorial-timeout':
     case 'agent-turn-output-truncated':
     case 'timeout':
+    case 'invalid-output-language':
       return 'retryOrModel'
     case 'source-failed':
     case 'candidate-overflow':
@@ -62,7 +63,7 @@ export function failureAdvice(code: string | undefined): BriefFailureAdvice {
 const conclusionFailureCodes: ReadonlySet<string> = new Set([
   'invalid-conclusion-synthesis', 'missing-conclusion-synthesis', 'missing-conclusion-evidence',
   'missing-conclusion-divergence', 'missing-mechanism', 'data-only-summary', 'missing-outlook',
-  'repeated-direction', 'duplicate-statement', 'forbidden-forecast', 'invalid-number-format',
+  'repeated-direction', 'duplicate-statement', 'invalid-number-format',
   'copied-conclusion', 'asset-equality-claim', 'direction-conflict', 'row-set-mismatch'
 ])
 
@@ -71,4 +72,52 @@ export function briefFailureCodeLabel(code: string | undefined, labels: Readonly
   if (!code) return labels.failurePanel.unknownCode
   return labels.failure[code]
     ?? (conclusionFailureCodes.has(code) ? labels.failurePanel.conclusionRejected : labels.failurePanel.unknownCode)
+}
+
+/**
+ * 详情行里不许出现内部写法的那几个码。
+ *
+ * 结论校验的 detail 是写给模型看的字段诊断（`missing: outlook`、`summary: ...`），
+ * 另外三种（隐去原因、宏观 why）带的是内部 id 或英文指令。读者要的是「缺哪一项」，
+ * 不是这些串——所以这些码一律由 `conclusionReaderDetail` 决定详情行，绝不回落到原文。
+ */
+const internalDetailCodes: ReadonlySet<string> = new Set([
+  ...conclusionFailureCodes,
+  'missing-hidden-reason', 'missing-macro-why', 'invalid-macro-why'
+])
+
+export function failureDetailIsInternal(code: string | undefined): boolean {
+  return code !== undefined && internalDetailCodes.has(code)
+}
+
+/**
+ * 结论类失败的详情：只说「缺哪一项」或「问题在哪个字段」，用读者语言。
+ *
+ * - `missing: outlook, counterEvidence` → “缺：未来判断、反证条件”；
+ * - `summary`（重复方向/照抄这类以字段名做 detail）→ “问题在：摘要”；
+ * - 其它英文指令（例如 outlook 的写法要求）→ 不显示详情行：句子已经说了发生了什么，
+ *   把「该按什么格式写」印给读者只会多一句他改不动的话。
+ */
+export function conclusionReaderDetail(
+  code: string | undefined,
+  detail: string | undefined,
+  labels: Readonly<{
+    missing: string
+    problem: string
+    separator: string
+    fields: Readonly<Record<string, string>>
+  }>
+): string | undefined {
+  if (!failureDetailIsInternal(code) || detail === undefined) return undefined
+  const missing = /^missing: ([^;]+)/.exec(detail)
+  if (missing) {
+    const names = missing[1]
+      .split(',')
+      .map((field) => field.trim())
+      .filter((field) => labels.fields[field] !== undefined)
+      .map((field) => labels.fields[field] as string)
+    return names.length === 0 ? undefined : labels.missing.replace('{fields}', names.join(labels.separator))
+  }
+  const field = labels.fields[detail]
+  return field === undefined ? undefined : labels.problem.replace('{field}', field)
 }

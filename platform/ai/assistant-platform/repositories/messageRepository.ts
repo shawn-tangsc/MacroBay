@@ -20,21 +20,11 @@ import {
 } from '../schemas/messageSchemas'
 import type { TopicRepository } from './topicRepository'
 
-type MessageRow = {
-  id: string
-  topic_id: string
-  parent_id: string | null
-  role: AssistantMessageEntity['role']
-  data_json: string
-  searchable_text: string
-  status: AssistantMessageStatus
-  siblings_group_id: number
-  model_id: string | null
-  model_snapshot_json: string | null
-  stats_json: string | null
-  created_at: string
-  updated_at: string
-  deleted_at: string | null
+import { hydrateMessage, type MessageRow } from './messageRowHydration'
+
+/** 进 pending 的那一次写批次；其它状态不带（收尾之后这个字段没有意义）。 */
+function resolveOwnerBootId(status: AssistantMessageStatus, bootId: string | undefined): string | null {
+  return status === 'pending' ? bootId ?? null : null
 }
 
 export type BranchMessage = {
@@ -87,7 +77,8 @@ export type MessageRepository = {
 
 export function createMessageRepository(
   db: AssistantPlatformDatabase,
-  topics: TopicRepository
+  topics: TopicRepository,
+  options: Readonly<{ bootId?: string }> = {}
 ): MessageRepository {
   function insertMessage(
     topicId: string,
@@ -111,8 +102,8 @@ export function createMessageRepository(
       .prepare(
         `insert into assistant_messages (
           id, topic_id, parent_id, role, data_json, searchable_text, status, siblings_group_id,
-          model_id, model_snapshot_json, stats_json, created_at, updated_at, deleted_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)`
+          model_id, model_snapshot_json, stats_json, owner_boot_id, created_at, updated_at, deleted_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)`
       )
       .run(
         id,
@@ -126,6 +117,7 @@ export function createMessageRepository(
         dto.modelId ?? null,
         dto.modelSnapshot ? JSON.stringify(dto.modelSnapshot) : null,
         dto.stats ? JSON.stringify(dto.stats) : null,
+        resolveOwnerBootId(dto.status, options.bootId),
         now,
         now
       )
@@ -511,22 +503,3 @@ function readTopicActiveStats(db: AssistantPlatformDatabase, topicId: string): {
   }
 }
 
-function hydrateMessage(row: MessageRow): AssistantMessageEntity {
-  return {
-    id: row.id,
-    topicId: row.topic_id,
-    parentId: row.parent_id,
-    role: row.role,
-    data: JSON.parse(row.data_json) as AssistantMessageData,
-    searchableText: row.searchable_text,
-    status: row.status,
-    siblingsGroupId: row.siblings_group_id,
-    modelId: row.model_id,
-    modelSnapshot: row.model_snapshot_json
-      ? (JSON.parse(row.model_snapshot_json) as AssistantMessageEntity['modelSnapshot'])
-      : null,
-    stats: row.stats_json ? (JSON.parse(row.stats_json) as AssistantMessageEntity['stats']) : null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  }
-}

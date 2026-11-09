@@ -42,8 +42,10 @@ describe('intelligence capability coverage', () => {
 
   it('exposes the read surface and keeps destructive routes closed', () => {
     const decisionFor = (method: string) => intelligenceCapabilityCoverage[method]
-    const exposedCapability = (method: string): CapabilityId | undefined =>
-      decisionFor(method)?.state === 'exposed' ? decisionFor(method).capabilityId : undefined
+    const exposedCapability = (method: string): CapabilityId | undefined => {
+      const decision = decisionFor(method)
+      return decision?.state === 'exposed' ? decision.capabilityId : undefined
+    }
 
     expect(exposedCapability('intelligence.querySentimentSnapshot')).toBe('query_sentiment_snapshot')
     expect(exposedCapability('intelligence.getOperationsHealth')).toBe('get_operations_health')
@@ -69,11 +71,7 @@ describe('intelligence capability coverage', () => {
       return decision?.state === 'exposed' ? decision.capabilityId : undefined
     }
 
-    for (const method of [
-      'intelligenceSources.saveProfile',
-      'intelligenceSources.setEnabled',
-      'intelligenceSources.saveFocusSettings'
-    ]) {
+    for (const method of ['intelligenceSources.saveProfile', 'intelligenceSources.setEnabled']) {
       expect(exposedCapability(method), method).toBe('configure_intelligence_source')
     }
     for (const method of [

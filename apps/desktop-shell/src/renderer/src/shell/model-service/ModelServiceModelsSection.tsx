@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Filter, Plus, RefreshCw, Search } from 'lucide-react'
 
+import { Button } from 'antd'
+
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { Tooltip } from '@platform/ui/components/tooltip'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -189,35 +192,58 @@ export function ModelServiceModelsSection({
             {...(configuredProtocolCount === undefined ? {} : { configuredProtocolCount })}
             detection={detection}
           />
-          <button
-            type="button"
-            className="model-service-pill"
-            data-models-sync
-            disabled={syncDisabled}
-            title={syncHint}
-            aria-label={syncHint ?? labels.fetchModelList}
-            onClick={onSyncModels}>
-            <RefreshCw size={13} aria-hidden="true" />
-            {labels.fetchModelList}
-          </button>
+          {/*
+            * 普通动作按档位：antd `Button` 默认档（不再挂 `model-service-pill`——胶囊在本界面没有第二处）。
+            * 禁用态不配提示：禁用控件接不到焦点，提示就成鼠标专属。
+            */}
+          {(() => {
+            const syncButton = (
+              <Button
+                aria-label={syncHint ?? labels.fetchModelList}
+                data-models-sync
+                disabled={syncDisabled}
+                icon={<RefreshCw size={13} aria-hidden="true" />}
+                onClick={onSyncModels}>
+                {labels.fetchModelList}
+              </Button>
+            )
+            // 禁用态不配提示（接不到焦点）：这时不套浮层，而不是套一个空壳。
+            return syncDisabled ? syncButton : (
+              <Tooltip
+                labelKey="modelService.fetchModelList"
+                resolveText={(key) => (key === 'modelService.fetchModelList' ? (syncHint ?? labels.fetchModelList) : '')}>
+                {syncButton}
+              </Tooltip>
+            )
+          })()}
           <ModelServiceClearModelsControl
             labels={labels}
             modelCount={modelCount + staleModelCount}
             disabled={isSyncing || isRemovingModel}
             onConfirm={onClearModels}
           />
-          <button
-            type="button"
-            className="model-service-pill model-service-pill-icon"
-            data-models-add
+          <IconButton
+            ariaLabelKey="modelService.addModel"
+            {...(canAddModel ? { tooltipKey: 'modelService.addModel' } : {})}
+            dataAttributes={{ 'data-models-add': true }}
             disabled={!canAddModel}
-            title={addHint}
-            aria-label={addHint}
-            onClick={onAddModel}>
-            <Plus size={13} aria-hidden="true" />
-          </button>
+            icon={Plus}
+            onSelect={onAddModel}
+            resolveText={(key) => (key === 'modelService.addModel' ? (addHint ?? labels.addModel) : '')}
+            size="sm"
+          />
         </span>
       </div>
+
+      {/*
+        * 禁用态的**看得见的**说明（契约：禁用控件接不到焦点，悬停提示对键盘读者等于不存在）。
+        * 没有 Key 时同步与加模型都不可用，就在工具条下面写一句为什么，而不是只在 title/aria 里说。
+        */}
+      {!canSyncModels ? (
+        <p className="model-service-key-hint" data-models-key-hint>
+          {labels.modelSyncNeedsApiKey}
+        </p>
+      ) : null}
 
       {staleModelCount > 0 ? (
         <p className="model-service-stale-hint" data-models-stale-hint>
@@ -268,14 +294,15 @@ export function ModelServiceModelsSection({
       {syncErrorText !== null ? (
         <p className="model-service-sync-error" data-models-sync-error role="alert">
           <span>{syncErrorText}</span>
-          <button
-            type="button"
-            className="model-service-link"
+          <Button
+            type="text"
+            size="small"
+            className="text-action"
             data-models-sync-retry
             disabled={isSyncing}
             onClick={onSyncModels}>
             {labels.retry}
-          </button>
+          </Button>
           {syncErrorDetail !== null ? (
             <small className="model-service-sync-detail" data-models-sync-detail>
               {labels.connectionCheckDetailPrefix}
@@ -320,8 +347,7 @@ export function ModelServiceModelsSection({
           const collapsed = collapsedGroups.has(group.name)
           return (
             <section key={group.name} className="model-service-group" data-model-group={group.name}>
-              <button
-                type="button"
+              <Button
                 className="model-service-group-header"
                 data-model-group-toggle
                 aria-expanded={!collapsed}
@@ -329,7 +355,7 @@ export function ModelServiceModelsSection({
                 <ChevronRight size={14} className={collapsed ? 'model-service-chevron' : 'model-service-chevron open'} />
                 <strong>{group.name}</strong>
                 <small>{group.models.length}</small>
-              </button>
+              </Button>
               {collapsed ? null : (
                 <div className="model-service-group-body">
                   {group.models.map((model) => (

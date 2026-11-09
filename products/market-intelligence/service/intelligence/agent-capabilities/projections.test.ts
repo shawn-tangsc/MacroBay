@@ -4,7 +4,8 @@ import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import {
   projectSourceDetail,
   projectSourceSummary,
-  projectTimelineRow
+  projectTimelineRow,
+  type SourceDetailProjectionInput
 } from './projections'
 
 const profile: IntelligenceSourceProfile = {
@@ -23,8 +24,7 @@ const profile: IntelligenceSourceProfile = {
   updatedAt: '2026-10-01T00:00:00.000Z'
 }
 
-const definition = {
-  sourceId: 'fred-rates-liquidity',
+const definition: SourceDetailProjectionInput['definition'] = {
   displayName: 'FRED rates & liquidity',
   sourceGroup: 'official-source',
   category: 'macro',
@@ -77,9 +77,9 @@ describe('agent source projections', () => {
     const detail = projectSourceDetail({
       definition,
       profile,
+      // 凭据状态只剩「有没有」与「上次校验时间」；预览值已不在契约里，注入不进去。
       credentialStatus: {
         hasCredential: true,
-        maskedPreview: 'sk-masked-preview',
         lastValidatedAt: '2026-10-02T00:00:00.000Z'
       },
       health,
@@ -90,8 +90,9 @@ describe('agent source projections', () => {
 
     expect(serialized).not.toContain('credentialRef')
     expect(serialized).not.toContain('sourceSpecificConfigJson')
+    // 预览值已从输入契约里删掉（结构性保证）；这里仍钉住输出不得出现这个键，
+    // 防止将来有人把预览重新加回投影而不自知。
     expect(serialized).not.toContain('maskedPreview')
-    expect(serialized).not.toContain('sk-masked-preview')
     expect(serialized).not.toContain('profileId')
     expect(serialized).not.toContain('workerStatus')
     expect(serialized).not.toContain('lastRunSummary')

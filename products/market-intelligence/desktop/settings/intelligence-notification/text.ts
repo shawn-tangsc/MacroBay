@@ -84,6 +84,7 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.test.info': '和真实推送走同一条链路，发一条带【测试】标记的真实样本；不会影响之后的真实推送。',
   'pages.intelligence.notification.test.sending': '正在发送…',
   'pages.intelligence.notification.test.sent': '已发到 {channel}（测试）',
+  'pages.intelligence.notification.test.cooldown': '刚发过，{seconds} 秒后再试',
   'pages.intelligence.notification.test.noData.sentiment': '最近 7 天没有符合条件的舆情，生成不了测试消息',
   'pages.intelligence.notification.test.noData.calendar-upcoming': '接下来没有可提醒的日历事件，生成不了测试消息',
   'pages.intelligence.notification.test.noData.calendar-landed': '最近没有已公布结果的日历事件，生成不了测试消息',
@@ -101,6 +102,8 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.threshold.info': '选「中」时只推中和高；选「低」会把低的那一档也推出去。',
   'pages.intelligence.notification.threshold.cost': '一天可能收到几十条。',
   'pages.intelligence.notification.threshold.aria': '最低强度的说明',
+  'pages.intelligence.notification.threshold.unreadable': '暂时读不到',
+  'pages.intelligence.notification.threshold.unreadableNote': '阈值读不到（设置文件读不到，可能已损坏），暂按「中」推送。',
   'pages.intelligence.notification.saveFailed': '这次没存上，可以再试一次。',
 
   'pages.intelligence.notification.infoAria': '这四条推送的生效条件',
@@ -189,6 +192,7 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.test.info': 'Runs the same path as a real push and sends a real sample marked [test]; later real pushes are unaffected.',
   'pages.intelligence.notification.test.sending': 'Sending…',
   'pages.intelligence.notification.test.sent': 'Sent to {channel} (test)',
+  'pages.intelligence.notification.test.cooldown': 'Just sent — try again in {seconds}s',
   'pages.intelligence.notification.test.noData.sentiment': 'Nothing qualifying in the last 7 days, so there is no test message to send',
   'pages.intelligence.notification.test.noData.calendar-upcoming': 'No upcoming calendar event to remind about, so there is no test message to send',
   'pages.intelligence.notification.test.noData.calendar-landed': 'No calendar event has a published result yet, so there is no test message to send',
@@ -206,6 +210,8 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.threshold.info': 'With Medium, only Medium and High are sent; Low also sends the weakest tier.',
   'pages.intelligence.notification.threshold.cost': 'Expect several dozen a day.',
   'pages.intelligence.notification.threshold.aria': 'About the minimum intensity',
+  'pages.intelligence.notification.threshold.unreadable': 'Not readable right now',
+  'pages.intelligence.notification.threshold.unreadableNote': 'The threshold could not be read (the settings file is unreadable, possibly corrupted), so pushes currently use "Medium".',
   'pages.intelligence.notification.saveFailed': 'That did not save. You can try again.',
 
   'pages.intelligence.notification.infoAria': 'When these four reach your phone',

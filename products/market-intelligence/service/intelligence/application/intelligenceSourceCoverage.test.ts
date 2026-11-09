@@ -44,27 +44,11 @@ describe('intelligenceSourceCoverage', () => {
     expect(coverage.find((row) => row.sourceId === 'alternative-fear-greed')?.productionState).toBe('pending')
   })
 
-  it('filters digital-asset-only sources when digital-assets focus is disabled', () => {
-    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
-    const pipeline = createIntelligencePipeline({ profileStore })
-
-    const coverage = buildSourceCoverage({
-      profileById: new Map(),
-      pipeline,
-      enabledFocusMarkets: ['global-macro']
-    })
-
-    expect(coverage.some((row) => row.sourceId === 'federal-reserve-rss')).toBe(true)
-    expect(coverage.some((row) => row.sourceId === 'binance-announcements')).toBe(false)
-    expect(coverage.every((row) => row.focusMarketActive)).toBe(true)
-  })
-
   it('does not project retired DeFiLlama stablecoins through generic pipeline coverage', () => {
     const pipeline = createIntelligencePipeline()
     const coverage = buildSourceCoverage({
       profileById: new Map(),
-      pipeline,
-      enabledFocusMarkets: ['digital-assets']
+      pipeline
     })
 
     expect(coverage.some((row) => row.sourceId === 'defillama-stablecoins')).toBe(false)

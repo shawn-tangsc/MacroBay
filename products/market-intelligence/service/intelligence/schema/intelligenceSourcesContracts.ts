@@ -5,7 +5,6 @@ import type {
 } from '../schema/intelligenceSource'
 
 export type SafeIntelligenceSourceDefinition = Omit<IntelligenceSourceDefinition, 'requestGovernance'>
-import type { IntelligenceFocusMarketSettings } from '../application/intelligenceFocusSettings'
 import type { IntelligencePipelineHealth } from '../application/intelligencePipeline'
 
 export type SafeVisibleRequestBudget = Readonly<{ maxRequests: number; windowSeconds: number }>
@@ -69,17 +68,12 @@ export type SafeIntelligenceSourcesPageState = {
   selectedSourceId?: string
   detail?: SafeIntelligenceSourceDetailView
   sourceHealthById?: Record<string, SafeIntelligenceSourceHealthView>
-  focusMarketSettings: IntelligenceFocusMarketSettings
 }
 
 export type SaveIntelligenceSourceProfileInput = Partial<
   Omit<IntelligenceSourceProfile, 'profileId' | 'sourceId' | 'updatedAt'>
 > & {
   sourceId: string
-}
-
-export type SaveIntelligenceFocusMarketSettingsInput = {
-  enabledFocusMarkets: IntelligenceFocusMarketSettings['enabledFocusMarkets']
 }
 
 export type SafeRunNowResult = {

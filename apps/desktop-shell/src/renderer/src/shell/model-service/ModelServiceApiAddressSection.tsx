@@ -1,5 +1,7 @@
-import { Input } from 'antd'
+import { Button, Input } from 'antd'
 import { Settings2 } from 'lucide-react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import type { ModelChatProtocol, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { resolveProviderChatBase } from '@platform/ai/providers/providerChatEndpoints'
@@ -93,13 +95,10 @@ export function ModelServiceApiAddressSection({
     <section className="model-service-api-address" data-api-address-section>
       <div className="model-service-endpoint-summary-head">
         <span className="model-service-api-address-title">{labels.apiAddress}</span>
-        <button
-          type="button"
-          className="model-service-add-endpoint"
-          data-add-endpoint
-          onClick={onOpenRequestConfig}>
+        {/* 命令型动作 → antd `Button` 默认档（类名原样，外观由类与主题给）。 */}
+        <Button className="model-service-add-endpoint" data-add-endpoint onClick={onOpenRequestConfig}>
           {labels.requestConfigAddEndpoint}
-        </button>
+        </Button>
       </div>
 
       <div className="model-service-endpoint-summary-main">
@@ -115,15 +114,16 @@ export function ModelServiceApiAddressSection({
           /* 只响应点击：抽屉关闭时焦点会还给这个只读框，onFocus 会把抽屉立刻重新打开。 */
           onClick={onOpenRequestConfig}
         />
-        <button
-          type="button"
-          className="model-service-request-config-icon"
-          data-request-config-open
-          title={labels.requestConfig}
-          aria-label={labels.requestConfig}
-          onClick={onOpenRequestConfig}>
-          <Settings2 size={14} />
-        </button>
+        {/* 图标型动作 → `IconButton`（`sm`=22，尺寸由组件闭集给）。可访问名与 data 钩子不变。 */}
+        <IconButton
+          ariaLabelKey="modelService.requestConfig"
+          tooltipKey="modelService.requestConfig"
+          dataAttributes={{ 'data-request-config-open': true }}
+          icon={Settings2}
+          onSelect={onOpenRequestConfig}
+          resolveText={(key) => (key === 'modelService.requestConfig' ? labels.requestConfig : '')}
+          size="sm"
+        />
       </div>
 
       <div className="model-service-endpoint-summary-tags" data-endpoint-summary-tags>

@@ -112,20 +112,28 @@
 .mi-crypto-dashboard__heading { min-width: 0; }
 .mi-crypto-dashboard__label { margin: 0 0 10px; color: var(--mi-dashboard-lime); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; letter-spacing: .14em; }
 .mi-crypto-dashboard h1 { color: #fff; font-size: 30px; font-weight: 650; letter-spacing: -.035em; line-height: 1.16; }
-.mi-crypto-dashboard__heading > p:last-child { max-width: 660px; margin-top: 8px; color: var(--mi-dashboard-muted); font-size: 14px; line-height: 1.5; }
+/* 标题与它的 ⓘ 同一行：`flex` + `nowrap`，图标 `flex:none`。窄容器里让标题去截断，而不是把图标
+   一个人甩到下一行（那段读法说明原来在正文，现在收进这颗 ⓘ）。 */
+.mi-crypto-dashboard__title-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; min-width: 0; }
+.mi-crypto-dashboard__title-row > h1 { min-width: 0; }
+.mi-crypto-dashboard__title-row > .ant-btn { flex: none; }
 .mi-crypto-dashboard__tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-.mi-crypto-dashboard__briefing,
-.mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
-.mi-crypto-dashboard__briefing,
-.mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { cursor: pointer; }
-.mi-crypto-dashboard__configure { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
-.mi-crypto-dashboard__back { color: var(--mi-dashboard-muted); }
-.mi-crypto-dashboard__configure:focus-visible,
-.mi-crypto-dashboard__back:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+/* 两处页头命令按钮已是 antd `Button`：选择器带上 `.ant-btn` 才压得住它自带的
+   padding/height/border-radius。**尺寸与字号仍是原来那几个数**，换的只是交互元素。
+   第三颗「返回 Agent」用户 2026-11-09 定删掉，它的 `__back` 规则随按钮一起删除。 */
+.mi-crypto-dashboard__briefing.ant-btn,
+.mi-crypto-dashboard__configure.ant-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
+.mi-crypto-dashboard__briefing.ant-btn,
+.mi-crypto-dashboard__configure.ant-btn { cursor: pointer; }
+.mi-crypto-dashboard__configure.ant-btn { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
+.mi-crypto-dashboard__configure.ant-btn:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-.mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-align: left; }
+/* 行内那几颗动作已是 antd `Button`（text 档）：它自带的 height / line-height / display / hover 底色
+   会把这行撑高、给链接加一个方框，所以这里把它们按原样按住——字号、颜色、留白一个数没改。
+   `display: revert` 回到替换前的 UA 值（`inline-block`：antd 是 `inline-flex`），盒模型与原来一致；
+   这里 `padding: 0` 是**替换前就有的**（不是这一批新加的，与 `__more-button` 那处不同）。 */
+.mi-crypto-dashboard__source-row button { display: revert; border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; height: auto; line-height: inherit; padding: 0; text-align: left; }
+.mi-crypto-dashboard__source-row button:hover { background: transparent; }
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 .mi-crypto-dashboard__capital-positioning-row {

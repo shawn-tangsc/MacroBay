@@ -22,6 +22,19 @@ const signal = (overrides: Partial<ModuleSignal> = {}): ModuleSignal => ({
 })
 
 /** A successful read carrying these signals; the chip never sees the window. */
+/**
+ * 一次读不成的四种来路，读者能做的事不同：形状/版本不符时点重试必然再失败，必须说清「完全退出后重开」；
+ * 其余三种（时钟不合法、契约自报读不到、客户端抛错）是「这次没读成」，可以再试。
+ */
+it('names the cause of an unreadable positioning read, because only some are worth a retry', () => {
+  const readAt = (value: unknown, asOfArg: string = at) => projectDashboardPositioning(value, asOfArg, '7d')
+  expect(readAt({}, 'not-a-clock')).toMatchObject({ state: 'unavailable', cause: 'invalid-clock' })
+  expect(readAt({ state: 'available' })).toMatchObject({ state: 'unavailable', cause: 'contract-mismatch' })
+  expect(readAt({ state: 'unavailable', failureCode: 'open-interest-history-query-unavailable' }))
+    .toMatchObject({ state: 'unavailable', cause: 'query-failed' })
+  expect(readAt({ get state() { throw new Error('boom') } })).toMatchObject({ state: 'unavailable', cause: 'query-failed' })
+})
+
 const read = (signals: readonly ModuleSignal[]): ModuleSignalRead => ({
   state: 'available',
   signals: signals.map(signal => ({ signal, window: { unit: 'buckets', amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 } })),

@@ -52,6 +52,7 @@ export async function requestMessagesChatCompletion(input: MessagesChatRequest):
       phase: 'response',
       summary: failure.summary,
       httpStatus: response.status,
+      ...(failure.upstreamCode === undefined ? {} : { upstreamCode: failure.upstreamCode }),
       ...(failure.body ? { body: failure.body } : {})
     })
   }

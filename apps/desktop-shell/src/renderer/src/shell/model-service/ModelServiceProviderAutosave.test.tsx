@@ -120,21 +120,29 @@ describe('PLAT-61 改动即存边界', () => {
     const api = page.api
     const input = apiKeyInput(page.container)
 
-    await act(async () => {
-      input.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-    await typeInto(apiKeyInput(page.container), 'sk-cancelled-123456')
-    await act(async () => {
-      apiKeyInput(page.container).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    })
+    // 页面已渲染完成（渲染期的等待走真实计时器）后再换成注入时钟：这样编辑、提交、防抖
+    // 这几步的任何定时器都归虚拟时间管，推进它不花真实时间，也盖得住比 50ms 更长的防抖。
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        input.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        await Promise.resolve()
+      })
+      await typeInto(apiKeyInput(page.container), 'sk-cancelled-123456')
+      await act(async () => {
+        apiKeyInput(page.container).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      })
 
-    expect(apiKeyInput(page.container).value).toBe(providerFixture.apiKeyPreview)
-    expect(apiKeyInput(page.container).readOnly).toBe(true)
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    })
-    expect(api.upsert).not.toHaveBeenCalled()
+      expect(apiKeyInput(page.container).value).toBe(providerFixture.apiKeyPreview)
+      expect(apiKeyInput(page.container).readOnly).toBe(true)
+      // 「不写入」的判据不是「真等了 50ms 还没写」，而是「把虚拟时间推过任何可能的防抖仍不写」。
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(api.upsert).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('常驻只有一行替换提示；系统供应商的删除入口只在品牌块 ⋯ 菜单里且禁用', async () => {

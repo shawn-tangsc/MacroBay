@@ -1,17 +1,23 @@
 import { Alert, Button, Input, Switch } from 'antd'
-import { ChevronRight, Eye, EyeOff } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Eye, EyeOff, Info } from 'lucide-react'
+import { useEffect, useId, useState } from 'react'
 
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
+import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
+import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/intelligenceSourceTest'
 import { openProxySettings } from '../../shared/navigation/productShellNavigation'
 import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
 import { useProxyConfigured } from '../../shared/useProxyConfigured'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellDay } from '@platform/ui/time/shellTimeFormat'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import { SOURCE_REPEATED_FAILURE_THRESHOLD, type ProviderView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -45,6 +51,10 @@ export type ProviderDetailLabels = {
    * 原因码、自动同步已停止、上次成功日期照原样给，由下面三个模板拼。
    */
   unavailableReasonCode: string
+  /** ⓘ 的名字（与正文那句分开：一个是名字，一个是句子）。 */
+  unavailableReasonCodeAria: string
+  /** 不可用源策略组停用时那一句（通用）。 */
+  collectionPolicyStopped: string
   automaticSyncStopped: string
   lastSuccessfulSync: string
 }
@@ -81,6 +91,41 @@ export function healthBadgeView(
  * Right pane for a provider: lists every capability with its switch. Clicking a
  * capability drills into the existing source detail.
  */
+/**
+ * 一个源此刻的健康状态词。抽成具名函数（原来是内联立即执行），因为接下去要改这一行的结构：
+ * 内联 IIFE 切括号最容易切错，先把它变成有名字、可单独读的一段。
+ *
+ * 两条规则不变：
+ * - 没有 generic adapter 的源由产品自己的任务采集，管线对它无话可说，旧的手动失败记录
+ *   不该读成「这个源坏了」；
+ * - **「没有健康数据」不等于「健康」**：过去给已启用、无健康数据的日历源画绿的 healthy，
+ *   而 BLS 正是这种源——已启用、实际取不到。没有数据就不画药丸。
+ */
+function SourceHealthPill({ health, resolveText, unavailable }: {
+  health?: Readonly<{ runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'; consecutiveFailures?: number }>
+  resolveText: (key: string) => string
+  unavailable: boolean
+}): React.ReactElement | null {
+  if (unavailable) {
+    return <StatusPill labelKey="settings.intelligenceSources.unavailableShort" resolveText={resolveText} tone="muted" />
+  }
+  if (!health) return null
+  const view = healthBadgeView(health.runtimeStatus, health.consecutiveFailures ?? 0)
+  return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
+}
+
+/**
+ * 原因码 → 读者看到的说法。**不许从码里截数字**：码名一改，「403」就会变成别的东西、甚至取不到。
+ * 表里没有的码退回不带数字的那句，永远不抛错。加一个码就在这里加一行，别在别处写第二份映射。
+ */
+const UNAVAILABLE_SENTENCE: Readonly<Record<string, string>> = {
+  'official-endpoint-returned-403': '官方源暂时不可用（403）'
+}
+
+function unavailableSentence(reasonCode: string, fallback: string): string {
+  return UNAVAILABLE_SENTENCE[reasonCode] ?? fallback
+}
+
 function needsJob(source: SourceView): boolean {
   return source.collection === 'adapter'
     || source.collection === 'job'
@@ -93,12 +138,21 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, onSelectSource, showSourceDetails, sourceDetailLabels, translation }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation }: {
   labels: ProviderDetailLabels
   provider: ProviderView
-  onSelectSource: (sourceId: string, calendar: boolean) => void
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
+  /**
+   * 每个源的采集策略（频率档 / 范围 / 是否纳入舆情）。页面上常显：读者不必先选中某个源。
+   * 数据与写入都来自页面的 profile 列表，这里只画。
+   */
+  policy?: {
+    profiles: Readonly<Record<string, IntelligenceSourceProfile>>
+    labels: CollectionPolicyLabels
+    supportsSentimentById: Readonly<Record<string, boolean>>
+    onChange: (sourceId: string, patch: Partial<IntelligenceSourceProfile>) => void
+  }
   sourceDetailLabels?: { health: { statuses: Readonly<Record<string, string>> }; [key: string]: unknown }
   translation?: Parameters<typeof TranslationPreferencesSection>[0]
   onChanged?: () => void
@@ -117,8 +171,17 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
   const resolveText = useProductTextKey()
-  // 读者已经配好自定义代理时，不再把「需要连接 VPN」当成他还没做的事（MI-11-R196）。
+  /*
+    每个源策略组的「停用原因」id 前缀。原因句在组开头，视觉上谁都看得见，但读屏不看位置——
+    键盘用户 Tab 进一片灰控件只会听到一串「不可用」，不知道为什么。所以用 `role="group"` +
+    `aria-describedby` 把原因挂到这一组上。**id 按源派生**：同一屏有多个不可用源时，
+    组件级单个 id 会让每组的 <p> 撞同一个 id，`aria-describedby` 只能解析到第一个。
+  */
+  const policyGroupIdBase = useId()
+  // 读者已经配好自定义代理时，不再把「需要连接 本地代理」当成他还没做的事（MI-11-R196）。
   const proxyConfigured = useProxyConfigured()
+  // 「上次成功同步」是读者可见的日期：走统一格式化（跟读者时区），不自己切 ISO 字符串。
+  const timeZone = useShellTimeZone()
   /** Set only by a transport-level refusal, so a rejected key never points at the proxy setting. */
   const [networkFailure, setNetworkFailure] = useState(false)
 
@@ -293,58 +356,70 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0
         const unavailable = source.unavailable
+        const policyStoppedId = `${policyGroupIdBase}-policy-${source.sourceId}`
         const tags = [
           unused || source.visibility === 'pending'
             ? labels.badges.pending
             : source.visibility === 'advanced'
+              // 「已启用／已停用」不进标签行：开关就在行尾，词说的是开关位置；读者要判断的是
+              // 这个源现在能不能用，那是状态串里状态词的事。同一个事实只说一次。
               ? labels.badges.advanced
-              : unavailable
-                // 「不可用」时不打「已启用／已停用」：那个词说的是启用开关的位置，读者要判断的是
-                // 这个源现在能不能用。三个状态词并排（已启用 + 未安排 + 不可用）没人知道哪个说了算。
-                ? null
-                : source.enabled ? labels.status.enabled : labels.status.disabled,
+              : null,
           isCalendar(source) ? labels.badges.calendar : null,
           ...source.panels.map((panel) => labels.panelNames[panel] ?? panel)
         ].filter((tag): tag is string => Boolean(tag))
         return <div key={source.sourceId}>
           <div className="source-provider-detail__row">
-          <button className="source-provider-detail__main" type="button" onClick={() => onSelectSource(source.sourceId, isCalendar(source))}>
+          {/* 非交互行：这个面板不提供「按源下钻」，所以它不画成入口（无按钮语义、无箭头、无
+              hover）——「看着能点、其实没有去处」是这一版在清的一类假可用。 */}
+          <div className="source-provider-detail__main">
             <strong>{name}</strong>
-            <span className="intelligence-source-tags">
-              {[...new Set(tags)].map((tag) => <em key={tag}>{tag}</em>)}
-              {source.requiresProxy && !proxyConfigured ? <em className="source-provider-detail__proxy">{labels.badges.proxy}</em> : null}
-              {needsJob(source) ? <em className={`source-provider-detail__job${source.jobRegistered ? ' is-on' : ''}`}>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</em> : null}
-              {(() => {
-                // A source with no generic adapter is collected by the product's own job; the
-                // pipeline has nothing to say about it, and an old failure from a manual attempt
-                // would otherwise read as "this source is broken".
-                const health = source.collection === 'none' ? undefined : details[source.sourceId]?.health
-                // 「没有健康数据」不等于「健康」：过去这里给已启用、无健康数据的日历源画绿的 healthy，
-                // 而 BLS 正是这种源——已启用、实际取不到。没有数据就不画药丸。
-                if (unavailable) {
-                  return <StatusPill labelKey="settings.intelligenceSources.unavailableShort" resolveText={resolveText} tone="muted" />
-                }
-                if (!health) return null
-                const view = healthBadgeView(health.runtimeStatus, health.consecutiveFailures ?? 0)
-                return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
-              })()}
-            </span>
+            {/* 状态串：**状态词 → 人话原因 → 上次成功**，一条 ` · ` 串起来，最多两行。 */}
+            <span className="source-provider-detail__status">
+              <SourceHealthPill
+                health={source.collection === 'none' ? undefined : details[source.sourceId]?.health}
+                resolveText={resolveText}
+                unavailable={Boolean(unavailable)} />
             {/* 「不可用」不是失败：药丸之外必须给出同一句原因，读者才知道为什么取不到、数据有多旧。 */}
             {unavailable
               ? <span className="source-provider-detail__unavailable">
                 {[
-                  labels.unavailableReasonCode.replace('{code}', unavailable.reasonCode),
+                  unavailableSentence(unavailable.reasonCode, resolveText('settings.intelligenceSources.unavailableShort')),
                   labels.automaticSyncStopped,
+                  // 读不出合法时刻就不写这一句，而不是印一段切出来的字符串。
                   ...(unavailable.lastSuccessfulSyncAt
-                    ? [labels.lastSuccessfulSync.replace('{date}', unavailable.lastSuccessfulSyncAt.slice(0, 10))]
+                    ? (() => {
+                      const day = formatShellDay(unavailable.lastSuccessfulSyncAt, timeZone)
+                      return day === null ? [] : [labels.lastSuccessfulSync.replace('{date}', day)]
+                    })()
                     : [])
                 ].join(' · ')}
               </span>
               : null}
-            {/* The one visible sign this row opens something: it is an entrance, not an action,
-                so it stays a row with an arrow rather than becoming a button. */}
-            <ChevronRight aria-hidden="true" className="source-provider-detail__chevron" size={13} />
-          </button>
+            {/* 原因码不进正文：它在 ⓘ 里，恰一处、默认不显示。正文那句是给读者的说法。 */}
+            {unavailable
+              ? <Popover
+                content={<code className="source-provider-detail__reason-code">{unavailable.reasonCode}</code>}
+                trigger={(triggerProps) => (
+                  <IconButton
+                    {...triggerProps}
+                    ariaLabelKey="settings.intelligenceSources.unavailableReasonCodeAria"
+                    icon={Info}
+                    resolveText={resolveText}
+                    size="sm"
+                    /* 圆形字形（Info / CircleHelp / HelpCircle）一律显式 plain：无框无底、悬停才出浅底；
+                       solid 只属于工具栏那一排（iconGlyphVariantGuard）。 */
+                    variant="plain" />
+                )} />
+              : null}
+            </span>
+            {/* 第二行：归属与任务状态。纯文本 ` · ` 串起，不再是一排药丸。 */}
+            <span className="source-provider-detail__tags-line">
+              {[...new Set(tags)].join(' · ')}
+              {source.requiresProxy && !proxyConfigured ? <><i aria-hidden="true"> · </i><em className="source-provider-detail__proxy">{labels.badges.proxy}</em></> : null}
+              {needsJob(source) ? <><i aria-hidden="true"> · </i>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</> : null}
+            </span>
+          </div>
           <Switch
             /* The row's label is the source name; the switch has to say what it does, or a screen
                reader reads the same name twice and cannot tell the two controls apart. */
@@ -352,9 +427,39 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
             checked={source.enabled}
             disabled={source.visibility === 'pending'}
             onChange={(enabled) => void toggle(source, enabled)}
+            /* ui-spec §8.3：开关唯一实现是 antd Switch，统一 small（32×18），默认尺寸不在允许写法内。 */
+            size="small"
           />
           </div>
-
+          {/* 采集策略（频率档 / 范围 / 是否纳入舆情）：每个源常显，读者不必先选中它。
+              产品自有采集的源只留启用开关，预设与范围不适用（组件自己写那句说明）。 */}
+          {/* 采集策略（频率档 / 范围 / 纳入情绪分析）：每个源一组，**默认收起**。
+              壳 `CollapsibleGroup` 已有自定义内容形态，头行档位、箭头、`aria-controls`、缩进都由
+              壳提供（另一条线 e20dd88 落地），本页不再自绘折叠头。 */}
+          {policy && policy.profiles[source.sourceId]
+            ? <CollapsibleGroup
+              resolveText={(key) => key === 'settings.intelligenceSources.collectionPolicy.title' ? policy.labels.title : ''}
+              titleKey="settings.intelligenceSources.collectionPolicy.title"
+            >
+              {/* 不可用的源不该还能改采集策略：整组停用，并说清为什么、什么时候恢复。
+                  这句是**通用结构**——所有不可用源同一句，不针对某一个源。 */}
+              {unavailable
+                ? <p className="source-provider-detail__policy-stopped" id={policyStoppedId}>{labels.collectionPolicyStopped}</p>
+                : null}
+              {/* 原因必须能被读屏关联到**这一组控件**：可用时不留组语义、也不留悬空 id。 */}
+              <div {...(unavailable ? { 'aria-describedby': policyStoppedId, role: 'group' } : {})}>
+                <CollectionPolicySection
+                  configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
+                  draftProfile={policy.profiles[source.sourceId]!}
+                  enabledConfigurable={source.visibility !== 'pending' && !unavailable}
+                  labels={policy.labels}
+                  onChange={(patch) => policy.onChange(source.sourceId, patch)}
+                  resolveText={resolveText}
+                  supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
+                />
+              </div>
+            </CollapsibleGroup>
+            : null}
         </div>
       })}
     </div>

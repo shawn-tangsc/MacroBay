@@ -210,6 +210,9 @@ function DetachedSettingsBody({ language, settingsPanelEntries }: {
                   key={panel.key}
                   type="button"
                   className={panelKey === panel.key ? 'settings-nav-item active' : 'settings-nav-item'}
+                  // 当前面板：整行即动作、保留现形（设置导航是分组列表，不是按钮组）；
+                  // 补的是读屏能拿到的「当前项」。
+                  {...(panelKey === panel.key ? { 'aria-current': 'page' as const } : {})}
                   onClick={() => setPanelKey(panel.key)}>
                   <Icon size={17} />
                   <span>{panel.label}</span>

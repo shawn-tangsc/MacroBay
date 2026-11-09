@@ -26,7 +26,9 @@ it('renders provider-only economic values and unknown country without numerical 
     expect(host.textContent).toContain('未标明国家')
     expect(host.textContent).toContain('暂不可比较')
     expect(host.textContent).toContain('本次尚未刷新')
+    // 抽屉里没有 ⓘ，所以这里按 `full` 显示：常态串（含采集时刻）仍在，不是被搬走了。
     expect(host.textContent).toContain('数据采集于')
+    expect(host.textContent).toContain('来源观测时间')
     expect(host.querySelector('[data-market-value="consensus"]')?.textContent).toContain('0')
     expect(host.querySelector('[data-market-value="providerPrevious"]')?.textContent).toBe('前值（0xRouter）暂无')
     expect(host.querySelector('[data-market-importance]')?.textContent).toBe('重要性高')
@@ -120,25 +122,35 @@ it('renders safe failed and empty endpoint feedback in English without claiming 
   } finally { await act(async () => root.unmount()) }
 })
 
-it('shows a refused automatic collection with its verdict, origin and time in the source line', async () => {
-  const { MarketCalendarSourceStatus } = await import('./MarketCalendarSourceStatus')
+it('shows a refused automatic collection with its verdict and retained time in the body, origin in the info lines', async () => {
+  const { MarketCalendarSourceStatus, calendarSourceStatusFragments } = await import('./MarketCalendarSourceStatus')
   const host = document.createElement('div'); const root = createRoot(host)
   const text = productText['en-US'].pages.intelligence.portal.calendar
   const observedAt = '2026-10-14T02:45:00.000Z'
   try {
-    await act(async () => root.render(scoped(<MarketCalendarSourceStatus text={text} source={{ eventType: 'economic-indicator',
+    // `full`：抽屉里没有 ⓘ，这一行必须自带触发方式——它就是"这次的自动重试被拒"那句话。
+    await act(async () => root.render(scoped(<MarketCalendarSourceStatus variant="full" text={text} source={{ eventType: 'economic-indicator',
       status: 'success', sourceObservedAt: observedAt, latestAttempt: { state: 'failed' as const,
         attemptedAt: '2026-10-14T13:00:00.000Z', failureCode: 'storage-pressure' as const, trigger: 'automatic' as const } }} />)))
     // Before this line existed, an automatic tick refused by the ceiling left no trace at all.
     expect(host.textContent).toContain('Refresh failed')
-    expect(host.textContent).toContain('Automatic')
     expect(host.textContent).toContain('Storage limited')
     expect(host.textContent).toContain('Showing previous data')
     expect(host.textContent).toContain('2026-10-14 02:45:00 GMT')
+    // 抽屉里没有 ⓘ：按 `full` 显示，所以触发方式仍在这一行里。
+    expect(host.textContent).toContain('Automatic')
+    const fragments = calendarSourceStatusFragments(
+      { eventType: 'economic-indicator', status: 'success', sourceObservedAt: observedAt,
+        latestAttempt: { state: 'failed', attemptedAt: '2026-10-14T13:00:00.000Z', failureCode: 'storage-pressure', trigger: 'automatic' } },
+      text,
+      (value) => value
+    )
+    expect(fragments.detail.join(' ')).toContain('Automatic')
+    expect(fragments.body.join(' ')).not.toContain('Automatic')
     // The verdict is localised, never the raw wire code.
     expect(host.textContent).not.toContain('storage-pressure')
 
-    await act(async () => root.render(scoped(<MarketCalendarSourceStatus text={text} source={{ eventType: 'economic-indicator',
+    await act(async () => root.render(scoped(<MarketCalendarSourceStatus variant="full" text={text} source={{ eventType: 'economic-indicator',
       status: 'success', sourceObservedAt: observedAt, latestAttempt: { state: 'failed', attemptedAt: '2026-10-14T13:00:00.000Z' } }} />)))
     expect(host.textContent).toContain('Refresh failed')
     expect(host.textContent).not.toContain('Storage limited')

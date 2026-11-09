@@ -30,6 +30,7 @@ export const agentTextZh: AgentText = {
     sessionsTab: '会话',
     newSession: '新建会话',
     defaultSessionName: '新的智能体会话',
+    unnamedSession: '未命名会话',
     clearFilteredSessions: '清空当前筛选会话',
     confirmDeleteFilteredSessions: (count) => `确认删除当前筛选出的 ${count} 个会话？`,
     searchSessions: '搜索会话',
@@ -39,7 +40,7 @@ export const agentTextZh: AgentText = {
     emptySessions: '还没有会话，先创建一个。',
     automationSessions: {
       title: '自动会话',
-      collapsedMeta: (today, total) => `今天 ${today} 条 · 共 ${total} 条`,
+      totalOnly: (total) => `共 ${total} 条`,
       today: '今天',
       yesterday: '昨天',
       showAll: '查看全部自动会话',

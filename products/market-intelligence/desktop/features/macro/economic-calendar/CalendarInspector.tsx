@@ -5,11 +5,15 @@ import { SidePanel } from '@platform/ui/components/side-panel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 
 /**
- * The detail is a **side panel**, not a drawer: it takes its own column and leaves the calendar
- * beside it. A reader who opens an event wants the days around it, so the board must not be covered.
+ * The detail is an **overlay layer**, not a column beside the calendar.
  *
- * One form only — the component's `flex` tier (480), the same width the floating card had. What
- * changed is where that width comes from: the calendar gives it up instead of being covered.
+ * It was briefly a flex sibling that took its own 480px column, which narrowed the month grid every
+ * time an event was opened — the opposite of what a detail is for: the reader opens it to read the
+ * event *against* the month, so the month must stay exactly where it was. `size: 'flex'` is still
+ * the panel's own tier (480); the page positions it out of flow (see `economicCalendar.css`) so the
+ * width never comes out of the calendar.
+ *
+ * One form only, so the page and the market dashboard card cannot drift to two widths.
  */
 export const CalendarDetailPanelPolicy = Object.freeze({ size: 'flex' as const })
 

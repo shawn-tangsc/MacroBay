@@ -17,7 +17,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
-import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
+import type { DashboardFundingRateHistoryPoint, DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import {
   dashboardPositioningPresentationPolicy,
   formatDashboardChange,
@@ -152,8 +152,20 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
     </header>
   )
 
-  const btcRate = funding.state === 'available' ? funding.btc : []
-  const ethRate = funding.state === 'available' ? funding.eth : []
+  // A leg that read fine keeps its rate even when the other leg did not: one unreadable leg must
+  // not erase a reading that is right there (its own line below says why the other is unknown).
+  const fundingLeg = (leg: 'btc' | 'eth'): readonly DashboardFundingRateHistoryPoint[] =>
+    funding.state === 'available' || funding.state === 'partial' ? funding[leg] ?? [] : []
+  const btcRate = fundingLeg('btc')
+  const ethRate = fundingLeg('eth')
+  const fundingMissingNote = funding.state === 'partial'
+    ? (['btc', 'eth'] as const).flatMap((asset) => {
+        const reason = funding.missing[asset]
+        return reason === undefined ? [] : [text.fundingMissingLeg
+          .replace('{asset}', text.assets[asset])
+          .replace('{reason}', text.fundingMissingReasons[reason])]
+      }).join(' · ')
+    : ''
   const available = positioning.state === 'available'
   const latest = available ? positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt : undefined
   // Two different facts, two different states: nothing collected yet is empty, a failed read is an
@@ -162,8 +174,20 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
     ? <LoadingState label={text.loading} minHeight={140} />
     : positioning.state === 'empty'
       ? <StateView state="empty" reasonCode="not-yet" size="md" />
-      : <StateView state="error" reasonCode="unavailable" size="md"
-          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: positioning.onReload }} />
+      : positioning.state === 'unavailable' && positioning.cause === 'contract-mismatch'
+        // A shape from another app version fails the same way every time: a retry button would be a
+        // false way out. The platform's `needs-restart` code + its relaunch action is the one path
+        // that actually changes the outcome; the sentence says why (and that reloading is not enough).
+        ? <>
+            <StateView state="error" reasonCode="needs-restart" size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void globalThis.window.platform.app.relaunch() } }} />
+            <p className="mi-positioning-panel__contract" role="status">{text.contractMismatch}</p>
+          </>
+        : positioning.state === 'unavailable'
+          ? <StateView state="error" reasonCode="unavailable" size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: positioning.onReload }} />
+          // `available` never reaches this slot (the chart is rendered instead).
+          : null
 
   return (
     <section className="mi-positioning-panel" data-state={positioning.state} data-funding-state={funding.state} data-window={window}
@@ -231,6 +255,10 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           {available
             ? <>
                 <PositioningChart positioning={positioning} funding={funding} text={text} />
+                {/* 一条腿读不到时的说明：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
+                {fundingMissingNote ? (
+                  <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingMissingNote}</p>
+                ) : null}
                 {/*
                   截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
                   一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import type { AgentFact, MarketAnalysisDomainObservation } from '../../../contracts/marketAnalysisContracts'
+import type { AgentFact } from '../../../contracts/marketAnalysisContracts'
+import type { MarketAnalysisDomainObservation } from './marketAnalysisContextProjection'
 import type { MacroEconomicCalendarMonthResult } from '../macro-calendar/macroEconomicCalendarQueryService'
 import { fact, projectMacroCalendar } from './marketAnalysisContextProjection'
 

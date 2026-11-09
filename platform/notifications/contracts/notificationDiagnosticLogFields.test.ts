@@ -23,14 +23,14 @@ describe('diagnostic log fields', () => {
   it('passes the reason through instead of dropping it', () => {
     const fields = diagnosticLogFields({
       code: 'submit-failed',
-      eventTypeId: 'platform.analysis.recovered',
-      producerId: 'market-intelligence.runMarketAnalysis',
+      eventTypeId: 'platform.sample-event',
+      producerId: 'sample-product.runJob',
       reason: 'TypeError',
       at: '2026-11-08T08:10:05.000Z'
     })
     expect(fields).toEqual({
-      eventTypeId: 'platform.analysis.recovered',
-      producerId: 'market-intelligence.runMarketAnalysis',
+      eventTypeId: 'platform.sample-event',
+      producerId: 'sample-product.runJob',
       reason: 'TypeError',
       at: '2026-11-08T08:10:05.000Z'
     })

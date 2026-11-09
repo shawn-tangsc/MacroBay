@@ -22,7 +22,11 @@ import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macr
  */
 export type CrossAssetStatusRow =
   | Readonly<{ id: CrossAssetId; state: 'connected' }>
-  | Readonly<{ id: 'dxy' | 'gold' | 'us10y' | 'realRate'; state: 'connected' | 'planned' }>
+  /**
+   * `loading` 与 `planned` 是两件事：前者是「那一路还没结算」，后者是「读完了、确实没有接入」。
+   * 把没结算画成「未接入」就是先给结论再改结论（用户 11-02 报过的同一类毛病）。
+   */
+  | Readonly<{ id: 'dxy' | 'gold' | 'us10y' | 'realRate'; state: 'connected' | 'planned' | 'loading' }>
 
 export type CrossAssetStatusId = CrossAssetStatusRow['id']
 
@@ -95,16 +99,24 @@ export const crossAssetStatusRows: readonly CrossAssetStatusRow[] = Object.freez
  * The rows for one macro snapshot and one daily rates snapshot. A macro row is connected only when
  * its own series has a reading; an empty or unavailable snapshot reproduces the no-data list exactly.
  */
+/** Which of the two reads behind the four macro rows are still in flight. */
+export type CrossAssetStatusPending = Readonly<{ macro: boolean; rates: boolean }>
+
 export function resolveCrossAssetStatusRows(
   readings: readonly MacroMarketSnapshotReading[],
-  rateReadings: readonly Readonly<{ seriesId: string }>[] = []
+  rateReadings: readonly Readonly<{ seriesId: string }>[] = [],
+  pending?: CrossAssetStatusPending
 ): readonly CrossAssetStatusRow[] {
   const available = new Set(readings.map(reading => reading.seriesId))
   const rates = new Set(rateReadings.map(reading => reading.seriesId))
-  return Object.freeze(crossAssetStatusRows.map(row =>
-    isPlannedMacroRow(row.id) && hasReading(row.id, available, rates)
-      ? Object.freeze({ id: row.id, state: 'connected' as const })
-      : row))
+  return Object.freeze(crossAssetStatusRows.map(row => {
+    if (!isPlannedMacroRow(row.id)) return row
+    // 拿到了就是 connected：加载态不许盖掉已经到的读数。
+    if (hasReading(row.id, available, rates)) return Object.freeze({ id: row.id, state: 'connected' as const })
+    // 没拿到、但那一路还在读 → 加载态；读完了仍然没有 → 原来的「未接入」。
+    const unsettled = row.id === 'dxy' || row.id === 'gold' ? pending?.macro === true : pending?.rates === true
+    return unsettled ? Object.freeze({ id: row.id, state: 'loading' as const }) : row
+  }))
 }
 
 /** The rows whose data is not connected yet, in the no-data state of the registry. */

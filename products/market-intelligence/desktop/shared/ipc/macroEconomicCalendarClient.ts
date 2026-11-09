@@ -192,7 +192,7 @@ function readManualBlsIcsCounts(
 function sanitizeEvent(value: unknown, asOf: string): MacroEconomicCalendarEventView | undefined {
   if (!isRecord(value) || !hasOnlyFields(value, [
     'eventKey', 'releaseGroupKey', 'eventFamily', 'titleKey', 'countryCode', 'importance', 'periodKey', 'lifecycleState',
-    'coverage', 'scheduledDate', 'scheduledAt', 'releaseTimeSource', 'conventionScheduledAt', 'officialReleaseDate', 'publishedAt', 'detectedAt', 'actual', 'previous', 'consensus',
+    'coverage', 'scheduledDate', 'scheduledAt', 'releaseTimeSource', 'conventionScheduledAt', 'officialReleaseDate', 'publishedAt', 'detectedAt', 'createdAt', 'actualDetectedAt', 'actual', 'previous', 'consensus',
     'consensusState', 'surprise', 'providerIds', 'caveats'
   ]) || !hasRequiredFields(value, [
     'eventKey', 'releaseGroupKey', 'eventFamily', 'titleKey', 'countryCode', 'importance', 'periodKey', 'lifecycleState',
@@ -202,7 +202,7 @@ function sanitizeEvent(value: unknown, asOf: string): MacroEconomicCalendarEvent
     !isBoundedText(value.periodKey) || value.countryCode !== 'US' || value.importance !== 'high' || !isLifecycleState(value.lifecycleState) ||
     !isCoverage(value.coverage) || !isDate(value.scheduledDate) || !isCanonicalUtcMillis(value.detectedAt) || value.detectedAt > asOf ||
     !isOptionalCanonicalUtcMillis(value.scheduledAt) || !isReleaseTimeSource(value.releaseTimeSource) ||
-    !isOptionalCanonicalUtcMillis(value.conventionScheduledAt) || !isOptionalDateProperty(value, 'officialReleaseDate') || !isOptionalCanonicalUtcMillis(value.publishedAt) ||
+    !isOptionalCanonicalUtcMillis(value.conventionScheduledAt) || !isOptionalDateProperty(value, 'officialReleaseDate') || !isOptionalCanonicalUtcMillis(value.publishedAt) || !isOptionalCanonicalUtcMillis(value.createdAt) || !isOptionalCanonicalUtcMillis(value.actualDetectedAt) ||
     !isValue(value.actual) || !isValue(value.previous) || !isConsensus(value.consensus) ||
     !macroEconomicCalendarConsensusPolicy.isState(value.consensusState) ||
     !macroEconomicCalendarConsensusPolicy.isSurprise(value.surprise) || !isProviderIds(value.providerIds) || !isCaveats(value.caveats)) return undefined
@@ -214,6 +214,8 @@ function sanitizeEvent(value: unknown, asOf: string): MacroEconomicCalendarEvent
     ...(value.conventionScheduledAt ? { conventionScheduledAt: value.conventionScheduledAt as string } : {}),
     ...(value.officialReleaseDate ? { officialReleaseDate: value.officialReleaseDate as string } : {}),
     ...(value.publishedAt ? { publishedAt: value.publishedAt } : {}), detectedAt: value.detectedAt,
+    ...(value.createdAt ? { createdAt: value.createdAt as string } : {}),
+    ...(value.actualDetectedAt ? { actualDetectedAt: value.actualDetectedAt as string } : {}),
     ...(value.actual ? { actual: value.actual } : {}), ...(value.previous ? { previous: value.previous } : {}),
     consensus: value.consensus, consensusState: value.consensusState, surprise: value.surprise,
     providerIds: [...value.providerIds], caveats: [...value.caveats]

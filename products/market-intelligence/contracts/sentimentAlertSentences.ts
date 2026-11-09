@@ -23,13 +23,15 @@ export const sentimentAlertTemplates: Readonly<Record<SentimentAlertLocale, Sent
     title: '【{strength}】{headline}',
     bodyWithSource: '来源：{sourceName}',
     reason: '分析给出的强度达到了收推送的门槛。',
-    strength: Object.freeze({ high: '高', medium: '中', low: '弱' })
+    // 档位词与应用卡片上的 `strengthLevels` 逐词相同（高 / 中 / 低）：同一档两处写法不同，读者会
+    // 以为是两件事。`newsSentimentTierWords.test.ts` 逐词比这两处，谁单独改一边都会红。
+    strength: Object.freeze({ high: '高', medium: '中', low: '低' })
   }),
   'en-US': Object.freeze({
     title: '[{strength}] {headline}',
     bodyWithSource: 'Source: {sourceName}',
     reason: 'The analysis rated this high enough to reach your phone.',
-    strength: Object.freeze({ high: 'High', medium: 'Medium', low: 'Weak' })
+    strength: Object.freeze({ high: 'High', medium: 'Medium', low: 'Low' })
   })
 })
 

@@ -9,7 +9,6 @@
     "apps/desktop-shell/src/renderer/src/shell/agents/agentToolCallSummary.test.ts",
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AutomationSessions.test.tsx",
     "apps/desktop-shell/src/renderer/src/shell/assistants/library/useAssistantLibrary.test.ts",
-    "apps/desktop-shell/src/renderer/src/shell/assistants/library/useAssistantLibrary.ts",
     "apps/desktop-shell/src/renderer/src/shell/navigation/homeMenuLanding.test.tsx",
     "apps/desktop-shell/src/renderer/src/shell/navigation/mergeShellNavigation.test.ts",
     "apps/desktop-shell/src/renderer/src/shell/navigation/navigationLanding.test.tsx",
@@ -65,7 +64,6 @@
     "platform/product-registry/homeMenuDeclaration.test.ts",
     "platform/product-registry/notificationEventsValidation.test.ts",
     "platform/product-registry/productRegistrationFailure.test.ts",
-    "platform/product-registry/validate.ts",
     "platform/workspace/navigation/navigationRequest.test.ts",
     "platform/workspace/registry/workspacePageRegistry.test.ts"
   ]

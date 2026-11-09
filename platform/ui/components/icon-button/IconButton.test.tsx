@@ -16,6 +16,21 @@ const css = readFileSync(join(__dirname, 'iconButton.css'), 'utf8')
 /** 断言只看规则，不看注释：注释里写「不许 outline:none」不该让守卫自己变红。 */
 const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
 
+/**
+ * 等一个条件真的成立，而不是等一个固定时长：条件一成立就立刻返回，上限用完才红。
+ * 上限按「次数 × 10ms」算，不读系统时钟；超时的失败信息说明等的是哪件事。
+ */
+async function waitUntil(condition: () => boolean, what: string, attempts = 100): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (condition()) return
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  if (condition()) return
+  throw new Error(`timed out waiting for ${what}`)
+}
+
 /** 测试只证明「键被解析」，不替调用方造句。 */
 const shirts = (value: string): string => value
 
@@ -317,6 +332,47 @@ describe('IconButton', () => {
     expect(on.getAttribute('aria-label')).toBe(off.getAttribute('aria-label'))
   })
 
+  it('leaves the appearance untouched when no tone is given', () => {
+    // 不传 tone 时输出里不许出现任何颜色类，行内样式也只有宽高：旧调用点逐字不变。
+    const html = markup()
+    const button = mountElement()
+
+    expect(html).not.toContain('icon-button--danger')
+    expect(button.className).not.toContain('icon-button--danger')
+    expect(button.style.color).toBe('')
+    expect(button.style.borderColor).toBe('')
+    // 基础档的正文色仍是中性 token，危险色只出现在带修饰类的规则里。
+    const base = rules.slice(rules.indexOf('.icon-button {'), rules.indexOf('.icon-button.ant-btn {'))
+    expect(base).toContain('color: var(--muted)')
+    expect(base).not.toContain('--danger')
+  })
+
+  it('paints the danger tone at rest, without waiting for hover', () => {
+    const html = markup({ tone: 'danger' })
+    expect(html).toContain('icon-button--danger')
+
+    // 静止规则：默认态就是危险色，且这条规则不在 `:hover` 里。
+    const staticRule = rules.slice(
+      rules.indexOf('.icon-button--danger {'),
+      rules.indexOf('}', rules.indexOf('.icon-button--danger {'))
+    )
+    expect(staticRule).toContain('--danger')
+    expect(staticRule).not.toContain(':hover')
+    // 描边档的边界同样在静止态成立。
+    expect(rules).toMatch(/\.icon-button--danger\.icon-button--solid\.ant-btn:not\(:disabled\)[^{]*\{[^}]*border-color: var\(--danger\)/)
+    // hover 只保色，不把字压回中性色（`.icon-button:hover` 特异性更高，必须显式压回来）。
+    const hoverRule = rules.slice(
+      rules.indexOf('.icon-button--danger.ant-btn:not(:disabled):hover'),
+      rules.indexOf('}', rules.indexOf('.icon-button--danger.ant-btn:not(:disabled):hover'))
+    )
+    expect(hoverRule).toContain('--danger')
+
+    // 尺寸与档位不受影响：危险档不改 22/24，也不替代 plain/solid/overlay。
+    const button = mountElement({ tone: 'danger', size: 'sm' })
+    expect(button.style.width).toBe('22px')
+    expect(button.className).toContain('icon-button--plain')
+  })
+
   it('writes no aria-pressed when the button is not a toggle', () => {
     const html = markup()
     const button = mountElement()
@@ -376,21 +432,19 @@ describe('IconButton', () => {
       button.focus()
     })
 
-    // antd 把弹层挂在传送门里，一帧后才进 DOM；这里轮询而不是靠固定 sleep。
-    let described: string | null = null
-    for (let attempt = 0; attempt < 40 && described === null; attempt += 1) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10))
-      })
+    // antd 把弹层挂在传送门里，一帧后才进 DOM：等「描述的 id 指向了真节点、且节点里就是那句提示」
+    // 这个真条件成立，而不是轮固定次数、睡固定时长。
+    await waitUntil(() => {
       const id = button.getAttribute('aria-describedby')
-      if (id === null) continue
+      if (id === null) return false
       const target = document.getElementById(id)
-      if (target === null) continue
-      if (target.textContent === 'ui.test.hint') described = target.textContent
-    }
+      return target?.textContent === 'ui.test.hint'
+    }, 'the tooltip text to be attached as the accessible description')
 
     // 键盘用户 Tab 到它时，提示文字必须已经挂在可访问描述上；这是「禁用 + Tooltip」被禁掉的前提。
-    expect(described).toBe('ui.test.hint')
+    const describedId = button.getAttribute('aria-describedby')
+    expect(describedId).not.toBeNull()
+    expect(document.getElementById(describedId!)?.textContent).toBe('ui.test.hint')
   })
 
   it('refuses a tooltip on a disabled button — keyboard users could never reach it', () => {

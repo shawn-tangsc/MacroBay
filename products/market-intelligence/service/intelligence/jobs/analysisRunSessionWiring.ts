@@ -29,7 +29,7 @@ export function createRunSessionPort(
       createAgentSession: input.createAgentSession,
       appendAgentSessionMessages: input.appendAgentSessionMessages,
       // 「时刻 · 模块名」，按建会话时的读者时区与语言落成文本；之后不再随设置变。
-      titleFor: async queuedAt => formatRunSessionTitle(queuedAt, await input.language(), input.timeZone())
+      titleFor: async () => formatRunSessionTitle(await input.language())
     }),
     appendSummary: appendAnalysisRunSummary({
       findAgentSessionByAutomationRef: input.findAgentSessionByAutomationRef,

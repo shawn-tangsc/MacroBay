@@ -1,6 +1,7 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
 import {
   analysisConclusionPushesPhone,
   buildAnalysisConclusionRequest,
@@ -22,6 +23,11 @@ export type AnalysisConclusionNotice = Readonly<{
   triggerKey: string
   /** 这一版的统计截止（快照的 asOf）：去重键的第二个分量。 */
   cutoff: string
+  /**
+   * 去重桶：原因码 + 事件（`severity-confirmed:mi-eg-…`）。同日计数与平台去重键都用它，
+   * 所以不同事件各算一次、同一条事件重复触发仍被合并。
+   */
+  bucket: string
   summary: string
   conclusionDirection: 'bullish' | 'bearish' | 'range' | 'undecided' | 'mixed'
   /** 结论引用的事实 id；用了信号没带的就是"新信息"。 */
@@ -52,12 +58,12 @@ export function analysisPushDayOf(now: string, timeZone: string): string {
 }
 
 export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifierDeps): (notice: AnalysisConclusionNotice) => Promise<void> {
-  const counts = new Map<string, { day: string; module: number; byTriggerKey: Map<string, number> }>()
+  const counts = new Map<string, { day: string; module: number; byBucket: Map<string, number> }>()
   const bucketOf = (now: string, timeZone: string) => {
     const day = analysisPushDayOf(now, timeZone)
     const existing = counts.get(day)
     if (existing !== undefined) return existing
-    const fresh = { day, module: 0, byTriggerKey: new Map<string, number>() }
+    const fresh = { day, module: 0, byBucket: new Map<string, number>() }
     counts.set(day, fresh)
     return fresh
   }
@@ -65,9 +71,11 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
     try {
       const now = deps.now()
       const timeZone = deps.timeZone()
-      const bucket = bucketOf(now, timeZone)
-      const sentToday = { byTriggerKey: bucket.byTriggerKey.get(notice.triggerKey) ?? 0, module: bucket.module }
+      const dayCounts = bucketOf(now, timeZone)
+      const sentToday = { byBucket: dayCounts.byBucket.get(notice.bucket) ?? 0, module: dayCounts.module }
       const delivery = analysisConclusionPushesPhone({
+        // 信号键才谈"同向"；消息面/日历达门槛的运行没有信号可比，达门槛本身就该叫醒一次。
+        signalDriven: analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(notice.triggerKey),
         ...(notice.triggerDirection === undefined ? {} : { signalDirection: notice.triggerDirection }),
         conclusionDirection: notice.conclusionDirection,
         ...(notice.triggerFactIds === undefined ? {} : { signalFactIds: notice.triggerFactIds }),
@@ -82,7 +90,7 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
         ...buildAnalysisConclusionRequest({
           summary: notice.summary,
           citedCount: notice.citedCount,
-          triggerKey: notice.triggerKey,
+          bucket: notice.bucket,
           cutoff: notice.cutoff,
           occurredAt: notice.occurredAt,
           // 同向：收窄到中心，手机不响。`center` 平台必达，所以这里传的就是「只剩中心」。
@@ -90,8 +98,8 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
         })
       }
       await deps.submit(request)
-      bucket.module += 1
-      bucket.byTriggerKey.set(notice.triggerKey, (bucket.byTriggerKey.get(notice.triggerKey) ?? 0) + 1)
+      dayCounts.module += 1
+      dayCounts.byBucket.set(notice.bucket, (dayCounts.byBucket.get(notice.bucket) ?? 0) + 1)
     } catch {
       // 通知是记录的附加物：发不出去不许把一次成功的分析变成失败。
     }

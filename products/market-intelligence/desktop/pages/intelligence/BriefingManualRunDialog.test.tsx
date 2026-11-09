@@ -74,6 +74,29 @@ describe('briefing manual run dialog', () => {
     expect(bubble).toContain(String(grid.stepMinutes))
   })
 
+  it('keeps the date range sentence out of the body and readable in the date question mark', async () => {
+    await render()
+    // 2026-11-09 用户第三次发火后的规矩：正文只留字段名、当前值、控件；范围说明进 ⓘ。
+    // 能选的三天由 disabledDate 置灰表达，文字不再占正文一行。
+    expect(document.body.textContent).not.toContain('只能生成最近 3 天（含今天）')
+    const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${text.manualRunDialog.dateHintLabel}"]`)!
+    await act(async () => { trigger.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await Promise.resolve() })
+    expect(document.body.textContent).toContain('只能生成最近 3 天（含今天）')
+  })
+
+  it('keeps only the value in the target line, with the cutoff explanation and its zone in the question mark', async () => {
+    await render()
+    // 底部只留「将生成到 <日期>」这个当前值；时区名和"按下那一刻"都在截止时刻的 ⓘ 里。
+    const target = document.querySelector<HTMLElement>('[data-manual-target="true"]')!
+    expect(target.textContent).toBe('将生成到 2026-11-05')
+    expect(document.body.textContent).not.toContain('GMT+8')
+    const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${text.manualRunDialog.cutoffHintLabel}"]`)!
+    await act(async () => { trigger.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await Promise.resolve() })
+    expect(document.body.textContent).toContain(text.manualRunDialog.nowHint.replace('{zone}', 'GMT+8'))
+  })
+
   // 用户当场卡住的那一下：点时间那一行，说明浮层自己弹出来压住下拉。
   // 根因是 `<label>` 里第一个可聚焦元素是问号，点 label 任何位置都会"点到"它。
   it('keeps the question mark out of the field label, so clicking the row cannot open it', async () => {
@@ -191,7 +214,8 @@ describe('briefing manual run dialog', () => {
     const target = document.querySelector('[data-manual-target]')!
     expect(target.textContent).toContain('2026-11-05')
     expect(target.textContent).toContain('00:00')
-    expect(target.textContent).toContain('GMT+8')
+    // 2026-11-09 起正文只留值：时区名在截止时刻的 ⓘ 里，不在这一行（下一次别照旧断言加回来）。
+    expect(target.textContent).not.toContain('GMT+8')
     // 确认区那句不是装饰：它写的就是提交出去的那一天那一刻。
     await act(async () => { runButton().click() })
     expect(document.querySelector('[data-manual-target]')).not.toBeNull()

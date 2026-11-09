@@ -92,3 +92,53 @@ describe('the failure panel says what happened in a sentence', () => {
     expect(reason).not.toContain('1 毫秒')
   })
 })
+
+describe('a conclusion validation failure names the missing item, never the internal field', () => {
+  it('lists the missing fields in reader words', async () => {
+    const host = await render(base, { kind: 'editorial', code: 'invalid-conclusion-synthesis', detail: 'missing: outlook, counterEvidence' })
+    expect(host.querySelector('[data-failure-reason]')?.textContent).toContain('结论综述的字段不全或写法不合规')
+    expect(host.querySelector('[data-failure-detail]')?.textContent).toBe('详情：缺：未来判断、反证条件')
+    expect(host.querySelector('[data-failure-next]')?.textContent).toBe('接下来：重新生成一次；反复出现就换一个模型')
+    expect(host.textContent).not.toContain('outlook')
+    expect(host.textContent).not.toContain('counterEvidence')
+    expect(host.textContent).not.toContain('invalid-conclusion-synthesis')
+  })
+
+  it('drops an English field diagnostic instead of printing it', async () => {
+    const host = await render(base, { kind: 'editorial', code: 'missing-outlook', detail: 'outlook: state the next-1-3-day bias explicitly' })
+    expect(host.querySelector('[data-failure-reason]')?.textContent).toContain('结论缺未来一到三天的方向判断')
+    expect(host.querySelector('[data-failure-detail]')).toBeNull()
+    expect(host.textContent).not.toContain('outlook:')
+  })
+
+  it('names the field a repeated direction came from', async () => {
+    const host = await render(base, { kind: 'editorial', code: 'repeated-direction', detail: 'summary' })
+    expect(host.querySelector('[data-failure-detail]')?.textContent).toBe('详情：问题在：摘要')
+  })
+})
+
+describe('the conclusion failure table cannot fall back for a code it should carry', () => {
+  const conclusionCodes = [
+    'invalid-conclusion-synthesis', 'missing-conclusion-synthesis', 'copied-conclusion',
+    'missing-conclusion-evidence', 'missing-conclusion-divergence', 'missing-mechanism',
+    'data-only-summary', 'missing-outlook', 'repeated-direction', 'duplicate-statement',
+    'invalid-number-format', 'asset-equality-claim', 'missing-hidden-reason',
+    'missing-macro-why', 'invalid-macro-why'
+  ]
+  const fields = [
+    'direction', 'confidence', 'summary', 'outlook', 'conditions', 'counterEvidence', 'watch',
+    'regimeChange', 'confirmed', 'refuted', 'coreTension', 'whatWouldChange', 'evidenceRefs'
+  ]
+  it('carries a sentence in both locales for every conclusion validation code', () => {
+    const en = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+    for (const code of conclusionCodes) {
+      expect(base.failureSentences[code as keyof typeof base.failureSentences], code).toBeDefined()
+      expect(en.failureSentences[code as keyof typeof en.failureSentences], code).toBeDefined()
+    }
+  })
+  it('labels every field the synthesis contract can report as missing, in both locales', () => {
+    const en = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+    expect(Object.keys(base.failurePanel.conclusionDetail.fields)).toEqual(fields)
+    expect(Object.keys(en.failurePanel.conclusionDetail.fields)).toEqual(fields)
+  })
+})

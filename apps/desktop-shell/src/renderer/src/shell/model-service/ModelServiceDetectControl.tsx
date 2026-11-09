@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from 'antd'
 
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
 import { LoadingSpinner } from '@platform/ui/components/loading'
@@ -32,15 +33,14 @@ export function ModelServiceDetectControl({
 
   return (
     <>
-      <button
-        type="button"
-        className="model-service-pill"
+      {/* 普通动作按档位：antd `Button` 默认档（不再挂 `model-service-pill`）。 */}
+      <Button
         data-models-detect
         data-models-detect-running={detection.running ? 'true' : 'false'}
+        icon={detection.running ? <LoadingSpinner size="sm" /> : undefined}
         onClick={() => setOpen(true)}>
-        {detection.running ? <LoadingSpinner size="sm" /> : null}
         {detection.running ? `${labels.detectModels} ${done}/${total}` : labels.detectModels}
-      </button>
+      </Button>
 
       <ModelServiceModelDetectionDialog
         open={open}

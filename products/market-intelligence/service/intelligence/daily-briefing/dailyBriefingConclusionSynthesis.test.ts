@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import type { BriefingConclusionSynthesis, BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import { briefingConclusionBasis, validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
 import { briefingEditionRowIds } from './dailyBriefingEditionSet'
@@ -44,13 +44,13 @@ const document = (): DailyBriefingDocument => ({
     funds: [
       {
         id: 'etf-btc', group: 'funds', labelKey: 'dailyBriefing.row.etfBtc',
-        importance: { tier: 'support', source: 'rule', reasonCode: 'etf-flow' },
+        importance: { tier: 'support', source: 'rule', reasonCode: 'context' },
         state: 'available', value: { number: -643_200_000, format: 'flow-usd' }, change: null,
         window: 'trading-day', observedAt: '2026-10-30T00:20:00.000Z'
       },
       {
         id: 'funding-btc', group: 'funds', labelKey: 'dailyBriefing.row.fundingBtc',
-        importance: { tier: 'support', source: 'rule', reasonCode: 'funding-extreme' },
+        importance: { tier: 'support', source: 'rule', reasonCode: 'context' },
         state: 'available', value: { number: 0.0036, format: 'percent' }, change: null,
         window: '24h', observedAt: '2026-10-30T00:20:00.000Z'
       }
@@ -94,7 +94,9 @@ const bullishBriefPrior = (): BriefingPriorConclusion => ({
   summary: 'Liquidity expansion supports bids.', rationale: 'Price lags flows.', evidenceRefs: ['ev-9']
 })
 
-const synthesis = (overrides: Record<string, unknown> = {}) => ({
+// 按契约的结论形状造：宽对象会让 `direction`/`confidence` 拓宽成 string，
+// 「方向与冻结事实相反要拒」这条判据在类型上就站不住。
+const synthesis = (overrides: Partial<BriefingConclusionSynthesis> = {}): BriefingConclusionSynthesis => ({
   direction: 'bearish',
   confidence: 'high',
   summary: '美国 CPI 同比 3.4%，高于预期 3.2%，通过压低降息预期导致实际利率上行，BTC 因此承压下跌 1.10%。未来两到三个交易日基准情形偏空：BTC 弱于 ETH，若 ETF 流出维持在 -6.43 亿美元附近，反弹空间有限。',
@@ -206,7 +208,7 @@ describe('daily briefing conclusion synthesis', () => {
     const btcRow = base.data.market[0]!
     const ethRow = {
       ...btcRow,
-      id: 'eth',
+      id: 'eth' as const,
       labelKey: 'dailyBriefing.row.eth',
       value: { number: -1.0992, format: 'percent' as const }
     }

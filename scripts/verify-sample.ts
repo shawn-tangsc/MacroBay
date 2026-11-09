@@ -57,12 +57,18 @@ export const VERIFY_CHECKS = [
   'check:danger-color',
   'check:hex-color',
   'check:undefined-token',
+  'check:font-weight',
+  'check:font-size-literals',
+  'check:body-prose',
   'check:components-ownership',
   'check:async-initial-state',
   'check:state-content-ternary',
   'check:notification-approval',
   'typecheck',
+  'typecheck:products',
   'test',
+  // 排在 `test` 之后：它读的是那一步写下来的 vitest JSON 报告，不自己再跑一遍。
+  'check:test-budget',
   'build'
 ] as const
 

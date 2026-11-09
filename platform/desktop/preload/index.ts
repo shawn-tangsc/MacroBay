@@ -96,7 +96,12 @@ const api = {
   },
   settings: {
     get: () => ipcRenderer.invoke(IpcChannels.settingsGet),
-    update: (patch: unknown) => ipcRenderer.invoke(IpcChannels.settingsUpdate, patch)
+    update: (patch: unknown) => ipcRenderer.invoke(IpcChannels.settingsUpdate, patch),
+    /**
+     * 启动期读设置失败后的恢复面：`state` 读状态、`retry` 再读一次、`reset` 由读者显式重建。
+     * 只有这三个动作，界面决定不了行为。
+     */
+    recovery: (action: 'state' | 'retry' | 'reset') => ipcRenderer.invoke(IpcChannels.settingsRecovery, action)
   },
   /**
    * 更新提示：读一个状态、发两个动作。**没有地址参数**——载荷里能传地址，界面就等于能决定打开哪个页面。

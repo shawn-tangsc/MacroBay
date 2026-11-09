@@ -51,13 +51,66 @@ async function mount(settings: NotificationSettingsClient): Promise<HTMLElement>
   return container
 }
 
+describe('the ⓘ sits on the same line as the row title', () => {
+  it('keeps the title and its info button inside one non-wrapping head row', async () => {
+    // 缺陷（用户截图）：`.notification-row-copy` 是列布局，标题与 ⓘ 是它的两个兄弟，图标永远掉到下一行。
+    const container = await mount(client())
+
+    for (const row of [text.toastRow, text.desktopRow]) {
+      const head = [...container.querySelectorAll<HTMLElement>('.notification-row-head')]
+        .find((element) => element.textContent?.startsWith(row))!
+      expect(head).toBeDefined()
+      // 标题与图标是同一个行容器的**第二个子项**：列容器会把图标变成下一行的兄弟（用户截图那个缺陷）。
+      // `Popover` 会把触发器包进一颗定位锚点 `span`，图标按钮在那个 span 里——按真实结构断言。
+      const children = [...head.children]
+      expect(children.map((child) => child.tagName)).toEqual(['STRONG', 'SPAN'])
+      expect(children[0]?.textContent).toBe(row)
+      const icon = children[1]?.querySelector('button')
+      expect(icon?.getAttribute('aria-label')).toBe(
+        row === text.toastRow ? text.toastHintLabel : text.desktopHintLabel
+      )
+    }
+  })
+
+  it('declares a non-wrapping head that shrinks the title, not the icon', async () => {
+    // happy-dom 没有排版，所以「窄容器下不换行」这件事按规则断言：容器不换行、图标不缩、
+    // 标题可以缩（min-width: 0 + 省略号）。三条缺一条，图标就会掉下去或把标题顶出界。
+    const { readFileSync } = await import('node:fs')
+    // happy-dom 里 `import.meta.url` 不是 file URL，按仓库根拼路径（vitest 的 cwd 就是仓库根）。
+    const css = readFileSync(
+      `${process.cwd()}/apps/desktop-shell/src/renderer/src/shell/settings/notifications/notificationSettings.css`,
+      'utf8'
+    )
+    const rule = (selector: string): string => {
+      const start = css.indexOf(selector + ' {')
+      expect(start).toBeGreaterThanOrEqual(0)
+      return css.slice(start, css.indexOf('}', start))
+    }
+    expect(rule('.notification-row-head')).toContain('flex-wrap: nowrap')
+    expect(rule('.notification-row-head')).toContain('min-width: 0')
+    expect(rule('.notification-row-head strong')).toContain('min-width: 0')
+    expect(rule('.notification-row-head strong')).toContain('text-overflow: ellipsis')
+  })
+})
+
 describe('notification settings is two switches, one test button and a footer', () => {
   it('renders only that: no event list, no channel control, no fixed-on label', async () => {
     const container = await mount(client())
 
     expect(container.querySelectorAll('button[role="switch"]')).toHaveLength(2)
     expect(container.querySelector('[data-send-test]')).not.toBeNull()
-    expect(container.querySelector('.notification-footer')?.textContent).toContain(text.footerLine)
+    // 页脚那句是**说明**：不在正文里，收在右边那颗 ⓘ（点开才读得到，原文一字不改）。
+    expect(container.querySelector('.notification-footer')?.textContent).not.toContain(text.footerLine)
+    const footerInfo = container.querySelector<HTMLButtonElement>(
+      `.notification-footer button[aria-label="${text.footerHintLabel}"]`
+    )
+    expect(footerInfo).not.toBeNull()
+    await act(async () => {
+      footerInfo?.click()
+      await Promise.resolve()
+    })
+    // 点开之后原句出现（浮层挂在 body 上），且一字不改。
+    await vi.waitFor(() => expect(document.body.textContent).toContain(text.footerLine))
 
     // 订阅层 v2.20 撤销后，这些对象一个都不该留在屏上。
     expect(container.textContent).not.toContain('固定开启')
@@ -212,8 +265,12 @@ describe('notification settings is two switches, one test button and a footer', 
     expect(sentence).toContain(text.testUnavailable)
     // 码只在折叠区：主句里 0 次，展开后恰 1 处，而且是返回值里的原码。
     expect(sentence).not.toContain('push-unavailable')
-    const details = container.querySelector('[data-send-test-result] details')
-    expect(details?.hasAttribute('open')).toBe(false)
-    expect(details?.textContent).toContain('push-unavailable')
+    // 折叠区现在是壳（`CollapsibleGroup`）：判「默认收起」看 `aria-expanded`，
+    // 判「码在折叠区里」看内容节点——壳为 `aria-controls` 让内容首帧挂载，收起用 `display: none`，
+    // 所以「在 DOM 里」不等于「读者看得见」。
+    const header = container.querySelector('[data-send-test-result] .ant-collapse-header')
+    expect(header?.getAttribute('aria-expanded')).toBe('false')
+    const body = container.querySelector('[data-send-test-result] .collapsible-group__body')
+    expect(body?.textContent).toContain('push-unavailable')
   })
 })

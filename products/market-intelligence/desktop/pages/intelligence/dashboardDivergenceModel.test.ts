@@ -30,6 +30,8 @@ describe('divergence view model', () => {
 
   it('keeps the instant a withheld leg stopped, so the card can name the day', () => {
     const view = projectDashboardDivergence(dto, asOf)
+    // `withheld` only exists on the two settled branches of the union; the DTO above is `available`.
+    if (view.state !== 'available') throw new Error('expected rows')
     expect(view.withheld).toEqual([{ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf', observedAt: '2026-10-29T21:00:00.000Z' }])
   })
 

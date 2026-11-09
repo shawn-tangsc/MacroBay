@@ -1,168 +1,100 @@
 import {
   Activity,
-  Bot,
-  Database,
-  Globe2,
-  Home,
-  KeyRound,
-  Languages,
-  Moon,
-  Palette,
-  Plus,
   Settings,
-  Sun
 } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, ConfigProvider, Input, Select } from 'antd'
+import {useEffect, useLayoutEffect, useMemo, useState} from 'react'
 
-import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints } from '@platform/ai/providers/modelProviderTypes'
-import { isProviderDraftConnectionTestable } from '@platform/ai/providers/providerConfigDraft'
-import type { LocalizedText } from '@platform/product-manifest'
 
-import type { WorkspaceTabState } from '@platform/workspace/contracts'
-import type { AppLanguage, AppSettings, AppSettingsPatch, NetworkSettings, NotificationSettings, ProxyMode, ThemeMode } from '@platform/settings/schema/appSettings'
-import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
-import { LoadingState } from '@platform/ui/components/loading'
-import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
-import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
-import { AppShellToastLayer } from './window/AppShellToastLayer'
-import { useDocumentLanguage } from './hooks/useDocumentLanguage'
-import { useNavigationFocusHandoff } from './navigation/useNavigationFocusHandoff'
-import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
+import type {AppLanguage, AppSettings, AppSettingsPatch, NetworkSettings} from '@platform/settings/schema/appSettings'
+import type {SettingsStartupReadState} from '@platform/settings/store/settingsStore'
+import {createDefaultAppSettings} from '@platform/settings/schema/appSettings'
+import {resolveThemeMode, toThemeAttributes} from '@platform/ui/theme/themeModel'
+import {AppShellToastLayer} from './window/AppShellToastLayer'
+import {useDocumentLanguage} from './hooks/useDocumentLanguage'
+import {useNavigationFocusHandoff} from './navigation/useNavigationFocusHandoff'
 
 import brandMarkUrl from '../assets/brand/mark.svg'
-import { platformText, type PlatformText } from '../i18n/platformText'
-import { AppMenuBar } from './window/AppMenuBar'
-import { WindowControls } from './window/WindowControls'
-import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
-import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
-import { builtInWorkspacePages } from '@platform/workspace/registry/builtInWorkspacePages'
-import { resolveHomeMenuKey, toProductHomeMenuCandidate } from './navigation/homeMenuKey'
+import {platformText} from '../i18n/platformText'
+import {AppMenuBar} from './window/AppMenuBar'
+import {WindowControls} from './window/WindowControls'
+import {productMenuEntries, productSettingsEntries} from '@products/generated/shellRegistry'
+import {builtInWorkspacePages} from '@platform/workspace/registry/builtInWorkspacePages'
+import {resolveHomeMenuKey, toProductHomeMenuCandidate} from './navigation/homeMenuKey'
 import './navigation/settingsNav.css'
-import { UpdateActionButton } from './updates/UpdateActionButton'
-import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
-import { ModelServiceProviderPage } from './model-service/ModelServiceProviderPage'
-import { ModelServiceLoadSurface } from './model-service/ModelServiceLoadSurface'
-import { useModelServiceProviders } from './model-service/useModelServiceProviders'
-import { InUseModelRetiredBanner } from './model-service/InUseModelRetiredBanner'
-import { ModelServiceDefaultModelsSection } from './model-service/ModelServiceDefaultModelsSection'
-import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
-import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
-import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
-import { NotificationBell } from './notifications/NotificationBell'
-import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
-import { NotificationBanner } from './notifications/NotificationBanner'
-import { useNotificationNavigation } from './notifications/notificationDeeplinkWiring'
-import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
+import {UpdateActionButton} from './updates/UpdateActionButton'
+import {resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash} from './navigation/settingsPanelKey'
+import {ModelServiceProviderPage} from './model-service/ModelServiceProviderPage'
+import {ModelServiceLoadSurface} from './model-service/ModelServiceLoadSurface'
+import {useModelServiceProviders} from './model-service/useModelServiceProviders'
+import {InUseModelRetiredBanner} from './model-service/InUseModelRetiredBanner'
+import {ModelServiceDefaultModelsSection} from './model-service/ModelServiceDefaultModelsSection'
+import {useInUseModelPatrol} from './model-service/useInUseModelPatrol'
+import {NotificationBell} from './notifications/NotificationBell'
+import {NotificationCenterDrawer} from './notifications/NotificationCenterDrawer'
+import {NotificationBanner} from './notifications/NotificationBanner'
+import {useNotificationNavigation} from './notifications/notificationDeeplinkWiring'
+import {AppShellPreferencesPane} from './AppShellPreferencesPane'
+import {AppShellSettingsLayout} from './AppShellSettingsLayout'
+import {useProxySelfTest} from './useProxySelfTest'
+import {AppShellView, type AppInfo, type AssistantOpenRequest, type ProductSummary} from './AppShellView'
+import {ModelServiceSection} from './model-service/ModelServiceSection'
+import {useModelServiceActions} from './model-service/useModelServiceActions'
+import {useModelServiceDrafts} from './model-service/useModelServiceDrafts'
+import {useModelServiceProviderActions} from './model-service/useModelServiceProviderActions'
 import {
   buildProxyProbeUrl,
   describeProxySelfTest,
-  type ProxySelfTestResult
+  type ProxySelfTestResult,
 } from './proxySelfTestDisplay'
 import {
   findProductMenuEntry,
   findProductSettingsEntry,
   groupShellSettingsPanels,
   mergeShellNavItems,
-  splitShellSidebarNavItems
+  splitShellSidebarNavItems,
 } from './navigation/mergeShellNavigation'
-import { resolveLocalizedTitle } from './navigation/shellIconRegistry'
-import { ProductContributionHost } from './workspace/ProductContributionHost'
-import { TimeZonePreference } from './settings/TimeZonePreference'
-import { createBuiltInPageAdapters, type BuiltInPageMounts } from './workspace/builtInPageAdapters'
-import { createShellWorkspacePageRegistry, type ShellWorkspacePage } from './navigation/workspacePageRegistry'
-import { WorkspacePageHost } from './workspace/WorkspacePageHost'
-import { createWorkspacePageContentProvider } from './workspace/workspacePageContentProvider'
-import { WorkspaceTabStrip, type WorkspaceTabDraftGuard } from './workspace/WorkspaceTabStrip'
-import { useWorkspaceTabSession } from './workspace/useWorkspaceTabSession'
-import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
-import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
-import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
-import { LANGUAGE_LABEL_KEYS, LANGUAGE_SEGMENTED_KEY, resolvePreferencesText } from './shellOptionTables'
-import { THEME_LABEL_KEYS, THEME_SEGMENTED_KEY } from './shellOptionTables'
-import { ConfirmProvider } from '@platform/ui/components/confirm'
-import { Segmented } from '@platform/ui/components/segmented'
+import {ProductContributionHost} from './workspace/ProductContributionHost'
+import {createBuiltInPageAdapters} from './workspace/builtInPageAdapters'
+import {createShellWorkspacePageRegistry, type ShellWorkspacePage} from './navigation/workspacePageRegistry'
+import {WorkspacePageHost} from './workspace/WorkspacePageHost'
+import {WorkspaceTabStrip} from './workspace/WorkspaceTabStrip'
+import {useWorkspaceTabSession} from './workspace/useWorkspaceTabSession'
+import {applyRootThemeAttributes, WorkspaceWindowRoot} from './workspace/WorkspaceWindowRoot'
+import {resolveAntDesignLocale} from './shellOptionTables'
+import {resolvePreferencesText} from './shellOptionTables'
 
 export { resolveAntDesignLocale } from './shellOptionTables'
-import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
+import {buildWindowAntdTheme} from '@platform/ui/theme/windowAntdTheme'
 import {
-  createModelServiceSettingsDraftOwner,
   createSettingsDraftOwnerPort,
   SettingsDraftPrompt,
-  type SettingsDraftOwner
 } from './settings/SettingsWorkspaceAdapter'
-import { ProviderConnectionCheckDrawer, type ProviderConnectionCheckResult } from './ProviderConnectionCheckDrawer'
-import { ProviderModelSyncDrawer } from './ProviderModelSyncDrawer'
-import {
-  buildModelSyncPlan,
-  clearModelSyncSelection,
-  createModelSyncSelection,
-  toggleAllModelSyncSelection,
-  toggleModelSyncSelection,
-  type ProviderModelSyncSelection
-} from './model-service/modelSyncPlan'
-import { AgentPage } from './agents/AgentPage'
-import { AssistantPage } from './assistants/AssistantPage'
-import { createConnectionCheckApiKeyOptions, selectDefaultConnectionCheckModelId } from './modelProviderConnectionCheck'
-import { resolveProviderRuntimeCheckReasonCode } from './providerRuntimeCheckReason'
-import { describeConnectionStatus } from './modelConnectionStatus'
-import { resolveLiveText, type PlatformLiveText } from './liveText'
-import { useLiveNotice } from './useLiveNotice'
-import {
-  sanitizeIpcErrorMessage,
-  type ModelSyncErrorState
-} from './modelServiceSyncError'
-import { isProviderModelSyncFailure, type ModelSyncPreviewOutcome } from '@platform/ai/providers/providerModelSync'
-import { groupModelsForDisplay } from './modelProviderDisplay'
-import { buildModelDefinitionFromDraft, createEmptyModelDraft, createModelDraftFromModel, type ModelDraft } from './modelDrafts'
-import { ModelServiceAddProviderDialog, type AddProviderInput } from './model-service/ModelServiceAddProviderDialog'
-import { ModelServiceModelDrawer } from './model-service/ModelServiceModelDrawer'
-import { resolveProviderDisplayName } from './model-service/providerDisplayName'
-import { buildProviderInputFromDraft } from '@platform/ai/providers/providerConfigDraft'
-import { resolveProviderChatBase } from '@platform/ai/providers/providerChatEndpoints'
-import type { ModelSyncPreview } from '@platform/ai/providers/providerModelSync'
-import { PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId } from './modelPins'
-import { NotificationSettingsScreen } from './settings/NotificationSettingsScreen'
-import { AboutSettingsPage } from './settings/about/AboutSettingsPage'
-import { AssistantLibrarySettingsPage } from './settings/assistants/AssistantLibrarySettingsPage'
-import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheSettingsPage'
-import { TaskAutomationSettingsPage } from './settings/task-automation/TaskAutomationSettingsPage'
-import { ChannelSettingsPage } from './settings/channels/ChannelSettingsPage'
-import { WebSearchSettingsPage } from './settings/web-search/WebSearchSettingsPage'
-import { VisualIdentityAvatar } from './VisualIdentityAvatar'
+import {ProviderConnectionCheckDrawer} from './ProviderConnectionCheckDrawer'
+import {ProviderModelSyncDrawer} from './ProviderModelSyncDrawer'
 
-type AppInfo = {
-  name: string
-  version: string
-  electron: string
-  chrome: string
-  node: string
-  platform: string
-  osRelease: string
-  theme: string
-}
+import {AgentPage} from './agents/AgentPage'
+import {AssistantPage} from './assistants/AssistantPage'
+import {resolveLiveText} from './liveText'
+import {useLiveNotice} from './useLiveNotice'
 
-type ProductSummary = {
-  id: string
-  name: LocalizedText
-  version: string
-  description?: string
-  routeCount: number
-  toolCount: number
-  skillCount: number
-  agentCount: number
-  workflowCount: number
-}
+import {ModelServiceAddProviderDialog} from './model-service/ModelServiceAddProviderDialog'
+import {ModelServiceModelDrawer} from './model-service/ModelServiceModelDrawer'
+import {PINNED_MODEL_IDS_STORAGE_KEY, serializePinnedModelIds} from './modelPins'
+import {NotificationSettingsScreen} from './settings/NotificationSettingsScreen'
+import {AboutSettingsPage} from './settings/about/AboutSettingsPage'
+import {AssistantLibrarySettingsPage} from './settings/assistants/AssistantLibrarySettingsPage'
+import {StorageCacheSettingsPage} from './settings/storage-cache/StorageCacheSettingsPage'
+import {TaskAutomationSettingsPage} from './settings/task-automation/TaskAutomationSettingsPage'
+import {ChannelSettingsPage} from './settings/channels/ChannelSettingsPage'
+import {WebSearchSettingsPage} from './settings/web-search/WebSearchSettingsPage'
+import {VisualIdentityAvatar} from './VisualIdentityAvatar'
+
+
 
 type ProviderDraft = {
   enabled: boolean
 }
 
-type AssistantOpenRequest = {
-  assistantId: string
-  topicId: string
-}
 
 type AppShellNavigateDetail = {
   navKey?: string
@@ -231,6 +163,29 @@ export function AppShell(): React.ReactElement {
  * 那个常量现在的**唯一触发条件**是「菜单里一页都没有」（解析器返回 `null`）；正常构建里内置页总在，
  * 所以它只是装配残缺时的最后兜底，不是「默认页」。判据见 `navigation/homeMenuKey.test.ts`。
  */
+/**
+ * 读取启动降级状态（`state` / `retry` / `reset`）。
+ *
+ * **必须功能探测**：升级途中、或旧 preload 配新渲染层时，`settings.recovery` 根本不存在。
+ * 那种情况下这里是 `undefined` 调用，整屏会直接崩（2026-11-10 全量 127 条用例就是这么红的）。
+ * 没有这个口 = 这台机器上没有"启动降级"这件事：返回 `null`，调用方按"没有降级"处理，
+ * 绝不再抛给上层。
+ */
+async function readSettingsRecovery(
+  action: 'state' | 'retry' | 'reset'
+): Promise<SettingsStartupReadState | null> {
+  const settings = window.platform?.settings as
+    | { recovery?: (next: 'state' | 'retry' | 'reset') => Promise<SettingsStartupReadState> }
+    | undefined
+  const recovery = settings?.recovery
+  if (typeof recovery !== 'function') return null
+  try {
+    return (await recovery.call(settings, action)) ?? null
+  } catch {
+    return null
+  }
+}
+
 const LANDING_NAV_KEY_FALLBACK = 'assistants'
 
 /** 主窗 shell 内容：语言变化时回传给 AppShell，供面板窗 error-shell/准备期壳兜底使用（P1-06h / N2）。 */
@@ -254,6 +209,12 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     setNotificationCenterOpen
   })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
+  /**
+   * 启动期设置文件读不到：当前跑在默认值上，横幅要说出来。
+   * 状态由主进程给（`settings.recovery('state')`），渲染层不自己推断"是不是读失败"。
+   */
+  const [settingsRecovery, setSettingsRecovery] = useState<SettingsStartupReadState>({ unreadable: false, copyPath: null })
+  const [settingsReadRetrying, setSettingsReadRetrying] = useState(false)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [products, setProducts] = useState<ProductSummary[]>([])
@@ -267,88 +228,31 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   } = useModelServiceProviders()
   // PLAT-75：巡检已挪到主进程的每日任务；界面只读它的全局结论。
   const inUseRetiredModels = useInUseModelPatrol()
-  const [providerDraft, setProviderDraft] = useState<ProviderDraft>(createEmptyProviderDraft)
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
-  const [modelDraft, setModelDraft] = useState<ModelDraft>(createEmptyModelDraft)
-  const [isAddModelOpen, setIsAddModelOpen] = useState(false)
-  const [editingModelId, setEditingModelId] = useState<string | null>(null)
-  const [providerSearch, setProviderSearch] = useState('')
-  const liveNotice = useLiveNotice()
-  const [connectionStatus, setConnectionStatus] = useState<PlatformLiveText | null>(null)
-  const [isTestingConnection, setIsTestingConnection] = useState(false)
-  const [preserveProviderDraftForId, setPreserveProviderDraftForId] = useState<string | null>(null)
-  const [isConnectionCheckOpen, setIsConnectionCheckOpen] = useState(false)
-  const [connectionCheckModelId, setConnectionCheckModelId] = useState('')
-  const [connectionCheckApiKeyOptionId, setConnectionCheckApiKeyOptionId] = useState('')
-  const [connectionCheckResult, setConnectionCheckResult] = useState<ProviderConnectionCheckResult | null>(null)
-  const [isModelSyncOpen, setIsModelSyncOpen] = useState(false)
-  const [isSyncingModels, setIsSyncingModels] = useState(false)
-  const [isAddProviderOpen, setIsAddProviderOpen] = useState(false)
-  const [modelSyncPreview, setModelSyncPreview] = useState<ModelSyncPreview | null>(null)
-  const [modelSyncError, setModelSyncError] = useState<ModelSyncErrorState | null>(null)
-  const [proxySelfTest, setProxySelfTest] = useState<{ running: boolean; result: ProxySelfTestResult | null }>({
-    running: false,
-    result: null
-  })
-  const [modelSyncSelection, setModelSyncSelection] = useState<ProviderModelSyncSelection>(clearModelSyncSelection)
-  const [collapsedModelGroups, setCollapsedModelGroups] = useState<Set<string>>(() => new Set())
-  const [pinnedModelIds, setPinnedModelIds] = useState<string[]>(() =>
-    parsePinnedModelIds(window.localStorage.getItem(PINNED_MODEL_IDS_STORAGE_KEY))
-  )
-  const autoSyncedProviderSignaturesRef = useRef<Set<string>>(new Set())
-  const previousSelectedProviderIdRef = useRef<string | null>(null)
-
   const t = platformText[settings.language]
+
+  // 模型服务屏：草稿/派生、写入动作、供应商与模型动作三块各自成模块，外壳只接线（只搬运）。
+  const drafts = useModelServiceDrafts({ providers, selectedProviderId, t })
+  const sync = useModelServiceActions({ drafts, reloadProviders })
+  const providerActions = useModelServiceProviderActions({
+    drafts,
+    persistSelectedProviderDraft: sync.persistSelectedProviderDraft,
+    reloadProviders,
+    providers,
+    selectProvider,
+    setActiveNavKey,
+    setSettingsPanelKey,
+    t
+  })
+  const liveNotice = drafts.liveNotice
+  const pinnedModelIds = drafts.pinnedModelIds
+  const selectedProvider = drafts.selectedProvider
+  const { proxySelfTest, proxySelfTestView, runProxySelfTest } = useProxySelfTest({ settings, t, selectedProvider })
   // 提示与状态在渲染时解析：存的是「怎么生成这句话」，所以切语言后连历史提示一起变。
   const noticeText = resolveLiveText(liveNotice.notice, t)
-  const connectionStatusText = resolveLiveText(connectionStatus, t)
   // 解析器与两张键表都在 `shellOptionTables`：同一件事只有一处定义。
   const preferencesText = (key: string): string =>
     resolvePreferencesText(t.preferences as unknown as Record<string, unknown>, key)
   // 结果行的文案、语气、第二行同时算出来：渲染层只照着 tone 上样式，不另算成败。
-  const proxySelfTestView =
-    proxySelfTest.result === null
-      ? null
-      : describeProxySelfTest(proxySelfTest.result, t, {
-          expectsProxy: settings.network.proxyMode === 'custom',
-          fallbackProxyLabel: resolveProxyDisplayLabel()
-        })
-  const selectedProvider = useMemo(
-    () => providers.find((provider) => provider.id === selectedProviderId) ?? null,
-    [providers, selectedProviderId]
-  )
-  const providerConnectionTestable = selectedProvider
-    ? isProviderDraftConnectionTestable(selectedProvider, { enabled: providerDraft.enabled, apiKey: apiKeyDraft })
-    : false
-  // PLAT-63 C：归档模型（presetStale）不参与计数 / 列表 / 探测候选，但数据仍保留。
-  const connectionCheckModels = useMemo(
-    () => selectedProvider?.models.filter((model) => model.presetStale !== true && model.capabilities.chat) ?? [],
-    [selectedProvider]
-  )
-  const connectionCheckApiKeyOptions = useMemo(
-    () => (selectedProvider ? createConnectionCheckApiKeyOptions(selectedProvider, apiKeyDraft) : []),
-    [apiKeyDraft, selectedProvider]
-  )
-  const modelGroups = useMemo(
-    () => (selectedProvider
-      ? groupModelsForDisplay(
-          selectedProvider.models.filter((model) => model.presetStale !== true),
-          t.models.ungroupedModels,
-          pinnedModelIds,
-          selectedProvider.id
-        )
-      : []),
-    [pinnedModelIds, selectedProvider, t.models.ungroupedModels]
-  )
-  const filteredProviders = useMemo(() => {
-    const keyword = providerSearch.trim().toLowerCase()
-    if (!keyword) return providers
-
-    return providers.filter((provider) => {
-      const searchText = `${resolveProviderDisplayName(t.models, provider)} ${provider.name} ${provider.id}`.toLowerCase()
-      return searchText.includes(keyword)
-    })
-  }, [providerSearch, providers, t.models])
   const navItems = useMemo(() => mergeShellNavItems(settings.language, productMenuEntries), [settings.language])
   const sidebarNavLayout = useMemo(() => splitShellSidebarNavItems(navItems), [navItems])
   const settingsNavGroups = useMemo(
@@ -384,11 +288,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    * **只**绑定既有草稿状态与既有保存回调（`window.platform.modelProviders.upsert`）；
    * ProviderStore、保存 IPC、草稿 state 的所有权一行未改。
    */
-  const settingsDraftOwner = useMemo<SettingsDraftOwner>(() => createModelServiceSettingsDraftOwner({
-    readDraft: () => ({ provider: selectedProvider, enabled: providerDraft.enabled, apiKey: apiKeyDraft }),
-    clearApiKeyDraft: () => setApiKeyDraft(''),
-    save: (provider) => window.platform.modelProviders.upsert(provider)
-  }), [apiKeyDraft, providerDraft.enabled, selectedProvider])
+  const settingsDraftOwner = drafts.settingsDraftOwner
 
   /**
    * P2-03：**生产 Tab 宿主接线**（这是移除「单 active 页面销毁」旧路径的挂载点）。
@@ -425,6 +325,45 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     ]).catch(() => undefined)
     return () => { cancelled = true }
   }, [])
+
+  // 启动降级状态：单独读一次。老 preload 没有这个口（`null`）或查询失败时，按"没有降级"处理——
+  // 横幅不出现，绝不让查状态本身把界面拦住或崩掉。
+  useEffect(() => {
+    let cancelled = false
+    void readSettingsRecovery('state').then((state) => {
+      if (!cancelled && state !== null) setSettingsRecovery(state)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  async function reloadSettingsFromMain(): Promise<void> {
+    try {
+      setSettings((await window.platform.settings.get()) as AppSettings)
+    } catch {
+      // 仍在降级：保留默认值，横幅继续显示。
+    }
+  }
+
+  /** 「重试读取」：读成功才换回真实设置，失败/没有这个口都保持当前状态——**不抛**。 */
+  async function retrySettingsRead(): Promise<void> {
+    setSettingsReadRetrying(true)
+    try {
+      const state = await readSettingsRecovery('retry')
+      if (state === null) return
+      setSettingsRecovery(state)
+      if (!state.unreadable) await reloadSettingsFromMain()
+    } finally {
+      setSettingsReadRetrying(false)
+    }
+  }
+
+  /** 危险区确认后的重置：只在读者显式确认后调用（主进程写默认值）；没有这个口就什么都不做。 */
+  async function resetSettingsFile(): Promise<void> {
+    const state = await readSettingsRecovery('reset')
+    if (state === null) return
+    setSettingsRecovery(state)
+    await reloadSettingsFromMain()
+  }
 
   // PLAT-82：检测结束会把「本次实测通过」的协议写回模型 ⇒ 重新拉一次供应商列表，
   // 行内协议 chip / 协议 pill 才能立刻反映新证据（状态文案仍在内存，不参与刷新）。
@@ -499,57 +438,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     return () => media.removeEventListener('change', applyTheme)
   }, [settings.accentColor, settings.themeMode])
 
-  useEffect(() => {
-    const currentProviderId = selectedProvider?.id ?? null
-    const providerChanged = previousSelectedProviderIdRef.current !== currentProviderId
-    previousSelectedProviderIdRef.current = currentProviderId
-
-    if (!selectedProvider) {
-      setProviderDraft(createEmptyProviderDraft())
-      if (providerChanged) {
-        setApiKeyDraft('')
-        setConnectionStatus(null)
-        setConnectionCheckResult(null)
-        setIsConnectionCheckOpen(false)
-        setConnectionCheckModelId('')
-        setConnectionCheckApiKeyOptionId('')
-        resetModelSyncState()
-      }
-      return
-    }
-
-    setProviderDraft({
-      enabled: selectedProvider.enabled
-    })
-    if (preserveProviderDraftForId === selectedProvider.id) {
-      setPreserveProviderDraftForId(null)
-    } else if (providerChanged) {
-      setApiKeyDraft('')
-      setConnectionStatus(null)
-      setConnectionCheckResult(null)
-      setIsTestingConnection(false)
-      setIsConnectionCheckOpen(false)
-      setConnectionCheckModelId('')
-      setConnectionCheckApiKeyOptionId('')
-      resetModelSyncState()
-    }
-
-    if (providerChanged) {
-      setModelDraft(createEmptyModelDraft())
-      setIsAddModelOpen(false)
-      setEditingModelId(null)
-      setCollapsedModelGroups(new Set())
-    }
-  }, [preserveProviderDraftForId, selectedProvider])
-
-  useEffect(() => {
-    if (!selectedProvider || !selectedProvider.enabled || !selectedProvider.hasApiKey || selectedProvider.models.length > 0) return
-    const signature = `${selectedProvider.id}:${selectedProvider.apiKeyPreview}:${selectedProvider.baseUrl}`
-    if (autoSyncedProviderSignaturesRef.current.has(signature)) return
-    autoSyncedProviderSignaturesRef.current.add(signature)
-    void previewModelSync({ autoApplyWhenOnlyAdded: true, openDrawerWhenDiff: false })
-  }, [selectedProvider])
-
   async function updateNetworkSettings(patch: Partial<NetworkSettings>): Promise<void> {
     await updateSettings({
       network: {
@@ -571,479 +459,11 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     }
   }
 
-  async function addProvider(input: AddProviderInput): Promise<void> {
-    const id = `provider-${Date.now()}`
-    const provider: ModelProviderInput = {
-      id,
-      name: input.name,
-      // 自建供应商没有预设 ⇒ 端点清单由用户填的两个地址组成（Chat 在前 = 默认端点）。
-      endpoints: input.endpoints,
-      enabled: true,
-      ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-      models: []
-    }
-    await window.platform.modelProviders.upsert(provider)
-    await reloadProviders(id)
-    setIsAddProviderOpen(false)
-  }
-
-  /**
-   * PLAT-61：改动即存 —— 密钥草稿由「焦点离开密钥行」触发。
-   * 仍走既有 Settings 草稿 owner（同一个 buildProviderInputFromDraft + 同一个 upsert 回调），
-   * 不新增 IPC。失败向上抛：由页面回滚草稿并给行内错误（不回退整页）。
-   */
-  async function saveApiKeyDraft(): Promise<void> {
-    if (!selectedProvider) return
-    await persistSelectedProviderDraft()
-    await reloadProviders(selectedProvider.id)
-    // 保存成功后清掉输入草稿 ⇒ 控件回到「已保存掩码」，不会把明文 Key 留在界面上。
-    setApiKeyDraft('')
-    setConnectionStatus(null)
-  }
-
-  async function persistSelectedProviderDraft(enabledOverride?: boolean): Promise<void> {
-    // P2-02：保存路径收敛到既有 Settings 草稿 owner（同一个 buildProviderInputFromDraft + 同一个
-    // upsert 回调），行为与此前逐字一致；owner 让 Tab 关闭/分离时能读到这份已有表单草稿。
-    if (enabledOverride === undefined) {
-      await settingsDraftOwner.save()
-      return
-    }
-    // PLAT-61：抽屉里「就地启用后自动重跑」需要在同一个渲染周期内带着新 enabled 落盘，
-    // 否则刚启用就会被旧闭包里的 providerDraft.enabled=false 又写回去。
-    if (!selectedProvider) return
-    await window.platform.modelProviders.upsert(
-      buildProviderInputFromDraft(selectedProvider, { enabled: enabledOverride, apiKey: apiKeyDraft })
-    )
-  }
-
   /**
    * T4/T5：端点清单保存（编辑器里改地址 / 添加 / 删除 / 设为默认都走它）。
    *
    * 传进来的是**整份有序清单**（`[0]` = 默认端点），所以不存在"只改了一个字段、
    * 其余字段被抹掉"的合并问题；`baseUrl` 由端点清单派生，不需要单独回写。
-   */
-  async function saveProviderEndpoints(endpoints: readonly ProviderChatEndpoint[]): Promise<void> {
-    if (!selectedProvider) return
-    await window.platform.modelProviders.upsert({
-      ...buildProviderInputFromDraft(selectedProvider, { enabled: providerDraft.enabled, apiKey: apiKeyDraft }),
-      endpoints: [...endpoints]
-    })
-    await reloadProviders(selectedProvider.id)
-  }
-
-  /** 图像端点（生成 / 编辑）保存：不是聊天协议，单独一份字段。 */
-  async function saveProviderImageEndpoint(
-    kind: 'generation' | 'edit',
-    value: string | undefined
-  ): Promise<void> {
-    if (!selectedProvider) return
-    const next: ProviderImageEndpoints = { ...selectedProvider.imageEndpoints }
-    const trimmed = value?.trim() ?? ''
-    if (trimmed) next[kind] = trimmed
-    else delete next[kind]
-    await window.platform.modelProviders.upsert({
-      ...buildProviderInputFromDraft(selectedProvider, { enabled: providerDraft.enabled, apiKey: apiKeyDraft }),
-      ...(Object.keys(next).length > 0 ? { imageEndpoints: next } : { imageEndpoints: undefined })
-    })
-    await reloadProviders(selectedProvider.id)
-  }
-
-  /** PLAT-61：右上角唯一启用开关（点一下立即保存）；失败回滚由页面负责。 */
-  async function setProviderEnabled(enabled: boolean): Promise<void> {
-    if (!selectedProvider) return
-    await window.platform.modelProviders.setEnabled(selectedProvider.id, enabled)
-    await reloadProviders(selectedProvider.id)
-  }
-
-  /**
-   * PLAT-61 诊断可用性：抽屉顶部「启用」→ 走既有 setEnabled 保存路径 → 就地重跑一次检查。
-   * 失败只更新行内状态，不关闭抽屉。
-   */
-  async function enableProviderAndRecheck(): Promise<void> {
-    if (!selectedProvider) return
-    try {
-      await window.platform.modelProviders.setEnabled(selectedProvider.id, true)
-      await reloadProviders(selectedProvider.id)
-      setProviderDraft((current) => ({ ...current, enabled: true }))
-    } catch (error) {
-      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
-      return
-    }
-    await startConnectionCheck({ enabledOverride: true })
-  }
-
-  function handleApiKeyDraftChange(nextValue: string): void {
-    setApiKeyDraft(nextValue)
-    setConnectionStatus(null)
-    setConnectionCheckResult(null)
-  }
-
-  async function removeProviderById(providerId: string): Promise<void> {
-    const target = providers.find((provider) => provider.id === providerId)
-    if (!target || target.isSystem) return
-    const index = providers.findIndex((provider) => provider.id === providerId)
-    const adjacent = providers[index + 1] ?? providers[index - 1]
-    await window.platform.modelProviders.remove(providerId)
-    await reloadProviders(adjacent?.id)
-  }
-
-  async function removeSelectedProvider(): Promise<void> {
-    if (selectedProvider) await removeProviderById(selectedProvider.id)
-  }
-
-  async function setProviderEnabledById(providerId: string, enabled: boolean): Promise<void> {
-    await window.platform.modelProviders.setEnabled(providerId, enabled)
-    await reloadProviders(providerId)
-  }
-
-  function resetModelSyncState(): void {
-    setIsModelSyncOpen(false)
-    setModelSyncPreview(null)
-    setModelSyncError(null)
-    setModelSyncSelection(clearModelSyncSelection())
-    setIsSyncingModels(false)
-  }
-
-  async function previewModelSync(options: { autoApplyWhenOnlyAdded?: boolean; openDrawerWhenDiff?: boolean } = {}): Promise<void> {
-    if (!selectedProvider) return
-    // PLAT-61：拉取模型清单是只读操作 ⇒ 只要求 baseUrl + Key，停用状态也允许（便于先看免费模型）。
-    if (!selectedProvider.baseUrl.trim() || !(selectedProvider.hasApiKey || apiKeyDraft.trim())) {
-      setConnectionStatus(() => (current: PlatformText) => current.models.modelSyncNeedsApiKey)
-      return
-    }
-
-    setIsSyncingModels(true)
-    liveNotice.clear()
-    setModelSyncError(null)
-    try {
-      setPreserveProviderDraftForId(selectedProvider.id)
-      await persistSelectedProviderDraft()
-      const outcome = (await window.platform.modelProviders.previewModelSync(selectedProvider.id)) as
-        | ModelSyncPreview
-        | ModelSyncPreviewOutcome
-      // PLAT-61：主进程把失败改成结构化结果；原始 IPC Error 不再进入 UI。
-      if (isProviderModelSyncFailure(outcome)) {
-        setModelSyncError({
-          reasonCode: outcome.reasonCode,
-          message: outcome.message,
-          ...(outcome.upstreamMessage ? { upstreamMessage: outcome.upstreamMessage } : {})
-        })
-        return
-      }
-      const preview: ModelSyncPreview = 'ok' in outcome
-        ? { added: outcome.added, updated: outcome.updated ?? [], missing: outcome.missing, stale: outcome.stale ?? [] }
-        : { ...outcome, stale: outcome.stale ?? [] }
-      setModelSyncPreview(preview)
-      // 三组默认全选（含「本地多余」）；应用时只有勾选的 id 会真正删除。
-      setModelSyncSelection(createModelSyncSelection(preview))
-
-      const hasDiff =
-        preview.added.length > 0 ||
-        preview.updated.length > 0 ||
-        preview.missing.length > 0 ||
-        preview.stale.length > 0
-      // 静默自动应用只在「纯新增/更新」时发生：任何删除（含本地多余）都必须由用户确认。
-      const shouldAutoApply =
-        options.autoApplyWhenOnlyAdded &&
-        preview.missing.length === 0 &&
-        preview.stale.length === 0 &&
-        (preview.added.length > 0 || preview.updated.length > 0)
-      if (shouldAutoApply) {
-        await applyModelSyncPreview(preview, {
-          addedIds: new Set(preview.added.map((model) => model.id)),
-          missingIds: new Set(),
-          staleIds: new Set()
-        })
-        return
-      }
-
-      if (hasDiff || options.openDrawerWhenDiff !== false) {
-        setIsModelSyncOpen(true)
-      } else {
-        liveNotice.show((current) => current.models.modelSyncUpToDate)
-      }
-    } catch (error) {
-      const friendly = sanitizeIpcErrorMessage(error)
-      console.warn('[model-providers] preview model sync failed', friendly ?? 'unknown error')
-      setModelSyncError({ reasonCode: 'unknown', message: friendly ?? '' })
-      if (options.autoApplyWhenOnlyAdded) {
-        autoSyncedProviderSignaturesRef.current.delete(`${selectedProvider.id}:${selectedProvider.apiKeyPreview}:${selectedProvider.baseUrl}`)
-      }
-    } finally {
-      setIsSyncingModels(false)
-    }
-  }
-
-  async function applyModelSyncPreview(
-    preview = modelSyncPreview,
-    selection = modelSyncSelection,
-    options: { closeDrawer?: boolean } = {}
-  ): Promise<void> {
-    if (!selectedProvider || !preview) return
-
-    setIsSyncingModels(true)
-    setModelSyncError(null)
-    try {
-      const plan = buildModelSyncPlan(preview, selection)
-      const outcome = await window.platform.modelProviders.applyModelSync(selectedProvider.id, plan)
-      if (isProviderModelSyncFailure(outcome)) {
-        setModelSyncError({
-          reasonCode: outcome.reasonCode,
-          message: outcome.message,
-          ...(outcome.upstreamMessage ? { upstreamMessage: outcome.upstreamMessage } : {})
-        })
-        return
-      }
-      await reloadProviders(selectedProvider.id)
-      const removed = plan.toRemove.length
-      liveNotice.show((current) => current.models.modelSyncAppliedSummary(preview.added.length, preview.updated.length, removed))
-      if (options.closeDrawer !== false) setIsModelSyncOpen(false)
-    } catch (error) {
-      const friendly = sanitizeIpcErrorMessage(error)
-      console.warn('[model-providers] apply model sync failed', friendly ?? 'unknown error')
-      setModelSyncError({ reasonCode: 'unknown', message: friendly ?? '' })
-    } finally {
-      setIsSyncingModels(false)
-    }
-  }
-
-  function toggleModelSyncAdded(modelId: string): void {
-    setModelSyncSelection((current) => toggleModelSyncSelection(current, 'added', modelId))
-  }
-
-  function toggleModelSyncMissing(modelId: string): void {
-    setModelSyncSelection((current) => toggleModelSyncSelection(current, 'missing', modelId))
-  }
-
-  /** PLAT-63 C：本地多余（预设已变更）——默认勾选，取消即保留。 */
-  function toggleModelSyncStale(modelId: string): void {
-    setModelSyncSelection((current) => toggleModelSyncSelection(current, 'stale', modelId))
-  }
-
-  function toggleAllModelSyncAdded(): void {
-    if (!modelSyncPreview) return
-    setModelSyncSelection((current) => toggleAllModelSyncSelection(current, 'added', modelSyncPreview))
-  }
-
-  function toggleAllModelSyncMissing(): void {
-    if (!modelSyncPreview) return
-    setModelSyncSelection((current) => toggleAllModelSyncSelection(current, 'missing', modelSyncPreview))
-  }
-
-  function toggleAllModelSyncStale(): void {
-    if (!modelSyncPreview) return
-    setModelSyncSelection((current) => toggleAllModelSyncSelection(current, 'stale', modelSyncPreview))
-  }
-
-  function resolveProxyDisplayLabel(): string {
-    if (settings.network.proxyMode === 'custom') {
-      return sanitizeProxyAddressForDisplay(settings.network.proxyUrl) ?? t.preferences.proxyCustom
-    }
-    return settings.network.proxyMode === 'system' ? t.preferences.proxySystem : t.preferences.proxyNone
-  }
-
-  /**
-   * PLAT-61 代理自检：通过既有 testConnection 通道的 additive 参数 `proxyProbeUrl`，
-   * 主进程用 Electron `net.fetch`（当前 session 代理）发**无鉴权 GET**；只显示归类与耗时。
-   */
-  async function runProxySelfTest(): Promise<void> {
-    const target = buildProxyProbeUrl(selectedProvider?.baseUrl)
-    setProxySelfTest({ running: true, result: null })
-    try {
-      const result = (await window.platform.modelProviders.testConnection('', {
-        proxyProbeUrl: target
-      })) as ProxySelfTestResult
-      setProxySelfTest({
-        running: false,
-        result: {
-          ok: result?.ok === true,
-          status: typeof result?.status === 'number' ? result.status : null,
-          durationMs: typeof result?.durationMs === 'number' ? result.durationMs : 0,
-          reasonCode: typeof result?.reasonCode === 'string' ? result.reasonCode : null,
-          targetHost: typeof result?.targetHost === 'string' ? result.targetHost : resolveProviderHost(target),
-          resolvedProxy: typeof result?.resolvedProxy === 'string' ? result.resolvedProxy : undefined,
-          proxied: typeof result?.proxied === 'boolean' ? result.proxied : undefined,
-          endpointReachable: typeof result?.endpointReachable === 'boolean' ? result.endpointReachable : null,
-          proxyEndpoint: typeof result?.proxyEndpoint === 'string' ? result.proxyEndpoint : null,
-          proxyEndpointLoopback: typeof result?.proxyEndpointLoopback === 'boolean' ? result.proxyEndpointLoopback : null,
-          directProbeReachable: typeof result?.directProbeReachable === 'boolean' ? result.directProbeReachable : null,
-          directProbeEndpoint: typeof result?.directProbeEndpoint === 'string' ? result.directProbeEndpoint : null
-        }
-      })
-    } catch {
-      setProxySelfTest({
-        running: false,
-        result: { ok: false, status: null, durationMs: 0, reasonCode: 'unknown', targetHost: resolveProviderHost(target) }
-      })
-    }
-  }
-
-  /** PLAT-61：网关未启用时可在抽屉里就地开启（复用既有 agents.setModelGatewayEnabled），成功后重跑一次。 */
-  async function enableModelGatewayAndRecheck(): Promise<void> {
-    try {
-      await window.platform.agents.setModelGatewayEnabled(true)
-    } catch (error) {
-      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
-      return
-    }
-    await startConnectionCheck()
-  }
-
-  /** PLAT-61：抽屉里的「去设置代理」只跳转到「基础设置」的代理段，不就地改设置。 */
-  function openProxySettings(): void {
-    setIsConnectionCheckOpen(false)
-    setActiveNavKey('settings')
-    setSettingsPanelKey('preferences')
-  }
-
-  function openConnectionCheck(): void {
-    if (!selectedProvider) return
-    if (!providerConnectionTestable) {
-      setConnectionStatus(() => (current: PlatformText) => current.models.connectionNeedsConfig)
-      return
-    }
-
-    const defaultModelId = selectDefaultConnectionCheckModelId(selectedProvider)
-    if (!defaultModelId) {
-      setConnectionStatus(() => (current: PlatformText) => current.models.noChatModelForConnectionCheck)
-      return
-    }
-
-    const apiKeyOptions = createConnectionCheckApiKeyOptions(selectedProvider, apiKeyDraft)
-    if (apiKeyOptions.length === 0) {
-      setConnectionStatus(() => (current: PlatformText) => current.models.connectionNeedsConfig)
-      return
-    }
-
-    setConnectionCheckModelId(defaultModelId)
-    setConnectionCheckApiKeyOptionId(apiKeyOptions[0].id)
-    setConnectionCheckResult(null)
-    setConnectionStatus(null)
-    setIsConnectionCheckOpen(true)
-  }
-
-  async function startConnectionCheck(options: { enabledOverride?: boolean } = {}): Promise<void> {
-    if (!selectedProvider) return
-    const selectedModel = connectionCheckModels.find((model) => model.id === connectionCheckModelId) ?? connectionCheckModels[0]
-    const selectedApiKeyOption =
-      connectionCheckApiKeyOptions.find((option) => option.id === connectionCheckApiKeyOptionId) ?? connectionCheckApiKeyOptions[0]
-
-    if (!selectedModel) {
-      setConnectionCheckResult({ ok: false, message: t.models.noChatModelForConnectionCheck })
-      return
-    }
-
-    if (!selectedApiKeyOption) {
-      setConnectionCheckResult({ ok: false, message: t.models.connectionNeedsConfig })
-      return
-    }
-
-    setIsTestingConnection(true)
-    setConnectionStatus(null)
-    setConnectionCheckResult(null)
-    try {
-      setPreserveProviderDraftForId(selectedProvider.id)
-      await persistSelectedProviderDraft(options.enabledOverride)
-      await reloadProviders(selectedProvider.id)
-      const report = (await window.platform.modelProviders.runRuntimeChecks(selectedProvider.id, {
-        modelId: selectedModel.id,
-        apiKey: selectedApiKeyOption.apiKey,
-        runtimeId: 'claude-code',
-        checkGateway: true
-      })) as import('@platform/ai/agent-platform/runtime/compatibility/providerRuntimeCheckTypes').ProviderRuntimeCheckReport
-      const overallOk = report.finalCompatibility.selectable
-      // PLAT-61：最终结论文案同样「把原因说出来」（例如供应商停用），不再只回英文 summary。
-      const reasonCode = resolveProviderRuntimeCheckReasonCode({
-        status: report.finalCompatibility.status,
-        summary: report.finalCompatibility.summary,
-        providerEnabled: options.enabledOverride === true || providerDraft.enabled,
-        hasApiKey: connectionCheckApiKeyOptions.length > 0
-      })
-      const chatOk = report.ordinaryChat.status === 'ready'
-      const messageFor = describeConnectionStatus({ overallOk, chatOk, reasonCode, summary: report.finalCompatibility.summary })
-      setConnectionCheckResult({ ok: overallOk, message: messageFor(t), report })
-      setConnectionStatus(chatOk && overallOk ? null : () => messageFor)
-    } catch (error) {
-      setConnectionCheckResult({ ok: false, message: sanitizeIpcErrorMessage(error) ?? t.status.failed })
-      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
-    } finally {
-      setIsTestingConnection(false)
-    }
-  }
-
-  async function saveModel(): Promise<void> {
-    if (!selectedProvider) return
-
-    const model = buildModelDefinitionFromDraft(modelDraft)
-    model.capabilities.capabilitiesEdited = true
-
-    await window.platform.modelProviders.addOrUpdateModel(selectedProvider.id, model)
-    setModelDraft(createEmptyModelDraft())
-    setIsAddModelOpen(false)
-    setEditingModelId(null)
-    await reloadProviders(selectedProvider.id)
-  }
-
-  function openAddModelDrawer(): void {
-    setEditingModelId(null)
-    setModelDraft(createEmptyModelDraft())
-    setIsAddModelOpen(true)
-  }
-
-  function openEditModelDrawer(model: ModelDefinition): void {
-    setEditingModelId(model.id)
-    setModelDraft(createModelDraftFromModel(model))
-    setIsAddModelOpen(true)
-  }
-
-  function closeModelDrawer(): void {
-    setIsAddModelOpen(false)
-    setEditingModelId(null)
-    setModelDraft(createEmptyModelDraft())
-  }
-
-  async function removeModel(modelId: string): Promise<void> {
-    if (!selectedProvider) return
-    await window.platform.modelProviders.removeModel(selectedProvider.id, modelId)
-    await reloadProviders(selectedProvider.id)
-    liveNotice.show((current) => current.models.modelRemovedNotice(1))
-  }
-
-  /**
-   * PLAT-72：一键清空该供应商的全部模型。
-   * 复用 `applyModelSync` 的 `toRemove`（不新增 IPC）：主进程按**一次** store mutation 落库，
-   * 预设来源的模型由既有逻辑写墓碑 ⇒ 下次合并不会复活；失败整体不写入。
-   */
-  async function clearAllProviderModels(): Promise<void> {
-    if (!selectedProvider) return
-    const modelIds = selectedProvider.models.map((model) => model.id)
-    if (modelIds.length === 0) return
-    const outcome = await window.platform.modelProviders.applyModelSync(selectedProvider.id, {
-      toAdd: [],
-      toUpdate: [],
-      toRemove: modelIds
-    })
-    if (isProviderModelSyncFailure(outcome)) throw new Error(outcome.reasonCode)
-    await reloadProviders(selectedProvider.id)
-  }
-
-  function toggleModelPinned(modelId: string): void {
-    setPinnedModelIds((current) => togglePinnedModelId(current, modelId))
-  }
-
-  function toggleModelGroup(groupName: string): void {
-    setCollapsedModelGroups((current) => {
-      const next = new Set(current)
-      if (next.has(groupName)) next.delete(groupName)
-      else next.add(groupName)
-      return next
-    })
-  }
-
-  /**
-   * 主窗的 antd 主题：**唯一来源**与分离窗共用（PLAT-39 ②：分离窗此前没有 ConfigProvider ⇒ 同一组件
-   * 在分离窗退化成 antd 默认浅色 token）。PLAT-42：token 值已上移到 `platform/ui/theme` 单源
-   * （`buildWindowAntdTheme`），本函数只负责把**当前外观**解析成单源需要的两个参数。
    */
   function getAntdTheme() {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -1056,75 +476,34 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   }
 
   function renderSettings(): React.ReactElement {
-    const productSettingsEntry = findProductSettingsEntry(settingsPanelKey, productSettingsEntries)
-
     return (
-      <div className="settings-layout">
-        <aside className="settings-nav" aria-label={t.nav.settings}>
-          {settingsNavGroups.map((group) => (
-            <section key={group.id} className="settings-nav-group" aria-label={group.title ?? undefined}>
-              {group.title ? <div className="settings-nav-group-title">{group.title}</div> : null}
-              {group.panels.map((panel) => {
-                const Icon = panel.icon
-                return (
-                  <button
-                    key={panel.key}
-                    type="button"
-                    className={settingsPanelKey === panel.key ? 'settings-nav-item active' : 'settings-nav-item'}
-                    onClick={() => setSettingsPanelKey(panel.key)}>
-                    <Icon size={17} />
-                    <span>{panel.label}</span>
-                  </button>
-                )
-              })}
-            </section>
-          ))}
-        </aside>
-
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'models' ? (
-          // 供应商列表是这一页的启动读数：等 / 读不到 / 有数据（刷新失败保留旧表）都由它统一判。
-          <ModelServiceLoadSurface
-            language={settings.language}
-            state={providersState}
-            onRetry={() => void reloadProviders()}>
-            <div className="model-service-with-defaults" data-model-service-with-defaults>
-              <ModelServiceDefaultModelsSection
-                labels={t.models}
-                providers={providers}
-                values={settings.modelDefaults}
-                onChange={(field, value) => {
-                  void updateSettings({ modelDefaults: { ...settings.modelDefaults, [field]: value } })
-                }}
-              />
-              {renderModelService()}
-            </div>
-          </ModelServiceLoadSurface>
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'assistant-library' ? (
-          <AssistantLibrarySettingsPage language={settings.language} onManageAssistants={() => setActiveNavKey('assistants')} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'web-search' ? (
-          <WebSearchSettingsPage language={settings.language} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'storage-cache' ? (
-          <StorageCacheSettingsPage language={settings.language} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'task-automation' ? (
-          <TaskAutomationSettingsPage language={settings.language} focusTaskId={focusEntityId} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'channels' ? (
-          <ChannelSettingsPage language={settings.language} />
-        ) : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? renderPreferences() : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'notifications' ? renderNotifications() : null}
-        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'about' ? <AboutSettingsPage settings={settings} onUpdateSettings={updateSettings} productName={appInfo?.name ?? ''} /> : null}
-        {productSettingsEntry ? (
-          <ProductContributionHost
-            language={settings.language}
-            load={productSettingsEntry.load} focusEntityId={focusEntityId}
-          />
-        ) : null}
-      </div>
+      <AppShellSettingsLayout
+        t={t}
+        settings={settings}
+        settingsRecovery={settingsRecovery}
+        settingsReadRetrying={settingsReadRetrying}
+        onRetrySettingsRead={() => void retrySettingsRead()}
+        onResetSettingsFile={resetSettingsFile}
+        noticeText={noticeText}
+        resolveText={preferencesText}
+        settingsPanelKey={settingsPanelKey}
+        onSelectPanel={setSettingsPanelKey}
+        navGroups={settingsNavGroups}
+        productSettingsEntries={productSettingsEntries}
+        providersState={providersState}
+        providers={providers}
+        onReloadProviders={() => void reloadProviders()}
+        onUpdateSettings={updateSettings}
+        onUpdateNetworkSettings={updateNetworkSettings}
+        onDraftSettingsChange={setSettings}
+        onRunProxySelfTest={runProxySelfTest}
+        onManageAssistants={() => setActiveNavKey('assistants')}
+        focusEntityId={focusEntityId}
+        appInfoName={appInfo?.name ?? ''}
+        proxySelfTest={proxySelfTest}
+        proxySelfTestView={proxySelfTestView}
+        modelService={renderModelService()}
+      />
     )
   }
 
@@ -1134,690 +513,47 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    */
   function renderModelService(): React.ReactElement {
     return (
-      <ModelServiceProviderPage
-        labels={t.models}
-        language={settings.language}
-        statusText={{ saved: t.status.saved, failed: t.status.failed }}
-        providers={providers}
-        filteredProviders={filteredProviders}
-        selectedProvider={selectedProvider}
-        selectedProviderId={selectedProviderId}
-        providerSearch={providerSearch}
-        enabled={providerDraft.enabled}
-        apiKeyDraft={apiKeyDraft}
-        modelGroups={modelGroups}
-        collapsedGroups={collapsedModelGroups}
-        connectionStatus={connectionStatusText}
-        isSyncingModels={isSyncingModels}
-        notice={noticeText}
-        syncError={modelSyncError}
-        onProviderSearchChange={setProviderSearch}
+      <ModelServiceSection
+        t={t}
+        settings={settings}
+        noticeText={noticeText}
+        drafts={drafts}
+        sync={sync}
+        provider={providerActions}
         onSelectProvider={selectProvider}
-        onAddProvider={() => setIsAddProviderOpen(true)}
-        onApiKeyDraftChange={handleApiKeyDraftChange}
-        onToggleGroup={toggleModelGroup}
-        actions={{
-          saveApiKeyDraft,
-          clearApiKeyDraft: () => setApiKeyDraft(''),
-          setProviderEnabled,
-          saveEndpoints: saveProviderEndpoints,
-          saveImageEndpoint: saveProviderImageEndpoint,
-          removeModel,
-          clearAllModels: clearAllProviderModels,
-          removeProvider: removeSelectedProvider,
-          removeProviderById,
-          setProviderEnabledById,
-
-          previewModelSync: () => void previewModelSync(),
-          openAddModel: openAddModelDrawer,
-          openEditModel: openEditModelDrawer,
-          openConnectionCheck,
-          openExternal: openProviderUrl,
-          revealApiKey: (providerId) => window.platform.modelProviders.revealApiKey(providerId)
-        }}
-        overlays={(
-          <>
-            <ProviderConnectionCheckDrawer
-          providerName={selectedProvider ? resolveProviderDisplayName(t.models, selectedProvider) : ''}
-              open={isConnectionCheckOpen}
-              models={connectionCheckModels}
-              apiKeyOptions={connectionCheckApiKeyOptions}
-              selectedModelId={connectionCheckModelId}
-              selectedApiKeyOptionId={connectionCheckApiKeyOptionId}
-              isSubmitting={isTestingConnection}
-              result={connectionCheckResult}
-              providerEnabled={providerDraft.enabled}
-              hasApiKey={connectionCheckApiKeyOptions.length > 0}
-              environment={{
-                proxyMode: settings.network.proxyMode,
-                proxyUrl: settings.network.proxyUrl,
-                targetHost: selectedProvider ? resolveProviderHost(selectedProvider.baseUrl) : ''
-              }}
-              onEnableProvider={() => void enableProviderAndRecheck()}
-              onOpenProxySettings={openProxySettings}
-              onEnableModelGateway={() => void enableModelGatewayAndRecheck()}
-              labels={{
-                title: t.models.connectionCheckTitle,
-                model: t.models.connectionCheckModel,
-                apiKey: t.models.connectionCheckApiKey,
-                cancel: t.models.cancel,
-                start: t.models.connectionCheckStart,
-                providerStatus: t.models.connectionCheckProviderStatus,
-                statusEnabled: t.models.connectionCheckStatusEnabled,
-                statusDisabled: t.models.connectionCheckStatusDisabled,
-                enableProvider: t.models.connectionCheckEnableProvider,
-                detailPrefix: t.models.connectionCheckDetailPrefix,
-                environment: t.models.connectionCheckEnvironment,
-                proxy: t.models.connectionCheckProxy,
-                proxyDirect: t.models.connectionCheckProxyDirect,
-                proxySystem: t.models.connectionCheckProxySystem,
-                proxyCustom: t.models.connectionCheckProxyCustom,
-                targetHost: t.models.connectionCheckTargetHost,
-                networkDiagnosis: t.models.connectionCheckNetworkDiagnosis,
-                networkDiagnosisNone: t.models.connectionCheckNetworkDiagnosisNone,
-                proxyNote: t.models.connectionCheckProxyNote,
-                networkFailureHint: t.models.connectionCheckNetworkFailureHint,
-                customProxyFailureHint: t.models.connectionCheckCustomProxyFailureHint,
-                openProxySettings: t.models.connectionCheckOpenProxySettings,
-                gatewayDisabledHint: t.models.connectionCheckGatewayDisabledHint,
-                enableModelGateway: t.models.connectionCheckEnableModelGateway,
-                retry: t.models.retry,
-                runtimeLanes: {
-                  ordinaryChat: t.models.connectionCheckOrdinaryChat,
-                  direct: t.models.connectionCheckDirect,
-                  gateway: t.models.connectionCheckGateway,
-                  final: t.models.connectionCheckFinal,
-                  ready: t.models.connectionCheckAgentReady,
-                  notReady: t.models.connectionCheckAgentNotReady,
-                  checking: t.models.connectionCheckStart,
-                  mixed: t.models.connectionCheckAgentMixed,
-                  reasons: t.models,
-                  detailPrefix: t.models.connectionCheckDetailPrefix,
-                  irrelevantHint: t.models.connectionCheckIrrelevantHint,
-                  gatewayDisabledHint: t.models.connectionCheckGatewayDisabledHint
-                },
-                noModels: t.models.noChatModelForConnectionCheck,
-                noApiKeys: t.models.connectionNeedsConfig
-              }}
-              onClose={() => setIsConnectionCheckOpen(false)}
-              onModelChange={(modelId) => {
-                setConnectionCheckModelId(modelId)
-                setConnectionCheckResult(null)
-              }}
-              onApiKeyOptionChange={(optionId) => {
-                setConnectionCheckApiKeyOptionId(optionId)
-                setConnectionCheckResult(null)
-              }}
-              onStart={() => void startConnectionCheck()}
-            />
-
-            <ProviderModelSyncDrawer
-              open={isModelSyncOpen}
-              preview={modelSyncPreview}
-              selection={modelSyncSelection}
-              isApplying={isSyncingModels}
-              labels={{
-                title: t.models.modelSyncTitle,
-                added: t.models.modelSyncAdded,
-                missing: t.models.modelSyncMissing,
-                localSurplus: t.models.modelSyncLocalSurplus,
-                localSurplusHint: t.models.modelSyncLocalSurplusHint,
-                upToDate: t.models.modelSyncUpToDate,
-                upToDateHint: t.models.modelSyncUpToDateHint,
-                removedHint: t.models.modelSyncRemovedHint,
-                selectAll: t.models.selectAll,
-                deselectAll: t.models.deselectAll,
-                cancel: t.models.cancel,
-                apply: t.models.modelSyncApply,
-                addSummary: (selected, total) => t.models.modelSyncAddSummary.replace('{selected}', String(selected)).replace('{total}', String(total)),
-                removeSummary: (selected, total) =>
-                  t.models.modelSyncRemoveSummary.replace('{selected}', String(selected)).replace('{total}', String(total))
-              }}
-              onClose={() => setIsModelSyncOpen(false)}
-              onApply={() => void applyModelSyncPreview()}
-              onToggleAdded={toggleModelSyncAdded}
-              onToggleMissing={toggleModelSyncMissing}
-              onToggleStale={toggleModelSyncStale}
-              onToggleAllAdded={toggleAllModelSyncAdded}
-              onToggleAllMissing={toggleAllModelSyncMissing}
-              onToggleAllStale={toggleAllModelSyncStale}
-            />
-
-            <ModelServiceAddProviderDialog
-              open={isAddProviderOpen}
-              labels={t.models}
-              providers={providers}
-              onCancel={() => setIsAddProviderOpen(false)}
-              onAdd={addProvider}
-            />
-
-            <ModelServiceModelDrawer
-              open={isAddModelOpen}
-              labels={t.models}
-              draft={modelDraft}
-              isEditing={editingModelId !== null}
-              isSaving={false}
-              chatProtocolAvailability={{
-                responses: Boolean(selectedProvider && resolveProviderChatBase(selectedProvider, 'responses')),
-                gemini: Boolean(selectedProvider && resolveProviderChatBase(selectedProvider, 'gemini')),
-                messages: Boolean(selectedProvider && resolveProviderChatBase(selectedProvider, 'messages'))
-              }}
-              pinned={
-                editingModelId !== null &&
-                selectedProvider !== null &&
-                pinnedModelIds.includes(`${selectedProvider.id}:${editingModelId}`)
-              }
-              onChange={setModelDraft}
-              onTogglePin={() => {
-                if (editingModelId !== null && selectedProvider !== null) {
-                  toggleModelPinned(`${selectedProvider.id}:${editingModelId}`)
-                }
-              }}
-              onSave={() => void saveModel()}
-              onClose={closeModelDrawer}
-            />
-          </>
-        )}
+        onOpenExternal={openProviderUrl}
       />
-    )
-  }
-
-  function renderPreferences(): React.ReactElement {
-    return (
-      <section className="settings-detail-pane preferences-pane">
-        <div className="section-heading">
-          <span>{t.settings.basicSettings}</span>
-          {noticeText ? <small>{noticeText}</small> : null}
-        </div>
-
-        <div className="preference-section">
-          <div className="preference-heading">
-            <Languages size={18} />
-            <span>{t.preferences.language}</span>
-          </div>
-          <Segmented
-            ariaLabelKey={LANGUAGE_SEGMENTED_KEY}
-            items={languageOptions.map((option) => ({
-              value: option.value,
-              labelKey: LANGUAGE_LABEL_KEYS[option.value]
-            }))}
-            value={settings.language}
-            onChange={(value) => void updateSettings({ language: value as AppLanguage })}
-            resolveText={preferencesText}
-          />
-        </div>
-
-        <TimeZonePreference
-          language={settings.language}
-          value={settings.timeZone}
-          onChange={(value) => void updateSettings({ timeZone: value })}
-        />
-
-        <div className="preference-section">
-          <div className="preference-heading">
-            <Palette size={18} />
-            <span>{t.preferences.displayStyle}</span>
-          </div>
-          <Segmented
-            ariaLabelKey={THEME_SEGMENTED_KEY}
-            items={themeOptions.map((option) => ({
-              value: option.value,
-              labelKey: THEME_LABEL_KEYS[option.value],
-              icon: option.icon
-            }))}
-            value={settings.themeMode}
-            onChange={(value) => void updateSettings({ themeMode: value as ThemeMode })}
-            resolveText={preferencesText}
-          />
-        </div>
-
-        <div className="preference-section">
-          <div className="preference-heading">
-            <Globe2 size={18} />
-            <span>{t.preferences.proxyMode}</span>
-          </div>
-          <Select<ProxyMode>
-            className="preference-select"
-            value={settings.network.proxyMode}
-            options={proxyModeOptions.map((option) => ({
-              value: option.value,
-              label: t.preferences[option.labelKey]
-            }))}
-            onChange={(value) => void updateNetworkSettings({ proxyMode: value })}
-          />
-          <p className="preference-hint" data-preferences-proxy-hint>{t.preferences.proxyRequestHint}</p>
-          <div className="preference-proxy-probe">
-            <Button
-              className="ant-secondary-button"
-              size="small"
-              loading={proxySelfTest.running}
-              disabled={proxySelfTest.running}
-              data-proxy-self-test
-              onClick={() => void runProxySelfTest()}>
-              {proxySelfTest.running ? t.preferences.proxySelfTestRunning : t.preferences.proxySelfTest}
-            </Button>
-            {proxySelfTestView !== null ? (
-              <p
-                className={`preference-proxy-probe-result ${proxySelfTestView.tone}`}
-                data-proxy-self-test-result
-                data-tone={proxySelfTestView.tone}>
-                {proxySelfTestView.line}
-                {proxySelfTestView.hint !== null ? (
-                  <>
-                    <br />
-                    <span className="preference-proxy-probe-hint">{proxySelfTestView.hint}</span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
-          </div>
-          {settings.network.proxyMode === 'custom' ? (
-            <div className="preference-fields">
-              <label className="preference-field">
-                <span>{t.preferences.proxyAddress}</span>
-                <Input
-                  value={settings.network.proxyUrl}
-                  placeholder={t.preferences.proxyAddressPlaceholder}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      network: { ...current.network, proxyUrl: event.target.value }
-                    }))
-                  }
-                  onBlur={(event) => void updateNetworkSettings({ proxyUrl: event.target.value.trim() })}
-                />
-                {proxyAddressUsesImplicitSocks5(settings.network.proxyUrl) ? (
-                  <p className="preference-hint" data-proxy-implicit-protocol>
-                    {t.preferences.proxySocks5Implicit}
-                  </p>
-                ) : null}
-              </label>
-              <label className="preference-field">
-                <span>{t.preferences.proxyBypassRules}</span>
-                <Input
-                  value={settings.network.proxyBypassRules}
-                  placeholder={t.preferences.proxyBypassPlaceholder}
-                  onChange={(event) =>
-                    setSettings((current) => ({
-                      ...current,
-                      network: { ...current.network, proxyBypassRules: event.target.value }
-                    }))
-                  }
-                  onBlur={(event) =>
-                    void updateNetworkSettings({ proxyBypassRules: event.target.value.trim() })
-                  }
-                />
-              </label>
-            </div>
-          ) : null}
-        </div>
-
-      </section>
-    )
-  }
-
-  function renderNotifications(): React.ReactElement {
-    return (
-      <NotificationSettingsScreen
-        title={t.settings.notifications}
-        notice={noticeText}
-        language={settings.language}
-      />
-    )
-  }
-
-  function renderWorkspace(): React.ReactElement {
-    return (
-      <section className="content">
-        <div className="hero-panel">
-          <div>
-            <p className="eyebrow">{t.workspace.eyebrow}</p>
-            <h1>{t.workspace.title}</h1>
-            <p className="hero-copy">{t.workspace.copy}</p>
-          </div>
-          <div className="runtime-badge">
-            <Activity size={18} />
-            <span>{appInfo
-              ? `${appInfo.platform} / Electron ${appInfo.electron}`
-              : <LoadingState layout="inline" size="sm" label={t.status.loading} />}</span>
-          </div>
-        </div>
-
-        <div className="work-grid">
-          <section className="primary-surface">
-            <div className="section-heading">
-              <span>{t.workspace.loadedProducts}</span>
-              <small>{t.workspace.manifestDriven}</small>
-            </div>
-            <div className="product-list">
-              {products.map((product) => (
-                <article key={product.id} className="product-row">
-                  <div>
-                    <strong>{resolveLocalizedTitle(product.name, settings.language)}</strong>
-                    <span>{product.description}</span>
-                  </div>
-                  <dl>
-                    <div>
-                      <dt>{t.workspace.tools}</dt>
-                      <dd>{product.toolCount}</dd>
-                    </div>
-                    <div>
-                      <dt>{t.workspace.skills}</dt>
-                      <dd>{product.skillCount}</dd>
-                    </div>
-                    <div>
-                      <dt>{t.workspace.agents}</dt>
-                      <dd>{product.agentCount}</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <aside className="inspector">
-            <div className="section-heading">
-              <span>{t.workspace.runtime}</span>
-              <small>{t.workspace.preloadApi}</small>
-            </div>
-            <ul className="runtime-list">
-              <li>
-                <span>{t.workspace.app}</span>
-                <strong>{appInfo?.name ?? '...'}</strong>
-              </li>
-              <li>
-                <span>{t.workspace.theme}</span>
-                <strong>{appInfo?.theme ?? '...'}</strong>
-              </li>
-              <li>
-                <span>{t.workspace.node}</span>
-                <strong>{appInfo?.node ?? '...'}</strong>
-              </li>
-              <li>
-                <span>{t.workspace.chrome}</span>
-                <strong>{appInfo?.chrome ?? '...'}</strong>
-              </li>
-            </ul>
-          </aside>
-        </div>
-      </section>
-    )
-  }
-
-  /**
-   * 页面正文的**唯一**挂载边缘：内置页派发收敛到 `builtInPageAdapters`，产品页走产品 loader，
-   * 正文状态所有权仍在本组件。
-   *
-   * P2-03 起它有两种驱动方式，且**没有**第二条布局权威：
-   *  - 有受控 Tab 桥（生产）⇒ `WorkspaceTabStrip` + `WorkspacePageHost` 驱动本函数逐 Tab 渲染
-   *    （非活动 Tab 就地隐藏、不卸载，草稿因此不丢）；
-   *  - 无 Tab 桥（既有 shell 单测注入的 platform 不含 workspace）⇒ 由 `activeNavKey` 直接渲染当前页。
-   * 旧「直接切页 + 单 active 页面销毁」路径已随 `.tabs.*` 接通整体移除。
-   */
-  function renderActivePage(): React.ReactElement {
-    if (isBuiltInNavItemId(activeNavKey)) {
-      return (
-        <>
-          {builtInPages.render(activeNavKey, {
-            assistants: () => (
-              <AssistantPage
-                language={settings.language}
-                providers={providers}
-                chatSettings={settings.chat}
-                pinnedModelIds={pinnedModelIds}
-                defaultAssistantModelId={settings.modelDefaults.assistantModelId}
-                openRequest={assistantOpenRequest}
-              />
-            ),
-            agents: () => (
-              <AgentPage
-                language={settings.language}
-                agentSettings={settings.agent}
-                chatSettings={settings.chat}
-                providers={providers}
-                pinnedModelIds={pinnedModelIds}
-                defaultAgentModelId={settings.modelDefaults.agentModelId}
-                loadingModelService={providersState.status === 'loading'}
-                onUpdateSettings={updateSettings}
-              />
-            ),
-            settings: () => renderSettings()
-          })}
-        </>
-      )
-    }
-
-    const productMenuEntry = findProductMenuEntry(activeNavKey, productMenuEntries)
-    if (productMenuEntry) {
-      return (
-        <ProductContributionHost
-          language={settings.language}
-          load={productMenuEntry.load}
-        />
-      )
-    }
-
-    return renderWorkspace()
-  }
-
-  /**
-   * P2-11：memo 化的页面 provider **只创建一次**，正文以**稳定包装**每次转发到本渲染最新的 mounts
-   * （`pageMountsRef.current`）。否则 `mounts.settings: () => renderSettings()` 会把闭包冻结在 memo
-   * 创建时那一次渲染：Tab 路径下 Settings 的 `apiKeyDraft` 等正文状态更新后正文不跟着变，受控输入
-   * 被旧闭包重置、提交读到旧草稿（用户可见：输入看不见、保存存不下）。
-   */
-  const pageMountsRef = useRef<BuiltInPageMounts | null>(null)
-  pageMountsRef.current = {
-    assistants: () => (
-      <AssistantPage
-        language={settings.language}
-        providers={providers}
-        chatSettings={settings.chat}
-        pinnedModelIds={pinnedModelIds}
-        defaultAssistantModelId={settings.modelDefaults.assistantModelId}
-        openRequest={assistantOpenRequest}
-      />
-    ),
-    agents: () => (
-      <AgentPage
-        language={settings.language}
-        agentSettings={settings.agent}
-        chatSettings={settings.chat}
-        providers={providers}
-        pinnedModelIds={pinnedModelIds}
-        defaultAgentModelId={settings.modelDefaults.agentModelId}
-        onUpdateSettings={updateSettings}
-      />
-    ),
-    settings: () => renderSettings()
-  }
-
-  /**
-   * 页面正文派发（**唯一**表：`workspacePageContentProvider`）。本组件只注入自己持有的 mounts
-   * （内置页正文 + AppShell 内部 Settings 渲染器），页窗用同一 provider 但不传 mounts。
-   */
-  const pageContentProvider = useMemo(
-    () => createWorkspacePageContentProvider({
-      mounts: {
-        assistants: () => pageMountsRef.current?.assistants() ?? null,
-        agents: () => pageMountsRef.current?.agents() ?? null,
-        settings: () => pageMountsRef.current?.settings() ?? null
-      }
-    }),
-    []
-  )
-
-  /** 一个 Tab 的正文：provider 未命中 ⇒ null，由 `WorkspacePageHost` 给成对 i18n 安全壳。 */
-  function renderPageForTab(pageId: string, menuKey: string): React.ReactNode {
-    return pageContentProvider.render({ pageId, menuKey, language: settings.language, active: true })
-  }
-
-  /**
-   * P2-10③（D2 接线）：Tab 条的三态草稿门**必须**由真实内容 owner 回答，因此这里把既有 Settings 草稿
-   * owner（模型服务 API Key 表单，`settingsDraftOwner`）经 `createSettingsDraftOwnerPort` 投影成端口：
-   *  - 只有 Settings 页的实例有草稿 owner；其它页一律 `undefined`（**绝不伪造保护**，也绝不错杀无草稿的页）；
-   *  - 提示界面用 Settings 自己的 `SettingsDraftPrompt`（通用 strip 不伪造 Settings 语义）；
-   *  - owner 只回答「干净/脏 + 敏感性」，草稿正文不进入端口 ⇒ 敏感草稿在结构上不可能进平台 handoff。
-   */
-  const workspaceDraftGuard = useMemo<WorkspaceTabDraftGuard>(() => ({
-    owner: (workspaceInstanceKey) => {
-      const tab = workspaceTabState?.tabs.find((entry) => entry.workspaceInstanceKey === workspaceInstanceKey)
-      return tab !== undefined && tab.pageId === 'settings'
-        ? createSettingsDraftOwnerPort(settingsDraftOwner)
-        : undefined
-    },
-    renderPrompt: ({ probe, pending, onDecision }) => (
-      <SettingsDraftPrompt
-        language={settings.language}
-        reason={probe.sensitivity === 'sensitive' ? 'sensitive-draft' : 'unsaved-content'}
-        pending={pending}
-        onDecision={onDecision}
-      />
-    )
-  }), [settingsDraftOwner, settings.language, workspaceTabState])
-
-  /**
-   * 生产页面宿主：有 Tab 快照时由 `WorkspaceTabStrip` 提供 tablist 语义、`WorkspacePageHost` 提供
-   * tabpanel 语义（全部 `open` 的实例同时挂载、非活动项 `hidden` 就地隐藏）；没有快照即回退既有直接切页。
-   */
-  function renderWorkspacePages(): React.ReactElement {
-    const state = workspaceTabState
-    const client = tabClientRef.current
-    if (state === null || client === null) return renderActivePage()
-    return (
-      <WorkspaceTabStrip
-        language={settings.language}
-        state={state}
-        pages={shellWorkspacePages}
-        port={client.port}
-        recentlyClosedCount={state.recentlyClosedCount ?? 0}
-        draftGuard={workspaceDraftGuard}>
-        <WorkspacePageHost
-          language={settings.language}
-          state={state}
-          renderPage={({ tab }) => renderPageForTab(tab.pageId, tab.menuKey)}
-        />
-      </WorkspaceTabStrip>
     )
   }
 
   return (
-    <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()} button={WINDOW_ANTD_BUTTON_CONFIG} wave={WINDOW_ANTD_WAVE_CONFIG}>
-      {/* 确认框宿主：必须在 ConfigProvider 里面，`Modal.useModal()` 才吃得到当前主题（深浅色一致）。 */}
-      <ConfirmProvider>
-      {/* 主窗所有内容（含产品页）共用 Main 已解析的显示时区；分离窗由 WorkspaceWindowRoot 提供。 */}
-      <ShellTimeZoneProvider timeZone={resolveShellTimeZone(settings.timeZone)}>
-      {/* 语言上下文：platform/ui 与其他共享组件按显示语言取文案（产品页/停靠面板由各自的外层提供）。 */}
-      <ShellLanguageProvider language={settings.language}>
-      <div className="app-shell">
-      <header className="topbar">
-        <div className="traffic-light-space" aria-hidden="true" />
-        {/* Windows 常规做法：标题栏最左是应用图标，其后才是菜单（macOS 同位置是红绿灯，故默认不显示） */}
-        <span className="titlebar-brand" aria-hidden="true">
-          <img src={brandMarkUrl} alt="" />
-        </span>
-        {/* Windows：OS 不再绘制菜单栏，应用菜单画在自绘标题栏里（macOS 用屏幕顶部的原生菜单，这里不渲染） */}
-        <AppMenuBar />
-        {/* 拖动区：页面名不再重复显示（当前页由 Tab 条承载），这里是纯粹的窗口拖动留白 */}
-        <div className="titlebar-drag" aria-hidden="true" />
-        <div className="topbar-actions">
-          {/* 搜索 / 布局两颗图标已删除：它们从来没有 onClick，标签承诺的动作不存在。
-              等真有面板时再连功能一起加回来，别只把按钮补回顶栏。 */}
-          <UpdateActionButton language={settings.language} />
-          <NotificationBell labels={t.notifications} open={notificationCenterOpen}
-            controlsId={NOTIFICATION_CENTER_PANEL_ID} onOpen={() => setNotificationCenterOpen(true)} />
-        </div>
-        {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
-        <WindowControls />
-      </header>
-
-      {/* 右上角横幅：挂载点只占一行，文案与语言由组件自己取。 */}
-      <NotificationBanner onOpen={() => setNotificationCenterOpen(true)} />
-
-      <NotificationCenterDrawer
-        open={notificationCenterOpen}
-        onOpenDeeplink={openNotificationTarget}
-        onClose={() => {
-          setNotificationCenterOpen(false)
-          // 关闭后焦点回铃铛：键盘用户不该被扔回文档开头。
-          queueMicrotask(() => document.querySelector<HTMLElement>('[data-notification-bell] button')?.focus())
-        }}
-        labels={t.notifications}
-      />
-
-      <InUseModelRetiredBanner
-        labels={t.models}
-        items={inUseRetiredModels}
-        onChangeModel={() => {
-          setSettingsPanelKey('models')
-          setActiveNavKey('settings')
-        }}
-      />
-
-      <aside className="global-sidebar">
-        {/* 品牌图标已上移到自绘标题栏最左（Windows 常规做法），侧栏不再留一块只有 logo 的空白区 */}
-        <nav className="nav-list" aria-label="Primary">
-          {sidebarNavLayout.primaryItems.map((item) => {
-            const Icon = item.icon
-            return (
-              <button
-                key={item.key}
-                type="button"
-                className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
-                title={item.label}
-                aria-label={item.label}
-                // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
-                data-nav-key={item.key}
-                onClick={() => activateNavKey(item.key)}>
-                <Icon size={17} strokeWidth={1.8} />
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </nav>
-
-        <nav className="sidebar-bottom-nav" aria-label="Secondary">
-          {sidebarNavLayout.bottomItems.map((item) => {
-            const Icon = item.icon
-            return (
-              <button
-                key={item.key}
-                type="button"
-                className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
-                title={item.label}
-                aria-label={item.label}
-                // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
-                data-nav-key={item.key}
-                onClick={() => activateNavKey(item.key)}>
-                <Icon size={17} strokeWidth={1.8} />
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="status-dot" />
-          <span>{products.length} {products.length === 1 ? t.status.productLoaded : t.status.productsLoaded}</span>
-        </div>
-      </aside>
-
-      <main className="app-main">
-        {/* PLAT-35：主窗页面区域由 MainWindowPanelArea 承载 —— 工作区键取 Tab 链的活动实例键，
-            停靠面板与页面正文因此同属一个实例（没有桥/活动 Tab 时原样渲染，行为逐字回到旧路径）。 */}
-        <div className="page-body">
-          <MainWindowPanelArea
-            workspaceInstanceKey={workspaceTabState?.activeWorkspaceInstanceKey ?? null}
-            language={settings.language}
-            timeZone={resolveShellTimeZone(settings.timeZone)}>
-            {renderWorkspacePages()}
-          </MainWindowPanelArea>
-        </div>
-      </main>
-      </div>
-      </ShellLanguageProvider>
-      </ShellTimeZoneProvider>
-      </ConfirmProvider>
-    </ConfigProvider>
+    <AppShellView
+      t={t}
+      settings={settings}
+      appInfo={appInfo}
+      products={products}
+      activeNavKey={activeNavKey}
+      sidebarNavLayout={sidebarNavLayout}
+      onActivateNavKey={activateNavKey}
+      notificationCenterOpen={notificationCenterOpen}
+      setNotificationCenterOpen={setNotificationCenterOpen}
+      onOpenNotificationTarget={openNotificationTarget}
+      inUseRetiredModels={inUseRetiredModels}
+      setSettingsPanelKey={setSettingsPanelKey}
+      builtInPages={builtInPages}
+      providers={providers}
+      providersState={providersState}
+      pinnedModelIds={pinnedModelIds}
+      assistantOpenRequest={assistantOpenRequest}
+      focusEntityId={focusEntityId}
+      productMenuEntries={productMenuEntries}
+      tabClientRef={tabClientRef}
+      workspaceTabState={workspaceTabState}
+      shellWorkspacePages={shellWorkspacePages}
+      settingsDraftOwner={settingsDraftOwner}
+      getAntdTheme={getAntdTheme}
+      renderSettings={renderSettings}
+      onUpdateSettings={updateSettings}
+    />
   )
 }

@@ -4,6 +4,21 @@ import { DEFAULT_RETRY_POLICY } from '../contracts/jobTypes'
 import { createJobRunSqliteStore } from './jobRunSqliteStore'
 import { createJobRuntime } from './jobRuntime'
 
+/**
+ * 有界冲刷：等一个**在内存里能观察到的**事实成立，不靠毫秒数。
+ *
+ * 假时钟下不能 `await setTimeout(0)`（不推进时钟就不返回），所以用 `advanceTimersByTimeAsync(0)`
+ * 让出并冲刷微任务；最多 50 圈，超了就抛——状态没在变，报错比继续等有用。
+ */
+async function flushUntil(condition: () => boolean): Promise<void> {
+  for (let round = 0; round < 50; round += 1) {
+    if (condition()) return
+    await vi.advanceTimersByTimeAsync(0)
+  }
+  if (condition()) return
+  throw new Error('condition did not settle within bounded microtask flushes')
+}
+
 describe('jobRuntime terminal hook', () => {
   it('reports a finished run once, with the cause the consumer needs', async () => {
     const reported: Array<{ status: string; cause: string }> = []
@@ -157,18 +172,16 @@ describe('jobRuntime', () => {
       expect(calls).toEqual([])
 
       await vi.advanceTimersByTimeAsync(1_000)
-      await vi.waitFor(() => {
-        expect(calls).toEqual(['tick'])
-      })
+      await flushUntil(() => calls.length === 1)
+      expect(calls).toEqual(['tick'])
       expect(runtime.listRuns({ definitionId: 'job-cron-runtime' })).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(3_599_000)
       expect(calls).toEqual(['tick'])
 
       await vi.advanceTimersByTimeAsync(1_000)
-      await vi.waitFor(() => {
-        expect(calls).toEqual(['tick', 'tick'])
-      })
+      await flushUntil(() => calls.length === 2)
+      expect(calls).toEqual(['tick', 'tick'])
       expect(runtime.listRuns({ definitionId: 'job-cron-runtime' })).toHaveLength(2)
     } finally {
       vi.useRealTimers()
@@ -224,9 +237,16 @@ describe('jobRuntime', () => {
   it('cancels a running job', async () => {
     const runtime = createJobRuntime()
     let observedAbort = false
+    /** 等处理器真的进入再取消：等事实，不等 100ms。 */
+    let markStarted: () => void = () => undefined
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
 
     runtime.registerHandler('wait', async (_payload, context) => {
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      markStarted()
+      await new Promise<void>((resolve) => {
+        if (context.signal.aborted) { resolve(); return }
+        context.signal.addEventListener('abort', () => resolve(), { once: true })
+      })
       observedAbort = context.signal.aborted
     })
 
@@ -242,6 +262,7 @@ describe('jobRuntime', () => {
 
     setSchedule(runtime, definition)
     const run = await runtime.enqueueManual('job-cancel')
+    await started
     runtime.cancel(run.id, {
       kind: 'cancelled',
       message: 'Cancelled by user.'
@@ -296,7 +317,7 @@ describe('jobRuntime', () => {
         trigger: { kind: 'startup' },
         payload: {}
       })
-      await vi.waitFor(() => expect(runtime.getRun(run.id)?.status).toBe('running'))
+      await flushUntil(() => runtime.getRun(run.id)?.status === 'running')
 
       const observation = runtime.waitForRunTerminal(run.id, { timeoutMs: 1_000 })
       await vi.advanceTimersByTimeAsync(1_000)
@@ -437,7 +458,7 @@ describe('jobRuntime', () => {
         }
       })
 
-      await vi.advanceTimersByTimeAsync(0)
+      await flushUntil(() => runtime.getRun(run.id)?.attempt === 2)
       expect(runtime.getRun(run.id)).toMatchObject({
         attempt: 2,
         status: 'running'
@@ -448,12 +469,11 @@ describe('jobRuntime', () => {
         message: 'Cancelled by user.'
       })
 
-      await vi.advanceTimersByTimeAsync(1000)
-      await vi.waitFor(() => {
-        expect(runtime.getRun(run.id)).toMatchObject({
-          status: 'cancelled',
-          lastError: 'Cancelled by user.'
-        })
+      // 取消会唤醒退避里的等待：不需要再推进假时钟，等终态这个事实即可。
+      await flushUntil(() => runtime.getRun(run.id)?.status === 'cancelled')
+      expect(runtime.getRun(run.id)).toMatchObject({
+        status: 'cancelled',
+        lastError: 'Cancelled by user.'
       })
 
       expect(attempts).toBe(1)
@@ -489,9 +509,7 @@ describe('jobRuntime', () => {
         payload: 'first',
         concurrencyKey: 'lock-1'
       })
-      await vi.waitFor(() => {
-        expect(runtime.getRun(firstRun.id)?.status).toBe('running')
-      })
+      await flushUntil(() => runtime.getRun(firstRun.id)?.status === 'running')
 
       const secondRunPromise = runtime.enqueueDefinition({
         id: 'job-queued-timeout-second',
@@ -504,23 +522,18 @@ describe('jobRuntime', () => {
         timeoutMs: 100
       })
 
-      await vi.waitFor(() => {
-        expect(runtime.listRuns({ definitionId: 'job-queued-timeout-second' })[0]?.status).toBe('queued')
-      })
+      await flushUntil(() => runtime.listRuns({ definitionId: 'job-queued-timeout-second' })[0]?.status === 'queued')
 
       await vi.advanceTimersByTimeAsync(100)
       const secondRun = await secondRunPromise
-      await vi.waitFor(() => {
-        expect(runtime.getRun(secondRun.id)).toMatchObject({
-          status: 'failed',
-          lastError: 'Job timed out after 100ms.'
-        })
+      await flushUntil(() => runtime.getRun(secondRun.id)?.status === 'failed')
+      expect(runtime.getRun(secondRun.id)).toMatchObject({
+        status: 'failed',
+        lastError: 'Job timed out after 100ms.'
       })
 
       ;(releaseFirstRun as (() => void) | null)?.()
-      await vi.waitFor(() => {
-        expect(runtime.getRun(firstRun.id)?.status).toBe('completed')
-      })
+      await flushUntil(() => runtime.getRun(firstRun.id)?.status === 'completed')
       expect(payloads).toEqual(['first'])
     } finally {
       vi.useRealTimers()
@@ -532,8 +545,14 @@ describe('jobRuntime', () => {
     let observedAbort = false
     let observedReason: unknown = null
 
+    let markStarted: () => void = () => undefined
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
     runtime.registerHandler('wait', async (_payload, context) => {
-      await new Promise<void>((resolve) => setTimeout(resolve, 100))
+      markStarted()
+      await new Promise<void>((resolve) => {
+        if (context.signal.aborted) { resolve(); return }
+        context.signal.addEventListener('abort', () => resolve(), { once: true })
+      })
       observedAbort = context.signal.aborted
       observedReason = context.signal.reason
     })
@@ -548,10 +567,7 @@ describe('jobRuntime', () => {
     })
 
     const run = await runtime.enqueueManual('job-stop-running')
-    await vi.waitFor(() => {
-      expect(runtime.getRun(run.id)?.status).toBe('running')
-    })
-
+    await started
     runtime.stopAll()
 
     await vi.waitFor(() => {

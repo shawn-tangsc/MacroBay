@@ -66,6 +66,12 @@ function providerWithModels(models: ModelDefinition[]): SafeModelProvider {
   } as SafeModelProvider
 }
 
+/** 类型筛选是一组 `Segmented` 按钮，按闭集顺序取（没有 data 钩子）。 */
+const TYPE_ORDER = ['all', 'deal', 'text', 'rerank', 'embedding', 'image', 'video', 'speech', 'transcription', 'ocr', 'vision']
+function typeButton(container: HTMLElement, tab: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>('[data-model-type-filter] [role="group"] button')][TYPE_ORDER.indexOf(tab)]
+}
+
 describe('R1 模型类型筛选 pill 行（看得见）', () => {
   it('renders 11 type pills with 全部 first and a ≥26px tall row', async () => {
     const page = await renderModelServiceSettings({ language: 'zh-CN' })
@@ -76,14 +82,12 @@ describe('R1 模型类型筛选 pill 行（看得见）', () => {
     // 智能体不是模型类型（它由协议表达）⇒ 类型行里没有它。
     expect(pills.map((pill) => pill.textContent ?? '').join('|')).not.toContain('智能体')
 
-    // 行高跟着内容走（macOS overlay 滚动条不占位，Windows 经典滚动条占 10px，定高会切胶囊），
-    // 只保证下限 26；pill 自身 24px。
-    const row = rule('.model-service-type-pills')
-    expect(row).toMatch(/height:\s*auto/)
-    expect(px(row, 'min-height')).toBeGreaterThanOrEqual(26)
-    expect(px(rule('.model-service-type-pill'), 'height')).toBe(24)
-    // 选中态是 accent 描边（不是 accent 实底）。
-    expect(rule(".model-service-type-pill[data-active='true']")).toMatch(/border-color:\s*var\(--accent\)/)
+    // 类型筛选已是平台 `Segmented`：外观归组件，这一页不再持有 pill 的高度/选中态规则。
+    // 断言同一件事的**新形态**：11 个按钮都在平台分段控件的组里，且页面 CSS 里不再有那套死选择器。
+    const group = page.container.querySelector('[data-model-type-filter] [role="group"]')
+    expect(group?.querySelectorAll('button')).toHaveLength(11)
+    expect(css).not.toContain('.model-service-type-pill {')
+    expect(css).not.toContain('.model-service-type-pills {')
 
     await act(async () => page.root.unmount())
   })
@@ -96,7 +100,8 @@ describe('R1 模型类型筛选 pill 行（看得见）', () => {
     expect(rule('.model-service-filter-rows[hidden]')).toMatch(/display:\s*none/)
     expect(container).toMatch(/padding:\s*0/)
     expect(container).toMatch(/border:\s*0/)
-    expect(rule('.model-service-type-pills')).toMatch(/border:\s*0/)
+    // 旧 pill 行已不存在，容器由平台组件负责；这里只留「两行同容器、间距、收起不残留」的判据。
+    expect(css).not.toContain('.model-service-type-pills')
   })
 })
 
@@ -246,7 +251,7 @@ describe('R4 协议筛选（4 个 pill，可叠加）', () => {
 
     // 类型 + 协议叠加（AND）：文本 + Gemini 原生。
     await act(async () => {
-      page.container.querySelector<HTMLButtonElement>('[data-model-type-tab="text"]')?.click()
+      typeButton(page.container, 'text')?.click()
       protocolChip(page.container, labels.protocolFilterGemini)?.click()
       await Promise.resolve()
     })
@@ -254,7 +259,7 @@ describe('R4 协议筛选（4 个 pill，可叠加）', () => {
 
     // 换成「嵌入」类型后与 Gemini 无交集。
     await act(async () => {
-      page.container.querySelector<HTMLButtonElement>('[data-model-type-tab="embedding"]')?.click()
+      typeButton(page.container, 'embedding')?.click()
       await Promise.resolve()
     })
     expect(page.container.querySelectorAll('[data-model-row]')).toHaveLength(0)

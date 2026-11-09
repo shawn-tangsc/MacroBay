@@ -44,14 +44,18 @@ function growTo(database: DatabaseSync, occupancyTable: string, ceilingBytes: nu
 function logicalBytes(database: DatabaseSync): number {
   return Number(database.prepare('pragma page_count').get()?.page_count) * Number(database.prepare('pragma page_size').get()?.page_size)
 }
-function repositoryOn(database: DatabaseSync, collectionId: string, capacity: ReturnType<typeof capacityReading>) {
+/**
+ * 第三个参数是**读数函数**（调用处都传 `capacityReading`），不是读数本身：
+ * 能力判定在读的那一刻量库大小，所以这里把函数转成 `readCapacity: () => …`。
+ */
+function repositoryOn(database: DatabaseSync, collectionId: string, readCapacity: (database: DatabaseSync) => ReturnType<typeof capacityReading>) {
   const scope = { providerId: '0xrouter', descriptorId, locale: 'zh' as const, month }
   const context = { ...scope, detectedAt: '2026-10-14T15:33:33.917Z',
     evidence: { providerId: '0xrouter', descriptorId, rawRecordId: `shared-capacity-${collectionId}`, evidenceHash: 'a'.repeat(64) } }
   return { input: { ...scope, collectionId, parserVersion: '0xrouter-calendar-mc2-v1', parseResult: parsedFixture() },
     repository: createMarketCalendarEventRepository({ database, manualCapacityAdmission: true,
       resolveCollectionContext: id => id === collectionId ? context : undefined,
-      readCapacity: () => capacity(database), now: () => '2026-10-14T15:34:00.000Z', cursorKey: randomBytes(32) }) }
+      readCapacity: () => readCapacity(database), now: () => '2026-10-14T15:34:00.000Z', cursorKey: randomBytes(32) }) }
 }
 function capacityReading(database: DatabaseSync) {
   return { marketBytes: logicalBytes(database), walBytes: 0, freeBytes: 64 * 1024 ** 3, archiveAvailable: true }

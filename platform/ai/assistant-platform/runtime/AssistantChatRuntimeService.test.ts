@@ -907,8 +907,11 @@ describe('createAssistantChatRuntimeService', () => {
     releaseTerminalRead?.()
     // A third pull can only happen after the runtime has consumed the [DONE] event.
     await vi.waitFor(() => expect(terminalDoneConsumed).toBe(true))
-    // Yield after stream completion so a late terminal result would attempt its write.
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    // 负向断言前要等「这次流已经收尾」这个事实，而不是 yield 一轮事件循环：
+    // 迟到的终局写入只可能发生在收尾之后，收尾一到，它该写就已经写了（没写就是不会写）。
+    await vi.waitFor(() => {
+      expect(['done', 'aborted']).toContain(runtime.getStatus(topic.id).status)
+    })
 
     await vi.waitFor(() => {
       expect(repos.messages.listByTopic(topic.id).find((message) => message.role === 'assistant')).toMatchObject({

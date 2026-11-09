@@ -13,6 +13,7 @@ import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
+import { analysisConclusionPushEligible } from './analysisConclusionPush'
 import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
 import { analysisUpstreamRetryPolicy, decideUpstreamRetry, waitForRetry } from './analysisUpstreamRetry'
 import {
@@ -44,6 +45,8 @@ type Repository = Readonly<{
   listSnapshots?: (eventGroupId: string) => readonly EvidenceSnapshot[]
   getEventGroup: (id: string) => { id: string; currentSummaryId: string | null } | undefined
   getSummary?: (id: string) => { version: number } | undefined
+  /** 这次运行为什么跑（判定行的原因码）：自动结论推送按它决定要不要进判定。 */
+  triggerReasonOf?: (runId: string) => string | undefined
   claimRun: (id: string, startedAt: string) => boolean
   updateRunStatus: (input: { id: string; status: AnalysisRun['status']; completedAt?: string; failureCode?: string; failureDetailCode?: string }) => boolean
   commitSuccessfulAnalysis: (input: { runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline: TimelineEntry }) => void
@@ -389,8 +392,13 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         try { await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText }) } catch { /* 会话是附加物 */ }
       }
     }
-    // N12：信号唤起的那一次、写入记录之后，**提交一次**结论推送。手动与日报那次不走这里。
-    if (deps.notifyAnalysisConclusion !== undefined && analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(runRecord.triggerKey)) {
+    // N12：**达到门槛**的那次、写入记录之后，提交一次结论推送。判据是原因码，不是触发键——
+    // 键记的是阶段，消息面达门槛的运行也长着宏观的样子（`analysisConclusionPushEligible` 一处判）。
+    const triggerReasonCode = deps.repository.triggerReasonOf?.(runRecord.id)
+    if (deps.notifyAnalysisConclusion !== undefined && analysisConclusionPushEligible({
+      triggerKey: runRecord.triggerKey,
+      ...(triggerReasonCode === undefined ? {} : { reasonCode: triggerReasonCode })
+    })) {
       try {
         const trigger = deps.readTriggerSignal?.(runRecord.triggerKey) ?? {}
         const citedFactIds = Object.freeze([...new Set([
@@ -400,6 +408,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         await deps.notifyAnalysisConclusion({
           runId: runRecord.id,
           triggerKey: runRecord.triggerKey,
+          // 桶 = 原因码 + 事件：不同事件各算一次，同一条事件重复触发仍是一个桶。
+          bucket: `${triggerReasonCode ?? 'signal'}:${runRecord.eventGroupId}`,
           cutoff: snapshot.asOf,
           summary: validated.value.conclusion.summary,
           conclusionDirection: validated.value.conclusion.direction,

@@ -63,9 +63,30 @@
   min-width: 0;
 }
 
+/* 标题与 ⓘ 同一行：窄下去只压文字，图标不换行、不缩（否则图标被挤到下一行＝用户截图那个缺陷）。 */
+.notification-row-head {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.notification-row-head > .platform-icon-button,
+.notification-row-head > button {
+  flex: none;
+}
+
 .notification-row-copy strong {
   font-size: 13px;
   font-weight: 500;
+}
+
+.notification-row-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notification-row-desc,

@@ -18,6 +18,8 @@ const asOf = '2026-09-28T00:00:00.000Z'
 const portal = productText['zh-CN'].pages.intelligence.portal
 const timelineText = portal.analysisTimeline
 const workspaceText = portal.analysisWorkspace
+/** 详情/卡片要的是两块文案的并集：时间轴那块说「详情」，工作区那块说「结论」。 */
+const detailText = { ...timelineText, ...workspaceText }
 const completeConclusion = `${'宏观数据已发布，资本流向与价格反应需要结合后续证据判断。'.repeat(12)}结论仍需观察。`
 let root: Root | undefined
 
@@ -147,7 +149,7 @@ describe('analysis conclusion direction markers', () => {
       summary: { ...summary(), eventAssessment: assessment },
       predictions: []
     })
-    const marked = await mountSurface([entry()], () => createElement(AnalysisConclusionDetail, { detail: detailFor('方向：偏多：ETF 连续流入，资金面转强。') as never, text: workspaceText }))
+    const marked = await mountSurface([entry()], () => createElement(AnalysisConclusionDetail, { detail: detailFor('方向：偏多：ETF 连续流入，资金面转强。') as never, text: detailText }))
     const chip = marked.container.querySelector('.mi-analysis-conclusion__direction')
     expect(chip?.textContent).toBe('偏多')
     expect(marked.container.querySelector('.mi-analysis-conclusion__body')?.textContent).toBe('ETF 连续流入，资金面转强。')
@@ -155,7 +157,7 @@ describe('analysis conclusion direction markers', () => {
     expect(section.getAttribute('data-direction')).toBe('bullish')
     expect(section.style.getPropertyValue('--mi-conclusion-direction')).toBe('var(--mi-conclusion-positive)')
 
-    const unmarked = await mountSurface([entry()], () => createElement(AnalysisConclusionDetail, { detail: detailFor(summary().eventAssessment) as never, text: workspaceText }))
+    const unmarked = await mountSurface([entry()], () => createElement(AnalysisConclusionDetail, { detail: detailFor(summary().eventAssessment) as never, text: detailText }))
     expect(unmarked.container.querySelector('.mi-analysis-conclusion__direction')).toBeNull()
     expect(unmarked.container.querySelector('.mi-analysis-timeline__conclusion')?.getAttribute('data-direction')).toBe('none')
   })
@@ -175,7 +177,7 @@ describe('market analysis conclusion surfaces', () => {
 
   it('reads the latest conclusion into the main-area card without a model run', async () => {
     const { container, invoke } = await mountSurface([entry()], timeline =>
-      createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }))
+      createElement(LatestAnalysisConclusionCard, { text: detailText, workspaceText, timeline, onOpenDetail: vi.fn() }))
 
     const conclusion = container.querySelector('.mi-analysis-conclusion-card__conclusion')
     // The body is split into labelled blocks, so the text is compared with collapsed
@@ -232,14 +234,14 @@ describe('market analysis conclusion surfaces', () => {
 
   it('keeps the card but shows the off state while the capability is off', async () => {
     const disabled = await mountSurface([entry()], timeline =>
-      createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }),
+      createElement(LatestAnalysisConclusionCard, { text: detailText, workspaceText, timeline, onOpenDetail: vi.fn() }),
       { analysisSettings: { enabled: false } })
     const offCard = disabled.container.querySelector('.mi-analysis-conclusion-card')
     expect(offCard).not.toBeNull()
     expect(offCard?.querySelector('.mi-analysis-conclusion-card__state')).not.toBeNull()
 
     const enabled = await mountSurface([entry()], timeline =>
-      createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }),
+      createElement(LatestAnalysisConclusionCard, { text: detailText, workspaceText, timeline, onOpenDetail: vi.fn() }),
       { analysisSettings: { enabled: true } })
     // Off is the only state that hides it: an unread setting must not blank the card.
     expect(enabled.container.querySelector('.mi-analysis-conclusion-card')).not.toBeNull()
@@ -247,7 +249,7 @@ describe('market analysis conclusion surfaces', () => {
 
   it('shows an explicit empty state in the card when nothing is published', async () => {
     const { container } = await mountSurface([], timeline =>
-      createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }))
+      createElement(LatestAnalysisConclusionCard, { text: detailText, workspaceText, timeline, onOpenDetail: vi.fn() }))
 
     expect(container.textContent).toContain(workspaceText.latestConclusionEmpty)
   })
@@ -279,7 +281,7 @@ describe('market analysis conclusion surfaces', () => {
 
   it('renders the published state through the shared status pill, not a hand-drawn span', async () => {
     const { container } = await mountSurface([entry()], timeline =>
-      createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }))
+      createElement(LatestAnalysisConclusionCard, { text: detailText, workspaceText, timeline, onOpenDetail: vi.fn() }))
 
     const pill = container.querySelector<HTMLElement>('.mi-analysis-conclusion-card header .status-pill')
     expect(pill).not.toBeNull()
@@ -305,7 +307,7 @@ describe('market analysis conclusion surfaces', () => {
     } as unknown as UseMarketAnalysisTimelineResult
     await act(async () => root?.render(
       <ShellTimeZoneProvider timeZone="UTC">
-        <AnalysisDetailDrawer text={timelineText} workspaceText={workspaceText} timeline={timeline} openEntry={notFound as never} onOpenChange={vi.fn()} />
+        <AnalysisDetailDrawer text={detailText} workspaceText={workspaceText} timeline={timeline} openEntry={notFound as never} onOpenChange={vi.fn()} />
       </ShellTimeZoneProvider>))
 
     // The entry's publish state is the shared pill here too: one word, one shape, four surfaces.
@@ -447,7 +449,7 @@ describe('market analysis conclusion surfaces', () => {
         return { schemaVersion: 1, nextCursor: null, items: reads >= 3 ? [entry()] : [] }
       }
       if (method === 'marketAnalysis.getLatestAttempt') {
-        return { id: 'run-1', status: 'running', failureCode: null, queuedAt: at, evidenceCount: 1 }
+        return { id: 'run-1', status: 'running', failureCode: null, queuedAt: asOf, evidenceCount: 1 }
       }
       return []
     })
@@ -532,7 +534,7 @@ describe('market analysis conclusion surfaces', () => {
 
   it('opens a non-modal drawer with the selected node detail and no backdrop', async () => {
     const { container } = await mountSurface([entry()], timeline =>
-      createElement(AnalysisDetailDrawer, { text: timelineText, workspaceText, timeline, openEntry: entry() as never, onOpenChange: vi.fn() }))
+      createElement(AnalysisDetailDrawer, { text: detailText, workspaceText, timeline, openEntry: entry() as never, onOpenChange: vi.fn() }))
 
     const drawer = container.querySelector('.mi-analysis-drawer')
     expect(drawer?.getAttribute('role')).toBe('complementary')
@@ -554,7 +556,6 @@ describe('market analysis conclusion surfaces', () => {
       + '数据缺口：缺少 cross-asset 价格反应，且缺乏 consensus 无法判断预期差方向。'
     const legacySummary = { ...summary(), eventAssessment: legacy }
     // The workspace layout merges both registries before handing text to the detail surfaces.
-    const detailText = { ...timelineText, ...workspaceText }
     // The card shows the verdict sentence and nothing else: the labelled parts belong to the drawer,
     // so this is a current-shaped conclusion with its verdict first.
     const current = '方向：偏空：稳定币current-usd由257,970,817,433.68085降至257,938,932,953.4702，'
@@ -623,7 +624,7 @@ describe('market analysis conclusion surfaces', () => {
   it('dismisses the drawer with Escape and with the close control', async () => {
     const onOpenChange = vi.fn()
     const { container } = await mountSurface([entry()], timeline =>
-      createElement(AnalysisDetailDrawer, { text: timelineText, workspaceText, timeline, openEntry: entry() as never, onOpenChange }))
+      createElement(AnalysisDetailDrawer, { text: detailText, workspaceText, timeline, openEntry: entry() as never, onOpenChange }))
 
     await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
     expect(onOpenChange).toHaveBeenCalledWith(undefined)
@@ -647,7 +648,7 @@ describe('market analysis conclusion surfaces', () => {
       const [openEntry, setOpenEntry] = useState<ReturnType<typeof entry>>()
       return createElement('div', {},
         createElement(TimelinePanel, { text: timelineText, timeline, onOpenChange: selected => setOpenEntry(selected as never) }),
-        createElement(AnalysisDetailDrawer, { text: timelineText, workspaceText, timeline, openEntry: openEntry as never, onOpenChange: selected => setOpenEntry(selected as never) })
+        createElement(AnalysisDetailDrawer, { text: detailText, workspaceText, timeline, openEntry: openEntry as never, onOpenChange: selected => setOpenEntry(selected as never) })
       )
     }
     const { container } = await mountSurface([entry()], timeline => createElement(Surface, { timeline }))

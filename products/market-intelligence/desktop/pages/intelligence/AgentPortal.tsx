@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { Bitcoin, CandlestickChart, ChartLine } from 'lucide-react'
 
 import type { ActivationState } from './agentActivationPolicy'
@@ -118,6 +119,9 @@ export function AgentPortal({
                 <span className="mi-agent-card__copy">
                   <span className="mi-agent-card__top">
                     {isCrypto ? (
+                      /* 开关不是命令按钮：平台没有 switch 组件（`platform/ui/components` 里没有），
+                         这里是 `role="switch"` + `aria-checked` + 轨道/滑块的自绘开关。换成 `Button`
+                         会把「开/关」说成一个动作，语义就错了。保留并登记。 */
                       <button
                         aria-checked={sample.active}
                         aria-label={text.activation.actions.sampleSwitch}
@@ -144,31 +148,33 @@ export function AgentPortal({
                     )}
                     {isCrypto ? (
                       activationState === 'configured' ? (
-                        <button
+                        <Button
                           aria-label={`${text.activation.actions.configure} · ${progress}`}
                           className="mi-agent-card__progress"
                           onClick={(event) => {
                             event.stopPropagation()
                             onOpenSources()
                           }}
-                          type="button"
+                          size="small"
+                          type="text"
                         >
                           {progress}
-                        </button>
+                        </Button>
                       ) : (
                         <span className="mi-agent-card__activation" data-activation-state={activationState}>
                           <span className="mi-agent-card__activation-state">{activationText}</span>
                           {activationAction ? (
-                            <button
+                            <Button
                               className="mi-agent-card__activation-action"
                               onClick={(event) => {
                                 event.stopPropagation()
                                 activationAction.run()
                               }}
-                              type="button"
+                              size="small"
+                              type="text"
                             >
                               {activationAction.label}
-                            </button>
+                            </Button>
                           ) : null}
                         </span>
                       )
@@ -186,6 +192,9 @@ export function AgentPortal({
                 <span className="mi-agent-card__portrait">
                   <img alt="" aria-hidden="true" draggable={false} src={portraitUrls[agent.portraitAsset]} />
                 </span>
+                {/* 整卡即动作：这块是铺满卡片的透明点击层（`position: absolute; inset: 0`），
+                    可访问名给出「打开看板 / 即将推出」，卡里的进度与开关各自 `z-index: 2` 和
+                    `stopPropagation` 把自己摘出去。换成平台按钮会把整张卡的图文包成一颗文字按钮。 */}
                 <button
                   aria-label={isAvailable ? text.actions.openDashboard : text.states.comingSoon}
                   className="mi-agent-card__entry"

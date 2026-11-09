@@ -34,12 +34,13 @@ component adds the open/close model, the width cap and the focus return.
 | --- | --- | --- | --- |
 | `labelKey` | `K extends string` | one of | A single-sentence explanation, **as a key**. |
 | `lines` | `readonly { labelKey, params? }[]` | one of | A multi-line explanation. Each line carries **its own** params; the first line is the subject and is rendered bold. |
+| `content` | `ReactNode` | one of | An explanation the caller has already assembled from its own parts. Rendered verbatim, with no line markup; `resolveText` is not required with it. |
 | `labelParams` | `Readonly<Record<string, string>>` | single-line only | Values to fill `{name}` placeholders in the one-line form. **Already formatted** strings only (`10–2`, `289/289`). It does not exist on the multi-line branch: passing it there does not compile. |
-| `resolveText` | `(key: K) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
+| `resolveText` | `(key: K) => string` | yes, on the key branches | The caller's resolver. An unknown key resolves to an empty string. The `content` branch has no key, so it takes no resolver. |
 | `trigger` | `(props: PopoverTriggerProps) => ReactElement` | yes | Renders the trigger yourself and spreads the props it is handed. Not a bare element: a bare child invites the component to inject handlers, which is exactly what broke composition. |
 
-`labelKey` and `lines` are a union: you give exactly one, never both and never neither. `K` is
-inferred from `resolveText`, so a resolver typed to a key union locks the allowed keys.
+`labelKey`, `lines` and `content` are a three-way union: you give exactly one, never two and never
+none. `K` is inferred from `resolveText`, so a resolver typed to a key union locks the allowed keys.
 
 ### One key or one key per line — never a `\n` in a sentence
 
@@ -64,10 +65,43 @@ A newline inside a sentence is a typographic accident: translation merges or dro
 first line is the subject" cannot be expressed inside one string. `popoverCallSiteGuard.test.ts`
 fails on a `\n` smuggled into `labelKey` or a `lines` entry.
 
-There is no `placement`, no `open`, no `onOpenChange` and no arbitrary `content` node: the open
-model and the position are fixed behaviour, not call-site options. A panel that lets the reader
-*choose something* (search, filters, a result list) is not this component — it is a picker, and
-wrapping a picker in an explanation panel is a classification error, not a migration.
+There is no `placement`, no `open` and no `onOpenChange`: the open model and the position are fixed
+behaviour, not call-site options. `content` is not a licence to put controls in the panel — it
+carries an explanation the caller has already assembled (see the slot below). A panel that lets the
+reader *choose something* (search, filters, a result list) is not this component — it is a picker,
+and wrapping a picker in an explanation panel is a classification error, not a migration.
+
+### An assembled explanation: the `content` slot
+
+Some explanations are assembled from several facts, and a fact can be absent this time; a key
+template then leaves an empty bracket behind (`source · () · every 30m`). Which fragments may be
+missing is the caller's knowledge, so the assembly stays there — the component only offers a slot.
+
+```tsx
+<Popover
+  content={
+    <>
+      <span>{sourceName}</span>
+      <span>{lastRun}</span>
+    </>
+  }
+  trigger={renderTrigger}
+/>
+```
+
+- **One of three branches, never two.** `labelKey`, `lines` and `content` are exclusive: a call site
+  gives exactly one. `resolveText` is required on the two key branches and absent on this one — there
+  is no key to resolve.
+- **The node is rendered verbatim** inside the same content node the key branches use, so the
+  trigger's `aria-describedby` still names that node and a screen reader reads the caller's text. The
+  component adds no line markup, no emphasis and no styling of its own; the slot is a `ReactNode`,
+  and nothing about the caller's domain enters the component.
+- **An empty slot means "nothing to say this frame", not missing copy.** When the caller's
+  conditional assembly yields `null`/`false`, neither the bubble nor the trigger renders, and nothing
+  throws in development — a frame with no fragment at all is exactly the case this slot exists for.
+  The missing-copy rule above belongs to the key branches.
+- **Still an explanation, not a place for controls.** Links, filters or a result list in the slot make
+  it a picker in disguise, and the classification rule below still applies.
 
 ## Rules the component enforces
 

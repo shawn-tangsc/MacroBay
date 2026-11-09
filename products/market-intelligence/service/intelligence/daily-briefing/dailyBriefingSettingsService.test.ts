@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { DailyBriefingAiSettingsView } from './dailyBriefingAiSettingsService'
+import type { DailyBriefingGenerationSettingsView } from './dailyBriefingGenerationSettingsService'
 import { createDailyBriefingSettingsService } from './dailyBriefingSettingsService'
 
 function deps() {
-  const aiView = {
+  const aiView: DailyBriefingAiSettingsView = {
     settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-    resolved: { state: 'agent' as const, providerId: 'p', modelId: 'm', source: 'default' as const }
+    resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' },
+    // 这个模型能不能吃服务端搜索工具：界面据此决定授不授权，缺了就不是一个完整的设置视图。
+    webSearchSupported: true
   }
-  const generationView = { generationTime: '08:00', windowHours: 24 as const, cronExpression: '0 8 * * *' }
+  // 生成设置现在按「期」给：派生值（cron、时区是否可用）只在每期里说一次。
+  const generationView: DailyBriefingGenerationSettingsView = {
+    periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }]
+  }
   const languageView = {
     settings: { primary: 'follow-ui' as const, additional: [] as const },
     plan: { locales: ['zh-CN' as const], primary: { requested: 'zh-CN', used: 'zh-CN' as const }, writeCount: 1 }
@@ -34,7 +41,7 @@ describe('daily briefing settings service', () => {
     const service = createDailyBriefingSettingsService(parts)
     const view = await service.getView()
     expect(view.settings.editorialEnabled).toBe(true)
-    expect(view.generation).toEqual({ generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' })
+    expect(view.generation).toEqual({ periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] })
     expect(view.resolved).toEqual({ state: 'agent', providerId: 'p', modelId: 'm', source: 'default' })
     expect(view.language.plan.writeCount).toBe(1)
   })

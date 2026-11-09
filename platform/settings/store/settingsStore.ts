@@ -21,10 +21,45 @@ import { normalizeWebSearchSettings } from '../../ai/web-search/contracts/webSea
 export type SettingsStorage = {
   read: () => Promise<unknown>
   write: (settings: AppSettings) => Promise<void>
+  /**
+   * 读到损坏内容时留一份 `.corrupt-*` 副本（**不改原文件**）；留档失败要抛。
+   * 返回副本路径（拿不到时返回 `undefined`）——启动降级要把路径给读者。
+   * 由 `createJsonFileStorage` 提供；用例里的内存存储可以不实现。
+   */
+  preserveCorruptCopy?: (error: unknown) => Promise<string | undefined>
+}
+
+/**
+ * 启动期「读设置」的结果。
+ *
+ * 与 `get()` 的契约分开：`get()` 读不到就抛（别的调用方靠它区分「读不到」与「从没配过」），
+ * 而启动必须先能起来。`readStartup()` 把损坏文件转成这个状态，`get()` 仍然抛——保存路径继续 fail-closed。
+ */
+export type SettingsStartupReadState = {
+  /** 设置文件读不到，当前跑在默认值上。 */
+  unreadable: boolean
+  /** 坏文件副本路径；`null` = 没留成（界面必须说「未能保留」，不许说「已保留」）。 */
+  copyPath: string | null
 }
 
 export type SettingsStore = {
   get: () => Promise<AppSettings>
+  /**
+   * 启动期读取：读不到时**仍然返回默认值**并记下状态，绝不因此让应用起不来。
+   *
+   * 不改 `get()` 的抛错契约：保存路径（`update`）照旧在读到坏文件时拒绝写入。
+   */
+  readStartup: () => Promise<AppSettings>
+  /** 最近一次启动读取是否降级、坏文件副本在哪。 */
+  startupState: () => SettingsStartupReadState
+  /** 「重试读取」：再读一次；成功就恢复正常状态，失败保持降级且不抛。 */
+  retryStartupRead: () => Promise<SettingsStartupReadState>
+  /**
+   * 读者**显式**要求「重置设置」：用默认值重建文件。
+   *
+   * 只在这里写盘——启动降级本身绝不自动重置、绝不覆盖坏文件（那是读者唯一的证据）。
+   */
+  resetAfterUnreadable: () => Promise<AppSettings>
   update: (patch: AppSettingsPatch) => Promise<AppSettings>
   /**
    * 订阅「设置已提交」。方向是订阅方 → 平台：产品在自己的 bootstrap 里注册，
@@ -112,6 +147,62 @@ export function createSettingsStore(
   const listeners = new Set<SettingsCommittedListener>()
   /** 上一次成功提交的待通知内容；`notifyCommitted` 消费后清空，避免重复通知。 */
   let pending: SettingsCommittedChange | null = null
+  /** 启动期降级状态：`null` = 正常读到了（或还没读过）。 */
+  let startupFailure: { copyPath: string | null } | null = null
+  /**
+   * 本次故障的副本路径（`undefined` = 还没尝试留档）。
+   *
+   * 同一份坏文件只留**一份**副本：否则读者每点一次「重试读取」（或每保存一次）就在同目录里
+   * 多一份 `.corrupt-*`，路径还每次不同——既吵，也让读者不知道该备份哪一个。
+   */
+  let corruptCopyPath: string | null | undefined
+  /** 降级期间对外表示"当前设置"的那份默认值；不写进 `settings`，免得把读失败洗成"读到了默认"。 */
+  let startupDefaults: AppSettings | null = null
+
+  /**
+   * 启动期读取：**读不到就用默认值启动**，并记下副本路径。
+   *
+   * 这是唯一允许"读失败不抛"的入口，且它不改 `load()` 的契约——`get()` 仍然抛，保存路径因此继续
+   * fail-closed。降级期间 `startupDefaults` 与 `settings` 分开存：`settings` 保持 `null`，
+   * 下一次 `get()` 不会因为这次降级就以为"读成功了"。
+   */
+  async function readStartup(): Promise<AppSettings> {
+    try {
+      const loaded = await load()
+      startupFailure = null
+      return loaded
+    } catch (error) {
+      if (!(error instanceof SettingsStorageUnreadableError)) throw error
+      startupDefaults ??= createDefaultAppSettings()
+      startupFailure = { copyPath: error.copyPath }
+      return startupDefaults
+    }
+  }
+
+  function startupState(): SettingsStartupReadState {
+    return startupFailure === null
+      ? { unreadable: false, copyPath: null }
+      : { unreadable: true, copyPath: startupFailure.copyPath }
+  }
+
+  async function retryStartupRead(): Promise<SettingsStartupReadState> {
+    await readStartup()
+    return startupState()
+  }
+
+  /**
+   * 读者显式「重置设置」：**只有这一处**会在读不到之后写盘。
+   *
+   * 坏文件原样留着（副本也不动），这里只把设置文件重建为默认值。启动降级绝不调用它。
+   */
+  async function resetAfterUnreadable(): Promise<AppSettings> {
+    const defaults = createDefaultAppSettings()
+    await storage?.write(defaults)
+    settings = defaults
+    startupFailure = null
+    startupDefaults = null
+    return defaults
+  }
 
   async function load(): Promise<AppSettings> {
     if (settings) return settings
@@ -120,17 +211,44 @@ export function createSettingsStore(
       return settings
     }
 
-    settings = normalizeAppSettings(await storage.read(), reportUnknownField)
+    let raw: unknown
+    try {
+      raw = await storage.read()
+    } catch (error) {
+      // 「读不到」不是「从没配过」：前者必须报错（界面是读失败/保存失败），后者才可以用默认值。
+      // 先把损坏的原文留一份 `.corrupt-*`（不改原文件）；留档失败就 fail-closed，继续往上抛。
+      // 同一次故障只留一份：重试/重复保存不再堆副本（见 `corruptCopyPath`）。
+      if (corruptCopyPath === undefined) {
+        corruptCopyPath = storage.preserveCorruptCopy
+          ? ((await storage.preserveCorruptCopy(error)) ?? null)
+          : null
+      }
+      throw new SettingsStorageUnreadableError(corruptCopyPath)
+    }
+    settings = normalizeAppSettings(raw, reportUnknownField)
+    corruptCopyPath = undefined
     return settings
   }
 
   return {
     get: load,
+    readStartup,
+    startupState,
+    retryStartupRead,
+    resetAfterUnreadable,
     async update(patch) {
       const operation = updateQueue.then(async () => {
         const previous = await load()
         const next = updateAppSettings(previous, patch, reportUnknownField)
-        await storage?.write(next)
+        // 落盘只写「读者这次真正改的顶层字段」，其余字段按**磁盘上的原文**原样写回。
+        //
+        // 为什么不是直接写 `next`：`normalizeAppSettings` 是**读时归一**，它会把旧形状改写成
+        // 新形状（例如旧代理三联 `system + socks5://127.0.0.1:1080 + 默认绕过` 被当成历史默认值
+        // 折成 `system + 空地址`）。把归一后的整份对象写回去，等于读者只改了一次主题，却把
+        // 他从未碰过的代理设置也静默落盘成了新值——旧值再也拿不回来。所以：
+        // - 内存里始终用归一后的 `next`（读的人拿到的是一份自洽的设置）；
+        // - 磁盘上没被 `patch` 点到的顶层字段保持原样，连类型不认识的字段一起留着。
+        await storage?.write(await mergePatchedOntoDisk(storage, patch, next))
         settings = next
         pending = { previous, next, patch, changedKeys: changedSettingKeys(previous, next) }
         return next
@@ -158,6 +276,62 @@ export function createSettingsStore(
       }
     }
   }
+}
+
+/**
+ * 设置文件读不出来时**拒绝保存**的错误。
+ *
+ * 单独一个类型，是为了让调用方能把它和「写入失败」分开显示：两种都是「这次没保存上」，
+ * 但前者意味着磁盘上那份文件需要人看一眼，后者重试就行。
+ */
+export class SettingsStorageUnreadableError extends Error {
+  /** 坏文件副本路径；`null` = 没能留成（界面必须说「未能保留」，不许说「已保留」）。 */
+  readonly copyPath: string | null
+
+  constructor(copyPath: string | null = null) {
+    super('settings-storage-unreadable')
+    this.name = 'SettingsStorageUnreadableError'
+    this.copyPath = copyPath
+  }
+}
+
+/**
+ * 把「这次改的顶层字段」叠到**磁盘原文**上：点到的字段用归一后的新值，其余原样。
+ *
+ * `storage.read()` 拿到的是磁盘上真实的 JSON；读失败/缺文件时退回归一后的整份文档
+ * （新装用户的第一次保存不该因为「没有原文」而被拦下）。
+ */
+async function mergePatchedOntoDisk(
+  storage: SettingsStorage | undefined,
+  patch: AppSettingsPatch,
+  next: AppSettings
+): Promise<AppSettings> {
+  if (!storage) return next
+  let raw: unknown
+  try {
+    raw = await storage.read()
+  } catch (error) {
+    // 读失败 = 文件坏了（不是「从没配过」——那种情况 `read()` 返回默认值，不抛）。
+    //
+    // 这里**绝不能**拿归一后的默认值整份写回去：内存里那份是加载时的快照，磁盘上这一份才是
+    // 读者真正的配置，覆盖它等于把主题、语言、时区、代理、模型默认值一次抹掉。做法：
+    // ① 先留一份 `.corrupt-*` 副本（留档失败就 fail-closed，不在来路不明的文件上写）；
+    // ② 把这次保存**拒绝**给调用方，由界面显示「保存失败」，让人自己去处理那个文件。
+    const copyPath = storage.preserveCorruptCopy ? await storage.preserveCorruptCopy(error) : undefined
+    throw new SettingsStorageUnreadableError(copyPath ?? null)
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return next
+  const rawRecord = raw as Record<string, unknown>
+  const merged: Record<string, unknown> = { ...rawRecord }
+  for (const key of Object.keys(patch)) {
+    merged[key] = (next as unknown as Record<string, unknown>)[key]
+  }
+  // 顶层字段集以归一后的文档为准：新版本新增的顶层键即使文件里没有，也要写全，
+  // 否则下一次读会因为缺字段再走一遍默认值。
+  for (const key of Object.keys(next)) {
+    if (!(key in merged)) merged[key] = (next as unknown as Record<string, unknown>)[key]
+  }
+  return merged as unknown as AppSettings
 }
 
 /** 顶层字段里真正变了的那些；用同一份比较，订阅方就不必自己再比一遍。 */

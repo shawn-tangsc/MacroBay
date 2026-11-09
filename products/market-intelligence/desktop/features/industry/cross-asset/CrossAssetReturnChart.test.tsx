@@ -9,20 +9,22 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetReturnChart = (props: Parameters<typeof CrossAssetReturnChart>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetReturnChart, props))
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetReturnChart, props) })
 
 const points = [0, 1, 2].map(index => ({ at: `2026-09-14T12:${String(index * 5).padStart(2, '0')}:00.000Z`, returnPercent: index }))
 const text = {
   chart: '收益率', assets: { index: '纳斯达克 100', btc: 'BTC', eth: 'ETH' },
   macroAssets: { dxy: '美元 DXY', gold: '黄金 XAU' }, noData: '无数据', forming: '实时未闭合',
-  eventLine: '事件', eventsCollapsed: '已折叠 {count} 条'
-}
+  eventLine: '事件', eventsCollapsed: '已折叠 {count} 条',
+  // 同一分钟里官方与 provider 都在、却没能确认是同一条时的说明（设计 145 §8 B）；原文见 productText。
+  eventLineIdentityUnconfirmed: '同一分钟里官方日历也有一条发布，没能确认是同一条，两边的名字都保留'
+} satisfies Parameters<typeof CrossAssetReturnChart>[0]['text']
 describe('cross-asset return chart', () => {
   it('keeps solid lines and forming dots without persistent labels, and inspects the tail with the keyboard', async () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
     try {
-      await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: points, btc: points, eth: points }, forming: { index: { at: '2026-09-14T12:15:00.000Z', returnPercent: 1.5 } } })))
+      await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: points, btc: points, eth: points }, forming: { index: { at: '2026-09-14T12:15:00.000Z', returnPercent: 1.5 }, btc: null, eth: null } })))
       expect([...host.querySelectorAll('[data-asset-line]')].every(path => !path.hasAttribute('stroke-dasharray'))).toBe(true)
       expect(host.querySelector('[data-forming-line] circle')).not.toBeNull()
       expect(host.querySelector('[data-forming-line] title')?.textContent).toBe(text.forming)
@@ -188,7 +190,7 @@ describe('cross-asset return chart', () => {
     const root = createRoot(host)
     const short = points.slice(0, 2)
     try {
-      await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: short, btc: short, eth: short }, forming: { index: { at: '2026-09-14T13:03:03.789Z', returnPercent: 3 } } })))
+      await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: short, btc: short, eth: short }, forming: { index: { at: '2026-09-14T13:03:03.789Z', returnPercent: 3 }, btc: null, eth: null } })))
       const ticks = [...host.querySelectorAll<HTMLElement>('.mi-cross-asset__ticks time')]
       expect(ticks.length).toBeLessThan(2)
       expect(ticks.every(tick => tick.style.transform !== 'translateX(-100%)')).toBe(true)
@@ -202,7 +204,7 @@ describe('cross-asset return chart', () => {
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: short, btc: short, eth: short } })))
       expect(host.querySelector('[data-asset-line="index"]')?.getAttribute('d')).toContain(count === 1 ? 'M500,' : 'L1000,')
-      await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: short, btc: short, eth: short }, forming: { index: { at: points[2].at, returnPercent: 3 } } })))
+      await act(async () => root.render(createElement(ScopedCrossAssetReturnChart, { text, curves: { index: short, btc: short, eth: short }, forming: { index: { at: points[2].at, returnPercent: 3 }, btc: null, eth: null } })))
       expect(host.querySelector('[data-forming-line="index"] circle')?.getAttribute('cx')).toBe('1000')
       const ticks = [...host.querySelectorAll<HTMLElement>('.mi-cross-asset__ticks time')]
       expect(ticks.at(-1)?.style.left).toBe(count === 1 ? '0%' : '50%')

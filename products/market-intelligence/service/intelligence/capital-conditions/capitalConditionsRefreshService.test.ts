@@ -33,7 +33,7 @@ describe('capital conditions refresh service', () => {
     const storage = createInMemoryCapitalConditionsStateStorage()
     const service = createCapitalConditionsRefreshService({
       isEnabled: async () => true,
-      http: { requestStablecoinPayload: vi.fn(async () => ({ state: 'available', payload: { peggedAssets: [] }, acceptedBytes: 20 })) },
+      http: { requestStablecoinPayload: vi.fn(async () => ({ state: 'available' as const, payload: { peggedAssets: [] }, acceptedBytes: 20 })) },
       store: createCapitalConditionsCurrentStateStore({ storage }),
       now: () => '2026-08-18T00:00:00.000Z'
     })
@@ -46,7 +46,7 @@ describe('capital conditions refresh service', () => {
     const storage = createInMemoryCapitalConditionsStateStorage()
     const service = createCapitalConditionsRefreshService({
       isEnabled: async () => true,
-      http: { requestStablecoinPayload: vi.fn(async () => ({ state: 'available', payload: validPayload(), acceptedBytes: 200 })) },
+      http: { requestStablecoinPayload: vi.fn(async () => ({ state: 'available' as const, payload: validPayload(), acceptedBytes: 200 })) },
       store: createCapitalConditionsCurrentStateStore({ storage }),
       now: () => '2026-08-18T00:00:00.000Z'
     })
@@ -83,7 +83,7 @@ describe('capital conditions refresh service', () => {
     const write = vi.fn(async () => undefined)
     const service = createCapitalConditionsRefreshService({
       isEnabled: async () => true,
-      http: { requestStablecoinPayload: vi.fn(async () => ({ state: 'available', payload: validPayload(), acceptedBytes: 200 })) },
+      http: { requestStablecoinPayload: vi.fn(async () => ({ state: 'available' as const, payload: validPayload(), acceptedBytes: 200 })) },
       store: createCapitalConditionsCurrentStateStore({ storage: { read: async () => null, write } }),
       now: () => '2026-08-18T00:00:00.000Z'
     })

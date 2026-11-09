@@ -2,28 +2,20 @@ import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
 import {
   sourceRequiresCredential,
   type IntelligenceCollectionPreset,
-  type IntelligenceFocusMarket,
   type IntelligenceRetentionMode,
   type IntelligenceScopePolicy
 } from '../schema/intelligenceSource'
-import type {
-  SaveIntelligenceFocusMarketSettingsInput,
-  SaveIntelligenceSourceProfileInput
-} from '../schema/intelligenceSourcesContracts'
+import type { SaveIntelligenceSourceProfileInput } from '../schema/intelligenceSourcesContracts'
 import { ProductToolGuardError, type ToolCallContext } from './capabilityTypes'
 import type { WriteHandlerDeps } from './writeAudit'
 import { runAuditedWrite } from './writeAudit'
-import {
-  readFocusMarketsSnapshot,
-  readRevisionSnapshot,
-  readSourceSnapshot
-} from './writeState'
+import { readRevisionSnapshot, readSourceSnapshot } from './writeState'
 
 const CONFIGURE_CAPABILITY = { id: 'configure_intelligence_source', domain: 'source-config' } as const
 const OPERATE_CAPABILITY = { id: 'operate_intelligence_source', domain: 'operations' } as const
 
 type ConfigureSourceInput = {
-  action: 'save-profile' | 'set-enabled' | 'save-focus-markets'
+  action: 'save-profile' | 'set-enabled'
   sourceId?: string
   collectionPreset?: IntelligenceCollectionPreset
   includeInSentiment?: boolean
@@ -33,7 +25,6 @@ type ConfigureSourceInput = {
   autoReplayAfterParserUpgrade?: boolean
   monitoredSymbols?: string[]
   enabled?: boolean
-  enabledFocusMarkets?: string[]
 }
 
 type OperateSourceInput = {
@@ -89,19 +80,8 @@ export async function handleConfigureIntelligenceSource(
     })
   }
 
-  const enabledFocusMarkets = requireStringArray(value.enabledFocusMarkets, 'enabledFocusMarkets') as IntelligenceFocusMarket[]
-  const focusInput: SaveIntelligenceFocusMarketSettingsInput = { enabledFocusMarkets }
-  return runAuditedWrite({
-    deps,
-    context,
-    capability: CONFIGURE_CAPABILITY,
-    action: value.action,
-    read: () => readFocusMarketsSnapshot(deps),
-    execute: async () => {
-      await sourcesService.saveFocusSettings(focusInput)
-      return { state: 'saved', enabledFocusMarkets }
-    }
-  })
+  // 两个 action 在上面都处理完了；这里只为类型收窄，走守卫的「动作字段不对」码。
+  throw new ProductToolGuardError('invalid-action-fields', `Unknown action: ${String(value.action)}`)
 }
 
 export async function handleOperateIntelligenceSource(

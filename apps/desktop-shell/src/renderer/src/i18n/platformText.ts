@@ -153,6 +153,19 @@ export type PlatformText = {
     storageAndCache: string
     taskAutomation: string
     basicSettings: string
+    /** 启动时设置文件读不到：主句（只说事实，不说"已恢复"）。 */
+    settingsFileUnreadable: string
+    /** 横幅上的动作：再读一次设置文件。 */
+    settingsFileRetry: string
+    /** 第二行：副本路径（可复制）。拿不到路径时必须用 `settingsFileCopyMissing`。 */
+    settingsFileCopyKept: (path: string) => string
+    settingsFileCopyMissing: string
+    /** 危险区：显式重建设置文件（不可逆，单独放底部）。 */
+    settingsReset: string
+    settingsResetConfirmTitle: string
+    settingsResetConfirmBody: string
+    settingsResetConfirm: string
+    settingsResetCancel: string
     notifications: string
     channels: string
     channelCreate: string
@@ -332,6 +345,8 @@ export type PlatformText = {
     channelLogsReadFailed: string
     channelLogsReadFailedHint: string
     channelLogsFooter: string
+    /** 记录范围那颗 ⓘ 的读屏名。 */
+    channelLogsFooterInfo: string
     /** 面板标题下那一行：时间口径声明；时区由 `formatShellTimeZoneLabel` 算，不写死。 */
     channelLogsTimeZone: string
     /** 闭集里查不到的码：只写这一句，原始码不上屏。 */
@@ -345,6 +360,8 @@ export type PlatformText = {
     channelLogDeliveryPrefix: string
     /** 「交出去了、没拿到回执」不是失败：单独一类前缀，别并入「发送失败」。 */
     channelLogUncertainPrefix: string
+    /** 「被规则挡下」：不是故障，也不确定——单独一类前缀，别和「发送失败：」混。 */
+    channelLogByRulePrefix: string
     /** 闭集：动作码 → 人话。查不到走 `channelLogsUnknownCode`。 */
     channelLogActionText: Readonly<Record<ChannelManagementAuditCopyKey, string>>
     channelLogRuntimeText: Readonly<Record<ChannelRuntimeAuditCopyKey, string>>
@@ -531,6 +548,8 @@ export type PlatformText = {
     assistantPrompt: string
     /** 设置抽屉不再重复选模型：模型统一在助手页顶部选择器切换。 */
     modelSwitchHint: string
+    /** 模型切换那颗 ⓘ 的读屏名。 */
+    modelSwitchHintInfo: string
     enableTemperature: string
     temperature: string
     streamOutput: string
@@ -542,6 +561,7 @@ export type PlatformText = {
     mcpModeUnavailableHint: string
     enableWebSearch: string
     webSearchHint: string
+    webSearchHintInfo: string
     comingSoon: string
     mentionedModels: string
     /** 提及选择器不可用时的回执：带下一步（先选模型）。 */
@@ -822,6 +842,8 @@ export type PlatformText = {
     /** 默认模型条底部：说清哪些默认值由平台入口直接用、哪些只供产品功能读取。 */
     defaultModelsConsumerHint: string
     copyModelId: string
+    /** API Key 的复制入口读屏名：掩码态与明文态都在（2026-11-01 拍板「展开后允许复制」）。 */
+    copyApiKey: string
     copied: string
     nonChatModelHint: string
     modelDiscountBadge: string
@@ -902,6 +924,8 @@ export type PlatformText = {
     detectionReasonShortNoChannel: string
     detectionReasonShortMissingKey: string
     typeAll: string
+    /** 模型类型筛选这组按钮的可访问名。 */
+    typeFilterLabel: string
     /** 价格筛选：免费 + 折扣模型（不是模型类型，但和类型 pill 同一行）。 */
     typeDeal: string
     typeText: string
@@ -1140,10 +1164,13 @@ export type PlatformText = {
     timeZoneSearch: string
     timeZoneUnavailable: string
     timeZoneOpenTimesHint: string
+    /** 「时区」那颗 ⓘ 的读屏名：念「它解释的东西 + 说明」，不念「更多信息」。 */
+    timeZoneOpenTimesHintInfo: string
     proxyMode: string
     proxyAddress: string
     proxyBypassRules: string
     proxyRequestHint: string
+    proxyRequestHintInfo: string
     proxySelfTest: string
     proxySelfTestRunning: string
     proxySelfTestPassedViaProxy: (status: number, seconds: string) => string
@@ -1368,6 +1395,8 @@ export type PlatformText = {
     deferredProviderHint: string
     drawerTitle: (name: string) => string
     drawerDefaultHint: string
+    /** 只读说明那颗 ⓘ 的读屏名。 */
+    drawerDefaultHintInfo: string
     toggleImmediateHint: string
     builtinApiHost: string
     capabilityJoin: string
@@ -1532,6 +1561,8 @@ export type PlatformText = {
     historyTitle: string
     historyEmpty: string
     historyColumnCache: string
+    /** 历史里的缓存已不在当前注册表：给中性说法，绝不印内部点分 id。 */
+    historyUnknownCache: string
     historyColumnOperation: string
     historyColumnResult: string
     historyColumnTime: string
@@ -1641,6 +1672,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: '存储与缓存',
       taskAutomation: '任务自动化',
       basicSettings: '基础设置',
+      settingsFileUnreadable: '设置文件读不到，已按默认设置启动。',
+      settingsFileRetry: '重试读取',
+      settingsFileCopyKept: (path) => `坏文件已保留副本：${path}`,
+      settingsFileCopyMissing: '坏文件未能保留副本。',
+      settingsReset: '重置设置',
+      settingsResetConfirmTitle: '重置设置？',
+      settingsResetConfirmBody: '这会把设置文件重建为默认值，当前设置无法恢复。坏文件与副本不会被删除。',
+      settingsResetConfirm: '确认重置',
+      settingsResetCancel: '取消',
       notifications: '通知', channels: '频道', channelCreate: '创建频道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无频道实例', channelStaleNotice: '没能更新，下面是上次读到的频道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除频道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '广播频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' },
       channelAdd: '添加',
       channelPlatformPurpose: {
@@ -1756,6 +1796,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsReadFailed: '日志没读出来。',
       channelLogsReadFailedHint: '已有的记录不会因此丢失，这次只是没读到。',
       channelLogsFooter: '记录连接的启动与停止、引起中断的错误，以及最近一次发送失败；不记录每一次轮询。',
+      channelLogsFooterInfo: '记录范围说明',
       channelLogsTimeZone: '时间均为 {zone}',
       channelLogsUnknownCode: '没有更多说明',
       channelLogOperationPrefix: '操作：',
@@ -1764,6 +1805,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogLifecyclePrefix: '运行：',
       channelLogDeliveryPrefix: '发送失败：',
       channelLogUncertainPrefix: '不确定：',
+      channelLogByRulePrefix: '按规则未发送：',
       channelLogActionText: Object.freeze({
         actionCreate: '创建了这个频道',
         actionUpdate: '修改了频道设置',
@@ -1791,7 +1833,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }),
       channelLogLifecycleText: Object.freeze({
         runtimeStarted: '连接已启动',
-        runtimeStopped: '连接已停止'
+        // 这一行只由「读者停用 / 应用退出」写入（`stopOwned`）；意外中断走「正在自动重试」那一行，
+        // 两者不能共用「连接已停止」——读者分不清是不是自己停的。
+        runtimeStopped: '已停用推送（你停用的，或应用退出时自动停）'
       }),
       channelLogTelegramFailureText: Object.freeze({
         telegramConflict: '另一个程序也在用这个机器人，收消息被中断',
@@ -1803,6 +1847,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         channelRuntimeGenerationStale: '频道状态刚变过，这一次没有生效，再点一次',
         channelRuntimeOwnerLost: '启用过程中运行许可被别的操作抢走了，再点一次',
         telegramRuntimeEvidenceMissing: '缺少真机验证记录，所以没有启动',
+        telegramPollRetrying: '暂时连不上，正在自动重试；不用做什么，恢复后会记一行「已恢复」',
+        telegramPollRecovered: '已恢复自动收消息',
+        telegramPollAbandoned: '连续重试都失败，已停止自动重连；检查网络或代理后重新启用这条通道',
         telegramRateLimited: '请求太频繁，被平台限流，稍后会自动重试',
         telegramPollFailed: '这一次取消息失败，稍后会自动重试',
         telegramUpdateInvalid: '收到一条看不懂的消息，已跳过'
@@ -1811,17 +1858,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         // 具体码优先：有它就不再显示下面那句兜底。
         'delivery-provider-rejected': '平台拒绝了这条消息（可能是找不到这个会话）',
         'delivery-target-invalid': '目标会话的 ID 不合法，一个请求都没发出去',
-        'delivery-rate-limited': '被平台限流了，等一会儿会自动重试',
-        'delivery-host-unavailable': '通道宿主没在运行，这条没有发出去',
+        'delivery-rate-limited': '被平台限流了，等一会儿会自动重试；不用做什么',
+        'delivery-host-unavailable': '通道宿主没在运行，这条没有发出去；重启应用或重新启用这条通道',
         'channel-delivery-unavailable': '通道暂时不可用，这条没有发出去',
-        'delivery-target-disabled': '接收的目标已停用，这条没有发出去',
-        'delivery-no-target-bound': '还没有接收消息的对话，这条没有发出去',
+        'delivery-target-disabled': '接收的目标已停用，这条没有发出去；到频道设置里重新启用目标',
+        'delivery-no-target-bound': '还没有接收消息的对话，这条没有发出去；在频道设置里绑定一个接收对话',
         'delivery-not-authorized': '没有权限发到这条对话，这条没有发出去',
         'delivery-permission-denied': '没有权限发到这条对话，这条没有发出去',
         // 兜底：只有拿不到具体码时才会出现，别把它当解释。
         'channel-delivery-failed': '这次没有发出去，具体原因没有记录',
         'delivery-send-lease-expired': '发送没有回音，按未确认处理',
-        'delivery-lifecycle-fenced': '运行的代际变了，这次发送被放弃',
+        'delivery-lifecycle-fenced': '运行的代际变了（重启或换代际），这次发送被放弃；不用做什么',
         'channel-rejected': '通道拒收了这条',
         unknownAfterSend: '已交给通道，但没拿到回执'
       })
@@ -1959,6 +2006,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       assistantName: '助手名称',
       assistantPrompt: '系统提示词',
       modelSwitchHint: '模型在助手页顶部的模型选择器里切换。',
+      modelSwitchHintInfo: '模型切换说明',
       enableTemperature: '启用温度',
       temperature: '温度',
       streamOutput: '流式输出',
@@ -1969,6 +2017,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       mcpModeUnavailableHint: '助手的 MCP 执行尚未接入，此处设置暂不生效；需要 MCP 请使用智能体。',
       enableWebSearch: '启用网页搜索',
       webSearchHint: '允许此助手调用当前互联网搜索与网页读取工具。',
+      webSearchHintInfo: '联网搜索说明',
       comingSoon: '即将推出',
       mentionedModels: '提及模型',
       mentionedModelsMissingHint: '先选择一个模型',
@@ -2237,6 +2286,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelsConsumerHint:
         '助手、智能体、绘画由对应入口直接使用；快速与翻译模型只作为共用默认值被产品功能读取。没有产品用到时，选了也不会有可见效果。',
       copyModelId: '复制',
+      copyApiKey: '复制密钥',
       copied: '已复制',
       nonChatModelHint: '非聊天模型不会出现在对话模型选择中',
       modelDiscountBadge: '特惠',
@@ -2305,6 +2355,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectionReasonShortNoChannel: '无可用渠道',
       detectionReasonShortMissingKey: '缺少密钥',
       typeAll: '全部',
+      typeFilterLabel: '模型类型筛选',
       typeDeal: '免费&折扣',
       typeText: '文本',
       typeImage: '图片',
@@ -2516,10 +2567,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       timeZoneSearch: '搜索时区',
       timeZoneUnavailable: '无法读取系统时区，暂时按 UTC 显示。',
       timeZoneOpenTimesHint: '开盘时刻按这里选择的时区计算',
+      timeZoneOpenTimesHintInfo: '时区说明',
       proxyMode: '代理模式',
       proxyAddress: '代理地址',
       proxyBypassRules: '代理绕过规则',
       proxyRequestHint: '应用请求走这里的代理设置；浏览器能打开不代表应用能连。',
+      proxyRequestHintInfo: '代理设置说明',
       proxySelfTest: '测试代理',
       proxySelfTestRunning: '测试中…',
       proxySelfTestPassedViaProxy: (status, seconds) => `已通过代理到达目标站点（HTTP ${status} · ${seconds}s）`,
@@ -2731,6 +2784,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       deferredProviderHint: '已规划，当前版本还不能用。',
       drawerTitle: (name) => `配置 · ${name}`,
       drawerDefaultHint: '只读：默认能力在「策略」里设置',
+      drawerDefaultHintInfo: '默认能力说明',
       toggleImmediateHint: '点一下立即生效',
       builtinApiHost: '内置地址，不可改',
       capabilityJoin: ' · ',
@@ -2891,6 +2945,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       historyTitle: '操作记录',
       historyEmpty: '还没有操作记录',
       historyColumnCache: '缓存',
+      historyUnknownCache: '已移除的缓存',
       historyColumnOperation: '操作',
       historyColumnResult: '结果',
       historyColumnTime: '时间',
@@ -2998,6 +3053,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: 'Storage and Cache',
       taskAutomation: 'Task Automation',
       basicSettings: 'Basic Settings',
+      settingsFileUnreadable: 'Your settings file could not be read, so the app started with default settings.',
+      settingsFileRetry: 'Try reading it again',
+      settingsFileCopyKept: (path) => `The damaged file was kept as a copy: ${path}`,
+      settingsFileCopyMissing: 'The damaged file could not be kept.',
+      settingsReset: 'Reset settings',
+      settingsResetConfirmTitle: 'Reset settings?',
+      settingsResetConfirmBody: 'This rebuilds the settings file with defaults; the current settings cannot be recovered. The damaged file and its copy are not deleted.',
+      settingsResetConfirm: 'Reset anyway',
+      settingsResetCancel: 'Cancel',
       notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelStaleNotice: 'Could not refresh — these channels are from the last read', channelDetailsStaleNotice: 'Could not refresh the details — showing the last read', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelNotRunning: 'Not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Broadcast channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' },
       channelAdd: 'Add',
       channelPlatformPurpose: {
@@ -3106,6 +3170,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsReadFailed: 'The log could not be read.',
       channelLogsReadFailedHint: 'Existing records are not lost; this read just failed.',
       channelLogsFooter: 'Records when the connection starts and stops, the errors that interrupt it, and the last failed send; every poll is not recorded.',
+      channelLogsFooterInfo: 'Log scope explanation',
       channelLogsTimeZone: 'All times are in {zone}',
       channelLogsUnknownCode: 'No further explanation',
       channelLogOperationPrefix: 'Operation: ',
@@ -3114,6 +3179,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogLifecyclePrefix: 'Runtime: ',
       channelLogDeliveryPrefix: 'Send failed: ',
       channelLogUncertainPrefix: 'Uncertain: ',
+      channelLogByRulePrefix: 'Not sent (held by a rule): ',
       channelLogActionText: Object.freeze({
         actionCreate: 'created this channel',
         actionUpdate: 'changed the channel settings',
@@ -3141,9 +3207,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }),
       channelLogLifecycleText: Object.freeze({
         runtimeStarted: 'connection started',
-        runtimeStopped: 'connection stopped'
+        runtimeStopped: 'push stopped (you turned it off, or the app is quitting)'
       }),
       channelLogTelegramFailureText: Object.freeze({
+        telegramPollRetrying: 'temporarily unreachable, retrying automatically; nothing to do',
+        telegramPollRecovered: 'receiving is working again',
+        telegramPollAbandoned: 'automatic reconnect gave up after repeated failures; check the network or proxy, then re-enable this channel',
         telegramConflict: 'another program is using the same bot, so receiving was interrupted',
         telegramProviderRejected: 'the platform rejected the bot credential; enter the token again',
         telegramNetworkUnavailable: 'the network cannot be reached, so receiving stopped',
@@ -3160,16 +3229,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogDeliveryText: Object.freeze({
         'delivery-provider-rejected': 'the platform rejected this message (the conversation may not exist)',
         'delivery-target-invalid': 'the target conversation ID is not valid, so nothing was sent',
-        'delivery-rate-limited': 'the platform rate-limited this send; it retries shortly',
-        'delivery-host-unavailable': 'the channel host is not running, so nothing was sent',
+        'delivery-rate-limited': 'the platform rate-limited this send; it retries shortly — nothing to do',
+        'delivery-host-unavailable': 'the channel host is not running, so nothing was sent — restart the app or re-enable the channel',
         'channel-delivery-unavailable': 'the channel is temporarily unavailable, so nothing was sent',
-        'delivery-target-disabled': 'the receiving target is disabled, so nothing was sent',
-        'delivery-no-target-bound': 'no conversation receives messages yet, so nothing was sent',
+        'delivery-target-disabled': 'the receiving target is disabled, so nothing was sent — re-enable it in channel settings',
+        'delivery-no-target-bound': 'no conversation receives messages yet, so nothing was sent — bind one in channel settings',
         'delivery-not-authorized': 'no permission to send to that conversation, so nothing was sent',
         'delivery-permission-denied': 'no permission to send to that conversation, so nothing was sent',
         'channel-delivery-failed': 'this one was not sent, and no specific reason was recorded',
         'delivery-send-lease-expired': 'the send went quiet and is treated as unconfirmed',
-        'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped',
+        'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped — nothing to do',
         'channel-rejected': 'the channel rejected this message',
         unknownAfterSend: 'handed to the channel, but no receipt came back'
       })
@@ -3305,6 +3374,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       assistantName: 'Assistant name',
       assistantPrompt: 'System prompt',
       modelSwitchHint: 'Switch the model from the picker at the top of the assistant page.',
+      modelSwitchHintInfo: 'Model switch explanation',
       enableTemperature: 'Enable temperature',
       temperature: 'Temperature',
       streamOutput: 'Stream output',
@@ -3316,6 +3386,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Assistant-side MCP execution is not connected yet, so this setting has no effect. Use an agent when you need MCP.',
       enableWebSearch: 'Enable web search',
       webSearchHint: 'Allow this assistant to use current web search and web page fetch tools.',
+      webSearchHintInfo: 'Web search explanation',
       comingSoon: 'Coming soon',
       mentionedModels: 'Mentioned models',
       mentionedModelsMissingHint: 'Select a model first',
@@ -3587,6 +3658,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelsConsumerHint:
         'Assistant, agent, and image defaults are used directly by their own entry points. The fast and translation defaults are shared values read by product features only, so they have no visible effect until a product uses them.',
       copyModelId: 'Copy',
+      copyApiKey: 'Copy key',
       copied: 'Copied',
       nonChatModelHint: 'Non-chat models do not appear in chat model selection.',
       modelDiscountBadge: 'Deal',
@@ -3654,6 +3726,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectionReasonShortNoChannel: 'No channel',
       detectionReasonShortMissingKey: 'Missing key',
       typeAll: 'All',
+      typeFilterLabel: 'Filter by model type',
       typeDeal: 'Free & deals',
       typeText: 'Text',
       typeImage: 'Image',
@@ -3871,10 +3944,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       timeZoneSearch: 'Search time zones',
       timeZoneUnavailable: 'The system time zone is unavailable; times are shown in UTC.',
       timeZoneOpenTimesHint: 'Open times are calculated in the time zone selected here.',
+      timeZoneOpenTimesHintInfo: 'Time zone explanation',
       proxyMode: 'Proxy Mode',
       proxyAddress: 'Proxy Address',
       proxyBypassRules: 'Proxy Bypass Rules',
       proxyRequestHint: 'App requests use the proxy settings here; the browser reaching a site does not mean the app can.',
+      proxyRequestHintInfo: 'Proxy settings explanation',
       proxySelfTest: 'Test proxy',
       proxySelfTestRunning: 'Testing…',
       proxySelfTestPassedViaProxy: (status, seconds) => `Reached the target site through the proxy (HTTP ${status} · ${seconds}s)`,
@@ -4091,6 +4166,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       deferredProviderHint: 'Planned, but not usable in this version.',
       drawerTitle: (name) => `Configure · ${name}`,
       drawerDefaultHint: 'Read-only: default capabilities are set in Policy',
+      drawerDefaultHintInfo: 'Default capabilities explanation',
       toggleImmediateHint: 'Takes effect immediately',
       builtinApiHost: 'Built-in address, read-only',
       capabilityJoin: ' · ',
@@ -4251,6 +4327,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       historyTitle: 'Operations',
       historyEmpty: 'No operations yet',
       historyColumnCache: 'Cache',
+      historyUnknownCache: 'Removed cache',
       historyColumnOperation: 'Operation',
       historyColumnResult: 'Result',
       historyColumnTime: 'Time',

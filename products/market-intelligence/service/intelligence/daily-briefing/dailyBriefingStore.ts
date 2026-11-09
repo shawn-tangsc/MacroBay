@@ -12,6 +12,7 @@ import type {
   DailyBriefingStore,
   DailyBriefingStoredEdition
 } from './dailyBriefingService'
+import { parseRun, type RunRow } from './dailyBriefingRunRow'
 import {
   DAILY_BRIEFING_STORAGE_VERSION,
   createAttemptsSql,
@@ -56,9 +57,10 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       db.exec(`alter table daily_briefing_period_runs add column ${column} ${ddl};`)
     }
   }
-  // 尝试记录补两列：这一次跑的触发方式与统计窗口（用户 2026-11-06：列表每一行要自己说清身份）。
-  // 可空——今天之前的记录没有这两样，界面上写「未记录」，绝不拿当前设置回填。
-  for (const [column, ddl] of [['trigger', 'text'], ['window_hours', 'integer']] as const) {
+  // 尝试记录补三列：这一次跑的触发方式、统计窗口与名义截止（用户 2026-11-06：列表每一行要自己说清身份；
+  // 0.4.2 #19：没有版次的行以前拿发起时刻当截止显示）。可空——今天之前的记录没有这几样，界面上写
+  // 「未记录」，绝不拿当前设置回填。**只追加列，不动已发布的 v2→v3 迁移**。
+  for (const [column, ddl] of [['trigger', 'text'], ['window_hours', 'integer'], ['nominal_at', 'text']] as const) {
     if (!tableColumns(db, 'daily_briefing_attempts').includes(column)) {
       db.exec(`alter table daily_briefing_attempts add column ${column} ${ddl};`)
     }
@@ -88,43 +90,65 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     const prune = db.prepare('delete from daily_briefings where edition_date < ?')
     const pruneAttempts = db.prepare('delete from daily_briefing_attempts where edition_date < ?')
     const pruneRuns = db.prepare('delete from daily_briefing_period_runs where edition_date < ?')
-    // One row per period: a regeneration replaces that run, because it replaces the editions the
-    // run describes. When both languages are written in one run they share this single record.
-    const insertRun = db.prepare(`insert into daily_briefing_period_runs
-      (edition_date, period_id, expected_locales, primary_requested, primary_used, fallback_reason,
-       snapshot_id, snapshot_hash, content_version, writing_rounds, direction, edition_rows, state, started_at, finished_at)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
-      on conflict(edition_date, period_id) do update set
-        expected_locales = excluded.expected_locales, primary_requested = excluded.primary_requested,
-        primary_used = excluded.primary_used, fallback_reason = excluded.fallback_reason,
-        snapshot_id = excluded.snapshot_id, snapshot_hash = excluded.snapshot_hash,
-        content_version = excluded.content_version, writing_rounds = excluded.writing_rounds,
-        direction = excluded.direction, edition_rows = excluded.edition_rows,
-        state = excluded.state, started_at = excluded.started_at, finished_at = null`)
-    const settleRun = db.prepare(`update daily_briefing_period_runs
-      set state = ?, finished_at = ?, writing_rounds = coalesce(?, writing_rounds)
-      where edition_date = ? and period_id = ?`)
-    const readRun = db.prepare('select * from daily_briefing_period_runs where edition_date = ? and period_id = ?')
+    // 运行记录按 (日期, 期号, 语言) 存（0.4.2 #18）：两种语言各自一行，第二语言不再覆盖第一语言。
+    // 迁移没跑成时表还是旧形状（没有 `locale` 列），退回旧键让应用照旧可用——见迁移的 skipped 约定。
+    const runLocale = tableColumns(db, 'daily_briefing_period_runs').includes('locale')
+    // One row per (period, language): a regeneration replaces that language's run, because it
+    // replaces the editions that run describes.
+    const insertRun = runLocale
+      ? db.prepare(`insert into daily_briefing_period_runs
+        (edition_date, period_id, locale, expected_locales, primary_requested, primary_used, fallback_reason,
+         snapshot_id, snapshot_hash, content_version, writing_rounds, direction, edition_rows, state, started_at, finished_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
+        on conflict(edition_date, period_id, locale) do update set
+          expected_locales = excluded.expected_locales, primary_requested = excluded.primary_requested,
+          primary_used = excluded.primary_used, fallback_reason = excluded.fallback_reason,
+          snapshot_id = excluded.snapshot_id, snapshot_hash = excluded.snapshot_hash,
+          content_version = excluded.content_version, writing_rounds = excluded.writing_rounds,
+          direction = excluded.direction, edition_rows = excluded.edition_rows,
+          state = excluded.state, started_at = excluded.started_at, finished_at = null`)
+      : db.prepare(`insert into daily_briefing_period_runs
+        (edition_date, period_id, expected_locales, primary_requested, primary_used, fallback_reason,
+         snapshot_id, snapshot_hash, content_version, writing_rounds, direction, edition_rows, state, started_at, finished_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
+        on conflict(edition_date, period_id) do update set
+          expected_locales = excluded.expected_locales, primary_requested = excluded.primary_requested,
+          primary_used = excluded.primary_used, fallback_reason = excluded.fallback_reason,
+          snapshot_id = excluded.snapshot_id, snapshot_hash = excluded.snapshot_hash,
+          content_version = excluded.content_version, writing_rounds = excluded.writing_rounds,
+          direction = excluded.direction, edition_rows = excluded.edition_rows,
+          state = excluded.state, started_at = excluded.started_at, finished_at = null`)
+    const settleRun = runLocale
+      ? db.prepare(`update daily_briefing_period_runs
+        set state = ?, finished_at = ?, writing_rounds = coalesce(?, writing_rounds)
+        where edition_date = ? and period_id = ? and locale = ?`)
+      : db.prepare(`update daily_briefing_period_runs
+        set state = ?, finished_at = ?, writing_rounds = coalesce(?, writing_rounds)
+        where edition_date = ? and period_id = ?`)
+    const readRun = runLocale
+      ? db.prepare('select * from daily_briefing_period_runs where edition_date = ? and period_id = ? and locale = ?')
+      : db.prepare('select * from daily_briefing_period_runs where edition_date = ? and period_id = ?')
     // The list needs the runs of a range, not one known period: a run that wrote no edition at all
     // is invisible through `readRun`, because nothing names its period id.
-    const listRuns = db.prepare('select * from daily_briefing_period_runs where edition_date between ? and ? order by edition_date desc, period_id asc')
+    const listRuns = db.prepare('select * from daily_briefing_period_runs where edition_date between ? and ? order by edition_date desc, period_id asc, locale asc')
 
     const beginAttempt = attemptPeriod
       ? (attempt: DailyBriefingAttemptStart): number => {
           const periodId = attempt.periodId ?? DEFAULT_PERIOD_ID
           const next = db.prepare(`select coalesce(max(attempt_no), 0) + 1 as next from daily_briefing_attempts
             where edition_date = ? and period_id = ? and locale = ?`)
-          // 触发方式与窗口一起写下：列表要能就着这一行说清"这一次是怎么来的、覆盖多长"。
-          // 老记录这两列是空的，界面写「未记录」，不回填。
+          // 触发方式、窗口与名义截止一起写下：列表要能就着这一行说清"这一次是怎么来的、覆盖多长、
+          // 截止是哪一刻"（`nominal_at` 是 0.4.2 #19 补的：以前没有版次的失败行拿发起时刻当截止）。
+          // 老记录这三列是空的，界面写「未记录」，不回填。
           const insert = db.prepare(`insert into daily_briefing_attempts
-            (edition_date, period_id, locale, attempt_no, state, failure_code, started_at, finished_at, trace_json, cleaned_at, trigger, window_hours)
-            values (?, ?, ?, ?, 'running', null, ?, null, null, null, ?, ?)`)
+            (edition_date, period_id, locale, attempt_no, state, failure_code, started_at, finished_at, trace_json, cleaned_at, trigger, window_hours, nominal_at)
+            values (?, ?, ?, ?, 'running', null, ?, null, null, null, ?, ?, ?)`)
           db.exec('begin immediate')
           try {
             const row = next.get(attempt.date, periodId, attempt.locale) as { next?: number } | undefined
             const attemptNo = Number(row?.next ?? 1)
             insert.run(attempt.date, periodId, attempt.locale, attemptNo, attempt.startedAt,
-              attempt.trigger ?? null, attempt.windowHours ?? null)
+              attempt.trigger ?? null, attempt.windowHours ?? null, attempt.nominalAt ?? null)
             db.exec('commit')
             return attemptNo
           } catch (error) {
@@ -183,17 +207,37 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       beginAttempt,
       finishAttempt,
       openPeriodRun(run: DailyBriefingPeriodRun) {
+        if (runLocale) {
+          insertRun.run(
+            run.date, run.periodId, run.locale, JSON.stringify(run.expectedLocales), run.primaryRequested,
+            run.primaryUsed, run.fallbackReason ?? null, run.snapshotId, run.snapshotHash,
+            run.contentVersion, run.writingRounds, run.direction, JSON.stringify(run.editionRows), run.state, run.startedAt
+          )
+          return
+        }
+        // 旧形状：两种语言共用一行，键里没有语言（迁移失败时的退路，不是正常路径）。
         insertRun.run(
           run.date, run.periodId, JSON.stringify(run.expectedLocales), run.primaryRequested,
           run.primaryUsed, run.fallbackReason ?? null, run.snapshotId, run.snapshotHash,
           run.contentVersion, run.writingRounds, run.direction, JSON.stringify(run.editionRows), run.state, run.startedAt
         )
       },
-      settlePeriodRun(run: Readonly<{ date: string; periodId: string; state: string; finishedAt: string; writingRounds?: number }>) {
+      settlePeriodRun(run: Readonly<{
+        date: string
+        periodId: string
+        locale: DailyBriefingLocale
+        state: string
+        finishedAt: string
+        writingRounds?: number
+      }>) {
+        if (runLocale) {
+          settleRun.run(run.state, run.finishedAt, run.writingRounds ?? null, run.date, run.periodId, run.locale)
+          return
+        }
         settleRun.run(run.state, run.finishedAt, run.writingRounds ?? null, run.date, run.periodId)
       },
-      periodRun(date: string, periodId: string): DailyBriefingPeriodRun | undefined {
-        return parseRun(readRun.get(date, periodId) as RunRow | undefined)
+      periodRun(date: string, periodId: string, locale: DailyBriefingLocale): DailyBriefingPeriodRun | undefined {
+        return parseRun((runLocale ? readRun.get(date, periodId, locale) : readRun.get(date, periodId)) as RunRow | undefined)
       },
       listPeriodRuns(from: string, to: string): readonly DailyBriefingPeriodRun[] {
         return (listRuns.all(from, to) as RunRow[])
@@ -320,8 +364,8 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     async prune(beforeDate) {
       statements.prune(beforeDate)
     },
-    async getPeriodRun(date, periodId) {
-      return statements.periodRun(date, periodId ?? DEFAULT_PERIOD_ID)
+    async getPeriodRun(date, periodId, locale) {
+      return statements.periodRun(date, periodId ?? DEFAULT_PERIOD_ID, locale)
     },
     async listPeriodRuns(from, to) {
       return statements.listPeriodRuns(from, to)
@@ -329,7 +373,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     async listAttemptRuns(from, to) {
       // 旧表没有 `period_id` 列：那一代一天一语言一版，没有"某一期跑了没跑"这回事。
       if (!tableColumns(db, 'daily_briefing_attempts').includes('period_id')) return Object.freeze([])
-      const rows = db.prepare(`select edition_date, period_id, locale, state, started_at, trigger, window_hours, failure_code from daily_briefing_attempts
+      const rows = db.prepare(`select edition_date, period_id, locale, state, started_at, trigger, window_hours, nominal_at, failure_code from daily_briefing_attempts
         where edition_date between ? and ? order by edition_date asc, period_id asc, locale asc`)
         .all(from, to) as Array<Record<string, unknown>>
       return Object.freeze(rows.map((row) => Object.freeze({
@@ -338,6 +382,8 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
         locale: String(row.locale) as 'zh-CN' | 'en-US',
         state: row.state === 'succeeded' || row.state === 'running' ? row.state : 'failed' as const,
         startedAt: String(row.started_at),
+        // 老记录没有这一列，读出来是 `undefined`：投影回退发起时刻，界面写「未记录」，不回填。
+        ...(typeof row.nominal_at === 'string' ? { nominalAt: row.nominal_at } : {}),
         ...(typeof row.trigger === 'string' ? { trigger: row.trigger } : {}),
         ...(typeof row.window_hours === 'number' ? { windowHours: row.window_hours } : {}),
         ...(typeof row.failure_code === 'string' ? { failureCode: row.failure_code } : {})
@@ -354,20 +400,31 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     },
     async deletePeriod(date, periodId, locale) {
       // 删的是**这一行**的记录：版次 + 这一次尝试的所有记录（用户 2026-11-06 定 A 口径）。
-      // 运行记录按 (日期, 期号) 存、两种语言共用，所以只在这一期已经没有别的版次时才删它——
-      // 否则删中文版会顺手抹掉英文版那一行的运行记录。会话连接在另一个库，另删。
+      // 运行记录现在按 (日期, 期号, 语言) 各一行（0.4.2 #18），所以只删本语言那一行；
+      // 迁移失败留下的旧形状仍按 (日期, 期号) 共用，只在这一期已经没有别的版次时才删。
+      // 会话连接在另一个库，另删。
       const editions = db.prepare('delete from daily_briefings where edition_date = ? and period_id = ? and locale = ?').run(date, periodId, locale)
       let attempts = 0
       if (tableColumns(db, 'daily_briefing_attempts').includes('period_id')) {
         attempts = Number(db.prepare('delete from daily_briefing_attempts where edition_date = ? and period_id = ? and locale = ?')
           .run(date, periodId, locale).changes ?? 0)
       }
+      const runLocale = tableColumns(db, 'daily_briefing_period_runs').includes('locale')
       let periodRuns = 0
-      const remaining = db.prepare('select count(*) as n from daily_briefings where edition_date = ? and period_id = ?')
-        .get(date, periodId) as { n?: unknown } | undefined
-      if (Number(remaining?.n ?? 0) === 0) {
-        periodRuns = Number(db.prepare('delete from daily_briefing_period_runs where edition_date = ? and period_id = ?')
-          .run(date, periodId).changes ?? 0)
+      if (runLocale) {
+        const remaining = db.prepare('select count(*) as n from daily_briefings where edition_date = ? and period_id = ? and locale = ?')
+          .get(date, periodId, locale) as { n?: unknown } | undefined
+        if (Number(remaining?.n ?? 0) === 0) {
+          periodRuns = Number(db.prepare('delete from daily_briefing_period_runs where edition_date = ? and period_id = ? and locale = ?')
+            .run(date, periodId, locale).changes ?? 0)
+        }
+      } else {
+        const remaining = db.prepare('select count(*) as n from daily_briefings where edition_date = ? and period_id = ?')
+          .get(date, periodId) as { n?: unknown } | undefined
+        if (Number(remaining?.n ?? 0) === 0) {
+          periodRuns = Number(db.prepare('delete from daily_briefing_period_runs where edition_date = ? and period_id = ?')
+            .run(date, periodId).changes ?? 0)
+        }
       }
       return Object.freeze({
         editions: Number(editions.changes ?? 0),
@@ -408,71 +465,14 @@ type Row = Readonly<{
   trace_json?: string | null
 }>
 
-type RunRow = Readonly<{
-  edition_date: string
-  period_id: string
-  expected_locales: string
-  primary_requested: string
-  primary_used: string
-  fallback_reason: string | null
-  snapshot_id: string
-  snapshot_hash: string
-  content_version: number
-  writing_rounds: number
-  direction: string | null
-  edition_rows: string | null
-  state: string
-  started_at: string
-  finished_at: string | null
-}>
-
-const runStates = ['running', 'published', 'partial', 'failed'] as const
-
-function parseRun(row: RunRow | undefined): DailyBriefingPeriodRun | undefined {
-  if (!row) return undefined
-  let locales: unknown
-  try {
-    locales = JSON.parse(row.expected_locales)
-  } catch {
-    return undefined
-  }
-  if (!Array.isArray(locales) || locales.length === 0 || locales.some((locale) => locale !== 'zh-CN' && locale !== 'en-US')) return undefined
-  const state = runStates.find((value) => value === row.state)
-  if (!state) return undefined
-  return Object.freeze({
-    date: row.edition_date,
-    periodId: row.period_id,
-    expectedLocales: Object.freeze(locales as DailyBriefingLocale[]),
-    primaryRequested: row.primary_requested,
-    primaryUsed: row.primary_used === 'en-US' ? 'en-US' : 'zh-CN',
-    ...(row.fallback_reason ? { fallbackReason: row.fallback_reason } : {}),
-    snapshotId: row.snapshot_id,
-    snapshotHash: row.snapshot_hash,
-    contentVersion: Number(row.content_version),
-    writingRounds: Number(row.writing_rounds),
-    direction: (row.direction ?? 'undecided') as DailyBriefingPeriodRun['direction'],
-    editionRows: Object.freeze(parseRows(row.edition_rows)),
-    state,
-    startedAt: row.started_at,
-    ...(row.finished_at ? { finishedAt: row.finished_at } : {})
-  })
-}
-
-function parseRows(value: string | null): string[] {
-  if (!value) return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
-  } catch {
-    return []
-  }
-}
-
 function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined {
   if (!row) return undefined
   // A row written before the upgrade carries the old storage version; its document shape is the
   // same, so the version only tells us which table it came from.
-  if (row.schema_version !== dailyBriefingStoragePolicy.schemaVersion && row.schema_version !== 2) return undefined
+  // **存储版本不是文档版本**：bump 之后必须继续读得动上一版写的行（2..当前版本），否则升级那一刻
+  // 上一版写的历史会整批消失（2026-11-09 事故：3→4 把 10/30–11/02 与今天的中文版一起藏了起来）。
+  // 只拒绝未来版本——这个 build 读不懂还不存在的形状。
+  if (row.schema_version < 2 || row.schema_version > dailyBriefingStoragePolicy.schemaVersion) return undefined
   let document: DailyBriefingDocument
   try {
     document = JSON.parse(row.document_json) as DailyBriefingDocument

@@ -49,6 +49,7 @@ export async function requestGeminiChatCompletion(input: GeminiChatRequest): Pro
       phase: 'response',
       summary: failure.summary,
       httpStatus: response.status,
+      ...(failure.upstreamCode === undefined ? {} : { upstreamCode: failure.upstreamCode }),
       ...(failure.body ? { body: failure.body } : {})
     })
   }

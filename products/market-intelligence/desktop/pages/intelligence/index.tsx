@@ -63,8 +63,11 @@ function IntelligencePageBody(): React.ReactElement {
   const { activation, sourceCounts, retry: retryActivation } = useCryptoActivation()
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
   /**
-   * 打开「情报」直接落在看板：智能体选择页仍在（从看板的「返回 Agent」进），只是不再是第一屏。
-   * 用户 2026-11-06：那张页先留着不删，多智能体方案未定前不改结构，只改默认落点。
+   * 打开「情报」直接落在看板。
+   * 用户 2026-11-06：智能体选择页先留着不删，多智能体方案未定前不改结构，只改默认落点。
+   * 用户 2026-11-09：看板页头那颗「返回 Agent」整个去掉——那个说法已经不存在——**选择页仍留着，
+   * 但暂时没有入口**。所以 `'portal'` 这一档现在没有任何调用点能落到；它不是死代码，等用户想好
+   * 多智能体的入口怎么给，再决定是恢复一个入口还是把这一屏下线。别当成无主代码清掉。
    */
   const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('dashboard')
   const sampleAvailable = sample.state.scenarioCount > 0
@@ -193,10 +196,6 @@ function IntelligencePageBody(): React.ReactElement {
           macroRatesClient={macroRatesClient}
           dashboardFeedStatusClient={dashboardFeedStatusClient}
           now={sampleNow}
-          onBack={() => {
-            setSourceDrawerOpen(false)
-            setActiveView('portal')
-          }}
           onConfigureSources={() => setSourceDrawerOpen(true)}
           onManageSource={() => setSourceDrawerOpen(true)}
           onOpenCalendar={() => setActiveView('calendar')}

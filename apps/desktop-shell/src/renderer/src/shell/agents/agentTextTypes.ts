@@ -40,6 +40,8 @@ export type AgentText = {
     sessionsTab: string
     newSession: string
     defaultSessionName: string
+    /** 会话名读不出人名（为空、或存的就是它自己的编号）时显示的中性文案；**绝不回落到 id**。 */
+    unnamedSession: string
     clearFilteredSessions: string
     confirmDeleteFilteredSessions: (count: number) => string
     searchSessions: string
@@ -52,7 +54,8 @@ export type AgentText = {
      */
     automationSessions: {
       title: string
-      collapsedMeta: (today: number, total: number) => string
+      /** 收起态只给**总计**：日分组标题已经写了日期，同一个计数不在两处各说一遍。 */
+      totalOnly: (total: number) => string
       today: string
       yesterday: string
       showAll: string

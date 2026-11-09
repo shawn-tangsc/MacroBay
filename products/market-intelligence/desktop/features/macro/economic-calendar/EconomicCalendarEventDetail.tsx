@@ -82,7 +82,7 @@ function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalenda
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice }: {
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked }: {
   event: EconomicCalendarEventView
   /**
    * The official consensus, when the view carries one. The projection does not surface it today —
@@ -107,6 +107,13 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   refreshState: EconomicCalendarRefreshState | undefined; text: EconomicCalendarText
   /** 官方日历已停用时那一句说明；有它就把 BLS 刷新置灰，不再发请求。 */
   blsUnavailableNotice?: string
+  /**
+   * 那颗**被置灰的键自己**的行内句（界面设计 2026-11-09）：为什么按不动、什么时候能好。
+   *
+   * 与上一句分开是有意的：上一句说后台现状（自动同步已停、上次成功在何时），这一句说这颗键
+   * 为什么按不动。一句顶两句会把两个不同的处境说成同一件事。
+   */
+  blsRefreshBlocked?: string
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
@@ -114,6 +121,17 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
   const valueRows: { id: 'actual' | 'previous'; label: string }[] = [
     { id: 'actual', label: text.details.actual }, { id: 'previous', label: text.details.previous }
   ]
+  /*
+   * 缺值不许写成一句「暂无」：那是把「还没到」「源没给」「读不到」三件事并成一个。
+   * 这一层能分的是前两种——发布时刻还没到写「尚未公布」，已到点而源没给值写「源未给出」。
+   * 第三种（读不到）由整块的读失败态给句子，它不是某一行缺值，整页都不该有内容。
+   */
+  const releaseInstantPassed = event.scheduledAt !== undefined
+    ? Date.parse(event.scheduledAt) <= now().getTime()
+    : event.scheduledDate <= calendarDisplayDate(now().toISOString(), timeZone)
+  const missingValueSentence = event.lifecycleState === 'scheduled' && !releaseInstantPassed
+    ? text.details.valueNotYet
+    : text.details.valueNotProvided
   // 停用是现状，不是这次点击失败：按钮置灰、点不动，也不发请求（服务侧也已立刻回 unavailable）。
   const blsRefreshAction = refreshActionPresentation(refreshState, event.eventKey, 'bls', blsUnavailableNotice !== undefined)
   const fomcRefreshAction = refreshActionPresentation(refreshState, event.eventKey, 'fomc')
@@ -130,11 +148,15 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
       <Meta label={text.details.source} value={event.sources.map((source) => text.sources[source]).join(', ')} />
       <ReleaseTimeRow client={releaseTimeClient} event={event} onChanged={onReleaseTimeChanged} text={text} timeZone={timeZone} timeZoneLabel={timeZoneLabel} />
       {event.sources.includes(fedFomcRefreshPresentationPolicy.source) && event.publishedAt ? <Meta label={text.fomcRefresh.publishedAt} value={formatTime(event.publishedAt, 'second')} /> : null}
+      {/* 两个时刻都是"记录本身"的时间，不是发布时刻：创建时间在修订后不变；实际值时间取第一次
+          拿到非空现值那刻的**来源观测时刻**。缺就不画，不拿别的时刻顶上。 */}
+      {event.createdAt ? <Meta label={text.recordTimes.createdAt} value={formatTime(event.createdAt, 'second')} /> : null}
+      {event.actualDetectedAt ? <Meta label={text.recordTimes.actualDetectedAt} value={formatTime(event.actualDetectedAt, 'second')} /> : null}
       <Meta label={text.details.importance} value={text.importance.high} />
       <Meta label={text.details.state} value={text.states[event.lifecycleState]} />
     </dl>
     <div className="mi-economic-calendar__values">
-      {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? text.details.unavailable}</strong></div>)}
+      {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? missingValueSentence}</strong></div>)}
       {/* 官方三源（Fed/BLS/BEA）不提供预期；能用的只有挂着的那条市场观测，所以标出来源。
           两边都没有时写「预期值未提供」——不是「没有超预期」，那会把未知说成结论。 */}
       {(() => {
@@ -160,7 +182,11 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
       })()}
     </div>
     {blsUnavailableNotice ? <p className="mi-economic-calendar__comparison-rule" data-bls-unavailable role="status">{blsUnavailableNotice}</p> : null}
-    {isBlsRefreshEligible(event, now()) ? <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} /> : null}
+    {/* 置灰也要说原因：句子与键同一行（界面设计 2026-11-09），不是第二个弹窗、也不是另起一段。 */}
+    {isBlsRefreshEligible(event, now()) ? <div className="mi-economic-calendar__refresh-row">
+      <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} />
+      {blsRefreshBlocked ? <span className="mi-economic-calendar__refresh-blocked" data-bls-refresh-blocked role="note">{blsRefreshBlocked}</span> : null}
+    </div> : null}
     {isFedFomcRefreshEligible(event, now()) ? <FedFomcRefreshAction disabled={fomcRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={fomcRefreshAction.pending} text={text} /> : null}
     {refreshState?.feedback && isRefreshStateFor(refreshState, event.eventKey, 'bls') ? <p className="mi-economic-calendar__comparison-rule" role="status">{text.blsRefresh[refreshState.feedback]}</p> : null}
     {refreshState?.feedback && isRefreshStateFor(refreshState, event.eventKey, 'fomc') ? <p className="mi-economic-calendar__comparison-rule" role="status">{refreshState.feedback === 'unavailable' && event.actual

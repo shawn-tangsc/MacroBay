@@ -55,8 +55,11 @@ function state(rows: readonly FlowChartRow[]) {
     change30dUsd: '-$88.2M',
     change30dPercent: '-0.03%',
     flowHistory: { state: 'available' as const, rows },
-    etf: {
+    etfReading: {
       state: 'available' as const,
+      comparison: { state: 'aligned' as const },
+      // 快照的校验时刻：`DashboardEtfFlow` 要求它在，缺了整张卡的类型都不成立。
+      verifiedAt: '2026-11-02T07:00:00.000Z',
       coverage: [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }],
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$297.4M', observedAt: '2026-11-02T07:00:00.000Z', cumulative: [{ windowDays: 5, coveredDays: 5, netFlowUsd: '+$1B', complete: true }, { windowDays: 20, coveredDays: 20, netFlowUsd: '+$2B', complete: true }], rows: [] },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '+$176.3M', observedAt: '2026-11-02T07:00:00.000Z', cumulative: [{ windowDays: 5, coveredDays: 5, netFlowUsd: '+$500M', complete: true }, { windowDays: 20, coveredDays: 20, netFlowUsd: '+$900M', complete: true }], rows: [] }
@@ -71,8 +74,8 @@ function mountWithFlow(flowHistory: unknown, rows: readonly FlowChartRow[]): HTM
   document.body.append(container)
   root = createRoot(container)
   const value = { ...state(rows), flowHistory }
-  act(() => root?.render(createElement(ShellLanguageProvider, { language: 'zh-CN' },
-    createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai' },
+  act(() => root?.render(scopedLang(
+    scopedTz(
       createElement(CapitalConditionsPanel, { text: cardText(), state: value as never, onRefresh: () => undefined })))))
   return container
 }
@@ -81,8 +84,8 @@ function mount(text = cardText(), rows: readonly FlowChartRow[] = plainRows) {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  act(() => root?.render(createElement(ShellLanguageProvider, { language: 'zh-CN' },
-    createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai' },
+  act(() => root?.render(scopedLang(
+    scopedTz(
       createElement(CapitalConditionsPanel, { text, state: state(rows), onRefresh: () => undefined })))))
   return container
 }
@@ -93,9 +96,62 @@ function clickLikeMouse(element: HTMLElement): void {
   element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
 }
 
+/** 语言与时区都是必填 props；包一层，调用点只写 scopedLang(scopedTz(child))。 */
+const scopedLang = (children: React.ReactElement): React.ReactElement =>
+  createElement(ShellLanguageProvider, { language: 'zh-CN', children })
+const scopedTz = (children: React.ReactElement): React.ReactElement =>
+  createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children })
+
+/** 同一张卡，只换 ETF 那一段（每支各说各的）。 */
+function mountReading(overrides: Record<string, unknown>): HTMLElement {
+  const base = state(plainRows) as ReturnType<typeof state> & { etfReading: Record<string, unknown> }
+  const value = { ...base, etfReading: { ...base.etfReading, ...overrides } }
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  act(() => root?.render(scopedLang(
+    scopedTz(createElement(CapitalConditionsPanel, { text: cardText(), state: value as never, onRefresh: () => undefined })))))
+  return container
+}
+
+describe('ETF 两支各说各的', () => {
+  it('shows the asset that has a value and says 未知 with the reason for the one that does not', () => {
+    // 「ETH 晚一天 → 整份作废」就是这条要防的：一支没值不该把另一支一起撤掉。
+    const container = mountReading({ missing: { eth: 'value-missing' }, eth: undefined })
+    const content = container.textContent ?? ''
+    expect(content).toContain('+$297.4M')          // BTC 照常显示数字
+    expect(content).toContain('未知')
+    expect(content).toContain('最新一天没有净流入数据')  // 具体原因，不是「原因未记录」
+    expect(content).toContain('BTC ETF')
+    expect(content).toContain('ETH ETF')
+  })
+
+  it('shows zero as zero instead of borrowing the other asset', () => {
+    const base = state(plainRows) as ReturnType<typeof state> & { etfReading: Record<string, unknown> }
+    const btc = (base.etfReading.btc as { latestNetFlowUsd: string })
+    const container = mountReading({ btc: { ...btc, latestNetFlowUsd: '$0' } })
+    const content = container.textContent ?? ''
+    expect(content).toContain('$0')
+    // 0 是有值：不许因为另一边有数字就把这一支写成「未知」。
+    expect(content).not.toContain('未知')
+  })
+
+  it('says the comparison does not hold without hiding either number when the windows differ', () => {
+    const container = mountReading({
+      comparison: { state: 'unaligned', reason: 'latest-trading-day-differs', lagging: 'eth', laggingDays: 1 }
+    })
+    const content = container.textContent ?? ''
+    expect(content).toContain('对比列不可比')
+    expect(content).toContain('落后 1 个交易日')
+    // 两份数字都还在：不可比说的是对比列，不是「没数据」。
+    expect(content).toContain('+$297.4M')
+    expect(content).toContain('+$176.3M')
+  })
+})
+
 describe('bar-top labels', () => {
   it('labels three readings and nothing else', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/data-flow-label="/g) ?? [])).toHaveLength(3)
     expect(markup).toContain('+$402.6M')
@@ -103,13 +159,13 @@ describe('bar-top labels', () => {
   })
 
   it('labels one number when the last day is also the largest inflow', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(overlappingRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/data-flow-label="/g) ?? [])).toHaveLength(2)
   })
 
   it('speaks 亿 while the screen keeps M', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect(markup).toContain('aria-label="净流入 4.026 亿美元，全部美元稳定币"')
     expect(markup).not.toContain('402.6 亿美元')
@@ -142,7 +198,7 @@ describe('the stablecoin row name', () => {
 
 describe('accessible names', () => {
   it('gives each label a role that can carry a name', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/role="img"/g) ?? [])).toHaveLength(3)
     expect(markup).toContain('role="img" aria-label="净流入 4.026 亿美元，全部美元稳定币"')
@@ -177,7 +233,7 @@ describe('the labels on the user-reported card', () => {
   ]
 
   it('labels three readings, and the repeated number is the axis, not a second label', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(reported) as never, onRefresh: () => undefined })))
     const labels = [...markup.matchAll(/data-flow-label="\d+"[^>]*>([^<]+)</g)].map((match) => match[1])
     expect(labels).toHaveLength(3)
@@ -191,7 +247,7 @@ describe('the labels on the user-reported card', () => {
 
 describe('labels versus the date band', () => {
   it('labels three readings and nothing else on the reported window', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/data-flow-label="/g) ?? [])).toHaveLength(3)
   })

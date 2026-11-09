@@ -4,23 +4,33 @@ import { httpRequest } from './httpClient'
 
 describe('httpClient', () => {
   it('aborts request on timeout', async () => {
-    const fetchImpl = vi.fn(async (_url, init) => {
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, 200)
-        init?.signal?.addEventListener('abort', () => {
-          clearTimeout(timer)
+    // 原来的写法让 fetch 真睡 200ms、请求真等 20ms：红线取决于机器把 20ms 落在哪儿。
+    // 现在时限由**假时钟**推进到恰好那一刻，并且断言 abort 真的传到了 fetch（不只是抛了个错）。
+    vi.useFakeTimers()
+    try {
+      let reachedAbort = false
+      const fetchImpl = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal
+        const rejectAborted = (): void => {
+          reachedAbort = true
           reject(new DOMException('The operation was aborted.', 'AbortError'))
-        })
-      })
-      return new Response('late', { status: 200 })
-    })
+        }
+        if (signal?.aborted) { rejectAborted(); return }
+        signal?.addEventListener('abort', rejectAborted, { once: true })
+      }))
 
-    await expect(
-      httpRequest(
+      const request = httpRequest(
         { url: 'https://example.test/data', timeoutMs: 20 },
-        { fetchImpl }
+        { fetchImpl: fetchImpl as unknown as typeof fetch }
       )
-    ).rejects.toThrow('timed out')
+      // 先挂上拒绝断言，再推进时钟：否则超时在 `advance` 期间先抛出，会变成未处理的 rejection。
+      const rejectsOnTimeout = expect(request).rejects.toThrow('timed out')
+      await vi.advanceTimersByTimeAsync(20)
+      await rejectsOnTimeout
+      expect(reachedAbort).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('retries only retryable failures', async () => {

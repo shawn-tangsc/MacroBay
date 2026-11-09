@@ -6,6 +6,7 @@ import type { JobScheduleView } from '@platform/jobs'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 // 深路径：`@platform/jobs` 那个 barrel 会带进 sqlite（主进程用），渲染层只要这一个小函数。
 import { resolveJobTitle } from '@platform/jobs/runtime/jobTitle'
 import {
@@ -43,6 +44,8 @@ export function TaskAutomationResourceJobsSection(props: {
   controller: ResourceJobSchedulesController
 }): React.ReactElement {
   const { controller, labels, language } = props
+  // 读者时区：下次/上次运行是给人看的时刻，跟设置走，不跟运行机器走。
+  const timeZone = useShellTimeZone()
   const [nameQuery, setNameQuery] = useState('')
   const [source, setSource] = useState<ResourceJobSourceFilter>('all')
   const [registration, setRegistration] = useState<ResourceJobRegistrationFilter>('all')
@@ -256,7 +259,7 @@ export function TaskAutomationResourceJobsSection(props: {
                         />
                       </td>
                       <td className="task-automation-mono">
-                        {formatTimestamp(job.nextRunAt, language) ?? labels.emptyValue}
+                        {formatTimestamp(job.nextRunAt, language, timeZone) ?? labels.emptyValue}
                       </td>
                       <td>
                         <JobLastRun job={job} labels={labels} language={language} />
@@ -317,11 +320,12 @@ function JobLastRun(props: {
   language: AppLanguage
 }): React.ReactElement {
   const { job, labels, language } = props
+  const timeZone = useShellTimeZone()
   const pillText = pillTextResolver(labels)
   if (job.lastOutcome === 'never' && !job.lastRunAt) {
     return <span className="task-automation-muted">{labels.outcome.never}</span>
   }
-  const at = formatTimestamp(job.lastRunAt, language)
+  const at = formatTimestamp(job.lastRunAt, language, timeZone)
   return (
     <>
       <StatusPill

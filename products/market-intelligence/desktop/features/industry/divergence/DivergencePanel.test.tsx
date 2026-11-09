@@ -79,53 +79,150 @@ const answer = (rows: readonly (typeof row | typeof observedRow | typeof boundRo
 
 const sentimentReason = text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment)
 
+/**
+ * 界面设计 2026-11-09 对行 48 的边界：顺序对（先读数、再口径），但**弹窗里不许再加第二颗 ⓘ**——
+ * 一张卡上两个解释入口就是又回到「一个读数两个入口」。
+ */
+it('keeps exactly one help trigger on the card, and it lives inside the expanded reading', () => {
+  const source = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.tsx', 'utf8')
+  // 入口是牌子自己（原生按钮 + `aria-expanded` / `aria-controls`），卡面没有第二颗图标触发器。
+  expect((source.match(/<IconButton/gu) ?? [])).toHaveLength(1)
+  expect((source.match(/<Popover/gu) ?? [])).toHaveLength(1)
+  expect(source).toContain('aria-expanded={expanded}')
+  expect(source).toContain('aria-controls={detailId}')
+  // 那颗 ⓘ 在展开区里（`data-divergence-detail` 之后），不在卡面上。
+  const detailAt = source.indexOf('data-divergence-detail')
+  const helpAt = source.indexOf('<IconButton')
+  expect(detailAt).toBeGreaterThan(-1)
+  expect(helpAt).toBeGreaterThan(detailAt)
+})
+
+/**
+ * 非 UTC 读者：截至那一行只能有一个偏移。
+ *
+ * 旧写法先 `formatTime()` 再 `.replace(/\s*GMT$/, '')` 再补时区标签——那个正则只匹配**裸 `GMT`**，
+ * 所以 UTC 之外的读者会看到「… 18:00 GMT+8 GMT+8」：同一行两遍偏移。
+ *
+ * 用例挂在展开之后（默认收起，收起时这一行根本不在 DOM 里），并且用 Asia/Shanghai 这个**非 UTC**
+ * 的显示时区——UTC 下旧写法与正确写法输出相同，拿 UTC 测等于没测。
+ */
+it('prints the reader’s offset once on every as-of line', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children:
+        createElement(DivergencePanel, { state: answer([row], []), onRetry: () => undefined, text }) }))
+    })
+    const summary = container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!
+    await act(async () => { summary.click() })
+    const line = container.querySelector('.mi-divergence__asof')?.textContent ?? ''
+    expect(line).not.toContain('GMT+8 GMT+8')
+    // 三条腿各一个偏移，且只有一个：多一个就是第二遍。
+    expect((line.match(/GMT\+8/gu) ?? [])).toHaveLength(3)
+  } finally { await act(async () => root.unmount()); container.remove() }
+})
+
 describe('divergence panel · the one summary line', () => {
-  it('A: one pair points opposite ways — and says only that', () => {
-    const markup = render(answer([row]))
-    expect(markup).toContain(text.summary.divergence)
-    expect(markup).not.toContain(text.summary.quiet)
-    expect(markup).not.toContain(text.summary.allWithheld)
-    // 读数不在卡面上：三个数字进展开区。
-    expect(markup).not.toContain(row.legs[0]!.text)
-  })
+  /**
+   * 五态一张表（界面设计 v2 §二）：每一行给「输入 + 该出现的那句 + 该缺席的几句」。
+   *
+   * 为什么并成表：原来每条用例各自 mount 一次、只差输入与那一句文案；分开写时，新增一态就要复制一遍
+   * 挂载与断言骨架，删一句也看不出是哪一态少了判据。表里每行仍逐条断言（出现的那句 + 缺席的几句），
+   * 断言数不减：合并的是骨架，不是判据。
+   */
+  const summaryStates = [
+    {
+      name: 'A 有背离：只说这一句，且读数不上卡面',
+      state: answer([row]),
+      expected: text.summary.divergence,
+      absent: [text.summary.quiet, text.summary.allWithheld],
+      alsoAbsent: [row.legs[0]!.text],
+      expandable: true
+    },
+    {
+      name: 'B 没背离、也没有没判成的组：一句说明，不是控件',
+      state: { state: 'empty', withheld: [] } as const,
+      expected: text.summary.quiet,
+      absent: [text.summary.divergence, text.summary.allWithheld],
+      expandable: false
+    },
+    {
+      name: 'C 有背离 + 1 组没判成（舆情腿）：冒号后是这一组的原因',
+      state: answer([row], [sentimentMissing]),
+      expected: `${text.summary.divergenceWithheldOne.split('{')[0]}${sentimentReason}`,
+      absent: [text.summary.quiet, text.summary.divergence],
+      expandable: true
+    },
+    {
+      name: 'C 换成另一组（价格太旧）时整句跟着换，不许照抄舆情',
+      state: answer([row], [priceStale]),
+      expected: `${text.summary.divergenceWithheldOne.split('{')[0]}${text.withheldReasons['leg-stale'].replace('{leg}', text.legs.price).split('{at}')[0]!}`,
+      absent: [sentimentReason, text.summary.quiet],
+      expandable: true
+    },
+    {
+      name: 'C 有背离 + 2 组没判成：只报数，不报原因',
+      state: answer([row], [sentimentMissing, priceStale]),
+      expected: text.summary.divergenceWithheldMany.replace('{count}', '2'),
+      absent: [sentimentReason, text.summary.divergence],
+      expandable: true
+    },
+    {
+      name: 'D 没背离 + 1 组没判成：原因跟在后面',
+      state: { state: 'empty', withheld: [sentimentMissing] } as const,
+      expected: `${text.summary.quietWithheldOne.split('{')[0]}${sentimentReason}`,
+      absent: [text.summary.quiet, text.summary.divergence],
+      expandable: true
+    },
+    {
+      name: 'D 没背离 + 2 组没判成：只报数',
+      state: { state: 'empty', withheld: [sentimentMissing, priceStale] } as const,
+      expected: text.summary.quietWithheldMany.replace('{count}', '2'),
+      absent: [sentimentReason, text.summary.quiet],
+      expandable: true
+    },
+    {
+      name: 'E 三组全判不了：独立一态，不许并进「没有背离」',
+      state: { state: 'empty', withheld: [sentimentMissing, stablecoinMissing, priceStale] } as const,
+      expected: text.summary.allWithheld,
+      absent: [text.summary.quiet, text.summary.divergence],
+      expandable: true
+    }
+  ] as const
 
-  it('B: a quiet day that compared everything — a paragraph, not a control', () => {
-    const markup = render({ state: 'empty', withheld: [] })
-    expect(markup).toContain(text.summary.quiet)
-    expect(markup).not.toContain(text.summary.divergence)
-    // 不可展开：不是按钮、没有 aria-expanded、没有箭头。
-    expect(markup).not.toContain('aria-expanded')
-    expect(markup).not.toContain('mi-divergence__summary-chevron')
-  })
-
-  it('C: the unjudged pair names its own leg and reason, not a fixed sentence', () => {
-    const sentimentCase = render(answer([row], [sentimentMissing]))
-    expect(sentimentCase).toContain(`${text.summary.divergenceWithheldOne.split('{')[0]}${sentimentReason}`)
-    // 换成另一组时整句跟着换：照抄成「舆情」就会在这里红。
-    const priceCase = render(answer([row], [priceStale]))
-    expect(priceCase).toContain(`${text.summary.divergenceWithheldOne.split('{')[0]}${text.withheldReasons['leg-stale'].replace('{leg}', text.legs.price).split('{at}')[0]!}`)
-    expect(priceCase).not.toContain(sentimentReason)
-  })
-
-  it('C with two unjudged, D with one, D with two, E with all three', () => {
-    expect(render(answer([row], [sentimentMissing, priceStale])))
-      .toContain(text.summary.divergenceWithheldMany.replace('{count}', '2'))
-    expect(render({ state: 'empty', withheld: [sentimentMissing] }))
-      .toContain(`${text.summary.quietWithheldOne.split('{')[0]}${sentimentReason}`)
-    expect(render({ state: 'empty', withheld: [sentimentMissing, priceStale] }))
-      .toContain(text.summary.quietWithheldMany.replace('{count}', '2'))
-    const allWithheld = render({ state: 'empty', withheld: [sentimentMissing, stablecoinMissing, priceStale] })
-    expect(allWithheld).toContain(text.summary.allWithheld)
-    // 五条互斥：E 里不许再出现「没有背离」。
-    expect(allWithheld).not.toContain(text.summary.quiet)
+  it('says exactly one of the five sentences, and only the one its state calls for', () => {
+    // 一条用例跑完五行：每行的断言各自带行名，失败时知道是哪一态（vitest 的消息参数会印出来）。
+    for (const row of summaryStates) {
+      const markup = render(row.state as never)
+      // 该出现的那一句在。
+      expect(markup, `${row.name} · 该出现的句子`).toContain(row.expected)
+      // 其余几句一个都不许出现（逐条，不是一条近似检查）。
+      for (const other of row.absent) expect(markup, `${row.name} · 不该出现：${other}`).not.toContain(other)
+      if ('alsoAbsent' in row) for (const other of row.alsoAbsent) expect(markup, `${row.name} · 不该出现：${other}`).not.toContain(other)
+      // 可展开的那几态是按钮；静默的一天不是控件（无 aria-expanded、无箭头）。
+      if (row.expandable) expect(markup, `${row.name} · 应是可展开的按钮`).toContain('aria-expanded="false"')
+      else {
+        expect(markup, `${row.name} · 不该是控件`).not.toContain('aria-expanded')
+        expect(markup, `${row.name} · 不该有箭头`).not.toContain('mi-divergence__summary-chevron')
+      }
+    }
   })
 
   it('is neutral and eats no default button look: transparent, borderless, one token size', () => {
     const markup = render(answer([row]))
     const summary = markup.slice(markup.indexOf('mi-divergence__summary"'), markup.indexOf('</button>'))
-    // 判据：摘要行里没有图标组件、没有语气标记——方向色只留在展开区。
+    /**
+     * 判据：摘要行里**只有折叠箭头这一个图形**，没有任何语气/方向标记——方向色只留在展开区。
+     *
+     * 这条原来写的是「一个 `<svg>` 都不许有」（界面设计 v2 §四）。2026-11-10 界面设计把入口改成
+     * 「左侧 14px 箭头 + 整行可点 + 悬停变色」，箭头就必须是图标组件——旧规则要守的其实是「不要让
+     * 语气图形进摘要行」，不是「不许有图标」。所以判据改成：恰好一个 svg，且它是那颗 chevron。
+     */
     expect(markup).toContain('class="mi-divergence__summary"')
-    expect(summary).not.toContain('<svg')
+    expect((summary.match(/<svg/gu) ?? [])).toHaveLength(1)
+    expect(summary).toContain('lucide-chevron-right')
     expect(summary).not.toContain('data-tone')
     /**
      * 样式在外部表里，测试环境读不到计算样式（happy-dom 不加载 `.css`），所以这条查**规则本身**：
@@ -139,10 +236,11 @@ describe('divergence panel · the one summary line', () => {
     const rule = css.match(/\.mi-divergence__summary \{([^}]*)\}/)?.[1] ?? ''
     expect(rule).toContain('background: transparent')
     expect(rule).toContain('border: 0')
-    expect(rule).toContain('padding: 0')
+    // 入口是可点的行（界面设计 2026-11-10）：左右内距 8、文字 12 那一档、正文行高，仍然零硬编码字号。
+    expect(rule).toContain('padding: 0 8px')
     expect(rule).toContain('font: inherit')
-    expect(rule).toContain('font-size: var(--mi-reading-note-size)')
-    expect(rule).toContain('line-height: var(--mi-reading-note-line-height)')
+    expect(rule).toContain('font-size: var(--font-body)')
+    expect(rule).toContain('line-height: var(--line-body)')
     expect(rule).not.toMatch(/font-size:\s*\d/)
     expect(rule).not.toMatch(/caution|negative|warning/)
   })
@@ -173,6 +271,54 @@ describe('divergence panel · the one summary line', () => {
      */
     await act(async () => { root.unmount() })
     style.remove()
+  })
+})
+
+describe('divergence panel · the chip is the control', () => {
+  /**
+   * 界面设计 2026-11-10 的判据：入口要**同时**给三个可见线索，只加一个都不够（用户实测「看不出区别」）——
+   * 左侧 14px 箭头（展开转 90°）、整行 44 高且可点（文字 12 / `--font-body` / `--text`，不许 muted）、
+   * 悬停整行 `--surface-soft` 且箭头变 `--text`。文案在展开后**不改**：一句事实被换成动词，行里就少一个信息。
+   */
+  it('draws the chevron on the left, 44 tall, focusable, and keeps the sentence when expanded', async () => {
+    const css = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.css', 'utf8')
+    const block = /\.mi-divergence__summary \{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(block).toMatch(/height:\s*44px/u)
+    expect(block).toMatch(/padding:\s*0 8px/u)
+    // 可点的行不是注释：字号走 12px 那一档，颜色是正文色。
+    expect(block).toMatch(/font-size:\s*var\(--font-body\)/u)
+    expect(block).toMatch(/color:\s*var\(--text\)/u)
+    expect(block).not.toMatch(/--muted/u)
+    // 悬停整行用 surface-soft；箭头在悬停/聚焦时变正文色。
+    expect(css).toMatch(/\.mi-divergence__summary:hover \{[^}]*background:\s*var\(--surface-soft\)/u)
+    expect(css).toMatch(/\.mi-divergence__summary:hover \.mi-divergence__summary-chevron[^{]*\{[^}]*color:\s*var\(--text\)/u)
+    // 展开时箭头转 90°，不是换形状也不是换文案。
+    expect(css).toMatch(/\.mi-divergence__summary\[aria-expanded='true'\] \.mi-divergence__summary-chevron[^{]*\{[^}]*rotate\(90deg\)/u)
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => { root.render(scoped(createElement(DivergencePanel, { state: answer([row]), onRetry: () => undefined, text }))) })
+      const summary = container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!
+      // 箭头在左：它是第一个子元素，且是 14px 的 lucide 图标而不是 8px 的字符。
+      const first = summary.firstElementChild
+      expect(first?.tagName.toLowerCase()).toBe('svg')
+      expect(first?.classList.contains('mi-divergence__summary-chevron')).toBe(true)
+      expect(first?.getAttribute('width')).toBe('14')
+      expect(first?.getAttribute('height')).toBe('14')
+      expect(summary.querySelector('.mi-divergence__summary-chevron + .mi-divergence__summary-text')).not.toBeNull()
+      // 可聚焦、可切换，展开后焦点不跑。
+      expect(summary.getAttribute('aria-expanded')).toBe('false')
+      summary.focus()
+      expect(document.activeElement).toBe(summary)
+      const sentence = summary.textContent
+      await act(async () => { summary.click() })
+      expect(summary.getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(summary)
+      // 文案不改：还是那一句事实，不是「收起」。
+      expect(summary.textContent).toBe(sentence)
+    } finally { await act(async () => root.unmount()) }
   })
 })
 

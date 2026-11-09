@@ -101,6 +101,13 @@ function ToastRow(props: {
 
   return (
     <div className="notification-toast" data-notification-toast={props.item.id}>
+      {/**
+        * **例外（登记在案）**：这里保留原生 `<button>`，不换 antd 也不换 `IconButton`。
+        * 它是**两行内容的行容器**（标题 + 正文），整块就是「打开这条」的点击区；换组件会改掉
+        * 行内排印与两行换行行为。可访问性已具备：名字取自行内文字（标题 + 正文），
+        * 关闭另有 `IconButton` 带 aria-label，不靠颜色区分。改这一处要同时重做 toast 的行模型，
+        * 不属于「只换交互元素」。
+        */}
       <button
         type="button"
         className="notification-toast-body"

@@ -1,5 +1,7 @@
 import { Network, Play, Square } from 'lucide-react'
 
+import { Button } from 'antd'
+
 import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import { useAgentText } from '../../agentTextProvider'
@@ -55,23 +57,27 @@ export default function AgentModelGatewayStatusCard({
 
       <footer className="agent-gateway-route__actions">
         {running ? (
-          <button type="button" className="secondary-button compact" disabled={busy} onClick={onStop}>
-            <Square size={14} />
+          <Button
+            className="ant-secondary-button"
+            size="small"
+            icon={<Square size={14} />}
+            disabled={busy}
+            onClick={onStop}>
             {labels.stop}
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
-            className="primary-button compact"
+          <Button
+            className="ant-primary-button"
+            size="small"
+            icon={busy || starting ? <LoadingSpinner size="sm" /> : <Play size={14} />}
             disabled={busy || starting}
             onClick={onStart}>
-            {busy || starting ? <LoadingSpinner size="sm" /> : <Play size={14} />}
             {starting ? labels.startingButton : labels.enableAndStart}
-          </button>
+          </Button>
         )}
-        <button type="button" className="secondary-button compact" onClick={onOpenModelService}>
+        <Button className="ant-secondary-button" size="small" onClick={onOpenModelService}>
           {labels.openModelService}
-        </button>
+        </Button>
       </footer>
     </section>
   )

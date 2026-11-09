@@ -118,8 +118,14 @@ export default function Sessions({
             ))}
           </div>
         ))}
+        {/*
+          自动会话块放在**同一个滚动容器**里（`agent-session-list`，它是本面板唯一的滚动条）。
+          之前它是这个 div 的兄弟：块没有 `overflow`、又压不动（flex 子项 `min-height:auto`），
+          41 行时把列表挤到 0 高、自己超出面板被祖先 `overflow:hidden` 裁掉——滚轮落在被裁区域上
+          没有任何容器可动，就是用户报的「滚动卡住」。放进滚动流后，块随内容滚，最后一组能滚到。
+        */}
+        <AutomationSessions onSelectSession={onSelectSession} sessions={automationSessions} />
       </div>
-      <AutomationSessions onSelectSession={onSelectSession} sessions={automationSessions} />
     </section>
   )
 }

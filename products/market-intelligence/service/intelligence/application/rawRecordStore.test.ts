@@ -100,6 +100,8 @@ describe('rawRecordStore', () => {
           ...baseInput(),
           rawRecordId: 'raw-1',
           detectedAt: '2026-08-01T00:00:00.000Z',
+          // 快照里的行是**完整记录**（与 append 的入参不同），加工归属必填。
+          processingOwner: 'generic-intelligence',
           processingState: 'received',
           storageTier: 'hot',
           archiveStatus: 'none'
@@ -173,7 +175,7 @@ describe('rawRecordStore', () => {
     writeAllSync.mockClear()
 
     const patch = (payloadFileRef: string) => ({
-      payloadRefType: 'file' as const, payloadFileRef, payloadCodec: 'plain', payloadBody: undefined,
+      payloadRefType: 'file' as const, payloadFileRef, payloadCodec: 'plain' as const,
       archiveStatus: 'archived' as const, storageTier: 'warm' as const
     })
     expect(store.updateArchiveRefs([

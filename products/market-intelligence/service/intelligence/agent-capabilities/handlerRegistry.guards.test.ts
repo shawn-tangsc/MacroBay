@@ -11,9 +11,10 @@ vi.mock('../product-tools/registerIntelligenceProductTools', async (importOrigin
   return {
     registerIntelligenceProductTools: (
       register: Parameters<typeof actual.registerIntelligenceProductTools>[0],
-      jobRuntime: Parameters<typeof actual.registerIntelligenceProductTools>[1]
+      jobRuntime: Parameters<typeof actual.registerIntelligenceProductTools>[1],
+      intelligenceModule: Parameters<typeof actual.registerIntelligenceProductTools>[2]
     ) => {
-      if (fixture.adaptersAvailable) actual.registerIntelligenceProductTools(register, jobRuntime)
+      if (fixture.adaptersAvailable) actual.registerIntelligenceProductTools(register, jobRuntime, intelligenceModule)
     }
   }
 })
@@ -46,7 +47,7 @@ function attemptRegistration(): {
   try {
     registerIntelligenceAgentToolHandlers(
       (registration) => registrations.set(registration.handlerId, registration),
-      { jobRuntime }
+      { jobRuntime, intelligenceModule: {} as never, macroCalendarOps: {} as never, crossAssetOps: {} as never }
     )
     return { registrations, error: undefined }
   } catch (error) {

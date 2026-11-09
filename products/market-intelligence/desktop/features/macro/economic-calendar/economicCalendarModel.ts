@@ -11,7 +11,7 @@ export type EconomicCalendarSourceKey = 'federalReserve' | 'bea' | 'blsManualIcs
 export type EconomicCalendarEventView = Pick<
   EconomicCalendarPublicEvent,
   'eventKey' | 'eventFamily' | 'titleKey' | 'periodKey' | 'lifecycleState' | 'coverage' | 'scheduledDate' |
-  'scheduledAt' | 'releaseTimeSource' | 'publishedAt' | 'detectedAt' | 'actual' | 'previous' | 'caveats'
+  'scheduledAt' | 'releaseTimeSource' | 'publishedAt' | 'detectedAt' | 'createdAt' | 'actualDetectedAt' | 'actual' | 'previous' | 'caveats'
 > & {
   category: EconomicCalendarCategory
   labelKey: EconomicCalendarTitleKey
@@ -190,6 +190,8 @@ function toEventView(event: EconomicCalendarPublicEvent): EconomicCalendarEventV
       releaseTimeSource: isReleaseTimeSource(event.releaseTimeSource) ? event.releaseTimeSource : 'official',
       detectedAt: event.detectedAt,
       ...(event.publishedAt ? { publishedAt: event.publishedAt } : {}),
+      ...(event.createdAt ? { createdAt: event.createdAt } : {}),
+      ...(event.actualDetectedAt ? { actualDetectedAt: event.actualDetectedAt } : {}),
       ...(event.actual ? { actual: event.actual } : {}), ...(event.previous ? { previous: event.previous } : {}),
       caveats: [...event.caveats], category, labelKey: economicCalendarEventLabelKey(event), sources
     }

@@ -26,7 +26,7 @@ import { isCurrent, markEditorialFailure, withEditorialModel } from './dailyBrie
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
-import { abandonDailyBriefingEditorial, publishDailyBriefingEdition } from './dailyBriefingPublish'
+import { settleEditorialEdition } from './dailyBriefingPublish'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { prepareMarketForRun } from './dailyBriefProgressWaiting'
 import { createDailyBriefingReads, type DailyBriefingGetResult } from './dailyBriefingReads'
@@ -83,10 +83,16 @@ export type DailyBriefingStoredEdition = Readonly<{
 
 /** The same row, settled. It is updated in place, never deleted: the attempt is history. */
 
-/** A period's run: one per day and issue, holding what the editions of that run were written from. */
+/**
+ * A period's run: one per day, issue **and language**, holding what the editions of that run were
+ * written from. The language is part of the identity because two languages of one issue produce
+ * two runs; sharing one row made the second overwrite the first (0.4.2 #18).
+ */
 export type DailyBriefingPeriodRun = Readonly<{
   date: string
   periodId: string
+  /** 旧形状（v3，迁移没跑成）读出来是 `unknown`；坏数据兜底，正常写入永远是一个具体语言。 */
+  locale: DailyBriefingLocale | 'unknown'
   expectedLocales: readonly DailyBriefingLocale[]
   primaryRequested: string
   primaryUsed: DailyBriefingLocale
@@ -148,8 +154,8 @@ export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunSt
   }>) => Promise<number | null>
   /** Every attempt of that edition, newest first; the history rail expands this list. */
   listAttempts?: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<readonly DailyBriefingAttemptRecord[]>
-  /** The run of that period, holding the frozen facts every edition of it was written from. */
-  getPeriodRun?: (date: string, periodId?: string) => Promise<DailyBriefingPeriodRun | undefined>
+  /** The run of that period and language, holding the frozen facts its edition was written from. */
+  getPeriodRun?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<DailyBriefingPeriodRun | undefined>
   /**
    * Every run of a date range. The list needs this to show a period whose run wrote no edition at
    * all (still generating, failed, or interrupted): edition rows are what name a period id, so a
@@ -161,6 +167,8 @@ export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunSt
   settlePeriodRun?: (run: Readonly<{
     date: string
     periodId: string
+    /** 结算必须点名语言：否则会改到另一语言那一行（0.4.2 #18）。 */
+    locale: DailyBriefingLocale
     state: 'published' | 'partial' | 'failed'
     finishedAt: string
     writingRounds?: number
@@ -216,7 +224,9 @@ export type DailyBriefingTodayFailureCode =
   | 'model-not-ready' | 'provider-disabled' | 'missing-api-key' | 'cancelled' | 'rate-limited'
   | 'provider-error' | 'invalid-json' | 'schema-validation-failed' | 'invalid-translation'
   | 'agent-turn-output-truncated' | 'direction-conflict' | 'row-set-mismatch' | 'model-unavailable' | 'date-out-of-window'
-  | 'run-interrupted' | 'not-generated' // 后者不是失败：只读打开时还没写过这一期。
+  | 'run-interrupted' | 'invalid-output-language' // 后者：读者能看到的文字不是本期语言，重写仍不合规。
+  | 'not-generated' // 不是失败：只读打开时还没写过这一期。
+
 
 export type DailyBriefingTodayResult =
   | Readonly<{
@@ -445,10 +455,11 @@ export function createDailyBriefingService(deps: Readonly<{
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
     const market = await prepareMarketForRun({ backfill: deps.marketBackfill?.(), readiness: deps.readiness, asOf: input.asOf, manual: force, publish: (progress) => runs.progress.set(progressKey, progress), now })
-    // 尝试记录写下这一次的**来源与窗口**：列表要就着这一行说清"这是哪一次、覆盖多长"。
+    // 尝试记录写下这一次的**来源、窗口与名义截止**：列表要就着这一行说清"这是哪一次、覆盖多长、
+    // 截止是哪一刻"（`asOf` 只影响这一次运行，不写回任何期配置）。
     const attempts = createDailyBriefingAttemptJournal(deps.store, {
       date: input.date, periodId: input.periodId, locale: input.locale, now,
-      trigger: input.runTrigger ?? 'scheduled', windowHours: input.windowHours
+      trigger: input.runTrigger ?? 'scheduled', windowHours: input.windowHours, nominalAt: input.asOf
     })
     if (!await attempts.open()) return { state: 'unavailable', failureCode: 'attempt-not-recorded' }
     const recorder = createDailyBriefingGenerationRecorder({
@@ -627,21 +638,11 @@ export function createDailyBriefingService(deps: Readonly<{
       // AI off is the fact-layer edition too: published, with the reason in the provenance.
       document = markEditorialFailure(document, 'editorial-disabled')
     }
-    // 写作没出来就**不发布**（用户 2026-11-06 拍板）：模板版一旦落库，页面就有正文可开、库里还记成功。
-    // 只有读者自己关掉 AI 编辑（`editorial-disabled`）才继续发事实层版次——那不是失败，是配置。
-    const editorialFailure = document.provenance.editorialFailure
-    if (editorialFailure !== undefined && editorialFailure !== 'editorial-disabled') {
-      return abandonDailyBriefingEditorial({
-        failureCode: editorialFailure, attempts, run, recorder, now,
-        locale: input.locale, asOf: input.asOf, timeZone: input.timeZone,
-        ...(deps.noticeSubmit ? { noticeSubmit: deps.noticeSubmit } : {}),
-        date: input.date, periodId: input.periodId
-      })
-    }
-    return publishDailyBriefingEdition({
+    // 写作没出来之后发不发、按什么记：判定与两个出口都住在 `settleEditorialEdition`（一处实现）。
+    return settleEditorialEdition({
       document, store: deps.store, attempts, run, recorder, now,
       ...(deps.noticeSubmit ? { noticeSubmit: deps.noticeSubmit } : {}),
-      date: input.date, periodId: input.periodId, locale: input.locale, deliver: !force
+      date: input.date, periodId: input.periodId, locale: input.locale, asOf: input.asOf, timeZone: input.timeZone, force
     })
   }
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {

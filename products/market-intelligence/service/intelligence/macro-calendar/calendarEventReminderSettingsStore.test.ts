@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -72,9 +72,48 @@ describe('calendar reminder settings store', () => {
     expect(missing.readWithStatus()).toEqual({ state: 'readable', settings: DEFAULT_CALENDAR_REMINDER_SETTINGS })
 
     writeFileSync(file, '{not json', 'utf8')
-    expect(createCalendarReminderSettingsStore(file).readWithStatus()).toEqual({ state: 'unreadable' })
-    // 既有调用方仍拿到默认值（默认是关，不会悄悄打开）。
-    expect(createCalendarReminderSettingsStore(file).read()).toEqual(DEFAULT_CALENDAR_REMINDER_SETTINGS)
+    expect(createCalendarReminderSettingsStore(file).readWithStatus()).toEqual({ state: 'unreadable', reason: 'corrupt' })
+    // 读不到**不许**回默认值（默认是关）：那等于替读者把提醒关掉。
+    expect(() => createCalendarReminderSettingsStore(file).read()).toThrow('calendar-reminder-settings-unreadable')
+  })
+
+  it('「读坏了」不是「读者关掉了」：坏文件读一次是「读不到」，再保存一次原文件一个字节没变', () => {
+    // 存储审计 2026-11-09 的原始缺陷：read() 回默认（默认＝关），writeWithStatus 又以默认打底整份写回，
+    // 于是「读坏了」被写成「读者关掉了」，只表现成「该响没响」。
+    const raw = '{"enabled":true,"leadMinutes":15,'
+    writeFileSync(file, raw, 'utf8')
+    const store = createCalendarReminderSettingsStore(file)
+
+    // 最核心的一条先断言：读不到**不伪装成默认值**（旧实现这里回的是「关」）。
+    expect(() => store.read()).toThrow('calendar-reminder-settings-unreadable')
+    expect(store.readWithStatus()).toEqual({ state: 'unreadable', reason: 'corrupt' })
+    // 判定损坏先留证据：原文件原样一份，原文件本身没被动过。
+    const copies = readdirSync(dir).filter((name) => name.includes('.corrupt-'))
+    expect(copies).toHaveLength(1)
+    expect(readFileSync(join(dir, copies[0]!), 'utf8')).toBe(raw)
+    expect(readFileSync(file, 'utf8')).toBe(raw)
+
+    // 保存被拒：返回「没存上（读不到）」，并且原文件逐字节未变——默认「关」没有写进去。
+    expect(store.writeWithStatus({ enabled: true })).toEqual({ state: 'not-saved', reason: 'unreadable' })
+    expect(readFileSync(file, 'utf8')).toBe(raw)
+    expect(store.writeWithStatus({ leadMinutes: 30 })).toEqual({ state: 'not-saved', reason: 'unreadable' })
+    expect(readFileSync(file, 'utf8')).toBe(raw)
+    // 只留一份副本：反复读同一个坏文件不再复制残片。
+    expect(readdirSync(dir).filter((name) => name.includes('.corrupt-'))).toHaveLength(1)
+  })
+
+  it('留档失败就 fail-closed：按读不到处理，且绝不覆盖原文件', () => {
+    const raw = '{not json'
+    writeFileSync(file, raw, 'utf8')
+    chmodSync(dir, 0o555)
+    try {
+      const store = createCalendarReminderSettingsStore(file)
+      expect(store.readWithStatus()).toEqual({ state: 'unreadable', reason: 'io' })
+      expect(store.writeWithStatus({ enabled: true })).toEqual({ state: 'not-saved', reason: 'unreadable' })
+      expect(readFileSync(file, 'utf8')).toBe(raw)
+    } finally {
+      chmodSync(dir, 0o755)
+    }
   })
 
   it('saves the country selection and reports it as saved', () => {
@@ -91,9 +130,9 @@ describe('calendar reminder settings store', () => {
     chmodSync(file, 0o444)
     try {
       const result = store.writeWithStatus({ landedCountries: { scope: 'all', codes: [] } })
-      // 读失败与存失败要能分开：这里是 not-saved，而且磁盘上的旧值没被换掉。
-      expect(result.state).toBe('not-saved')
-      expect(result.settings.landedCountries).toEqual({ scope: 'us', codes: [] })
+      // 读失败与存失败要能分开：这里是 not-saved + write-failed，而且磁盘上的旧值没被换掉。
+      expect(result).toMatchObject({ state: 'not-saved', reason: 'write-failed' })
+      if (result.state !== 'saved') expect(result).toMatchObject({ settings: { landedCountries: { scope: 'us', codes: [] } } })
       // 旧接口对同一失败仍然抛，行为不倒退。
       expect(() => store.write({ landedCountries: { scope: 'all', codes: [] } })).toThrow('calendar-reminder-settings-not-saved')
       chmodSync(file, 0o644)
@@ -103,11 +142,9 @@ describe('calendar reminder settings store', () => {
     }
   })
 
-  it('falls back to the default settings when the file is missing or corrupt', () => {
+  it('falls back to the default settings only when nothing was ever stored', () => {
+    // 「没配过」可以用默认；「读坏了」不行——后半条在坏文件那条用例里钉。
     const store = createCalendarReminderSettingsStore(join(dir, 'missing.json'))
     expect(store.read()).toEqual(DEFAULT_CALENDAR_REMINDER_SETTINGS)
-
-    writeFileSync(file, '{not json', 'utf8')
-    expect(createCalendarReminderSettingsStore(file).read()).toEqual(DEFAULT_CALENDAR_REMINDER_SETTINGS)
   })
 })

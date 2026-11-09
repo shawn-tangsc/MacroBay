@@ -41,6 +41,8 @@ function createRuntime(clock: { now: string }) {
         { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
       ]
     }),
+    // 诊断出口是 runtime 的必传依赖（漏传＝「能记但没人接」），这一条只测合并结果，不接诊断。
+    diagnostics: () => undefined,
     getSettings: async () => settings,
     clock: { now: () => new Date(clock.now), timeZone: () => 'Asia/Shanghai' }
   })

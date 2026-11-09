@@ -30,6 +30,7 @@ export const agentTextEn: AgentText = {
     sessionsTab: 'Sessions',
     newSession: 'New session',
     defaultSessionName: 'New agent session',
+    unnamedSession: 'Untitled session',
     clearFilteredSessions: 'Clear filtered sessions',
     confirmDeleteFilteredSessions: (count) => `Delete ${count} filtered session${count === 1 ? '' : 's'}?`,
     searchSessions: 'Search sessions',
@@ -39,7 +40,7 @@ export const agentTextEn: AgentText = {
     emptySessions: 'No sessions yet. Create one to start.',
     automationSessions: {
       title: 'Automated sessions',
-      collapsedMeta: (today, total) => `${today} today · ${total} total`,
+      totalOnly: (total) => `${total} total`,
       today: 'Today',
       yesterday: 'Yesterday',
       showAll: 'Show all automated sessions',

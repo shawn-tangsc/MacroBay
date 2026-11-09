@@ -83,15 +83,10 @@ export const listSourcesInputSchema = {
 
 export const listSourcesOutputSchema = {
   type: 'object',
-  required: ['state', 'revision', 'focusMarkets', 'sources'],
+  required: ['state', 'revision', 'sources'],
   properties: {
     state: stateSchema,
     revision: { type: 'string' },
-    focusMarkets: {
-      type: 'object',
-      required: ['enabledFocusMarkets'],
-      properties: { enabledFocusMarkets: { type: 'array', items: { type: 'string' } } }
-    },
     sources: { type: 'array', items: sourceSummarySchema }
   }
 } as const

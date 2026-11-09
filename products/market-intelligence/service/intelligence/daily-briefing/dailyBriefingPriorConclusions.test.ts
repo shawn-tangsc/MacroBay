@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
+import type { AnalysisSummary, TimelineEntry } from '../../../contracts/marketAnalysisContracts'
 import type { BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import {
   collectAnalysisPriorConclusions,
@@ -26,9 +26,13 @@ const summary = (overrides: Partial<AnalysisSummary> = {}): AnalysisSummary => (
   ...overrides
 })
 
-const entry = (overrides: Record<string, unknown> = {}) => ({
-  id: 'mi-tl-1', kind: 'analysis', status: 'published', occurredAt: '2026-10-29T08:00:00.000Z',
-  summaryRef: 'mi-as-1', direction: 'bearish', ...overrides
+// 按真实形状造：读取侧只取其中六格，但传进来的就是一条时间线条目，别用一个宽对象冒充——
+// 宽对象会把 `kind`/`status`/`direction` 都写成 string，「只读 published 的分析」这条判据就落空了。
+const entry = (overrides: Partial<TimelineEntry> = {}): TimelineEntry => ({
+  id: 'mi-tl-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1',
+  kind: 'analysis', status: 'published', occurredAt: '2026-10-29T08:00:00.000Z',
+  summaryRef: 'mi-as-1', safeTitle: 'Flows pull bids away.', safeExcerpt: null,
+  direction: 'bearish', version: 1, ...overrides
 })
 
 const prior = (overrides: Partial<BriefingPriorConclusion> = {}): BriefingPriorConclusion => ({

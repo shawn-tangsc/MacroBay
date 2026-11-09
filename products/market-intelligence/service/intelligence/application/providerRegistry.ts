@@ -28,7 +28,7 @@ export type SourceDefinition = {
   adapterRef?: string
   /**
    * The source's API host is edge-blocked from some networks (for example mainland China) and is
-   * only reachable through a working local proxy/VPN. Declared once per source; a provider-level
+   * only reachable through a working local proxy. Declared once per source; a provider-level
    * need is derived with `sources.some(...)` rather than stored a second time.
    */
   requiresProxy?: boolean

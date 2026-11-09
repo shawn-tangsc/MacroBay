@@ -304,7 +304,8 @@ async function clickAndCount(ui: Awaited<ReturnType<typeof renderAvailability>>,
 
 describe('P2-13：AppShell 的入口判据（源码护栏）', () => {
   it('条数只取自受控快照，绝不再用本地 state 自造（恒禁用的旧写法不许回归）', () => {
-    const appShell = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/AppShell.tsx'), 'utf8')
+    // 2026-11-09：主窗视图搬到 `AppShellView.tsx`，判据不变，只跟着实现换文件。
+    const appShell = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/AppShellView.tsx'), 'utf8')
     // 生产判据：解析后的权威快照字段 → 入口禁用态
     expect(appShell).toContain('recentlyClosedCount={state.recentlyClosedCount ?? 0}')
     // 旧根因：本地 0 起手、只在 openTab 时归零 ⇒ 关闭后入口永远拿不到「有可重开项」

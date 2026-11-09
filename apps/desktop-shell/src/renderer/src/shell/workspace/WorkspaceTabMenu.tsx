@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Button } from 'antd'
 import type { LucideIcon } from 'lucide-react'
 
 /**
@@ -158,9 +159,8 @@ export function WorkspaceTabMenu(props: WorkspaceTabMenuProps): React.ReactEleme
     <>
       {contextMenu ? null : (
         <div className="workspace-tab-menu-root" ref={containerRef}>
-          <button
+          <Button
             ref={triggerRef}
-            type="button"
             className="workspace-tab-menu-trigger"
             aria-haspopup="menu"
             aria-expanded={open}
@@ -175,7 +175,7 @@ export function WorkspaceTabMenu(props: WorkspaceTabMenuProps): React.ReactEleme
             }}
             {...props.triggerAttributes}>
             <TriggerIcon size={14} strokeWidth={1.8} />
-          </button>
+          </Button>
           {open ? renderMenu() : null}
         </div>
       )}

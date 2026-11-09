@@ -181,10 +181,14 @@ describe('PLAT-61 连接检查抽屉：就地启用并自动重跑', () => {
     expect(document.querySelector('[data-connection-check-enable]')).toBeNull()
     expect(api.upsert).toHaveBeenCalledWith(expect.objectContaining({ id: 'silicon', enabled: true }))
 
-    // 稳定后不再继续重跑（恰好一次）。
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60))
-    })
+    // 稳定后不再继续重跑（恰好一次）。这里没有可「成立」的条件可等——要证的是「没有下一次」，
+    // 所以把固定 60ms 换成一段有界的宏任务冲刷：`enableProviderAndRecheck()` 是一条 await 链
+    // （见 `AppShell.tsx`），不含定时器，若它还会再跑一次，会在这些宏任务里出现，而不是 60ms 之后。
+    for (let turn = 0; turn < 5; turn += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
     expect(api.runRuntimeChecks).toHaveBeenCalledTimes(2)
   })
 })

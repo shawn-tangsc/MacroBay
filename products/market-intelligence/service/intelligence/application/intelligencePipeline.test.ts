@@ -266,14 +266,17 @@ describe('intelligencePipeline', () => {
     const directory = await mkdtemp(join(tmpdir(), 'intelligence-event-bus-backfill-'))
     const storage = createEventBusJsonStorage(join(directory, 'event-bus.json'))
     const persistedBus = createEventBusStore()
+    // 回填事件必须落在总线**保留窗口内**（30 天 / 5,000 条，`280596e`）：写死的旧日期会在
+    // 任何消费者看到它之前被裁掉，于是消费者永远进不来——那是夹具过期，不是被测行为慢。
+    const backfilledAt = new Date(Date.now() - 60 * 60 * 1000).toISOString()
     persistedBus.appendEvent({
       topic: INTELLIGENCE_EVENT_TOPICS.itemCreated,
       producer: { owner: 'product', productId: 'market-intelligence' },
       schemaVersion: 1,
       payload: { itemId: 'historical-item' }
-    }, '2026-08-23T00:00:00.000Z')
+    }, backfilledAt)
     await storage.write(persistedBus.getState())
-    const consumerEntered = deferred<void>()
+    let consumerEntered = false
     const releaseConsumer = deferred<void>()
     const eventBus = createEventBusRuntime({ storage })
     eventBus.registerConsumer({
@@ -282,10 +285,14 @@ describe('intelligencePipeline', () => {
       productId: 'sample-product',
       topics: [INTELLIGENCE_EVENT_TOPICS.itemCreated]
     }, async () => {
-      consumerEntered.resolve()
+      consumerEntered = true
       await releaseConsumer.promise
     })
-    await consumerEntered.promise
+    // 等**条件**（消费者真的进来），不是等一个没人 resolve 的 promise 到 5 秒超时：
+    // 条件不成立时这里给出一句能读的失败，而不是「测试超时」。
+    await vi.waitFor(() => {
+      expect(consumerEntered).toBe(true)
+    }, { timeout: 2_000, interval: 10 })
 
     try {
       const alternative = getIntelligenceSourceDefinition('alternative-fear-greed')!

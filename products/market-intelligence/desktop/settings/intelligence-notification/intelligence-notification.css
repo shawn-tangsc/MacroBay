@@ -189,9 +189,24 @@
 .intelligence-notification-form-label {
   display: flex;
   align-items: center;
-  gap: 2px;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
   font-size: 13px;
   color: var(--text-primary);
+}
+
+/* 窄的时候只压标题：图标永远跟着标题在同一行，不换行、不缩。 */
+.intelligence-notification-form-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intelligence-notification-form-label > .platform-icon-button,
+.intelligence-notification-form-label > button {
+  flex: none;
 }
 
 .intelligence-notification-form-control {

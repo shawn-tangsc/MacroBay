@@ -9,6 +9,7 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import { MarketCalendarCard } from './MarketCalendarCard'
+import type { CalendarCardRow } from './projectUpcomingCalendarCard'
 
 const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/intelligence.css'), 'utf8')
 
@@ -24,7 +25,8 @@ function calendarText(language: 'zh-CN' | 'en-US') {
   }
 }
 const text = calendarText('zh-CN')
-const row = (overrides: Record<string, unknown> = {}) => ({
+/** 夹具按域类型写：`Record<string, unknown>` 会把 `surprise.direction` 放宽成 `string`，整条行就对不上了。 */
+const row = (overrides: Partial<CalendarCardRow> = {}): CalendarCardRow => ({
   eventKey: 'US.CPI.RELEASE.2026-M10', titleKey: 'cpi', month: '2026-10', date: '2026-10-13', at: '2026-10-13T12:30:00.000Z',
   importance: 'high' as const, kind: 'upcoming' as const, category: 'economic-indicator' as const, actual: null, previous: null, consensus: null,
   surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' },
@@ -145,7 +147,7 @@ it('hands a selected row to the caller as the agent context, and a copy click do
   const onSelectEvent = vi.fn()
   const written: string[] = []
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { written.push(value) } } })
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
+  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available' }}
     onOpenCalendar={() => undefined} onSelectEvent={onSelectEvent} selectedEventKey="US.CPI.RELEASE.2026-M10" text={text} />)
   const line = host.querySelector<HTMLElement>('[data-calendar-card-row]')!
   expect(line.getAttribute('aria-pressed')).toBe('true')
@@ -161,7 +163,7 @@ it('hands a selected row to the caller as the agent context, and a copy click do
 it('opens the whole calendar at one row without disturbing the selection', async () => {
   const onOpenEventInCalendar = vi.fn()
   const onSelectEvent = vi.fn()
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
+  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available' }}
     onOpenCalendar={() => undefined} onOpenEventInCalendar={onOpenEventInCalendar} onSelectEvent={onSelectEvent} text={text} />)
 
   // A row click selects the event as the agent's context; the calendar jump is a separate control.
@@ -178,7 +180,7 @@ it('offers no calendar jump when the card has no such action to hand over', asyn
 
 it('is keyboard selectable, because a row that selects must be reachable without a mouse', async () => {
   const onSelectEvent = vi.fn()
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
+  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available' }}
     onOpenCalendar={() => undefined} onSelectEvent={onSelectEvent} text={text} />)
   const line = host.querySelector<HTMLElement>('[data-calendar-card-row]')!
   await act(async () => { line.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })) })
@@ -218,8 +220,9 @@ it('shows the ±30 minute reaction of the four lines on a released row', async (
   // The window is explained on hover by the same styled tooltip the agent controls use, not a
   // native title (which is slow and brings the question-mark cursor).
   await act(async () => { line?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })) })
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 300)) })
-  expect(document.body.textContent).toContain(text.reactionHint)
+  // 条件是「提示出现」，不是「等 300ms」：轮询一成立就返回，上限由 `vi.waitFor` 自己兜住。
+  // 真等一段固定时长在慢机器上会红、在快机器上白等，也是「同一提交两次跑结果不一致」的来源。
+  await vi.waitFor(() => { expect(document.body.textContent).toContain(text.reactionHint) })
   expect(line?.textContent).toContain('QQQ')
   expect(line?.textContent).toContain('−0.12%')
   expect(line?.textContent).toContain('BTC')
@@ -253,7 +256,7 @@ it('prints only the lines that answered, and nothing at all when none did', asyn
 })
 
 it('states a beat with its presentation unit, in the reader language', async () => {
-  const released = (language: 'zh-CN' | 'en-US') => render(<MarketCalendarCard projection={{ today: [row({
+  const released = (language: 'zh-CN' | 'en-US') => render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [row({
     kind: 'released-changed', actual: '3.4%', consensus: '3.1%',
     surprise: { direction: 'beat', value: 0.2999999999999998, unit: 'pp', reason: null }
   })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={calendarText(language)} />, language)
@@ -372,16 +375,19 @@ it('keeps the category tag inside the 84px rail instead of letting the card clip
 // feature is broken"; «no released events in the last 3 days» is a fact the reader can act on.
 it('says its own window when nothing was released, instead of leaving the section blank', async () => {
   const projection = { today: [], upcoming: [row()], state: 'available' as const }
-  const zh = await render(<MarketCalendarCard projection={projection} text={text} />)
+  const props = { projection, onOpenCalendar: () => undefined, onRefresh: () => undefined }
+  const zh = await render(<MarketCalendarCard {...props} text={text} />)
   expect(zh.textContent).toContain('最近 3 天内没有已公布的事件')
-  await act(async () => {})
-  const en = await render(<MarketCalendarCard projection={projection} text={calendarText('en-US')} />, 'en-US')
+  // 这里原来有一次空的 `await act(async () => {})`：它不等待任何条件，只让 React 刷一次微任务。
+  // 渲染本身已经在 `act` 里做完了，那次空转只是噪音，删掉后两条断言照旧。
+  const en = await render(<MarketCalendarCard {...props} text={calendarText('en-US')} />, 'en-US')
   expect(en.textContent).toContain('No released events in the last 3 days.')
 })
 
 it('drops that line as soon as one release is listed', async () => {
-  const released = row({ eventKey: 'released', kind: 'released' as const, actual: { displayValue: '1.2%' }, previous: { displayValue: '1.0%' } })
-  const host = await render(<MarketCalendarCard projection={{ today: [released], upcoming: [], state: 'available' }} text={text} />)
+  const released = row({ eventKey: 'released', kind: 'released-changed', actual: '1.2%', previous: '1.0%' })
+  const host = await render(<MarketCalendarCard projection={{ today: [released], upcoming: [], state: 'available' }}
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).not.toContain('没有已公布的事件')
 })
 

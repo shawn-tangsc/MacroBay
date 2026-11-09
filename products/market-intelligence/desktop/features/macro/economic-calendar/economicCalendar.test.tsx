@@ -11,6 +11,7 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
 import { EconomicCalendar } from './index'
 import { economicCalendarPresentationPolicy } from './economicCalendarModel'
+import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
 import { marketCalendarClient } from '../../../shared/ipc/marketCalendarClient'
 import type { MarketCalendarEvent, MarketCalendarPage } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
@@ -48,6 +49,7 @@ vi.mock('antd', async () => {
 
 let root: Root | null = null
 let restorePlatform: (() => void) | undefined
+let restoreDefaultMarket: (() => void) | undefined
 
 
 afterEach(async () => {
@@ -55,7 +57,28 @@ afterEach(async () => {
   root = null
   restorePlatform?.()
   restorePlatform = undefined
+  restoreDefaultMarket?.()
+  restoreDefaultMarket = undefined
   document.body.replaceChildren()
+})
+
+/**
+ * 界面设计 2026-11-09 对行 59 的边界：页头那一排按钮必须**同一档高度**，不许 default 与 small 混排。
+ * 判据落在样式表：`.tools` 的直接子元素（时段、按钮、antd 按钮、月份选择器）由同一条规则给高度，
+ * 且 32px 是唯一取值。
+ */
+it('gives every control in the calendar toolbar the same one height', () => {
+  const css = readFileSync('products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css', 'utf8')
+  const block = /\.mi-economic-calendar__tools > \.ant-picker \{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(block).toContain('height: 32px')
+  for (const selector of ['> span', '> button', '> .ant-btn', '> .ant-picker']) {
+    expect(css).toContain(`.mi-economic-calendar__tools ${selector}`)
+  }
+  // 直接子元素里不许再冒出第二个高度（内层输入框的 30px 不算：它不是这一排控件）。
+  const directChildRules = [...css.matchAll(/\.mi-economic-calendar__tools > [^{]+\{([^}]*)\}/gu)].map(match => match[1] ?? '')
+  for (const rule of directChildRules) {
+    expect(rule.match(/height:\s*([^;]+);/u)?.[1]?.trim() ?? '32px').toBe('32px')
+  }
 })
 
 describe('macro economic calendar', () => {
@@ -155,7 +178,9 @@ describe('macro economic calendar', () => {
       expect(overview.textContent).toContain('经济指标 · 刷新失败')
       expect(overview.textContent).toContain('显示上次数据')
       expect(overview.textContent).toContain('2026-08-05 08:00:00 GMT+8')
-      expect(overview.textContent).toContain('财经事件 · 刷新成功')
+      // 成功的常态串已收进 ⓘ：正文只留类别名，不再逐条写「刷新成功」。
+      expect(overview.textContent).toContain('财经事件')
+      expect(overview.textContent).not.toContain('刷新成功')
       await act(async () => container.querySelector<HTMLButtonElement>('[data-market-event]')!.click())
       expect(container.querySelector('.mi-market-calendar__inspector')?.textContent).toContain('刷新失败')
       expect(container.querySelector('[data-market-value="providerActual"]')?.textContent).toContain('暂无')
@@ -290,7 +315,10 @@ describe('macro economic calendar', () => {
     try {
       const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [] }), getEventDetail: async () => unavailableDetail() })
       await flush()
-      expect(container.querySelector('.mi-market-calendar__status')?.textContent).toContain('官方每月最多 200 条')
+      const strip = container.querySelector('.mi-market-calendar__status')!
+      expect(strip.textContent).not.toContain('官方每月最多 200 条')
+      await act(async () => strip.querySelector<HTMLButtonElement>('[aria-label="日历说明"]')!.click())
+      expect(document.body.textContent).toContain('官方每月最多 200 条')
       await act(async () => button(container, productText['zh-CN'].pages.intelligence.portal.calendar.market.refresh).click())
       await flush()
       expect(container.querySelector('.mi-market-calendar__status')?.textContent).toContain('存储受限')
@@ -339,7 +367,7 @@ describe('macro economic calendar', () => {
       expect(container.querySelector('[data-calendar-detail-actions]')).toBeNull()
     } finally { spy.mockRestore() }
   })
-  it('opens the detail in its own column beside the calendar instead of covering it', async () => {
+  it('opens the detail as a maskless overlay, leaving the month column exactly where it was', async () => {
     const copy = productText['zh-CN'].pages.intelligence.portal.calendar
     const event = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
     const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [event] }),
@@ -349,8 +377,7 @@ describe('macro economic calendar', () => {
     await flush()
     const detail = container.querySelector<HTMLElement>('[data-calendar-detail-container]')!
     expect(detail.textContent).toContain(copy.events.cpi)
-    // A side panel, not a drawer and not a modal: no overlay, no dialog role, and the month grid
-    // beside it stays where it was and stays clickable. That is what giving up a column buys.
+    // A maskless overlay, not a column and not a modal: no drawer, no mask, no dialog role.
     const panel = container.querySelector('aside')
     expect(panel?.classList.contains('side-panel')).toBe(true)
     expect(panel?.classList.contains('mi-calendar-detail')).toBe(true)
@@ -362,17 +389,31 @@ describe('macro economic calendar', () => {
     for (const rule of ['.mi-calendar-detail dt', '.mi-calendar-detail dd', '.mi-calendar-detail h2']) {
       expect(styles, rule).toContain(rule)
     }
-    // The page is the row; the calendar keeps the page padding in its own column. The panel is the
-    // DOM's second child (opened from a row, so "calendar, then detail" is the reading order) and
-    // lands on the left through `row-reverse`, where the drawer used to be.
-    const pageRule = styles.slice(styles.indexOf('.mi-economic-calendar {'))
-    expect(pageRule.slice(0, pageRule.indexOf('\n}'))).toContain('flex-direction: row-reverse')
-    expect(styles).toContain('.mi-economic-calendar__column {')
+    /*
+     * 打开详情不许改变月份列的宽度。jsdom 没有布局，量不出像素；能被钉住的是**为什么**宽度不会变：
+     * 页面是单列，详情是这一列之外的覆盖层。所以这里断言结构而不是像素——把布局退回「并排」时，
+     * 下面两条会立刻红：`flex-direction: row-reverse`（详情占第二列）或详情 `position: static`
+     * （重新进入文档流、挤压 7 列周视图）。
+     */
+    // 断言只看规则、不看注释：注释里写着这次回归的历史，正文明文里不该再出现 `row-reverse`。
+    const layout = styles.replace(/\/\*[\s\S]*?\*\//g, '')
+    const pageRule = layout.slice(layout.indexOf('.mi-economic-calendar {'))
+    const pageBody = pageRule.slice(0, pageRule.indexOf('\n}'))
+    expect(pageBody).toContain('flex-direction: column')
+    expect(pageBody).not.toContain('row-reverse')
+    const overlaySelector = '.mi-economic-calendar .mi-calendar-detail {'
+    expect(layout).toContain(overlaySelector)
+    const overlayRule = layout.slice(layout.indexOf(overlaySelector))
+    const overlayBody = overlayRule.slice(overlayRule.indexOf('{') + 1, overlayRule.indexOf('\n}'))
+    expect(overlayBody).toContain('position: absolute')
+    expect(overlayBody).toContain('inset-block: 0')
+    expect(overlayBody).toContain('inset-inline-start: 0')
+    // 覆盖层不许按屏宽切换形态：以前 ≥1300 并排、<1300 才覆盖，同一份数据两种布局正是这次回归的形态。
+    expect(layout).not.toContain('@media (max-width: 1299px)')
+    // 结构上的第二道保险：面板不在日历列里，所以工作区（月份网格 + 当日列表）无法把它算进列宽。
+    expect(container.querySelector('.mi-economic-calendar__column .mi-calendar-detail')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__column .mi-economic-calendar__header')).not.toBeNull()
-    // Under 1300 the panel covers the row exactly as the drawer did. The threshold is arithmetic,
-    // not taste: panel 480 + gap 22 + day list 320 + padding 40 leaves the month 140px at 1000.
-    expect(styles).toContain('@media (max-width: 1299px)')
-    expect(styles).toContain('.mi-economic-calendar .mi-calendar-detail { position: absolute; inset: 0; width: 100%; z-index: 2; }')
+    expect(container.querySelector('.mi-economic-calendar > .mi-calendar-detail')).not.toBeNull()
     // The reused body's tokens travel with the surface. Opened from the market dashboard there is no
     // `.mi-economic-calendar` ancestor, and an undefined `var()` is invalid at computed-value time —
     // it unsets the property instead of falling back — so the body silently lost its padding and the
@@ -597,8 +638,11 @@ describe('macro economic calendar', () => {
       // The same verdict is on the source line, with its origin and the retained-data time.
       const status = container.querySelector('.mi-market-calendar__status')?.textContent ?? ''
       expect(status).toContain(copy.market.attemptFailure['storage-pressure'])
-      expect(status).toContain(copy.market.refreshTrigger.automatic)
       expect(status).toContain(copy.market.retainedData)
+      // 触发方式是常态信息，收在 ⓘ 里：正文说「失败了、看上批数据」，ⓘ 说「这次是自动跑的」。
+      expect(status).not.toContain(copy.market.refreshTrigger.automatic)
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="日历说明"]')!.click())
+      expect(document.body.textContent).toContain(copy.market.refreshTrigger.automatic)
     } finally { spy.mockRestore() }
   })
   it('shows the same overdue cell as not-yet-published when the source answered after the release', async () => {
@@ -786,7 +830,7 @@ describe('macro economic calendar', () => {
 
     const inspector = container.querySelector('.mi-economic-calendar__inspector')?.textContent
     expect(inspector).toContain('3.50%–3.75%')
-    expect(inspector).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.details.unavailable)
+    expect(inspector).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.details.valueNotProvided)
     expect(inspector).not.toMatch(/https?:|rawRecordId|evidenceHash|sourceUrl|parser/i)
   })
 
@@ -816,8 +860,9 @@ describe('macro economic calendar', () => {
       expect(inspector.textContent).toContain('2026-08-05 08:00:00 GMT+8')
       expect(inspector.textContent).toContain('3.50%–3.75%')
     } else {
+      // 没有保留值时的句子不是「暂无」：事件早已到点、源也没给值，所以写「源未给出」。
       expect(inspector.textContent).not.toContain('显示上次官方值')
-      expect(inspector.textContent).toContain('暂无官方值')
+      expect(inspector.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.details.valueNotProvided)
     }
   })
 
@@ -1156,7 +1201,7 @@ describe('macro economic calendar', () => {
     await act(async () => unavailable.root.unmount())
     unavailable.container.remove()
 
-    const empty = await renderCalendar({ queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }), getEventDetail: async () => unavailableDetail() })
+    const empty = await renderCalendar({ queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }), getEventDetail: async () => unavailableDetail(), marketEmpty: true })
     await flush()
     // The shared state surface prints its own title; the product sentence rides the reason slot.
     expect(empty.container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
@@ -1273,7 +1318,8 @@ describe('macro economic calendar', () => {
       const pending: ((value: unknown) => void)[] = []
       const { container, client } = await renderCalendar({
         queryMonth: () => new Promise((resolve) => { pending.push(resolve) }),
-        getEventDetail: async () => unavailableDetail()
+        getEventDetail: async () => unavailableDetail(),
+        marketEmpty: true
       })
 
       await act(async () => { for (const resolve of pending) resolve({ state: 'available', asOf, events: [] }) })
@@ -1293,7 +1339,8 @@ describe('macro economic calendar', () => {
     try {
       const { container, client } = await renderCalendar({
         queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
-        getEventDetail: async () => unavailableDetail()
+        getEventDetail: async () => unavailableDetail(),
+        marketEmpty: true
       })
 
       await flush()
@@ -1328,25 +1375,195 @@ describe('macro economic calendar', () => {
     expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
   })
 
-  it('routes an empty month to the data sources settings without issuing calendar queries', async () => {
+  it('A：一条官方腿都没启用 → 「去启用」，点它落到情报源设置，且不摆「本月没有」', async () => {
     const navigation = vi.fn()
     window.addEventListener('app-shell:navigate', navigation)
-    const { container, client } = await renderCalendar({
+    const { container } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
-      getEventDetail: async () => unavailableDetail()
+      getEventDetail: async () => unavailableDetail(),
+      officialFeeds: 'disabled'
     })
 
     await flush()
-    await act(async () => container.querySelector<HTMLElement>('.mi-economic-calendar__empty-state button')!.click())
+    // A 那一态：disabled 外壳 + 产品句「日历来源都没有启用」，不是「本月没有任何事件」。
+    const state = container.querySelector('.mi-economic-calendar__no-source-state')
+    expect(state).not.toBeNull()
+    expect(state?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.noSourceEnabled)
+    expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+    expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
 
+    // 动作只有一个：「去启用」→ 情报源设置面板。
+    const action = state?.querySelector<HTMLElement>('button')
+    expect(action?.textContent).toContain('去启用')
+    await act(async () => action!.click())
     expect(navigation).toHaveBeenCalledTimes(1)
     expect(navigation.mock.calls[0]?.[0].detail).toEqual({
       navKey: 'settings',
       settingsPanelKey: 'market-intelligence.intelligence-sources'
     })
-    expect(client.queryMonth).toHaveBeenCalledTimes(3)
-    expect(client.getEventDetail).not.toHaveBeenCalled()
     window.removeEventListener('app-shell:navigate', navigation)
+  })
+
+  it('B：有可用腿、两边都读到且都为空 → 「本月没有任何事件」，且**不给动作**', async () => {
+    const { container } = await renderCalendar({
+      queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+      getEventDetail: async () => unavailableDetail(),
+      officialFeeds: 'enabled',
+      marketEmpty: true
+    })
+
+    await flush()
+    const state = container.querySelector('.mi-economic-calendar__empty-state')
+    expect(state).not.toBeNull()
+    expect(state?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
+    // 这一态没有「范围」可扩大：页头的上个月/下个月/回到本月已经在屏上，再放一颗就是同一屏两处入口。
+    expect(state?.querySelector('button')).toBeNull()
+    expect(container.querySelector('.mi-economic-calendar__no-source-state')).toBeNull()
+  })
+
+  it('命名月读不到、官方月读到且为空 → 错误态 + 原因 + 重试，不是「本月没有」', async () => {
+    // 四行表第二行的市场侧：命名月自己没读到，就不许画空态——那是在说「确实没有」。
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth')
+      .mockResolvedValue({ state: 'unavailable', failureCode: 'query-unavailable' })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+        getEventDetail: async () => unavailableDetail()
+      })
+      await flush()
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+      const failed = container.querySelector('.mi-economic-calendar__read-failed')
+      expect(failed, 'a failed named month is an error surface').not.toBeNull()
+      expect(failed?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.market.queryUnavailable)
+      expect([...(failed?.querySelectorAll('button') ?? [])].some(candidate => candidate.textContent?.includes('重试'))).toBe(true)
+    } finally { query.mockRestore() }
+  })
+
+  it('命名月读不到、官方侧还有行 → 列出已有行 + 说明行，不画空态', async () => {
+    // 四行表第三行：另一侧有内容时，失败只变成说明行（`role="note"`），不是「什么都没有」。
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth')
+      .mockResolvedValue({ state: 'unavailable', failureCode: 'query-unavailable' })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [blsEvent()] }),
+        getEventDetail: async () => unavailableDetail()
+      })
+      await flush()
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+      const notes = [...container.querySelectorAll('.mi-calendar-month-scroll [role="note"]')]
+      expect(notes.some(note => note.textContent?.includes(productText['zh-CN'].pages.intelligence.portal.calendar.market.queryUnavailable))).toBe(true)
+      expect(container.querySelectorAll('[data-event-key]')).not.toHaveLength(0)
+    } finally { query.mockRestore() }
+  })
+
+  it('命名月读到了、相邻月失败 → 说「未完整加载」，绝不说「市场事件读取受限」', async () => {
+    // 顶部那行只回答「命名月读到了没有」：窗口级 `failure` 会把相邻月的失败说成这一屏读不到，
+    // 而这一屏的数据（命名月）明明读到了、也确实为空。
+    const copy = productText['zh-CN'].pages.intelligence.portal.calendar
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockImplementation(async (input: { month: string; locale: 'zh' | 'en' }) =>
+      input.month === '2026-08'
+        ? { state: 'available' as const, month: input.month, locale: input.locale, asOf, events: [], sources: [] }
+        : { state: 'unavailable' as const, failureCode: 'query-unavailable' as const })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+        getEventDetail: async () => unavailableDetail()
+      })
+      await flush()
+      const status = container.querySelector('.mi-market-calendar__status')?.textContent ?? ''
+      expect(status).not.toContain(copy.market.queryUnavailable)
+      // 命名月读到了、确实为空 → 空态照常；窗口不完整由日清单那句说。
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).not.toBeNull()
+      expect(container.querySelector('[data-day-summary]')?.textContent).toContain(copy.unifiedDay.incomplete)
+    } finally { query.mockRestore() }
+  })
+
+  it('月查询读不到、整块也没有内容 → 错误态 + 原因 + 重试（重试重读这个月）', async () => {
+    // 四行表的第二行：任一来源失败且整块没有任何内容，只能是错误态，不许落成空态（那是在说「没有」）。
+    const { container, client } = await renderCalendar({
+      queryMonth: async () => ({ state: 'unavailable' as const, failureCode: 'calendar-query-unavailable' }),
+      getEventDetail: async () => unavailableDetail()
+    })
+    await flush()
+    expect(container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
+    expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+    const failed = container.querySelector('.mi-economic-calendar__read-failed')
+    expect(failed, 'the read failure is its own surface').not.toBeNull()
+    const retry = [...(failed?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.includes('重试'))
+    expect(retry, 'a re-read could succeed, so it carries a retry').toBeDefined()
+    const before = client.queryMonth.mock.calls.length
+    await act(async () => retry!.click())
+    await flush()
+    expect(client.queryMonth.mock.calls.length).toBeGreaterThan(before)
+  })
+
+  it('英文页：来源不提供英文条目 → 月区说明行，不画「本月没有」，也不给重试', async () => {
+    // 产品 2026-11-09：空态只属于「都读到了、都为空」；「来源没有英文内容」只能在说明行里说，
+    // 而且它不能与「确实没有」「读不到」共用同一句。
+    const en = productText['en-US'].pages.intelligence.portal.calendar
+    const sources = ([ 'economic-indicator', 'financial-event', 'central-bank-activity' ] as const)
+      .map(eventType => ({
+        eventType,
+        status: eventType === 'economic-indicator' ? 'success-empty' as const : 'no-locale-rows' as const,
+        sourceObservedAt: asOf
+      }))
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth')
+      .mockResolvedValue({ state: 'available', month: '2026-08', locale: 'en', asOf, events: [], sources })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+        getEventDetail: async () => unavailableDetail(),
+        text: en
+      })
+      await flush()
+
+      const note = container.querySelector('[data-calendar-no-locale]')
+      expect(note, 'the month says why it is empty').not.toBeNull()
+      expect(note?.getAttribute('role')).toBe('note')
+      expect(note?.textContent).toBe(en.noLocaleRowsNote)
+      // 三句话不能共用：说明行不是状态行那句的复制，也不是「本月没有」。
+      expect(en.noLocaleRowsNote).not.toBe(en.market.statuses['no-locale-rows'])
+      expect(en.noLocaleRowsNote).not.toBe(en.status.empty)
+      // 这一态不摆空态、不说「本期没有」，也没有任何动作（不给「重试」）。
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+      expect(container.textContent).not.toContain(en.status.empty)
+      expect(note?.querySelector('button')).toBeNull()
+    } finally { query.mockRestore() }
+  })
+
+  it('英文页反向：三个来源都读到了、确实为空 → 仍然画「本月没有」，没有说明行', async () => {
+    // 反向用例：抹掉「有 no-locale-rows 才画说明行」这条判据，它必须红。
+    const en = productText['en-US'].pages.intelligence.portal.calendar
+    const sources = ([ 'economic-indicator', 'financial-event', 'central-bank-activity' ] as const)
+      .map(eventType => ({ eventType, status: 'success-empty' as const, sourceObservedAt: asOf }))
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth')
+      .mockResolvedValue({ state: 'available', month: '2026-08', locale: 'en', asOf, events: [], sources })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+        getEventDetail: async () => unavailableDetail(),
+        text: en
+      })
+      await flush()
+      expect(container.querySelector('[data-calendar-no-locale]')).toBeNull()
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).not.toBeNull()
+      expect(container.textContent).toContain(en.status.empty)
+    } finally { query.mockRestore() }
+  })
+
+  it('反向：来源全关但当月有行 → 照常列出来，两态都不得命中', async () => {
+    const { container } = await renderCalendar({
+      // 用真实事件夹具（2026-08-12），页面打开的就是这个月；「有行」才有意义。
+      queryMonth: async () => ({ state: 'available' as const, asOf, events: [blsEvent()] }),
+      getEventDetail: async () => unavailableDetail(),
+      officialFeeds: 'disabled'
+    })
+
+    await flush()
+    expect(container.querySelector('.mi-economic-calendar__no-source-state')).toBeNull()
+    expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
+    // 行照常渲染：网格里至少有一条事件（不看内部键——卡面本来就不印它）。
+    expect(container.querySelectorAll('[data-event-key]')).not.toHaveLength(0)
   })
 
   it('starts only the existing file picker from the empty month import action', async () => {
@@ -1896,21 +2113,34 @@ describe('macro economic calendar', () => {
     })
     await flush()
     const status = container.querySelector('.mi-market-calendar__status')?.textContent ?? ''
-    expect(status).toContain('2026-07 · 2026-08 · 2026-09')
-    expect(status).not.toContain('跨月事件覆盖可能不完整')
+    // 「读取范围」是常态说明，已收进 ⓘ：正文一个字都不该有它。
+    expect(status).not.toContain('2026-07 · 2026-08 · 2026-09')
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="日历说明"]')!.click())
+    expect(document.body.textContent).toContain('2026-07 · 2026-08 · 2026-09')
+    expect(document.body.textContent).not.toContain('跨月事件覆盖可能不完整')
   })
 })
 
 const asOf = '2026-08-05T00:00:00.000Z'
 
 async function renderCalendar(client: {
-  queryMonth: () => unknown
-  getEventDetail: () => unknown
+  // 带参数的类型才容得下调用点写的 `(input) => …`：`() => unknown` 会让每个带参数夹具都报错。
+  queryMonth: (input: { month: string; asOf: string }) => unknown
+  getEventDetail: (input: { eventKey: string; asOf: string }) => unknown
   previewManualBlsIcs?: () => unknown
   importManualBlsIcs?: () => unknown
     refreshBlsEmploymentRelease?: () => unknown
   refreshFedFomcDecision?: () => unknown
   syncBlsEmploymentSchedule?: () => unknown
+  /** 官方日历腿的三态（注册表那侧算出来的）；默认「有可用腿」。 */
+  officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
+  /** 页面文案（语言）：读者切语言时只看这一份，测试据此断言两种语言的成品句。**两种语言都收**。 */
+  text?: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['calendar']
+  /**
+   * 四行表第一行需要一个**干净读到的市场侧**：不传时市场读取按「没有 IPC」失败，那是「读不到」，
+   * 日历页据此只会画错误态/说明行——空态用例必须显式说明「两边都读到了」。
+   */
+  marketEmpty?: boolean
   now?: () => Date
   strict?: boolean
   openTarget?: { month: string; eventKey?: string }
@@ -1927,11 +2157,23 @@ async function renderCalendar(client: {
     refreshFedFomcDecision: vi.fn(client.refreshFedFomcDecision ?? (async () => ({ state: 'unavailable' as const }))),
     syncBlsEmploymentSchedule: vi.fn(client.syncBlsEmploymentSchedule ?? (async () => ({ state: 'unavailable' as const })))
   }
+  // 官方腿三态来自注册表投影：这里替成可控值，默认「有可用腿」，页面因此走既有的空/列表分支。
+  vi.spyOn(intelligenceSourcesClient, 'getPanelView').mockResolvedValue({
+    calendarOfficialFeeds: { state: client.officialFeeds ?? 'enabled' },
+    providers: []
+  } as never)
+  if (client.marketEmpty === true) {
+    const marketSpy = vi.spyOn(marketCalendarClient, 'queryMonth').mockImplementation(async (input: { month: string; locale: 'zh' | 'en' }) => ({
+      state: 'available' as const, month: input.month, locale: input.locale,
+      asOf: (client.now?.() ?? new Date(asOf)).toISOString(), events: [], sources: []
+    }))
+    restoreDefaultMarket = () => marketSpy.mockRestore()
+  }
   root = localRoot
   // 显示时区由窗口级 provider 提供；测试固定 Asia/Shanghai，断言才与宿主时区无关。
   // 刷新前的确认框由树内的 Modal 实例渲染（`useConfirm`），所以页面必须挂在 `ConfirmProvider` 下；
   // 没有宿主时组件按契约直接抛错，测试也会跟着炸——这正是我们要的。
-  const calendar = <ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} text={productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider></ConfirmProvider>
+  const calendar = <ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} text={client.text ?? productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider></ConfirmProvider>
   await act(async () => localRoot.render(client.strict ? <StrictMode>{calendar}</StrictMode> : calendar))
   return { container, root: localRoot, client: input }
 }
@@ -1941,13 +2183,17 @@ async function renderCalendar(client: {
  * 所以它经 portal 挂在 `document.body` 上，并且要点下之后一个 tick 才挂得上。
  */
 async function acceptConfirm(): Promise<void> {
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-  const ok = document.querySelector<HTMLButtonElement>('.ant-modal-confirm-btns .ant-btn-primary')
-  if (!ok) throw new Error('Expected the refresh confirmation dialog.')
-  await act(async () => {
-    ok.click()
-    await new Promise((resolve) => setTimeout(resolve, 20))
+  // 条件是「确认键挂上了」，不是「等 20ms 再说」：轮询一成立就继续，上限由 `vi.waitFor` 兜住。
+  // 固定 sleep 在慢机器上会红、在快机器上白等，也是「同一提交两次跑结果不一致」的来源。
+  const ok = await vi.waitFor(() => {
+    const button = document.querySelector<HTMLButtonElement>('.ant-modal-confirm-btns .ant-btn-primary')
+    if (button === null) throw new Error('Expected the refresh confirmation dialog.')
+    return button
   })
+  await act(async () => { ok.click() })
+  // 点完之后走既有的微任务 flush（`flush()` 在同一文件里已经定义）：确认回调与随后的重读都是 Promise 链，
+  // 没有定时器参与，所以不需要等待时长。
+  await flush()
 }
 
 async function flush(): Promise<void> {

@@ -6,6 +6,7 @@ import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRa
 import type { DashboardFeedSourceId, DashboardFeedStatusView } from '../../../contracts/macro/dashboardFeedStatusContracts'
 import { crossAssetMacroReading } from '../../features/industry/cross-asset/crossAssetStatusRegistry'
 import type { MacroMarketViewState } from '../../features/industry/cross-asset/useMacroMarketSnapshot'
+import type { MacroRatesViewState } from '../../features/industry/cross-asset/useMacroRatesSnapshot'
 import { projectDashboardMacroSourceState } from './dashboardMacroSourceModel'
 import type { productText } from '../../shared/i18n/productText'
 
@@ -53,6 +54,8 @@ export type DashboardFeedInput = Readonly<{
   macroClient: boolean
   macroState: MacroMarketViewState
   macro?: MacroMarketSnapshotView
+  /** The daily FRED read's own state: `loading` until it settles, so the row never guesses first. */
+  ratesState: MacroRatesViewState
   rates?: MacroRatesSnapshotView
   /** Whether the cross-asset read is still in flight, so the index row says 加载中 and not 不可用. */
   indexLoading: boolean
@@ -83,6 +86,11 @@ type FeedRowExtra = Readonly<{ sourceId: DashboardFeedRow['sourceId'] }> & Parti
 
 function row(id: DashboardFeedRowId, state: DashboardFeedRowState, manageSourceId: string, extra: FeedRowExtra): DashboardFeedRow {
   return Object.freeze({ id, state, manageSourceId, ...extra })
+}
+
+/** Whether the source itself stated a reason that does not depend on the reading arriving. */
+function hasConclusiveSourceReason(status: Readonly<{ enabled: boolean; hasCredential: boolean; failureCode?: string }> | undefined): boolean {
+  return status !== undefined && (!status.hasCredential || !status.enabled || status.failureCode !== undefined)
 }
 
 /** The reason a row has no reading at all, read from the source's own switch and credential. */
@@ -120,7 +128,11 @@ function dollarRow(input: DashboardFeedInput): DashboardFeedRow {
     return row('dollar', 'stale-fallback', 'realmarketapi-market', { ...fallback, ...(staleMinutes === undefined ? {} : { staleMinutes }) })
   }
   // The store has no dollar point at all: name the source's own state rather than the store's emptiness.
-  const reason: DashboardFeedRowState = input.macroState === 'loading' && !status ? 'loading' : sourceReasonState(status)
+  // 读数没结算就是加载态——源列表先到、读数还没到不算结算（界面设计 2026-11-09：结算完成后才允许出现状态词）；
+  // 只有源自己给出的确定原因（没凭据 / 被关掉 / 失败带码）例外，那是配置事实。
+  const reason: DashboardFeedRowState = input.macroState === 'loading' && !hasConclusiveSourceReason(status)
+    ? 'loading'
+    : sourceReasonState(status)
   return row('dollar', reason, 'realmarketapi-market', {
     sourceId: 'realmarketapi-market', fallback: 'synthetic',
     ...(reason === 'failed' && status?.failureCode ? { failureCode: status.failureCode } : {})
@@ -146,6 +158,16 @@ function ratesRow(input: DashboardFeedInput): DashboardFeedRow {
   const reading = readings.find(candidate => candidate.seriesId === macroRatesSnapshotPublicPolicy.series.us10y)
   if (reading) return row('rates', 'ok', 'fred-rates-liquidity', { sourceId: 'fred-rates-liquidity', period: reading.period })
   const status = sourceStatus(input.feed, 'fred-rates-liquidity')
+  /**
+   * 未结算就是加载态（用户 11-02 报过「先闪一下获取失败再出数据」）。
+   *
+   * 这一行以前没有 `loading` 分支：启动时 `rates` 与源状态都还没到，`sourceReasonState(undefined)` 返回
+   * `unavailable`，行上先写「不可用」，等日线读回来才变「采集正常」——一个字的失败话术都不许先出现。
+   * 只有源自己给出**确定**的原因（没凭据 / 被关掉 / 上次失败有码）时才例外：那是配置事实，不是在猜读数。
+   */
+  if (input.ratesState === 'loading' && !hasConclusiveSourceReason(status)) {
+    return row('rates', 'loading', 'fred-rates-liquidity', { sourceId: 'fred-rates-liquidity' })
+  }
   const state = sourceReasonState(status)
   return row('rates', state, 'fred-rates-liquidity', {
     sourceId: 'fred-rates-liquidity',

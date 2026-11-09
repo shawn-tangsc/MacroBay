@@ -4,7 +4,10 @@ import { createBinanceFundingRateHistoryClient, fundingRateCollectionWindowPolic
 
 describe('Binance funding rate history client', () => {
   it('uses platformFetch for the exact fixed BTCUSDT and ETHUSDT limit=22 URLs and normalizes 22 points per asset', async () => {
-    const platformFetch = vi.fn(async (url: string) => new Response(JSON.stringify(points(url.includes('BTCUSDT') ? 'BTCUSDT' : 'ETHUSDT')), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const platformFetch = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input)
+      return new Response(JSON.stringify(points(url.includes('BTCUSDT') ? 'BTCUSDT' : 'ETHUSDT')), { status: 200, headers: { 'content-type': 'application/json' } })
+    })
     const client = createBinanceFundingRateHistoryClient({ platformFetch })
 
     await expect(client.requestHistory({ btc: fundingRateCollectionWindowPolicy.assets.btc, eth: fundingRateCollectionWindowPolicy.assets.eth })).resolves.toMatchObject({ state: 'available', btc: { length: 22 }, eth: { length: 22 } })
@@ -13,9 +16,12 @@ describe('Binance funding rate history client', () => {
   })
 
   it('projects the funding fields when Binance includes an optional mark price', async () => {
-    const platformFetch = vi.fn(async (url: string) => new Response(JSON.stringify(
-      points(url.includes('BTCUSDT') ? 'BTCUSDT' : 'ETHUSDT').map((row) => ({ ...row, markPrice: '100000.0' }))
-    ), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const platformFetch = vi.fn(async (input: URL | RequestInfo) => {
+      const url = String(input)
+      return new Response(JSON.stringify(
+        points(url.includes('BTCUSDT') ? 'BTCUSDT' : 'ETHUSDT').map((row) => ({ ...row, markPrice: '100000.0' }))
+      ), { status: 200, headers: { 'content-type': 'application/json' } })
+    })
     const client = createBinanceFundingRateHistoryClient({ platformFetch })
 
     const result = await client.requestHistory({ btc: fundingRateCollectionWindowPolicy.assets.btc, eth: fundingRateCollectionWindowPolicy.assets.eth })

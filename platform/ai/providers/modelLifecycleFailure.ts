@@ -1,4 +1,5 @@
 import {
+  isAccountBalanceUpstreamCode,
   isModelNotActivatedFailure,
   isModelRetiredFailure
 } from './providerFailureMapping'
@@ -27,6 +28,11 @@ export type ModelLifecycleFailureEvidence = {
   status?: number
   summary?: string | null
   body?: string | null
+  /**
+   * 上游**机器码**（JSON 里的 `error.code` / `error.type`），只用来判「是不是余额类」。
+   * 它不是文案：调用方把它当结构字段传进来，这里也只与闭集比较。
+   */
+  upstreamCode?: string | null
 }
 
 const MODEL_NOT_FOUND_PATTERN = /model.*(?:not found|does not exist|no such|unknown model|invalid model)|模型不存在|模型已下线/i
@@ -58,6 +64,12 @@ export function resolveProviderRuntimeFailureCode(
   error: unknown,
   evidence: ModelLifecycleFailureEvidence = readFailureEvidence(error)
 ): ProviderRuntimeFailureCode {
+  // 余额先判，且只认**结构事实**：HTTP 402，或上游给的余额类机器码（闭集）。
+  // 这里刻意不看 `summary`/`body` 的措辞——同一句话今天这么写、明天那么写，猜出来的结论
+  // 一旦驱动「等额度恢复」这类行为，错一次就是让读者干等。
+  if (evidence.status === 402 || isAccountBalanceUpstreamCode(evidence.upstreamCode)) {
+    return ProviderRuntimeFailurePolicy.accountBalanceInsufficient
+  }
   const lifecycle = classifyModelLifecycleFailure(evidence)
   if (lifecycle) return modelLifecycleRuntimeFailureCode(lifecycle)
   return toProviderRuntimeFailureCode(error)
@@ -65,9 +77,12 @@ export function resolveProviderRuntimeFailureCode(
 
 function readFailureEvidence(error: unknown): ModelLifecycleFailureEvidence {
   if (!error || typeof error !== 'object') return {}
-  const candidate = (error as { evidence?: { httpStatus?: unknown; summary?: unknown; body?: unknown } }).evidence
+  const candidate = (error as {
+    evidence?: { httpStatus?: unknown; summary?: unknown; body?: unknown; upstreamCode?: unknown }
+  }).evidence
   if (!candidate || typeof candidate !== 'object') return {}
   return {
+    ...(typeof candidate.upstreamCode === 'string' ? { upstreamCode: candidate.upstreamCode } : {}),
     ...(typeof candidate.httpStatus === 'number' ? { status: candidate.httpStatus } : {}),
     ...(typeof candidate.summary === 'string' ? { summary: candidate.summary } : {}),
     ...(typeof candidate.body === 'string' ? { body: candidate.body } : {})

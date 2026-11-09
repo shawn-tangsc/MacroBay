@@ -25,6 +25,8 @@ export type NotificationSettingsText = {
   footerHintLabel: string
   sendTestRow: string
   sendTest: string
+  /** 冷却期内的就地提示：刚发过就别再发（秒数由主进程之外的守卫算）。 */
+  sendCooldown: (seconds: number) => string
   /** 页脚那一行（唯一一行常驻说明）。 */
   footerLine: string
   /** 页脚 ⓘ 第一段：中心关不掉、读过可清、超保留期自动清理。 */
@@ -60,6 +62,7 @@ const zh: NotificationSettingsText = {
   footerHintLabel: '页脚说明',
   sendTestRow: '发送测试通知',
   sendTest: '发送测试',
+  sendCooldown: (seconds) => `刚发过，${seconds} 秒后再试`,
   footerLine: '都会记进通知中心。该弹桌面的会弹到桌面，同一件事不会重复。',
   centerDesc: '不能逐条关；读过的可以清掉，超过保留期的自动清理。',
   footerHint:
@@ -86,6 +89,7 @@ const en: NotificationSettingsText = {
   footerHintLabel: 'About this footer',
   sendTestRow: 'Send a test notification',
   sendTest: 'Send test',
+  sendCooldown: (seconds) => `Just sent — try again in ${seconds}s`,
   footerLine: 'Everything is recorded in the notification center. Whatever should show on the desktop does, and the same thing never repeats.',
   centerDesc:
     'You cannot turn individual ones off; read ones can be cleared, and the rest age out of the retention window.',

@@ -1,5 +1,7 @@
 import type { BrowserWindow } from 'electron'
 
+import { processBootId } from '../processBootId'
+
 import { ClaudeCodeRuntimeDriver } from '../../../ai/agent-platform/runtime/drivers/claudeCode'
 import type { AgentTaskSchedulerRuntimeService } from '../../../ai/agent-platform/runtime/tasks'
 import { mergeAgentRuntimeSessionState, type AgentStoreState } from '../../../ai/agent-platform/store/agentStore'
@@ -154,6 +156,7 @@ export function createAssistantsAndRuntimes(ports: AssistantsAndRuntimesPorts): 
   }
   const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
     loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
+    ownerBootId: processBootId,
     getProviderState: providerStore.getState,
     getAgentState: () => agentStore.getState(),
     saveAgentState: async (state, options) => {
@@ -324,6 +327,7 @@ export function createAssistantsAndRuntimes(ports: AssistantsAndRuntimesPorts): 
   })
 
   const assistantChatRuntime = createAssistantChatRuntimeService({
+    ownerBootId: processBootId,
     // 凭据判定信号：进程级依赖，**只在这里注入一次**（AI 运行时不许 import 通知包）。
     // 请求路径上不携带；翻转去重交给 `reportProviderCredential` 自己的 changed。
     // 名字在组合根取：通知那边只有 id，且**不许印 id**。取不到名字就不发（返回 undefined 即可），

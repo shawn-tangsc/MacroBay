@@ -45,6 +45,21 @@ describe('taskAutomationFormat', () => {
     expect(formatTimestamp('2026-07-17T09:05:00.000Z', 'en-US', 'UTC')).toContain('07/17')
   })
 
+  /**
+   * 时刻按读者时区显示：同一个瞬间在两个时区下必须是两个钟点。
+   * 一次性调度的钟点也是触发瞬间，所以跟读者时区走；cron 的「表达式 · 定义时区」不是瞬间，不跟。
+   */
+  it('renders a moment in the reader zone, and a once-schedule follows that zone', () => {
+    const instant = '2026-07-18T01:00:00.000Z'
+    expect(formatTimestamp(instant, 'zh-CN', 'Asia/Shanghai')).toBe('07/18 09:00')
+    expect(formatTimestamp(instant, 'zh-CN', 'America/New_York')).toBe('07/17 21:00')
+    expect(formatTaskSchedule({ kind: 'once', at: Date.parse(instant) }, zh, 'zh-CN', 'America/New_York'))
+      .toBe(zh.schedule.onceAt('07/17 21:00'))
+    // 定义不是瞬间：cron 即使有定义时区，也照原样显示那个时区，不换算成读者时区。
+    expect(formatTaskSchedule({ kind: 'cron', expr: '0 9 * * *', timezone: 'Asia/Shanghai' }, zh, 'zh-CN', 'America/New_York'))
+      .toBe('Cron 0 9 * * * · Asia/Shanghai')
+  })
+
   it('builds the three policy facts from the real preset values with units', () => {
     const facts = buildPolicyFacts(
       { maxActiveTasksPerAgent: 10, minimumRecurringIntervalMs: 15 * 60_000, maximumTimeoutMinutes: 30, maxChannelsPerTask: 5 },

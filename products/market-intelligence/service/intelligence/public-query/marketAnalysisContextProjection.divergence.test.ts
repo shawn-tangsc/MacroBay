@@ -31,13 +31,16 @@ const divergence: MarketDivergenceResult = {
       { id: 'funding', value: -0.0032, unit: 'percent-per-8h', observedAt: at(1) }
     ]
   }],
-  withheld: []
+  withheld: [],
+  // 纯检测器不下升级结论：升级由看得到原始各腿的调用方决定（`marketDivergence.ts:290`）。
+  escalated: false
 }
 
 function project(value: MarketDivergenceResult | undefined) {
   const facts: AgentFact[] = []
   const caveats = new Set<string>()
-  const observations: Parameters<typeof projectCapital>[4] = {}
+  // 第六个参数是 observations（第五个是 caveats），按真实签名取类型。
+  const observations: Parameters<typeof projectCapital>[5] = {}
   projectCapital(capital, value, asOf, facts, caveats, observations)
   return { facts, observations }
 }
@@ -60,7 +63,7 @@ describe('divergence in the analysis snapshot', () => {
   })
 
   it('adds nothing when there is no divergence — absence is not a zero', () => {
-    expect(project({ state: 'empty', asOf, withheld: [] }).facts.some(f => String(f.metric).startsWith('divergence-'))).toBe(false)
+    expect(project({ state: 'empty', asOf, withheld: [], escalated: false }).facts.some(f => String(f.metric).startsWith('divergence-'))).toBe(false)
     expect(project(undefined).facts.some(f => String(f.metric).startsWith('divergence-'))).toBe(false)
   })
 })

@@ -106,11 +106,11 @@ describe('useCapitalConditions', () => {
       // First attempt failed; the panel must still say "loading", not "failed".
       expect(page.state()).toBe('loading')
 
-      await act(async () => { vi.advanceTimersByTime(capitalConditionsReadRetryDelaysMs[0]) })
-      await flush()
+      // 推进虚拟时间要等它挂着的 promise 一起落定；断言等「事实出现」，不等固定轮数。
+      await act(async () => { await vi.advanceTimersByTimeAsync(capitalConditionsReadRetryDelaysMs[0]) })
 
+      await vi.waitFor(() => expect(page.state()).toBe('available'))
       expect(querySnapshot).toHaveBeenCalledTimes(2)
-      expect(page.state()).toBe('available')
       expect(page.container.textContent).toContain('$254.9B')
     } finally { vi.useRealTimers() }
   })
@@ -124,12 +124,11 @@ describe('useCapitalConditions', () => {
       expect(page.state()).toBe('loading')
 
       for (const delay of capitalConditionsReadRetryDelaysMs) {
-        await act(async () => { vi.advanceTimersByTime(delay) })
-        await flush()
+        await act(async () => { await vi.advanceTimersByTimeAsync(delay) })
       }
 
+      await vi.waitFor(() => expect(page.state()).toBe('unavailable'))
       expect(querySnapshot).toHaveBeenCalledTimes(1 + capitalConditionsReadRetryDelaysMs.length)
-      expect(page.state()).toBe('unavailable')
     } finally { vi.useRealTimers() }
   })
 
@@ -177,10 +176,9 @@ describe('useCapitalConditions', () => {
       await flush()
       expect(client.state()).toBe('loading')
       for (const delay of capitalConditionsReadRetryDelaysMs) {
-        await act(async () => { vi.advanceTimersByTime(delay) })
-        await flush()
+        await act(async () => { await vi.advanceTimersByTimeAsync(delay) })
       }
-      expect(client.state()).toBe('unavailable')
+      await vi.waitFor(() => expect(client.state()).toBe('unavailable'))
     } finally { vi.useRealTimers() }
   })
 })

@@ -2,6 +2,7 @@ import { Input } from 'antd'
 import { Filter, Search, X } from 'lucide-react'
 
 import { FilterChip, FilterChipGroup } from '@platform/ui/components/filter-chip'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { resolveProviderVisual } from '@platform/ui/icons/modelProviderVisuals'
 
 import type { PlatformText } from '../../../i18n/platformText'
@@ -15,6 +16,9 @@ import {
   type ModelPickerOption,
   type ModelPickerOptions
 } from './modelPickerOptions'
+
+/** 清除筛选那枚的读屏名：句子在 `models` 文案表里，键只回答「哪个按钮」。 */
+const CLEAR_FILTERS_KEY = 'models.pickerClearFilters'
 
 const CATEGORY_GROUP_KEY = 'models.pickerFilterCategories'
 const PROTOCOL_GROUP_KEY = 'models.pickerFilterProtocols'
@@ -109,15 +113,15 @@ export function ModelPickerPanel({
           }}
         />
         {hasActiveFilters ? (
-          <button
-            type="button"
-            className="model-picker-filter-action"
-            data-model-picker-clear-filters
-            aria-label={labels.pickerClearFilters}
-            title={labels.pickerClearFilters}
-            onClick={onClearFilters}>
-            <X size={12} aria-hidden="true" />
-          </button>
+          <IconButton
+            ariaLabelKey={CLEAR_FILTERS_KEY}
+            icon={X}
+            size="sm"
+            tooltipKey={CLEAR_FILTERS_KEY}
+            dataAttributes={{ 'data-model-picker-clear-filters': true }}
+            onSelect={onClearFilters}
+            resolveText={(key) => (key === CLEAR_FILTERS_KEY ? labels.pickerClearFilters : '')}
+          />
         ) : null}
         <button
           type="button"

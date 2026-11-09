@@ -130,6 +130,58 @@ describe('a web-sourced value says so in the copy too (v2.128)', () => {
 })
 
 describe('daily briefing markdown', () => {
+  it('says the day is dense only when the must rows pass the threshold', () => {
+    const base = document()
+    const row = base.data.market[0]!
+    const dense = dailyBriefingToMarkdown({
+      ...base,
+      data: { ...base.data, market: Array.from({ length: 8 }, (_, index) => ({ ...row, id: (['btc','eth','index','dxy','gold','us10y','us10y-real'] as const)[index % 7]!, labelKey: 'dailyBriefing.row.btc' })) }
+    }, options)
+    expect(dense).toContain(options.labels.denseDay)
+    const normal = dailyBriefingToMarkdown({
+      ...base,
+      data: { ...base.data, market: Array.from({ length: 6 }, (_, index) => ({ ...row, id: (['btc','eth','index','dxy','gold','us10y','us10y-real'] as const)[index % 7]!, labelKey: 'dailyBriefing.row.btc' })) }
+    }, options)
+    expect(normal).not.toContain(options.labels.denseDay)
+  })
+
+  it('marks the index row as a perpetual proxy when it is one', () => {
+    const base = document()
+    const indexRow = { ...base.data.market[0]!, id: 'index' as const, labelKey: 'dailyBriefing.row.index' }
+    const proxied = dailyBriefingToMarkdown({ ...base, data: { ...base.data, market: [...base.data.market, { ...indexRow, indexSource: 'proxy' as const }] } }, options)
+    expect(proxied).toContain(options.labels.indexProxy)
+    const real = dailyBriefingToMarkdown({ ...base, data: { ...base.data, market: [...base.data.market, { ...indexRow, indexSource: 'real' as const }] } }, options)
+    expect(real).not.toContain(options.labels.indexProxy)
+  })
+
+  it('marks the perpetual contract on the copied price rows, like the card does', () => {
+    const markdown = dailyBriefingToMarkdown(document(), options)
+    const btc = markdown.split('\n').find((line) => line.startsWith('- BTC'))
+    expect(btc).toContain(options.labels.perpetualContract)
+    // 纳指不是永续合约报价：那一行不许挂这个标记。
+    const index = markdown.split('\n').find((line) => line.startsWith('- 纳指'))
+    if (index) expect(index).not.toContain(options.labels.perpetualContract)
+  })
+
+  it('marks an untranslated headline as the original in the copied text', () => {
+    const markdown = dailyBriefingToMarkdown(document(), options)
+    expect(markdown).toContain('（原文）')
+    const translated = document()
+    const withTranslation = dailyBriefingToMarkdown({
+      ...translated,
+      news: { ...translated.news, items: [{ ...translated.news.items[0]!, translatedTitle: '摩根大通称 AI 标签不再赢得贷款机构' }] }
+    }, options)
+    expect(withTranslation).not.toContain('（原文）')
+  })
+
+  it('carries the no-AI sentence into the copied text, and leaves it out when there is none', () => {
+    // r17 `A9`：屏幕上有的那句，复制出去也要有；没有这回事时不许多出一行。
+    const withNotice = dailyBriefingToMarkdown(document(), { ...options, editorialNotice: '本期只有数据，没有 AI 写的解读。' })
+    expect(withNotice).toContain('本期只有数据，没有 AI 写的解读。')
+    const without = dailyBriefingToMarkdown(document(), options)
+    expect(without).not.toContain('没有 AI 写的解读')
+  })
+
   it('leaves the readings count out of the copy header', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     // The header block only: the body may legitimately say "5 项" about its own rows, so scanning
@@ -392,6 +444,31 @@ describe('one number, one place', () => {
     expect(occurrences('dailyBriefing.row.etf-eth')).toBe(1)
     // The funding rows are excluded from the data list: the leverage block is their only home.
     expect(occurrences('dailyBriefing.row.funding-btc')).toBe(0)
+  })
+})
+
+describe('the copied positioning block names the figure it prints', () => {
+  it('says the dollar amount is notional open interest, exactly as the card does', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      data: {
+        ...base.data,
+        leverage: {
+          state: 'available',
+          btc: { fundingRate: 0.0001, openInterestUsd: 12_340_000_000, change24hPct: 0.08 },
+          eth: { fundingRate: -0.0002, openInterestUsd: 2_400_000_000, change24hPct: -0.12 }
+        }
+      }
+    }, options)
+    // A bare `$12.34B` under 「持仓与费率」 does not say whether it is notional open interest or a
+    // quantity; the card names it, so the copied edition must name it too (same rule as
+    // `perpetualContract`: text printed on the card is printed in the copy).
+    // The market rows list has a `- BTC …` line too; take the one inside the positioning block.
+    const positioning = markdown.slice(markdown.indexOf(`### ${options.labels.sections.leverage}`))
+    const btc = positioning.split('\n').find((line) => line.startsWith('- BTC '))
+    expect(btc).toBeDefined()
+    expect(btc).toContain(options.labels.leverageOpenInterest)
   })
 })
 

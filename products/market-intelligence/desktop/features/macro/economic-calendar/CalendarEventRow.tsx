@@ -45,6 +45,11 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // The description is runtime data (time, title, status), not a sentence from the text table, so it
   // goes through `dataText`. The hint is the same line on hover and on focus; the accessible name is
   // that same line — it used to repeat the time, because the template added it a second time.
+  //
+  // 整行即动作，平台组件表达不了：`Choice` 会把一条已发布的事件变成「可选中项」（语义错），换平台
+  // 按钮又会把行内的时间、种类字形、标题一起包成一颗文字按钮——那正是用户否过的样子。所以这里保留
+  // 原生 `<button>`：`aria-label` 给名字（同一句也做悬停提示）、原生按钮自带键盘可达、
+  // `.mi-economic-calendar__event:hover` 给悬停反馈。用户 2026-11-09 判决：保留，别当漏换的裸按钮。
   return <Tooltip dataText={description} resolveText={resolveText}>
     <button className="mi-economic-calendar__event" data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
       data-market-event={item.source === 'market' ? item.event.eventKey : undefined} data-calendar-row data-importance={important ? 'high' : item.source === 'market' ? item.event.importance : undefined}

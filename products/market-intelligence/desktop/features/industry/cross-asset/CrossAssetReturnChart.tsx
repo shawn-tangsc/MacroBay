@@ -134,6 +134,11 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
           Solid once something in that minute was published, dashed while it is all still ahead — only
           the first kind explains a move that has already happened. HTML rather than SVG so they are
           focusable and announce themselves the way every other control here does.
+
+          例外（用户 2026-11-09 定）：这条竖线是**图上的可视标记**，不是控件。它的可点区域本来就是一块
+          透明、可聚焦、有名字的元素（`aria-label` 写明时刻与事件名，`:hover` / `:focus-visible` 各加深
+          竖线并露出标签），换成平台按钮会把一个 12px 宽、绝对定位的图形层包成一枚按钮，图形就散了。
+          保留并登记，别硬改。
         */}
         {(events ?? []).map(line => <button
           aria-label={`${text.eventLine} ${formatTime(new Date(line.atMs).toISOString(), 'second')}：${line.label}${line.identityUnconfirmed ? ` · ${text.eventLineIdentityUnconfirmed}` : ''}`}

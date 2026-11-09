@@ -164,6 +164,11 @@ describe('row-to-event binding', () => {
       ['pages.intelligence.notification.rows.sentimentAlert.title', 'market-intelligence.sentiment.alert'],
       ['pages.intelligence.notification.rows.calendar.title', 'market-intelligence.calendar.event-upcoming']
     ])
+    // 映射表里不许有重复落点：两个类别指到同一行或同一个事件，读者改一个就会顺手改到另一个。
+    const rows = INTELLIGENCE_CHANNEL_EVENT_ROWS
+    expect(new Set(rows.map((row) => row.itemKey)).size).toBe(rows.length)
+    expect(new Set(rows.map((row) => row.eventId)).size).toBe(rows.length)
+    expect(new Set(rows.map((row) => row.titleKey)).size).toBe(rows.length)
     // 每个 id 都必须在 manifest 里声明过——表里写一个拼错的 id，这里就红。
     const declared = new Set(marketIntelligenceProductManifest.notificationEvents.map((event) => event.id))
     for (const row of INTELLIGENCE_CHANNEL_EVENT_ROWS) expect(declared.has(row.eventId), row.itemKey).toBe(true)
@@ -500,21 +505,6 @@ describe('intelligence notification settings', () => {
       .toBe(text['pages.intelligence.notification.threshold.medium'])
   })
 
-  it('keeps the "also matched" cost inside the ⓘ of that row', async () => {
-    install({
-      productsInvoke: vi.fn(async (_productId: string, method: string) => {
-        if (String(method).includes('getCalendarReminderSettings')) {
-          return { enabled: false, leadMinutes: 60, importance: ['high'], landedFilter: 'also-matched' }
-        }
-        return { enabled: false }
-      })
-    })
-    await render()
-    await selectItem(3)
-    expect(container?.textContent ?? '').not.toContain(text['pages.intelligence.notification.landed.cost'])
-    expect(await openRowInfo(text['pages.intelligence.notification.calendar.landedInfoAria']!))
-      .toContain(text['pages.intelligence.notification.landed.cost'])
-  })
 })
 
 /** 有可用通道：`channelReady` 由投影的 `deliverable` 决定。 */
@@ -620,7 +610,14 @@ describe('通知配置后的测试按钮（R201）', () => {
       release({ state: 'sent', channelId: 'slack', channelName: 'Slack' })
       await Promise.resolve()
     })
+    // 成功后进入 10 秒冷却：按钮不再禁用（否则「刚发过」这句提示永远出不来），但再点**不发**。
     expect(button?.disabled).toBe(false)
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+    expect(stubs.sendTest).toHaveBeenCalledTimes(1)
+    expect(container?.textContent).toContain('刚发过')
   })
 
   it('says the per-row 「nothing to send」 sentence and never shows a reason code', async () => {

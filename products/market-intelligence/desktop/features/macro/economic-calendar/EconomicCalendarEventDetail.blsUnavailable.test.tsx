@@ -13,6 +13,7 @@ import type { EconomicCalendarEventView } from './economicCalendarModel'
 const text = productText['zh-CN'].pages.intelligence.portal.calendar
 const asOf = '2026-11-06T14:00:00.000Z'
 const notice = 'BLS 官方日历：当前网络环境无法自动获取（官方站点返回 403），自动同步已停止；库里的 BLS 事件来自上次成功同步（2026-10-22），发布时间未知。'
+const blocked = '暂时不能刷新：官方站点拒绝了当前网络（原因码 official-endpoint-returned-403），恢复时间未知。'
 
 /** A BLS-eligible row: the refresh control only exists for these families and only before release. */
 function event(overrides: Partial<EconomicCalendarEventView> = {}): EconomicCalendarEventView {
@@ -59,14 +60,15 @@ async function render(detail: Parameters<typeof EconomicCalendarEventDetail>[0])
 }
 
 describe('the BLS refresh once the official calendar has stopped', () => {
-  const detail = (overrides: Record<string, unknown> = {}) => ({
+  // 与组件契约逐字段对齐：`refreshState` 是可选的，但漏传时 TypeScript 会在这里把缺字段说出来。
+  const detail = (overrides: Record<string, unknown> = {}): Parameters<typeof EconomicCalendarEventDetail>[0] => ({
     event: event(), now: () => new Date(asOf), onRefresh: vi.fn(async () => undefined),
-    onReleaseTimeChanged: async () => undefined, releaseTimeClient: client, text, ...overrides
-  })
+    onReleaseTimeChanged: async () => undefined, releaseTimeClient: client, refreshState: undefined, text, ...overrides
+  } as Parameters<typeof EconomicCalendarEventDetail>[0])
 
   it('shows the stop notice and greys the refresh control, which then sends nothing', async () => {
     const onRefresh = vi.fn(async () => undefined)
-    const host = await render(detail({ onRefresh, blsUnavailableNotice: notice }) as never)
+    const host = await render(detail({ onRefresh, blsUnavailableNotice: notice }))
     // 说明与源注册表同源（调用方传进来的就是由原因码拼出的那一句）。
     expect(host.querySelector('[data-bls-unavailable]')?.textContent).toBe(notice)
     const refresh = [...host.querySelectorAll('button')].find(button => button.textContent?.includes(text.blsRefresh.action))
@@ -77,10 +79,25 @@ describe('the BLS refresh once the official calendar has stopped', () => {
     expect(onRefresh).not.toHaveBeenCalled()
   })
 
+  it('says inline why the control cannot be used: the reason code and that recovery is unknown', async () => {
+    // 界面设计 2026-11-09：置灰必须当场说清「为什么不能刷新、什么时候能好（若有）」。
+    // 它必须是**这颗键自己的**行内句：不是第二个弹窗，也不是又一段解释。
+    const host = await render(detail({ blsUnavailableNotice: notice, blsRefreshBlocked: blocked }))
+    const inline = host.querySelector('[data-bls-refresh-blocked]')
+    expect(inline, 'the greyed key carries its own reason').not.toBeNull()
+    expect(inline?.textContent).toContain('official-endpoint-returned-403')
+    expect(inline?.textContent).toContain('恢复时间未知')
+    // 与刷新键同处一个行内容器（同一行），而不是另起一段。
+    expect(inline?.parentElement?.querySelector('button')?.textContent).toContain(text.blsRefresh.action)
+    // 同一件事只出现一次。
+    expect(host.querySelectorAll('[data-bls-refresh-blocked]')).toHaveLength(1)
+  })
+
   it('leaves the control usable when the source is not stopped', async () => {
     const onRefresh = vi.fn(async () => undefined)
-    const host = await render(detail({ onRefresh, blsUnavailableNotice: undefined }) as never)
+    const host = await render(detail({ onRefresh, blsUnavailableNotice: undefined, blsRefreshBlocked: undefined }))
     expect(host.querySelector('[data-bls-unavailable]')).toBeNull()
+    expect(host.querySelector('[data-bls-refresh-blocked]')).toBeNull()
     const refresh = [...host.querySelectorAll('button')].find(button => button.textContent?.includes(text.blsRefresh.action))
     expect(refresh?.disabled).toBe(false)
   })

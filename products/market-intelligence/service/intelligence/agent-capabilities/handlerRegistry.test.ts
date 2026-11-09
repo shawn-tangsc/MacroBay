@@ -8,7 +8,9 @@ import { ProductToolGuardError, type ToolCallContext } from './capabilityTypes'
 import { assertCapabilityRegistration, registerIntelligenceAgentToolHandlers } from './handlerRegistry'
 
 const jobRuntime = {} as JobRuntime
-const operationFacades = { macroCalendarOps: {} as never, crossAssetOps: {} as never }
+// Registration reads no module or facade state; the handlers that do are invoked one at a time in
+// their own suites, so these seams only have to exist.
+const operationFacades = { macroCalendarOps: {} as never, crossAssetOps: {} as never, intelligenceModule: {} as never }
 
 const context = {
   toolCallId: 'tool-call-1',

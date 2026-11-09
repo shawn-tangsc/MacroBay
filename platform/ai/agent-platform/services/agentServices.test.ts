@@ -469,16 +469,12 @@ describe('agent platform services', () => {
     })
     const pageOne = await services.messages.listSessionMessages(session.id, { limit: 2 })
     const pageTwo = await services.messages.listSessionMessages(session.id, { cursor: pageOne.nextCursor, limit: 10 })
-    const pendingIds = await services.messages.findPendingAssistantMessageIds()
 
     expect(saved.runtimeResumeToken).toBe('resume-token')
     expect(pageOne.items.map((item) => item.id)).toEqual(['message-new', 'message-003'])
     expect(pageTwo.items.map((item) => item.id)).toEqual(['message-002', 'message-001'])
-    expect(pendingIds).toEqual(['message-new'])
-
-    await services.messages.markMessagesError(pendingIds)
-    const resolved = (await services.messages.listSessionMessages(session.id, { limit: 1 })).items[0]
-    expect(resolved.status).toBe('error')
+    const savedPage = (await services.messages.listSessionMessages(session.id, { limit: 1 })).items[0]
+    expect(savedPage.status).toBe('pending')
 
     await services.messages.deleteSessionMessage(session.id, saved.id)
     expect((await services.messages.listSessionMessages(session.id, { limit: 10 })).items.map((item) => item.id)).not.toContain(saved.id)

@@ -1,17 +1,16 @@
 import type { ReactElement } from 'react'
 
-import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+import { StateView } from '@platform/ui/components/state'
 
-import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
 import type { EconomicCalendarText } from './economicCalendarText'
 
 /**
  * A month with nothing in it.
  *
- * One action: the state's action slot answers "what does the reader do next", and only one thing
- * can be that. The manual ICS import used to sit here beside it, competing for the same slot; it
- * is a page-level tool and now lives in the header toolbar, where it stays visible whether or not
- * the month is empty.
+ * **No action on purpose** (product, 2026-11-09): this page has no range to widen — it draws one
+ * month at a time, and what changes which month is the page header's previous/next/this-month
+ * controls, which are on screen already. A second entry in the empty state would be the same screen
+ * offering the same move twice.
  *
  * The product's own sentence ("本月没有已发布事件") rides the reason slot through the
  * product-sentence entry, so the specific wording survives the shared surface.
@@ -22,7 +21,6 @@ export function CalendarEmptyMonthState({ text }: { text: EconomicCalendarText }
     state="empty"
     reasonCode="nothing-in-window"
     size="lg"
-    action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: openIntelligenceSourcesSettings }}
     productReason={{ key: 'mi.calendar.empty-month', resolve: () => text.status.empty }}
   />
 }

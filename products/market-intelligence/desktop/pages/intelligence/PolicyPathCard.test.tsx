@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,7 +8,8 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { PolicyPathCard } from './PolicyPathCard'
+import { PolicyPathCard, type PolicyPathCardText } from './PolicyPathCard'
+import { policyPathDay } from './policyPathMonth'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
 const reading: PolicyPathReading = {
@@ -32,12 +34,14 @@ afterEach(async () => {
 // The card resolves its state word through the shell language now, so the test has to supply the
 // same context the app does — a card whose copy is English but whose pill says 实时 is exactly the
 // bug that missing context hides.
-const render = async (candidate: PolicyPathReading, cardText: typeof text = text, language: 'zh-CN' | 'en-US' = 'zh-CN') => {
+const render = async (candidate: PolicyPathReading, cardText: PolicyPathCardText = text, language: 'zh-CN' | 'en-US' = 'zh-CN') => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root!.render(createElement(ShellLanguageProvider, { language },
-    createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' }))))
+  await act(async () => root!.render(createElement(ShellLanguageProvider, {
+    language,
+    children: createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' })
+  })))
   return host
 }
 
@@ -57,6 +61,16 @@ it('keeps the freshness word and the venue in one group, so the footer cannot sp
   const provenance = foot.querySelector('.mi-policy-card__provenance')!
   expect(provenance.querySelector('.status-pill')).not.toBeNull()
   expect(provenance.textContent).toContain('polymarket')
+})
+
+/**
+ * 红线第 4 条：时刻走统一格式化，不许手拼。这张卡原来有 `date.slice(5)`、`asOf.slice(5)` 与
+ * `decidedMeetingDate.slice(5)` 三处手拼日期，还有一个「先切 19 位再交给格式化」的写法。
+ */
+it('builds no date string of its own', () => {
+  const card = readFileSync('products/market-intelligence/desktop/pages/intelligence/PolicyPathCard.tsx', 'utf8')
+  expect(card).not.toMatch(/\.slice\(\s*5\b/u)
+  expect(card).not.toMatch(/replace\('T', ' '\)/u)
 })
 
 describe('policy path card', () => {
@@ -125,6 +139,7 @@ const settlement: PolicyPathSettlement = {
   actualOutcome: 'hike-25',
   priced: 0.38,
   pricedOutcome: 'no-change',
+  pricingBasis: 'pre-decision',
   conclusion: { kind: 'relative', direction: 'hawkish', surprisePp: 62 },
   nextMeeting: { meetingDate: '2027-01-27', daysUntil: 50 }
 }
@@ -179,13 +194,14 @@ describe('policy path card shapes', () => {
     expect(rendered.querySelector('.mi-policy-card')?.getAttribute('data-phase')).toBe('settlement')
     expect(rendered.textContent).toContain(text.phaseSettlement)
     expect(rendered.textContent).toContain('加息 25bp')
-    expect(rendered.textContent).toContain('12-09 实际')
+    // 日历日按读者语言写（`12月9日`），不再是自己切的 `12-09`。
+    expect(rendered.textContent).toContain(`${policyPathDay('2026-12-09', 'zh-CN')} 实际`)
     expect(rendered.textContent).toContain('相对定价偏鹰 +62pp')
     expect(rendered.textContent).toContain('决议前 1 小时定价 38.0%')
     expect(rendered.textContent).toContain('实际落在 加息 25bp 档 · 之前主档「维持利率」')
     expect(rendered.textContent).toContain('4.00–4.25%')
     expect(rendered.textContent).toContain('9–3')
-    expect(rendered.textContent).toContain('01-27 · 50 天')
+    expect(rendered.textContent).toContain(`${policyPathDay('2027-01-27', 'zh-CN')} · 50 天`)
     expect(rendered.textContent).toContain('结算后 42 分钟')
     // A judgement word is not a conclusion: the comparison is arithmetic.
     expect(rendered.textContent).not.toContain('鹰派')

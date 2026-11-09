@@ -52,10 +52,9 @@ describe('newsSentimentSettings', () => {
     const { state, providerId, modelId } = readyProviders()
     const resolved = resolveNewsSentimentModel({
       settings: {
-        modelScoringEnabled: true,
+        // 解析只读 providerId/modelId：入参类型就是 `Pick<NewsSentimentSettings, 'providerId' | 'modelId'>`。
         providerId,
-        modelId: 'explicit-model',
-        updatedAt: '2026-10-24T00:00:00.000Z'
+        modelId: 'explicit-model'
       },
       modelDefaults: { fastModelId: `${providerId}:${modelId}` },
       providers: state.providers

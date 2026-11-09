@@ -45,11 +45,11 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 你可以自己核；没取到的会如实说成缺口，不会被悄悄填上。
 
 <p align="center">
-  <img src="./docs/assets/screenshots/brief-hero-zh.png" alt="MacroBay 每日简报：一句结论、过去 24 小时要闻与宏观事件，以及支撑它们的数字，每个数字都带来源和截止时间" width="100%">
+  <img src="./docs/assets/screenshots/brief-page-zh.png" alt="MacroBay 每日简报：一句结论、过去 24 小时要闻与宏观事件，以及支撑它们的数字，每个数字都带来源和截止时间" width="100%">
 </p>
 
 <p align="center">
-  <sub>每天早上的一页。<a href="./docs/assets/screenshots/brief-page-zh.png">看完整一页</a>——每一条都带来源和截止时间。</sub>
+  <sub>每天早上的一整页——每一条都带来源和截止时间。</sub>
 </p>
 
 ### 凭什么信
@@ -194,14 +194,14 @@ pnpm dev
 
 1. **设置 → 模型服务**：添加一个供应商和 API Key，启用它，并为智能体选择默认模型。
 2. **设置 → 情报源**：启用你有权限访问的来源，需要凭据的填入凭据。
-3. 打开左侧**情报**，直接落在数字货币看板。智能体选择页不在第一屏，从看板的**返回 Agent** 进。
+3. 打开左侧**情报**，直接落在数字货币看板。
 4. 向分析智能体提问：*最近一次宏观数据发布有什么变化，会影响哪些资产？*
 
 答案应当说明哪些已知、哪些缺失、证据来自哪里，以及它使用的截止时间。
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.4.1`）。macOS 是已验证平台。面板仍需你自己的供应商凭据；读不到的数据
+MacroBay 目前是 **alpha**（`0.4.2`）。macOS 是已验证平台。面板仍需你自己的供应商凭据；读不到的数据
 会如实报成缺口。macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
 运行态尚未验证，Linux 尚未配置打包。详见
 [状态与限制](./docs/reference/status-and-limitations.zh-CN.md)。

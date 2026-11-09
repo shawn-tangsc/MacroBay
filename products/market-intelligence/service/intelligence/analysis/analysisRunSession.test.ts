@@ -66,16 +66,18 @@ describe('the analysis run session', () => {
     expect(last.messages).toEqual([{ role: 'assistant', data: { parts: [{ type: 'text', text: 'BTC 持仓骤降，量放大 3.4 倍' }] } }])
   })
 
-  it('titles the conversation with the moment and the module, never the run id', async () => {
+  it('titles the conversation with the module alone, never the moment or the run id', async () => {
     const { ensure, createAgentSession } = harness()
     const titled = createAnalysisRunSession({
       findAgentSessionByAutomationRef: async () => null,
       createAgentSession: createAgentSession as never,
-      titleFor: queuedAt => `${queuedAt} · 市场分析`
+      titleFor: () => '市场分析'
     })
     await titled({ runId: 'mi-ar-9', queuedAt: '2026-11-06T10:15:00.000Z' })
     const call = createAgentSession.mock.calls.at(-1)![0] as unknown as { name: string }
-    expect(call.name).toBe('2026-11-06T10:15:00.000Z · 市场分析')
+    // 时刻不进标题：列表右侧有 `formatShellClock`、日期在分组标题上；标题只回答「这是哪一块」。
+    expect(call.name).toBe('市场分析')
+    expect(call.name).not.toContain('2026-11-06')
     expect(call.name).not.toContain('mi-ar-')
     await ensure({ runId: 'mi-ar-10' })
   })
@@ -107,7 +109,7 @@ describe('the analysis run session', () => {
     const english = createAnalysisRunSession({
       findAgentSessionByAutomationRef: async () => null,
       createAgentSession: createAgentSession as never,
-      titleFor: async queuedAt => `${queuedAt} · ${await Promise.resolve('Market analysis' as const)}`
+      titleFor: async () => await Promise.resolve('Market analysis' as const)
     })
     await english({ runId: 'mi-ar-en', queuedAt: '2026-11-06T10:15:00.000Z' })
     const title = (createAgentSession.mock.calls.at(-1)![0] as unknown as { name: string }).name

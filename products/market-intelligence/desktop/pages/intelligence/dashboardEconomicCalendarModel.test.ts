@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { selectDashboardEconomicCalendarMonth } from './dashboardEconomicCalendarModel'
 
 const asOf = '2026-08-05T00:00:00.000Z'
@@ -49,11 +50,11 @@ function available(events: unknown[]): unknown {
   return { state: 'available', asOf, events }
 }
 
-function event(): unknown {
+function event(): MacroEconomicCalendarEventView {
   return {
     eventKey: 'US.CPI.RELEASE.uid-1', releaseGroupKey: 'US.BLS.RELEASE.uid-1', eventFamily: 'cpi', titleKey: 'cpi',
     countryCode: 'US', importance: 'high', periodKey: 'release-2026-08-12', lifecycleState: 'scheduled', coverage: 'available',
-    scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z', detectedAt: asOf,
+    scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z', releaseTimeSource: 'official', detectedAt: asOf,
     consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: []
   }
 }

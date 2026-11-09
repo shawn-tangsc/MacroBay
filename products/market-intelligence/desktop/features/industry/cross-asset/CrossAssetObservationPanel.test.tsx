@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CrossAssetObservationPanel } from './CrossAssetObservationPanel'
 import { productText } from '../../../shared/i18n/productText'
 import { parseCrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
@@ -10,6 +10,15 @@ import { createCrossAssetSnapshotQuery } from '../../../../service/intelligence/
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { resolveStateViewText, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+
+/**
+ * 每个用例之后都把时钟还回去。
+ *
+ * 这个文件里有几条用例要推进重试阶梯（装假计时器）；漏掉归还时，**后面所有用例**都在假时钟里跑——
+ * antd 浮层延迟与 `vi.waitFor` 的轮询就都变成「要有人替它推进才动」，同一份代码时而绿、时而红。
+ * 与 `useMacroMarketSnapshot.test.tsx` / `useCrossAssetObservation.test.tsx` 的做法一致。
+ */
+afterEach(() => { vi.useRealTimers() })
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
@@ -143,6 +152,50 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()) }
   })
 
+  it('draws no empty quote-status container once both quotes are live', async () => {
+    // 界面设计 2026-11-09 对行 26 的边界：删块级药丸之后**不留空白容器**。这条线只在「有报价需要说明」
+    // 时才该存在；两条都实时时它不该留在 DOM 里。
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const now = Date.now()
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: now + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      release: vi.fn(async () => ({ state: 'released' })),
+      query: async () => createCrossAssetSnapshotQuery({ now: () => now, store: { revision: 0, queryAt: () => [] },
+        live: () => ({ state: 'live', quotes: {
+          index: { state: 'live', price: '712.30', tradedAtMs: now, receivedAtMs: now },
+          btc: { state: 'live', price: '61230.10', tradedAtMs: now, receivedAtMs: now },
+          eth: { state: 'live', price: '2411.20', tradedAtMs: now, receivedAtMs: now }
+        } }) }).query({ range: '24h' })
+    }
+    try {
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      expect(host.querySelector('.mi-cross-asset__status')).toBeNull()
+    } finally { await act(async () => root.unmount()); host.remove() }
+  })
+
+  it('waits for the macro and rates reads instead of claiming 未接入 first', async () => {
+    // 用户 11-02 报过「先闪一下获取失败再出数据」，同类：四行在 macro / rates 未结算时曾落回注册表的
+    // `planned`（未接入），读完再变「已接入」。未结算就是加载态，不许先给一个结论。
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
+    try {
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
+        { client: client as never, macroState: 'loading', ratesState: 'loading', text })))
+      for (const id of ['dxy', 'gold', 'us10y', 'realRate']) {
+        const row = host.querySelector(`[data-status-row="${id}"]`)
+        expect(row?.getAttribute('data-status-loading'), id).toBe('true')
+        expect(row?.textContent, id).not.toContain(text.notConnected)
+      }
+      // 指数与两条加密行不归这两路读管，仍是既有形态。
+      expect(host.querySelector('[data-status-row="btc"]')?.getAttribute('data-status-loading')).toBeNull()
+    } finally { await act(async () => root.unmount()) }
+  })
+
   // The dashboard's 市场状态 block reads the macro snapshot: the dollar is the product's own
   // synthesis and says so, gold is a licensed level, and the two rate rows still have no source.
   it('shows the collected dollar and gold readings, labelling the computed dollar index', async () => {
@@ -227,8 +280,9 @@ describe('cross-asset observation workspace', () => {
     }
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
-      for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
-      expect(host.textContent).toContain(text.contractMismatch)
+      // 条件是「契约不一致那句话出现」，不是「刷 6 个微任务」：固定次数是在赌调用链长度，
+      // 链一变就红（同一提交两次跑结果不一致的典型来源）。轮询一成立就继续，上限由 `vi.waitFor` 兜住。
+      await vi.waitFor(() => { expect(host.textContent).toContain(text.contractMismatch) })
       // 版本不一致时重试没有意义（重读同一份契约），所以这一态的出口是「重启应用」，不是「重试」。
       // 比的是两条平台动作句，不是 `text.retry`——那个键在跨资产文案里根本不存在，比 undefined
       // 永远成立，等于没断言（2026-11-06 预检钩子把它抓出来）。
@@ -341,6 +395,13 @@ describe('cross-asset observation workspace', () => {
       expect([...host.querySelectorAll('button')].some(button => button.getAttribute('aria-label') === text.refresh)).toBe(true)
       expect(host.querySelector('input[type="password"], input[type="text"]')).toBeNull()
     } finally { await act(async () => root.unmount()); host.remove() }
+  })
+
+  it('never leaves a fake clock installed for the cases that come after it', () => {
+    // 上一条按语言跑两遍、装了假计时器。它不还回去的话，这个文件里**后面所有用例**都在假时钟里跑：
+    // antd 的浮层延迟、`vi.waitFor` 的轮询都变成「要有人替它推进才动」，于是同一份代码时而绿、时而红。
+    // 这条守卫在任何一次泄漏之后立刻红，比等一次难复现的 flake 便宜。
+    expect(vi.isFakeTimers()).toBe(false)
   })
 
   it('shows the gold live price with its badge, and no badge at all when there is no live tick', async () => {

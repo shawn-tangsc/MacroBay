@@ -6,10 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobRuntime } from '@platform/jobs'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 
+import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import { createAgentChangeLog, type AgentChangeLog } from './changeLog'
 
 const fixture = vi.hoisted(() => {
-  const profile = (overrides: Record<string, unknown> = {}) => ({
+  // 形状 2：夹具从真实类型取形状，不用 Record<string, unknown> 展开——
+  // 展开会把 sourceId / enabled 拓宽成 unknown，写入 fixture.profiles 时整组不兼容。
+  const profile = (overrides: Partial<IntelligenceSourceProfile> = {}): IntelligenceSourceProfile => ({
     profileId: 'profile-1',
     sourceId: 'coingecko-trending',
     enabled: true,
@@ -25,7 +28,6 @@ const fixture = vi.hoisted(() => {
 
   return {
     profiles: [profile()],
-    focusMarkets: ['digital-assets'],
     definitions: [
       { sourceId: 'coingecko-trending', displayName: 'Trending', authMode: 'none', sourceSpecificFields: [] },
       { sourceId: 'fred-rates-liquidity', displayName: 'FRED', authMode: 'api-key', sourceSpecificFields: ['apiKey'] },
@@ -33,17 +35,14 @@ const fixture = vi.hoisted(() => {
     ],
     saves: [] as unknown[],
     enables: [] as unknown[],
-    focusSaves: [] as unknown[],
     runNows: [] as unknown[],
     connections: [] as unknown[],
     retries: [] as unknown[],
     profile,
     reset() {
       this.profiles = [profile()]
-      this.focusMarkets = ['digital-assets']
       this.saves = []
       this.enables = []
-      this.focusSaves = []
       this.runNows = []
       this.connections = []
       this.retries = []
@@ -56,10 +55,6 @@ const injectedModule = {
     sourcesService: {
       listDefinitions: () => fixture.definitions,
       listProfiles: async () => fixture.profiles.map((profile) => ({ ...profile })),
-      getFocusSettings: async () => ({
-        enabledFocusMarkets: [...fixture.focusMarkets],
-        updatedAt: '2026-10-01T00:00:00.000Z'
-      }),
       saveProfile: async (input: Record<string, unknown>) => {
         fixture.saves.push(input)
         const current = fixture.profiles.find((profile) => profile.sourceId === input.sourceId)
@@ -74,7 +69,7 @@ const injectedModule = {
         )
         return { profile: next }
       },
-      setEnabled: async (input: Record<string, unknown>) => {
+      setEnabled: async (input: { sourceId: string; enabled: boolean }) => {
         fixture.enables.push(input)
         const next = {
           ...fixture.profile(),
@@ -86,11 +81,6 @@ const injectedModule = {
           profile.sourceId === input.sourceId ? next : profile
         )
         return { profile: next }
-      },
-      saveFocusSettings: async (input: { enabledFocusMarkets: string[] }) => {
-        fixture.focusSaves.push(input)
-        fixture.focusMarkets = [...input.enabledFocusMarkets]
-        return { enabledFocusMarkets: [...input.enabledFocusMarkets], updatedAt: '2026-10-02T00:00:00.000Z' }
       },
       runNow: async (input: { sourceId: string }) => {
         fixture.runNows.push(input)
@@ -222,18 +212,6 @@ describe('source configuration write handlers', () => {
 
     expect(fixture.enables).toEqual([{ sourceId: 'coingecko-trending', enabled: true }])
     expect(result.changed).toEqual({ enabled: { before: false, after: true } })
-  })
-
-  it('saves focus markets through saveFocusSettings', async () => {
-    const result = (await handler('configure-intelligence-source')(
-      { action: 'save-focus-markets', enabledFocusMarkets: ['digital-assets', 'fx'] },
-      context
-    )) as { state: string; changed: Record<string, { before: unknown; after: unknown }> }
-
-    expect(fixture.focusSaves).toEqual([{ enabledFocusMarkets: ['digital-assets', 'fx'] }])
-    expect(result.changed).toEqual({
-      enabledFocusMarkets: { before: ['digital-assets'], after: ['digital-assets', 'fx'] }
-    })
   })
 
   it('writes one audit row per successful configuration change with before, after, and both revisions', async () => {

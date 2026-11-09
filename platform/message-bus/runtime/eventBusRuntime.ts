@@ -14,6 +14,7 @@ import type {
 } from '../contracts/eventBusContracts'
 import { validatePublishEventInput } from '../contracts/eventBusValidation'
 import { createEventBusRegistry } from './eventBusRegistry'
+import { pruneEventBusState } from '../store/eventBusRetention'
 import {
   createDefaultEventBusStoreState,
   createEventBusStore,
@@ -75,6 +76,22 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
   let dispatchInFlight: Promise<void> | null = null
   const runtimePublishedEventIds = new Set<string>()
 
+  /**
+   * 按保留期裁剪当前状态；删到东西才落盘（没删就不写，避免启动时做一次无意义的整份写回）。
+   * 返回删了多少，供任务日志与用例断言——不把「裁了没有」变成只有实现知道的秘密。
+   */
+  async function pruneRetainedState(
+    options?: { now?: string }
+  ): Promise<{ removedEvents: number; removedDeliveries: number }> {
+    const result = pruneEventBusState(store.getState(), options)
+    if (result.removedEvents === 0 && result.removedDeliveries === 0) {
+      return { removedEvents: 0, removedDeliveries: 0 }
+    }
+    store.replaceState(result.state)
+    await persist()
+    return { removedEvents: result.removedEvents, removedDeliveries: result.removedDeliveries }
+  }
+
   async function ensureHydrated(): Promise<void> {
     if (hydrated || !deps.storage) {
       hydrated = true
@@ -85,6 +102,8 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
         store.replaceState(await deps.storage!.read())
         synchronizeEventBusIdCounters(store.getState().events, store.getState().deliveries)
         hydrated = true
+        // 启动即裁一次：老文件不必等到第一次每日任务才缩小。
+        await pruneRetainedState()
       })()
     }
     try {
@@ -147,6 +166,11 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
     async dispatchPending() {
       await ensureHydrated()
       await dispatchPendingInternal(store, registry, persist)
+    },
+
+    async pruneRetained(options) {
+      await ensureHydrated()
+      return pruneRetainedState(options)
     },
 
     async getDiagnostics(query: EventBusDiagnosticsQuery = {}): Promise<EventBusDiagnosticsPage> {

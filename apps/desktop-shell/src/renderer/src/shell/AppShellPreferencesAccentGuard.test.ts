@@ -16,12 +16,14 @@ const REPO_ROOT = resolve(__dirname, '../../../../../..')
 const SHELL_FILE = resolve(__dirname, 'AppShell.tsx')
 const SCHEMA_FILE = resolve(REPO_ROOT, 'platform/settings/schema/appSettings.ts')
 
+/**
+ * 2026-11-09：偏好段搬到 `AppShellPreferencesPane.tsx`，判据不变——「偏好段不许提到强调色」
+ * 现在读那一份整体（它就是偏好段本身）。
+ */
+const PREFERENCES_FILE = resolve(__dirname, 'AppShellPreferencesPane.tsx')
+
 function preferencesSection(): string {
-  const source = readFileSync(SHELL_FILE, 'utf8')
-  const start = source.indexOf('function renderPreferences()')
-  const end = source.indexOf('function renderNotifications()')
-  if (start < 0 || end <= start) throw new Error('renderPreferences 的边界变了，守卫要跟着改')
-  return source.slice(start, end)
+  return readFileSync(PREFERENCES_FILE, 'utf8')
 }
 
 describe('基础设置不再暴露强调色入口', () => {

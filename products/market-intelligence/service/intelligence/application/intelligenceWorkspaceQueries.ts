@@ -28,8 +28,6 @@ import type { IntelligenceTranslationService } from './intelligenceTranslationSe
 import type { IntelligenceTranslationStatus } from '../schema/intelligenceTranslation'
 import { resolveSourceFreshnessStatus } from '../schema/intelligenceSourcesContracts'
 import { getIntelligenceSourceDefinition, isDefillamaStablecoinRetiredPath } from './sourceCatalog'
-import { isItemApplicableToFocusMarkets } from './intelligenceSourceApplicability'
-import type { IntelligenceFocusMarket } from '../schema/intelligenceSource'
 import {
   type IntelligenceAssessmentStatus,
   compareTimelineTimestamps,
@@ -272,23 +270,15 @@ export function createIntelligenceWorkspaceQueries(deps: {
       matchContext: WorkspaceMatchContext
       textMode?: 'translated' | 'original'
     }): Promise<IntelligenceWorkspaceState> {
-      const [profiles, focusMarketSettings] = await Promise.all([
-        deps.sourcesService.listProfiles(),
-        deps.sourcesService.getFocusSettings()
-      ])
+      const profiles = await deps.sourcesService.listProfiles()
       const profileById = new Map(profiles.map((profile) => [profile.sourceId, profile]))
-      const enabledFocusMarkets = focusMarketSettings.enabledFocusMarkets
       const filters = normalizeFilters(input.filters)
       const timelineRows = await enrichTimelineRows(
         buildTimelineRows(deps, filters, input.matchContext),
         deps.translationService,
         input.textMode
       )
-      const sentimentRows = filterSentimentRowsByFocus(
-        deps.pipeline,
-        buildSentimentRows(deps.pipeline, filters),
-        enabledFocusMarkets
-      )
+      const sentimentRows = buildSentimentRows(deps.pipeline, filters)
       const broadTimelineCount = buildTimelineRows(deps, broadenFilters(filters), input.matchContext).length
 
       return {
@@ -300,8 +290,7 @@ export function createIntelligenceWorkspaceQueries(deps: {
           timelineRows,
           sentimentRows,
           profileById,
-          broadTimelineCount,
-          enabledFocusMarkets
+          broadTimelineCount
         ),
         timelineRows,
         sentimentRows,
@@ -452,8 +441,7 @@ function buildOverview(
   timelineRows: IntelligenceTimelineRow[],
   sentimentRows: IntelligenceSentimentAggregateRow[],
   profileById: Map<string, IntelligenceSourceProfile> = new Map(),
-  totalTimelineCount = timelineRows.length,
-  enabledFocusMarkets?: IntelligenceFocusMarket[]
+  totalTimelineCount = timelineRows.length
 ): IntelligenceOverviewView {
   const status = buildWorkspaceStatus({
     filters,
@@ -461,8 +449,7 @@ function buildOverview(
     sentimentRows,
     profileById,
     pipeline: deps.pipeline,
-    totalTimelineCount,
-    enabledFocusMarkets
+    totalTimelineCount
   })
 
   return {
@@ -470,33 +457,14 @@ function buildOverview(
     layerDesk: buildLayerDesk({
       timelineRows,
       profileById,
-      pipeline: deps.pipeline,
-      enabledFocusMarkets
+      pipeline: deps.pipeline
     }),
     sourceCoverage: buildSourceCoverage({
       profileById,
-      pipeline: deps.pipeline,
-      enabledFocusMarkets
+      pipeline: deps.pipeline
     }),
     recentEvents: timelineRows.slice(0, 8)
   }
-}
-
-function filterSentimentRowsByFocus(
-  pipeline: IntelligencePipeline,
-  rows: IntelligenceSentimentAggregateRow[],
-  enabledFocusMarkets: IntelligenceFocusMarket[]
-): IntelligenceSentimentAggregateRow[] {
-  const itemsById = new Map(pipeline.listItems().map((item) => [item.itemId, item]))
-  return rows.filter((row) =>
-    row.supportingItemIds.some((itemId) => {
-      const item = itemsById.get(itemId)
-      if (!item) return false
-      const definition = getIntelligenceSourceDefinition(item.sourceId)
-      if (!definition) return false
-      return isItemApplicableToFocusMarkets(item, definition, enabledFocusMarkets)
-    })
-  )
 }
 
 function broadenFilters(filters: IntelligenceWorkspaceFilters): IntelligenceWorkspaceFilters {

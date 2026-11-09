@@ -1400,6 +1400,10 @@ describe('daily briefing page', () => {
     expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
     const banner = dom.querySelector<HTMLElement>('[data-open-settings-section="ai"]')!
     expect(banner.textContent).toBe(text.aiSettings.goEnable)
+    // 说明句不在正文：状态旁边只有一个 ⓘ，它的可访问名就是那句话，点开才看到。
+    const warning = banner.closest<HTMLElement>('.mi-daily-briefing-page__websearch-warning')!
+    expect(warning.textContent).toBe(`${text.aiSettings.webSearchOff}${text.aiSettings.goEnable}`)
+    expect(warning.querySelector(`button[aria-label="${text.aiSettings.webSearchOffHint}"]`)).not.toBeNull()
 
     await act(async () => {
       banner.click()
@@ -2088,7 +2092,8 @@ it('writes into the day the reader is on, and says that day before the press', a
   const target = document.querySelector('[data-manual-target]')!
   expect(target.textContent).toContain('2026-10-30')
   expect(target.textContent).toContain('08:00')
-  expect(target.textContent).toContain('GMT+8')
+  // 2026-11-09：正文只留值，时区名在截止时刻的 ⓘ 里（弹窗自己的用例钉住那一侧）。
+  expect(target.textContent).not.toContain('GMT+8')
   await confirmManualRun()
   const request = (regenerate.mock.calls as unknown as [[{ generation: { asOf: string } }]])[0]![0]
   expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')
@@ -2262,8 +2267,13 @@ it('keeps the stored edition under a one-line failure mark when a retry fails af
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
-it('names a calendar that could not be read in the audit column only, with a re-read on that row', async () => {
-  // v2.124：正文不画"读不到"，读不到只在右列「数据缺口与限制」里说，重试挂在那一条上且只重读。
+it('names a calendar that could not be read in the paper and in the audit column, with a re-read on that row', async () => {
+  /*
+   * 口径已变（`8beefb1`，简报线 2026-11-09 02:42）：v2.124 的「正文一个字都不说、只在右列说」
+   * 被推翻了——正文现在用**一句话**说清为什么这一栏是空的，且这句话与右列**同一句**。
+   * 这里按新事实改断言，不是把红的改绿：正文出现的是「暂时读不到：<原因>」，不是「没数据」；
+   * 右列那条缺口与「只重读、不起 run」的判据原样保留。
+   */
   const doc = briefingDocument()
   const client = fakeClient({
     getToday: vi.fn(async () => ({
@@ -2272,8 +2282,12 @@ it('names a calendar that could not be read in the audit column only, with a re-
     }))
   })
   const dom = await renderPage(client)
-  // 正文：该栏节点数 0，且没有一个"读不到"字样。
-  expect(dom.querySelector('.mi-daily-briefing-page__paper .mi-brief-poster__macro-head')).toBeNull()
+  // 正文：这一栏保留标题，并在栏内说出原因——不是三句「没有」中的任何一句。
+  expect(dom.querySelector('.mi-daily-briefing-page__paper .mi-brief-poster__macro-head')).not.toBeNull()
+  const emptyLine = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper [data-macro-empty="unreadable"]')
+  expect(emptyLine).not.toBeNull()
+  expect(emptyLine!.textContent).toContain(text.macroUnreadable)
+  expect(emptyLine!.textContent).toContain(text.macroEmptyCodes['calendar-stale']!.replace('{hours}', '42'))
   for (const word of ['没数据', '没拿到', '未拿到', '未公布']) {
     expect(dom.querySelector('.mi-daily-briefing-page__paper')!.textContent).not.toContain(word)
   }
@@ -2990,5 +3004,67 @@ describe('a re-run over an existing edition says the body is the previous issue 
 
     expect(dom.querySelector('[data-briefing-previous-version]')).toBeNull()
     expect(dom.textContent).not.toContain('CPI 超预期 · Ripple 获批')
+  })
+
+  // 0.4.2 #11/#22：定时触发或别的窗口发起的一跑，读者点开它的「生成中」行；跑完的收尾重读
+  // 必须仍停在**这一期**、显示它自己的正文（或它自己的失败/空态），不许被默认期顶掉，
+  // 也不许落成「本期没有简报」。以前 `getToday` 一回来就无条件把选中项换成默认期。
+  it('keeps the scheduled run the reader opened selected when it finishes', async () => {
+    const today = '2026-10-30'
+    let finished = false
+    const defaultRow = {
+      date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const,
+      state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4
+    }
+    const generatingRow = {
+      date: today, periodId: 'period_0800', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const,
+      state: 'missing' as const, attemptCount: 1,
+      languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }]
+    }
+    const finishedRow = {
+      ...generatingRow, state: 'generated' as const, generatedAt: `${today}T01:00:00.000Z`,
+      windowEnd: `${today}T01:00:00.000Z`, readingsAvailable: 4
+    }
+    const client = fakeClient({
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: finished ? [defaultRow, finishedRow] : [defaultRow, generatingRow], today }
+      })),
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument(today) })),
+      get: vi.fn(async ({ date, periodId }: { date: string; periodId?: string }) => {
+        if (periodId !== 'period_0800') return { state: 'available' as const, document: briefingDocument(date) }
+        if (!finished) return { state: 'unavailable' as const, failureCode: 'not-generated' }
+        return {
+          state: 'available' as const,
+          document: {
+            ...briefingDocument(date, '刚生成的那一版'),
+            edition: { ...briefingDocument(date).edition, periodId: 'period_0800' }
+          }
+        }
+      }),
+      getProgress: vi.fn(async () => finished
+        ? { state: 'idle' as const }
+        : { state: 'running' as const, progress: { attemptId: 'a1', startedAt: `${today}T00:40:00.000Z`, stages: [] } })
+    })
+    const dom = await renderPage(client)
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+    const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_0800"]')!
+    expect(row).not.toBeNull()
+    await act(async () => { row.click(); await Promise.resolve() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    expect(dom.querySelector('[aria-current="true"]')?.getAttribute('data-period-id')).toBe('period_0800')
+
+    // 这一跑跑完了：进度转 idle、列表里的行变成有正文。收尾重读必须发生，并落回这一期。
+    const readsBeforeFinish = (client.list as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+    finished = true
+    for (let round = 0; round < 8; round += 1) {
+      await act(async () => { vi.advanceTimersByTime(1_600); await Promise.resolve() })
+    }
+
+    expect((client.list as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBeGreaterThan(readsBeforeFinish)
+    expect(dom.querySelector('[aria-current="true"]')?.getAttribute('data-period-id')).toBe('period_0800')
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('刚生成的那一版')
+    expect(dom.textContent).not.toContain(text.stateReasons.noBrief)
   })
 })

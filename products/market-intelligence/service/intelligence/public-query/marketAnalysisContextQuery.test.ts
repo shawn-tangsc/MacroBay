@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
+import type { IntelligenceModule } from '../intelligenceModule'
+import type { CrossAssetOps, MacroCalendarOps } from '../agent-capabilities/operationFacades'
 
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { intelligenceAgentCapabilities } from '../agent-capabilities/capabilityCatalog'
@@ -21,9 +23,9 @@ import {
   formatMarketAnalysisContextAcceptanceMarker,
   formatMarketAnalysisDataAccessHarness,
   listMarketAnalysisSourceAccess,
-  resolveMacroActual,
-  type MarketAnalysisDomainObservation
+  resolveMacroActual
 } from './marketAnalysisContextQuery'
+import type { MarketAnalysisDomainObservation } from './marketAnalysisContextProjection'
 import { registerIntelligenceAgentToolHandlers } from '../agent-capabilities/handlerRegistry'
 import {
   marketCalendarPublicPolicy,
@@ -31,6 +33,20 @@ import {
   type MarketCalendarPage
 } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
+import type { CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
+import type { FearGreedSnapshotResult, FundingRateHistoryResult, MarketIntelligenceQueryResult, MarketIntelligenceQueryType, SourceCoverageAsOf } from '../../../contracts/intelligenceQueryContracts'
+import type { CapitalConditionsSnapshotResult } from '../../../contracts/capitalConditionsQueryTypes'
+
+/**
+ * 按真实签名收窄的空端口：注册期不需要任何方法，真被调用就抛。
+ * 类型上是完整端口，所以不是用 `as never` 把判断瞒过去。
+ */
+function unusedOps<T extends object>(): T {
+  return new Proxy({}, { get: () => () => { throw new Error('port-not-used-in-this-test') } }) as T
+}
+function unusedPort<T>(): T {
+  return new Proxy({}, { get: () => { throw new Error('port-not-used-in-this-test') } }) as T
+}
 
 const AS_OF = '2026-09-25T08:30:00.000Z'
 
@@ -49,9 +65,9 @@ function macroMarketReading(seriesId: string, overrides: Partial<{ level: number
   }
 }
 
-function macroMarketSnapshot(overrides: Partial<Extract<MacroMarketSnapshot, { state: 'available' | 'empty' }>> = {}): MacroMarketSnapshot {
+function macroMarketSnapshot(overrides: Partial<MacroMarketSnapshot> = {}): MacroMarketSnapshot {
   const readings = overrides.readings ?? [macroMarketReading(SERIES.dollarIndexReal), macroMarketReading(SERIES.gold)]
-  return { state: readings.length > 0 ? 'available' : 'empty', asOf: AS_OF, readings, caveats: [], ...overrides, readings }
+  return { state: readings.length > 0 ? 'available' : 'empty', asOf: AS_OF, caveats: [], ...overrides, readings }
 }
 
 /** The four FRED series the daily block renders, on one trading day. */
@@ -69,12 +85,29 @@ function macroRatesSnapshot(): MacroRatesSnapshot {
 
 const SERIES_RATES = macroRatesSnapshotPublicPolicy.series
 
-function queryEnvelope(data: unknown, queryType = 'query_sentiment_snapshot') {
+function queryEnvelope<T>(data: T, queryType: MarketIntelligenceQueryType = 'query_sentiment_snapshot'): MarketIntelligenceQueryResult<T> {
   return {
     schemaVersion: 1, queryId: 'query-1', queryType, asOf: AS_OF, servedAt: AS_OF,
     resultHash: 'hash', scope: {}, timeWindow: { to: AS_OF }, confidence: 1,
     caveats: [], sourceCoverage: [], evidenceRefs: [], data
   }
+}
+
+/** 一份健康度行：真实读取器给的就是这些字段，用例只关心状态，其余按"正常来源"补齐。 */
+function sourceCoverage(sourceId: string, productionState: SourceCoverageAsOf['productionState'], confidence: number) {
+  return {
+    sourceId, sourceKind: 'rss', layer: 'collection', focusMarkets: [] as string[],
+    readiness: 'live' as const, productionState, includedInResult: true, confidence, caveats: [] as SourceCoverageAsOf['caveats']
+  }
+}
+
+/** 健康度信封必须带汇总：真实读取器返回的就是这两块，缺一块不是"健康度"。 */
+function sourceHealthEnvelope(sources: readonly SourceCoverageAsOf[]) {
+  const count = (state: SourceCoverageAsOf['productionState']) => sources.filter((source) => source.productionState === state).length
+  return queryEnvelope({
+    sources: [...sources],
+    summary: { freshCount: count('fresh'), staleCount: count('stale'), failedCount: count('failed'), pendingCount: count('pending'), fixtureOnlyCount: count('fixture-only'), plannedCount: count('planned') }
+  }, 'get_source_health')
 }
 
 const MARKET_OBSERVATION_KEY = JSON.stringify(['0xrouter', 'macro-calendar-0xrouter-economic-data', 'zh', JSON.stringify(['211664', 71565])])
@@ -99,29 +132,36 @@ function officialEvent(): MacroEconomicCalendarEventView {
   return {
     eventKey: 'US.CPI.2026-09-25', releaseGroupKey: 'US.BLS.CPI.2026-09', eventFamily: 'consumer-price-index',
     titleKey: 'cpi', countryCode: 'US', importance: 'high', periodKey: '2026-08', lifecycleState: 'released',
-    coverage: 'available', scheduledDate: '2026-09-25', scheduledAt: AS_OF, detectedAt: AS_OF,
+    coverage: 'available', scheduledDate: '2026-09-25', scheduledAt: AS_OF, releaseTimeSource: 'official', detectedAt: AS_OF,
     actual: { displayValue: '3.2%', unit: 'percent-yoy' }, consensus: null,
     consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: []
   }
 }
 
-function contextQueryService(overrides: Record<string, unknown> = {}) {
-  return {
+/** 被测函数要的那个投影服务：桩按真实签名收窄，覆盖项也按真实签名检查。 */
+type ContextQueryService = Parameters<typeof buildMarketAnalysisContext>[1]
+
+function contextQueryService(overrides: Partial<ContextQueryService> = {}): ContextQueryService {
+  // 基桩比端口宽（额外的舆情读取器只服务于别处的探针），所以先建对象再合并，类型在出口处收窄。
+  const base = {
     querySentimentSnapshot: async () => queryEnvelope({ status: 'unknown', scopeType: 'asset', scopeKey: 'BTC', horizon: '1h', supportingImpactCount: 0, supportingItemCount: 0, supportingClusterCount: 0 }),
     querySentimentSeries: async () => queryEnvelope({ points: [] }, 'query_sentiment_series'),
     queryRelatedEvents: async () => queryEnvelope({ events: [] }, 'query_related_events'),
     queryImpactTimeline: async () => queryEnvelope({ impacts: [] }, 'query_impact_timeline'),
-    getSourceHealth: async () => queryEnvelope({ sources: [] }, 'get_source_health'),
+    getSourceHealth: async () => sourceHealthEnvelope([]),
+    // 两个必需读取器：这一组用例不消费它们时，按"读不到/没有"给，与生产里缺读取器的处理一致。
+    queryOpenInterestHistory: async () => ({ state: 'unavailable' as const, failureCode: 'open-interest-history-query-unavailable' as const }),
+    queryCrossAssetSnapshot: async () => undefined,
     getEvidenceExcerpt: async () => queryEnvelope({}, 'get_evidence_excerpt'),
-    queryFearGreedSnapshot: async () => ({ state: 'available', asOf: AS_OF, score: 42, bucket: 'fear', observedAt: AS_OF }),
-    queryFundingRateHistory: async () => ({ state: 'available', asOf: AS_OF, btc: [{ observedAt: AS_OF, ratePercent: 0.01 }], eth: [{ observedAt: AS_OF, ratePercent: -0.02 }] }),
+    queryFearGreedSnapshot: async () => ({ state: 'available', asOf: AS_OF, score: 42, bucket: 'fear', observedAt: AS_OF } satisfies FearGreedSnapshotResult),
+    queryFundingRateHistory: async () => ({ state: 'available', asOf: AS_OF, btc: [{ observedAt: AS_OF, ratePercent: 0.01 }], eth: [{ observedAt: AS_OF, ratePercent: -0.02 }] } satisfies FundingRateHistoryResult),
     queryCapitalConditionsSnapshot: async () => ({
       state: 'available', asOf: AS_OF, etf: { state: 'unavailable' },
       coreStablecoins: { observedAt: AS_OF, verifiedAt: AS_OF, currentUsd: 100, change1dUsd: 1, change1dPercent: 1, change7dUsd: 2, change7dPercent: 2, change30dUsd: 3, change30dPercent: 3 },
       conclusion: 'partial'
-    }),
-    ...overrides
+    } satisfies CapitalConditionsSnapshotResult)
   }
+  return { ...base, ...overrides }
 }
 
 describe('market analysis data-access matrix', () => {
@@ -282,9 +322,11 @@ describe('market analysis data-access matrix', () => {
     const manifestToolNames = marketIntelligenceProductManifest.productAgentTools.map(tool => tool.toolName)
     const handlerIds: string[] = []
     registerIntelligenceAgentToolHandlers((registration) => handlerIds.push(registration.handlerId), {
-      jobRuntime: {} as JobRuntime,
-      macroCalendarOps: {} as never,
-      crossAssetOps: {} as never
+      // 这条用例只数"注册了几个 handler"：端口里没有一个会被调用。
+      jobRuntime: unusedPort<JobRuntime>(),
+      intelligenceModule: unusedPort<IntelligenceModule>(),
+      macroCalendarOps: unusedOps<MacroCalendarOps>(),
+      crossAssetOps: unusedOps<CrossAssetOps>()
     })
 
     expect(manifestToolNames).toEqual(intelligenceAgentCapabilities.map(capability => capability.id))
@@ -384,7 +426,7 @@ describe('market analysis data-access matrix', () => {
 
   it('reads the cross-asset snapshot and clears the domain once it carries comparable price evidence', async () => {
     const wired = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF },
-      contextQueryService({ queryCrossAssetSnapshot: async ({ range }: { range: '1h' | '24h' | '7d' }) => crossAssetSnapshotFor(range) }) as never)
+      contextQueryService({ queryCrossAssetSnapshot: async ({ range }) => crossAssetSnapshotFor(range) }))
 
     expect(wired.state).toBe('available')
     if (wired.state !== 'available') return
@@ -396,7 +438,7 @@ describe('market analysis data-access matrix', () => {
     expect(wired.facts.some(fact => fact.domain === 'cross-asset' && fact.metric === 'relative-return-2h' && fact.comparability === 'comparable')).toBe(true)
 
     // Not wired: the domain stays exactly as unhelpful as it is today, rather than crashing.
-    const bare = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService() as never)
+    const bare = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService())
     expect(bare.state === 'available' && bare.missingDomains).toContain('cross-asset')
   })
 
@@ -409,7 +451,7 @@ describe('market analysis data-access matrix', () => {
 
   it('turns hostile query projections into a safe unavailable domain without throwing', async () => {
     const hostileService = contextQueryService({
-      queryFundingRateHistory: async () => new Proxy({}, { get() { throw new Error('https://secret.example.test/raw') } })
+      queryFundingRateHistory: async () => new Proxy({}, { get() { throw new Error('https://secret.example.test/raw') } }) as unknown as FundingRateHistoryResult
     })
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, hostileService)
 
@@ -424,7 +466,7 @@ describe('market analysis data-access matrix', () => {
     Object.defineProperty(hostile, 'btc', { get: () => { throw new Error('provider payload') } })
     Object.defineProperty(hostile, 'eth', { get: () => { throw new Error('provider payload') } })
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
-      queryFundingRateHistory: async () => hostile
+      queryFundingRateHistory: async () => hostile as unknown as FundingRateHistoryResult
     }))
 
     expect(result.state).toBe('available')
@@ -435,12 +477,12 @@ describe('market analysis data-access matrix', () => {
 
   it('maps pending and unknown source health to degraded instead of healthy', async () => {
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
-      getSourceHealth: async () => queryEnvelope({ sources: [
-        { sourceId: 'pending-source', productionState: 'pending', confidence: 0.2, caveats: [] },
-        { sourceId: 'unknown-source', productionState: 'unknown', confidence: 0.2, caveats: [] },
-        { sourceId: 'fixture-source', productionState: 'fixture-only', confidence: 0.2, caveats: [] },
-        { sourceId: 'fresh-source', productionState: 'fresh', confidence: 0.9, caveats: [] }
-      ] }, 'get_source_health')
+      getSourceHealth: async () => sourceHealthEnvelope([
+        sourceCoverage('pending-source', 'pending', 0.2),
+        sourceCoverage('unknown-source', 'unknown', 0.2),
+        sourceCoverage('fixture-source', 'fixture-only', 0.2),
+        sourceCoverage('fresh-source', 'fresh', 0.9)
+      ])
     }))
 
     expect(result.state).toBe('available')
@@ -478,7 +520,7 @@ describe('market analysis data-access matrix', () => {
           {
             eventKey: 'US.CPI.2026-09-25', releaseGroupKey: 'US.BLS.CPI.2026-09', eventFamily: 'consumer-price-index',
             titleKey: 'cpi', countryCode: 'US', importance: 'high', periodKey: '2026-08', lifecycleState: 'released',
-            coverage: 'available', scheduledDate: '2026-09-25', scheduledAt: '2026-09-25T08:30:00.000Z',
+            coverage: 'available', scheduledDate: '2026-09-25', scheduledAt: '2026-09-25T08:30:00.000Z', releaseTimeSource: 'official',
             officialReleaseDate: '2026-09-25', publishedAt: AS_OF, detectedAt: AS_OF,
             actual: { displayValue: '3.2%', numericValue: 3.2, unit: 'percent-yoy' },
             previous: { displayValue: '3.1%', numericValue: 3.1, unit: 'percent-yoy' },
@@ -488,14 +530,14 @@ describe('market analysis data-access matrix', () => {
           {
             eventKey: 'US.FOMC.2026-09-30', releaseGroupKey: 'US.FOMC.2026-09-30', eventFamily: 'fomc',
             titleKey: 'fomc', countryCode: 'US', importance: 'high', periodKey: '2026-09-30', lifecycleState: 'scheduled',
-            coverage: 'available', scheduledDate: '2026-09-30', scheduledAt: '2026-09-30T18:00:00.000Z',
+            coverage: 'available', scheduledDate: '2026-09-30', scheduledAt: '2026-09-30T18:00:00.000Z', releaseTimeSource: 'official',
             detectedAt: '2026-09-26T00:00:00.000Z', consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable',
             providerIds: ['macro-calendar-fed'], caveats: []
           },
           {
             eventKey: 'US.NFP.2026-09-30', releaseGroupKey: 'US.BLS.NFP.2026-09', eventFamily: 'employment-situation',
             titleKey: 'nonfarm-payrolls', countryCode: 'US', importance: 'high', periodKey: '2026-09', lifecycleState: 'scheduled',
-            coverage: 'available', scheduledDate: '2026-09-30', scheduledAt: '2026-09-30T12:30:00.000Z',
+            coverage: 'available', scheduledDate: '2026-09-30', scheduledAt: '2026-09-30T12:30:00.000Z', releaseTimeSource: 'official',
             detectedAt: '2026-09-26T00:00:00.001Z', consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable',
             providerIds: ['macro-calendar-bls'], caveats: []
           }
@@ -779,9 +821,9 @@ describe('market analysis data-access matrix', () => {
 
   it('returns a bounded error when the safe projection exceeds 256 KiB', async () => {
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
-      getSourceHealth: async () => queryEnvelope({ sources: Array.from({ length: 5000 }, (_, index) => ({
-        sourceId: `safe-source-${index}-${'x'.repeat(80)}`, productionState: 'fresh', confidence: 1, caveats: []
-      })) }, 'get_source_health')
+      getSourceHealth: async () => sourceHealthEnvelope(Array.from({ length: 5000 }, (_, index) => ({
+        ...sourceCoverage(`safe-source-${index}-${'x'.repeat(80)}`, 'fresh', 1)
+      })))
     }))
 
     expect(result).toEqual({ state: 'unavailable', errorCode: 'analysis-context-too-large' })
@@ -809,13 +851,15 @@ describe('market analysis data-access matrix', () => {
  * The cross-asset snapshots the projection reads. Field-complete enough for the projection; the
  * strict `parseCrossAssetSnapshot` boundary is covered by `publicQueryService.test.ts`.
  */
-function crossAssetSnapshotFor(range: '1h' | '24h' | '7d') {
+function crossAssetSnapshotFor(range: '1h' | '24h' | '7d'): CrossAssetSnapshot {
   const lookback = range === '1h' ? 3 : range === '24h' ? 24 : 72
   const curve = (step: number) => Array.from({ length: lookback + 1 }, (_, index) => ({ at: AS_OF, returnPercent: index * step }))
   const metric = { state: 'available' as const, value: 2 }
   return {
-    mode: 'historical' as const, asOf: AS_OF, analysisEnd: AS_OF, range,
+    schemaVersion: 1, mode: 'historical' as const, servedAt: AS_OF, asOf: AS_OF, analysisEnd: AS_OF, windowStart: AS_OF, range,
     indexSource: 'real' as const,
+    correlations: { indexBtc: { ...metric, sampleCount: lookback, expectedCount: lookback }, indexEth: { ...metric, sampleCount: lookback, expectedCount: lookback } },
+    relativeReturns: { btcMinusIndex: metric, ethMinusBtc: metric },
     historyCoverage: { btc: { count: lookback, expectedCount: lookback, complete: true }, eth: { count: lookback, expectedCount: lookback, complete: true }, index: { count: lookback, expectedCount: lookback, complete: true } },
     curves: { btc: curve(0.1), eth: curve(0.05), index: curve(0.02) },
     closedReturns: { btc: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, eth: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, index: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric } }

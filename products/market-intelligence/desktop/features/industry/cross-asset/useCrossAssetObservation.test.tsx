@@ -2,13 +2,16 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+/** 固定基准：租约到期只是夹具字段，钩子不读它；摸系统时钟只会让同一提交的两次结果不可比。 */
+const FIXED_NOW = Date.parse('2026-11-09T00:00:00.000Z')
 import { useCrossAssetObservation } from './useCrossAssetObservation'
 
 let root: Root | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.replaceChildren(); vi.useRealTimers() })
 const client = () => ({
-  acquire: vi.fn(async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 })),
-  renew: vi.fn(async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 })),
+  acquire: vi.fn(async () => ({ state: 'active', leaseId: 'lease', expiresAt: FIXED_NOW + 30_000 })),
+  renew: vi.fn(async () => ({ state: 'active', leaseId: 'lease', expiresAt: FIXED_NOW + 30_000 })),
   release: vi.fn(async () => ({ state: 'released' })), refresh: vi.fn(async () => ({ state: 'accepted' })),
   getSourceConfiguration: vi.fn(async () => ({ state: 'configured', enabled: true })),
   query: vi.fn(async () => ({ state: 'unavailable' }))
@@ -106,7 +109,7 @@ describe('cross-asset visible lease hook', () => {
     api.acquire.mockImplementationOnce(() => new Promise(done => { resolve = done }))
     await render(api)
     await act(async () => root!.unmount()); root = undefined
-    await act(async () => resolve({ state: 'active', leaseId: 'late', expiresAt: Date.now() + 30_000 }))
+    await act(async () => resolve({ state: 'active', leaseId: 'late', expiresAt: FIXED_NOW + 30_000 }))
     expect(api.release).toHaveBeenCalledWith('late')
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -128,8 +131,10 @@ it('stays loading while the runtime is not ready, and only turns to the error af
 it('never paints an error while a slow query is still on its way', async () => {
   vi.useFakeTimers()
   const api = client()
+  // 延迟解决的查询：mock 推断出的 promise 结果类型比 `unknown` 窄，直接赋值会因逆变失败；
+  // 这里保留 `unknown` 作为存储类型（调用点给的是完整快照），只在交接处做一次类型转换。
   let resolve!: (value: unknown) => void
-  api.query.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+  api.query.mockImplementationOnce(() => new Promise(done => { resolve = done as unknown as (value: unknown) => void }))
   const page = await render(api)
   await act(async () => vi.advanceTimersByTimeAsync(5_000))
   expect(page.state().state).toBe('loading')

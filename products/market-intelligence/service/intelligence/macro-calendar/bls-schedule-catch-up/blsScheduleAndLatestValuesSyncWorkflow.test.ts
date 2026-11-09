@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { MacroCalendarRevision } from '../macroCalendarContracts'
+import type { BlsPythonBridgeOperation } from '../bls-python/blsPythonRequestsBridge'
 import { createBlsEmploymentMvpRefreshService } from '../bls-employment-refresh/blsEmploymentMvpRefreshService'
-import { createBlsScheduleAndLatestValuesSyncWorkflow } from './blsScheduleAndLatestValuesSyncWorkflow'
+import { createBlsScheduleAndLatestValuesSyncWorkflow, type BlsAutomaticRefreshInput } from './blsScheduleAndLatestValuesSyncWorkflow'
 
 const groups = [
   { family: 'cpi' as const, scheduledDate: '2026-08-12', period: '2026-M07' as const, eventKey: 'US.CPI.RELEASE.2026-M07' },
@@ -23,7 +25,7 @@ describe('BLS schedule and latest values workflow', () => {
 
   it('uses one frozen as-of, selects mature latest groups, and maps family outcomes in fixed order', async () => {
     const getEffectiveEventAsOf = vi.fn(() => undefined)
-    const refreshAutomatic = vi.fn(async (input: { family: string }) => ({ state: input.family === 'cpi' ? 'updated' as const : 'unchanged' as const }))
+    const refreshAutomatic = vi.fn(async (input: BlsAutomaticRefreshInput) => ({ state: input.family === 'cpi' ? 'updated' as const : 'unchanged' as const }))
     const workflow = createBlsScheduleAndLatestValuesSyncWorkflow({
       schedule: { sync: vi.fn(async () => ({ state: 'completed' as const, schedule: 'updated' as const, groups })) },
       repository: { getEffectiveEventAsOf },
@@ -39,10 +41,12 @@ describe('BLS schedule and latest values workflow', () => {
 
   it('keeps a missing CPI and Employment flow within the five exact locked reads', async () => {
     const events = [...cpiScheduleGroup(), ...employmentScheduleGroup()]
-    const getEffectiveEventAsOf = vi.fn(({ eventKey }) => events.find((event) => event.eventKey === eventKey))
+    const getEffectiveEventAsOf = vi.fn((input: { eventKey: string; asOf: string }) => events.find((event) => event.eventKey === input.eventKey))
     const refresh = createBlsEmploymentMvpRefreshService({
       repository: { getEffectiveEventAsOf, appendManyIfNew: vi.fn((revisions) => ({ insertedCount: revisions.length, dedupedCount: 0 })) },
-      valuesBridge: { run: vi.fn(async (input: { family: 'cpi' | 'employment' }) => ({ state: 'response' as const, status: 200, body: familyResponse(input.family) })) },
+      valuesBridge: { run: vi.fn(async (operation: BlsPythonBridgeOperation) => operation.kind === 'calendar-family-values'
+        ? { state: 'response' as const, status: 200, body: familyResponse(operation.family) }
+        : { state: 'unavailable' as const }) },
       evidence: { reserve: vi.fn(() => Object.freeze({})), release: vi.fn(), appendApiBody: vi.fn(() => ({ rawRecordId: 'raw', evidenceHash: 'hash' })) } as never,
       now: () => '2026-08-19T00:00:00.000Z'
     })
@@ -106,11 +110,12 @@ describe('BLS schedule and latest values workflow', () => {
     expect(refreshAutomatic).toHaveBeenCalledOnce()
   })
 
-  it('does not accept a mismatched member identity as a complete current family', async () => {
+  it('leaves the family decision to the refresh service and never reads the repository itself', async () => {
     const refreshAutomatic = vi.fn(async () => ({ state: 'updated' as const }))
+    const getEffectiveEventAsOf = vi.fn()
     const workflow = createBlsScheduleAndLatestValuesSyncWorkflow({
       schedule: { sync: vi.fn(async () => ({ state: 'completed' as const, schedule: 'unchanged' as const, groups: [groups[0]!] })) },
-      repository: { getEffectiveEventAsOf: vi.fn(({ eventKey }) => completeCpiRevision(eventKey === 'US.CORE_CPI.RELEASE.2026-M07' ? 'US.CORE_CPI.RELEASE.2026-M06' : eventKey)) },
+      repository: { getEffectiveEventAsOf },
       refresh: { refreshAutomatic }, now: () => '2026-08-19T00:00:00.000Z'
     })
 
@@ -118,6 +123,11 @@ describe('BLS schedule and latest values workflow', () => {
       state: 'completed', schedule: 'unchanged', values: { cpi: 'updated', employment: 'not-required' }
     })
     expect(refreshAutomatic).toHaveBeenCalledOnce()
+    // This layer only chooses candidates and maps the answer; whether a member identity makes a
+    // complete family is decided inside the service, and that has its own judgement:
+    // `blsEmploymentMvpRefreshService.test.ts` -> "rejects a lock-internal family whose repository
+    // member has a mismatched event key".
+    expect(getEffectiveEventAsOf).not.toHaveBeenCalled()
   })
 })
 
@@ -133,8 +143,15 @@ function employmentScheduleGroup() {
   ]
 }
 
-function schedule(eventKey: string, releaseGroupKey: string, eventNameKey: string, scheduledDate: string) {
-  return { eventKey, releaseGroupKey, eventFamily: 'bls', eventNameKey, countryCode: 'US', importance: 'high', periodKey: '2026-M07', lifecycleState: 'scheduled' as const, revisionKind: 'schedule' as const, scheduledDate, detectedAt: '2026-08-01T00:00:00.000Z', recordedAt: '2026-08-01T00:00:00.000Z', providerId: 'macro-calendar-bls', descriptorId: 'macro-calendar-bls-python-schedule', sourceUrl: 'https://bls.gov', evidenceHash: 'schedule', evidenceRefs: [], snapshotHash: 'snapshot', parserVersion: 'parser', caveats: ['bls-python-schedule'] }
+function schedule(eventKey: string, releaseGroupKey: string, eventNameKey: string, scheduledDate: string): MacroCalendarRevision {
+  return {
+    revisionId: `${eventKey}:${scheduledDate}:schedule`, eventKey, releaseGroupKey,
+    eventFamily: eventNameKey === 'cpi' ? 'cpi' : eventNameKey === 'core-cpi' ? 'core-cpi' : 'employment-situation',
+    eventNameKey, countryCode: 'US', importance: 'high', periodKey: '2026-M07', lifecycleState: 'scheduled' as const,
+    revisionKind: 'schedule' as const, scheduledDate, detectedAt: '2026-08-01T00:00:00.000Z', recordedAt: '2026-08-01T00:00:00.000Z',
+    providerId: 'macro-calendar-bls', descriptorId: 'macro-calendar-bls-python-schedule', sourceUrl: 'https://bls.gov',
+    evidenceHash: 'schedule', evidenceRefs: [], snapshotHash: 'snapshot', parserVersion: 'parser', caveats: ['bls-python-schedule']
+  }
 }
 
 function familyResponse(family: 'cpi' | 'employment'): string {

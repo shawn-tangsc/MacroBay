@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
 import { EconomicCalendar } from './index'
+import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 
 // Real antd `DatePicker` would paint its panel; this stand-in keeps the two things these tests are
 // about — the value the control was handed, and the fact that it is only mounted once opened.
@@ -59,7 +60,7 @@ async function renderInspector(subject: Record<string, unknown>, timeZone = 'Asi
   const input = {
     queryMonth: vi.fn(async () => ({ state: 'available' as const, asOf: queryAsOf, events: [subject] })),
     getEventDetail: vi.fn(async () => ({ state: 'available' as const, asOf: queryAsOf, event: subject })),
-    setReleaseTime: vi.fn(async () => ({ state: 'saved' as const, scheduledAt: '2026-10-15T13:30:00.000Z', scheduledDate: '2026-10-15' })),
+    setReleaseTime: vi.fn<MacroEconomicCalendarClient['setReleaseTime']>(async () => ({ state: 'saved' as const, scheduledAt: '2026-10-15T13:30:00.000Z', scheduledDate: '2026-10-15' })),
     clearReleaseTime: vi.fn(async () => ({ state: 'cleared' as const })),
     previewManualBlsIcs: vi.fn(async () => ({ state: 'failed' as const, failureCode: 'invalid-file' as const })),
     importManualBlsIcs: vi.fn(async () => ({ state: 'failed' as const, failureCode: 'invalid-file' as const })),

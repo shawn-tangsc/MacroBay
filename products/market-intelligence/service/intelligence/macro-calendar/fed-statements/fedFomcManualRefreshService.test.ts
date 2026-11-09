@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { MacroCalendarRevision } from '../macroCalendarContracts'
 import { createFedFomcManualRefreshService } from './fedFomcManualRefreshService'
 
 const now = '2026-08-13T08:00:00.000Z'
@@ -40,9 +41,33 @@ describe('Fed FOMC manual refresh', () => {
   })
 })
 
-function schedule(overrides: Record<string, unknown> = {}) {
+/**
+ * 形状 2：夹具从真实的 `MacroCalendarRevision` 取形状（`Partial` 只放宽用例要改的那几个字段），
+ * 不再用 `Record<string, unknown>` 展开——那会把每个字段拓宽成 unknown，整个对象不满足仓储端口。
+ */
+function schedule(overrides: Partial<MacroCalendarRevision> = {}): MacroCalendarRevision {
   return {
-    eventKey, releaseGroupKey: eventKey, eventFamily: 'fomc', scheduledDate: '2026-07-29', scheduledAt: undefined,
-    lifecycleState: 'scheduled', providerId: 'macro-calendar-fed', ...overrides
+    revisionId: 'revision-1',
+    eventKey,
+    releaseGroupKey: eventKey,
+    eventFamily: 'fomc',
+    eventNameKey: 'fomc',
+    countryCode: 'US',
+    importance: 'high',
+    periodKey: '2026-M07',
+    lifecycleState: 'scheduled',
+    revisionKind: 'schedule',
+    scheduledDate: '2026-07-29',
+    detectedAt: now,
+    recordedAt: now,
+    providerId: 'macro-calendar-fed',
+    descriptorId: 'fed-fomc',
+    sourceUrl: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',
+    evidenceHash: 'evidence-hash',
+    evidenceRefs: [],
+    snapshotHash: 'snapshot-hash',
+    parserVersion: 'v1',
+    caveats: [],
+    ...overrides
   }
 }

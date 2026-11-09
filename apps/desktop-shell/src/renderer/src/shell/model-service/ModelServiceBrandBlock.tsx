@@ -1,8 +1,9 @@
 import { Activity, ExternalLink, Lock } from 'lucide-react'
-import { Switch } from 'antd'
+import { Button, Switch } from 'antd'
 
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { providerCategoryOf } from '@platform/ai/providers/providerPresets'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { resolveProviderVisual } from '@platform/ui/icons/modelProviderVisuals'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -91,15 +92,15 @@ export function ModelServiceBrandBlock({
             {resolveProviderDisplayName(labels, provider) || labels.providerFallback}
           </h1>
           {titleLink ? (
-            <button
-              type="button"
-              className="model-service-title-link"
-              data-provider-title-link
-              title={labels.providerConsole}
-              aria-label={labels.providerConsole}
-              onClick={() => onOpenExternal(titleLink)}>
-              <ExternalLink size={12} />
-            </button>
+            <IconButton
+              ariaLabelKey="modelService.providerConsole"
+              dataAttributes={{ 'data-provider-title-link': true }}
+              icon={ExternalLink}
+              onSelect={() => onOpenExternal(titleLink)}
+              resolveText={(key) => (key === 'modelService.providerConsole' ? labels.providerConsole : '')}
+              size="sm"
+              tooltipKey="modelService.providerConsole"
+            />
           ) : null}
           {savedHint ? (
             <span className="model-service-saved-hint" data-provider-saved-hint role="status">
@@ -123,23 +124,20 @@ export function ModelServiceBrandBlock({
         </div>
       </div>
       <span className="model-service-brand-spacer" />
-      <button
-        type="button"
-        className="model-service-pill"
+      {/* 普通动作按档位：antd `Button` 默认档（不再挂 `model-service-pill`）。 */}
+      <Button
         data-provider-connection-check
+        icon={<Activity size={13} aria-hidden="true" />}
         onClick={onOpenConnectionCheck}>
-        <Activity size={13} aria-hidden="true" />
         {labels.connectionCheckTitle}
-      </button>
+      </Button>
       {consoleUrl ? (
-        <button
-          type="button"
-          className="model-service-pill"
+        <Button
           data-provider-console
+          icon={<ExternalLink size={13} aria-hidden="true" />}
           onClick={() => onOpenExternal(consoleUrl)}>
-          <ExternalLink size={13} aria-hidden="true" />
           {labels.providerConsole}
-        </button>
+        </Button>
       ) : null}
       <ModelServiceProviderMoreMenu
         labels={labels}

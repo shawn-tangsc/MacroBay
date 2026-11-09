@@ -94,10 +94,12 @@ describe('AgentRuntimeMessagePartBlocks', () => {
 
     expect(markup).toContain('agent-message-runtime-group execution')
     expect(markup).toContain('class="agent-message-runtime-group-item tool-result error"')
-    expect(markup).toContain('class="agent-message-runtime-detail-fold"')
+    // 折叠区走壳：判「有折叠」看 `collapsible-group`，判「默认收起」看 `aria-expanded="false"`
+    // 与没有 `-active` 项——原生 `<details>` 时期这里查的是 `open=""`。
+    expect(markup).toContain('collapsible-group')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).not.toContain('ant-collapse-item-active')
     expect(markup).not.toContain('class="agent-message-runtime-part tool-result error"')
-    expect(markup).not.toContain('class="agent-message-runtime-group-item tool-result error" open=""')
-    expect(markup).not.toContain('class="agent-message-runtime-detail-fold" open=""')
   })
 
   it('renders thumbnails and open actions for previewable detail items', () => {

@@ -163,6 +163,8 @@ export type AgentTextWorkbench = {
       productToolStatusAvailable: string
       productToolStatusMissingHandler: string
       productToolStatusNotInstalled: string
+      /** 产品包没有显示名时的中性称呼。**绝不回落到内部 slug**——读者拿着它做不了任何事。 */
+      unnamedProductToolPackage: string
       productToolSummary: (total: number, readOnly: number, writable: number, asOf: number) => string
       productToolDisabledNote: string
       productToolColumnTool: string

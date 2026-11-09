@@ -1,5 +1,6 @@
+import { Button } from 'antd'
 import { useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { Info } from 'lucide-react'
 
 import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
 import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
@@ -32,7 +33,10 @@ import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnap
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
 import type { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
@@ -45,7 +49,6 @@ type CryptoDashboardText = {
   workspaceLabel: string
   title: string
   description: string
-  backToAgents: string
   configureSources: string
   crossAsset: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
   macroReleaseDynamics: {
@@ -65,9 +68,9 @@ type CryptoDashboardText = {
   dailyBriefing: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['dailyBriefing']
 }
 
-type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
+type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -79,6 +82,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
 }): React.ReactElement {
+  const resolveProductKey = useProductTextKey()
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, now })
   const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
@@ -114,7 +118,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     [text.crossAsset, calendarEventTitles]
   )
   const feedRows = projectDashboardFeedRows({
-    macroClient: Boolean(macroMarketClient), macroState: macroView.state,
+    macroClient: Boolean(macroMarketClient), macroState: macroView.state, ratesState: macroRatesView.state,
     ...(macroView.snapshot ? { macro: macroView.snapshot } : {}),
     ...(macroRatesView.snapshot ? { rates: macroRatesView.snapshot } : {}),
     indexLoading: Boolean(crossAssetClient) && feedView.indexState === 'loading',
@@ -150,13 +154,24 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       <header className="mi-crypto-dashboard__header">
         <div className="mi-crypto-dashboard__heading">
           <p className="mi-crypto-dashboard__label">{text.workspaceLabel}</p>
-          <h1>{text.title}</h1>
-          <p>{text.description}</p>
+          {/* 标题与它自己的 ⓘ 是一组，图标紧跟标题文字（行内 gap 4px、不换行）：不推到行尾、也不
+              单独占一行。读法那句（阅读顺序 + partial 口径）收进浮层，正文只留标题——
+              它说的是「怎么读这张表」，不是读者这一刻要知道的状态。 */}
+          <div className="mi-crypto-dashboard__title-row">
+            <h1>{text.title}</h1>
+            <Popover labelKey="pages.intelligence.portal.dashboard.description" resolveText={resolveProductKey}
+              trigger={triggerProps => (
+                <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.descriptionLabel"
+                  icon={Info} resolveText={resolveProductKey} size="sm" variant="plain" />
+              )} />
+          </div>
         </div>
         <div className="mi-crypto-dashboard__tools">
-          {briefingEnabled ? <button className="mi-crypto-dashboard__briefing" onClick={onOpenBriefing} type="button">{text.dailyBriefing.entry}</button> : null}
-          <button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="button">{text.configureSources}</button>
-          <button className="mi-crypto-dashboard__back" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToAgents}</button>
+          {/* 两处页头命令按钮：换 antd `Button` 默认档，className 原样保留——尺寸/字重仍由
+              `cryptoDashboard.css` 那几条决定（选择器已加 `.ant-btn` 提高特异性），视觉档位不变。
+              原来还有第三颗「返回 Agent」，用户 2026-11-09 定：那个说法已经不存在，按钮整个去掉。 */}
+          {briefingEnabled ? <Button className="mi-crypto-dashboard__briefing" onClick={onOpenBriefing} type="default">{text.dailyBriefing.entry}</Button> : null}
+          <Button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="default">{text.configureSources}</Button>
         </div>
       </header>
 
@@ -168,7 +183,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {crossAssetClient ? <CrossAssetObservationPanel
         client={crossAssetClient}
         macroSnapshot={macroView.snapshot}
+        macroState={macroView.state}
         rates={macroRatesView.snapshot}
+        ratesState={macroRatesView.state}
         // The panel reads the same calendar this dashboard already reads, rather than reaching for a
         // second client of its own: one month query per window, one source of truth for the events.
         calendar={client}
@@ -250,10 +267,10 @@ function SentimentPanel({ fearGreedState, text, onRetry }: { fearGreedState: Das
 function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, feedRows, nowMs, text, onManageSource, onOpenCalendar }: { calendarState: DashboardEconomicCalendarState; fearGreedState: DashboardFearGreedState; fundingRateState: DashboardFundingRateHistoryState; feedRows: ReturnType<typeof projectDashboardFeedRows>; nowMs: number; text: CryptoDashboardText; onManageSource: () => void; onOpenCalendar: () => void }): React.ReactElement {
   const tags = { synthetic: text.crossAsset.syntheticTag, proxy: text.crossAsset.proxyTag, realIndex: text.crossAsset.indexNames.real }
   return <section className="mi-crypto-dashboard__source-region"><header><h2>{text.context.sourceStatus.title}</h2></header>{dashboardRealSourcePolicy.map((source) => source.sourceId === 'economic-calendar'
-    ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={calendarState.state} key={source.sourceId}><i /><span>{text.macroReleaseDynamics.sourceName}</span><small>{text.macroReleaseDynamics.sourceStates[calendarState.state]}</small><div><button onClick={onOpenCalendar} type="button">{text.macroReleaseDynamics.calendarAction}</button><button onClick={() => onManageSource()} type="button">{text.macroReleaseDynamics.manageSettings}</button></div></div>
+    ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={calendarState.state} key={source.sourceId}><i /><span>{text.macroReleaseDynamics.sourceName}</span><small>{text.macroReleaseDynamics.sourceStates[calendarState.state]}</small><div><Button onClick={onOpenCalendar} size="small" type="text">{text.macroReleaseDynamics.calendarAction}</Button><Button onClick={() => onManageSource()} size="small" type="text">{text.macroReleaseDynamics.manageSettings}</Button></div></div>
     : source.sourceId === 'fear-greed'
-      ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fearGreedState.state} key={source.sourceId}><i /><span>{text.fearGreed.sourceName}</span><small>{text.fearGreed.sourceStates[fearGreedState.state]}</small><div><button onClick={() => onManageSource()} type="button">{text.fearGreed.manageSettings}</button></div></div>
-      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fundingRateState.state} key={source.sourceId}><i /><span>{text.positioning.sourceName}</span><small>{text.positioning.sourceStates[fundingRateState.state]}</small><div><button onClick={() => onManageSource()} type="button">{text.positioning.manageSettings}</button></div></div>)}
+      ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fearGreedState.state} key={source.sourceId}><i /><span>{text.fearGreed.sourceName}</span><small>{text.fearGreed.sourceStates[fearGreedState.state]}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.fearGreed.manageSettings}</Button></div></div>
+      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fundingRateState.state} key={source.sourceId}><i /><span>{text.positioning.sourceName}</span><small>{text.positioning.sourceStates[fundingRateState.state]}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.positioning.manageSettings}</Button></div></div>)}
     <FeedStatusStrip rows={feedRows} text={text.feedStatus} tags={tags} nowMs={nowMs} onManageSource={onManageSource} />
   </section>
 }

@@ -33,6 +33,7 @@ export function createDailyBriefingPeriodRunJournal(
       await store.openPeriodRun?.({
         date: input.date,
         periodId: input.periodId,
+        locale: input.locale,
         expectedLocales: [input.locale],
         primaryRequested: input.locale,
         primaryUsed: input.locale,
@@ -53,6 +54,7 @@ export function createDailyBriefingPeriodRunJournal(
       await store.settlePeriodRun?.({
         date: input.date,
         periodId: input.periodId,
+        locale: input.locale,
         state,
         finishedAt: input.now(),
         writingRounds

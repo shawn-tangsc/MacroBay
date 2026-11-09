@@ -41,6 +41,29 @@ const edition = (date: string, text?: string) => ({
   document: document(date, text)
 })
 
+/** 一期一语言一条运行记录（0.4.2 #18）：语言是这条记录身份的一部分。 */
+const periodRun = (
+  locale: 'zh-CN' | 'en-US',
+  snapshotId: string,
+  snapshotHash: string,
+  date = '2026-11-02'
+) => ({
+  date,
+  periodId: 'default',
+  locale,
+  expectedLocales: [locale] as const,
+  primaryRequested: locale,
+  primaryUsed: locale,
+  snapshotId,
+  snapshotHash,
+  contentVersion: 1,
+  writingRounds: 0,
+  direction: 'bearish' as const,
+  editionRows: ['market:btc', 'funds:etf-btc'],
+  state: 'running' as const,
+  startedAt: `${date}T00:00:00.000Z`
+})
+
 describe('daily briefing store', () => {
   // 用户 2026-11-06：同一个时间、同一个窗口、同一个语言生成了两份简报。查这个槽的眼睛在这里：
   // 键是 (日期, 截止时刻, 语言)，窗口不进键，期号也不进键（期号是那一版的属性，不是它的身份）。
@@ -127,12 +150,14 @@ describe('daily briefing store', () => {
     expect(await store.deletePeriod!('2026-10-30', 'default', 'zh-CN')).toEqual({ editions: 0, attempts: 0, periodRuns: 0 })
   })
 
-  it('records how each attempt was triggered and how long its window was', async () => {
-    // 用户 2026-11-06：列表那一行要自己说清"哪一次、怎么来的、覆盖多长"。
+  it('records how each attempt was triggered, how long its window was, and its nominal cutoff', async () => {
+    // 用户 2026-11-06：列表那一行要自己说清"哪一次、怎么来的、覆盖多长"；
+    // 0.4.2 #19：还要说清"截止是哪一刻"——没有版次的失败行没有正文，只能从这里取。
     const store = createDailyBriefingSqliteStore(':memory:')
     await store.beginAttempt!({ date: '2026-11-06', periodId: 'p_catchup', locale: 'zh-CN',
-      startedAt: '2026-11-06T00:00:00.000Z', trigger: 'catch-up', windowHours: 12 })
-    // 老调用点不给这两样：写空，读出来就是"未记录"，绝不拿当前设置回填。
+      startedAt: '2026-11-06T00:00:00.000Z', trigger: 'catch-up', windowHours: 12,
+      nominalAt: '2026-11-06T12:00:00.000Z' })
+    // 老调用点不给这三样：写空，读出来就是"未记录"，绝不拿当前设置回填。
     await store.beginAttempt!({ date: '2026-11-06', periodId: 'p_legacy', locale: 'zh-CN',
       startedAt: '2026-11-06T00:01:00.000Z' })
 
@@ -141,6 +166,14 @@ describe('daily briefing store', () => {
     const [legacy] = await store.listAttempts!('2026-11-06', 'zh-CN', 'p_legacy')
     expect(legacy?.trigger).toBeUndefined()
     expect(legacy?.windowHours).toBeUndefined()
+
+    // 列表要分得开「发起时刻」与「名义截止」：09:30 重跑一个 07:00 的期，两个值都得在。
+    const runs = await store.listAttemptRuns!('2026-11-06', '2026-11-06')
+    expect(runs.find((run) => run.periodId === 'p_catchup')).toMatchObject({
+      startedAt: '2026-11-06T00:00:00.000Z',
+      nominalAt: '2026-11-06T12:00:00.000Z'
+    })
+    expect(runs.find((run) => run.periodId === 'p_legacy')?.nominalAt).toBeUndefined()
   })
 
   it('replaces the same day rather than stacking editions', async () => {
@@ -259,7 +292,7 @@ describe('writing attempts', () => {
 
 
 describe('deleting one language', () => {
-  it('removes that language\'s attempts, keeps the other edition and the shared run readable', async () => {
+  it('removes that language\'s attempts and run, keeps the other edition and its run readable', async () => {
     // The failure mode this catches: a delete that forgot `where ... and locale = ?` removes the
     // whole issue and still reports success. Only the other edition's absence would show it — so the
     // assertions below are counts before/after and a read of the edition that must survive.
@@ -273,14 +306,15 @@ describe('deleting one language', () => {
     })
     await store.beginAttempt!({ date: '2026-11-03', locale: 'zh-CN', startedAt: '2026-11-03T00:00:00.000Z' })
     await store.beginAttempt!({ date: '2026-11-03', locale: 'en-US', startedAt: '2026-11-03T00:01:00.000Z' })
+    // 运行记录按语言各一行：删中文版只带走中文那一行，英文那一行必须原样留着。
     await store.openPeriodRun!({
-      date: '2026-11-03', periodId: 'default', expectedLocales: ['zh-CN', 'en-US'],
-      primaryRequested: 'zh-CN', primaryUsed: 'zh-CN', snapshotId: 'bs_x', snapshotHash: 'h',
-      contentVersion: 1, writingRounds: 1, direction: 'bearish', editionRows: [], state: 'published',
-      startedAt: '2026-11-03T00:00:00.000Z'
+      ...periodRun('zh-CN', 'bs_zh', 'h-zh', '2026-11-03'), state: 'published', writingRounds: 1
+    })
+    await store.openPeriodRun!({
+      ...periodRun('en-US', 'bs_en', 'h-en', '2026-11-03'), state: 'published', writingRounds: 1
     })
     const attemptsBefore = (await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length
-    const runBefore = await store.getPeriodRun!('2026-11-03', 'default')
+    const englishRunBefore = await store.getPeriodRun!('2026-11-03', 'default', 'en-US')
 
     const removed = await store.deletePeriod!('2026-11-03', 'default', 'zh-CN')
 
@@ -289,30 +323,18 @@ describe('deleting one language', () => {
     expect(await store.get('2026-11-03', 'zh-CN')).toBeUndefined()
     // 2. The other edition is still there and still readable.
     expect((await store.get('2026-11-03', 'en-US'))?.document.edition.locale).toBe('en-US')
-    // 3. 中文版那条尝试跟着删掉；英文版那条还在；共用的大运行记录留着（英文版还读得到）。
+    // 3. 中文版那条尝试与它自己的运行记录跟着删掉；英文版两样都还在。
     expect(removed.attempts).toBe(1)
+    expect(removed.periodRuns).toBe(1)
     expect((await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length).toBe(attemptsBefore - 1)
     expect((await store.listAttempts!('2026-11-03', 'en-US', 'default')).length).toBe(1)
-    expect(await store.getPeriodRun!('2026-11-03', 'default')).toEqual(runBefore)
+    expect(await store.getPeriodRun!('2026-11-03', 'default', 'zh-CN')).toBeUndefined()
+    expect(await store.getPeriodRun!('2026-11-03', 'default', 'en-US')).toEqual(englishRunBefore)
   })
 })
 
 describe('period runs', () => {
-  const run = (snapshotId: string, snapshotHash: string) => ({
-    date: '2026-11-02',
-    periodId: 'default',
-    expectedLocales: ['zh-CN' as const],
-    primaryRequested: 'zh-CN',
-    primaryUsed: 'zh-CN' as const,
-    snapshotId,
-    snapshotHash,
-    contentVersion: 1,
-    writingRounds: 0,
-    direction: 'bearish' as const,
-    editionRows: ['market:btc', 'funds:etf-btc'],
-    state: 'running' as const,
-    startedAt: '2026-11-02T00:00:00.000Z'
-  })
+  const run = (snapshotId: string, snapshotHash: string) => periodRun('zh-CN', snapshotId, snapshotHash)
 
   it('replaces the run when the period is regenerated, and settles its state in place', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
@@ -320,13 +342,30 @@ describe('period runs', () => {
     // A regeneration replaces the editions, so the run has to describe the batch that produced them.
     await store.openPeriodRun!(run('bs_second', 'hash-second'))
 
-    expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({
-      periodId: 'default', expectedLocales: ['zh-CN'], snapshotId: 'bs_second', snapshotHash: 'hash-second',
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'zh-CN')).toMatchObject({
+      periodId: 'default', locale: 'zh-CN', expectedLocales: ['zh-CN'], snapshotId: 'bs_second', snapshotHash: 'hash-second',
       state: 'running', direction: 'bearish', editionRows: ['market:btc', 'funds:etf-btc']
     })
 
-    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })
-    expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({ state: 'published', writingRounds: 1, finishedAt: '2026-11-02T00:05:00.000Z' })
+    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'zh-CN')).toMatchObject({ state: 'published', writingRounds: 1, finishedAt: '2026-11-02T00:05:00.000Z' })
+  })
+
+  it('keeps one run per language, so settling zh never lands on the en row', async () => {
+    // 0.4.2 #18 的判据：两语言各开各结，第二语言不许覆盖第一语言。
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.openPeriodRun!(periodRun('zh-CN', 'bs_zh', 'hash-zh'))
+    await store.openPeriodRun!(periodRun('en-US', 'bs_en', 'hash-en'))
+    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })
+    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', locale: 'en-US', state: 'failed', finishedAt: '2026-11-02T00:06:00.000Z' })
+
+    expect((await store.listPeriodRuns!('2026-11-02', '2026-11-02'))
+      .map((entry) => [entry.locale, entry.snapshotId, entry.state]))
+      .toEqual([['en-US', 'bs_en', 'failed'], ['zh-CN', 'bs_zh', 'published']])
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'zh-CN'))
+      .toMatchObject({ locale: 'zh-CN', snapshotId: 'bs_zh', state: 'published' })
+    expect(await store.getPeriodRun!('2026-11-02', 'default', 'en-US'))
+      .toMatchObject({ locale: 'en-US', snapshotId: 'bs_en', state: 'failed' })
   })
 
   it('lists the runs of a date range, including one that wrote no edition at all', async () => {
@@ -429,5 +468,46 @@ describe('tombstones stay inside their own period', () => {
     // Listing for one issue never mixes in the other.
     expect((await store.listAttempts!(base.date, base.locale, 'p_evening')).map((row) => row.attemptNo)).toEqual([evening])
     expect((await store.listAttempts!(base.date, base.locale, 'p_morning')).map((row) => row.attemptNo)).toEqual([morning])
+  })
+})
+
+/**
+ * 事故回归（2026-11-09）：存储版本从 3 提到 4 之后，读侧只认「当前版本 + 2」，
+ * 把上一版（3）写的每一行整批藏了起来——历史 10/30–11/02 和今天的中文版一起消失。
+ *
+ * 判据：存储版本不是文档版本，**2..当前版本都必须读得出来**；只拒绝未来版本（这个 build
+ * 不认识它）。直接插行，绕过写入路径，钉住读侧这一条。
+ */
+describe('reading editions written by an earlier storage version', () => {
+  let directory: string | undefined
+
+  afterEach(() => {
+    if (directory !== undefined) rmSync(directory, { recursive: true, force: true })
+    directory = undefined
+  })
+
+  it('reads every earlier storage version and still rejects a future one', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'briefing-storage-version-'))
+    const filePath = join(directory, 'daily-briefings.sqlite')
+    const store = createDailyBriefingSqliteStore(filePath)
+    const db = openSqliteDatabase(filePath)
+    const insert = db.prepare(`insert into daily_briefings
+      (edition_date, period_id, locale, generated_at, window_start, window_end, document_json, schema_version)
+      values (?, 'default', 'zh-CN', ?, ?, ?, ?, ?)`)
+    for (const version of [2, 3, 4, 5]) {
+      const date = `2026-10-0${version}`
+      insert.run(date, `${date}T00:30:00.000Z`, `${date}T00:00:00.000Z`, `${date}T00:30:00.000Z`,
+        JSON.stringify(document(date, `v${version}`)), version)
+    }
+    db.close()
+
+    // `list`：2 / 3 / 4 都在，5（未来版本）不在。
+    const listed = await store.list('2026-10-01', '2026-10-06', 'zh-CN')
+    expect(listed.map((row) => `${row.date}:${row.document.lede.text}`)).toEqual([
+      '2026-10-02:v2', '2026-10-03:v3', '2026-10-04:v4'
+    ])
+    // `get`：今天那一版就是走这条路读的，旧存储版本同样要读得出来。
+    expect((await store.get('2026-10-03', 'zh-CN', 'default'))?.document.lede.text).toBe('v3')
+    expect(await store.get('2026-10-05', 'zh-CN', 'default')).toBeUndefined()
   })
 })

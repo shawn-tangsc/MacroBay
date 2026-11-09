@@ -8,6 +8,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../../shared/i18n/productText'
 import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
+import type { EconomicCalendarText } from './economicCalendarText'
 
 let root: Root | undefined
 
@@ -65,7 +66,7 @@ describe('ImportBlsIcsDialog', () => {
 async function render(
   state: Parameters<typeof ImportBlsIcsDialog>[0]['dialogState'],
   handlers: { onConfirm?: () => void; onClose?: () => void } = {},
-  text = productText['zh-CN'].pages.intelligence.portal.calendar,
+  text: EconomicCalendarText = productText['zh-CN'].pages.intelligence.portal.calendar,
   language: 'zh-CN' | 'en-US' = 'zh-CN'
 ) {
   const container = document.createElement('div')

@@ -37,7 +37,8 @@ function snapshot(tradingDayCount = 10): CapitalConditionsSnapshotResult {
 function project(value: CapitalConditionsSnapshotResult) {
   const facts: AgentFact[] = []
   const caveats = new Set<string>()
-  const observations: Parameters<typeof projectCapital>[4] = {}
+  // 第六个参数是 observations（第五个是 caveats），按真实签名取类型。
+  const observations: Parameters<typeof projectCapital>[5] = {}
   projectCapital(value, undefined, asOf, facts, caveats, observations)
   return { facts, caveats, observations }
 }

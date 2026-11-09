@@ -1,4 +1,4 @@
-import { editionNewsTitle, type BriefingConclusionSynthesis, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import { dailyBriefingPolicy, editionNewsTitle, editionNewsTitleIsOriginal, type BriefingConclusionSynthesis, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -9,6 +9,7 @@ import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
+import { editorialNotice } from './dailyBriefingEditorialNotice'
 import { briefingMacroValueLabel } from '../../../contracts/dailyBriefingMacroValueText'
 import { BriefingDataArea } from './BriefingDataArea'
 import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type fearGreedBucketWords as FearGreedBuckets, type paymentDirectionWords as PayDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
@@ -58,12 +59,19 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const visibleMacro = newestFirst(doc.news.macro
     .filter((item) => item.visibility !== 'hidden')
     .map((item) => ({ item, at: item.scheduledAt, id: item.eventKey }))).map((entry) => entry.item)
+  // 宏观那一栏空着时**为什么**空：与右列「数据缺口与限制」共用同一个推导、同一句话
+  // （`briefingMacroEmptyCopy`）。**读不到**（源失败/未启用/过期/采集失败…）要在正文说
+  // 「暂时读不到：<原因>」（用户 2026-11-09 放宽呈现分寸后定，`MI-2-R89`）；**确实没有**
+  // （窗口里真的没有高影响事件）该函数返回 `null`，正文照旧一个字都不印——那一档的空态形态
+  // 仍按 2026-11-06 定稿与 `MI-2-R81` 待裁，这里不选边。
+  const macroEmpty = briefingMacroEmptyCopy(doc, {
+    macroEmptyCodes: text.macroEmptyCodes,
+    macroUnreadable: text.macroUnreadable
+  })
   // 正文不再印"窗口里共几条、几条没拿到"（用户 2026-11-06：这类话会让人觉得简报不可信）。
   // 「几条真摆出来了 / 几条没列」只在本栏有截断时说（`02` v2.125）：条数 = 本栏展示行数，
   // 候选总数不许当成事件条数——那是把"有限"说成"全部"。
-  // 宏观那一栏：有事件才有这一栏；**读不到或确实没有都不在正文里画**（用户 2026-11-06）。
-  // 「读不到」进右列「数据缺口与限制」说（那里有原因与重试），正文里一个字都不提。
-  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
+  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null
   const hasData = chosen.length > 0
   // What the forecast stands on: the synthesis's own premises and falsifiers, plus the one line that
   // says whether the earlier read held. The audit-only detail also carries the forward view, the
@@ -117,6 +125,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
             number said the same thing twice and never named what it counted. */}
       </div>
     </header>
+    {/* 没有 AI 解读的那一期：屏幕、导出图、复制文本三处说同一句（r17）。海报就是导出的那张图，
+        所以这句话写在这里，导出自动带上。 */}
+    {editorialNotice(doc.provenance.editorialFailure, text) ? <p className="mi-brief-poster__ai-notice" data-editorial-notice={editorialNotice(doc.provenance.editorialFailure, text)!.case}>{editorialNotice(doc.provenance.editorialFailure, text)!.sentence}</p> : null}
     {doc.comparison ? <p className="mi-brief-poster__comparison">{comparisonText(doc, text, locale)}</p> : null}
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
 
@@ -125,12 +136,12 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       {visibleNews.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
         <span data-polarity={item.polarity}>{clockWithZone(item.publishedAt, formatTime)}</span>
         <div>
-          <p>{editionNewsTitle(item, doc.edition.locale)}{item.why ? <span className="mi-brief-poster__news-focus">{text.newsFocus}</span> : null}</p>
+          <p>{editionNewsTitle(item, doc.edition.locale)}{editionNewsTitleIsOriginal(item, doc.edition.locale) ? <span className="mi-brief-poster__news-original">{text.newsOriginal}</span> : null}{item.why ? <span className="mi-brief-poster__news-focus">{text.newsFocus}</span> : null}</p>
           {item.why ? <small>{item.why}</small> : null}
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
-      {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {visibleMacro.length > 0 || macroEmpty ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
           `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
@@ -149,15 +160,20 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div>)}
       {/* 不再有"共 N 条（另 M 条未列出）"（用户 2026-11-06）：AI 判定有用的全部显示，
           所以这句话在正文与导出里都不该存在——它描述的截断已经不存在了。 */}
-      {/* 一行，正文段落样式：不是错误、不给图标、不给重试。「确实没有」那一档用另一句，
-          由同一个推导决定，正文与限制清单说的是同一句话。
-          **它是一个网格行**（`__macro` 那套两列），里面那格才跨两列：海报的网格是逐行的，
-          把这句放成行的兄弟，`grid-column` 不会生效，「跨两列」就悄悄做不到。 */}
+      {/* 一行，正文段落样式：不是错误、不给图标、不给重试。**它是一个网格行**（`__macro` 那套
+          两列），里面那格才跨两列：海报的网格是逐行的，把这句放成行的兄弟，`grid-column` 不会
+          生效，「跨两列」就悄悄做不到。用 `<p>` 而不是 `<span>`：`__macro > span` 那条是给日期
+          列的字号与不换行，套在这句上会把它压成 10.5px 单行。 */}
+      {visibleMacro.length === 0 && macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
+        <p className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</p>
+      </div> : null}
 
     </section> : null}
 
     {hasData ? <section className="mi-brief-poster__data-section">
       <h2>{text.sections.data}</h2>
+      {/* 必须显示的读数超过阈值：全部照印，另外说一句"今天信息较多"——不许为了版面删行。 */}
+      {must.length > dailyBriefingPolicy.denseDayMustRows ? <p className="mi-brief-poster__dense-day">{text.denseDay}</p> : null}
       <BriefingDataArea groups={groups} text={text} locale={locale} formatTime={formatTime} paymentDirectionsCompact={paymentDirectionsCompact} policyWords={policyWords} changeArrows={changeArrows} fearGreedBuckets={fearGreedBuckets} />
     </section> : null}
 

@@ -41,8 +41,16 @@ export function calendarEventReminderDefinition(): Readonly<Record<string, unkno
   }
 }
 
+/**
+ * 读设置只有两种结果，**没有「默认值」这一种**：文件坏了不等于读者关掉了。
+ * 读不到时调用方不许当成 `enabled: false`。
+ */
+export type CalendarReminderSettingsRead =
+  | Readonly<{ state: 'readable'; settings: CalendarReminderSettings }>
+  | Readonly<{ state: 'unreadable' }>
+
 export type CalendarEventReminderDeps = Readonly<{
-  readSettings: () => CalendarReminderSettings
+  readSettings: () => CalendarReminderSettingsRead
   /** 未来窗口内的事件；调用方只给这段窗口，本模块不负责翻页。 */
   readEvents: () => readonly CalendarReminderEvent[]
   submit: (request: NotificationSubmitRequest) => Promise<unknown>
@@ -80,7 +88,14 @@ export function registerCalendarEventReminderJob(
   applySchedule: (enabled: boolean) => void
 }> {
   const runOnce = async (): Promise<CalendarEventReminderRunResult> => {
-    const settings = deps.readSettings()
+    const read = deps.readSettings()
+    // 读不到设置：这一轮**什么都不判**。既不说「关着」（那是替读者关掉提醒），也不按默认去推。
+    // 页面那一行会显示「读不到」，日志里留一条，读者与诊断都看得见。
+    if (read.state === 'unreadable') {
+      deps.log?.({ kind: 'skipped', reason: 'settings-unreadable', count: 1 })
+      return { submitted: [], skipped: { 'settings-unreadable': 1 } }
+    }
+    const settings = read.settings
     const selection = selectCalendarReminderCandidates({
       events: settings.enabled ? deps.readEvents() : [],
       settings,
@@ -111,7 +126,10 @@ export function registerCalendarEventReminderJob(
   }
 
   // 重启自行重建：注册发生在每次启动，开着就排上；关着就确保没有残留。
-  applySchedule(deps.readSettings().enabled)
+  // **读不到时不动排程**：当成关着会把提醒静默停掉，当成开着会推读者没要的——两种都是编事实。
+  const boot = deps.readSettings()
+  if (boot.state === 'readable') applySchedule(boot.settings.enabled)
+  else deps.log?.({ kind: 'skipped', reason: 'settings-unreadable', count: 1 })
 
   return { runOnce, applySchedule }
 }

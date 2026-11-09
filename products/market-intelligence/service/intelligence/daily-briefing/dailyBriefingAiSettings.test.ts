@@ -14,7 +14,7 @@ const providers = [
 ]
 
 const settings = (overrides: Partial<DailyBriefingAiSettings> = {}): DailyBriefingAiSettings => ({
-  editorialEnabled: true, providerId: '', modelId: '', updatedAt: '2026-10-30T00:00:00.000Z', ...overrides
+  editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false, updatedAt: '2026-10-30T00:00:00.000Z', ...overrides
 })
 
 const deps = {

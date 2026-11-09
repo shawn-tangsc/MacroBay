@@ -31,7 +31,7 @@ import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
 import { useBlsIcsImport } from './useBlsIcsImport'
 import { useMarketCalendar } from './useMarketCalendar'
 import { MarketCalendarInspector } from './MarketCalendarEvents'
-import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
+import { CalendarSourceStatusInfo, MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
 import { CalendarEventStatusPolicy } from './calendarEventStatusModel'
 import { useCalendarStatusClock } from './useCalendarStatusClock'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
@@ -40,6 +40,7 @@ import { DashboardPanelDrawer } from '../../../pages/intelligence/DashboardPanel
 import { economicCalendarMonthLoadingPolicy, toDetailEvent } from './economicCalendarMonthResult'
 import type { EconomicCalendarText } from './economicCalendarText'
 import { useEconomicCalendarMonthWindow, type EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
+import { calendarEventDay, readSelectedEvent } from './economicCalendarSelection'
 
 import './economicCalendar.css'
 
@@ -342,7 +343,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           <Button aria-label={text.manualImport.action} className="mi-economic-calendar__import" icon={<Upload aria-hidden="true" size={15} />} onClick={() => void blsIcsImport.selectFile()} size="small">
             {text.manualImport.action}
           </Button>
-          <button aria-label={text.monthNavigation.previous} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, -1))} type="button"><ChevronLeft aria-hidden="true" size={15} />{text.monthNavigation.previous}</button>
+          <Button aria-label={text.monthNavigation.previous} icon={<ChevronLeft aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, -1))}>{text.monthNavigation.previous}</Button>
           <DatePicker
             allowClear={economicCalendarMonthPickerPolicy.allowClear}
             aria-label={text.monthNavigation.picker}
@@ -357,21 +358,23 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             picker={economicCalendarMonthPickerPolicy.picker}
             value={toEconomicCalendarMonthPickerValue(selectedMonth)}
           />
-          <button aria-label={text.monthNavigation.next} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))} type="button"><ChevronRight aria-hidden="true" size={15} />{text.monthNavigation.next}</button>
-          <button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)} type="button">{text.monthNavigation.current}</button>
+          <Button aria-label={text.monthNavigation.next} icon={<ChevronRight aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))}>{text.monthNavigation.next}</Button>
+          <Button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)}>{text.monthNavigation.current}</Button>
           <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => setCalendarPanelOpen(true)}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
-          <button onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}</button>
+          <Button icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack}>{text.backToDashboard}</Button>
         </div>
       </header>
       {shouldShowMarketCalendarProxyNotice(market.sources) ? <NetworkProxyBanner onOpenProxySettings={openProxySettings} /> : null}
       <section className="mi-market-calendar__status" aria-live="polite">
-        <span>{text.unifiedDay.coverage.replace('{months}', gridMonths.join(' · '))}</span>
-        {market.pending ? <span>{text.market.pending}</span> : market.feedback ? <span>{text.market[market.feedback.state]}</span> : null}
+        {/* 常态说明（读取范围、刷新成功、采集时刻、更新频率）都收进那颗 ⓘ；正文只留状态。 */}
+        {market.pending ? <span>{text.market.pending}</span> : market.feedback && market.feedback.state !== 'completed' ? <span>{text.market[market.feedback.state]}</span> : null}
         {market.feedback?.failureCode === 'storage-unavailable' || market.feedback?.failureCode === 'storage-pressure' ? <span>{text.unifiedDay.storageUnavailable}</span> : null}
         {market.loading ? <LoadingState layout="inline" size="sm" label={text.market.loading} /> : null}
-        {market.failure ? <span>{text.market.queryUnavailable}</span> : null}
+        {/* 只回答「命名月读到了没有」：窗口级 `failure` 会把相邻月的失败说成这一屏读不到。 */}
+        {market.namedMonthState.status === 'failed' ? <span>{text.market.queryUnavailable}</span> : null}
         {market.sources.map(source => <MarketCalendarSourceStatus key={source.eventType} source={source} text={text} />)}
+        <CalendarSourceStatusInfo coverage={text.unifiedDay.coverage.replace('{months}', gridMonths.join(' · '))} sources={market.sources} text={text} />
         {market.feedback?.failureCode === 'disabled' || market.feedback?.failureCode === 'credential-not-configured' ?
           <Button size="small" onClick={openIntelligenceSourcesSettings}>{text.market.settings}</Button> : null}
       </section>
@@ -380,6 +383,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       <div className="mi-economic-calendar__workspace">
         <CalendarMonthBoard
           officialUnavailable={blsAvailability.unavailable === undefined ? undefined : text.officialUnavailableNote}
+          officialFeeds={blsAvailability.feeds}
           statusNow={statusNow}
           asOf={asOf}
           today={today}
@@ -393,6 +397,10 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           selectedEventKey={selectedEventKey}
           state={monthState}
           text={text}
+          onRetryMonth={() => loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))}
+          marketMonthRead={market.namedMonthState}
+          marketLoading={market.loading}
+          onRetryMarket={() => void market.refresh()}
         />
         <section aria-label={text.dayEvents.listLabel} className="mi-calendar-day-list" data-calendar-day-list ref={dayList}>
           <h2>{text.dayEvents.title.replace('{date}', selectedDay)}</h2>
@@ -412,6 +420,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />
       <CalendarDetailSurface
         blsUnavailableNotice={blsAvailability.notice}
+        blsRefreshBlocked={blsAvailability.refreshBlocked}
         client={client}
         contentId={detailContentId}
         detailState={detailState}
@@ -457,16 +466,4 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
 
 function toCanonicalUtcMillis(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}T${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(date.getUTCSeconds()).padStart(2, '0')}.${String(date.getUTCMilliseconds()).padStart(3, '0')}Z`
-}
-
-/** The calendar day an official event is drawn on, in the workspace's display zone. */
-function calendarEventDay(event: EconomicCalendarEventView, timeZone: string): string {
-  return event.scheduledAt ? calendarDisplayDate(event.scheduledAt, timeZone) : event.scheduledDate
-}
-
-function readSelectedEvent(state: EconomicCalendarMonthState, eventKey: string | undefined): { event: EconomicCalendarEventView; version: number } | undefined {
-  if (!eventKey) return undefined
-  if (state?.state !== 'available') return undefined
-  const event = state.events.find((candidate) => candidate.eventKey === eventKey)
-  return event ? { event, version: state.version } : undefined
 }

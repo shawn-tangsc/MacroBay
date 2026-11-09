@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IconButton } from '../icon-button'
 import { Popover, type PopoverTriggerProps } from './Popover'
 
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 
 import { Info } from 'lucide-react'
 
@@ -71,21 +71,38 @@ async function mountLines(keys: readonly string[], resolveText: (value: string) 
   return trigger
 }
 
+async function mountContent(content: ReactNode): Promise<HTMLButtonElement> {
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root!.render(<Popover content={content} trigger={buttonTrigger} />)
+  })
+  const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')
+  if (!trigger) throw new Error('no trigger rendered')
+  return trigger
+}
+
 /**
  * 等到浮层内容真的出现，**轮询到条件成立，不用固定 sleep**。
  *
  * 原来这里等一次 20ms，单独跑够用、全套并发跑就不够——同一棵树、同一时刻，跑全套红、单跑绿，
  * 那是测试在对时序作假设，不是产品行为。等待要等的是「东西出现了」，不是一个时长。
  */
-async function waitForLines(): Promise<HTMLElement[]> {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const rendered = [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
-    if (rendered.length > 0) return rendered
+async function waitForElement(selector: string, attempts = 60): Promise<HTMLElement | null> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const found = document.querySelector<HTMLElement>(selector)
+    if (found !== null) return found
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
     })
   }
-  return []
+  return document.querySelector<HTMLElement>(selector)
+}
+
+async function waitForLines(): Promise<HTMLElement[]> {
+  await waitForElement('[data-popover-line]')
+  return [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
 }
 
 async function tick(): Promise<void> {
@@ -441,16 +458,7 @@ describe('Popover', () => {
       await act(async () => {
         button.focus()
       })
-      const layer = await (async () => {
-        for (let attempt = 0; attempt < 60; attempt += 1) {
-          const found = document.querySelector<HTMLElement>('.ant-popover')
-          if (found !== null) return found
-          await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 10))
-          })
-        }
-        return null
-      })()
+      const layer = await waitForElement('.ant-popover')
       expect(layer).not.toBeNull()
       expect(layer!.parentElement).toBe(document.body)
       return { left: Number.parseFloat(layer!.style.left), top: Number.parseFloat(layer!.style.top) }
@@ -462,5 +470,74 @@ describe('Popover', () => {
     const second = await render(600, 900)
     expect(second.left - first.left).toBe(500)
     expect(second.top - first.top).toBe(300)
+  })
+
+  it('keeps the key path unchanged when no content slot is given', async () => {
+    // 传了 `content` 的分支不能把老路挤掉：逐行渲染、首行强调、开合与焦点回收都还是原来那套。
+    const trigger = await mountLines(['ui.test.first', 'ui.test.second'])
+    const rendered = await waitForLines()
+
+    expect(rendered.map((line) => line.textContent)).toEqual(['ui.test.first', 'ui.test.second'])
+    expect(rendered[0]?.style.fontWeight).toBe('600')
+    expect(rendered[1]?.style.fontWeight).toBe('')
+    // 描述指向的仍是这块内容节点。
+    const describedBy = trigger.getAttribute('aria-describedby')
+    expect(document.getElementById(describedBy!)).toBe(rendered[0]?.closest('[data-popover-content]'))
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    await vi.waitFor(() => { expect(isOpen(trigger)).toBe(false) })
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('renders the caller-built node in the same bubble and still describes the trigger by it', async () => {
+    const trigger = await mountContent(
+      <div data-caller-node>
+        <span>alpha fragment</span>
+        <span>second fragment</span>
+      </div>
+    )
+    await act(async () => {
+      trigger.focus()
+    })
+
+    const bubble = await waitForElement('[data-popover-content]')
+    expect(bubble).not.toBeNull()
+    // 槽里的节点原样进来：组件不解析它、也不给它加行样式。
+    expect(bubble!.querySelector('[data-caller-node]')?.textContent).toContain('second fragment')
+    expect(bubble!.querySelector('[data-popover-line]')).toBeNull()
+
+    // 无障碍走的是同一条：触发件的描述就是这块内容节点。
+    const describedBy = trigger.getAttribute('aria-describedby')
+    expect(describedBy).not.toBeNull()
+    expect(document.getElementById(describedBy!)).toBe(bubble)
+
+    // 开合与焦点回收不变。
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    await vi.waitFor(() => { expect(isOpen(trigger)).toBe(false) })
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('treats an empty slot as nothing to say, not as missing copy', async () => {
+    // 调用方按条件拼行，这一帧可能一个片段都没有：那时不画空框，也不当成「文案没写」的缺陷。
+    // `''` 也算空：它是合法 ReactNode，漏掉它就会渲染出一个空气泡。
+    for (const empty of [null, false, ''] as const) {
+      const host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      await act(async () => {
+        root!.render(<Popover content={empty} trigger={buttonTrigger} />)
+      })
+
+      expect(document.querySelector('[data-trigger]'), String(empty)).toBeNull()
+      expect(document.querySelector('[data-popover-content]'), String(empty)).toBeNull()
+
+      await act(async () => root?.unmount())
+      root = undefined
+      document.body.replaceChildren()
+    }
   })
 })

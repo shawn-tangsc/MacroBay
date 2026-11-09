@@ -78,7 +78,7 @@ function isExactEvent(value: unknown, asOf: string): value is MacroEconomicCalen
   // payload from a main process that predates it must still draw — making it required here blanked the
   // detail pane. A missing source means neither a convention nor an edit is on record, so it is
   // normalised to the published-time case rather than rejected.
-  const optional = ['scheduledAt', 'releaseTimeSource', 'conventionScheduledAt', 'officialReleaseDate', 'publishedAt', 'actual', 'previous']
+  const optional = ['scheduledAt', 'releaseTimeSource', 'conventionScheduledAt', 'officialReleaseDate', 'publishedAt', 'createdAt', 'actualDetectedAt', 'actual', 'previous']
   if (!isExactRecord(value, [...required, ...optional], required)) return false
   return isBoundedText(value.eventKey) && isBoundedText(value.releaseGroupKey) && isBoundedText(value.eventFamily) && isBoundedText(value.titleKey) &&
     isBoundedText(value.periodKey) && value.countryCode === 'US' && value.importance === 'high' && isLifecycleState(value.lifecycleState) &&
@@ -87,7 +87,9 @@ function isExactEvent(value: unknown, asOf: string): value is MacroEconomicCalen
     isExactStringArray(value.providerIds, ['macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls'], 1) &&
     isExactStringArray(value.caveats, macroEconomicCalendarCaveatPolicy.admittedCaveats) &&
     (value.releaseTimeSource === undefined || isReleaseTimeSource(value.releaseTimeSource)) &&
-    isOptionalCanonicalUtcMillis(value.scheduledAt) && isOptionalDate(value.officialReleaseDate) && isOptionalCanonicalUtcMillis(value.publishedAt) && isOptionalValue(value.actual) && isOptionalValue(value.previous)
+    isOptionalCanonicalUtcMillis(value.scheduledAt) && isOptionalDate(value.officialReleaseDate) && isOptionalCanonicalUtcMillis(value.publishedAt) &&
+    isOptionalCanonicalUtcMillis(value.createdAt) && isOptionalCanonicalUtcMillis(value.actualDetectedAt) &&
+    isOptionalValue(value.actual) && isOptionalValue(value.previous)
 }
 
 function isBoundedText(value: unknown): value is string {

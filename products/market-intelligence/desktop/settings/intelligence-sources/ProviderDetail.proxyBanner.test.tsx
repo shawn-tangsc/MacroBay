@@ -38,6 +38,11 @@ function labels(): ProviderDetailLabels {
     connectionSucceeded: settingsText.connectionSucceeded,
     connectionFailed: settingsText.connectionFailed,
     connectionUnsupported: settingsText.connectionUnsupported,
+    unavailableReasonCode: settingsText.unavailableReasonCode,
+    unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria,
+    collectionPolicyStopped: settingsText.collectionPolicyStopped,
+    automaticSyncStopped: settingsText.automaticSyncStopped,
+    lastSuccessfulSync: settingsText.lastSuccessfulSync,
     apiKey: settingsText.apiKey
   }
 }
@@ -91,7 +96,7 @@ async function render(provider: ProviderView): Promise<void> {
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(ProviderDetail, { labels: labels(), provider, onSelectSource: () => undefined }))
+    root?.render(createElement(ProviderDetail, { labels: labels(), provider }))
     await Promise.resolve()
   })
 }
@@ -141,7 +146,7 @@ describe('ProviderDetail proxy notice', () => {
     await act(async () => button(settingsText.testConnection).click())
     await flush()
 
-    // The standing requirement stays, but a rejected key never becomes a VPN verdict.
+    // The standing requirement stays, but a rejected key never becomes a 本地代理 verdict.
     expect(document.body.querySelector('[data-network-proxy-banner]')?.getAttribute('data-tone')).toBe('requires')
     expect(document.body.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
   })
@@ -198,7 +203,7 @@ describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', 
     expect(banner?.getAttribute('data-tone')).toBe('failed')
     expect(banner?.getAttribute('data-proxy-configured')).toBe('yes')
     expect(banner?.textContent).toContain(settingsText.proxyNotice.configuredFailedTitle)
-    // 不许再让他「先打开 VPN 或本地代理」——那件事他已经做了。
+    // 不许再让他「先打开 本地代理 或本地代理」——那件事他已经做了。
     expect(banner?.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
   })
 

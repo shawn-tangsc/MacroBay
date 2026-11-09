@@ -25,6 +25,8 @@ export const IpcChannels = {
   appRelaunch: 'platform:app-relaunch',
   settingsGet: 'platform:settings-get',
   settingsUpdate: 'platform:settings-update',
+  /** 启动期读设置失败后的恢复面（状态 / 重试读取 / 显式重置设置文件）。 */
+  settingsRecovery: 'platform:settings-recovery',
   /**
    * 更新提示（「知道有新版本 + 给下载入口」）三条，只读一态 + 两个动作。
    *

@@ -2,16 +2,25 @@ import { describe, expect, it } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 import { macroCalendarProviderSettingsPolicy } from '../../../contracts/macro/economicCalendarQueryContracts'
-import { handleGetCalendarState } from './readHandlers'
+import type { IntelligenceModule } from '../intelligenceModule'
+import type { CrossAssetOps, MacroCalendarOps } from './operationFacades'
+import { handleGetCalendarState, type ReadHandlerDeps } from './readHandlers'
 
 const [fed, bea] = macroCalendarProviderSettingsPolicy.providerIds
 
-function deps(readConfiguration: () => Promise<unknown>) {
+/**
+ * 依赖按**真实签名**声明：返回类型就是 `ReadHandlerDeps`，契约以后再加必填项，这里会当场红。
+ *
+ * `handleGetCalendarState` 只走 `macroCalendarOps.readConfiguration`；`intelligenceModule`、
+ * `jobRuntime`、`crossAssetOps` 是契约上必填但这条路径不碰，所以各自给一个显式占位。
+ */
+function deps(readConfiguration: () => Promise<unknown>): ReadHandlerDeps {
   return {
     jobRuntime: {} as JobRuntime,
+    intelligenceModule: {} as IntelligenceModule,
     getAppLanguage: async () => 'zh-CN' as const,
-    macroCalendarOps: { readConfiguration } as never,
-    crossAssetOps: {} as never
+    macroCalendarOps: { readConfiguration } as unknown as MacroCalendarOps,
+    crossAssetOps: {} as CrossAssetOps
   }
 }
 

@@ -274,6 +274,14 @@ export const ProviderRuntimeFailurePolicy = {
   source: 'main-process provider runtime',
   configurationRequired: 'provider-configuration-required',
   requestFailed: 'provider-request-failed',
+  /**
+   * 余额/额度用尽（上游 `error.code` 是余额类机器码，或 HTTP 402）。
+   *
+   * 单独一个码的理由：调用方（日报那条「等额度恢复」）不许从报错文本里猜。折进
+   * `provider-request-failed` 之后，「没配好」「被限流」「欠费」三种处理完全不同的事只能
+   * 显示成同一句「请重试」，而欠费重试一百次也不会好。
+   */
+  accountBalanceInsufficient: 'provider-account-balance-insufficient',
   /** PLAT-74：上游已停止提供该模型（retired / no longer available）⇒「该模型已下线」。 */
   modelRetired: 'provider-model-retired',
   /** PLAT-74：模型未开通（model_not_activated）⇒「该模型未开通」。 */
@@ -284,6 +292,7 @@ export const ProviderRuntimeFailurePolicy = {
 
 export type ProviderRuntimeFailureCode = typeof ProviderRuntimeFailurePolicy.configurationRequired
   | typeof ProviderRuntimeFailurePolicy.requestFailed
+  | typeof ProviderRuntimeFailurePolicy.accountBalanceInsufficient
   | typeof ProviderRuntimeFailurePolicy.modelRetired
   | typeof ProviderRuntimeFailurePolicy.modelNotActivated
   | typeof ProviderRuntimeFailurePolicy.modelNotFound

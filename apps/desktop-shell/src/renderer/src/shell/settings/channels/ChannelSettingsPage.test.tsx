@@ -90,6 +90,17 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
+/**
+ * 选中一项之后，等选择框真的把这一项显示出来——等条件，不等一个宏任务。
+ * 失败信息带上等的是哪个值，免得「下拉没关」和「值没选上」分不清。
+ */
+async function waitForSelection(label: string): Promise<void> {
+  await vi.waitFor(() => {
+    const shown = [...document.querySelectorAll('.ant-select-selection-item')]
+    expect(shown.some((node) => node.textContent?.trim() === label), `selection ${label}`).toBe(true)
+  })
+}
+
 describe('reading the channel list', () => {
   it('surfaces a failed first read as an error with retry, never as "no channels"', async () => {
     installPlatform({ catalog: vi.fn(async () => { throw new Error('ipc-unavailable') }) })
@@ -520,23 +531,8 @@ describe('enabling a channel runs a live check', () => {
   })
 })
 
-describe('platforms that are not implemented', () => {
-  it('says only that this version cannot connect it, with no add button and no red copy', async () => {
-    installPlatform()
-    const container = await mount()
-
-    const feishu = [...container.querySelectorAll('button')].find((node) => node.textContent?.includes(CHANNEL_DISPLAY_NAME.feishu['zh-CN']))
-    await act(async () => feishu?.click())
-
-    expect(container.textContent).toContain(labels.channelUnsupportedPane)
-    const addButton = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    expect(addButton).toBeUndefined()
-    expect(container.querySelector('.channel-row')).toBeNull()
-  })
-})
-
 describe('the platform list follows the approved layout', () => {
-  it('keeps the six platforms in the fixed order, whatever their status is', async () => {
+  it('lists only the platforms this version can actually connect, in the fixed order', async () => {
     installPlatform()
     const container = await mount()
 
@@ -544,7 +540,8 @@ describe('the platform list follows the approved layout', () => {
     const order = [...container.querySelectorAll('.channel-platform-item')].map((node) =>
       node.querySelectorAll('span')[1]?.textContent?.trim()
     )
-    expect(order).toEqual(['飞书', 'Telegram', 'QQ', '微信', 'Discord', 'Slack'])
+    // 产品 2026-11-09：未实现的四个（飞书 / QQ / 微信 / Discord）撤下，只留能开的两个。
+    expect(order).toEqual(['Telegram', 'Slack'])
   })
 
   it('never shows another platform sentence once the selection changes', async () => {
@@ -575,12 +572,14 @@ describe('the platform list follows the approved layout', () => {
     expect([...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)).toBeUndefined()
   })
 
-  it('gives every platform a mark, and never brightens the ones that cannot be connected', async () => {
+  it('gives every listed platform its own mark', async () => {
     installPlatform()
     const container = await mount()
 
-    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(6)
+    // 列表只留能开的两个平台（产品 2026-11-09），每个都有自己的图形。
+    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(2)
     expect(container.querySelector('.channel-platform-logo[data-platform-logo="telegram"]')).not.toBeNull()
+    expect(container.querySelector('.channel-platform-logo[data-platform-logo="slack"]')).not.toBeNull()
   })
 })
 
@@ -749,8 +748,9 @@ describe('saving a credential has to prove itself', () => {
     ) as HTMLElement
     await act(async () => {
       option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    // 选完之后等选择框真的显示这一项，而不是等一个宏任务。
+    await waitForSelection('助手一')
     const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
     await act(async () => typeInto(token, '123:new-token'))
     await clickByText(labels.channelCreate)
@@ -986,8 +986,8 @@ describe('the working folder picker', () => {
     ) as HTMLElement
     await act(async () => {
       agentOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    await waitForSelection('助手一')
     const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set

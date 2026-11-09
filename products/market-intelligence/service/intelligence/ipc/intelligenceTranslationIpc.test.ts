@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createJobRuntime } from '@platform/jobs'
 import { createDefaultProviderState } from '@platform/ai/providers/providerStore'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
+import type { ProductIpcHandler } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { createIntelligencePipeline } from '../application/intelligencePipeline'
 import { createIntelligenceTranslationService } from '../application/intelligenceTranslationService'
@@ -56,7 +57,10 @@ function createTranslationModule() {
   const pipeline = createIntelligencePipeline()
   const jobRuntime = createJobRuntime()
   const structuredModelInvocation = createStructuredModelInvocationService({
-    getProviderState: async () => createDefaultProviderState()
+    getProviderState: async () => createDefaultProviderState(),
+    // The port is required at construction; these cases never reach the model (the translation job
+    // is stubbed), so the answer stands in for the platform's proxy-aware fetch.
+    fetch: vi.fn(async () => new Response('{}', { status: 200 }))
   })
   const service = createIntelligenceTranslationService({
     storage,
@@ -73,7 +77,7 @@ function registerHandlers(
   jobRuntime: ReturnType<typeof createJobRuntime>,
   moduleUnderTest: never
 ) {
-  const handlers = new Map<string, (payload?: unknown) => Promise<unknown>>()
+  const handlers = new Map<string, ProductIpcHandler>()
   registerIntelligenceTranslationIpc((productId, method, handler) => {
     handlers.set(`${productId}:${method}`, handler)
   }, jobRuntime, moduleUnderTest)

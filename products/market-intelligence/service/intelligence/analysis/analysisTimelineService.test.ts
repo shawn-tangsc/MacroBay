@@ -5,7 +5,6 @@ import { createAnalysisTimelineService } from './analysisTimelineService'
 describe('analysisTimelineService', () => {
   it('allows follow-up on a historical successful run without replacing it with the current summary', async () => {
     const service = createAnalysisTimelineService({
-    timeZone: () => 'Asia/Shanghai',
     repository: {
       getEventGroup: () => ({ id: 'mi-eg-1', currentSummaryId: 'mi-as-new' }),
       getRun: () => ({ id: 'mi-ar-old', eventGroupId: 'mi-eg-1', status: 'succeeded' }),

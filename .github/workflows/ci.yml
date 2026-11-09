@@ -39,6 +39,11 @@ jobs:
       # 唯一验证入口：步骤定义在 package.json 的 `verify`，CI 不再各列一份。
       # 加一步只改那一处，AGENTS.md 与 release-process.md 指向同一命令，三处漂移由守卫测试挡住。
       - name: Verify
+        # 根 tsconfig 现在把产品侧一起检查：本机峰值 RSS 2.8 GB，而 runner 上 Node 按可用内存
+        # 取默认堆（约 2 GB），typecheck 会直接 SIGABRT（本机把堆压到 2048 可复现同一次
+        # Abort trap: 6）。4 GB 是实测能跑完全部检查、又不去顶满 runner 的一档。
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm verify
 
   # Windows 上从来没有跑过测试：`verify` 在 macos-latest，release 的 Windows 作业只有

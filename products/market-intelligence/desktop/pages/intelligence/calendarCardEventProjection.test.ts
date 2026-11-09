@@ -2,9 +2,16 @@ import { expect, it } from 'vitest'
 import { marketCalendarEventLifecyclePolicy, providerLifecycleState } from '../../shared/marketCalendarEventLifecycle'
 import { toCardEventFromOfficial, toCardEventFromProvider } from './calendarCardEventProjection'
 
-const provider = (overrides: Record<string, unknown> = {}) => ({
-  eventKey: 'market-observation-1', title: '零售销售(月率)', importance: 'high' as const,
-  eventType: 'economic-indicator' as const, scheduledAt: '2026-10-13T12:30:00.000Z', sourceObservedAt: '2026-10-11T06:00:00.000Z', ...overrides
+/**
+ * 夹具按**真实签名**收窄（从函数参数取形状，不另写一份）：`provider` 这一侧的读数
+ * 以前写成 `Record<string, unknown>`，于是它和 `providerLifecycleState` 的弱类型参数
+ * 没有任何公共属性，TS 报 TS2559——那是夹具宽了，不是生产类型窄了。
+ */
+type ProviderRow = Parameters<typeof toCardEventFromProvider>[0]
+
+const provider = (overrides: Partial<ProviderRow> = {}): ProviderRow => ({
+  eventKey: 'market-observation-1', title: '零售销售(月率)', importance: 'high',
+  eventType: 'economic-indicator', scheduledAt: '2026-10-13T12:30:00.000Z', sourceObservedAt: '2026-10-11T06:00:00.000Z', ...overrides
 })
 
 it('keeps an official event’s own lifecycle rather than deriving one', () => {

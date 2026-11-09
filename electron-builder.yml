@@ -47,6 +47,7 @@ mac:
     - target: dmg
       arch:
         - arm64
+        - x64
   # Local builds are unsigned. Set CSC_LINK/CSC_KEY_PASSWORD (and the notarize
   # block below) to produce a signed, notarized build.
   identity: null

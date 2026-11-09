@@ -4,10 +4,8 @@ import type {
   SafeCredentialTestResult,
   SafeIntelligenceSourceDetailView,
   SafeIntelligenceSourcesPageState,
-  SaveIntelligenceFocusMarketSettingsInput,
   SaveIntelligenceSourceProfileInput
 } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
-import type { IntelligenceFocusMarketSettings } from '../../../service/intelligence/application/intelligenceFocusSettings'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { AgentView, PanelView, SettingsView } from '../../../service/intelligence/application/sourceProjection'
 
@@ -91,10 +89,4 @@ export const intelligenceSourcesClient = {
   testConnection(sourceId: string) {
     return invoke<{ ok: boolean; message: string; testedAt: string } | SafeCredentialProviderConnectionResult>('intelligenceSources.testConnection', { sourceId })
   },
-  getFocusSettings() {
-    return invoke<IntelligenceFocusMarketSettings>('intelligenceSources.getFocusSettings')
-  },
-  saveFocusSettings(input: SaveIntelligenceFocusMarketSettingsInput) {
-    return invoke<IntelligenceFocusMarketSettings>('intelligenceSources.saveFocusSettings', input)
-  }
 }

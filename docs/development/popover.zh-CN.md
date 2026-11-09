@@ -31,12 +31,43 @@ import { Popover } from '@platform/ui/components/popover'
 | --- | --- | --- | --- |
 | `labelKey` | `K extends string` | 二选一 | 说明文案的**单个键**。`K` 从 `resolveText` 推断，解析器绑了键联合时只收联合内的键。 |
 | `lines` | `readonly { labelKey, params? }[]` | 二选一 | 多行说明，**每行自带参数**；代替 `labelKey`。首行是主题，会被强调。 |
+| `content` | `ReactNode` | 三选一 | 调用方已经拼好的说明节点，原样渲染、不加行标记；这一支不需要 `resolveText`。 |
 | `labelParams` | `Record<string, string>` | 仅单行 | 单行分支里填 `{name}` 的值，**只收已经格式化好的字符串**；多行分支没有这个字段，传了编译不过，参数进 `lines[].params`。 |
-| `resolveText` | `(key: K) => string` | 是 | 调用方的解析入口；未知键返回空串。 |
+| `resolveText` | `(key: K) => string` | 两条键分支必填 | 调用方的解析入口；未知键返回空串。`content` 分支没有键，也就不收解析器。 |
 | `trigger` | `(props: PopoverTriggerProps) => ReactElement` | 是 | 自己渲染触发器，把这组属性摊上去。不留裸 children：裸元素会诱使组件去注入处理器，而组合失败正是从那里来的。 |
 
-没有 `placement`、没有 `open`、没有 `onOpenChange`、也不收任意 `content` 节点：开合模型与位置是
-组件固定的行为，不是调用点的选项。
+没有 `placement`、没有 `open`、没有 `onOpenChange`：开合模型与位置是组件固定的行为，不是调用点的
+选项。`content` 不是「往浮层里塞控件」的许可——它装的是调用方已经拼好的说明（见下一节那个槽）。
+让读者**选择点什么**的面板（搜索、筛选、结果列表）不是本组件，那是 picker；把 picker 塞进说明浮层
+是分类错误，不是迁移。
+
+### 拼装出来的说明：`content` 槽
+
+有些说明由几项事实拼成，而其中某一项这次可以缺失；用键模板拼，就会留下一个空括号
+（`来源 · （）· 每 30 分钟`）。哪些片段能缺只有调用方知道，所以拼装留在调用方——组件只提供一个槽。
+
+```tsx
+<Popover
+  content={
+    <>
+      <span>{sourceName}</span>
+      <span>{lastRun}</span>
+    </>
+  }
+  trigger={renderTrigger}
+/>
+```
+
+- **三支互斥，只能给一支。**`labelKey`、`lines`、`content` 三者互斥，调用点给恰好一种。
+  `resolveText` 在两条键分支上必填，在这一支上不存在——没有键要解析。
+- **节点原样渲染**，放进与键分支同一个内容节点里，所以触发器的 `aria-describedby` 照样指向它，
+  读屏念到的就是调用方给的文本。组件不加行标记、不加强调、不加自己的样式：槽是 `ReactNode`，
+  调用方的领域概念一个也进不了组件。
+- **空槽是「这一帧没有要说的」，不是缺文案。**调用方条件拼装得到 `null`/`false` 时，浮层与触发器
+  都不渲染，开发期也不抛错——一帧里一个片段都没有，正是这个槽存在的情形。上面那条缺文案的规矩
+  属于键分支。
+- **它仍然是说明，不是放控件的地方。**槽里放链接、筛选器或结果列表，就是伪装的 picker，
+  下面那条分类规矩照旧。
 
 ## 组件自己保证的几条
 

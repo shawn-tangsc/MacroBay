@@ -39,10 +39,6 @@ export function registerIntelligenceSourcesIpc(register: ProductIpcRegistrar, jo
         return service.getPanelView((payload ?? {}) as { panelId: string })
       case 'testConnection':
         return service.testConnection((payload ?? {}) as { sourceId: string })
-      case 'getFocusSettings':
-        return service.getFocusSettings()
-      case 'saveFocusSettings':
-        return service.saveFocusSettings((payload ?? {}) as Parameters<typeof service.saveFocusSettings>[0])
       default:
         throw new Error(`Unknown intelligenceSources IPC method "${method}".`)
     }
@@ -70,12 +66,6 @@ export function registerIntelligenceSourcesIpc(register: ProductIpcRegistrar, jo
     INTELLIGENCE_PRODUCT_ID,
     'intelligenceSources.testConnection',
     async (payload) => invoke('testConnection', payload)
-  )
-  register(INTELLIGENCE_PRODUCT_ID, 'intelligenceSources.getFocusSettings', async () => invoke('getFocusSettings'))
-  register(
-    INTELLIGENCE_PRODUCT_ID,
-    'intelligenceSources.saveFocusSettings',
-    async (payload) => invoke('saveFocusSettings', payload)
   )
 }
 

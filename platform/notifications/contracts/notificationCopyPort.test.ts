@@ -94,12 +94,13 @@ describe('可选段：拿不到就整段消失，不整条降级', () => {
   })
 
   it('参数缺失（必填也一样）只丢那一格，不整条降级', () => {
-    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
+    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body.line'
     const missing = port().resolveDetailed({ scope: 'platform', key: requiredKey }, 'zh-CN')
     // 模板还在，所以不是兜底句；缺的那两格消失，句子剩下的部分照常。
     expect(missing.text).not.toBeNull()
     expect(missing.text).not.toContain('{')
-    expect([...missing.missingParams].sort()).toEqual(['limit', 'used'])
+    // 这条正文有 {line} / {used} / {limit} 三个必填格：缺哪个就报哪个，一个都不许漏。
+    expect([...missing.missingParams].sort()).toEqual(['limit', 'line', 'used'])
     expect(port().resolve({ scope: 'platform', key: requiredKey, params: { used: '3', limit: '10' } }, 'zh-CN'))
       .toContain('今天已用 3 次，上限 10 次')
   })
@@ -116,13 +117,14 @@ describe('参数可以是引用（一层）', () => {
   })
 
   it('引用解析不到只丢那一格，并报出参数名', () => {
-    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
+    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body.line'
     const params = {
       used: { ref: { scope: 'job-title' as const, definitionId: 'gone' } },
       limit: '10'
     }
     const detailed = port().resolveDetailed({ scope: 'platform', key: requiredKey, params }, 'zh-CN')
-    expect(detailed.missingParams).toEqual(['used'])
+    // `line` 这次也没给：引用解析不到与根本没给，在端口看来都是「这一格缺」。
+    expect([...detailed.missingParams].sort()).toEqual(['line', 'used'])
     expect(detailed.text).toContain('上限 10 次')
     expect(detailed.text).not.toContain('{')
   })
@@ -133,9 +135,9 @@ describe('参数可以是引用（一层）', () => {
   })
 
   it('缺参数时报出参数名（`copy-param-missing` 的输入），不许印占位符', () => {
-    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
+    const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body.line'
     expect([...port().resolveDetailed({ scope: 'platform', key: requiredKey }, 'zh-CN').missingParams].sort())
-      .toEqual(['limit', 'used'])
+      .toEqual(['limit', 'line', 'used'])
   })
 
   it('双语快照：按当前语言选；**缺那种语言就按缺参处理，绝不拿另一种顶上**', () => {

@@ -1,0 +1,95 @@
+# MacroBay UI 规则（一页）
+
+[English](./ui-rules.md) | [中文](./ui-rules.zh-CN.md)
+
+> 一份给人查的规则：一处写一次。其余文档指到这里，不重复正文。
+
+## 1. 一页速查表
+
+| 场景 | 必须用 | 禁止写法 | 判据 |
+|---|---|---|---|
+| 图标触发 | `IconButton`（`sm` 22 / `md` 24，名必填） | 手写 `<button>`；26/28px | `iconButtonKeyGuard`、`iconGlyphVariantGuard` |
+| 空态 / 错误 / 禁用 / 权限 | `StateView`（`state` + `reasonCode`） | 本地空态、本地错误段 | `stateViewCallSiteGuard`、`check:state-content-ternary` |
+| 多行说明浮层 | `Popover`（悬停/聚焦开、点击钉住、Esc 回焦） | 手写浮层、直接用 antd `Popover` | `popoverCallSiteGuard`、`popoverLimitsGuard` |
+| 一句话提示 | `Tooltip` | — | `tooltipCallSiteGuard` |
+| 右键菜单 | `ContextMenu`（`items: {key,labelKey,disabled?,tone?}`） | `<button role="menuitem">`、可点 `<li>` | **人看** |
+| 状态词 | `StatusPill`（闭集 tone） | 手写药丸、字着色 | `statusPillKeyGuard` |
+| 加载 | `LoadingState` / `LoadingSpinner` | 本地转圈、CSS 旋转、antd `Spin`、`加载中…` | `loadingStandard` |
+| 可折叠分组头行 | 平台 `CollapsibleGroup`：**壳持有行与箭头，内容归作者** | 自绘箭头、自接整行点击、头行里放可聚焦元素 | `CollapsibleGroup` 头行守卫（使用处） |
+| 标签页 | 平台 `Tabs`；工作区 Tab 条为唯一登记例外 | 第三份自绘 Tab | **人看** |
+| 分段 / 单选 | `Segmented` / `Select`（闭集） | 一行混两种控件 | **人看** |
+| 开关 | antd `Switch` | 手写 `role="switch"` | **人看** |
+| 抽屉 / 弹窗头动作 | 头的 `actions` 槽（距关闭键 12，一头一个） | 用产品 CSS 撑开标题行 | **人看**（有组件用例，无全仓守卫） |
+| 按钮五档 | 主 / 次 / 图标 / 行内文字 / 危险，一个动作一档 | 自绘胶囊、28px 图标钮、危险只悬停变红 | **人看** |
+| 行内文字动作 | `.text-action` | 句子里的描边盒子 | **人看** |
+| 说明性文字 | 该行/该组标题旁的 ⓘ（`IconButton` + `Popover`），默认收起 | 写成正文的一句、半句、括号补充、破折号补充 | `check:body-prose` |
+
+## 2. 字号与字重
+
+字重只有四档：**400 / 500 / 600 / 650**。其余值（500 以上非档位、620、680、700、750）一律并回。
+
+| 用途 | 字号 / 行高 / 字重 | token |
+|---|---|---|
+| 行标题（会话名、事件名） | 12 / 1.5 / 500 | `--font-body` / `--line-body` |
+| 行 meta（时间、来源、计数） | 11 / 1.5 / 400 + `tabular-nums` | `--font-meta` / `--line-meta` |
+| 正文句 | 12 / 1.5 / 400 | `--font-body` / `--line-body` |
+| 分组标题（今天 / 更早） | 11.5 / 1.6 / 600 | `--font-section` / `--line-section` |
+| 阅读注释 | 11.5 / 1.6 / 400 | 同上 |
+| 卡片 / 区块标题 | 13 / 1.4 / 650 | **缺** |
+| 设置行标签 | 13 / 1.4 / 400 | **缺** |
+| 表内数字、坐标轴 | 11 / 1 / 400 或 600 + `tabular-nums` | **缺** |
+
+- 行标题必须比分组标题**轻一档**（500 对 600）：内容比结构轻。
+- **可折叠分组的头行与分组标题同一档**：`--font-section` / `--line-section` / 600 / `--muted-strong`。平台 `CollapsibleGroup` 落地后必须用同一个值，否则壳与页面又是两套。
+- 卡标题 13 仍**缺 token**，按临时值写。
+- **落进页面只许等值替换**（12 / 11 / 11.5 换成引用，视觉零变化）；把 10 / 10.5 / 9.5 抬到 11 是**可见变化**，单独一笔并带改前改后对比。
+- **禁止用 10 / 10.5 / 9.5 就近凑**。
+
+## 3. 间距
+
+| 规则 | 值 |
+|---|---|
+| 只许用主档 | **4 / 6 / 8 / 10 / 12 / 16** |
+| 列表行 | 行高 44（单行）/ 60（两行）；**日志与消息流等密集流 32**，左右 12，标题与 meta 相距 8 |
+| 新增 | 非主档值出现即不合格；存量按清单并，不全仓重排 |
+| 两列行（字段区 + 右侧控件） | 左字段区 **`flex: 1; min-width: 0`**，右控件 **`flex: none`** |
+
+## 4. 颜色
+
+**判据**：左字段区没有 `min-width: 0` 时，长串会被挤成竖排／一字一格——`ProviderDetail` 那处 403 串就是这么坏的。两列行一律按上表写，别等下一屏再犯一次。
+
+| token | 用途 | 禁止 |
+|---|---|---|
+| `--text` | 正文、标签、值 | — |
+| `--text-strong` | 读数里的强调 | 整段正文 |
+| `--muted` | meta、单位、时刻 | 要读者行动的信息 |
+| `--muted-strong` | 次级标题 | 正文 |
+| `--border` / `--border-strong` | 分隔线、卡边 | 当文字色 |
+| `--surface*` | 底色 | 当文字色 |
+| `--accent` | 唯一交互色：链接、焦点环、主按钮底 | **警示、错误、「重要」** |
+| `--danger` | 破坏性动作、失败文字 | 装饰、强调 |
+| `--warning` | 注意但不是故障 | 错误 |
+| `--success` | 已确认 / 健康 | 「没有数据」 |
+| `--mi-dashboard-*` | 看板语义色（正负、警示、线色） | 跨模块借用 |
+
+门禁三道，各自留一个洞：
+
+| 门禁 | 挡 | 不挡 |
+|---|---|---|
+| `check:hex-color` | 硬写十六进制色 | **用错色**（accent 画警示） |
+| `check:undefined-token` | `var(--x)` 未定义 | 用了一个「定义过但不该用」的 token |
+| `check:danger-color` | 新增的 `color: var(--danger)`（基线只减不增） | `background` / `border-color` 用 danger、拿别的红替代它 |
+
+因此：**用错色、非前台 danger，目前没有门禁**，靠审核；审核清单要单列这两条。
+
+## 5. 禁止清单
+
+- 手写 `<button>` 代替 `IconButton`。
+- 使用非档位字重（620 / 680 / 700 / 750）。
+- 硬写 px 字号代替字号档。
+- 手写 `role="switch"`。
+- 自绘 `role="tab"`（除已登记的工作区 Tab 条）。
+- 手拼 `YYYY/M/D` 时间。
+- 同一行重复同一事实（典型：标题与行尾各印一次时间）。
+- 在正文里写说明性文字（范围解释、实现细节、安慰性说明——「只影响…」「不会影响…」都算）。
+- 给**不可恢复的失败**（官方源 403、来自别的版本的数据格式）配重试按钮——那是假控件；这类只给「不可用 + 原因」，并说清「不知道什么时候会好」。

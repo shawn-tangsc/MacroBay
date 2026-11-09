@@ -40,6 +40,8 @@ export type CalendarReminderSkipReason =
   | 'already-started'
   | 'outside-window'
   | 'importance-not-selected'
+  // 设置文件读不出来：这一轮不判「开/关」，也不假装读者把它关了。
+  | 'settings-unreadable'
 
 export type CalendarReminderSelection = Readonly<{
   candidates: readonly CalendarReminderCandidate[]

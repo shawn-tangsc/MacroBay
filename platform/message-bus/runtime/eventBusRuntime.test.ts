@@ -142,7 +142,7 @@ describe('event bus runtime', () => {
       producer: { owner: 'product', productId: 'product-a' },
       schemaVersion: 1,
       payload: { id: 'historical' }
-    }, '2026-08-24T00:00:00.000Z')
+    }, new Date(Date.now() - 60 * 60 * 1000).toISOString())
     await storage.write(persisted.getState())
 
     const consumerEntered = deferred<void>()

@@ -181,18 +181,25 @@ describe('useResourceJobSchedules', () => {
   })
 
   it('clears the pending bounded timeout when the component unmounts', async () => {
-    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
-    platform.listSchedules.mockReturnValue(new Promise(() => {}))
-    platform.getProductSummaries.mockResolvedValue([])
-    installPlatform()
+    // 只断言「clearTimeout 被调用过」是弱的：任何一次无关的清理都能让它绿。
+    // 这里改看**待处理定时器的数量**——卸载前有一个（读还没回来），卸载后必须是 0。
+    vi.useFakeTimers()
+    try {
+      platform.listSchedules.mockReturnValue(new Promise(() => {}))
+      platform.getProductSummaries.mockResolvedValue([])
+      installPlatform()
 
-    const { root } = await mountSection({ timeoutMs: 60_000 })
-    clearSpy.mockClear()
-    await act(async () => {
-      root.unmount()
-    })
+      const { root } = await mountSection({ timeoutMs: 60_000 })
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
 
-    expect(clearSpy).toHaveBeenCalled()
+      await act(async () => {
+        root.unmount()
+      })
+
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

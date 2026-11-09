@@ -48,11 +48,11 @@ to watch today. Every number carries its source and its cutoff time, so you can 
 and whatever could not be collected is reported as a gap instead of being quietly filled in.
 
 <p align="center">
-  <img src="./docs/assets/screenshots/brief-hero-en.png" alt="MacroBay daily brief: one-sentence lede, the past 24 hours of news, macro events, and the numbers behind them, each with its source and cutoff time" width="100%">
+  <img src="./docs/assets/screenshots/brief-page-en.png" alt="MacroBay daily brief: one-sentence lede, the past 24 hours of news, macro events, and the numbers behind them, each with its source and cutoff time" width="100%">
 </p>
 
 <p align="center">
-  <sub>One page a morning. <a href="./docs/assets/screenshots/brief-page-en.png">See the full page</a> — every item, its source and its cutoff.</sub>
+  <sub>One page a morning, the whole page — every item, its source and its cutoff.</sub>
 </p>
 
 ### Why you can trust it
@@ -68,6 +68,7 @@ and whatever could not be collected is reported as a gap instead of being quietl
 ## Download
 
 **[macOS · Apple Silicon (.dmg)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-arm64.dmg)** ·
+**[macOS · Intel (.dmg)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64.dmg)** ·
 **[Windows · x64 (.exe)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [All releases](https://github.com/shawn-tangsc/MacroBay/releases)
 
@@ -81,6 +82,9 @@ This build is **not code-signed and not notarized**, so the first launch takes t
    **More info → Run anyway**.
 
 Every update you download repeats those same two steps, until a signed build ships.
+
+The Intel build is `MacroBay-x64.dmg`: **built, but not yet verified on Intel hardware**. The Apple
+Silicon download link above is unchanged, and `latest-mac.yml` is produced only by the arm64 job.
 
 <div align="center">
 
@@ -218,8 +222,7 @@ Full walkthrough: **[Quick start](./docs/getting-started/quick-start.md)**.
    for agents.
 2. **Settings → Intelligence Sources**: enable the sources you have access to and add any required
    credentials.
-3. Open **Intelligence** in the sidebar: it lands on the crypto dashboard. The agent portal is not
-   the first screen; reach it with **Back to Agents** on the dashboard.
+3. Open **Intelligence** in the sidebar: it lands on the crypto dashboard.
 4. Ask the analyst: *What changed in the last macro release, and which assets does it affect?*
 
 The answer should show what is known, what is missing, where the evidence came from, and the time
@@ -227,7 +230,7 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.4.1`). macOS is the verified platform. Panels still need your own provider
+MacroBay is **alpha** (`0.4.2`). macOS is the verified platform. Panels still need your own provider
 credentials; anything that cannot be read is reported as a gap. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified
 there yet, and Linux has no packaging. See [Status and limitations](./docs/reference/status-and-limitations.md).

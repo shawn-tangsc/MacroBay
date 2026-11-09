@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ClosedBar, StoredSymbol } from './binanceCrossAssetClient'
 import { createCrossAssetSnapshotQuery } from './crossAssetSnapshotQuery'
 
 const now = Date.parse('2026-09-14T12:00:00.000Z')
-const histories = (symbol: string) => Array.from({ length: 289 }, (_, index) => ({
+const histories = (symbol: StoredSymbol): readonly ClosedBar[] => Array.from({ length: 289 }, (_, index) => ({
   symbol, barOpenMs: now - (289 - index) * 300_000, barEndMs: now - (288 - index) * 300_000,
   open: '100', high: '110', low: '90', close: String(100 + index / 100), volume: '1'
 }))
@@ -11,14 +12,16 @@ const histories = (symbol: string) => Array.from({ length: 289 }, (_, index) => 
  * row is answered by the tokenised proxy and its live quote reaches the snapshot. The real leg's own
  * cases live in `crossAssetSnapshotQuery.index.test.ts`.
  */
-const binanceOnly = (input: { symbol: string; asOfMs: number }) =>
+// 读腿的入参是真实的那个形状：拿掉 fromMs/toMs 会让「窗口边界」在类型上消失，
+// 用例里再读 `input.toMs` 就红——那是测试自己把数字吞掉了，不是被测代码的问题。
+const binanceOnly = (input: { symbol: StoredSymbol; fromMs: number; toMs: number; asOfMs: number }): readonly ClosedBar[] =>
   input.symbol === 'USTEC' ? [] : histories(input.symbol).filter(bar => bar.barEndMs <= input.asOfMs)
 const setup = () => {
   let clock = now
   let revision = 1
   const queryAt = vi.fn(binanceOnly)
-  const live = vi.fn(() => ({ state: 'live', quotes: { index: { state: 'live', price: '103', tradedAtMs: now, receivedAtMs: now },
-    btc: { state: 'missing' }, eth: { state: 'missing' } } }))
+  const live = vi.fn(() => ({ state: 'live' as const, quotes: { index: { state: 'live' as const, price: '103', tradedAtMs: now, receivedAtMs: now },
+    btc: { state: 'missing' as const }, eth: { state: 'missing' as const } } }))
   const query = createCrossAssetSnapshotQuery({ now: () => clock, store: { get revision() { return revision }, queryAt }, live })
   return { query, queryAt, live, setNow: (value: number) => { clock = value }, bumpRevision: () => { revision++ } }
 }
@@ -68,15 +71,15 @@ describe('cross-asset bounded snapshot query', () => {
      * that missed the window, or a restart), so an `as-of` read loses the window's right end while
      * `latest` keeps it. Same window, same anchor — only the version cutoff differs.
      */
-    const bars = (symbol: string) => Array.from({ length: 313 }, (_, index) => ({
+    const bars = (symbol: StoredSymbol): readonly ClosedBar[] => Array.from({ length: 313 }, (_, index) => ({
       symbol, barOpenMs: now - (313 - index) * 300_000, barEndMs: now - (312 - index) * 300_000,
       open: '100', high: '110', low: '90', close: String(100 + index / 100), volume: '1'
     }))
-    const read = vi.fn((input: { symbol: string; asOfMs: number }) =>
+    const read = vi.fn((input: { symbol: StoredSymbol; fromMs: number; toMs: number; asOfMs: number }): readonly ClosedBar[] =>
       input.symbol === 'USTEC' ? []
         : bars(input.symbol).filter(bar => input.asOfMs >= now || bar.barEndMs <= now - 4_200_000))
     const query = createCrossAssetSnapshotQuery({ now: () => now, store: { revision: 1, queryAt: read },
-      live: () => ({ state: 'live', quotes: { index: { state: 'missing' }, btc: { state: 'missing' }, eth: { state: 'missing' } } }) })
+      live: () => ({ state: 'live' as const, quotes: { index: { state: 'missing' as const }, btc: { state: 'missing' as const }, eth: { state: 'missing' as const } } }) })
     const asOf = new Date(now - 3_600_000).toISOString()
     const known = query.query({ range: '24h', asOf })
     expect(query.query({ range: '24h', asOf, knowledge: 'as-of' })).toEqual(known)

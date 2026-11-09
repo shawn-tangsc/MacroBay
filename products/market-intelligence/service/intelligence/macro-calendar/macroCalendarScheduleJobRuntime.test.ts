@@ -21,11 +21,12 @@ describe('macroCalendarScheduleJobRuntime', () => {
       jobRuntime,
       // The market calendar's providers sit in the same profile list; one unknown id used to make
       // the Fed/BEA descriptors resolve to `undefined`, so nothing was ever scheduled.
+      // 这些桩只实现被测代码用到的那几个方法（平台端口比桩宽），按仓库既有写法在注入点收窄。
       profiles: { list: vi.fn(async () => [
         { providerId: 'macro-calendar-0xrouter-economic-data', enabled: true },
         { providerId: 'macro-calendar-fed', enabled: true }
-      ]) },
-      health: { collectAndUpdateHealth }
+      ]) } as never,
+      health: { collectAndUpdateHealth } as never
     })
     await service.initialize()
     await vi.waitFor(() => expect(collectAndUpdateHealth).toHaveBeenCalledTimes(1))
@@ -41,18 +42,22 @@ describe('macroCalendarScheduleJobRuntime', () => {
       const collectAndUpdateHealth = vi.fn(async () => ({ state: 'updated' as const }))
       const service = createMacroCalendarScheduleJobRuntime({
         jobRuntime,
-        profiles: { list: vi.fn(async () => [{ providerId: 'macro-calendar-fed', enabled: true }]) },
-        health: { collectAndUpdateHealth }
+        profiles: { list: vi.fn(async () => [{ providerId: 'macro-calendar-fed', enabled: true }]) } as never,
+        health: { collectAndUpdateHealth } as never
       })
 
       await service.initialize()
-      await vi.waitFor(() => expect(collectAndUpdateHealth).toHaveBeenCalledTimes(1))
+      // 假时钟下不需要「等」：起步那一次由平台运行时在微任务/零延迟里跑完，把到期的计时器和
+      // 微任务一次性排干净就够。`vi.waitFor` 在假时钟里会自己推进时间，推多少不受这条用例
+      // 控制，正好会把下面「差 1 毫秒不跳」的判据搅浑。
+      await vi.advanceTimersByTimeAsync(0)
+      expect(collectAndUpdateHealth).toHaveBeenCalledTimes(1)
 
       await vi.advanceTimersByTimeAsync(macroCalendarScheduleJobPolicy.scheduleIntervalMs - 1)
       expect(collectAndUpdateHealth).toHaveBeenCalledTimes(1)
 
       await vi.advanceTimersByTimeAsync(1)
-      await vi.waitFor(() => expect(collectAndUpdateHealth).toHaveBeenCalledTimes(2))
+      expect(collectAndUpdateHealth).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }
@@ -174,8 +179,8 @@ describe('macroCalendarScheduleJobRuntime', () => {
       }))
       const service = createMacroCalendarScheduleJobRuntime({
         jobRuntime,
-        profiles: { list: vi.fn(async () => [{ providerId: 'macro-calendar-fed', enabled: true }]) },
-        health: { collectAndUpdateHealth }
+        profiles: { list: vi.fn(async () => [{ providerId: 'macro-calendar-fed', enabled: true }]) } as never,
+        health: { collectAndUpdateHealth } as never
       })
 
       await expect(service.runProviderNow('macro-calendar-fed')).resolves.toEqual({ state: 'completed', outcome: 'succeeded' })
@@ -258,9 +263,9 @@ function createHarness(
   })
   return {
     service: createMacroCalendarScheduleJobRuntime({
-      jobRuntime: { registerHandler, setSchedule, removeSchedule, enqueueStartup, enqueueDefinition, getRun },
-      profiles: { list: vi.fn(async () => { if (profileError) throw profileError; return enabledProviderIds.map((providerId) => ({ providerId, enabled: enabledOverride ? enabledOverride() : true })) }) },
-      health: { collectAndUpdateHealth }
+      jobRuntime: { registerHandler, setSchedule, removeSchedule, enqueueStartup, enqueueDefinition, getRun } as never,
+      profiles: { list: vi.fn(async () => { if (profileError) throw profileError; return enabledProviderIds.map((providerId) => ({ providerId, enabled: enabledOverride ? enabledOverride() : true })) }) } as never,
+      health: { collectAndUpdateHealth } as never
     }),
     handlers, setSchedule, removeSchedule, enqueueStartup, enqueueDefinition, getRun, collectAndUpdateHealth
   }

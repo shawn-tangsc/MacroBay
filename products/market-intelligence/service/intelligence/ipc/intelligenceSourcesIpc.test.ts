@@ -6,10 +6,6 @@ vi.mock('@platform/network/platformFetch', () => ({ getPlatformFetch: () => plat
 import { createJobRuntime, createManagedWorkerRuntime } from '@platform/jobs'
 
 import { createInMemoryProfileStorage, createSourceProfileStore, type SourceProfileStore } from '../application/sourceProfileStore'
-import {
-  createInMemoryFocusSettingsStorage,
-  createIntelligenceFocusSettingsStore
-} from '../application/intelligenceFocusSettingsStore'
 import { createInMemoryIntelligenceCredentialStorage, createIntelligenceCredentialStore } from '../store/intelligenceCredentialStore'
 import { createIntelligencePipeline } from '../application/intelligencePipeline'
 import { createSourceRequestGovernanceQueue } from '../application/sourceRequestGovernance'
@@ -198,17 +194,6 @@ describe('intelligenceSources service', () => {
     await expect(service.runNow({ sourceId: 'bls-economic-series' })).rejects.toThrow(
       'not available for production collection'
     )
-  })
-
-  it('returns focus market settings in page state and persists updates', async () => {
-    const service = createService()
-    const pageState = await service.getPageState()
-
-    expect(pageState.focusMarketSettings.enabledFocusMarkets).toEqual(['global-macro', 'digital-assets'])
-
-    const saved = await service.saveFocusSettings({ enabledFocusMarkets: ['global-macro'] })
-    expect(saved.enabledFocusMarkets).toEqual(['global-macro'])
-    expect((await service.getFocusSettings()).enabledFocusMarkets).toEqual(['global-macro'])
   })
 
   it('returns normalized errors for unknown source ids', async () => {
@@ -836,10 +821,8 @@ function createService(
   requestGovernanceQueue: ReturnType<typeof createSourceRequestGovernanceQueue> | null = createSourceRequestGovernanceQueue({ now: () => Date.now() })
 ) {
   const profileStore = profileStoreOverride ?? createSourceProfileStore(createInMemoryProfileStorage(profiles))
-  const focusSettingsStore = createIntelligenceFocusSettingsStore(createInMemoryFocusSettingsStorage())
   return createIntelligenceSourcesService({
     profileStore,
-    focusSettingsStore,
     pipeline: pipelineOverride ?? createIntelligencePipeline({ profileStore }),
     jobRuntime,
     workerRuntime: createManagedWorkerRuntime(),

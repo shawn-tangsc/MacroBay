@@ -25,6 +25,8 @@ import { ToolApprovalRegistry } from '../../ai/agent-platform/runtime/policy'
 import { createAgentPlatformServices } from '../../ai/agent-platform/services'
 import { McpRuntimeService } from '../../ai/agent-platform/mcp'
 import { mergeAgentRuntimeSessionState, reconcileStalePendingMessages, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
+import { processBootId } from './processBootId'
+import { requestRuntimeSingleInstanceLock } from './runtimeSingleInstanceLock'
 import { createAgentPlatformDatabase } from '../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
@@ -662,11 +664,6 @@ function expectedProductIpcMethods(productManifests: readonly ProductManifest[])
   )
 }
 
-function requestRuntimeSingleInstanceLock(productAcceptanceEnabled: boolean): boolean {
-  if (productAcceptanceEnabled) return true
-  return app.requestSingleInstanceLock()
-}
-
 function reportProductAcceptanceRegistration(input: {
   productIds: readonly string[]
   productIpcMethodCount: number
@@ -927,7 +924,15 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     jobScheduleQueryService,
     refreshBuiltinSeedCopy
   )
-  registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, cacheAudit: { pruneAudit: () => cacheGovernanceService.pruneAudit() }, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
+  registerPlatformRetentionJobs({
+    jobRuntime,
+    assistantDatabase,
+    cacheAudit: { pruneAudit: () => cacheGovernanceService.pruneAudit() },
+    // 用 thunk 交给保留期组：事件总线是懒构造单例，注册时不该把它实例化。
+    eventBus: { pruneRetained: () => getEventBusRuntime().pruneRetained() },
+    notificationRuntime: getNotificationRuntime(),
+    timeZone: () => shellTimeZone.get()
+  })
 
   // 更新检查：源码启动与装好的包同一套逻辑，没有「开发态」分支；每天最多一次在服务里封顶。
   const updateCheck = await composeUpdateCheck({
@@ -1017,7 +1022,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       return true
     },
     preferences: {
-      getLanguage: async () => (await settingsStore.get()).language,
+      getLanguage: async () => (await settingsStore.readStartup()).language,
       getTheme: () => readWorkspaceContextTheme(settingsStore, nativeTheme), // P1-06h N3：与 shell 同源（settings.themeMode），只有 system 才回退 OS
       // 显示时区与 shell 同源（settings.timeZone），只有 system 才回退运行时 IANA 时区
       // 运行时 IANA 时区只在 shellTimeZone 提供者内部读取；这里只取它解析好的结果
@@ -1031,7 +1036,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
 
   await mainWindowHost.createAndWire()
   tray = createAppTray(getMainWindow)
-  await applySessionProxySettings((await settingsStore.get()).network, {
+  await applySessionProxySettings((await settingsStore.readStartup()).network, {
     // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
@@ -1043,12 +1048,12 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               eventBusRuntime: getEventBusRuntime(),
               getProviderState: providerStore.getState,
               getAppLanguage: async () => {
-                const settings = await settingsStore.get()
+                const settings = await settingsStore.readStartup()
                 return settings.language
               },
-              getModelDefaults: async () => (await settingsStore.get()).modelDefaults,
+              getModelDefaults: async () => (await settingsStore.readStartup()).modelDefaults,
               getNetworkSettings: async () => {
-                const settings = await settingsStore.get()
+                const settings = await settingsStore.readStartup()
                 return settings.network
               },
               log: appLog.log,
@@ -1102,14 +1107,19 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   assistantChatRuntime.reconcileStalePending()
   await syncBuiltinSkills()
   const providers = await providerStore.list()
-  const language = (await settingsStore.get()).language
+  // 启动期：设置文件读不到就用默认值起来（`readStartup`），绝不让引导因此落到启动失败页。
+  const language = (await settingsStore.readStartup()).language
   const productSeed = mergeAgentSeeds(
     ...builtinSeedFactories.map((factory) => factory.create(providers, { language }))
   )
   const seededState = mergeAgentStoreSeeds(await agentStore.getState(), productSeed)
+  // 崩溃收尾只在这里跑、只跑一次（boot 阶段）。假设是**近似成立**的：它跑在 renderer 开始读会话之前，
+  // 而不是「主窗创建之前」——主窗在更早的装配里已经建好。代价最多是渲染层短暂看到一条属于上一个
+  // 已死批次的 pending，不会误收正在跑的回合（那时本进程还没派发过运行）。
   await replaceAgentState(
     reconcileStalePendingMessages(
-      localizeBuiltinSeedCopy(seededState, language, buildBuiltinSeedVariants(providers))
+      localizeBuiltinSeedCopy(seededState, language, buildBuiltinSeedVariants(providers)),
+      { ownerBootId: processBootId }
     )
   )
   await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()

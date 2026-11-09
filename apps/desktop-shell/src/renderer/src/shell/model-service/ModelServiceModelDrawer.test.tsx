@@ -137,14 +137,14 @@ describe('PLAT-62 模型编辑抽屉', () => {
 
   it('uses a standard role=switch control for pinning', async () => {
     const container = await mount(createElement(Harness))
-    const pin = container.querySelector<HTMLButtonElement>('[data-model-pin]')
+    const pin = container.querySelector<HTMLButtonElement>('[data-model-pin] button[role="switch"]')
     expect(pin?.getAttribute('role')).toBe('switch')
     expect(pin?.getAttribute('aria-checked')).toBe('true')
     await act(async () => {
       pin?.click()
       await Promise.resolve()
     })
-    expect(container.querySelector('[data-model-pin]')?.getAttribute('aria-checked')).toBe('false')
+    expect(container.querySelector('[data-model-pin] button[role="switch"]')?.getAttribute('aria-checked')).toBe('false')
   })
 
   it('hides the pin row for a new model and saves once', async () => {
@@ -161,7 +161,7 @@ describe('PLAT-62 模型编辑抽屉', () => {
 
   it('marks the model free from the drawer', async () => {
     const container = await mount(createElement(Harness))
-    const free = container.querySelector<HTMLButtonElement>('[data-model-free]')
+    const free = container.querySelector<HTMLButtonElement>('[data-model-free] button[role="switch"]')
     expect(free?.getAttribute('role')).toBe('switch')
     expect(free?.getAttribute('aria-checked')).toBe('false')
     expect(free?.disabled).toBe(false)
@@ -170,7 +170,7 @@ describe('PLAT-62 模型编辑抽屉', () => {
       free?.click()
       await Promise.resolve()
     })
-    expect(container.querySelector('[data-model-free]')?.getAttribute('aria-checked')).toBe('true')
+    expect(container.querySelector('[data-model-free] button[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
     expect(container.querySelector('[data-model-free-hint]')?.textContent).toBe(labels.freeModelHint)
   })
 
@@ -186,7 +186,7 @@ describe('PLAT-62 模型编辑抽屉', () => {
         pricing: { currency: 'USD', promptPerMillion: 0, completionPerMillion: 0 }
       }
     }))
-    const free = container.querySelector<HTMLButtonElement>('[data-model-free]')
+    const free = container.querySelector<HTMLButtonElement>('[data-model-free] button[role="switch"]')
     expect(free?.getAttribute('aria-checked')).toBe('true')
     expect(free?.disabled).toBe(true)
     expect(container.querySelector('[data-model-free-hint]')?.textContent).toBe(labels.freeModelAutoHint)

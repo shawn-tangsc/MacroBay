@@ -14,9 +14,28 @@ export const dashboardFundingRateHistoryPresentationPolicy = Object.freeze({
 })
 
 export type DashboardFundingRateHistoryPoint = Readonly<{ observedAt: string; ratePercent: number; paymentDirection: DashboardFundingRatePaymentDirection }>
+
+/**
+ * Why one leg's history is not drawable. Two different facts, two different sentences:
+ * the read returned no rows (`series-missing`), or it returned rows that broke their contract
+ * (`value-invalid`). Neither is "zero" — a zero rate is a value and is drawn.
+ */
+export type DashboardFundingRateHistoryMissingReason = 'series-missing' | 'value-invalid'
+
 export type DashboardFundingRateHistoryState =
   | Readonly<{ state: 'loading' }>
   | Readonly<{ state: 'available'; btc: readonly DashboardFundingRateHistoryPoint[]; eth: readonly DashboardFundingRateHistoryPoint[] }>
+  /**
+   * One leg has points and the other does not: the drawable leg keeps its chart line, the other is
+   * named as unknown with its own reason. A missing leg must not take the present one down.
+   */
+  | Readonly<{
+
+    state: 'partial'
+    btc?: readonly DashboardFundingRateHistoryPoint[]
+    eth?: readonly DashboardFundingRateHistoryPoint[]
+    missing: Readonly<{ btc?: DashboardFundingRateHistoryMissingReason; eth?: DashboardFundingRateHistoryMissingReason }>
+  }>
   | Readonly<{ state: 'empty' }>
   | Readonly<{ state: 'unavailable' }>
 
@@ -24,8 +43,17 @@ export function projectDashboardFundingRateHistory(value: unknown, asOf: string)
   try {
     if (!isCanonicalFundingRateHistoryTime(asOf)) return { state: 'unavailable' }
     if (exact(value, ['state', 'asOf', 'btc', 'eth']) && value.state === 'available' && value.asOf === asOf) {
-      const btc = projectRows(value.btc, asOf); const eth = projectRows(value.eth, asOf)
-      return btc && eth ? { state: 'available', btc, eth } : { state: 'unavailable' }
+      // A leg with no rows and a leg whose rows failed their contract are both "unknown", never
+      // "zero"; the leg that did project keeps its points either way.
+      const btcRows = projectRows(value.btc, asOf); const ethRows = projectRows(value.eth, asOf)
+      const btc = btcRows && btcRows.length > 0 ? btcRows : undefined
+      const eth = ethRows && ethRows.length > 0 ? ethRows : undefined
+      const missing: { btc?: DashboardFundingRateHistoryMissingReason; eth?: DashboardFundingRateHistoryMissingReason } = {}
+      if (!btc) missing.btc = Array.isArray(value.btc) && value.btc.length > 0 ? 'value-invalid' : 'series-missing'
+      if (!eth) missing.eth = Array.isArray(value.eth) && value.eth.length > 0 ? 'value-invalid' : 'series-missing'
+      if (btc && eth) return { state: 'available', btc, eth }
+      if (btc || eth) return { state: 'partial', ...(btc ? { btc } : {}), ...(eth ? { eth } : {}), missing }
+      return { state: 'unavailable' }
     }
     if (exact(value, ['state', 'asOf']) && value.state === 'empty' && value.asOf === asOf) return { state: 'empty' }
     if (exact(value, ['state', 'failureCode']) && value.state === 'unavailable' && value.failureCode === fundingRateHistoryPolicy.unavailableFailureCode) return { state: 'unavailable' }

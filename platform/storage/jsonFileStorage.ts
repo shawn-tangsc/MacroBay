@@ -6,10 +6,24 @@ import { dirname } from 'node:path'
 export type JsonFileStorage<T> = {
   read: () => Promise<T>
   write: (value: T) => Promise<void>
+  /**
+   * 读到损坏内容时，在**不改原文件**的前提下留一份 `.corrupt-*` 副本。
+   *
+   * 调用方拿到的 `read()` 仍然是「坏了就抛」——留档与恢复是两件事：这份文档是整份读—改—写的
+   * 目标，静默拿默认值覆盖等于抹掉读者的配置，所以这里只留证据，恢复由人决定。
+   * 返回副本路径（留档失败返回 `undefined`）。留档抛错时调用方按 fail-closed 处理：
+   * 宁可不保存，也不要在一份来路不明的文件上写。
+   */
+  preserveCorruptCopy?: (error: unknown) => Promise<string | undefined>
 }
 
 export function createJsonFileStorage<T>(filePath: string, fallback: T): JsonFileStorage<T> {
   return {
+    async preserveCorruptCopy() {
+      // 原文件一个字节都不动：只读它的内容、另存一份带时间戳的副本。
+      const raw = await readFile(filePath, 'utf8')
+      return quarantineCorruptFile(filePath, raw)
+    },
     async read() {
       try {
         return JSON.parse(await readFile(filePath, 'utf8')) as T
@@ -150,9 +164,20 @@ export function readJsonFileRecoveringSync(filePath: string): unknown | undefine
   }
 }
 
-/** 把坏文件按时间戳留一份，便于事后追查；留档失败不阻断恢复。 */
-export async function quarantineCorruptFile(filePath: string, raw: string): Promise<void> {
-  await writeFile(`${filePath}.corrupt-${Date.now()}`, raw, 'utf8').catch(() => undefined)
+/**
+ * 把坏文件按时间戳留一份，便于事后追查；留档失败不阻断恢复。
+ *
+ * 返回副本的绝对路径（启动降级要把路径给读者，让他们去备份/复制）；留档失败返回 `undefined`
+ * ——调用方据此说「未能保留副本」，不许给一个假承诺。
+ */
+export async function quarantineCorruptFile(filePath: string, raw: string): Promise<string | undefined> {
+  const copyPath = `${filePath}.corrupt-${Date.now()}`
+  try {
+    await writeFile(copyPath, raw, 'utf8')
+    return copyPath
+  } catch {
+    return undefined
+  }
 }
 
 function isMissingFileError(error: unknown): boolean {

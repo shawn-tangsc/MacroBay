@@ -24,8 +24,16 @@ export const macroCalendarScheduleCollectionWorkflowPolicy = {
   }
 } as const
 
+/**
+ * 采集端口按 `unknown` 收结果：这一步跨 HTTP 与解析边界，运行时会送来不可信形状，函数体第一件事
+ * 就是验证；类型若声称收到的是可信联合，这条守卫在类型上不可达，测试也只能靠强转去喂坏数据。
+ */
+export type MacroCalendarScheduleCollectionPort = Readonly<{
+  collectDescriptor: (input: MacroCalendarCollectionInput) => Promise<unknown>
+}>
+
 export function createMacroCalendarScheduleCollectionWorkflow(deps: {
-  collection: Pick<MacroCalendarCollectionService, 'collectDescriptor'>
+  collection: MacroCalendarScheduleCollectionPort
   persistence: Pick<MacroCalendarSchedulePersistenceService, 'persistScheduleEvidence'>
 }): MacroCalendarScheduleCollectionWorkflow {
   return {
@@ -39,9 +47,11 @@ export function createMacroCalendarScheduleCollectionWorkflow(deps: {
       }
 
       const collected = await deps.collection.collectDescriptor({ descriptorId: descriptor.descriptorId, runId: input.runId, detectedAt: input.detectedAt, signal: input.signal })
-      if (!isObject(collected)) return { ...identity, state: 'failed', failureCode: 'collection-result-invalid' }
-      if (collected.state !== 'persisted') return collectionFailure(collected, identity)
-      if (!isValidCollectionResult(collected, identity)) return { ...identity, state: 'failed', failureCode: 'collection-result-invalid' }
+      if (!isObject(collected)) return invalidCollectionResult(identity)
+      if (isNonPersistedCollectionResult(collected)) return collectionFailure(collected, identity)
+      if (!isPersistedCollectionResult(collected) || !isValidCollectionResult(collected, identity)) {
+        return invalidCollectionResult(identity)
+      }
 
       const persisted = deps.persistence.persistScheduleEvidence(collected.evidence.rawRecordId)
       return persisted.state === 'persisted'
@@ -118,6 +128,18 @@ function isCanonicalUtcMillis(value: string): boolean {
 
 function isNonBlank(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+type PersistedCollectionResult = Extract<MacroCalendarCollectionResult, { state: 'persisted' }>
+
+function isPersistedCollectionResult(value: Record<string, unknown>): value is PersistedCollectionResult {
+  return value.state === 'persisted'
+}
+
+function isNonPersistedCollectionResult(
+  value: Record<string, unknown>
+): value is Exclude<MacroCalendarCollectionResult, { state: 'persisted' }> {
+  return value.state === 'skipped' || value.state === 'failed'
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

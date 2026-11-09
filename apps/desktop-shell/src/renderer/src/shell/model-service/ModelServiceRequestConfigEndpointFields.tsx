@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input } from 'antd'
+import { Button, Input } from 'antd'
 import { Trash2 } from 'lucide-react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import type {
   ModelChatProtocol,
@@ -132,14 +134,15 @@ export function ModelServiceRequestConfigEndpointFields({
     // 「已配置」按当前输入框里的实时值判断：刚填好地址就能设为默认，不用等失焦保存。
     if (!normalizeEndpointBase(liveValue)) return null
     return (
-      <button
-        type="button"
-        className="request-config-set-default"
+      <Button
+        type="text"
+        size="small"
+        className="text-action"
         data-endpoint-set-default={protocol}
         disabled={savingDefaultEndpoint}
         onClick={() => commit(setDefaultEndpoint(endpoints, protocol))}>
         {labels.endpointSetDefault}
-      </button>
+      </Button>
     )
   }
 
@@ -154,19 +157,25 @@ export function ModelServiceRequestConfigEndpointFields({
     )
   }
 
+  /** 能不能删：只剩一个端点时不能删（禁用态需要一句**看得见**的原因，不能用悬停提示代替）。 */
+  function canDeleteAny(): boolean {
+    return endpoints.length > 1
+  }
+
   /** 删除图标（只在可删的端点行；只剩一个端点时禁用并提示原因）。 */
   function renderDelete(protocol: ModelChatProtocol): React.ReactElement {
     return (
-      <button
-        type="button"
-        className="request-config-delete"
-        data-endpoint-delete={protocol}
-        aria-label={labels.endpointDelete}
-        title={canDelete ? labels.endpointDelete : labels.endpointKeepAtLeastOne}
+      <IconButton
+        ariaLabelKey="modelService.endpointDelete"
+        {...(canDelete ? { tooltipKey: 'modelService.endpointDelete' } : {})}
+        dataAttributes={{ 'data-endpoint-delete': protocol }}
         disabled={!canDelete}
-        onClick={() => removeChatEndpoint(protocol)}>
-        <Trash2 size={14} />
-      </button>
+        icon={Trash2}
+        onSelect={() => removeChatEndpoint(protocol)}
+        resolveText={(key) => (key === 'modelService.endpointDelete' ? labels.endpointDelete : '')}
+        size="sm"
+        tone="danger"
+      />
     )
   }
 
@@ -186,6 +195,11 @@ export function ModelServiceRequestConfigEndpointFields({
               <span className="request-config-endpoint-name">{endpointKindLabel(labels, protocol)}</span>
               {renderDefaultMarker(protocol, value)}
               {renderDelete(protocol)}
+              {canDeleteAny() ? null : (
+                <span className="request-config-keep-one" data-endpoint-keep-one>
+                  {labels.endpointKeepAtLeastOne}
+                </span>
+              )}
             </div>
             <Input
               ref={(node) => {

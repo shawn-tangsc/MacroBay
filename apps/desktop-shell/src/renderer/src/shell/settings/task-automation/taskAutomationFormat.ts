@@ -54,11 +54,15 @@ export function formatTaskSchedule(
   return trigger.timezone ? `${expression} · ${trigger.timezone}` : expression
 }
 
+/**
+ * 资源任务的调度**定义**：没有一处是「某个钟点的瞬间」（间隔按最大整数单位、cron 显示表达式与它自己的
+ * 定义时区、事件/启动/手动只是词），所以这里没有读者时区参数——下次运行那个瞬间在表格里另有一格，
+ * 由 `formatTimestamp(..., timeZone)` 显示。给这里加一个永远没人传的时区参数，就是又留了一个假接缝。
+ */
 export function formatJobSchedule(
   trigger: JobScheduleTriggerView,
   labels: TaskAutomationLabels,
-  language: AppLanguage,
-  timeZone?: string
+  language: AppLanguage
 ): string {
   if (trigger.kind === 'interval') return formatIntervalSchedule(trigger.intervalMs, labels)
   if (trigger.kind === 'cron') {

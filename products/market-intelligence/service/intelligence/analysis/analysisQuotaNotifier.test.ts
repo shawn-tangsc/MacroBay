@@ -55,7 +55,7 @@ function createRuntime() {
 
 describe('analysis quota notifier (P3)', () => {
   it('keys the notice by the UTC day and carries today’s used / limit', () => {
-    const request = buildAnalysisQuotaRequest({ used: 48, limit: 48, occurredAt: NOW })
+    const request = buildAnalysisQuotaRequest({ used: 48, limit: 48, occurredAt: NOW, scope: { kind: 'line', line: 'event' } })
 
     expect(request).toBeDefined()
     const shaped = request!
@@ -70,11 +70,24 @@ describe('analysis quota notifier (P3)', () => {
     expect(shaped).not.toHaveProperty('dedupeKey')
     // 句子在源头拼好（契约 v2.56）：两种语言各一份，记录里没有文案键。
     expect(shaped).not.toHaveProperty('bodyParams')
-    // 正文必须真的出现两个数：少了哪一格，读者就只看到一句「用完了」。
-    expect(shaped.rendered?.['zh-CN']?.body).toContain('今天已用 48 次')
+    // 正文必须真的出现两个数，并且说清是**哪条线**：少了哪一格，读者就只看到一句「用完了」。
+    expect(shaped.rendered?.['zh-CN']?.body).toContain('行情变动分析今天已用 48 次')
     expect(shaped.rendered?.['zh-CN']?.body).toContain('上限 48 次')
-    expect(shaped.rendered?.['en-US']?.body).toContain('Used 48 of 48 analyses')
+    expect(shaped.rendered?.['en-US']?.body).toContain('market-move analysis: 48 of 48 analyses')
     expect(JSON.stringify(shaped.rendered)).not.toMatch(/\{\w+\}/)
+  })
+
+  it('switches to the sentence without a line name when the global ceiling refused it', () => {
+    // 全局兜底拒绝时，读者的那条线可能还有余量：带线名的句子会让读者一算就不平。
+    const request = buildAnalysisQuotaRequest({
+      used: 60, limit: 60, occurredAt: NOW, scope: { kind: 'global' }
+    })
+    expect(request?.rendered?.['zh-CN']?.body).toBe('今天各类自动分析的总次数已经用完')
+    expect(request?.rendered?.['en-US']?.body).toBe("today's overall automatic-analysis budget is spent")
+    // 不带线名，也不留占位符。
+    expect(JSON.stringify(request?.rendered)).not.toContain('行情变动分析')
+    expect(JSON.stringify(request?.rendered)).not.toContain('日历事件分析')
+    expect(JSON.stringify(request?.rendered)).not.toMatch(/\{\w+\}/)
   })
 
   it('takes the day from the instant, so a rejection just after UTC midnight is the next day', () => {
@@ -85,7 +98,7 @@ describe('analysis quota notifier (P3)', () => {
   it('keeps one row a day: the second refusal merges, does not disturb the reader twice, and updates the pair', async () => {
     const { runtime, records, desktopDeliveries } = createRuntime()
 
-    const first = await notifyAnalysisQuota((request) => runtime.submit(request), { used: 47, limit: 48, occurredAt: NOW })
+    const first = await notifyAnalysisQuota((request) => runtime.submit(request), { used: 47, limit: 48, occurredAt: NOW, scope: { kind: 'line', line: 'event' } })
     expect(first).toMatchObject({ kind: 'accepted' })
     expect(records()).toHaveLength(1)
     const firstRecordId = records()[0]?.id
@@ -97,7 +110,7 @@ describe('analysis quota notifier (P3)', () => {
     // 第一次被拒时打扰过一次；同一天再被拒不许打扰第二次。
     expect(desktopDeliveries()).toBe(1)
 
-    const second = await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: '2026-11-03T10:30:00.000Z' })
+    const second = await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: '2026-11-03T10:30:00.000Z', scope: { kind: 'line', line: 'event' } })
     expect(second).toMatchObject({ kind: 'merged', recordId: firstRecordId })
     expect(records()).toHaveLength(1)
     // 正文跟着**最新一次**取数。第二次换了一对数是夹具：真实链路里同一天通常都是 48/48，
@@ -118,8 +131,8 @@ describe('analysis quota notifier (P3)', () => {
 
   it('starts the next UTC day as a second row', async () => {
     const { runtime, records } = createRuntime()
-    await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: NOW })
-    await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: '2026-11-04T09:30:00.000Z' })
+    await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: NOW, scope: { kind: 'line', line: 'event' } })
+    await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: '2026-11-04T09:30:00.000Z', scope: { kind: 'line', line: 'event' } })
 
     expect(records()).toHaveLength(2)
     expect(records().map((record) => record.dedupeKey).sort()).toEqual([
@@ -129,11 +142,11 @@ describe('analysis quota notifier (P3)', () => {
   })
 
   it('does nothing without a notification port', async () => {
-    await expect(notifyAnalysisQuota(undefined, { used: 48, limit: 48, occurredAt: NOW })).resolves.toBeNull()
+    await expect(notifyAnalysisQuota(undefined, { used: 48, limit: 48, occurredAt: NOW, scope: { kind: 'line', line: 'event' } })).resolves.toBeNull()
   })
 
   it('does not fail the refusal when the notification port throws', async () => {
-    await expect(notifyAnalysisQuota(() => { throw new Error('notification store unavailable') }, { used: 48, limit: 48, occurredAt: NOW }))
+    await expect(notifyAnalysisQuota(() => { throw new Error('notification store unavailable') }, { used: 48, limit: 48, occurredAt: NOW, scope: { kind: 'line', line: 'event' } }))
       .resolves.toBeNull()
   })
 })

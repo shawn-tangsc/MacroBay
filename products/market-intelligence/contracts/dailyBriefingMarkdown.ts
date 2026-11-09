@@ -1,4 +1,5 @@
-import { editionNewsTitle } from './dailyBriefing/readings'
+import { dailyBriefingPolicy } from './dailyBriefing/policies'
+import { editionNewsTitle, editionNewsTitleIsOriginal } from './dailyBriefing/readings'
 import { briefingMacroValueLabel } from './dailyBriefingMacroValueText'
 import { briefingEditionPeriod, type BriefingMacroItem, type BriefingMarketRow, type BriefingNewsItem, type BriefingNextItem, type BriefingPulseRow, type BriefingRowChange, type DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
@@ -18,6 +19,19 @@ export type DailyBriefingMarkdownLabels = Readonly<{
    */
   languageNames?: Readonly<Record<string, string>>
   readingsAllMissing: string
+  /** 价格那两行读的是永续合约：正文标了，复制文本也要标。 */
+  perpetualContract: string
+  /**
+   * 持仓块里那个 `$…B` 是什么：未平仓合约的**名义额**（美元），不是张数、不是成交量。
+   * 卡片名已经这么写（`positioningChange`），复制文本同样要写——只留一个 `$` 金额，读者认不出它是什么量。
+   */
+  leverageOpenInterest: string
+  /** 必须显示的读数超过阈值时说的那句「今天信息较多」。 */
+  denseDay: string
+  /** 纳指那行读的是代币化永续代理时，标题后带的那句（正文卡片也用它）。 */
+  indexProxy: string
+  /** 中文版没有译文时标在标题后的两个字；英文版是 "Original"。 */
+  newsOriginal: string
   noValue: string
   sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string; leverage: string; policyPath: string }>
   tiers: Readonly<{ must: string; support: string; reference: string }>
@@ -61,6 +75,11 @@ export type DailyBriefingMarkdownOptions = Readonly<{
   direction: (term: string) => string
   eventTitle?: (item: Readonly<{ title: string; titleKey?: string }>) => string
   formatTime: (value: string) => string
+  /**
+   * 这一期没有 AI 解读时要带上的那句说明（r17）。屏幕上有、复制出去没有，读者发出去的
+   * 就是一份"看起来完整"的日报——所以它必须和页面、导出的图是同一句话。
+   */
+  editorialNotice?: string
 }>
 
 /**
@@ -83,6 +102,8 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     : ` · ${(period.periodKind === 'manual' ? labels.periodManual : labels.periodScheduled).replace('{time}', options.formatTime(period.periodTime))}`
   const language = labels.languageNames?.[document.edition.locale] ?? document.edition.locale
   lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))}${periodLabel} · ${language}${allMissing}`)
+  // 单独一段，不用引用块：复制头部那行 `> …` 说的是「这一期是什么」，这句说的是「缺了什么」。
+  if (options.editorialNotice) lines.push('', escapeMarkdown(options.editorialNotice))
   if (document.lede.text) lines.push('', escapeMarkdown(document.lede.text))
 
   const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')
@@ -96,6 +117,8 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   const rows = briefingDataRows(document)
   if (rows.length > 0) {
     lines.push('', `## ${labels.sections.data}`)
+    // 与海报同一条判据：必须显示的读数超过阈值，就明说这一天很密。
+    if (rows.filter((row) => row.importance.tier === 'must').length > dailyBriefingPolicy.denseDayMustRows) lines.push('', labels.denseDay)
     for (const tier of ['must', 'support', 'reference'] as const) {
       const tierRows = rows.filter((row) => row.importance.tier === tier)
       if (tierRows.length === 0) continue
@@ -113,7 +136,7 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
         // The rate travels with the block that explains it, exactly as on the card.
         const rate = briefingDataGroups(document).funding.find((row) => row.id === `funding-${key}`)?.value?.number
         const fee = rate === undefined ? labels.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`
-        lines.push(`- ${asset} · ${fee} · ${openInterest} · ${day}`)
+        lines.push(`- ${asset} · ${fee} · ${labels.leverageOpenInterest} ${openInterest} · ${day}`)
       }
     }
     if (document.data.policyPath && document.data.policyPath.visibility !== 'hidden') {
@@ -245,7 +268,8 @@ function publicationSpan(
 }
 
 function newsLine(item: BriefingNewsItem, options: DailyBriefingMarkdownOptions): string {
-  const title = escapeMarkdown(editionNewsTitle(item, options.locale))
+  // 中文版没有译文时标题只能是原文：复制出去也要写清，别静默印英文。
+  const title = escapeMarkdown(editionNewsTitle(item, options.locale)) + (editionNewsTitleIsOriginal(item, options.locale) ? `（${options.labels.newsOriginal}）` : '')
   return `- **${title}** — ${escapeMarkdown(item.sourceName)} · ${options.formatTime(item.publishedAt)} · ${item.polarity}`
 }
 
@@ -268,7 +292,14 @@ function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOption
 }
 
 function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBriefingMarkdownOptions): string {
-  const label = rowLabel(row.labelKey, options.labels)
+  // 价格那两行读的是币安 U 本位**永续合约**，不是现货；正文卡片标了、复制文本没标，读者会把两个
+  // 市场当成一个。只有 BTC/ETH 两行加：纳指走真指数或代币化永续，它有自己的代理标记。
+  const perpetual = row.id === 'btc' || row.id === 'eth' ? ` · ${options.labels.perpetualContract}` : ''
+  // 纳指走代币化永续的那些天，点位不是纳指自己的；正文卡片标了，复制出去也要标，否则读者把
+  // QQQ 的点位当成纳指的点位用。
+  // 文案本身带着括号与英文前的空格（与海报同一个键），这里不再补空格。
+  const proxy = 'indexSource' in row && row.indexSource === 'proxy' ? options.labels.indexProxy : ''
+  const label = `${rowLabel(row.labelKey, options.labels)}${perpetual}${proxy}`
   if (row.state === 'available' || row.state === 'stale') {
     const copy = changeLedRowCopy(row, options.labels, options.locale)
     if (copy) {

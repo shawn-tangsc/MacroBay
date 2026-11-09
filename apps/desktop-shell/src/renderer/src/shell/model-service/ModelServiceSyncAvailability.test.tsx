@@ -96,9 +96,10 @@ describe('PLAT-61 模型同步可用性', () => {
     const sync = page.container.querySelector<HTMLButtonElement>('[data-models-sync]')
     const add = page.container.querySelector<HTMLButtonElement>('[data-models-add]')
     expect(sync?.disabled).toBe(true)
-    expect(sync?.getAttribute('title')).toContain('API key')
+    // 禁用态的说明改成**看得见**的一句（平台契约：禁用控件带不了可聚焦提示）。
+    expect(page.container.querySelector('[data-models-key-hint]')?.textContent).toContain('API key')
     expect(add?.disabled).toBe(true)
-    expect(add?.getAttribute('title')).toContain('API key')
+    expect(page.container.querySelector('[data-models-key-hint]')?.textContent).toContain('API key')
   })
 
   it('keeps add-model available for a disabled provider with a key', async () => {
@@ -106,7 +107,8 @@ describe('PLAT-61 模型同步可用性', () => {
 
     const add = page.container.querySelector<HTMLButtonElement>('[data-models-add]')
     expect(add?.disabled).toBe(false)
-    expect(add?.getAttribute('title')).toBe(labels.addModel)
+    // 可用时提示是浮层（tooltipKey），不再是原生 title。
+    expect(add?.getAttribute('title')).toBeNull()
   })
 
   /**

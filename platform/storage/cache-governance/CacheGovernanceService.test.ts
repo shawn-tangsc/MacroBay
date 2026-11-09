@@ -208,11 +208,15 @@ describe('CacheGovernanceService', () => {
     const first = service.listCaches()
     const second = service.listCaches()
     release()
-    await Promise.all([first, second])
+    const [firstViews, secondViews] = await Promise.all([first, second])
 
+    // 次数在这里是契约本身：合并的是「同一次在飞巡检」，没有别的东西能观测到它。
+    // 两个并发调用还必须拿到同一份结果——否则「少扫一次」可能是把第二次调用饿死。
     expect(inspect).toHaveBeenCalledOnce()
+    expect(firstViews[0]?.latestInspection).toMatchObject({ sizeBytes: 1 })
+    expect(secondViews[0]?.latestInspection).toMatchObject({ sizeBytes: 1 })
 
-    // 巡检结束后再点刷新，仍然重新读一遍。
+    // 巡检结束后再点刷新，仍然重新读一遍（合并只覆盖重叠窗口，不是永久缓存）。
     await service.listCaches()
     expect(inspect).toHaveBeenCalledTimes(2)
   })

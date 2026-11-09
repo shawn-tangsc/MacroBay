@@ -1360,30 +1360,25 @@ h1 {
 }
 
 /* PLAT-60 二级 Tab：原型 底边 2px accent / 未选中 muted / 选中 600。 */
-.web-search-settings-tabs {
+/* 页签内容：动作条固定在面板顶部（不随内容滚动），内容在它下面。 */
+.web-search-panel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.web-search-panel-actions {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
-  gap: 2px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid var(--border);
-}
-
-.web-search-settings-tab {
-  padding: 7px 14px;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.web-search-settings-tab:hover {
-  color: var(--text-strong);
-}
-
-.web-search-settings-tab.on {
-  border-bottom-color: var(--accent);
-  color: var(--text);
-  font-weight: 600;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 0;
+  background: var(--surface);
 }
 
 .web-search-detail-pane {
@@ -2173,7 +2168,15 @@ h1 {
 .web-search-drawer-title {
   display: inline-flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 10px;
+  min-width: 0;
+}
+
+/* ⓘ 跟着标题走：窄下去只压文字，图标不换行、不缩。 */
+.web-search-drawer-title > .platform-icon-button,
+.web-search-drawer-title > button {
+  flex: none;
 }
 
 .web-search-drawer-readonly {
@@ -3495,6 +3498,20 @@ h1 {
   justify-content: space-between;
 }
 
+/* 「文字 + ⓘ」在同一行：窄的时候文字先缩，图标不换行。 */
+.assistant-settings-toggle > span {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assistant-settings-toggle > span > .platform-icon-button,
+.assistant-settings-toggle > span > button {
+  flex: none;
+}
+
 .agent-navbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -3645,43 +3662,6 @@ h1 {
   margin-bottom: 8px;
 }
 
-.agent-side-panel-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  min-height: 30px;
-  margin-bottom: 8px;
-  padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 58%, transparent);
-}
-
-.agent-side-panel-tabs button {
-  min-width: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted-strong);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
-  transition:
-    background 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease;
-}
-
-.agent-side-panel-tabs button:hover {
-  color: var(--text-strong);
-}
-
-.agent-side-panel-tabs button.active {
-  background: var(--surface);
-  color: var(--text-strong);
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 5%, transparent);
-}
-
 .agent-new-agent-button.ant-btn {
   flex: 1;
   justify-content: flex-start;
@@ -3730,6 +3710,67 @@ h1 {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+/*
+ * 助手侧栏：按页签变化的动作条进面板（`ui-conventions.md`「A per-tab action bar belongs to its panel」）。
+ *
+ * 每个面板 = `[动作条][可滚动内容]`：动作条是面板第一行、不随内容滚动，间距 8px 由
+ * `.agent-side-panel-action` 自己的 margin 承担；内容在 `minmax(0, 1fr)` 里滚。
+ * 两条都是 0 行高、1fr 的网格，动作条因此不会被内容挤走。
+ */
+.agent-side-panel.assistant-side-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-side-panel.assistant-side-panel > .tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel.assistant-side-panel .tabs__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel.assistant-side-panel .tabs__panel[hidden] {
+  /* `Tabs` 用原生 hidden 表达非活动面板；显式写下是为了不和上面那条 flex 打架。 */
+  display: none;
+}
+
+.assistant-side-panel-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+/* 智能体侧栏同一形状：`Tabs` 填满剩余高度，面板内 `[动作条][可滚动内容]` 两行。 */
+.agent-side-panel.agent-side-panel--tabbed {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-side-panel--tabbed > .tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel--tabbed .tabs__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-side-panel--tabbed .tabs__panel[hidden] {
+  display: none;
+}
+
+.agent-side-panel-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
 }
 
 .agent-session-search {
@@ -3997,7 +4038,7 @@ h1 {
 .agent-session-group-title small {
   color: color-mix(in srgb, var(--muted) 74%, transparent);
   font-size: 10.5px;
-  font-weight: 560;
+  font-weight: 600;
 }
 
 .agent-session-item {
@@ -4639,22 +4680,16 @@ h1 {
   background: color-mix(in srgb, var(--danger) 6%, var(--surface));
 }
 
-.agent-message-runtime-part summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  cursor: pointer;
-  list-style: none;
+/* 消息流与活动面板同属**密集流**（ui-rules §2）：头行 32、内距 12。
+   特异性压过壳自己的 44（`.collapsible-group .ant-collapse-header`），否则会被顶回去。 */
+.agent-message-runtime-part .collapsible-group .ant-collapse-header,
+.agent-message-runtime-group .collapsible-group .ant-collapse-header,
+.agent-message-runtime-group-item .collapsible-group .ant-collapse-header {
+  min-height: 32px;
 }
 
-.agent-message-runtime-part.reasoning.done summary {
+.agent-message-runtime-part.reasoning.done .collapsible-group__head {
   color: var(--muted);
-}
-
-.agent-message-runtime-part summary::-webkit-details-marker,
-.agent-message-runtime-group summary::-webkit-details-marker {
-  display: none;
 }
 
 .agent-message-runtime-part-icon {
@@ -4668,19 +4703,19 @@ h1 {
   background: var(--surface);
 }
 
-.agent-message-runtime-part summary strong {
+.agent-message-runtime-part .collapsible-group__head strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
-  font-size: 11.5px;
+  font-size: var(--font-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-message-runtime-part summary small {
+.agent-message-runtime-part .collapsible-group__head small {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: var(--font-meta);
   white-space: nowrap;
 }
 
@@ -4690,41 +4725,24 @@ h1 {
   width: min(720px, 100%);
   margin: 2px 0;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 999px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--surface-soft) 46%, transparent);
   color: var(--text);
 }
 
-.agent-message-runtime-group[open] {
-  gap: 7px;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
-}
-
-.agent-message-runtime-group summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  min-height: 28px;
-  padding: 4px 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-message-runtime-group summary strong {
+.agent-message-runtime-group .collapsible-group__head strong {
   min-width: 0;
   overflow: hidden;
   color: var(--muted-strong);
-  font-size: 11.5px;
+  font-size: var(--font-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-message-runtime-group summary small {
+.agent-message-runtime-group .collapsible-group__head small {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: var(--font-meta);
   white-space: nowrap;
 }
 
@@ -4754,38 +4772,25 @@ h1 {
   background: color-mix(in srgb, var(--danger) 5%, var(--surface));
 }
 
-.agent-message-runtime-group-item summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-message-runtime-group-item summary::-webkit-details-marker {
-  display: none;
-}
-
 /* The tool name keeps its width; the command truncates instead of collapsing the title. */
-.agent-message-runtime-group-item summary strong {
+.agent-message-runtime-group-item .collapsible-group__head strong {
   flex: 0 0 auto;
   max-width: 45%;
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
-  font-size: 11px;
+  font-size: var(--font-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.agent-message-runtime-group-item summary small {
+.agent-message-runtime-group-item .collapsible-group__head small {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   margin-left: 4px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: var(--font-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4823,8 +4828,7 @@ h1 {
   gap: 6px;
 }
 
-.agent-message-runtime-part-details section,
-.agent-message-runtime-detail-fold {
+.agent-message-runtime-part-details section {
   display: grid;
   gap: 3px;
 }
@@ -4833,25 +4837,6 @@ h1 {
   color: var(--muted);
   font-size: 10.5px;
   font-weight: 600;
-}
-
-.agent-message-runtime-detail-fold {
-  padding: 5px 6px;
-  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-soft) 28%, transparent);
-}
-
-.agent-message-runtime-detail-fold summary {
-  color: var(--muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-message-runtime-detail-fold summary::-webkit-details-marker {
-  display: none;
 }
 
 .agent-message-runtime-part-details pre {
@@ -5096,26 +5081,24 @@ h1 {
   color: var(--text-strong);
 }
 
+/* 运行时活动面板：**密集流档**（ui-rules §2：44 单行 / 60 两行 / 32 日志与消息流）。
+   这里原来有一条 `26px + 10px` 的空栅格轨——实测面板正文因此比同一条消息的正文右移 36px，
+   而栅格第一列没有任何内容（头像轨在更外层的 `.agent-message` 上），所以那条轨是遗留空轨，
+   取消后正文与消息正文回到同一条左缘。折叠头由壳画，行高 32、内距 12。 */
 .agent-runtime-activity-panel {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 720px);
-  gap: 10px;
-  justify-content: center;
+  display: block;
   width: 100%;
 }
 
-.agent-runtime-activity-heading {
-  grid-column: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
+/* 特异性要压过壳自己的 `.collapsible-group .ant-collapse-header`（同为两段时后者按加载顺序赢），
+   否则密集流这一档会被壳的默认 44 顶回去。 */
+.agent-runtime-activity-panel .collapsible-group .ant-collapse-header,
+.agent-runtime-activity-group .collapsible-group .ant-collapse-header,
+.agent-runtime-activity-group-item .collapsible-group .ant-collapse-header {
+  min-height: 32px;
 }
 
 .agent-runtime-activity-list {
-  grid-column: 2;
   display: grid;
   gap: 8px;
 }
@@ -5141,48 +5124,12 @@ h1 {
   background: color-mix(in srgb, var(--danger) 7%, var(--surface));
 }
 
+/* 胶囊取消（界面设计 2026-11-09）：展开时不变圆角、不换底色，点击区高 32、宽满行。 */
 .agent-runtime-activity-group {
   display: grid;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 999px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--surface-soft) 46%, transparent);
-}
-
-.agent-runtime-activity-group[open] {
-  gap: 7px;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
-}
-
-.agent-runtime-activity-group summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  min-height: 30px;
-  padding: 4px 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-runtime-activity-group summary::-webkit-details-marker {
-  display: none;
-}
-
-.agent-runtime-activity-group summary strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted-strong);
-  font-size: 11.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-runtime-activity-group summary small {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 10.5px;
-  white-space: nowrap;
 }
 
 .agent-runtime-activity-group-items {
@@ -5206,29 +5153,8 @@ h1 {
   background: color-mix(in srgb, var(--danger) 5%, var(--surface));
 }
 
-.agent-runtime-activity-group-item summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  cursor: pointer;
-  list-style: none;
-}
-
-.agent-runtime-activity-group-item summary::-webkit-details-marker {
-  display: none;
-}
-
-.agent-runtime-activity-group-item summary strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-runtime-activity-group-item summary .agent-runtime-activity-status.ant-tag {
+/* 条目头行里的状态词推到最右：壳的头行内距已经是 12，这里只管对齐。 */
+.agent-runtime-activity-group-item .collapsible-group__head .agent-runtime-activity-status {
   margin-left: auto;
 }
 
@@ -5759,6 +5685,12 @@ h1 {
   padding: 0 9px 9px 43px;
 }
 
+/* 列表常驻挂载（头行 `aria-controls` 必须指向真实节点），收起时靠 `hidden` 藏。
+   这里显式写 `none`：`display: grid` 会盖掉 `hidden` 自带的 `display: none`。 */
+.agent-todo-list[hidden] {
+  display: none;
+}
+
 .agent-todo-item {
   display: flex;
   align-items: center;
@@ -5991,7 +5923,7 @@ h1 {
 .agent-quick-panel-group-label {
   color: var(--muted-strong);
   font-size: 11px;
-  font-weight: 680;
+  font-weight: 650;
 }
 
 .agent-quick-panel-search {
@@ -6088,7 +6020,7 @@ h1 {
 .agent-quick-panel-item-copy > span {
   color: var(--text-strong);
   font-size: 12px;
-  font-weight: 620;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -7316,16 +7248,6 @@ h1 {
   white-space: nowrap;
 }
 
-.agent-product-package-id {
-  margin-top: 2px;
-  overflow: hidden;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .agent-product-status {
   display: inline-flex;
   flex: none;
@@ -7920,6 +7842,58 @@ h1 {
   min-height: 0;
   overflow: hidden;
   background: var(--bg);
+}
+
+/* 设置页外壳：顶部降级横幅 / 中间设置网格 / 底部危险区，三者纵向排列。
+   读正常时两个附加块都不渲染，外壳只剩中间那一格。 */
+.settings-layout-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-layout-shell > .settings-layout {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+/* 设置文件读不到：一行事实 + 第二行副本路径（等宽、可选中复制，不进 ⓘ）。 */
+.settings-file-recovery {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  font-size: var(--font-meta);
+}
+
+.settings-file-recovery__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-file-recovery__path {
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* 底部危险区：只在降级时出现，右对齐一颗静止红按钮（不与「重试读取」并排）。 */
+.settings-reset-danger {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
 }
 
 .settings-nav {
@@ -9123,7 +9097,9 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .preference-heading {
   display: inline-flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 8px;
+  min-width: 0;
   color: var(--muted-strong);
 }
 
@@ -10419,20 +10395,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   cursor: default;
 }
 
-.model-service-request-config-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-h);
-  height: var(--control-h);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
 /* PLAT-81：抽屉里的输入框高度也由 antd token（controlHeight 32）决定，不再逐个写 height/padding；
    带 👁 的行只需保证同行垂直居中。 */
 .request-config-header-value {
@@ -10504,36 +10466,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   white-space: nowrap;
 }
 
-/* 删除图标：视觉尺寸与端点名字号一致（14px），可点击区域 24×24，固定在该行最右。 */
-.request-config-endpoint-head .request-config-delete {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  margin-left: auto;
-  padding: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.request-config-endpoint-head .request-config-delete:hover {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-  color: var(--danger);
-}
-
-.request-config-endpoint-head .request-config-delete:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent);
-}
-
-.request-config-endpoint-head .request-config-delete:disabled {
-  background: transparent;
-  color: var(--muted);
-  opacity: 0.4;
-  cursor: default;
-}
-
 /* 当前默认端点：强调色文字 + 强调色透明底 + 同色 1px 边框（与全站 tag 密度一致）。 */
 .request-config-default-badge {
   display: inline-flex;
@@ -10547,39 +10479,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   font-size: 11px;
   line-height: 18px;
   white-space: nowrap;
-}
-
-/* 非默认端点：小号 secondary/ghost 按钮（有边框、hover、焦点环，层级低于主按钮）。 */
-.request-config-set-default {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted-strong);
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.request-config-set-default:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-}
-
-.request-config-set-default:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent);
-}
-
-.request-config-set-default:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 /* 「添加端点」触发按钮：左对齐的小号文字按钮。 */
@@ -10623,20 +10522,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   display: flex;
   min-width: 0;
   gap: 4px;
-}
-
-.request-config-icon,
-.request-config-delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-h);
-  height: var(--control-h);
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
 }
 
 .request-config-empty {
@@ -11425,18 +11310,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   opacity: 0.5;
 }
 
-.model-service-pill-icon {
-  width: 28px;
-  padding: 0;
-}
-
-/* PLAT-72：「清空模型」——平时与普通 pill 一致，只有 hover 才显红（danger 但不喧宾夺主）。 */
-.model-service-pill-danger:hover:not(:disabled) {
-  border-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  color: var(--danger);
-}
-
 .model-service-section {
   display: grid;
   gap: 8px;
@@ -11613,27 +11486,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .model-service-protocol-notice-text {
   flex: 1;
   min-width: 0;
-}
-
-.model-service-protocol-notice-close {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0.7;
-}
-
-.model-service-protocol-notice-close:hover {
-  opacity: 1;
-  background: color-mix(in srgb, var(--warning, #c48a1a) 18%, transparent);
 }
 
 .model-service-inline-error {
@@ -11907,23 +11759,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   gap: 8px;
 }
 
-.model-drawer-copy {
-  display: inline-grid;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.model-drawer-copy:hover {
-  color: var(--text);
-}
-
 .model-drawer-copied {
   position: absolute;
   top: 34px;
@@ -11944,44 +11779,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   align-items: center;
   justify-content: flex-end;
   height: 32px;
-}
-
-.model-drawer-switch {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: var(--border);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.model-drawer-switch::after {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  content: '';
-  transition: transform 0.15s ease;
-}
-
-.model-drawer-switch.is-on {
-  background: var(--accent);
-}
-
-.model-drawer-switch.is-on::after {
-  transform: translateX(18px);
-}
-
-.model-drawer-switch:disabled {
-  cursor: default;
-  opacity: 0.55;
 }
 
 .model-drawer-footer {
@@ -12005,28 +11802,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--accent-contrast);
 }
 
-/*
- * PLAT-81 / R1：筛选 pill 行。pill 高 24，行高**跟着内容走**：macOS 的 overlay 滚动条不占位，
- * Windows 的经典滚动条要占 10px —— 固定 26px 会把胶囊切掉一截，所以这里只给下限、不给定高。
- * 行间距/与工具条与列表的间距一律由 `.model-service-filter-rows` 承担，行自身零 margin/padding。
- */
-.model-service-type-pills {
-  display: flex;
-  flex: none;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px;
-  box-sizing: border-box;
-  height: auto;
-  min-height: 26px;
-  margin: 0;
-  padding: 0 0 2px;
-  border: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-}
-
 /* 两行 pill 的容器：距工具条 8、距列表 10、两行之间 6；自身无 padding/border/min-height，
    折叠时整体 display:none（不留任何细线）。 */
 .model-service-filter-rows {
@@ -12043,46 +11818,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 
 .model-service-filter-rows[hidden] {
   display: none;
-}
-
-.model-service-type-pill {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.model-service-type-pill:hover {
-  border-color: var(--border-strong);
-}
-
-/* 选中：accent 描边 + 12% 底色，**不用** accent 实底白字（对比度差）。 */
-.model-service-type-pill[data-active='true'] {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--text);
-}
-
-.model-service-protocol-pills .model-service-type-pill {
-  gap: 5px;
-}
-
-.model-service-type-pill small {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.model-service-type-pill[data-active='true'] small {
-  color: var(--text);
 }
 
 .model-service-model-row {
@@ -12175,35 +11910,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   flex: 0 0 auto;
   align-items: center;
   gap: 2px;
-}
-
-.model-service-row-icon {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.model-service-row-icon:hover:not(:disabled) {
-  background: var(--surface-soft);
-  color: var(--text);
-}
-
-.model-service-row-icon:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-.model-service-row-remove {
-  color: color-mix(in srgb, var(--danger) 52%, var(--muted));
-}
-
-.model-service-row-remove:hover:not(:disabled) {
-  color: var(--danger);
 }
 
 @media (max-width: 1080px) {
@@ -12632,17 +12338,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 
 :root[data-theme='dark'] { --protocol-icon-filter: invert(1) brightness(1.6); }
 :root[data-theme='light'] { --protocol-icon-filter: none; }
-
-/* 协议 pill：品牌 glyph + 语义符号（10px，弱化色）。 */
-.model-service-protocol-semantic {
-  flex: none;
-  color: var(--muted);
-  opacity: 0.85;
-}
-.model-service-type-pill[data-active='true'] .model-service-protocol-semantic {
-  color: var(--accent);
-  opacity: 1;
-}
 
 /* Runtime activity reads as an inline harness log: one collapsible row under the conversation,
    compact tool/approval rows inside, never a second column of large cards. */

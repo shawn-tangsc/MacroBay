@@ -20,8 +20,9 @@ const render = async (onClose: () => void) => {
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(MiSideDrawer, {
-    title: '利率路径', closeLabel: '关闭', onClose, meta: createElement('span', null, '12-09')
-  }, createElement('p', null, '内容'))))
+    title: '利率路径', closeLabel: '关闭', onClose, meta: createElement('span', null, '12-09'),
+    children: createElement('p', null, '内容')
+  })))
   return host
 }
 

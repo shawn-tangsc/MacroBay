@@ -4,26 +4,24 @@ import type {
   IntelligenceSourceProfile,
   IntelligenceSourceDefinition
 } from '../../../service/intelligence/schema/intelligenceSource'
-import type { IntelligenceFocusMarket } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
-import type { IntelligenceFocusMarketSettings } from '../../../service/intelligence/application/intelligenceFocusSettings'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
-import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
+import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout } from './intelligenceSourceProfileEditor'
+
+export { isSuccessfulCredentialOperation }
 import { buildSourceEnabledById } from './intelligenceSourceCatalogView'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 
 type HookState = {
   definitions: IntelligenceSourceDefinition[]
   profiles: IntelligenceSourceProfile[]
-  focusMarketSettings: IntelligenceFocusMarketSettings
   selectedSourceId?: string
   detail?: SafeIntelligenceSourceDetailView
   draftProfile?: IntelligenceSourceProfile
   loading: boolean
   settingsView?: SettingsView
   saving: boolean
-  savingFocusMarkets: boolean
   running: boolean
   testingCredentials: boolean
   replaying: boolean
@@ -48,10 +46,8 @@ export function useIntelligenceSourcesSettings(labels: {
   const [state, setState] = useState<HookState>({
     definitions: [],
     profiles: [],
-    focusMarketSettings: { enabledFocusMarkets: ['global-macro', 'digital-assets'], updatedAt: '' },
     loading: true,
     saving: false,
-    savingFocusMarkets: false,
     running: false,
     testingCredentials: false,
     replaying: false,
@@ -71,7 +67,6 @@ export function useIntelligenceSourcesSettings(labels: {
       ...current,
       definitions: pageState.definitions,
       profiles,
-      focusMarketSettings: pageState.focusMarketSettings,
       selectedSourceId: pageState.selectedSourceId,
       detail: pageState.detail,
       settingsView,
@@ -163,7 +158,7 @@ export function useIntelligenceSourcesSettings(labels: {
           notifyIntelligenceSourcesChanged()
 
           if (enabled && detail.profile.collectionPreset !== 'manual') {
-            void pollRunHealth(sourceId!)
+            void waitForRunHealth(sourceId!)
               .then((health) => {
                 setState((current) => {
                   if (current.selectedSourceId !== sourceId) return current
@@ -257,6 +252,67 @@ export function useIntelligenceSourcesSettings(labels: {
     [labels.saved, labels.saveFailed]
   )
 
+  /**
+   * 按**源**改采集策略（频率档 / 范围 / 是否纳入舆情）。
+   *
+   * 与 `updateProfile` 同一套草稿队列与回滚，区别只在基准：那个改「当前选中的草稿」，这个改
+   * 页面上任意一行——详情面板里每个源都常显这三行，读者不必先选中它。
+   */
+  const updateSourceProfile = useCallback(
+    (sourceId: string, patch: Partial<IntelligenceSourceProfile>) => {
+      let previous: IntelligenceSourceProfile | undefined
+      let next: IntelligenceSourceProfile | undefined
+      setState((current) => {
+        const base = current.profiles.find((profile) => profile.sourceId === sourceId)
+          ?? (current.draftProfile?.sourceId === sourceId ? current.draftProfile : undefined)
+        if (!base) return current
+        previous = base
+        next = { ...base, ...patch }
+        return {
+          ...current,
+          profiles: upsertProfile(current.profiles, next),
+          draftProfile: current.draftProfile?.sourceId === sourceId ? next : current.draftProfile,
+          saving: true,
+          errorCode: null
+        }
+      })
+      if (!previous || !next) return
+
+      pendingSaveCountRef.current += 1
+      saveQueueRef.current = saveQueueRef.current
+        .then(async () => {
+          const detail = await withTimeout(
+            intelligenceSourcesClient.saveProfile(toSaveProfileInput(next!)),
+            15_000
+          )
+          setState((current) => ({
+            ...current,
+            profiles: upsertProfile(current.profiles, detail.profile),
+            errorCode: null,
+            ...(current.selectedSourceId === detail.profile.sourceId
+              ? { detail, draftProfile: detail.profile, notice: labels.saved }
+              : {})
+          }))
+          notifyIntelligenceSourcesChanged()
+        })
+        .catch(() => {
+          setState((current) => ({
+            ...current,
+            profiles: previous ? upsertProfile(current.profiles, previous) : current.profiles,
+            draftProfile: current.draftProfile?.sourceId === previous?.sourceId ? previous : current.draftProfile,
+            errorCode: labels.saveFailed
+          }))
+        })
+        .finally(() => {
+          pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1)
+          if (pendingSaveCountRef.current === 0) {
+            setState((current) => ({ ...current, saving: false }))
+          }
+        })
+    },
+    [labels.saved, labels.saveFailed]
+  )
+
   const runNow = useCallback(async () => {
     if (!state.selectedSourceId) return
     const definition = state.definitions.find((item) => item.sourceId === state.selectedSourceId)
@@ -331,28 +387,6 @@ export function useIntelligenceSourcesSettings(labels: {
     }))
   }, [state.detail, state.selectedSourceId])
 
-  const saveFocusMarkets = useCallback(
-    async (enabledFocusMarkets: IntelligenceFocusMarket[]) => {
-      setState((current) => ({ ...current, savingFocusMarkets: true, errorCode: null }))
-      try {
-        const focusMarketSettings = await intelligenceSourcesClient.saveFocusSettings({ enabledFocusMarkets })
-        setState((current) => ({
-          ...current,
-          focusMarketSettings,
-          savingFocusMarkets: false,
-          notice: labels.saved
-        }))
-      } catch {
-        setState((current) => ({
-          ...current,
-          savingFocusMarkets: false,
-          errorCode: labels.saveFailed
-        }))
-      }
-    },
-    [labels.saved, labels.saveFailed]
-  )
-
   const sourceEnabledById = useMemo(
     () =>
       buildSourceEnabledById(
@@ -376,93 +410,10 @@ export function useIntelligenceSourcesSettings(labels: {
     selectSource,
     setEnabled,
     updateProfile,
+    updateSourceProfile,
     runNow,
     testCredentials,
     replayWindow,
-    refreshHealth,
-    saveFocusMarkets
+    refreshHealth
   }
-}
-
-export function isSuccessfulCredentialOperation(value: unknown, sourceId: string): boolean {
-  return isAcceptedCredentialSave(value, sourceId)
-}
-
-function waitForRunHealth(sourceId: string) {
-  return pollRunHealth(sourceId)
-}
-
-async function pollRunHealth(sourceId: string) {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const health = await intelligenceSourcesClient.getHealth(sourceId)
-    if (health.lastSuccessAt || health.lastFailureAt || health.lastRunSummary) {
-      return health
-    }
-    await sleep(500)
-  }
-  return intelligenceSourcesClient.getHealth(sourceId)
-}
-
-function resolveEnabledNotice(
-  profile: IntelligenceSourceProfile,
-  enabled: boolean,
-  labels: {
-    saved: string
-    disabledSaved: string
-    enabledManualHint: string
-    enabledAutoCollectQueued: string
-  }
-): string {
-  if (!enabled) return labels.disabledSaved
-  if (profile.collectionPreset === 'manual') return labels.enabledManualHint
-  return labels.enabledAutoCollectQueued
-}
-
-function resolveRunNotice(
-  health: Awaited<ReturnType<typeof intelligenceSourcesClient.getHealth>>,
-  labels: { runQueued: string; runSucceeded: string; runFailed: string }
-): string {
-  if (health.lastFailureAt && (!health.lastSuccessAt || health.lastFailureAt >= health.lastSuccessAt)) {
-    return health.lastRunSummary ? `${labels.runFailed} ${health.lastRunSummary}` : labels.runFailed
-  }
-  if (health.lastSuccessAt) {
-    return health.lastRunSummary ? `${labels.runSucceeded} ${health.lastRunSummary}` : labels.runSucceeded
-  }
-  return labels.runQueued
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    sleep(ms).then(() => {
-      throw new Error('Save timed out.')
-    })
-  ])
-}
-
-function toSaveProfileInput(profile: IntelligenceSourceProfile) {
-  return {
-    sourceId: profile.sourceId,
-    enabled: profile.enabled,
-    collectionPreset: profile.collectionPreset,
-    includeInSentiment: profile.includeInSentiment,
-    scopePolicy: profile.scopePolicy,
-    rawArchiveEnabled: profile.rawArchiveEnabled,
-    retentionMode: profile.retentionMode,
-    autoReplayAfterParserUpgrade: profile.autoReplayAfterParserUpgrade,
-    credentialRef: profile.credentialRef
-  }
-}
-
-function upsertProfile(
-  profiles: IntelligenceSourceProfile[],
-  profile: IntelligenceSourceProfile
-): IntelligenceSourceProfile[] {
-  const index = profiles.findIndex((item) => item.sourceId === profile.sourceId)
-  if (index < 0) return [...profiles, profile]
-  return profiles.map((item, itemIndex) => (itemIndex === index ? profile : item))
 }

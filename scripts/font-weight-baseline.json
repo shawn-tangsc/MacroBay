@@ -1,0 +1,16 @@
+{
+  "files": {
+    "apps/desktop-shell/src/renderer/src/shell/workspace/workspaceLayout.css": 4,
+    "apps/desktop-shell/src/renderer/src/styles.css": 34,
+    "platform/ui/components/structured-text/structuredText.css": 1,
+    "products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css": 1,
+    "products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css": 1,
+    "products/market-intelligence/desktop/pages/intelligence/dailyBriefingGeneratedBanner.css": 1,
+    "products/market-intelligence/desktop/pages/intelligence/dailyBriefingShareCard.css": 22,
+    "products/market-intelligence/desktop/pages/intelligence/intelligence.css": 6,
+    "products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css": 3,
+    "products/market-intelligence/desktop/pages/intelligence/sampleMode.css": 1,
+    "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css": 5
+  },
+  "total": 79
+}

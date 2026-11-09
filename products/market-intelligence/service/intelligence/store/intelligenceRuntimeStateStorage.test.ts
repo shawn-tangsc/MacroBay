@@ -37,7 +37,9 @@ describe('intelligenceRuntimeStateStorage', () => {
         fixtureText: await readFile(join(__dirname, '../adapters/fixtures/rss-sample.xml'), 'utf8')
       })
 
-      expect(pipeline.getHealth('coindesk-rss').lastSuccessAt).toBeTruthy()
+      const health = pipeline.getHealth('coindesk-rss')
+      expect(health).toBeDefined()
+      expect(health?.lastSuccessAt).toBeTruthy()
 
       const historyAfterCollect = readIntelligenceRuntimeStateHistorySync(historyPath)
       expect(historyAfterCollect.some((entry) => entry.resourceId === 'coindesk-rss')).toBe(true)
@@ -50,7 +52,9 @@ describe('intelligenceRuntimeStateStorage', () => {
         runtimeStateHistoryStorage
       })
 
-      expect(reloaded.getHealth('coindesk-rss').lastSuccessAt).toBeTruthy()
+      const reloadedHealth = reloaded.getHealth('coindesk-rss')
+      expect(reloadedHealth).toBeDefined()
+      expect(reloadedHealth?.lastSuccessAt).toBeTruthy()
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

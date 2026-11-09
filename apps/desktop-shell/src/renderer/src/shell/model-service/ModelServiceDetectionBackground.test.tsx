@@ -37,6 +37,16 @@ function holdingDetect(total: number): (providerId: string, request: { modes: st
  * PLAT-82：检测 run 活在模块级内存 store 里。
  * 关弹窗、切供应商都不取消；只有「停止」才取消；结果不落库。
  */
+/**
+ * 检测结果由受控面异步推进：等某个真实条件成立（某行出现某状态），不等固定的一拍。
+ * 上限按 `vi.waitFor` 的显式超时算，失败信息说明等的是哪一条。
+ */
+async function waitForDetection(condition: () => boolean, what: string): Promise<void> {
+  await vi.waitFor(() => {
+    expect(condition(), what).toBe(true)
+  }, { timeout: 5_000, interval: 10 })
+}
+
 describe('PLAT-82 后台检测', () => {
   it('keeps running after the dialog closes and stops on demand', async () => {
     const page = await renderModelServiceSettings({
@@ -137,9 +147,10 @@ describe('PLAT-82 后台检测', () => {
 
     await click(page.container, '[data-models-detect]')
     await click(document.body, '[data-detect-start]')
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await waitForDetection(
+      () => page.container.querySelector('[data-model-detection-status="failed"]') !== null,
+      'the failed row to render'
+    )
 
     expect(page.container.querySelector('[data-model-detection-status="failed"]')).not.toBeNull()
     expect(page.api.upsert).not.toHaveBeenCalled()
@@ -166,9 +177,10 @@ describe('PLAT-82 后台检测', () => {
 
     await click(page.container, '[data-models-detect]')
     await click(document.body, '[data-detect-start]')
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await waitForDetection(
+      () => page.container.querySelector('[data-model-row="declared"]')?.getAttribute('data-model-protocol-failed') === 'messages',
+      'the declared protocol failure to render on that row'
+    )
 
     const declared = page.container.querySelector('[data-model-row="declared"]')
     const undeclared = page.container.querySelector('[data-model-row="undeclared"]')
@@ -195,9 +207,10 @@ describe('PLAT-82 后台检测', () => {
 
     await click(page.container, '[data-models-detect]')
     await click(document.body, '[data-detect-start]')
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await waitForDetection(
+      () => page.container.querySelector('[data-model-row="m-1"] [data-model-detection-status="skipped"]') !== null,
+      'the skipped row to render'
+    )
 
     const skippedRow = page.container.querySelector('[data-model-row="m-1"] [data-model-detection-status="skipped"]')
     expect(skippedRow?.querySelector('.status-pill__label')?.textContent).toBe(labels.detectionStatusLabel('skipped'))
@@ -230,9 +243,14 @@ describe('PLAT-82 协议结果看得见', () => {
 
     await click(page.container, '[data-models-detect]')
     await click(document.body, '[data-detect-start]')
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await waitForDetection(
+      () => {
+        const row = page.container.querySelector('[data-model-row="m-1"] [data-model-detection-status]')
+        return row?.querySelector('.status-pill__label')?.textContent === labels.detectionStatusLabel('ok')
+          && (row.textContent ?? '').includes(labels.detectionProtocolCount(1, 2))
+      },
+      'the per-model protocol count to render'
+    )
 
     // 行内：一个状态位 + 协议摘要（通/总数）。
     const failedRow = page.container.querySelector('[data-model-row="m-1"] [data-model-detection-status]')
@@ -276,9 +294,10 @@ describe('PLAT-82 协议结果看得见', () => {
 
     await click(page.container, '[data-models-detect]')
     await click(document.body, '[data-detect-start]')
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
+    await waitForDetection(
+      () => page.container.querySelector('[data-model-row="m-1"] [data-model-protocol-chip="messages"]') !== null,
+      'the proved protocol chip to render'
+    )
 
     const row = page.container.querySelector('[data-model-row="m-1"]')
     expect(row?.querySelector('[data-model-detection-status] .status-pill__label')?.textContent)

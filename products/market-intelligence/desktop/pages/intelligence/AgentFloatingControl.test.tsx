@@ -56,7 +56,7 @@ it('uses the copy the caller passes, with no text of its own', async () => {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
-  await act(async () => root.render(<AgentFloatingControl text={{ open: 'OPEN-ME', close: 'CLOSE-ME', title: 'TITLE-ME' }}><p data-agent-body>对话</p></AgentFloatingControl>))
+  await act(async () => root.render(<AgentFloatingControl text={{ open: 'OPEN-ME', close: 'CLOSE-ME', title: 'TITLE-ME', clear: 'CLEAR-ME' }}><p data-agent-body>对话</p></AgentFloatingControl>))
   expect(host.querySelector('[data-agent-floating-button]')?.getAttribute('aria-label')).toBe('OPEN-ME')
   await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
   expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('TITLE-ME')

@@ -34,10 +34,6 @@ const fixtures = vi.hoisted(() => {
     sourcesService: {
       listDefinitions: () => [definition],
       listProfiles: async () => [profile],
-      getFocusSettings: async () => ({
-        enabledFocusMarkets: ['digital-assets'],
-        updatedAt: '2026-10-01T00:00:00.000Z'
-      }),
       getDetail: async (sourceId: string) => ({
         definition,
         profile: { ...profile, sourceId },

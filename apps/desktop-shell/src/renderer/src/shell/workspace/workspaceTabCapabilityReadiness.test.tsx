@@ -220,23 +220,33 @@ describe('PLAT-05：`.tabs.*` 首次权威读取的能力就绪门控', () => {
   })
 
   it('③ 有界：未就绪持续（真实时间流逝）与握手被拒之后都零重试，行为退化为安全壳', async () => {
-    const surface = createSurface({ handshake: 'pending' })
-    const { mod, client } = await openTabClient(surface)
-    await client.load()
-    expect(surface.calls.tabsGetSnapshot).toBe(0)
+    // 时间流逝用**注入时钟**推进，不占真实时间：这条要证的是「实现里没有任何定时器」，
+    // 推进 60 秒虚拟时间比原来真等 60ms 盖得更久，而且不会因为机器忙就先超时。
+    vi.useFakeTimers()
+    try {
+      const surface = createSurface({ handshake: 'pending' })
+      const { mod, client } = await openTabClient(surface)
+      await client.load()
+      expect(surface.calls.tabsGetSnapshot).toBe(0)
 
-    // 无定时器、无忙轮询：真实时间流逝之后依然一次 invoke 都没有（当前实现此刻早已打过多次）。
-    await new Promise((resolve) => setTimeout(resolve, 60))
-    expect(surface.calls.tabsGetSnapshot).toBe(0)
+      // 无定时器、无忙轮询：虚拟时间走过 60 秒之后依然一次 invoke 都没有。
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      await settle()
+      expect(surface.calls.tabsGetSnapshot).toBe(0)
 
-    // 反面证据（握手被拒/能力缺席）⇒ 首次权威读取**永久放弃**：事件再多也绝不补打。
-    surface.settleHandshake('rejected')
-    await runWindowHandshake(surface, mod)
-    for (let index = 0; index < 5; index += 1) surface.emit({ type: 'open', layoutRevision: index + 2, scope: {} })
-    await settle()
+      // 反面证据（握手被拒/能力缺席）⇒ 首次权威读取**永久放弃**：事件再多也绝不补打。
+      surface.settleHandshake('rejected')
+      await runWindowHandshake(surface, mod)
+      for (let index = 0; index < 5; index += 1) surface.emit({ type: 'open', layoutRevision: index + 2, scope: {} })
+      await settle()
 
-    expect(surface.calls.tabsGetSnapshot).toBe(0)
-    expect(client.getState()).toBeNull()
+      expect(surface.calls.tabsGetSnapshot).toBe(0)
+      expect(client.getState()).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('②/④ 就绪正证到达后自动补**恰好一次**权威读取，不重复、不风暴、不需要手动刷新', async () => {
@@ -251,7 +261,8 @@ describe('PLAT-05：`.tabs.*` 首次权威读取的能力就绪门控', () => {
     surface.settleHandshake('ok')
     await runWindowHandshake(surface, mod)
     await settle()
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // 补读是异步落地的：等「真的发生了一次读取」这个条件成立，不等固定 20ms。
+    await vi.waitFor(() => { expect(surface.calls.tabsGetSnapshot).toBe(1) }, { timeout: CONDITION_TIMEOUT_MS })
     await settle()
 
     expect(surface.calls.tabsGetSnapshot).toBe(1) // ② 恰好一次；④ 自动补读（无人调用 load()）

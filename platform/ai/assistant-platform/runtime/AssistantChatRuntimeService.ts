@@ -512,6 +512,8 @@ export function createAssistantChatRuntimeService(
     for (const topic of topics) {
       for (const message of deps.repos.messages.listByTopic(topic.id)) {
         if (message.status !== 'pending') continue
+        // 本批次写的 pending：本进程正在跑，绝不动（缺失按「上一个进程」处理）。
+        if (message.ownerBootId !== undefined && message.ownerBootId === deps.ownerBootId) continue
         deps.repos.messages.update(message.id, {
           data: { parts: [{ type: 'error', message: 'Interrupted before completion.' }] },
           status: 'error'

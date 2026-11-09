@@ -36,6 +36,14 @@ describe('market-intelligence approvals', () => {
     ])
   })
 
+  it('requests every surface the finished briefing was approved for, so no signed level is dead', () => {
+    // 2026-11-04 用户翻案恢复「日报完成推手机」，11-06 又加了桌面档；批准表两档都批了。
+    // 声明若仍写 []，运行时只会投中心——提交发生、读者收不到，正是这条要钉住的假实现。
+    const ready = (manifest.notificationEvents ?? [])
+      .find((event) => event.id === 'market-intelligence.briefing.ready')
+    expect(ready?.requestedDisruptionLevels).toEqual(['channel', 'desktop'])
+  })
+
   it('keeps the phone leg to the six events the user approved for it', () => {
     // N2 日报完成、N3 信号、N5 宏观事件、N11 事件开始前、N10 舆情、分析结论。
     // N10 与结论只批 center + channel——桌面与提示两档明确不加。

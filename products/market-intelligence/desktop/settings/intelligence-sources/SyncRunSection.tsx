@@ -4,6 +4,8 @@ import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
+import { SettingsInfo } from '../settingsInfo'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import type {
@@ -17,6 +19,7 @@ import type {
 import { isAnalysisRunId, syncRunsCsv } from '../../../contracts/syncRunRecords'
 import { syncRunClient } from '../../shared/ipc/syncRunClient'
 import { AnalysisCell, AnalysisRecord, analysisRecordId, formatSyncRunTime } from './SyncRunAnalysisCell'
+import { SyncRunAggregates } from './SyncRunAggregates'
 import { syncRunSourceLabel, syncRunTaskLabel, syncRunTallyText } from './syncRunRowText'
 import './sync-run-section.css'
 
@@ -81,6 +84,8 @@ export type SyncRunText = Readonly<{
   exportTruncated: string
   showing: string
   retention: string
+  /** 标题旁那颗 ⓘ 的读屏名。 */
+  infoAria: string
   page: string
   previous: string
   next: string
@@ -115,7 +120,6 @@ const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
 /** Thirty rows a page: one screen of recent history without a wall of scroll. */
 const SYNC_RUN_PAGE_SIZE = 30
 /** A year of daily counts across every task would be a wall of rows; the newest days come first. */
-const SYNC_RUN_AGGREGATE_ROWS = 60
 
 export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, knownSources, text }: Readonly<{
   text: SyncRunText
@@ -130,6 +134,15 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
   analysisFailureReasons?: Readonly<Record<string, string>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
+  // 这一页手里是**解好的**文案（`text`），而 ⓘ 与平台控件只收键——这里把那四条键映射回这一页
+  // 的字。只给 ⓘ 用，不是第二套文案表。
+  const infoCopy: Readonly<Record<string, string>> = {
+    'settings.intelligenceSources.syncRun.infoAria': text.infoAria,
+    'settings.intelligenceSources.syncRun.noSourceHint': text.noSourceHint,
+    'settings.intelligenceSources.syncRun.oldRecordNote': text.oldRecordNote,
+    'settings.intelligenceSources.syncRun.retention': text.retention
+  }
+  const resolveInfoText = (key: string): string => infoCopy[key] ?? ''
   /**
    * A located row may be older than the default window, so a focus request reads the widest window
    * the contract allows from the start — one read, no second round trip, and page 5 is reachable.
@@ -274,7 +287,20 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
 
   return <section className="mi-sync-run" aria-label={text.title}>
     <header className="mi-sync-run__head">
-      <h2>{text.title}</h2>
+      <div className="mi-sync-run__title">
+        <h2>{text.title}</h2>
+        {/* 三句说明（来源列为什么是空的 / 旧记录为什么没有条数 / 明细与汇总的保留期）都住在这里：
+            正文只留字段名、当前值和状态。 */}
+        <SettingsInfo
+          ariaLabelKey="settings.intelligenceSources.syncRun.infoAria"
+          labelKeys={[
+            'settings.intelligenceSources.syncRun.noSourceHint',
+            'settings.intelligenceSources.syncRun.oldRecordNote',
+            'settings.intelligenceSources.syncRun.retention'
+          ]}
+          resolveText={resolveInfoText}
+        />
+      </div>
       <div className="mi-sync-run__filters">
         <label>{text.columns.time}
           <select value={window} onChange={(event) => { setWindow(event.target.value as SyncRunWindow); setPage(0) }}>
@@ -357,13 +383,6 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
         <span role="columnheader">{text.columns.duration}</span>
         <span role="columnheader">{text.columns.detail}</span>
       </div>
-      <p className="mi-sync-run__legend">{text.noSourceHint}</p>
-      {/* One line for the whole table, not one per row: a run that predates the tally shows no
-          numbers, and without this the empty spot reads as "zero items". Only shown when such a row
-          is actually on screen — a legend for an absent case is noise. */}
-      {visible.some((row) => row.counts === undefined)
-        ? <p className="mi-sync-run__legend mi-sync-run__legend--tally">{text.oldRecordNote}</p>
-        : null}
       {visible.map((row) => <Fragment key={row.runId}>
         <div
           className="mi-sync-run__grid"
@@ -443,7 +462,7 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     </div> : null}
     {state === 'available' && filtered.length > 0
       ? <footer className="mi-sync-run__foot">
-        <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}{text.joiner}{text.retention}</span>
+        <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}</span>
         {/* 取回一部分就明说：读者要能分清「这段时间只有这些」和「这里还没取完」。 */}
         {truncated ? <span role="status">{text.truncatedNotice.replace('{count}', String(rows.length))}</span> : null}
         {pageCount > 1 ? <span className="mi-sync-run__pager">
@@ -453,44 +472,8 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
         </span> : null}
       </footer>
       : null}
-    {window === 'all' ? <section className="mi-sync-run__aggregates" aria-label={text.aggregates.title}>
-      <h3>{text.aggregates.title}</h3>
-      <p className="mi-sync-run__aggregate-note">{text.aggregates.note}</p>
-      {!aggregates ? <LoadingState label={text.loading} minHeight={80} /> : null}
-      {aggregates?.state === 'unavailable'
-        ? (aggregates.reason === 'memory-store-has-no-aggregates'
-          ? <StateView reasonCode="capability-not-wired" size="md" state="disabled" />
-          : <StateView
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
-            reasonCode="unreadable"
-            size="md"
-            state="error"
-          />)
-        : null}
-      {/* Detail is kept 30 days; a younger install has nothing folded yet, and there is nothing to
-          do about that, so no action. */}
-      {aggregates?.state === 'available' && aggregates.rows.length === 0
-        ? <StateView reasonCode="not-yet" size="md" state="empty" />
-        : null}
-      {aggregates?.state === 'available' && aggregates.rows.length > 0
-        ? <div className="mi-sync-run__aggregate-table" role="table" aria-label={text.aggregates.title}>
-          <div className="mi-sync-run__grid mi-sync-run__grid--aggregate" role="row">
-            <span role="columnheader">{text.aggregates.columns.day}</span>
-            <span role="columnheader">{text.aggregates.columns.task}</span>
-            <span role="columnheader">{text.aggregates.columns.runs}</span>
-            <span role="columnheader">{text.aggregates.columns.failures}</span>
-          </div>
-          {[...aggregates.rows]
-            .sort((left, right) => right.day.localeCompare(left.day) || left.taskLabel.localeCompare(right.taskLabel))
-            .slice(0, SYNC_RUN_AGGREGATE_ROWS)
-            .map((row) => <div className="mi-sync-run__grid mi-sync-run__grid--aggregate" key={`${row.day}:${row.handlerId}`} role="row">
-            <span role="cell">{row.day}</span>
-            <span role="cell">{row.taskLabel}</span>
-            <span role="cell">{String(row.runs)}</span>
-            <span role="cell" data-has-failures={row.failures > 0 ? 'true' : undefined}>{String(row.failures)}</span>
-          </div>)}
-        </div>
-        : null}
-    </section> : null}
+    {window === 'all'
+      ? <SyncRunAggregates aggregates={aggregates} loading={text.loading} onRetry={retry} text={text.aggregates} />
+      : null}
   </section>
 }

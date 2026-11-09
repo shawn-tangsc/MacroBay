@@ -196,6 +196,9 @@ export default function SkillDetailModal({
                     type="button"
                     className={selectedFile === node.path ? 'agent-skill-file-row active' : 'agent-skill-file-row'}
                     style={{ paddingLeft: `${8 + node.depth * 14}px` }}
+                    // 整行只有一个结果：预览这个文件；目录行是不可点的分组标题，由 `disabled` 表达。
+                    // `aria-current` 标出正在预览的那一个（此前只有底色）。
+                    aria-current={selectedFile === node.path ? 'true' : undefined}
                     disabled={node.type === 'directory'}
                     onClick={() => {
                       if (node.type === 'file') setSelectedFile(node.path)

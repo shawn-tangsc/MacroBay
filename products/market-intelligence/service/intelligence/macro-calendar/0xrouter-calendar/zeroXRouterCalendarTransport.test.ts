@@ -8,6 +8,31 @@ import { zeroXRouterSourcePolicy } from '../../application/zeroXRouterSourcePoli
 import { createZeroXRouterCalendarTransport, zeroXRouterCalendarPrefetchMonth, zeroXRouterCalendarPrefetchOwner } from './zeroXRouterCalendarTransport'
 
 const apiKey = 'safe-test-key'
+/**
+ * 传输只调用 `enqueue`，其余方法归队列自己的 owner——所以夹具只提供这一个方法。但**签名用队列自己的**：
+ * `enqueue` 对 `T` 是泛型的（`<T>(request) => Promise<T>`），手写一个非泛型的 `(input: unknown)` 装不下它，
+ * 而且会逼着每个桩都用 `as` 把 `entry` 掰回来。
+ */
+type GovernanceQueue = ReturnType<typeof createSourceRequestGovernanceQueue>
+type GovernanceQueuePort = Pick<GovernanceQueue, 'enqueue'>
+/** 队列自己的请求形状 + 这次调用真正返回的 `T`：`enqueue` 从 `run` 推断 `T`，转发才不会退化成 `unknown`。 */
+type QueueRequestOf<T> = Parameters<GovernanceQueue['enqueue']>[0] & { run: () => Promise<T> }
+
+/**
+ * 记下 `enqueue` 被调了几次、带了什么 intent，并**真的**交给队列——配额与排队正是这些用例要测的东西。
+ *
+ * 不用 `vi.fn(queue.enqueue)`：它把泛型调用签名拍成 `Promise<unknown>`，装不进端口。也不用 `vi.spyOn`：
+ * 队列对象的 `enqueue` 不可重定义（`TypeError: Cannot redefine property`）。
+ */
+function spyQueue(governanceQueue: GovernanceQueue) {
+  // 记录件的参数仍是队列自己的请求形状，所以断言里的 `mock.calls[i][0].intent` 是类型化的，不是 `any`。
+  const enqueue = vi.fn<(request: Parameters<GovernanceQueue['enqueue']>[0]) => void>()
+  const port: GovernanceQueuePort = {
+    enqueue: <T>(request: QueueRequestOf<T>) => { enqueue(request); return governanceQueue.enqueue(request) }
+  }
+  return { port, enqueue }
+}
+
 const acceptedBody = JSON.stringify({ code: 200, msg: 'ok', data: [] })
 
 function deferred<T>() {
@@ -18,10 +43,10 @@ function deferred<T>() {
 
 function createScheduledHarness() {
   const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse('2026-09-07T01:02:03.000Z') })
-  const enqueue = vi.fn(queue.enqueue)
+  const { port, enqueue } = spyQueue(queue)
   const responses: ReturnType<typeof deferred<unknown>>[] = []
   const harness = createHarness({
-    queue: { enqueue },
+    queue: port,
     now: () => new Date('2026-09-07T01:02:03.000Z'),
     requestJsonBody: async () => {
       const response = deferred<unknown>()
@@ -43,9 +68,10 @@ function createScheduledHarness() {
 
 function createHarness(options: {
   apiKey?: string
-  requestJsonBody?: (input: unknown) => Promise<unknown>
+  /** 入参照端口是真的（桩要能声明自己读 `url`）；返回故意宽松：有几条用例就是要给出残缺的响应体。 */
+  requestJsonBody?: (input: Readonly<{ url: string; apiKey: string }>) => Promise<unknown>
   now?: () => Date
-  queue?: { enqueue: (input: unknown) => Promise<unknown> }
+  queue?: GovernanceQueuePort
   consumeAcceptedResponse?: Parameters<typeof createZeroXRouterCalendarTransport>[0]['consumeAcceptedResponse']
 } = {}) {
   const requestJsonBody = vi.fn(options.requestJsonBody ?? (async () => ({
@@ -195,7 +221,7 @@ describe('0xRouter calendar transport', () => {
     const bodyPending = new Promise<unknown>((done) => { resolve = done })
     const queueCalls: Array<{ intent?: string }> = []
     const queue = {
-      enqueue: async (input: { intent?: string; run: () => Promise<unknown> }) => {
+      enqueue: async <T>(input: { intent?: string; run: () => Promise<T> }): Promise<T> => {
         queueCalls.push({ intent: input.intent })
         return input.run()
       }
@@ -218,10 +244,10 @@ describe('0xRouter calendar transport', () => {
   it('derives all automatic work from the current UTC month without accepting caller input', async () => {
     const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-07T01:02:03.000Z') })
     const batch = await transport.requestAutomatic()
-    expect(batch.results).toEqual(Array.from({ length: 6 }, () => expect.objectContaining({ state: 'succeeded', month: '2026-09' })))
-    expect(batch.scopes).toHaveLength(6)
+    expect(batch.results).toEqual(Array.from({ length: 4 }, () => expect.objectContaining({ state: 'succeeded', month: '2026-09' })))
+    expect(batch.scopes).toHaveLength(4)
     expect(new Set(batch.scopes.map(scope => scope.month))).toEqual(new Set(['2026-09']))
-    expect(requestJsonBody).toHaveBeenCalledTimes(6)
+    expect(requestJsonBody).toHaveBeenCalledTimes(4)
   })
 
   it('submits automatic work stepwise and submits a waiting manual request next', async () => {
@@ -238,18 +264,18 @@ describe('0xRouter calendar transport', () => {
     expect(enqueue.mock.calls[1]![0].intent).toBe('user')
     const url = new URL((requestJsonBody.mock.calls[1]![0] as { url: string }).url)
     expect(url.searchParams.get('startTime')).toBe(String(Date.UTC(2026, 7, 1)))
-    for (let index = 1; index < 7; index += 1) await complete(index)
+    for (let index = 1; index < 5; index += 1) await complete(index)
     await expect(manual).resolves.toMatchObject({ state: 'succeeded', month: '2026-08' })
     await expect(automatic).resolves.toMatchObject({ results: expect.any(Array) })
-    expect((await automatic).results).toHaveLength(6)
-    expect(enqueue).toHaveBeenCalledTimes(7)
+    expect((await automatic).results).toHaveLength(4)
+    expect(enqueue).toHaveBeenCalledTimes(5)
   })
 
   it('promotes the same local automatic key and shares its result without preempting active work', async () => {
     const { transport, enqueue, requestJsonBody, complete } = createScheduledHarness()
     const automatic = transport.requestAutomatic()
     await vi.waitFor(() => expect(enqueue).toHaveBeenCalled())
-    const input = { descriptorId: 'macro-calendar-0xrouter-central-bank-activities', month: '2026-09', locale: 'en' } as const
+    const input = { descriptorId: 'macro-calendar-0xrouter-central-bank-activities', month: '2026-09', locale: 'zh' } as const
     const manual = transport.requestManual(input)
     expect(transport.requestManual(input)).toBe(manual)
     expect(enqueue).toHaveBeenCalledTimes(1)
@@ -258,11 +284,11 @@ describe('0xRouter calendar transport', () => {
     expect(enqueue.mock.calls.map(([entry]) => entry.intent)).toEqual(['automatic', 'user'])
     const url = new URL((requestJsonBody.mock.calls[1]![0] as { url: string }).url)
     expect(url.pathname).toBe('/cexdata/calendar/central-bank-activities')
-    expect(url.searchParams.get('locale')).toBe('en')
-    for (let index = 1; index < 6; index += 1) await complete(index)
+    expect(url.searchParams.get('locale')).toBe('zh')
+    for (let index = 1; index < 4; index += 1) await complete(index)
     const { results } = await automatic
-    expect(await manual).toBe(results[5])
-    expect(enqueue).toHaveBeenCalledTimes(6)
+    expect(await manual).toBe(results[3])
+    expect(enqueue).toHaveBeenCalledTimes(4)
   })
 
   it('reuses the entire unfinished automatic batch even after its prefix completes', async () => {
@@ -272,10 +298,10 @@ describe('0xRouter calendar transport', () => {
     await complete(0)
     await vi.waitFor(() => expect(enqueue).toHaveBeenCalledTimes(2))
     expect(transport.requestAutomatic()).toBe(first)
-    for (let index = 1; index < 6; index += 1) await complete(index)
+    for (let index = 1; index < 4; index += 1) await complete(index)
     await expect(first).resolves.toMatchObject({ results: expect.any(Array) })
-    expect((await first).results).toHaveLength(6)
-    expect(enqueue).toHaveBeenCalledTimes(6)
+    expect((await first).results).toHaveLength(4)
+    expect(enqueue).toHaveBeenCalledTimes(4)
   })
 
   it('derives the prefetch month and owner only at month end', () => {
@@ -296,26 +322,25 @@ describe('0xRouter calendar transport', () => {
   it('prefetches the next UTC month for the hour feed inside the end-of-month window', async () => {
     const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z') })
     const batch = await transport.requestAutomatic()
-    // Six current-month rows plus two for the one owner feed: still inside ten per minute.
-    expect(batch.scopes).toHaveLength(8)
-    expect(batch.results).toHaveLength(8)
+    // Four current-month rows plus one for the one owner feed, and that owner publishes only zh.
+    expect(batch.scopes).toHaveLength(5)
+    expect(batch.results).toHaveLength(5)
     expect(batch.scopes.filter(scope => scope.month === '2026-10').map(scope => [scope.descriptorId, scope.locale])).toEqual([
-      ['macro-calendar-0xrouter-central-bank-activities', 'zh'],
-      ['macro-calendar-0xrouter-central-bank-activities', 'en']
+      ['macro-calendar-0xrouter-central-bank-activities', 'zh']
     ])
-    expect(requestJsonBody).toHaveBeenCalledTimes(8)
-    const nextMonthUrl = new URL((requestJsonBody.mock.calls[6]![0] as { url: string }).url)
+    expect(requestJsonBody).toHaveBeenCalledTimes(5)
+    const nextMonthUrl = new URL((requestJsonBody.mock.calls[4]![0] as { url: string }).url)
     expect(nextMonthUrl.searchParams.get('startTime')).toBe(String(Date.UTC(2026, 9, 1)))
     expect(nextMonthUrl.searchParams.get('locale')).toBe('zh')
   })
 
   it('collects the prefetched month once and keeps the current month on every tick', async () => {
-    const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), queue: { enqueue: async (entry) => (entry as { run: () => Promise<unknown> }).run() } })
+    const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), queue: { enqueue: <T>(entry: { run: () => Promise<T> }) => entry.run() } })
     await transport.requestAutomatic()
     const second = await transport.requestAutomatic()
-    expect(second.scopes).toHaveLength(6)
+    expect(second.scopes).toHaveLength(4)
     expect(new Set(second.scopes.map(scope => scope.month))).toEqual(new Set(['2026-09']))
-    expect(requestJsonBody).toHaveBeenCalledTimes(14)
+    expect(requestJsonBody).toHaveBeenCalledTimes(9)
   })
 
   it('asks again for a prefetched month that did not succeed', async () => {
@@ -323,11 +348,11 @@ describe('0xRouter calendar transport', () => {
       ? { state: 'failed' as const, failureCode: 'response-unavailable' as const }
       : { state: 'succeeded' as const, body: acceptedBody, acceptedBytes: Buffer.byteLength(acceptedBody), status: 200, contentType: 'application/json' })
     const { transport } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), requestJsonBody,
-      queue: { enqueue: async (entry) => (entry as { run: () => Promise<unknown> }).run() } })
+      queue: { enqueue: <T>(entry: { run: () => Promise<T> }) => entry.run() } })
     await transport.requestAutomatic()
     const retry = await transport.requestAutomatic()
-    expect(retry.scopes.filter(scope => scope.month === '2026-10')).toHaveLength(2)
-    expect(requestJsonBody).toHaveBeenCalledTimes(16)
+    expect(retry.scopes.filter(scope => scope.month === '2026-10')).toHaveLength(1)
+    expect(requestJsonBody).toHaveBeenCalledTimes(10)
   })
 
   it('keeps a separate in-flight batch per requested descriptor set', async () => {
@@ -343,11 +368,11 @@ describe('0xRouter calendar transport', () => {
     const { transport, enqueue, complete } = createScheduledHarness()
     const automatic = transport.requestAutomatic()
     await complete(0, true)
-    for (let index = 1; index < 6; index += 1) await complete(index)
+    for (let index = 1; index < 4; index += 1) await complete(index)
     const { results } = await automatic
     expect(results[0]).toEqual({ state: 'unavailable', failureCode: 'response-unavailable' })
-    expect(results.slice(1)).toEqual(Array.from({ length: 5 }, () => expect.objectContaining({ state: 'succeeded' })))
-    expect(enqueue).toHaveBeenCalledTimes(6)
+    expect(results.slice(1)).toEqual(Array.from({ length: 3 }, () => expect.objectContaining({ state: 'succeeded' })))
+    expect(enqueue).toHaveBeenCalledTimes(4)
   })
 
   it('preserves an automatic request already waiting in the shared quota queue', async () => {
@@ -357,8 +382,9 @@ describe('0xRouter calendar transport', () => {
     for (let index = 0; index < policy.rollingWindow.maxRequests; index += 1) {
       await queue.enqueue({ sourceId: zeroXRouterSourcePolicy.sourceId, policy, apiKey, run: async () => undefined })
     }
-    const enqueue = vi.fn(queue.enqueue)
-    const { transport, requestJsonBody } = createHarness({ queue: { enqueue }, now: () => new Date(now) })
+    // 队列还是那一个（后面的 `pendingCount()` 还要用它），只是把 `enqueue` 记下来再转发。
+    const { port, enqueue } = spyQueue(queue)
+    const { transport, requestJsonBody } = createHarness({ queue: port, now: () => new Date(now) })
     const automatic = transport.requestAutomatic()
     await vi.waitFor(() => expect(queue.pendingCount()).toBe(1))
     const manual = transport.requestManual({
@@ -370,9 +396,9 @@ describe('0xRouter calendar transport', () => {
     queue.pump()
     await Promise.all([automatic, manual])
     expect(enqueue.mock.calls.map(([entry]) => entry.intent)).toEqual([
-      'automatic', 'user', 'automatic', 'automatic', 'automatic', 'automatic'
+      'automatic', 'user', 'automatic', 'automatic', 'automatic'
     ])
-    expect(requestJsonBody).toHaveBeenCalledTimes(6)
+    expect(requestJsonBody).toHaveBeenCalledTimes(5)
     queue.close()
   })
 

@@ -75,8 +75,8 @@ function memoryStore(): DailyBriefingStore & {
     async listPeriodRuns(from, to) {
       return runs.filter((run) => run.date >= from && run.date <= to)
     },
-    async getPeriodRun(date, periodId = 'default') {
-      return runs.find((run) => run.date === date && run.periodId === periodId)
+    async getPeriodRun(date, periodId = 'default', locale = 'zh-CN') {
+      return runs.find((run) => run.date === date && run.periodId === periodId && run.locale === locale)
     },
     async prune(beforeDate) { pruned.push(beforeDate) }
   }
@@ -111,6 +111,7 @@ function periodRun(date: string): DailyBriefingPeriodRun {
   return {
     date,
     periodId: 'default',
+    locale: 'zh-CN',
     expectedLocales: ['zh-CN'],
     primaryRequested: 'zh-CN',
     primaryUsed: 'zh-CN',
@@ -382,7 +383,7 @@ describe('daily briefing service', () => {
     expect(store.rows.size).toBe(0)
   })
 
-  it('cancels the runtime session and abandons its link when the editorial deadline fires', async () => {
+  it('cancels the runtime session, and still publishes the data with the reason when the editorial deadline fires', async () => {
     vi.useFakeTimers()
     try {
       const store = memoryStore()
@@ -405,11 +406,15 @@ describe('daily briefing service', () => {
       const result = await pending
 
       expect(cancelAgentSession).toHaveBeenCalledWith('s-timeout')
-      // 会话被丢弃之外，这一跑也不许留下"看起来正常"的版次。
-      expect(result.state).toBe('unavailable')
-      expect(store.rows.size).toBe(0)
+      // 超时属模型类原因（r17 情形二）：版次照发（读者拿到数据），但原因写进 provenance、
+      // 这次尝试记失败——不是"悄悄发一份看起来完整的模板版"。
+      expect(result.state).toBe('available')
+      expect(store.rows.size).toBe(1)
       expect((await links.findBySession('s-timeout'))?.state).toBe('abandoned')
-      if (result.state === 'unavailable') expect(result.failureCode).toBe('editorial-timeout')
+      if (result.state === 'available') {
+        expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
+        expect(result.document.lede.source).not.toBe('agent')
+      }
     } finally {
       vi.useRealTimers()
     }
@@ -434,9 +439,10 @@ describe('daily briefing service', () => {
       const result = await pending
 
       expect(finish).not.toHaveBeenCalled()
-      expect(result.state).toBe('unavailable')
-      if (result.state === 'unavailable') expect(result.failureCode).toBe('editorial-timeout')
-      expect(store.rows.size).toBe(0)
+      // 会话都没建起来也一样：数据是真拿到的，版次照发，原因记在 provenance。
+      expect(result.state).toBe('available')
+      expect(store.rows.size).toBe(1)
+      if (result.state === 'available') expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
     } finally {
       vi.useRealTimers()
     }
@@ -485,7 +491,7 @@ describe('daily briefing service', () => {
     }
   })
 
-  it('publishes nothing when no model can be called, and says why', async () => {
+  it('publishes the data with the reason when no model can be called', async () => {
     const store = memoryStore()
     const starts: number[] = []
     const service = createDailyBriefingService({
@@ -496,10 +502,50 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    // 模型不可用是失败，不是"发一份没解读的版次"：原因码会走到右列与失败面板。
-    expect(store.rows.size).toBe(0)
-    expect(result.state).toBe('unavailable')
-    if (result.state === 'unavailable') expect(result.failureCode).toBe('model-unavailable')
+    // r17 情形一（2026-11-09 翻 11-06 的"干脆不出"）：没配模型的读者也要拿到这一天——
+    // 数据照发，provenance 写下原因，页面据此说「本期只有数据，没有 AI 写的解读」。
+    expect(store.rows.size).toBe(1)
+    expect(result.state).toBe('available')
+    if (result.state === 'available') {
+      expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
+      expect(result.document.lede.source).not.toBe('agent')
+    }
+  })
+
+  it('records the data-only edition and its failed attempt in the same write', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      agentRunner: acceptingAgentRunner(),
+      agentModel: async () => ({ state: 'unavailable', reason: 'default-unavailable' })
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    // 版次在、这次尝试记 failed：读者拿到数据，审计里也看得出"解读没出来"。
+    expect(await store.get('2026-10-30', 'zh-CN')).toBeTruthy()
+    const attempts = await store.listAttempts!('2026-10-30', 'zh-CN')
+    expect(attempts.map((attempt) => attempt.state)).toContain('failed')
+  })
+
+  it('does not deliver a completion notice for a data-only edition that is marked failed', async () => {
+    // 模型这一类失败照发数据版，但这一期在库里是 failed。推一条「完成」到手机就是把失败画成
+    // 成功（用户红线）。记录照写、deliver 关掉：手动「推送到手机」仍能核对是哪一版，表面一声不响。
+    const notices: Array<Record<string, unknown>> = []
+    const service = createDailyBriefingService({
+      source: fakeSource(), store: memoryStore(), now: () => asOf,
+      agentRunner: acceptingAgentRunner(),
+      agentModel: async () => ({ state: 'unavailable', reason: 'default-unavailable' }),
+      noticeSubmit: async (request) => {
+        notices.push(request as unknown as Record<string, unknown>)
+        return { kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }
+      }
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({ eventTypeId: 'market-intelligence.briefing.ready', deliver: false })
   })
 
   it('fails closed without starting a session when model readiness cannot be resolved', async () => {
@@ -513,10 +559,10 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    // 同样是失败：不发布、不记成功（用户 2026-11-06）。
-    expect(store.rows.size).toBe(0)
-    expect(result.state).toBe('unavailable')
-    if (result.state === 'unavailable') expect(result.failureCode).toBe('model-unavailable')
+    // 解析不出模型可用性也是模型类原因：照发数据，原因写进 provenance（不记成功）。
+    expect(store.rows.size).toBe(1)
+    expect(result.state).toBe('available')
+    if (result.state === 'available') expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
   })
 
   it('regenerates the same day, overwrites the row and applies the agent editorial', async () => {
@@ -630,7 +676,7 @@ describe('daily briefing service', () => {
 
     // 一条只存在于审计表里的"运行"：它有日期、有期号，但没有任何版次与尝试。
     await store.openPeriodRun!({
-      date: '2026-10-27', periodId: 'period_audit_only', expectedLocales: ['zh-CN'],
+      date: '2026-10-27', periodId: 'period_audit_only', locale: 'zh-CN', expectedLocales: ['zh-CN'],
       primaryRequested: 'zh-CN', primaryUsed: 'zh-CN', snapshotId: 'bs_audit', snapshotHash: 'h',
       contentVersion: 1, writingRounds: 1, direction: 'bearish', editionRows: [], state: 'failed',
       startedAt: '2026-10-27T00:00:00.000Z'
@@ -867,7 +913,7 @@ describe('period run', () => {
     const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    const run = await store.getPeriodRun?.('2026-10-30')
+    const run = await store.getPeriodRun?.('2026-10-30', 'default', 'zh-CN')
     expect(run).toMatchObject({
       periodId: 'default',
       expectedLocales: ['zh-CN'],
@@ -972,7 +1018,7 @@ describe('period run', () => {
     }
     const service = createDailyBriefingService({ source: failing, store, now: () => asOf })
     expect((await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).state).toBe('unavailable')
-    expect(await store.getPeriodRun?.('2026-10-30')).toBeUndefined()
+    expect(await store.getPeriodRun?.('2026-10-30', 'default', 'zh-CN')).toBeUndefined()
   })
 })
 
@@ -986,7 +1032,7 @@ describe('briefing notices', () => {
       generationSettings: async () => ({ generationTime: '08:00', windowHours: 24 }),
       noticeSubmit: async (request) => {
         notices.push(request as unknown as Record<string, unknown>)
-        return { kind: 'accepted', recordId: 'r1', levels: ['center'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }
       }
     })
     return { service, notices }
@@ -1012,6 +1058,17 @@ describe('briefing notices', () => {
     // revision, hash and generation moment must still stay out of it.
     expect(JSON.stringify(notices[0]?.dedupeVars)).toMatch(/periodId/)
     expect(JSON.stringify(notices[0]?.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt/)
+  })
+
+  it('does not submit again when a later read finds the stored edition', async () => {
+    // 触发点是「生成并落库之后」，不是每次读：同一个版次再读一次不该再响一声。
+    const { service, notices } = completedRun()
+
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const again = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(again.state).toBe('available')
+    expect(notices).toHaveLength(1)
   })
 
   it('writes the completion record without delivering it when the reader regenerates', async () => {
@@ -1043,7 +1100,7 @@ describe('briefing notices', () => {
       now: () => asOf,
       noticeSubmit: async (request) => {
         notices.push(request as unknown as Record<string, unknown>)
-        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'], suppressedLevels: [] }
       }
     })
 
@@ -1073,7 +1130,7 @@ describe('briefing notices', () => {
       agentModel: async () => ({ state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }),
       noticeSubmit: async (request) => {
         notices.push(request as unknown as Record<string, unknown>)
-        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
+        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'], suppressedLevels: [] }
       }
     })
 

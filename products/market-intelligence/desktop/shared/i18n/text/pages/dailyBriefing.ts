@@ -16,13 +16,15 @@ export const dailyBriefingText = {
     // 与「本版没采集」分开：那是我们没做，这是我们这次没拿到——读者据此决定等不等下一次。
     // 纳指走永续代理的那些天，点位不是纳指自己的——不标出来，读者会把 QQQ 的点位当纳指用。
     perpetualContract: '永续合约', indexProxy: '（QQQ 永续代理）',
+    // 持仓块那个 $ 金额的名字：与卡片名同一事实、同一种说法（A0.11）。
+    leverageOpenInterest: '未平仓合约名义额',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '持仓与费率', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
       // The card says what the dial is, not which section it belongs to: the section is already titled.
       policyProbability: '利率概率',
       // Two headings with meaning: "资金" covers flows and the stablecoin stock, so it is not "流向";
       // and the other line is prices and sentiment together, which is what the five cells are.
       markets: '行情与情绪' },
-    newsFocus: '重点',
+    newsFocus: '重点', newsOriginal: '原文',
     newsCount: '{count} 条',
     labelSeparator: '：',
     citationSources: { macroCalendar: '宏观日历', news: '新闻', analysis: '分析证据' },
@@ -62,8 +64,8 @@ export const dailyBriefingText = {
     /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
     macroUnreadable: '暂时读不到：',
     macroWebValue: '（网页）',
-    macroEmptyCodes: { 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在 90 秒内完成' },
-    nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
+    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在 90 秒内完成' },
+    nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用' },
     macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', cancelled: '已取消', surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
     /** 这一栏截断时才说（`02` v2.125）：条数是真摆出来的行数，不是候选总数。 */
     conclusion: { invalidation: '什么会推翻它', conditions: '判断前提', counter: '证伪条件', outlook: '前瞻', watch: '观察点', whatWouldChange: '什么会推翻', regimeChanged: '判断有变', basisHeld: '依据成立', basisOverturned: '依据被推翻', basisPartlyHeld: '依据部分成立', gaps: '数据缺口', caveats: '数据限制' },
@@ -88,10 +90,10 @@ export const dailyBriefingText = {
       invalid: '这一期的取值无效，请重新选择。', cancel: '取消', save: '保存', saving: '保存中…'
     },
     manualRunDialog: {
-      title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻。', cutoffHintLabel: '解释：截止时刻', repeatHintLabel: '解释：重复生成', windowHint: '统计窗口决定这一版覆盖多长时间；12 小时看半天，48 小时看两天。', windowHintLabel: '解释：统计窗口', languageHint: '这一版用哪种语言写。一期可以同时有中文版和英文版，各自一行。', languageHintLabel: '解释：语言',
-      date: '日期', dateHintLabel: '解释：日期', dateHint: '这一版归档到哪一天。默认是你现在在的那一天；过去的任意一天都可以补，未来不行。',
-      generateTarget: '将生成到 {date} {time}（{zone}）', generateTargetNow: '将生成到 {date}，截止时刻取你按下那一刻（{zone}）',
-      windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时', windowDaysHint: '只能生成最近 3 天（含今天）',
+      title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻（{zone}）。', cutoffHintLabel: '解释：截止时刻', repeatHintLabel: '解释：重复生成', duplicateHintLabel: '解释：替换已有版次', windowHint: '统计窗口决定这一版覆盖多长时间；12 小时看半天，48 小时看两天。', windowHintLabel: '解释：统计窗口', languageHint: '这一版用哪种语言写。一期可以同时有中文版和英文版，各自一行。', languageHintLabel: '解释：语言',
+      date: '日期', dateHintLabel: '解释：日期', dateHint: '这一版归档到哪一天。默认是你现在在的那一天；只能生成最近 3 天（含今天），未来不行。',
+      generateTarget: '将生成到 {date} {time}', generateTargetNow: '将生成到 {date}',
+      windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
       repeatable: '同一时刻、同一语言只保留一版：再点一次会先问你要不要替换那一版。',
       cutoffInFuture: '截止时刻晚于现在：那一份还没有发生，先换一个已经过去的时刻。', alreadyRunning: '已经有一版在生成，等它跑完再试。', duplicateTitle: '这一版已经有了', duplicateBody: '同一时刻、同一语言已经生成过一版（窗口不同也算同一版）。替换会覆盖它，旧内容不保留。', duplicateReplace: '替换',
       cutoffUnreadable: '这个时刻换算不出来，换一个再试。',
@@ -144,7 +146,18 @@ export const dailyBriefingText = {
     configureSources: '配置情报源',
     completeness: { missingVersion: '本期只有一版：另一版没有生成。', missingReadings: '本期缺 {n} 项数据。' },
     copy: '复制日报', copied: '已复制', copyFailed: '复制失败，请重试',
-    aiSettings: { open: '日报 AI 设置', title: '日报 AI 设置', notApplied: 'AI 编辑未生成', failedHint: 'AI 没有通过校验，日报未生成；可以重试或检查 AI 设置。', failure: { 'editorial-disabled': 'AI 编辑已关闭', 'model-unavailable': '默认模型不可用', 'editorial-timeout': 'AI 编辑超时', 'editorial-fallback': 'AI 输出未通过校验', 'invalid-shape': 'AI 输出格式不合规', 'unknown-fact': 'AI 引用了不存在的事实', 'unknown-number': 'AI 写入了事实包外的数字', 'forbidden-content': 'AI 输出包含禁用内容', 'too-long': 'AI 输出超长', 'language-mismatch': 'AI 输出语言不符', 'model-not-ready': '模型尚未就绪', 'provider-disabled': '模型供应商已停用', 'missing-api-key': '模型供应商缺少 API Key', timeout: 'AI 调用超时', cancelled: 'AI 调用被取消', 'rate-limited': '模型请求被限流', 'provider-error': '模型供应商返回错误', 'invalid-json': 'AI 返回的不是合法 JSON', 'schema-validation-failed': 'AI 输出未通过结构校验', 'invalid-translation': '译文未通过校验', 'agent-turn-output-truncated': 'AI 单轮输出被截断', 'source-failed': '情报源采集失败', 'candidate-overflow': '候选数据超出上限', 'build-failed': '日报生成失败', 'store-failed': '日报保存失败', 'time-invalid': '生成时间无效', 'direction-conflict': 'AI 的结论方向与数据层相反', 'row-set-mismatch': 'AI 改动了本期行集合', 'attempt-not-recorded': '这次运行没能记下自己的尝试记录，已停止', 'run-timeout': '这次运行超时仍未返回，可以重试', 'date-out-of-window': '只能生成最近 3 天的简报（含今天）', 'run-interrupted': '应用在这之前被关闭了，这次没写完' }, loading: '正在读取设置…', enabled: '使用 AI 编辑', enabledHint: '默认跟随平台默认模型；关掉只保留事实层。', model: '模型', webSearch: '允许补查缺失结论', webSearchHint: '仅在本地缺少高影响事件结论时搜索；来源/时间写入日报，截止到本期生成时间。', webSearchOff: '日报未授权 WebSearch', webSearchOffHint: '若 Web Search 源已配置，点“去授权”打开日报 AI 设置开启；若未配置，先到 设置 → 网页搜索 → 供应商 配置。', webSearchNeedsSetup: '无法开启：请先在 设置 → 网页搜索 → 供应商 配置并启用搜索源。', webSearchUnsupported: '当前模型不支持 Anthropic 内置搜索；补查将使用平台 Web Search（需已启用搜索源）。', goEnable: '去授权', followDefault: '跟随平台默认模型', modelUnavailable: '当前自选模型不可用会回落默认；默认也不可用时只出事实层。', failed: '保存失败，请重试' },
+    aiSettings: { open: '日报 AI 设置', title: '日报 AI 设置', notApplied: 'AI 编辑未生成',
+      notice: {
+        noModel: '模型还没配置，本期只有数据，没有 AI 写的解读。配好模型后重新生成就能补上。',
+        failed: '模型这次没写成（{reason}），本期只有数据，没有 AI 写的解读。可以重新生成试一次。',
+        quota: '今天的模型调用额度用完了，本期只有数据，没有 AI 写的解读。额度恢复后自动恢复。'
+      },
+      noticeAction: { configure: '去配置', regenerate: '重新生成' },
+      noticeReason: {
+        'model-unavailable': '模型不可用', 'model-not-ready': '模型尚未就绪', 'provider-disabled': '模型供应商已停用',
+        'missing-api-key': '密钥失效了', 'rate-limited': '请求太频繁被限了', 'editorial-timeout': '等太久没写完',
+        'provider-error': '模型服务返回了错误'
+      }, failedHint: 'AI 没有通过校验，日报未生成；可以重试或检查 AI 设置。', failure: { 'editorial-disabled': 'AI 编辑已关闭', 'model-unavailable': '默认模型不可用', 'editorial-timeout': 'AI 编辑超时', 'editorial-fallback': 'AI 输出未通过校验', 'invalid-shape': 'AI 输出格式不合规', 'unknown-fact': 'AI 引用了不存在的事实', 'unknown-number': 'AI 写入了事实包外的数字', 'forbidden-content': 'AI 输出包含禁用内容', 'too-long': 'AI 输出超长', 'language-mismatch': 'AI 输出语言不符', 'invalid-output-language': '正文语言与本期不一致', 'model-not-ready': '模型尚未就绪', 'provider-disabled': '模型供应商已停用', 'missing-api-key': '模型供应商缺少 API Key', timeout: 'AI 调用超时', cancelled: 'AI 调用被取消', 'rate-limited': '模型请求被限流', 'provider-error': '模型供应商返回错误', 'invalid-json': 'AI 返回的不是合法 JSON', 'schema-validation-failed': 'AI 输出未通过结构校验', 'invalid-translation': '译文未通过校验', 'agent-turn-output-truncated': 'AI 单轮输出被截断', 'source-failed': '情报源采集失败', 'candidate-overflow': '候选数据超出上限', 'build-failed': '日报生成失败', 'store-failed': '日报保存失败', 'time-invalid': '生成时间无效', 'direction-conflict': 'AI 的结论方向与数据层相反', 'row-set-mismatch': 'AI 改动了本期行集合', 'attempt-not-recorded': '这次运行没能记下自己的尝试记录，已停止', 'run-timeout': '这次运行超时仍未返回，可以重试', 'missing-hidden-reason': '数据被隐去，但没写原因', 'missing-macro-why': '宏观条目缺「为什么重要」', 'invalid-macro-why': '宏观条目的「为什么重要」不合规', 'invalid-conclusion-synthesis': '结论综述未通过校验', 'missing-conclusion-synthesis': '缺结论综述', 'copied-conclusion': '结论照抄了之前的分析', 'missing-conclusion-evidence': '结论缺证据', 'missing-conclusion-divergence': '结论未说明分析转向', 'missing-mechanism': '结论缺机制说明', 'data-only-summary': '结论只是复述数字', 'missing-outlook': '结论缺未来判断', 'repeated-direction': '结论开头重复方向', 'duplicate-statement': '结论有重复句子', 'invalid-number-format': '结论数字写法不合规', 'asset-equality-claim': '把 BTC 与 ETH 说成相同', 'date-out-of-window': '只能生成最近 3 天的简报（含今天）', 'run-interrupted': '应用在这之前被关闭了，这次没写完' }, loading: '正在读取设置…', enabled: '使用 AI 编辑', enabledHint: '默认跟随平台默认模型；关掉只保留事实层。', model: '模型', webSearch: '允许补查缺失结论', webSearchHint: '仅在本地缺少高影响事件结论时搜索；来源/时间写入日报，截止到本期生成时间。', webSearchOff: '日报未授权 WebSearch', webSearchOffHint: '若 Web Search 源已配置，点“去授权”打开日报 AI 设置开启；若未配置，先到 设置 → 网页搜索 → 供应商 配置。', webSearchNeedsSetup: '无法开启：请先在 设置 → 网页搜索 → 供应商 配置并启用搜索源。', webSearchUnsupported: '当前模型不支持 Anthropic 内置搜索；补查将使用平台 Web Search（需已启用搜索源）。', goEnable: '去授权', followDefault: '跟随平台默认模型', modelUnavailable: '当前自选模型不可用会回落默认；默认也不可用时只出事实层。', failed: '保存失败，请重试' },
     limits: {
       expand: '展开问题留痕', retryRead: '重新读取',
       collapse: '收起',
@@ -164,6 +177,7 @@ export const dailyBriefingText = {
         'news-source-silent': '新闻源很久没有新条目', 'news-source-failed': '新闻源采集失败',
         'calendar-disabled': '日历来源未启用', 'calendar-unavailable': '日历不可用',
         'macro-consensus': '预期值未收录', 'macro-actual': '实际值未收录', 'macro-previous': '前值未收录', 'macro-value-conflict': '来源数值冲突',
+        'macro-quiet': '确实没有高影响事件',
         'backfill-done': '核心数据回补', 'backfill-generic': '核心数据回补',
         'ai-fallback': '模型回落', 'ai-websearch': 'WebSearch 未授权', 'ai-failure': 'AI 编辑未完成',
         'source-failure': '情报源采集失败', 'system-failure': '生成或存储未完成',
@@ -194,6 +208,7 @@ export const dailyBriefingText = {
       macro: { consensusMissing: '{event}：预期值未收录', actualMissing: '{event}：实际值未收录', previousMissing: '{event}：前值未收录', valueConflict: '同一事件两个来源数值冲突：这一格不显示数值' },
       calendarDisabled: '宏观日历来源未启用，事件与未来日程未显示',
       calendarUnavailable: '宏观日历暂不可用',
+      macroQuiet: '近 {hours} 小时内没有高影响事件',
       newsDisabled: '新闻来源未启用，舆情未显示',
       newsUnavailable: '新闻舆情暂不可用',
       /** 源静默：活着、只是很久没有新条目。与「连续失败」是两句话，永不共用。 */
@@ -214,6 +229,7 @@ export const dailyBriefingText = {
         widenWindow: '把统计窗口调到 24 小时以上，或等下一期。',
         fillConsensus: '在宏观日历来源里补齐预期值；缺失时结论不计算预期差。',
         checkCalendar: '在「配置情报源」里启用宏观日历，或等日历采集恢复。',
+        macroQuiet: '无需处理；记在这里是为了说明这一栏确实为空。',
         checkNews: '在「配置情报源」里启用新闻来源，或等舆情采集恢复。',
         backfill: '无需操作；若同一指标反复回补，检查常规采集是否按时完成。',
         modelFallback: '在模型服务里恢复自选模型，或继续使用默认模型。',
@@ -295,6 +311,7 @@ export const dailyBriefingText = {
       'editorial-timeout': { step: '写稿', what: '等到超时也没返回，这次没写完', next: '再试一次；反复出现就换一个模型或检查网络' },
       'editorial-fallback': { step: '校验', what: '写出来的内容有一处对不上数据，重写也没成', next: '重新生成一次；反复出现就看一眼数据缺口' },
       'invalid-shape': { step: '写稿', what: '返回的格式不对，没能解析成一份日报', next: '重新生成一次；反复出现就换模型' },
+      'invalid-output-language': { step: '校验', what: '写出来的正文语言和本期不一致，重写也没改过来', next: '重新生成一次；反复出现就换一个模型' },
       'unknown-fact': { step: '校验', what: '引用了数据里没有的一条事实', next: '重新生成一次' },
       'unknown-number': { step: '校验', what: '写进了一个数据里没有的数字', next: '重新生成一次' },
       'forbidden-content': { step: '校验', what: '写出的内容里有不允许出现的表述', next: '重新生成一次' },
@@ -320,6 +337,21 @@ export const dailyBriefingText = {
       'row-set-mismatch': { step: '校验', what: '改动了这一期该有的行', next: '重新生成一次' },
       'attempt-not-recorded': { step: '生成', what: '这次运行没能记下自己的尝试记录，已停止', next: '重新生成一次' },
       'run-timeout': { step: '生成', what: '这次运行超时仍未返回', next: '再试一次；反复出现就缩短统计窗口' },
+      'missing-hidden-reason': { step: '校验', what: '有一条数据没在正文里出现，也没说明为什么', next: '重新生成一次；反复出现就看「数据缺口与限制」' },
+      'missing-macro-why': { step: '校验', what: '一条宏观事件缺了「为什么重要」那句说明', next: '重新生成一次' },
+      'invalid-macro-why': { step: '校验', what: '宏观事件的「为什么重要」写法不合规', next: '重新生成一次' },
+      'invalid-conclusion-synthesis': { step: '校验', what: '结论综述的字段不全或写法不合规', next: '重新生成一次；反复出现就换一个模型' },
+      'missing-conclusion-synthesis': { step: '校验', what: '这一期缺结论综述', next: '重新生成一次' },
+      'copied-conclusion': { step: '校验', what: '结论照抄了之前的分析，没有给出新的判断', next: '重新生成一次' },
+      'missing-conclusion-evidence': { step: '校验', what: '结论没有引用任何支撑它的证据', next: '重新生成一次' },
+      'missing-conclusion-divergence': { step: '校验', what: '之前的分析转向过，结论没有说明这次转向', next: '重新生成一次' },
+      'missing-mechanism': { step: '校验', what: '结论只讲了结果，没讲清楚为什么（机制）', next: '重新生成一次' },
+      'data-only-summary': { step: '校验', what: '结论只是复述数字，没有给出判断', next: '重新生成一次' },
+      'missing-outlook': { step: '校验', what: '结论缺未来一到三天的方向判断', next: '重新生成一次' },
+      'repeated-direction': { step: '校验', what: '结论开头又写了一遍方向标签', next: '重新生成一次' },
+      'duplicate-statement': { step: '校验', what: '结论里有重复的句子', next: '重新生成一次' },
+      'invalid-number-format': { step: '校验', what: '结论里的数字写法不合规', next: '重新生成一次' },
+      'asset-equality-claim': { step: '校验', what: '把 BTC 和 ETH 说成了同一件事', next: '重新生成一次' },
     },
     /** 表外码的唯一出口：走这一句，**绝不印出码本身**（`02` v2.145）。 */
     failureSentenceFallback: { step: '生成', what: '这一期没能生成出来', next: '重新生成一次；反复出现就查看「数据缺口与限制」' },
@@ -345,6 +377,12 @@ export const dailyBriefingText = {
         system: '先重新生成；若反复失败，检查本地存储空间和运行状态。'
       },
       detail: { 'default-unavailable': '平台默认模型不可用', 'custom-unavailable': '自选模型不可用', selection: '模型返回的选择结果格式不正确' },
+      conclusionDetail: {
+        missing: '缺：{fields}',
+        problem: '问题在：{field}',
+        separator: '、',
+        fields: { direction: '方向', confidence: '置信度', summary: '摘要', outlook: '未来判断', conditions: '触发条件', counterEvidence: '反证条件', watch: '观察项', regimeChange: '状态标记', confirmed: '已应验', refuted: '已推翻', coreTension: '核心矛盾', whatWouldChange: '推翻条件', evidenceRefs: '证据引用' }
+      },
       openAiSettings: 'AI 设置',
       openModelService: '打开模型服务'
     },
@@ -384,10 +422,11 @@ export const dailyBriefingText = {
     periodScheduled: 'Period {time} (scheduled)', periodManual: 'Period {time} (manual)', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
     perpetualContract: 'Perpetual', indexProxy: ' (QQQ perpetual proxy)',
+    leverageOpenInterest: 'Open interest notional',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
       markets: 'Markets & sentiment' },
-    newsFocus: 'Focus',
+    newsFocus: 'Focus', newsOriginal: 'Original',
     newsCount: '{count} items',
     labelSeparator: ': ',
     citationSources: { macroCalendar: 'Macro calendar', news: 'News', analysis: 'Analysis evidence' },
@@ -421,8 +460,8 @@ export const dailyBriefingText = {
     /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
     macroUnreadable: 'Not readable right now: ',
     macroWebValue: ' (web)',
-    macroEmptyCodes: { 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish within 90 seconds' },
-    nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },
+    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish within 90 seconds' },
+    nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled' },
     macro: { actual: 'Actual', consensus: 'Consensus', previous: 'Previous', noConsensus: 'No consensus', cancelled: 'Cancelled', surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No consensus' } },
     conclusion: { invalidation: 'What would invalidate it', conditions: 'Premises', counter: 'Falsifiers', outlook: 'Outlook', watch: 'Watch', whatWouldChange: 'What would overturn it', regimeChanged: 'View changed', basisHeld: 'Basis held', basisOverturned: 'Basis overturned', basisPartlyHeld: 'Basis partly held', gaps: 'Data gaps', caveats: 'Data limits' },
     next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' }, focus: 'Focus', count: '{count} high-impact events · ranked by crypto relevance', importance: { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }, expected: 'Consensus', previous: 'Previous', noExpected: 'Consensus not available', soon: 'In {days} days', why: 'Why it matters', watchHigher: 'Higher than expected', watchLower: 'Lower than expected', watchInline: 'In line with consensus', watchOther: 'Other scenario' },
@@ -444,10 +483,10 @@ export const dailyBriefingText = {
       invalid: 'One of these values is not valid; choose again.', cancel: 'Cancel', save: 'Save', saving: 'Saving…'
     },
     manualRunDialog: {
-      title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate.', cutoffHintLabel: 'Explain: cutoff', repeatHintLabel: 'Explain: repeating a run', windowHint: 'The window decides how much time this edition covers: 12 hours is half a day, 48 hours is two days.', windowHintLabel: 'Explain: window', languageHint: 'Which language this edition is written in. One period can have both a Chinese and an English edition, each its own row.', languageHintLabel: 'Explain: language',
-      date: 'Date', dateHintLabel: 'Explain: date', dateHint: 'Which day this edition is filed under. Defaults to the day you are on; any past day can be filled in, but not a future one.',
-      generateTarget: 'Will generate into {date} {time} ({zone})', generateTargetNow: 'Will generate into {date}, cut off at the moment you press ({zone})',
-      windowHours: 'Window', language: 'Language', windowValue: '{hours} hours', windowDaysHint: 'Only the last 3 days (today included)',
+      title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate ({zone}).', cutoffHintLabel: 'Explain: cutoff', repeatHintLabel: 'Explain: repeating a run', duplicateHintLabel: 'Explain: replacing an existing edition', windowHint: 'The window decides how much time this edition covers: 12 hours is half a day, 48 hours is two days.', windowHintLabel: 'Explain: window', languageHint: 'Which language this edition is written in. One period can have both a Chinese and an English edition, each its own row.', languageHintLabel: 'Explain: language',
+      date: 'Date', dateHintLabel: 'Explain: date', dateHint: 'Which day this edition is filed under. Defaults to the day you are on; only the last 3 days (today included) can be generated, not a future one.',
+      generateTarget: 'Will generate into {date} {time}', generateTargetNow: 'Will generate into {date}',
+      windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
       repeatable: 'One edition per cutoff and language: pressing again asks whether to replace that edition.',
       cutoffInFuture: 'That cutoff is still in the future — nothing has happened there yet. Pick a time that has passed.', alreadyRunning: 'Another run is already generating; wait for it to finish.', duplicateTitle: 'This edition already exists', duplicateBody: 'An edition already exists at that cutoff in that language (a different window still counts as the same). Replacing overwrites it; the old text is not kept.', duplicateReplace: 'Replace',
       cutoffUnreadable: 'That time could not be resolved here; pick another one.',
@@ -501,7 +540,18 @@ export const dailyBriefingText = {
     configureSources: 'Configure sources',
     completeness: { missingVersion: 'This edition has only one version: the other one was not generated.', missingReadings: 'The brief is missing {n} data items.' },
     copy: 'Copy brief', copied: 'Copied', copyFailed: 'Copy failed — try again',
-    aiSettings: { open: 'Brief AI settings', title: 'Brief AI settings', notApplied: 'AI editing did not run', failedHint: 'AI failed validation, so the brief was not generated. Retry or check AI settings.', failure: { 'editorial-disabled': 'AI editing is off', 'model-unavailable': 'Default model unavailable', 'editorial-timeout': 'AI editing timed out', 'editorial-fallback': 'AI output failed validation', 'invalid-shape': 'AI output shape is invalid', 'unknown-fact': 'AI cited a fact that does not exist', 'unknown-number': 'AI wrote a number outside the fact packet', 'forbidden-content': 'AI output contains forbidden content', 'too-long': 'AI output is too long', 'language-mismatch': 'AI output language mismatch', 'model-not-ready': 'Model is not ready', 'provider-disabled': 'Model provider is disabled', 'missing-api-key': 'Model provider has no API key', timeout: 'AI invocation timed out', cancelled: 'AI invocation was cancelled', 'rate-limited': 'Model request was rate-limited', 'provider-error': 'Model provider returned an error', 'invalid-json': 'AI did not return valid JSON', 'schema-validation-failed': 'AI output failed schema validation', 'invalid-translation': 'Translation failed validation', 'agent-turn-output-truncated': 'AI output was truncated', 'source-failed': 'Source collection failed', 'candidate-overflow': 'Too many candidates', 'build-failed': 'Brief generation failed', 'store-failed': 'Brief could not be saved', 'time-invalid': 'Invalid generation time', 'direction-conflict': 'AI concluded the opposite of the data layer', 'row-set-mismatch': 'AI changed this edition’s rows', 'attempt-not-recorded': 'This run could not record its own attempt, so it stopped', 'run-timeout': 'This run did not return in time — you can retry', 'date-out-of-window': 'Only the last 3 days (including today) can be generated', 'run-interrupted': 'the app was closed before this finished writing' }, loading: 'Reading settings…', enabled: 'Use AI editing', enabledHint: 'Follows the platform default model; turn it off to keep only the fact layer.', model: 'Model', webSearch: 'Allow missing-conclusion research', webSearchHint: 'Only when a high-impact conclusion is missing; sources/time are cited and capped at this edition\'s generation time.', webSearchOff: 'WebSearch is not authorized for the brief', webSearchOffHint: 'If the source is configured, open Brief AI settings to authorize it; otherwise configure a provider under Settings → Web Search → Providers first.', webSearchNeedsSetup: 'Cannot enable: configure and enable a provider under Settings → Web Search → Providers first.', webSearchUnsupported: 'This model does not support Anthropic built-in web search; research will use the platform Web Search (a configured provider is required).', goEnable: 'Authorize', followDefault: 'Follow the platform default', modelUnavailable: 'An unavailable custom model falls back to the default; if that is unavailable too, only the fact layer is shown.', failed: 'Save failed — try again' },
+    aiSettings: { open: 'Brief AI settings', title: 'Brief AI settings', notApplied: 'AI editing did not run',
+      notice: {
+        noModel: 'No model is configured, so this edition has the data only, without the written read. Configure a model and regenerate to fill it in.',
+        failed: 'The model did not finish this time ({reason}), so this edition has the data only. You can regenerate and try again.',
+        quota: 'Today’s model quota is used up, so this edition has the data only. It resumes when the quota resets.'
+      },
+      noticeAction: { configure: 'Configure', regenerate: 'Regenerate' },
+      noticeReason: {
+        'model-unavailable': 'the model is unavailable', 'model-not-ready': 'the model is not ready', 'provider-disabled': 'the model provider is disabled',
+        'missing-api-key': 'the key is no longer valid', 'rate-limited': 'the request was rate-limited', 'editorial-timeout': 'it waited too long',
+        'provider-error': 'the model service returned an error'
+      }, failedHint: 'AI failed validation, so the brief was not generated. Retry or check AI settings.', failure: { 'editorial-disabled': 'AI editing is off', 'model-unavailable': 'Default model unavailable', 'editorial-timeout': 'AI editing timed out', 'editorial-fallback': 'AI output failed validation', 'invalid-shape': 'AI output shape is invalid', 'unknown-fact': 'AI cited a fact that does not exist', 'unknown-number': 'AI wrote a number outside the fact packet', 'forbidden-content': 'AI output contains forbidden content', 'too-long': 'AI output is too long', 'language-mismatch': 'AI output language mismatch', 'invalid-output-language': 'Text is not in this edition’s language', 'model-not-ready': 'Model is not ready', 'provider-disabled': 'Model provider is disabled', 'missing-api-key': 'Model provider has no API key', timeout: 'AI invocation timed out', cancelled: 'AI invocation was cancelled', 'rate-limited': 'Model request was rate-limited', 'provider-error': 'Model provider returned an error', 'invalid-json': 'AI did not return valid JSON', 'schema-validation-failed': 'AI output failed schema validation', 'invalid-translation': 'Translation failed validation', 'agent-turn-output-truncated': 'AI output was truncated', 'source-failed': 'Source collection failed', 'candidate-overflow': 'Too many candidates', 'build-failed': 'Brief generation failed', 'store-failed': 'Brief could not be saved', 'time-invalid': 'Invalid generation time', 'direction-conflict': 'AI concluded the opposite of the data layer', 'row-set-mismatch': 'AI changed this edition’s rows', 'attempt-not-recorded': 'This run could not record its own attempt, so it stopped', 'run-timeout': 'This run did not return in time — you can retry', 'missing-hidden-reason': 'A data row was hidden without a reason', 'missing-macro-why': 'A macro event has no “why it matters”', 'invalid-macro-why': 'A macro event’s “why it matters” is invalid', 'invalid-conclusion-synthesis': 'Conclusion synthesis failed validation', 'missing-conclusion-synthesis': 'No conclusion synthesis', 'copied-conclusion': 'Conclusion copies an earlier analysis', 'missing-conclusion-evidence': 'Conclusion cites no evidence', 'missing-conclusion-divergence': 'Conclusion does not mention the turn', 'missing-mechanism': 'Conclusion has no mechanism', 'data-only-summary': 'Conclusion only repeats numbers', 'missing-outlook': 'Conclusion has no outlook', 'repeated-direction': 'Conclusion repeats the direction', 'duplicate-statement': 'Conclusion repeats a sentence', 'invalid-number-format': 'A conclusion number is written wrong', 'asset-equality-claim': 'BTC and ETH treated as equal', 'date-out-of-window': 'Only the last 3 days (including today) can be generated', 'run-interrupted': 'the app was closed before this finished writing' }, loading: 'Reading settings…', enabled: 'Use AI editing', enabledHint: 'Follows the platform default model; turn it off to keep only the fact layer.', model: 'Model', webSearch: 'Allow missing-conclusion research', webSearchHint: 'Only when a high-impact conclusion is missing; sources/time are cited and capped at this edition\'s generation time.', webSearchOff: 'WebSearch is not authorized for the brief', webSearchOffHint: 'If the source is configured, open Brief AI settings to authorize it; otherwise configure a provider under Settings → Web Search → Providers first.', webSearchNeedsSetup: 'Cannot enable: configure and enable a provider under Settings → Web Search → Providers first.', webSearchUnsupported: 'This model does not support Anthropic built-in web search; research will use the platform Web Search (a configured provider is required).', goEnable: 'Authorize', followDefault: 'Follow the platform default', modelUnavailable: 'An unavailable custom model falls back to the default; if that is unavailable too, only the fact layer is shown.', failed: 'Save failed — try again' },
     limits: {
       expand: 'Show diagnostics', retryRead: 'Read again',
       collapse: 'Collapse',
@@ -521,6 +571,7 @@ export const dailyBriefingText = {
         'news-source-silent': 'A news source has gone quiet', 'news-source-failed': 'A news source keeps failing',
         'calendar-disabled': 'Calendar sources disabled', 'calendar-unavailable': 'Calendar unavailable',
         'macro-consensus': 'Consensus not collected', 'macro-actual': 'Actual not collected', 'macro-previous': 'Previous not collected', 'macro-value-conflict': 'Sources disagree',
+        'macro-quiet': 'No high-impact event, confirmed',
         'backfill-done': 'Core data backfill', 'backfill-generic': 'Core data backfill',
         'ai-fallback': 'Model fallback', 'ai-websearch': 'WebSearch not authorized', 'ai-failure': 'AI editing incomplete',
         'source-failure': 'Source collection failed', 'system-failure': 'Generation or storage incomplete',
@@ -551,6 +602,7 @@ export const dailyBriefingText = {
       macro: { consensusMissing: '{event}: consensus not collected', actualMissing: '{event}: actual not collected', previousMissing: '{event}: previous not collected', valueConflict: 'Two sources disagree on this event, so its value is not shown' },
       calendarDisabled: 'Macro calendar sources are disabled, so events and the upcoming schedule are hidden',
       calendarUnavailable: 'The macro calendar is unavailable',
+      macroQuiet: 'No high-impact event in the past {hours} hours',
       newsDisabled: 'News sources are disabled, so sentiment is hidden',
       newsUnavailable: 'News sentiment is unavailable',
       newsSourceSilent: '{source}: no new item for {hours} hours (last one at {time})',
@@ -570,6 +622,7 @@ export const dailyBriefingText = {
         widenWindow: 'Set the statistics window to 24 hours or more, or wait for the next edition.',
         fillConsensus: 'Fill in the consensus value in the macro calendar source; without it the conclusion cannot compute a surprise.',
         checkCalendar: 'Enable the macro calendar under intelligence sources, or wait for calendar collection to recover.',
+        macroQuiet: 'Nothing to do; recorded so an empty section is not mistaken for a gap.',
         checkNews: 'Enable news sources under intelligence sources, or wait for sentiment collection to recover.',
         backfill: 'No action needed; if the same metric keeps backfilling, check that routine collection runs on time.',
         modelFallback: 'Restore the selected model in the model service, or keep using the default.',
@@ -644,6 +697,7 @@ export const dailyBriefingText = {
       'editorial-timeout': { step: 'Writing', what: 'it ran out of time waiting for the write, so this one was not finished', next: 'Try again; if it keeps happening, switch models or check the network' },
       'editorial-fallback': { step: 'Validation', what: 'one part of the draft did not match the data and the rewrite did not land either', next: 'Generate again; if it keeps happening, look at the data gaps' },
       'invalid-shape': { step: 'Writing', what: 'the reply came back in a shape this app cannot read as a brief', next: 'Generate again; if it keeps happening, switch models' },
+      'invalid-output-language': { step: 'Validation', what: 'the text was not in this edition’s language, and the rewrite did not fix it', next: 'Generate again; if it keeps happening, switch models' },
       'unknown-fact': { step: 'Validation', what: 'it cited a fact the data does not contain', next: 'Generate again' },
       'unknown-number': { step: 'Validation', what: 'it wrote a number the data does not contain', next: 'Generate again' },
       'forbidden-content': { step: 'Validation', what: 'the text contained wording that is not allowed', next: 'Generate again' },
@@ -669,6 +723,21 @@ export const dailyBriefingText = {
       'row-set-mismatch': { step: 'Validation', what: 'it changed the rows this issue should have', next: 'Generate again' },
       'attempt-not-recorded': { step: 'Generate', what: 'this run could not record its own attempt, so it stopped', next: 'Generate again' },
       'run-timeout': { step: 'Generate', what: 'this run did not return in time', next: 'Try again; if it keeps happening, shorten the window' },
+      'missing-hidden-reason': { step: 'Validation', what: 'a data row was left out of the text without saying why', next: 'Generate again; if it keeps happening, look at the data gaps' },
+      'missing-macro-why': { step: 'Validation', what: 'a macro event is missing its “why it matters” sentence', next: 'Generate again' },
+      'invalid-macro-why': { step: 'Validation', what: 'a macro event’s “why it matters” sentence does not match the contract', next: 'Generate again' },
+      'invalid-conclusion-synthesis': { step: 'Validation', what: 'the conclusion synthesis has missing fields or invalid wording', next: 'Generate again; if it keeps happening, switch models' },
+      'missing-conclusion-synthesis': { step: 'Validation', what: 'this issue has no conclusion synthesis', next: 'Generate again' },
+      'copied-conclusion': { step: 'Validation', what: 'the conclusion copies an earlier analysis instead of making a new call', next: 'Generate again' },
+      'missing-conclusion-evidence': { step: 'Validation', what: 'the conclusion cites no evidence at all', next: 'Generate again' },
+      'missing-conclusion-divergence': { step: 'Validation', what: 'the earlier analysis turned, and the conclusion does not say so', next: 'Generate again' },
+      'missing-mechanism': { step: 'Validation', what: 'the conclusion states the outcome but not why it happened', next: 'Generate again' },
+      'data-only-summary': { step: 'Validation', what: 'the conclusion repeats the numbers without making a call', next: 'Generate again' },
+      'missing-outlook': { step: 'Validation', what: 'the conclusion has no one-to-three-day direction', next: 'Generate again' },
+      'repeated-direction': { step: 'Validation', what: 'the conclusion opens by repeating the direction tag', next: 'Generate again' },
+      'duplicate-statement': { step: 'Validation', what: 'the conclusion repeats one of its own sentences', next: 'Generate again' },
+      'invalid-number-format': { step: 'Validation', what: 'a number in the conclusion is written in a form the contract does not allow', next: 'Generate again' },
+      'asset-equality-claim': { step: 'Validation', what: 'it treats BTC and ETH as the same thing', next: 'Generate again' },
     },
     /** The only exit for a code the table does not carry: this sentence, and never the code. */
     failureSentenceFallback: { step: 'Generate', what: 'this issue could not be produced', next: 'Generate again; if it keeps happening, look under data gaps and limits' },
@@ -693,6 +762,12 @@ export const dailyBriefingText = {
         system: 'Regenerate first; if it keeps failing, check local storage space and runtime status.'
       },
       detail: { 'default-unavailable': 'The platform default model is unavailable', 'custom-unavailable': 'The selected model is unavailable', selection: 'The model returned an invalid selection result' },
+      conclusionDetail: {
+        missing: 'Missing: {fields}',
+        problem: 'Problem in: {field}',
+        separator: ', ',
+        fields: { direction: 'direction', confidence: 'confidence', summary: 'summary', outlook: 'outlook', conditions: 'conditions', counterEvidence: 'counter-evidence', watch: 'watch items', regimeChange: 'regime marker', confirmed: 'confirmed', refuted: 'refuted', coreTension: 'core tension', whatWouldChange: 'overturn threshold', evidenceRefs: 'evidence references' }
+      },
       openAiSettings: 'AI settings',
       openModelService: 'Open model service'
     },

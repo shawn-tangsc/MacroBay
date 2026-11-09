@@ -15,10 +15,56 @@ import { ProviderDetail } from '../../settings/intelligence-sources/ProviderDeta
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
 import '../../settings/intelligence-sources/intelligence-sources.css'
 import { panelView, type PanelView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { sourceHealthTone, type SourceHealthTone } from '../../settings/intelligence-sources/sourceHealthTone'
 import type { PanelId } from '../../../service/intelligence/application/providerRegistry'
 
 function isCalendar(source: SourceView): boolean {
   return source.kind === 'official-calendar' || source.kind === 'market-calendar'
+}
+
+/** 色调严重度：取「已启用源里最差的一档」（`ok < muted < warn < bad`）。只排顺序，不再判一次健康。 */
+const TONE_SEVERITY: Record<SourceHealthTone, number> = { ok: 0, muted: 1, warn: 2, bad: 3 }
+
+/**
+ * 面板视图的健康是粗档字符串，而色调函数收的是运行时健康对象。
+ * 这里只做**形状映射**，判断（亮/警示/红/中性）全部留给 `sourceHealthTone` 那一处。
+ */
+function toneHealth(
+  health: SourceView['health']
+): { runtimeStatus: 'healthy' | 'degraded' | 'failed' } | undefined {
+  if (health === 'healthy') return { runtimeStatus: 'healthy' }
+  if (health === 'degraded') return { runtimeStatus: 'degraded' }
+  if (health === 'failed') return { runtimeStatus: 'failed' }
+  // `never-run` / 缺数据：不给健康对象，函数会判成 muted（「没有数据」不等于健康）。
+  return undefined
+}
+
+/**
+ * 目录点的色调：**只有每一个已启用源都健康才绿**。
+ *
+ * 之前它只看「已启用数 > 0」，于是 BLS（启用但 403 不可用）和 Fed（正常）长得一模一样。
+ * 不可用/没数据 → muted（灰）；失败 → bad（红）；降级 → warn（黄）。没启用 → muted。
+ */
+function catalogTone(sources: readonly SourceView[]): SourceHealthTone {
+  const enabled = sources.filter((source) => source.enabled)
+  if (enabled.length === 0) return 'muted'
+  let worst: SourceHealthTone = 'ok'
+  for (const source of enabled) {
+    const tone = sourceHealthTone({
+      enabled: true,
+      unavailable: Boolean(source.unavailable),
+      health: toneHealth(source.health)
+    })
+    if (TONE_SEVERITY[tone] > TONE_SEVERITY[worst]) worst = tone
+  }
+  return worst
+}
+
+function toneClass(tone: SourceHealthTone): string {
+  if (tone === 'ok') return 'is-on'
+  if (tone === 'warn') return 'is-warn'
+  if (tone === 'bad') return 'is-bad'
+  return ''
 }
 
 /**
@@ -142,7 +188,7 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
                   >
                     <span className={`intelligence-source-avatar${provider.sources.every((source) => source.panels.length === 0) ? ' is-unused' : ''}`} aria-hidden="true">{providerName.slice(0, 1).toUpperCase()}</span>
                     <span className="intelligence-provider-main"><strong>{providerName}</strong><small>{summary}</small></span>
-                    <span className="intelligence-provider-state"><i className={enabled > 0 ? 'is-on' : ''} aria-hidden="true" /><ChevronRight aria-hidden="true" size={13} /></span>
+                    <span className="intelligence-provider-state"><i className={toneClass(catalogTone(provider.sources))} aria-hidden="true" /><ChevronRight aria-hidden="true" size={13} /></span>
                   </button>
                 </section>
               })}
@@ -150,13 +196,12 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
           </aside>
           <section className="settings-detail-pane intelligence-detail-pane">
             {selectedProvider ? <ProviderDetail
-              labels={{ sourceNames: settingsText.sourceNames as Readonly<Record<string, string>>, providerNames: settingsText.providerNames as Readonly<Record<string, string>>, panelNames: settingsText.panelNames as Readonly<Record<string, string>>, badges: { pending: settingsText.sourceBadges.pending, advanced: settingsText.sourceBadges.advanced, calendar: settingsText.sourceBadges.calendar, proxy: settingsText.sourceBadges.proxy }, status: settingsText.status, capabilities: settingsText.providerSummary, toggleSource: settingsText.toggleSource, credentials: settingsText.credentialsRequired, website: settingsText.website, signup: settingsText.signup, inviteNote: settingsText.inviteNote, testConnection: settingsText.testConnection, jobRegistered: settingsText.jobRegistered, jobNotRegistered: settingsText.jobNotRegistered, connectionSucceeded: settingsText.connectionSucceeded, connectionFailed: settingsText.connectionFailed, connectionUnsupported: settingsText.connectionUnsupported, apiKey: settingsText.apiKey, unavailableReasonCode: settingsText.unavailableReasonCode, automaticSyncStopped: settingsText.automaticSyncStopped, lastSuccessfulSync: settingsText.lastSuccessfulSync }}
+              labels={{ sourceNames: settingsText.sourceNames as Readonly<Record<string, string>>, providerNames: settingsText.providerNames as Readonly<Record<string, string>>, panelNames: settingsText.panelNames as Readonly<Record<string, string>>, badges: { pending: settingsText.sourceBadges.pending, advanced: settingsText.sourceBadges.advanced, calendar: settingsText.sourceBadges.calendar, proxy: settingsText.sourceBadges.proxy }, status: settingsText.status, capabilities: settingsText.providerSummary, toggleSource: settingsText.toggleSource, credentials: settingsText.credentialsRequired, website: settingsText.website, signup: settingsText.signup, inviteNote: settingsText.inviteNote, testConnection: settingsText.testConnection, jobRegistered: settingsText.jobRegistered, jobNotRegistered: settingsText.jobNotRegistered, connectionSucceeded: settingsText.connectionSucceeded, connectionFailed: settingsText.connectionFailed, connectionUnsupported: settingsText.connectionUnsupported, apiKey: settingsText.apiKey, unavailableReasonCode: settingsText.unavailableReasonCode, automaticSyncStopped: settingsText.automaticSyncStopped, unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria, collectionPolicyStopped: settingsText.collectionPolicyStopped, lastSuccessfulSync: settingsText.lastSuccessfulSync }}
               provider={selectedProvider}
               showSourceDetails
               sourceDetailLabels={{ sourceNames: settingsText.sourceNames as Readonly<Record<string, string>>, providerNames: settingsText.providerNames as Readonly<Record<string, string>>, enabled: settingsText.status.enabled, disabled: settingsText.status.disabled, pending: settingsText.sourceBadges.pending, runNow: settingsText.header.runNow, testConnection: settingsText.testConnection, connectionSucceeded: settingsText.connectionSucceeded, connectionFailed: settingsText.connectionFailed, health: settingsText.health, sourceSpecific: settingsText.sourceSpecific }}
               translation={{ settings: translation.settings, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: settingsText.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) }}
               onChanged={() => { void readPanel().then(applyRead) }}
-              onSelectSource={() => undefined}
             /> : <p>{text.unavailable}</p>}
           </section>
         </div>

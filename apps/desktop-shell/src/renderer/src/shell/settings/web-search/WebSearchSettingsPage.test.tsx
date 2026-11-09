@@ -100,6 +100,22 @@ async function click(container: ParentNode, selector: string): Promise<void> {
   await settle()
 }
 
+/**
+ * 按**页签名**点击：平台 `Tabs` 是按钮 + `role="tab"`，不再有手写的 `data-web-search-tab`。
+ * 两个面板都会挂载（非活动加 `hidden`），所以「现在看到的是哪一页」要查可见的那块。
+ */
+async function clickTab(container: ParentNode, label: string): Promise<void> {
+  const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+    .find((candidate) => candidate.textContent?.trim() === label)
+  expect(tab, `no tab named ${label}`).toBeDefined()
+  await act(async () => tab?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await settle()
+}
+
+function visiblePanel(container: ParentNode): HTMLElement | null {
+  return container.querySelector<HTMLElement>('.tabs__panel:not([hidden])')
+}
+
 describe('PLAT-60 settings page shell', () => {
   it('shows a load failure as an error with a retry, and keeps the raw message off screen', async () => {
     const raw = 'ENOENT: no such file or directory, open settings.json'
@@ -163,25 +179,27 @@ describe('PLAT-60 settings page shell', () => {
     )
     expect(saveButtons).toHaveLength(1)
     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(2)
-    expect(container.querySelectorAll('[data-web-search-summary-chip]')).toHaveLength(6)
+    // 两个面板都挂载（平台 `Tabs` 的既定行为），摘要只在可见的那一块里数。
+    expect(visiblePanel(container)?.querySelectorAll('[data-web-search-summary-chip]')).toHaveLength(6)
   })
 
   it('switches tabs without writing the tab state into settings', async () => {
     const { container, updateSettings } = await mountPage()
 
-    await click(container, '[data-web-search-tab="providers"]')
-    expect(container.querySelector('[data-web-search-providers]')).not.toBeNull()
-    expect(container.querySelector('[data-web-search-policy]')).toBeNull()
+    await clickTab(container, labels.providersTab)
+    // 切页签后**可见的**是供应商页；旧策略页仍挂载但 `hidden`（`Tabs` 全挂载）。
+    expect(visiblePanel(container)?.querySelector('[data-web-search-providers]')).not.toBeNull()
+    expect(visiblePanel(container)?.querySelector('[data-web-search-policy]')).toBeNull()
     expect(updateSettings).not.toHaveBeenCalled()
 
-    await click(container, '[data-web-search-tab="policy"]')
-    expect(container.querySelector('[data-web-search-policy]')).not.toBeNull()
+    await clickTab(container, labels.policyTab)
+    expect(visiblePanel(container)?.querySelector('[data-web-search-policy]')).not.toBeNull()
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('filters providers by capability and disabled state', async () => {
     const { container } = await mountPage()
-    await click(container, '[data-web-search-tab="providers"]')
+    await clickTab(container, labels.providersTab)
 
     expect(container.querySelector('[data-web-search-filter="all"]')?.textContent).toBe(labels.providerFiltersAll(4))
     expect(container.querySelector('[data-web-search-filter="disabled"]')?.textContent).toBe(labels.providerFilterDisabled(2))
@@ -198,7 +216,7 @@ describe('PLAT-60 settings page shell', () => {
 
   it('folds unavailable providers behind one row and expands on demand', async () => {
     const { container } = await mountPage()
-    await click(container, '[data-web-search-tab="providers"]')
+    await clickTab(container, labels.providersTab)
 
     const more = container.querySelector('[data-web-search-more-providers]') as HTMLButtonElement
     expect(more.textContent).toContain(labels.moreProviders(1))
@@ -254,7 +272,7 @@ describe('PLAT-60 settings page shell', () => {
 
   it('shows one row per provider and read-only default badges', async () => {
     const { container } = await mountPage()
-    await click(container, '[data-web-search-tab="providers"]')
+    await clickTab(container, labels.providersTab)
 
     expect(rows(container)).toEqual(['Tavily', 'Jina', 'Searxng', 'Fetch'])
     const jina = container.querySelector('[data-web-search-provider-row="jina"]') as HTMLElement

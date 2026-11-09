@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { getMacroCalendarOfficialSourceDescriptor } from './macroCalendarOfficialSourceRegistry'
+import type { MacroCalendarSchedulePersistenceResult } from './macroCalendarSchedulePersistenceService'
 import { createMacroCalendarScheduleCollectionWorkflow } from './macroCalendarScheduleCollectionWorkflow'
 
 const detectedAt = '2026-08-04T00:00:00.000Z'
@@ -162,10 +163,17 @@ function successfulCollection(descriptor: typeof fed | typeof bea) {
   }
 }
 
-function createWorkflow(options: { descriptor?: typeof fed | typeof bea; collectionResult?: unknown; persistenceResult?: unknown } = {}) {
+function createWorkflow(options: {
+  descriptor?: typeof fed | typeof bea
+  /** 跨边界的运行时结果：用例故意喂坏形状来验证守卫，端口类型也按 unknown 收。 */
+  collectionResult?: unknown
+  persistenceResult?: MacroCalendarSchedulePersistenceResult
+} = {}) {
   const descriptor = options.descriptor ?? fed
-  const collectDescriptor = vi.fn(async () => Object.hasOwn(options, 'collectionResult') ? options.collectionResult : successfulCollection(descriptor))
-  const persistScheduleEvidence = vi.fn(() => options.persistenceResult ?? {
+  const collectDescriptor = vi.fn(async (): Promise<unknown> =>
+    Object.hasOwn(options, 'collectionResult') ? options.collectionResult : successfulCollection(descriptor)
+  )
+  const persistScheduleEvidence = vi.fn((_rawRecordId: string): MacroCalendarSchedulePersistenceResult => options.persistenceResult ?? {
     providerId: descriptor.providerId, descriptorId: descriptor.descriptorId, state: 'persisted' as const, insertedCount: 4, dedupedCount: 0
   })
   return {

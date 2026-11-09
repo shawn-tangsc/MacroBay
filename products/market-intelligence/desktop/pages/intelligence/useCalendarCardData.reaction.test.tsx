@@ -63,11 +63,11 @@ async function readProjection(readReaction?: (instant: string) => Promise<Calend
 }
 
 it('reads the window for the released row and shows it on that row', async () => {
-  const readReaction = vi.fn(async () => ({ index: -0.12, btc: -0.18, eth: -0.21 }))
+  const readReaction = vi.fn(async () => ({ index: -0.12, btc: -0.18, eth: -0.21, dxy: -0.05 }))
   const projection = await readProjection(readReaction)
   expect(projection.today).toHaveLength(1)
   expect(readReaction).toHaveBeenCalledWith(eventAt)
-  expect(projection.today[0]?.reaction).toEqual({ index: -0.12, btc: -0.18, eth: -0.21 })
+  expect(projection.today[0]?.reaction).toEqual({ index: -0.12, btc: -0.18, eth: -0.21, dxy: -0.05 })
 })
 
 it('keeps the row (without a reaction) when the read says nothing', async () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ClosedBar, StoredSymbol } from './binanceCrossAssetClient'
 import { createCrossAssetSnapshotQuery } from './crossAssetSnapshotQuery'
 
 // Aligned to the product's own five-minute grid, exactly as `analysisEnd` is in production:
@@ -16,7 +17,7 @@ const SEVEN_DAY_BARS = 2018
  * for was the second one, wearing the first one's clothes.
  */
 function rangedStore() {
-  const bars = (symbol: string) => Array.from({ length: SEVEN_DAY_BARS }, (_, index) => ({
+  const bars = (symbol: StoredSymbol): readonly ClosedBar[] => Array.from({ length: SEVEN_DAY_BARS }, (_, index) => ({
     symbol,
     // The oldest bar ends exactly seven days behind `now` — the far end of the admitted horizon,
     // which is inclusive — and the newest ends one interval behind it, as the real store publishes
@@ -25,14 +26,14 @@ function rangedStore() {
     barEndMs: now - (SEVEN_DAY_BARS - 1 - index) * STEP,
     open: '100', high: '110', low: '90', close: String(100 + index / 100), volume: '1'
   }))
-  const queryAt = vi.fn((input: { symbol: string; fromMs: number; toMs: number; asOfMs: number }) => {
+  const queryAt = vi.fn((input: { symbol: StoredSymbol; fromMs: number; toMs: number; asOfMs: number }): readonly ClosedBar[] => {
     if (input.toMs - input.fromMs >= 2017 * STEP) throw new Error('invalid-query')
     return bars(input.symbol).filter(bar => bar.barEndMs >= input.fromMs && bar.barEndMs <= input.toMs && bar.barEndMs <= input.asOfMs)
   })
   return { queryAt, query: createCrossAssetSnapshotQuery({
     now: () => now,
     store: { revision: 1, queryAt },
-    live: () => ({ state: 'live', quotes: { index: { state: 'missing' }, btc: { state: 'missing' }, eth: { state: 'missing' } } })
+    live: () => ({ state: 'live' as const, quotes: { index: { state: 'missing' as const }, btc: { state: 'missing' as const }, eth: { state: 'missing' as const } } })
   }) }
 }
 

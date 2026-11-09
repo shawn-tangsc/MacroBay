@@ -4,7 +4,6 @@ import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 
 export type ConfigurationRevisionInput = {
   profiles: readonly IntelligenceSourceProfile[]
-  focusMarkets: readonly string[]
 }
 
 export type CalendarReleaseTimeValue = Readonly<{
@@ -32,10 +31,11 @@ export type CrossAssetRevisionInput =
   | Readonly<{ state: 'unknown' }>
 
 /**
- * Single implementation of the configuration revision. Focus markets are part
- * of the revision because they change the analysis scope.
+ * Single implementation of the configuration revision: the source profiles and nothing else.
+ * The reader-wide focus markets used to be part of it; that capability is gone, and a revision
+ * must only move when something an agent can change through this capability really changed.
  */
-export function computeConfigurationRevision({ profiles, focusMarkets }: ConfigurationRevisionInput): string {
+export function computeConfigurationRevision({ profiles }: ConfigurationRevisionInput): string {
   const rows = profiles
     .map((profile) =>
       [
@@ -52,8 +52,6 @@ export function computeConfigurationRevision({ profiles, focusMarkets }: Configu
       ].join('|')
     )
     .sort()
-
-  rows.push(`focus:${[...focusMarkets].sort().join(',')}`)
 
   return shortRevision(rows)
 }

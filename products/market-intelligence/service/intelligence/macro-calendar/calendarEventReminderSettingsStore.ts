@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import { normalizeCalendarLandedCountries } from '../../../contracts/calendarLandedCountries'
@@ -15,31 +15,37 @@ import {
 /**
  * 「日历事件 · 开始前」提醒的配置存储。
  *
- * 三条规矩：
- * - **读坏了一律回默认值**，不抛：配置文件坏掉不该让设置页打不开；但**默认值是「关」**，
- *   所以「读不到」不会变成「悄悄替你打开」。
- * - **写只接受合法值**：提前量不在 15/30/60/120 里就保持原值；重要性去重、只留三档；
- *   非法输入不写入，也不静默替换成一个看起来合理的数。
- * - **表面选择不在这里**：它由平台按组键存（同一件事不该有第二个落点），产品只读不算存。
+ * 四条规矩（2026-11-09 存储审计后重定，此前三条会静默关掉读者的提醒）：
+ * - **「从没配过」与「读失败」是两件事**：文件不存在＝可读 + 默认值（默认是关，只对"没配过"成立）；
+ *   文件坏了/没权限＝`unreadable`。`read()` **不再**把读失败伪装成默认值——它直接抛，让上层知道读不到。
+ * - **读不到时拒绝保存**：不拿默认值打底整份写回。那份文件里可能是读者真正设过的值，用默认覆盖
+ *   等于把「读者关掉了」写死，而他察觉不到，只表现成「该响没响」。
+ * - **判定损坏先留副本**：把原文件按时间戳另存 `${filePath}.corrupt-*`（与平台
+ *   `jsonFileStorage` 同一口径：不改原文件、只留证据）。留档失败＝fail-closed：这一份按读不到处理，
+ *   并且绝不写它。
+ * - **写只接受合法值**：提前量不在 15/30/60/120 里就保持原值；重要性去重、只留三档。
  */
 
-/**
- * 「没读到」与「没存上」是两个结果，不是两个异常：
- * - 读：文件不存在（首次运行）＝**可读 + 默认值**；文件坏了/没权限＝`unreadable`。
- * - 写：失败时磁盘上的旧值原样生效，`not-saved` 告诉调用方"这次没存上"，界面据此保留读者刚选的值。
- * `read` / `write` 保留给既有调用方（失败仍抛/回默认），新的两个 `*WithStatus` 供设置页与 IPC 用。
- */
 export type CalendarReminderReadResult =
   | Readonly<{ state: 'readable'; settings: CalendarReminderSettings }>
-  | Readonly<{ state: 'unreadable' }>
+  | Readonly<{ state: 'unreadable'; reason: 'corrupt' | 'io' }>
 
+/**
+ * 「没存上」现在分两种：`unreadable`＝原文件读不出来，**我们拒绝覆盖**（文件一个字节没动）；
+ * `write-failed`＝读到了、写盘失败。两种都不假装成功，也都不回默认值。
+ */
 export type CalendarReminderWriteResult =
   | Readonly<{ state: 'saved'; settings: CalendarReminderSettings }>
-  | Readonly<{ state: 'not-saved'; settings: CalendarReminderSettings }>
+  | Readonly<{ state: 'not-saved'; reason: 'unreadable' }>
+  | Readonly<{ state: 'not-saved'; reason: 'write-failed'; settings: CalendarReminderSettings }>
 
 export type CalendarReminderSettingsStore = Readonly<{
+  /**
+   * 读者的设置。**读不到时抛 `calendar-reminder-settings-unreadable`**：调用方不许拿到一份
+   * 看起来像默认值的设置。要自己处理读失败就用 `readWithStatus`。
+   */
   read: () => CalendarReminderSettings
-  /** 局部更新：只改传进来的字段，其余保持。返回写入后的完整设置。 */
+  /** 局部更新：只改传进来的字段，其余保持。返回写入后的完整设置；没存上就抛。 */
   write: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderSettings
   readWithStatus: () => CalendarReminderReadResult
   writeWithStatus: (patch: Readonly<Partial<CalendarReminderSettings>>) => CalendarReminderWriteResult
@@ -81,28 +87,58 @@ function normalize(stored: StoredShape): CalendarReminderSettings {
 }
 
 export function createCalendarReminderSettingsStore(filePath: string): CalendarReminderSettingsStore {
-  const readWithStatus = (): CalendarReminderReadResult => {
+  /** 这次进程里已经留过副本了就不再留：每 5 分钟一次提醒扫描会把同一个坏文件复制成一堆残片。 */
+  let quarantined = false
+
+  /** 把坏文件原样留一份。**失败即返回 false**，调用方据此 fail-closed（按读不到处理，绝不写）。 */
+  const quarantineCorrupt = (raw: string): boolean => {
+    if (quarantined) return true
     try {
-      const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
-      if (!parsed || typeof parsed !== 'object') return { state: 'unreadable' }
-      return { state: 'readable', settings: normalize(parsed as StoredShape) }
-    } catch (error) {
-      // 首次运行没有这个文件＝可读 + 默认值；其余（坏 JSON、没权限）才是真的读不到。
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return { state: 'readable', settings: DEFAULT_CALENDAR_REMINDER_SETTINGS }
-      }
-      return { state: 'unreadable' }
+      writeFileSync(`${filePath}.corrupt-${Date.now()}`, raw, 'utf8')
+      quarantined = true
+      return true
+    } catch {
+      return false
     }
   }
 
-  // 既有调用方要的是「总能拿到一份可用设置」：读不到也回默认（默认是关，不会悄悄打开）。
+  const readWithStatus = (): CalendarReminderReadResult => {
+    let raw: string
+    try {
+      raw = readFileSync(filePath, 'utf8')
+    } catch (error) {
+      // 首次运行没有这个文件＝可读 + 默认值；其余（没权限、磁盘错）才是真的读不到。
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { state: 'readable', settings: DEFAULT_CALENDAR_REMINDER_SETTINGS }
+      }
+      return { state: 'unreadable', reason: 'io' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw) as unknown
+    } catch {
+      // 坏 JSON：先留副本（留档失败也算读不到，且写侧会因为 unreadable 而拒绝保存）。
+      return quarantineCorrupt(raw) ? { state: 'unreadable', reason: 'corrupt' } : { state: 'unreadable', reason: 'io' }
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      // 合法 JSON 但不是对象：同样判定为损坏，同样先留副本。
+      return quarantineCorrupt(raw) ? { state: 'unreadable', reason: 'corrupt' } : { state: 'unreadable', reason: 'io' }
+    }
+    return { state: 'readable', settings: normalize(parsed as StoredShape) }
+  }
+
   const read = (): CalendarReminderSettings => {
     const result = readWithStatus()
-    return result.state === 'readable' ? result.settings : DEFAULT_CALENDAR_REMINDER_SETTINGS
+    // 读不到**不伪装成默认值**（默认是「关」，装成默认等于替读者关掉提醒）。
+    if (result.state === 'unreadable') throw new Error('calendar-reminder-settings-unreadable')
+    return result.settings
   }
 
   const writeWithStatus = (patch: Readonly<Partial<CalendarReminderSettings>>): CalendarReminderWriteResult => {
-    const current = read()
+    const loaded = readWithStatus()
+    // 读不到就拒绝保存：原文件一个字节都不动。拿默认打底写回会把「读坏了」写成「读者关掉了」。
+    if (loaded.state === 'unreadable') return { state: 'not-saved', reason: 'unreadable' }
+    const current = loaded.settings
     const next: CalendarReminderSettings = {
       enabled: typeof patch.enabled === 'boolean' ? patch.enabled : current.enabled,
       leadMinutes: isCalendarReminderLeadMinutes(patch.leadMinutes) ? patch.leadMinutes : current.leadMinutes,
@@ -119,7 +155,7 @@ export function createCalendarReminderSettingsStore(filePath: string): CalendarR
       return { state: 'saved', settings: next }
     } catch {
       // 写失败：磁盘上的旧值原样生效，明确告诉调用方"没存上"，不假装成功。
-      return { state: 'not-saved', settings: current }
+      return { state: 'not-saved', reason: 'write-failed', settings: current }
     }
   }
 

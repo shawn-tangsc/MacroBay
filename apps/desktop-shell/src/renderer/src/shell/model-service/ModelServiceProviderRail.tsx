@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from 'antd'
 import { ChevronDown, ChevronRight, Network, Plus, Search } from 'lucide-react'
 
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
@@ -175,21 +176,20 @@ export function ModelServiceProviderRail({
 
           return (
             <div key={group.id} className="model-service-rail-group" data-provider-group={group.id}>
-              <button
-                type="button"
+              {/* 行容器形态的展开键 → antd `Button`；开合由 `aria-expanded` 表达，不再挂原生 title。 */}
+              <Button
                 className="model-service-rail-group-header"
                 data-provider-group-header
                 data-provider-group={group.id}
                 aria-expanded={!collapsed}
-                title={toggleLabel}
-                aria-label={`${label} · ${group.providers.length}`}
+                aria-label={`${label} · ${group.providers.length} · ${toggleLabel}`}
                 onClick={() => toggleGroup(group.id)}>
                 {collapsed ? <ChevronRight size={12} aria-hidden="true" /> : <ChevronDown size={12} aria-hidden="true" />}
                 <span className="model-service-rail-group-name">{label}</span>
                 <span className="model-service-rail-group-count" data-provider-group-count>
                   {group.providers.length}
                 </span>
-              </button>
+              </Button>
 
               {collapsed
                 ? null
@@ -258,16 +258,14 @@ export function ModelServiceProviderRail({
         onDelete={onDeleteProvider}
       />
 
-      <button
-        type="button"
+      <Button
         className="model-service-rail-add"
         data-provider-add
-        title={labels.addProvider}
         aria-label={labels.addProvider}
+        icon={<Plus size={14} aria-hidden="true" />}
         onClick={onAdd}>
-        <Plus size={14} aria-hidden="true" />
         {labels.addProviderAction}
-      </button>
+      </Button>
     </aside>
   )
 }

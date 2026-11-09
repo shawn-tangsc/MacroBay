@@ -11,11 +11,16 @@ import type { CrossAssetEventLine, CrossAssetEventLineEvent } from '../../featur
  */
 const event = (overrides: Partial<CrossAssetEventLineEvent> = {}): CrossAssetEventLineEvent => ({
   eventKey: 'US.CPI.RELEASE.2026-M10', title: '消费者物价指数（CPI）', countryCode: 'US',
-  eventType: 'economic-indicator', lifecycleState: 'released', ...overrides
+  eventType: 'economic-indicator', lifecycleState: 'released',
+  // 行内事件自带来源（官方 / 市场）。这两个夹具测的是「点一条线记录哪一个事件」，
+  // 所以默认给官方路线；要测市场路线的用例在 overrides 里覆盖它。
+  source: 'official', ...overrides
 })
 const line = (overrides: Partial<CrossAssetEventLine> = {}): CrossAssetEventLine => ({
   atMs: Date.parse('2026-10-13T12:30:00.000Z'), events: [event()], published: true,
-  label: '消费者物价指数（CPI）', sources: 1, ...overrides
+  label: '消费者物价指数（CPI）', sources: 1,
+  // 「这一分钟没能把市场发布与官方那条对上」是读者可见的痕迹，行上必填（默认为没有这种痕迹）。
+  identityUnconfirmed: false, ...overrides
 })
 
 it('records the event a line stands for, in the calendar month that instant belongs to', () => {

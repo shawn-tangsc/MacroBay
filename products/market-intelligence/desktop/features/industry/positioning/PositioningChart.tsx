@@ -52,8 +52,13 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     VIEW.upperBottom - ((value - scale.min) / scale.range) * (VIEW.upperBottom - VIEW.upperTop)
 
   const periodMs = 8 * 3_600_000
-  const fundingPoints = funding.state === 'available'
-    ? [...funding.btc.map(point => ({ ...point, asset: 'btc' as const })), ...funding.eth.map(point => ({ ...point, asset: 'eth' as const }))]
+  // One readable leg is still a readable leg: draw the points that came back, the card names the
+  // other one as unknown. Both missing never reaches this component (the model says unavailable).
+  const fundingLegs = funding.state === 'available'
+    ? funding
+    : funding.state === 'partial' ? { btc: funding.btc ?? [], eth: funding.eth ?? [] } : undefined
+  const fundingPoints = fundingLegs
+    ? [...fundingLegs.btc.map(point => ({ ...point, asset: 'btc' as const })), ...fundingLegs.eth.map(point => ({ ...point, asset: 'eth' as const }))]
         // A settlement a few seconds after the newest reading still belongs to the last period,
         // so the raw cut is loose and the snapped instant decides what is inside the window.
         .filter(point => Date.parse(point.observedAt) >= startMs - periodMs && Date.parse(point.observedAt) <= endMs + periodMs)

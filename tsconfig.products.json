@@ -3,6 +3,11 @@
   "include": [
     "products/**/*.ts",
     "products/**/*.tsx",
-    "apps/desktop-shell/src/renderer/shared/types/platform-api.d.ts"
+    "apps/desktop-shell/src/renderer/shared/types/platform-api.d.ts",
+    "apps/desktop-shell/src/renderer/src/vite-env.d.ts",
+    "apps/desktop-shell/src/renderer/shared/types/assets.d.ts"
+  ],
+  "exclude": [
+    "products/market-intelligence/service/demo/importMetaGlob.d.ts"
   ]
 }

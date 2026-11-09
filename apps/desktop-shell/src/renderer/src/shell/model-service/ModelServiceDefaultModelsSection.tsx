@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
@@ -120,15 +121,15 @@ export function ModelServiceDefaultModelsSection({
     <section className="model-service-default-models" data-model-service-default-models>
       <div className="model-service-default-row" data-default-model-row-group="primary">
         <div className="model-service-default-row-scroll">{primaryDefaultModelFields.map(renderRow)}</div>
-        <button
-          type="button"
+        {/* 展开/收起是命令型动作 → antd `Button`（类名与 `aria-expanded` 原样保留）。 */}
+        <Button
           className="model-service-default-toggle"
           data-default-models-toggle
           aria-expanded={expanded}
           onClick={() => setExpanded((current) => !current)}>
           <span>{expanded ? labels.defaultModelsCollapse : labels.defaultModelsShowMore}</span>
           <ChevronDown className="model-service-default-toggle-chevron" size={13} aria-hidden="true" />
-        </button>
+        </Button>
       </div>
       {expanded ? (
         <div className="model-service-default-row" data-default-model-row-group="more">

@@ -48,7 +48,7 @@ it('sorts date-only last and uses stable source/key tie-breaks without title mer
   const first = unifiedCalendarDay('2026-09-10', input, markets, 'complete')
   expect(first.items.at(-1)?.key).toBe('official:official-3')
   expect(first.items).toHaveLength(5)
-  expect(unifiedCalendarDay('2026-09-10', input.toReversed(), markets.toReversed(), 'complete').items).toEqual(first.items)
+  expect(unifiedCalendarDay('2026-09-10', [...input].reverse(), [...markets].reverse(), 'complete').items).toEqual(first.items)
 })
 it('groups UTC cross-day and cross-month timestamps in Beijing while retaining date-only dates', async () => {
   const { unifiedCalendarDay } = await model()
@@ -164,7 +164,7 @@ it('puts pending times last in the economic group and retains stable source/key 
   expect(result.groups?.[0]?.items.map(item => item.key)).toEqual([
     'official:official-1', 'market:market-1', 'market:market-2', 'market:market-3', 'official:official-3'
   ])
-  expect(unifiedCalendarDay('2026-09-10', officials.toReversed(), events.toReversed(), 'complete').groups).toEqual(result.groups)
+  expect(unifiedCalendarDay('2026-09-10', [...officials].reverse(), [...events].reverse(), 'complete').groups).toEqual(result.groups)
 })
 it.each(['economic-indicator', 'financial-event', 'central-bank-activity'] as const)('sorts %s by high importance, Beijing time and stable keys', async eventType => {
   const { unifiedCalendarDay } = await model()
@@ -173,7 +173,7 @@ it.each(['economic-indicator', 'financial-event', 'central-bank-activity'] as co
   const first = unifiedCalendarDay('2026-09-10', [], events, 'complete')
   expect(first.groups[0].items.map(item => item.event.eventKey)).toEqual([events[2].eventKey, events[3].eventKey, events[1].eventKey, events[0].eventKey])
   expect(first.groups[0].items.map(item => item.time)).toEqual(['11:00', '11:00', '12:00', '09:00'])
-  expect(unifiedCalendarDay('2026-09-10', [], events.toReversed(), 'complete').groups).toEqual(first.groups)
+  expect(unifiedCalendarDay('2026-09-10', [], [...events].reverse(), 'complete').groups).toEqual(first.groups)
 })
 it('stands a month on the reader\'s own day when it belongs to that month, and on its first day otherwise', async () => {
   const { calendarDayForMonth } = await model()

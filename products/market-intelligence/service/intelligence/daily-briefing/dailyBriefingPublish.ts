@@ -44,7 +44,15 @@ export async function publishDailyBriefingEdition(input: Readonly<{
       windowEnd: traced.edition.windowEnd,
       document: traced
     }
-    const settled = attempts.build('succeeded', traced.provenance.generationTrace?.finishedAt ?? input.now())
+    // 有 editorialFailure 的版次是"数据在、解读没出来"：版次照发，但这次尝试**记失败**并带上原因。
+    // 否则库里就是"发了、还记了成功"，与页面上那句说明互相打架（用户 2026-11-06 指出的那件事）。
+    const editorialFailure = traced.provenance.editorialFailure
+    const recordedFailure = editorialFailure !== undefined && editorialFailure !== 'editorial-disabled' ? editorialFailure : undefined
+    const settled = attempts.build(recordedFailure ? 'failed' : 'succeeded', traced.provenance.generationTrace?.finishedAt ?? input.now(), {
+      ...(recordedFailure ? { failureCode: recordedFailure } : {}),
+      // 只有失败才把阶段表写进尝试记录：成功的版次原本不带，别在这一笔里改变它的形状。
+      ...(recordedFailure && traced.provenance.generationTrace ? { trace: traced.provenance.generationTrace } : {})
+    })
     // The edition row and the attempt that wrote it are one write: a reader never sees one without
     // the other.
     if (store.publishEdition) {
@@ -88,6 +96,64 @@ export async function publishDailyBriefingEdition(input: Readonly<{
  * 以前这里发的是事实层模板版：页面能打开、却没有任何解读，而库里记的是成功。现在失败就是失败，
  * 原因码原样回给页面，右列与失败面板据此说清是超时、输出不合规还是模型不可用。
  */
+/**
+ * 模型类失败：读者这一天本该有日报，问题既不在数据也不在这份报纸。
+ *
+ * 与「输出质量失败」分开（后者是稿子不能给读者，仍按 2026-11-06 的决定不发）。这一类照发事实层
+ * 版次，原因留在 provenance；`publishDailyBriefingEdition` 会把它记成一次失败，不是"悄悄发一份
+ * 看起来完整的模板版"。
+ */
+export const modelFailureCodes: readonly string[] = Object.freeze([
+  'model-unavailable',
+  'model-not-ready',
+  'provider-disabled',
+  'missing-api-key',
+  'rate-limited',
+  'provider-error',
+  'editorial-timeout'
+])
+
+/**
+ * 写作没出来之后：按原因决定发还是不发（r17 `A1` + 2026-11-06 的顾虑一起满足）。
+ *
+ * 模型类原因 → 发（数据是读者的，缺的只是解读）；输出质量原因 → 不发，返回失败、留失败行。
+ */
+export async function settleEditorialEdition(input: Readonly<{
+  document: DailyBriefingDocument
+  store: Pick<DailyBriefingStore, 'publishEdition' | 'put' | 'prune'> & Partial<Pick<DailyBriefingStore, 'finishAttempt'>>
+  attempts: Pick<DailyBriefingAttemptJournal, 'build' | 'settle'>
+  run: Pick<DailyBriefingPeriodRunJournal, 'settle'>
+  recorder: Pick<DailyBriefingGenerationRecorder, 'begin' | 'end' | 'complete'>
+  now: () => string
+  noticeSubmit?: DailyBriefingNoticeSubmit
+  date: string
+  periodId: string
+  locale: DailyBriefingLocale
+  asOf: string
+  timeZone: string
+  force: boolean
+}>): Promise<DailyBriefingTodayResult> {
+  const failure = input.document.provenance.editorialFailure
+  if (failure !== undefined && failure !== 'editorial-disabled' && !modelFailureCodes.includes(failure)) {
+    return abandonDailyBriefingEditorial({
+      failureCode: failure, attempts: input.attempts, run: input.run, recorder: input.recorder, now: input.now,
+      locale: input.locale, asOf: input.asOf, timeZone: input.timeZone,
+      ...(input.noticeSubmit ? { noticeSubmit: input.noticeSubmit } : {}),
+      date: input.date, periodId: input.periodId
+    })
+  }
+  // 数据版是「这一期已被标记为失败、但数据照发」：它照常落库，**不许**再推一条「完成」到
+  // 任何表面——那等于把失败画成成功。仍然写一条记录（deliver: false），供手动「推送到手机」
+  // 核对是哪一版，但记录本身不投递。读者自己关掉 AI 编辑（editorial-disabled）不是失败，
+  // 完成提醒照旧。
+  const deliversCompletion = !input.force && (failure === undefined || failure === 'editorial-disabled')
+  return publishDailyBriefingEdition({
+    document: input.document, store: input.store, attempts: input.attempts, run: input.run, recorder: input.recorder, now: input.now,
+    ...(input.noticeSubmit ? { noticeSubmit: input.noticeSubmit } : {}),
+    date: input.date, periodId: input.periodId, locale: input.locale, deliver: deliversCompletion
+  })
+}
+
 export async function abandonDailyBriefingEditorial(input: Readonly<{
   failureCode: string
   attempts: Pick<DailyBriefingAttemptJournal, 'settle'>

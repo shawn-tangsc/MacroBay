@@ -334,10 +334,17 @@ button.mi-agent-card__status:focus-visible {
   outline-offset: 2px;
 }
 
-.mi-agent-card__progress {
+/* 进度与它旁边的动作已是 antd `Button`（text 档）：选择器带上 `.ant-btn` 才压得住它自带的字号与内距，
+   另补 `height: auto` / `line-height: inherit`（这是卡内 9px 的行内字，antd 的 24px 档会撑高卡片）、
+   `display: revert`（回到替换前的 UA `inline-block`，antd 是 `inline-flex`）与 hover 的透明底
+   （原来只有颜色变化）。两处 `padding: 0` 是**替换前就有的**，不是这一批新加。 */
+.mi-agent-card__progress.ant-btn {
+  display: revert;
   position: relative;
   z-index: 2;
   flex: 0 0 auto;
+  height: auto;
+  line-height: inherit;
   padding: 0;
   border: 0;
   background: transparent;
@@ -349,6 +356,8 @@ button.mi-agent-card__status:focus-visible {
   text-underline-offset: 2px;
   white-space: nowrap;
 }
+
+.mi-agent-card__progress.ant-btn:hover { background: transparent; }
 
 .mi-agent-card__progress:hover {
   color: var(--mi-terminal-lime);
@@ -385,7 +394,10 @@ button.mi-agent-card__status:focus-visible {
   white-space: nowrap;
 }
 
-.mi-agent-card__activation-action {
+.mi-agent-card__activation-action.ant-btn {
+  display: revert;
+  height: auto;
+  line-height: inherit;
   padding: 0;
   border: 0;
   background: transparent;
@@ -397,7 +409,8 @@ button.mi-agent-card__status:focus-visible {
   text-underline-offset: 2px;
 }
 
-.mi-agent-card__activation-action:hover {
+.mi-agent-card__activation-action.ant-btn:hover {
+  background: transparent;
   color: var(--mi-terminal-lime);
 }
 
@@ -406,8 +419,7 @@ button.mi-agent-card__status:focus-visible {
   outline-offset: 2px;
 }
 
-.mi-agent-card__entry,
-.mi-crypto-dashboard__back {
+.mi-agent-card__entry {
   border: 0;
   background: transparent;
   color: inherit;
@@ -421,8 +433,7 @@ button.mi-agent-card__status:focus-visible {
   z-index: 1;
 }
 
-.mi-agent-card__entry:focus-visible,
-.mi-crypto-dashboard__back:focus-visible {
+.mi-agent-card__entry:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -777,14 +788,6 @@ button.mi-agent-card__status:focus-visible {
 .mi-crypto-dashboard h2 {
   color: var(--text-strong);
   font-size: 13px;
-}
-
-.mi-crypto-dashboard__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text);
-  font-size: 12px;
 }
 
 .mi-crypto-dashboard__tools {

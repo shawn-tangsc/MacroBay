@@ -1,6 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
+import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
 
 /**
  * AI 分析结论推送（N12）的**判定层**：只回答"这一条要不要推、推给谁、句子写成什么"。
@@ -15,10 +16,15 @@ import type { AnalysisConclusionDirection } from '../../../contracts/marketAnaly
  */
 export const analysisConclusionPushPolicy = Object.freeze({
   version: 'analysisConclusionPush.v1',
-  /** 去重键：同一触发键 + 同一截止时刻一条；**不用 runId**（同一份证据重跑会换 runId）。 */
-  dedupeKeyTemplate: 'analysis:{triggerKey}:{cutoff}',
-  /** 同一触发键每天 1 条；模块每天 4 条（两条推送合计）；超出只进中心。 */
-  perTriggerKeyDailyLimit: 1,
+  /**
+   * 去重键：**同一桶（原因码 + 事件）+ 同一截止时刻**一条；**不用 runId**（同一份证据重跑会换）。
+   *
+   * 桶按事件算，不按触发键：初次运行的键全都叫 `macro.actual.first-confirmed`，按键会让一天
+   * 只有第一条达门槛的能到手机（2026-11-09）。同一条事件重复触发仍是同一个桶，照样被去重。
+   */
+  dedupeKeyTemplate: 'analysis:{bucket}:{cutoff}',
+  /** 同一个桶（原因码 + 事件）每天 1 条；模块每天 4 条；超出只进中心。 */
+  perBucketDailyLimit: 1,
   moduleDailyLimit: 4,
   /** 正文上限：中文按字、英文按字符。 */
   maximumBodyLength: Object.freeze({ 'zh-CN': 40, 'en-US': 90 }) as Readonly<Record<'zh-CN' | 'en-US', number>>,
@@ -31,8 +37,39 @@ export const analysisConclusionPushPolicy = Object.freeze({
     'en-US': { title: 'Analysis conclusion', reason: 'You subscribed to signal-triggered analysis conclusions.' }
   }),
   /** 结论方向里这五个是"有方向"的取值，其余按"没表态"处理。 */
-  directionKeys: ['bullish', 'bearish', 'range', 'undecided', 'mixed'] as readonly AnalysisConclusionDirection[]
+  directionKeys: ['bullish', 'bearish', 'range', 'undecided', 'mixed'] as readonly AnalysisConclusionDirection[],
+  /**
+   * 哪些**原因码**算「这次分析是达到门槛才跑的」——自动结论推送的入口只读这一处。
+   *
+   * 判据不读触发键：键记的是阶段（初次 = `macro.actual.first-confirmed`、复盘 =
+   * `market-reaction.15m`），消息面达门槛的运行也长着宏观的样子，按前缀判会把它们全漏掉
+   * （2026-11-09 用户报「分析结论不推手机」的根因）。原因码才说"为什么跑"。
+   *
+   * 不进这里的：`session-slot-*`（开盘例行）、`restart-*-compensated`（进程重启补跑）、
+   * `manual-request`（读者手动，走发送按钮）、以及各种 `skipped` 原因——例行与补跑不是"达门槛"。
+   */
+  thresholdReasonCodes: [
+    'severity-confirmed',
+    'medium-score-confirmed',
+    'provider-surprise-confirmed',
+    'market-reaction-confirmed',
+    'signal-high-triggered',
+    'signal-medium-triggered'
+  ] as readonly string[]
 })
+
+/**
+ * 这次运行要不要进结论推送的判定：**达到门槛**就进。
+ *
+ * 原因码优先（唯一口径在 `thresholdReasonCodes`）；没有判定行时（老运行、信号触发那条不走
+ * 意义闸门）回落到信号键：`signal.<模块>.<规则>` 的键本身带着来源，是仅剩的可信事实。
+ */
+export function analysisConclusionPushEligible(input: Readonly<{ triggerKey: string; reasonCode?: string }>): boolean {
+  if (input.reasonCode !== undefined && input.reasonCode.length > 0) {
+    return analysisConclusionPushPolicy.thresholdReasonCodes.includes(input.reasonCode)
+  }
+  return analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(input.triggerKey)
+}
 
 export type AnalysisPushLanguage = 'zh-CN' | 'en-US'
 
@@ -52,7 +89,7 @@ export type AnalysisConclusionPushInput = Readonly<{
   /** 读者时区：日界按它算。 */
   timeZone: string
   /** 今天（读者时区）已经为这个触发键发过几条、模块一共发过几条。 */
-  sentToday: Readonly<{ byTriggerKey: number; module: number }>
+  sentToday: Readonly<{ byBucket: number; module: number }>
   now: string
 }>
 
@@ -63,8 +100,8 @@ export type AnalysisConclusionPushDecision = Readonly<{
     centerOnly: boolean
     /** 正文那句（两种语言各一份，平台按读者语言挑）。 */
     body: Readonly<Record<AnalysisPushLanguage, string>>
-    /** 去重键的三个分量：键字符串由平台按模板拼，调用点不自己拼。 */
-    dedupeVars: Readonly<{ triggerKey: string; cutoff: string }>
+    /** 去重键的两个分量（桶 + 截止）：键字符串由平台按模板拼，调用点不自己拼。 */
+    dedupeVars: Readonly<{ bucket: string; cutoff: string }>
   }
   /** 没提交时的原因，供日志与用例断言；`undefined` 表示提交了。 */
   skipped?: 'same-direction' | 'quota-day' | 'quota-module' | 'no-direction'
@@ -131,18 +168,26 @@ function firstClause(text: string): string {
 export function analysisConclusionPushesPhone(input: Readonly<{
   /** 读不出来就是 `undefined`：没有证据说"反了"，就不叫醒读者。 */
   signalDirection?: 'bullish' | 'bearish'
+  /**
+   * 这次是不是信号唤起的。缺省按"有方向就算信号"推；调用方知道触发键时应显式给。
+   * 非信号的（消息面/日历达门槛）没有同向可言，达门槛本身就值得叫醒一次。
+   */
+  signalDriven?: boolean
   conclusionDirection: AnalysisConclusionDirection
   signalFactIds?: readonly string[]
   citedFactIds: readonly string[]
-  sentToday: Readonly<{ byTriggerKey: number; module: number }>
+  sentToday: Readonly<{ byBucket: number; module: number }>
 }>): Readonly<{ phone: boolean; centerOnly: boolean; reason?: 'same-direction' | 'quota-trigger-key' | 'quota-module' }> {
   const directional = input.conclusionDirection === 'bullish' || input.conclusionDirection === 'bearish'
   const opposing = directional && input.signalDirection !== undefined && input.conclusionDirection !== input.signalDirection
   const newInformation = input.signalFactIds !== undefined && input.citedFactIds.some((id) => !input.signalFactIds!.includes(id))
-  const quotaHit = input.sentToday.byTriggerKey >= analysisConclusionPushPolicy.perTriggerKeyDailyLimit
+  const quotaHit = input.sentToday.byBucket >= analysisConclusionPushPolicy.perBucketDailyLimit
     ? 'quota-trigger-key' as const
     : input.sentToday.module >= analysisConclusionPushPolicy.moduleDailyLimit ? 'quota-module' as const : undefined
-  const worthPhone = opposing || newInformation
+  // 「同向只进中心」只对**信号唤起**的那次成立：没有信号就没有"同不同向"可谈，达门槛本身
+  // 就是新信息（2026-11-09：消息面达门槛的运行曾被这条按成只进中心，手机永远不响）。
+  const signalDriven = input.signalDriven ?? input.signalDirection !== undefined
+  const worthPhone = !signalDriven || opposing || newInformation
   if (!worthPhone) return Object.freeze({ phone: false, centerOnly: true, reason: 'same-direction' })
   if (quotaHit !== undefined) return Object.freeze({ phone: false, centerOnly: true, reason: quotaHit })
   return Object.freeze({ phone: true, centerOnly: false })
@@ -161,7 +206,8 @@ export function analysisConclusionPushesPhone(input: Readonly<{
 export function buildAnalysisConclusionRequest(input: Readonly<{
   summary: string
   citedCount: number
-  triggerKey: string
+  /** 去重桶：原因码 + 事件（手动发送是它自己的桶）。 */
+  bucket: string
   /** 去重键 `analysis:{triggerKey}:{cutoff}` 的第二个分量；手动发送是 `${截止时刻}:${点击时刻}`。 */
   cutoff: string
   occurredAt: string
@@ -174,7 +220,7 @@ export function buildAnalysisConclusionRequest(input: Readonly<{
     withContext: !input.centerOnly
   })
   return {
-    dedupeVars: { builder: 'template', vars: { triggerKey: input.triggerKey, cutoff: input.cutoff } },
+    dedupeVars: { builder: 'template', vars: { bucket: input.bucket, cutoff: input.cutoff } },
     ...(input.centerOnly ? { narrowedDisruptionLevels: ['center'] as const } : {}),
     rendered: {
       'zh-CN': { ...analysisConclusionPushPolicy.renderedCopy['zh-CN'], body: body.text },

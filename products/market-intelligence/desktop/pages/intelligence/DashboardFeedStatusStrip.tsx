@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { TriangleAlert } from 'lucide-react'
 
 import { dashboardFeedRowText, type DashboardFeedRow, type DashboardFeedText, type DashboardFeedTags } from './dashboardFeedStatusModel'
@@ -25,7 +26,7 @@ export function FeedStatusStrip({ rows, text, tags, nowMs, onManageSource }: {
   return <div className="mi-crypto-dashboard__feed-strip" data-feed-strip>
     {health.hasSummary && <div className="mi-crypto-dashboard__source-row" data-feed-summary data-state="ok" data-feed-health="healthy">
       <strong className="mi-crypto-dashboard__source-summary-label" data-feed-status="summary">{format(text.summary, { count: String(health.healthyCount), names: health.healthyNames })}</strong>
-      <div><button onClick={() => onManageSource()} type="button">{text.manageSources}</button></div>
+      <div><Button onClick={() => onManageSource()} size="small" type="text">{text.manageSources}</Button></div>
     </div>}
     {health.attentionRows.map(row => {
       const line = dashboardFeedRowText(row, text, tags, nowMs)
@@ -33,7 +34,7 @@ export function FeedStatusStrip({ rows, text, tags, nowMs, onManageSource }: {
         <strong aria-hidden="true" className="mi-crypto-dashboard__source-anomaly-mark" data-feed-anomaly={row.id}><TriangleAlert size={12} /></strong>
         <span>{line.name}</span>
         <small data-feed-status={row.id}>{line.status}</small>
-        <div><button onClick={() => onManageSource()} type="button">{text.manage}</button></div>
+        <div><Button onClick={() => onManageSource()} size="small" type="text">{text.manage}</Button></div>
       </div>
     })}
   </div>

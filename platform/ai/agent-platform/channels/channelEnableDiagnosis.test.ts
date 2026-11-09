@@ -177,13 +177,20 @@ describe('enabling a channel that has no seven-item evidence', () => {
 
     // 关键：启用成功**之后**跑一拍，轮询宿主必须真的有资格、真的发过 getUpdates。
     // 以前「自检放行」在 enable 返回的 finally 里就被清掉，宿主第一拍判 not-current 直接静默退出。
-    await new Promise<void>((resolve) => { setTimeout(resolve, 20) })
+    //
+    // 等的是「发过一次 getUpdates」这个**事实**，不是等 20 毫秒：固定等待在慢机器上会假红，
+    // 在快机器上会把失败提前暴露成另一条断言。上限只用于兜底——真没发，这条仍然红，只是红得更晚。
+    await vi.waitFor(
+      () => {
+        const updatePolls = fetchMock.mock.calls.filter(([url]) => String(url).includes('/getUpdates'))
+        expect(updatePolls.length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 2_000, interval: 10 }
+    )
     const generation = (database.connection.prepare(
       'select generation from channel_runtime_generations where channel_id = ?'
     ).get(CHANNEL_ID) as { generation: number }).generation
     expect(new ChannelInboundRepository(database).isCurrentActive(CHANNEL_ID, generation)).toBe(true)
-    const updatePolls = fetchMock.mock.calls.filter(([url]) => String(url).includes('/getUpdates'))
-    expect(updatePolls.length).toBeGreaterThanOrEqual(1)
     manager.stop(CHANNEL_ID)
   })
 

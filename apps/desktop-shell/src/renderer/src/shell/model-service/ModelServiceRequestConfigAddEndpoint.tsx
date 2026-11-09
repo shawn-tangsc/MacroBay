@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Button } from 'antd'
 import { ChevronDown, Plus } from 'lucide-react'
 
 import type { ModelChatProtocol } from '@platform/ai/providers/modelProviderTypes'
@@ -75,8 +76,8 @@ export function ModelServiceRequestConfigAddEndpoint({
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-block' }}>
-      <button
-        type="button"
+      {/* 命令型动作 → antd `Button`；`aria-haspopup=listbox` 与开合态原样。 */}
+      <Button
         className="request-config-add-endpoint"
         data-request-config-add
         aria-haspopup="listbox"
@@ -86,7 +87,7 @@ export function ModelServiceRequestConfigAddEndpoint({
         <Plus size={12} aria-hidden="true" />
         {labels.endpointAdd}
         <ChevronDown size={12} aria-hidden="true" />
-      </button>
+      </Button>
       {open ? (
         <div style={MENU_STYLE} role="listbox" data-request-config-add-menu>
           {availableProtocols.map((protocol) => (

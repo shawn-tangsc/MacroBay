@@ -81,7 +81,7 @@ describe('the macro-market runtime', () => {
         ? { credentialRef: realMarketApiPolicy.credentialRef, enabled: true }
         : { credentialRef: 'twelve-data-market', enabled: false },
       getCredential: async () => ({ apiKey: `${'ab12'.repeat(16)}` }), now: () => atMs,
-      fetchImpl: (async url => response(String(url).includes('/api/v1/candle')
+      fetchImpl: (async (url: Parameters<typeof fetch>[0]) => response(String(url).includes('/api/v1/candle')
         ? (new URL(String(url)).searchParams.get('symbolCode') === 'XAUUSD' ? goldCandleResponse : realMarketApiCandleResponse)
         : (new URL(String(url)).searchParams.get('symbolCode') === 'XAUUSD' ? goldPriceResponse : realMarketApiPriceResponse))) as unknown as typeof fetch,
       onError: (error, sourceId) => { errors.push({ message: String(error), sourceId }) }

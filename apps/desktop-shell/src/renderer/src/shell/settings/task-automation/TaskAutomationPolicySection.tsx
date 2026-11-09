@@ -18,13 +18,22 @@ export function TaskAutomationPolicySection(props: {
 }): React.ReactElement {
   const { controller, labels, language } = props
   const policy = controller.policy
-  const disabled = !policy || controller.policyLoading || controller.policyError
+  /**
+   * 读者改过、还没落盘的那个值要留在控件上：没保存上不等于他没选过。
+   * 冻结控件和把值退回已存的那份，都是把「这次没保存上」说成了「你没改过」。
+   */
+  const shownPreset = controller.pendingPolicyPreset ?? policy?.preset
+  // 写失败不冻控件（还能再改再存）；只有真的没有值可选时才停用。
+  const disabled = !policy || controller.policyLoading
   const placeholder = controller.policyLoading
     ? labels.policyLoading
-    : controller.policyError
+    : !policy && controller.policyReadError
       ? labels.policyLoadFailed
       : labels.policyLoading
   const facts = policy ? buildPolicyFacts(policy.policy, labels, language) : []
+  const retry = controller.policyWriteError
+    ? () => void controller.retryPolicySave()
+    : () => void controller.reloadPolicy()
 
   return (
     <section className="task-automation-block" aria-busy={controller.policyLoading}>
@@ -38,7 +47,7 @@ export function TaskAutomationPolicySection(props: {
             size="small"
             aria-label={labels.policy}
             className={TASK_AUTOMATION_CONTROL_CLASSES.policy}
-            value={policy ? policy.preset : undefined}
+            value={shownPreset}
             placeholder={placeholder}
             disabled={disabled}
             loading={controller.policyLoading}
@@ -48,18 +57,27 @@ export function TaskAutomationPolicySection(props: {
               { value: 'conservative', label: labels.conservative }
             ]}
           />
-          {controller.policyError ? (
-            <Button size="small" onClick={() => void controller.reloadPolicy()}>
+          {controller.policyReadError || controller.policyWriteError ? (
+            <Button size="small" onClick={retry}>
               {labels.retry}
             </Button>
           ) : null}
         </div>
-        {controller.policyError ? (
+        {controller.policyWriteError ? (
+          // 这次没保存上：动作是把那次修改重发一遍，不是重读——重读只会把读者改的值冲掉。
+          <StateView
+            state="error"
+            reasonCode="operation-failed"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
+          />
+        ) : controller.policyReadError ? (
+          // 读不到：没有值可选，重试是重读。
           <StateView
             state="error"
             reasonCode="unreadable"
             size="md"
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reloadPolicy() }}
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
           />
         ) : null}
         <p className="task-automation-note">{labels.policyExplanation}</p>

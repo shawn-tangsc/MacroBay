@@ -187,6 +187,7 @@ export const agentTextZhWorkbench: AgentTextWorkbench = {
       productToolStatusAvailable: '可用',
       productToolStatusMissingHandler: '缺少处理器',
       productToolStatusNotInstalled: '未安装',
+      unnamedProductToolPackage: '未命名工具包',
       productToolSummary: (total, readOnly, writable, asOf) =>
         `${total} 个工具 · ${readOnly} 个只读 · ${writable} 个可写 · ${asOf} 个需要 asOf`,
       productToolDisabledNote: '已禁用：本智能体不会看到这个产品提供的工具。',

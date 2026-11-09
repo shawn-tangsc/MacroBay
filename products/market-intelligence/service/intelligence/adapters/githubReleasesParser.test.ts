@@ -71,7 +71,7 @@ describe('parseGithubReleasePayload', () => {
 
 describe('restApiPollerAdapter github releases collection', () => {
   it('collects one raw record per release through the injected transport', async () => {
-    const fetchText = vi.fn(async () => loadFixture('github-releases-goethereum-sample.json'))
+    const fetchText = vi.fn(async (_url: string) => loadFixture('github-releases-goethereum-sample.json'))
     const config = runtimeConfig('github-releases')
     const records = await restApiPollerAdapter.collect({ config, runId: 'run-gh', fetchText })
 

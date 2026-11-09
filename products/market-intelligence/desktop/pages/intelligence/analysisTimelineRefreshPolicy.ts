@@ -3,7 +3,23 @@
 // bounded polling policy is owned by the workspace data hook and is covered by
 // the timeline refresh regression test; it stops on a published node or a
 // terminal failure.
-export const analysisTimelineRefreshPolicy = Object.freeze({
+/**
+ * 读取节奏的形状。写成显式类型而不是让 `Object.freeze` 推成字面量：这是测试要替换的接缝
+ * （生产值换成更短的等待），字面量类型会让"换成 5 毫秒"在类型上不成立，等于接缝只在注释里。
+ */
+export type AnalysisTimelineRefreshPolicy = Readonly<{
+  pollIntervalMs: number
+  maxPollAttempts: number
+  livePollIntervalMs: number
+  initialRetryAttempts: number
+  initialRetryDelayMs: number
+  initialRetryMaxDelayMs: number
+  initialRetryBudgetMs: number
+  readTimeoutMs: number
+  detailRetryDelaysMs: readonly number[]
+}>
+
+export const analysisTimelineRefreshPolicy: AnalysisTimelineRefreshPolicy = Object.freeze({
   pollIntervalMs: 1_000,
   /**
    * Bounded, but longer than the run job's own timeout: the job is 600s because one run may spend

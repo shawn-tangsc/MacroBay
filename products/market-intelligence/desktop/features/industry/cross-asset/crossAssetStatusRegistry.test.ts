@@ -1,9 +1,13 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { productText } from '../../../shared/i18n/productText'
 import type { MacroMarketSnapshotReading } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import { macroMarketSnapshotPublicPolicy } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import {
   crossAssetMacroReading, crossAssetMacroSeriesIds, crossAssetStatusRows, plannedCrossAssetStatusIds, resolveCrossAssetStatusRows
 } from './crossAssetStatusRegistry'
+import { LoadingStatusRow } from './crossAssetStatusRows'
 
 const reading = (seriesId: string, extra: Partial<MacroMarketSnapshotReading> = {}): MacroMarketSnapshotReading =>
   ({ seriesId, level: 101.42, atMs: 1, returns: { '15m': 0.1 }, ...extra })
@@ -39,6 +43,33 @@ describe('cross-asset status rows', () => {
     expect(shape([reading('usd-cnh'), reading('usdt-usd')])).toEqual([
       'dxy:planned', 'gold:planned', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
     ])
+  })
+
+  it('says 加载中 — not 未接入 — for a macro row whose read has not settled yet', () => {
+    // 用户 11-02 那句「先闪一下获取失败再出数据」的同类：macro / rates 还没结算时，四行会先落回注册表的
+    // `planned`（未接入），读完再变「已接入」——先给结论、再改结论。未结算就应当是加载态。
+    const pendingBoth = (pending: { macro: boolean; rates: boolean }): string[] =>
+      resolveCrossAssetStatusRows([], [], pending).map(row => `${row.id}:${row.state}`)
+    expect(pendingBoth({ macro: true, rates: true })).toEqual([
+      'dxy:loading', 'gold:loading', 'us10y:loading', 'realRate:loading', 'index:connected', 'btc:connected', 'eth:connected'
+    ])
+    // 只有那一路没结算才给加载态；已经读完、确实没有 → 仍然是「未接入」。
+    expect(pendingBoth({ macro: true, rates: false })).toEqual([
+      'dxy:loading', 'gold:loading', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
+    ])
+    // 读数已经到了就是 connected：加载态不许盖掉已经拿到的东西。
+    expect(resolveCrossAssetStatusRows([reading('dxy-synthetic')], [], { macro: true, rates: true })[0]).toEqual({ id: 'dxy', state: 'connected' })
+    // 没传 pending 的旧调用点行为不变（没有第五个参数的默认语义被偷偷改掉）。
+    expect(shape([])).toEqual([
+      'dxy:planned', 'gold:planned', 'us10y:planned', 'realRate:planned', 'index:connected', 'btc:connected', 'eth:connected'
+    ])
+  })
+
+  it('renders the unsettled row as a waiting cell, never as the 未接入 sentence', () => {
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const markup = renderToStaticMarkup(createElement(LoadingStatusRow, { id: 'dxy', text }))
+    expect(markup).not.toContain(text.notConnected)
+    expect(markup).toContain(text.loading)
   })
 
   it('promotes the two rate rows only from their own daily series', () => {

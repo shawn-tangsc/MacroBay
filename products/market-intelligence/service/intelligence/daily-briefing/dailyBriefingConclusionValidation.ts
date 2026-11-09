@@ -26,7 +26,6 @@ export type ConclusionSynthesisFailure =
   | 'repeated-direction'
   | 'duplicate-statement'
   | 'forbidden-content'
-  | 'forbidden-forecast'
   | 'invalid-number-format'
   | 'unknown-number'
   | 'asset-equality-claim'
@@ -46,7 +45,6 @@ import {
   maximumListItems,
   maximumRationaleLength,
   maximumRegimeMarkerLength,
-  internalWordingPatterns,
   vagueWordingTerms,
   concreteAnchorPattern,
   clockTimePattern,
@@ -55,7 +53,6 @@ import {
   outlookStancePattern,
   relativeStrengthPattern,
   conditionalPattern,
-  forbiddenForecastPatterns,
 } from './dailyBriefingConclusionWording'
 
 
@@ -144,8 +141,6 @@ export function validateConclusionSynthesis(
   if (isCopiedConclusionText(outlook, copyCandidates)) return fail('copied-conclusion', 'outlook')
   if (isCopiedConclusionText(regimeChange, copyCandidates)) return fail('copied-conclusion', 'regimeChange')
   const prose = [summary, outlook, regimeChange, coreTension, whatWouldChange, ...conditions, ...counterEvidence, ...watch, ...confirmed, ...refuted].join('\n')
-  const forecast = forbiddenForecast(prose)
-  if (forecast) return fail('forbidden-forecast', forecast)
   const numberFormat = invalidNumberFormat(prose, document.edition.locale)
   if (numberFormat) return fail('invalid-number-format', numberFormat)
   const unknownNumber = unknownNumberIn(prose, document)
@@ -295,14 +290,6 @@ function repeatedStatement(
   return undefined
 }
 
-function forbiddenForecast(prose: string): string | undefined {
-  for (const { pattern, repair } of forbiddenForecastPatterns) {
-    const match = pattern.exec(prose)
-    if (match) return `"${match[0]}" is a prohibited forecast; ${repair}.`
-  }
-  return undefined
-}
-
 /**
  * Rejects a number the prose formatted itself instead of quoting the fact's `display`.
  *
@@ -357,14 +344,6 @@ function sentenceCount(text: string): number {
  * its repair message, so it must state what to write instead, not just what was wrong.
  */
 function bannedConclusionWording(fields: readonly ConclusionProseField[]): string | undefined {
-  for (const { field, text } of fields) {
-    for (const { pattern, repair } of internalWordingPatterns) {
-      const match = pattern.exec(text)
-      if (match) {
-        return `${field}: "${match[0]}" is internal process language; ${repair}. Rewrite it as the market event or data, its number from FACTS, and the date.`
-      }
-    }
-  }
   for (const { field, text } of fields) {
     for (const term of vagueWordingTerms) {
       const sentence = sentenceContaining(text, term)

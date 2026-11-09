@@ -88,6 +88,16 @@ function dataOnly(
  */
 export type IconButtonVariant = 'plain' | 'solid' | 'overlay'
 
+/**
+ * 语义色调（闭集，先只有 `danger`）。与 `StatusPill` 的 tone 是同一个概念，**但不是同一个类型**：
+ * 那颗徽标有 success / warning 等档，这颗按钮一个都不收——按钮只在「这一下是破坏性的」时才上色。
+ *
+ * - **只影响颜色，不碰尺寸与档位**：尺寸仍只有 `sm`/`md`，`plain`/`solid`/`overlay` 与它并存；
+ * - **危险色必须静止可见**：默认态就是红字（描边档再给红边），不靠 hover 才出现——
+ *   靠悬停才变红的破坏性动作，在键盘与触屏上等于没有提示。
+ */
+export type IconButtonTone = 'danger'
+
 /** `aria-haspopup` 的合法值。闭集，不收 `string`：写错的值读屏直接忽略。 */
 export type IconButtonHasPopup = 'menu' | 'listbox' | 'dialog' | 'tree' | 'grid'
 
@@ -138,6 +148,13 @@ type IconButtonCommon = {
   disabled?: boolean
   /** 默认无边框透明底；工具栏用 `solid`。 */
   variant?: IconButtonVariant
+  /**
+   * 语义色调。不传就与现在逐字一致（没有任何颜色类进 DOM）。
+   *
+   * 与 `ariaLabelKey`、`plain` 都不冲突：读屏名照旧必填，档位照旧由 `variant` 决定，
+   * tone 只回答「这一下危不危险」。
+   */
+  tone?: IconButtonTone
   /**
    * 这是不是个「展开/收起」触发器（通知铃铛、折叠面板、抽屉入口）。
    *
@@ -254,6 +271,7 @@ export function IconButton({
   loading,
   tooltipKey,
   variant = 'plain',
+  tone,
   expanded,
   controls,
   pressed,
@@ -305,6 +323,7 @@ export function IconButton({
         'icon-button',
         `icon-button--${size}`,
         `icon-button--${variant}`,
+        tone === 'danger' ? 'icon-button--danger' : null,
         'ant-btn-icon-only',
         className
       ]

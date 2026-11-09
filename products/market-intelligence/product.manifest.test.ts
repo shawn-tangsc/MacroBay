@@ -88,9 +88,7 @@ describe('market-intelligence product manifest', () => {
       'intelligenceSources.testCredentials',
       'intelligenceSources.testConnection',
       'intelligenceSources.runNow',
-      'intelligenceSources.getHealth',
-      'intelligenceSources.getFocusSettings',
-      'intelligenceSources.saveFocusSettings'
+      'intelligenceSources.getHealth'
     ]
     const serviceMethods = marketIntelligenceProductManifest.serviceRoutes.map(({ method }) => method)
 

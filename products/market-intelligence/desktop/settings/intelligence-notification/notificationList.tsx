@@ -33,6 +33,9 @@ export function NotificationList(props: Readonly<{
   return <ul aria-label={props.ariaLabel} className="intelligence-notification-list">
     {props.items.map((item) => (
       <li key={item.key}>
+        {/* 例外登记（ui-spec R1）：这是**两行内容的列表行容器**（名字 + 状态），不是命令按钮。
+            antd `Button` 会把子节点包进自己的 span 并带 padding/height，可见形状会变，所以保留
+            原生按钮、不覆写内联样式去模拟；语义自带：名字取行内文本、键盘可达、选中态 `aria-current`。 */}
         <button
           aria-current={props.selected === item.key ? 'true' : undefined}
           className="intelligence-notification-list-item"

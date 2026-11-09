@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+
 const hooks = vi.hoisted(() => ({
   settings: vi.fn(),
   schedules: vi.fn()
@@ -192,13 +194,21 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).toContain('ant-select-disabled')
   })
 
-  it('shows the policy failure with a retry instead of an empty dropdown', () => {
-    hooks.settings.mockReturnValue(settings({ tasks: [], emptyState: 'never-created', policyError: true, policy: null }))
+  it('shows a failed policy read with a retry instead of an empty dropdown', () => {
+    hooks.settings.mockReturnValue(settings({
+      tasks: [],
+      emptyState: 'never-created',
+      policyReadError: true,
+      policy: null
+    }))
     hooks.schedules.mockReturnValue(schedules({ items: [] }))
 
     const markup = renderPage()
 
     expect(markup).toContain('策略加载失败')
+    // 读失败用读的句子（`error/unreadable`），不是「这次操作没有成功」——读者没做任何操作。
+    expect(markup).toContain('数据没有读出来，可以重试')
+    expect(markup).not.toContain('这次操作没有成功，可以重试')
     expect(markup).toContain('重试')
     expect(markup).toContain('ant-select-disabled')
   })
@@ -352,10 +362,73 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).toContain('Execution policy')
     expect(markup).not.toContain('我的定时任务')
   })
+
+  /**
+   * 同屏的每个时刻都跟读者时区走：任务的下次运行、最近结果时间、变更审计时间、
+   * 投递健康的「最近更新」、资源任务的下次/上次运行。
+   *
+   * 断言用**该时区下的钟点原文**，不是「两次渲染不同」——后者在两边都读运行机器时区时
+   * 也可能凑巧不同（例如文案顺序变了），那就不算证明了什么。
+   */
+  it('renders every moment in the reader time zone and follows a change of it', () => {
+    const instant = '2026-07-18T01:00:00.000Z'
+    hooks.settings.mockReturnValue(settings({
+      tasks: [
+        task({ id: 'task-1', name: '跨时区任务', trigger: { kind: 'cron', expr: '0 9 * * *' }, nextRun: instant }),
+        // 一次性调度的钟点也是「瞬间」：定义不变，显示跟读者时区。
+        task({ id: 'task-2', name: '一次性任务', trigger: { kind: 'once', at: Date.parse(instant) } })
+      ],
+      expandedTaskId: 'task-1',
+      audits: [{ id: 'audit-1', action: 'resume', outcome: 'accepted', createdAt: instant }],
+      taskRuns: {
+        'task-1': {
+          status: 'completed',
+          at: instant,
+          health: { delivered: 1, failed: 0, pending: 0, skipped: 0, unknown: 0 },
+          skipReasons: [],
+          unexplainedSkips: 0
+        }
+      }
+    }))
+    hooks.schedules.mockReturnValue(schedules({
+      items: [job({
+        id: 'job-1',
+        title: 'Platform retention',
+        trigger: { kind: 'cron', expression: '0 3 * * *', timezone: 'Asia/Shanghai' },
+        nextRunAt: instant,
+        lastRunAt: instant,
+        lastOutcome: 'success',
+        lastRunStatus: 'success'
+      })]
+    }))
+
+    const shanghai = renderPageInZone('Asia/Shanghai')
+    const newYork = renderPageInZone('America/New_York')
+
+    // 2026-07-18T01:00Z：上海 09:00（18 日）、纽约 21:00（17 日）。
+    expect(shanghai).toContain('07/18 09:00')
+    expect(shanghai).not.toContain('07/17 21:00')
+    expect(newYork).toContain('07/17 21:00')
+    expect(newYork).not.toContain('07/18 09:00')
+    // 一次性调度那一格也是瞬间：同一个 `at` 在两个时区下是两个钟点。
+    expect(shanghai).toContain('一次 · 07/18 09:00')
+    expect(newYork).toContain('一次 · 07/17 21:00')
+    // 同一个时刻在整屏的每一处都按同一个时区显示：这些位置全部来自那一个 instant。
+    expect(countOccurrences(shanghai, '07/18 09:00')).toBeGreaterThanOrEqual(5)
+  })
 })
 
 function renderPage(): string {
   return renderToStaticMarkup(<TaskAutomationSettingsPage language="zh-CN" />)
+}
+
+/** 读者时区由窗口级 provider 决定（`ShellTimeZoneContext`），这里模拟换了时区的读者。 */
+function renderPageInZone(timeZone: string): string {
+  return renderToStaticMarkup(
+    <ShellTimeZoneProvider timeZone={timeZone}>
+      <TaskAutomationSettingsPage language="zh-CN" />
+    </ShellTimeZoneProvider>
+  )
 }
 
 function task(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -413,8 +486,11 @@ function settings(overrides: Record<string, unknown> = {}): Record<string, unkno
     expandedTaskId: overrides.expandedTaskId ?? null,
     audits: overrides.audits ?? [],
     policyLoading: overrides.policyLoading ?? false,
-    policyError: overrides.policyError ?? false,
+    policyReadError: overrides.policyReadError ?? false,
+    policyWriteError: overrides.policyWriteError ?? false,
+    pendingPolicyPreset: overrides.pendingPolicyPreset ?? null,
     reloadPolicy: vi.fn(),
+    retryPolicySave: vi.fn(),
     updatePolicy: vi.fn(),
     policy: overrides.policy === undefined
       ? {

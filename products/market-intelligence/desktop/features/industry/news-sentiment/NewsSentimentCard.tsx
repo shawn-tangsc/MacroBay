@@ -198,7 +198,15 @@ export function NewsSentimentCard(props: {
             }}
           >
             {visibleDrivers.map((item) => (
-              <button key={item.itemId} onClick={() => props.onSelectItem(item)} type="button">
+              // 整行即动作（ui-spec「可点击行」）：保留原生 button 与既有 class，antd `Button` 表达不了
+              // 这种多行富内容（换它要重写高度/内距），所以这里按组件表达不了登记。可访问名说明点开去哪；
+              // 键盘可达与焦点环由原生 button 与全仓统一的 `:focus-visible` 提供；悬停底色在样式表里一条。
+              <button
+                aria-label={text.openItem.replace('{title}', item.displayTitle ?? item.title)}
+                key={item.itemId}
+                onClick={() => props.onSelectItem(item)}
+                type="button"
+              >
                 <span className="mi-news-sentiment__driver-line">
                   <span className={`mi-news-sentiment__pill is-${item.polarity}`}>{labelText(text, item.polarity)}</span>
                   <span className="mi-news-sentiment__title">{item.displayTitle ?? item.title}</span>

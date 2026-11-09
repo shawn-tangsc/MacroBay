@@ -10,15 +10,6 @@ evidence view lets you check the number.
 
 ## What you see when you open the app
 
-### Intelligence portal
-
-The portal is the agent selection page. It shows the available analyst agents and whether their
-evidence is ready. It is no longer the first screen: **Intelligence** in the sidebar lands on the
-dashboard, and **Back to Agents** returns here. From the portal you configure data sources or start a
-conversation.
-
-![Intelligence portal](../assets/screenshots/portal-en.png)
-
 ### Daily briefing
 
 The daily briefing reads the same local evidence as the dashboard and puts one day on one page: what

@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
-
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
+import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
+import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { productText } from '../../shared/i18n/productText'
-import { SourceSpecificSection } from './SourceSpecificSection'
-import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { ProviderDetail } from './ProviderDetail'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
-import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { SourceSpecificSection } from './SourceSpecificSection'
+import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { useIntelligenceTranslationSettings } from './useIntelligenceTranslationSettings'
 
 import './intelligence-sources.css'
@@ -42,11 +42,18 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     testCredentials,
     replayWindow,
     refreshHealth,
-    saveFocusMarkets,
-    focusMarketSettings,
-    savingFocusMarkets
+    profiles,
+    definitions,
+    updateSourceProfile
   } = useIntelligenceSourcesSettings(t)
   const translation = useIntelligenceTranslationSettings(t.translationPreferences)
+  // 采集策略：每源一份 profile，读 `profiles`；是否支持情绪分析由源定义决定（同一个事实只读一处）。
+  const policyProfiles: Readonly<Record<string, IntelligenceSourceProfile>> = Object.fromEntries(
+    profiles.map((profile) => [profile.sourceId, profile])
+  )
+  const supportsSentimentById: Readonly<Record<string, boolean>> = Object.fromEntries(
+    definitions.map((definition) => [definition.sourceId, definition.supportsSentiment === true])
+  )
   useEffect(() => {
     if (selectedProviderId || !settingsView) return
     const first = settingsView.groups.flatMap((group) => group.providers)[0]
@@ -90,12 +97,12 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         {selectedProviderId ? (() => {
           const provider = settingsView?.groups.flatMap((group) => group.providers).find((entry) => entry.providerId === selectedProviderId)
           return provider ? <div className="intelligence-detail-scroll"><ProviderDetail
-            labels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, panelNames: t.panelNames, badges: { pending: t.sourceBadges.pending, advanced: t.sourceBadges.advanced, calendar: t.sourceBadges.calendar, proxy: t.sourceBadges.proxy }, status: t.status, capabilities: t.providerSummary, toggleSource: t.toggleSource, credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote, testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey, unavailableReasonCode: t.unavailableReasonCode, automaticSyncStopped: t.automaticSyncStopped, lastSuccessfulSync: t.lastSuccessfulSync }}
+            labels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, panelNames: t.panelNames, badges: { pending: t.sourceBadges.pending, advanced: t.sourceBadges.advanced, calendar: t.sourceBadges.calendar, proxy: t.sourceBadges.proxy }, status: t.status, capabilities: t.providerSummary, toggleSource: t.toggleSource, credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote, testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey, unavailableReasonCode: t.unavailableReasonCode, unavailableReasonCodeAria: t.unavailableReasonCodeAria, collectionPolicyStopped: t.collectionPolicyStopped, automaticSyncStopped: t.automaticSyncStopped, lastSuccessfulSync: t.lastSuccessfulSync }}
             provider={provider}
+            policy={{ labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById }}
             showSourceDetails
             sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
-            onSelectSource={() => undefined}
           /></div> : null
         })() : null}
       </div>
