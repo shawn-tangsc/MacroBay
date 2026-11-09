@@ -28,6 +28,7 @@ export function ModelServiceProtocolNotice({
       {/* 图标型动作统一 `IconButton`（`sm`=22，尺寸由组件闭集给，页面不写像素）。 */}
       <IconButton
         ariaLabelKey="modelService.protocolNoticeDismiss"
+        tooltipKey="modelService.protocolNoticeDismiss"
         icon={X}
         onSelect={onDismiss}
         resolveText={(key) => (key === 'modelService.protocolNoticeDismiss' ? labels.protocolNoticeDismiss : '')}
