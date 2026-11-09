@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { productText } from '../../shared/i18n/productText'
 import IntelligenceSourcesSettingsSection from './index'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { useIntelligenceTranslationSettings } from './useIntelligenceTranslationSettings'
@@ -50,6 +51,42 @@ function sourcesState(overrides: Record<string, unknown>) {
     savingFocusMarkets: false,
     ...overrides
   }
+}
+
+const zhText = productText['zh-CN'].settings.intelligenceSources
+
+/** 一个能画出来的最小来源页：一个 provider、一个源。 */
+function settingsViewOneProvider(): never {
+  return {
+    groups: [{
+      category: 'macro',
+      providers: [{
+        providerId: 'p1',
+        displayName: 'P1',
+        category: 'macro',
+        credential: 'none',
+        sources: [{
+          providerId: 'p1',
+          sourceId: 's1',
+          displayName: 'S1',
+          agents: ['crypto'],
+          panels: ['dashboard'],
+          visibility: 'visible',
+          collection: 'provider',
+          kind: 'feed',
+          capabilities: { runNow: 'none', testConnection: false },
+          readiness: 'live',
+          enabled: true
+        }]
+      }]
+    }]
+  } as never
+}
+
+function button(dom: HTMLElement, label: string): HTMLButtonElement {
+  const found = [...dom.querySelectorAll<HTMLButtonElement>('button')].find((each) => each.textContent === label)
+  if (!found) throw new Error(`button not found: ${label}`)
+  return found
 }
 
 beforeEach(() => {
@@ -105,6 +142,73 @@ describe('sources settings page states', () => {
     // The failure keeps an action: a dead end is not an error surface.
     await act(async () => (failure?.querySelector('.state-view__action') as HTMLButtonElement | null)?.click())
     expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the default coverage as values and saves a change through the existing write path', async () => {
+    // 缺陷（MI-10-R12）：写入链一直是通的，页面从来没画过这块——读者改不了看板带哪些资产。
+    const saveFocusMarkets = vi.fn(async () => true)
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({
+        focusMarketSettings: { enabledFocusMarkets: ['global-macro', 'digital-assets'], updatedAt: '' },
+        loading: false,
+        saveFocusMarkets,
+        settingsView: settingsViewOneProvider()
+      }) as never
+    )
+    const dom = await render()
+
+    // 默认值不动：两个药的**值**在页面上，且没有人替读者写过一次。
+    expect(dom.querySelector('.intelligence-focus-markets-section')?.textContent).toContain('全球宏观')
+    expect(dom.querySelector('.intelligence-focus-markets-section')?.textContent).toContain('数字资产')
+    expect(saveFocusMarkets).not.toHaveBeenCalled()
+
+    await act(async () => button(dom, '高级自定义').click())
+    const usEquities = [...dom.querySelectorAll<HTMLInputElement>('.intelligence-focus-market-tile input[type="checkbox"]')]
+      .find((input) => input.getAttribute('aria-label') === '美股')!
+    await act(async () => { usEquities.click(); await Promise.resolve() })
+
+    expect(saveFocusMarkets).toHaveBeenCalledWith(['global-macro', 'digital-assets', 'us-equities'])
+  })
+
+  it('keeps the reader\'s choice when the coverage write fails, and says so in place', async () => {
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({
+        focusMarketSettings: { enabledFocusMarkets: ['global-macro', 'digital-assets'], updatedAt: '' },
+        loading: false,
+        saveFocusMarkets: vi.fn(async () => false),
+        settingsView: settingsViewOneProvider()
+      }) as never
+    )
+    const dom = await render()
+    await act(async () => button(dom, '高级自定义').click())
+    const usEquities = [...dom.querySelectorAll<HTMLInputElement>('.intelligence-focus-market-tile input[type="checkbox"]')]
+      .find((input) => input.getAttribute('aria-label') === '美股')!
+    await act(async () => { usEquities.click(); await Promise.resolve() })
+
+    // 没存上：读者刚勾的那个还在，屏幕上多一句「这次没存上」——不退回默认、不假装成功。
+    expect(dom.querySelector('.intelligence-focus-market-chip-list')?.textContent).toContain('美股')
+    expect(dom.textContent).toContain(zhText.focusMarkets.saveFailed)
+  })
+
+  it('sends an empty choice so the service can fall back to the defaults', async () => {
+    const saveFocusMarkets = vi.fn(async () => true)
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({
+        focusMarketSettings: { enabledFocusMarkets: ['global-macro', 'digital-assets'], updatedAt: '' },
+        loading: false,
+        saveFocusMarkets,
+        settingsView: settingsViewOneProvider()
+      }) as never
+    )
+    const dom = await render()
+    await act(async () => button(dom, '高级自定义').click())
+    for (const name of ['全球宏观', '数字资产']) {
+      const input = [...dom.querySelectorAll<HTMLInputElement>('.intelligence-focus-market-tile input[type="checkbox"]')]
+        .find((each) => each.getAttribute('aria-label') === name)!
+      await act(async () => { input.click(); await Promise.resolve() })
+    }
+    // 空选择照原文发出去：归一成默认两个是服务端的事（见 intelligenceFocusSettings 的用例）。
+    expect(saveFocusMarkets).toHaveBeenLastCalledWith([])
   })
 
   it('draws the page once the read is done', async () => {

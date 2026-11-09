@@ -254,11 +254,11 @@ export const intelligenceSourcesText = {
   focusMarkets: {
     title: '默认覆盖范围',
     description: '每个信息源都有内置覆盖范围，系统会按默认规则工作。通常无需调整；只有需要强行改变采集覆盖时再自定义。',
-    defaultSummary: '当前来源',
     customize: '高级自定义',
     customizeDone: '完成',
     saving: '保存中…',
-    plannedHint: '待实现',
+    saveFailed: '这次没存上，请重试',
+    infoAria: '默认覆盖范围这一项的说明',
     markets: {
       'global-macro': '全球宏观',
       'digital-assets': '数字资产',
@@ -719,11 +719,11 @@ export const intelligenceSourcesText = {
     title: 'Default Coverage',
     description:
       'Each source has built-in coverage and works with its default rules. You usually do not need to change this; customize only when overriding collection scope.',
-    defaultSummary: 'Current source',
     customize: 'Advanced customize',
     customizeDone: 'Done',
     saving: 'Saving…',
-    plannedHint: 'Planned',
+    saveFailed: 'That did not save — try again',
+    infoAria: 'About the default coverage',
     markets: {
       'global-macro': 'Global Macro',
       'digital-assets': 'Digital Assets',

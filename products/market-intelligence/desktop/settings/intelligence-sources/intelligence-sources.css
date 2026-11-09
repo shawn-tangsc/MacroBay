@@ -663,6 +663,14 @@
   min-width: 0;
 }
 
+.intelligence-focus-market-save-failed {
+  display: block;
+  padding: 6px 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .intelligence-focus-market-chip {
   display: inline-flex;
   align-items: center;

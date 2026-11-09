@@ -331,8 +331,12 @@ export function useIntelligenceSourcesSettings(labels: {
     }))
   }, [state.detail, state.selectedSourceId])
 
+  /**
+   * 写「默认覆盖范围」，并把**这一处**的成败交回调用方：设置行的失败要就地显示（保留读者刚选的），
+   * 与页面级 `errorCode` 不是同一件事——后者只在首屏读失败时用。
+   */
   const saveFocusMarkets = useCallback(
-    async (enabledFocusMarkets: IntelligenceFocusMarket[]) => {
+    async (enabledFocusMarkets: IntelligenceFocusMarket[]): Promise<boolean> => {
       setState((current) => ({ ...current, savingFocusMarkets: true, errorCode: null }))
       try {
         const focusMarketSettings = await intelligenceSourcesClient.saveFocusSettings({ enabledFocusMarkets })
@@ -342,12 +346,14 @@ export function useIntelligenceSourcesSettings(labels: {
           savingFocusMarkets: false,
           notice: labels.saved
         }))
+        return true
       } catch {
         setState((current) => ({
           ...current,
           savingFocusMarkets: false,
           errorCode: labels.saveFailed
         }))
+        return false
       }
     },
     [labels.saved, labels.saveFailed]

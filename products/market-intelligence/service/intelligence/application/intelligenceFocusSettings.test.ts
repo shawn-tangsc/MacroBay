@@ -22,6 +22,12 @@ describe('intelligenceFocusSettings', () => {
     expect(settings.enabledFocusMarkets).toEqual(['digital-assets', 'global-macro'])
   })
 
+  it('falls back to the two defaults when the reader saves an empty scope', () => {
+    // 界面允许把 7 个市场全部取消；服务端归一成默认两个，而不是「一个都不采」。
+    expect(normalizeFocusMarketSettings({ enabledFocusMarkets: [] }).enabledFocusMarkets)
+      .toEqual(['global-macro', 'digital-assets'])
+  })
+
   it('persists focus settings independently', async () => {
     const store = createIntelligenceFocusSettingsStore(createInMemoryFocusSettingsStorage())
     const saved = await store.saveSettings({ enabledFocusMarkets: ['global-macro'] })
