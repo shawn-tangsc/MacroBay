@@ -173,8 +173,12 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
   // 内容只有两个来处：调用方拼好的节点，或由键解析出的句子（类型上两者互斥）。
   // 没有内容就不存在浮层：空框比没有框更糟，键名更糟。
   const hasContentSlot = props.content !== undefined
-  // 给了槽但这一帧是 `null`/`false`：那是调用方的条件渲染，不是「文案没写」的缺陷，也不画空框。
-  const contentPresent = hasContentSlot && props.content !== null && props.content !== false
+  // 给了槽但这一帧是空值（`null` / `false` / 空串）：那是调用方的条件渲染，不是「文案没写」的缺陷，
+  // 也不画空框。空串必须一起算：`''` 是合法 ReactNode，漏掉它就会渲染出一个空气泡。
+  const contentPresent = hasContentSlot
+    && props.content !== null
+    && props.content !== false
+    && props.content !== ''
   const resolved = hasContentSlot ? contentPresent : resolvedLines.length > 0
 
   const close = (): void => {

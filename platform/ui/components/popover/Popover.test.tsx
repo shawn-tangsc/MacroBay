@@ -523,14 +523,21 @@ describe('Popover', () => {
 
   it('treats an empty slot as nothing to say, not as missing copy', async () => {
     // 调用方按条件拼行，这一帧可能一个片段都没有：那时不画空框，也不当成「文案没写」的缺陷。
-    const host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => {
-      root!.render(<Popover content={null} trigger={buttonTrigger} />)
-    })
+    // `''` 也算空：它是合法 ReactNode，漏掉它就会渲染出一个空气泡。
+    for (const empty of [null, false, ''] as const) {
+      const host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      await act(async () => {
+        root!.render(<Popover content={empty} trigger={buttonTrigger} />)
+      })
 
-    expect(document.querySelector('[data-trigger]')).toBeNull()
-    expect(document.querySelector('[data-popover-content]')).toBeNull()
+      expect(document.querySelector('[data-trigger]'), String(empty)).toBeNull()
+      expect(document.querySelector('[data-popover-content]'), String(empty)).toBeNull()
+
+      await act(async () => root?.unmount())
+      root = undefined
+      document.body.replaceChildren()
+    }
   })
 })
