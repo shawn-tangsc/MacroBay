@@ -172,6 +172,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     eventBusRuntime: deps.eventBusRuntime,
     platformFetch,
     createAgentSession: deps.createAgentSession,
+    findAgentSessionByAutomationRef: deps.findAgentSessionByAutomationRef,
     sendAgentMessage: deps.sendAgentMessage,
     cancelAgentSession: deps.cancelAgentSession,
     appendAgentSessionMessages: deps.appendAgentSessionMessages,

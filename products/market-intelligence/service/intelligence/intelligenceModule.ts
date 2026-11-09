@@ -77,7 +77,7 @@ import { applyDailyBriefingSchedules } from './jobs/registerDailyBriefingJob'
 import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
-import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
+import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
 import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
@@ -213,6 +213,8 @@ export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
   /** Reconcile the automatic calendar job registry after a feed switch. */
   onCalendarEnabledChanged?: () => void | Promise<void>
   createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
+  /** 自动会话的幂等窄查（按 agentId + originRef）：同一期只复用一条会话。 */
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
   sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
   cancelAgentSession?: (sessionId: string) => Promise<void> | void
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
@@ -722,7 +724,21 @@ export function getIntelligenceModule(
     // that need no credential; a fresh install should not require toggling them on before the cards
     // can do anything. An existing profile wins, so a reader's "off" is never overridden.
     const ensureDefaultSources = seedDefaultEnabledSources(profileStore).catch(() => undefined)
-    const startupReady = ensureDefaultSources
+    // 历史日报编辑会话的身份归位：只改身份字段（消息与内容不动），幂等，失败不阻断启动但要留痕。
+    const earlierBriefingSessionMigration = ensureDefaultSources
+      .then(() => claimExistingBriefingSessions({
+        links: dailyBriefSessionLinks,
+        agentId: 'daily-brief-editor',
+        ...(hooks.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
+        ...(hooks.updateAgentSession ? { updateAgentSession: hooks.updateAgentSession } : {})
+      }))
+      .then((result) => {
+        if (result.updated > 0) hooks.log?.('info', 'daily-brief-session-migration', { updated: result.updated, skipped: result.skipped })
+      })
+      .catch((error: unknown) => {
+        hooks.log?.('warn', 'daily-brief-session-migration-failed', { message: error instanceof Error ? error.message : String(error) })
+      })
+    const startupReady = earlierBriefingSessionMigration
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
       .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
@@ -776,6 +792,7 @@ export function getIntelligenceModule(
       ? createDailyBriefEditorSessionPort({
         links: dailyBriefSessionLinks,
         createSession: hooks.createAgentSession,
+        ...(hooks.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
         send: hooks.sendAgentMessage,
         cancelAgentSession: hooks.cancelAgentSession,
       })

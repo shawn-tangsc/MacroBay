@@ -29,7 +29,7 @@ import { DEFAULT_SYSTEM_WORKSPACE_PATH, type AgentWorkspaceEntity } from '../sch
 import type { AgentSessionWorkspaceSource, CreateAgentWorkspaceDto, UpdateAgentWorkspaceDto } from '../schemas/workspaceSchemas'
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
 import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
-import { normalizeSessionOrigin, normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
+import { normalizeSessionOrigin, normalizeSessionOriginGroup, normalizeSessionOriginRef } from '../schemas/sessionSchemas'
 import { isAbandonedPendingMessage } from '../schemas/pendingTurnOwnership'
 import {
   normalizeMessagePageLimit,
@@ -284,7 +284,13 @@ export function updateAgentSession(
     changed = true
     return {
       ...session,
-      ...patch,
+      ...(patch.name === undefined ? {} : { name: patch.name }),
+      ...(patch.description === undefined ? {} : { description: patch.description }),
+      ...(patch.agentId === undefined ? {} : { agentId: patch.agentId }),
+      // 身份字段走与创建时同一套规范化；缺省不动，绝不因为一次改名把来源抹掉。
+      ...(patch.origin === undefined ? {} : { origin: normalizeSessionOrigin(patch.origin) }),
+      ...(patch.originGroup === undefined ? {} : { originGroup: normalizeSessionOriginGroup(patch.originGroup) }),
+      ...(patch.originRef === undefined ? {} : { originRef: normalizeSessionOriginRef(patch.originRef) }),
       updatedAt: now
     }
   })

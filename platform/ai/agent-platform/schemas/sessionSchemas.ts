@@ -204,6 +204,13 @@ export type UpdateAgentSessionDto = {
   name?: string
   description?: string
   agentId?: string | null
+  /**
+   * 只用于把**已有会话归位到它真正的来源**（历史数据的身份修正）：内容、名字、消息一条不动。
+   * 缺省 = 不改；三个字段按平台既有的规范化函数读入，和创建时同一套口径。
+   */
+  origin?: AgentSessionOrigin
+  originGroup?: string
+  originRef?: string
 }
 
 export type AgentSessionMessagesListQuery = {
