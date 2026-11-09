@@ -166,6 +166,49 @@ describe('AgentSidePanel', () => {
     expect(markup).not.toContain('agent-auto-sessions')
   })
 
+
+  it('hides superseded automation sessions by field, not by their name', () => {
+    const renderPanel = (sessionsToRender: AgentSessionEntity[]) => renderToStaticMarkup(
+      <AgentTextProvider language="zh-CN">
+        <AgentSidePanel
+          state={createAgentStoreState({
+            agents,
+            sessions: sessionsToRender,
+            workspaces: [workspace],
+            activeAgentId: 'agent-1',
+            activeSessionId: 'session-1'
+          })}
+          runtimeStateBySessionId={{}}
+          channelRuntimeSnapshot={{ channels: [] }}
+          sessionPanelPosition="left"
+          onUpdateSessionPanelPosition={() => undefined}
+          onCreateAgent={() => undefined}
+          onEditAgent={() => undefined}
+          onStateChange={(updater) => updater({} as never)}
+        />
+      </AgentTextProvider>
+    )
+
+    // 同一批会话，只改 `originState`：把状态翻过来，哪一行出现就跟着换——证明判据是字段。
+    const currentRun = automatedSession('run-current', 'agent-1', todayAt, '本期正式身份')
+    const supersededRun = automatedSession('run-old', 'agent-1', todayAt, '历史副本')
+    const first = renderPanel([
+      session('session-1', 'agent-1', 'Research chat'),
+      { ...currentRun, originState: 'current' },
+      { ...supersededRun, originState: 'superseded' }
+    ])
+    expect(first).toContain('本期正式身份')
+    expect(first).not.toContain('历史副本')
+
+    const flipped = renderPanel([
+      session('session-1', 'agent-1', 'Research chat'),
+      { ...currentRun, originState: 'superseded' },
+      { ...supersededRun, originState: 'current' }
+    ])
+    expect(flipped).not.toContain('本期正式身份')
+    expect(flipped).toContain('历史副本')
+  })
+
   it('says the reader has not started one, not that there are no sessions, when only automation exists', () => {
     const markup = renderToStaticMarkup(
       <AgentTextProvider language="zh-CN">
@@ -232,7 +275,7 @@ function agent(id: string, name: string): AgentEntity {
   }
 }
 
-function automatedSession(id: string, agentId: string, createdAtIso: string, name: string): AgentSessionEntity {
+function automatedSession(id: string, agentId: string, createdAtIso: string, name: string, originState?: 'current' | 'superseded'): AgentSessionEntity {
   return {
     id,
     agentId,
@@ -242,6 +285,7 @@ function automatedSession(id: string, agentId: string, createdAtIso: string, nam
     orderKey: id,
     origin: 'automation',
     originGroup: 'market-analysis',
+    ...(originState === undefined ? {} : { originState }),
     createdAt: createdAtIso,
     updatedAt: createdAtIso
   }

@@ -3,7 +3,7 @@ import { DEFAULT_PERIOD_ID } from '../../../contracts/dailyBriefing'
 import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
 
-type FakeSession = { id: string; agentId: string; name: string; createdAt?: string; origin?: string; originGroup?: string; originRef?: string; messages?: unknown[] }
+type FakeSession = { id: string; agentId: string; name: string; createdAt?: string; origin?: string; originGroup?: string; originRef?: string; originState?: 'current' | 'superseded'; messages?: unknown[] }
 
 const deps = () => {
   const sessions = new Map<string, FakeSession>()
@@ -118,7 +118,7 @@ describe('daily brief editor session port', () => {
 })
 
 describe('claiming the briefing sessions that were created without an identity', () => {
-  it('marks them as automation, keeps one canonical per edition, and changes no content', async () => {
+  it('marks them as automation, keeps one canonical per edition and language, and changes no content', async () => {
     const d = deps()
     const readerSession = (id: string, name: string, createdAt = '2026-11-09T00:00:00.000Z') => ({
       id,
@@ -175,6 +175,9 @@ describe('claiming the briefing sessions that were created without an identity',
     })
 
     expect(result.updated).toBe(5)
+    const canonicalId = [...d.sessions.entries()]
+      .find(([, session]) => session.originRef === `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN`)?.[0]
+    expect(canonicalId, '正式身份必须是最近一次生成（换成最早/任意一次即为身份冲突）').toBe('s-new-2')
     // 1) 同一期只剩一条正式身份，取**最新**那次生成（读者现在打开的就是它的内容）。
     const edition23 = `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN`
     expect(d.sessions.get('s-new-2')?.originRef).toBe(edition23)
@@ -187,12 +190,19 @@ describe('claiming the briefing sessions that were created without an identity',
       expect(d.sessions.get(id)?.origin).toBe('automation')
       expect(d.sessions.get(id)?.originGroup).toBe('daily-briefing')
     }
+    // 可见性：正式身份 current，历史副本 superseded；同一期的中英各有一条 current，**不许并成一条**。
+    expect(d.sessions.get('s-new-2')?.originState).toBe('current')
+    expect(d.sessions.get('s-en')?.originState).toBe('current')
+    for (const id of ['s-old-1', 's-mid-3']) {
+      expect(d.sessions.get(id)?.originState).toBe('superseded')
+    }
+    expect([...d.sessions.values()].filter(session => session.originState === 'current' && session.name.includes('11-09'))).toHaveLength(2)
     // 2) 内容逐字不变（名字、正文、消息、时间戳都在快照里）。
     for (const [id, snapshot] of before) {
       const current = JSON.parse(JSON.stringify(d.sessions.get(id)))
       const expected = JSON.parse(snapshot)
       // 只允许身份字段不同。
-      for (const key of ['origin', 'originGroup', 'originRef']) delete current[key]
+      for (const key of ['origin', 'originGroup', 'originRef', 'originState']) delete current[key]
       expect(current).toEqual(expected)
     }
     // 3) 行数不变；消息表没动（fake 里的 messages 属于会话内容，上面已逐字比对）。
@@ -225,12 +235,8 @@ describe('claiming the briefing sessions that were created without an identity',
       expect(session.originRef ?? '').not.toMatch(/#history:.*#history:/u)
     }
 
-    // 断言 6（反向）：正式身份必须是**最近**一次生成。换成「最早」或「任意一次」都必须红。
-    expect(d.sessions.get('s-new-2')?.originRef).toBe(edition23)
+    // 断言 6（反向）：正式身份必须是**最近**一次生成（断言在迁移后第一处，带身份冲突消息）。
     expect(d.sessions.get('s-old-1')?.originRef).not.toBe(edition23)
-    const canonicalId = [...d.sessions.entries()]
-      .find(([, session]) => session.originRef === edition23)?.[0]
-    expect(canonicalId).toBe('s-new-2')
 
     // 断言 5（可见性看字段不看字符串）：把历史身份的前缀换成任意别的值，读者列表结果不变——
     // 因为「不进读者列表」是由 `origin = 'automation'` 这个真实字段决定的。

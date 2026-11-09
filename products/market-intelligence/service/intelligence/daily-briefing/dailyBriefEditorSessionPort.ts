@@ -1,4 +1,5 @@
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
+import { normalizeSessionOriginState } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { DailyBriefSessionLinkStore, DailyBriefSessionState } from './dailyBriefSessionLinks'
 
@@ -105,7 +106,7 @@ export function createDailyBriefEditorSessionPort(deps: Readonly<{
 export async function claimExistingBriefingSessions(deps: Readonly<{
   links: DailyBriefSessionLinkStore
   agentId: string
-  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<Pick<AgentSessionEntity, 'id'> | null>
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<Pick<AgentSessionEntity, 'id' | 'originState'> | null>
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<unknown>
 }>): Promise<{ updated: number; skipped: number }> {
   if (!deps.findAgentSessionByAutomationRef || !deps.updateAgentSession) return { updated: 0, skipped: 0 }
@@ -137,14 +138,26 @@ export async function claimExistingBriefingSessions(deps: Readonly<{
       const desired = wantsCanonical && (canonicalOwner === null || canonicalOwner?.id === link.sessionId)
         ? originRef
         : `${originRef}#history:${link.sessionId}`
+      const wantedState: 'current' | 'superseded' = desired === originRef ? 'current' : 'superseded'
       const found = desired === originRef
         ? canonicalOwner
         : await deps.findAgentSessionByAutomationRef(deps.agentId, desired)
       if (found?.id === link.sessionId) {
+        // 身份已在位：只有可见性还没标对时才补一把（保证第二次运行 updated = 0）。
+        if (normalizeSessionOriginState(found.originState) !== wantedState) {
+          await deps.updateAgentSession(link.sessionId, { originState: wantedState })
+          updated += 1
+          continue
+        }
         skipped += 1
         continue
       }
-      await deps.updateAgentSession(link.sessionId, { origin: 'automation', originGroup: 'daily-briefing', originRef: desired })
+      await deps.updateAgentSession(link.sessionId, {
+        origin: 'automation',
+        originGroup: 'daily-briefing',
+        originRef: desired,
+        originState: wantedState
+      })
       updated += 1
     }
   }
