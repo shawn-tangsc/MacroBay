@@ -57,6 +57,8 @@ function state(rows: readonly FlowChartRow[]) {
     flowHistory: { state: 'available' as const, rows },
     etf: {
       state: 'available' as const,
+      // 快照的校验时刻：`DashboardEtfFlow` 要求它在，缺了整张卡的类型都不成立。
+      verifiedAt: '2026-11-02T07:00:00.000Z',
       coverage: [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }],
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$297.4M', observedAt: '2026-11-02T07:00:00.000Z', cumulative: [{ windowDays: 5, coveredDays: 5, netFlowUsd: '+$1B', complete: true }, { windowDays: 20, coveredDays: 20, netFlowUsd: '+$2B', complete: true }], rows: [] },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '+$176.3M', observedAt: '2026-11-02T07:00:00.000Z', cumulative: [{ windowDays: 5, coveredDays: 5, netFlowUsd: '+$500M', complete: true }, { windowDays: 20, coveredDays: 20, netFlowUsd: '+$900M', complete: true }], rows: [] }
@@ -71,8 +73,8 @@ function mountWithFlow(flowHistory: unknown, rows: readonly FlowChartRow[]): HTM
   document.body.append(container)
   root = createRoot(container)
   const value = { ...state(rows), flowHistory }
-  act(() => root?.render(createElement(ShellLanguageProvider, { language: 'zh-CN' },
-    createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai' },
+  act(() => root?.render(scopedLang(
+    scopedTz(
       createElement(CapitalConditionsPanel, { text: cardText(), state: value as never, onRefresh: () => undefined })))))
   return container
 }
@@ -81,8 +83,8 @@ function mount(text = cardText(), rows: readonly FlowChartRow[] = plainRows) {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  act(() => root?.render(createElement(ShellLanguageProvider, { language: 'zh-CN' },
-    createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai' },
+  act(() => root?.render(scopedLang(
+    scopedTz(
       createElement(CapitalConditionsPanel, { text, state: state(rows), onRefresh: () => undefined })))))
   return container
 }
@@ -93,9 +95,15 @@ function clickLikeMouse(element: HTMLElement): void {
   element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
 }
 
+/** 语言与时区都是必填 props；包一层，调用点只写 scopedLang(scopedTz(child))。 */
+const scopedLang = (children: React.ReactElement): React.ReactElement =>
+  createElement(ShellLanguageProvider, { language: 'zh-CN', children })
+const scopedTz = (children: React.ReactElement): React.ReactElement =>
+  createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children })
+
 describe('bar-top labels', () => {
   it('labels three readings and nothing else', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/data-flow-label="/g) ?? [])).toHaveLength(3)
     expect(markup).toContain('+$402.6M')
@@ -103,13 +111,13 @@ describe('bar-top labels', () => {
   })
 
   it('labels one number when the last day is also the largest inflow', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(overlappingRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/data-flow-label="/g) ?? [])).toHaveLength(2)
   })
 
   it('speaks 亿 while the screen keeps M', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect(markup).toContain('aria-label="净流入 4.026 亿美元，全部美元稳定币"')
     expect(markup).not.toContain('402.6 亿美元')
@@ -142,7 +150,7 @@ describe('the stablecoin row name', () => {
 
 describe('accessible names', () => {
   it('gives each label a role that can carry a name', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/role="img"/g) ?? [])).toHaveLength(3)
     expect(markup).toContain('role="img" aria-label="净流入 4.026 亿美元，全部美元稳定币"')
@@ -177,7 +185,7 @@ describe('the labels on the user-reported card', () => {
   ]
 
   it('labels three readings, and the repeated number is the axis, not a second label', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(reported) as never, onRefresh: () => undefined })))
     const labels = [...markup.matchAll(/data-flow-label="\d+"[^>]*>([^<]+)</g)].map((match) => match[1])
     expect(labels).toHaveLength(3)
@@ -191,7 +199,7 @@ describe('the labels on the user-reported card', () => {
 
 describe('labels versus the date band', () => {
   it('labels three readings and nothing else on the reported window', () => {
-    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    const markup = renderToStaticMarkup(scopedLang(
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect((markup.match(/data-flow-label="/g) ?? [])).toHaveLength(3)
   })
