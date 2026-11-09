@@ -21,7 +21,8 @@ import './collapsibleGroup.css'
  * - **默认收起、展开态不持久化**：不进 localStorage、不进 URL——这是视图状态，不是读者设置；
  * - **展开区自己滚**：41 条实数据时头行不许滚走，滚动条只出现在展开区里（`maxBodyHeight` 是那个上限）。
  *
- * 头行：标题 12/500 截断 + 右侧「共 N 条」11/400/muted/tabular-nums + 最右 `ChevronDown` 14。
+ * 头行：标题**分组档** 11.5/600/muted-strong（`ui-rules` §2：可折叠头与分组标题同类）+
+ * 右侧「共 N 条」11/400/muted/tabular-nums + 最右 `ChevronDown` 14。
  * 展开项：标题 12/500 单行省略 + 时间右对齐 11/400/muted/tabular-nums + `StatusPill`；行高 44/60。
  */
 

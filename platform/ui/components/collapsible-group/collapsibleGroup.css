@@ -21,15 +21,19 @@
   min-width: 0;
 }
 
-/* 头行标题：12 / 500，截断。 */
+/*
+ * 头行标题：**分组档** 11.5 / 1.6 / 600 / `--muted-strong`（`docs/ui-rules.md` §2 第 41 行）。
+ * 可折叠头与「自动会话」的分组标题是同一类东西，必须同档；`--font-body` / 500 只留给列表行标题。
+ * 12/500 让同一个列表里出现两种可折叠头，壳与页面就又成两套。
+ */
 .collapsible-group__title {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--text);
-  font-size: var(--font-body);
-  font-weight: 500;
-  line-height: var(--line-body);
+  color: var(--muted-strong);
+  font-size: var(--font-section);
+  font-weight: 600;
+  line-height: var(--line-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

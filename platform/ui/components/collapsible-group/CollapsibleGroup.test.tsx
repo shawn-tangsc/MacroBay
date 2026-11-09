@@ -117,6 +117,26 @@ describe('CollapsibleGroup', () => {
     expect(css).toMatch(/\.collapsible-group__body\s*\{[^}]*overflow:\s*auto/u)
   })
 
+  it('paints the header with the group tier, and row titles one step lighter', () => {
+    // 壳头行与分组标题同类：11.5 / 1.6 / 600 / muted-strong；列表行标题 12 / 1.5 / 500。
+    // 两档必须差一档，否则同一列表里出现两种「可折叠头」（界面设计 2026-11-09 裁定）。
+    const css = readFileSync(join(__dirname, 'collapsibleGroup.css'), 'utf8')
+    const rule = (selector: string): string => {
+      const start = css.indexOf(`${selector} {`)
+      return css.slice(start, css.indexOf('}', start))
+    }
+    const head = rule('.collapsible-group__title')
+    expect(head).toContain('font-size: var(--font-section)')
+    expect(head).toContain('font-weight: 600')
+    expect(head).toContain('line-height: var(--line-section)')
+    expect(head).toContain('color: var(--muted-strong)')
+
+    const row = rule('.collapsible-group__row-title')
+    expect(row).toContain('font-size: var(--font-body)')
+    expect(row).toContain('font-weight: 500')
+    expect(row).toContain('line-height: var(--line-body)')
+  })
+
   it('renders a row as a button only when the row has an action', async () => {
     const onSelect = vi.fn()
     const host = await mount({
