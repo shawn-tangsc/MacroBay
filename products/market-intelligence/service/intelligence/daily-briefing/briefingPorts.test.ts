@@ -42,7 +42,7 @@ describe('the briefing notification port leaves a trace', () => {
 
   it('says nothing when the platform accepted the notice', async () => {
     const log = vi.fn()
-    const accepted = { kind: 'accepted' as const, recordId: 'r1', levels: [] }
+    const accepted = { kind: 'accepted' as const, recordId: 'r1', levels: [], suppressedLevels: [] }
     const ports = briefingNotificationPorts({ log, submitNotification: vi.fn(async () => accepted) })
 
     await expect(ports.noticeSubmit!({ eventTypeId: 'market-intelligence.briefing.ready' } as never)).resolves.toBe(accepted)
