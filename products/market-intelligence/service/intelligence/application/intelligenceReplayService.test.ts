@@ -64,15 +64,18 @@ describe('intelligenceReplayService', () => {
   })
 
   it('refuses the retired DeFiLlama stablecoin replay path before reading or queuing generic work', async () => {
+    // 只为断言「一次都没被调用」：按真实签名标注，别让 `as never` 把属性访问变成 never。
     const pipeline = {
       listRawRecordSummaries: vi.fn(() => []),
       listItems: vi.fn(() => []),
       assessChangedItems: vi.fn(),
       refreshSentimentAggregates: vi.fn()
-    } as never
+    }
     const enqueueJob = vi.fn(async () => undefined)
-    const service = createIntelligenceReplayService({ pipeline, enqueueJob })
-
+    const service = createIntelligenceReplayService({
+      pipeline: pipeline as unknown as Parameters<typeof createIntelligenceReplayService>[0]['pipeline'],
+      enqueueJob
+    })
     await expect(service.queueReplayWindow({ sourceId: 'defillama-stablecoins' })).resolves.toMatchObject({ queued: false })
     await expect(service.replayWindow({ sourceId: 'defillama-stablecoins' })).resolves.toMatchObject({ replayedCount: 0, queuedJobs: [] })
 

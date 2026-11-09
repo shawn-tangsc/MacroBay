@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { DashboardSourceConnectionResult } from '../../../contracts/macro/economicCalendarQueryContracts'
+import type { DashboardSourceConnectionService } from '../application/dashboardSourceConnectionService'
 import { registerDashboardSourceConnectionIpc } from './registerDashboardSourceConnectionIpc'
+
+/** 这一处只用到 `testConnection`；结果按真实契约标注，不把类型放宽。 */
+function serviceReturning(result: unknown): DashboardSourceConnectionService {
+  return { testConnection: vi.fn(async () => result as DashboardSourceConnectionResult) }
+}
 
 describe('registerDashboardSourceConnectionIpc', () => {
   it('registers one Dashboard-only connection IPC and rebuilds an exact result', async () => {
     const handlers = new Map<string, (payload: unknown) => unknown>()
-    const service = { testConnection: vi.fn(async () => ({ state: 'succeeded' })) }
+    const service = serviceReturning({ state: 'succeeded' })
     registerDashboardSourceConnectionIpc((_productId, method, handler) => handlers.set(method, handler), service)
 
     await expect(handlers.get('intelligence.dashboardSourceConnection.test')?.({ sourceId: 'binance-futures-positioning' })).resolves.toEqual({ state: 'succeeded' })
@@ -15,7 +22,7 @@ describe('registerDashboardSourceConnectionIpc', () => {
 
   it('allows only the exact fixed DeFiLlama probe input', async () => {
     const handlers = new Map<string, (payload: unknown) => unknown>()
-    const service = { testConnection: vi.fn(async () => ({ state: 'succeeded' })) }
+    const service = serviceReturning({ state: 'succeeded' })
     registerDashboardSourceConnectionIpc((_productId, method, handler) => handlers.set(method, handler), service)
 
     await expect(handlers.get('intelligence.dashboardSourceConnection.test')?.({ sourceId: 'defillama-stablecoins' })).resolves.toEqual({ state: 'succeeded' })
@@ -25,7 +32,7 @@ describe('registerDashboardSourceConnectionIpc', () => {
 
   it('rejects a non-plain input before calling the Dashboard connection service', async () => {
     const handlers = new Map<string, (payload: unknown) => unknown>()
-    const service = { testConnection: vi.fn(async () => ({ state: 'succeeded' })) }
+    const service = serviceReturning({ state: 'succeeded' })
     registerDashboardSourceConnectionIpc((_productId, method, handler) => handlers.set(method, handler), service)
     const payload = Object.assign(Object.create({ inherited: 'foreign' }), { sourceId: 'alternative-fear-greed' })
 
@@ -39,7 +46,7 @@ describe('registerDashboardSourceConnectionIpc', () => {
     new Proxy({}, { ownKeys() { throw new Error('hostile') } })
   ])('fails closed for hostile service results', async (result) => {
     const handlers = new Map<string, (payload: unknown) => unknown>()
-    const service = { testConnection: vi.fn(async () => result) }
+    const service = serviceReturning(result)
     registerDashboardSourceConnectionIpc((_productId, method, handler) => handlers.set(method, handler), service)
 
     await expect(handlers.get('intelligence.dashboardSourceConnection.test')?.({ sourceId: 'alternative-fear-greed' })).resolves.toEqual({
