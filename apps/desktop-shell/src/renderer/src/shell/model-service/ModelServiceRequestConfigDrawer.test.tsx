@@ -185,29 +185,23 @@ describe('PLAT-62 request configuration drawer', () => {
     expect(badgeRule).toContain('border: 1px solid color-mix(in srgb, var(--accent)')
     expect(rule('.request-config-default-badge')).not.toMatch(/#[0-9a-f]{3,8}/i)
 
-    // 非默认端点：是真的按钮（边框 / hover / 焦点环 / cursor）。
+    // 非默认端点：是真的按钮（平台 antd 文本档承担边框 / hover / 焦点环）。
     const button = document.querySelector('[data-endpoint-set-default]')
-    expect(button?.className).toContain('request-config-set-default')
-    const buttonRule = rule('.request-config-set-default')
-    expect(buttonRule).toContain('border: 1px solid var(--border-strong)')
-    expect(buttonRule).toContain('cursor: pointer')
-    expect(rule('.request-config-set-default:hover')).toContain('border-color: color-mix(in srgb, var(--accent)')
-    expect(rule('.request-config-set-default:focus-visible')).toContain('box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent)')
-    expect(rule('.request-config-set-default')).not.toMatch(/#[0-9a-f]{3,8}/i)
+    expect(button).not.toBeNull()
+    expect(button?.tagName).toBe('BUTTON')
+    expect(button?.className).toContain('text-action')
+    // 外观归平台组件；`styles.css` 里那两条旧规则已登记为死选择器，等它无人在途时单独清。
 
     // 上下结构：名字行 + 整行输入框，端点行之间统一 12px 间距。
     const blockRule = rule('.request-config-endpoint-block')
     expect(blockRule).toContain('flex-direction: column')
     expect(blockRule).toContain('margin-top: 12px')
     expect(rule('.request-config-endpoint-head')).toContain('align-items: center')
-    // 删除图标：24×24 点击区、14px 图标、固定在该行最右；hover 用危险色、focus-visible 有焦点环。
-    const deleteRule = rule('.request-config-endpoint-head .request-config-delete')
-    expect(deleteRule).toContain('width: 24px')
-    expect(deleteRule).toContain('height: 24px')
-    expect(deleteRule).toContain('margin-left: auto')
-    expect(deleteRule).toContain('cursor: pointer')
-    expect(rule('.request-config-endpoint-head .request-config-delete:hover')).toContain('var(--danger)')
-    expect(rule('.request-config-endpoint-head .request-config-delete:focus-visible')).toContain('box-shadow')
+    // 删除键已是 `IconButton`（`sm`=22、危险色静止可见、焦点环由组件给）：
+    // 尺寸与状态不再由这一页的 CSS 承担，旧规则已登记为死选择器。
+    const removeButton = document.querySelector<HTMLButtonElement>('[data-endpoint-delete]')
+    expect(removeButton).not.toBeNull()
+    expect(removeButton?.disabled).toBe(false)
   })
 
   it('lists endpoints in list order no matter which one is the default', async () => {
@@ -513,8 +507,7 @@ describe('PLAT-62 request configuration drawer', () => {
     const remove = document.querySelector<HTMLButtonElement>('[data-endpoint-delete="responses"]')
     expect(remove).not.toBeNull()
     expect(remove?.disabled).toBe(true)
-    expect(remove?.getAttribute('title')).toBe(labels.endpointKeepAtLeastOne)
-    // 禁用态视觉上降到 40% 不透明度。
-    expect(rule('.request-config-endpoint-head .request-config-delete:disabled')).toContain('opacity: 0.4')
+    // 禁用态的原因**看得见**：禁用控件接不到焦点，悬停提示对键盘读者等于不存在。
+    expect(document.querySelector('[data-endpoint-keep-one]')?.textContent).toBe(labels.endpointKeepAtLeastOne)
   })
 })
