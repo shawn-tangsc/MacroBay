@@ -189,7 +189,7 @@ describe('settings registry self-checks (G1–G9)', () => {
     expect(enabled.labelText?.({})).toBe('')
   })
 
-  it('G9: a template must match its instance dimension', () => {
+  it('G1: a template must match its instance dimension', () => {
     const wrongTemplate = { ...PUSH_THRESHOLD, key: 'setting:sources.foo@<feedId>', keyedBy: 'sourceId' as const }
     expect(validateSettingRegistry(withRow(wrongTemplate))).toContain('template-key-mismatch')
     const feedTemplate = { ...PUSH_THRESHOLD, key: 'setting:calendar-feeds.enabled@<feedId>', keyedBy: 'feedId' as const }
