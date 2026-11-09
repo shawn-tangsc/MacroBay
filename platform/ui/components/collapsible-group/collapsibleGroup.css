@@ -1,0 +1,123 @@
+/*
+ * 可折叠分组：头行与箭头的唯一来源。几何全部用 token 与间距主档（12 / 8 / 4），
+ * 字号走 `--font-body` / `--font-meta`，行高走 `--line-body` / `--line-meta`。
+ */
+.collapsible-group .ant-collapse-header {
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px !important;
+}
+
+.collapsible-group .ant-collapse-header-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.collapsible-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* 头行标题：12 / 500，截断。 */
+.collapsible-group__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-body);
+  font-weight: 500;
+  line-height: var(--line-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 头行计数：11 / 400 / muted / 等宽数字，靠右。 */
+.collapsible-group__meta {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-meta);
+  white-space: nowrap;
+}
+
+/* 箭头在最右：antd 的展开图标容器默认带内距，这里只留 8 的间距。 */
+.collapsible-group .ant-collapse-expand-icon {
+  padding: 0 !important;
+  margin-left: 8px;
+}
+
+.collapsible-group__chevron {
+  display: block;
+  transition: transform 160ms ease;
+}
+
+.collapsible-group__chevron[data-open='true'] {
+  transform: rotate(180deg);
+}
+
+/* 展开区：内容内距归零，缩进由行自己给；滚的是这一层，头行不动。 */
+.collapsible-group .ant-collapse-content-box {
+  padding: 0 !important;
+}
+
+.collapsible-group__body {
+  overflow: auto;
+}
+
+/* 展开项行：44 单行 / 60 两行（12 + 18×行数 + 12），左侧缩进 12。 */
+.collapsible-group__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.collapsible-group__row--action {
+  cursor: pointer;
+}
+
+/* 展开项标题：12 / 500，单行省略。 */
+.collapsible-group__row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-body);
+  font-weight: 500;
+  line-height: var(--line-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 展开项时间：11 / 400 / muted / 等宽数字，右对齐；先压它（shrink 4），标题最后才截。 */
+.collapsible-group__row-meta {
+  flex: 0 4 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-meta);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collapsible-group .ant-collapse-header:focus-visible,
+.collapsible-group__row--action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
