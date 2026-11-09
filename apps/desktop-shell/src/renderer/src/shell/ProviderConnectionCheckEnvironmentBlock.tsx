@@ -69,9 +69,14 @@ export function ProviderConnectionCheckEnvironmentBlock({
         <span>{labels.targetHost}</span>
         <span>{environment.targetHost || '—'}</span>
       </div>
+      {/*
+        「链接样式的展开开关」就是行内文字动作的定义（界面设计 2026-11-09）：用平台的 `.text-action`
+        拿统一的交互色、下划线与焦点环，不再自绘一套。`aria-expanded` 仍由这里给——展开态是这一步的
+        语义，`.text-action` 不是组件，不会替我们输出。
+      */}
       <button
         type="button"
-        className="connection-check-env-diagnosis"
+        className="connection-check-env-diagnosis text-action"
         data-env-diagnosis
         aria-expanded={diagnosisOpen}
         onClick={() => setDiagnosisOpen((current) => !current)}>
