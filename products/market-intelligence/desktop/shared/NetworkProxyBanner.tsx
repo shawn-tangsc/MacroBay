@@ -21,7 +21,7 @@ export function NetworkProxyBanner({ tone = 'requires', configured = false, onOp
   tone?: 'requires' | 'failed'
   /**
    * 读者已经配好了自定义代理。此时「去配一个代理」不再是题目：失败档改成「配好了但这次没连上」，
-   * 不再让他去打开 VPN（`MI-11-R196`）。未配置时行为与原来一致。
+   * 不再让他去打开本地代理（`MI-11-R196`）。未配置时行为与原来一致。
    */
   configured?: boolean
   onOpenProxySettings: () => void

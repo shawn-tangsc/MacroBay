@@ -131,7 +131,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
   const resolveText = useProductTextKey()
-  // 读者已经配好自定义代理时，不再把「需要连接 VPN」当成他还没做的事（MI-11-R196）。
+  // 读者已经配好自定义代理时，不再把「需要连接 本地代理」当成他还没做的事（MI-11-R196）。
   const proxyConfigured = useProxyConfigured()
   // 「上次成功同步」是读者可见的日期：走统一格式化（跟读者时区），不自己切 ISO 字符串。
   const timeZone = useShellTimeZone()

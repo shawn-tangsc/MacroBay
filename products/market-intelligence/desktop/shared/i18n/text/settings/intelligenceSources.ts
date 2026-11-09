@@ -204,8 +204,9 @@ export const intelligenceSourcesText = {
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
   proxyNotice: {
     title: '这个来源要走本地代理才能连',
-    failedTitle: '连接失败：请先打开 VPN / 本地代理，再回来重试。',
-    // 已配好代理却仍连不上：不让他去「打开 VPN」，而是查地址/端口/代理是否在跑。
+    failedTitle: '连接失败：请先打开本地代理，再回来重试。',
+    // 读者配的是代理，不是 本地代理：整页只写「本地代理」（已配好却仍连不上时不让他去「打开代理」，
+    // 而是查地址/端口/代理是否在跑）。
     configuredFailedTitle: '代理没通：这次没连上',
     configuredFailedBody: '检查代理地址与端口是否正确、代理程序是否正在运行，然后回来重试。',
     body: '去「设置 → 基础设置 → 代理模式」选「自定义代理」，填入本地地址（例如 http://127.0.0.1:7888），保存后回来重试。',
@@ -658,7 +659,7 @@ export const intelligenceSourcesText = {
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
   proxyNotice: {
     title: 'This source needs a local proxy to connect',
-    failedTitle: 'Connection failed: turn on your VPN / local proxy, then try again.',
+    failedTitle: 'Connection failed: turn on your local proxy, then try again.',
     configuredFailedTitle: 'The proxy is not reachable: this attempt did not connect',
     configuredFailedBody: 'Check the proxy address and port, and that the proxy program is running, then try again.',
     body: 'Set “Proxy mode” to “Custom proxy” under Settings → Basic settings and enter your local address (for example http://127.0.0.1:7888), then try again.',

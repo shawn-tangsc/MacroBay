@@ -144,7 +144,7 @@ describe('ProviderDetail proxy notice', () => {
     await act(async () => button(settingsText.testConnection).click())
     await flush()
 
-    // The standing requirement stays, but a rejected key never becomes a VPN verdict.
+    // The standing requirement stays, but a rejected key never becomes a 本地代理 verdict.
     expect(document.body.querySelector('[data-network-proxy-banner]')?.getAttribute('data-tone')).toBe('requires')
     expect(document.body.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
   })
@@ -201,7 +201,7 @@ describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', 
     expect(banner?.getAttribute('data-tone')).toBe('failed')
     expect(banner?.getAttribute('data-proxy-configured')).toBe('yes')
     expect(banner?.textContent).toContain(settingsText.proxyNotice.configuredFailedTitle)
-    // 不许再让他「先打开 VPN 或本地代理」——那件事他已经做了。
+    // 不许再让他「先打开 本地代理 或本地代理」——那件事他已经做了。
     expect(banner?.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
   })
 
