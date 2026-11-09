@@ -2,6 +2,7 @@ import { Select, Switch } from 'antd'
 
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { SettingsInfo } from '../settingsInfo'
+import { SettingsRow } from '@platform/ui/components/settings-row'
 
 export type CollectionPolicyLabels = {
   title: string
@@ -94,13 +95,16 @@ function SettingRow(props: {
   aside?: React.ReactNode
   children: React.ReactNode
 }): React.ReactElement {
+  // 结构来自共享组件（类名仍由本页给）：只换来源，DOM 与类名逐字不变。
   return (
-    <div className="intelligence-setting-row">
-      <span className={props.aside === undefined ? 'intelligence-setting-label' : 'intelligence-setting-label intelligence-setting-label--with-info'}>
-        {props.label}
-        {props.aside}
-      </span>
-      <div className="intelligence-setting-control">{props.children}</div>
-    </div>
+    <SettingsRow
+      controlWrapperClassName="intelligence-setting-control"
+      copyClassName={props.aside === undefined
+        ? 'intelligence-setting-label'
+        : 'intelligence-setting-label intelligence-setting-label--with-info'}
+      label={<>{props.label}{props.aside}</>}
+      rowClassName="intelligence-setting-row">
+      {props.children}
+    </SettingsRow>
   )
 }
