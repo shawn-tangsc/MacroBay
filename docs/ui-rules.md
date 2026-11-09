@@ -15,6 +15,7 @@
 | Right-click menu | `ContextMenu` (`items: {key,labelKey,disabled?,tone?}`) | `<button role="menuitem">`, clickable `<li>` | **human review** |
 | Status word | `StatusPill` (closed tone set) | hand-written pill; colour on the word | `statusPillKeyGuard` |
 | Waiting region | `LoadingState` / `LoadingSpinner` | local spinner, CSS rotation, antd `Spin`, `loading…` | `loadingStandard` |
+| Collapsible group header | platform `CollapsibleGroup`: **the shell owns the row and the arrow, the author owns the content** | a hand-drawn arrow, a second row click handler, any focusable element in the header | `CollapsibleGroup` header guard (at the call site) |
 | Tabs | platform `Tabs`; the workspace tab strip is the one registered exception | a third hand-drawn tab strip | **human review** |
 | Single choice | `Segmented` / `Select` (closed set) | two control types in one row | **human review** |
 | On / off | antd `Switch` | hand-written `role="switch"` | **human review** |
@@ -48,7 +49,7 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | Rule | Value |
 |---|---|
 | Allowed steps | **4 / 6 / 8 / 10 / 12 / 16** |
-| List row | height 44 (one line) / 60 (two), inline padding 12, title to meta 8 |
+| List row | height 44 (one line) / 60 (two); **32 for dense streams such as logs and message feeds**, inline padding 12, title to meta 8 |
 | New values | a non-step value is a defect; the existing ones merge file by file, no repo-wide rewrite |
 
 ## 4. Colour
@@ -86,3 +87,4 @@ So **wrong-colour-for-meaning and non-foreground danger have no gate**; keep bot
 - Hand-draw `role="tab"` (except the registered workspace tab strip).
 - Hand-format `YYYY/M/D`.
 - Print the same fact twice on one row.
+- Offer **Retry on an unrecoverable failure** (an official source returning 403, data written by another version) — a retry that must fail is a fake control. Say "unavailable", give the reason, and say nobody knows when it will recover.
