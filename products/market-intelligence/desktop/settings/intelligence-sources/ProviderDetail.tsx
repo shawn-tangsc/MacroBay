@@ -294,8 +294,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
 
   return <section className="source-provider-detail">
     {/* 要求在前、探测只把措辞收紧；读者配好代理后不再显示「去配代理」，只在真失败时回来。 */}
-    {hasProxySource && (!proxyConfigured || networkFailure) ? <NetworkProxyBanner
-      tone={networkFailure ? 'failed' : 'requires'}
+    {/* 分工：横幅只管「配了没通」，药丸只管「还没配」——同一件事不许两处说；
+        未配时代理只需要一个入口（行内药丸）。 */}
+    {hasProxySource && proxyConfigured && networkFailure ? <NetworkProxyBanner
+      tone="failed"
       configured={proxyConfigured}
       onOpenProxySettings={openProxySettings}
     /> : null}
