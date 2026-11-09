@@ -109,28 +109,34 @@ function button(text: string): HTMLButtonElement {
 }
 
 describe('ProviderDetail proxy notice', () => {
-  it('shows no banner before a proxy is configured, and only then sharpens it to a failed probe', async () => {
-    // 分工（界面设计 2026-11-10）：横幅只管「配了没通」，药丸只管「还没配」。
-    // 未配代理时那件事只需要一个入口，所以横幅不出现，行内药丸承担。
+  it('states the proxy requirement before any test, then sharpens it when the probe is refused', async () => {
     stubPlatform({ sourceId: '0xrouter-aggregate-provider', state: 'failed', failureCode: 'response-unavailable' })
     await render(routerProvider())
-    await flush()
 
-    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
-    expect(document.body.querySelector('.source-provider-detail__proxy')?.textContent).toBe(settingsText.sourceBadges.proxy)
+    // The requirement is on screen before anyone presses 测试连接, above the provider heading.
+    const before = document.body.querySelector('[data-network-proxy-banner]')
+    expect(before).not.toBeNull()
+    expect(before?.getAttribute('data-tone')).toBe('requires')
+    expect(before?.textContent).toContain(settingsText.proxyNotice.title)
+    const heading = document.body.querySelector('h2')
+    expect(before && heading && before.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
-    // 配好代理、探测被拒：这时才轮到横幅说「配了没通」。
-    await act(async () => root?.unmount())
-    document.body.replaceChildren()
-    stubPlatform({ sourceId: '0xrouter-aggregate-provider', state: 'failed', failureCode: 'response-unavailable' }, configuredProxy)
-    await render(routerProvider())
-    await flush()
-    // 探测被拒这一步要真发生：横幅只说「配了没通」，不能凭渲染就断言。
     await act(async () => button(settingsText.testConnection).click())
     await flush()
+
     const banner = document.body.querySelector('[data-network-proxy-banner]')
+    expect(banner).not.toBeNull()
     expect(banner?.getAttribute('data-tone')).toBe('failed')
-    expect(banner?.textContent).toContain(settingsText.proxyNotice.configuredFailedTitle)
+    expect(banner?.textContent).toContain(settingsText.proxyNotice.failedTitle)
+    expect(banner?.textContent).toContain(settingsText.proxyNotice.body)
+
+    const navigation = vi.fn()
+    window.addEventListener('app-shell:navigate', navigation)
+    const openSettings = document.body.querySelector<HTMLButtonElement>('[data-network-proxy-settings]')
+    expect(openSettings).not.toBeNull()
+    await act(async () => openSettings?.click())
+    expect(navigation.mock.calls[0]?.[0].detail).toEqual({ navKey: 'settings', settingsPanelKey: 'preferences' })
+    window.removeEventListener('app-shell:navigate', navigation)
   })
 
   it('does not send a rejected API key to the proxy settings', async () => {
@@ -140,10 +146,9 @@ describe('ProviderDetail proxy notice', () => {
     await act(async () => button(settingsText.testConnection).click())
     await flush()
 
-    // 未配代理时横幅根本不出现（那是药丸的事）；被拒的密钥也不会变成「配了没通」的判定。
-    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
+    // The standing requirement stays, but a rejected key never becomes a 本地代理 verdict.
+    expect(document.body.querySelector('[data-network-proxy-banner]')?.getAttribute('data-tone')).toBe('requires')
     expect(document.body.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
-    expect(document.body.textContent).not.toContain(settingsText.proxyNotice.configuredFailedTitle)
   })
 
   it('still tags a proxy-required source even before any test runs', async () => {
@@ -207,9 +212,8 @@ describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', 
     await render(routerProvider())
     await flush()
 
-    // 地址不可解析＝没配：只有药丸，没有「配了没通」的横幅。
-    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
-    expect(document.body.querySelector('.source-provider-detail__proxy')?.textContent).toBe(settingsText.sourceBadges.proxy)
+    expect(document.body.querySelector('[data-network-proxy-banner]')).not.toBeNull()
+    expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
   })
 
   it('treats a custom mode with an empty address as not configured yet', async () => {
@@ -217,8 +221,8 @@ describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', 
     await render(routerProvider())
     await flush()
 
-    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
-    expect(document.body.querySelector('.source-provider-detail__proxy')?.textContent).toBe(settingsText.sourceBadges.proxy)
+    expect(document.body.querySelector('[data-network-proxy-banner]')).not.toBeNull()
+    expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
   })
 })
 
