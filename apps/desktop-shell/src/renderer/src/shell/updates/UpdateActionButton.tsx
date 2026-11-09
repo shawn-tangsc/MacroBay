@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Button } from 'antd'
 import { Download } from 'lucide-react'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
@@ -72,14 +73,14 @@ export function UpdateActionButton(props: {
         实心按钮，所以不用 `IconButton`（那个组件只服务「纯图标触发器」）：这里图标是配字，
         可读名与可见文字一致（label-in-name），动作在可读名后半句里补上。
       */}
-      <button
-        type="button"
+      <Button
         className="update-action__button"
+        type="primary"
         aria-label={labelPlan.label}
         onClick={() => navigateTo({ page: 'settings', panel: 'about' })}>
         <Download className="update-action__glyph" aria-hidden="true" size={14} strokeWidth={2.2} />
         <span className="update-action__text">{labelPlan.text}</span>
-      </button>
+      </Button>
     </span>
   )
 }
