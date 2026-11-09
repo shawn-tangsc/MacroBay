@@ -12,9 +12,10 @@ import {
   Video,
   Wrench
 } from 'lucide-react'
-import { Button } from 'antd'
+import { Button, Switch } from 'antd'
 
 import { Drawer } from '@platform/ui/components/drawer'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { FilterChip, FilterChipGroup } from '@platform/ui/components/filter-chip'
 
 import type { ModelChatProtocol } from '@platform/ai/providers/modelProviderTypes'
@@ -158,15 +159,16 @@ export function ModelServiceModelDrawer({
               readOnly
               aria-label={labels.modelId}
             />
-            <button
-              type="button"
-              className="model-drawer-copy"
-              data-model-copy
-              title={copied ? labels.copied : labels.copyModelId}
-              aria-label={copied ? labels.copied : labels.copyModelId}
-              onClick={() => void copyId()}>
-              <Copy size={16} />
-            </button>
+            {/* 图标型动作 → `IconButton`（`sm`）；可访问名仍随「已复制」变化。 */}
+            <IconButton
+              ariaLabelKey="modelService.copyModelId"
+              dataAttributes={{ 'data-model-copy': true }}
+              icon={Copy}
+              onSelect={() => void copyId()}
+              resolveText={(key) =>
+                (key === 'modelService.copyModelId' ? (copied ? labels.copied : labels.copyModelId) : '')}
+              size="sm"
+            />
             {copied ? (
               <span className="model-drawer-copied" data-model-copied>
                 {labels.copied}
@@ -244,19 +246,17 @@ export function ModelServiceModelDrawer({
               <span className="model-drawer-label">{labels.freeModel}</span>
               <div>
                 <div className="model-drawer-switch-row">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={freeChecked}
-                    aria-label={labels.freeModel}
-                    data-model-free
-                    disabled={freeLocked}
-                    className={`model-drawer-switch${freeChecked ? ' is-on' : ''}`}
-                    onClick={() => onChange({
-                      ...draft,
-                      freeOverride: draft.freeOverride === true ? undefined : true
-                    })}
-                  />
+                  {/* 手写 `role="switch"` 是缺陷：换 antd `Switch`，尺寸走 `size="small"`（主题 token）。 */}
+                  <span data-model-free>
+                    <Switch
+                      aria-label={labels.freeModel}
+                      checked={freeChecked}
+                      disabled={freeLocked}
+                      onChange={(next) =>
+                        onChange({ ...draft, freeOverride: next ? true : undefined })}
+                      size="small"
+                    />
+                  </span>
                 </div>
                 <p className="model-drawer-hint" data-model-free-hint>
                   {freeLocked ? labels.freeModelAutoHint : labels.freeModelHint}
@@ -265,15 +265,14 @@ export function ModelServiceModelDrawer({
 
               <span className="model-drawer-label">{labels.pinModel}</span>
               <div className="model-drawer-switch-row">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={pinned}
-                  aria-label={labels.pinModel}
-                  data-model-pin
-                  className={`model-drawer-switch${pinned ? ' is-on' : ''}`}
-                  onClick={onTogglePin}
-                />
+                <span data-model-pin>
+                  <Switch
+                    aria-label={labels.pinModel}
+                    checked={pinned}
+                    onChange={() => onTogglePin()}
+                    size="small"
+                  />
+                </span>
               </div>
             </>
           ) : null}

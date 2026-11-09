@@ -36,7 +36,8 @@ describe('PLAT-62 模型编辑抽屉保存', () => {
     })
 
     expect(document.querySelector<HTMLInputElement>('[data-model-id]')?.readOnly).toBe(true)
-    expect(document.querySelector('[data-model-pin]')?.getAttribute('role')).toBe('switch')
+    // `data-model-pin` 现在包着 antd `Switch`：角色在里面的按钮上，仍是开关。
+    expect(document.querySelector('[data-model-pin] button')?.getAttribute('role')).toBe('switch')
 
     await act(async () => {
       document.querySelector<HTMLButtonElement>('.model-drawer-save')?.click()
