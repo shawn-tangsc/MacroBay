@@ -55,10 +55,16 @@ export default function AgentTodoListPanel({
     () => buildTodoItems(agent, session, messages, t.todos, { nowMs, language }),
     [agent, language, messages, nowMs, session, t.todos]
   )
-  if (!shouldShowTodoPanel(items)) return null
-
+  /*
+    钩子必须在**任何提前返回之前**：这条面板在「没有待办」时 `return null`，等智能体一开始跑
+    待办就出现。`useId` 原来写在 `return null` 之后，于是「隐藏 → 出现」的同一实例上钩子数从 8
+    变 9，React 抛 `Rendered more hooks than during the previous render`，整棵树被卸载——读者看到
+    的就是点「生成」之后整窗黑屏（2026-11-10 用户实测）。
+  */
   // 展开态由这条头部按钮控制：给它状态与指向，读屏才知道「这是可折叠的、现在开着」。
   const listId = useId()
+  if (!shouldShowTodoPanel(items)) return null
+
   const completed = items.filter((item) => item.status === 'completed').length
   const inProgress = items.some((item) => item.status === 'in_progress')
 
@@ -75,19 +81,19 @@ export default function AgentTodoListPanel({
         <small>{completed}/{items.length}</small>
         <ChevronDown size={14} className={expanded ? 'expanded' : ''} />
       </button>
-      {expanded ? (
-        <div className="agent-todo-list" id={listId}>
-          {items.map((item) => (
-            <div key={item.id} className={`agent-todo-item ${item.status}`}>
-              {item.status === 'completed' ? <Check size={14} /> : null}
-              {item.status === 'in_progress' ? <LoadingSpinner size="sm" /> : null}
-              {item.status === 'pending' ? <Circle size={14} /> : null}
-              {item.status === 'error' ? <AlertTriangle size={14} /> : null}
-              <span>{item.label}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {/* 列表**常驻挂载**、收起时用 `hidden` 藏起来：头行的 `aria-controls` 必须指向一个真实存在的
+          节点，懒挂载时收起态指向空 id 比不写更糟（壳 `CollapsibleGroup` 用的是同一条判据）。 */}
+      <div className="agent-todo-list" hidden={!expanded} id={listId}>
+        {items.map((item) => (
+          <div key={item.id} className={`agent-todo-item ${item.status}`}>
+            {item.status === 'completed' ? <Check size={14} /> : null}
+            {item.status === 'in_progress' ? <LoadingSpinner size="sm" /> : null}
+            {item.status === 'pending' ? <Circle size={14} /> : null}
+            {item.status === 'error' ? <AlertTriangle size={14} /> : null}
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

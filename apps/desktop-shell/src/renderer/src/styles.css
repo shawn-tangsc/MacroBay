@@ -5685,6 +5685,12 @@ h1 {
   padding: 0 9px 9px 43px;
 }
 
+/* 列表常驻挂载（头行 `aria-controls` 必须指向真实节点），收起时靠 `hidden` 藏。
+   这里显式写 `none`：`display: grid` 会盖掉 `hidden` 自带的 `display: none`。 */
+.agent-todo-list[hidden] {
+  display: none;
+}
+
 .agent-todo-item {
   display: flex;
   align-items: center;
