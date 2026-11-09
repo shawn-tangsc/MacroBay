@@ -1,5 +1,7 @@
 import { X } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { PlatformText } from '../../i18n/platformText'
 
 /**
@@ -23,15 +25,15 @@ export function ModelServiceProtocolNotice({
       <span className="model-service-protocol-notice-text" data-protocol-notice-text>
         {labels.protocolNoticeNone(providerName)}
       </span>
-      <button
-        type="button"
-        className="model-service-protocol-notice-close"
-        aria-label={labels.protocolNoticeDismiss}
-        title={labels.protocolNoticeDismiss}
-        data-protocol-notice-dismiss
-        onClick={onDismiss}>
-        <X size={12} aria-hidden="true" />
-      </button>
+      {/* 图标型动作统一 `IconButton`（`sm`=22，尺寸由组件闭集给，页面不写像素）。 */}
+      <IconButton
+        ariaLabelKey="modelService.protocolNoticeDismiss"
+        icon={X}
+        onSelect={onDismiss}
+        resolveText={(key) => (key === 'modelService.protocolNoticeDismiss' ? labels.protocolNoticeDismiss : '')}
+        size="sm"
+        dataAttributes={{ 'data-protocol-notice-dismiss': true }}
+      />
     </div>
   )
 }
