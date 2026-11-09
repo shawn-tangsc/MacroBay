@@ -203,6 +203,39 @@ describe('CollapsibleGroup', () => {
     expect(resolveText).not.toHaveBeenCalledWith('2026/11/9 20:45 持仓骤降')
   })
 
+  it('is controlled when `open` is given: it reports the request and renders what it is told', async () => {
+    const onOpenChange = vi.fn()
+    // 受控：点击只发回调，组件不偷偷改自己的状态（`open={false}` 时点完仍是收起）。
+    const host = await renderGroup({ ...props(), open: false, onOpenChange })
+    await act(async () => {
+      host.querySelector<HTMLElement>('.collapsible-group__title')!.click()
+    })
+    const header = host.querySelector<HTMLElement>('.ant-collapse-header')!
+    expect(onOpenChange).toHaveBeenCalledWith(true)
+    expect(header.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('follows an external `open` change, and still toggles on its own when uncontrolled', async () => {
+    const host = await renderGroup({ ...props(), open: false })
+    const header = host.querySelector<HTMLElement>('.ant-collapse-header')!
+    expect(header.getAttribute('aria-expanded')).toBe('false')
+
+    // 外部改 `open` → 立刻展开（受控的判据在「外部」这一侧）。
+    await act(async () => {
+      root!.render(<CollapsibleGroup {...props()} open />)
+    })
+    expect(host.querySelector<HTMLElement>('.ant-collapse-header')!.getAttribute('aria-expanded')).toBe('true')
+
+    // 非受控（不传 open）仍然自己开合：内部状态那条路没被受控改坏。
+    const uncontrolled = await mount()
+    const ownHeader = uncontrolled.querySelector<HTMLElement>('.ant-collapse-header')!
+    expect(ownHeader.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => {
+      uncontrolled.querySelector<HTMLElement>('.collapsible-group__title')!.click()
+    })
+    expect(ownHeader.getAttribute('aria-expanded')).toBe('true')
+  })
+
   it('renders a row as a button only when the row has an action', async () => {
     const onSelect = vi.fn()
     const host = await mount({

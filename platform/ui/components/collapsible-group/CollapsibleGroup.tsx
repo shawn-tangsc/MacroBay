@@ -1,6 +1,6 @@
 import { Collapse } from 'antd'
 import type { ReactNode } from 'react'
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 import { fillLabelParams } from '../textKeyParams'
@@ -65,6 +65,12 @@ type CollapsibleGroupBaseProps = {
   resolveText: (key: string) => string
   /** 展开区的自滚上限，默认 `COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT`。 */
   maxBodyHeight?: number
+  /**
+   * 受控开合（可选）。不传就是非受控——内部自己记，行为与以前一字不差。
+   * 传了就必须由调用方回写：组件只发 `onOpenChange`，不偷偷改内部状态。
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -82,6 +88,13 @@ export type CollapsibleGroupProps = CollapsibleGroupBaseProps & (
 export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactElement {
   const { titleKey, metaKey, metaParams, resolveText, maxBodyHeight = COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT } = props
   const rows = props.rows ?? []
+  // 受控 / 非受控两条路：`open` 给了就以它为准（组件不改它），没给就用内部状态。
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = props.open ?? internalOpen
+  const requestOpen = (next: boolean): void => {
+    if (props.open === undefined) setInternalOpen(next)
+    props.onOpenChange?.(next)
+  }
   const title = resolveText(titleKey)
   const meta = metaKey === undefined ? null : fillLabelParams(resolveText(metaKey), metaParams)
   /**
@@ -114,6 +127,8 @@ export function CollapsibleGroup(props: CollapsibleGroupProps): React.ReactEleme
         />
       )}
       ghost
+      activeKey={open ? ['group'] : []}
+      onChange={(keys) => requestOpen(keys.length > 0)}
       items={[{
         key: 'group',
         forceRender: true,
