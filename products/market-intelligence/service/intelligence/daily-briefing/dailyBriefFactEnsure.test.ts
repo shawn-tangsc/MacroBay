@@ -55,7 +55,8 @@ function available<T extends BriefingMarketRow | BriefingPulseRow>(row: T, state
 
 /** Leaves the named rows as the document built them; the rest are readable so only one gap remains. */
 function onlyGaps(document: DailyBriefingDocument, gapIds: readonly string[]): DailyBriefingDocument {
-  const availableIds = new Set(coreIds.filter((id) => !gapIds.includes(id)))
+  // 行情行与资金行的 id 是两个形状：这个集合要同时回答两者，所以按 string 收。
+  const availableIds = new Set<string>(coreIds.filter((id) => !gapIds.includes(id)))
   return {
     ...document,
     data: {
