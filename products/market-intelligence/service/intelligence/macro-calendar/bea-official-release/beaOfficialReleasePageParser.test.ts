@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs'
 import { parseBeaOfficialReleasePage } from './beaOfficialReleasePageParser'
 import type { BeaOfficialReleaseRssIdentity, BeaReleaseGroup } from './beaOfficialReleaseRssRecognizer'
 
-const pceGroup: BeaReleaseGroup = Object.freeze({ kind: 'pce-core', releaseGroupKey: 'US.BEA.PCE.2026-07', periodKey: '2026-07', scheduledDate: '2026-08-26', eventKeys: ['US.PCE.2026-07', 'US.CORE_PCE.2026-07'] })
-const gdpGroup: BeaReleaseGroup = Object.freeze({ kind: 'gdp', releaseGroupKey: 'US.BEA.GDP.2026-Q2.SECOND', periodKey: '2026-Q2', variant: 'SECOND', scheduledDate: '2026-08-26', eventKeys: ['US.GDP.2026-Q2.SECOND'] })
+const pceGroup: BeaReleaseGroup = Object.freeze({ kind: 'pce-core', releaseGroupKey: 'US.BEA.PCE.2026-07', periodKey: '2026-07', scheduledDate: '2026-08-26', eventKeys: ['US.PCE.2026-07', 'US.CORE_PCE.2026-07'] as const })
+const gdpGroup: BeaReleaseGroup = Object.freeze({ kind: 'gdp', releaseGroupKey: 'US.BEA.GDP.2026-Q2.SECOND', periodKey: '2026-Q2', variant: 'SECOND', scheduledDate: '2026-08-26', eventKeys: ['US.GDP.2026-Q2.SECOND'] as const })
 const pio: BeaOfficialReleaseRssIdentity = Object.freeze({ title: 'Personal Income and Outlays, July 2026', officialPageUrl: 'https://www.bea.gov/news/2026/pio', publishedAt: '2026-08-26T12:30:00.000Z' })
 const gdp: BeaOfficialReleaseRssIdentity = Object.freeze({ title: 'GDP (Second Estimate) and Corporate Profits, 2nd Quarter 2026', officialPageUrl: 'https://www.bea.gov/news/2026/gdp', publishedAt: '2026-08-26T12:30:00.000Z', currentPercent: 1.5 })
 const gdpFixture = readFileSync(new URL('./fixtures/bea-gdp-second-q2-2026.html', import.meta.url), 'utf8')
