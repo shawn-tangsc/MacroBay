@@ -22,7 +22,9 @@ describe('analysis model vocabulary', () => {
     for (const kind of Object.keys(analysisModelVocabulary) as (keyof typeof analysisModelVocabulary)[]) {
       const model = analysisModelVocabulary[kind]
       expect(Object.keys(zh[kind]).sort(), `${kind} (zh-CN)`).toEqual(Object.keys(model).sort())
-      for (const [id, name] of Object.entries(model)) expect(zh[kind][id], `${kind}:${id}`).toBe(name)
+      // 词表是"标识符 → 读者名"的自由映射：按 string 索引，别让某一类的字面量键收窄成唯一形状。
+      const readerNames: Readonly<Record<string, string>> = zh[kind]
+      for (const [id, name] of Object.entries(model)) expect(readerNames[id], `${kind}:${id}`).toBe(name)
     }
   })
 
