@@ -22,6 +22,7 @@
 | Drawer / modal header action | the header's `actions` slot (12px from close, one action) | stretching the title row with product CSS | **human review** (component test only) |
 | Buttons | primary / secondary / icon / inline text / destructive — one tier per action | a hand-drawn pill, a 28px icon button, red only on hover | **human review** |
 | Inline text action | `.text-action` | a bordered box inside a sentence | **human review** |
+| Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
 
 ## 2. Type and weight
 
@@ -90,4 +91,5 @@ So **wrong-colour-for-meaning and non-foreground danger have no gate**; keep bot
 - Hand-draw `role="tab"` (except the registered workspace tab strip).
 - Hand-format `YYYY/M/D`.
 - Print the same fact twice on one row.
+- Put explanatory prose in the body — scope notes, implementation detail, reassurance ("only affects…", "will not affect…").
 - Offer **Retry on an unrecoverable failure** (an official source returning 403, data written by another version) — a retry that must fail is a fake control. Say "unavailable", give the reason, and say nobody knows when it will recover.
