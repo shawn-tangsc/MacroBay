@@ -25,7 +25,7 @@ const runtimeWith = (input: { enabled?: boolean; scheduled?: string; facts?: { h
   const appended: Array<{ meetingDate: string; at: string }> = []
   const sepWrites: Array<{ meetingDate: string }> = []
   const runtime = createPolicyPathRuntime({
-    jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn() },
+    jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn() },
     repository: {
       listEffectiveMonthAsOf: () => input.scheduled ? [meeting(input.scheduled)] : [],
       policyObservations: { append: (meetingDate: string, observation: { at: string }) => { appended.push({ meetingDate, at: observation.at }) } },
@@ -94,7 +94,7 @@ describe('policy path runtime SEP collection', () => {
   it('reads the projections once for a meeting that publishes them', async () => {
     const sepWrites: Array<{ meetingDate: string; sep: { asOf: string } }> = []
     const runtime = createPolicyPathRuntime({
-      jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn() },
+      jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn() },
       repository: {
         listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
         policyObservations: { append: vi.fn() },
@@ -114,7 +114,7 @@ describe('policy path runtime SEP collection', () => {
   it('does not re-read projections it already has', async () => {
     const recordSep = vi.fn()
     const runtime = createPolicyPathRuntime({
-      jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn() },
+      jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn() },
       repository: {
         listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
         policyObservations: { append: vi.fn() },
