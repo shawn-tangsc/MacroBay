@@ -21,8 +21,18 @@ export const macroCalendarScheduleHealthPolicy = {
   persistenceFailureCodes: ['evidence-not-found', 'evidence-invalid', 'parser-unavailable', 'payload-invalid', 'parser-output-empty', 'schedule-input-invalid', 'repository-write-failed']
 } as const
 
+/**
+ * 工作流端口的**返回值在运行期不可信**：`healthRevision(outcome: unknown, …)` 是服务自己的一道守卫，
+ * 它逐字段判 `null`、错 provider / descriptor、缺计数、错失败码——这些值类型系统拦不住
+ * （跨 HTTP / 解析边界），只能在这里拒。所以端口写 `Promise<unknown>` 是**说出真实契约**，
+ * 不是放宽：合法返回值照常通过，非法返回值落到既有的 `workflow-result-invalid`。
+ */
+export type MacroCalendarScheduleHealthWorkflow = {
+  collectAndPersistSchedule: (input: MacroCalendarCollectionInput) => Promise<unknown>
+}
+
 export function createMacroCalendarScheduleHealthService(deps: {
-  workflow: Pick<MacroCalendarScheduleCollectionWorkflow, 'collectAndPersistSchedule'>
+  workflow: MacroCalendarScheduleHealthWorkflow
   health: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>
 }): MacroCalendarScheduleHealthService {
   return {
