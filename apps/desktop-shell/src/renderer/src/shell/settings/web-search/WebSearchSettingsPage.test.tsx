@@ -201,17 +201,31 @@ describe('PLAT-60 settings page shell', () => {
     const { container } = await mountPage()
     await clickTab(container, labels.providersTab)
 
-    expect(container.querySelector('[data-web-search-filter="all"]')?.textContent).toBe(labels.providerFiltersAll(4))
-    expect(container.querySelector('[data-web-search-filter="disabled"]')?.textContent).toBe(labels.providerFilterDisabled(2))
+    // 平台 `FilterChip`：标签与计数分两格渲染，选中态只有 `aria-pressed` 一个来源。
+    // 换掉的是页内自绘的 `.web-search-filter-chip`——它不该再出现，否则就是第二套胶囊。
+    const chips = providerFilterChips(container)
+    expect(container.querySelector('.web-search-filter-chip')).toBeNull()
+    expect(chips).toHaveLength(4)
+    for (const chip of chips) expect(chip.classList.contains('filter-chip')).toBe(true)
+    expect(chipText(chips[0]!)).toEqual([labels.providerFilterAll, '4'])
+    expect(chipText(chips[1]!)).toEqual([labels.providerFilterSearch, null])
+    expect(chipText(chips[2]!)).toEqual([labels.providerFilterFetch, null])
+    expect(chipText(chips[3]!)).toEqual([labels.providerFilterDisabled, '2'])
+    // 单选组：只有当前筛选项是按下态。
+    expect(chips[0]!.getAttribute('aria-pressed')).toBe('true')
+    expect(chips.slice(1).every((chip) => chip.getAttribute('aria-pressed') === 'false')).toBe(true)
 
-    await click(container, '[data-web-search-filter="disabled"]')
+    await press(chips[3]!)
     expect(rows(container)).toEqual(['Searxng', 'Fetch'])
+    expect(pressedFilterChip(container)).toBe('disabled')
 
-    await click(container, '[data-web-search-filter="searchKeywords"]')
+    await press(chips[1]!)
     expect(rows(container)).toEqual(['Tavily', 'Jina', 'Searxng'])
+    expect(pressedFilterChip(container)).toBe('searchKeywords')
 
-    await click(container, '[data-web-search-filter="fetchUrls"]')
+    await press(chips[2]!)
     expect(rows(container)).toEqual(['Jina', 'Fetch'])
+    expect(pressedFilterChip(container)).toBe('fetchUrls')
   })
 
   it('folds unavailable providers behind one row and expands on demand', async () => {
@@ -294,6 +308,36 @@ function rows(container: HTMLElement): string[] {
   return [...container.querySelectorAll('[data-web-search-provider-row]')].map(
     (row) => (row.querySelector('.web-search-provider-name')?.textContent ?? '').trim()
   )
+}
+
+/** 筛选组的胶囊，按渲染顺序：全部 / 搜索 / 读取 / 未启用。 */
+function providerFilterChips(container: ParentNode): HTMLButtonElement[] {
+  return [...container.querySelectorAll<HTMLButtonElement>('.web-search-provider-filters button')]
+}
+
+/** 胶囊的标签与计数是两格：返回 `[标签, 计数或 null]`，不把两格拼成一个字符串再断言。 */
+function chipText(chip: HTMLElement): [string, string | null] {
+  return [
+    (chip.querySelector('.filter-chip__label')?.textContent ?? '').trim(),
+    chip.querySelector('.filter-chip__count')?.textContent?.trim() ?? null
+  ]
+}
+
+async function press(chip: HTMLElement): Promise<void> {
+  await act(async () => chip.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await settle()
+}
+
+/** 当前按下的是哪一个筛选项——从可见标签反推，标签写错时会落到 `unknown:` 而不是静默通过。 */
+function pressedFilterChip(container: ParentNode): string {
+  const pressed = providerFilterChips(container).filter((chip) => chip.getAttribute('aria-pressed') === 'true')
+  expect(pressed).toHaveLength(1)
+  const [label] = chipText(pressed[0]!)
+  if (label === labels.providerFilterAll) return 'all'
+  if (label === labels.providerFilterSearch) return 'searchKeywords'
+  if (label === labels.providerFilterFetch) return 'fetchUrls'
+  if (label === labels.providerFilterDisabled) return 'disabled'
+  return `unknown:${label}`
 }
 
 async function settle(): Promise<void> {

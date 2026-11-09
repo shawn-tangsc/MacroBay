@@ -1374,10 +1374,11 @@ export type PlatformText = {
     resultsSection: string
     providerOptionReason: (name: string, reason: string) => string
     optionMissingKey: string
-    providerFiltersAll: (count: number) => string
+    /** 筛选胶囊的标签与计数分开：计数由组件渲染，文案里不再嵌数字。 */
+    providerFilterAll: string
     providerFilterSearch: string
     providerFilterFetch: string
-    providerFilterDisabled: (count: number) => string
+    providerFilterDisabled: string
     providerTableName: string
     providerTableCapabilities: string
     providerTableStatus: string
@@ -2763,10 +2764,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       resultsSection: '结果',
       providerOptionReason: (name, reason) => `${name}（${reason}）`,
       optionMissingKey: '缺 Key',
-      providerFiltersAll: (count) => `全部 ${count}`,
+      providerFilterAll: '全部',
       providerFilterSearch: '搜索',
       providerFilterFetch: '读取',
-      providerFilterDisabled: (count) => `未启用 ${count}`,
+      providerFilterDisabled: '未启用',
       providerTableName: '名称',
       providerTableCapabilities: '能力',
       providerTableStatus: '状态',
@@ -4145,10 +4146,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       resultsSection: 'Results',
       providerOptionReason: (name, reason) => `${name} (${reason})`,
       optionMissingKey: 'Missing key',
-      providerFiltersAll: (count) => `All ${count}`,
+      providerFilterAll: 'All',
       providerFilterSearch: 'Search',
       providerFilterFetch: 'Fetch',
-      providerFilterDisabled: (count) => `Disabled ${count}`,
+      providerFilterDisabled: 'Disabled',
       providerTableName: 'Name',
       providerTableCapabilities: 'Capabilities',
       providerTableStatus: 'Status',
