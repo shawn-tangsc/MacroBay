@@ -1,6 +1,7 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import type { DeliveryHealthCounts } from './taskAutomationSettingsViewModel'
@@ -21,8 +22,10 @@ export function TaskAutomationHealthSection(props: {
   onRetry: () => void
 }): React.ReactElement {
   const { health, labels, language } = props
-  const updatedAt = formatTimestamp(props.latestRunAt, language) ?? labels.emptyValue
-  const resourceUpdatedAt = formatTimestamp(props.resourceRuns.latestRunAt, language) ?? labels.emptyValue
+  // 读者时区：同一行的「最近更新」是给人看的时刻，跟设置走，不跟运行机器走。
+  const timeZone = useShellTimeZone()
+  const updatedAt = formatTimestamp(props.latestRunAt, language, timeZone) ?? labels.emptyValue
+  const resourceUpdatedAt = formatTimestamp(props.resourceRuns.latestRunAt, language, timeZone) ?? labels.emptyValue
   const isEmpty = health.delivered + health.failed + health.pending + health.skipped + health.unknown === 0
 
   return (

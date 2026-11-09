@@ -7,6 +7,7 @@ import type { TaskMutationAuditEntity } from '@platform/ai/agent-platform/runtim
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 
 import { formatTaskSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
@@ -36,6 +37,8 @@ export function TaskAutomationTasksSection(props: {
 }): React.ReactElement {
   const { labels, language, controller, focusTaskId = null } = props
   const { state } = controller
+  // 读者时区：这张表里的钟点是给人看的，跟设置走，不跟运行机器走。
+  const timeZone = useShellTimeZone()
   const pillText = pillTextResolver(labels)
 
   useEffect(() => {
@@ -145,10 +148,10 @@ export function TaskAutomationTasksSection(props: {
                       />
                     </td>
                     <td className="task-automation-mono">
-                      {formatTaskSchedule(row.task.trigger, labels, language)}
+                      {formatTaskSchedule(row.task.trigger, labels, language, timeZone)}
                     </td>
                     <td className="task-automation-mono">
-                      {formatTimestamp(row.task.nextRun ?? null, language) ?? labels.emptyValue}
+                      {formatTimestamp(row.task.nextRun ?? null, language, timeZone) ?? labels.emptyValue}
                     </td>
                     <td>
                       <LastRun
@@ -245,10 +248,11 @@ function LastRun(props: {
   language: AppLanguage
 }): React.ReactElement {
   const { labels, language, snapshot, unreadable } = props
+  const timeZone = useShellTimeZone()
   const pillText = pillTextResolver(labels)
   if (unreadable) return <span className="task-automation-muted">{labels.runUnreadable}</span>
   if (!snapshot) return <span className="task-automation-muted">{labels.outcome.never}</span>
-  const at = formatTimestamp(snapshot.at, language)
+  const at = formatTimestamp(snapshot.at, language, timeZone)
   const outcome = outcomeFromRunStatus(snapshot.status)
   if (!outcome) return <span className="task-automation-muted">{at ?? labels.emptyValue}</span>
   return (
@@ -284,6 +288,7 @@ function TaskHealth(props: {
   unreadable: boolean
 }): React.ReactElement {
   const { health, labels, language } = props
+  const timeZone = useShellTimeZone()
   if (props.unreadable) {
     return (
       <dl className="task-automation-kv">
@@ -291,7 +296,7 @@ function TaskHealth(props: {
         <dd className="task-automation-muted">{labels.runUnreadable}</dd>
         <dt>{labels.columns.nextRun}</dt>
         <dd className="task-automation-mono">
-          {formatTimestamp(props.task.nextRun ?? null, language) ?? labels.emptyValue}
+          {formatTimestamp(props.task.nextRun ?? null, language, timeZone) ?? labels.emptyValue}
         </dd>
       </dl>
     )
@@ -310,7 +315,7 @@ function TaskHealth(props: {
       <dd className="task-automation-mono">{health.unknown}</dd>
       <dt>{labels.columns.nextRun}</dt>
       <dd className="task-automation-mono">
-        {formatTimestamp(props.task.nextRun ?? null, language) ?? labels.emptyValue}
+        {formatTimestamp(props.task.nextRun ?? null, language, timeZone) ?? labels.emptyValue}
       </dd>
     </dl>
   )
@@ -322,6 +327,7 @@ function AuditList(props: {
   audits: TaskMutationAuditEntity[]
 }): React.ReactElement {
   const { audits, labels, language } = props
+  const timeZone = useShellTimeZone()
   const pillText = pillTextResolver(labels)
   if (audits.length === 0) return <p className="task-automation-note">{labels.noChanges}</p>
   return (
@@ -335,7 +341,7 @@ function AuditList(props: {
           />
           <span>{labels.auditAction[audit.action] ?? audit.action}</span>
           <span className="task-automation-mono task-automation-muted">
-            {formatTimestamp(audit.createdAt, language) ?? labels.emptyValue}
+            {formatTimestamp(audit.createdAt, language, timeZone) ?? labels.emptyValue}
           </span>
         </li>
       ))}
