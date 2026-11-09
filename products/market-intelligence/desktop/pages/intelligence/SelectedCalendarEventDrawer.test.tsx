@@ -22,6 +22,11 @@ const text = portal.calendar
 // The label the reader was looking at when they clicked: the chart line's own, which is named from
 // the analysis vocabulary (设计 145 §8 D) — not the calendar's former second wording.
 const selection = { eventKey: 'US.CORE_CPI.RELEASE.2026-M09', month: '2026-10', label: portal.analysisWorkspace.readableNames.eventName['core-cpi'] }
+
+/** 市场月读数的**真实签名**（从组件 prop 取），不另写一份形状：测试夹具按它收窄。 */
+type ReadMarketMonth = NonNullable<Parameters<typeof SelectedCalendarEventDrawer>[0]['readMarketMonth']>
+type MarketMonthRead = NonNullable<Awaited<ReturnType<ReadMarketMonth>>>
+type MarketEventRead = MarketMonthRead['events'][number]
 let root: Root | undefined
 let host: HTMLDivElement | undefined
 
@@ -60,8 +65,8 @@ async function render(client: MacroEconomicCalendarClient, onClose = vi.fn(), re
   document.body.append(host)
   const localRoot = createRoot(host)
   root = localRoot
-  await act(async () => localRoot.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' },
-    createElement(SelectedCalendarEventDrawer, { client, selection, now: () => new Date(asOf), text, onClose, ...(readMarketMonth ? { readMarketMonth } : {}) }))))
+  const drawer = createElement(SelectedCalendarEventDrawer, { client, selection, now: () => new Date(asOf), text, onClose, ...(readMarketMonth ? { readMarketMonth } : {}) })
+  await act(async () => localRoot.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: drawer })))
   for (let attempt = 0; attempt < 8; attempt += 1) await act(async () => { await Promise.resolve() })
   return host
 }
@@ -188,8 +193,8 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
 })
 
 describe('the drawer pairs an official event with its admitted market observation', () => {
-  const linkedMarket = (consensus: unknown) => ({
-    state: 'available' as const, month: selection.month, locale: 'zh' as const, asOf, sources: [],
+  const linkedMarket = (consensus: MarketEventRead['consensus']): MarketMonthRead => ({
+    sources: [],
     events: [{
       eventKey: 'market:core-cpi', title: '美国核心CPI', countryCode: 'US', eventType: 'economic-indicator',
       importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus, providerPrevious: null, providerActual: null,
@@ -230,8 +235,8 @@ describe('the drawer pairs an official event with its admitted market observatio
   it('does not pair a different indicator that happens to share the release minute', async () => {
     // 非农、失业率、时薪常常同一分钟发布。市场侧那条同一时刻的观测没有准入映射，
     // 就不许被当成「这条官方事件的预期」——那是凭空造的一对。
-    const otherAtSameInstant = {
-      state: 'available' as const, month: selection.month, locale: 'zh' as const, asOf, sources: [],
+    const otherAtSameInstant: MarketMonthRead = {
+      sources: [],
       events: [{
         eventKey: 'market:unemployment', title: '美国失业率', countryCode: 'US', eventType: 'economic-indicator',
         importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus: { displayValue: '4.1%' },
