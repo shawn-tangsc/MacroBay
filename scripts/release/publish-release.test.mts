@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -86,6 +86,20 @@ describe('publish plan', () => {
     expect(stdout).toContain('publish plan for v0.4.3')
     expect(stdout).toContain('MacroBay-x64.dmg')
     expect(stdout).toContain('dry run: no Release was created or changed')
+  })
+
+  it('validates in dry-run too, so a green dry run cannot print a partial plan', () => {
+    const distDir = distWith(REQUIRED_ASSETS.filter((name) => name !== 'latest.yml'))
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, '--dist', distDir, '--tag', 'v0.4.3', '--dry-run'],
+      { encoding: 'utf8' }
+    )
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('missing release asset: latest.yml')
+    // 计划都没过，就不许先打印一段“看起来没问题”的命令。
+    expect(result.stdout).not.toContain('publish plan')
   })
 
   it('prints the exact command it would run, for both a new and an existing release', () => {
@@ -185,7 +199,12 @@ describe('release workflow keeps what it reads inside the job', () => {
   })
 
   it('never reintroduces the repository-owned release body', () => {
-    expect(readFileSync(WORKFLOW, 'utf8')).not.toMatch(/release-notes|release-body/u)
+    // 注释里写事故经过是允许的（它不读文件）；这里只看真正会执行的代码。
+    const code = readFileSync(WORKFLOW, 'utf8')
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+    expect(code).not.toMatch(/release-notes|release-body/u)
   })
 
   it('checks out the script and downloads the artifacts the plan validates', () => {

@@ -271,12 +271,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 0.4.2 的教训：作业要从仓库里拿东西，就得自己检出仓库。这次它拿的是发布脚本本身；
-      # 产物仍然只来自下面那一步下载——两样都显式取，谁也不靠「环境里应该有」。
+      # 为什么要检出（别删）：0.4.2 第一次发版就红在这条作业——它只下载产物、不检出仓库，
+      # 脚本却去仓库里读 `<版本>.release-body.md`，于是报 `missing release body` 退 1。
+      # 现在的规则是「读什么就取什么」：脚本来自仓库（这一步），产物只来自下面那一步下载。
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ env.BUILD_REF }}
+
+      # 下限写死 22.18：脚本是 `.mts`，靠 Node 自带的类型剥离直接跑；剥类型在 22.18 才默认开启，
+      # `node-version: 22` 这种浮动大版本不保证拿得到，命令行会变成一个看不懂的扩展名错误。
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
 
       - name: Download installers
         uses: actions/download-artifact@v4
