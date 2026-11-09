@@ -36,14 +36,21 @@ git push origin vX.Y.Z
 密钥。`latest-mac.yml` 只由 arm64 job 产出并上传，所以 `MacroBay-arm64.dmg` 的永久链接不会被 x64
 包顶掉。
 
+Release 页面上的文字不是发布之后手写上去的：它是仓库里的两个文件——
+`docs/reference/release-notes/<version>.release-body.md` 与 `<version>.release-body.zh-CN.md`——
+按这个顺序拼成一份正文。应用「关于我们」页显示的就是同一份正文，因此两处读到的是同一批字；正文
+缺一份时，打包流程会直接停下，而不是发一个没有说明的 Release。`pnpm release:preflight` 会在打 tag
+之前检查这两份，包括两份合计不超过「关于我们」页的字数上限。
+
 dmg 与安装器的文件名不含版本号，所以 README 可以长期链接
 `releases/latest/download/MacroBay-arm64.dmg`、`.../MacroBay-x64.dmg` 和
 `.../MacroBay-x64-setup.exe`；任一名字变化，打包 job 会直接失败。
 
 - tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 `check-release-version.mjs` 会在打包前
   让 job 停下。应用版本来自 manifest，不来自 tag。
-- 对已有 release 的 tag 重跑，只替换 assets、保留原有说明，所以 tag 不用移动也能补救失败的运行。
-- 产物未签名；Release 说明里写明 macOS 的 Gatekeeper 与 Windows 的 SmartScreen 放行方式。
+- 对已有 release 的 tag 重跑，会替换 assets **与正文**，所以失败的运行、或发布后才发现要改的一句话，
+  都不用移动 tag 就能补救。
+- 产物未签名；发布的正文里写明 macOS 的 Gatekeeper 与 Windows 的 SmartScreen 放行方式。
 
 想在打 tag **之前**确认打包没问题，用 **Actions → Release → Run workflow**，ref 填分支（或某个
 commit），`publish` 不勾。两个安装包都会构建出来并留在该次运行的 artifacts 里，不动任何 Release。

@@ -41,15 +41,22 @@ auto-update metadata attached. Neither lane needs signing secrets. `latest-mac.y
 uploaded only by the arm64 job, so the permanent `MacroBay-arm64.dmg` link keeps pointing at the
 arm64 build.
 
+The text of the Release page is not written after publishing: it is two files in the repository,
+`docs/reference/release-notes/<version>.release-body.md` and `<version>.release-body.zh-CN.md`,
+published in that order as one body. The app's About page renders that same body for the version,
+so a reader sees the same words in both places, and the workflow stops rather than publishing a
+release whose body is missing. `pnpm release:preflight` checks the pair before the tag, including
+that the two together stay under the About page's character cap.
+
 The dmg and installer file names carry no version, so the README links
 `releases/latest/download/MacroBay-arm64.dmg`, `.../MacroBay-x64.dmg` and `.../MacroBay-x64-setup.exe`
 permanently; the packaging job fails if a name changes.
 
 - The tag must be `v` plus the `version` in `package.json`; `check-release-version.mjs` stops the
   job before packaging otherwise. The app version comes from the manifest, not from the tag.
-- Re-running a tag that already has a release replaces its assets and keeps its notes, so a failed
-  run is recoverable without moving the tag.
-- Nothing is signed; the release notes carry the Gatekeeper and SmartScreen bypass.
+- Re-running a tag that already has a release replaces its assets **and its body**, so a failed run,
+  or a sentence fixed after publication, is recoverable without moving the tag.
+- Nothing is signed; the published body carries the Gatekeeper and SmartScreen bypass.
 
 To check packaging **before** cutting a tag, run **Actions → Release → Run workflow** with the branch
 (or commit) as the ref and `publish` unchecked. Both installers are built and left on the run page as
