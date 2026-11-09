@@ -36,12 +36,12 @@ describe('buildSentimentAlertContent', () => {
   it('renders the three blocks in both languages, with the bracket style each language uses', () => {
     const content = buildSentimentAlertContent(BASE)!
     expect(content.rendered['zh-CN']).toEqual({
-      title: '【强】Democrats surge in midterm polls',
+      title: '【高】Democrats surge in midterm polls',
       body: '来源：CoinDesk',
       reason: '分析给出的强度达到了收推送的门槛。'
     })
     expect(content.rendered['en-US']).toEqual({
-      title: '[Strong] Democrats surge in midterm polls',
+      title: '[High] Democrats surge in midterm polls',
       body: 'Source: CoinDesk',
       reason: 'The analysis rated this high enough to reach your phone.'
     })

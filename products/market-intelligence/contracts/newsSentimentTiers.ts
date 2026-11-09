@@ -22,7 +22,7 @@ export function tierOf(strength: number): NewsSentimentTier {
   return 'medium'
 }
 
-/** 读者可配的推送门槛：与三档同一套顺序，弱 < 中 < 强。 */
+/** 读者可配的推送门槛：与三档同一套顺序，低 < 中 < 高（词在文案表里，三处逐词相同）。 */
 export type NewsSentimentTierThreshold = NewsSentimentTier
 
 const TIER_ORDER: Readonly<Record<NewsSentimentTier, number>> = Object.freeze({

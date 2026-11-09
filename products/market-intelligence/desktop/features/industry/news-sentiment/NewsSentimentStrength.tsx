@@ -4,7 +4,7 @@ import type { NewsSentimentText } from './NewsSentimentCard'
 
 /**
  * 档位阈值**不在这里**：它住 `contracts/newsSentimentTiers.ts`，推送判据调的是同一个函数。
- * 这里只把档位翻成读者看得见的词（弱 / 中 / 强）。
+ * 这里只把档位翻成读者看得见的词（低 / 中 / 高）——与手机标题、设置页那一行同一套。
  */
 export function strengthLabel(text: NewsSentimentText, strength: number): string {
   const levels = text.drawer.detail.strengthLevels
