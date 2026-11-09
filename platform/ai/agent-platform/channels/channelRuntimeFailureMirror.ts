@@ -23,7 +23,6 @@ export const channelRuntimeFailureMirrorCodes = [
   'telegram-network-unavailable',
   'telegram-proxy-unavailable',
   'telegram-poll-failed',
-  'telegram-poll-timeout',
   'telegram-poll-retrying',
   'telegram-poll-recovered',
   'telegram-poll-abandoned',

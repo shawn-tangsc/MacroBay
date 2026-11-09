@@ -1811,7 +1811,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }),
       channelLogLifecycleText: Object.freeze({
         runtimeStarted: '连接已启动',
-        runtimeStopped: '连接已停止'
+        // 这一行只由「读者停用 / 应用退出」写入（`stopOwned`）；意外中断走「正在自动重试」那一行，
+        // 两者不能共用「连接已停止」——读者分不清是不是自己停的。
+        runtimeStopped: '已停用推送（你停用的，或应用退出时自动停）'
       }),
       channelLogTelegramFailureText: Object.freeze({
         telegramConflict: '另一个程序也在用这个机器人，收消息被中断',
@@ -1823,7 +1825,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         channelRuntimeGenerationStale: '频道状态刚变过，这一次没有生效，再点一次',
         channelRuntimeOwnerLost: '启用过程中运行许可被别的操作抢走了，再点一次',
         telegramRuntimeEvidenceMissing: '缺少真机验证记录，所以没有启动',
-        telegramPollTimeout: '连接超时，正在自动重连；不用做什么，恢复后会自动继续收消息',
         telegramPollRetrying: '暂时连不上，正在自动重试；不用做什么，恢复后会记一行「已恢复」',
         telegramPollRecovered: '已恢复自动收消息',
         telegramPollAbandoned: '连续重试都失败，已停止自动重连；检查网络或代理后重新启用这条通道',
@@ -3175,10 +3176,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }),
       channelLogLifecycleText: Object.freeze({
         runtimeStarted: 'connection started',
-        runtimeStopped: 'connection stopped'
+        runtimeStopped: 'push stopped (you turned it off, or the app is quitting)'
       }),
       channelLogTelegramFailureText: Object.freeze({
-        telegramPollTimeout: 'the connection timed out; it reconnects automatically — nothing to do',
         telegramPollRetrying: 'temporarily unreachable, retrying automatically; nothing to do',
         telegramPollRecovered: 'receiving is working again',
         telegramPollAbandoned: 'automatic reconnect gave up after repeated failures; check the network or proxy, then re-enable this channel',

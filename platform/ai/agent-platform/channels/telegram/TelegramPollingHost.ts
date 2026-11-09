@@ -94,10 +94,8 @@ export class TelegramPollingHost {
   private async pollSafely(): Promise<void> {
     try { await this.poll() } catch (error) {
       if (this.stopped || this.deps.signal.aborted || !this.deps.isCurrent()) return
-      // 拆码（产品 2026-11-08 判据）：**超时**是「尝试过、失败」里最可验证的一类，单独成码，
-      // 不再与「入站处理抛错」共用 `telegram-poll-failed`——两者下一步动作不同。
-      const timedOut = error instanceof Error && (error.name === 'TimeoutError' || /\btimeout\b/i.test(error.message))
-      this.deps.offsets.auditIfCurrent(this.deps.channelId, this.deps.generation, timedOut ? 'telegram-poll-timeout' : 'telegram-poll-failed')
+      // **不再每次尝试写一行**（2026-11-10 用户报「整屏被同一种红行刷满」）：重试期间只由
+      // `failAndReschedule` 在状态变化时写一行；具体成因留在断线通知（`onConnectionLost`）里。
       const cause = transportFailureCause(error)
       if (cause) this.reportConnectionLost(cause)
       this.failAndReschedule()
@@ -149,7 +147,8 @@ export class TelegramPollingHost {
     if (this.stopped || this.deps.signal.aborted) return this.close('stopped')
     if (!this.deps.isCurrent()) return this.close('not-current')
     if (!response.ok) {
-      this.deps.offsets.auditIfCurrent(this.deps.channelId, this.deps.generation, response.code)
+      // 同上：这里也不逐条写失败码（一次断线可能重试几十次）；状态行由 `failAndReschedule` 写。
+      // 成因仍然交给断线通知，别把「网络连不上」写在限流/冲突上。
       // 限流/进程冲突/token 被拒都不是「连不上」：那种情况报「网络连不上」会把读者带去查错地方。
       const cause = connectionCauseOfCode(response.code)
       if (cause) this.reportConnectionLost(cause)

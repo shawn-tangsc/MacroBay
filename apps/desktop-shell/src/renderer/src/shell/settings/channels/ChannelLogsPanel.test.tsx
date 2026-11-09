@@ -118,9 +118,11 @@ describe('the channel log panel', () => {
 
     const rows = [...container.querySelectorAll('.channel-log-row')]
     const started = rows.find((node) => node.textContent?.includes('连接已启动'))
-    const stopped = rows.find((node) => node.textContent?.includes('连接已停止'))
+    // 「停了」这一行必须说清是谁停的：读者停用/应用退出，而不是「它自己停了」（后者走自动重试那一行）。
+    const stopped = rows.find((node) => node.textContent?.includes('已停用推送'))
     expect(started?.getAttribute('data-log-level')).toBe('INFO')
     expect(stopped?.getAttribute('data-log-level')).toBe('INFO')
+    expect(stopped?.textContent).toContain('你停用的')
     // 起停用「运行：」，不是「运行异常：」——它们不是异常。
     expect(started?.textContent).toContain(labels.channelLogLifecyclePrefix)
     expect(started?.textContent).not.toContain(labels.channelLogRuntimePrefix)

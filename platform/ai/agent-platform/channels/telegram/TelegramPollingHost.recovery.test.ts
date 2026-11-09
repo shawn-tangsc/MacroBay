@@ -52,14 +52,13 @@ function createHarness() {
 describe('Telegram polling host: automatic recovery', () => {
   it('goes retrying after a failure, then recovers on the first success, with both states on record', async () => {
     const harness = createHarness()
-    const timeout = Object.assign(new Error('getUpdates timed out'), { name: 'TimeoutError' })
-    harness.updates.mockRejectedValueOnce(timeout)
+    harness.updates.mockRejectedValueOnce(new Error('getUpdates timed out'))
     harness.host.start()
     await harness.pump()
 
     expect(harness.host.status()).toEqual({ state: 'retrying', consecutiveFailures: 1 })
-    // 超时单独成码（拆码），并且这一次断开只写一行「正在重试」。
-    expect(harness.audits).toEqual(['telegram-poll-timeout', 'telegram-poll-retrying'])
+    // 这一次断开只写一行「正在重试」：**每次尝试不再一行一条**（用户报「整屏被同一种红行刷满」）。
+    expect(harness.audits).toEqual(['telegram-poll-retrying'])
 
     harness.updates.mockResolvedValue({ ok: true, value: [] })
     harness.advance(1_000)
