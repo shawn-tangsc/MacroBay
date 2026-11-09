@@ -14,23 +14,28 @@
 /* 卡面那一行摘要：一个索引，不是结论。所以它整行中性——不用琥珀、不用红、不铺底，
    方向色只出现在展开区每组的标签上（两张牌方向相反时，摘要行着色必然错一半）。
    右侧 8px 的 `›` 用字符画：摘要行里不许出现 `<svg>`（界面设计 v2 §四）。 */
+/*
+ * 入口是一个**可点的行**，不是注释（界面设计 2026-11-10）：整行 44 高、左右内距 8、文字 12 / `--font-body`、
+ * 颜色 `--text`。原来它只有 11.5px 的紧凑量和 muted 字色，读者把它读成注解，没人点——用户实测「看不出区别」。
+ * 三个线索要**同时**在：左侧 14px 箭头（展开转 90°）、整行可点、悬停整行换底色。
+ */
 .mi-divergence__summary {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 0; border: 0; border-radius: 4px; background: transparent;
-  /* 字号只用同屏既有那一档：看板「口径说明」那条 `--mi-reading-note-size` / `-line-height`
-     （唯一 owner 在 `cryptoDashboard.css`）。摘要行是新加的常驻行，自成一套字号就是「融不进项目」。 */
-  color: var(--mi-dashboard-text); font: inherit;
-  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  height: 44px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent;
+  color: var(--text); font: inherit;
+  font-size: var(--font-body); line-height: var(--line-body);
   text-align: left; text-decoration: none; cursor: pointer;
 }
-/* 安静的一天不是控件：纯文本，没有箭头、没有悬停底、点了没反应。 */
-.mi-divergence__summary--static { cursor: default; }
+/* 安静的一天不是控件：纯文本，没有箭头、没有悬停底、点了没反应——也不占那 44 的行高。 */
+.mi-divergence__summary--static { height: auto; padding: 0; cursor: default; }
 .mi-divergence__summary-text {
   flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-.mi-divergence__summary-chevron { flex: none; color: var(--mi-dashboard-muted); font-size: 0.85em; opacity: 0.55; }
-.mi-divergence__summary:hover { background: var(--mi-dashboard-surface); }
-.mi-divergence__summary:hover .mi-divergence__summary-chevron { opacity: 0.95; }
+/* 箭头在左：折叠项���通用语汇。静止时用 muted（不抢正文），悬停/聚焦变正文色。 */
+.mi-divergence__summary-chevron { flex: none; color: var(--muted); transition: transform 120ms ease, color 120ms ease; }
+.mi-divergence__summary:hover { background: var(--surface-soft); }
+.mi-divergence__summary:hover .mi-divergence__summary-chevron,
+.mi-divergence__summary:focus-visible .mi-divergence__summary-chevron { color: var(--text); }
 .mi-divergence__summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mi-divergence__summary[aria-expanded='true'] .mi-divergence__summary-chevron { transform: rotate(90deg); }
 .mi-divergence > .mi-signal-detail { flex-basis: 100%; }

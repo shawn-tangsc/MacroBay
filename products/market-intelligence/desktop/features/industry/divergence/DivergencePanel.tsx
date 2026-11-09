@@ -1,7 +1,7 @@
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
-import { Info } from 'lucide-react'
+import { ChevronRight, Info } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -87,9 +87,11 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
            （`.mi-divergence__summary:hover` / `:focus-visible`）。别换成平台组件。 */
         <button aria-controls={detailId} aria-expanded={expanded} className="mi-divergence__summary"
           onClick={() => setExpanded(current => !current)} type="button">
+          {/* 界面设计 2026-11-10：入口要**同时**给三个可见线索——左侧 14px 箭头（展开转 90°）、整行 44 高
+              可点、悬停整行变色。原来右侧那颗 8px 的字符 `›` 像装饰，用户实测「看不出区别」。
+              展开时只转箭头，文案仍是那一句事实：换成「收起」等于行里少一个信息。 */}
+          <ChevronRight aria-hidden="true" className="mi-divergence__summary-chevron" size={14} />
           <span className="mi-divergence__summary-text">{summary}</span>
-          {/* 8px 的 `›` 用字符画，不用图标组件：摘要行里不许出现 `<svg>`（界面设计 v2 §四）。 */}
-          <span aria-hidden="true" className="mi-divergence__summary-chevron">›</span>
         </button>
       ) : (
         <p className="mi-divergence__summary mi-divergence__summary--static">{summary}</p>

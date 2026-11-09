@@ -213,9 +213,16 @@ describe('divergence panel · the one summary line', () => {
   it('is neutral and eats no default button look: transparent, borderless, one token size', () => {
     const markup = render(answer([row]))
     const summary = markup.slice(markup.indexOf('mi-divergence__summary"'), markup.indexOf('</button>'))
-    // 判据：摘要行里没有图标组件、没有语气标记——方向色只留在展开区。
+    /**
+     * 判据：摘要行里**只有折叠箭头这一个图形**，没有任何语气/方向标记——方向色只留在展开区。
+     *
+     * 这条原来写的是「一个 `<svg>` 都不许有」（界面设计 v2 §四）。2026-11-10 界面设计把入口改成
+     * 「左侧 14px 箭头 + 整行可点 + 悬停变色」，箭头就必须是图标组件——旧规则要守的其实是「不要让
+     * 语气图形进摘要行」，不是「不许有图标」。所以判据改成：恰好一个 svg，且它是那颗 chevron。
+     */
     expect(markup).toContain('class="mi-divergence__summary"')
-    expect(summary).not.toContain('<svg')
+    expect((summary.match(/<svg/gu) ?? [])).toHaveLength(1)
+    expect(summary).toContain('lucide-chevron-right')
     expect(summary).not.toContain('data-tone')
     /**
      * 样式在外部表里，测试环境读不到计算样式（happy-dom 不加载 `.css`），所以这条查**规则本身**：
@@ -229,10 +236,11 @@ describe('divergence panel · the one summary line', () => {
     const rule = css.match(/\.mi-divergence__summary \{([^}]*)\}/)?.[1] ?? ''
     expect(rule).toContain('background: transparent')
     expect(rule).toContain('border: 0')
-    expect(rule).toContain('padding: 0')
+    // 入口是可点的行（界面设计 2026-11-10）：左右内距 8、文字 12 那一档、正文行高，仍然零硬编码字号。
+    expect(rule).toContain('padding: 0 8px')
     expect(rule).toContain('font: inherit')
-    expect(rule).toContain('font-size: var(--mi-reading-note-size)')
-    expect(rule).toContain('line-height: var(--mi-reading-note-line-height)')
+    expect(rule).toContain('font-size: var(--font-body)')
+    expect(rule).toContain('line-height: var(--line-body)')
     expect(rule).not.toMatch(/font-size:\s*\d/)
     expect(rule).not.toMatch(/caution|negative|warning/)
   })
@@ -263,6 +271,54 @@ describe('divergence panel · the one summary line', () => {
      */
     await act(async () => { root.unmount() })
     style.remove()
+  })
+})
+
+describe('divergence panel · the chip is the control', () => {
+  /**
+   * 界面设计 2026-11-10 的判据：入口要**同时**给三个可见线索，只加一个都不够（用户实测「看不出区别」）——
+   * 左侧 14px 箭头（展开转 90°）、整行 44 高且可点（文字 12 / `--font-body` / `--text`，不许 muted）、
+   * 悬停整行 `--surface-soft` 且箭头变 `--text`。文案在展开后**不改**：一句事实被换成动词，行里就少一个信息。
+   */
+  it('draws the chevron on the left, 44 tall, focusable, and keeps the sentence when expanded', async () => {
+    const css = readFileSync('products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.css', 'utf8')
+    const block = /\.mi-divergence__summary \{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(block).toMatch(/height:\s*44px/u)
+    expect(block).toMatch(/padding:\s*0 8px/u)
+    // 可点的行不是注释：字号走 12px 那一档，颜色是正文色。
+    expect(block).toMatch(/font-size:\s*var\(--font-body\)/u)
+    expect(block).toMatch(/color:\s*var\(--text\)/u)
+    expect(block).not.toMatch(/--muted/u)
+    // 悬停整行用 surface-soft；箭头在悬停/聚焦时变正文色。
+    expect(css).toMatch(/\.mi-divergence__summary:hover \{[^}]*background:\s*var\(--surface-soft\)/u)
+    expect(css).toMatch(/\.mi-divergence__summary:hover \.mi-divergence__summary-chevron[^{]*\{[^}]*color:\s*var\(--text\)/u)
+    // 展开时箭头转 90°，不是换形状也不是换文案。
+    expect(css).toMatch(/\.mi-divergence__summary\[aria-expanded='true'\] \.mi-divergence__summary-chevron[^{]*\{[^}]*rotate\(90deg\)/u)
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => { root.render(scoped(createElement(DivergencePanel, { state: answer([row]), onRetry: () => undefined, text }))) })
+      const summary = container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!
+      // 箭头在左：它是第一个子元素，且是 14px 的 lucide 图标而不是 8px 的字符。
+      const first = summary.firstElementChild
+      expect(first?.tagName.toLowerCase()).toBe('svg')
+      expect(first?.classList.contains('mi-divergence__summary-chevron')).toBe(true)
+      expect(first?.getAttribute('width')).toBe('14')
+      expect(first?.getAttribute('height')).toBe('14')
+      expect(summary.querySelector('.mi-divergence__summary-chevron + .mi-divergence__summary-text')).not.toBeNull()
+      // 可聚焦、可切换，展开后焦点不跑。
+      expect(summary.getAttribute('aria-expanded')).toBe('false')
+      summary.focus()
+      expect(document.activeElement).toBe(summary)
+      const sentence = summary.textContent
+      await act(async () => { summary.click() })
+      expect(summary.getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(summary)
+      // 文案不改：还是那一句事实，不是「收起」。
+      expect(summary.textContent).toBe(sentence)
+    } finally { await act(async () => root.unmount()) }
   })
 })
 
