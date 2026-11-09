@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { analysisTimelineRefreshPolicy } from './analysisTimelineRefreshPolicy'
+import { analysisTimelineRefreshPolicy, type AnalysisTimelineRefreshPolicy } from './analysisTimelineRefreshPolicy'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
 import { isAlreadyAvailableError, withReadTimeout } from './marketAnalysisTimelineRead'
@@ -100,7 +100,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
    * Test seam only: the production policy with shorter waits. The bounded poll needs 660 ticks to
    * reach its cap, which is too slow for a UI test; the hook is otherwise identical.
    */
-  policy?: typeof analysisTimelineRefreshPolicy
+  policy?: AnalysisTimelineRefreshPolicy
 }>): UseMarketAnalysisTimelineResult {
   const policy = input.policy ?? analysisTimelineRefreshPolicy
   const [state, setState] = useState<State>({ loading: true, entries: [] })

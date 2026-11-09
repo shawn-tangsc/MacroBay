@@ -704,7 +704,7 @@ it('shows a reader-triggered analysis as that, with a moment instead of a "since
   const container = document.createElement('div')
   document.body.append(container)
   const localRoot = createRoot(container)
-  await act(async () => localRoot.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(Timeline, { text }))))
+  await act(async () => localRoot.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(Timeline, { text }) })))
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
   const status = container.querySelector('[data-trigger-status]')!
@@ -730,7 +730,7 @@ it('shows why the newest automatic decision was made, in the reader time zone', 
   const container = document.createElement('div')
   document.body.append(container)
   const localRoot = createRoot(container)
-  await act(async () => localRoot.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(Timeline, { text }))))
+  await act(async () => localRoot.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(Timeline, { text }) })))
   // The list read is async: flush the IPC promise before querying the DOM.
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   const status = container.querySelector('[data-trigger-status]')
