@@ -49,6 +49,9 @@ function sourcesState(overrides: Record<string, unknown>) {
     saveFocusMarkets: vi.fn(),
     focusMarketSettings: { enabledFocusMarkets: [], updatedAt: '' },
     savingFocusMarkets: false,
+    profiles: [],
+    definitions: [],
+    updateSourceProfile: vi.fn(),
     ...overrides
   }
 }
@@ -209,6 +212,48 @@ describe('sources settings page states', () => {
     }
     // 空选择照原文发出去：归一成默认两个是服务端的事（见 intelligenceFocusSettings 的用例）。
     expect(saveFocusMarkets).toHaveBeenLastCalledWith([])
+  })
+
+  it('lets the reader change collection frequency, scope and sentiment for a source', async () => {
+    // 缺陷（0.4.2）：`CollectionPolicySection` 早就写好了（三个控件 + 用例），但全仓没有一处渲染它，
+    // 所以这三项读者一个都改不了。这里钉住：三行出现在页面上，且改动走该源的 profile 保存。
+    const updateSourceProfile = vi.fn()
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({
+        definitions: [{ sourceId: 's1', supportsSentiment: true }],
+        loading: false,
+        profiles: [{
+          autoReplayAfterParserUpgrade: false,
+          collectionPreset: 'balanced',
+          enabled: true,
+          includeInSentiment: true,
+          profileId: 'profile-s1',
+          rawArchiveEnabled: false,
+          retentionMode: 'balanced',
+          scopePolicy: 'watchlist-priority',
+          sourceId: 's1',
+          updatedAt: '2026-11-09T00:00:00.000Z'
+        }],
+        settingsView: settingsViewOneProvider(),
+        updateSourceProfile
+      }) as never
+    )
+    const dom = await render()
+
+    const section = dom.querySelector('.intelligence-section:has(.intelligence-setting-grid)')
+    expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
+    expect(dom.textContent).toContain(zhText.collectionPolicy.scopePolicy)
+    expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)
+    expect(section).not.toBeNull()
+    // 三个控件都在：预设、范围是下拉，舆情是开关。
+    expect(section!.querySelectorAll('.ant-select').length).toBeGreaterThanOrEqual(2)
+
+    const sentimentRow = [...section!.querySelectorAll<HTMLElement>('.intelligence-setting-row')]
+      .find((row) => row.textContent?.includes(zhText.collectionPolicy.includeInSentiment))!
+    const toggle = sentimentRow.querySelector<HTMLElement>('[role="switch"]')!
+    await act(async () => { toggle.click() })
+
+    expect(updateSourceProfile).toHaveBeenCalledWith('s1', { includeInSentiment: false })
   })
 
   it('draws the page once the read is done', async () => {

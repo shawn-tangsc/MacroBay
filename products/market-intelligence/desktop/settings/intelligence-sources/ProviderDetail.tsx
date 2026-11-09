@@ -7,7 +7,9 @@ import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
+import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
+import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/intelligenceSourceTest'
 import { openProxySettings } from '../../shared/navigation/productShellNavigation'
 import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
@@ -93,11 +95,21 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, showSourceDetails, sourceDetailLabels, translation }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
+  /**
+   * 每个源的采集策略（频率档 / 范围 / 是否纳入舆情）。页面上常显：读者不必先选中某个源。
+   * 数据与写入都来自页面的 profile 列表，这里只画。
+   */
+  policy?: {
+    profiles: Readonly<Record<string, IntelligenceSourceProfile>>
+    labels: CollectionPolicyLabels
+    supportsSentimentById: Readonly<Record<string, boolean>>
+    onChange: (sourceId: string, patch: Partial<IntelligenceSourceProfile>) => void
+  }
   sourceDetailLabels?: { health: { statuses: Readonly<Record<string, string>> }; [key: string]: unknown }
   translation?: Parameters<typeof TranslationPreferencesSection>[0]
   onChanged?: () => void
@@ -352,7 +364,19 @@ export function ProviderDetail({ labels, provider, onChanged, showSourceDetails,
             onChange={(enabled) => void toggle(source, enabled)}
           />
           </div>
-
+          {/* 采集策略（频率档 / 范围 / 是否纳入舆情）：每个源常显，读者不必先选中它。
+              产品自有采集的源只留启用开关，预设与范围不适用（组件自己写那句说明）。 */}
+          {policy && policy.profiles[source.sourceId]
+            ? <CollectionPolicySection
+              configurable={source.collection !== 'none' && source.visibility !== 'pending'}
+              draftProfile={policy.profiles[source.sourceId]!}
+              enabledConfigurable={source.visibility !== 'pending'}
+              labels={policy.labels}
+              onChange={(patch) => policy.onChange(source.sourceId, patch)}
+              onEnabledChange={(enabled) => void toggle(source, enabled)}
+              supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
+            />
+            : null}
         </div>
       })}
     </div>

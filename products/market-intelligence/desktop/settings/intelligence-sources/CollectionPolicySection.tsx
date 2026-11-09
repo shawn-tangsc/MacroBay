@@ -2,6 +2,19 @@ import { Select, Switch } from 'antd'
 
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 
+export type CollectionPolicyLabels = {
+  title: string
+  enabled: string
+  collectionPreset: string
+  manualPresetNote: string
+  includeInSentiment: string
+  scopePolicy: string
+  plannedNotConfigurable?: string
+  productOwnedNote?: string
+  presets: Record<string, string>
+  scopePolicies: Record<string, string>
+}
+
 export function CollectionPolicySection(props: {
   draftProfile: IntelligenceSourceProfile
   supportsSentiment: boolean
@@ -11,18 +24,7 @@ export function CollectionPolicySection(props: {
    * collection policy (preset, scope) does not apply to it, so the switch is usable on its own.
    */
   enabledConfigurable?: boolean
-  labels: {
-    title: string
-    enabled: string
-    collectionPreset: string
-    manualPresetNote: string
-    includeInSentiment: string
-    scopePolicy: string
-    plannedNotConfigurable?: string
-    productOwnedNote?: string
-    presets: Record<string, string>
-    scopePolicies: Record<string, string>
-  }
+  labels: CollectionPolicyLabels
   onEnabledChange: (enabled: boolean) => void
   onChange: (patch: Partial<IntelligenceSourceProfile>) => void
 }): React.ReactElement {

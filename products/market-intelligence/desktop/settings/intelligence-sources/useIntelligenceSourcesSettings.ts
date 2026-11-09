@@ -257,6 +257,67 @@ export function useIntelligenceSourcesSettings(labels: {
     [labels.saved, labels.saveFailed]
   )
 
+  /**
+   * 按**源**改采集策略（频率档 / 范围 / 是否纳入舆情）。
+   *
+   * 与 `updateProfile` 同一套草稿队列与回滚，区别只在基准：那个改「当前选中的草稿」，这个改
+   * 页面上任意一行——详情面板里每个源都常显这三行，读者不必先选中它。
+   */
+  const updateSourceProfile = useCallback(
+    (sourceId: string, patch: Partial<IntelligenceSourceProfile>) => {
+      let previous: IntelligenceSourceProfile | undefined
+      let next: IntelligenceSourceProfile | undefined
+      setState((current) => {
+        const base = current.profiles.find((profile) => profile.sourceId === sourceId)
+          ?? (current.draftProfile?.sourceId === sourceId ? current.draftProfile : undefined)
+        if (!base) return current
+        previous = base
+        next = { ...base, ...patch }
+        return {
+          ...current,
+          profiles: upsertProfile(current.profiles, next),
+          draftProfile: current.draftProfile?.sourceId === sourceId ? next : current.draftProfile,
+          saving: true,
+          errorCode: null
+        }
+      })
+      if (!previous || !next) return
+
+      pendingSaveCountRef.current += 1
+      saveQueueRef.current = saveQueueRef.current
+        .then(async () => {
+          const detail = await withTimeout(
+            intelligenceSourcesClient.saveProfile(toSaveProfileInput(next!)),
+            15_000
+          )
+          setState((current) => ({
+            ...current,
+            profiles: upsertProfile(current.profiles, detail.profile),
+            errorCode: null,
+            ...(current.selectedSourceId === detail.profile.sourceId
+              ? { detail, draftProfile: detail.profile, notice: labels.saved }
+              : {})
+          }))
+          notifyIntelligenceSourcesChanged()
+        })
+        .catch(() => {
+          setState((current) => ({
+            ...current,
+            profiles: previous ? upsertProfile(current.profiles, previous) : current.profiles,
+            draftProfile: current.draftProfile?.sourceId === previous?.sourceId ? previous : current.draftProfile,
+            errorCode: labels.saveFailed
+          }))
+        })
+        .finally(() => {
+          pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1)
+          if (pendingSaveCountRef.current === 0) {
+            setState((current) => ({ ...current, saving: false }))
+          }
+        })
+    },
+    [labels.saved, labels.saveFailed]
+  )
+
   const runNow = useCallback(async () => {
     if (!state.selectedSourceId) return
     const definition = state.definitions.find((item) => item.sourceId === state.selectedSourceId)
@@ -382,6 +443,7 @@ export function useIntelligenceSourcesSettings(labels: {
     selectSource,
     setEnabled,
     updateProfile,
+    updateSourceProfile,
     runNow,
     testCredentials,
     replayWindow,

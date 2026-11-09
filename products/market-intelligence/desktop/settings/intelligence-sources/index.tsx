@@ -7,7 +7,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { INTELLIGENCE_FOCUS_MARKET_IDS } from '../../../service/intelligence/application/intelligenceFocusSettings'
-import type { IntelligenceFocusMarket } from '../../../service/intelligence/schema/intelligenceSource'
+import type { IntelligenceFocusMarket, IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { productText } from '../../shared/i18n/productText'
 import { SettingsInfo } from '../settingsInfo'
@@ -52,6 +52,9 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     refreshHealth,
     saveFocusMarkets,
     focusMarketSettings,
+    profiles,
+    definitions,
+    updateSourceProfile,
     savingFocusMarkets
   } = useIntelligenceSourcesSettings(t)
   const translation = useIntelligenceTranslationSettings(t.translationPreferences)
@@ -71,6 +74,13 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     void saveFocusMarkets(next).then((saved) => { if (!saved) setFocusSaveFailed(true) })
   }
 
+  // 采集策略：每源一份 profile，读 `profiles`；是否支持情绪分析由源定义决定（同一个事实只读一处）。
+  const policyProfiles: Readonly<Record<string, IntelligenceSourceProfile>> = Object.fromEntries(
+    profiles.map((profile) => [profile.sourceId, profile])
+  )
+  const supportsSentimentById: Readonly<Record<string, boolean>> = Object.fromEntries(
+    definitions.map((definition) => [definition.sourceId, definition.supportsSentiment === true])
+  )
   const focusMarketText: Readonly<Record<string, string>> = {
     'settings.intelligenceSources.focusMarkets.infoAria': t.focusMarkets.infoAria,
     'settings.intelligenceSources.focusMarkets.description': t.focusMarkets.description
@@ -120,6 +130,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
           return provider ? <div className="intelligence-detail-scroll"><ProviderDetail
             labels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, panelNames: t.panelNames, badges: { pending: t.sourceBadges.pending, advanced: t.sourceBadges.advanced, calendar: t.sourceBadges.calendar, proxy: t.sourceBadges.proxy }, status: t.status, capabilities: t.providerSummary, toggleSource: t.toggleSource, credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote, testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey, unavailableReasonCode: t.unavailableReasonCode, automaticSyncStopped: t.automaticSyncStopped, lastSuccessfulSync: t.lastSuccessfulSync }}
             provider={provider}
+            policy={{ labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById }}
             showSourceDetails
             sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
