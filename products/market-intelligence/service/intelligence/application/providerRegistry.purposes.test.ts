@@ -55,10 +55,24 @@ describe('the derived panels match what the registry declared before purposes ex
     ])
   })
 
-  it('maps only dashboard and calendar to a panel, never briefing or sentiment', () => {
-    // 这两条是消费线，没有「面板」这一层；若把它们映射成面板，源会凭空出现在看板上。
+  it('maps only dashboard and calendar to a panel, never the three consumer purposes', () => {
+    // briefing / sentiment / analysis 是消费线，没有「面板」这一层；若映射成面板，源会凭空出现在看板上。
+    const consumers = ['briefing', 'sentiment', 'analysis']
     const withOnlyConsumers = allSources().filter((source) =>
-      (source.purposes ?? []).length > 0 && (source.purposes ?? []).every((purpose) => purpose === 'briefing' || purpose === 'sentiment'))
+      (source.purposes ?? []).length > 0 && (source.purposes ?? []).every((purpose) => consumers.includes(purpose)))
     for (const source of withOnlyConsumers) expect(source.panels).toEqual([])
+  })
+
+  // 产品口径（`c3-source-purposes-2026-11-10.md` 定稿）：**读者今天能开的源**要么供给至少一个模块，
+  // 要么明确标成维护/备用。两者都没有 = 漏填，或者该下线——不许默默留一个空数组。
+  //
+  // 还没接上的源（`planned` / `fixture-ready`）与被藏起来的源（`hidden` / `pending`）不在此列：
+  // 它们今天根本不产出，`visibility`/`readiness` 已经把「为什么是空」说清楚了，再要一个标记是重复。
+  it('gives every live, visible source either a purpose or the maintenance marker', () => {
+    const undefended = allSources()
+      .filter((source) => source.readiness === 'live' && source.visibility === 'visible')
+      .filter((source) => (source.purposes ?? []).length === 0 && source.maintenanceOnly !== true)
+      .map((source) => source.sourceId)
+    expect(undefended).toEqual([])
   })
 })
