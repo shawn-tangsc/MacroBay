@@ -6,6 +6,7 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { useSingleFlightSend } from '@platform/ui/async/useSingleFlightSend'
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { SettingsRow } from '@platform/ui/components/settings-row'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { StateView } from '@platform/ui/components/state'
@@ -164,20 +165,20 @@ export function NotificationSettingsScreen(props: {
 
           <section className="notification-group" aria-label={text.testGroup}>
             <h3 className="notification-group-title">{text.testGroup}</h3>
-            <div className="notification-row" data-row="test">
-              <span className="notification-row-copy">
-                <strong>{text.sendTestRow}</strong>
-              </span>
-              <span className="notification-row-control">
-                <Button
-                  size="small"
-                  disabled={sendGuard.sending}
-                  onClick={onSendTest}
-                  data-send-test>
-                  {text.sendTest}
-                </Button>
-              </span>
-            </div>
+            <SettingsRow
+              controlClassName="notification-row-control"
+              copyClassName="notification-row-copy"
+              label={<strong>{text.sendTestRow}</strong>}
+              rowAttributes={{ 'data-row': 'test' }}
+              rowClassName="notification-row">
+              <Button
+                size="small"
+                disabled={sendGuard.sending}
+                onClick={onSendTest}
+                data-send-test>
+                {text.sendTest}
+              </Button>
+            </SettingsRow>
             {receipt === null ? null : (
               // aria-live：回执各播报一次，重复点击只更新同一处，不堆消息。
               <div data-send-test-result>

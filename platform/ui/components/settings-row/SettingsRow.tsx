@@ -26,6 +26,8 @@ export type SettingsRowProps = {
   label: ReactNode
   /** 右侧控件容器类名。 */
   controlClassName: string
+  /** 行容器上的额外属性（如 `data-row`）：这些必须留在**行**上，不能挪到子元素。 */
+  rowAttributes?: Readonly<Record<string, string>>
   children?: ReactNode
 }
 
@@ -35,9 +37,10 @@ export function SettingsRow({
   headClassName,
   label,
   controlClassName,
+  rowAttributes,
   children
 }: SettingsRowProps): React.ReactElement {
-  return <div className={rowClassName}>
+  return <div className={rowClassName} {...rowAttributes}>
     <span className={copyClassName}>
       {headClassName === undefined ? label : <span className={headClassName}>{label}</span>}
     </span>
