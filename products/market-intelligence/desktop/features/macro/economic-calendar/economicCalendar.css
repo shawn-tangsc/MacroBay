@@ -212,8 +212,10 @@
 .mi-economic-calendar__empty-state { display: flex; align-items: center; justify-content: space-between; gap: var(--mi-economic-gap); padding: 14px; border-top: 1px solid var(--mi-economic-line); background: var(--mi-economic-surface-strong); }
 .mi-economic-calendar__empty-state-title { color: var(--mi-economic-text); font-size: 12px; font-weight: 650; }
 .mi-economic-calendar__empty-state-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.mi-economic-calendar__more-button { height: var(--mi-calendar-row-height); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: fit-content; border: 0; background: transparent; cursor: pointer; font-size: var(--mi-calendar-time-size); text-align: left; }
-.mi-economic-calendar__more-button:hover { color: var(--mi-economic-text); text-decoration: underline; }
+/* 「还有 N 条」已是 antd `Button`（text 档）：选择器带上 `.ant-btn` 才压得住它自带的字号与内距，
+   另补 `padding: 0` / `line-height: inherit` 与 hover 的透明底，好让这一行的高度和留白保持原样。 */
+.mi-economic-calendar__more-button.ant-btn { height: var(--mi-calendar-row-height); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: fit-content; border: 0; background: transparent; cursor: pointer; font-size: var(--mi-calendar-time-size); line-height: inherit; padding: 0; text-align: left; }
+.mi-economic-calendar__more-button.ant-btn:hover { background: transparent; color: var(--mi-economic-text); text-decoration: underline; }
 .mi-economic-calendar__inspector { display: grid; align-content: start; gap: 15px; padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
 .mi-economic-calendar h2, .mi-calendar-detail h2 { font-size: 20px; font-weight: 650; line-height: 1.3; }
 .mi-economic-calendar__surprise { width: fit-content; border: 1px solid var(--mi-economic-line); border-radius: 999px; color: var(--mi-economic-muted); font-size: 11px; padding: 5px 9px; }

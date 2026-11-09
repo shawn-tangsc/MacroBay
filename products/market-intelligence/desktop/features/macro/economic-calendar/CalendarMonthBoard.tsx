@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import type { ReactElement } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -146,7 +147,7 @@ function CalendarMonth({ month, today, statusNow, projection, events, selectedEv
           <span className="mi-economic-calendar__date" aria-current={day.dateKey === today ? 'date' : undefined}>{day.day}</span>
           <div className="mi-economic-calendar__events">
             {unified.visible.map(item => <CalendarEventRow key={item.key} item={item} marketSources={marketSources} text={text} statusNow={statusNow} selected={item.event.eventKey === selectedEventKey} onSelect={onSelectItem} />)}
-            {unified.coverage !== 'complete' || unified.remaining ? <button data-calendar-more className="mi-economic-calendar__more mi-economic-calendar__more-button" onClick={() => onOpenDay(day.dateKey)} type="button">{unified.coverage === 'complete' ? text.unifiedDay.more.replace('{count}', String(unified.remaining)) : text.unifiedDay[unified.coverage]}</button> : null}
+            {unified.coverage !== 'complete' || unified.remaining ? <Button className="mi-economic-calendar__more mi-economic-calendar__more-button" data-calendar-more onClick={() => onOpenDay(day.dateKey)} size="small" type="text">{unified.coverage === 'complete' ? text.unifiedDay.more.replace('{count}', String(unified.remaining)) : text.unifiedDay[unified.coverage]}</Button> : null}
           </div>
         </article>
       })}
