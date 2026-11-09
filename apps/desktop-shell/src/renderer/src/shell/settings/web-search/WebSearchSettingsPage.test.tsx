@@ -203,6 +203,10 @@ describe('PLAT-60 settings page shell', () => {
 
     // 平台 `FilterChip`：标签与计数分两格渲染，选中态只有 `aria-pressed` 一个来源。
     // 换掉的是页内自绘的 `.web-search-filter-chip`——它不该再出现，否则就是第二套胶囊。
+    //
+    // 下面这行**故意**点名那个已经删掉的类名（`styles.css` 与样式契约里都没有它，grep 到不要以为是残留
+    // 死样式）：它守的是「不许回来」这条行为判据——只有「旧的必须不存在」+「新的必须在」合起来，
+    // 才能发现「两套胶囊并存」。类的样式已经删了，这条断言保留。
     const chips = providerFilterChips(container)
     expect(container.querySelector('.web-search-filter-chip')).toBeNull()
     expect(chips).toHaveLength(4)
