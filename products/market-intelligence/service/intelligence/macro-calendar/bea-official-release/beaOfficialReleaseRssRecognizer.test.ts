@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import { recognizeBeaOfficialReleaseRss, type BeaReleaseGroup } from './beaOfficialReleaseRssRecognizer'
 
-const pce: BeaReleaseGroup = Object.freeze({ kind: 'pce-core', releaseGroupKey: 'US.BEA.PCE.2026-07', periodKey: '2026-07', scheduledDate: '2026-08-26', scheduledAt: '2026-08-26T12:30:00.000Z', eventKeys: ['US.PCE.2026-07', 'US.CORE_PCE.2026-07'] })
-const second: BeaReleaseGroup = Object.freeze({ kind: 'gdp', releaseGroupKey: 'US.BEA.GDP.2026-Q2.SECOND', periodKey: '2026-Q2', variant: 'SECOND', scheduledDate: '2026-08-26', scheduledAt: '2026-08-26T12:30:00.000Z', eventKeys: ['US.GDP.2026-Q2.SECOND'] })
-const advance: BeaReleaseGroup = Object.freeze({ ...second, releaseGroupKey: 'US.BEA.GDP.2026-Q2.ADVANCE', variant: 'ADVANCE', eventKeys: ['US.GDP.2026-Q2.ADVANCE'] })
-const third: BeaReleaseGroup = Object.freeze({ ...second, releaseGroupKey: 'US.BEA.GDP.2026-Q2.THIRD', variant: 'THIRD', eventKeys: ['US.GDP.2026-Q2.THIRD'] })
+// `eventKeys` is a fixed-length tuple on `BeaReleaseGroup` (the PCE group is exactly its two members,
+// the GDP group exactly one), so each fixture states its keys as a tuple rather than a `string[]`.
+const scheduled = { scheduledDate: '2026-08-26', scheduledAt: '2026-08-26T12:30:00.000Z' } as const
+const pce: BeaReleaseGroup = Object.freeze({ kind: 'pce-core', releaseGroupKey: 'US.BEA.PCE.2026-07', periodKey: '2026-07', ...scheduled, eventKeys: ['US.PCE.2026-07', 'US.CORE_PCE.2026-07'] as const })
+const second: BeaReleaseGroup = Object.freeze({ kind: 'gdp', releaseGroupKey: 'US.BEA.GDP.2026-Q2.SECOND', periodKey: '2026-Q2', variant: 'SECOND', ...scheduled, eventKeys: ['US.GDP.2026-Q2.SECOND'] as const })
+const advance: BeaReleaseGroup = Object.freeze({ kind: 'gdp', releaseGroupKey: 'US.BEA.GDP.2026-Q2.ADVANCE', periodKey: '2026-Q2', variant: 'ADVANCE', ...scheduled, eventKeys: ['US.GDP.2026-Q2.ADVANCE'] as const })
+const third: BeaReleaseGroup = Object.freeze({ kind: 'gdp', releaseGroupKey: 'US.BEA.GDP.2026-Q2.THIRD', periodKey: '2026-Q2', variant: 'THIRD', ...scheduled, eventKeys: ['US.GDP.2026-Q2.THIRD'] as const })
 
 function rss(item: string): string { return `<rss><channel>${item}</channel></rss>` }
 function item(fields: string): string { return `<item>${fields}</item>` }
