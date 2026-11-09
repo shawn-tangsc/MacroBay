@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Info } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { useSingleFlightSend } from '@platform/ui/async/useSingleFlightSend'
 import { LoadingSpinner } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 
@@ -36,6 +37,8 @@ type Phase =
   | { kind: 'sent'; channelName: string }
   | { kind: 'no-data' }
   | { kind: 'failed'; reasonCode: string | null; channelCount: number | null }
+  /** 冷却期内又点了一次：不发，只就地说明。 */
+  | { kind: 'cooldown'; seconds: number }
 
 export function TestNotificationButton(props: Readonly<{
   kind: TestNotificationKind
@@ -59,8 +62,7 @@ export function TestNotificationButton(props: Readonly<{
   const sending = phase.kind === 'sending'
   const text = (key: string): string => props.resolveText(key)
 
-  async function run(): Promise<void> {
-    if (sending || props.disabled) return
+  async function sendOnce(): Promise<boolean> {
     setPhase({ kind: 'sending' })
     // 超时只给「失败 + 人话」，不给码：码必须来自主进程的结论。
     const timeout = new Promise<null>((resolve) => {
@@ -72,11 +74,17 @@ export function TestNotificationButton(props: Readonly<{
       const result: IntelligenceTestReceipt | null = await Promise.race([sendIntelligenceTestNotification(props.kind), timeout])
       if (result === null) {
         setPhase({ kind: 'failed', reasonCode: null, channelCount: null })
-        return
+        return false
       }
-      if (result.state === 'sent') setPhase({ kind: 'sent', channelName: result.channelName })
-      else if (result.state === 'no-data') setPhase({ kind: 'no-data' })
-      else {
+      if (result.state === 'sent') {
+        setPhase({ kind: 'sent', channelName: result.channelName })
+        return true
+      }
+      if (result.state === 'no-data') {
+        setPhase({ kind: 'no-data' })
+        return false
+      }
+      {
         setPhase({
           kind: 'failed',
           reasonCode: result.reasonCode,
@@ -85,9 +93,11 @@ export function TestNotificationButton(props: Readonly<{
               ? result.enabledChannelCount
               : null
         })
+        return false
       }
     } catch {
       setPhase({ kind: 'failed', reasonCode: null, channelCount: null })
+      return false
     } finally {
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current)
@@ -96,16 +106,28 @@ export function TestNotificationButton(props: Readonly<{
     }
   }
 
+  /**
+   * 连点守卫（用户 2026-11-09：连点 4 次收到 4 条自检）：同一次只允许一个在飞，成功后冷却 10 秒，
+   * 失败不冷却。冷却中再点只就地说明，不发。
+   */
+  const sendGuard = useSingleFlightSend({ cooldownMs: 10_000, send: sendOnce })
+
+  const onPress = (): void => {
+    void sendGuard.run().then((outcome) => {
+      if (outcome === 'cooldown') setPhase({ kind: 'cooldown', seconds: sendGuard.cooldownSecondsLeft })
+    })
+  }
+
   const note = describePhase(phase, text, props.kind)
 
   return <span className="intelligence-notification-test-action">
     <button
       className="intelligence-notification-test-button"
       data-test-notification={props.kind}
-      disabled={props.disabled || sending}
-      onClick={() => void run()}
+      disabled={props.disabled || sendGuard.sending}
+      onClick={onPress}
       type="button">
-      {sending ? <><LoadingSpinner size="sm" />{text('pages.intelligence.notification.test.sending')}</> : text(props.labelKey)}
+      {sendGuard.sending ? <><LoadingSpinner size="sm" />{text('pages.intelligence.notification.test.sending')}</> : text(props.labelKey)}
     </button>
     {/*
       * ⓘ 统一走 `IconButton` + `Popover`（界面 2026-11-08 定的规则：独立站着的说明图标一律按钮化）。
@@ -146,6 +168,9 @@ export function TestNotificationButton(props: Readonly<{
 function describePhase(phase: Phase, text: (key: string) => string, kind: TestNotificationKind): string | null {
   if (phase.kind === 'sent') {
     return text('pages.intelligence.notification.test.sent').replace('{channel}', phase.channelName)
+  }
+  if (phase.kind === 'cooldown') {
+    return text('pages.intelligence.notification.test.cooldown').replace('{seconds}', String(phase.seconds))
   }
   if (phase.kind === 'no-data') return text(`pages.intelligence.notification.test.noData.${kind}`)
   if (phase.kind === 'failed') {

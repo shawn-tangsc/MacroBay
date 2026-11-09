@@ -605,7 +605,14 @@ describe('通知配置后的测试按钮（R201）', () => {
       release({ state: 'sent', channelId: 'slack', channelName: 'Slack' })
       await Promise.resolve()
     })
+    // 成功后进入 10 秒冷却：按钮不再禁用（否则「刚发过」这句提示永远出不来），但再点**不发**。
     expect(button?.disabled).toBe(false)
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+    expect(stubs.sendTest).toHaveBeenCalledTimes(1)
+    expect(container?.textContent).toContain('刚发过')
   })
 
   it('says the per-row 「nothing to send」 sentence and never shows a reason code', async () => {
