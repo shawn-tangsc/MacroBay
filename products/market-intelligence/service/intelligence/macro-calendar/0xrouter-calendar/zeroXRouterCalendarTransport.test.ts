@@ -8,6 +8,31 @@ import { zeroXRouterSourcePolicy } from '../../application/zeroXRouterSourcePoli
 import { createZeroXRouterCalendarTransport, zeroXRouterCalendarPrefetchMonth, zeroXRouterCalendarPrefetchOwner } from './zeroXRouterCalendarTransport'
 
 const apiKey = 'safe-test-key'
+/**
+ * 传输只调用 `enqueue`，其余方法归队列自己的 owner——所以夹具只提供这一个方法。但**签名用队列自己的**：
+ * `enqueue` 对 `T` 是泛型的（`<T>(request) => Promise<T>`），手写一个非泛型的 `(input: unknown)` 装不下它，
+ * 而且会逼着每个桩都用 `as` 把 `entry` 掰回来。
+ */
+type GovernanceQueue = ReturnType<typeof createSourceRequestGovernanceQueue>
+type GovernanceQueuePort = Pick<GovernanceQueue, 'enqueue'>
+/** 队列自己的请求形状 + 这次调用真正返回的 `T`：`enqueue` 从 `run` 推断 `T`，转发才不会退化成 `unknown`。 */
+type QueueRequestOf<T> = Parameters<GovernanceQueue['enqueue']>[0] & { run: () => Promise<T> }
+
+/**
+ * 记下 `enqueue` 被调了几次、带了什么 intent，并**真的**交给队列——配额与排队正是这些用例要测的东西。
+ *
+ * 不用 `vi.fn(queue.enqueue)`：它把泛型调用签名拍成 `Promise<unknown>`，装不进端口。也不用 `vi.spyOn`：
+ * 队列对象的 `enqueue` 不可重定义（`TypeError: Cannot redefine property`）。
+ */
+function spyQueue(governanceQueue: GovernanceQueue) {
+  // 记录件的参数仍是队列自己的请求形状，所以断言里的 `mock.calls[i][0].intent` 是类型化的，不是 `any`。
+  const enqueue = vi.fn<(request: Parameters<GovernanceQueue['enqueue']>[0]) => void>()
+  const port: GovernanceQueuePort = {
+    enqueue: <T>(request: QueueRequestOf<T>) => { enqueue(request); return governanceQueue.enqueue(request) }
+  }
+  return { port, enqueue }
+}
+
 const acceptedBody = JSON.stringify({ code: 200, msg: 'ok', data: [] })
 
 function deferred<T>() {
@@ -18,10 +43,10 @@ function deferred<T>() {
 
 function createScheduledHarness() {
   const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse('2026-09-07T01:02:03.000Z') })
-  const enqueue = vi.fn(queue.enqueue)
+  const { port, enqueue } = spyQueue(queue)
   const responses: ReturnType<typeof deferred<unknown>>[] = []
   const harness = createHarness({
-    queue: { enqueue },
+    queue: port,
     now: () => new Date('2026-09-07T01:02:03.000Z'),
     requestJsonBody: async () => {
       const response = deferred<unknown>()
@@ -43,9 +68,10 @@ function createScheduledHarness() {
 
 function createHarness(options: {
   apiKey?: string
-  requestJsonBody?: (input: unknown) => Promise<unknown>
+  /** 入参照端口是真的（桩要能声明自己读 `url`）；返回故意宽松：有几条用例就是要给出残缺的响应体。 */
+  requestJsonBody?: (input: Readonly<{ url: string; apiKey: string }>) => Promise<unknown>
   now?: () => Date
-  queue?: { enqueue: (input: unknown) => Promise<unknown> }
+  queue?: GovernanceQueuePort
   consumeAcceptedResponse?: Parameters<typeof createZeroXRouterCalendarTransport>[0]['consumeAcceptedResponse']
 } = {}) {
   const requestJsonBody = vi.fn(options.requestJsonBody ?? (async () => ({
@@ -195,7 +221,7 @@ describe('0xRouter calendar transport', () => {
     const bodyPending = new Promise<unknown>((done) => { resolve = done })
     const queueCalls: Array<{ intent?: string }> = []
     const queue = {
-      enqueue: async (input: { intent?: string; run: () => Promise<unknown> }) => {
+      enqueue: async <T>(input: { intent?: string; run: () => Promise<T> }): Promise<T> => {
         queueCalls.push({ intent: input.intent })
         return input.run()
       }
@@ -310,7 +336,7 @@ describe('0xRouter calendar transport', () => {
   })
 
   it('collects the prefetched month once and keeps the current month on every tick', async () => {
-    const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), queue: { enqueue: async (entry) => (entry as { run: () => Promise<unknown> }).run() } })
+    const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), queue: { enqueue: <T>(entry: { run: () => Promise<T> }) => entry.run() } })
     await transport.requestAutomatic()
     const second = await transport.requestAutomatic()
     expect(second.scopes).toHaveLength(6)
@@ -323,7 +349,7 @@ describe('0xRouter calendar transport', () => {
       ? { state: 'failed' as const, failureCode: 'response-unavailable' as const }
       : { state: 'succeeded' as const, body: acceptedBody, acceptedBytes: Buffer.byteLength(acceptedBody), status: 200, contentType: 'application/json' })
     const { transport } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), requestJsonBody,
-      queue: { enqueue: async (entry) => (entry as { run: () => Promise<unknown> }).run() } })
+      queue: { enqueue: <T>(entry: { run: () => Promise<T> }) => entry.run() } })
     await transport.requestAutomatic()
     const retry = await transport.requestAutomatic()
     expect(retry.scopes.filter(scope => scope.month === '2026-10')).toHaveLength(2)
@@ -357,8 +383,9 @@ describe('0xRouter calendar transport', () => {
     for (let index = 0; index < policy.rollingWindow.maxRequests; index += 1) {
       await queue.enqueue({ sourceId: zeroXRouterSourcePolicy.sourceId, policy, apiKey, run: async () => undefined })
     }
-    const enqueue = vi.fn(queue.enqueue)
-    const { transport, requestJsonBody } = createHarness({ queue: { enqueue }, now: () => new Date(now) })
+    // 队列还是那一个（后面的 `pendingCount()` 还要用它），只是把 `enqueue` 记下来再转发。
+    const { port, enqueue } = spyQueue(queue)
+    const { transport, requestJsonBody } = createHarness({ queue: port, now: () => new Date(now) })
     const automatic = transport.requestAutomatic()
     await vi.waitFor(() => expect(queue.pendingCount()).toBe(1))
     const manual = transport.requestManual({
