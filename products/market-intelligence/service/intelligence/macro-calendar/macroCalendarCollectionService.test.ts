@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import { createMacroCalendarCollectionService } from './macroCalendarCollectionService'
+import type { MacroCalendarHttpResult } from './macroCalendarHttpClient'
 import { getMacroCalendarOfficialSourceDescriptor } from './macroCalendarOfficialSourceRegistry'
 
 const detectedAt = '2026-08-04T00:00:00.000Z'
@@ -152,10 +154,10 @@ describe('macroCalendarCollectionService', () => {
 })
 
 function createService(options: {
-  enabledProviderIds?: string[]
+  enabledProviderIds?: MacroCalendarProviderId[]
   descriptorId?: string
   body?: string
-  httpResult?: unknown
+  httpResult?: MacroCalendarHttpResult
   profileError?: Error
   httpError?: Error
   evidenceAppend?: (input: Record<string, unknown>) => unknown
@@ -171,7 +173,7 @@ function createService(options: {
   const httpRequest = vi.fn(async () => {
     if (options.httpError) throw options.httpError
     return options.httpResult ?? {
-    ok: true, descriptorId: descriptor.descriptorId, status: 200,
+    ok: true as const, descriptorId: descriptor.descriptorId, status: 200,
     acceptedBytes: Buffer.byteLength(body, 'utf8'), body, contentType: 'application/json'
     }
   })
