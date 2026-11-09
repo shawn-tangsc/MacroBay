@@ -6,7 +6,7 @@ import type {
   MessageData
 } from '../schemas/sessionSchemas'
 import { getAgentMessagePromptText } from '../schemas/messageDataHelpers'
-import { clearAgentSessionMessages, deleteAgentSessionMessage, listAgentSessionMessages } from '../store/agentStore'
+import { clearAgentSessionMessages, deleteAgentSessionMessage, listAgentSessionMessages, settleSessionPendingMessages } from '../store/agentStore'
 import type { AgentPlatformQueryAdapters, AgentPlatformStateStore } from './agentServiceTypes'
 
 export class AgentSessionMessageService {
@@ -30,6 +30,15 @@ export class AgentSessionMessageService {
       }),
       nextCursor: page.nextCursor
     }
+  }
+
+  /**
+   * 打开/附着某个会话时调一次：这个会话在本进程**没有活着的运行**，就把它的 pending 收成失败。
+   * 只动这一个会话；`turnLive` 为真时什么都不做。
+   */
+  async settlePendingTurnIfGone(sessionId: string, turnLive: boolean): Promise<void> {
+    if (turnLive) return
+    await this.store.update((state) => settleSessionPendingMessages(state, sessionId))
   }
 
   async saveMessage(params: {

@@ -16,6 +16,8 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+// 单实例锁的判定搬到了独立模块（app.ts 只留调用点），断言跟着实现走。
+const singleInstanceLockSource = readSource('runtimeSingleInstanceLock.ts')
 // 产品可见的智能体会话面（含 `invokeProductIpc` 的接线）已搬到这个模块，断言跟着实现走。
 const productAgentWiringSource = readSource('productAgentPlatformWiring.ts')
 const webIpcSource = readSource('ipc/webIpc.ts')
@@ -410,8 +412,8 @@ describe('desktop main IPC surface', () => {
   })
 
   it('does not request the normal global single-instance lock in product acceptance mode', () => {
-    expect(appSource).toContain('function requestRuntimeSingleInstanceLock(productAcceptanceEnabled: boolean): boolean')
-    expect(appSource).toContain('if (productAcceptanceEnabled) return true')
+    expect(singleInstanceLockSource).toContain('function requestRuntimeSingleInstanceLock(productAcceptanceEnabled: boolean): boolean')
+    expect(singleInstanceLockSource).toContain('if (productAcceptanceEnabled) return true')
     expect(appSource).toContain('const gotLock = requestRuntimeSingleInstanceLock(productAcceptanceProfile.enabled)')
     expect(appSource).toContain("if (!productAcceptanceProfile.enabled) app.on('second-instance'")
   })

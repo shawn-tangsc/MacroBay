@@ -654,6 +654,39 @@ export function reconcileStalePendingMessages(
   return changed ? { ...state, messagesBySessionId } : state
 }
 
+/**
+ * 同进程卡死：只把**这一个会话**里残留的 `pending` 收成失败。
+ *
+ * 判据由调用方给（该会话的运行不在本进程运行表里），这里只管「收这一个会话」——
+ * 绝不做全局扫描：别的会话可能正在跑，那正是另一个窗口的回合被误收的路径。
+ */
+export function settleSessionPendingMessages(
+  state: AgentStoreState,
+  sessionId: string,
+  stoppedText = '上次运行已中断，可以重新发一次。'
+): AgentStoreState {
+  const messages = state.messagesBySessionId[sessionId] ?? []
+  if (!messages.some((message) => message.status === 'pending')) return state
+  const now = new Date().toISOString()
+  return {
+    ...state,
+    messagesBySessionId: {
+      ...state.messagesBySessionId,
+      [sessionId]: messages.map((message) => {
+        if (message.status !== 'pending') return message
+        const nextData = message.searchableText.trim() ? message.data : textData(stoppedText)
+        return {
+          ...message,
+          status: 'error' as const,
+          data: nextData,
+          searchableText: messageDataToSearchableText(nextData),
+          updatedAt: now
+        }
+      })
+    }
+  }
+}
+
 export function mergeAgentRuntimeSessionState(
   current: AgentStoreState,
   runtimeSnapshot: AgentStoreState,

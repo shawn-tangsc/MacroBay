@@ -26,6 +26,7 @@ import { createAgentPlatformServices } from '../../ai/agent-platform/services'
 import { McpRuntimeService } from '../../ai/agent-platform/mcp'
 import { mergeAgentRuntimeSessionState, reconcileStalePendingMessages, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 import { processBootId } from './processBootId'
+import { requestRuntimeSingleInstanceLock } from './runtimeSingleInstanceLock'
 import { createAgentPlatformDatabase } from '../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
@@ -663,11 +664,6 @@ function expectedProductIpcMethods(productManifests: readonly ProductManifest[])
   )
 }
 
-function requestRuntimeSingleInstanceLock(productAcceptanceEnabled: boolean): boolean {
-  if (productAcceptanceEnabled) return true
-  return app.requestSingleInstanceLock()
-}
-
 function reportProductAcceptanceRegistration(input: {
   productIds: readonly string[]
   productIpcMethodCount: number
@@ -1116,6 +1112,9 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     ...builtinSeedFactories.map((factory) => factory.create(providers, { language }))
   )
   const seededState = mergeAgentStoreSeeds(await agentStore.getState(), productSeed)
+  // 崩溃收尾只在这里跑、只跑一次（boot 阶段）。假设是**近似成立**的：它跑在 renderer 开始读会话之前，
+  // 而不是「主窗创建之前」——主窗在更早的装配里已经建好。代价最多是渲染层短暂看到一条属于上一个
+  // 已死批次的 pending，不会误收正在跑的回合（那时本进程还没派发过运行）。
   await replaceAgentState(
     reconcileStalePendingMessages(
       localizeBuiltinSeedCopy(seededState, language, buildBuiltinSeedVariants(providers)),

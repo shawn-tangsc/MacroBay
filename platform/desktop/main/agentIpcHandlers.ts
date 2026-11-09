@@ -1,4 +1,5 @@
 import type { AgentRuntimeControl } from '../../ai/agent-platform/runtime/runtimeTypes'
+import { isSessionTurnLive } from '../../ai/agent-platform/runtime/sessionRuntimeLiveness'
 import type { AgentPlatformServices } from '../../ai/agent-platform/services'
 import type { UpdateAgentDto } from '../../ai/agent-platform/schemas/agentSchemas'
 import type { CreateTaskDto, UpdateTaskDto } from '../../ai/agent-platform/schemas/taskSchemas'
@@ -211,8 +212,13 @@ export function createAgentIpcHandlers(
       return taskRunController.cancelTaskRun(runLogId)
     },
     listSessions: (query: ListAgentSessionsQuery = {}) => services.sessions.listByCursor(query),
-    listSessionMessages: (sessionId: string, query: AgentSessionMessagesListQuery = {}) =>
-      services.messages.listSessionMessages(sessionId, query),
+    listSessionMessages: async (sessionId: string, query: AgentSessionMessagesListQuery = {}) => {
+      // 打开/附着会话这一趟：本进程里这个会话没有活着的运行，就把它残留的 pending 收成失败。
+      // 只判这一个会话，**不做全局扫描**——别的会话可能正在跑。
+      const runtimeState = runtime?.getSnapshot?.().sessions[sessionId]
+      await services.messages.settlePendingTurnIfGone(sessionId, isSessionTurnLive(runtimeState))
+      return services.messages.listSessionMessages(sessionId, query)
+    },
     createSession: (dto: CreateAgentSessionDto) => services.sessions.create(dto),
     updateAgent: (agentId: string, patch: UpdateAgentDto) => services.agents.update(agentId, patch),
     deleteAgent: async (agentId: string) => {
