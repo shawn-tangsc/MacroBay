@@ -112,7 +112,7 @@ function clientWhereCountriesFailToSave(initial: CalendarReminderSettingsView): 
   return {
     read: async () => freshCopy(held),
     write: async (patch) => {
-      if ('landedCountries' in patch) return { settings: freshCopy(held), state: 'not-saved' }
+      if ('landedCountries' in patch) return { settings: freshCopy(held), state: 'not-saved', reason: 'write-failed' as const }
       held = { ...held, ...patch }
       return { settings: freshCopy(held), state: 'saved' }
     }

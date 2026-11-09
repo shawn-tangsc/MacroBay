@@ -34,7 +34,7 @@ function harness(input: Readonly<{
   const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' }))
   const log = vi.fn()
   const deps: CalendarEventReminderDeps = {
-    readSettings: () => input.settings ?? settings(),
+    readSettings: () => ({ state: 'readable' as const, settings: input.settings ?? settings() }),
     readEvents: () => input.events ?? [event()],
     submit: submit as never,
     now: () => NOW,
@@ -135,7 +135,7 @@ describe('calendar reminder job', () => {
     const job = registerCalendarEventReminderJob(
       { registerHandler, setSchedule: vi.fn(), removeSchedule: vi.fn() } as never,
       {
-        readSettings: () => settings(),
+        readSettings: () => ({ state: 'readable' as const, settings: settings() }),
         readEvents: () => [event({ eventKey: 'a' }), event({ eventKey: 'b' })],
         submit: submit as never,
         now: () => NOW,

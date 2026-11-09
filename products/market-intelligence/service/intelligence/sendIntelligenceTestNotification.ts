@@ -40,7 +40,7 @@ import {
 export type IntelligenceTestDeps = Readonly<{
   intelligence: IntelligenceModule
   /** 与真实提醒同一个读取函数（作业原样暴露的那个），测试样例必须与真实链路同源。 */
-  calendarReminder: Pick<CalendarEventReminderWiring, 'read' | 'readEvents'>
+  calendarReminder: Pick<CalendarEventReminderWiring, 'readWithStatus' | 'readEvents'>
   /** 日历数据源启用状态：为空 = `disabled`，抛错 = `unreadable`，两者都**不许**用空数组顶替。 */
   readEnabledCalendarFeeds: () => Promise<readonly string[]>
   /** 读者显示时区（壳层 `shellTimeZone().get()`）；空串或抛错都按「读不到时区」处理。 */
@@ -124,10 +124,13 @@ async function readSentiment(deps: IntelligenceTestDeps, now: string): Promise<C
 
 async function readUpcoming(deps: IntelligenceTestDeps, now: string): Promise<CandidateRead> {
   const source = await calendarSource(deps)
+  const read = deps.calendarReminder.readWithStatus()
+  // 设置读不出来：这一条样例给「读不到」，不拿默认值演示一条读者不会收到的提醒。
+  if (read.state === 'unreadable') return { kind: 'unavailable', reasonCode: 'read-failed' }
   const result = calendarUpcomingTestCandidate({
     now,
     source,
-    settings: deps.calendarReminder.read(),
+    settings: read.settings,
     events: deps.calendarReminder.readEvents()
   })
   if (result.kind === 'reminder' || result.kind === 'nearest-future') {

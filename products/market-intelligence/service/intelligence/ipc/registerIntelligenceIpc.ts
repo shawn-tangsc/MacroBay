@@ -116,7 +116,7 @@ export function registerIntelligenceIpc(
     const testDeps = {
       ...notificationTest,
       intelligence: intelligenceModule,
-      calendarReminder: calendarReminder as unknown as Pick<CalendarEventReminderWiring, 'read' | 'readEvents'>
+      calendarReminder: calendarReminder as unknown as Pick<CalendarEventReminderWiring, 'readWithStatus' | 'readEvents'>
     }
     register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.sendTestNotification, async (payload) =>
       sendIntelligenceTestNotification(parseIntelligenceTestRequest(payload), testDeps)
@@ -134,7 +134,9 @@ export function registerIntelligenceIpc(
       const patch = (payload ?? {}) as Readonly<Record<string, unknown>>
       const result = calendarReminder.writeWithStatus(patch as never)
       // 写设置的人就是让排程生效的人：不留「设置开了、作业没排上」的中间态。
-      calendarReminder.applySchedule(result.settings.enabled === true)
+      // 读不到时写被拒（`unreadable`），此时**不动排程**——我们不知道盘上原来是什么，编不得。
+      if (result.state === 'saved') calendarReminder.applySchedule(result.settings.enabled === true)
+      else if (result.reason === 'write-failed') calendarReminder.applySchedule(result.settings.enabled === true)
       // 「没存上」作为一个结果回给页面，不抛：抛出去页面只剩一句笼统失败，旧值也没法留在界面上。
       return result
     })

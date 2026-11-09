@@ -96,7 +96,7 @@ export function registerCalendarEventReminder(input: Readonly<{
   }
 
   const job = registerCalendarEventReminderJob(input.jobRuntime, {
-    readSettings: () => settings.read(),
+    readSettings: () => settings.readWithStatus(),
     readEvents,
     submit: input.submit as never,
     now,

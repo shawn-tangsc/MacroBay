@@ -65,9 +65,11 @@ export function useCalendarReminderSettings(
     void client.write(patch).then(
       (outcome) => {
         setSaving(false)
+        if (outcome.state === 'saved') { setValue(outcome.settings); return }
+        // 读不到：设置页那一整块改成「读不到 + 重试」——服务端拒绝覆盖原文件，这里也不假装存上了。
+        if (outcome.reason === 'unreadable') { setStatus('error'); return }
         // 没存上：不拿旧值覆盖读者刚选的（界面自己保留草稿），只报"这次没存上"。
-        if (outcome.state === 'saved') setValue(outcome.settings)
-        else setSaveFailedField(field)
+        setSaveFailedField(field)
       },
       () => { setSaving(false); setSaveFailedField(field) }
     )

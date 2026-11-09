@@ -68,7 +68,7 @@ function deps(over: Partial<IntelligenceTestDeps> = {}): IntelligenceTestDeps {
   return {
     intelligence: minimumModule(),
     calendarReminder: {
-      read: () => REMINDER_ON,
+      readWithStatus: () => ({ state: 'readable' as const, settings: REMINDER_ON }),
       readEvents: () => []
     },
     readEnabledCalendarFeeds: async () => ['macro-calendar'],
@@ -162,7 +162,7 @@ describe('sendIntelligenceTestNotification — 真的发出去了', () => {
     )
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
       calendarReminder: {
-        read: () => REMINDER_ON,
+        readWithStatus: () => ({ state: 'readable' as const, settings: REMINDER_ON }),
         readEvents: () => [{ eventKey: 'cpi', title: '美国 CPI', scheduledAt: '2026-11-08T05:30:00.000Z', importance: 'high' as const }]
       },
       submit
@@ -184,7 +184,7 @@ describe('sendIntelligenceTestNotification — 真的发出去了', () => {
   it('a rejected submit is not a success — it comes back as read-failed', async () => {
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
       calendarReminder: {
-        read: () => REMINDER_ON,
+        readWithStatus: () => ({ state: 'readable' as const, settings: REMINDER_ON }),
         readEvents: () => [{ eventKey: 'cpi', title: '美国 CPI', scheduledAt: '2026-11-08T05:30:00.000Z', importance: 'high' as const }]
       },
       submit: async (): Promise<NotificationSubmitOutcome> => ({ kind: 'rejected', reason: 'unknown-event-type', message: 'no such event' })
@@ -192,11 +192,12 @@ describe('sendIntelligenceTestNotification — 真的发出去了', () => {
     expect(result).toEqual({ state: 'unavailable', reasonCode: 'read-failed' })
   })
 
-  it('a reader that throws is read-failed, and nothing is submitted', async () => {
+  it('an unreadable settings file is read-failed, and nothing is submitted', async () => {
+    // 设置读不到时**不拿默认值演示**一条读者不会收到的提醒：这一条样例给「读不到」。
     const submit = vi.fn()
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
       calendarReminder: {
-        read: () => { throw new Error('store unreadable') },
+        readWithStatus: () => ({ state: 'unreadable' as const, reason: 'corrupt' as const }),
         readEvents: () => []
       },
       submit
