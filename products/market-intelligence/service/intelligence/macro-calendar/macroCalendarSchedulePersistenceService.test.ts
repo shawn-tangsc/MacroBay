@@ -151,7 +151,8 @@ describe('macroCalendarSchedulePersistenceService', () => {
     const source = createTestEvidenceStore()
     const record = appendScheduleEvidence(source, 'macro-calendar-fed-schedule', fixture('fed-fomc-schedule-2026-08-03.html'))
     const repository = { appendIfNew: () => { throw new Error('must not write') } } as unknown as MacroCalendarRepository
-    const evidence = { getCalendarRecord: () => ({ ...source.getCalendarRecord(record.rawRecordId)!, rawRecordId: 'raw-other' }) }
+    // 边界要求 `readBody` 与 `getCalendarRecord` 两个方法都在：真实 store 转出，只覆盖这一个返回值。
+    const evidence = { ...source, getCalendarRecord: () => ({ ...source.getCalendarRecord(record.rawRecordId)!, rawRecordId: 'raw-other' }) }
 
     expect(createMacroCalendarSchedulePersistenceService({ evidence, repository }).persistScheduleEvidence(record.rawRecordId)).toEqual({
       providerId: 'macro-calendar-fed', descriptorId: 'macro-calendar-fed-schedule', state: 'failed', failureCode: 'evidence-invalid', insertedCount: 0
@@ -176,7 +177,10 @@ describe('macroCalendarSchedulePersistenceService', () => {
   })
 })
 
-function appendScheduleEvidence(evidence: ReturnType<typeof createMacroCalendarEvidenceStore>, descriptorId: 'macro-calendar-fed-schedule' | 'macro-calendar-bea-schedule', body: string) {
+/** 测试包装在 `append` 里自己 reserve（见 `createTestEvidenceStore`），所以这里收它的返回类型。 */
+type TestEvidenceStore = ReturnType<typeof createTestEvidenceStore>
+
+function appendScheduleEvidence(evidence: TestEvidenceStore, descriptorId: 'macro-calendar-fed-schedule' | 'macro-calendar-bea-schedule', body: string) {
   const descriptor = getMacroCalendarOfficialSourceDescriptor(descriptorId)!
   return evidence.append({
     descriptor, sourceUrl: descriptor.sourceUrl, detectedAt, body, payloadFormat: descriptor.payloadFormat,
