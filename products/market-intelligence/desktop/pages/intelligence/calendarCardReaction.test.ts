@@ -125,7 +125,7 @@ describe('which rows get a reaction read', () => {
     const released = row({ eventKey: 'a', at: iso(0) })
     const upcoming = row({ eventKey: 'b', at: iso(60), kind: 'upcoming' })
     const before = projection([released], [upcoming])
-    const reaction = { index: 0.5, btc: null, eth: -0.25 }
+    const reaction = { index: 0.5, btc: null, eth: -0.25, dxy: 0.12 }
     const after = attachReactions(before, new Map([[iso(0), reaction]]))
     expect(after.today[0]?.reaction).toEqual(reaction)
     expect(after.upcoming[0]?.reaction).toBeUndefined()
