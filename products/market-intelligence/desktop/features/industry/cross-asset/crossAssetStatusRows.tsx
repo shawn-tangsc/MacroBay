@@ -8,6 +8,7 @@ import type { productText } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { crossAssetTextKeys } from './crossAssetTextKeys'
+import { LoadingState } from '@platform/ui/components/loading'
 
 /**
  * 市场状态表里三行行情（纳指 / BTC / ETH）与它们共用的单元格、空行、末次收盘说明。
@@ -70,6 +71,19 @@ export function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMe
     return cell
   })}</>
 }
+/**
+ * 那一路还在读：整行等，不给结论。
+ *
+ * 与 `PlannedStatusRow` 的区别只在最后一句——「未接入」是读完之后的事实，不能拿来填加载中的空档；
+ * 等待区一律走平台 `LoadingState`（这条线不许自绘 spinner 或写一个 `loading…` 段落）。
+ */
+export function LoadingStatusRow({ id, text }: { id: MacroDriverId; text: Text }): React.ReactElement {
+  return <tr data-status-row={id} data-connected="false" data-status-loading="true">
+    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
+    <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><LoadingState layout="inline" size="sm" label={text.loading} /></td>
+  </tr>
+}
+
 /** No figure and no value cell at all: the row states the gap instead of filling it. */
 export function PlannedStatusRow({ id, text }: { id: MacroDriverId; text: Text }): React.ReactElement {
   return <tr data-status-row={id} data-connected="false">

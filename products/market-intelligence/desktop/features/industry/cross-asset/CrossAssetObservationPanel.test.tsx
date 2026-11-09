@@ -143,6 +143,26 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()) }
   })
 
+  it('waits for the macro and rates reads instead of claiming 未接入 first', async () => {
+    // 用户 11-02 报过「先闪一下获取失败再出数据」，同类：四行在 macro / rates 未结算时曾落回注册表的
+    // `planned`（未接入），读完再变「已接入」。未结算就是加载态，不许先给一个结论。
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
+    try {
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
+        { client: client as never, macroState: 'loading', ratesState: 'loading', text })))
+      for (const id of ['dxy', 'gold', 'us10y', 'realRate']) {
+        const row = host.querySelector(`[data-status-row="${id}"]`)
+        expect(row?.getAttribute('data-status-loading'), id).toBe('true')
+        expect(row?.textContent, id).not.toContain(text.notConnected)
+      }
+      // 指数与两条加密行不归这两路读管，仍是既有形态。
+      expect(host.querySelector('[data-status-row="btc"]')?.getAttribute('data-status-loading')).toBeNull()
+    } finally { await act(async () => root.unmount()) }
+  })
+
   // The dashboard's 市场状态 block reads the macro snapshot: the dollar is the product's own
   // synthesis and says so, gold is a licensed level, and the two rate rows still have no source.
   it('shows the collected dollar and gold readings, labelling the computed dollar index', async () => {
