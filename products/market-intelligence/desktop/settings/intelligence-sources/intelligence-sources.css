@@ -621,122 +621,42 @@
   line-height: 1.5;
 }
 
-.intelligence-focus-markets-section {
-  margin: 0;
-}
-
-.intelligence-focus-market-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 46px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 68%, transparent);
-}
-
-.intelligence-focus-market-summary .ant-btn {
-  color: var(--muted-strong);
-}
-
-.intelligence-focus-market-defaults {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: center;
-  min-width: 0;
-}
-
-.intelligence-focus-market-default-label {
-  color: var(--muted-strong);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.4;
-}
 
 
-.intelligence-focus-market-save-failed {
-  display: block;
-  margin: 8px 12px 0;
-  color: var(--muted);
-  font-size: var(--font-meta);
-  line-height: var(--line-meta);
-}
-
-/* 当前值：文本枚举（`--text-primary`），档与档之间留 8 的间距，不画成状态药丸。 */
-.intelligence-focus-market-values {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-  color: var(--text-primary);
-}
 
 
-.intelligence-focus-market-groups {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
 
-.intelligence-focus-market-group {
-  display: grid;
-  gap: 8px;
-}
 
-.intelligence-focus-market-group-title {
-  color: var(--muted-strong);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.4;
-}
 
-.intelligence-focus-market-grid {
-  display: grid;
-  gap: 8px;
-}
 
-.intelligence-focus-market-tile {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-  min-height: 56px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 68%, transparent);
-}
 
-.intelligence-focus-market-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
 
-.intelligence-focus-market-copy strong {
-  color: var(--text-strong);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.35;
-}
 
-.intelligence-focus-market-copy small {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.4;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @media (max-width: 1380px) {
   .intelligence-overview-grid,
   .intelligence-detail-section-grid {
     grid-template-columns: 1fr;
-  }
-
-  .intelligence-focus-market-groups {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -747,8 +667,7 @@
 
   .intelligence-setting-grid,
   .intelligence-health-list,
-  .intelligence-translation-status,
-  .intelligence-focus-market-groups {
+  .intelligence-translation-status {
     grid-template-columns: 1fr;
   }
 
@@ -822,10 +741,6 @@
   .intelligence-actions,
   .intelligence-translation-footer {
     flex-wrap: wrap;
-  }
-
-  .intelligence-focus-market-summary {
-    grid-template-columns: 1fr;
   }
 
   .intelligence-translation-pill-wide {

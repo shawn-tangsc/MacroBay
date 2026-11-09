@@ -252,24 +252,6 @@ export const intelligenceSourcesText = {
   runSucceeded: '采集成功。',
   testFailed: '凭证测试失败，请重试。',
   replayFailed: '重放请求失败，请重试。',
-  focusMarkets: {
-    title: '默认覆盖范围',
-    description: '每个信息源都有内置覆盖范围，系统会按默认规则工作。通常无需调整；只有需要强行改变采集覆盖时再自定义。',
-    customize: '高级自定义',
-    customizeDone: '完成',
-    saving: '保存中…',
-    saveFailed: '这次没存上，请重试',
-    infoAria: '默认覆盖范围这一项的说明',
-    markets: {
-      'global-macro': '全球宏观',
-      'digital-assets': '数字资产',
-      'cn-a-shares': 'A 股',
-      'us-equities': '美股',
-      'china-futures': '国内期货',
-      fx: '外汇',
-      commodities: '大宗商品'
-    }
-  },
   focusGroups: {
     globalMacro: '宏观与监管',
     digitalAssets: '加密市场',
@@ -705,25 +687,6 @@ export const intelligenceSourcesText = {
   runSucceeded: 'Collection succeeded.',
   testFailed: 'Credential test failed. Try again.',
   replayFailed: 'Replay request failed. Try again.',
-  focusMarkets: {
-    title: 'Default Coverage',
-    description:
-      'Each source has built-in coverage and works with its default rules. You usually do not need to change this; customize only when overriding collection scope.',
-    customize: 'Advanced customize',
-    customizeDone: 'Done',
-    saving: 'Saving…',
-    saveFailed: 'That did not save — try again',
-    infoAria: 'About the default coverage',
-    markets: {
-      'global-macro': 'Global Macro',
-      'digital-assets': 'Digital Assets',
-      'cn-a-shares': 'A-shares',
-      'us-equities': 'US Equities',
-      'china-futures': 'China Futures',
-      fx: 'FX',
-      commodities: 'Commodities'
-    }
-  },
   focusGroups: {
     globalMacro: 'Macro & regulation',
     digitalAssets: 'Crypto market',

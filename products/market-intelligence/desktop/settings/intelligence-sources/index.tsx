@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react'
 
-import { Button, Checkbox } from 'antd'
-
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
-import { INTELLIGENCE_FOCUS_MARKET_IDS } from '../../../service/intelligence/application/intelligenceFocusSettings'
-import type { IntelligenceFocusMarket, IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
+import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { productText } from '../../shared/i18n/productText'
-import { SettingsInfo } from '../settingsInfo'
 import { ProviderDetail } from './ProviderDetail'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
 import { SourceSpecificSection } from './SourceSpecificSection'
@@ -22,10 +18,6 @@ import './intelligence-sources.css'
 export default function IntelligenceSourcesSettingsSection(): React.ReactElement {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
-  /** 「默认覆盖范围」：展开态、读者草稿、这一处自己的失败提示。 */
-  const [focusExpanded, setFocusExpanded] = useState(false)
-  const [focusDraft, setFocusDraft] = useState<readonly IntelligenceFocusMarket[]>([])
-  const [focusSaveFailed, setFocusSaveFailed] = useState(false)
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
   const {
@@ -50,30 +42,11 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     testCredentials,
     replayWindow,
     refreshHealth,
-    saveFocusMarkets,
-    focusMarketSettings,
     profiles,
     definitions,
-    updateSourceProfile,
-    savingFocusMarkets
+    updateSourceProfile
   } = useIntelligenceSourcesSettings(t)
   const translation = useIntelligenceTranslationSettings(t.translationPreferences)
-  const confirmedFocusMarkets = focusMarketSettings.enabledFocusMarkets
-  // 草稿看**服务端确认值的内容**，不看对象引用：别处保存成功会换一个新对象，那不该抹掉
-  // 读者刚点、但还没存上的选择（与通知设置页同一处教训）。
-  const confirmedFocusKey = confirmedFocusMarkets.join(',')
-  useEffect(() => { setFocusDraft(confirmedFocusMarkets) }, [confirmedFocusKey]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const toggleFocusMarket = (market: IntelligenceFocusMarket, checked: boolean): void => {
-    const next = checked
-      ? [...focusDraft, market]
-      : focusDraft.filter((entry) => entry !== market)
-    setFocusDraft(next)
-    setFocusSaveFailed(false)
-    // 空选择由服务端归一成默认两个；失败时保留草稿并就地报「这次没存上」。
-    void saveFocusMarkets(next).then((saved) => { if (!saved) setFocusSaveFailed(true) })
-  }
-
   // 采集策略：每源一份 profile，读 `profiles`；是否支持情绪分析由源定义决定（同一个事实只读一处）。
   const policyProfiles: Readonly<Record<string, IntelligenceSourceProfile>> = Object.fromEntries(
     profiles.map((profile) => [profile.sourceId, profile])
@@ -81,10 +54,6 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
   const supportsSentimentById: Readonly<Record<string, boolean>> = Object.fromEntries(
     definitions.map((definition) => [definition.sourceId, definition.supportsSentiment === true])
   )
-  const focusMarketText: Readonly<Record<string, string>> = {
-    'settings.intelligenceSources.focusMarkets.infoAria': t.focusMarkets.infoAria,
-    'settings.intelligenceSources.focusMarkets.description': t.focusMarkets.description
-  }
   useEffect(() => {
     if (selectedProviderId || !settingsView) return
     const first = settingsView.groups.flatMap((group) => group.providers)[0]
@@ -136,64 +105,6 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
           /></div> : null
         })() : null}
-        {/* 默认覆盖范围：一行当前值 + ⓘ（说明）+ 自定义；正文里没有整句解释。
-            它决定看板带哪些资产（`intelligenceWorkspaceQueries` 每次查询现读这份设置）。 */}
-        <section
-          aria-label={t.focusMarkets.title}
-          className="intelligence-focus-markets-section"
-        >
-          <div className="intelligence-focus-market-summary">
-            <div className="intelligence-focus-market-defaults">
-              <span className="intelligence-focus-market-default-label">{t.focusMarkets.title}</span>
-              <SettingsInfo
-                ariaLabelKey="settings.intelligenceSources.focusMarkets.infoAria"
-                labelKeys={['settings.intelligenceSources.focusMarkets.description']}
-                resolveText={(key) => focusMarketText[key] ?? ''}
-              />
-              {/* 当前值是**文本枚举**，不是状态药丸：值不是状态词，画成药丸既不属于
-                  `StatusPill` 的用法，档多时还会把一行撑爆（界面设计 2026-11-09）。 */}
-              <span className="intelligence-focus-market-values">
-                {focusDraft.map((market) => (
-                  <span key={market}>{t.focusMarkets.markets[market]}</span>
-                ))}
-              </span>
-            </div>
-            <Button
-              onClick={() => setFocusExpanded((open) => !open)}
-              size="small"
-              type="text"
-            >
-              {focusExpanded ? t.focusMarkets.customizeDone : t.focusMarkets.customize}
-            </Button>
-          </div>
-          {focusExpanded
-            ? <div className="intelligence-focus-market-groups">
-              <div className="intelligence-focus-market-group">
-                <div className="intelligence-focus-market-grid">
-                  {INTELLIGENCE_FOCUS_MARKET_IDS.map((market) => (
-                    // 不套 <label>：antd 的复选框自己就是一个 label，嵌套会让 DOM 把节点重排。
-                    <div className="intelligence-focus-market-tile" key={market}>
-                      <Checkbox
-                        aria-label={t.focusMarkets.markets[market]}
-                        checked={focusDraft.includes(market)}
-                        disabled={savingFocusMarkets}
-                        onChange={(event) => toggleFocusMarket(market, event.target.checked)}
-                      />
-                      <span className="intelligence-focus-market-copy">
-                        <strong>{t.focusMarkets.markets[market]}</strong>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            : null}
-          {focusSaveFailed
-            ? <span className="intelligence-focus-market-save-failed" role="status">
-              {t.focusMarkets.saveFailed}
-            </span>
-            : null}
-        </section>
       </div>
     </section>
   )
