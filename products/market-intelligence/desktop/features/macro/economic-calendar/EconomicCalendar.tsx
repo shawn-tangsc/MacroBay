@@ -371,7 +371,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
         {market.pending ? <span>{text.market.pending}</span> : market.feedback && market.feedback.state !== 'completed' ? <span>{text.market[market.feedback.state]}</span> : null}
         {market.feedback?.failureCode === 'storage-unavailable' || market.feedback?.failureCode === 'storage-pressure' ? <span>{text.unifiedDay.storageUnavailable}</span> : null}
         {market.loading ? <LoadingState layout="inline" size="sm" label={text.market.loading} /> : null}
-        {market.failure ? <span>{text.market.queryUnavailable}</span> : null}
+        {/* 只回答「命名月读到了没有」：窗口级 `failure` 会把相邻月的失败说成这一屏读不到。 */}
+        {market.namedMonthState.status === 'failed' ? <span>{text.market.queryUnavailable}</span> : null}
         {market.sources.map(source => <MarketCalendarSourceStatus key={source.eventType} source={source} text={text} />)}
         <CalendarSourceStatusInfo coverage={text.unifiedDay.coverage.replace('{months}', gridMonths.join(' · '))} sources={market.sources} text={text} />
         {market.feedback?.failureCode === 'disabled' || market.feedback?.failureCode === 'credential-not-configured' ?

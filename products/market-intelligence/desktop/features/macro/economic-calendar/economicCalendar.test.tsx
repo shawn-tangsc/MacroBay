@@ -1456,6 +1456,28 @@ describe('macro economic calendar', () => {
     } finally { query.mockRestore() }
   })
 
+  it('命名月读到了、相邻月失败 → 说「未完整加载」，绝不说「市场事件读取受限」', async () => {
+    // 顶部那行只回答「命名月读到了没有」：窗口级 `failure` 会把相邻月的失败说成这一屏读不到，
+    // 而这一屏的数据（命名月）明明读到了、也确实为空。
+    const copy = productText['zh-CN'].pages.intelligence.portal.calendar
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockImplementation(async (input: { month: string; locale: 'zh' | 'en' }) =>
+      input.month === '2026-08'
+        ? { state: 'available' as const, month: input.month, locale: input.locale, asOf, events: [], sources: [] }
+        : { state: 'unavailable' as const, failureCode: 'query-unavailable' as const })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+        getEventDetail: async () => unavailableDetail()
+      })
+      await flush()
+      const status = container.querySelector('.mi-market-calendar__status')?.textContent ?? ''
+      expect(status).not.toContain(copy.market.queryUnavailable)
+      // 命名月读到了、确实为空 → 空态照常；窗口不完整由日清单那句说。
+      expect(container.querySelector('.mi-economic-calendar__empty-state')).not.toBeNull()
+      expect(container.querySelector('[data-day-summary]')?.textContent).toContain(copy.unifiedDay.incomplete)
+    } finally { query.mockRestore() }
+  })
+
   it('月查询读不到、整块也没有内容 → 错误态 + 原因 + 重试（重试重读这个月）', async () => {
     // 四行表的第二行：任一来源失败且整块没有任何内容，只能是错误态，不许落成空态（那是在说「没有」）。
     const { container, client } = await renderCalendar({
