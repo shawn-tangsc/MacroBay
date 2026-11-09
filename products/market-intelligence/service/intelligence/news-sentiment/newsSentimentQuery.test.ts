@@ -114,7 +114,8 @@ describe('the widest window is capped at 100 rows', () => {
   // This is the other half of that promise — 120 stored judgments really do come back as 100.
   it('returns the newest 100 of 120 rows', async () => {
     const store = createNewsSentimentSqliteStore(':memory:')
-    const items = []
+    // 元素类型按 `listItems()` 实际读到的字段收窄：查询只读 itemId/title，条目本身由夹具给出。
+    const items: Array<{ itemId: string; sourceId: string; title: string; publishedAt: string }> = []
     for (let index = 0; index < 120; index += 1) {
       const at = new Date(Date.UTC(2026, 9, 24, 0, index, 0)).toISOString()
       items.push({ itemId: `item-${index}`, sourceId: 'coindesk-rss', title: `News ${index}`, publishedAt: at })

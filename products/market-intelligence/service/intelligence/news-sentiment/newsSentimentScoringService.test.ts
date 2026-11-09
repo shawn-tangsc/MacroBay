@@ -105,7 +105,7 @@ async function harness(options: {
             ledgerPath: options.alertLedger,
             submit:
               options.submitAlert ??
-              (async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'] }))
+              (async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'], suppressedLevels: [] }))
           }
         }
       : {})
@@ -332,7 +332,7 @@ describe('the scoring service exposes the push threshold it judges with', () => 
       alertDelivery: {
         ledgerPath: join(mkdtempSync(join(tmpdir(), 'news-ledger-')), 'ledger.sqlite'),
         thresholdFilePath,
-        submit: async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'] })
+        submit: async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'], suppressedLevels: [] })
       }
     })
   }
