@@ -96,7 +96,6 @@ describe('ProviderDetail source details', () => {
         labels: labels(),
         provider: fedProvider(),
         showSourceDetails: true,
-        onSelectSource: () => undefined
       }))
       await Promise.resolve()
     })
@@ -131,8 +130,7 @@ describe('ProviderDetail source details', () => {
             jobRegistered: true
           })]
         },
-        showSourceDetails: true,
-        onSelectSource: () => undefined
+        showSourceDetails: true
       }))
       await Promise.resolve()
     })
@@ -172,7 +170,7 @@ describe('ProviderDetail source details', () => {
           })]
         },
         showSourceDetails: true,
-        onSelectSource: () => undefined
+      
       }))
       await Promise.resolve()
     })
@@ -188,6 +186,32 @@ describe('ProviderDetail source details', () => {
     expect(container.querySelector('.status-pill--ok')).toBeNull()
     // 「未安排」不许显示成「已启用」。
     expect(container.textContent).toContain(settingsText.jobNotRegistered)
+  })
+
+  it('does not dress a source row as an entrance it cannot honour', async () => {
+    // 缺陷（MI-10-R17）：行入口的 onSelectSource 一直是空回调，点了没有任何反应——「看着能点、
+    // 其实没有去处」。修法是**渲染成非交互行**：不是按钮、没有箭头、没有 hover 指路。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: fedProvider(),
+        showSourceDetails: true
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const row = container.querySelector('.source-provider-detail__main')
+    expect(row).not.toBeNull()
+    expect(row?.tagName).toBe('DIV')
+    expect(row?.hasAttribute('onclick')).toBe(false)
+    expect(container.querySelector('.source-provider-detail__chevron')).toBeNull()
   })
 
   it('does not paint “enabled” next to “unavailable”: one of them has to win', async () => {
@@ -223,8 +247,7 @@ describe('ProviderDetail source details', () => {
             }
           })]
         },
-        showSourceDetails: true,
-        onSelectSource: () => undefined
+        showSourceDetails: true
       }))
       await Promise.resolve()
     })

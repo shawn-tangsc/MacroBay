@@ -38,6 +38,9 @@ function labels(): ProviderDetailLabels {
     connectionSucceeded: settingsText.connectionSucceeded,
     connectionFailed: settingsText.connectionFailed,
     connectionUnsupported: settingsText.connectionUnsupported,
+    unavailableReasonCode: settingsText.unavailableReasonCode,
+    automaticSyncStopped: settingsText.automaticSyncStopped,
+    lastSuccessfulSync: settingsText.lastSuccessfulSync,
     apiKey: settingsText.apiKey
   }
 }
@@ -91,7 +94,7 @@ async function render(provider: ProviderView): Promise<void> {
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(ProviderDetail, { labels: labels(), provider, onSelectSource: () => undefined }))
+    root?.render(createElement(ProviderDetail, { labels: labels(), provider }))
     await Promise.resolve()
   })
 }

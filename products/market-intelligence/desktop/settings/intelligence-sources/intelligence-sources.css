@@ -1108,7 +1108,6 @@
   background: transparent;
   color: inherit;
   text-align: left;
-  cursor: pointer;
 }
 
 .source-provider-detail__main strong {
@@ -1119,15 +1118,6 @@
 
 .source-provider-detail__main .intelligence-source-tags {
   min-width: 0;
-}
-
-.source-provider-detail__main:hover {
-  background: var(--surface-soft);
-}
-
-.source-provider-detail__chevron {
-  color: var(--muted);
-  flex: none;
 }
 
 .intelligence-provider-row.selected {

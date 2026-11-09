@@ -1,5 +1,5 @@
 import { Alert, Button, Input, Switch } from 'antd'
-import { ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -93,10 +93,9 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, onSelectSource, showSourceDetails, sourceDetailLabels, translation }: {
+export function ProviderDetail({ labels, provider, onChanged, showSourceDetails, sourceDetailLabels, translation }: {
   labels: ProviderDetailLabels
   provider: ProviderView
-  onSelectSource: (sourceId: string, calendar: boolean) => void
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   sourceDetailLabels?: { health: { statuses: Readonly<Record<string, string>> }; [key: string]: unknown }
@@ -308,7 +307,9 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
         ].filter((tag): tag is string => Boolean(tag))
         return <div key={source.sourceId}>
           <div className="source-provider-detail__row">
-          <button className="source-provider-detail__main" type="button" onClick={() => onSelectSource(source.sourceId, isCalendar(source))}>
+          {/* 非交互行：这个面板不提供「按源下钻」，所以它不画成入口（无按钮语义、无箭头、无
+              hover）——「看着能点、其实没有去处」是这一版在清的一类假可用。 */}
+          <div className="source-provider-detail__main">
             <strong>{name}</strong>
             <span className="intelligence-source-tags">
               {[...new Set(tags)].map((tag) => <em key={tag}>{tag}</em>)}
@@ -341,10 +342,7 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
                 ].join(' · ')}
               </span>
               : null}
-            {/* The one visible sign this row opens something: it is an entrance, not an action,
-                so it stays a row with an arrow rather than becoming a button. */}
-            <ChevronRight aria-hidden="true" className="source-provider-detail__chevron" size={13} />
-          </button>
+          </div>
           <Switch
             /* The row's label is the source name; the switch has to say what it does, or a screen
                reader reads the same name twice and cannot tell the two controls apart. */
