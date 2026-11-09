@@ -22,6 +22,7 @@ export type MarketAnalysisSessionMenuText = Readonly<{
 
 export function MarketAnalysisSessionMenu({
   sessions,
+  historyState = 'ready',
   currentSessionId,
   text,
   onNewConversation,
@@ -29,6 +30,11 @@ export function MarketAnalysisSessionMenu({
   onDeleteConversation
 }: Readonly<{
   sessions: readonly AgentSessionEntity[]
+  /**
+   * 会话历史的读取状态。未结算/读失败时**不画空态**——「还没读到」和「确实没有」是两件事，
+   * 前者的正确说法是「加载中」，而它已经在同一屏的标题旁写着。缺省按已结算处理（老调用点不变）。
+   */
+  historyState?: 'loading' | 'ready' | 'failed'
   currentSessionId?: string
   text: MarketAnalysisSessionMenuText
   onNewConversation: () => void
@@ -48,7 +54,10 @@ export function MarketAnalysisSessionMenu({
   const menu = (
     <div className="mi-agent-sessions">
       <div className="mi-agent-sessions__heading">{text.history}</div>
-      {sessions.length === 0
+      {historyState !== 'ready'
+        // 未结算或读失败：什么都不画，绝不断言「你从没有过会话」。
+        ? null
+        : sessions.length === 0
         ? <StateView
           action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: startNewConversation }}
           productReason={{ key: 'pages.intelligence.portal.analysisWorkspace.noSessions', resolve: resolveProductText }}

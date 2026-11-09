@@ -142,6 +142,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
           <small>{chat.agent?.modelName ?? t.loading}</small>
           <MarketAnalysisSessionMenu
             sessions={chat.sessions}
+            historyState={chat.historyState}
             currentSessionId={chat.sessionId}
             text={{
               newChat: t.newChatAction,

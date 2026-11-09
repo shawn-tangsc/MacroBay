@@ -131,3 +131,59 @@ it('never shows the run id as a conversation name, and marks the current row for
   expect(legacyRow.getAttribute('aria-current')).toBe('true')
   expect(rows.find((row) => row.textContent?.includes('市场解读对话'))?.getAttribute('aria-current')).toBeNull()
 })
+
+it('does not claim there are no conversations before the store has been read', async () => {
+  // 未结算 ≠ 空。state 未到时 sessions 是空数组，菜单若就此画「还没有会话」，
+  // 等于在同屏已经显示「加载中」的情况下先给一个错误结论。
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(MarketAnalysisSessionMenu, {
+      sessions: [],
+      historyState: 'loading',
+      text: { newChat: '新对话', history: '历史会话', delete: '删除会话', deleteConfirm: '删除这个会话？', cancel: '取消', untitledSession: '未命名会话' },
+      onNewConversation: vi.fn(),
+      onSelectConversation: vi.fn(),
+      onDeleteConversation: vi.fn()
+    }))
+  })
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('[aria-label="历史会话"]')!.click()
+  })
+
+  expect(document.body.textContent).not.toContain('还没有历史会话')
+  // 读失败也不许画成空态：那是「读不到」，不是「确实没有」。
+  await act(async () => {
+    root?.render(createElement(MarketAnalysisSessionMenu, {
+      sessions: [],
+      historyState: 'failed',
+      text: { newChat: '新对话', history: '历史会话', delete: '删除会话', deleteConfirm: '删除这个会话？', cancel: '取消', untitledSession: '未命名会话' },
+      onNewConversation: vi.fn(),
+      onSelectConversation: vi.fn(),
+      onDeleteConversation: vi.fn()
+    }))
+  })
+  expect(document.body.textContent).not.toContain('还没有历史会话')
+})
+
+it('shows the empty state once the read has settled and there really is nothing', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(MarketAnalysisSessionMenu, {
+      sessions: [],
+      historyState: 'ready',
+      text: { newChat: '新对话', history: '历史会话', delete: '删除会话', deleteConfirm: '删除这个会话？', cancel: '取消', untitledSession: '未命名会话' },
+      onNewConversation: vi.fn(),
+      onSelectConversation: vi.fn(),
+      onDeleteConversation: vi.fn()
+    }))
+  })
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('[aria-label="历史会话"]')!.click()
+  })
+  expect(document.body.textContent).toContain('还没有历史会话')
+  expect(document.body.textContent).toContain('创建')
+})
