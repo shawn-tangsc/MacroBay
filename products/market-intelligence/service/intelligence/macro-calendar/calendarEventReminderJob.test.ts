@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
-import type { CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
+import { DEFAULT_CALENDAR_REMINDER_SETTINGS, type CalendarReminderSettings } from '../../../contracts/calendarEventReminder'
 import { formatCalendarReminderInstant, renderCalendarReminderSentence } from './calendarEventReminderCopy'
 import {
   CALENDAR_EVENT_REMINDER_INTERVAL_MS,
@@ -15,7 +15,8 @@ import type { CalendarReminderEvent } from './calendarEventReminderScan'
 const NOW = '2026-11-07T12:00:00.000Z'
 
 function settings(overrides: Partial<CalendarReminderSettings> = {}): CalendarReminderSettings {
-  return { enabled: true, leadMinutes: 60, importance: ['high'], ...overrides }
+  // Derived from the contract's default so a newly required field cannot be left out silently.
+  return { ...DEFAULT_CALENDAR_REMINDER_SETTINGS, enabled: true, ...overrides }
 }
 
 function event(overrides: Partial<CalendarReminderEvent> = {}): CalendarReminderEvent {
