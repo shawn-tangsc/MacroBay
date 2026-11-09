@@ -23,7 +23,7 @@ function textOf(row: DashboardFeedRow, locale: 'zh-CN' | 'en-US' = 'zh-CN') {
 }
 
 const project = (over: Partial<DashboardFeedInput>) =>
-  projectDashboardFeedRows({ macroClient: true, macroState: 'ready', indexLoading: false, ...over })
+  projectDashboardFeedRows({ macroClient: true, macroState: 'ready', ratesState: 'ready', indexLoading: false, ...over })
 
 function macroSnapshot(readings: readonly MacroMarketSnapshotReading[], source: Readonly<{ enabled: boolean; hasCredential: boolean }> = { enabled: true, hasCredential: true }): MacroMarketSnapshotView {
   return { state: readings.length > 0 ? 'available' : 'empty', asOf, source, readings, caveats: [] }
@@ -51,6 +51,20 @@ const feedFor = (sources: readonly DashboardFeedSourceStatus[]): DashboardFeedSt
 const rowOf = (rows: readonly DashboardFeedRow[], id: DashboardFeedRow['id']): DashboardFeedRow => rows.find(row => row.id === id)!
 
 describe('dashboard feed rows', () => {
+  it('never says 不可用 before the daily read has settled — it is loading, like every other row', () => {
+    // 用户 11-02 报过「先闪一下获取失败再出数据」。启动时 `rates` 与源状态都没到，
+    // 这一行以前会先写「不可用」，等日线读回来才变「采集正常」——一个字的失败话术都不许先出现。
+    const loading = project({ ratesState: 'loading' })
+    expect(rowOf(loading, 'rates').state).toBe('loading')
+    expect(textOf(rowOf(loading, 'rates')).status).not.toBe(zh.feedStatus.states.unavailable)
+    expect(textOf(rowOf(loading, 'rates')).status).toContain(zh.feedStatus.states.loading)
+
+    // 源自己给了**确定**的原因（没凭据 / 关了 / 失败）时照旧说原因：那不是在猜读数，是配置事实。
+    const unconfigured = project({ ratesState: 'loading', feed: feedFor([feedSource('fred-rates-liquidity', { hasCredential: false })]) })
+    expect(rowOf(unconfigured, 'rates').state).toBe('unconfigured')
+    expect(textOf(rowOf(unconfigured, 'rates')).status).not.toContain(zh.feedStatus.states.loading)
+  })
+
   it('gives every feed that feeds the board its own row, in reading order', () => {
     const rows = project({
       macro: macroSnapshot([dxySynthetic(asOfMs), goldReading(asOfMs)]),

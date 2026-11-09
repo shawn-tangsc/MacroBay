@@ -118,7 +118,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     [text.crossAsset, calendarEventTitles]
   )
   const feedRows = projectDashboardFeedRows({
-    macroClient: Boolean(macroMarketClient), macroState: macroView.state,
+    macroClient: Boolean(macroMarketClient), macroState: macroView.state, ratesState: macroRatesView.state,
     ...(macroView.snapshot ? { macro: macroView.snapshot } : {}),
     ...(macroRatesView.snapshot ? { rates: macroRatesView.snapshot } : {}),
     indexLoading: Boolean(crossAssetClient) && feedView.indexState === 'loading',
