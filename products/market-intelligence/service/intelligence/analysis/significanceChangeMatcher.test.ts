@@ -41,9 +41,17 @@ it('reports a high-importance release the snapshot never carried, while it is st
   ])
 })
 
+/**
+ * 旧契约写进库里的行：`importance` 可能不是 high、`actual` 可能是 null。
+ * 新契约的类型不让人构造这种行，但库里的老数据运行时能读到——这正是这条用例要防的。
+ */
+function storedOfficial(overrides: Record<string, unknown>): MacroEconomicCalendarEventView {
+  return official(overrides as Partial<MacroEconomicCalendarEventView>)
+}
+
 it('does not replay history: only recent, high-importance, actually-released additions count', () => {
-  const current = (overrides: Partial<MacroEconomicCalendarEventView>): SignificanceBaseline =>
-    ({ official: [official(overrides)], provider: [], months: ['2026-10'], asOf: '2026-10-14T04:00:00.000Z' })
+  const current = (overrides: Record<string, unknown>): SignificanceBaseline =>
+    ({ official: [storedOfficial(overrides)], provider: [], months: ['2026-10'], asOf: '2026-10-14T04:00:00.000Z' })
   const base = { eventKey: 'CN.CPI.RELEASE.2026-M09', scheduledAt: '2026-10-14T01:30:00.000Z', detectedAt: '2026-10-14T02:00:00.000Z' }
 
   // Three days old: a first sync of a long month must not wake the model for it.
