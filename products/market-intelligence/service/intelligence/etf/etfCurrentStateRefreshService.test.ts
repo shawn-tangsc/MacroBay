@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { createEtfCurrentStateRefreshService } from './etfCurrentStateRefreshService'
 import { createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage } from '../store/etfCurrentStateStore'
 
@@ -127,7 +128,8 @@ describe('ETF current-state refresh service', () => {
   // incomplete window must not ring.
   it("hands the rule's own signals to the outlet after a write, one per flowing asset", async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
-    const handOffSignals = vi.fn(async () => undefined)
+    // 入参就是运行时真的交出去的那一类：写成无参 mock 会让 `calls[0][0]` 在类型上不存在。
+    const handOffSignals = vi.fn<(signals: readonly ModuleSignal[]) => Promise<void>>(async () => undefined)
     const service = createEtfCurrentStateRefreshService({
       isEnabled: async () => true,
       hasCredential: async () => true,
@@ -139,7 +141,7 @@ describe('ETF current-state refresh service', () => {
 
     await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
     expect(handOffSignals).toHaveBeenCalledTimes(1)
-    const handed = handOffSignals.mock.calls[0]![0] as readonly { moduleId: string; ruleId: string; asset: string; readiness: string }[]
+    const handed = handOffSignals.mock.calls[0]![0]
     // Only the asset whose three days really cleared the threshold; a quiet asset says nothing.
     expect(handed).toHaveLength(1)
     expect(handed[0]).toMatchObject({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc', readiness: 'available' })
