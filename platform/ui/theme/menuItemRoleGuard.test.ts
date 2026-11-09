@@ -23,9 +23,13 @@ const ALLOWED: Readonly<Record<string, string>> = {
   'apps/desktop-shell/src/renderer/src/shell/workspace/WorkspaceTabMenu.tsx':
     '与页签条共用开合与键盘编排（roving focus、禁用原因 aria-description），换 ContextMenu 会丢这套编排',
   'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderMoreMenu.tsx':
-    '内联面板（非 portal）以保证外点/Esc 关闭与 DOM 顺序稳定，换 ContextMenu 会把面板挪出上层结构',
+    '已评估（2026-11-09）：ContextMenu 用 createPortal 渲染、没有内联模式，这一处要的是「内联面板（非 portal）」，'
+    + '组件表达不了。换它会怎样：面板被挪进 portal，DOM 结构变化；外点/Esc 关闭与焦点归还要重写；'
+    + '发版期不做可见结构变化，且需界面签字。长期保留，除非 ContextMenu 增加非 portal 内联模式。',
   'apps/desktop-shell/src/renderer/src/shell/model-service/ProviderRowContextMenu.tsx':
-    '供应商行右键菜单带图标与禁用原因，且与行的选中态联动，换 ContextMenu 要重接行状态'
+    '已评估（2026-11-09）：菜单项带图标与**禁用原因**，且与行选中态联动，而 ContextMenu 的 item 契约只收 '
+    + '`{key,labelKey,disabled,tone}`。换它会怎样：禁用原因无处可放、行状态要重接，等于改行为不是替换。'
+    + '长期保留，除非 ContextMenu 支持行状态联动与禁用原因。'
 }
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
