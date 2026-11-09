@@ -1400,6 +1400,10 @@ describe('daily briefing page', () => {
     expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
     const banner = dom.querySelector<HTMLElement>('[data-open-settings-section="ai"]')!
     expect(banner.textContent).toBe(text.aiSettings.goEnable)
+    // 说明句不在正文：状态旁边只有一个 ⓘ，它的可访问名就是那句话，点开才看到。
+    const warning = banner.closest<HTMLElement>('.mi-daily-briefing-page__websearch-warning')!
+    expect(warning.textContent).toBe(`${text.aiSettings.webSearchOff}${text.aiSettings.goEnable}`)
+    expect(warning.querySelector(`button[aria-label="${text.aiSettings.webSearchOffHint}"]`)).not.toBeNull()
 
     await act(async () => {
       banner.click()

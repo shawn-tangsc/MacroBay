@@ -1,6 +1,9 @@
 import { Button } from 'antd'
+import { CircleHelp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 import { StateView } from '@platform/ui/components/state'
 
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
@@ -142,7 +145,21 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
       <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
       <DailyBriefingStorageNotice text={text.migration} />
       {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
-        <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
+        {/* 正文只留状态与动作：怎么配置那句是说明，挂在 ⓘ 上（同一句话只出现一处）。 */}
+        <div><strong>{text.aiSettings.webSearchOff}</strong>
+          <Popover
+            labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchOffHint"
+            resolveText={resolveProductText}
+            trigger={(triggerProps) => <IconButton
+              ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchOffHint"
+              variant="plain"
+              icon={CircleHelp}
+              resolveText={resolveProductText}
+              size="sm"
+              {...triggerProps}
+            />}
+          />
+        </div>
         <Button data-open-settings-section="ai" onClick={onOpenSettings}>{text.aiSettings.goEnable}</Button>
       </div> : null}
       {/* With nothing to read, the body is where the run reports itself. When this issue already has
