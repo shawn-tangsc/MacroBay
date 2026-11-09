@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, ChevronDown, Circle, Wrench } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentSessionEntity, AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
@@ -57,19 +57,26 @@ export default function AgentTodoListPanel({
   )
   if (!shouldShowTodoPanel(items)) return null
 
+  // 展开态由这条头部按钮控制：给它状态与指向，读屏才知道「这是可折叠的、现在开着」。
+  const listId = useId()
   const completed = items.filter((item) => item.status === 'completed').length
   const inProgress = items.some((item) => item.status === 'in_progress')
 
   return (
     <section className={narrow ? 'agent-todo-panel narrow' : 'agent-todo-panel'}>
-      <button type="button" className="agent-todo-header" onClick={() => setExpanded((current) => !current)}>
+      <button
+        type="button"
+        className="agent-todo-header"
+        aria-expanded={expanded}
+        aria-controls={listId}
+        onClick={() => setExpanded((current) => !current)}>
         <span className="agent-todo-icon">{inProgress ? <LoadingSpinner size="sm" /> : <Wrench size={14} />}</span>
         <strong>{t.todos.title}</strong>
         <small>{completed}/{items.length}</small>
         <ChevronDown size={14} className={expanded ? 'expanded' : ''} />
       </button>
       {expanded ? (
-        <div className="agent-todo-list">
+        <div className="agent-todo-list" id={listId}>
           {items.map((item) => (
             <div key={item.id} className={`agent-todo-item ${item.status}`}>
               {item.status === 'completed' ? <Check size={14} /> : null}
