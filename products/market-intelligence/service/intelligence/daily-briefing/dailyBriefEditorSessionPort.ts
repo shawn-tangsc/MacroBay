@@ -18,6 +18,12 @@ export type DailyBriefEditorSessionPort = Readonly<{
   state: (sessionId: string, state: DailyBriefSessionState) => Promise<void>
 }>
 
+/**
+ * 历史副本的身份后缀。**只是字符串，不承载语义**：任何一处按它判断可见性或身份都是错的
+ * （用例会在把它的值换掉后仍全绿，用来钉住这一点）。
+ */
+export const DAILY_BRIEF_HISTORY_REF_MARKER = '#history:'
+
 /** 一次生成属于哪一期：**身份**（不是标题）——同一期多次生成只承认一条会话。 */
 export function dailyBriefSessionOriginRef(input: Readonly<{ editionDate: string; periodId: string; locale: 'zh-CN' | 'en-US' }>): string {
   return `daily-brief:${input.editionDate}:${input.periodId}:${input.locale}`
@@ -144,7 +150,7 @@ export async function claimExistingBriefingSessions(deps: Readonly<{
         : null
       const desired = wantsCanonical && (canonicalOwner === null || canonicalOwner?.id === link.sessionId)
         ? originRef
-        : `${originRef}#history:${link.sessionId}`
+        : `${originRef}${DAILY_BRIEF_HISTORY_REF_MARKER}${link.sessionId}`
       const wantedState: 'current' | 'superseded' = desired === originRef ? 'current' : 'superseded'
       const found = desired === originRef
         ? canonicalOwner

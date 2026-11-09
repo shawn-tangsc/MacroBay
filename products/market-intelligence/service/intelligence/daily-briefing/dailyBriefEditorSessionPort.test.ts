@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PERIOD_ID } from '../../../contracts/dailyBriefing'
 import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
-import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
+import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort, DAILY_BRIEF_HISTORY_REF_MARKER } from './dailyBriefEditorSessionPort'
 
 type FakeSession = { id: string; agentId: string; name: string; createdAt?: string; origin?: string; originGroup?: string; originRef?: string; originState?: 'current' | 'superseded'; messages?: unknown[] }
 
@@ -181,8 +181,8 @@ describe('claiming the briefing sessions that were created without an identity',
     // 1) 同一期**同一语言**只剩一条正式身份，取**最新**那次生成（读者现在打开的就是它的内容）。
     const edition23 = `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN`
     expect(d.sessions.get('s-new-2')?.originRef).toBe(edition23)
-    expect(d.sessions.get('s-mid-3')?.originRef).toBe(`${edition23}#history:s-mid-3`)
-    expect(d.sessions.get('s-old-1')?.originRef).toBe(`${edition23}#history:s-old-1`)
+    expect(d.sessions.get('s-mid-3')?.originRef).toBe(`${edition23}${DAILY_BRIEF_HISTORY_REF_MARKER}s-mid-3`)
+    expect(d.sessions.get('s-old-1')?.originRef).toBe(`${edition23}${DAILY_BRIEF_HISTORY_REF_MARKER}s-old-1`)
     expect(d.sessions.get('s-10th')?.originRef).toBe(`daily-brief:2026-11-10:${DEFAULT_PERIOD_ID}:zh-CN`)
     // 身份是「期 × 语言」：同一期中文、英文各一条，互不顶替。
     expect(d.sessions.get('s-en')?.originRef).toBe(`daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:en-US`)
@@ -219,7 +219,24 @@ describe('claiming the briefing sessions that were created without an identity',
     expect(messageTable()).toBe(JSON.stringify([...before.values()].map(snapshot => JSON.parse(snapshot).messages)))
 
     // 断言 4：后缀幂等——第二次迁移不许把同一条再套一层 `#history:`。
-        // 幂等：再跑一次不再改任何行，而且每一行的内容**逐字不变**（不是只看 updated 计数）。
+        // 迁移后再生成一次：必须命中那一条正式身份、不新增——后缀/字符串不参与身份判定。
+    const port = createDailyBriefEditorSessionPort({
+      links: d.links,
+      createSession: d.createSession as never,
+      findAgentSessionByAutomationRef: d.findAgentSessionByAutomationRef as never,
+      send: d.send as never,
+      now: d.now
+    })
+    const sessionsBeforeRegenerate = d.sessions.size
+    const regenerated = await port.ensure({ ...edition(), editionDate: '2026-11-09', title: '11-09 再次生成' })
+    expect(regenerated.created).toBe(false)
+    expect(regenerated.sessionId).toBe('s-new-2')
+    expect(d.sessions.size).toBe(sessionsBeforeRegenerate)
+    // 可见性也不变：该期自动会话块可见 1 行（其余是 superseded 历史副本），读者列表 0 行。
+    expect([...d.sessions.values()].filter(session => session.originRef === edition23 && session.originState !== 'superseded')).toHaveLength(1)
+    expect([...d.sessions.values()].filter(session => (session.origin ?? 'reader') !== 'automation' && session.name.includes('11-09'))).toHaveLength(0)
+
+    // 幂等：再跑一次不再改任何行，而且每一行的内容**逐字不变**（不是只看 updated 计数）。
     const afterFirstRun = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
     const again = await claimExistingBriefingSessions({
       links: d.links,
@@ -232,7 +249,8 @@ describe('claiming the briefing sessions that were created without an identity',
     const afterSecondRun = new Map([...d.sessions.entries()].map(([id, session]) => [id, JSON.stringify(session)]))
     expect(afterSecondRun).toEqual(afterFirstRun)
     for (const session of d.sessions.values()) {
-      expect(session.originRef ?? '').not.toMatch(/#history:.*#history:/u)
+      const marker = DAILY_BRIEF_HISTORY_REF_MARKER.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+      expect(session.originRef ?? '').not.toMatch(new RegExp(`${marker}.*${marker}`, 'u'))
     }
 
     // 断言 6（反向）：正式身份必须是**最近**一次生成（断言在迁移后第一处，带身份冲突消息）。
