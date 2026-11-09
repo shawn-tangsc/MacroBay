@@ -130,6 +130,11 @@ describe('AgentSidePanel', () => {
     expect(markup).toContain('agent-auto-sessions')
     expect(markup).toContain('自动会话')
     expect(markup).toContain('今天 1 条 · 共 1 条')
+    // **块必须长在滚动容器里**（`.agent-session-list`）。它曾是列表的兄弟：块没 overflow、
+    // 又压不动（flex 子项 `min-height:auto`），条数一多就把列表挤到 0 高、自己被祖先
+    // `overflow:hidden` 裁掉——滚轮落在被裁区域上没有任何容器可动（用户 2026-11-09 报的「滚动卡住」）。
+    // 用固定缩进判「直接子节点」不够：这里直接断言块在容器内部，且容器是唯一滚动条那条。
+    expect(markup).toMatch(/class="agent-session-list"[\s\S]*agent-auto-sessions[\s\S]*<\/div>/)
   })
 
   it('draws no automation block when there is nothing in it', () => {
