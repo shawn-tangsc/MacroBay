@@ -5,7 +5,7 @@ import type { GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingStagePanel } from './DailyBriefingStagePanel'
 import { briefingFailureSentence } from './briefingFailureSentence'
-import { failureAdvice, readableFailureDetail } from './dailyBriefingFailureDetail'
+import { conclusionReaderDetail, failureAdvice, failureDetailIsInternal, readableFailureDetail } from './dailyBriefingFailureDetail'
 
 /** A generation or editorial attempt that did not produce a readable edition. */
 export type BriefFailure = Readonly<{
@@ -29,7 +29,10 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, onOpenSet
   onOpenSettings: () => void
 }>): React.ReactElement {
   const advice = failureAdvice(failure.code)
-  const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
+  // 结论校验类的 detail 是写给模型看的字段诊断：读者只看到「缺哪一项」，绝不把字段名原文印出来。
+  const detail = failureDetailIsInternal(failure.code)
+    ? conclusionReaderDetail(failure.code, failure.detail, text.failurePanel.conclusionDetail)
+    : readableFailureDetail(failure.detail, text.failurePanel.detail)
   const separator = text.labelSeparator
   // 人话原因：**哪一步没跑完 + 发生了什么 + 接下来怎么办**，由文案表逐码拼出来；用时在步骤清单里。
   // 表里还没有这个码时退回原来的标签——不许在这里自己造句。
