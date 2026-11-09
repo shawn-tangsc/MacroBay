@@ -46,6 +46,12 @@ export type SettingLevel = 'product' | 'platform'
 /** 未实现项无控件、无写、无默认值（G4），渲染一行说明；不许画成禁用控件。 */
 export type SettingAvailability = 'live' | 'unimplemented'
 
+/** 这一行读到的视图；`keyedBy` 行由页面把实例键与投影事实拼进来。 */
+export type SettingView = unknown
+
+/** 页面传下来的只读上下文（如 `supportsSentimentById`）；**不许存进注册表、不许从它推可写值**。 */
+export type SettingContext = unknown
+
 /** 控件可选项只许来自这里声明的集合，不许在行里手写列表。 */
 export type SettingOptionsSource =
   | 'news-push-thresholds'
@@ -107,8 +113,8 @@ export type SettingWrite =
 export type SettingDescriptor = Readonly<{
   /** 身份：静态行全局唯一；带 `keyedBy` 时是模板（`…@<sourceId>`），模板只声明一次。 */
   key: string
-  /** 按视图里的列表实例化；本版只认 `sourceId`。注册表里不写实例清单。 */
-  keyedBy?: 'sourceId'
+  /** 按视图里的列表实例化：每源一行 / 每个日历 feed 一行。注册表里不写实例清单。 */
+  keyedBy?: 'sourceId' | 'feedId'
   menu: SettingMenuId
   surfaces: readonly SettingSurface[]
   level: SettingLevel
@@ -117,9 +123,14 @@ export type SettingDescriptor = Readonly<{
   write?: SettingWrite
   /** 值缺失时显示什么：只许是 `SERVER_DEFAULTS` 的键（G6，编译期）。 */
   defaultValueFrom?: ServerDefaultKey
-  /** 只依赖 `read` 的结果；假 = 不渲染，不是禁用。 */
-  visibleWhen?: (view: unknown) => boolean
-  copy: Readonly<{ labelKey: string; helpKey?: string }>
+  /** 只依赖 `view` 与页面上下文 `ctx`；假 = 不渲染，不是禁用。 */
+  visibleWhen?: (view: SettingView, ctx: SettingContext) => boolean
+  /**
+   * 行名：静态行用 `labelKey`；按实例化的行可用 `labelText(view)` 取视图数据（来源名/feed 名）。
+   * `labelText` 只许出现在 `keyedBy` 行上，且**不许写字面量句子**。
+   */
+  copy?: Readonly<{ labelKey?: string; helpKey?: string }>
+  labelText?: (view: SettingView) => string
   availability: SettingAvailability
 }>
 

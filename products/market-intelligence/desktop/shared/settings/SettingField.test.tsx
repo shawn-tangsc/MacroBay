@@ -58,12 +58,44 @@ describe('SettingField', () => {
     const container = await mount(renderField(SWITCH_ROW, { value: true }))
     const rowNode = container.querySelector('[data-setting-key="setting:notifications.calendar.enabled"]')
     expect(rowNode).not.toBeNull()
-    expect(rowNode?.textContent).toContain(`t:${SWITCH_ROW.copy.labelKey}`)
+    expect(rowNode?.textContent).toContain(`t:${SWITCH_ROW.copy?.labelKey ?? ''}`)
     expect(rowNode?.querySelector('button[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
     // ⓘ 的读屏名也来自 copy，不是硬编码。
     const infoButton = [...(rowNode?.querySelectorAll('button[aria-label]') ?? [])]
-      .find((button) => button.getAttribute('aria-label') === `t:${SWITCH_ROW.copy.helpKey}`)
+      .find((button) => button.getAttribute('aria-label') === `t:${SWITCH_ROW.copy?.helpKey ?? ''}`)
     expect(infoButton).toBeTruthy()
+  })
+
+  it('uses labelText(view) for keyed rows and the concrete instance key on the row', async () => {
+    const enabled = settingRegistry.sources.find(
+      (row) => row.key === 'setting:sources.enabled@<sourceId>'
+    ) as SettingDescriptor
+    const container = await mount(renderField(enabled, {
+      view: { sourceId: 'coindesk-rss', displayName: 'CoinDesk RSS', enabled: true },
+      instanceKey: 'setting:sources.enabled@coindesk-rss',
+      value: true
+    }))
+    const node = container.querySelector('[data-setting-key="setting:sources.enabled@coindesk-rss"]')
+    expect(node).not.toBeNull()
+    // 行名是数据（来源名），不是文案键。
+    expect(node?.textContent).toContain('CoinDesk RSS')
+    expect(node?.textContent).not.toContain('setting:sources.enabled')
+  })
+
+  it('passes the page context to visibleWhen, never storing it', async () => {
+    const include = settingRegistry.sources.find(
+      (row) => row.key === 'setting:sources.include-in-sentiment@<sourceId>'
+    ) as SettingDescriptor
+    const view = { sourceId: 'coindesk-rss', profile: { includeInSentiment: true } }
+    const hidden = await mount(renderField(include, {
+      view, context: { supportsSentimentById: { 'coindesk-rss': false } }
+    }))
+    expect(hidden.querySelector('[data-setting-key]')).toBeNull()
+    act(() => root?.unmount())
+    const shown = await mount(renderField(include, {
+      view, context: { supportsSentimentById: { 'coindesk-rss': true } }
+    }))
+    expect(shown.querySelector('[data-setting-key]')).not.toBeNull()
   })
 
   it('does not render at all when visibleWhen is false (no disabled row)', async () => {

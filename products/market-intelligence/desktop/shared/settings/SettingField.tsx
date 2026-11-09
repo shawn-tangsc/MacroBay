@@ -27,6 +27,10 @@ export type SettingFieldProps = Readonly<{
   descriptor: SettingDescriptor
   /** 这一行的视图：`read` 的结果 + （按实例化的行）实例键与投影事实。 */
   view: unknown
+  /** 页面传下来的只读上下文（如 `supportsSentimentById`）；组件不存、不推写值。 */
+  context?: unknown
+  /** 按实例化的行的**具体**键（模板里的 `<sourceId>` 已替换）；静态行不用给。 */
+  instanceKey?: string
   /** 当前值（`switch` 用布尔、`select` 用单值、`multiSelect` 用数组、`readonly` 用文本）。 */
   value: unknown
   rowClassName: string
@@ -51,14 +55,16 @@ export type SettingFieldProps = Readonly<{
 
 export function SettingField(props: SettingFieldProps): ReactElement | null {
   const { descriptor } = props
-  if (descriptor.visibleWhen && !descriptor.visibleWhen(props.view)) return null
+  if (descriptor.visibleWhen && !descriptor.visibleWhen(props.view, props.context)) return null
 
-  const label = props.resolveText(descriptor.copy.labelKey)
-  const info = descriptor.copy.helpKey === undefined
+  // 按实例化的行的行名是**数据**（来源名 / feed 名）；静态行才用文案键。
+  const label = descriptor.labelText ? descriptor.labelText(props.view) : props.resolveText(descriptor.copy?.labelKey ?? '')
+  const helpKey = descriptor.copy?.helpKey
+  const info = helpKey === undefined
     ? null
     : <SettingsInfo
-      ariaLabelKey={props.helpAriaLabelKey ?? descriptor.copy.helpKey}
-      labelKeys={[descriptor.copy.helpKey]}
+      ariaLabelKey={props.helpAriaLabelKey ?? helpKey}
+      labelKeys={[helpKey]}
       resolveText={props.resolveText}
     />
   const row = (children: ReactNode): ReactElement => <SettingsRow
@@ -68,7 +74,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
       <span className={props.labelTextClassName}>{label}</span>
       {info}
     </>}
-    rowAttributes={{ 'data-setting-key': descriptor.key }}
+    rowAttributes={{ 'data-setting-key': props.instanceKey ?? descriptor.key }}
     rowClassName={props.rowClassName}
     {...(props.controlWrapperClassName === undefined ? {} : { controlWrapperClassName: props.controlWrapperClassName })}
   >

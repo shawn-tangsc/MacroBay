@@ -52,9 +52,12 @@ export type SettingRegistryIssue =
   | 'readonly-forbids-write'
   | 'unknown-default'
   | 'unknown-platform-command'
+  | 'missing-label'
+  | 'label-text-on-static-row'
+  | 'template-key-mismatch'
 
 /**
- * G1–G7 自检，纯函数：注册表自身不自洽时返回问题码，由单测调用。
+ * G1–G9 自检，纯函数：注册表自身不自洽时返回问题码，由单测调用。
  * 不在这里抛错——渲染层拿到的是一份已验证的表；验证失败应当是测试的红，不是页面白屏。
  */
 export function validateSettingRegistry(
@@ -96,6 +99,21 @@ export function validateSettingRegistry(
       }
       if (descriptor.write?.kind === 'command' && !(PLATFORM_COMMANDS as readonly string[]).includes(descriptor.write.id)) {
         issues.push('unknown-platform-command')
+      }
+
+      // G9：行名必须恰有一个来源——静态行用 labelKey，按实例化的行才可用 labelText（视图数据）。
+      const hasLabelKey = (descriptor.copy?.labelKey ?? '').length > 0
+      if (descriptor.labelText === undefined && !hasLabelKey) issues.push('missing-label')
+      if (descriptor.labelText !== undefined && descriptor.keyedBy === undefined) {
+        issues.push('label-text-on-static-row')
+      }
+
+      // 模板必须按实例化的维度取键：源行不许写 feed 模板，feed 行也不许写源模板。
+      if (descriptor.keyedBy === 'sourceId' && !descriptor.key.includes('@<sourceId>')) {
+        issues.push('template-key-mismatch')
+      }
+      if (descriptor.keyedBy === 'feedId' && !descriptor.key.includes('@<feedId>')) {
+        issues.push('template-key-mismatch')
       }
     }
   }

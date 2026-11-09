@@ -31,7 +31,7 @@ function withRow(replacement: SettingDescriptor): Registry {
   }
 }
 
-describe('settings registry self-checks (G1–G7)', () => {
+describe('settings registry self-checks (G1–G9)', () => {
   it('ships a self-consistent registry and declares every menu in the type', () => {
     expect(Object.keys(settingRegistry).sort()).toEqual([...SETTING_MENUS].sort())
     expect(validateSettingRegistry(settingRegistry)).toEqual([])
@@ -114,19 +114,22 @@ describe('settings registry self-checks (G1–G7)', () => {
 
   it('conditional rows declare visibleWhen instead of always showing', () => {
     // 提前量 / 重要性：只在「开始前」开着时出现。
-    expect(LEAD.visibleWhen?.({ enabled: false })).toBe(false)
-    expect(LEAD.visibleWhen?.({ enabled: true })).toBe(true)
+    expect(LEAD.visibleWhen?.({ enabled: false }, {})).toBe(false)
+    expect(LEAD.visibleWhen?.({ enabled: true }, {})).toBe(true)
     // 国家码：只在「自选国家」时出现。
-    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'us' } })).toBe(false)
-    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'custom', codes: ['US'] } })).toBe(true)
+    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'us' } }, {})).toBe(false)
+    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'custom', codes: ['US'] } }, {})).toBe(true)
   })
 
-  it('menu 1 declares a keyed template instead of a source list', () => {
-    // 模板只声明一条；实例数量由视图里的源列表决定，注册表里不许出现源清单。
-    expect(settingRegistry.sources).toHaveLength(1)
-    const row = settingRegistry.sources[0] as SettingDescriptor
-    expect(row.keyedBy).toBe('sourceId')
-    expect(row.key).toBe('setting:sources.collection-preset@<sourceId>')
+  it('menu 1 declares keyed templates instead of a source list', () => {
+    // 模板数量固定；实例数量由视图里的源列表决定，注册表里不许出现源清单。
+    expect(settingRegistry.sources.map((row) => row.key).sort()).toEqual([
+      'setting:sources.collection-preset@<sourceId>',
+      'setting:sources.enabled@<sourceId>',
+      'setting:sources.include-in-sentiment@<sourceId>'
+    ])
+    expect(settingRegistry.sources.every((row) => row.keyedBy === 'sourceId')).toBe(true)
+    const row = settingRegistry.sources.find((entry) => entry.key === 'setting:sources.collection-preset@<sourceId>') as SettingDescriptor
 
     const view = {
       sourceId: 'coindesk-rss',
@@ -134,8 +137,8 @@ describe('settings registry self-checks (G1–G7)', () => {
     }
     expect(row.read.command).toBe('intelligenceSources.getPageState')
     expect(row.read.select(view)).toBe('balanced')
-    expect(row.visibleWhen?.(view)).toBe(true)
-    expect(row.visibleWhen?.({})).toBe(false)
+    expect(row.visibleWhen?.(view, {})).toBe(true)
+    expect(row.visibleWhen?.({}, {})).toBe(false)
     if (row.write?.kind !== 'value') throw new Error('the preset row must be a value write')
     // 写的是「选中来源的 profile」：sourceId 从视图拿，渲染层不另传第二个参数。
     expect(row.write.toPayload('frequent', view)).toEqual({
@@ -172,6 +175,33 @@ describe('settings registry self-checks (G1–G7)', () => {
     ])
     expect(byKey.has('setting:notifications.channel-event.calendar')).toBe(false)
     expect(byKey.has('setting:notifications.channel-event.sentiment-alert')).toBe(false)
+  })
+
+  it('G9: labelText only on keyed rows, and the label comes from the view data', () => {
+    // 静态行加 labelText → 红（行名会绕开文案表）。
+    const staticWithLabel = { ...PUSH_THRESHOLD, labelText: () => 'CoinDesk' }
+    expect(validateSettingRegistry(withRow(staticWithLabel))).toContain('label-text-on-static-row')
+
+    const enabled = settingRegistry.sources.find((row) => row.key === 'setting:sources.enabled@<sourceId>') as SettingDescriptor
+    // 同一模板的两个实例得到不同标签：证明取的是视图数据，不是写死的句子。
+    expect(enabled.labelText?.({ displayName: 'CoinDesk RSS' })).toBe('CoinDesk RSS')
+    expect(enabled.labelText?.({ displayName: 'Binance Announcements' })).toBe('Binance Announcements')
+    expect(enabled.labelText?.({})).toBe('')
+  })
+
+  it('G9: a template must match its instance dimension', () => {
+    const wrongTemplate = { ...PUSH_THRESHOLD, key: 'setting:sources.foo@<feedId>', keyedBy: 'sourceId' as const }
+    expect(validateSettingRegistry(withRow(wrongTemplate))).toContain('template-key-mismatch')
+    const feedTemplate = { ...PUSH_THRESHOLD, key: 'setting:calendar-feeds.enabled@<feedId>', keyedBy: 'feedId' as const }
+    expect(validateSettingRegistry(withRow(feedTemplate))).not.toContain('template-key-mismatch')
+  })
+
+  it('ctx is read-only context: include-in-sentiment visibility comes from the page', () => {
+    const row = settingRegistry.sources.find((entry) => entry.key === 'setting:sources.include-in-sentiment@<sourceId>') as SettingDescriptor
+    const view = { sourceId: 'coindesk-rss', profile: { includeInSentiment: true } }
+    expect(row.visibleWhen?.(view, { supportsSentimentById: { 'coindesk-rss': true } })).toBe(true)
+    expect(row.visibleWhen?.(view, { supportsSentimentById: { 'coindesk-rss': false } })).toBe(false)
+    expect(row.visibleWhen?.(view, {})).toBe(false)
   })
 
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
@@ -215,11 +245,16 @@ describe('settings registry self-checks (G1–G7)', () => {
     expect(descriptors.length).toBeGreaterThan(0)
     for (const descriptor of descriptors) {
       for (const locale of ['zh-CN', 'en-US'] as const) {
-        expect(resolveCopyKey(locale, descriptor.copy.labelKey)).not.toBe('')
-        if (descriptor.copy.helpKey) {
+        // 静态行必须能解析行名；按实例化的行行名来自视图，没有 labelKey 是正常的。
+        if (descriptor.copy?.labelKey) {
+          expect(resolveCopyKey(locale, descriptor.copy.labelKey)).not.toBe('')
+        }
+        if (descriptor.copy?.helpKey) {
           expect(resolveCopyKey(locale, descriptor.copy.helpKey)).not.toBe('')
         }
       }
+      // 每一行都要有行名来源：labelKey 或 labelText，至少一个。
+      expect(descriptor.labelText !== undefined || Boolean(descriptor.copy?.labelKey)).toBe(true)
     }
   })
 })
