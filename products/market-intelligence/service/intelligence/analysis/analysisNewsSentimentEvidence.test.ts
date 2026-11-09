@@ -68,7 +68,7 @@ describe('analysisNewsSentiment', () => {
     }
 
     const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never, reader(items) as never, {
-      asOf, since: '2026-10-29T11:00:00.000Z'
+      asOf, timeZone: 'UTC', since: '2026-10-29T11:00:00.000Z'
     })
 
     expect(updated.facts.map(fact => fact.factId)).toHaveLength(2)
@@ -92,7 +92,7 @@ describe('analysisNewsSentiment', () => {
       context(), { eventRefs: ['item-bull'], groupType: 'sentiment' }, { getEvidenceExcerpt } as never
     )
     const updated = await appendAnalysisNewsSentiment(anchorContext, { getEvidenceExcerpt } as never,
-      reader([item()]) as never, { asOf, since: '2026-10-29T11:00:00.000Z' })
+      reader([item()]) as never, { asOf, timeZone: 'UTC', since: '2026-10-29T11:00:00.000Z' })
 
     expect(updated.facts.filter(fact => fact.metric === 'news-sentiment')).toHaveLength(0)
     expect(updated.facts[0]).toMatchObject({ metric: 'event-excerpt', evidenceRefId: 'ev-item-bull' })
@@ -111,7 +111,7 @@ describe('analysisNewsSentiment', () => {
     }
 
     const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never, reader(items) as never, {
-      asOf, since: '2026-10-29T11:00:00.000Z'
+      asOf, timeZone: 'UTC', since: '2026-10-29T11:00:00.000Z'
     })
 
     expect(updated.facts).toHaveLength(1)
@@ -124,7 +124,7 @@ describe('analysisNewsSentiment', () => {
     const mixed = item({ itemId: 'item-mixed', polarity: 'mixed', title: 'Flows conflict' })
     const getEvidenceExcerpt = async (input: { itemId: string }) => evidence(input.itemId, mixed.publishedAt)
     const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never, reader([mixed]) as never, {
-      asOf, since: '2026-10-29T11:00:00.000Z'
+      asOf, timeZone: 'UTC', since: '2026-10-29T11:00:00.000Z'
     })
     expect(updated.facts).toHaveLength(1)
     expect(String(updated.facts[0]!.value)).toContain('mixed')
@@ -132,19 +132,19 @@ describe('analysisNewsSentiment', () => {
 
   it('names an unavailable store instead of pretending there was no news', async () => {
     const unavailable = { query: async () => ({ state: 'unavailable' as const, asOf, generatedAt: asOf, window: '1h' as const, items: [], caveats: [] }) }
-    const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt: async () => undefined } as never, unavailable as never, { asOf })
+    const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt: async () => undefined } as never, unavailable as never, { asOf, timeZone: 'UTC' })
     expect(updated.caveats).toContain('news-sentiment-unavailable')
     expect(updated.facts).toHaveLength(0)
 
     // No reader wired at all is the same gap, not an empty window.
-    const missing = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt: async () => undefined } as never, undefined, { asOf })
+    const missing = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt: async () => undefined } as never, undefined, { asOf, timeZone: 'UTC' })
     expect(missing.caveats).toContain('news-sentiment-unavailable')
   })
 
   it('adds nothing when the window has only neutral items', async () => {
     const getEvidenceExcerpt = async (input: { itemId: string }) => evidence(input.itemId, '2026-10-29T11:20:00.000Z')
     const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never,
-      reader([item({ polarity: 'neutral' })]) as never, { asOf, since: '2026-10-29T11:00:00.000Z' })
+      reader([item({ polarity: 'neutral' })]) as never, { asOf, timeZone: 'UTC', since: '2026-10-29T11:00:00.000Z' })
     expect(updated.facts).toHaveLength(0)
     expect(updated.caveats).not.toContain('news-sentiment-unavailable')
   })
@@ -162,7 +162,7 @@ describe('analysisNewsSentiment', () => {
   it('drops an item revised after the cutoff, like the anchor path does', async () => {
     const getEvidenceExcerpt = async (input: { itemId: string }) => evidence(input.itemId, '2026-10-29T11:20:00.000Z')
     const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never, reader([item()]) as never,
-      { asOf, since: '2026-10-29T11:00:00.000Z' },
+      { asOf, timeZone: 'UTC', since: '2026-10-29T11:00:00.000Z' },
       () => [{ itemId: 'item-bull', detectedAt: '2026-10-29T12:30:00.000Z' }])
     expect(updated.facts).toHaveLength(0)
   })
