@@ -16,6 +16,8 @@ export const dailyBriefingText = {
     // 与「本版没采集」分开：那是我们没做，这是我们这次没拿到——读者据此决定等不等下一次。
     // 纳指走永续代理的那些天，点位不是纳指自己的——不标出来，读者会把 QQQ 的点位当纳指用。
     perpetualContract: '永续合约', indexProxy: '（QQQ 永续代理）',
+    // 持仓块那个 $ 金额的名字：与卡片名同一事实、同一种说法（A0.11）。
+    leverageOpenInterest: '未平仓合约名义额',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '持仓与费率', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
       // The card says what the dial is, not which section it belongs to: the section is already titled.
       policyProbability: '利率概率',
@@ -417,6 +419,7 @@ export const dailyBriefingText = {
     periodScheduled: 'Period {time} (scheduled)', periodManual: 'Period {time} (manual)', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
     perpetualContract: 'Perpetual', indexProxy: ' (QQQ perpetual proxy)',
+    leverageOpenInterest: 'Open interest notional',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
       markets: 'Markets & sentiment' },

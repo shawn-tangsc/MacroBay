@@ -21,6 +21,11 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   readingsAllMissing: string
   /** 价格那两行读的是永续合约：正文标了，复制文本也要标。 */
   perpetualContract: string
+  /**
+   * 持仓块里那个 `$…B` 是什么：未平仓合约的**名义额**（美元），不是张数、不是成交量。
+   * 卡片名已经这么写（`positioningChange`），复制文本同样要写——只留一个 `$` 金额，读者认不出它是什么量。
+   */
+  leverageOpenInterest: string
   /** 必须显示的读数超过阈值时说的那句「今天信息较多」。 */
   denseDay: string
   /** 纳指那行读的是代币化永续代理时，标题后带的那句（正文卡片也用它）。 */
@@ -131,7 +136,7 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
         // The rate travels with the block that explains it, exactly as on the card.
         const rate = briefingDataGroups(document).funding.find((row) => row.id === `funding-${key}`)?.value?.number
         const fee = rate === undefined ? labels.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`
-        lines.push(`- ${asset} · ${fee} · ${openInterest} · ${day}`)
+        lines.push(`- ${asset} · ${fee} · ${labels.leverageOpenInterest} ${openInterest} · ${day}`)
       }
     }
     if (document.data.policyPath && document.data.policyPath.visibility !== 'hidden') {

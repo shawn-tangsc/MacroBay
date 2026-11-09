@@ -447,6 +447,31 @@ describe('one number, one place', () => {
   })
 })
 
+describe('the copied positioning block names the figure it prints', () => {
+  it('says the dollar amount is notional open interest, exactly as the card does', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      data: {
+        ...base.data,
+        leverage: {
+          state: 'available',
+          btc: { fundingRate: 0.0001, openInterestUsd: 12_340_000_000, change24hPct: 0.08 },
+          eth: { fundingRate: -0.0002, openInterestUsd: 2_400_000_000, change24hPct: -0.12 }
+        }
+      }
+    }, options)
+    // A bare `$12.34B` under 「持仓与费率」 does not say whether it is notional open interest or a
+    // quantity; the card names it, so the copied edition must name it too (same rule as
+    // `perpetualContract`: text printed on the card is printed in the copy).
+    // The market rows list has a `- BTC …` line too; take the one inside the positioning block.
+    const positioning = markdown.slice(markdown.indexOf(`### ${options.labels.sections.leverage}`))
+    const btc = positioning.split('\n').find((line) => line.startsWith('- BTC '))
+    expect(btc).toBeDefined()
+    expect(btc).toContain(options.labels.leverageOpenInterest)
+  })
+})
+
 describe('the copied text carries the whole title', () => {
   it('writes the lede in full, with no ellipsis', () => {
     const long = 'Stablecoin contraction keeps the read defensive across every venue the desk covers today, and the funding leg still leans short'
