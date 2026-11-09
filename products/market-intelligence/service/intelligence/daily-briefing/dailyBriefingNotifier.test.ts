@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
@@ -303,5 +303,36 @@ describe('the completion notice carries the edition’s own lede', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0]?.event).toBe('MI_DAILY_BRIEF_LEDE_WITHHELD')
     expect(calls[0]?.fields).toMatchObject({ hit: '点开', editionId: `${DATE}:zh-CN:default` })
+  })
+  it('the completion notice actually reaches the channel, not only the centre', async () => {
+    // 2026-11-08 用户报「日报那条没推到」。在 HEAD 上复跑这条路径：真正的原因不是这条通知
+    // 没排手机，而是运行时拿不到派生入口（`61dfc2d`），于是每条推送都写 `push-unavailable`。
+    // 这条用例钉的是「日报完成会真的调用通道」——把那根线再剪断一次，它必须红。
+    const push = vi.fn(async () => ({ ok: true, messageId: 'm-1' }))
+    let state: StoreState = { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
+    const runtime = createNotificationRuntime({
+      storage: {
+        read: async () => JSON.parse(JSON.stringify(state)),
+        write: async (next) => { state = JSON.parse(JSON.stringify(next)) as StoreState }
+      },
+      catalog: createNotificationEventCatalog({
+        sources: [
+          { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
+          { productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents, approval: marketIntelligenceProductManifest.notificationApproval }
+        ]
+      }),
+      diagnostics: () => undefined,
+      getSettings: async () => ({ ...settings, desktopEnabled: true }),
+      clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
+      productIds: ['market-intelligence'],
+      resolvePushChannel: async () => ({ ok: true, channelId: 'channel-a', channelName: 'Telegram' }),
+      deliveryHooks: { push }
+    })
+    const outcome = await runtime.submit(
+      buildBriefingNoticeRequest({ kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:zh-CN:period_x`, locale: 'zh-CN' }, NOW)!
+    )
+    expect(outcome.kind).toBe('accepted')
+    expect(push).toHaveBeenCalledTimes(1)
+    expect((outcome as { delivery?: { push?: { state?: string } } }).delivery?.push?.state).toBe('sent-accepted')
   })
 })
