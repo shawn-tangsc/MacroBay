@@ -31,7 +31,8 @@
   "include": [
     "apps/desktop-shell/src",
     "platform/**/*.ts",
-    "products/**/*.{ts,tsx}",
+    "products/**/*.ts",
+    "products/**/*.tsx",
     "products/**/*.mts",
     "scripts/**/*.mts",
     "electron.vite.config.ts"
