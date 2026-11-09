@@ -54,7 +54,9 @@ describe('open interest facts', () => {
   })
 
   it('drops the change and the state when the reference buckets are missing', () => {
-    const sparse = project({ ...positioning, change: { eth: { h24Pct: 2.7 } } })
+    // 契约里 `change` 两个资产都在，缺的是**那一个数**：BTC 的 24h 参照桶没了，写空对象、
+    // 不写一个假的数——投影据此不给 BTC 出 change 事实。
+    const sparse = project({ ...positioning, change: { btc: {}, eth: { h24Pct: 2.7 } } })
     expect(sparse.filter(fact => fact.subject === 'BTC').map(fact => fact.metric)).toEqual(['open-interest-notional-usd'])
   })
 
