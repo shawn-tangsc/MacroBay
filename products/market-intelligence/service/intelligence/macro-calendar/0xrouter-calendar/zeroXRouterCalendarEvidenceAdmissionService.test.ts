@@ -7,15 +7,30 @@ import { createZeroXRouterCalendarEvidenceAdmissionService } from './zeroXRouter
 const apiKey = 'safe-test-key'
 const body = JSON.stringify({ code: 200, data: [{ id: 'event-1' }] })
 
+// 形状 3：端口签名从真实依赖类型取，桩的返回类型不再靠推断拓宽成 unknown。
+type AdmissionDeps = Parameters<typeof createZeroXRouterCalendarEvidenceAdmissionService>[0]
+type RequestJsonBody = NonNullable<AdmissionDeps['requestJsonBody']>
+type EvidenceAppend = NonNullable<AdmissionDeps['evidence']['append']>
+
 function createHarness(options: {
   apiKey?: string
-  transport?: (input: unknown) => Promise<unknown>
-  append?: (input: unknown) => unknown
+  transport?: RequestJsonBody
+  append?: EvidenceAppend
 } = {}) {
   const calls: string[] = []
   const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse('2026-09-06T01:02:03.000Z') })
-  const transport = options.transport ?? (async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }))
-  const append = options.append ?? (() => ({ rawRecordId: 'raw-1', evidenceHash: 'hash-1', inserted: true, deduped: false }))
+  const transport: RequestJsonBody = options.transport ?? (async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }))
+  const append: EvidenceAppend = options.append ?? ((input) => ({
+    rawRecordId: 'raw-1',
+    providerId: input.descriptor.providerId,
+    descriptorId: input.descriptor.descriptorId,
+    sourceUrl: input.sourceUrl,
+    evidenceHash: 'hash-1',
+    detectedAt: input.detectedAt,
+    parserVersion: input.parserVersion,
+    inserted: true,
+    deduped: false
+  }))
   const service = createZeroXRouterCalendarEvidenceAdmissionService({
     requestGovernanceQueue: queue,
     getApiKey: async () => options.apiKey === undefined ? apiKey : options.apiKey,
@@ -26,7 +41,7 @@ function createHarness(options: {
     evidence: {
       reserve: () => ({ reservationId: 'reservation-1', maximumBytes: 256 * 1024 }),
       release: () => true,
-      append: async (input) => append(input)
+      append: (input, reservation) => append(input, reservation)
     },
     now: () => new Date('2026-09-06T01:02:03.000Z'),
     createRunId: () => 'run-1',
@@ -73,10 +88,10 @@ describe('zeroXRouter calendar evidence admission', () => {
   })
 
   it('derives the current UTC month window and locale in the fixed request without caller URL input', async () => {
-    const requestJsonBody = vi.fn(async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }))
+    const requestJsonBody = vi.fn<RequestJsonBody>(async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }))
     const { service } = createHarness({ transport: requestJsonBody })
     await service.collect({ descriptorId: zeroXRouterCalendarEvidenceDescriptors[0]!.descriptorId, locale: 'en' })
-    const request = requestJsonBody.mock.calls[0]?.[0] as { url: string; apiKey: string }
+    const request = requestJsonBody.mock.calls[0]![0]
     const url = new URL(request.url)
     expect(url.pathname).toBe('/cexdata/calendar/economic-data')
     expect([...url.searchParams.keys()].sort()).toEqual(['endTime', 'locale', 'startTime'])
