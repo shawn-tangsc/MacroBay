@@ -365,6 +365,36 @@ describe('NewsSentimentFeature', () => {
     expect(document.body.querySelectorAll('.mi-news-drawer__row-open')).toHaveLength(2)
   })
 
+  // 重建把坏库换掉之后，读者要知道「旧的没丢、新的能用」。存储页现在列不出 `.corrupt-*`
+  // （治理页只列注册表），所以这句不许指向那个页面——那会是假入口。
+  it('says the old store was kept as an unmodified copy, without pointing at a viewer that does not exist', async () => {
+    const rebuild = vi.fn(async () => ({
+      queued: true,
+      quarantinedCopy: '/tmp/intelligence-news-sentiment.sqlite.corrupt-1'
+    }))
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ rebuild })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const rebuildButton = [...document.body.querySelectorAll('button')]
+      .find((button) => button.textContent?.includes(text.settingsModal.rebuild))
+    expect(rebuildButton).toBeTruthy()
+    await act(async () => { rebuildButton?.click() })
+    await act(async () => {})
+
+    const notice = document.body.querySelector('.mi-news-drawer__notice')?.textContent ?? ''
+    // 锁死定稿原文（不是拿同一个键自证）：改一个字就该红。
+    expect(notice).toBe('旧库已原样留存一份副本，新库已建好。刷新本页即可使用新库。')
+    expect(productText['en-US'].pages.intelligence.portal.newsSentiment.settingsModal.rebuiltWithCopy).toBe(
+      'The old store was kept as an unmodified copy and a new one is ready. Refresh this page to start using it.'
+    )
+    // 「可在设置 → 存储里查看」只在存储页真能列出副本时才许写；现在列不出，就不许出现。
+    expect(notice).not.toContain('设置')
+    expect(notice).not.toContain('存储')
+  })
+
 
   // A button carrying role="listitem" loses its button semantics: a screen reader announces "list
   // item" and never says the row opens anything. The list item is the wrapper; the button is inside.
