@@ -16,7 +16,7 @@
  * 复算：`pnpm exec tsx scripts/check-body-prose.mts`。
  */
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 
 const ROOT = process.cwd()
 const BASELINE_PATH = join(ROOT, 'scripts/body-prose-baseline.json')
@@ -47,13 +47,17 @@ for (const root of SCAN_ROOTS) {
     const text = readFileSync(file, 'utf8')
     text.split('\n').forEach((line, index) => {
       if (ALLOWED_CONTEXT.test(line)) return
+      // 键**定义**不是用法：`const X_KEY = '…Hint'` 只是给这段文案起名字，真正渲染在别处。
+      // 把定义行算成正文，会让每个把键抽成常量的文件都假红一次。
+      if (/^\s*const\s+[A-Z][A-Z0-9_]*\s*=/.test(line)) return
       const keys: string[] = []
       // 成员访问：取最后一段（`text.hours.hoursHint` → `hoursHint`）
       for (const match of line.matchAll(/\.([A-Za-z_$][\w$]*(?:Hint|Note))\b/gu)) keys.push(match[1]!)
       // 键字符串：`'settings.x.hoursHint'`
       for (const match of line.matchAll(/['"`]([\w.$-]*(?:Hint|Note))['"`]/gu)) keys.push(match[1]!)
       for (const key of new Set(keys)) {
-        findings.push({ file: relative(ROOT, file), line: index + 1, key })
+        // 基线键必须归一化分隔符：Windows 上 `relative()` 给 `a\\b`，基线里是 `a/b`，两边永远对不上。
+        findings.push({ file: relative(ROOT, file).split(sep).join('/'), line: index + 1, key })
       }
     })
   }
