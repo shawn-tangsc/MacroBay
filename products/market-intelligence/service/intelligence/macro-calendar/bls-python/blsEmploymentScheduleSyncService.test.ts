@@ -8,7 +8,8 @@ const cpiRows = annualRows('2026', '14')
 
 describe('BLS Employment schedule sync service', () => {
   it('turns both fixed annual mappings into 60 stable date-only events and writes atomically', async () => {
-    const appendManyIfNew = vi.fn(() => ({ insertedCount: 60, dedupedCount: 0 }))
+    // 形状 3：mock 按真实端口收参数，调用记录里才有 revisions，而不是空的调用元组 + 强转。
+    const appendManyIfNew = vi.fn((_rows: readonly MacroCalendarRevision[]) => ({ insertedCount: 60, dedupedCount: 0 }))
     const bridge = { run: vi.fn(async () => ({ state: 'schedule' as const, rows: employmentRows, employmentRows, cpiRows })) }
     const service = createBlsEmploymentScheduleSyncService({ bridge, repository: { appendManyIfNew }, now: () => '2026-08-11T00:00:00.000Z' })
 
@@ -23,7 +24,7 @@ describe('BLS Employment schedule sync service', () => {
     }
     expect(bridge.run).toHaveBeenCalledWith({ kind: 'employment-schedule', year: '2026' })
     expect(appendManyIfNew).toHaveBeenCalledOnce()
-    const revisions = appendManyIfNew.mock.calls[0]![0] as MacroCalendarRevision[]
+    const revisions = appendManyIfNew.mock.calls[0]![0]
     expect(revisions).toHaveLength(60)
     expect(revisions[0]).toMatchObject({
       eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2025-M12',
