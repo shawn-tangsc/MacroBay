@@ -110,7 +110,9 @@ describe('button geometry and the danger colour', () => {
 
   it('is a real guard: the baselines are finite and the detectors fire', () => {
     expect(BASELINE.has('.brand-new-capsule')).toBe(false)
-    expect(HOVER_DANGER_BASELINE.size).toBe(4)
+    // 只减不增：删掉一条已登记的 hover-独有危险色规则时，这里必须跟着减（2026-11-09 删
+    // `.request-config-delete:hover` 后 4 → 3），防止基线悄悄增行。
+    expect(HOVER_DANGER_BASELINE.size).toBe(3)
     expect(DANGER.test('color: var(--danger)')).toBe(true)
   })
 })

@@ -1,6 +1,5 @@
 [
   "apps/desktop-shell/src/renderer/src/styles.css → .secondary-button.danger:hover",
-  "apps/desktop-shell/src/renderer/src/styles.css → .request-config-endpoint-head .request-config-delete:hover",
   "platform/ui/components/icon-button/iconButton.css → .icon-button--danger.ant-btn:not(:disabled):hover",
   "platform/ui/components/menu/contextMenu.css → .context-menu .ant-menu-item-danger:hover"
 ]

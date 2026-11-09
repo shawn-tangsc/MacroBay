@@ -28,7 +28,6 @@
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-sync-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .preference-proxy-probe-result.fail": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .provider-api-key-error": 1,
-  "apps/desktop-shell/src/renderer/src/styles.css :: .request-config-endpoint-head .request-config-delete:hover": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .secondary-button.danger:hover": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .storage-cache-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .storage-cache-flag": 1,

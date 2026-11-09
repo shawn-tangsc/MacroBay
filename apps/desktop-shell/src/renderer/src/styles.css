@@ -10408,36 +10408,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   white-space: nowrap;
 }
 
-/* 删除图标：视觉尺寸与端点名字号一致（14px），可点击区域 24×24，固定在该行最右。 */
-.request-config-endpoint-head .request-config-delete {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  margin-left: auto;
-  padding: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.request-config-endpoint-head .request-config-delete:hover {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-  color: var(--danger);
-}
-
-.request-config-endpoint-head .request-config-delete:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent);
-}
-
-.request-config-endpoint-head .request-config-delete:disabled {
-  background: transparent;
-  color: var(--muted);
-  opacity: 0.4;
-  cursor: default;
-}
-
 /* 当前默认端点：强调色文字 + 强调色透明底 + 同色 1px 边框（与全站 tag 密度一致）。 */
 .request-config-default-badge {
   display: inline-flex;
@@ -10451,39 +10421,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   font-size: 11px;
   line-height: 18px;
   white-space: nowrap;
-}
-
-/* 非默认端点：小号 secondary/ghost 按钮（有边框、hover、焦点环，层级低于主按钮）。 */
-.request-config-set-default {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted-strong);
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.request-config-set-default:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-}
-
-.request-config-set-default:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent);
-}
-
-.request-config-set-default:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 /* 「添加端点」触发按钮：左对齐的小号文字按钮。 */
@@ -10527,20 +10464,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   display: flex;
   min-width: 0;
   gap: 4px;
-}
-
-.request-config-icon,
-.request-config-delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-h);
-  height: var(--control-h);
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
 }
 
 .request-config-empty {
@@ -11327,11 +11250,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .model-service-pill:disabled {
   cursor: default;
   opacity: 0.5;
-}
-
-.model-service-pill-icon {
-  width: 28px;
-  padding: 0;
 }
 
 .model-service-section {
