@@ -72,6 +72,9 @@ export function AppShellSettingsLayout(props: AppShellSettingsLayoutProps): Reac
                     key={panel.key}
                     type="button"
                     className={settingsPanelKey === panel.key ? 'settings-nav-item active' : 'settings-nav-item'}
+                    // 当前面板：整行即动作、保留现形（设置导航是一个分组列表，不是按钮组）；
+                    // 补的是读屏能拿到的「当前项」，高亮 class 只对眼睛有效。
+                    {...(settingsPanelKey === panel.key ? { 'aria-current': 'page' as const } : {})}
                     onClick={() => setSettingsPanelKey(panel.key)}>
                     <Icon size={17} />
                     <span>{panel.label}</span>
