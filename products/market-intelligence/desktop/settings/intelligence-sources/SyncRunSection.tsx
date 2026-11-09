@@ -19,6 +19,7 @@ import type {
 import { isAnalysisRunId, syncRunsCsv } from '../../../contracts/syncRunRecords'
 import { syncRunClient } from '../../shared/ipc/syncRunClient'
 import { AnalysisCell, AnalysisRecord, analysisRecordId, formatSyncRunTime } from './SyncRunAnalysisCell'
+import { SyncRunAggregates } from './SyncRunAggregates'
 import { syncRunSourceLabel, syncRunTaskLabel, syncRunTallyText } from './syncRunRowText'
 import './sync-run-section.css'
 
@@ -119,7 +120,6 @@ const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
 /** Thirty rows a page: one screen of recent history without a wall of scroll. */
 const SYNC_RUN_PAGE_SIZE = 30
 /** A year of daily counts across every task would be a wall of rows; the newest days come first. */
-const SYNC_RUN_AGGREGATE_ROWS = 60
 
 export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, knownSources, text }: Readonly<{
   text: SyncRunText
@@ -472,44 +472,8 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
         </span> : null}
       </footer>
       : null}
-    {window === 'all' ? <section className="mi-sync-run__aggregates" aria-label={text.aggregates.title}>
-      <h3>{text.aggregates.title}</h3>
-      <p className="mi-sync-run__aggregate-note">{text.aggregates.note}</p>
-      {!aggregates ? <LoadingState label={text.loading} minHeight={80} /> : null}
-      {aggregates?.state === 'unavailable'
-        ? (aggregates.reason === 'memory-store-has-no-aggregates'
-          ? <StateView reasonCode="capability-not-wired" size="md" state="disabled" />
-          : <StateView
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
-            reasonCode="unreadable"
-            size="md"
-            state="error"
-          />)
-        : null}
-      {/* Detail is kept 30 days; a younger install has nothing folded yet, and there is nothing to
-          do about that, so no action. */}
-      {aggregates?.state === 'available' && aggregates.rows.length === 0
-        ? <StateView reasonCode="not-yet" size="md" state="empty" />
-        : null}
-      {aggregates?.state === 'available' && aggregates.rows.length > 0
-        ? <div className="mi-sync-run__aggregate-table" role="table" aria-label={text.aggregates.title}>
-          <div className="mi-sync-run__grid mi-sync-run__grid--aggregate" role="row">
-            <span role="columnheader">{text.aggregates.columns.day}</span>
-            <span role="columnheader">{text.aggregates.columns.task}</span>
-            <span role="columnheader">{text.aggregates.columns.runs}</span>
-            <span role="columnheader">{text.aggregates.columns.failures}</span>
-          </div>
-          {[...aggregates.rows]
-            .sort((left, right) => right.day.localeCompare(left.day) || left.taskLabel.localeCompare(right.taskLabel))
-            .slice(0, SYNC_RUN_AGGREGATE_ROWS)
-            .map((row) => <div className="mi-sync-run__grid mi-sync-run__grid--aggregate" key={`${row.day}:${row.handlerId}`} role="row">
-            <span role="cell">{row.day}</span>
-            <span role="cell">{row.taskLabel}</span>
-            <span role="cell">{String(row.runs)}</span>
-            <span role="cell" data-has-failures={row.failures > 0 ? 'true' : undefined}>{String(row.failures)}</span>
-          </div>)}
-        </div>
-        : null}
-    </section> : null}
+    {window === 'all'
+      ? <SyncRunAggregates aggregates={aggregates} loading={text.loading} onRetry={retry} text={text.aggregates} />
+      : null}
   </section>
 }
