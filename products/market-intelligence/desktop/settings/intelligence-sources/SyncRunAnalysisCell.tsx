@@ -1,3 +1,5 @@
+import { Button } from 'antd'
+
 import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 
 import type { SyncRunAnalysisResult, SyncRunRow } from '../../../contracts/syncRunRecords'
@@ -72,14 +74,16 @@ export function AnalysisCell({ analysis, analysisFailureReasons, expanded, onTog
   const state = text.analysis.states[result.state]
   const reason = analysisSentence(result, text, analysisFailureReasons)
   const visible = reason ? `${state}${text.joiner}${reason}` : state
-  return <button
+  // 交互按钮一律 antd 基座（ui-spec R1）；这里只是文字触发器，用 text 档保持原观感。
+  return <Button
     aria-controls={analysisRecordId(result.runId)}
     aria-expanded={expanded}
     aria-label={`${visible}${text.joiner}${expanded ? text.analysis.close : text.analysis.open}`}
     className="mi-sync-run__analysis-button"
     onClick={() => onToggle(result.runId)}
-    type="button"
-  >{visible}</button>
+    size="small"
+    type="text"
+  >{visible}</Button>
 }
 
 /** The analysis record behind the cell: what it recorded, including the code, once asked for. */
