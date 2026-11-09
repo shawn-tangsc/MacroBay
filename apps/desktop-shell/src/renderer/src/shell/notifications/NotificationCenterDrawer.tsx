@@ -167,9 +167,10 @@ export function NotificationCenterDrawer({
             // 刷新失败但手上有上一次的列表：**不拿它换一块空白**，只标一句「这是上次的读数」。
             <p className="notification-center-stale" role="status" data-center-stale>
               <span>{labels.centerStaleNotice}</span>
-              <button type="button" className="notification-center-link" onClick={() => void load()}>
+              {/* 句内动作：命令型一律 antd；`.text-action` 是「行内动作」的标记，旧的排印类保留不改外观。 */}
+              <Button type="text" size="small" className="notification-center-link text-action" onClick={() => void load()}>
                 {labels.centerReload}
-              </button>
+              </Button>
             </p>
           ) : null}
           <NotificationGroups
@@ -325,13 +326,14 @@ function NotificationRow(props: {
           </span>
         ) : null}
         {longBody ? (
-          <button
-            type="button"
-            className="notification-center-link"
+          <Button
+            type="text"
+            size="small"
+            className="notification-center-link text-action"
             aria-expanded={expanded}
             onClick={() => setExpanded((current) => !current)}>
             {expanded ? labels.centerCollapse : labels.centerExpand}
-          </button>
+          </Button>
         ) : null}
       </div>
       {props.actionable ? (
