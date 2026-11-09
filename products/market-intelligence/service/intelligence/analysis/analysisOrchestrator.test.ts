@@ -456,8 +456,39 @@ describe('analysisOrchestrator', () => {
       })
     })
 
+    it('pushes a run that reached the importance threshold, whatever key the phase gave it', async () => {
+      // 2026-11-09 的缺陷：消息面达门槛的运行也记成 `macro.actual.first-confirmed`，按前缀判会漏；
+      // 判据改成原因码之后，同一条运行进推送判定。
+      const notifyAnalysisConclusion = vi.fn(async (_notice: import('./analysisConclusionNotifier').AnalysisConclusionNotice) => undefined)
+      const invoke = vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository({ getRun: () => runFixture('macro.actual.first-confirmed'), triggerReasonOf: () => 'severity-confirmed' }),
+        structuredModelInvocation: { invoke } as never,
+        now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+        notifyAnalysisConclusion
+      })
+
+      await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+      expect(notifyAnalysisConclusion).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps routine slots and restart catch-ups out of the phone', async () => {
+      for (const reasonCode of ['session-slot-europe', 'session-slot-asia', 'session-slot-us', 'restart-initial-compensated', 'restart-review-compensated']) {
+        const notifyAnalysisConclusion = vi.fn(async (_notice: import('./analysisConclusionNotifier').AnalysisConclusionNotice) => undefined)
+        const invoke = vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+        const orchestrator = createAnalysisOrchestrator({
+          repository: createRepository({ getRun: () => runFixture('macro.actual.first-confirmed'), triggerReasonOf: () => reasonCode }),
+          structuredModelInvocation: { invoke } as never,
+          now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+          notifyAnalysisConclusion
+        })
+        await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+        expect(notifyAnalysisConclusion, reasonCode).not.toHaveBeenCalled()
+      }
+    })
+
     it('stays silent for a manual run and for the daily-briefing path', async () => {
-      for (const triggerKey of ['manual.refresh', 'manual.initial', 'macro.actual.first-confirmed', 'calendar.refresh']) {
+      for (const triggerKey of ['manual.refresh', 'manual.initial', 'calendar.refresh']) {
         const notifyAnalysisConclusion = vi.fn(async (_notice: import('./analysisConclusionNotifier').AnalysisConclusionNotice) => undefined)
         const invoke = vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
         const orchestrator = createAnalysisOrchestrator({

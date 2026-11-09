@@ -1,6 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
+import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
 
 /**
  * AI 分析结论推送（N12）的**判定层**：只回答"这一条要不要推、推给谁、句子写成什么"。
@@ -31,8 +32,39 @@ export const analysisConclusionPushPolicy = Object.freeze({
     'en-US': { title: 'Analysis conclusion', reason: 'You subscribed to signal-triggered analysis conclusions.' }
   }),
   /** 结论方向里这五个是"有方向"的取值，其余按"没表态"处理。 */
-  directionKeys: ['bullish', 'bearish', 'range', 'undecided', 'mixed'] as readonly AnalysisConclusionDirection[]
+  directionKeys: ['bullish', 'bearish', 'range', 'undecided', 'mixed'] as readonly AnalysisConclusionDirection[],
+  /**
+   * 哪些**原因码**算「这次分析是达到门槛才跑的」——自动结论推送的入口只读这一处。
+   *
+   * 判据不读触发键：键记的是阶段（初次 = `macro.actual.first-confirmed`、复盘 =
+   * `market-reaction.15m`），消息面达门槛的运行也长着宏观的样子，按前缀判会把它们全漏掉
+   * （2026-11-09 用户报「分析结论不推手机」的根因）。原因码才说"为什么跑"。
+   *
+   * 不进这里的：`session-slot-*`（开盘例行）、`restart-*-compensated`（进程重启补跑）、
+   * `manual-request`（读者手动，走发送按钮）、以及各种 `skipped` 原因——例行与补跑不是"达门槛"。
+   */
+  thresholdReasonCodes: [
+    'severity-confirmed',
+    'medium-score-confirmed',
+    'provider-surprise-confirmed',
+    'market-reaction-confirmed',
+    'signal-high-triggered',
+    'signal-medium-triggered'
+  ] as readonly string[]
 })
+
+/**
+ * 这次运行要不要进结论推送的判定：**达到门槛**就进。
+ *
+ * 原因码优先（唯一口径在 `thresholdReasonCodes`）；没有判定行时（老运行、信号触发那条不走
+ * 意义闸门）回落到信号键：`signal.<模块>.<规则>` 的键本身带着来源，是仅剩的可信事实。
+ */
+export function analysisConclusionPushEligible(input: Readonly<{ triggerKey: string; reasonCode?: string }>): boolean {
+  if (input.reasonCode !== undefined && input.reasonCode.length > 0) {
+    return analysisConclusionPushPolicy.thresholdReasonCodes.includes(input.reasonCode)
+  }
+  return analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(input.triggerKey)
+}
 
 export type AnalysisPushLanguage = 'zh-CN' | 'en-US'
 
@@ -131,6 +163,11 @@ function firstClause(text: string): string {
 export function analysisConclusionPushesPhone(input: Readonly<{
   /** 读不出来就是 `undefined`：没有证据说"反了"，就不叫醒读者。 */
   signalDirection?: 'bullish' | 'bearish'
+  /**
+   * 这次是不是信号唤起的。缺省按"有方向就算信号"推；调用方知道触发键时应显式给。
+   * 非信号的（消息面/日历达门槛）没有同向可言，达门槛本身就值得叫醒一次。
+   */
+  signalDriven?: boolean
   conclusionDirection: AnalysisConclusionDirection
   signalFactIds?: readonly string[]
   citedFactIds: readonly string[]
@@ -142,7 +179,10 @@ export function analysisConclusionPushesPhone(input: Readonly<{
   const quotaHit = input.sentToday.byTriggerKey >= analysisConclusionPushPolicy.perTriggerKeyDailyLimit
     ? 'quota-trigger-key' as const
     : input.sentToday.module >= analysisConclusionPushPolicy.moduleDailyLimit ? 'quota-module' as const : undefined
-  const worthPhone = opposing || newInformation
+  // 「同向只进中心」只对**信号唤起**的那次成立：没有信号就没有"同不同向"可谈，达门槛本身
+  // 就是新信息（2026-11-09：消息面达门槛的运行曾被这条按成只进中心，手机永远不响）。
+  const signalDriven = input.signalDriven ?? input.signalDirection !== undefined
+  const worthPhone = !signalDriven || opposing || newInformation
   if (!worthPhone) return Object.freeze({ phone: false, centerOnly: true, reason: 'same-direction' })
   if (quotaHit !== undefined) return Object.freeze({ phone: false, centerOnly: true, reason: quotaHit })
   return Object.freeze({ phone: true, centerOnly: false })

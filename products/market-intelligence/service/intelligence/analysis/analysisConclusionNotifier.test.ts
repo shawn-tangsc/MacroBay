@@ -32,7 +32,7 @@ const narrowOf = (request: NotificationSubmitRequest) => request.narrowedDisrupt
 
 describe('the analysis conclusion submit', () => {
   it('submits once with the trigger key and the cutoff, and no run id in the vars', async () => {
-    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [] }))
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [], suppressedLevels: [] }))
     const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
     await send(notice())
     expect(submit).toHaveBeenCalledTimes(1)
@@ -44,7 +44,7 @@ describe('the analysis conclusion submit', () => {
 
   it('does not narrow when the conclusion goes the other way', async () => {
     // 反向（信号说跌、结论说涨）**不传**收窄字段 = 按批准表全档，也就是手机那一档照常排上。
-    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [] }))
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [], suppressedLevels: [] }))
     const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
     await send(notice())
     expect(narrowOf(submit.mock.calls[0]![0] as NotificationSubmitRequest)).toBeUndefined()
@@ -52,7 +52,7 @@ describe('the analysis conclusion submit', () => {
   })
 
   it('narrows to the centre when the conclusion agrees with the signal', async () => {
-    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [] }))
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [], suppressedLevels: [] }))
     const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
     await send(notice({ conclusionDirection: 'bearish', citedFactIds: ['mi-fact-oi'] }))
     const narrowed = narrowOf(submit.mock.calls[0]![0] as NotificationSubmitRequest)
@@ -63,7 +63,7 @@ describe('the analysis conclusion submit', () => {
   })
 
   it('narrows once the day or module cap is reached, but still submits', async () => {
-    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [] }))
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [], suppressedLevels: [] }))
     const now = () => '2026-11-08T03:10:00.000Z'
     const send = createAnalysisConclusionNotifier({ submit, now, timeZone: () => 'Asia/Shanghai' })
     // 同一触发键第二条：收窄（只进中心），不是不发。
@@ -78,7 +78,7 @@ describe('the analysis conclusion submit', () => {
   })
 
   it('carries one sentence in both languages and lets the body carry the evidence count only when pushing', async () => {
-    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [] }))
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => ({ kind: 'accepted' as const, recordId: 'n-1', levels: [], suppressedLevels: [] }))
     const send = createAnalysisConclusionNotifier({ submit, now: () => '2026-11-08T03:10:00.000Z', timeZone: () => 'Asia/Shanghai' })
     await send(notice())
     const rendered = (submit.mock.calls[0]![0] as NotificationSubmitRequest).rendered!

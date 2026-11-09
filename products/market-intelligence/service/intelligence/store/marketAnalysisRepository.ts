@@ -363,6 +363,14 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     linkRunJobRun(value: Readonly<{ id: string; jobRunId: string }>) {
       return attachRunJobRun(sqlite, value)
     },
+    /**
+     * 这次运行为什么跑：判定行上写着原因码（`severity-confirmed` 等）。没有判定行就返回
+     * undefined——信号触发那条不走意义闸门，调用方按信号键回落。
+     */
+    triggerReasonOf(runId: string): string | undefined {
+      const row = sqlite.database.prepare('select reason_code from mi_analysis_trigger_ledger where analysis_run_id=? order by created_at desc, id desc limit 1').get(runId) as Row | undefined
+      return row && typeof row.reason_code === 'string' ? row.reason_code : undefined
+    },
     listTriggerLedger(eventGroupId: string) {
       // Evidence stays serialized here on purpose: the caller has the decision, and the contract's
       // `parseSignalEvidence` is the one place that turns it into a shape. Parsing in this projection

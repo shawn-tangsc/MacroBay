@@ -26,6 +26,20 @@ describe('who gets woken up', () => {
     expect(decision).toMatchObject({ phone: false, centerOnly: true, reason: 'same-direction' })
   })
 
+  it('pushes a threshold-triggered run that had no signal to compare against', () => {
+    // 消息面达门槛的运行没有信号方向：没有"同向"可谈，达门槛本身就是新信息 → 该推手机。
+    const decision = analysisConclusionPushesPhone({
+      signalDriven: false, conclusionDirection: 'bearish', citedFactIds: ['mi-fact-flow'], sentToday: { byTriggerKey: 0, module: 0 }
+    })
+    expect(decision).toMatchObject({ phone: true, centerOnly: false })
+  })
+
+  it('still keeps a no-signal run quiet when the quota is used up', () => {
+    expect(analysisConclusionPushesPhone({
+      signalDriven: false, conclusionDirection: 'bearish', citedFactIds: ['mi-fact-flow'], sentToday: { byTriggerKey: 1, module: 1 }
+    })).toMatchObject({ phone: false, centerOnly: true, reason: 'quota-trigger-key' })
+  })
+
   it('pushes the phone when the conclusion goes the other way', () => {
     expect(analysisConclusionPushesPhone(basePhone)).toMatchObject({ phone: true, centerOnly: false })
   })
@@ -110,8 +124,10 @@ describe('an unreadable signal widens nothing', () => {
     expect(decision).toMatchObject({ phone: false, centerOnly: true, reason: 'same-direction' })
   })
 
-  it('keeps the centre-only default when the trigger direction itself is unknown', () => {
+  it('keeps a signal run centre-only when its rule has no registered direction', () => {
+    // 信号唤起、但规则方向没登记：没有证据说"反了"，不叫醒（这是信号那一档的旧口径）。
     const decision = analysisConclusionPushesPhone({
+      signalDriven: true,
       conclusionDirection: 'bullish',
       citedFactIds: ['mi-fact-flow'],
       sentToday: { byTriggerKey: 0, module: 0 }

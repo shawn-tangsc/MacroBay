@@ -48,7 +48,7 @@ const summary = (overrides: Partial<AnalysisSummary> = {}): AnalysisSummary => (
   ...overrides
 })
 
-const accepted: NotificationSubmitOutcome = { kind: 'accepted', recordId: 'n-1', levels: ['center', 'channel'] }
+const accepted: NotificationSubmitOutcome = { kind: 'accepted', recordId: 'n-1', levels: ['center', 'channel'], suppressedLevels: [] }
 
 function harness(options: Readonly<{ run?: AnalysisRun; summary?: AnalysisSummary; outcome?: NotificationSubmitOutcome }> = {}) {
   const outcome = options.outcome ?? accepted

@@ -1,6 +1,7 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
 import {
   analysisConclusionPushesPhone,
   buildAnalysisConclusionRequest,
@@ -68,6 +69,8 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
       const bucket = bucketOf(now, timeZone)
       const sentToday = { byTriggerKey: bucket.byTriggerKey.get(notice.triggerKey) ?? 0, module: bucket.module }
       const delivery = analysisConclusionPushesPhone({
+        // 信号键才谈"同向"；消息面/日历达门槛的运行没有信号可比，达门槛本身就该叫醒一次。
+        signalDriven: analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(notice.triggerKey),
         ...(notice.triggerDirection === undefined ? {} : { signalDirection: notice.triggerDirection }),
         conclusionDirection: notice.conclusionDirection,
         ...(notice.triggerFactIds === undefined ? {} : { signalFactIds: notice.triggerFactIds }),
