@@ -97,6 +97,50 @@ it.each(['resolve', 'reject'] as const)('ignores a stale refresh %s after leavin
   expect(state.pending).toBe(false)
 })
 
+it('keeps the named month’s own verdict when only a neighbouring month fails', async () => {
+  // 三个月一个 `failure` 布尔是坏的：「命名月成功、相邻月失败」时它也是 true，上层拿它挡空态就会把
+  // 「相邻月读不到」写成「本月读不到」——同一个错误换个方向。每个月各自的读取结论必须是自己的。
+  const { useMarketCalendar } = await import('./useMarketCalendar')
+  const page = (month: string): MarketCalendarPage => ({ state: 'available', month, locale: 'zh', asOf: now().toISOString(), events: [], sources: [] })
+  const client = calendarClient({
+    queryMonth: vi.fn(async ({ month }: { month: string }) => month === '2026-08'
+      ? { state: 'unavailable' as const, failureCode: 'query-unavailable' as const }
+      : page(month)),
+    refresh: vi.fn()
+  })
+  let state!: ReturnType<typeof useMarketCalendar>
+  function Harness() { state = useMarketCalendar({ months: ['2026-09', '2026-08', '2026-10'], locale: 'zh', now, client }); return null }
+  root = createRoot(host)
+  await act(async () => root!.render(<Harness />))
+
+  // 命名月读到了：它的结论不许被相邻月的失败改写。
+  expect(state.namedMonthState).toEqual({ status: 'read' })
+  expect(state.monthStates['2026-09']).toEqual({ status: 'read' })
+  // 相邻月各自记账：失败的那个带它自己的原因，还没轮到的仍是「未请求」（我们读失败就停了）。
+  expect(state.monthStates['2026-08']).toEqual({ status: 'failed', reason: 'query-unavailable' })
+  expect(state.monthStates['2026-10']).toEqual({ status: 'not-requested' })
+  // 窗口整体仍然不完整——既有那个布尔不撒谎，但它不再代言命名月。
+  expect(state.failure).toBe(true)
+})
+
+it('reports 未请求 for every month before the first read settles', async () => {
+  const { useMarketCalendar } = await import('./useMarketCalendar')
+  // 首帧：还没有任何一月落定，三个都是「未请求」，不能被当成「读失败」或「读到空」。
+  const resolver: { settle?: () => void } = {}
+  const client = calendarClient({
+    queryMonth: vi.fn(async ({ month }: { month: string }) => new Promise<MarketCalendarPage>(resolve => {
+      resolver.settle = () => resolve({ state: 'available', month, locale: 'zh', asOf: now().toISOString(), events: [], sources: [] })
+    })),
+    refresh: vi.fn()
+  })
+  let state!: ReturnType<typeof useMarketCalendar>
+  function Harness() { state = useMarketCalendar({ months: ['2026-09', '2026-08', '2026-10'], locale: 'zh', now, client }); return null }
+  root = createRoot(host)
+  await act(async () => root!.render(<Harness />))
+  expect(state.namedMonthState).toEqual({ status: 'not-requested' })
+  expect(Object.values(state.monthStates).every(entry => entry.status === 'not-requested')).toBe(true)
+})
+
 it('reads every month the grid draws and keeps a repeated observation once', async () => {
   const { useMarketCalendar } = await import('./useMarketCalendar')
   const event = { eventKey: 'shared-observation', title: 'Shared', countryCode: null, eventType: 'economic-indicator' as const,
