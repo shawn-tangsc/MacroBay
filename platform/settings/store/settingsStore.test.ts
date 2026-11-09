@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -692,5 +692,70 @@ describe('读时归一不落盘（2026-11-09 缺陷）', () => {
     await store.get()
     await store.get()
     expect(writes).toEqual([])
+  })
+})
+
+describe('设置文件损坏时不许覆盖（2026-11-09 存储审计）', () => {
+  it('rejects the save instead of writing defaults over an unreadable file', async () => {
+    const writes: unknown[] = []
+    const preserveCorruptCopy = vi.fn(async () => undefined)
+    const store = createSettingsStore({
+      read: async () => {
+        throw new SyntaxError('Unexpected token } in JSON at position 42')
+      },
+      write: async (value) => {
+        writes.push(value)
+      },
+      preserveCorruptCopy
+    })
+
+    // 读到坏文件 → 保存被拒绝，**不写默认值**。
+    await expect(store.update({ themeMode: 'light' })).rejects.toThrow('settings-storage-unreadable')
+    expect(writes).toEqual([])
+    // 先留损坏副本（证据），再拒绝。
+    expect(preserveCorruptCopy).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed when the corrupt copy cannot be preserved', async () => {
+    const writes: unknown[] = []
+    const store = createSettingsStore({
+      read: async () => {
+        throw new SyntaxError('bad json')
+      },
+      write: async (value) => {
+        writes.push(value)
+      },
+      preserveCorruptCopy: async () => {
+        throw new Error('disk full')
+      }
+    })
+
+    // 留档失败 → 同样不写；错误照实抛给调用方（界面显示保存失败）。
+    await expect(store.update({ themeMode: 'light' })).rejects.toThrow()
+    expect(writes).toEqual([])
+  })
+})
+
+describe('设置文件损坏：真实文件层（先留档、原文件不动）', () => {
+  it('leaves the corrupt file byte-identical and writes a .corrupt-* copy', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'settings-corrupt-'))
+    try {
+      const file = join(dir, 'settings.json')
+      const corrupt = '{"language":"zh-CN", "themeMode": '
+      writeFileSync(file, corrupt, 'utf8')
+      const storage = createJsonFileStorage(file, createDefaultAppSettings())
+      const store = createSettingsStore(storage)
+
+      await expect(store.update({ themeMode: 'light' })).rejects.toThrow('settings-storage-unreadable')
+
+      // 原文件逐字节未变。
+      expect(readFileSync(file, 'utf8')).toBe(corrupt)
+      // 留了一份损坏副本，内容与原文件一致。
+      const copies = readdirSync(dir).filter((name) => name.includes('.corrupt-'))
+      expect(copies).toHaveLength(1)
+      expect(readFileSync(join(dir, copies[0]!), 'utf8')).toBe(corrupt)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

@@ -21,6 +21,11 @@ import { normalizeWebSearchSettings } from '../../ai/web-search/contracts/webSea
 export type SettingsStorage = {
   read: () => Promise<unknown>
   write: (settings: AppSettings) => Promise<void>
+  /**
+   * 读到损坏内容时留一份 `.corrupt-*` 副本（**不改原文件**）；留档失败要抛。
+   * 由 `createJsonFileStorage` 提供；用例里的内存存储可以不实现。
+   */
+  preserveCorruptCopy?: (error: unknown) => Promise<void>
 }
 
 export type SettingsStore = {
@@ -120,7 +125,16 @@ export function createSettingsStore(
       return settings
     }
 
-    settings = normalizeAppSettings(await storage.read(), reportUnknownField)
+    let raw: unknown
+    try {
+      raw = await storage.read()
+    } catch (error) {
+      // 「读不到」不是「从没配过」：前者必须报错（界面是读失败/保存失败），后者才可以用默认值。
+      // 先把损坏的原文留一份 `.corrupt-*`（不改原文件）；留档失败就 fail-closed，继续往上抛。
+      if (storage.preserveCorruptCopy) await storage.preserveCorruptCopy(error)
+      throw new SettingsStorageUnreadableError()
+    }
+    settings = normalizeAppSettings(raw, reportUnknownField)
     return settings
   }
 
@@ -169,6 +183,19 @@ export function createSettingsStore(
 }
 
 /**
+ * 设置文件读不出来时**拒绝保存**的错误。
+ *
+ * 单独一个类型，是为了让调用方能把它和「写入失败」分开显示：两种都是「这次没保存上」，
+ * 但前者意味着磁盘上那份文件需要人看一眼，后者重试就行。
+ */
+export class SettingsStorageUnreadableError extends Error {
+  constructor() {
+    super('settings-storage-unreadable')
+    this.name = 'SettingsStorageUnreadableError'
+  }
+}
+
+/**
  * 把「这次改的顶层字段」叠到**磁盘原文**上：点到的字段用归一后的新值，其余原样。
  *
  * `storage.read()` 拿到的是磁盘上真实的 JSON；读失败/缺文件时退回归一后的整份文档
@@ -183,8 +210,15 @@ async function mergePatchedOntoDisk(
   let raw: unknown
   try {
     raw = await storage.read()
-  } catch {
-    return next
+  } catch (error) {
+    // 读失败 = 文件坏了（不是「从没配过」——那种情况 `read()` 返回默认值，不抛）。
+    //
+    // 这里**绝不能**拿归一后的默认值整份写回去：内存里那份是加载时的快照，磁盘上这一份才是
+    // 读者真正的配置，覆盖它等于把主题、语言、时区、代理、模型默认值一次抹掉。做法：
+    // ① 先留一份 `.corrupt-*` 副本（留档失败就 fail-closed，不在来路不明的文件上写）；
+    // ② 把这次保存**拒绝**给调用方，由界面显示「保存失败」，让人自己去处理那个文件。
+    if (storage.preserveCorruptCopy) await storage.preserveCorruptCopy(error)
+    throw new SettingsStorageUnreadableError()
   }
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return next
   const rawRecord = raw as Record<string, unknown>

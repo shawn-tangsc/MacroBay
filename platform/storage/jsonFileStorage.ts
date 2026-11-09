@@ -6,10 +6,23 @@ import { dirname } from 'node:path'
 export type JsonFileStorage<T> = {
   read: () => Promise<T>
   write: (value: T) => Promise<void>
+  /**
+   * 读到损坏内容时，在**不改原文件**的前提下留一份 `.corrupt-*` 副本。
+   *
+   * 调用方拿到的 `read()` 仍然是「坏了就抛」——留档与恢复是两件事：这份文档是整份读—改—写的
+   * 目标，静默拿默认值覆盖等于抹掉读者的配置，所以这里只留证据，恢复由人决定。
+   * 留档失败直接抛（fail-closed）：宁可不保存，也不要在一份来路不明的文件上写。
+   */
+  preserveCorruptCopy?: (error: unknown) => Promise<void>
 }
 
 export function createJsonFileStorage<T>(filePath: string, fallback: T): JsonFileStorage<T> {
   return {
+    async preserveCorruptCopy() {
+      // 原文件一个字节都不动：只读它的内容、另存一份带时间戳的副本。
+      const raw = await readFile(filePath, 'utf8')
+      await quarantineCorruptFile(filePath, raw)
+    },
     async read() {
       try {
         return JSON.parse(await readFile(filePath, 'utf8')) as T
