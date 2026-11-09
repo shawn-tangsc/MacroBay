@@ -23,13 +23,15 @@ export const sentimentAlertTemplates: Readonly<Record<SentimentAlertLocale, Sent
     title: '【{strength}】{headline}',
     bodyWithSource: '来源：{sourceName}',
     reason: '分析给出的强度达到了收推送的门槛。',
-    strength: Object.freeze({ high: '高', medium: '中', low: '弱' })
+    // 最弱档是「弱」，它的反面就是「强」——与应用里 `strengthLevels` 用同一组词（`productText`
+    // 中英两侧），否则手机上写【高】、进应用找不到「高」字，同一件事两种说法。
+    strength: Object.freeze({ high: '强', medium: '中', low: '弱' })
   }),
   'en-US': Object.freeze({
     title: '[{strength}] {headline}',
     bodyWithSource: 'Source: {sourceName}',
     reason: 'The analysis rated this high enough to reach your phone.',
-    strength: Object.freeze({ high: 'High', medium: 'Medium', low: 'Weak' })
+    strength: Object.freeze({ high: 'Strong', medium: 'Medium', low: 'Weak' })
   })
 })
 
