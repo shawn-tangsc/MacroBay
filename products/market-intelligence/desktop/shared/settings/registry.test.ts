@@ -31,7 +31,7 @@ function withRow(replacement: SettingDescriptor): Registry {
   }
 }
 
-describe('settings registry self-checks (G1–G9)', () => {
+describe('settings registry self-checks', () => {
   it('ships a self-consistent registry and declares every menu in the type', () => {
     expect(Object.keys(settingRegistry).sort()).toEqual([...SETTING_MENUS].sort())
     expect(validateSettingRegistry(settingRegistry)).toEqual([])
@@ -40,7 +40,7 @@ describe('settings registry self-checks (G1–G9)', () => {
     }
   })
 
-  it('G1: static keys are unique, and a keyed template is declared exactly once', () => {
+  it('static keys are unique, and a keyed template is declared exactly once', () => {
     // 静态行重复 → 红。
     expect(validateSettingRegistry({
       ...settingRegistry,
@@ -54,14 +54,14 @@ describe('settings registry self-checks (G1–G9)', () => {
     expect(validateSettingRegistry({ ...settingRegistry, sources: [template] })).not.toContain('duplicate-key')
   })
 
-  it('G2: an empty or non-settings surface is rejected', () => {
+  it('an empty or non-settings surface is rejected', () => {
     expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, surfaces: [] }))).toContain('empty-surfaces')
     // A3 变异之一：把 surfaces 改成本版不许的值。
     expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, surfaces: ['drawer'] }))).toContain('surface-not-settings')
     expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, surfaces: ['drawer'] }))).not.toContain('unsupported-surface')
   })
 
-  it('G3: a platform row may use command writes, but never a value write or a default', () => {
+  it('a platform row may use command writes, but never a value write or a default', () => {
     expect(validateSettingRegistry(withRow({ ...CHANNEL_SWITCH, defaultValueFrom: 'calendarReminder.enabled' })))
       .toContain('platform-has-default')
     expect(validateSettingRegistry(withRow({
@@ -72,13 +72,13 @@ describe('settings registry self-checks (G1–G9)', () => {
     expect(validateSettingRegistry(settingRegistry)).not.toContain('platform-has-value-write')
   })
 
-  it('G4: an unimplemented row may not carry a write path or a default', () => {
+  it('an unimplemented row may not carry a write path or a default', () => {
     const issues = validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, availability: 'unimplemented' }))
     expect(issues).toContain('unimplemented-has-write')
     expect(issues).toContain('unimplemented-has-default')
   })
 
-  it('G5: writable product rows need a write, read-only rows forbid one', () => {
+  it('writable product rows need a write, read-only rows forbid one', () => {
     // A3 变异之二：抽掉可写行的写命令。
     expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, write: undefined })))
       .toContain('writable-requires-write')
@@ -86,7 +86,7 @@ describe('settings registry self-checks (G1–G9)', () => {
       .toContain('readonly-forbids-write')
   })
 
-  it('G6: a default value must come from the server constants, never a literal', () => {
+  it('a default value must come from the server constants, never a literal', () => {
     expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, defaultValueFrom: 'not-a-server-default' as never })))
       .toContain('unknown-default')
 
@@ -96,7 +96,7 @@ describe('settings registry self-checks (G1–G9)', () => {
     expect(literalDefault.defaultValueFrom).toBe('medium')
   })
 
-  it('G7: every command write names a command that the platform actually exports', () => {
+  it('every command write names a command that the platform actually exports', () => {
     for (const rows of Object.values(settingRegistry)) {
       for (const row of rows) {
         if (row.write?.kind === 'command') {
@@ -177,7 +177,7 @@ describe('settings registry self-checks (G1–G9)', () => {
     expect(byKey.has('setting:notifications.channel-event.sentiment-alert')).toBe(false)
   })
 
-  it('G9: labelText only on keyed rows, and the label comes from the view data', () => {
+  it('labelText only on keyed rows, and the label comes from the view data', () => {
     // 静态行加 labelText → 红（行名会绕开文案表）。
     const staticWithLabel = { ...PUSH_THRESHOLD, labelText: () => 'CoinDesk' }
     expect(validateSettingRegistry(withRow(staticWithLabel))).toContain('label-text-on-static-row')
@@ -189,7 +189,7 @@ describe('settings registry self-checks (G1–G9)', () => {
     expect(enabled.labelText?.({})).toBe('')
   })
 
-  it('G1: a template must match its instance dimension', () => {
+  it('a template must match its instance dimension', () => {
     const wrongTemplate = { ...PUSH_THRESHOLD, key: 'setting:sources.foo@<feedId>', keyedBy: 'sourceId' as const }
     expect(validateSettingRegistry(withRow(wrongTemplate))).toContain('template-key-mismatch')
     const feedTemplate = { ...PUSH_THRESHOLD, key: 'setting:calendar-feeds.enabled@<feedId>', keyedBy: 'feedId' as const }

@@ -36,14 +36,14 @@ export const SETTING_MENUS = [
 ] as const
 export type SettingMenuId = (typeof SETTING_MENUS)[number]
 
-/** 允许出现在哪些面。本版只许 `settings`；另两个是预留位，出现即违反 G2。 */
+/** 允许出现在哪些面。本版只许 `settings`；另两个是预留位，出现即不合法。 */
 export const SETTING_SURFACES = ['settings', 'drawer', 'panel'] as const
 export type SettingSurface = (typeof SETTING_SURFACES)[number]
 
 /** 值的归属：`product` = 产品存储；`platform` = 平台设置（命令写或只读）。 */
 export type SettingLevel = 'product' | 'platform'
 
-/** 未实现项无控件、无写、无默认值（G4），渲染一行说明；不许画成禁用控件。 */
+/** 未实现项无控件、无写、无默认值，渲染一行说明；不许画成禁用控件。 */
 export type SettingAvailability = 'live' | 'unimplemented'
 
 /** 这一行读到的视图；`keyedBy` 行由页面把实例键与投影事实拼进来。 */
@@ -71,13 +71,13 @@ export type SettingField =
   | { readonly kind: 'number'; readonly min?: number; readonly max?: number; readonly step?: number; readonly unitKey?: string }
   | { readonly kind: 'readonly' }
 
-/** 平台命令清单：G7 的对照表，也把「写一个不存在的命令」变成编译期错误。 */
+/** 平台命令清单：命令写的对照表，也把「写一个不存在的命令」变成编译期错误。 */
 export const PLATFORM_COMMANDS = Object.values(IpcChannels)
 export type PlatformCommandId = (typeof IpcChannels)[keyof typeof IpcChannels]
 
 /**
  * 默认值的唯一来源：只放共享契约/服务端常量引用，声明里只放这张表的键。
- * 运行期分不出「引用的 false」和「手写的 false」，所以 G6 用类型强制（写字面量编译不过）。
+ * 运行期分不出「引用的 false」和「手写的 false」，所以默认值用类型强制（写字面量编译不过）。
  */
 export const SERVER_DEFAULTS = Object.freeze({
   newsPushThreshold: DEFAULT_NEWS_PUSH_THRESHOLD,
@@ -121,7 +121,7 @@ export type SettingDescriptor = Readonly<{
   field: SettingField
   read: Readonly<{ command: string; select: (view: unknown) => unknown }>
   write?: SettingWrite
-  /** 值缺失时显示什么：只许是 `SERVER_DEFAULTS` 的键（G6，编译期）。 */
+  /** 值缺失时显示什么：只许是 `SERVER_DEFAULTS` 的键（编译期）。 */
   defaultValueFrom?: ServerDefaultKey
   /** 只依赖 `view` 与页面上下文 `ctx`；假 = 不渲染，不是禁用。 */
   visibleWhen?: (view: SettingView, ctx: SettingContext) => boolean

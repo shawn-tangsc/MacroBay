@@ -1,5 +1,5 @@
 /**
- * 设置定义注册表（C2 第一步：只声明，不渲染）：六格聚合 + G1–G7 自检。
+ * 设置定义注册表（C2 第一步：只声明，不渲染）：六格聚合 + 声明自检。
  *
  * 形状与默认值来源在 `descriptorTypes.ts`，每个菜单的声明在 `menus/` 下——一个菜单一个文件，
  * 谁也不必读完整张表才能改一行。
@@ -57,7 +57,7 @@ export type SettingRegistryIssue =
   | 'template-key-mismatch'
 
 /**
- * G1–G9 自检，纯函数：注册表自身不自洽时返回问题码，由单测调用。
+ * 声明自检，纯函数：注册表自身不自洽时返回问题码，由单测调用。
  * 不在这里抛错——渲染层拿到的是一份已验证的表；验证失败应当是测试的红，不是页面白屏。
  */
 export function validateSettingRegistry(
@@ -68,7 +68,7 @@ export function validateSettingRegistry(
   for (const menu of SETTING_MENUS) {
     for (const descriptor of registry[menu]) {
       if (descriptor.key.trim().length === 0) issues.push('empty-key')
-      // G1：静态行判全局唯一；按实例化的行只判模板唯一（实例数由视图决定）。
+      // 身份：静态行判全局唯一；按实例化的行只判模板唯一（实例数由视图决定）。
       const identity = descriptor.keyedBy ? `template:${descriptor.key}` : `static:${descriptor.key}`
       if (seen.has(identity)) issues.push('duplicate-key')
       seen.add(identity)
@@ -101,7 +101,7 @@ export function validateSettingRegistry(
         issues.push('unknown-platform-command')
       }
 
-      // G9：行名必须恰有一个来源——静态行用 labelKey，按实例化的行才可用 labelText（视图数据）。
+      // 行名：必须恰有一个来源——静态行用 labelKey，按实例化的行才可用 labelText（视图数据）。
       const hasLabelKey = (descriptor.copy?.labelKey ?? '').length > 0
       if (descriptor.labelText === undefined && !hasLabelKey) issues.push('missing-label')
       if (descriptor.labelText !== undefined && descriptor.keyedBy === undefined) {
