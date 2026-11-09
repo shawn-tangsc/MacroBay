@@ -1,34 +1,34 @@
 /**
  * 设置定义注册表（C2 第一步：只声明，不渲染）。
  *
- * 一条声明 = 设置页上的一行。渲染层只按这张表出行，不许再手写第二份；`key` 是这一行的
- * 身份（将来写在最外层节点的 `data-setting-key` 上），**不是文案键**——文案走 `copy`。
+ * 一条声明 = 设置页上的一行。`key` 是身份（将来写进行节点的 `data-setting-key`），不是文案键；
+ * 文案走 `copy`，只引用现有表。
  *
- * 本笔的边界（与产品/Chief 2026-11-10 对齐）：
- * - `surfaces` 闭集只有三个值，本版**只许出现 `settings`**；`drawer` / `panel` 是预留位，
- *   不许提前写空壳分支；
- * - **产品只声明自己拥有的设置**：`level: 'platform'` 的项只许只读展示 + 跳转，禁
- *   `write` / `defaultValueFrom`（否则产品注册表就持有了平台设置的写路径，平台反向依赖产品）；
- * - 菜单 1（来源与采集）本笔为空：它的每一行都是**按来源实例化**的（`启用`/`能力·看板`/
- *   `能力·日历`/`采集频率` 每个源各一行），静态 `key` 表达不了；要等契约补 `keyedBy`
- *   （或等 C11–C13 拿着视图里的源列表一起落），不在本笔硬造一份源清单。
+ * 本笔边界（与产品/Chief 2026-11-10 对齐）：
+ * - `surfaces` 闭集三个值，本版**只许 `settings`**；`drawer`/`panel` 是预留位，不写空壳；
+ * - 产品只声明自己拥有的设置：`level: 'platform'` 只许**命令写**（值在平台）或只读，
+ *   禁用值写、禁 `defaultValueFrom`；
+ * - 菜单 1 的行按来源实例化（`keyedBy: 'sourceId'`），`key` 是模板；注册表里不写源清单。
  *
- * 文案键只引用**现有**表：通知页的字句在
- * `desktop/settings/intelligence-notification/text.ts`（不是 `productText.ts`），本笔
- * 不新增任何文案键（A2：键集合相等）。
+ * 文案键来自 `desktop/settings/intelligence-notification/text.ts`（**不是 `productText.ts`**），
+ * 本笔不新增任何文案键（A2：键集合相等）。
  */
+
+import { IpcChannels } from '@platform/desktop/ipc/channels'
 
 import {
   DEFAULT_CALENDAR_REMINDER_SETTINGS,
   type CalendarLandedFilter,
   type CalendarReminderLeadMinutes
 } from '../../../contracts/calendarEventReminder'
+import { DEFAULT_CALENDAR_LANDED_COUNTRIES } from '../../../contracts/calendarLandedCountries'
+import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import {
   DEFAULT_NEWS_PUSH_THRESHOLD,
   type NewsSentimentTierThreshold
 } from '../../../contracts/newsSentimentTiers'
 
-/** 六格菜单的 id：与 `01-prd-structure.md` 的六格一一对应，顺序也一致。 */
+/** 六格菜单 id：与 `01-prd-structure.md` 的六格一一对应，顺序一致。 */
 export const SETTING_MENUS = [
   'sources',
   'content',
@@ -39,75 +39,182 @@ export const SETTING_MENUS = [
 ] as const
 export type SettingMenuId = (typeof SETTING_MENUS)[number]
 
-/** 允许出现在哪些面。本版只许 `settings`；另两个是预留位，声明里出现即违反 G2。 */
+/** 允许出现在哪些面。本版只许 `settings`；另两个是预留位，出现即违反 G2。 */
 export const SETTING_SURFACES = ['settings', 'drawer', 'panel'] as const
 export type SettingSurface = (typeof SETTING_SURFACES)[number]
 
-/**
- * 值的归属：`product` = 产品自己的存储；`platform` = 平台设置的只读投影。
- * 平台项禁写、禁声明默认值（G3）——产品注册表不许持有平台的写路径。
- */
+/** 值的归属：`product` = 产品存储；`platform` = 平台设置（命令写或只读）。 */
 export type SettingLevel = 'product' | 'platform'
 
-/** 未实现项不许挂控件、不许声明默认值、不许有写命令（G4）；渲染成一行说明。 */
+/** 未实现项无控件、无写、无默认值（G4），渲染一行说明；不许画成禁用控件。 */
 export type SettingAvailability = 'live' | 'unimplemented'
 
-/** 本版只做四种控件（契约 §1.1）；文本输入与多值勾选不在其中，故它们不在首批声明里。 */
+/** 控件可选项只许来自这里声明的集合，不许在行里手写列表。 */
 export type SettingOptionsSource =
   | 'news-push-thresholds'
   | 'calendar-reminder-leads'
+  | 'calendar-reminder-importance'
   | 'calendar-landed-filter'
+  | 'calendar-landed-scopes'
+  | 'calendar-landed-country-codes'
 
+/** 本版五种控件；文本输入与动作按钮不进注册表（契约 §1.1）。 */
 export type SettingField =
   | { readonly kind: 'switch' }
   | { readonly kind: 'select'; readonly optionsFrom: SettingOptionsSource }
+  | { readonly kind: 'multiSelect'; readonly optionsFrom: SettingOptionsSource }
   | { readonly kind: 'number'; readonly min?: number; readonly max?: number; readonly step?: number; readonly unitKey?: string }
   | { readonly kind: 'readonly' }
 
+/** 平台命令清单：G7 的对照表，也把「写一个不存在的命令」变成编译期错误。 */
+export const PLATFORM_COMMANDS = Object.values(IpcChannels)
+export type PlatformCommandId = (typeof IpcChannels)[keyof typeof IpcChannels]
+
 /**
- * 默认值的**唯一来源**：这里只放服务端/共享契约里的常量引用，声明里只放这张表的键。
- *
- * 为什么不按契约写 `defaultValue: unknown`：运行期分不出「引用的 false」和「手写的 false」，
- * 单测只能看着两个相等的值发呆。把默认值改成「键」以后，写一个字面量在类型上就不成立
- * （G6 从测试提升为编译期），服务端改默认值时这里不同步会直接编译报错。
+ * 默认值的唯一来源：只放共享契约/服务端常量引用，声明里只放这张表的键。
+ * 运行期分不出「引用的 false」和「手写的 false」，所以 G6 用类型强制（写字面量编译不过）。
  */
 export const SERVER_DEFAULTS = Object.freeze({
   newsPushThreshold: DEFAULT_NEWS_PUSH_THRESHOLD,
   'calendarReminder.enabled': DEFAULT_CALENDAR_REMINDER_SETTINGS.enabled,
   'calendarReminder.leadMinutes': DEFAULT_CALENDAR_REMINDER_SETTINGS.leadMinutes,
-  'calendarReminder.landedFilter': DEFAULT_CALENDAR_REMINDER_SETTINGS.landedFilter
+  'calendarReminder.importance': DEFAULT_CALENDAR_REMINDER_SETTINGS.importance,
+  'calendarReminder.landedFilter': DEFAULT_CALENDAR_REMINDER_SETTINGS.landedFilter,
+  'calendarReminder.landedCountryScope': DEFAULT_CALENDAR_LANDED_COUNTRIES.scope
 } as const)
 
 export type ServerDefaultKey = keyof typeof SERVER_DEFAULTS
 
+/**
+ * 两种写，不是一个例外：
+ * - `value`：值写，注册表持有这一项（只许 `level: 'product'`）；
+ * - `command`：命令写，值在平台，这里只声明按哪个命令改（不持有值、无默认值）。
+ *
+ * `toPayload` / `toArgs` 都收第二个 `view`：有些行一次要写多字段（如国家的
+ * `{ scope, codes }`），只给新值会丢掉同一对象里的另一格——那不是省事，是把读者另一半设置清空。
+ */
+export type SettingWrite =
+  | Readonly<{
+      kind: 'value'
+      command: string
+      toPayload: (value: unknown, view: unknown) => unknown
+    }>
+  | Readonly<{
+      kind: 'command'
+      id: PlatformCommandId
+      toArgs?: (value: unknown, view: unknown) => unknown
+    }>
+
 export type SettingDescriptor = Readonly<{
-  /** 身份：全局唯一、稳定，不随文案改名；将来写到行的 `data-setting-key` 上。 */
+  /** 身份：静态行全局唯一；带 `keyedBy` 时是模板（`…@<sourceId>`），模板只声明一次。 */
   key: string
+  /** 按视图里的列表实例化；本版只认 `sourceId`。注册表里不写实例清单。 */
+  keyedBy?: 'sourceId'
   menu: SettingMenuId
   surfaces: readonly SettingSurface[]
   level: SettingLevel
   field: SettingField
-  /** 从哪个视图取哪个字段。渲染层只调用它，不许自己拼载荷。 */
   read: Readonly<{ command: string; select: (view: unknown) => unknown }>
-  /** 怎么把值写回去。可写的 live 项必须有；只读/平台/未实现项必须没有（G3/G4/G5）。 */
-  write?: Readonly<{ command: string; toPayload: (value: unknown) => unknown }>
-  /** 值缺失时显示什么：只许引用 `SERVER_DEFAULTS` 的键（G6）。 */
+  write?: SettingWrite
+  /** 值缺失时显示什么：只许是 `SERVER_DEFAULTS` 的键（G6，编译期）。 */
   defaultValueFrom?: ServerDefaultKey
   /** 只依赖 `read` 的结果；假 = 不渲染，不是禁用。 */
   visibleWhen?: (view: unknown) => boolean
-  /** 行名 + ⓘ 说明。只引用现有文案键，不新增。 */
   copy: Readonly<{ labelKey: string; helpKey?: string }>
   availability: SettingAvailability
 }>
 
-/** 从 `unknown` 视图里取一个具名字段；取不到就是 `undefined`，不让渲染层猜。 */
+/** 从 `unknown` 视图里取具名字段；取不到就是 `undefined`，不让渲染层猜。 */
 export function readViewField(view: unknown, field: string): unknown {
   if (typeof view !== 'object' || view === null) return undefined
   return field in view ? (view as Record<string, unknown>)[field] : undefined
 }
 
-/** 通知页的四行（本笔首批）。文案键全部来自现有 `intelligenceNotificationText`。 */
-const NOTIFICATION_SETTINGS: readonly SettingDescriptor[] = Object.freeze([
+const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
+  {
+    key: 'setting:notifications.channel-event.signal-triggered',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.signalTriggered)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.signalTriggered, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.signalTriggered.title',
+      helpKey: 'pages.intelligence.notification.rows.signalTriggered.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.channel-event.briefing-ready',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.briefingReady)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.briefingReady, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.briefingReady.title',
+      helpKey: 'pages.intelligence.notification.rows.briefingReady.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.channel-event.sentiment-alert',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.sentimentAlert.title',
+      helpKey: 'pages.intelligence.notification.rows.sentimentAlert.info'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.channel-event.calendar',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'platform',
+    field: { kind: 'switch' },
+    read: {
+      command: 'platform:notifications-get-channel-events',
+      select: (view) => readViewField(readViewField(view, 'events'), MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.calendarEventUpcoming)
+    },
+    write: {
+      kind: 'command',
+      id: 'platform:notifications-set-channel-event',
+      toArgs: (value) => ({ eventId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.calendarEventUpcoming, enabled: value === true })
+    },
+    copy: {
+      labelKey: 'pages.intelligence.notification.rows.calendar.title',
+      helpKey: 'pages.intelligence.notification.rows.calendar.info'
+    },
+    availability: 'live'
+  },
   {
     key: 'setting:notifications.push-threshold',
     menu: 'notifications',
@@ -116,6 +223,7 @@ const NOTIFICATION_SETTINGS: readonly SettingDescriptor[] = Object.freeze([
     field: { kind: 'select', optionsFrom: 'news-push-thresholds' },
     read: { command: 'intelligence.getNewsPushThreshold', select: (view) => readViewField(view, 'pushThreshold') },
     write: {
+      kind: 'value',
       command: 'intelligence.saveNewsPushThreshold',
       toPayload: (value) => ({ pushThreshold: value as NewsSentimentTierThreshold })
     },
@@ -127,24 +235,6 @@ const NOTIFICATION_SETTINGS: readonly SettingDescriptor[] = Object.freeze([
     availability: 'live'
   },
   {
-    key: 'setting:notifications.calendar.enabled',
-    menu: 'notifications',
-    surfaces: ['settings'],
-    level: 'product',
-    field: { kind: 'switch' },
-    read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'enabled') },
-    write: {
-      command: 'intelligence.setCalendarReminderSettings',
-      toPayload: (value) => ({ enabled: value === true })
-    },
-    defaultValueFrom: 'calendarReminder.enabled',
-    copy: {
-      labelKey: 'pages.intelligence.notification.calendar.beforeRow',
-      helpKey: 'pages.intelligence.notification.calendar.beforeNote'
-    },
-    availability: 'live'
-  },
-  {
     key: 'setting:notifications.calendar.lead',
     menu: 'notifications',
     surfaces: ['settings'],
@@ -152,12 +242,35 @@ const NOTIFICATION_SETTINGS: readonly SettingDescriptor[] = Object.freeze([
     field: { kind: 'select', optionsFrom: 'calendar-reminder-leads' },
     read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'leadMinutes') },
     write: {
+      kind: 'value',
       command: 'intelligence.setCalendarReminderSettings',
       toPayload: (value) => ({ leadMinutes: value as CalendarReminderLeadMinutes })
     },
     defaultValueFrom: 'calendarReminder.leadMinutes',
+    // 契约：只在「开始前」开着时出现；关着时只留一行状态摘要。
+    visibleWhen: (view) => readViewField(view, 'enabled') === true,
     copy: {
       labelKey: 'pages.intelligence.notification.calendar.lead',
+      helpKey: 'pages.intelligence.notification.calendar.beforeNote'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.importance',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'multiSelect', optionsFrom: 'calendar-reminder-importance' },
+    read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'importance') },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value) => ({ importance: value })
+    },
+    defaultValueFrom: 'calendarReminder.importance',
+    visibleWhen: (view) => readViewField(view, 'enabled') === true,
+    copy: {
+      labelKey: 'pages.intelligence.notification.calendar.importance',
       helpKey: 'pages.intelligence.notification.calendar.beforeNote'
     },
     availability: 'live'
@@ -170,6 +283,7 @@ const NOTIFICATION_SETTINGS: readonly SettingDescriptor[] = Object.freeze([
     field: { kind: 'select', optionsFrom: 'calendar-landed-filter' },
     read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'landedFilter') },
     write: {
+      kind: 'value',
       command: 'intelligence.setCalendarReminderSettings',
       toPayload: (value) => ({ landedFilter: value as CalendarLandedFilter })
     },
@@ -179,19 +293,71 @@ const NOTIFICATION_SETTINGS: readonly SettingDescriptor[] = Object.freeze([
       helpKey: 'pages.intelligence.notification.landed.cost'
     },
     availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.landed-countries.scope',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'select', optionsFrom: 'calendar-landed-scopes' },
+    read: {
+      command: 'intelligence.getCalendarReminderSettings',
+      select: (view) => readViewField(readViewField(view, 'landedCountries'), 'scope')
+    },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value, view) => ({
+        // 两格是一份对象：改范围不能把读者已勾的国家清掉（非 custom 时服务端本来也只存空）。
+        landedCountries: {
+          scope: value,
+          codes: value === 'custom' ? readViewField(readViewField(view, 'landedCountries'), 'codes') ?? [] : []
+        }
+      })
+    },
+    defaultValueFrom: 'calendarReminder.landedCountryScope',
+    copy: {
+      labelKey: 'pages.intelligence.notification.countries.row',
+      helpKey: 'pages.intelligence.notification.countries.scopeNote'
+    },
+    availability: 'live'
+  },
+  {
+    key: 'setting:notifications.calendar.landed-countries.codes',
+    menu: 'notifications',
+    surfaces: ['settings'],
+    level: 'product',
+    field: { kind: 'multiSelect', optionsFrom: 'calendar-landed-country-codes' },
+    read: {
+      command: 'intelligence.getCalendarReminderSettings',
+      select: (view) => readViewField(readViewField(view, 'landedCountries'), 'codes')
+    },
+    write: {
+      kind: 'value',
+      command: 'intelligence.setCalendarReminderSettings',
+      toPayload: (value) => ({ landedCountries: { scope: 'custom', codes: value } })
+    },
+    // 契约：仅「自选国家」时出现（`calendarLandedCountries.ts` 的 scope 条件多选）。
+    visibleWhen: (view) => readViewField(readViewField(view, 'landedCountries'), 'scope') === 'custom',
+    copy: {
+      labelKey: 'pages.intelligence.notification.countries.customTitle',
+      helpKey: 'pages.intelligence.notification.countries.customCost'
+    },
+    availability: 'live'
   }
 ])
 
 /**
- * 六格都必须有键：删掉某菜单的声明（或整个菜单）会从类型上报错，不会静默少一行。
+ * 六格都必须有键：删掉某菜单（或整个菜单）从类型上报错，不会静默少一行。
  * 本笔只填菜单 5；其余空数组是「本笔不声明」，不是「永远没有」。
+ * 菜单 1 的 `keyedBy: 'sourceId'` 已在类型里，行声明等读/写实例绑定落到契约后再进表。
  */
 export const settingRegistry: Readonly<Record<SettingMenuId, readonly SettingDescriptor[]>> = Object.freeze({
   sources: Object.freeze([]),
   content: Object.freeze([]),
   analysis: Object.freeze([]),
   briefing: Object.freeze([]),
-  notifications: NOTIFICATION_SETTINGS,
+  notifications: NOTIFICATION_ROWS,
   platform: Object.freeze([])
 })
 
@@ -201,17 +367,18 @@ export type SettingRegistryIssue =
   | 'empty-surfaces'
   | 'unsupported-surface'
   | 'surface-not-settings'
-  | 'platform-has-write'
   | 'platform-has-default'
+  | 'platform-has-value-write'
   | 'unimplemented-has-write'
   | 'unimplemented-has-default'
   | 'writable-requires-write'
   | 'readonly-forbids-write'
   | 'unknown-default'
+  | 'unknown-platform-command'
 
 /**
- * G1–G6 的自检，纯函数：注册表自身不自洽时返回问题码，由单测与（将来的）构建期守卫调用。
- * 不在这里抛错——渲染层拿到的是一份已验证的表，验证失败应当是测试的红，不是页面的白屏。
+ * G1–G7 自检，纯函数：注册表自身不自洽时返回问题码，由单测调用。
+ * 不在这里抛错——渲染层拿到的是一份已验证的表；验证失败应当是测试的红，不是页面白屏。
  */
 export function validateSettingRegistry(
   registry: Readonly<Record<SettingMenuId, readonly SettingDescriptor[]>>
@@ -221,8 +388,10 @@ export function validateSettingRegistry(
   for (const menu of SETTING_MENUS) {
     for (const descriptor of registry[menu]) {
       if (descriptor.key.trim().length === 0) issues.push('empty-key')
-      if (seen.has(descriptor.key)) issues.push('duplicate-key')
-      seen.add(descriptor.key)
+      // G1：静态行判全局唯一；按实例化的行只判模板唯一（实例数由视图决定）。
+      const identity = descriptor.keyedBy ? `template:${descriptor.key}` : `static:${descriptor.key}`
+      if (seen.has(identity)) issues.push('duplicate-key')
+      seen.add(identity)
 
       if (descriptor.surfaces.length === 0) issues.push('empty-surfaces')
       for (const surface of descriptor.surfaces) {
@@ -231,8 +400,8 @@ export function validateSettingRegistry(
       }
 
       if (descriptor.level === 'platform') {
-        if (descriptor.write) issues.push('platform-has-write')
         if (descriptor.defaultValueFrom) issues.push('platform-has-default')
+        if (descriptor.write?.kind === 'value') issues.push('platform-has-value-write')
       }
       if (descriptor.availability === 'unimplemented') {
         if (descriptor.write) issues.push('unimplemented-has-write')
@@ -241,19 +410,22 @@ export function validateSettingRegistry(
 
       if (descriptor.field.kind === 'readonly') {
         if (descriptor.write) issues.push('readonly-forbids-write')
-      } else if (descriptor.availability === 'live' && !descriptor.write) {
+      } else if (descriptor.availability === 'live' && descriptor.level === 'product' && !descriptor.write) {
         issues.push('writable-requires-write')
       }
 
       if (descriptor.defaultValueFrom && !(descriptor.defaultValueFrom in SERVER_DEFAULTS)) {
         issues.push('unknown-default')
       }
+      if (descriptor.write?.kind === 'command' && !(PLATFORM_COMMANDS as readonly string[]).includes(descriptor.write.id)) {
+        issues.push('unknown-platform-command')
+      }
     }
   }
   return issues
 }
 
-/** 取值：声明里只放键，值从唯一来源读；未知键返回 `undefined`（G6 已在测试里挡住未知键）。 */
+/** 取值：声明里只放键，值从唯一来源读。 */
 export function resolveServerDefault(key: ServerDefaultKey): unknown {
   return SERVER_DEFAULTS[key]
 }

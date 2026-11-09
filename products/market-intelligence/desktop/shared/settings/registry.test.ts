@@ -1,83 +1,126 @@
 import { describe, expect, it } from 'vitest'
 
 import { intelligenceNotificationText } from '../../settings/intelligence-notification/text'
-import type { SettingDescriptor, SettingMenuId } from './registry'
-import { SETTING_MENUS, settingRegistry, validateSettingRegistry } from './registry'
+import { IpcChannels } from '@platform/desktop/ipc/channels'
+import type { SettingDescriptor, SettingMenuId, SettingWrite } from './registry'
+import { PLATFORM_COMMANDS, SETTING_MENUS, settingRegistry, validateSettingRegistry } from './registry'
 
 type Registry = Readonly<Record<SettingMenuId, readonly SettingDescriptor[]>>
 
-const SHIPPED_ROW = settingRegistry.notifications[0] as SettingDescriptor
+const PUSH_THRESHOLD = settingRegistry.notifications.find(
+  (row) => row.key === 'setting:notifications.push-threshold'
+) as SettingDescriptor
+const CHANNEL_SWITCH = settingRegistry.notifications.find(
+  (row) => row.key === 'setting:notifications.channel-event.signal-triggered'
+) as SettingDescriptor
+const LEAD = settingRegistry.notifications.find(
+  (row) => row.key === 'setting:notifications.calendar.lead'
+) as SettingDescriptor
+const COUNTRY_CODES = settingRegistry.notifications.find(
+  (row) => row.key === 'setting:notifications.calendar.landed-countries.codes'
+) as SettingDescriptor
 
-function registryWithNotifications(rows: readonly SettingDescriptor[]): Registry {
-  return { ...settingRegistry, notifications: rows }
+function withRow(replacement: SettingDescriptor): Registry {
+  return {
+    ...settingRegistry,
+    notifications: [
+      ...settingRegistry.notifications.filter((row) => row.key !== replacement.key),
+      replacement
+    ]
+  }
 }
 
-function withRow(patch: Partial<SettingDescriptor>): Registry {
-  return registryWithNotifications([
-    { ...SHIPPED_ROW, ...patch },
-    ...settingRegistry.notifications.slice(1)
-  ])
-}
-
-describe('settings registry self-checks (G1–G6)', () => {
-  it('ships a self-consistent registry and puts every menu in the type', () => {
-    // 六格都必须在（类型是 Record<MenuId, …>，删掉一个键编译就红）。
+describe('settings registry self-checks (G1–G7)', () => {
+  it('ships a self-consistent registry and declares every menu in the type', () => {
     expect(Object.keys(settingRegistry).sort()).toEqual([...SETTING_MENUS].sort())
     expect(validateSettingRegistry(settingRegistry)).toEqual([])
-    // 本版只许声明 settings 面（drawer/panel 是预留位）。
     for (const rows of Object.values(settingRegistry)) {
       for (const row of rows) expect(row.surfaces).toEqual(['settings'])
     }
   })
 
-  it('G1: a repeated key is rejected', () => {
-    const issues = validateSettingRegistry(registryWithNotifications([
-      SHIPPED_ROW,
-      { ...SHIPPED_ROW }
-    ]))
-    expect(issues).toContain('duplicate-key')
+  it('G1: static keys are unique, and a keyed template is declared exactly once', () => {
+    // 静态行重复 → 红。
+    expect(validateSettingRegistry({
+      ...settingRegistry,
+      notifications: [...settingRegistry.notifications, { ...PUSH_THRESHOLD }]
+    })).toContain('duplicate-key')
+
+    // 按来源实例化的行：同一模板声明两次 → 红；实例数由视图决定，注册表里只许一条模板。
+    const template: SettingDescriptor = { ...PUSH_THRESHOLD, key: 'setting:sources.enabled@<sourceId>', keyedBy: 'sourceId' }
+    expect(validateSettingRegistry({ ...settingRegistry, sources: [template, { ...template }] })).toContain('duplicate-key')
+    // 一条模板 + 一条静态同名 key 不算撞：两种身份不同。
+    expect(validateSettingRegistry({ ...settingRegistry, sources: [template] })).not.toContain('duplicate-key')
   })
 
   it('G2: an empty or non-settings surface is rejected', () => {
-    expect(validateSettingRegistry(withRow({ surfaces: [] }))).toContain('empty-surfaces')
-    // A3 变异之一：把 surfaces 改成一个本版不许的值。
-    expect(validateSettingRegistry(withRow({ surfaces: ['drawer'] }))).toContain('surface-not-settings')
-    expect(validateSettingRegistry(withRow({ surfaces: ['drawer'] }))).not.toContain('unsupported-surface')
+    expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, surfaces: [] }))).toContain('empty-surfaces')
+    // A3 变异之一：把 surfaces 改成本版不许的值。
+    expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, surfaces: ['drawer'] }))).toContain('surface-not-settings')
+    expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, surfaces: ['drawer'] }))).not.toContain('unsupported-surface')
   })
 
-  it('G3: a platform-level row may not carry a write path or a default', () => {
-    const issues = validateSettingRegistry(withRow({ level: 'platform' }))
-    expect(issues).toContain('platform-has-write')
-    expect(issues).toContain('platform-has-default')
+  it('G3: a platform row may use command writes, but never a value write or a default', () => {
+    expect(validateSettingRegistry(withRow({ ...CHANNEL_SWITCH, defaultValueFrom: 'calendarReminder.enabled' })))
+      .toContain('platform-has-default')
+    expect(validateSettingRegistry(withRow({
+      ...CHANNEL_SWITCH,
+      write: { kind: 'value', command: 'platform:notifications-set-channel-event', toPayload: () => ({}) }
+    }))).toContain('platform-has-value-write')
+    // 命令写是允许的（通道事件开关今天就要能拨）。
+    expect(validateSettingRegistry(settingRegistry)).not.toContain('platform-has-value-write')
   })
 
   it('G4: an unimplemented row may not carry a write path or a default', () => {
-    const issues = validateSettingRegistry(withRow({ availability: 'unimplemented' }))
+    const issues = validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, availability: 'unimplemented' }))
     expect(issues).toContain('unimplemented-has-write')
     expect(issues).toContain('unimplemented-has-default')
   })
 
-  it('G5: writable rows need a write, read-only rows forbid one', () => {
+  it('G5: writable product rows need a write, read-only rows forbid one', () => {
     // A3 变异之二：抽掉可写行的写命令。
-    const missingWrite = withRow({ write: undefined })
-    expect(validateSettingRegistry(missingWrite)).toContain('writable-requires-write')
-    // 另一个方向：只读行带着写命令也要红。
-    const readonlyWithWrite = withRow({ field: { kind: 'readonly' } })
-    expect(validateSettingRegistry(readonlyWithWrite)).toContain('readonly-forbids-write')
+    expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, write: undefined })))
+      .toContain('writable-requires-write')
+    expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, field: { kind: 'readonly' } })))
+      .toContain('readonly-forbids-write')
   })
 
   it('G6: a default value must come from the server constants, never a literal', () => {
-    // 运行时这一侧：未知的默认值键要报出来。
-    expect(validateSettingRegistry(withRow({ defaultValueFrom: 'not-a-server-default' as never })))
+    expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, defaultValueFrom: 'not-a-server-default' as never })))
       .toContain('unknown-default')
 
-    // 编译期这一侧：类型只接受 SERVER_DEFAULTS 的键，写一个字面量/乱写的键本身就编不过。
+    // 编译期：类型只接受 SERVER_DEFAULTS 的键，写字面量本身编不过。
     // @ts-expect-error defaultValueFrom only accepts keys of SERVER_DEFAULTS
-    const literalDefault: SettingDescriptor = { ...SHIPPED_ROW, defaultValueFrom: 'medium' }
+    const literalDefault: SettingDescriptor = { ...PUSH_THRESHOLD, defaultValueFrom: 'medium' }
     expect(literalDefault.defaultValueFrom).toBe('medium')
   })
 
-  it('只有现有文案键：每个 labelKey / helpKey 在中英两份里都能解析', () => {
+  it('G7: every command write names a command that the platform actually exports', () => {
+    for (const rows of Object.values(settingRegistry)) {
+      for (const row of rows) {
+        if (row.write?.kind === 'command') {
+          expect(PLATFORM_COMMANDS).toContain(row.write.id)
+        }
+      }
+    }
+    // 反向：写一个平台清单里没有的命令 → 红。
+    const bogus: SettingWrite = { kind: 'command', id: 'platform:notifications-set-channel-event-x' as never }
+    expect(validateSettingRegistry(withRow({ ...CHANNEL_SWITCH, write: bogus })))
+      .toContain('unknown-platform-command')
+    // 清单本身必须来自唯一的平台导出，不许另抄一份。
+    expect(PLATFORM_COMMANDS).toEqual(Object.values(IpcChannels))
+  })
+
+  it('conditional rows declare visibleWhen instead of always showing', () => {
+    // 提前量 / 重要性：只在「开始前」开着时出现。
+    expect(LEAD.visibleWhen?.({ enabled: false })).toBe(false)
+    expect(LEAD.visibleWhen?.({ enabled: true })).toBe(true)
+    // 国家码：只在「自选国家」时出现。
+    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'us' } })).toBe(false)
+    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'custom', codes: ['US'] } })).toBe(true)
+  })
+
+  it('only existing copy keys: every labelKey / helpKey resolves in both locales', () => {
     const descriptors = Object.values(settingRegistry).flat()
     expect(descriptors.length).toBeGreaterThan(0)
     for (const descriptor of descriptors) {
