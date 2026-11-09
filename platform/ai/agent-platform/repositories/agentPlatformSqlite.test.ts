@@ -1779,6 +1779,30 @@ describe('agent platform sqlite repositories', () => {
     })
   })
 
+
+  it('persists the automation visibility state and reads legacy rows as current', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-session-origin-state-'))
+    try {
+      const path = join(dir, 'agent.sqlite')
+      const db = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(db)
+      repos.agents.upsert(agent)
+      repos.workspaces.upsert(workspace)
+      repos.sessions.upsert({ ...sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Run' }), origin: 'automation', originRef: 'run-1', originState: 'superseded' })
+      // 旧行：不写这一列（老库就是这么写的），列默认值必须给 current。
+      db.connection.prepare("insert into agent_sessions (id, agent_id, name, workspace_id, order_key, origin, origin_ref, created_at, updated_at) values ('session-old','" + agent.id + "','Old','" + workspace.id + "','0002','automation',null,'2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')").run()
+      db.connection.close()
+
+      const reopened = createAgentPlatformDatabase(path)
+      const rows = createAgentPlatformRepositories(reopened).sessions.listAll(new Map([[workspace.id, workspace]]))
+      expect(rows.find((row) => row.id === 'session-1')?.originState).toBe('superseded')
+      expect(rows.find((row) => row.id === 'session-old')?.originState).toBe('current')
+      reopened.connection.close()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('reads rows written before owner_boot_id existed, and stamps only pending rows', () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-message-owner-'))
     try {

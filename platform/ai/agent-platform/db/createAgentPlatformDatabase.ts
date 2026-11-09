@@ -1553,6 +1553,14 @@ const migrations: AgentPlatformMigration[] = [
     up: `
       alter table agent_session_messages add column owner_boot_id text;
     `
+  },
+  {
+    id: '0050_agent_session_origin_state',
+    // 自动会话的可见性：只有 `superseded` 在自动会话块里隐藏。照 `origin` 的形状写
+    // （`not null default`），旧行自动拿到确定值，读侧不再依赖「某条读路径记得归一」。
+    up: `
+      alter table agent_sessions add column origin_state text not null default 'current';
+    `
   }
 ]
 

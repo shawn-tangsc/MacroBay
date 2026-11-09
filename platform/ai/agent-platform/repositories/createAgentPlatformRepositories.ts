@@ -2,7 +2,7 @@ import type { AgentEntity } from '../schemas/agentSchemas'
 import type { AgentChannelEntity } from '../schemas/channelSchemas'
 import { stripQuietRuntimeControlParts } from '../schemas/messageDataHelpers'
 import type { McpRuntimeStatus, McpServerEntity } from '../schemas/mcpServerSchemas'
-import { normalizeSessionOrigin, normalizeSessionOriginGroup, normalizeSessionOriginRef } from '../schemas/sessionSchemas'
+import { normalizeSessionOrigin, normalizeSessionOriginGroup, normalizeSessionOriginRef, normalizeSessionOriginState } from '../schemas/sessionSchemas'
 import { resolveMessageOwnerBootId } from '../schemas/pendingTurnOwnership'
 import type {
   AgentSessionMessagesListQuery,
@@ -107,6 +107,7 @@ type SessionRow = {
   origin: string | null
   origin_group: string | null
   origin_ref: string | null
+  origin_state: string | null
   created_at: string
   updated_at: string
 }
@@ -474,8 +475,8 @@ export function createAgentPlatformRepositories(
     },
     upsert(entity: AgentSessionEntity): void {
       db.prepare(
-        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, origin_state, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict(id) do update set
            agent_id = excluded.agent_id,
            name = excluded.name,
@@ -487,6 +488,7 @@ export function createAgentPlatformRepositories(
            origin = excluded.origin,
            origin_group = excluded.origin_group,
            origin_ref = excluded.origin_ref,
+           origin_state = excluded.origin_state,
            created_at = excluded.created_at,
            updated_at = excluded.updated_at`
       ).run(
@@ -501,6 +503,7 @@ export function createAgentPlatformRepositories(
         normalizeSessionOrigin(entity.origin),
         normalizeSessionOriginGroup(entity.originGroup) ?? null,
         normalizeSessionOriginRef(entity.originRef) ?? null,
+        normalizeSessionOriginState(entity.originState),
         entity.createdAt,
         entity.updatedAt
       )
@@ -508,7 +511,7 @@ export function createAgentPlatformRepositories(
     listAll(workspacesById: ReadonlyMap<string, AgentWorkspaceEntity>): AgentSessionEntity[] {
       return db
         .prepare(
-          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, created_at, updated_at
+          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, origin_state, created_at, updated_at
            from agent_sessions
            order by order_key asc, id asc`
         )
@@ -534,7 +537,7 @@ export function createAgentPlatformRepositories(
     findByAutomationRef(agentId: string, originRef: string): AgentSessionEntity | null {
       const rows = db
         .prepare(
-          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, created_at, updated_at
+          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, origin_state, created_at, updated_at
            from agent_sessions
            where agent_id = ? and origin_ref = ?
            order by created_at asc, id asc
@@ -2232,6 +2235,8 @@ function mapSessionEntity(row: SessionRow, workspace: AgentWorkspaceEntity): Age
     ...(normalizeSessionOriginRef(row.origin_ref) === undefined
       ? {}
       : { originRef: normalizeSessionOriginRef(row.origin_ref) }),
+    // 只有 superseded 值得写进实体；缺省/未知一律 current（读侧归一，见契约注释）。
+    originState: normalizeSessionOriginState(row.origin_state),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }

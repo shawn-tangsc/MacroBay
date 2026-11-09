@@ -593,6 +593,32 @@ describe('agent store', () => {
     ])
   })
 
+
+  it('keeps the automation visibility state on create, and updates it when asked', () => {
+    let state = createAgentStoreState({ agents, sessions: [], workspaces: [workspace] })
+    state = createAgentSession(state, {
+      agentId: agents[0]!.id,
+      name: 'run session',
+      workspace: { type: 'system' },
+      origin: 'automation',
+      originGroup: 'market-analysis',
+      originRef: 'run-1',
+      originState: 'superseded'
+    })
+    const created = state.sessions[0]!
+    // 契约：只有 superseded 会被侧栏隐藏；缺省就是 current（实体可以不带这个字段）。
+    expect(created.originRef).toBe('run-1')
+    expect(created.originState).toBe('superseded')
+
+    state = updateAgentSession(state, created.id, { originState: 'current' })
+    expect(state.sessions[0]!.originState).toBe('current')
+
+    // 缺省创建不带标记：读侧/壳层按「可见」处理。
+    let plain = createAgentStoreState({ agents, sessions: [], workspaces: [workspace] })
+    plain = createAgentSession(plain, { agentId: agents[0]!.id, name: 'x', workspace: { type: 'system' }, origin: 'automation' })
+    expect(plain.sessions[0]!.originState).toBeUndefined()
+  })
+
   it('merges runtime session messages without overwriting concurrent agent edits', () => {
     const base = createAgentStoreState({ agents, sessions, workspaces: [workspace], activeSessionId: 'session-1' })
     const current = updateAgent(base, 'agent-1', { name: 'Renamed while streaming' })

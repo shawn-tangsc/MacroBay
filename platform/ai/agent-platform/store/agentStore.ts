@@ -29,7 +29,7 @@ import { DEFAULT_SYSTEM_WORKSPACE_PATH, type AgentWorkspaceEntity } from '../sch
 import type { AgentSessionWorkspaceSource, CreateAgentWorkspaceDto, UpdateAgentWorkspaceDto } from '../schemas/workspaceSchemas'
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
 import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
-import { normalizeSessionOrigin, normalizeSessionOriginGroup, normalizeSessionOriginRef } from '../schemas/sessionSchemas'
+import { normalizeSessionOrigin, normalizeSessionOriginGroup, normalizeSessionOriginRef, normalizeSessionOriginState } from '../schemas/sessionSchemas'
 import { isAbandonedPendingMessage } from '../schemas/pendingTurnOwnership'
 import {
   normalizeMessagePageLimit,
@@ -264,6 +264,8 @@ export function createAgentSession(state: AgentStoreState, payload: CreateAgentS
     ...(normalizeSessionOriginRef(payload.originRef) === undefined
       ? {}
       : { originRef: normalizeSessionOriginRef(payload.originRef) }),
+    // 缺省即 current：只有显式 `superseded` 才写进实体，读侧与库列都会把它归一成 current。
+    ...(payload.originState === 'superseded' ? { originState: 'superseded' as const } : {}),
     createdAt: now,
     updatedAt: now
   }
@@ -296,6 +298,7 @@ export function updateAgentSession(
       ...(patch.origin === undefined ? {} : { origin: normalizeSessionOrigin(patch.origin) }),
       ...(patch.originGroup === undefined ? {} : { originGroup: normalizeSessionOriginGroup(patch.originGroup) }),
       ...(patch.originRef === undefined ? {} : { originRef: normalizeSessionOriginRef(patch.originRef) }),
+      ...(patch.originState === undefined ? {} : { originState: normalizeSessionOriginState(patch.originState) }),
       updatedAt: now
     }
   })

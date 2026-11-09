@@ -122,6 +122,22 @@ export type CreateAgentSessionMessagesDto = {
 export type AgentSessionOrigin = 'reader' | 'automation'
 
 /**
+ * 这条**自动会话**是否已被同身份（`agentId + originRef`）的更新会话取代。平台语义，与产品无关。
+ *
+ * 契约（三句都要守）：
+ * 1. `origin` 决定进不进**读者列表**；`originState` 只决定进不进**自动会话块**——两者不许互相替代。
+ * 2. 读者列表判据固定 `origin !== 'automation'`，不许拿 `originState` 反过滤；自动会话块只读这个
+ *    字段，不许去看 `originRef` 的后缀字符串。
+ * 3. **只有 `superseded` 会隐藏**；缺省、未知值、将来新加的值一律按可见处理（白名单式只认
+ *    `current` 会在加第三个值时把读者自己的会话一起藏掉）。
+ */
+export type AgentSessionOriginState = 'current' | 'superseded'
+
+export function normalizeSessionOriginState(value: unknown): AgentSessionOriginState {
+  return value === 'superseded' ? 'superseded' : 'current'
+}
+
+/**
  * The one normalisation: anything that is not the explicit automation value is a reader session.
  *
  * The direction is deliberate — an automation session leaking into the default list is a nuisance,
@@ -177,6 +193,8 @@ export type AgentSessionEntity = {
   originGroup?: string
   /** 自动会话的幂等键：创建它的那一次运行。**身份，不是描述**。 */
   originRef?: string
+  /** 自动会话的可见性：只有 `superseded` 会在自动会话块里隐藏；缺省即可见。 */
+  originState?: AgentSessionOriginState
   createdAt: string
   updatedAt: string
 }
@@ -198,6 +216,8 @@ export type CreateAgentSessionDto = {
   originGroup?: string
   /** 自动会话的幂等键：创建它的那一次运行；平台不做词表，只按原样存。 */
   originRef?: string
+  /** 只有被同身份的新会话取代时才传 `superseded`；缺省即可见。 */
+  originState?: AgentSessionOriginState
 }
 
 export type UpdateAgentSessionDto = {
@@ -211,6 +231,8 @@ export type UpdateAgentSessionDto = {
   origin?: AgentSessionOrigin
   originGroup?: string
   originRef?: string
+  /** 只用于把已有会话标成「已被同身份新会话取代」；缺省不动。 */
+  originState?: AgentSessionOriginState
 }
 
 export type AgentSessionMessagesListQuery = {
