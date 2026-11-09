@@ -6,6 +6,10 @@ import type {
 } from '@platform/notifications/contracts/notificationContracts'
 import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
 
+import {
+  DEFAULT_CALENDAR_REMINDER_SETTINGS,
+  type CalendarReminderSettings
+} from '../../contracts/calendarEventReminder'
 import { parseIntelligenceTestRequest } from '../../contracts/intelligenceNotificationTest'
 import type { IntelligenceModule } from './intelligenceModule'
 import { sendIntelligenceTestNotification, type IntelligenceTestDeps } from './sendIntelligenceTestNotification'
@@ -19,6 +23,31 @@ import { sendIntelligenceTestNotification, type IntelligenceTestDeps } from './s
 
 const NOW = '2026-11-08T05:00:00.000Z'
 const ONE_CHANNEL: PushChannelResolution = { ok: true, channelId: 'slack', channelName: 'Slack' }
+
+/** 打开提醒的读者设置：其余字段取契约默认值，不为测试另造一份形状。 */
+const REMINDER_ON: CalendarReminderSettings = { ...DEFAULT_CALENDAR_REMINDER_SETTINGS, enabled: true }
+
+const ACCEPTED: NotificationSubmitOutcome = {
+  kind: 'accepted',
+  recordId: 'r1',
+  levels: ['center'],
+  // 契约要求：这次因免打扰/未批准而被压下的档位要显式交出来（空数组＝没有压下任何一档）。
+  suppressedLevels: []
+}
+const NO_PUSH_CHANNEL: PushChannelResolution = {
+  ok: false,
+  reason: 'push-unavailable',
+  enabledChannelCount: 0,
+  multiple: false,
+  states: {}
+}
+const TWO_PUSH_CHANNELS: PushChannelResolution = {
+  ok: false,
+  reason: 'push-unavailable',
+  enabledChannelCount: 2,
+  multiple: true,
+  states: {}
+}
 
 function minimumModule(over: Partial<Record<string, unknown>> = {}): IntelligenceModule {
   const base = {
@@ -39,13 +68,13 @@ function deps(over: Partial<IntelligenceTestDeps> = {}): IntelligenceTestDeps {
   return {
     intelligence: minimumModule(),
     calendarReminder: {
-      read: () => ({ enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }),
+      read: () => REMINDER_ON,
       readEvents: () => []
     },
     readEnabledCalendarFeeds: async () => ['macro-calendar'],
     getTimeZone: () => 'Asia/Shanghai',
     resolvePushChannel: async () => ONE_CHANNEL,
-    submit: async () => ({ kind: 'accepted', recordId: 'r1', levels: ['center'] }),
+    submit: async () => ACCEPTED,
     now: () => NOW,
     ...over
   }
@@ -69,7 +98,7 @@ describe('sendIntelligenceTestNotification — 通道先判', () => {
     const submit = vi.fn()
     const result = await sendIntelligenceTestNotification('sentiment', deps({
       intelligence: minimumModule({ sourceProfileStore: { listProfiles } }),
-      resolvePushChannel: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false }),
+      resolvePushChannel: async () => NO_PUSH_CHANNEL,
       submit
     }))
     expect(result).toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0 })
@@ -80,7 +109,7 @@ describe('sendIntelligenceTestNotification — 通道先判', () => {
 
   it('two ready channels also refuses, and the count is the one the platform counted', async () => {
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
-      resolvePushChannel: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 2, multiple: true })
+      resolvePushChannel: async () => TWO_PUSH_CHANNELS
     }))
     expect(result).toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 2 })
   })
@@ -129,11 +158,11 @@ describe('sendIntelligenceTestNotification — 三条取数各回各的话', () 
 describe('sendIntelligenceTestNotification — 真的发出去了', () => {
   it('builds the upcoming request from the same reader the real reminder uses, in the test dedupe domain', async () => {
     const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>>(
-      async () => ({ kind: 'accepted', recordId: 'r1', levels: ['center'] })
+      async () => ACCEPTED
     )
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
       calendarReminder: {
-        read: () => ({ enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }),
+        read: () => REMINDER_ON,
         readEvents: () => [{ eventKey: 'cpi', title: '美国 CPI', scheduledAt: '2026-11-08T05:30:00.000Z', importance: 'high' as const }]
       },
       submit
@@ -155,7 +184,7 @@ describe('sendIntelligenceTestNotification — 真的发出去了', () => {
   it('a rejected submit is not a success — it comes back as read-failed', async () => {
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
       calendarReminder: {
-        read: () => ({ enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }),
+        read: () => REMINDER_ON,
         readEvents: () => [{ eventKey: 'cpi', title: '美国 CPI', scheduledAt: '2026-11-08T05:30:00.000Z', importance: 'high' as const }]
       },
       submit: async (): Promise<NotificationSubmitOutcome> => ({ kind: 'rejected', reason: 'unknown-event-type', message: 'no such event' })
