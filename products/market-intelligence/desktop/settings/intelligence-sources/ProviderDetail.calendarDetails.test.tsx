@@ -7,7 +7,7 @@ import { productText } from '../../shared/i18n/productText'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { ProviderDetail } from './ProviderDetail'
 import type { ProviderDetailLabels } from './ProviderDetail'
-import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { sourceHealthMarker, sourceHealthState, type ProviderView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
 
 const settingsText = productText['zh-CN'].settings.intelligenceSources
 
@@ -48,7 +48,17 @@ function labels(): ProviderDetailLabels {
   }
 }
 
+/**
+ * 夹具照**处境**挑健康档，且用服务端那两个函数算——不在这里另判一遍。
+ *
+ * 两档不是一一对应：`ring` 只给「已启用但取不到」，`none` 给未启用/没有读数。所以不可用的源
+ * （BLS 403 那种）落到 `off` / `ring`，关掉的源落到 `off` / `none`，能正常采集的才是 `healthy` / `none`。
+ * 一律写 `healthy` 会让夹具说一件不成立的事：读者看到的那一行明明写着「不可用」。
+ */
 function source(input: Partial<SourceView> & Pick<SourceView, 'sourceId' | 'displayName'>): SourceView {
+  const enabled = input.enabled ?? true
+  const unavailable = input.unavailable !== undefined
+  const healthState = sourceHealthState({ enabled, unavailable })
   return {
     providerId: 'fed',
     agents: ['crypto'],
@@ -58,11 +68,9 @@ function source(input: Partial<SourceView> & Pick<SourceView, 'sourceId' | 'disp
     kind: 'feed',
     capabilities: { runNow: 'provider', testConnection: true },
     readiness: 'live',
-    enabled: true,
-    // 健康态由服务端投影成一句话（`SourceHealthState`），调用方不再自己拼 runtimeStatus/失败数。
-    healthState: 'healthy',
-    // 目录标记档同样由投影给出（与五态同一处派生），夹具照投影形状给。
-    healthMarker: 'none',
+    enabled,
+    healthState,
+    healthMarker: sourceHealthMarker({ enabled, unavailable, state: healthState }),
     ...input
   }
 }
