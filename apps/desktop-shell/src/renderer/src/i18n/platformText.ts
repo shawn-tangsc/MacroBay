@@ -909,6 +909,8 @@ export type PlatformText = {
     detectionReasonShortNoChannel: string
     detectionReasonShortMissingKey: string
     typeAll: string
+    /** 模型类型筛选这组按钮的可访问名。 */
+    typeFilterLabel: string
     /** 价格筛选：免费 + 折扣模型（不是模型类型，但和类型 pill 同一行）。 */
     typeDeal: string
     typeText: string
@@ -2321,6 +2323,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectionReasonShortNoChannel: '无可用渠道',
       detectionReasonShortMissingKey: '缺少密钥',
       typeAll: '全部',
+      typeFilterLabel: '模型类型筛选',
       typeDeal: '免费&折扣',
       typeText: '文本',
       typeImage: '图片',
@@ -3677,6 +3680,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectionReasonShortNoChannel: 'No channel',
       detectionReasonShortMissingKey: 'Missing key',
       typeAll: 'All',
+      typeFilterLabel: 'Filter by model type',
       typeDeal: 'Free & deals',
       typeText: 'Text',
       typeImage: 'Image',
