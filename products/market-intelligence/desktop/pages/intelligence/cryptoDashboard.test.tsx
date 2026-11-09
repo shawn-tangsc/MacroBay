@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMarketSnapshotContracts'
+import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { AgentPortal } from './AgentPortal'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import type { DashboardFeedRowState } from './dashboardFeedStatusModel'
@@ -160,7 +161,7 @@ describe('crypto intelligence dashboard', () => {
 
   it.each([
     ['empty', { state: 'empty' as const, asOf }, 'empty'],
-    ['unavailable', { state: 'unavailable' as const }, 'error']
+    ['unavailable', { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const }, 'error']
   ] as const)('renders the %s sentiment read as its own state, not as the other one', async (_name, result, expected) => {
     // The gauge is the one place the reader sees risk appetite. "We could not read it" and "there
     // is no index yet" are different facts, and only one of them is the reader's fault to fix.
@@ -194,8 +195,8 @@ describe('crypto intelligence dashboard', () => {
         state: 'available', asOf,
         btc: [{ observedAt: '2026-08-04T10:00:00.000Z', ratePercent: 0.01234 }],
         eth: [{ observedAt: '2026-08-04T11:00:00.000Z', ratePercent: -0.0031 }]
-      }), now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined,
-      onOpenCalendar: () => undefined, text: text.dashboard
+      }), openInterestClient: openInterestClient(), now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
+      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
     await flush()
 
@@ -337,7 +338,7 @@ describe('crypto intelligence dashboard', () => {
       text: text.dashboard
     })))
     await flush()
-    const source = container.querySelector('.mi-crypto-dashboard__source-region')!
+    const source = container.querySelector<HTMLElement>('.mi-crypto-dashboard__source-region')!
     await act(async () => findButton(source, text.dashboard.fearGreed.manageSettings).click())
     await act(async () => findButton(source, text.dashboard.positioning.manageSettings).click())
 
@@ -409,9 +410,9 @@ describe('crypto intelligence dashboard', () => {
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
-      macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
+      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
+        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true as const }], caveats: [] }) },
+      macroRatesClient: { query: async () => ({ state: 'available' as const, asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -438,9 +439,9 @@ describe('crypto intelligence dashboard', () => {
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
+      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-real', level: 98.21, atMs: Date.parse(asOf), returns: {} }, { seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }) },
-      macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
+      macroRatesClient: { query: async () => ({ state: 'available' as const, asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
       crossAssetClient: { query: async () => ({ schemaVersion: 1, indexSource: 'real', lastClosed: { index: { at: asOf, close: 23_100 } } }) },
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
@@ -485,8 +486,8 @@ describe('crypto intelligence dashboard', () => {
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
+      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
+        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true as const }], caveats: [] }) },
       // The boundary already refuses such a payload, so this is the strip's own second lock: the code
       // reaches the line as a code only, and the provider's own words never do.
       dashboardFeedStatusClient: { query: async () => ({ state: 'available', sources: [{ sourceId: 'realmarketapi-market', enabled: true, hasCredential: true, failureCode: 'credential-rejected https://api.example.com/price?apikey=SECRET0123456789' }] }) },
@@ -841,6 +842,39 @@ describe('crypto intelligence dashboard', () => {
     expect(scrollRule).toContain('overflow-x: hidden')
     expect(dashboardRootRule).not.toContain('min-height: 100%')
   })
+
+  it('keeps the reading order off the body and on the title’s own ⓘ', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
+      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+    })))
+    await flush()
+
+    // 正文只留标题：那句读法（阅读顺序 + 不以中性填补）不再占正文一行。
+    expect(container.textContent).not.toContain(text.dashboard.description)
+
+    // ⓘ 与标题在**同一个父容器**里，名字是它的短名——不是「一行空容器只放图标」，也不是两个块级兄弟。
+    const row = container.querySelector<HTMLElement>('.mi-crypto-dashboard__title-row')
+    expect(row?.querySelector('h1')?.textContent).toBe(text.dashboard.title)
+    const trigger = row?.querySelector<HTMLButtonElement>('button')
+    expect(trigger?.getAttribute('aria-label')).toBe(text.dashboard.descriptionLabel)
+
+    // 窄容器里图标不换行：同一行是 flex + nowrap，图标 flex:none（挤掉的是文字，不是把它甩下一行）。
+    const rowRule = cssBlock(styles, '.mi-crypto-dashboard__title-row {')
+    expect(rowRule).toMatch(/display:\s*flex/)
+    expect(rowRule).toMatch(/flex-wrap:\s*nowrap/)
+    expect(rowRule).toMatch(/gap:\s*4px/)
+    expect(cssBlock(styles, '.mi-crypto-dashboard__title-row > .ant-btn {')).toMatch(/flex:\s*none/)
+
+    // 那句话还在，只是搬进了浮层：点开 ⓘ 才出现（浮层挂 body）。
+    await act(async () => trigger?.click())
+    await flush()
+    expect(document.body.textContent).toContain(text.dashboard.description)
+  })
 })
 
 /**
@@ -864,30 +898,43 @@ function repositorySourceFiles(root: string, directory = root): string[] {
   return files
 }
 
-function dashboardClient(events: unknown[] = []) {
+/**
+ * The fixtures below answer as the dashboard's own clients do.
+ *
+ * Each helper is typed by the prop it fills, and each payload by what that prop really answers:
+ * `unknown` here let every case pass a shape the component could never receive, which is exactly the
+ * blind spot the widened typecheck found (42 calls that "worked" only in the test).
+ */
+type DashboardProps = Parameters<typeof CryptoIntelligenceDashboard>[0]
+type CalendarEvents = Extract<Awaited<ReturnType<DashboardProps['client']['queryMonth']>>, { state: 'available' }>['events']
+type FearGreedSnapshot = Awaited<ReturnType<DashboardProps['fearGreedClient']['querySnapshot']>>
+type OpenInterestResult = Awaited<ReturnType<DashboardProps['openInterestClient']['query']>>
+type CapitalConditionsSnapshot = Awaited<ReturnType<NonNullable<DashboardProps['capitalConditionsClient']>['querySnapshot']>>
+
+function dashboardClient(events: CalendarEvents = []): DashboardProps['client'] {
   return { queryMonth: async () => ({ state: 'available' as const, asOf, events }) }
 }
 
-function dashboardClientByMonth(eventsByMonth: Record<string, unknown[]>) {
-  return { queryMonth: async ({ month }: { month: string }) => ({ state: 'available' as const, asOf, events: eventsByMonth[month] ?? [] }) }
+function dashboardClientByMonth(eventsByMonth: Record<string, CalendarEvents>): DashboardProps['client'] {
+  return { queryMonth: async ({ month }) => ({ state: 'available' as const, asOf, events: eventsByMonth[month] ?? [] }) }
 }
 
-function fearGreedClient(result: unknown = { state: 'empty' as const, asOf }) {
+function fearGreedClient(result: FearGreedSnapshot = { state: 'empty' as const, asOf }): DashboardProps['fearGreedClient'] {
   return { querySnapshot: async () => result }
 }
 
-function openInterestClient(result: unknown = { state: 'empty' as const, asOf, window: '7d' as const }) {
-  return { query: async (input: { asOf: string; window: '7d' | '24h' }) => result }
-}
-
-function fundingRateClient(result: unknown = { state: 'empty' as const, asOf }) {
+function openInterestClient(result: OpenInterestResult = { state: 'empty' as const, asOf, window: '7d' as const }): DashboardProps['openInterestClient'] {
   return { query: async () => result }
 }
 
-function capitalConditionsClient(result: unknown = {
+function fundingRateClient(result: unknown = { state: 'empty' as const, asOf }): DashboardProps['fundingRateClient'] {
+  return { query: async () => result }
+}
+
+function capitalConditionsClient(result: CapitalConditionsSnapshot = {
   state: 'available' as const, asOf, etf: { state: 'unavailable' as const }, conclusion: 'partial' as const,
   coreStablecoins: { observedAt: '2026-08-04T23:00:00.000Z', verifiedAt: asOf, currentUsd: 254_900_000_000, change1dUsd: 82_400_000, change1dPercent: 0.0323, change7dUsd: 82_400_000, change7dPercent: 0.0323, change30dUsd: -500_000_000, change30dPercent: -0.21 }
-}) {
+}): NonNullable<DashboardProps['capitalConditionsClient']> {
   return { querySnapshot: vi.fn(async () => result) }
 }
 
@@ -897,11 +944,11 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   return button
 }
 
-function event(overrides: Record<string, unknown> = {}) {
+function event(overrides: Partial<MacroEconomicCalendarEventView> = {}): MacroEconomicCalendarEventView {
   return {
     eventKey: 'US.CPI.RELEASE.uid-1', releaseGroupKey: 'US.BLS.RELEASE.uid-1', eventFamily: 'cpi', titleKey: 'cpi',
     countryCode: 'US', importance: 'high', periodKey: 'release-2026-08-12', lifecycleState: 'scheduled', coverage: 'available',
-    scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z', detectedAt: asOf,
+    scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z', releaseTimeSource: 'official', detectedAt: asOf,
     consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: [],
     ...overrides
   }
