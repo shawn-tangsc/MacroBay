@@ -1,11 +1,13 @@
 import { expect, it } from 'vitest'
 
+import type { ProductIpcHandler } from '@platform/desktop/ipc/productIpcRegistry'
+
 import { provenanceMethods, type ProvenanceExplanation } from '../../../contracts/provenanceContracts'
 import { registerProvenanceIpc } from './registerProvenanceIpc'
 
 /** 门本身：合法请求得到从 owner 现读的口径；非法请求与别侧的族各有自己的回答。 */
 function handler() {
-  const registered = new Map<string, (payload: unknown) => Promise<unknown>>()
+  const registered = new Map<string, ProductIpcHandler>()
   registerProvenanceIpc((productId, method, run) => { registered.set(`${productId}:${method}`, run) })
   return registered.get(`market-intelligence:${provenanceMethods.explainFigure}`)!
 }
