@@ -788,6 +788,12 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).toContain("[data-gauge-bucket-text='extreme-greed']")
   })
 
+  it('keeps no hand-written button elements in the dashboard', () => {
+    // 命令型一律平台控件：这份源码里再出现裸 `<button>` 就说明又一个交互元素回到了自绘状态，
+    // 而自绘按钮在这页上已经两次被用户当成"按钮没吃到样式"报出来。
+    expect(dashboard).not.toContain('<button')
+  })
+
   it('keeps the funding-history component isolated from dashboard layout styles', () => {
     expect(styles).not.toContain('.mi-positioning-panel__chart')
     expect(styles).not.toContain('.mi-crypto-dashboard__funding-rates')

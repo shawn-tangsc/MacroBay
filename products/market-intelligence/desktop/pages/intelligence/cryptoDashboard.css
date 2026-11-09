@@ -128,7 +128,10 @@
 .mi-crypto-dashboard__configure.ant-btn { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
 .mi-crypto-dashboard__configure.ant-btn:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-.mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-align: left; }
+/* 行内那几颗动作已是 antd `Button`（text 档）：它自带的 height / line-height / hover 底色会把这行
+   撑高、并给链接加一个方框，所以这里把它们按原样按住——字号、颜色、留白一个数没改。 */
+.mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; height: auto; line-height: inherit; padding: 0; text-align: left; }
+.mi-crypto-dashboard__source-row button:hover { background: transparent; }
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 .mi-crypto-dashboard__capital-positioning-row {
