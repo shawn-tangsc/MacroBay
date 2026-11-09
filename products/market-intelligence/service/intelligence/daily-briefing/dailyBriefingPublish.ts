@@ -142,10 +142,15 @@ export async function settleEditorialEdition(input: Readonly<{
       date: input.date, periodId: input.periodId
     })
   }
+  // 数据版是「这一期已被标记为失败、但数据照发」：它照常落库，**不许**再推一条「完成」到
+  // 任何表面——那等于把失败画成成功。仍然写一条记录（deliver: false），供手动「推送到手机」
+  // 核对是哪一版，但记录本身不投递。读者自己关掉 AI 编辑（editorial-disabled）不是失败，
+  // 完成提醒照旧。
+  const deliversCompletion = !input.force && (failure === undefined || failure === 'editorial-disabled')
   return publishDailyBriefingEdition({
     document: input.document, store: input.store, attempts: input.attempts, run: input.run, recorder: input.recorder, now: input.now,
     ...(input.noticeSubmit ? { noticeSubmit: input.noticeSubmit } : {}),
-    date: input.date, periodId: input.periodId, locale: input.locale, deliver: !input.force
+    date: input.date, periodId: input.periodId, locale: input.locale, deliver: deliversCompletion
   })
 }
 

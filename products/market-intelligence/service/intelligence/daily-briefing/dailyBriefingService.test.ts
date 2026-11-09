@@ -528,6 +528,26 @@ describe('daily briefing service', () => {
     expect(attempts.map((attempt) => attempt.state)).toContain('failed')
   })
 
+  it('does not deliver a completion notice for a data-only edition that is marked failed', async () => {
+    // 模型这一类失败照发数据版，但这一期在库里是 failed。推一条「完成」到手机就是把失败画成
+    // 成功（用户红线）。记录照写、deliver 关掉：手动「推送到手机」仍能核对是哪一版，表面一声不响。
+    const notices: Array<Record<string, unknown>> = []
+    const service = createDailyBriefingService({
+      source: fakeSource(), store: memoryStore(), now: () => asOf,
+      agentRunner: acceptingAgentRunner(),
+      agentModel: async () => ({ state: 'unavailable', reason: 'default-unavailable' }),
+      noticeSubmit: async (request) => {
+        notices.push(request as unknown as Record<string, unknown>)
+        return { kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }
+      }
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({ eventTypeId: 'market-intelligence.briefing.ready', deliver: false })
+  })
+
   it('fails closed without starting a session when model readiness cannot be resolved', async () => {
     const store = memoryStore()
     const starts: number[] = []
