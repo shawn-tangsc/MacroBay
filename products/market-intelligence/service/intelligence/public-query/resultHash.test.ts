@@ -4,9 +4,9 @@ import {
   MARKET_INTELLIGENCE_QUERY_SCHEMA_VERSION,
   MARKET_INTELLIGENCE_QUERY_TYPES
 } from './queryContracts'
-import { buildQueryResultHash } from './resultHash'
+import { buildQueryResultHash, type QueryResultHashInput } from './resultHash'
 
-function stableInput() {
+function stableInput(): QueryResultHashInput {
   return {
     schemaVersion: MARKET_INTELLIGENCE_QUERY_SCHEMA_VERSION,
     queryType: MARKET_INTELLIGENCE_QUERY_TYPES.sentimentSnapshot,
@@ -14,7 +14,7 @@ function stableInput() {
     scope: { symbol: 'BTCUSDT' },
     timeWindow: { to: '2026-07-08T10:00:00.000Z' },
     confidence: 0.8,
-    caveats: [] as const,
+    caveats: [],
     sourceCoverage: [],
     evidenceRefs: [],
     data: { status: 'unknown' as const }
