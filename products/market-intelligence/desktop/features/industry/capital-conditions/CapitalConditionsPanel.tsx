@@ -149,13 +149,15 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
             : null}
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
+        {/* state-ternary: reviewed — 这一处只决定「要不要把采集时刻传给详情弹窗」，不决定任何内容画不画；
+            unreadable 时本来就没有可信的采集时刻，传 undefined 只是不给那个时间戳。 */}
         <EtfSignalDetailDialog
+          verifiedAt={state.etfReading.state === 'unreadable' ? undefined : state.etfReading.verifiedAt}
           analysis={analysisSentence}
           chip={state.etfSignal ?? { state: 'hidden' }}
           onClose={closeDetail}
           open={detailOpen}
-          text={text}
-          verifiedAt={state.etfReading?.state === 'unreadable' ? undefined : state.etfReading?.verifiedAt} />
+          text={text} />
         {/* These are the last numbers that read successfully. Saying so is the difference between
             "old" and "gone", and only one of those is true after a failed re-read. */}
         {state.stale ? <p className="mi-capital-conditions__stale" role="status">{text.staleRead}</p> : null}
