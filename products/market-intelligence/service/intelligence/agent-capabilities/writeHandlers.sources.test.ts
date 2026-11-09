@@ -6,10 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobRuntime } from '@platform/jobs'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 
+import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import { createAgentChangeLog, type AgentChangeLog } from './changeLog'
 
 const fixture = vi.hoisted(() => {
-  const profile = (overrides: Record<string, unknown> = {}) => ({
+  // 形状 2：夹具从真实类型取形状，不用 Record<string, unknown> 展开——
+  // 展开会把 sourceId / enabled 拓宽成 unknown，写入 fixture.profiles 时整组不兼容。
+  const profile = (overrides: Partial<IntelligenceSourceProfile> = {}): IntelligenceSourceProfile => ({
     profileId: 'profile-1',
     sourceId: 'coingecko-trending',
     enabled: true,
