@@ -92,7 +92,15 @@ export default function AutomationSessions({ sessions, onSelectSession }: Automa
 
   return (
     <section aria-label={text.title} className="agent-auto-sessions">
+      {/*
+        **本块不设自己的高度上限**：滚动交给侧栏唯一的滚动容器 `.agent-session-list`，展开区就是
+        面板剩余的可视高度。这里若吃 `CollapsibleGroup` 默认的 320，就变成「小盒子自己滚、盒子下面
+        一大片空白」，同一列两条滚动条（0.4.2 发布说明写明「整个侧栏只剩一个滚动条」）。
+        代价：内容长时「自动会话」头行会随内容滚走——这是发布说明里已写明的取舍。
+        内层每天一组同样不设上限，理由相同。
+      */}
       <CollapsibleGroup
+        maxBodyHeight={null}
         metaText={text.totalOnly(sessions.length)}
         onOpenChange={setExpanded}
         open={expanded}

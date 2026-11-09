@@ -7,7 +7,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
-import { COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT } from '@platform/ui/components/collapsible-group'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { AgentTextProvider } from '../agentTextProvider'
@@ -189,21 +188,66 @@ describe('automation sessions block', () => {
     expect(dayHeads(dom).map((day) => day.getAttribute('aria-expanded'))).toEqual(['true', 'true'])
   })
 
-  it('with 41 real rows scrolls only the expanded area and never the block header', async () => {
-    // 真实量级：41 条自动会话。头行必须留在滚动容器**外面**，否则读者往下一翻就找不到
-    // 「自动会话」这块了；内层每天一组不设上限，避免两条互相套着的滚动条。
+  it('with 41 real rows never builds a second scrollbar inside the sidebar', async () => {
+    // 真实量级：41 条自动会话。滚动只许有一条，而且在外层 `.agent-session-list`（侧栏唯一的
+    // 滚动容器）：展开区一旦自己设上限（`maxBodyHeight` 的默认 320），同一列上就会出现两条滚动条，
+    // 外侧那条几乎没内容可滚——就是「小盒子自己滚、盒子下面一大片空白」。
     const { dom } = await render(
       Array.from({ length: 41 }, (_, index) => session(`s${index}`, `自动会话 ${index}`, todayAt))
     )
     await click(outerHead(dom))
 
     const outerBody = dom.querySelector<HTMLElement>('.agent-auto-sessions .collapsible-group__body')!
-    expect(outerBody.style.maxHeight).toBe(`${COLLAPSIBLE_GROUP_BODY_MAX_HEIGHT}px`)
+    expect(outerBody.style.maxHeight).toBe('')
+    expect(outerBody.style.height).toBe('')
+    expect(outerBody.style.overflowY).toBe('')
     expect(outerBody.contains(outerHead(dom))).toBe(false)
     expect(outerBody.querySelectorAll('.collapsible-group__row--action')).toHaveLength(41)
 
-    const dayBody = dom.querySelectorAll<HTMLElement>('.collapsible-group__body')[1]!
-    expect(dayBody.style.maxHeight).toBe('')
+    // 内层每天一组同样不设上限（同一条判据）。
+    for (const dayBody of [...dom.querySelectorAll<HTMLElement>('.collapsible-group__body')].slice(1)) {
+      expect(dayBody.style.maxHeight).toBe('')
+      expect(dayBody.style.height).toBe('')
+      expect(dayBody.style.overflowY).toBe('')
+    }
+
+    // 计算样式：组件 CSS 给展开区的是 `overflow: auto`（jest/happy-dom 不加载样式表，这里把真实
+    // 规则原样注入，见下方「CSS 链」断言——两处必须一致）。有了 auto 但没有上限，它就不是滚动容器。
+    const style = document.createElement('style')
+    style.textContent = `
+      .collapsible-group__body { overflow-y: auto; }
+      .agent-session-list { overflow-y: auto; }
+    `
+    document.head.append(style)
+    try {
+      // happy-dom 把「没有设上限」报成 `''`（浏览器报 `none`），两种都算没有上限。
+      const unbounded = (value: string): boolean => value === '' || value === 'none' || value === 'auto'
+      const isBoundedScroller = (element: HTMLElement): boolean => {
+        const computed = getComputedStyle(element)
+        const scrolls = computed.overflowY === 'auto' || computed.overflowY === 'scroll'
+        return scrolls && !unbounded(computed.maxHeight) && !unbounded(computed.height)
+      }
+      const block = dom.querySelector<HTMLElement>('.agent-auto-sessions')!
+      expect([...block.querySelectorAll<HTMLElement>('*')].filter(isBoundedScroller)).toHaveLength(0)
+      expect(unbounded(getComputedStyle(outerBody).maxHeight)).toBe(true)
+      // 组件 CSS 确实给了 `overflow: auto`：它不滚，是因为**没有上限**，不是因为没有 overflow。
+      expect(getComputedStyle(outerBody).overflowY).toBe('auto')
+    } finally {
+      style.remove()
+    }
+  })
+
+  it('keeps exactly one declared scroller in the column, and none in this block', () => {
+    // CSS 链：本块的样式表不许再出现 overflow / max-height（出现即等于自己造第二个滚动条）；
+    // 侧栏那条唯一滚动条仍由 `.agent-session-list` 声明。两条一起钉——只钉一条会被另一条绕过。
+    const blockCss = readFileSync(join(__dirname, 'automationSessions.css'), 'utf8')
+    expect(blockCss).not.toMatch(/\.agent-auto-sessions[^{]*\{[^}]*overflow/iu)
+    expect(blockCss).not.toMatch(/\.agent-auto-sessions[^{]*\{[^}]*max-height/iu)
+
+    const shellCss = readFileSync(join(__dirname, '../../../styles.css'), 'utf8')
+    const listRule = shellCss.slice(shellCss.indexOf('.agent-session-list {'), shellCss.indexOf('}', shellCss.indexOf('.agent-session-list {')))
+    expect(listRule).toContain('overflow: auto')
+    expect(listRule).toContain('min-height: 0')
   })
 
   it('indents days exactly one level, so a row never stacks a third', () => {
