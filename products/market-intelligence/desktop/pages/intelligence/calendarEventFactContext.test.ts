@@ -2,7 +2,9 @@ import { expect, it } from 'vitest'
 import { formatCalendarEventFactContext } from './calendarEventFactContext'
 
 const text = { factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }
-const fact = (metric: string, value: string) => ({ factKey: `k-${metric}`, metric, value })
+// The contract's fact is `{ factId, metric, value }`; the formatter prints only `metric value`, so the
+// identity is derived here rather than invented per call site.
+const fact = (metric: string, value: string) => ({ factId: `fact-${metric}`, metric, value })
 
 it('lists the facts and their evidence when the context is complete', () => {
   const block = formatCalendarEventFactContext({ facts: [fact('实际值', '0.3%'), fact('市场预期', '0.2%')], evidenceRefs: ['macro-calendar:official:US.CPI'], coverage: 'available', caveats: [] }, text)
