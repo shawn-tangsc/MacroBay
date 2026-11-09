@@ -9,7 +9,17 @@ type CapitalConditionsTransportResult =
 
 export function createCapitalConditionsRefreshService(deps: {
   isEnabled: () => Promise<boolean>
-  http: { requestStablecoinPayload: () => Promise<CapitalConditionsTransportResult> }
+  /**
+   * 两条请求：当前快照，和可选的已完成日流水。
+   *
+   * 实现里早就在读 `requestStablecoinHistoryPayload`（见下面 `refresh`），但类型只写了第一条——
+   * 于是那条历史分支在编译期不存在：测试把这条依赖传进来会被判成「未知属性」，
+   * 而真正的调用点也不可能被类型检查。补上它，让分支和类型说的是同一件事。
+   */
+  http: {
+    requestStablecoinPayload: () => Promise<CapitalConditionsTransportResult>
+    requestStablecoinHistoryPayload?: () => Promise<CapitalConditionsTransportResult>
+  }
   store: CapitalConditionsCurrentStateStore
   now: () => string
 }) {
