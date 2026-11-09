@@ -18,7 +18,7 @@ import { Tag } from 'antd'
 
 import type { ModelDetectionResult } from '@platform/ai/providers/modelDetection/types'
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
-import { LoadingSpinner } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { StatusPill } from '@platform/ui/components/status-pill'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -264,36 +264,36 @@ export function ModelServiceModelRow({
       </span>
       <span className="model-service-model-actions">
         {isAvailabilityProbeModel(model) ? (
-          <button
-            type="button"
-            className="model-service-row-icon"
-            data-model-row-test
-            title={labels.testModel}
-            aria-label={labels.testModel}
+          <IconButton
+            ariaLabelKey="modelService.testModel"
+            dataAttributes={{ 'data-model-row-test': true }}
             disabled={testDisabled}
-            onClick={() => onTestModel(model.id)}>
-            {detectionStatus === 'testing' ? <LoadingSpinner size="sm" /> : <FlaskConical size={13} />}
-          </button>
+            icon={FlaskConical}
+            loading={detectionStatus === 'testing'}
+            onSelect={() => onTestModel(model.id)}
+            resolveText={(key) => (key === 'modelService.testModel' ? labels.testModel : '')}
+            size="sm"
+          />
         ) : null}
-        <button
-          type="button"
-          className="model-service-row-icon"
-          data-model-row-settings
-          title={labels.editModel}
-          aria-label={labels.editModel}
-          onClick={() => onEditModel(model)}>
-          <Settings size={13} />
-        </button>
-        <button
-          type="button"
-          className="model-service-row-icon model-service-row-remove"
-          data-model-row-remove
-          title={labels.removeModel}
-          aria-label={labels.removeModel}
+        <IconButton
+          ariaLabelKey="modelService.editModel"
+          dataAttributes={{ 'data-model-row-settings': true }}
+          icon={Settings}
+          onSelect={() => onEditModel(model)}
+          resolveText={(key) => (key === 'modelService.editModel' ? labels.editModel : '')}
+          size="sm"
+        />
+        {/* 危险图标：`tone="danger"`（闭集，颜色静止可见；尺寸仍只许 sm/md）。 */}
+        <IconButton
+          ariaLabelKey="modelService.removeModel"
+          dataAttributes={{ 'data-model-row-remove': true }}
           disabled={isRemovingModel}
-          onClick={() => void onRemoveModel(model.id)}>
-          <Minus size={13} />
-        </button>
+          icon={Minus}
+          onSelect={() => void onRemoveModel(model.id)}
+          resolveText={(key) => (key === 'modelService.removeModel' ? labels.removeModel : '')}
+          size="sm"
+          tone="danger"
+        />
       </span>
     </div>
   )
