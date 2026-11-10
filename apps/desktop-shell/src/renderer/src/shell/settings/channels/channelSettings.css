@@ -1,7 +1,7 @@
 .channel-settings-page {
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr);
-  gap: 20px;
+  gap: 16px;
   min-height: 0;
   padding: 24px;
 }
@@ -233,7 +233,7 @@
   border-radius: 4px;
   background: var(--surface-2);
   color: var(--text-primary);
-  font-size: 12.5px;
+  font-size: var(--font-body);
 }
 
 /* 日志面板：等宽、按级别上色，但红只落在 `[LEVEL]` 几个字符上。 */
@@ -307,7 +307,7 @@
 .channel-log-hint {
   margin: 4px 0 10px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--font-body);
 }
 
 /* 中列标题：跟左导航分组标题同级的「频道」，不是页面大标题。 */
@@ -334,7 +334,7 @@
   padding-left: 10px;
   border-left: 2px solid var(--danger);
   color: var(--muted-strong);
-  font-size: 12.5px;
+  font-size: var(--font-body);
 }
 
 /* Token 输入框 + 显示切换：按钮在框右侧同一行，不挤掉输入宽度。 */
