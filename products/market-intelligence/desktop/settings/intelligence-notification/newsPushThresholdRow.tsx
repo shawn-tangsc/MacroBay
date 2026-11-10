@@ -36,8 +36,18 @@ export function NewsPushThresholdRow(props: Readonly<{
   text: Readonly<Record<string, string>>
   resolveText: (key: string) => string
   last?: boolean
+  /**
+   * 这一项自己的开关关着：控件灰着、点了不写，并就地说明「先打开舆情提醒」。
+   * 关着也要看得见这一行（用户 2026-11-11：撤平台页是换位置，不是减功能）。
+   */
+  disabled?: boolean
 }>): ReactElement {
   const label = props.text['pages.intelligence.notification.threshold.row'] ?? ''
+  const disabledNote = props.disabled === true
+    ? <span className="intelligence-notification-form-note" role="status">
+      {props.text['pages.intelligence.notification.threshold.disabledNote']}
+    </span>
+    : null
   const failed = props.state.saveFailed
     ? <span className="intelligence-notification-form-note" role="status">
       {props.text['pages.intelligence.notification.saveFailed']}
@@ -74,6 +84,7 @@ export function NewsPushThresholdRow(props: Readonly<{
     controlWrapperClassName={CONTROL_CLASS}
     copyClassName={LABEL_CLASS}
     descriptor={thresholdDescriptor()}
+    disabled={props.disabled === true}
     labelTextClassName={LABEL_TEXT_CLASS}
     onChange={(next) => props.state.setThreshold(next as NewsSentimentTierThreshold)}
     resolveOptionLabel={(option) =>
@@ -85,5 +96,6 @@ export function NewsPushThresholdRow(props: Readonly<{
   >
     {/* 存不上是**状态**，不是说明：它只在出事时出现，必须当场看见。 */}
     {failed}
+    {disabledNote}
   </SettingField>
 }

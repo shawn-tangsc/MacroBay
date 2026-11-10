@@ -122,9 +122,11 @@ describe('an unreadable calendar settings block is never drawn as off', () => {
     // 真重试：可点的按钮，不是一句话。
     expect([...(row?.querySelectorAll('button') ?? [])].length).toBeGreaterThan(0)
 
-    // 条件区块跟着消失（条件属于那一刻读到的值，读不到就不画）。
+    // 区块标题仍要在（读不到也是一件要看见、要重试的事）；**条件与摘要不画**——
+    // 条件属于那一刻读到的值，读不到就没有「已存值」可摆。
     expect(container.querySelector('.intelligence-notification-drawer')?.textContent)
-      .not.toContain(text['pages.intelligence.notification.calendarSection'])
+      .toContain(text['pages.intelligence.notification.calendarSection'])
+    expect(container.querySelector('[data-calendar-summary="true"]')).toBeNull()
   })
 
   it('renders the real controls of both condition blocks when their switches are on', async () => {

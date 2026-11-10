@@ -140,6 +140,21 @@ export function NotificationDrawerScreen(): ReactElement {
 
   const reminderValue = reminder.value
   const calendarOn = reminderValue?.enabled === true
+  const joiner = text['pages.intelligence.notification.joiner'] ?? ' / '
+  const leadLabel = (minutes: number): string => text[`pages.intelligence.notification.leads.${minutes}`] ?? String(minutes)
+  /**
+   * 组关着时的**已存值摘要**：与平台那一屏同一句、同一批键（关闭 + 提前量 + 重要性）。
+   * 撤掉平台页是换位置，不是减功能——关着也要能看见自己存过什么。
+   */
+  const storedSummary = reminderValue === undefined
+    ? ''
+    : [
+      text['pages.intelligence.notification.status.off'] ?? '',
+      leadLabel(reminderValue.leadMinutes),
+      reminderValue.importance
+        .map((level) => text[`pages.intelligence.notification.importance.${level}`] ?? level)
+        .join(joiner)
+    ].join(joiner)
 
   /**
    * 「最近一次投递」是通道侧的**事实**，与「通道未就绪」两种口径分开说：
@@ -202,6 +217,10 @@ export function NotificationDrawerScreen(): ReactElement {
       {reminder.saveFailedField === 'enabled'
         ? <span className="intelligence-notification-form-note" role="status">{text['pages.intelligence.notification.saveFailed'] ?? ''}</span>
         : null}
+      {/* 关着时把**已存的值**摆出来，不是一句话代替配置：读者要能确认自己之前设了什么。 */}
+      {reminderValue.enabled
+        ? null
+        : <span className="intelligence-notification-form-note" data-calendar-summary="true">{storedSummary}</span>}
       <Switch
         aria-label={itemName('calendar')}
         checked={reminderValue.enabled}
@@ -248,21 +267,22 @@ export function NotificationDrawerScreen(): ReactElement {
         {calendarRow()}
       </Section>
 
-      {/* 舆情条件：只在舆情提醒开着时出现——关着就不画（不是灰）。 */}
-      {outlet.enabled
-        ? <Section title={text['pages.intelligence.notification.sentimentSection'] ?? ''}>
-          <NewsPushThresholdRow
-            last
-            resolveText={resolveText}
-            state={threshold}
-            text={text}
-          />
-        </Section>
-        : null}
+      {/* 舆情条件：**整块常显**（用户 2026-11-11：关着时也要能选到门槛这一项）。
+          关着 → 门槛行灰着，并写明「先打开舆情提醒」；打开 → 可改。 */}
+      <Section title={text['pages.intelligence.notification.sentimentSection'] ?? ''}>
+        <NewsPushThresholdRow
+          disabled={!outlet.enabled}
+          last
+          resolveText={resolveText}
+          state={threshold}
+          text={text}
+        />
+      </Section>
 
-      {/* 日历提醒：这些本来就是它的条件，只在日历事件开着时出现。 */}
-      {calendarOn && reminderValue !== undefined
-        ? <Section title={text['pages.intelligence.notification.calendarSection'] ?? ''}>
+      {/* 日历提醒：**整块常显**（用户 2026-11-11：换位置不是减功能）。关着时仍给已存值摘要，
+          并且「测试发生后」仍可点（平台那一屏只按设置读不到禁用，不看组开关）；
+          只有组开着时才画开始前条件与发生后的过滤 / 国家。 */}
+      <Section title={text['pages.intelligence.notification.calendarSection'] ?? ''}>
           {reminder.status === 'error'
             ? <SettingsRow copyClassName={LABEL_CLASS} label={text['pages.intelligence.notification.status.unreadable'] ?? ''} rowClassName={ROW_CLASS}>
               <StateView
@@ -272,6 +292,9 @@ export function NotificationDrawerScreen(): ReactElement {
               />
             </SettingsRow>
             : <>
+              {/* 开始前条件与发生后的过滤 / 国家：组关着时收起（抽屉「关掉就收起条件」的版式），
+                  组开着才画；测试行不在这一层里，见下。 */}
+              {calendarOn ? <>
               <SettingField
                 busy={reminder.saving}
                 controlWrapperClassName={CONTROL_CLASS}
@@ -340,7 +363,10 @@ export function NotificationDrawerScreen(): ReactElement {
                 selection={reminderValue.landedCountries}
                 text={text}
               />
-              {/* 行尾两颗动作：两条测试各自贴在自己那一行，不挤进条件行。 */}
+              </> : null}
+              {/* 行尾两颗动作：两条测试各自贴在自己那一行，不挤进条件行。
+                  「测试开始前」随组开关禁用（平台同）；「测试发生后」只按设置读不到禁用——
+                  组关着也要能测，这是平台那一屏现在就有的能力。 */}
               <SettingsRow
                 controlWrapperClassName={CONTROL_CLASS}
                 copyClassName={LABEL_CLASS}
@@ -357,15 +383,14 @@ export function NotificationDrawerScreen(): ReactElement {
                 />
                 <TestNotificationButton
                   channelReady={channelReady}
-                  disabled={!calendarOn}
+                  disabled={reminder.status !== 'ready'}
                   kind="calendar-landed"
                   labelKey="pages.intelligence.notification.test.calendarLanded"
                   resolveText={resolveText}
                 />
               </SettingsRow>
             </>}
-        </Section>
-        : null}
+      </Section>
     </div>
   </div>
 }

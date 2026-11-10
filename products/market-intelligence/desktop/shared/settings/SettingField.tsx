@@ -115,7 +115,13 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
         const optionByValue = new Map(options.map((option) => [String(option.value), option]))
         return row(<Segmented
           ariaLabelKey={ariaLabelKey}
-          items={options.map((option) => ({ value: String(option.value), labelKey: String(option.value) }))}
+          /* 禁用整组时把每一档都标成 disabled：`Segmented` 的禁用语义在**选项**上（分档可以单独禁用），
+             容器级没有 disabled。不这样做，被条件禁用的一行会被画成「能点却不起作用」。 */
+          items={options.map((option) => ({
+            value: String(option.value),
+            labelKey: String(option.value),
+            ...(props.disabled === true ? { disabled: true } : {})
+          }))}
           onChange={(next) => {
             // Segmented 的值是字符串；原值是数字的（如提前量分钟）按原类型回写。
             const picked = optionByValue.get(next)
