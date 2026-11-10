@@ -176,8 +176,8 @@ export type SettingRowCopy = Readonly<{
   helpAriaKey?: string
 }>
 
-/** 一个选项：值 + 是否固定勾选（`locked` 的项读者不能取消）。 */
-export type SettingOption = Readonly<{ value: string | number; locked?: boolean }>
+/** 一个选项：稳定值。可选项就是可选项——固定项的表达已随「通知中心不进可选项」一起移除。 */
+export type SettingOption = Readonly<{ value: string | number }>
 
 /**
  * `optionsFrom` 的选项集合：**数据在注册表，句子在文案表**。页面只把这些值交给控件，
