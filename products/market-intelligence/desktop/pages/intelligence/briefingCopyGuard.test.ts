@@ -178,6 +178,7 @@ describe('briefing copy guard', () => {
           text: zh.dailyBriefing,
           onBack: () => undefined,
           onConfigureSources: () => undefined,
+          onOpenSettings: () => undefined,
           client: client as never
         }),
         createElement(DailyBriefingGeneratedBanner, { locale: 'zh-CN', text: bannerText, client: client as never, now: () => new Date('2026-10-30T04:00:00.000Z') })

@@ -23,7 +23,6 @@ import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote
 import { useBriefingShareActions } from './useBriefingShareActions'
 import { runBriefingRegenerate } from './runBriefingRegenerate'
 import { useBriefingEditionDelete } from './useBriefingEditionDelete'
-import { DailyBriefingSettingsDrawer, type BriefingSettingsSection } from './DailyBriefingSettingsDrawer'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingDocumentInvalidIssue } from './briefingDocumentInvalidIssue'
@@ -92,12 +91,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   /** Overrides the built-in platform model-service navigation. */
   onOpenModelSettings?: () => void
   /**
-   * 页面层给的「打开配置抽屉」入口（C9：抽屉成为唯一入口）。
+   * 「打开配置抽屉」入口（C9：抽屉是唯一入口）。页头那颗与失败面板那颗都走它。
    *
-   * 给了它，页头那颗与失败面板那颗都走它；**没给时**仍用页面自己那个设置抽屉——那是这一层
-   * 的旧路径，等外壳删除时一起收掉，但这一笔只加东西、不改可见行为。
+   * 这一页**不再有自己的设置抽屉**：同一块内容已经搬进配置抽屉的日报屏（`DailyBriefingSettingsBlocks`），
+   * 在这里再留一个外壳就是两个入口、两份草稿。
    */
-  onOpenSettings?: () => void
+  onOpenSettings: () => void
   client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'> & Partial<Pick<DailyBriefingClient, 'listAttempts' | 'deletePeriod'>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
@@ -140,9 +139,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // about whether this issue still has content.
   const [pinnedDate, setPinnedDate] = useState<string | undefined>(undefined)
   const [reloadKey, setReloadKey] = useState(0)
-  // One settings surface: the entry opens it at the top, the web-search banner and a failed attempt
-  // open the same drawer aimed at its AI block. Two dialogs is what this replaces.
-  const [settingsSection, setSettingsSection] = useState<BriefingSettingsSection | null>(null)
   // Which edition is on screen: language is part of its identity now, chosen by the row badges.
   const [pickedLocale, setPickedLocale] = useState<'zh-CN' | 'en-US' | undefined>(undefined)
   const [pickedPeriodId, setPickedPeriodId] = useState<string | undefined>(undefined)
@@ -425,7 +421,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       systemZone={screenDocument !== undefined && readyZone(view) === 'system'}
       onManualRun={onManualRun}
       {...(manualRunningLabel === undefined ? {} : { runningLabel: manualRunningLabel })}
-      onOpenSettings={() => (onOpenSettings === undefined ? setSettingsSection('generation') : onOpenSettings())}
+      onOpenSettings={onOpenSettings}
       onBack={onBack}
     />
     <div className={bodyClass}>
@@ -470,14 +466,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
         eventTitles: editionEventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled,
-        settingsOpen: settingsSection !== null,
+        // 设置面已经不在这一页（抽屉是唯一入口），所以这里永远是 false。
+        settingsOpen: false,
         // 正文失败面板的「重新生成」：跑的是屏幕上这一版，所以期号与语言取自它，不是全局默认期。
         onRetry: () => void runBriefing({ periodId: onScreenPeriodId, locale: screenDocument?.edition.locale ?? effectiveLocale, trigger: 'regenerate', ...(screenRerun === undefined ? {} : { rerun: screenRerun }) }),
         // 读不到时的「重试」只重读：把读取重跑一遍，不起 run、不写版、不调模型。
         onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句
         // 「正在重新生成」=读者认定在重跑当前版。重跑当前版仍保留旧正文可读。
-        onOpenSettings: () => (onOpenSettings === undefined ? setSettingsSection('ai') : onOpenSettings()), onConfigureSources,
+        onOpenSettings, onConfigureSources,
         onDeleteRetry: retryDelete
       }} />
       <DailyBriefingAppendix {...{
@@ -489,15 +486,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       }} />
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
-    {/* Mounted only while open: both blocks read settings on mount, so a closed page reads none. */}
-    {settingsSection ? <DailyBriefingSettingsDrawer client={client} open section={settingsSection} text={text}
-      onConfigureWebSearch={onConfigureWebSearch ?? openWebSearchSettings}
-      onOpenModelSettings={openModelService}
-      onClose={() => {
-        setSettingsSection(null)
-        // Saving may have added or removed the English edition: read the settings again.
-        reloadSettings()
-      }} /> : null}
     {screenDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
       <div ref={shareRef}><DailyBriefingShareCard document={screenDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} paymentDirectionsCompact={briefingPaymentDirections(poster.locale)} policyWords={briefingPolicyGaugeWords(poster.locale)} changeArrows={briefingChangeArrows(poster.locale)} fearGreedBuckets={briefingFearGreedBuckets(poster.locale)} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} timeZone={timeZone} /></div>

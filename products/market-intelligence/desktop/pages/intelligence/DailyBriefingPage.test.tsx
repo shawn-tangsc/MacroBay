@@ -300,7 +300,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   locale?: 'zh-CN' | 'en-US'
   text?: typeof text
 }> = {}): Promise<HTMLDivElement> {
-  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, onOpenSettings, locale = 'zh-CN', text: textOverride } = options
+  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, onOpenSettings = vi.fn(), locale = 'zh-CN', text: textOverride } = options
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -312,7 +312,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
       onBack={onBack}
       onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
-      {...(onOpenSettings ? { onOpenSettings } : {})}
+      onOpenSettings={onOpenSettings}
       client={client as never}
     /></ToastHost></ConfirmProvider></ConfigProvider>)
   })
@@ -1085,197 +1085,6 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain('重新生成版')
   })
 
-  // The drawer's three close routes and the two answers to its question. Kept as helpers because
-  // the evidence matrix is "entry x state": every route is checked in two states, and a copy-pasted
-  // click per case is how one route silently stops being covered.
-  const openSettingsDrawer = async (dom: HTMLDivElement): Promise<void> => {
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
-  }
-  const aiSwitch = (): HTMLElement => document.querySelector<HTMLElement>('[role="switch"]')!
-  /** The switch's own value, which is what "the edits are still there" means. */
-  const editorialSwitchValue = (): string | null => aiSwitch()?.getAttribute('aria-checked') ?? null
-  const toggleEditorial = async (): Promise<void> => {
-    await act(async () => { aiSwitch().click(); await Promise.resolve() })
-  }
-  const closeButton = (): HTMLButtonElement => [...document.querySelectorAll('button')]
-    .filter((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.cancel).at(-1)!
-  const confirmButton = (label: string): HTMLButtonElement => [...document.querySelectorAll('button')]
-    .find((button) => button.textContent?.replace(/\s/g, '') === label)!
-  const discardQuestionVisible = (): boolean => document.body.textContent?.includes(text.settingsDrawer.discardTitle) === true
-  const drawerOpen = (): boolean => document.querySelector('[data-settings-section="generation"]') !== null
-  const pressEscape = async (): Promise<void> => {
-    // antd's modal drawer handles Escape on its own panel and keys off keyCode; dispatching on
-    // `document` never reaches it.
-    const panel = document.querySelector<HTMLElement>('[role="dialog"]')
-    await act(async () => { (panel ?? document).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true })); await Promise.resolve() })
-  }
-  const clickMask = async (): Promise<void> => {
-    const mask = document.querySelector<HTMLElement>('.ant-drawer-mask')
-    expect(mask, 'the modal drawer must render a mask to click').not.toBeNull()
-    await act(async () => { mask!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve() })
-  }
-
-  it('asks before closing the drawer with unsaved edits instead of dropping them', async () => {
-    // The one silent-loss path: the reader edits a field, presses 取消, and nothing on screen says
-    // the edit is gone. A clean close must not ask; a dirty one must keep the edit until discarded.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-
-    // Clean close: no confirmation, the drawer just closes.
-    await openSettingsDrawer(dom)
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-    expect(discardQuestionVisible()).toBe(false)
-
-    // Edit, then try to close: the drawer stays, the question names what would be lost, and the
-    // edited value is still the value on screen (not the value that was read).
-    await openSettingsDrawer(dom)
-    expect(editorialSwitchValue()).toBe('true')
-    await toggleEditorial()
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    // Discarding is the only way the edits leave: confirm closes the drawer.
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('keeps the edit when the reader answers the question with 继续编辑', async () => {
-    // The other half of the guard: cancelling the confirmation must not close the drawer and must
-    // not reset the form to the values that were read.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    await act(async () => { confirmButton(text.settingsDrawer.discardCancel).click(); await Promise.resolve() })
-
-    // The drawer and the edited value survive the cancelled question; asking again works, which is
-    // what proves the first dialog was dismissed rather than merely faded out of view.
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-  })
-
-  it('asks after a failed save, when the edits are still in the drawer', async () => {
-    // The reviewer's case: edit, press save, save fails, close — the edits are still there and the
-    // reader was just told the save did not go through. That close must ask.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await act(async () => { document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-    // Only the AI block has a save now: the period list writes itself, so there is no generation
-    // write left that could be rejected here.
-    expect(document.body.textContent).toContain(text.settingsDrawer.saveFailed.replace('{sections}', text.settingsDrawer.sectionFailed.ai))
-
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('still asks on Escape after a failed save', async () => {
-    // Escape in the `save-failed` state: the same onClose route, but a different cell of the matrix.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-    await act(async () => { document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-
-    await pressEscape()
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('takes the same asking path when the reader presses Escape', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await pressEscape()
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('asks when the reader clicks the mask, and keeps the edit until discarded', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await clickMask()
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('does not ask when the settings could not be loaded at all', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(false)
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('does not ask after a successful save, so the saved values are the new baseline', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await act(async () => { document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(false)
-  })
-
   it('leaves the readings count out of the document masthead', async () => {
     const dom = await renderPage(fakeClient())
     const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
@@ -1343,126 +1152,50 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-settings-section]')).toBeNull()
   })
 
-  it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {
+  it('keeps exactly one settings entry, and hands it to the host from the header and the failure panel', async () => {
+    // C9：这一天起，页面上只有一个设置入口，而且它把「打开哪一屏」交给宿主（配置抽屉的日报屏）。
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke: async () => [] } }
-    const getSettings = vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    const onOpenSettings = vi.fn()
     const client = fakeClient({
       getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('editorial-timeout') })),
-      getSettings,
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
       saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
     })
-    const dom = await renderPage(client)
+    const dom = await renderPage(client, { onOpenSettings })
 
-    // The header entry, and nothing else that opens a settings surface of its own.
+    // 只留一个入口：页头那颗；失败面板那颗是同一个入口，不是第二个设置面。
     expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
     expect(dom.querySelectorAll(`[aria-label="${text.aiSettings.open}"]`)).toHaveLength(0)
-    // The failure panel's button is the same entry, not a second one.
     const failureAction = dom.querySelector<HTMLButtonElement>('[data-failure-action="settings"]')!
     expect(failureAction.getAttribute('data-open-settings-section')).toBe('ai')
 
-    await act(async () => {
-      failureAction.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    const generation = document.querySelector('[data-settings-section="generation"]')
-    const ai = document.querySelector('[data-settings-section="ai"]')
-    expect(generation).not.toBeNull()
-    expect(ai).not.toBeNull()
-    // The platform-wide values are jumps, never a second editable copy. The sentence explaining
-    // that is an explanation, so it rides in the question mark instead of taking a line of its own.
-    const platform = document.querySelector<HTMLElement>('[data-settings-platform="true"]')!
-    expect(platform.textContent).not.toContain(text.settingsDrawer.platformNote)
-    expect(platform.textContent).toContain(text.settingsDrawer.platformTitle)
-    const platformHeading = platform.querySelector('h3')!
-    const help = platformHeading.querySelector<HTMLButtonElement>(`[aria-label="${text.settingsDrawer.platformNote}"]`)!
-    expect(help).not.toBeNull()
-    // The question mark comes before the title, like every other field-level explanation.
-    expect(platformHeading.firstElementChild?.contains(help)).toBe(true)
-    expect(platformHeading.lastElementChild?.textContent).toBe(text.settingsDrawer.platformTitle)
-    // The sentence is not gone: focus opens the explanation that holds it.
-    await act(async () => {
-      help.focus()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    expect(document.querySelector('[data-popover-content]')?.textContent).toContain(text.settingsDrawer.platformNote)
-    const globalLinks = [...document.querySelectorAll<HTMLElement>('[data-global-link]')]
-    expect(globalLinks).toHaveLength(2)
-    expect(globalLinks.every((link) => !link.matches('input, select, textarea'))).toBe(true)
-    // Every form control in the drawer belongs to the brief's own settings: the scoped blocks carry
-    // the marker, so a control added outside them would show up as unscoped.
-    expect(document.querySelectorAll('[data-setting-scope="brief"]')).toHaveLength(2)
-    // 加一期的入口现在长在期列表里，而不是一颗写着"这个版本还不支持"的灰按钮：它必须可点。
-    const generationHead = document.querySelector('[data-settings-section="generation"] .mi-briefing-settings__group-head')!
-    expect(generationHead.querySelector('h3')?.textContent).toBe(text.settingsDrawer.sections.generation)
-    // 期列表走产品桥；这一条用例只关心入口在不在、可不可点，所以给它一个空列表。
-    const addPeriod = document.querySelector<HTMLButtonElement>('[data-briefing-period-add]')!
-    expect(addPeriod.disabled).toBe(false)
-    expect(addPeriod.textContent).toContain(text.settings.periods.add)
-    // 那句"这个版本还不支持一天多期"随禁用按钮一起消失，不许留在界面上。
-    expect(document.body.textContent).not.toContain(text.settings.periods.addReason)
-    // The form-wide note lives in the block now, so the drawer shows it too — it used to exist only
-    // in the dialog shell, which meant this surface silently lost it.
-    expect(document.querySelector('[data-settings-section="generation"]')?.textContent)
-      .toContain(text.generationSettings.noteLabel)
+    await act(async () => { failureAction.click(); await Promise.resolve() })
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    // 页面自己不再画设置面：两块内容都不在这里（它们在抽屉的日报屏里）。
+    expect(document.querySelector('[data-settings-section]')).toBeNull()
   })
-
-  it('opens the same drawer from the web-search banner and keeps one entry', async () => {
+  it('sends the web-search banner to the same single entry the header uses', async () => {
+    const onOpenSettings = vi.fn()
     const client = fakeClient({
       getSettings: vi.fn(async () => ({
         state: 'available' as const,
         view: { ...settingsView, settings: { ...settingsView.settings, webSearchEnabled: false } }
       }))
     })
-    const dom = await renderPage(client)
+    const dom = await renderPage(client, { onOpenSettings })
 
+    // 仍然只有一个入口；横幅那颗走的是同一个回调，不是自己再开一个面。
     expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
     const banner = dom.querySelector<HTMLElement>('[data-open-settings-section="ai"]')!
     expect(banner.textContent).toBe(text.aiSettings.goEnable)
-    // 说明句不在正文：状态旁边只有一个 ⓘ，它的可访问名就是那句话，点开才看到。
     const warning = banner.closest<HTMLElement>('.mi-daily-briefing-page__websearch-warning')!
     expect(warning.textContent).toBe(`${text.aiSettings.webSearchOff}${text.aiSettings.goEnable}`)
-    expect(warning.querySelector(`button[aria-label="${text.aiSettings.webSearchOffHint}"]`)).not.toBeNull()
+    expect(warning.querySelector('button')).not.toBeNull()
 
-    await act(async () => {
-      banner.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    expect(document.querySelector('[data-settings-section="ai"]')).not.toBeNull()
-    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
+    await act(async () => { banner.click(); await Promise.resolve() })
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('[data-settings-section]')).toBeNull()
   })
-
-  it('closes one explanation on Escape without closing the drawer, and returns focus', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await act(async () => {
-      dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    // 抽屉里还留着的问号：整块的生成说明（加一期的假按钮已经不存在了）。
-    const trigger = document.querySelector<HTMLButtonElement>(`[aria-label="${text.generationSettings.noteLabel}"]`)!
-    expect(trigger).not.toBeUndefined()
-
-    await act(async () => {
-      trigger.focus()
-      await Promise.resolve()
-    })
-    expect(trigger.getAttribute('aria-expanded')).toBe('true')
-
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-      await Promise.resolve(); await Promise.resolve()
-    })
-    // One Escape closes the explanation it was aimed at; the drawer stays, and focus is back on
-    // the question mark instead of falling to the page behind the mask.
-    expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(trigger)
-    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
-    expect(document.querySelector('[data-settings-section="ai"]')).not.toBeNull()
-  })
-
   it('names a model failure and keeps the readable detail', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('model-unavailable', 'custom-unavailable') })) })
     const dom = await renderPage(client)
@@ -1522,29 +1255,6 @@ describe('daily briefing page', () => {
     // 面板只留一颗「日报设置」：建议句已经点名要检查什么，按钮不再跟着建议码长。
     expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(1)
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
-  })
-
-  it('names the block that failed to save and keeps the drawer open', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const }))
-    })
-    const dom = await renderPage(client)
-    await act(async () => {
-      dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    const save = document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!
-    expect(save.disabled).toBe(false)
-
-    await act(async () => {
-      save.click()
-      await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
-    })
-    const failed = document.querySelector<HTMLElement>('[data-settings-save-failed]')!
-    // Two forms, one save: a bare "save failed" would leave the reader guessing which block to fix.
-    expect(failed.textContent).toContain(text.settingsDrawer.sectionFailed.ai)
-    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
   })
 
   it('renders the failure panel in English', async () => {

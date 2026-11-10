@@ -3,21 +3,17 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ShellLanguageProvider, useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
+import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { productText } from '../../shared/i18n/productText'
-import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
+import { useDailyBriefingSettingsBlocks } from './DailyBriefingSettingsBlocks'
 
 /**
- * 日报那一屏搬进配置抽屉之后，**保存失败要点名是哪一块失败**这条判据搬到这里。
- *
- * 它不是「关窗确认」那一族：关窗确认问的是「要不要丢」，这条说的是「哪一块没存上」。
- * 外壳没了以后，块本身还在，所以在块这一层断。
+ * 「保存失败要点名是哪一块失败」——外壳（那个抽屉）退役后，这条判据挂在块自己的保存路径上，
+ * **不是**随关窗确认一起消失。这里直接驱动那块用的 hook，不经过任何外壳。
  */
-const settingsView = {
-  settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-  periods: [], periodsUnreadable: false
-} as never
+const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 
 let root: Root | undefined
 
@@ -28,43 +24,47 @@ afterEach(async () => {
   Reflect.deleteProperty(window, 'platform')
 })
 
-/** 文案要按当前语言取：面板自己读 `useShellLanguage()`，测试里用同一个 provider。 */
-function Probe(): React.ReactElement {
-  return createElement(DailyBriefingSettingsPanel)
+type Blocks = ReturnType<typeof useDailyBriefingSettingsBlocks>
+
+function fakeClient(saveFails: boolean): Pick<DailyBriefingClient, 'getSettings' | 'saveSettings'> {
+  const view = { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, periods: [], periodsUnreadable: false }
+  return {
+    getSettings: vi.fn(async () => ({ state: 'available' as const, view })) as never,
+    saveSettings: vi.fn(async () => (saveFails ? { state: 'unavailable' as const, failureCode: 'failed' } : { state: 'available' as const, view })) as never
+  }
 }
 
-async function renderPanel(saveFails: boolean): Promise<HTMLElement> {
-  const invoke = vi.fn(async (_productId: string, method: string) => {
-    if (method.includes('getSettings')) return { state: 'available', view: settingsView }
-    if (method.includes('saveSettings')) {
-      if (saveFails) throw new Error('save failed')
-      return { state: 'available', view: settingsView }
-    }
-    return { state: 'available', periods: [] }
-  })
-  ;(window as unknown as { platform: unknown }).platform = { products: { invoke }, modelProviders: { list: vi.fn(async () => []) } }
-  const container = document.createElement('div')
-  document.body.append(container)
-  root = createRoot(container)
+async function mountBlocks(client: Pick<DailyBriefingClient, 'getSettings' | 'saveSettings'>): Promise<() => Blocks> {
+  let latest: Blocks
+  function Probe(): null {
+    latest = useDailyBriefingSettingsBlocks({ client, open: true })
+    return null
+  }
+  root = createRoot(document.createElement('div'))
   await act(async () => root!.render(createElement(ShellLanguageProvider, { language: 'zh-CN', children: createElement(Probe) })))
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-  return container
+  return () => latest
 }
 
-function Language(): 'zh-CN' | 'en-US' {
-  return useShellLanguage()
-}
-
-describe('the drawer briefing panel', () => {
+describe('the briefing blocks save', () => {
   it('names the block that failed to save', async () => {
-    const text = productText[Language() ?? 'zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
-    const container = await renderPanel(true)
-    const save = [...container.querySelectorAll('button')]
-      .find((button) => (button.textContent ?? '').replace(/\s+/gu, '') === text.generationSettings.save)
-    expect(save).toBeDefined()
-    await act(async () => { save?.click(); await new Promise((resolve) => setTimeout(resolve, 0)) })
-    const failed = container.querySelector('[data-settings-save-failed="true"]')
-    expect(failed).not.toBeNull()
-    expect(failed?.textContent).toContain(text.settingsDrawer.sectionFailed.ai)
+    ;(window as unknown as { platform: unknown }).platform = { modelProviders: { list: vi.fn(async () => []) } }
+    const current = await mountBlocks(fakeClient(true))
+    expect(current().ai.state).toBe('ready')
+    const onSaved = vi.fn()
+    await act(async () => { await current().saveAll(onSaved) })
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(current().failed).toEqual(['ai'])
+    expect(current().failedSentence).toContain(text.settingsDrawer.sectionFailed.ai)
+  })
+
+  it('does not name any block when the save goes through', async () => {
+    ;(window as unknown as { platform: unknown }).platform = { modelProviders: { list: vi.fn(async () => []) } }
+    const current = await mountBlocks(fakeClient(false))
+    const onSaved = vi.fn()
+    await act(async () => { await current().saveAll(onSaved) })
+    expect(onSaved).toHaveBeenCalledTimes(1)
+    expect(current().failed).toEqual([])
+    expect(current().failedSentence).toBeNull()
   })
 })
