@@ -51,6 +51,26 @@ describe('SourceFilterBar', () => {
     for (const chip of chips) expect(chip.textContent?.trim()).not.toMatch(/^\d+$/u)
   })
 
+  it('puts the state block above the conditions, and leaves clearing to the state action alone', async () => {
+    // 第三笔：空态的三处位置收尾。状态块是**唯一**说明面且在上；条件胶囊在下；清空只活在状态动作里。
+    const onClear = vi.fn()
+    const host = await render({ chips: CHIPS, empty: true, onClear, onDrop: () => undefined, resolveText })
+    expect(host.querySelectorAll('[data-source-filter="empty"]')).toHaveLength(1)
+
+    const stateBlock = host.querySelector('[class*="state"]')?.closest('div') ?? null
+    const chipsBlock = host.querySelector('.intelligence-source-filter__chips')
+    expect(chipsBlock).not.toBeNull()
+    // 状态块在条件之前：同一份结构里先读「筛出来是空的」，再读「松掉哪一格」。
+    if (stateBlock !== null && chipsBlock !== null) {
+      expect(stateBlock.compareDocumentPosition(chipsBlock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    // 空态里清空只有一处入口（状态动作），不许再有第二颗常驻按钮。
+    expect(host.querySelectorAll('[data-source-filter-clear="true"]')).toHaveLength(0)
+    // 三颗按钮 = StateView 的动作「清空筛选」+ 两颗条件胶囊；没有第二颗常驻清空。
+    const buttons = [...host.querySelectorAll('button')]
+    expect(buttons).toHaveLength(CHIPS.length + 1)
+  })
+
   it('never draws the layout switch on an empty result, but keeps the three things in one order when it does', async () => {
     // 空态里画「平铺 / 列表」只是多一个 Tab 停靠点：空结果没有「怎么排」这件事。
     const modeSwitch = <button data-mode-switch="true" type="button">平铺</button>
