@@ -22,15 +22,17 @@ export function macroMarketJobDefinitions(): readonly Readonly<Record<string, un
  * Registers the collector. The startup run matters: an interval anchored to the last complete
  * period would leave a reader who opens the app at 09:02 without a dollar level until 09:05, and
  * the level they see then would be the first one ever fetched rather than the latest.
+ *
+ * The interval itself is not armed here: a source that is switched off must own no job registration
+ * (user, 2026-11-11), so the schedule belongs to the single enable gate in `intelligenceSourcesService`
+ * (`sourceOwnedJobSchedules`). A disabled source's startup tick still reaches this handler once and
+ * returns `disabled` without spending a request.
  */
 export function registerMacroMarketJob(jobRuntime: JobRuntime, run: (atMs?: number, options?: Readonly<{ force?: boolean }>) => Promise<unknown>): void {
   jobRuntime.registerHandler(MACRO_MARKET_COLLECT_JOB_ID, async (payload: unknown) => {
     const startup = Boolean(payload && typeof payload === 'object' && (payload as { startup?: unknown }).startup)
     await run(undefined, startup ? { force: true } : {})
   })
-  const [definition, startup] = macroMarketJobDefinitions()
-  if (typeof jobRuntime.setSchedule === 'function') {
-    jobRuntime.setSchedule(definition as never)
-    void jobRuntime.enqueueDefinition(startup as never).catch(() => undefined)
-  }
+  const [, startup] = macroMarketJobDefinitions()
+  void jobRuntime.enqueueDefinition(startup as never).catch(() => undefined)
 }

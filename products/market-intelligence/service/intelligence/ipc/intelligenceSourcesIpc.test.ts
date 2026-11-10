@@ -11,6 +11,7 @@ import { createIntelligencePipeline } from '../application/intelligencePipeline'
 import { createSourceRequestGovernanceQueue } from '../application/sourceRequestGovernance'
 import { createDefaultProfileForDefinition, createIntelligenceSourcesService } from '../application/intelligenceSourcesService'
 import { createSourceRuntimeOrchestrator, intelligenceCollectJobId } from '../application/sourceRuntimeOrchestrator'
+import { MACRO_MARKET_COLLECT_JOB_ID } from '../macro-market/macroMarketJob'
 import { registerIntelligenceJobs } from '../jobs/registerIntelligenceJobs'
 import { resolveRuntimeConfig } from '../application/sourceRuntimeConfig'
 import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
@@ -695,13 +696,18 @@ describe('intelligenceSources service', () => {
     expect(detail.profile.enabled).toBe(true)
     // 挡住通用运行时的**不是** `readiness`（这条源 2026-11-11 改成 live 了），而是
     // `genericRuntimeCollects`：`collectionOwner: 'product'` / `collection: 'none'` 一律不采。
-    // 所以没有排期、也没有这条 `rest-api-poller` collect job。改 readiness 不会解开这道闸。
+    // 所以没有这条 `rest-api-poller` collect job。改 readiness 不会解开这道闸。
     expect(resolveRuntimeConfig({
       definition: getIntelligenceSourceDefinition('twelve-data-market')!,
       profile: detail.profile,
       hasCredential: true
     }).enabled).toBe(false)
-    expect(setSchedule).not.toHaveBeenCalled()
+    // 通用采集作业不存在；读者开着这条源时，**产品自有**的那条作业照规则排期
+    // （用户 2026-11-11：没启用的源不注册 job，反之开着就要注册）。
+    const scheduledIds = jobRuntime.listSchedules().map((definition) => definition.id)
+    expect(scheduledIds).not.toContain(intelligenceCollectJobId('twelve-data-market'))
+    expect(scheduledIds).toContain(MACRO_MARKET_COLLECT_JOB_ID)
+    expect(setSchedule).not.toHaveBeenCalledWith(expect.objectContaining({ id: intelligenceCollectJobId('twelve-data-market') }))
     await expect(jobRuntime.enqueueManual(intelligenceCollectJobId('twelve-data-market'))).rejects.toThrow('Unknown job definition')
     expect(jobRuntime.listRecentRuns()).toEqual([])
   })

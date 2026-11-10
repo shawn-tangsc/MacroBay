@@ -26,6 +26,10 @@ export function canonicalRuntimeFingerprint(input: {
   return stableJson({
     sourceId: input.sourceId,
     profileRevision: input.profile.updatedAt,
+    // 读者存下来的开关本身就是运行时决定的一部分：产品自有作业（宏观市场、DXY）只读这个布尔，
+    // 而它们的 `config.enabled` 恒为 false。只看 `config.enabled` 时，两次保存落在同一毫秒
+    // （`updatedAt` 相同）会让指纹也相同，于是「刚打开」被当成没变化、作业不再排期。
+    profileEnabled: input.profile.enabled === true,
     enabled: input.config.enabled,
     desiredRuntimeState: input.config.desiredRuntimeState,
     collectionPreset: input.config.collectionPreset,

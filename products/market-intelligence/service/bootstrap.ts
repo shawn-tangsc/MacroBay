@@ -189,7 +189,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(deps.getNetworkSettings
       ? { createPlatformWebSocket: () => createPlatformWebSocketFactory({ getNetworkSettings: deps.getNetworkSettings! }) }
       : {}),
-    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => syncMarketCalendarSchedule?.()
+    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => syncMarketCalendarSchedule?.(),
+    // 读者一拨开关，产品自有作业就跟着排期/撤期（`sourceEnableListeners` 在下面装配时登记）。
+    // 通用采集作业与宏观市场、DXY、Nasdaq 100 那几条不由这里管：它们的闸是服务里的同一处。
+    onSourceEnabledChanged: (sourceId) => { sourceEnableListeners.get(sourceId)?.() }
   })
   // A reader who changes their display zone means "08:05 is my 08:05 from now on", and they will not
   // also open the briefing setting to press save. The platform tells us after the new zone is in

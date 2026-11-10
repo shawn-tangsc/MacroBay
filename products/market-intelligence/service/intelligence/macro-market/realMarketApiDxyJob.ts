@@ -21,6 +21,13 @@ export function realMarketApiDxyJobDefinitions(): readonly Readonly<Record<strin
   return [definition, { ...definition, id: `${REAL_MARKET_API_DXY_COLLECT_JOB_ID}:startup`, trigger: { kind: 'manual' as const }, payload: { startup: true } }]
 }
 
+/**
+ * Registers the collector and asks for one startup tick.
+ *
+ * The interval is not armed here: a source that is switched off must own no job registration
+ * (user, 2026-11-11). The schedule is owned by `intelligenceSourcesService` through
+ * `sourceOwnedJobSchedules`, the single place that reads this source's switch.
+ */
 export function registerRealMarketApiDxyJob(
   jobRuntime: JobRuntime,
   run: (atMs?: number, options?: Readonly<{ force?: boolean }>) => Promise<unknown>
@@ -29,9 +36,6 @@ export function registerRealMarketApiDxyJob(
     const startup = Boolean(payload && typeof payload === 'object' && (payload as { startup?: unknown }).startup)
     await run(undefined, startup ? { force: true } : {})
   })
-  const [definition, startup] = realMarketApiDxyJobDefinitions()
-  if (typeof jobRuntime.setSchedule === 'function') {
-    jobRuntime.setSchedule(definition as never)
-    void jobRuntime.enqueueDefinition(startup as never).catch(() => undefined)
-  }
+  const [, startup] = realMarketApiDxyJobDefinitions()
+  void jobRuntime.enqueueDefinition(startup as never).catch(() => undefined)
 }

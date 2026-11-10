@@ -28,6 +28,7 @@ import {
 import { createSourceProfileStore, type SourceProfileStore } from './sourceProfileStore'
 import { probeIntelligenceSourceConnection } from './intelligenceSourceConnectivity'
 import { createSourceRuntimeOrchestrator } from './sourceRuntimeOrchestrator'
+import { syncSourceOwnedJobSchedules } from './sourceOwnedJobSchedules'
 import type { IntelligenceReplayService } from './intelligenceReplayService'
 import { validateIntelligenceCredential } from './intelligenceCredentialValidation'
 import { isZeroXRouterSource } from './zeroXRouterSourcePolicy'
@@ -189,6 +190,16 @@ export function createIntelligenceSourcesService(deps: {
     } else {
       orchestrator.remove(profile.sourceId)
     }
+    // 产品自有作业（宏观市场、DXY、Nasdaq 100…）不归通用编排管，但「没启用就不注册」同一条规则：
+    // 它们的启用口径是「读者开着」+「真的能采」，与上面 `config.enabled` 不同，闸仍只有这一处——
+    // 装配时不再无条件排期，开或关都从这里走。
+    syncSourceOwnedJobSchedules({
+      jobRuntime: deps.jobRuntime,
+      sourceId: profile.sourceId,
+      enabled: hasProductOwnedCollection(definition)
+        && !blocksProductionCollection(definition)
+        && profile.enabled === true
+    })
     appliedRuntimeFingerprintBySource.set(profile.sourceId, fingerprint)
   }
 
