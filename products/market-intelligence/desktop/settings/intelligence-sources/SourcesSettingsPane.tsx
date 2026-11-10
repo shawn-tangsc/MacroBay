@@ -28,6 +28,8 @@ export type SourcesSettingsPaneProps = {
   notice?: ReactNode
   /** 右栏那份「事实 + 文案」组装件需要的全部入参（由调用方原样给）。 */
   surface: Omit<SourceConfigSurfaceProps, 'provider'> & { providerId?: string }
+  /** 这一面显示哪几块筛选（抽屉传四块，设置页默认六项）。 */
+  treeFilters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>
 }
 
 export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactElement {
@@ -39,6 +41,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
   return <>
     <SettingsSourceTree
       filter={props.filter}
+      {...(props.treeFilters === undefined ? {} : { filters: props.treeFilters })}
       labels={props.treeLabels}
       selectedProviderId={props.selectedProviderId}
       view={props.view}

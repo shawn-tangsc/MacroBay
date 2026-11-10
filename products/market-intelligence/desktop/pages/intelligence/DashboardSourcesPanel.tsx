@@ -30,7 +30,8 @@ export function DashboardSourcesPanel(props: {
 } = {}): React.ReactElement {
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  // 抽屉落「看板」：打开就省一步。**设置页仍默认「全部」**（那是完整管理面），两边不一致是有意的。
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('dashboard')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const settings = useIntelligenceSourcesSettings(t)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings
@@ -81,6 +82,14 @@ export function DashboardSourcesPanel(props: {
 
   return <SourcesSettingsPane
     filter={sourceFilter}
+    /* 抽屉只留四块：看板 / 日历 / 舆情 / 其他（第四块是兜底）（用户 2026-11-10 砍掉「全部」「高级」）。
+       第一个 tab 与默认筛选都是**看板**，读起来一致。设置页仍是原来的六项。 */
+    treeFilters={[
+      { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
+      { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
+      { value: 'sentiment', labelKey: 'settings.intelligenceSources.sourceFilters.sentiment' },
+      { value: 'other', labelKey: 'settings.intelligenceSources.sourceFilters.other' }
+    ]}
     onFilterChange={setSourceFilter}
     onSelectProvider={(providerId) => setSelectedProviderId(providerId)}
     selectedProviderId={selectedProviderId}

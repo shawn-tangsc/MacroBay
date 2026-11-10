@@ -9,7 +9,7 @@ import { catalogMarkerClass } from './sourceHealthTone'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import type { SourceCategory } from '../../../service/intelligence/application/providerRegistry'
 
-export type SourceFilter = 'all' | 'calendar' | 'dashboard' | 'pending' | 'advanced'
+export type SourceFilter = 'all' | 'calendar' | 'dashboard' | 'sentiment' | 'pending' | 'advanced' | 'other'
 
 type Labels = {
   title: string
@@ -26,21 +26,48 @@ const FILTERS: ReadonlyArray<{ value: SourceFilter; labelKey: string }> = [
   { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
   { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
   { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
+  { value: 'sentiment', labelKey: 'settings.intelligenceSources.sourceFilters.sentiment' },
   { value: 'pending', labelKey: 'settings.intelligenceSources.sourceFilters.pending' },
   { value: 'advanced', labelKey: 'settings.intelligenceSources.sourceFilters.advanced' }
 ]
 
-function matchesFilter(source: { panels: readonly string[]; visibility: string; kind: string }, filter: SourceFilter): boolean {
+/**
+ * 「舆情」按**用途**判，不按面板：`panels` 是面板路由（只由 dashboard / calendar 映射出来），
+ * `sentiment` 本来就没有对应面板。把 sentiment 塞进 `panels` 会让「出现在哪个面板」和
+ * 「这个源供什么用途」混成一个语义，别处按 panels 做的判断都会被牵连——所以这里读 `purposes`。
+ */
+export function sourceMatchesFilter(
+  source: { panels: readonly string[]; visibility: string; kind: string; purposes?: readonly string[] },
+  filter: SourceFilter
+): boolean {
   if (filter === 'calendar') return source.kind === 'official-calendar' || source.kind === 'market-calendar'
   if (filter === 'dashboard') return source.panels.includes('dashboard')
+  if (filter === 'sentiment') return (source.purposes ?? []).includes('sentiment')
   if (filter === 'pending') return source.visibility === 'pending'
   if (filter === 'advanced') return source.visibility === 'advanced'
+  /* 「其他」是**兜底**：不属于看板 / 日历 / 舆情的源都归它（pending、advanced、只供分析、维护备用）。
+     它不是「待接入」——那 4 个只供分析的源是正常可用的，说成「待接入」就是假话（同「读不到 ≠ 没有」）。
+     设置页那份不加这一块，那边的「待接入」仍是 pending 原义。 */
+  if (filter === 'other') {
+    // 只收「有真实用途或需要读者配置」的源：4 个只供分析的、pending 待接入的、只进简报的。
+    // **维护备用源（purposes 为空且不是 pending）不进抽屉**——它们今天没有读者可见产出，
+    // 也没有待配的意义，留在设置页仍可见可开关。这不是「被误筛掉」，是明确按 purposes 为空排除。
+    const purposes = source.purposes ?? []
+    if (purposes.length === 0 && source.visibility !== 'pending') return false
+    return !sourceMatchesFilter(source, 'dashboard')
+      && !sourceMatchesFilter(source, 'calendar')
+      && !sourceMatchesFilter(source, 'sentiment')
+  }
   return true
 }
 
+const matchesFilter = sourceMatchesFilter
+
 /** One flat row per provider; capabilities live in the detail pane. */
-export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
+export function SettingsSourceTree({ filter, filters, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
   filter: SourceFilter
+  /** 这一面显示哪几块筛选：设置页默认六项；抽屉只传四块（日历 / 看板 / 舆情 / 待接入）。 */
+  filters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>
   labels: Labels
   onFilterChange: (filter: SourceFilter) => void
   onSelectProvider: (providerId: string) => void
@@ -48,6 +75,7 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
   view?: SettingsView
 }): React.ReactElement {
   const resolveText = useProductTextKey()
+  const visibleFilters = filters ?? FILTERS
   return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
     <div className="intelligence-catalog-filters">
       {/* One Tab reaches the group; the arrow keys move focus and Enter/Space picks, so a reader can
@@ -55,7 +83,7 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
           so this file holds no sentences. */}
       <Segmented
         ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
-        items={FILTERS}
+        items={visibleFilters}
         onChange={(value) => onFilterChange(value as SourceFilter)}
         resolveText={resolveText}
         value={filter}
@@ -67,7 +95,12 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
           任何新调用点提前渲染都会立刻误导成「筛选后没有来源」。 */}
       {view !== undefined && view.groups.every((group) => group.providers.every((provider) => provider.sources.filter((source) => matchesFilter(source, filter)).length === 0))
         ? <StateView
-          action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: () => onFilterChange('all') }}
+          /* `filtered-out` 必须给一个动作（StateView 的调用点守卫会红）。有「全部」就回「全部」；
+             四块那一面没有「全部」，就回第一块（抽屉里是「看板」，也是默认值）——不会落到不存在的档位。 */
+          action={{
+            labelKey: STATE_VIEW_ACTION_KEYS.clear_filter,
+            onSelect: () => onFilterChange(visibleFilters.some((entry) => entry.value === 'all') ? 'all' : visibleFilters[0].value)
+          }}
           reasonCode="filtered-out"
           size="md"
           state="empty"

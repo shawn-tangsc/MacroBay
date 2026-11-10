@@ -242,7 +242,7 @@ export const intelligenceSourcesText = {
   },
   readinessLabels: { live: '可用', 'fixture-ready': '测试数据', planned: '未接入' },
 
-  sourceFilters: { all: '全部', calendar: '日历', dashboard: '看板', pending: '待接入', advanced: '高级' },
+  sourceFilters: { all: '全部', calendar: '日历', dashboard: '看板', sentiment: '舆情', pending: '待接入', advanced: '高级', other: '其他' },
   sourceFilterLabel: '来源筛选',
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
   proxyNotice: {
@@ -763,7 +763,7 @@ export const intelligenceSourcesText = {
   },
   readinessLabels: { live: 'Available', 'fixture-ready': 'Fixture data', planned: 'Not connected' },
 
-  sourceFilters: { all: 'All', calendar: 'Calendar', dashboard: 'Dashboard', pending: 'Pending', advanced: 'Advanced' },
+  sourceFilters: { all: 'All', calendar: 'Calendar', dashboard: 'Dashboard', sentiment: 'Sentiment', pending: 'Pending', advanced: 'Advanced', other: 'Other' },
   sourceFilterLabel: 'Filter sources',
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
   proxyNotice: {
