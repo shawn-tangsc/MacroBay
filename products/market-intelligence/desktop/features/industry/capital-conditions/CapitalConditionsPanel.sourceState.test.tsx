@@ -8,7 +8,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { productText } from '../../../shared/i18n/productText'
-import { CapitalConditionsPanel, type DashboardCapitalCellAvailability } from './CapitalConditionsPanel'
+import { CapitalConditionsPanel, type DashboardCapitalCellAvailability, type DashboardCapitalCellOff } from './CapitalConditionsPanel'
 import type { DashboardCapitalConditionsState } from './capitalConditionsModel'
 
 /**
@@ -22,12 +22,9 @@ import type { DashboardCapitalConditionsState } from './capitalConditionsModel'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
 const dataText = productText['zh-CN'].pages.intelligence.portal.data
 
-type CellState = NonNullable<DashboardCapitalCellAvailability['stablecoin']>
-
 const openSources = (): void => undefined
-const disabledStablecoin: CellState = { state: 'disabled', sourceLabel: '稳定币', onOpenSources: openSources }
-const disabledEtf: CellState = { state: 'disabled', sourceLabel: 'ETF', onOpenSources: openSources }
-const missingEtf: CellState = { state: 'missing', onOpenSources: openSources }
+const disabledStablecoin: DashboardCapitalCellOff = { sourceLabel: '稳定币', onOpenSources: openSources }
+const disabledEtf: DashboardCapitalCellOff = { sourceLabel: 'ETF', onOpenSources: openSources }
 
 /** 一次读成功的快照：稳定币有数；ETF 这一支这里给「读不到」，好让「读不到由读数自己说」也被看见。 */
 const available: DashboardCapitalConditionsState = {
@@ -67,7 +64,6 @@ const onlyStablecoinOff = render({ cells: { stablecoin: disabledStablecoin } })
 const bothOff = render({ cells: { stablecoin: disabledStablecoin, etf: disabledEtf } })
 /** 两格都关时宿主根本不发请求，读口停在等待态——卡片照样要画出两行。 */
 const bothOffWhileIdle = render({ state: { state: 'loading' }, cells: { stablecoin: disabledStablecoin, etf: disabledEtf } })
-const missingRow = render({ cells: { etf: missingEtf } })
 
 describe('the two cells of the capital card speak their own source state', () => {
   it('marks only the cell that is off, and keeps the other cell reading', () => {
@@ -75,7 +71,6 @@ describe('the two cells of the capital card speak their own source state', () =>
     expect(onlyEtfOff).toContain(dataText.sourcesNotEnabled)
     expect(onlyEtfOff).toContain('（ETF）')
     expect(onlyEtfOff).toContain('mi-capital-conditions__stable-table')
-    expect(onlyEtfOff).not.toContain(dataText.sourcesNotConfigured)
     // 只关稳定币：反过来，ETF 那张表照旧在（资金流图也跟着 ETF 那一格一起走）。
     expect(onlyStablecoinOff).toContain(dataText.sourcesNotEnabled)
     expect(onlyStablecoinOff).toContain('mi-capital-conditions__etf-table')
@@ -101,12 +96,15 @@ describe('the two cells of the capital card speak their own source state', () =>
     expect((bothOffWhileIdle.match(/data-state="disabled"/g) ?? [])).toHaveLength(2)
   })
 
-  it('never calls a missing source an unenabled one', () => {
-    expect(missingRow).toContain(dataText.sourcesNotConfigured)
-    expect(missingRow).not.toContain(dataText.sourcesNotEnabled)
-    expect(missingRow).toContain(dataText.configureSources)
-    // 未配置与未启用都不用错误色：它们不是故障，是读者要动手的事。
-    for (const markup of [onlyEtfOff, missingRow]) expect(markup).not.toContain('data-state="unreadable"')
+  it('has one source state only, and never claims a source is unconfigured', () => {
+    // 这两格的源写死在看板模块表里，读者没有任何动作能让一格「没有源」——所以卡片不画那一态：
+    // 画一个永远到不了的句子，读者迟早会看到一句解释不了自己的话。
+    expect(onlyEtfOff).toContain(dataText.sourcesNotEnabled)
+    expect(onlyEtfOff).toContain(dataText.enableSources)
+    expect(onlyEtfOff).not.toContain(dataText.sourcesNotConfigured)
+    expect(onlyEtfOff).not.toContain(dataText.configureSources)
+    // 没启用不用错误色：它不是故障，是读者要动手的事。
+    expect(onlyEtfOff).not.toContain('data-state="unreadable"')
   })
 
   it('sends each row action to its own cell, so two "去启用" cannot both mean the card', async () => {
@@ -127,8 +125,8 @@ describe('the two cells of the capital card speak their own source state', () =>
           state: { state: 'loading' },
           onRefresh: () => undefined,
           cellAvailability: {
-            stablecoin: { state: 'disabled', sourceLabel: '稳定币', onOpenSources: openStablecoin },
-            etf: { state: 'disabled', sourceLabel: 'ETF', onOpenSources: openEtf }
+            stablecoin: { sourceLabel: '稳定币', onOpenSources: openStablecoin },
+            etf: { sourceLabel: 'ETF', onOpenSources: openEtf }
           }
         })
       })
