@@ -77,6 +77,26 @@ function openSources(view: DrawerSourcesView, onSelect: (sourceId: string) => vo
   return document.body
 }
 
+
+/** 行屏挂载助手：用通知屏这条共用渲染路径验占位规则（通知/日报/处理同一条）。 */
+function openRows(rows: ReadonlyArray<{ key: string; value?: string; emptyLabel?: string }>): HTMLElement {
+  document.body.replaceChildren()
+  root?.unmount()
+  root = undefined
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  act(() => root?.render(
+    <ConfigSettingsDrawer
+      initialMenu="notifications"
+      notificationsView={{ state: 'ready', rows }}
+      onClose={() => undefined}
+      open
+      resolveText={(key) => key} />
+  ))
+  return document.body
+}
+
 describe('config settings drawer (static layout)', () => {
   it('shows the six menus, with the current one marked once', () => {
     const body = mount('sources')
@@ -274,5 +294,25 @@ describe('config settings drawer (static layout)', () => {
       expect(container.querySelector('.config-drawer__source-list')).not.toBeNull()
       expect(container.querySelector('.config-drawer__detail')).not.toBeNull()
     }
+  })
+
+  it('never puts two empty markers in one row, and uses a status word for state-type gaps', () => {
+    // 共享行为变更：通知 / 日报 / 处理等屏都走这条规则。
+    const container = openSources({ state: 'ready', rows: [] })
+    expect(container).not.toBeNull()
+    const rowsWithGap = openRows([
+      { key: 'translation', emptyLabel: '没启用' },
+      { key: 'sentimentModel', value: '跟随快速模型：GPT-4.1' },
+      { key: 'briefing?', emptyLabel: '未知：排期投影读不到' }
+    ])
+    for (const row of rowsWithGap.querySelectorAll<HTMLElement>('[data-drawer-row]')) {
+      const text = row.textContent ?? ''
+      expect((text.match(/—/gu) ?? []).length).toBeLessThanOrEqual(1)
+      expect(text).not.toMatch(/—\s*—/u)
+    }
+    const cells = [...rowsWithGap.querySelectorAll<HTMLElement>('.config-drawer__value')].map((cell) => cell.textContent)
+    // 状态类空值给状态词，不许给 `—`。
+    expect(cells[0]).toBe('没启用')
+    expect(cells[2]).toBe('未知：排期投影读不到')
   })
 })

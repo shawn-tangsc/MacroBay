@@ -166,7 +166,8 @@ function NotificationsScreen({ view, resolveText }: {
       {view.rows.map((row) => (
         <div className={row.disabled === true ? 'config-drawer__row is-disabled' : 'config-drawer__row'} data-drawer-row={row.key} key={row.key}>
           <span className="config-drawer__label">{resolveText(row.key)}</span>
-          <span className="config-drawer__value">{row.value ?? '—'}</span>
+          {/* 值列只有一个位置表达「没有」：状态类空值给状态词，其余留白，不铺 `—`。 */}
+          <span className="config-drawer__value">{row.value ?? row.emptyLabel ?? ''}</span>
           {row.action === undefined ? null : (
             <button className="config-drawer__row-action" disabled={row.action.disabled === true} onClick={row.action.onSelect} type="button">
               {resolveText(row.action.labelKey)}
