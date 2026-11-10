@@ -369,7 +369,10 @@ describe('intelligence notification settings', () => {
     await selectItem(1)
     expect(keys()).toEqual(['setting:notifications.channel-event.briefing-ready'])
     await selectItem(2)
-    expect(keys()).toEqual(['setting:notifications.push-outlet'])
+    expect(keys()).toEqual([
+      'setting:notifications.push-outlet',
+      'setting:notifications.push-threshold'
+    ])
 
     // 日历详情：开关打开时四行都从声明渲染；关着时只剩开关那一行 + 页面状态摘要。
     install({

@@ -63,6 +63,8 @@ const CALENDAR_SETTING_KEYS = [
 /** 已迁移到「按声明渲染」的键：守卫①②只认这份清单，不按文件位置推断。 */
 export const MIGRATED_SETTING_KEYS: readonly string[] = [
   ...Object.values(CONTENT_SETTING_KEYS),
+  // 强度门槛是舆情详情里的第二行，不属于列表项本身，单独列在这里。
+  'setting:notifications.push-threshold',
   ...CALENDAR_SETTING_KEYS
 ]
 
