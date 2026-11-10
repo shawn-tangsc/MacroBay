@@ -15,6 +15,13 @@ const labels = platformText['zh-CN'].assistants
 
 type SendShortcut = 'enter' | 'mod-enter'
 
+const KEYS = {
+  Enter: {},
+  'Shift+Enter': { shiftKey: true },
+  'Ctrl+Enter': { ctrlKey: true },
+  'Cmd+Enter': { metaKey: true }
+} as const satisfies Record<string, KeyboardEventInit>
+
 let root: Root | undefined
 let container: HTMLDivElement | undefined
 
@@ -86,10 +93,22 @@ async function changeSetting(sendShortcut: SendShortcut, onSend: () => void): Pr
   return textarea
 }
 
-async function press(textarea: HTMLTextAreaElement, init: KeyboardEventInit): Promise<void> {
+async function press(textarea: HTMLTextAreaElement, init: KeyboardEventInit): Promise<KeyboardEvent> {
+  const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init })
   await act(async () => {
-    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }))
+    textarea.dispatchEvent(event)
   })
+  return event
+}
+
+/**
+ * 一次按键只允许两种结局：**发送**（阻止默认 + 调一次 onSend）或**换行**（不阻止默认，
+ * 输入框自己插入换行）。第三种——阻止了默认却没发送——就是「按了没反应」，必须红。
+ */
+function outcomeOf(event: KeyboardEvent, onSend: ReturnType<typeof vi.fn>): 'send' | 'newline' | 'swallowed' | 'send-and-newline' {
+  const sent = onSend.mock.calls.length > 0
+  if (sent) return event.defaultPrevented ? 'send' : 'send-and-newline'
+  return event.defaultPrevented ? 'swallowed' : 'newline'
 }
 
 describe('assistant inputbar reads the shared send shortcut', () => {
@@ -125,5 +144,26 @@ describe('assistant inputbar reads the shared send shortcut', () => {
     textarea = await changeSetting('mod-enter', onSend)
     await press(textarea, { shiftKey: true })
     expect(onSend).toHaveBeenCalledTimes(0)
+  })
+
+  /**
+   * 每档 × 四种键组合 = 8 次按键，每次都必须落到「发送」或「换行」。
+   * `happy-dom` 没有排版/编辑引擎，不会真往 textarea 里插 `\n`，所以「换行」用
+   * **未阻止默认** 表示——那正是浏览器插入换行的前提；阻止了却没发送才是被吞掉。
+   */
+  it.each([
+    { setting: 'enter', keys: 'Enter', outcome: 'send' },
+    { setting: 'enter', keys: 'Shift+Enter', outcome: 'newline' },
+    { setting: 'enter', keys: 'Ctrl+Enter', outcome: 'newline' },
+    { setting: 'enter', keys: 'Cmd+Enter', outcome: 'newline' },
+    { setting: 'mod-enter', keys: 'Enter', outcome: 'newline' },
+    { setting: 'mod-enter', keys: 'Shift+Enter', outcome: 'newline' },
+    { setting: 'mod-enter', keys: 'Ctrl+Enter', outcome: 'send' },
+    { setting: 'mod-enter', keys: 'Cmd+Enter', outcome: 'send' }
+  ] as const)('$setting 档 · $keys → 只能是「发送」或「换行」', async ({ setting, keys, outcome }) => {
+    const onSend = vi.fn()
+    const textarea = await mount(setting, onSend)
+    const event = await press(textarea, KEYS[keys])
+    expect(outcomeOf(event, onSend)).toBe(outcome)
   })
 })
