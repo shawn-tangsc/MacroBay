@@ -103,11 +103,13 @@ describe('业务设置：只有卡片，没有源详情头', () => {
   it('shows module cards and no source-level detail at all', async () => {
     const container = await renderPanel('dashboard')
     expect(container.querySelector('.business-settings__content')).not.toBeNull()
-    // 卡片在：跨资产、行情卡、AI 分析用（末卡带 ⓘ）。
+    // 卡片在：市场状态（原来的行情卡 + 跨资产合并）。
     // 跨资产并进「市场状态」（原来两张卡的纳指/美元/黄金各列一遍）：不再有单独的跨资产卡。
     expect(container.querySelector('[data-business-card="cross-asset"]')).toBeNull()
     expect(container.querySelector('[data-business-card="quotes"]')).not.toBeNull()
-    expect(container.querySelector('[data-business-card="ai-analysis"]')).not.toBeNull()
+    // 「AI 分析用」那张卡删掉了（用户 2026-11-11）：那几个源只是登记成 analysis 用途，
+    // 没有任何分析面在读它们，卡片名不成立。
+    expect(container.querySelector('[data-business-card="ai-analysis"]')).toBeNull()
     // **不出现任何源级详情**：没有源名 <h2>、没有那几颗按钮与那两行标签。
     const body = container.textContent ?? ''
     expect(container.querySelector('h2')).toBeNull()

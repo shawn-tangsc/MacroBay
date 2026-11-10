@@ -3,9 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { Switch } from 'antd'
 
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
-import { SettingsInfo } from '../settingsInfo'
 import {
-  AI_ANALYSIS_MODULE,
   cellIdOf,
   modulesForBusiness,
   sourceCountForBusiness,
@@ -168,22 +166,12 @@ export function BusinessSettingsContent(props: {
       {/* 内容区页头：只写当前业务名，不写副标题、不写「共 N 个」这类统计（用户 2026-11-11）。 */}
       <h3 className="intelligence-section-title">{props.resolveText(titleKey)}</h3>
       {props.business === 'dashboard'
-        ? [...modulesForBusiness('dashboard'), AI_ANALYSIS_MODULE].map((module) => <section
+        ? modulesForBusiness('dashboard').map((module) => <section
           className="business-card"
           data-business-card={module.id}
           key={module.id}>
-          <div className="business-card__title">
-            {props.resolveText(module.labelKey)}
-            {module.id === 'ai-analysis'
-              ? <SettingsInfo
-                ariaLabelKey="settings.intelligenceSources.aiAnalysisNoteAria"
-                labelKeys={['settings.intelligenceSources.aiAnalysisNote']}
-                resolveText={props.resolveText} />
-              : null}
-          </div>
-          {module.id === 'ai-analysis'
-            ? module.cells.map((cell) => renderCell(module.id, cell, []))
-            : <div className="business-cell-grid">
+          <div className="business-card__title">{props.resolveText(module.labelKey)}</div>
+          <div className="business-cell-grid">
               {/* 两层卡片（用户 2026-11-11）：第一层是模块卡（上面那个 `business-card`），
                   第二层是「数据卡片」——一个格一张卡（`美元`、`纳指`…），卡里放有开关的源项。
                   第二层卡片并排，一行至少 3 张（`grid-template-columns: repeat(3, …)`）。 */}
@@ -207,7 +195,7 @@ export function BusinessSettingsContent(props: {
                   ))}
                 </div>
               </div>)}
-            </div>}
+          </div>
         </section>)
         : null}
       {props.business === 'dashboard'

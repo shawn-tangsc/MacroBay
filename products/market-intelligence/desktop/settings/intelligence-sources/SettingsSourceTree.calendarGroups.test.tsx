@@ -142,7 +142,8 @@ describe('the calendar filter groups by feed owner', () => {
 
 /**
  * 看板页签按**模块**分组（清单：`dashboard-modules-by-panel-2026-11-10.md`）。
- * 判据：看板页签的源集合 = 各模块挂的源 ∪ 「AI 分析用」那 4 个；维护备用 / 未接入一个都不许出现。
+ * 判据：看板页签的源集合 = 各模块挂的源；维护备用、未接入、只标了 analysis 用途的源一个都不许出现。
+ * （「AI 分析用」那张卡已删：那几个源没有任何分析面在读，用户 2026-11-11 查清后去掉。）
  */
 describe('the dashboard filter groups by module', () => {
   const MODULE_SOURCES = ['binance-futures-positioning', 'realmarketapi-market', 'twelve-data-market', 'policy-path-market',
@@ -196,16 +197,16 @@ describe('the dashboard filter groups by module', () => {
     return host
   }
 
-  it('shows the module groups plus a trailing 「AI 分析用」 group, and nothing else', async () => {
+  it('shows the module groups and nothing that no module lists', async () => {
     const host = await renderDashboard([...MODULE_SOURCES, ...ANALYSIS_ONLY, ...MAINTENANCE])
     const titles = groupTitles(host)
-    expect(titles).toContain('AI 分析用')
+    expect(titles).not.toContain('AI 分析用')
     expect(titles).not.toContain('宏观')
     // 维护备用源一个都不许出现在看板页签里。
     const shown = [...host.querySelectorAll<HTMLElement>('.intelligence-provider-row strong')].map((node) => node.textContent ?? '')
     for (const id of MAINTENANCE) expect(shown).not.toContain(id)
-    // 「AI 分析用」那一组恰好那 4 个。
-    expect(providerIdsIn(host, 'AI 分析用').sort()).toEqual([...ANALYSIS_ONLY].sort())
+    // 只标了 analysis 用途、没有任何模块挂的那 4 个也不出现（那张卡是错的，已删）。
+    for (const id of ANALYSIS_ONLY) expect(shown).not.toContain(id)
     // 共用源按模块重复出现：合并「跨资产」后，`binance-futures-positioning` 在 3 个模块下各一次。
     expect(shown.filter((name) => name === 'binance-futures-positioning')).toHaveLength(3)
   })

@@ -72,7 +72,7 @@ function moduleOf(
   const cells: DashboardCell[] = rows.map(([label, sourceId, fallback, explicitKey]) => ({
     label,
     /* 键的优先级：显式给的最优先（同一格名出现两次时必须显式区分，例如背离卡的两条「资金腿」），
-       其次是 `CELL_SLUGS` 的表，最后退回格名本身；无格名的行（AI 分析用）用源 id。 */
+       其次是 `CELL_SLUGS` 的表，最后退回格名本身；没有格名的行（今天已不存在）退回源 id。 */
     cellKey: explicitKey ?? (label === '' ? sourceId : (CELL_SLUGS[label] ?? label)),
     sourceId,
     ...(fallback === true ? { fallback: true } : {})
@@ -129,21 +129,17 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
 ]
 
 /**
- * 「AI 分析用」这张卡：**四行只写源名、不写格名**（左列源名、右列留空，行样式与别的行一致）。
+ * 曾经这里有一张「AI 分析用」卡（`binance-spot-market` / `okx-api-announcements` /
+ * `coingecko-market` / `defillama-tvl`）。
  *
- * 这是**唯一的无格名例外**：这 4 个源不进任何读数格，只进 AI 分析快照；硬给一个格名会造出
- * 界面上不存在的读数格（用户 2026-11-11 定，别当漏写）。卡头那颗 ⓘ 说明「这些源没有看板位，
- * 数据只给 AI 分析读」。
+ * 它**按用途字段推出来的，不是真的**（用户 2026-11-11 追问后查清并删除）：这四个源在注册表里
+ * 标成 `purposes: ['analysis']`，那个值只表示「不供看板 / 日历 / 日报 / 舆情用」，**没有任何分析面
+ * 读它们**——分析侧的源访问表里没有它们（`marketAnalysisContextQuery.ts` 甚至给 OKX 两条写着
+ * 「没有分析面读它们」）。它们的真实角色是指标事件源：抓数 → 分类器 / 影响规则 → 事件管道。
+ *
+ * 所以别再加回来：要给它们做界面，先证明有分析面在读。
  */
-export const AI_ANALYSIS_MODULE: DashboardSourceModule = moduleOf('ai-analysis', `${TITLES}.aiAnalysis`, [
-  ['', 'binance-spot-market'],
-  ['', 'okx-api-announcements'],
-  ['', 'coingecko-market'],
-  ['', 'defillama-tvl']
-])
-
-/** 看板业务里出现的卡：各模块 + 末尾「AI 分析用」。 */
-export const DASHBOARD_TAB_MODULES: readonly DashboardSourceModule[] = [...DASHBOARD_SOURCE_MODULES, AI_ANALYSIS_MODULE]
+export const DASHBOARD_TAB_MODULES: readonly DashboardSourceModule[] = DASHBOARD_SOURCE_MODULES
 
 /** 反查：这个源被哪些模块用（详情那行「用在哪些模块」读它，顺序与卡片一致）。 */
 export function modulesUsingSource(sourceId: string): readonly DashboardSourceModule[] {
@@ -152,7 +148,7 @@ export function modulesUsingSource(sourceId: string): readonly DashboardSourceMo
 
 /**
  * 三张业务各自挂哪些模块（用户 2026-11-11）：
- * - 看板 = 主列那 7 个模块（+ 末尾 `AI 分析用` 卡，在视图里追加）；
+ * - 看板 = 主列那 6 个模块（不挂源的「最新 AI 结论」与「来源状态条」不在清单里）；
  * - 日历 = 经济日历那个模块（六个日历源，平铺列源名）；
  * - 舆情 = 新闻／舆情那个模块（四个源，平铺列源名）。
  * 副标题里的数字从这里算，不写死。

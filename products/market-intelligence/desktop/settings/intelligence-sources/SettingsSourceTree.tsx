@@ -134,7 +134,7 @@ export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChan
       }))
       : filter === 'dashboard'
         /* 看板：按**模块**分组（顺序照清单），一个源被多个模块共用就在每个模块下各出现一次；
-           末尾一只是「AI 分析用」。不属于任何模块的源（维护备用 / 未接入）在看板页签里不出现。 */
+           不属于任何模块的源（维护备用 / 未接入 / 只标了 analysis 用途的那几条）在看板页签里不出现。 */
         ? DASHBOARD_TAB_MODULES.map((module) => ({
           key: module.id,
           title: resolveText(module.labelKey),
@@ -143,8 +143,7 @@ export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChan
               ...provider,
               sources: provider.sources.filter((source) => module.sourceIds.includes(source.sourceId))
             }))
-            .filter((provider) => provider.sources.length > 0),
-          ...(module.id === 'ai-analysis' ? { info: { ariaLabelKey: 'settings.intelligenceSources.aiAnalysisNoteAria', noteKey: 'settings.intelligenceSources.aiAnalysisNote' } } : {})
+            .filter((provider) => provider.sources.length > 0)
         }))
         : [{ key: 'flat', providers: matchingProviders }]
   void visibleFilters

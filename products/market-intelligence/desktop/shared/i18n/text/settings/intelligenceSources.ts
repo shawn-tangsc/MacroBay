@@ -460,12 +460,8 @@ export const intelligenceSourcesText = {
   dashboardModuleTitles: {
     policyPath: '政策路径',
     divergence: '背离卡',
-    marketState: '市场状态',
-    aiAnalysis: 'AI 分析用'
+    marketState: '市场状态'
   },
-  /* 「AI 分析用」组头旁那颗 ⓘ：说明不进正文。 */
-  aiAnalysisNote: '这些源没有看板位，数据只给 AI 分析读。',
-  aiAnalysisNoteAria: 'AI 分析用的说明',
   /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
   cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
   /** 源详情里那行：这个源被哪些模块用（0 个模块时整行不显示）。 */
@@ -1008,11 +1004,8 @@ export const intelligenceSourcesText = {
   dashboardModuleTitles: {
     policyPath: 'Policy path',
     divergence: 'Divergence',
-    marketState: 'Market state',
-    aiAnalysis: 'Used by AI analysis'
+    marketState: 'Market state'
   },
-  aiAnalysisNote: 'These sources have no dashboard slot; only AI analysis reads them.',
-  aiAnalysisNoteAria: 'About sources used by AI analysis',
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
   usedInModules: 'Used in modules',
   detailsBlockTitle: 'Health and collection policy',
