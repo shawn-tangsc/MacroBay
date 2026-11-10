@@ -59,7 +59,7 @@ describe('the drawer’s briefing screen', () => {
   it('shows the three facts from the periods it is given, reading exactly once', async () => {
     const read = vi.fn(async () => ({
       periods: [period(), period({ id: 'evening', generationTime: '21:30', language: 'en-US' as const })],
-      autoGeneration: 'on' as const
+      autoGeneration: 'on' as const, briefingModel: { state: 'follows-default' as const }
     }))
     const screen = await mount(read)
 
@@ -69,14 +69,16 @@ describe('the drawer’s briefing screen', () => {
     // 值来自传进来的那一份期：时刻按原样、语言去重、自动生成来自宿主那一档。
     expect(view.rows).toEqual([
       { key: 'configDrawer.rows.publishAt', value: '07:00 · 21:30' },
-      { key: 'configDrawer.rows.briefingLanguages', value: '中文 · 英文' },
+      { key: 'configDrawer.rows.window', value: '24 小时' },
+      { key: 'configDrawer.rows.editions', value: '共 2 期' },
+      { key: 'configDrawer.rows.briefingModel', value: '跟随平台默认模型' },
       { key: 'configDrawer.rows.autoGeneration', value: '开' }
     ])
     expect(read).toHaveBeenCalledTimes(1)
   })
 
   it('says the empty state only when there really are no periods', async () => {
-    const screen = await mount(async () => ({ periods: [], autoGeneration: 'on' }))
+    const screen = await mount(async () => ({ periods: [], autoGeneration: 'on', briefingModel: { state: 'follows-default' as const } }))
     expect(screen.current()).toEqual({ state: 'ready', rows: [] })
   })
 
@@ -91,7 +93,7 @@ describe('the drawer’s briefing screen', () => {
   it('reads again when the retry action runs, and shows the new answer', async () => {
     const read = vi.fn()
       .mockRejectedValueOnce(new Error('period-store-unreadable'))
-      .mockResolvedValueOnce({ periods: [period()], autoGeneration: 'off' as const })
+      .mockResolvedValueOnce({ periods: [period()], autoGeneration: 'off' as const, briefingModel: { state: 'follows-default' as const } })
     const screen = await mount(read)
     const failed = screen.current()
     expect(failed?.state).toBe('error')
@@ -106,7 +108,8 @@ describe('the drawer’s briefing screen', () => {
     const view = screen.current()
     expect(view?.state).toBe('ready')
     if (view?.state !== 'ready') throw new Error('unreachable')
-    expect(view.rows[2]).toEqual({ key: 'configDrawer.rows.autoGeneration', value: '关' })
+    expect(view.rows.find((row) => row.key === 'configDrawer.rows.autoGeneration'))
+      .toEqual({ key: 'configDrawer.rows.autoGeneration', value: '关' })
     expect(read).toHaveBeenCalledTimes(2)
   })
 })

@@ -31,15 +31,23 @@ export type DrawerBriefingFacts = Readonly<{
    * **不给或读不到就整屏算读不到**（宿主让 `read` 抛），不留一格空值——抽屉会把空值画成
    * 「—」，那和「没开」看起来一样。
    */
-  autoGeneration: 'on' | 'off'
+  autoGeneration: 'on' | 'off' | 'unknown'
+  /** 日报用的模型三态：跟随平台默认 / 查得到名字 / 说不清是谁（**这一行不给 value**）。 */
+  briefingModel: { state: 'follows-default' } | { state: 'named'; name: string } | { state: 'unknown' }
 }>
 
 export type DrawerBriefingView = DrawerScreenView<DrawerRowView>
 
 /** 这一屏要用到的文案片段；结构足够窄，测试可以直接喂两份语言。 */
 type BriefingDrawerCopy = Readonly<{
-  configDrawer: Readonly<{ values: Readonly<{ autoOn: string; autoOff: string }> }>
-  dailyBriefing: Readonly<{ history: Readonly<{ languages: Readonly<Record<'zh-CN' | 'en-US', string>> }> }>
+  configDrawer: Readonly<{ values: Readonly<{ autoOn: string; autoOff: string; autoUnknown: string; autoUnknownReason: string; modelFollowsDefault: string }> }>
+  dailyBriefing: Readonly<{
+    history: Readonly<{
+      languages: Readonly<Record<'zh-CN' | 'en-US', string>>
+      windowHoursLong: string
+      periodCount: string
+    }>
+  }>
 }>
 
 /**
@@ -49,21 +57,28 @@ type BriefingDrawerCopy = Readonly<{
  * 名字」变成文案键；那是宿主渲染层的决定，不在这份只读视图里发明。
  */
 export function drawerBriefingRows(facts: DrawerBriefingFacts, copy: BriefingDrawerCopy): readonly DrawerRowView[] {
-  // 确实没有配期：空态由抽屉画，这里不给占位行、也不编一个"默认 07:00"。
   if (facts.periods.length === 0) return []
-  const languages = [...new Set(facts.periods.map((period) => period.language))]
+  const times = [...new Set(facts.periods.map((period) => period.generationTime))]
+  const windows = [...new Set(facts.periods.map((period) => period.windowHours))]
   return [
+    { key: 'configDrawer.rows.publishAt', value: times.join(' · ') },
+    { key: 'configDrawer.rows.window', value: windows.map((hours) => copy.dailyBriefing.history.windowHoursLong.replace('{hours}', String(hours))).join(' · ') },
+    { key: 'configDrawer.rows.editions', value: copy.dailyBriefing.history.periodCount.replace('{count}', String(facts.periods.length)) },
     {
-      key: 'configDrawer.rows.publishAt',
-      value: facts.periods.map((period) => period.generationTime).join(' · ')
+      key: 'configDrawer.rows.briefingModel',
+      // 说不清是谁就**不给 value 这个键**：不写「跟随默认」、不写 `—`、不编默认名。
+      ...(facts.briefingModel.state === 'named'
+        ? { value: facts.briefingModel.name }
+        : facts.briefingModel.state === 'follows-default'
+          ? { value: copy.configDrawer.values.modelFollowsDefault }
+          : {})
     },
     {
-      key: 'configDrawer.rows.briefingLanguages',
-      value: languages.map((language) => copy.dailyBriefing.history.languages[language]).join(' · ')
-    },
-    {
+      // 自动生成三态：未知**绝不落进「关」**——未知是「不知道」，关是「知道且关着」。
       key: 'configDrawer.rows.autoGeneration',
-      value: facts.autoGeneration === 'on' ? copy.configDrawer.values.autoOn : copy.configDrawer.values.autoOff
+      ...(facts.autoGeneration === 'unknown'
+        ? { emptyLabel: copy.configDrawer.values.autoUnknown, reason: copy.configDrawer.values.autoUnknownReason }
+        : { value: facts.autoGeneration === 'on' ? copy.configDrawer.values.autoOn : copy.configDrawer.values.autoOff })
     }
   ]
 }
