@@ -88,16 +88,17 @@ export function ModelServiceDefaultModelsSection({
   values,
   onChange
 }: ModelServiceDefaultModelsSectionProps): React.ReactElement {
-  // `imageModelId`（绘画模型）不在渲染列表里：字段与值保留，只是没有控件（C10）。
-  const labelOf: Record<DefaultModelField, string> = {
+  // 只有 `primaryDefaultModelFields` 里的字段会渲染；`imageModelId`（绘画模型）没有任何控件（C10），
+  // 连它的标签也不留在表里——留一个用不到的键，下一个人会以为那一行只是暂时藏起来了。
+  type RenderedField = (typeof primaryDefaultModelFields)[number]
+  const labelOf: Record<RenderedField, string> = {
     assistantModelId: labels.defaultModelAssistant,
     agentModelId: labels.defaultModelAgent,
     fastModelId: labels.defaultModelFast,
-    translationModelId: labels.defaultModelTranslation,
-    imageModelId: labels.defaultModelImage
+    translationModelId: labels.defaultModelTranslation
   }
 
-  function renderRow(field: DefaultModelField): React.ReactElement {
+  function renderRow(field: RenderedField): React.ReactElement {
     return (
       <DefaultModelFieldRow
         key={field}

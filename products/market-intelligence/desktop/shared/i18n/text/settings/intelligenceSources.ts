@@ -428,17 +428,6 @@ export const intelligenceSourcesText = {
     title: '来源专属选项',
     empty: '当前来源没有额外可见字段。'
   },
-  retentionReplay: {
-    title: '保留与重放',
-    rawArchiveEnabled: '启用原始归档',
-    retentionMode: '保留模式',
-    autoReplayAfterParserUpgrade: '解析器升级后自动重放',
-    retentionModes: {
-      compact: '紧凑',
-      balanced: '均衡',
-      extended: '扩展'
-    }
-  },
   /**
    * 设置页只放**短句**：这里不显示内容，套全句会变成「先显示上次同步的内容」而那儿什么都没显示。
    * 全句只用在会显示内容的地方（经济日历错误态、日报）。
@@ -957,17 +946,6 @@ export const intelligenceSourcesText = {
   sourceSpecific: {
     title: 'Source-Specific Options',
     empty: 'No extra visible fields for this source.'
-  },
-  retentionReplay: {
-    title: 'Retention And Replay',
-    rawArchiveEnabled: 'Enable Raw Archive',
-    retentionMode: 'Retention Mode',
-    autoReplayAfterParserUpgrade: 'Auto Replay After Parser Upgrade',
-    retentionModes: {
-      compact: 'Compact',
-      balanced: 'Balanced',
-      extended: 'Extended'
-    }
   },
   unavailableShort: 'The official source is temporarily unavailable',
   unavailableCount: '{count} sources cannot be reached',

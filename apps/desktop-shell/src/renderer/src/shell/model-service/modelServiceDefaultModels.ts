@@ -30,12 +30,12 @@ export const defaultModelFields: readonly DefaultModelField[] = [
  * 唯一读它的是「在用模型巡检」，留着控件就是假可用。字段与读者已设的值**保留、不迁不删**；
  * 将来要么接进生成路径，要么连字段一起退（台账另列一行）。
  */
-export const primaryDefaultModelFields: readonly DefaultModelField[] = [
+export const primaryDefaultModelFields = [
   'assistantModelId',
   'agentModelId',
   'fastModelId',
   'translationModelId'
-]
+] as const satisfies readonly DefaultModelField[]
 
 const DEFAULT_MODEL_CONSTRAINTS: Record<DefaultModelField, ModelPickerConstraints> = {
   assistantModelId: { requireCapabilities: ['chat'] },
