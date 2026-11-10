@@ -209,6 +209,34 @@ describe('ProviderDetail health detail (B4)', () => {
     expect(container.textContent).toContain(settingsText.health.runNow.unsupported)
   })
 
+  it('refreshes the four cells after a run, without asking the reader to press retry', async () => {
+    // 跑完健康读数会变：四格读的是页面自己的详情映射，不重读就停在旧时刻。
+    let reads = 0
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method !== 'intelligenceSources.getPageState') return undefined
+      reads += 1
+      return { detail: detail(reads === 1 ? '2026-11-09T04:00:00.000Z' : '2026-11-10T04:30:00.000Z') }
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = await render(createElement(ProviderDetail, {
+      labels: labels(),
+      onRunNow: async () => ({ kind: 'succeeded' as const, notice: '采集成功。' }),
+      provider: provider([source({ sourceId: 's1', displayName: 'S1' })]),
+      showSourceDetails: true,
+      supportsRunNowById: { s1: true }
+    }))
+
+    expect(container.textContent).toContain('11-09 12:00 GMT+8')
+    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === settingsText.health.runAction.run)
+    await act(async () => { runButton?.click() })
+    await flush()
+
+    expect(container.textContent).toContain('11-10 12:30 GMT+8')
+    expect(container.textContent).not.toContain('11-09 12:00 GMT+8')
+    expect(reads).toBe(2)
+  })
+
   it('does not paint a calendar feed as "never collected": it says the record is unknown, and never asks the generic service', async () => {
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }

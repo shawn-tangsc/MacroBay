@@ -199,6 +199,30 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     void loadDetail(sourceId, () => true)
   }, [loadDetail])
 
+  /**
+   * 跑完**后台刷新**这个源的详情：健康读数会变（上次成功 / 今天有没有读数）。
+   *
+   * 不把它画成 `loading`——那会把整块四格（连同刚显示出来的「跑了什么结果」）卸载再重挂，
+   * 读者会看到行闪一下、结果也没了。刷新失败保留旧读数，四格不空。
+   */
+  const refreshDetail = useCallback(async (sourceId: string): Promise<void> => {
+    try {
+      const state = await intelligenceSourcesClient.getPageState(sourceId)
+      const detail = state?.detail
+      if (detail !== undefined) {
+        setDetails((current) => ({ ...current, [sourceId]: { state: 'ready' as const, detail } }))
+      }
+    } catch {
+      // 刷新是补充，不是主读：失败不把已经显示的四格抹掉。
+    }
+  }, [])
+
+  const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
+    const outcome = await onRunNow!(sourceId)
+    await refreshDetail(sourceId)
+    return outcome
+  }, [onRunNow, refreshDetail])
+
 
 
   const inviteProvider = provider.invite === true || /[?&](?:invite|via)=/.test(provider.signupUrl ?? '')
@@ -421,7 +445,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             automaticSyncStopped={labels.automaticSyncStopped}
             labels={labels.health}
             onRetry={() => retryDetail(source.sourceId)}
-            {...(onRunNow === undefined ? {} : { onRunNow })}
+            {...(onRunNow === undefined ? {} : { onRunNow: runAndRefresh })}
             read={details[source.sourceId] ?? { state: 'loading' }}
             resolveText={resolveText}
             source={source}
