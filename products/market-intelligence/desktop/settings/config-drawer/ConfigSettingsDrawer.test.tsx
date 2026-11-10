@@ -35,6 +35,27 @@ function mount(menu: (typeof DRAWER_MENUS)[number]): HTMLElement {
   return document.body
 }
 
+
+/** 平台屏的挂载助手：这两条用例只差「传了哪些值」。 */
+function openPlatform(values: Record<string, string>, onOpen: (target: string) => void = () => undefined): HTMLElement {
+  document.body.replaceChildren()
+  root?.unmount()
+  root = undefined
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  act(() => root?.render(
+    <ConfigSettingsDrawer
+      initialMenu="platform"
+      onClose={() => undefined}
+      onOpenPlatformSettings={onOpen as never}
+      open
+      platformValues={values}
+      resolveText={(key) => key} />
+  ))
+  return document.body
+}
+
 describe('config settings drawer (static layout)', () => {
   it('shows the six menus, with the current one marked once', () => {
     const body = mount('sources')
@@ -135,35 +156,37 @@ describe('config settings drawer (static layout)', () => {
     expect(onSelect).toHaveBeenCalledTimes(1)
   })
 
-  it('shows "could not read" for a missing platform value, never a blank cell', () => {
-    // 这屏最容易把「没读到」画成「没设置」：缺键必须显示「读不到」。
-    document.body.replaceChildren()
-    root?.unmount()
-    root = undefined
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    const onOpen = vi.fn()
-    act(() => root?.render(
-      <ConfigSettingsDrawer
-        initialMenu="platform"
-        onClose={() => undefined}
-        onOpenPlatformSettings={onOpen}
-        open
-        platformValues={{ timeZone: 'Asia/Shanghai' }}
-        resolveText={(key) => key} />
-    ))
+  it('shows the values the host passed', () => {
+    // 与下一条成对、互不替代：这条只证明「传了值就显示值」，不证明缺值怎么画。
+    const container = openPlatform({
+      timeZone: 'Asia/Shanghai',
+      language: '中文',
+      theme: '深色',
+      proxy: '系统代理',
+      modelService: '已配置'
+    })
+    const rows = [...container.querySelectorAll<HTMLElement>('[data-drawer-row]')]
+    expect(rows.map((row) => row.querySelector('.config-drawer__value')?.textContent))
+      .toEqual(['Asia/Shanghai', '中文', '深色', '系统代理', '已配置'])
+    expect(container.textContent).not.toContain('configDrawer.unreadable')
+  })
 
-    expect(document.querySelector('[data-drawer-screen="ready"]')).not.toBeNull()
-    const rows = [...document.querySelectorAll<HTMLElement>('[data-drawer-row]')]
+  it('shows "could not read" for a missing platform value, never a blank cell', () => {
+    // 这一屏最容易把「没读到」画成「没设置」：缺键必须显示读不到，且不是空串。
+    const container = openPlatform({ timeZone: 'Asia/Shanghai' })
+    const rows = [...container.querySelectorAll<HTMLElement>('[data-drawer-row]')]
     expect(rows).toHaveLength(5)
-    // 有值的照常显示；缺值的显示「读不到」，且不是空串。
-    expect(rows[0]?.querySelector('.config-drawer__value')?.textContent).toBe('Asia/Shanghai')
     for (const row of rows.slice(1)) {
       const cell = row.querySelector('.config-drawer__value')?.textContent ?? ''
       expect(cell).toBe('configDrawer.unreadable')
       expect(cell.trim()).not.toBe('')
     }
+  })
+
+  it('sends the row action to the host with the navigation target', () => {
+    const onOpen = vi.fn()
+    const container = openPlatform({ timeZone: 'Asia/Shanghai' }, onOpen)
+    const rows = [...container.querySelectorAll<HTMLElement>('[data-drawer-row]')]
     act(() => { rows[4]?.querySelector<HTMLElement>('.config-drawer__row-action')?.click() })
     expect(onOpen).toHaveBeenCalledWith('models')
   })
