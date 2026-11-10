@@ -143,7 +143,7 @@ export function ConfigSettingsDrawer({
         {menu === 'sources' && sourcesPanel === undefined && sourcesView === undefined
           ? (<SourcesStaticScreen />)
           : null}
-        {menu === 'sources' && sourcesView !== undefined
+        {menu === 'sources' && sourcesPanel === undefined && sourcesView !== undefined
           ? (<SourcesScreen
             labels={{ enabled: copy.rows.enabled }}
             onSelect={onSelectSource}

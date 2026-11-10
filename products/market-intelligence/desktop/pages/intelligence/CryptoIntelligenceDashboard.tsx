@@ -3,7 +3,6 @@ import { Button } from 'antd'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
-import { useDrawerSourcesView } from '../../settings/config-drawer/useDrawerSourcesView'
 import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
 import { useDashboardAnalysisDrawer } from './useDashboardAnalysisDrawer'
@@ -108,11 +107,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   const platformDrawerValues = usePlatformDrawerValues()
-  // 兜底句从产品文案表取：dashboard 的 Text 类型不额外加字段。
-  const drawerSourcesView = useDrawerSourcesView(
-    settingsDrawerOpen,
-    productText[useShellLanguage()].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
-  )
   // 「AI 分析」那一屏：只读 + 跳转。没有给打开对话框的入口就不接这一屏（不画一个点了没反应的按钮）。
   const drawerAnalysisView = useDashboardAnalysisDrawer(
     settingsDrawerOpen && onOpenAnalysisSettings !== undefined,
@@ -220,8 +214,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           platformValues={platformDrawerValues}
           analysisView={onOpenAnalysisSettings === undefined ? undefined : drawerAnalysisView}
           notificationsPanel={<NotificationSettingsPanel />}
-          sourcesPanel={<DashboardSourcesPanel />}
-          sourcesView={drawerSourcesView} />
+          sourcesPanel={<DashboardSourcesPanel />} />
       </ErrorBoundary>
 
       {/* Named mount point: the analysis workspace portals its latest-conclusion
