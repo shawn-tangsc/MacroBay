@@ -139,7 +139,7 @@ async function main(): Promise<void> {
   if (!gateway.ok) return print({ ...report, failure: gateway.code })
 
   const ready = await awaitReady({ token, url: gateway.value.url, proxy })
-  print({ ...report, ...ready })
+  print({ ...report, intents: DISCORD_DEFAULT_INTENTS, ...ready })
 }
 
 /** 真网关一次识别往返：用随包的状态机跑 HELLO → IDENTIFY → READY，跑完就关。 */
@@ -182,7 +182,9 @@ function awaitReady(input: { token: string; url: string; proxy: string | null })
       session.receive(frame)
     })
     socket.on('error', (error) => finish({ ok: false, failure: `gateway-error:${error.message.slice(0, 120)}` }))
-    socket.on('close', () => finish({ ok: false, failure: 'gateway-closed-before-ready' }))
+    // 关闭码是唯一能分清「intent 没授权 / Token 不对 / 连得太急 / 普通掉线」的线索：
+    // 混成一句 `gateway-closed-before-ready`，下一个人只能重新猜一遍。
+    socket.on('close', (code) => finish({ ok: false, closeCode: code, failure: closeFailure(code) }))
   })
 }
 
@@ -202,6 +204,14 @@ async function sendMessage(
   const body = await response.json() as { id?: unknown }
   if (typeof body.id !== 'string' || body.id.length === 0) return { ok: false, code: 'discord-provider-rejected' }
   return { ok: true, value: { messageId: body.id } }
+}
+
+/** Discord 的 Close Event Codes：只有这几条是「改配置才会好」，其余都算普通掉线。 */
+function closeFailure(code: number): string {
+  if (code === 4_013 || code === 4_014) return 'intents-disallowed'
+  if (code === 4_003 || code === 4_004) return 'credential-rejected'
+  if (code === 4_008) return 'rate-limited-close'
+  return 'gateway-closed-before-ready'
 }
 
 function print(value: Record<string, unknown>): void {
