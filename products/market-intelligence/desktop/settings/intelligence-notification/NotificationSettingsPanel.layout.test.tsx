@@ -137,8 +137,8 @@ describe('the notification settings panel layout', () => {
     const notice = drawer.querySelector('.inline-notice--caution')
     expect(notice).not.toBeNull()
     const column = drawer.querySelector('.intelligence-notification-drawer')
-    // 「最近一次投递」那条事实句可能夹在中间；滚动容器仍在它之后。
-    expect(column?.previousElementSibling?.className).toMatch(/intelligence-notification-(panel__notice|delivery-line)/)
+    // 通道未就绪横幅就在滚动容器上方（那里不再有「最近一次投递」那条事实句）。
+    expect(column?.previousElementSibling?.className).toMatch(/inline-notice--caution/)
     const section = column?.querySelector('.settings-section')
     const trigger = [...(section?.querySelectorAll('button') ?? [])]
       .find((button) => button.getAttribute('aria-label') === infoAria)

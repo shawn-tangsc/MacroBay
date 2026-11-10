@@ -54,16 +54,8 @@ export type ChannelEventSettingsState = {
   failedEventIds: ReadonlySet<string>
   /** 频道是否可用（可用 = 推送端口装配好且至少一个可投递目标）。不可用不禁用开关。 */
   channelReady: boolean
-  /** 最近一次**真实**投递（通道侧尝试）。`null` = 一条都没投过——与「未就绪」是两件事。 */
-  lastDelivery: LastDelivery | null | undefined
   reload: () => void
   toggle: (eventId: string, enabled: boolean) => void
-}
-
-type LastDelivery = {
-  status: 'delivered' | 'failed' | 'unknown-after-send'
-  at: string
-  conversationLabel: string | null
 }
 
 type NotificationApi = {
@@ -72,7 +64,6 @@ type NotificationApi = {
   getDeliverySettings: () => Promise<{
     pushWired: boolean
     channels: readonly unknown[]
-    lastDelivery?: LastDelivery | null
   }>
 }
 
@@ -98,8 +89,6 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
   const [savingEventId, setSavingEventId] = useState<string | null>(null)
   const [failedIds, setFailedIds] = useState<readonly string[]>(() => failedWriteIds())
   const [channelReady, setChannelReady] = useState(true)
-  /** `undefined` = 还没读到；`null` = 一次都没投过。两者不能共用一句话。 */
-  const [lastDelivery, setLastDelivery] = useState<LastDelivery | null | undefined>(undefined)
   // 卸载后不再 setState：这一屏会被设置页挂载/卸载，慢响应回来时组件可能已经走了。
   const mounted = useRef(true)
   useEffect(() => {
@@ -127,7 +116,6 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
       setFailedIds(failedWriteIds())
       setValues(next)
       setChannelReady(isChannelReady(delivery))
-      setLastDelivery(delivery.lastDelivery ?? null)
       setStatus('ready')
     } catch {
       if (!mounted.current) return
@@ -168,10 +156,9 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
       savingEventId,
       failedEventIds: new Set(failedIds),
       channelReady,
-      lastDelivery,
       reload: () => void load(),
       toggle
     }),
-    [status, values, savingEventId, failedIds, channelReady, lastDelivery, load, toggle]
+    [status, values, savingEventId, failedIds, channelReady, load, toggle]
   )
 }

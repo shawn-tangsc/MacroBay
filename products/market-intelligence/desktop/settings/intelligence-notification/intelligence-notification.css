@@ -333,11 +333,3 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* 「最近一次投递」：落在通道横幅附近的一条事实句，12 号、读不到就先不说。 */
-.intelligence-notification-delivery-line {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: var(--font-body);
-  line-height: var(--line-body);
-}
