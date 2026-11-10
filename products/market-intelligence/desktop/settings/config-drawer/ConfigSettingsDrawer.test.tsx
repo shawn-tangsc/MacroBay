@@ -430,6 +430,22 @@ describe('config settings drawer (static layout)', () => {
     expect(pane.getAttribute('aria-label')).toBe(current)
   })
 
+  it('tells the page the drawer is open, so the AI button gets out of the way', () => {
+    // 浮球在抽屉之外且 fixed：铺满后它盖住内容。根属性 = 「抽屉开着」这一条事实的唯一出口，
+    // 浮球按 CSS 让位（不改它的交互与位置常量）。反向：抽屉关着时属性必须不在。
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(<ConfigSettingsDrawer initialMenu="briefing" onClose={() => undefined} open />))
+    expect(document.documentElement.getAttribute('data-settings-drawer')).toBe('open')
+
+    act(() => root?.render(<ConfigSettingsDrawer initialMenu="briefing" onClose={() => undefined} open={false} />))
+    expect(document.documentElement.getAttribute('data-settings-drawer')).toBeNull()
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {

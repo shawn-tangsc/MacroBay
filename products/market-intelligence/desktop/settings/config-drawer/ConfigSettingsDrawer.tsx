@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Drawer } from '@platform/ui/components/drawer'
 import { Popover } from '@platform/ui/components/popover'
@@ -149,6 +149,15 @@ export function ConfigSettingsDrawer({
 }: ConfigSettingsDrawerProps): React.ReactElement {
   const language = useShellLanguage()
   const copy = productText[language].pages.intelligence.portal.dashboard.configDrawer
+  // 抽屉铺满后，右下角那颗 AI 对话浮球（`position: fixed`、在抽屉之外）会浮在内容上。
+  // 用**根上的一个属性**说明「抽屉开着」，让浮球按 CSS 让位：不改它的交互与位置常量，
+  // 也不必把「抽屉开关」这条状态穿过 layout → workspace 三层（它们今天都不知道抽屉）。
+  useEffect(() => {
+    const root = document.documentElement
+    if (open) root.setAttribute('data-settings-drawer', 'open')
+    else root.removeAttribute('data-settings-drawer')
+    return () => { root.removeAttribute('data-settings-drawer') }
+  }, [open])
   const resolveProductText = useProductTextKey()
   const [menu, setMenu] = useState<ConfigDrawerMenu>(initialMenu)
   const navRef = useRef<HTMLElement>(null)

@@ -1399,3 +1399,7 @@ button.mi-agent-card__status:focus-visible {
 /* 「±30 分」反应（原型 ④）：标注窗口，三条线各自一格 —— 数字用等宽数字，好和上面的值对齐着读。 */
 .mi-calendar-card__row-reaction { display: flex; grid-column: 2 / -1; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin-top: 5px; color: var(--muted); font-size: 9.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-calendar-card__row-reaction span { white-space: nowrap; }
+
+/* 配置抽屉开着时，右下的 AI 对话浮球让位（它在抽屉之外、fixed，铺满后会盖住抽屉内容）。
+   只隐藏、不改它的交互与位置：抽屉一关，属性移除，它原样回来。 */
+html[data-settings-drawer='open'] .mi-agent-floating__button { display: none; }
