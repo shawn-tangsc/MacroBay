@@ -426,6 +426,35 @@ describe('intelligence notification settings', () => {
     }
   })
 
+  it('keeps the switch and its row action inside one two-column row', () => {
+    // 布局数值（行高/是否折行）在 happy-dom 下量不到：没有排版引擎，`getBoundingClientRect()`
+    // 恒为 0（本仓已登记 MI-11-R143，浏览器/截图/CDP 各线禁用）。所以这里钉的是**结构前提**：
+    // 行只有两列、开关与行尾动作同在第 2 列、开关不再被强制成 small（small 正是那次被吞掉的宽度差）。
+    install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'us', codes: [] } }
+        }
+        return { enabled: true }
+      })
+    })
+    return render().then(async () => {
+      await selectItem(3)
+      const row = container?.querySelector('[data-setting-key="setting:notifications.calendar.enabled"]')
+      expect(row).not.toBeNull()
+      // 两列：标签列 + 控件列；没有第三列、也不靠换行另起一块。
+      expect(row?.children).toHaveLength(2)
+      const control = row?.children[1] as HTMLElement | undefined
+      const toggle = control?.querySelector('button[role="switch"]')
+      const action = control?.querySelector('[data-test-notification]')
+      expect(toggle).not.toBeNull()
+      expect(action).not.toBeNull()
+      // 默认尺寸开关：不得再出现 small 档（那会让这一行少 12px 宽度）。
+      expect(toggle?.className ?? '').not.toContain('ant-switch-small')
+    })
+  })
+
   it('never leaks a setting anchor into visible text or an accessible name', async () => {
     // `data-setting-key` 只当锚点：读者看到 `setting:…` 会把它当成内部码，读屏念出来更糟。
     const leaks = (): string[] => {
