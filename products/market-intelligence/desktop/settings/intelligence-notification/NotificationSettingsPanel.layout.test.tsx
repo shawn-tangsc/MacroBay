@@ -134,7 +134,7 @@ describe('the notification settings panel layout', () => {
     // 「为什么勾了还不响」挂在「推送提醒」区块标题旁（间距 4，平台 header 的 info 槽），不单独悬空。
     const infoAria = text['pages.intelligence.notification.infoAria']
     const drawer = await renderPanel('drawer')
-    const notice = drawer.querySelector('.intelligence-notification-panel__notice')
+    const notice = drawer.querySelector('.inline-notice--caution')
     expect(notice).not.toBeNull()
     const column = drawer.querySelector('.intelligence-notification-drawer')
     expect(notice?.nextElementSibling).toBe(column)

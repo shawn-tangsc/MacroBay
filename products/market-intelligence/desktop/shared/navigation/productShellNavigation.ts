@@ -27,6 +27,11 @@ export function openIntelligenceSourcesSettings(): void {
   })
 }
 
+/** Opens the shell's channel settings (where the reader turns a channel on). */
+export function openChannelSettings(): void {
+  navigateAppShell({ navKey: 'settings', settingsPanelKey: 'channels' })
+}
+
 /** Opens the built-in model service page (providers and default models). */
 export function openWebSearchSettings(): void {
   navigateAppShell({ navKey: 'settings', settingsPanelKey: PLATFORM_SETTINGS_PANELS.webSearch })

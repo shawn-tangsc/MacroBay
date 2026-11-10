@@ -243,16 +243,6 @@
   gap: 16px;
 }
 
-/* 整屏级事实（通道未就绪）放两栏上方：读者先知道不通，再看内容；解释在紧邻的 ⓘ 里。 */
-.intelligence-notification-panel__notice {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 0 8px;
-  color: var(--text-secondary);
-  font-size: var(--font-body);
-  line-height: 1.5;
-}
 
 /* 「读取中」不是 settled 状态，不画成药丸——一行小字就是占位，不冒充状态。 */
 .intelligence-notification-row-loading {

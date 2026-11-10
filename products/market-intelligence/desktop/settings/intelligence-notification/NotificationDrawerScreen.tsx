@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { SettingsSectionHeader } from '@platform/ui/components/settings-section'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
@@ -11,6 +12,7 @@ import { Switch } from 'antd'
 import type { SettingDescriptor } from '../../shared/settings/descriptorTypes'
 import { settingRegistry } from '../../shared/settings/registry'
 import { SettingField } from '../../shared/settings/SettingField'
+import { openChannelSettings } from '../../shared/navigation/productShellNavigation'
 import { CalendarLandedCountriesRow } from './calendarLandedCountriesRow'
 import { NewsPushThresholdRow } from './newsPushThresholdRow'
 import { SettingsInfo } from './settingsRow'
@@ -193,9 +195,14 @@ export function NotificationDrawerScreen(): ReactElement {
 
   return <div className="intelligence-notification-panel" data-notification-panel="true">
     {/* 整屏级事实：通道不通时先说，读者再看内容；解释挂在「推送提醒」块头那颗 ⓘ 上。 */}
-    {channelReady ? null : <p className="intelligence-notification-panel__notice" role="status">
+    {/* 整屏级事实：通道没配通 → 黄色横幅（caution），右侧一条真动作去频道设置。 */}
+    {channelReady ? null : <InlineNotice
+      action={{ labelKey: 'pages.intelligence.notification.channelNotReadyAction', onSelect: openChannelSettings }}
+      resolveText={resolveText}
+      tone="caution"
+    >
       {text['pages.intelligence.notification.channelNotReadyState']}
-    </p>}
+    </InlineNotice>}
 
     <div className="intelligence-notification-drawer">
       <Section

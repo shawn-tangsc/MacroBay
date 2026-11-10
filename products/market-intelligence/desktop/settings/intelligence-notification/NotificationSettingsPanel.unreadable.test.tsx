@@ -30,7 +30,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function install(calendarFails: boolean): void {
+function install(calendarFails: boolean, options: { deliverableChannels?: readonly unknown[] } = {}): void {
   const productsInvoke = vi.fn(async (_productId: string, method: string) => {
     if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
     if (String(method).includes('getNewsPushOutletState')) return { enabled: true }
@@ -44,7 +44,7 @@ function install(calendarFails: boolean): void {
     notifications: {
       getChannelEvents: vi.fn(async () => ({})),
       setChannelEvent: vi.fn(async (eventId: string, enabled: boolean) => ({ eventId, enabled })),
-      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, desktopEnabled: false, pushWired: true, channels: [{ deliverable: true }], lastPushFailureAt: null, lastPushFailureReason: null })),
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, desktopEnabled: false, pushWired: true, channels: options.deliverableChannels ?? [{ deliverable: true }], lastPushFailureAt: null, lastPushFailureReason: null })),
       getSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
       setSurfaceSelection: vi.fn(async () => undefined)
     },
@@ -68,6 +68,29 @@ async function selectCalendar(container: HTMLElement): Promise<void> {
     .find((button) => button.textContent?.includes(text['pages.intelligence.notification.rows.calendar.title']))
   await act(async () => { row?.click(); await Promise.resolve() })
 }
+
+describe('the channel-not-ready banner', () => {
+  it('is a caution banner with the state sentence and a real action to the channel settings', async () => {
+    install(false, { deliverableChannels: [] })
+    const container = await render()
+    const banner = container.querySelector('[data-inline-notice="caution"]')
+    expect(banner).not.toBeNull()
+    expect(banner?.textContent).toContain(text['pages.intelligence.notification.channelNotReadyState'])
+    const action = [...(banner?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === text['pages.intelligence.notification.channelNotReadyAction'])
+    expect(action, '通道没配通时给一条真动作：去频道设置').toBeDefined()
+
+    const navigations: unknown[] = []
+    const listener = (event: Event): void => { navigations.push((event as CustomEvent).detail) }
+    window.addEventListener('app-shell:navigate', listener)
+    try {
+      await act(async () => { action?.click(); await Promise.resolve() })
+    } finally {
+      window.removeEventListener('app-shell:navigate', listener)
+    }
+    expect(navigations).toEqual([{ navKey: 'settings', settingsPanelKey: 'channels' }])
+  })
+})
 
 describe('an unreadable calendar settings block is never drawn as off', () => {
   it('says unreadable on its own row and offers a real retry, not an off switch', async () => {
