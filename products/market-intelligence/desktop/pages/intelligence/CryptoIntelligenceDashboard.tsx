@@ -7,8 +7,8 @@ import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSetting
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
 import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
-import { AnalysisSettingsPanel, type AnalysisScreenState } from './AnalysisSettingsPanel'
-import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
+import { AnalysisSettingsPanel } from './AnalysisSettingsPanel'
+import { DailyBriefingSettingsPanel, type BriefingScreenState } from './DailyBriefingSettingsPanel'
 import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
 import { RunLogDrawerPanel } from './RunLogDrawerPanel'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
@@ -146,9 +146,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const platformDrawerValues = usePlatformDrawerValues()
   // 「AI 分析」那一屏：屏自己读、自己存，把「有没有改动 / 保存中 / 失败句 / 保存动作」报上来；
   // 底部那条保存栏由抽屉壳给（壳只认这四样，不读数据）。
-  const [analysisScreen, setAnalysisScreen] = useState<AnalysisScreenState>({ dirty: false, saving: false, save: () => undefined })
+  // 有底部保存栏的屏都按同一份契约上报（脏 / 保存中 / 失败句 / 保存动作）。同一时刻只有一屏挂载，
+  // 所以两者写同一份宿主状态：切屏时离开的那一屏先报 dirty=false，进入的那一屏再报自己。
+  const [drawerScreen, setDrawerScreen] = useState<BriefingScreenState>({ dirty: false, saving: false, save: () => undefined })
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
-  const [briefingDirty, setBriefingDirty] = useState(false)
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
@@ -249,7 +250,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           /* 计数变化就重新挂载：每次都落到请求的那一屏（连点同一个入口也算一次）。 */
           key={`settings-drawer-${openSettingsRequest ?? 0}`}
           initialMenu={initialSettingsMenu}
-          isScreenDirty={(menu) => menu === 'briefing' && briefingDirty}
+          isScreenDirty={() => drawerScreen.dirty}
           onClose={() => setSettingsDrawerOpen(false)}
           onOpenPlatformSettings={(target) => {
             // 只转达目标，不拼路由（页面对应关系在导航层）。
@@ -258,12 +259,12 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           }}
           open={settingsDrawerOpen}
           platformValues={platformDrawerValues}
-          analysisPanel={<AnalysisSettingsPanel onState={setAnalysisScreen} />}
-          screenDirty={analysisScreen.dirty}
-          onScreenSave={analysisScreen.save}
-          screenSaving={analysisScreen.saving}
-          {...(analysisScreen.failure === undefined ? {} : { screenSaveFailure: analysisScreen.failure })}
-          briefingPanel={<DailyBriefingSettingsPanel onDirtyChange={setBriefingDirty} />}
+          analysisPanel={<AnalysisSettingsPanel onState={setDrawerScreen} />}
+          screenDirty={drawerScreen.dirty}
+          onScreenSave={drawerScreen.save}
+          screenSaving={drawerScreen.saving}
+          {...(drawerScreen.failure === undefined ? {} : { screenSaveFailure: drawerScreen.failure })}
+          briefingPanel={<DailyBriefingSettingsPanel onState={setDrawerScreen} />}
           processingPanel={<ProcessingSettingsPanel />}
           runLogPanel={<RunLogDrawerPanel />}
           notificationsPanel={<NotificationSettingsPanel />}

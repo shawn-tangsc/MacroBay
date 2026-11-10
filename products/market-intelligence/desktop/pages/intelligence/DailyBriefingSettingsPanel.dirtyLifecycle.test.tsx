@@ -7,17 +7,13 @@ import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
-import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
+import { DailyBriefingSettingsPanel, type BriefingScreenState } from './DailyBriefingSettingsPanel'
 
 /**
- * 配置抽屉「日报」屏的脏生命周期（搬屏时独立成文，避免和同一屏的其它用例抢一个文件）。
+ * 日报设置屏（重做版）的判据：脏的进出走 `onState`，三段与只读事实按设置页骨架渲染。
  *
- * 这一屏自己不带外壳：关闭/切屏由配置抽屉决定，抽屉只问一个问题——「现在有没有未保存的草稿」。
- * 这里钉四件事（关闭守卫那三条在 `ConfigSettingsDrawer.test.tsx`，不在这里重造）：
- * 1. 草稿变了报 `true`，卸载时清成 `false`（否则在别的屏关抽屉被误拦）；
- * 2. **读失败不报脏**：没有草稿可丢，关掉不该问；
- * 3. **保存成功后报 `false`**：存下的值就是新基线；
- * 4. **保存失败后仍是 `true`**，且读者刚改的值还在——这条不钉，读者会遇到「存不上、一关就没了、连问都不问」。
+ * 脏只认 `useDailyBriefingAiSettings.dirty` 一处：期列表的弹框立即写，不属于「未保存改动」。
+ * 关闭守卫那三条在 `ConfigSettingsDrawer.test.tsx`，这里只判「屏报的脏」与「取消后屏与值还在」。
  */
 let root: Root | undefined
 
@@ -28,135 +24,193 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-type BridgeOptions = Readonly<{ settingsFails?: boolean; saveFails?: boolean }>
+type BridgeOptions = Readonly<{
+  settingsFails?: boolean
+  saveFails?: boolean
+  periods?: readonly { id: string; generationTime: string; windowHours: number; language: string }[]
+  schedules?: 'missing' | 'registered' | 'none' | 'orphan'
+}>
 
-const language = {
-  settings: { primary: 'follow-ui', additional: [] },
-  plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 }
-}
-
-function settingsView(input: Readonly<{ editorialEnabled: boolean }> = { editorialEnabled: true }): unknown {
-  return {
-    settings: { editorialEnabled: input.editorialEnabled, providerId: '', modelId: '', webSearchEnabled: false },
-    language,
-    webSearchSupported: true,
-    resolved: { state: 'disabled' }
-  }
+const aiView = {
+  settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
+  language: {
+    settings: { primary: 'follow-ui', additional: [] },
+    plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 }
+  },
+  webSearchSupported: true,
+  resolved: { state: 'disabled' }
 }
 
 function stubBridge(options: BridgeOptions = {}): void {
-  let stored = settingsView()
-  const invoke = vi.fn(async (_product: string, method: string, payload?: unknown) => {
+  const periods = options.periods ?? [{ id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }]
+  const invoke = vi.fn(async (_product: string, method: string) => {
     if (method === 'intelligence.dailyBriefing.getSettings') {
       if (options.settingsFails) throw new Error('settings-unreadable')
-      return stored
+      return aiView
     }
     if (method === 'intelligence.dailyBriefing.saveSettings') {
-      if (options.saveFails) throw new Error('save-failed')
-      const patch = payload as { editorialEnabled?: boolean } | undefined
-      // 保存成功后返回的就是「服务器存下的那一份」，与请求一致。
-      stored = settingsView({ editorialEnabled: patch?.editorialEnabled ?? true })
-      return stored
+      if (options.saveFails) return { state: 'unavailable', failureCode: 'failed' }
+      return aiView
     }
-    if (method === 'intelligence.dailyBriefing.listPeriods') {
-      return [{ id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }]
-    }
+    if (method === 'intelligence.dailyBriefing.listPeriods') return periods
     return undefined
   })
+  const schedules = options.schedules ?? 'registered'
+  const listSchedules = schedules === 'missing'
+    ? undefined
+    : vi.fn(async () => schedules === 'none'
+      ? []
+      : schedules === 'orphan'
+        ? [{ id: 'market-intelligence.dailyBriefing.gone', productId: 'market-intelligence', registered: true, trigger: { kind: 'cron', expression: '0 7 * * *', timezone: null }, title: 't', owner: 'product', nextRunAt: null }]
+        : periods.map((period) => ({
+          id: `market-intelligence.dailyBriefing.${period.id}`,
+          productId: 'market-intelligence',
+          registered: true,
+          trigger: { kind: 'cron' as const, expression: '0 7 * * *', timezone: null },
+          title: 't',
+          owner: 'product' as const,
+          nextRunAt: null
+        })))
   vi.stubGlobal('platform', {
     products: { invoke },
     modelProviders: { list: vi.fn(async () => []) },
-    settings: { get: vi.fn(async () => ({ modelDefaults: { agentModelId: '' } })) }
+    settings: { get: vi.fn(async () => ({ modelDefaults: { agentModelId: '' } })) },
+    ...(listSchedules === undefined ? {} : { jobs: { listSchedules } })
   })
 }
 
-async function mount(onDirtyChange: (dirty: boolean) => void, options: BridgeOptions = {}): Promise<HTMLElement> {
+async function mount(options: BridgeOptions = {}): Promise<Readonly<{ host: HTMLElement; last: () => BriefingScreenState | undefined }>> {
   stubBridge(options)
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
+  let latest: BriefingScreenState | undefined
+  function Probe(): ReactElement {
+    const [state, setState] = useState<BriefingScreenState>({ dirty: false, saving: false, save: () => undefined })
+    return <>
+      <button data-probe-save="true" onClick={state.save} type="button">probe-save</button>
+      <DailyBriefingSettingsPanel onState={(next) => { latest = next; setState(next) }} />
+    </>
+  }
   await act(async () => root!.render(
-    <ShellLanguageProvider language="zh-CN">
-      <ConfirmProvider>
-        <DailyBriefingSettingsPanel onDirtyChange={onDirtyChange} />
-      </ConfirmProvider>
-    </ShellLanguageProvider>
+    <ShellLanguageProvider language="zh-CN"><ConfirmProvider><Probe /></ConfirmProvider></ShellLanguageProvider>
   ))
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-  return host
+  return { host, last: () => latest }
 }
 
 const switches = (host: HTMLElement): HTMLElement[] => [...host.querySelectorAll<HTMLElement>('.ant-switch')]
-const saveButton = (host: HTMLElement): HTMLButtonElement => host.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!
 
-describe('the briefing settings panel’s unsaved flag', () => {
-  it('clears the unsaved flag when the screen is unmounted, so no other screen is blocked by it', async () => {
-    const reported: boolean[] = []
-    const host = await mount((dirty) => reported.push(dirty))
-
-    // 改一处 AI 编辑的设置，草稿就有了未保存改动。
+describe('the briefing settings screen’s unsaved flag', () => {
+  it('clears the unsaved flag when the screen is unmounted', async () => {
+    const { host, last } = await mount()
     const toggle = switches(host)[0]
     expect(toggle).not.toBeUndefined()
     await act(async () => toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(reported.at(-1)).toBe(true)
+    expect(last()?.dirty).toBe(true)
 
-    // 切到别的屏 / 关掉这一屏：这一屏已经不在了，脏必须跟着清掉。
     await act(async () => root!.unmount())
     root = undefined
-    expect(reported.at(-1)).toBe(false)
+    expect(last()?.dirty).toBe(false)
   })
 
   it('reports no unsaved edits when the settings could not be read at all', async () => {
-    // 读不到 = 没有草稿可丢：关抽屉不该问「要不要丢改动」。
-    const reported: boolean[] = []
-    const host = await mount((dirty) => reported.push(dirty), { settingsFails: true })
-    expect(host.querySelector('[role="alert"]')).not.toBeNull()
-    expect(reported.at(-1)).toBe(false)
-    expect(reported).not.toContain(true)
+    const { host, last } = await mount({ settingsFails: true })
+    expect(host.textContent).toContain('设置没读到，请重试。')
+    expect(last()?.dirty).toBe(false)
   })
 
   it('keeps the draft dirty, and its value, when the save fails', async () => {
-    // 存不上时草稿还在：关抽屉必须还能问一句「要丢掉吗」。不钉这条，读者会遇到
-    // 「存不上、一关就没了，连问都没问」。
-    const reported: boolean[] = []
-    const host = await mount((dirty) => reported.push(dirty), { saveFails: true })
+    const { host, last } = await mount({ saveFails: true })
     const toggle = switches(host)[0]
     await act(async () => toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(reported.at(-1)).toBe(true)
+    expect(last()?.dirty).toBe(true)
 
-    await act(async () => saveButton(host).dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => { last()?.save() })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    expect(reported.at(-1)).toBe(true)
-    // 读者刚改的那一格还在（关掉 AI 编辑 → 开关是关的），没有被失败重置。
+    expect(last()?.dirty).toBe(true)
+    expect(last()?.failure).toContain('AI 编辑未保存')
     expect(switches(host)[0]?.getAttribute('aria-checked')).toBe('false')
   })
 
-  it('reports no unsaved edits once the save goes through', async () => {
-    // 存下的值就是新基线：保存成功后关抽屉不该再问。
-    const reported: boolean[] = []
-    const host = await mount((dirty) => reported.push(dirty))
+  it('reports no unsaved edits and no failure once the save goes through', async () => {
+    const { host, last } = await mount()
     const toggle = switches(host)[0]
     await act(async () => toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(reported.at(-1)).toBe(true)
+    expect(last()?.dirty).toBe(true)
 
-    await act(async () => saveButton(host).dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => { last()?.save() })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    expect(reported.at(-1)).toBe(false)
+    expect(last()?.dirty).toBe(false)
+    expect(last()?.failure).toBeUndefined()
   })
 })
 
-/**
- * 「继续编辑」真的把草稿留下：这一步只有把面板和抽屉守卫放在一起才判得出来。
- * （守卫自己的三条在 `ConfigSettingsDrawer.test.tsx`；这里判的是「取消之后屏还在、值还在」。）
- */
+describe('the briefing settings screen’s three sections', () => {
+  it('draws generation, AI editing and platform as settings blocks, with the period as a settings row', async () => {
+    const { host } = await mount()
+    expect(host.querySelectorAll('[data-settings-section-block="true"]')).toHaveLength(3)
+    const row = host.querySelector<HTMLElement>('[data-period-id="default"]')!
+    expect(row.classList.contains('config-drawer__row')).toBe(true)
+    expect(row.querySelector('.config-drawer__label')?.textContent).toBe('第 1 期')
+    expect(row.querySelector('.config-drawer__control')).not.toBeNull()
+    expect(row.textContent).toContain('每天 07:00')
+    expect(row.textContent).toContain('最近 24 小时')
+    expect(row.textContent).toContain('中文')
+    expect(row.querySelector('[data-period-edit="default"]')?.getAttribute('aria-label')).toBe('编辑第 1 期')
+    expect(row.querySelector('[data-period-delete="default"]')?.getAttribute('aria-label')).toBe('删除第 1 期')
+  })
+
+  it('keeps「添加一期」out of the way when the period list cannot be read', async () => {
+    stubBridge()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
+    ))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(host.querySelector('[data-briefing-periods-empty="true"]')).toBeNull()
+    expect(host.querySelector('[data-briefing-period-add="true"]')).not.toBeNull()
+  })
+
+  it('shows the registration fact as a word, hides it when there is no period, and never as 「关」', async () => {
+    const registered = await mount({ schedules: 'registered' })
+    expect(registered.host.querySelector('[data-briefing-auto]')?.getAttribute('data-briefing-auto')).toBe('registered')
+    expect(registered.host.textContent).toContain('每天到点自动跑')
+
+    await act(async () => root!.unmount()); root = undefined; document.body.replaceChildren()
+    const missing = await mount({ schedules: 'missing' })
+    expect(missing.host.querySelector('[data-briefing-auto]')?.getAttribute('data-briefing-auto')).toBe('unknown')
+    expect(missing.host.textContent).toContain('未知')
+    expect(missing.host.querySelector('[data-briefing-auto-retry="true"]')).not.toBeNull()
+
+    await act(async () => root!.unmount()); root = undefined; document.body.replaceChildren()
+    const orphan = await mount({ schedules: 'orphan' })
+    expect(orphan.host.querySelector('[data-briefing-auto]')?.getAttribute('data-briefing-auto')).toBe('not-registered')
+
+    await act(async () => root!.unmount()); root = undefined; document.body.replaceChildren()
+    const empty = await mount({ periods: [], schedules: 'none' })
+    expect(empty.host.querySelector('[data-briefing-auto]')).toBeNull()
+  })
+
+  it('gives the platform block exactly two jumps, one per row', async () => {
+    const { host } = await mount()
+    const jumps = [...host.querySelectorAll<HTMLElement>('[data-global-link]')]
+    expect(jumps).toHaveLength(2)
+    expect(jumps.map((jump) => jump.getAttribute('data-global-link'))).toEqual(['model-service', 'web-search'])
+    expect(jumps.every((jump) => (jump.textContent ?? '').includes('去平台设置'))).toBe(true)
+  })
+})
+
 describe('the drawer guard keeps the draft when the reader keeps editing', () => {
   function Probe({ onClose }: Readonly<{ onClose: () => void }>): ReactElement {
     const confirm = useConfirm()
-    const [dirty, setDirty] = useState(false)
+    const [screen, setScreen] = useState<BriefingScreenState>({ dirty: false, saving: false, save: () => undefined })
     return <ConfigSettingsDrawer
-      briefingPanel={<DailyBriefingSettingsPanel onDirtyChange={setDirty} />}
+      briefingPanel={<DailyBriefingSettingsPanel onState={setScreen} />}
       confirmDiscard={(input) => confirm({
         title: input.title,
         description: input.body,
@@ -166,40 +220,38 @@ describe('the drawer guard keeps the draft when the reader keeps editing', () =>
         onConfirm: input.onDiscard
       })}
       initialMenu="briefing"
-      isScreenDirty={(menu) => menu === 'briefing' && dirty}
+      isScreenDirty={() => screen.dirty}
       onClose={onClose}
-      open />
+      onScreenSave={screen.save}
+      open
+      screenDirty={screen.dirty}
+      screenSaving={screen.saving}
+      {...(screen.failure === undefined ? {} : { screenSaveFailure: screen.failure })} />
   }
 
   const confirmButton = (label: string): HTMLButtonElement | undefined =>
     [...document.body.querySelectorAll<HTMLButtonElement>('.ant-modal-confirm-btns button')]
       .find((button) => (button.textContent ?? '').replace(/\s+/gu, '') === label)
 
-  it('keeps the panel and the reader’s value when they answer 继续编辑, and closes only on 丢掉改动', async () => {
+  it('keeps the screen and the value on 继续编辑, and closes only on 丢掉改动', async () => {
     stubBridge()
     const onClose = vi.fn()
     const host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
     await act(async () => root!.render(
-      <ShellLanguageProvider language="zh-CN">
-        <ConfirmProvider><Probe onClose={onClose} /></ConfirmProvider>
-      </ShellLanguageProvider>
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><Probe onClose={onClose} /></ConfirmProvider></ShellLanguageProvider>
     ))
-    // antd 的 Drawer 走 portal：内容挂在 document 上，不在我给的容器里。
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    const body = document.body
 
+    const body = document.body
     const toggle = switches(body)[0]
     expect(toggle).not.toBeUndefined()
     await act(async () => toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(switches(body)[0]?.getAttribute('aria-checked')).toBe('false')
 
     const close = body.querySelector<HTMLElement>('.drawer__header-actions button')
     expect(close).not.toBeNull()
-
-    // 第一次关：问一句；选「继续编辑」→ 抽屉还在、值还在。
     await act(async () => close!.click())
     await act(async () => { await Promise.resolve() })
     expect(confirmButton('继续编辑')).not.toBeUndefined()
@@ -209,7 +261,6 @@ describe('the drawer guard keeps the draft when the reader keeps editing', () =>
     expect(body.querySelector('[data-briefing-settings-panel="true"]')).not.toBeNull()
     expect(switches(body)[0]?.getAttribute('aria-checked')).toBe('false')
 
-    // 第二次关：选「丢掉改动」→ 关一次，草稿随卸载走。
     await act(async () => close!.click())
     await act(async () => { await Promise.resolve() })
     await act(async () => confirmButton('丢掉改动')!.click())

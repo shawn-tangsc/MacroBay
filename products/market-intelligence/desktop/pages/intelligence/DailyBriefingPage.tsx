@@ -93,7 +93,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   /**
    * 「打开配置抽屉」入口（C9：抽屉是唯一入口）。页头那颗与失败面板那颗都走它。
    *
-   * 这一页**不再有自己的设置抽屉**：同一块内容已经搬进配置抽屉的日报屏（`DailyBriefingSettingsBlocks`），
+   * 这一页**不再有自己的设置抽屉**：同一块内容已经搬进配置抽屉的日报屏（`DailyBriefingSettingsPanel`），
    * 在这里再留一个外壳就是两个入口、两份草稿。
    */
   onOpenSettings: () => void
