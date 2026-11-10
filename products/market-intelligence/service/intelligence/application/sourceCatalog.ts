@@ -214,9 +214,10 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     authMode: 'api-key',
     supportsRunNow: false,
     parserStrategy: 'twelve-data-time-series-v1',
-    // Hidden in providerRegistry as well: the agreement is what the registry guard test holds.
-    visibility: 'hidden',
-    readiness: 'planned',
+    // Visible in providerRegistry as well: the agreement is what the registry guard test holds.
+    // 用户 2026-11-11：它在看板供数（合成美元 DXY 兜底 + 黄金未收盘覆盖），注册表按事实写「可见 / 就绪」。
+    visibility: 'visible',
+    readiness: 'live',
     // The macro-market collector is a product job (market-intelligence.collect-macro-market); the
     // profile's enable flag is what that job reads, and the generic runtime never schedules it.
     collectionOwner: 'product',

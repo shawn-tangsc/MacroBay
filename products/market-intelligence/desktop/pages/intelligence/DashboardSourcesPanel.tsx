@@ -50,12 +50,11 @@ export function DashboardSourcesPanel(props: {
    * 抽屉这条筛选页签：**五块、值不变**。业务设置那一屏也要常显这一条（它是上层，三项列表是下层），
    * 所以这份清单提到函数里，两处共用一份。
    */
+  /* 抽屉只留两块（用户 2026-11-11）：`情报源` 与 `业务设置`。
+     日历 / 舆情 / 其他 的内容已经由业务设置里那两块覆盖，不再各占一个页签。设置页那一面仍是六项。 */
   const treeFilters = [
     { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
-    { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
-    { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
-    { value: 'sentiment', labelKey: 'settings.intelligenceSources.sourceFilters.sentiment' },
-    { value: 'other', labelKey: 'settings.intelligenceSources.sourceFilters.other' }
+    { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' }
   ] as const
   const settings = useIntelligenceSourcesSettings(t)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings

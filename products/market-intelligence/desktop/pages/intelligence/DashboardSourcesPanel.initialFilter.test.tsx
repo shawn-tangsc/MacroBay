@@ -90,10 +90,10 @@ describe('the drawer sources panel filter', () => {
   })
 
   it('uses the passed value only as the mount value', async () => {
-    const container = await renderPanel('calendar')
-    const text = container.querySelector('.intelligence-catalog-pane')?.textContent ?? ''
-    expect(text).toContain('日历源')
-    expect(text).not.toContain('看板源')
+    // 抽屉只剩两块：带上下文进来的入口传 `dashboard`（业务设置），挂载即落在那一块。
+    const container = await renderPanel('dashboard')
+    const selected = container.querySelector('.intelligence-catalog-filters [aria-pressed="true"]')
+    expect(selected?.textContent).toContain('业务设置')
   })
 })
 
@@ -127,8 +127,9 @@ describe('筛选页签在业务设置下常显', () => {
     // 用户 2026-11-11：左列换成三项之后，那条页签不许不见——页签在上、三项在下，各自占位。
     const container = await renderPanel('dashboard')
     const tabs = [...container.querySelectorAll('.intelligence-catalog-filters [role="group"] button')]
-    expect(tabs).toHaveLength(5)
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['情报源', '业务设置', '日历', '舆情', '其他'])
+    // 抽屉只留两块（日历 / 舆情 / 其他 已由业务设置覆盖）：恒为 2 个、顺序固定。
+    expect(tabs).toHaveLength(2)
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['情报源', '业务设置'])
     // 三项列表在看板卡上方、与页签是两层。
     expect(container.querySelectorAll('.business-settings__nav .intelligence-provider-row')).toHaveLength(3)
   })
