@@ -1,5 +1,6 @@
 import type { IntelligenceModule } from '../intelligenceModule'
 import { analysisModelVocabulary } from '../analysis/analysisModelVocabulary'
+import { marketCalendarLocale } from '../macro-calendar/marketCalendarLocale'
 import {
   assessMarketCalendarSurprise,
   toCalendarSurpriseView
@@ -19,7 +20,7 @@ export async function handleQueryMacroCalendar(
 ): Promise<unknown> {
   const { month, asOf, from, to, maxEvents } = (input ?? {}) as MacroCalendarInput
   const queryService = deps.intelligenceModule.publicQueryService
-  const locale = (await deps.getAppLanguage()) === 'en-US' ? 'en' : 'zh'
+  const locale = marketCalendarLocale(await deps.getAppLanguage())
   const caveats: string[] = []
 
   // The caller's cap is an output budget, not a query budget: filtering a day out of a truncated
