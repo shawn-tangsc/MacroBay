@@ -388,7 +388,7 @@ function NotificationsScreen({ view, resolveText }: {
               <Popover
                 content={<span>{row.reason}</span>}
                 trigger={(triggerProps) => (
-                  <IconButton {...triggerProps} ariaLabelKey="configDrawer.rowReason" icon={Info} onSelect={() => undefined} resolveText={(key: string) => (key === 'configDrawer.rowReason' ? row.reason ?? '' : '')} size="sm" />
+                  <IconButton {...triggerProps} ariaLabelKey="configDrawer.rowReason" icon={Info} onSelect={() => undefined} resolveText={(key: string) => (key === 'configDrawer.rowReason' ? row.reason ?? '' : '')} size="sm" variant="plain" />
                 )} />
             )}
           </span>
@@ -417,6 +417,6 @@ function PreviewControlView({ control, info }: { control: PreviewControl; info: 
         : null
   return <>
     {glyph}
-    {info ? <IconButton ariaLabelKey="configDrawer.info" icon={Info} onSelect={() => undefined} resolveText={(key) => key} size="sm" /> : null}
+    {info ? <IconButton ariaLabelKey="configDrawer.info" icon={Info} onSelect={() => undefined} resolveText={(key) => key} size="sm" variant="plain" /> : null}
   </>
 }

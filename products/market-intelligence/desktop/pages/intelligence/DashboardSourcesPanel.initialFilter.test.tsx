@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../shared/i18n/productText'
+import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 
 /**
@@ -57,23 +58,32 @@ const VIEW: SettingsView = {
 } as unknown as SettingsView
 
 let root: Root | undefined
-afterEach(async () => {
+/**
+ * 两屏各只挂一次：这几个用例全是**只读断言**，挂 5 次等于把同一棵树画 5 遍。
+ * 满负载下（别的套件同时在跑）单次挂载就逼近 5s 上限——今晚第二次超时是这么来的，
+ * 不是它测的行为不稳定。所以减工作，不调 timeout。
+ */
+const rendered = new Map<'sources' | 'business', HTMLElement>()
+
+afterAll(async () => {
   await act(async () => root?.unmount())
   root = undefined
   document.body.replaceChildren()
 })
 
-async function renderPanel(pane?: 'sources' | 'business'): Promise<HTMLElement> {
-  const { DashboardSourcesPanel } = await import('./DashboardSourcesPanel')
+async function renderPanel(pane: 'sources' | 'business' = 'sources'): Promise<HTMLElement> {
+  const cached = rendered.get(pane)
+  if (cached !== undefined) return cached
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
     root?.render(<ShellLanguageProvider language="zh-CN">
-      <DashboardSourcesPanel {...(pane === undefined ? {} : { pane })} />
+      <DashboardSourcesPanel pane={pane} />
     </ShellLanguageProvider>)
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  rendered.set(pane, container)
   return container
 }
 
