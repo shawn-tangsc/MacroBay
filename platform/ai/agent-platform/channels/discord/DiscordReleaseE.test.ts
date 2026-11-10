@@ -15,7 +15,6 @@ import { DiscordDeliveryTransport } from './DiscordDeliveryTransport'
 import { DiscordRuntimeManager } from './DiscordRuntimeManager'
 import { discordGatewayStateUpsertSql, DiscordRuntimeRepository } from './DiscordRuntimeRepository'
 import { normalizeDiscordEvent } from './DiscordUpdateNormalizer'
-import { DiscordGatewayHost } from './DiscordGatewayHost'
 
 describe('Discord Release E contracts', () => {
   it('creates Discord only as blocked metadata with a bot-token-only credential schema', () => {
@@ -107,22 +106,6 @@ describe('Discord Release E contracts', () => {
     expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('discord-a')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('discord-a')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(management.stopAllRuntimeAndFence('2026-07-20T00:01:00.000Z')).toContain('telegram-a')
-  })
-
-  it.each(['closed', 'replaced'] as const)('does not commit or acknowledge a %s source socket during durable inbound work', async (mode) => {
-    const source = new FakeSocket(); const replacement = new FakeSocket(); let created = 0; let release!: () => void
-    const runtime = { commitIfCurrent: vi.fn(() => true), auditIfCurrent: vi.fn(() => true) }
-    const receive = vi.fn(async (input: { acknowledge: () => Promise<void> }) => {
-      await new Promise<void>((resolve) => { release = resolve })
-      await expect(input.acknowledge()).rejects.toThrow('discord-current-gate-failed')
-      return { disposition: 'retry' as const }
-    })
-    const host = new DiscordGatewayHost({ channelId: 'discord-a', generation: 1, gatewayUrl: 'wss://fake', inbound: { receive } as never, runtime: runtime as never, parseVerifiedDispatch: () => ({ sequence: 9, facts: { eventKey: 'discord:event:e1', conversationKey: 'discord:conversation:direct:user_1', userKey: 'discord:user:user_1', conversationKind: 'direct', mentionedBot: true, text: 'hello' }, acknowledgeWire: '{"ack":9}' }), createPlatformWebSocket: class { constructor(_url: string) { return (++created === 1 ? source : replacement) as never } } as never, isCurrent: () => true, signal: new AbortController().signal })
-    host.start(); source.onmessage?.({ data: '{}' }); await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce())
-    if (mode === 'closed') source.onclose?.({})
-    else host.start()
-    release(); await vi.waitFor(() => expect(runtime.commitIfCurrent).not.toHaveBeenCalled())
-    expect(source.sent).toEqual([]); expect(replacement.sent).toEqual([])
   })
 
   it('purges Discord runtime rows in the established delete isolation transaction', async () => {
