@@ -13,6 +13,7 @@
  * 也不替代 Chief 跑的全量。成本实测：5 个真实文件 6.3s（原来全仓 tsc 是 42–60s）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
+import { findCallers, programFiles } from './pre-commit-callers.mts'
 import { materializeCommitTree, readDeletedPaths } from './pre-commit-tree.mts'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -220,13 +221,30 @@ const ambientDeclarations = execFileSync('git', ['ls-files', '*.d.ts'], { cwd: r
   .map((line) => line.trim())
   .filter((path) => path !== '' && !path.includes('node_modules') && existsSync(join(treeRoot, path)))
 
+/**
+ * 反向依赖：**程序之外引用这一笔文件的人**也要进 `files`。
+ *
+ * 2026-11-10 的 B4 事故：`ProviderDetail` 的 props 加了必填 `health`，设置页改了、看板抽屉
+ * （`DashboardPanelDrawer.tsx`）没改。抽屉是**调用方**，不在「本次提交的文件」里，于是 tsc 的程序
+ * 里根本没有它，`TS2741` 就这么进了链。钩子当时 9.7s / 预算 58s——不是超时，是范围比名字小。
+ * 只展开一层：props 改动的第一个受害者就在这里，够用，也不至于把一个公共模块的全部下游都拖进来。
+ */
+const callerSearch = findCallers({ cwd: root, staged: codeStaged })
+const callers = callerSearch.callers.filter((path) => existsSync(join(treeRoot, path)))
+if (callers.length > 0) {
+  say(`反向依赖：另有 ${callers.length} 个调用方一起查（${callers.slice(0, 3).join('、')}${callers.length > 3 ? ' …' : ''}）`)
+}
+if (callerSearch.skipped > 0) {
+  say(`反向依赖还有 ${callerSearch.skipped} 个调用方超出上限，本次未纳入（只查了前 ${callers.length} 个）。`)
+}
+
 const treeConfig = join(treeRoot, 'tsconfig.pre-commit.json')
 writeFileSync(
   treeConfig,
   JSON.stringify({
     extends: './tsconfig.json',
     include: [],
-    files: [...codeStaged, ...ambientDeclarations].map((path) => `./${path}`)
+    files: programFiles({ staged: codeStaged, callers, ambient: ambientDeclarations })
   })
 )
 
@@ -275,7 +293,15 @@ const repoPathOf = (line: string): string | undefined =>
  * 用户已知并接受（`products/**` 全量本来也看不到）。
  */
 const located = allErrors.map((line) => ({ line, file: repoPathOf(line) }))
-const ownErrors = located.filter((entry) => entry.file !== undefined && codeStaged.includes(entry.file))
+/**
+ * 归属：本笔的文件，**以及本笔文件的调用方**。
+ *
+ * 调用方这一档是 2026-11-10 补的：改 props 的那一笔，红会落在没改过的宿主上（`TS2741`）；
+ * 把它当「别人的文件」放过去，正是这次事故进链的方式。只算一层反查到的调用方，别的一律不动。
+ */
+const callerSet = new Set(callers)
+const ownedFiles = new Set<string>([...codeStaged, ...callers])
+const ownErrors = located.filter((entry) => entry.file !== undefined && ownedFiles.has(entry.file))
 const foreignErrors = located.filter((entry) => !ownErrors.includes(entry))
 
 if (foreignErrors.length > 0) {
@@ -292,6 +318,9 @@ if (ownErrors.length > 0) {
    * `SKIP_PRE_COMMIT=1`，那比这条报错更难收拾。
    */
   for (const entry of ownErrors.slice(0, 20)) {
+    if (entry.file !== undefined && callerSet.has(entry.file)) {
+      console.error(`  （调用方：本笔改了它引用的文件，它自己没跟上）`)
+    }
     // 文件路径用已剥干净的 `entry.file`，位置与错误正文从原行里取：tsc 有时给 `../../var/folders/…`
     // 相对路径、有时给绝对路径，直接打原行会露出一串读者磁盘上不存在的路径（实测过）。
     const position = /\(\d+,\d+\)/u.exec(entry.line)?.[0] ?? ''
