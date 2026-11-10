@@ -10,7 +10,8 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
-import { SourceHealthDetail, type SourceDetailRead, type SourceHealthLabels } from './SourceHealthDetail'
+import { SourceHealthDetail, type SourceHealthLabels } from './SourceHealthDetail'
+import { isCalendarSource, useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { healthStateBadge } from './sourceHealthTone'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
@@ -23,10 +24,6 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import type { ProviderView, SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-
-function isCalendar(source: SourceView): boolean {
-  return source.kind === 'official-calendar' || source.kind === 'market-calendar'
-}
 
 export type ProviderDetailLabels = {
   sourceNames: Record<string, string>
@@ -144,7 +141,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [credentialStatus, setCredentialStatus] = useState<{ hasCredential: boolean; maskedPreview?: string }>()
   const [credentialFeedback, setCredentialFeedback] = useState<'saved' | 'failed'>()
   const [savingCredential, setSavingCredential] = useState(false)
-  const [details, setDetails] = useState<Record<string, SourceDetailRead>>({})
   const [runningSourceId, setRunningSourceId] = useState<string>()
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
@@ -164,67 +160,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [networkFailure, setNetworkFailure] = useState(false)
 
 
-  /**
-   * 每个源的详情：**读取失败是一种状态，不是「没有数据」**（读者要能重试）。
-   * 日历 feed 不读通用详情（它不在通用目录里，问一次只会得到「未知来源」）——记 `skipped`，
-   * 四格里读不到的那两格写「未知」并说明原因。
-   */
-  const loadDetail = useCallback(async (sourceId: string, active: () => boolean): Promise<void> => {
-    setDetails((current) => ({ ...current, [sourceId]: { state: 'loading' } }))
-    try {
-      const state = await intelligenceSourcesClient.getPageState(sourceId)
-      if (!active()) return
-      const detail = state?.detail
-      setDetails((current) => ({
-        ...current,
-        [sourceId]: detail === undefined ? { state: 'failed' } : { state: 'ready', detail }
-      }))
-    } catch {
-      if (!active()) return
-      setDetails((current) => ({ ...current, [sourceId]: { state: 'failed' } }))
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!showSourceDetails) return
-    let active = true
-    const sources = provider.sources.filter((source) => !isCalendar(source))
-    setDetails((current) => {
-      const next: Record<string, SourceDetailRead> = {}
-      for (const source of provider.sources) {
-        next[source.sourceId] = isCalendar(source)
-          ? { state: 'skipped' }
-          // 同一屏重渲染时保留已读到的结果：重读由「重试」触发，不因为父级刷新把四格闪空。
-          : current[source.sourceId]?.state === 'ready' ? current[source.sourceId]! : { state: 'loading' }
-      }
-      return next
-    })
-    for (const source of sources) void loadDetail(source.sourceId, () => active)
-    return () => { active = false }
-  }, [provider.providerId, showSourceDetails, loadDetail])
-
-  /** 读失败后的重试：重新问这一次源，不改任何设置。 */
-  const retryDetail = useCallback((sourceId: string): void => {
-    void loadDetail(sourceId, () => true)
-  }, [loadDetail])
-
-  /**
-   * 跑完**后台刷新**这个源的详情：健康读数会变（上次成功 / 今天有没有读数）。
-   *
-   * 不把它画成 `loading`——那会把整块四格（连同刚显示出来的「跑了什么结果」）卸载再重挂，
-   * 读者会看到行闪一下、结果也没了。刷新失败保留旧读数，四格不空。
-   */
-  const refreshDetail = useCallback(async (sourceId: string): Promise<void> => {
-    try {
-      const state = await intelligenceSourcesClient.getPageState(sourceId)
-      const detail = state?.detail
-      if (detail !== undefined) {
-        setDetails((current) => ({ ...current, [sourceId]: { state: 'ready' as const, detail } }))
-      }
-    } catch {
-      // 刷新是补充，不是主读：失败不把已经显示的四格抹掉。
-    }
-  }, [])
+  const { details, retryDetail, refreshDetail } = useSourceDetailReads(provider, showSourceDetails)
 
   const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
     const outcome = await onRunNow!(sourceId)
@@ -418,7 +354,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               // 这个源现在能不能用，那是状态串里状态词的事。同一个事实只说一次。
               ? labels.badges.advanced
               : null,
-          isCalendar(source) ? labels.badges.calendar : null,
+          isCalendarSource(source) ? labels.badges.calendar : null,
           ...source.panels.map((panel) => labels.panelNames[panel] ?? panel)
         ].filter((tag): tag is string => Boolean(tag))
         return <div key={source.sourceId}>
