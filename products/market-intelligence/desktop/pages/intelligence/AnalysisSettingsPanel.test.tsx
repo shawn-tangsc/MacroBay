@@ -77,6 +77,20 @@ describe('the drawer analysis screen', () => {
     expect(state().dirty).toBe(false)
   })
 
+  it('reports "nothing unsaved" when the screen goes away, so a later close asks nothing', async () => {
+    // 样板要给人照抄：脏着切走（面板卸载）之后，宿主那份状态必须回到「不脏」，
+    // 否则关抽屉会误拦一句「有未保存改动」。存储那边踩过这个坑。
+    stubInvoke(true)
+    const { container, state } = await mount()
+    const toggle = container.querySelector<HTMLElement>('.config-drawer__row [role="switch"], .config-drawer__row .ant-switch')!
+    await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve() })
+    expect(state().dirty).toBe(true)
+
+    await act(async () => root?.unmount())
+    root = undefined
+    expect(state().dirty).toBe(false)
+  })
+
   it('shows the refusal notice above the block instead of between rows', async () => {
     stubInvoke(false)
     const { container, state } = await mount()

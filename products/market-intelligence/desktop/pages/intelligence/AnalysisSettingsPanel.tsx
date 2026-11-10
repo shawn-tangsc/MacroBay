@@ -62,6 +62,9 @@ export function AnalysisSettingsPanel({ onState }: Readonly<{
   const saving = settingsState.saving
   const refusal: MarketAnalysisSettingsRefusal | undefined = settingsState.refusal
 
+  const onStateRef = useRef(onState)
+  useEffect(() => { onStateRef.current = onState })
+
   const latest = useRef<Draft | null>(null)
   useEffect(() => { latest.current = draft }, [draft])
   const save = (): void => {
@@ -69,16 +72,21 @@ export function AnalysisSettingsPanel({ onState }: Readonly<{
     if (current === null) return
     void settingsState.save(current).then((ok) => { if (ok) setBaseline(current) })
   }
-  useEffect(() => {
-    onState({
-      dirty, saving, save,
-      ...(refusal === undefined ? {} : {
-        failure: refusal === 'model-unconfigured' ? text.refusalModelUnconfigured
-          : refusal === 'model-unavailable' ? text.refusalModelUnavailable
-            : text.refusalFailed
-      })
+  const state: AnalysisScreenState = {
+    dirty, saving, save,
+    ...(refusal === undefined ? {} : {
+      failure: refusal === 'model-unconfigured' ? text.refusalModelUnconfigured
+        : refusal === 'model-unavailable' ? text.refusalModelUnavailable
+          : text.refusalFailed
     })
-  }, [dirty, saving, refusal, onState, text.refusalFailed, text.refusalModelUnconfigured, text.refusalModelUnavailable])
+  }
+  // 上报用 ref 里最新的一份 + 最新的 setter：cleanup 里读到的 state 会过期（那时是上一次渲染的值）。
+  const emitted = useRef(state)
+  useEffect(() => { emitted.current = state; onState(state) })
+  useEffect(() => {
+    const report = onStateRef.current
+    return () => { report({ ...emitted.current, dirty: false }) }
+  }, [])
 
   const candidates: ModelPickerCandidate[] = settingsState.providers
     .flatMap((provider) => provider.models.map((model) => ({ providerId: provider.id, model })))
