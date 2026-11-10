@@ -70,7 +70,7 @@ const workspaceSwitchKeys = Object.freeze({
   agent: 'pages.intelligence.portal.analysisWorkspace.title'
 })
 
-export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
+export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
   /** 舆情那颗设置入口：打开配置抽屉、落在「内容处理」屏（未传时舆情仍用本地弹框）。 */
   onOpenSettings?: () => void
   /**
@@ -198,7 +198,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           text={text.analysisTimeline}
         />
         <AnalysisTimelineDrawer
-          onOpenSettings={() => setAnalysisSettingsOpen(true)}
+          onOpenSettings={onOpenAnalysisSettings ?? (() => setAnalysisSettingsOpen(true))}
           onClose={() => setTimelineOpen(false)}
           onOpenChange={setOpenEntry}
           open={timelineOpen}
