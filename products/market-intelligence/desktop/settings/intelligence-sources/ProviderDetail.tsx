@@ -14,7 +14,6 @@ import { SettingsInfo } from '../settingsInfo'
 import { SourceEnabledRow, needsJob } from './SourceRows'
 import { SourceDetailsBlock } from './SourceDetailsBlock'
 import type { SourceHealthLabels } from './SourceHealthDetail'
-import { BUSINESS_MODULE_IDS, DASHBOARD_SOURCE_MODULES, cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 import { useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
@@ -80,7 +79,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, cellEnabled, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -104,13 +103,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    * 不各自传布尔、也不各自决定「要不要走注册表」——同一个事实两处判，迟早两处不一致。
    */
   surface?: 'settings' | 'panel'
-  /**
-   * 格级开关快照（`采集与数据` 里那些项）。**能力行的只读状态读它**：任一相关格开着 = 开，全关 = 关；
-   * 无格但在「日历 / 舆情」里列着的源（日历 feed 六条、新闻四条）读**源自己的 `enabled`**（出现了且启用才算开）；
-   * 采集与数据里根本没出现的（维护备用 / 只供分析 / 未接入）→ 关。
-   * 页头那颗组开关管的是**源自己的采集**（`enabled`）——两件事，别混。
-   */
-  cellEnabled?: Readonly<Record<string, boolean>>
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -346,28 +338,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
   /* 待接入 > 缺凭据 > 可操作：**整组一个可操作能力都没有**时才锁死并提示「还没接入」。 */
   const providerPending = operableSources.length === 0 && sources.length > 0
-  /**
-   * 能力行的只读状态 = 这个源**有没有出现在「采集与数据」里**（用户 2026-11-11 的最终口径）：
-   * 1. 看板各格用到的源 → 任一相关格开着 = 开；全关 = 关；
-   * 2. **无格但在采集与数据里列着**（日历 feed 六条、新闻四条，在「日历 / 舆情」里是平铺项）→ 视为**开**
-   *    ——它们没有自己的格开关，但确实在用（把它们在用也刷成关就错了）；
-   * 3. 采集与数据里根本没有它的（维护备用 / 只供分析 / 未接入）→ 关。
-   */
-  const rowEnabledOf = (sourceId: string): boolean | undefined => {
-    const dashboardModules = DASHBOARD_SOURCE_MODULES.filter((module) => (BUSINESS_MODULE_IDS.dashboard as readonly string[]).includes(module.id))
-    const cells = dashboardModules.flatMap((module) => module.cells
-      .filter((cell) => cell.sourceId === sourceId)
-      .map((cell) => cellIdOf(module.id, cell)))
-    if (cells.length > 0) return cells.some((cellId) => cellEnabled?.[cellId] === true)
-    /* 没有看板格、但**在采集与数据里以平铺项出现**（日历六条 / 新闻四条）→ 不覆盖，
-       走声明式行自己的 `row.value`（即源投影的 `enabled`）；用户口径：出现了且被启用才算开。 */
-    const listedElsewhere = [...modulesForBusiness('calendar'), ...modulesForBusiness('sentiment')]
-      .some((module) => module.cells.some((cell) => cell.sourceId === sourceId))
-    if (listedElsewhere) return undefined
-    /* 采集与数据里根本没出现的（维护备用 / 只供分析 / 未接入）→ 关。 */
-    return false
-  }
-
   const toggleProvider = async (next: boolean): Promise<void> => {
     if (providerCredentialMissing || providerPending) return
     // 只写**已接入**的能力；待接入的项不写、不会被打开、状态不变。
@@ -510,8 +480,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
           <SourceEnabledRow
             /* 需要 API Key 的源，Key 没配好之前开关灰着（判据在服务层：`hasCredential`）。
                界面只画，不自己造默认值——投影给什么 `enabled` 就画什么。 */
-            /* 组开关（页头最右那颗）是**唯一可编辑入口**：能力行的开关只读展示状态，点了不发写请求。 */
-            enabledOverride={rowEnabledOf(source.sourceId)}
+            /* 组开关（页头最右那颗）是**唯一可编辑入口**：能力行的开关只读展示这个源自己开没开，
+               点了不发写请求。「某一格用不用它」是「采集与数据」那面的题，不在这面出现——
+               页头、行开关、左上角摘要从此读同一个字段（`source.enabled`），不会再出现
+               「摘要 4、行上 2」这种自相矛盾。 */
             readOnlyEnabled
             {...(provider.credential === 'api-key' && credentialStatus?.hasCredential === false
               ? { credentialMissing: true }

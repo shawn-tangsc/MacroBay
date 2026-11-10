@@ -9,9 +9,11 @@ import { productText } from '../../shared/i18n/productText'
 import { ProviderDetail } from './ProviderDetail'
 
 /**
- * 能力行的只读状态 = 「采集与数据」里用到它的那些格开关（用户 2026-11-11）：
- * 任一相关格开着 = 开；全关 = 关；**采集与数据里没有对应格的源恒显示关**（不退回 `enabled`）。
- * 页头那颗组开关管的是源自己的采集，两件事别混。
+ * 能力行的只读状态 = **这个源自己开没开**（`source.enabled`）。
+ *
+ * 用户 2026-11-11：「币安」摘要写「已启用 4」，点进去只有 2 颗开关是开的——因为行开关当时读的是
+ * 「看板某一格有没有用它」。同一个词在两处指两件事，两个数必然对不上。
+ * 现在页头组开关、行开关、左上角摘要读同一个字段；「哪一格用不用它」归「采集与数据」那面。
  */
 const t = productText['zh-CN'].settings.intelligenceSources
 let root: ReturnType<typeof createRoot> | undefined
@@ -34,22 +36,21 @@ const labels = {
   automaticSyncStopped: t.automaticSyncStopped, health: t.health
 } as never
 
-function source(sourceId: string, kind = 'feed') {
+function source(sourceId: string, enabled = true, kind = 'feed') {
   return {
     sourceId, providerId: 'p', displayName: sourceId, agents: [], panels: ['dashboard'],
     visibility: 'visible', collection: 'adapter', kind, capabilities: {}, readiness: 'live',
-    enabled: true, healthState: 'healthy', healthMarker: 'none'
+    enabled, healthState: enabled ? 'healthy' : 'off', healthMarker: 'none'
   }
 }
 
-async function render(sources: ReadonlyArray<never>, cellEnabled: Readonly<Record<string, boolean>>) {
+async function render(sources: ReadonlyArray<unknown>) {
   ;(window as unknown as { platform: unknown }).platform = { products: { invoke: vi.fn(async () => undefined) } }
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(createElement(ShellLanguageProvider, { language: 'zh-CN', children: createElement(ProviderDetail, {
-      cellEnabled,
       labels,
       provider: { providerId: 'p', displayName: 'P', category: 'macro', credential: 'none', healthMarker: 'none', sources },
       showSourceDetails: true
@@ -63,31 +64,35 @@ function rowSwitch(host: HTMLElement, sourceId: string): HTMLElement | null {
   return host.querySelector<HTMLElement>(`[data-setting-key$="${sourceId}"] [role="switch"]`)
 }
 
-describe('能力行状态读格开关', () => {
-  it('shows the row off when every cell using that source is off, and on when one is on', async () => {
-    const sources = [source('binance-futures-positioning')]
-    const off = await render(sources as never, {})
-    expect(rowSwitch(off, 'binance-futures-positioning')?.getAttribute('aria-checked')).toBe('false')
-    await act(async () => root?.unmount())
-    const on = await render(sources as never, { 'quotes:btc': true })
-    expect(rowSwitch(on, 'binance-futures-positioning')?.getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('shows a no-cell source listed in 采集与数据 by its own enabled', async () => {
-    // 舆情 / 日历那几条没有格开关，但确实在采集与数据里列着：出现了、且被启用 → 开。
-    const on = await render([source('binance-announcements', 'feed')] as never, {})
-    expect(rowSwitch(on, 'binance-announcements')?.getAttribute('aria-checked')).toBe('true')
-    await act(async () => root?.unmount())
-    const off = await render([{ ...source('binance-announcements', 'feed'), enabled: false }] as never, {})
-    expect(rowSwitch(off, 'binance-announcements')?.getAttribute('aria-checked')).toBe('false')
-  })
-
-  it('shows maintenance and un-wired sources with no place in 采集与数据 as off', async () => {
-    const host = await render(
-      [source('binance-api-updates'), source('treasury-fiscal-data', 'adapter')] as never,
-      {}
-    )
+describe('能力行状态读源自己的 enabled', () => {
+  it('shows exactly the enabled sources as on, and the disabled ones as off', async () => {
+    const host = await render([
+      source('binance-announcements', true),
+      source('binance-futures-positioning', true),
+      source('binance-api-updates', false),
+      source('binance-spot-market', false)
+    ])
+    expect(rowSwitch(host, 'binance-announcements')?.getAttribute('aria-checked')).toBe('true')
+    expect(rowSwitch(host, 'binance-futures-positioning')?.getAttribute('aria-checked')).toBe('true')
     expect(rowSwitch(host, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('false')
-    expect(rowSwitch(host, 'treasury-fiscal-data')?.getAttribute('aria-checked')).toBe('false')
+    expect(rowSwitch(host, 'binance-spot-market')?.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('keeps working for a source used by no dashboard cell at all', async () => {
+    // 维护备用 / 只供分析的源没有格开关：它们的开关现在只回答「这个源自己开没开」。
+    const on = await render([source('binance-api-updates', true)])
+    expect(rowSwitch(on, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => root?.unmount())
+    const off = await render([source('binance-api-updates', false)])
+    expect(rowSwitch(off, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('never renders a writable row: the header group switch is the only write path', async () => {
+    const host = await render([source('binance-announcements', true), source('binance-api-updates', false)])
+    const rows = [...host.querySelectorAll<HTMLButtonElement>(
+      '[data-setting-key^="setting:sources.enabled"] [role="switch"]'
+    )]
+    expect(rows.length).toBe(2)
+    for (const control of rows) expect(control.disabled).toBe(true)
   })
 })
