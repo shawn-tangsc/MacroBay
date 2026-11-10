@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Switch } from 'antd'
 import { parseConfiguredModelRef, type ConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { helpTrigger } from '@platform/ui/components/popover'
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { SettingsSection } from '@platform/ui/components/settings-section'
 import { platformText } from '@renderer/i18n/platformText'
@@ -105,7 +106,12 @@ export function AnalysisSettingsPanel({ onState }: Readonly<{
       <SettingsRow
         copyClassName="config-drawer__label"
         headClassName="config-drawer__label-head"
-        label={<strong>{text.analysisEnabled}</strong>}
+        label={<span className="config-drawer__label-with-info">
+          <strong>{text.analysisEnabled}</strong>
+          {/* 这句必须留着：它说的是「关掉 AI 编辑会失去什么」，读者要知道的后果，不是实现说明。
+              正文只留字段名，所以进 ⓘ；别当冗余删掉，删了读者只能靠试。 */}
+          {helpTrigger({ text: text.analysisEnabledHint })}
+        </span>}
         rowClassName="config-drawer__row"
         controlWrapperClassName="config-drawer__control">
         <Switch
