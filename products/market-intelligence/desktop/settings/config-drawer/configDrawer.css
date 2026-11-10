@@ -126,6 +126,10 @@
 .config-drawer__source-list {
   display: grid;
   align-content: start;
+  /* 规格：列表栏宽 196、1px 边框、圆角 8，与详情区间距 12。 */
+  width: 196px;
+  max-width: 100%;
+  margin-bottom: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -137,8 +141,9 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 32px;
-  padding: 6px 10px;
+  /* 规格：每行高 44、左右内距 12（主档）。 */
+  min-height: 44px;
+  padding: 0 12px;
   border: 0;
   border-bottom: 1px solid var(--border);
   background: none;
@@ -180,11 +185,25 @@
   line-height: var(--line-meta);
 }
 
-/* 停用的源：一个淡点，不画成第二个状态词。 */
+/* 行尾状态点：8×8。warn 实心黄、bad 实心红、unavailable 空心环，其余不画。 */
 .config-drawer__source-off {
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
-  background: var(--border-strong);
+  border: 1.5px solid var(--muted);
+  background: transparent;
 }
+
+/* 选中：整行 `--surface-soft` + 左侧 2px `--accent`。 */
+.config-drawer__source-item[aria-current='true'] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* 禁用：不假装可点，但仍要读得清。 */
+.config-drawer__source-item:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.config-drawer__source-item:disabled:hover { background: none; }
