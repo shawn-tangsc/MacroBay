@@ -261,4 +261,18 @@ describe('config settings drawer (static layout)', () => {
     })
     expect(container.querySelectorAll('[data-drawer-source]')).toHaveLength(6)
   })
+
+  it('keeps the two-column skeleton in every state, so loading does not collapse to one column', () => {
+    // 四态都要两栏：加载时塌成一栏，读者看到的是布局跳变。
+    for (const view of [
+      { state: 'loading' as const },
+      { state: 'error' as const, onRetry: () => undefined },
+      { state: 'ready' as const, rows: [] }
+    ]) {
+      const container = openSources(view as never)
+      expect(container.querySelector('.config-drawer__split')).not.toBeNull()
+      expect(container.querySelector('.config-drawer__source-list')).not.toBeNull()
+      expect(container.querySelector('.config-drawer__detail')).not.toBeNull()
+    }
+  })
 })

@@ -179,62 +179,66 @@ function NotificationsScreen({ view, resolveText }: {
 }
 
 /**
- * 来源与采集：**只渲染宿主读来的源列表**（宿主用现成 `getPanelView`）。
+ * 来源与采集：**只渲染宿主读来的源列表**（宿主用现成 `getSettingsView`）。
  *
- * 四态与通知屏同一套：「读不到」是错误态 + 重试，「确实没有源」是空态——两者必须能分开断言。
- * 右侧详情区这一版只留占位：真实字段等 S1 落地再接，先不编。
+ * 四态**都在同一副两栏骨架里**（列表 196 + 详情 + 间距 12）——加载时不能塌成一栏。
+ * 「读不到」是错误态 + 重试，「确实没有源」是空态，两者必须能分开断言。
  */
 function SourcesScreen({ view, resolveText, onSelect }: {
   view: DrawerSourcesView
   resolveText: (key: string) => string
   onSelect?: (sourceId: string) => void
 }): React.ReactElement {
+  // 空态与就绪态都来自 `ready`，但两者在页面上是两件事：空态不画列表，只画空状态。
+  const screen = view.state === 'ready' && view.rows.length === 0 ? 'empty' : view.state
+
+  const frame = (detail: React.ReactElement, list: React.ReactElement | null): React.ReactElement => (
+    <div data-drawer-screen={screen} data-drawer-screen-name="sources">
+      <div className="config-drawer__split">
+        <div className="config-drawer__source-list">{list}</div>
+        <div className="config-drawer__detail">{detail}</div>
+      </div>
+    </div>
+  )
+
   if (view.state === 'loading') {
-    return (<div data-drawer-screen="loading"><LoadingState ariaLabel={resolveText('ui.loading.label')} /></div>)
+    return frame(<LoadingState ariaLabel={resolveText('ui.loading.label')} />, null)
   }
   if (view.state === 'error') {
-    return (
-      <div data-drawer-screen="error">
-        <StateView
-          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: view.onRetry }}
-          reasonCode="unreadable"
-          resolveText={resolveText}
-          state="error" />
-      </div>
+    return frame(
+      <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: view.onRetry }}
+        reasonCode="unreadable"
+        resolveText={resolveText}
+        state="error" />,
+      null
     )
   }
   if (view.rows.length === 0) {
-    return (<div data-drawer-screen="empty"><StateView reasonCode="not-yet" resolveText={resolveText} state="empty" /></div>)
+    // `not-yet`：确实还没有源；要求挂动作的码在这里语义不对。
+    return frame(<StateView reasonCode="not-yet" resolveText={resolveText} state="empty" />, null)
   }
-  return (
-    <div data-drawer-screen="ready">
-      {/* 两栏：列表 196 + 详情 + 间距 12。详情区这一版是占位（真实字段等写路径接上）。 */}
-      <div className="config-drawer__split">
-      <div className="config-drawer__source-list">
-        {view.rows.map((source) => (
-          <button
-            className="config-drawer__source-item"
-            data-drawer-source={source.sourceId}
-            key={source.sourceId}
-            onClick={() => onSelect?.(source.sourceId)}
-            type="button">
-            <span className="config-drawer__source-name">{source.name}</span>
-            {source.statusLabel === undefined ? null : (
-              <span className="config-drawer__source-status">{source.statusLabel}</span>
-            )}
-            {/* 启用与否只说事实；开关等 S1 落地再接，避免这里多出第二个写入口。 */}
-            {/* 行尾点：none 不画；ring 空心环、warn 实心黄、bad 实心红。 */}
-            {source.healthMarker === undefined || source.healthMarker === 'none'
-              ? null
-              : <span className={`config-drawer__source-dot config-drawer__source-dot--${source.healthMarker}`} />}
-          </button>
-        ))}
-      </div>
-      <div className="config-drawer__detail">
-        <div className="config-drawer__group-title">—</div>
-      </div>
-      </div>
-    </div>
+  return frame(
+    <div className="config-drawer__group-title">—</div>,
+    <>
+      {view.rows.map((source) => (
+        <button
+          className="config-drawer__source-item"
+          data-drawer-source={source.sourceId}
+          key={source.sourceId}
+          onClick={() => onSelect?.(source.sourceId)}
+          type="button">
+          <span className="config-drawer__source-name">{source.name}</span>
+          {source.statusLabel === undefined ? null : (
+            <span className="config-drawer__source-status">{source.statusLabel}</span>
+          )}
+          {/* 行尾点：none 不画；ring 空心环、warn 实心黄、bad 实心红。 */}
+          {source.healthMarker === undefined || source.healthMarker === 'none'
+            ? null
+            : <span className={`config-drawer__source-dot config-drawer__source-dot--${source.healthMarker}`} />}
+        </button>
+      ))}
+    </>
   )
 }
 
