@@ -76,8 +76,10 @@ describe('the deeplink handler is assembled with a navigation that actually open
     expect(shell).not.toContain('navigate: setActiveNavKey')
   })
 
-  it('resolves the settings panel through the availability check', () => {
-    // 产品卸载或版本差异会让面板键不存在：直接 set 就是把读者送进空屏。
-    expect(wiring).toContain('ports.setSettingsPanelKey(resolveAvailableSettingsPanelKey(key, ports.productSettingsEntries))')
+  it('never falls back to another panel when the named one is gone', () => {
+    // 产品卸载或版本差异会让面板键不存在：回落到默认面板就是「点了落到别页」。
+    // 判据在 handler 的 `isSettingsPanelAvailable`；装配里不许再出现会回落的解析。
+    expect(wiring).toContain('isSettingsPanelAvailable:')
+    expect(wiring).not.toContain('resolveAvailableSettingsPanelKey')
   })
 })
