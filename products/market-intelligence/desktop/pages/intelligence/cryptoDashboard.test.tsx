@@ -966,7 +966,7 @@ describe('host wiring: cells switched off and sources judged', () => {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: allEnabled }) },
-      onConfigureSources: () => undefined, onManageSource: vi.fn(), onOpenCalendar: () => undefined,
+      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
       text: dashboardText, cellEnabledIo: { read: async () => cells },
       ...extra
     } as never)))
@@ -1030,7 +1030,7 @@ describe('host wiring: capital cells, one row at a time', () => {
     }
   }
 
-  async function renderCapital(cells: Record<string, boolean>, query = vi.fn(async () => capitalSnapshot)) {
+  async function renderCapital(cells: Record<string, boolean>, query = vi.fn(async () => capitalSnapshot), onManageSource = vi.fn()) {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -1043,7 +1043,7 @@ describe('host wiring: capital cells, one row at a time', () => {
         { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) },
-      onConfigureSources: () => undefined, onManageSource: vi.fn(), onOpenCalendar: () => undefined,
+      onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
       text: dashboardText, cellEnabledIo: { read: async () => cells }
     } as never)))
     for (let round = 0; round < 20; round += 1) {
@@ -1051,7 +1051,7 @@ describe('host wiring: capital cells, one row at a time', () => {
       if (card && (card.querySelector('.mi-capital-conditions__stable-table') !== null || card.querySelector('.mi-source-state') !== null)) break
       await act(async () => { await Promise.resolve() })
     }
-    return { container, query }
+    return { container, query, onManageSource }
   }
 
   it('only ETF off: that row says it, the other cell keeps reading', async () => {
@@ -1081,5 +1081,41 @@ describe('host wiring: capital cells, one row at a time', () => {
     const card = container.querySelector('.mi-capital-conditions')!
     expect(card.querySelector('.mi-source-state')).toBeNull()
     expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+  })
+})
+
+
+describe('host wiring: each capital cell focuses its own cell', () => {
+  it('only the stablecoin action carries capital:stablecoin, only the ETF one carries capital:etf', async () => {
+    const text = productText['zh-CN'].pages.intelligence.portal
+    const onManageSource = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const query = vi.fn(async () => ({
+      state: 'available' as const, asOf, conclusion: 'partial' as const, etf: { state: 'unavailable' as const },
+      coreStablecoins: {
+        observedAt: '2026-08-04T23:00:00.000Z', verifiedAt: asOf, currentUsd: 254_900_000_000,
+        change1dUsd: 82_400_000, change1dPercent: 0.0323, change7dUsd: 82_400_000, change7dPercent: 0.0323,
+        change30dUsd: -500_000_000, change30dPercent: -0.21
+      }
+    }))
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), capitalConditionsClient: { querySnapshot: query },
+      now: () => new Date(asOf), onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
+      text: text.dashboard, cellEnabledIo: { read: async () => ({ 'capital:stablecoin': false, 'capital:etf': false }) }
+    } as never)))
+    for (let round = 0; round < 20; round += 1) {
+      if (container.querySelectorAll('.mi-source-state[data-state="disabled"]').length === 2) break
+      await act(async () => { await Promise.resolve() })
+    }
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>('.mi-capital-conditions button')]
+      .filter((button) => button.textContent === productText['zh-CN'].pages.intelligence.portal.data.enableSources)
+    expect(buttons).toHaveLength(2)
+    await act(async () => buttons[0]!.click())
+    expect(onManageSource).toHaveBeenLastCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:stablecoin' })
+    await act(async () => buttons[1]!.click())
+    expect(onManageSource).toHaveBeenLastCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:etf' })
   })
 })

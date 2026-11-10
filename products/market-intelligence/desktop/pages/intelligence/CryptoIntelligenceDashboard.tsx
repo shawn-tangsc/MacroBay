@@ -6,6 +6,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { ConfigDrawerPanel } from './ConfigDrawerPanel'
 import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
+import type { ProcessingSection } from './ProcessingSettingsPanel'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
@@ -115,7 +116,7 @@ type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEn
   onManageSource: (focus?: BusinessFocus) => void
   onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, openSettingsRequest, cellEnabledIo }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -142,6 +143,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   initialSourceId?: string
   /** 「采集与数据」那一屏的屏内定位（只作初值）：业务 / 模块卡 / 格。 */
   initialBusinessPosition?: BusinessFocus
+  /** 三屏的屏内分区（只作初值）：菜单 + 那一块。只交给对得上的那一屏。 */
+  initialDrawerSection?: Readonly<{ menu: ConfigDrawerMenu; section: string }>
   initialSourceFilter?: SourceFilter
   openSettingsRequest?: number
 }): React.ReactElement {
@@ -175,7 +178,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const capitalCellOff = (cellKey: string): DashboardCapitalCellOff | undefined =>
     isCellEnabled(cellState.cells, dashboardCellId('capital', cellKey))
       ? undefined
-      : { sourceLabel: cellLabel('capital', cellKey) ?? '', onOpenSources: () => onManageSource() }
+      : {
+          sourceLabel: cellLabel('capital', cellKey) ?? '',
+          // 两颗「去启用」各指各的格：cellId 就是这一格的键，别共用卡级回跳。
+          onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: 'capital', cellId: `capital:${cellKey}` })
+        }
   const capitalCellAvailability: DashboardCapitalCellAvailability = {
     ...(capitalCellOff('stablecoin') === undefined ? {} : { stablecoin: capitalCellOff('stablecoin') }),
     ...(capitalCellOff('etf') === undefined ? {} : { etf: capitalCellOff('etf') })
@@ -183,7 +190,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 情绪卡那一格被关掉：卡仍在，卡内遮罩说「来源没有启用」。
   const fearGreedCellOff = isCellEnabled(cellState.cells, dashboardCellId('fear-greed', 'index'))
     ? undefined
-    : { sourceLabel: cellLabel('fear-greed', 'index') ?? '', onOpenSources: () => onManageSource() }
+    : { sourceLabel: cellLabel('fear-greed', 'index') ?? '', onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: 'fear-greed', cellId: 'fear-greed:index' }) }
   // 市场状态表每一行：读不到 / 未启用就画状态行（不是删行）。
   const QUOTES_ROW_CELL_KEYS = {
     index: 'ndx', btc: 'btc', eth: 'eth', dxy: 'usd', gold: 'gold', us10y: 'ust10y', realRate: 'ust10y'
@@ -335,7 +342,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           screenSaving={drawerScreen.saving}
           {...(drawerScreen.failure === undefined ? {} : { screenSaveFailure: drawerScreen.failure })}
           briefingPanel={<ConfigDrawerPanel screen="briefing"><DailyBriefingSettingsPanel onState={setDrawerScreen} /></ConfigDrawerPanel>}
-          processingPanel={<ConfigDrawerPanel screen="processing"><ProcessingSettingsPanel /></ConfigDrawerPanel>}
+          processingPanel={<ConfigDrawerPanel screen="processing"><ProcessingSettingsPanel
+              {...(initialDrawerSection?.menu === 'processing'
+                ? { initialSection: initialDrawerSection.section as ProcessingSection }
+                : {})} /></ConfigDrawerPanel>}
           runLogPanel={<ConfigDrawerPanel screen="run-log"><RunLogDrawerPanel /></ConfigDrawerPanel>}
           notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel /></ConfigDrawerPanel>}
               sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel pane="sources" initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
@@ -403,7 +413,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
           onWindowChange={setPositioningWindow} text={text.positioning}
           {...(positioningCells ? { cells: positioningCells } : {})}
-          onOpenSources={() => onManageSource()}
+          onOpenSources={() => onManageSource({ business: 'dashboard', moduleKey: 'positioning', cellId: 'positioning:oi' })}
           onReloadFunding={() => setFundingReloadKey(key => key + 1)} />
         {/* A conclusion about the card above it, not another section: the reader asks "so what do
             these two legs mean together" while looking at the chart, and a band of its own read
