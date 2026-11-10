@@ -247,7 +247,7 @@ export function ModelServiceModelDrawer({
               <span className="model-drawer-label">{labels.freeModel}</span>
               <div>
                 <div className="model-drawer-switch-row">
-                  {/* 手写 `role="switch"` 是缺陷：换 antd `Switch`，尺寸走 `size="small"`（主题 token）。 */}
+                  {/* 手写 `role="switch"` 是缺陷：换 antd `Switch`，尺寸走默认档（全仓一档，`small` 只在该用它的密排处）。 */}
                   <span data-model-free>
                     <Switch
                       aria-label={labels.freeModel}
@@ -255,7 +255,6 @@ export function ModelServiceModelDrawer({
                       disabled={freeLocked}
                       onChange={(next) =>
                         onChange({ ...draft, freeOverride: next ? true : undefined })}
-                      size="small"
                     />
                   </span>
                 </div>
@@ -271,7 +270,6 @@ export function ModelServiceModelDrawer({
                     aria-label={labels.pinModel}
                     checked={pinned}
                     onChange={() => onTogglePin()}
-                    size="small"
                   />
                 </span>
               </div>

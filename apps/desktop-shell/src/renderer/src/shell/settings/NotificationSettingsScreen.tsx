@@ -138,7 +138,6 @@ export function NotificationSettingsScreen(props: {
               text={text}
               control={
                 <Switch
-                  size="small"
                   checked={state.data.toastEnabled}
                   aria-label={text.toastRow}
                   onChange={(next) => void save(setToast(next))}
@@ -153,7 +152,6 @@ export function NotificationSettingsScreen(props: {
               text={text}
               control={
                 <Switch
-                  size="small"
                   checked={state.data.desktopEnabled}
                   aria-label={text.desktopRow}
                   onChange={(next) => void save(setDesktop(next))}

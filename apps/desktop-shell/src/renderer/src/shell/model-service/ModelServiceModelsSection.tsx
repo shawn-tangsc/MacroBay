@@ -295,8 +295,6 @@ export function ModelServiceModelsSection({
         <p className="model-service-sync-error" data-models-sync-error role="alert">
           <span>{syncErrorText}</span>
           <Button
-            type="text"
-            size="small"
             className="text-action"
             data-models-sync-retry
             disabled={isSyncing}

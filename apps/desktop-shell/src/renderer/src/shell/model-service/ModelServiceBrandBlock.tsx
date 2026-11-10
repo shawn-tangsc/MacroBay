@@ -147,7 +147,6 @@ export function ModelServiceBrandBlock({
       />
       <span data-provider-switch title={labels.enableSwitchTitle}>
         <Switch
-          size="small"
           checked={enabled}
           loading={enabledPending}
           disabled={enabledPending}

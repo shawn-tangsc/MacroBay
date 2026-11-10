@@ -135,8 +135,6 @@ export function ModelServiceRequestConfigEndpointFields({
     if (!normalizeEndpointBase(liveValue)) return null
     return (
       <Button
-        type="text"
-        size="small"
         className="text-action"
         data-endpoint-set-default={protocol}
         disabled={savingDefaultEndpoint}
