@@ -21,6 +21,8 @@ export function useSourceDetailReads(provider: ProviderView, showSourceDetails: 
   refreshDetail: (sourceId: string) => Promise<boolean>
   /** 哪些源「刚跑完、读数还没刷新」——只在这一次运行之后成立，下一次成功刷新就消失。 */
   refreshStaleById: Readonly<Record<string, boolean>>
+  /** 开始一次新的运行：上一轮留下的「读数还没刷新」先撤掉（它说的不是这一轮）。 */
+  beginRun: (sourceId: string) => void
 }> {
   const [details, setDetails] = useState<Record<string, SourceDetailRead>>({})
   const [refreshStaleById, setRefreshStaleById] = useState<Readonly<Record<string, boolean>>>({})
@@ -95,7 +97,16 @@ export function useSourceDetailReads(provider: ProviderView, showSourceDetails: 
     }
   }, [])
 
-  return { details, retryDetail, refreshDetail, refreshStaleById }
+  const beginRun = useCallback((sourceId: string): void => {
+    setRefreshStaleById((current) => {
+      if (current[sourceId] !== true) return current
+      const next = { ...current }
+      delete next[sourceId]
+      return next
+    })
+  }, [])
+
+  return { details, retryDetail, refreshDetail, refreshStaleById, beginRun }
 }
 
 /** 只需要 `kind` 的调用点（标签行）用这一份，避免再抄一遍 kind 判断。 */

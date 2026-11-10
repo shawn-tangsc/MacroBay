@@ -179,13 +179,15 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [networkFailure, setNetworkFailure] = useState(false)
 
 
-  const { details, retryDetail, refreshDetail, refreshStaleById } = useSourceDetailReads(provider, showSourceDetails)
+  const { details, retryDetail, refreshDetail, refreshStaleById, beginRun } = useSourceDetailReads(provider, showSourceDetails)
 
   const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
+    // 上一轮留下的「读数还没刷新」在这一轮开始时就该消失：否则它会和「正在运行」同时出声。
+    beginRun(sourceId)
     const outcome = await onRunNow!(sourceId)
     await refreshDetail(sourceId)
     return outcome
-  }, [onRunNow, refreshDetail])
+  }, [beginRun, onRunNow, refreshDetail])
 
 
 

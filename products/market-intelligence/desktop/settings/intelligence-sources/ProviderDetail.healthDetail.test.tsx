@@ -287,6 +287,11 @@ describe('ProviderDetail health detail (B4)', () => {
     // 旧值还在，状态句出现；不是「今天还没有」那种「没有数据」。
     expect(container.textContent).toContain('11-09 12:00 GMT+8')
     expect(container.textContent).toContain(settingsText.health.refreshStale)
+    // 它与「原因说明」是**两行**：那句话说的是四格新鲜度，不是「为什么没在采」。
+    const staleLine = [...container.querySelectorAll('[role="status"]')]
+      .find((node) => node.textContent === settingsText.health.refreshStale)
+    expect(staleLine).not.toBeUndefined()
+    expect(staleLine?.textContent).toBe(settingsText.health.refreshStale)
     // 状态句与「没有数据」不是一句：不是 never-ran / noSuccess 那两档。
     expect(container.textContent).not.toContain(settingsText.health.reasons['never-ran'])
   })
@@ -323,5 +328,46 @@ describe('ProviderDetail health detail (B4)', () => {
     await runOnce()
     expect(container.textContent).toContain('11-10 12:30 GMT+8')
     expect(container.textContent).not.toContain(settingsText.health.refreshStale)
+  })
+
+  it('drops the stale note when a new run starts, so it never speaks over 「正在运行」', async () => {
+    let reads = 0
+    let releaseRun: () => void = () => {}
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method !== 'intelligenceSources.getPageState') return undefined
+      reads += 1
+      if (reads === 2) throw new Error('refresh-failed')
+      return { detail: detail(reads === 1 ? '2026-11-09T04:00:00.000Z' : '2026-11-10T04:30:00.000Z') }
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    let call = 0
+    const container = await render(createElement(ProviderDetail, {
+      labels: labels(),
+      onRunNow: async () => {
+        call += 1
+        if (call === 1) return { kind: 'succeeded' as const, notice: '采集成功。' }
+        await new Promise<void>((resolve) => { releaseRun = resolve })
+        return { kind: 'succeeded' as const, notice: '采集成功。' }
+      },
+      provider: provider([source({ sourceId: 's1', displayName: 'S1' })]),
+      showSourceDetails: true,
+      supportsRunNowById: { s1: true }
+    }))
+
+    const runButton = (): HTMLButtonElement | undefined => [...container.querySelectorAll('button')]
+      .find((button) => button.textContent === settingsText.health.runAction.run)
+    await act(async () => { runButton()?.click() })
+    await flush()
+    expect(container.textContent).toContain(settingsText.health.refreshStale)
+
+    // 第二轮开始：这句先撤掉，运行中的状态词占着 role=status。
+    await act(async () => { runButton()?.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(container.textContent).not.toContain(settingsText.health.refreshStale)
+    expect(container.textContent).toContain(settingsText.health.runAction.running)
+
+    releaseRun()
+    await flush()
   })
 })
