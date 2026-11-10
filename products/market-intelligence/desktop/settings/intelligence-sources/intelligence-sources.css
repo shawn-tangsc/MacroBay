@@ -999,7 +999,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto 32px;
   column-gap: 8px;
-  align-items: start;
+  /* 名字 / meta / 「高级」/ 开关共用一条水平中线（用户 2026-11-10）：
+     整行 44 高、四个子项都居中，谁都不许被 margin 顶偏。 */
+  align-items: center;
+  min-height: 44px;
   padding: 10px 12px;
   /* 边框用 inset 阴影画：`border` 会把内容再往里挤 1px，下面那张表单的第一列就对不齐了。
      视觉完全一样（1px 细线 + 圆角），但内容左缘与表单行同为 12（主档）。 */
@@ -1010,9 +1013,9 @@
 }
 
 .source-provider-detail__row > .ant-switch {
-  /* 与**第一行**文字垂直居中，不随左栏折行往下掉。 */
-  align-self: start;
-  margin-top: 1px;
+  /* 居中靠容器的 `align-items: center`：开关自己不留 margin，否则它就被顶偏 1px。 */
+  align-self: center;
+  margin: 0;
 }
 
 /* 状态串：状态词 + 人话原因 + 上次成功，一条 ` · ` 串起来。
@@ -1253,19 +1256,58 @@
 /* 整屏的动作统一成小号文字按钮：源名旁的「官网 / 测试连接」、标签行里的「注册 / 获取 Key」、
    行尾的「高级」。页面里不再出现占一整行的实心大按钮。 */
 .source-provider-detail__signup-inline.ant-btn,
+/* 源名那一行：名字 + 行内动作，**一行不换行**（用户 2026-11-10 第四次定位置）。
+   间距全部由这一处的 `gap: 8px` 给：名字与第一颗之间、按钮与按钮之间都是 8，不用 margin 补。 */
+.source-provider-detail__title-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.source-provider-detail__title-row > h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-provider-detail__name-actions {
+  display: inline-flex;
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 源名旁那几颗：**同一种小号描边按钮**——24 高、1px 中性描边、6 圆角、12 号字、中性次级底色。
+   两颗长得一模一样：谁都不用主色/危险色变体（它们没有危险语义，「测试连接」也不是一等动作）。
+   `flex: 0 0 auto`：宁可压名字的省略号，也不许折行。 */
 .source-provider-detail__name-action.ant-btn {
-  height: auto;
-  padding: 0;
-  font-size: var(--font-meta);
-  line-height: var(--line-meta);
-  white-space: normal;
-  text-align: left;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  box-shadow: none;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.source-provider-detail__name-action.ant-btn:not(:disabled):hover {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-strong);
 }
 
 .source-provider-detail__credential {
   display: grid;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .source-provider-detail__credential label {
@@ -1496,10 +1538,16 @@
 
 /* 源那一行行尾的「高级」：文字按钮，右缘贴住开关左侧，不与开关抢行尾。 */
 .source-provider-detail__advanced.ant-btn {
-  height: 22px;
-  padding: 0 4px;
+  align-self: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  box-shadow: none;
   color: var(--muted-strong);
-  font-size: var(--font-meta);
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* 展开后那张表单：健康两行（一行两组）+ 采集策略两行，**没有二级标题、没有卡片、没有嵌套框**。

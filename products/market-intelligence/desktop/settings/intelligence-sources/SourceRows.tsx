@@ -75,6 +75,12 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
   if (!row.visible) return null
   const label = row.descriptor.labelText?.(view) || props.name
   const enabled = row.value === true
+  const metaParts = [
+    ...new Set(props.tags),
+    ...(source.requiresProxy && !props.proxyConfigured ? [labels.badges.proxy] : []),
+    ...(needsJob(source) ? [source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered] : [])
+  ]
+  const proxyPart = labels.badges.proxy
   /* 这一行是**列表行**，不是设置行：复制列是 `div`、标签是 `strong`（原来就是这样）。
      所以它自己写这两层，不改通用设置行的形状。三列：内容 / 高级 / 开关。 */
   return <div
@@ -94,11 +100,16 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
       {/* 第二行：归属与任务状态。纯文本 ` · ` 串起，不再是一排药丸。
           「已启用／未启用」不进这一行：行尾开关就是那个状态本身，同一个事实两个词就是说两遍
           （用户 2026-11-10 又一次确认这条）。 */}
-      <span className="source-provider-detail__tags-line">
-        {[...new Set(props.tags)].join(' · ')}
-        {source.requiresProxy && !props.proxyConfigured ? <><i aria-hidden="true"> · </i><em className="source-provider-detail__proxy">{labels.badges.proxy}</em></> : null}
-        {needsJob(source) ? <><i aria-hidden="true"> · </i>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</> : null}
-      </span>
+      {/* meta 一行 = 可见性标签 + 代理/任务状态；**一件都没有就整段不渲染**，
+          不留空行、空 span，也不留一个孤零零的 `·`。 */}
+      {metaParts.length === 0
+        ? null
+        : <span className="source-provider-detail__tags-line">
+          {metaParts.map((part, index) => <span key={part}>
+            {index === 0 ? null : <i aria-hidden="true"> · </i>}
+            {part === proxyPart ? <em className="source-provider-detail__proxy">{part}</em> : part}
+          </span>)}
+        </span>}
     </div>
     {props.advanced === undefined
       ? null

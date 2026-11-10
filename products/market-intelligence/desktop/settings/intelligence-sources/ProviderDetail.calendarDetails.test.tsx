@@ -241,6 +241,69 @@ describe('ProviderDetail source details', () => {
     expect(container.textContent).toContain(settingsText.jobNotRegistered)
   })
 
+  it('keeps the source name and its inline actions in one unbroken row', async () => {
+    // 用户 2026-11-10 第四次定位：名字 + 官网 + 测试连接 + 注册/获取 Key **同一行**，间距 8，
+    // 一颗都不许掉到第二行；几颗按钮长得一样（同一种小号描边按钮，没有 link / primary 变体）。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          ...fedProvider(),
+          website: 'https://www.federalreserve.gov',
+          signupUrl: 'https://www.federalreserve.gov/signup'
+        }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const row = container.querySelector('.source-provider-detail__title-row')
+    expect(row).not.toBeNull()
+    // 同一个行容器里只有「名字」与「动作组」两块：按钮组不会再自成第二个行容器。
+    expect(row?.querySelectorAll('.source-provider-detail__title-row')).toHaveLength(0)
+    expect(row?.querySelector('h2')?.textContent).toContain('Federal Reserve Board (Fed)')
+    const actions = row?.querySelector('.source-provider-detail__name-actions')
+    const buttons = [...(actions?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      settingsText.website,
+      settingsText.testConnection,
+      settingsText.signup
+    ])
+    // 长得一样：同一套类名，都不是 antd 的 link 变体。
+    for (const button of buttons) {
+      expect(button.className).toContain('source-provider-detail__name-action')
+      expect(button.className).not.toContain('ant-btn-link')
+      expect(button.className).not.toContain('ant-btn-primary')
+    }
+  })
+
+  it('does not put a 「需要 API Key」 heading above the key row', async () => {
+    // 用户 2026-11-10：那行标题是废话——下面那行的标签 `API Key` 已经说了同一件事。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: { ...fedProvider(), credential: 'api-key' }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.textContent).not.toContain(settingsText.credentialsRequired)
+    // 标签本身还在：`API Key` 那一行的标签 + 值列。
+    expect(container.textContent).toContain(settingsText.apiKey.label)
+    expect(container.querySelector('.source-provider-detail__credential')).not.toBeNull()
+  })
+
   it('does not print a capability-count line in the header', async () => {
     // 用户 2026-11-10：「2 项能力 · 已启用 1」是废话——下面一行行自己数得出来。
     // 这一行整行删掉，不留占位；把它加回来这条就红。

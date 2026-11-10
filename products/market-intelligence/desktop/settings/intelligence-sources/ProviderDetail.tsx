@@ -12,7 +12,7 @@ import { CollectionPolicySection, type CollectionPolicyLabels } from './Collecti
 import { SourceEnabledRow, needsJob } from './SourceRows'
 import { SourceDetailsBlock } from './SourceDetailsBlock'
 import type { SourceHealthLabels } from './SourceHealthDetail'
-import { isCalendarSource, useSourceDetailReads } from './useSourceDetailReads'
+import { useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -334,12 +334,14 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         <span className="source-provider-detail__name-actions">
           {provider.website && !hideWebsite
             ? <Button
+              autoInsertSpace={false}
               className="source-provider-detail__name-action"
               onClick={() => window.open(provider.website!, '_blank', 'noopener,noreferrer')}
               size="small">{labels.website}</Button>
             : null}
           {offersConnectionTest(provider)
             ? <Button
+              autoInsertSpace={false}
               className="source-provider-detail__name-action"
               disabled={testingConnection}
               loading={testingConnection}
@@ -348,14 +350,16 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             : null}
           {provider.signupUrl
             ? <Button
+              autoInsertSpace={false}
               className="source-provider-detail__name-action"
               onClick={() => window.open(provider.signupUrl!, '_blank', 'noopener,noreferrer')}
               size="small">{labels.signup}</Button>
             : null}
         </span>
       </div>
+      {/* 「需要 API Key」那行分组标题删掉了（用户 2026-11-10）：下面那行的标签 `API Key` 自己就说清了，
+          再来一个标题只是同一件事说两遍。 */}
       {provider.credential === 'api-key' ? <>
-        <small>{labels.credentials}</small>
         <div className="source-provider-detail__credential">
           <label>
             {/* 标签行只放字段名：按钮跟着源名走，不跟着字段标签走（用户 2026-11-10）。 */}
@@ -395,16 +399,16 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0
         const unavailable = source.unavailable
+        /* meta 只放**读者要判断的东西**：未接入 / 高级这类可见性，以及后面的运行/代理状态。
+           「看板 / 日历 / 舆情」这种**面板用途**不进 meta（用户 2026-11-10：它只说这个源供哪块用，
+           读者不需要；面板在哪块出现，看板里自己看得见）。 */
         const tags = [
           unused || source.visibility === 'pending'
             ? labels.badges.pending
             : source.visibility === 'advanced'
-              // 「已启用／已停用」不进标签行：开关就在行尾，词说的是开关位置；读者要判断的是
-              // 这个源现在能不能用，那是状态串里状态词的事。同一个事实只说一次。
+              // 「已启用／已停用」不进标签行：开关就在行尾，词说的是开关位置。
               ? labels.badges.advanced
-              : null,
-          isCalendarSource(source) ? labels.badges.calendar : null,
-          ...source.panels.map((panel) => labels.panelNames[panel] ?? panel)
+              : null
         ].filter((tag): tag is string => Boolean(tag))
         /* 启用行：设置页那一面按菜单 1 的声明渲染，看板/日历那一面仍是旧形状——
            两条路径在同一组件里，状态药丸与标签行只有一份。 */
