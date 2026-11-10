@@ -66,16 +66,19 @@ export function modelServiceValue(
 const text = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined
 
-/** 只取五个已知字段；形状不认识就是 `undefined`（= 读不到），绝不猜。 */
+/**
+ * 只取已知字段，按 **`AppSettings` 的真实形状**读：`language` / `themeMode` / `timeZone` 是**顶层**，
+ * 代理在 `network.proxyMode`。之前按 `raw.preferences` / `raw.proxy` 读，四行一直显示「读不到」——
+ * 不是没数据，是路径读错。形状不认识就是 `undefined`（= 读不到），绝不猜。
+ */
 function readPlatformValues(raw: Record<string, unknown>): DrawerPlatformValues {
-  const preferences = (raw.preferences ?? {}) as Record<string, unknown>
-  const proxy = (raw.proxy ?? {}) as Record<string, unknown>
+  const network = (raw.network ?? {}) as Record<string, unknown>
   return {
-    timeZone: text(preferences.timeZone),
-    language: text(preferences.language),
-    theme: text(preferences.displayStyle) ?? text(preferences.theme),
-    proxy: text(proxy.mode),
-    // 「模型服务」不在这一份设置快照里：由 `modelServiceValue` 从供应商读数单独算
-    // （见上面的 hook），这里不编一个值。
+    timeZone: text(raw.timeZone),
+    language: text(raw.language),
+    theme: text(raw.themeMode),
+    proxy: text(network.proxyMode),
+    // 模型服务页的「是否配置」还没有在渲染层暴露成单一视图：留空 → 显示「读不到」，不编模型名。
+    modelService: undefined
   }
 }

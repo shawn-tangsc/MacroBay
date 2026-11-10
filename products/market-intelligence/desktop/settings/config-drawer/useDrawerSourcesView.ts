@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { sourceUnavailableSentence } from '../../shared/i18n/sourceUnavailableCopy'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 
 import type { DrawerSourcesView } from './drawerScreenView'
@@ -13,7 +14,11 @@ import type { DrawerSourcesView } from './drawerScreenView'
  *
  * 与平台那屏同一个分工：hook 在抽屉目录**之外**，由宿主使用；抽屉只渲染传进去的列表。
  */
-export function useDrawerSourcesView(active: boolean): DrawerSourcesView | undefined {
+export function useDrawerSourcesView(
+  active: boolean,
+  /** 兜底那句「取不到（原因见详情）」由调用方按语言给。 */
+  unavailableFallback: string
+): DrawerSourcesView | undefined {
   const [view, setView] = useState<DrawerSourcesView>()
 
   useEffect(() => {
@@ -27,14 +32,17 @@ export function useDrawerSourcesView(active: boolean): DrawerSourcesView | undef
         const rows = settings.groups.flatMap((group) => group.providers.flatMap((provider) => provider.sources.map((source) => ({
           sourceId: source.sourceId,
           name: source.displayName,
-          statusLabel: source.unavailable ? source.unavailable.reasonCode : undefined,
+          // 正文只给人话：原因码走映射表，表里没有就兜底，**绝不把码漏出来**。
+          statusLabel: source.unavailable
+            ? sourceUnavailableSentence(source.unavailable.reasonCode, unavailableFallback)
+            : undefined,
           enabled: source.enabled
         }))))
         setView({ state: 'ready', rows })
       })
       .catch(() => { if (alive) setView({ state: 'error', onRetry: () => setView({ state: 'loading' }) }) })
     return () => { alive = false }
-  }, [active])
+  }, [active, unavailableFallback])
 
   return view
 }

@@ -243,4 +243,22 @@ describe('config settings drawer (static layout)', () => {
     expect(empty.querySelector('[data-drawer-screen="empty"]')).not.toBeNull()
     expect(empty.querySelector('[data-drawer-screen="error"]')).toBeNull()
   })
+
+  it('shows every source the settings view returned, including calendar-only ones', () => {
+    // 回归：配置面要的是**全部源**。曾经想用 `getPanelView(panelId)` 喂这一屏，而它只有
+    // `dashboard` / `economic-calendar` 两个面板——那样「只给日历」和「哪都不给」的源会在抽屉里消失，
+    // 读者会以为没有这个源。这条用例把「6 个源（含 1 个只在日历里）→ 6 行」钉死。
+    const container = openSources({
+      state: 'ready',
+      rows: [
+        { sourceId: 'bls', name: 'BLS 官方日历', statusLabel: '官方源暂时不可用', enabled: true },
+        { sourceId: 'fed', name: 'Fed 官方日历', enabled: true },
+        { sourceId: 'market', name: '市场日历', enabled: true },
+        { sourceId: 'binance', name: 'Binance 期货持仓', enabled: false },
+        { sourceId: 'fear-greed', name: '恐惧贪婪指数', enabled: true },
+        { sourceId: 'news-rss', name: '新闻 RSS', enabled: false }
+      ]
+    })
+    expect(container.querySelectorAll('[data-drawer-source]')).toHaveLength(6)
+  })
 })

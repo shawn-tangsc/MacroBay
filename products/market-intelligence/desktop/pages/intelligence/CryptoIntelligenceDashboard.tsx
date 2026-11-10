@@ -6,6 +6,8 @@ import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSetting
 import { useDrawerSourcesView } from '../../settings/config-drawer/useDrawerSourcesView'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useMemo, useState, type ReactNode } from 'react'
+
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { Info } from 'lucide-react'
 
 import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
@@ -38,7 +40,7 @@ import type { createCrossAssetObservationClient } from '../../shared/ipc/crossAs
 import type { DashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedStatusClient'
 import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
-import type { productText } from '../../shared/i18n/productText'
+import { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
@@ -101,7 +103,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   const platformDrawerValues = usePlatformDrawerValues()
-  const drawerSourcesView = useDrawerSourcesView(settingsDrawerOpen)
+  // 兜底句从产品文案表取：dashboard 的 Text 类型不额外加字段。
+  const drawerSourcesView = useDrawerSourcesView(
+    settingsDrawerOpen,
+    productText[useShellLanguage()].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
+  )
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
