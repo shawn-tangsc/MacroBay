@@ -14,7 +14,7 @@ import { SettingsInfo } from '../settingsInfo'
 import { SourceEnabledRow, needsJob } from './SourceRows'
 import { SourceDetailsBlock } from './SourceDetailsBlock'
 import type { SourceHealthLabels } from './SourceHealthDetail'
-import { BUSINESS_MODULE_IDS, DASHBOARD_SOURCE_MODULES, cellIdOf } from './dashboardSourceModules'
+import { BUSINESS_MODULE_IDS, DASHBOARD_SOURCE_MODULES, cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 import { useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
@@ -358,14 +358,18 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    *    ——它们没有自己的格开关，但确实在用（把它们在用也刷成关就错了）；
    * 3. 采集与数据里根本没有它的（维护备用 / 只供分析 / 未接入）→ 关。
    */
-  const rowEnabledOf = (sourceId: string): boolean => {
+  const rowEnabledOf = (sourceId: string): boolean | undefined => {
     const dashboardModules = DASHBOARD_SOURCE_MODULES.filter((module) => (BUSINESS_MODULE_IDS.dashboard as readonly string[]).includes(module.id))
     const cells = dashboardModules.flatMap((module) => module.cells
       .filter((cell) => cell.sourceId === sourceId)
       .map((cell) => cellIdOf(module.id, cell)))
     if (cells.length > 0) return cells.some((cellId) => cellEnabled?.[cellId] === true)
-    /* 采集与数据里没有对应格的源（日历 feed / 新闻 / 维护备用）→ **恒显示关**
-       （用户 2026-11-11 最新口径：读的是「采集与数据里有的项的启用状态」，不在的默认关闭）。 */
+    /* 没有看板格、但**在采集与数据里以平铺项出现**（日历六条 / 新闻四条）→ 不覆盖，
+       走声明式行自己的 `row.value`（即源投影的 `enabled`）；用户口径：出现了且被启用才算开。 */
+    const listedElsewhere = [...modulesForBusiness('calendar'), ...modulesForBusiness('sentiment')]
+      .some((module) => module.cells.some((cell) => cell.sourceId === sourceId))
+    if (listedElsewhere) return undefined
+    /* 采集与数据里根本没出现的（维护备用 / 只供分析 / 未接入）→ 关。 */
     return false
   }
 

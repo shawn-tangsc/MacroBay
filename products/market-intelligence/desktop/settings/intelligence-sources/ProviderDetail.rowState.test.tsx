@@ -74,10 +74,13 @@ describe('能力行状态读格开关', () => {
     expect(rowSwitch(on, 'binance-futures-positioning')?.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('always shows a no-cell source as off, even when its own enabled is true', async () => {
-    // 用户 2026-11-11 最新口径：读「采集与数据里有的项的启用状态」；**没有对应格的默认关闭**。
-    const host = await render([source('binance-announcements', 'feed')] as never, {})
-    expect(rowSwitch(host, 'binance-announcements')?.getAttribute('aria-checked')).toBe('false')
+  it('shows a no-cell source listed in 采集与数据 by its own enabled', async () => {
+    // 舆情 / 日历那几条没有格开关，但确实在采集与数据里列着：出现了、且被启用 → 开。
+    const on = await render([source('binance-announcements', 'feed')] as never, {})
+    expect(rowSwitch(on, 'binance-announcements')?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => root?.unmount())
+    const off = await render([{ ...source('binance-announcements', 'feed'), enabled: false }] as never, {})
+    expect(rowSwitch(off, 'binance-announcements')?.getAttribute('aria-checked')).toBe('false')
   })
 
   it('shows maintenance and un-wired sources with no place in 采集与数据 as off', async () => {
