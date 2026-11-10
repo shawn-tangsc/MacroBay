@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PERIOD_ID } from '../../../contracts/dailyBriefing'
 import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
-import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort, DAILY_BRIEF_HISTORY_REF_MARKER } from './dailyBriefEditorSessionPort'
+import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort, DAILY_BRIEF_HISTORY_REF_MARKER, findLatestBriefingSessionId } from './dailyBriefEditorSessionPort'
 
 type FakeSession = { id: string; agentId: string; name: string; createdAt?: string; origin?: string; originGroup?: string; originRef?: string; originState?: 'current' | 'superseded'; messages?: unknown[] }
 
@@ -279,3 +279,35 @@ describe('claiming the briefing sessions that were created without an identity',
     // 真实库里就有 4 条链接指向已删除的会话：跳过并计数，不能因此中断整趟迁移。
     expect(result).toEqual({ updated: 0, skipped: 0, missing: 1 })
   })
+
+describe('E9 open-session lookup', () => {
+  const editionKey = { agentId: 'daily-brief-editor', editionDate: '2026-11-09', periodId: DEFAULT_PERIOD_ID, locale: 'zh-CN' as const }
+
+  it('returns the formal identity of this edition and language, never a history copy', async () => {
+    const d = deps()
+    d.sessions.set('formal', { id: 'formal', agentId: 'daily-brief-editor', name: 'zh', originRef: `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN` })
+    d.sessions.set('history', { id: 'history', agentId: 'daily-brief-editor', name: 'old', originRef: `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:zh-CN${DAILY_BRIEF_HISTORY_REF_MARKER}old` })
+    d.sessions.set('english', { id: 'english', agentId: 'daily-brief-editor', name: 'en', originRef: `daily-brief:2026-11-09:${DEFAULT_PERIOD_ID}:en-US` })
+
+    await expect(findLatestBriefingSessionId({ findAgentSessionByAutomationRef: d.findAgentSessionByAutomationRef }, editionKey)).resolves.toBe('formal')
+    // 期 × 语言：换语言必须是另一条，不许拿中文那条顶。
+    await expect(findLatestBriefingSessionId({ findAgentSessionByAutomationRef: d.findAgentSessionByAutomationRef }, { ...editionKey, locale: 'en-US' })).resolves.toBe('english')
+  })
+
+  it('returns null when the edition has no session, and never falls back to the nearest one', async () => {
+    const d = deps()
+    d.sessions.set('other-day', { id: 'other-day', agentId: 'daily-brief-editor', name: 'x', originRef: `daily-brief:2026-11-08:${DEFAULT_PERIOD_ID}:zh-CN` })
+    await expect(findLatestBriefingSessionId({ findAgentSessionByAutomationRef: d.findAgentSessionByAutomationRef }, editionKey)).resolves.toBeNull()
+  })
+
+  it('returns null on a read failure but leaves a log line that distinguishes it from "no session"', async () => {
+    const log = vi.fn()
+    const failing = { findAgentSessionByAutomationRef: async () => { throw new Error('db locked') } }
+    await expect(findLatestBriefingSessionId({ ...failing, log }, editionKey)).resolves.toBeNull()
+    expect(log).toHaveBeenCalledWith('warn', 'daily-brief-session-link-unreadable', expect.objectContaining({ editionDate: '2026-11-09', locale: 'zh-CN' }))
+
+    const quiet = vi.fn()
+    await expect(findLatestBriefingSessionId({ findAgentSessionByAutomationRef: async () => null, log: quiet }, editionKey)).resolves.toBeNull()
+    expect(quiet).not.toHaveBeenCalled()
+  })
+})

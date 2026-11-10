@@ -176,3 +176,39 @@ export async function claimExistingBriefingSessions(deps: Readonly<{
   }
   return { updated, skipped, missing }
 }
+
+/**
+ * E9「打开会话」入口的唯一查找实现：**该期该语言最新一次生成**所用的会话 id。
+ *
+ * - 维度是「期 × 语言」（`daily-brief:<期>:<period>:<locale>`）——同一期中英是两条身份，
+ *   拿错一条会把英文期指向中文会话；
+ * - 只查**正式身份**（不带历史后缀）：历史副本按定义不是身份，这个入口不该指到它们；
+ * - **查不到回 null**（界面据此不显示这个动作），不做「就近取一条」；
+ * - **读失败也回 null**，但留一条日志——「确实没有」与「读不到」在界面上表现一样，
+ *   在日志里必须分得开（`daily-brief-session-link-unreadable`）。
+ */
+export async function findLatestBriefingSessionId(deps: Readonly<{
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<{ id: string } | null>
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+}>, input: Readonly<{
+  agentId: string
+  editionDate: string
+  periodId: string
+  locale: 'zh-CN' | 'en-US'
+}>): Promise<string | null> {
+  const originRef = dailyBriefSessionOriginRef(input)
+  if (!deps.findAgentSessionByAutomationRef) return null
+  try {
+    const found = await deps.findAgentSessionByAutomationRef(input.agentId, originRef)
+    return found?.id ?? null
+  } catch (error) {
+    deps.log?.('warn', 'daily-brief-session-link-unreadable', {
+      editionDate: input.editionDate,
+      periodId: input.periodId,
+      locale: input.locale,
+      originRef,
+      reason: error instanceof Error ? error.message : String(error)
+    })
+    return null
+  }
+}
