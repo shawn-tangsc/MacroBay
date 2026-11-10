@@ -13,6 +13,8 @@
 |---|---|---|---|
 | `pnpm demo:verify` | 改动涉及示例模式（`sample mode`）或它的示例数据时；发布前若有涉及则跑一次 | 改这块的实现方 | 退出码 0 + 报告里"示例场景与断言条数"那一行 |
 | `pnpm channel:acceptance` | 改动涉及真实通道投递（绑定、鉴权、出站限流）时；需要真机与真实凭据 | 通道线实现方 | 退出码 0 + 一份"哪个通道、哪条消息、落到了哪个设备/会话"的记录 |
+| `pnpm discord:smoke`（`--probe`，或 `--send <频道 id> "文本"`） | 改 Discord 网关/投递，或要在真机确认「这条通道真的通」时；**必须对真外网跑**，本机直连不通时加 `--proxy http://127.0.0.1:7888` | 有该 bot 凭据的人（Token 只从 `$DSH_SECRET_DISCORD_BOT_TOKEN` 读，不落盘、不打印） | 一行脱敏 JSON：`--probe` 出 `ok:true` 且 `guilds ≥ 1`；`--send` 出 `messageId`，并与手机/客户端里那条消息对照 |
+| `pnpm slack:smoke`（`--probe`，或 `--send <频道 id> "文本"`） | 改 Slack Socket Mode/投递，或要在真机确认「App Token 与 Socket Mode 都真的能用」时；同样要对真外网跑，可加 `--proxy` | 有该 App 两把 token 的人（`$DSH_SECRET_SLACK_BOT_TOKEN` / `$DSH_SECRET_SLACK_APP_TOKEN`） | 一行脱敏 JSON：`--probe` 出 `ok:true` 且 `socket:"hello"`（证到「拿到 Socket Mode 地址并连上」）；`--send` 出 `messageId`（Slack 的 `ts`） |
 | `pnpm check:boot-page` | 改动或审查启动失败页（`bootFailurePage`）的布局时 | 改这块的实现方 | 五条通过行（每行含卡片宽度与三个按钮高度）+ 退出码 0 |
 | `pnpm seed:briefing-history` | 需要造「那一次已清理」的门槛 5 证据时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用 | 取这部分证据的人 | 临时目录里的 `daily-briefings.sqlite` 与 `daily-brief-sessions.sqlite` + 指向该目录的截图 |
 | `pnpm seed:analysis-quota` | 需要造「今天的分析额度已用尽」来验 P3 时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用，然后触发一次自动分析（市场日历「Refresh now」或模块信号） | 验 P3 的这条线 | 脚本输出 `seeded <UTC 日>: event 48/48, calendar 9/9` 那一行 + 临时目录里的 `market-analysis.sqlite` + 中心出现一条 P3（正文含「今天已用 48 次 / 上限 48 次」），同一天再触发不新增 |
@@ -79,3 +81,14 @@ TypeScript 认识的通配，主 typecheck 与它一起暴露债务，按 `produ
 
 2026-11-07 那次事故就是它的理由：0.4.0 是从一个落后远端 5 笔、还带着一笔旧本地提交的检出处打的标签，
 打出来的树还写着 0.3.1，发包作业已经开始构建，两分钟后才被工作流自己的版本检查拦下。
+
+## `discord:smoke` / `slack:smoke` 为什么不进 `verify`
+
+两条都是**对真外网、用真实凭据**的诊断命令，`verify` 里放它们等于让每次门禁都去连别人的服务：
+
+- 需要真实凭据（Discord bot token；Slack 的 Bot Token + App Token），CI 没有；
+- 需要真网络与代理（本机直连这两家都不通，必须经系统代理），一次外网抖动就会把门禁染红；
+- 它们**不为通过而设计**，是为「说清哪一段断了」而设计（`--probe` 会把失败码与关闭码原样打出来，
+  例如 Discord 的 `4014 intents-disallowed`）。
+
+所以只在「改这条通道、或要在真机确认它通」时由有凭据的人手动跑，证据就是上面那一行脱敏 JSON。
