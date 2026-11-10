@@ -21,6 +21,15 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '../state'
 export type ErrorBoundaryProps = {
   /** 这一块叫什么（面板名/区域名）。进日志与错误态详情，必填。 */
   scope: string
+  /**
+   * 错误面的原因码与产品句，**透传给 `StateView`**。
+   *
+   * 为什么需要：默认的 `error · operation-failed` 说的是「读者刚才那个操作失败了」——对
+   * 「这一块渲染崩了」是错的（读者没做任何动作，也没有任何读取失败）。调用点用
+   * 一句产品原因句把这件事说清楚；`reasonCode` 仍须是 `StateView` 的闭集之一（新增码要先改
+   * `StateView` 的文案表与用例，那是另一笔）。
+   */
+  reasonCode?: 'unavailable' | 'unreadable' | 'operation-failed' | 'needs-restart' | 'page-load-failed' | 'notification-unknown'
   children: ReactNode
 }
 
@@ -49,7 +58,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: this.retry }}
       // 详情里只给范围名：这是读者唯一能报给我们、又不含业务数据的定位信息。
       details={{ bodyText: this.props.scope }}
-      reasonCode="operation-failed"
+      reasonCode={this.props.reasonCode ?? 'operation-failed'}
       state="error"
     />
   }

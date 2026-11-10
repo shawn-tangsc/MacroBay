@@ -311,6 +311,8 @@ mi: miText['zh-CN'],
             configureSettings: '配置',
             configDrawer: {
               title: '设置',
+              /** 抽屉某屏渲染崩了：这一块没能显示（不是「读取失败」，读者没做任何动作）。 */
+              screenCrashed: '这一块没能显示出来，可以重试。',
               sourceUnavailable: '取不到（原因见详情）',
               unreadable: '读不到',
               discard: {
@@ -1788,6 +1790,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             configureSettings: 'Settings',
             configDrawer: {
               title: 'Settings',
+              /** 抽屉某屏渲染崩了：这一块没能显示（不是「读取失败」，读者没做任何动作）。 */
+              screenCrashed: 'This part could not be shown. Try again.',
               sourceUnavailable: 'Not available (see details)',
               unreadable: 'Could not read',
               discard: {
