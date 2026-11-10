@@ -3,6 +3,7 @@ import { Button } from 'antd'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
+import { useDrawerSourcesView } from '../../settings/config-drawer/useDrawerSourcesView'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Info } from 'lucide-react'
@@ -100,6 +101,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   const platformDrawerValues = usePlatformDrawerValues()
+  const drawerSourcesView = useDrawerSourcesView(settingsDrawerOpen)
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
@@ -199,7 +201,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
             else openPreferencesSettings()
           }}
           open={settingsDrawerOpen}
-          platformValues={platformDrawerValues} />
+          platformValues={platformDrawerValues}
+          sourcesView={drawerSourcesView} />
       </ErrorBoundary>
 
       {/* Named mount point: the analysis workspace portals its latest-conclusion
