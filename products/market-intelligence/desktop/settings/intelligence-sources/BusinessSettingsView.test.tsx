@@ -86,11 +86,13 @@ describe('业务设置的左列', () => {
     }
   })
 
-  it('lists calendar and sentiment as flat source names, without group titles', async () => {
+  it('splits calendar into 官方源 / 聚合源 cards and keeps sentiment as one card', async () => {
     const calendar = await renderContent('calendar')
     expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(6)
-    expect(calendar.host.textContent).not.toContain('官方源')
-    expect(calendar.host.textContent).not.toContain('聚合源')
+    // 日历也走两层卡片：第二层两张数据卡片，标题按注册表的 owner 分。
+    const cards = [...calendar.host.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
+    expect(cards.map((card) => card.getAttribute('data-business-cell-card'))).toEqual(['official', 'aggregate'])
+    expect(cards.map((card) => card.querySelector('.business-cell__title')?.textContent)).toEqual(['官方源', '聚合源'])
     // 卡片项是纯行：不是按钮、没有 onClick、点了不导航（用户 2026-11-11 取消点击跳转）。
     for (const row of [...calendar.host.querySelectorAll('.business-card__row')]) {
       expect(row.tagName).not.toBe('BUTTON')
@@ -100,6 +102,10 @@ describe('业务设置的左列', () => {
 
     const sentiment = await renderContent('sentiment')
     expect(sentiment.host.querySelectorAll('.business-card__row')).toHaveLength(4)
+    // 舆情只有一张第二层卡片，卡头留空（业务名已经在第一层卡头）。
+    const sentimentCards = [...sentiment.host.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
+    expect(sentimentCards).toHaveLength(1)
+    expect(sentimentCards[0]!.querySelector('.business-cell__title')).toBeNull()
     // 「舆情评分」不是源，不添行。
     expect(sentiment.host.textContent).not.toContain('舆情评分')
   })

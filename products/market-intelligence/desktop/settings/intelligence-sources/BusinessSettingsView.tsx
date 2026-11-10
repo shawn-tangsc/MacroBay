@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react'
 
 import { Switch } from 'antd'
 
+import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import { SettingsInfo } from '../settingsInfo'
 import {
   AI_ANALYSIS_MODULE,
@@ -56,6 +57,23 @@ export function cellGroupsOf(cells: readonly DashboardCell[]): readonly CellGrou
     }
   }
   return groups
+}
+
+/** 日历按 feed 的 `owner` 分官方 / 聚合；舆情只有一张。判据来自注册表，不在组件里写源 id。 */
+export function otherBusinessGroups(
+  business: BusinessKey,
+  resolveText: (key: string) => string
+): readonly CellGroup[] {
+  if (business === 'dashboard') return []
+  const cells = modulesForBusiness(business).flatMap((module) => module.cells)
+  if (business !== 'calendar') return [{ key: business, label: '', cells }]
+  const isOfficial = (sourceId: string): boolean =>
+    (calendarFeedRegistry as Readonly<Record<string, { owner?: string }>>)[sourceId]?.owner === 'official'
+  const groups: CellGroup[] = [
+    { key: 'official', label: resolveText('settings.intelligenceSources.calendarGroups.official'), cells: cells.filter((cell) => isOfficial(cell.sourceId)) },
+    { key: 'aggregate', label: resolveText('settings.intelligenceSources.calendarGroups.aggregate'), cells: cells.filter((cell) => !isOfficial(cell.sourceId)) }
+  ]
+  return groups.filter((group) => group.cells.length > 0)
 }
 
 export function BusinessSettingsView(props: {
@@ -184,9 +202,27 @@ export function BusinessSettingsContent(props: {
       {props.business === 'dashboard'
         ? null
         : <section className="business-card" data-business-card={props.business}>
-          {/* 日历 / 舆情：平铺源名（不写格名、没有组头）。 */}
-          {modulesForBusiness(props.business)
-            .flatMap((module) => module.cells.map((cell) => renderCell(module.id, cell, [])))}
+          {/* 日历 / 舆情也是两层卡片（用户 2026-11-11）：模块卡里放第二层数据卡片。
+              日历按 `calendarFeedRegistry` 的 `owner` 分「官方源 / 聚合源」两张卡；
+              舆情只有一张卡（标题留空，卡头已经写了业务名）。 */}
+          <div className="business-cell-grid">
+            {otherBusinessGroups(props.business, props.resolveText).map((group) => <div
+              className="business-cell"
+              data-business-cell-card={group.key}
+              key={group.key}
+              style={{ ['--cell-span' as string]: Math.min(group.cells.length, 3) }}>
+              {group.label === '' ? null : <div className="business-cell__title">{group.label}</div>}
+              <div
+                className="business-cell__items"
+                style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
+                {group.cells.map((cell) => renderCell(
+                  modulesForBusiness(props.business)[0]?.id ?? props.business,
+                  cell,
+                  []
+                ))}
+              </div>
+            </div>)}
+          </div>
         </section>}
     </div>
   </div>
