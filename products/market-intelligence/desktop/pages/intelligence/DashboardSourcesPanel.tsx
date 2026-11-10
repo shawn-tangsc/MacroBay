@@ -29,6 +29,8 @@ export function DashboardSourcesPanel(props: {
    * 所以它只参与**关闭确认**，不进保存栏（保存栏只覆盖自己上报了的屏）。
    */
   onDraftChange?: (dirty: boolean) => void
+  /** 只渲染哪一屏：`sources` = 源树 + 详情；`business` = 业务设置。给了就不画页签条。 */
+  pane?: 'sources' | 'business'
   /**
    * 打开抽屉时落哪一块筛选（前端可以在「打开配置」的请求里指定）。
    * **只当初始值**，不是受控 prop：读者点了别的 tab 就归读者，外部不许一直压着。不传仍是「看板」。
@@ -104,6 +106,7 @@ export function DashboardSourcesPanel(props: {
   }
 
   return <SourcesSettingsPane
+    {...(props.pane === undefined ? {} : { pane: props.pane })}
     /* 格级开关的读写：与看板读取链**同一个客户端实例**（同一份存储，不各建一份）。 */
     cellEnabledIo={{ read: () => cellEnabledClient.read(), write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled) }}
     filter={sourceFilter}

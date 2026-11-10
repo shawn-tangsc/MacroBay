@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Drawer } from '@platform/ui/components/drawer'
 import { Popover } from '@platform/ui/components/popover'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { Bell, Info, ListTree, MonitorCog, Newspaper, ScanText, ScrollText, Sparkles } from 'lucide-react'
+import { Bell, Info, Layers, ListTree, Newspaper, ScanText, ScrollText, Sparkles } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -57,6 +57,8 @@ export type ConfigSettingsDrawerProps = {
    * 抽屉只负责把它放进两栏。传了它就不再用下面的静态版或扁平列表。
    */
   sourcesPanel?: React.ReactNode
+  /** 「采集与数据」那一屏（业务设置视图）由宿主渲染好交进来。 */
+  sourcesDataPanel?: React.ReactNode
   /**
    * 运行日志：**只读表格**，直接用设置页那一份实现（同一块，不复制）。
    *
@@ -112,7 +114,7 @@ const EMPTY_VALUE = '—'
 
 /** 左列分三组（设置页那套导航：分组标题 + 图标项）；顺序即 `DRAWER_MENUS` 的顺序。 */
 const DRAWER_NAV_GROUPS: ReadonlyArray<{ id: string; menus: readonly ConfigDrawerMenu[] }> = [
-  { id: 'collect', menus: ['sources', 'processing'] },
+  { id: 'collect', menus: ['sources', 'sourcesData', 'processing'] },
   { id: 'output', menus: ['analysis', 'briefing', 'notifications'] },
   { id: 'record', menus: ['runLog'] }
 ]
@@ -120,6 +122,7 @@ const DRAWER_NAV_GROUPS: ReadonlyArray<{ id: string; menus: readonly ConfigDrawe
 /** 六屏各一颗图标（不再用 1–6 编号）。 */
 const DRAWER_MENU_ICONS: Readonly<Record<ConfigDrawerMenu, typeof Info>> = {
   sources: ListTree,
+  sourcesData: Layers,
   processing: ScanText,
   analysis: Sparkles,
   briefing: Newspaper,
@@ -139,6 +142,7 @@ export function ConfigSettingsDrawer({
   briefingView,
   briefingPanel,
   sourcesPanel,
+  sourcesDataPanel,
   resolveText: resolveTextProp,
   isScreenDirty,
   screenDirty,
@@ -294,6 +298,9 @@ export function ConfigSettingsDrawer({
         /* 有「左树 + 右详情」这一屏时，滚动交给两栏各自（菜单那一栏也自己滚），整块不滚。 */
         /* 只有真正的分栏屏（来源：左树 + 右详情）才吃两栏；通知屏是单列，套 split 会让卡片按内容宽度塌缩。 */
         className={`config-drawer__pane${menu === 'sources' && sourcesPanel !== undefined ? ' config-drawer__pane--split' : ''}`}>
+        {menu === 'sourcesData' && sourcesDataPanel !== undefined
+          ? sourcesDataPanel
+          : null}
         {menu === 'sources'
           ? sourcesPanel === undefined
             ? (<SourcesStaticScreen />)

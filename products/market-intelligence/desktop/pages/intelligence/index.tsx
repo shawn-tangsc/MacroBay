@@ -68,13 +68,13 @@ function IntelligencePageBody(): React.ReactElement {
    * 所以这里只 bump 一个**递增计数**——布尔表达不了「已经开着又点了一次」，而连点入口很常见。
    */
   const [configDrawerRequest, setConfigDrawerRequest] = useState(0)
-  const [configDrawerMenu, setConfigDrawerMenu] = useState<'sources' | 'processing' | 'briefing'>('sources')
+  const [configDrawerMenu, setConfigDrawerMenu] = useState<'sources' | 'sourcesData' | 'processing' | 'briefing'>('sources')
   /**
    * 「来源与采集」这一屏挂载时的初值过滤器（只作初值，之后的筛选由那一屏自己管）。
    * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
    */
   const [initialSourceFilter, setInitialSourceFilter] = useState<SourceFilter>()
-  const openConfigDrawer = (menu: 'sources' | 'processing' | 'briefing', filter?: SourceFilter): void => {
+  const openConfigDrawer = (menu: 'sources' | 'sourcesData' | 'processing' | 'briefing', filter?: SourceFilter): void => {
     setConfigDrawerMenu(menu)
     setInitialSourceFilter(filter)
     setConfigDrawerRequest((value) => value + 1)
@@ -95,7 +95,7 @@ function IntelligencePageBody(): React.ReactElement {
   }
   /** 门户/看板「配置来源」：**新抽屉**，预设看板筛选（旧看板抽屉入口一并收口）。 */
   const openCryptoSources = (): void => {
-    openConfigDrawer('sources', 'dashboard')
+    openConfigDrawer('sourcesData', 'dashboard')
   }
   const toggleSample = async (): Promise<void> => {
     if (sample.state.active) {
@@ -150,7 +150,7 @@ function IntelligencePageBody(): React.ReactElement {
       {sample.state.active && activeView === 'dashboard' ? (
         <SampleModeBanner
           busy={sample.busy}
-          onConnect={() => { void sample.exit().then(() => openConfigDrawer('sources', 'dashboard')) }}
+          onConnect={() => { void sample.exit().then(() => openConfigDrawer('sourcesData', 'dashboard')) }}
           onExit={() => { void sample.exit() }}
           scenarioNow={sample.state.scenarioNow}
           text={sampleText.banner as SampleModeBannerText}
@@ -162,7 +162,7 @@ function IntelligencePageBody(): React.ReactElement {
           text={text.dashboard.dailyBriefing}
           eventTitles={text.analysisWorkspace.readableNames.eventName}
           onBack={() => setActiveView('dashboard')}
-          onConfigureSources={() => openConfigDrawer('sources', 'dashboard')}
+          onConfigureSources={() => openConfigDrawer('sourcesData', 'dashboard')}
           onConfigureWebSearch={openWebSearchSettings}
           onOpenSettings={() => openConfigDrawer('briefing')}
         />
@@ -220,8 +220,8 @@ function IntelligencePageBody(): React.ReactElement {
           macroRatesClient={macroRatesClient}
           dashboardFeedStatusClient={dashboardFeedStatusClient}
           now={sampleNow}
-          onConfigureSources={() => openConfigDrawer('sources', 'dashboard')}
-          onManageSource={() => openConfigDrawer('sources', 'dashboard')}
+          onConfigureSources={() => openConfigDrawer('sourcesData', 'dashboard')}
+          onManageSource={() => openConfigDrawer('sourcesData', 'dashboard')}
           initialSettingsMenu={configDrawerMenu}
           initialSourceFilter={initialSourceFilter}
           openSettingsRequest={configDrawerRequest}

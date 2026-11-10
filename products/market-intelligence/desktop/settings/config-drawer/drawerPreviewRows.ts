@@ -42,7 +42,7 @@ export type PreviewScreen = {
 }
 
 /** 六个菜单（顺序即左栏顺序）。 */
-export const DRAWER_MENUS = ['sources', 'processing', 'analysis', 'briefing', 'notifications', 'runLog'] as const
+export const DRAWER_MENUS = ['sources', 'sourcesData', 'processing', 'analysis', 'briefing', 'notifications', 'runLog'] as const
 export type ConfigDrawerMenu = (typeof DRAWER_MENUS)[number]
 
 

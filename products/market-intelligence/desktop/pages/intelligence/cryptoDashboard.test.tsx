@@ -63,9 +63,10 @@ describe('the old source drawer has no entry left', () => {
     // 入口只指向一个函数：四处（门户/看板配置来源、样例「连数据」、行尾管理来源、日报页配置来源）
     // 与日历「日历设置」，都走 openConfigDrawer，且筛选预设写死在这里。
     expect(page).not.toContain('setSourceDrawerOpen(true)')
-    expect(page).toContain("openConfigDrawer('sources', 'dashboard')")
+    // 看板这几处进「采集与数据」（业务设置），数据源那一屏只从菜单进。
+    expect(page).toContain("openConfigDrawer('sourcesData', 'dashboard')")
     expect(page).toContain("openConfigDrawer('sources', 'calendar')")
-    expect(page.match(/openConfigDrawer\('sources', 'dashboard'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+    expect(page.match(/openConfigDrawer\('sourcesData', 'dashboard'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
     // 日历那一颗必须显式传：不传就退回旧行为（打开旧抽屉）。
     expect(page).toContain('onOpenSettings={() => openConfigDrawer')
   })
