@@ -3,6 +3,7 @@ import { hostScreenDirty } from './drawerScreenDirty'
 
 import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
+import { ConfigDrawerPanel } from './ConfigDrawerPanel'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
@@ -254,8 +255,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         </div>
       </header>
 
-      {/* TODO(0.4.3-settings-drawer): 数据接入后删除。静态版式抽屉，只画结构；内容区包一层边界——
-          抽屉崩了不许影响背后这一页。 */}
+      {/* TODO(0.4.3-settings-drawer): 数据接入后删除。静态版式抽屉，只画结构。
+          两层边界：这一层保「抽屉外壳自己崩了不影响背后这一页」；每一屏另有一层
+          `ConfigDrawerPanel`，屏幕内的崩溃只在抽屉正文里显示，不落到主列顶端。 */}
       <ErrorBoundary scope="drawer">
         {/* 局部一层 ConfirmProvider：这一块被单独渲染（页面用例、抽屉用例）时也拿得到确认框；
             应用里它嵌在 AppShell 的 provider 之内，文案与主题照样跟着走。 */}
@@ -269,16 +271,16 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           isScreenDirty={() => hostScreenDirty(drawerScreen.dirty, sourcesDraftDirty)}
           onClose={() => setSettingsDrawerOpen(false)}
           open={settingsDrawerOpen}
-          analysisPanel={<AnalysisSettingsPanel onState={setDrawerScreen} />}
+          analysisPanel={<ConfigDrawerPanel screen="analysis"><AnalysisSettingsPanel onState={setDrawerScreen} /></ConfigDrawerPanel>}
           screenDirty={drawerScreen.dirty}
           onScreenSave={drawerScreen.save}
           screenSaving={drawerScreen.saving}
           {...(drawerScreen.failure === undefined ? {} : { screenSaveFailure: drawerScreen.failure })}
-          briefingPanel={<DailyBriefingSettingsPanel onState={setDrawerScreen} />}
-          processingPanel={<ProcessingSettingsPanel />}
-          runLogPanel={<RunLogDrawerPanel />}
-          notificationsPanel={<NotificationSettingsPanel />}
-              sourcesPanel={<DashboardSourcesPanel initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} />} />}
+          briefingPanel={<ConfigDrawerPanel screen="briefing"><DailyBriefingSettingsPanel onState={setDrawerScreen} /></ConfigDrawerPanel>}
+          processingPanel={<ConfigDrawerPanel screen="processing"><ProcessingSettingsPanel /></ConfigDrawerPanel>}
+          runLogPanel={<ConfigDrawerPanel screen="run-log"><RunLogDrawerPanel /></ConfigDrawerPanel>}
+          notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel /></ConfigDrawerPanel>}
+              sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
           </DrawerDiscardConfirm>
         </ConfirmProvider>
       </ErrorBoundary>
