@@ -166,6 +166,15 @@ describe('sourceRuntimeConfig', () => {
     expect(config.enabled).toBe(false)
   })
 
+  it('defaults only keyless, live, module-backed sources to enabled', () => {
+    // 免钥匙 + live + 被模块用到 → 默认开。
+    expect(createDefaultSourceProfile(requireDefinition('coindesk-rss')).enabled).toBe(true)
+    // 免钥匙但没人用（0 模块）→ 默认关。
+    expect(createDefaultSourceProfile(requireDefinition('defillama-tvl')).enabled).toBe(false)
+    // 需要钥匙 → 默认关。
+    expect(createDefaultSourceProfile(requireDefinition('twelve-data-market')).enabled).toBe(false)
+  })
+
   it('blocks enabling planned sources at validation time', () => {
     const definition = requireDefinition('bea-economic-series')
     const { config, issues } = resolveAndValidateRuntimeConfig({

@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import { createSourceProfileStore, createInMemoryProfileStorage } from './sourceProfileStore'
-import { KEYLESS_SOURCES_ENABLED_MARKER, migrateKeylessSourceDefaults } from './keylessSourceDefaultsMigration'
+import {
+  KEYLESS_SOURCES_ENABLED_MARKER,
+  UNUSED_KEYLESS_SOURCES_DISABLED_MARKER,
+  disableUnusedKeylessSources,
+  migrateKeylessSourceDefaults
+} from './keylessSourceDefaultsMigration'
 
 /**
  * 「免钥匙 + live」的老 profile 改成开，只做一次。
@@ -73,6 +78,43 @@ describe('keyless source defaults migration', () => {
     }
     const second = await migrateKeylessSourceDefaults({ store: spiedStore, markerPath })
     expect(second.opened).toEqual([])
+    expect(saves).toEqual([])
+  })
+
+  it('closes keyless sources no dashboard module uses, and leaves the used ones alone', async () => {
+    const markerPath = tempMarker()
+    const { store } = await setup([
+      profile('defillama-tvl', true),            // 0 模块 → 关
+      profile('ethereum-foundation-blog', true), // 0 模块 → 关
+      profile('coindesk-rss', true),             // news 模块在用 → 不动
+      profile('twelve-data-market', true)        // 需要钥匙 → 不动（偏好照存）
+    ], markerPath)
+
+    const result = await disableUnusedKeylessSources({ store, markerPath })
+    expect([...result.closed].sort()).toEqual(['defillama-tvl', 'ethereum-foundation-blog'])
+    expect((await store.getProfile('defillama-tvl'))?.enabled).toBe(false)
+    expect((await store.getProfile('coindesk-rss'))?.enabled).toBe(true)
+    expect((await store.getProfile('twelve-data-market'))?.enabled).toBe(true)
+  })
+
+  it('keeps both markers and makes the unused-sources pass a no-op the second time', async () => {
+    const markerPath = tempMarker()
+    const { store } = await setup([profile('defillama-tvl', true)], markerPath)
+    await migrateKeylessSourceDefaults({ store, markerPath })
+    await disableUnusedKeylessSources({ store, markerPath })
+
+    const markers = JSON.parse(readFileSync(markerPath, 'utf8')) as { markers: Record<string, unknown> }
+    expect(markers.markers[KEYLESS_SOURCES_ENABLED_MARKER]).toBeDefined()
+    expect(markers.markers[UNUSED_KEYLESS_SOURCES_DISABLED_MARKER]).toBeDefined()
+
+    // 读者之后手动打开：第二次跑不许再关。
+    await store.saveProfile({ sourceId: 'defillama-tvl', enabled: true })
+    const saves: string[] = []
+    const second = await disableUnusedKeylessSources({
+      store: { listProfiles: () => store.listProfiles(), saveProfile: async (input) => { saves.push(input.sourceId) } },
+      markerPath
+    })
+    expect(second.closed).toEqual([])
     expect(saves).toEqual([])
   })
 })

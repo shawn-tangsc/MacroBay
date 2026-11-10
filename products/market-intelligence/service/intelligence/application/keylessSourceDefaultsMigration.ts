@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 import { sourceRequiresCredential } from '../schema/intelligenceSource'
+import { modulesUsingSource } from '../../../desktop/settings/intelligence-sources/dashboardSourceModules'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 
@@ -21,6 +22,9 @@ import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
  */
 export const KEYLESS_SOURCES_ENABLED_MARKER = 'keyless-sources-enabled-2026-11-11'
 
+/** 第二条迁移的标记：把「没人用」的免钥匙源关掉。两条迁移各管各的，历史标记不删。 */
+export const UNUSED_KEYLESS_SOURCES_DISABLED_MARKER = 'unused-keyless-sources-disabled-2026-11-11'
+
 export type KeylessDefaultsStore = Readonly<{
   listProfiles: () => Promise<readonly IntelligenceSourceProfile[]>
   saveProfile: (input: { sourceId: string; enabled: boolean }) => Promise<unknown>
@@ -33,19 +37,19 @@ export type KeylessDefaultsMigrationResult = Readonly<{
 
 type MarkerDocument = { markers?: Record<string, unknown> }
 
-async function hasMarker(markerPath: string): Promise<boolean> {
+async function hasMarker(markerPath: string, key: string): Promise<boolean> {
   try {
     const parsed = JSON.parse(await readFile(markerPath, 'utf8')) as MarkerDocument
     const markers = parsed.markers
-    return typeof markers === 'object' && markers !== null && markerKeyPresent(markers)
+    return typeof markers === 'object' && markers !== null && markerKeyPresent(markers, key)
   } catch {
     // 没读写过、或读到坏文件：当作没跑过；跑完会原子写一次标记。
     return false
   }
 }
 
-function markerKeyPresent(markers: Record<string, unknown>): boolean {
-  return Object.prototype.hasOwnProperty.call(markers, KEYLESS_SOURCES_ENABLED_MARKER)
+function markerKeyPresent(markers: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(markers, key)
 }
 
 export async function migrateKeylessSourceDefaults(input: Readonly<{
@@ -54,7 +58,7 @@ export async function migrateKeylessSourceDefaults(input: Readonly<{
   markerPath: string
   now?: () => string
 }>): Promise<KeylessDefaultsMigrationResult> {
-  if (await hasMarker(input.markerPath)) return { opened: [] }
+  if (await hasMarker(input.markerPath, KEYLESS_SOURCES_ENABLED_MARKER)) return { opened: [] }
 
   const now = (input.now ?? (() => new Date().toISOString()))()
   const opened: string[] = []
@@ -74,4 +78,41 @@ export async function migrateKeylessSourceDefaults(input: Readonly<{
     markers: { [KEYLESS_SOURCES_ENABLED_MARKER]: { at: now } }
   })
   return { opened }
+}
+
+export type UnusedKeylessMigrationResult = Readonly<{ closed: readonly string[] }>
+
+/**
+ * 第二条一次性迁移：**没人用**的免钥匙源，默认关。
+ *
+ * 第一条迁移把「免钥匙 + live」全打开了，范围太宽：DeFiLlama TVL、维护备用那批、分析用那批
+ * 没有任何看板模块读它们（`modulesUsingSource` 为 0）。这条把它们关回关着；用到的不动。
+ * 只跑一次，标记在同一个 `markers` 文档里，第二次零写入；读者之后手动打开也不会被再关掉。
+ */
+export async function disableUnusedKeylessSources(input: Readonly<{
+  store: KeylessDefaultsStore
+  markerPath: string
+  now?: () => string
+}>): Promise<UnusedKeylessMigrationResult> {
+  if (await hasMarker(input.markerPath, UNUSED_KEYLESS_SOURCES_DISABLED_MARKER)) return { closed: [] }
+
+  const now = (input.now ?? (() => new Date().toISOString()))()
+  const closed: string[] = []
+  for (const profile of await input.store.listProfiles()) {
+    if (profile.enabled !== true) continue
+    const definition = getIntelligenceSourceDefinition(profile.sourceId)
+    if (definition === undefined) continue
+    if (sourceRequiresCredential(definition.authMode)) continue
+    if (modulesUsingSource(profile.sourceId).length > 0) continue
+    await input.store.saveProfile({ sourceId: profile.sourceId, enabled: false })
+    closed.push(profile.sourceId)
+  }
+
+  await writeJsonFileAtomically(input.markerPath, {
+    markers: {
+      [KEYLESS_SOURCES_ENABLED_MARKER]: { at: now },
+      [UNUSED_KEYLESS_SOURCES_DISABLED_MARKER]: { at: now }
+    }
+  })
+  return { closed }
 }

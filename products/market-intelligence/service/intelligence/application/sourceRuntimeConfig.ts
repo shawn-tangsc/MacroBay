@@ -7,6 +7,7 @@ import type {
   IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
 import { sourceRequiresCredential } from '../schema/intelligenceSource'
+import { modulesUsingSource } from '../../../desktop/settings/intelligence-sources/dashboardSourceModules'
 import { getSource } from './providerRegistry'
 import { isMacroSourceId } from './macroSourceCatalogMetadata'
 import { isDefillamaStablecoinRetiredPath } from './sourceCatalog'
@@ -43,6 +44,18 @@ const MACRO_POLLING_INTERVAL_SEC: Record<IntelligenceCollectionPreset, number | 
   frequent: 2 * 60 * 60
 }
 
+/**
+ * 默认启用 = 免钥匙 **且** 已就绪（live）**且** 至少被一个看板模块用到（`modulesUsingSource` 反查）。
+ *
+ * 只看「免钥匙」会把没人用的源也打开（DeFiLlama TVL、维护备用那批、分析用那批），它们没有读者，
+ * 只产生请求——用户 2026-11-11 收窄成这一条。源清单仍然只从注册表与模块表来，没有 id 白名单。
+ */
+export function isDefaultEnabledDefinition(definition: IntelligenceSourceDefinition): boolean {
+  if (sourceRequiresCredential(definition.authMode)) return false
+  if ((definition.readiness ?? 'live') !== 'live') return false
+  return modulesUsingSource(definition.sourceId).length > 0
+}
+
 export function createDefaultSourceProfile(
   definition: IntelligenceSourceDefinition,
   now = new Date().toISOString()
@@ -50,9 +63,9 @@ export function createDefaultSourceProfile(
   return {
     profileId: `${definition.sourceId}-profile`,
     sourceId: definition.sourceId,
-    // 默认值**只在这里定一次**：免钥匙的源首次运行即启用；需要 API Key 的源默认关着，
-    // 配好钥匙并通过校验后才允许打开。读者显式存过的 profile 一律以存量为准，不经过这一行。
-    enabled: !sourceRequiresCredential(definition.authMode),
+    // 默认值**只在这里定一次**：免钥匙 + 已就绪 + 被模块用到的源首次运行即启用；
+    // 需要 API Key 的、还没接入的、没人用的源默认关着。读者显式存过的 profile 一律以存量为准。
+    enabled: isDefaultEnabledDefinition(definition),
     collectionPreset: definition.defaultCollectionPreset,
     includeInSentiment: definition.supportsSentiment,
     scopePolicy: definition.defaultScopePolicy,
