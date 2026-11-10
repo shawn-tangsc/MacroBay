@@ -69,6 +69,8 @@ for (const finding of findings) {
   counts.set(id, (counts.get(id) ?? 0) + 1)
 }
 
+const BASELINE_NOTE = '正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts'
+
 const baseline: Record<string, number> = existsSync(BASELINE_PATH)
   ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8')).entries ?? {}
   : {}
@@ -81,6 +83,18 @@ const baseline: Record<string, number> = existsSync(BASELINE_PATH)
  * 一次一条，删的理由写进提交说明。
  */
 if (process.argv.includes('--write-baseline')) {
+  // 先算「这次写入会不会动到已有条目」：删掉或改小都算。有就**失败并列出**，一个都不写。
+  const shrinking = Object.keys(baseline).flatMap((id) => {
+    const now = counts.get(id) ?? 0
+    return now < baseline[id]! ? [`${id}（基线 ${baseline[id]} → 现在 ${now}）`] : []
+  })
+  const dropping = Object.keys(baseline).filter((id) => !counts.has(id))
+  if (shrinking.length > 0 || dropping.length > 0) {
+    console.log('--write-baseline 拒绝执行：这次写入会删掉或改写已有条目（共享基线只许增，不许覆盖）：')
+    for (const line of [...dropping, ...shrinking]) console.log(`  ${line}`)
+    console.log('真要降/删，用 --lower \'<文件> :: <键>\' 或 --remove \'<文件> :: <键>\'，一次一条，理由写进提交说明。')
+    process.exit(1)
+  }
   const merged: Record<string, number> = { ...baseline }
   const added: string[] = []
   for (const [id, count] of counts) {
@@ -89,12 +103,32 @@ if (process.argv.includes('--write-baseline')) {
     merged[id] = Math.max(previous ?? 0, count)
   }
   writeFileSync(BASELINE_PATH, `${JSON.stringify({
-    note: '正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts',
+    note: BASELINE_NOTE,
     total: Object.values(merged).reduce((sum, value) => sum + value, 0),
     entries: merged
   }, null, 2)}\n`)
   console.log(`基线已合并（只增不减）：新增 ${added.length} 条，合计 ${Object.keys(merged).length} 个位置 / ${Object.values(merged).reduce((s, v) => s + v, 0)} 处`)
   console.log('要删条目请用 --remove \'<文件> :: <键>\'，一次一条，理由写进提交说明。')
+  process.exit(0)
+}
+
+const lower = process.argv.findIndex((arg) => arg === '--lower')
+if (lower !== -1) {
+  const target = process.argv[lower + 1]
+  if (target === undefined || baseline[target] === undefined) {
+    console.log(`--lower 没找到这一条：${target ?? '（没给）'}`)
+    process.exit(1)
+  }
+  const now = counts.get(target) ?? 0
+  const next = { ...baseline }
+  if (now === 0) delete next[target]
+  else next[target] = now
+  writeFileSync(BASELINE_PATH, `${JSON.stringify({
+    note: BASELINE_NOTE,
+    total: Object.values(next).reduce((sum, value) => sum + value, 0),
+    entries: next
+  }, null, 2)}\n`)
+  console.log(`已降一条基线：${target}（${baseline[target]} → ${now}；命中为 0 时该条直接删除）`)
   process.exit(0)
 }
 
@@ -107,7 +141,7 @@ if (removed !== -1) {
   }
   const { [target]: _gone, ...rest } = baseline
   writeFileSync(BASELINE_PATH, `${JSON.stringify({
-    note: '正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts',
+    note: BASELINE_NOTE,
     total: Object.values(rest).reduce((sum, value) => sum + value, 0),
     entries: rest
   }, null, 2)}\n`)
