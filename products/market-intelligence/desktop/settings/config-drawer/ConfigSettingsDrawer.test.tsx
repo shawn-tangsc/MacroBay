@@ -514,6 +514,24 @@ describe('config settings drawer (static layout)', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  it('gives the two-column pane class only to the screen that really has two columns', () => {
+    // 通知屏是单列：套 `pane--split`（overflow:hidden + 两行网格）会把卡片按内容宽度塌缩、控件被裁。
+    const open = (menu: 'sources' | 'notifications', props: Record<string, unknown>): string => {
+      document.body.replaceChildren()
+      root?.unmount()
+      root = undefined
+      host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      act(() => root?.render(
+        <ConfigSettingsDrawer initialMenu={menu} onClose={() => undefined} open {...props} />
+      ))
+      return document.body.querySelector('.config-drawer__pane')!.className
+    }
+    expect(open('sources', { sourcesPanel: <div /> })).toContain('config-drawer__pane--split')
+    expect(open('notifications', { notificationsPanel: <div data-notification-screen="true" /> })).not.toContain('config-drawer__pane--split')
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {
