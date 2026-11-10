@@ -180,8 +180,13 @@ export type SettingRowCopy = Readonly<{
 export type SettingOption = Readonly<{ value: string | number }>
 
 /**
- * `optionsFrom` 的选项集合：**数据在注册表，句子在文案表**。页面只把这些值交给控件，
- * 不另抄一份列表；`notification-surfaces` 的 `center` 是固定勾选项（通知中心恒收）。
+ * `optionsFrom` 的**静态**选项集合：数据在注册表，句子在文案表；页面只把这些值交给控件，
+ * 不另抄一份列表。
+ *
+ * 触达面不在这里：它的可选项来自平台视图的 `available`（`{ kind: 'view', field: 'available' }`）。
+ * **「通知中心」不在可选项里**——恒收这件事由写入侧保证，事实出处是
+ * `platform/notifications/contracts/notificationSurfaceSelection.ts` 的 `SELECTABLE_SURFACES`
+ * （只有 `channel` / `toast` / `desktop`）；这里不设「固定勾选项」这种东西。
  */
 export const SETTING_OPTION_SETS: Readonly<Record<SettingOptionsSource, readonly SettingOption[]>> = Object.freeze({
   // 顺序跟页面那颗 `Segmented` 一致（高 / 中 / 低，`03-fields` 同序）：换了顺序 DOM 就变了。
