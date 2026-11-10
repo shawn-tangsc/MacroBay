@@ -1,56 +1,38 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
-import { healthBadgeView } from './ProviderDetail'
-import { SOURCE_REPEATED_FAILURE_THRESHOLD } from '../../../service/intelligence/application/sourceProjection'
+import { healthStateBadge } from './sourceHealthTone'
 
 /**
- * 来源健康药丸的四句话与四个 tone。
+ * 五态 → 药丸上的**词与色**（判据在 `sourceProjection.sourceHealthState`，这里只映射）。
  *
- * 这一条守的是**词与色的对应**，不是 DOM：`degraded` 一个状态背后两种原因，读者看到的词
- * 必须回答「关注什么」；「已关闭」说的是来源被关掉（服务只在来源停用时报 `paused`），
- * 不是「暂停了一阵子」。
+ * 这条是 `healthBadgeView` 那一条用例的接替者（原函数随 C16 删除）：过去视图层拿
+ * `runtimeStatus` + 失败数自己判一遍，现在同一份事实只由服务端算、这里只把词与色对上。
+ *
+ * 守的是「词与色的对应」：不许出现「字数说坏了、颜色是灰的」。`off` 不给词——它盖住
+ * 「没启用 / 取不到 / 没有读数」三种处境，写成「已关闭」会把「没有读数」说成读者的动作；
+ * 「取不到」那一种行内另有「不可用」一句。
  */
-describe('health badge words and tones', () => {
-  it('says repeated failures once the shared threshold is reached, and stale data below it', () => {
-    const below = healthBadgeView('degraded', SOURCE_REPEATED_FAILURE_THRESHOLD - 1)
-    expect(below.tone).toBe('warn')
-    expect(below.labelKey).toBe('settings.intelligenceSources.health.statuses.data-stale')
-
-    const at = healthBadgeView('degraded', SOURCE_REPEATED_FAILURE_THRESHOLD)
-    expect(at.tone).toBe('bad')
-    expect(at.labelKey).toBe('settings.intelligenceSources.health.statuses.multiple-failures')
-  })
-
-  it('keeps the other three states on their own word and tone', () => {
-    expect(healthBadgeView('healthy', 0)).toEqual({
+describe('health state words and tones', () => {
+  it('keeps the four worded states on their own word and tone', () => {
+    expect(healthStateBadge('healthy')).toEqual({
       labelKey: 'settings.intelligenceSources.health.statuses.healthy',
       tone: 'ok'
     })
-    expect(healthBadgeView('failed', 0)).toEqual({
+    expect(healthStateBadge('repeated-failures')).toEqual({
+      labelKey: 'settings.intelligenceSources.health.statuses.multiple-failures',
+      tone: 'bad'
+    })
+    expect(healthStateBadge('stale')).toEqual({
+      labelKey: 'settings.intelligenceSources.health.statuses.data-stale',
+      tone: 'warn'
+    })
+    expect(healthStateBadge('failed')).toEqual({
       labelKey: 'settings.intelligenceSources.health.statuses.failed',
       tone: 'bad'
     })
-    // `paused` is what the service reports for a disabled source, so it reads "off", never "paused".
-    expect(healthBadgeView('paused', 0)).toEqual({
-      labelKey: 'settings.intelligenceSources.health.statuses.paused',
-      tone: 'muted'
-    })
   })
 
-  it('resolves every word in both languages, so no badge falls back to a raw state name', () => {
-    const keys = [
-      'settings.intelligenceSources.health.statuses.healthy',
-      'settings.intelligenceSources.health.statuses.multiple-failures',
-      'settings.intelligenceSources.health.statuses.data-stale',
-      'settings.intelligenceSources.health.statuses.failed',
-      'settings.intelligenceSources.health.statuses.paused'
-    ]
-    for (const key of keys) {
-      expect(resolveProductTextKey('zh-CN', key), key).not.toBe('')
-      expect(resolveProductTextKey('en-US', key), key).not.toBe('')
-    }
-    expect(resolveProductTextKey('zh-CN', 'settings.intelligenceSources.health.statuses.paused')).toBe('已关闭')
-    expect(resolveProductTextKey('en-US', 'settings.intelligenceSources.health.statuses.multiple-failures')).toBe('Repeated failures')
+  it('draws nothing for “off”, which covers three different situations', () => {
+    expect(healthStateBadge('off')).toBeUndefined()
   })
 })

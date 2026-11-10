@@ -5,11 +5,12 @@ import { useEffect, useId, useState } from 'react'
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
-import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
+import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
+import { healthStateBadge } from './sourceHealthTone'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/intelligenceSourceTest'
@@ -19,7 +20,7 @@ import { useProxyConfigured } from '../../shared/useProxyConfigured'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellDay } from '@platform/ui/time/shellTimeFormat'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
-import { SOURCE_REPEATED_FAILURE_THRESHOLD, type ProviderView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
+import type { ProviderView, SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 
@@ -59,59 +60,22 @@ export type ProviderDetailLabels = {
   lastSuccessfulSync: string
 }
 
-/** The badge's own words; the tone rides along, the word carries the meaning. */
-const HEALTH_LABEL_KEYS = {
-  healthy: 'settings.intelligenceSources.health.statuses.healthy',
-  multipleFailures: 'settings.intelligenceSources.health.statuses.multiple-failures',
-  dataStale: 'settings.intelligenceSources.health.statuses.data-stale',
-  failed: 'settings.intelligenceSources.health.statuses.failed',
-  paused: 'settings.intelligenceSources.health.statuses.paused'
-} as const
-
 /**
- * One place maps a runtime state to its word and tone, so a call site cannot show a calm word on a
- * red badge. `degraded` covers two causes and the failure count is the only one the payload can
- * separate: at or past the shared threshold it is repeated failures (really broken), below it the
- * last collections simply did not land, which is stale data. `paused` is what the service reports
- * for a disabled source, so its word is "off", not "paused".
+ * 一行药丸：**只读投影**（`SourceView.healthState`），词与色都走 `healthStateBadge` 那一处映射。
+ * 视图层不再拿 `runtimeStatus`/失败数算一遍——同一份事实两处判，迟早一行绿一行红。
+ * `off` 不画词（它盖住「没启用 / 取不到 / 没有读数」三种处境）；「取不到」那一种由行内「不可用」说。
  */
-export function healthBadgeView(
-  status: 'healthy' | 'degraded' | 'failed' | 'paused',
-  consecutiveFailures: number
-): Readonly<{ labelKey: string; tone: StatusPillTone }> {
-  if (status === 'healthy') return { labelKey: HEALTH_LABEL_KEYS.healthy, tone: 'ok' }
-  if (status === 'failed') return { labelKey: HEALTH_LABEL_KEYS.failed, tone: 'bad' }
-  if (status === 'paused') return { labelKey: HEALTH_LABEL_KEYS.paused, tone: 'muted' }
-  return consecutiveFailures >= SOURCE_REPEATED_FAILURE_THRESHOLD
-    ? { labelKey: HEALTH_LABEL_KEYS.multipleFailures, tone: 'bad' }
-    : { labelKey: HEALTH_LABEL_KEYS.dataStale, tone: 'warn' }
-}
-
-/**
- * Right pane for a provider: lists every capability with its switch. Clicking a
- * capability drills into the existing source detail.
- */
-/**
- * 一个源此刻的健康状态词。抽成具名函数（原来是内联立即执行），因为接下去要改这一行的结构：
- * 内联 IIFE 切括号最容易切错，先把它变成有名字、可单独读的一段。
- *
- * 两条规则不变：
- * - 没有 generic adapter 的源由产品自己的任务采集，管线对它无话可说，旧的手动失败记录
- *   不该读成「这个源坏了」；
- * - **「没有健康数据」不等于「健康」**：过去给已启用、无健康数据的日历源画绿的 healthy，
- *   而 BLS 正是这种源——已启用、实际取不到。没有数据就不画药丸。
- */
-function SourceHealthPill({ health, resolveText, unavailable }: {
-  health?: Readonly<{ runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'; consecutiveFailures?: number }>
+function SourceHealthPill({ state, resolveText, unavailable }: {
+  state?: SourceHealthState
   resolveText: (key: string) => string
   unavailable: boolean
 }): React.ReactElement | null {
   if (unavailable) {
     return <StatusPill labelKey="settings.intelligenceSources.unavailableShort" resolveText={resolveText} tone="muted" />
   }
-  if (!health) return null
-  const view = healthBadgeView(health.runtimeStatus, health.consecutiveFailures ?? 0)
-  return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
+  const badge = state === undefined ? undefined : healthStateBadge(state)
+  if (badge === undefined) return null
+  return <StatusPill labelKey={badge.labelKey} resolveText={resolveText} tone={badge.tone} />
 }
 
 /**
@@ -379,7 +343,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             {/* 状态串：**状态词 → 人话原因 → 上次成功**，一条 ` · ` 串起来，最多两行。 */}
             <span className="source-provider-detail__status">
               <SourceHealthPill
-                health={source.collection === 'none' ? undefined : details[source.sourceId]?.health}
+                state={source.collection === 'none' ? undefined : source.healthState}
                 resolveText={resolveText}
                 unavailable={Boolean(unavailable)} />
             {/* 「不可用」不是失败：药丸之外必须给出同一句原因，读者才知道为什么取不到、数据有多旧。 */}

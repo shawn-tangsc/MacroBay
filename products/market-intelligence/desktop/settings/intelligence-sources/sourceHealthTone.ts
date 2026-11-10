@@ -21,6 +21,26 @@ export function sourceHealthTone(state: SourceHealthState): SourceHealthTone {
 }
 
 /**
+ * 五态 → 药丸上的那句话。**唯一一处映射**：判在 `sourceProjection.sourceHealthState`，
+ * 词与色都在这里对上，调用点不再各自拼 `runtimeStatus`/失败数。
+ *
+ * `off` 不给词：它同时盖住「没启用」「已启用但取不到」「没有健康读数」三种处境，写成
+ * 「已关闭」会把「没有读数」说成读者的动作。取不到的那一种另有一句话（行内「不可用」）。
+ */
+export const HEALTH_STATE_LABEL_KEYS: Readonly<Record<Exclude<SourceHealthState, 'off'>, string>> = Object.freeze({
+  healthy: 'settings.intelligenceSources.health.statuses.healthy',
+  'repeated-failures': 'settings.intelligenceSources.health.statuses.multiple-failures',
+  stale: 'settings.intelligenceSources.health.statuses.data-stale',
+  failed: 'settings.intelligenceSources.health.statuses.failed'
+})
+
+/** 一行药丸要的两个东西：词键 + 色调。`off` 返回 `undefined`（不画药丸）。 */
+export function healthStateBadge(state: SourceHealthState): Readonly<{ labelKey: string; tone: SourceHealthTone }> | undefined {
+  if (state === 'off') return undefined
+  return { labelKey: HEALTH_STATE_LABEL_KEYS[state], tone: sourceHealthTone(state) }
+}
+
+/**
  * 标记档 → CSS 类。**纯映射**（架构师 2026-11-10）：判据在 `sourceProjection.sourceHealthMarker`，
  * 这里不接收第二个输入、不再看 `enabled`/`unavailable`。
  */

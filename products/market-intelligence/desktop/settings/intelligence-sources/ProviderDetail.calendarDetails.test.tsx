@@ -508,6 +508,41 @@ describe('ProviderDetail source details', () => {
     expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
   })
 
+  it('words the row pill from the projected health state, not from a second read of the runtime status', async () => {
+    // C16：五态在服务端算好（`sourceProjection.sourceHealthState`），行内药丸只做「状态 → 词与色」的映射。
+    // 用一个「投影说滞后」的源：旧实现在没有健康读数时什么都不画，读者就看不到这一行需要关注。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          providerId: 'bls',
+          displayName: 'Bureau of Labor Statistics (BLS)',
+          category: 'macro',
+          credential: 'none',
+          healthMarker: 'bad',
+          sources: [
+            source({ providerId: 'bls', sourceId: 'bls-stale', displayName: 'Stale feed', healthState: 'stale' }),
+            source({ providerId: 'bls', sourceId: 'bls-failed', displayName: 'Failed feed', healthState: 'failed' })
+          ]
+        },
+        showSourceDetails: true
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const statuses = settingsText.health.statuses
+    expect(container.textContent).toContain(statuses['data-stale'])
+    expect(container.textContent).toContain(statuses.failed)
+    expect(container.querySelector('.status-pill--warn')).not.toBeNull()
+    expect(container.querySelector('.status-pill--bad')).not.toBeNull()
+  })
+
   it('offers the enable switch only at the end of the row, never inside the policy group', async () => {
     // 缺陷（用户实测 2026-11-10）：「采集策略」里还有一颗「启用」，动它，上面整行就被关掉。
     // 两颗开关是同一个事实（profile.enabled）的两份副本：组内读页面 profiles、行尾读 source.enabled，
