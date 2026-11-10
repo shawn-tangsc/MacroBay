@@ -247,7 +247,7 @@ describe('ChannelDeliveryService', () => {
   })
 })
 
-function harness(enabled = true, beforeSendOwnership?: () => void) {
+function harness(enabled = true, beforeSendOwnership?: () => void, deliveredDetail?: string) {
   const database = createAgentPlatformDatabase(':memory:')
   database.connection.exec(`
     insert into agent_entities(id,type, name, mcps_json, disabled_tools_json, order_key, created_at, updated_at) values ('agent-a', 'general', 'Agent', '[]', '[]', '0', '2026-01-01', '2026-01-01');
@@ -258,13 +258,39 @@ function harness(enabled = true, beforeSendOwnership?: () => void) {
     ${enabled ? "insert into channel_delivery_targets (id, channel_id, conversation_id, enabled, created_at, updated_at) values ('target-a', 'channel-a', 'conversation-a', 1, '2026-01-01', '2026-01-01');" : ''}
   `)
   seedChannelAdapterSupport(database, ['telegram', 'slack', 'lark'])
-  const transport = { send: vi.fn(async () => ({ kind: 'delivered' as const })), supportsIdempotency: vi.fn(() => false) }
+  const transport = {
+    send: vi.fn(async () => ({ kind: 'delivered' as const, ...(deliveredDetail === undefined ? {} : { detail: deliveredDetail }) })),
+    supportsIdempotency: vi.fn(() => false)
+  }
   const cipher = cipherForTests()
   return { database, transport, service: new ChannelDeliveryService({ repository: new ChannelDeliveryRepository(database), cipher, transport, now: () => new Date('2026-07-18T00:00:00.000Z'), beforeSendOwnership }) }
 }
 
 function cipherForTests() { return { encrypt: async () => ({ ciphertext: new Uint8Array(), keyRef: 'ref', keyRevision: 1 }), decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext, keyedHash: async () => 'hash', rotate: async () => ({ keyRef: 'ref', keyRevision: 1 }), revoke: async () => {} } }
 function hashForTests(value: string): string { return createHash('sha256').update(value).digest('base64url') }
+
+describe('delivery evidence', () => {
+  it('keeps the upstream message id on the audit row, so "sent" can be told apart from "sent elsewhere"', async () => {
+    const { service, database } = harness(true, undefined, '{"telegramMessageId":4242}')
+    await expect(service.deliverToEnabledTargets({
+      channelId: 'channel-a', agentId: 'agent-a', source: 'notification', sourceId: 'notification-1', text: 'real alert'
+    })).resolves.toEqual([{ status: 'delivered', attemptId: expect.any(String), errorCode: null }])
+
+    const audit = database.connection.prepare("select code, detail from channel_delivery_audits where code='channel-delivery-delivered'").get()
+    expect(audit).toEqual({ code: 'channel-delivery-delivered', detail: '{"telegramMessageId":4242}' })
+    // 证据里不许夹带正文：id 是 id，消息内容不进审计。
+    expect(JSON.stringify(database.connection.prepare('select * from channel_delivery_audits').all())).not.toContain('real alert')
+  })
+
+  it('writes no detail when the upstream gives no message id, instead of inventing one', async () => {
+    const { service, database } = harness()
+    await service.deliverToEnabledTargets({
+      channelId: 'channel-a', agentId: 'agent-a', source: 'notification', sourceId: 'notification-2', text: 'real alert'
+    })
+    expect(database.connection.prepare("select detail from channel_delivery_audits where code='channel-delivery-delivered'").get())
+      .toEqual({ detail: null })
+  })
+})
 
 describe('skip reasons name the action the user has to take', () => {
   it('distinguishes a bound but disabled target from no target at all', async () => {

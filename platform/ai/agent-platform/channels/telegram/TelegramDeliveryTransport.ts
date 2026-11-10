@@ -24,6 +24,7 @@ export class TelegramDeliveryTransport implements ChannelDeliveryTransport {
     // 以前整串直接当 chat_id 发出去 → 400 `chat not found` → 被记成「凭据被拒」，用户看到「发送失败」。
     const chatId = telegramChatId(input.providerConversationKey)
     if (!chatId) return { kind: 'failed', code: 'delivery-target-invalid' }
+    let lastMessageId: number | null = null
     for (const segment of splitTelegramText(input.text)) {
       // A fence between delivery admission and a later segment must not leak a stale send.
       if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
@@ -35,8 +36,13 @@ export class TelegramDeliveryTransport implements ChannelDeliveryTransport {
         if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
       }
       if (!response.ok) return mapFailure(response.code, response.providerDetail)
+      if (typeof response.value.messageId === 'number') lastMessageId = response.value.messageId
     }
-    return { kind: 'delivered' }
+    // 上游 id 只作证据：没有它（个别网关不回 message_id）就不写 detail，别编一个。
+    return {
+      kind: 'delivered',
+      ...(lastMessageId === null ? {} : { detail: JSON.stringify({ telegramMessageId: lastMessageId }) })
+    }
   }
 
   supportsIdempotency(): boolean { return false }

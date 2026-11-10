@@ -37,8 +37,19 @@ export class TelegramApiClient {
     return this.request<TelegramUpdate[]>('getUpdates', { offset: 0, timeout: 0, allowed_updates: allowedUpdates }, signal)
   }
 
-  async sendMessage(chatId: string, text: string, plain: boolean, signal?: AbortSignal): Promise<TelegramApiResult<true>> {
-    return this.request<true>('sendMessage', { chat_id: chatId, text, ...(plain ? {} : { parse_mode: 'MarkdownV2' }) }, signal)
+  /**
+   * 发送一条文本。返回值里带**上游 `message_id`**：它是唯一能把「发到了」与「发到了别处」
+   * 分开的证据（我们以前只留自己的 attempt id，读者拿着它没法跟手机对照）。
+   */
+  async sendMessage(chatId: string, text: string, plain: boolean, signal?: AbortSignal): Promise<TelegramApiResult<{ messageId: number | null }>> {
+    const response = await this.request<{ message_id?: unknown }>(
+      'sendMessage',
+      { chat_id: chatId, text, ...(plain ? {} : { parse_mode: 'MarkdownV2' }) },
+      signal
+    )
+    if (!response.ok) return response
+    const id = response.value?.message_id
+    return { ok: true, value: { messageId: typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? id : null } }
   }
 
   async typing(chatId: string, signal?: AbortSignal): Promise<TelegramApiResult<true>> {
