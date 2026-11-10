@@ -29,8 +29,9 @@ without rendering or IPC; use the heavier tests for integration seams.
 ## Channel suites
 
 The channel test suites run in the default suite. A green run covers them, but passing tests do not
-mean channels are usable: no adapter is enabled in this release
-(see [Status and limitations](../reference/status-and-limitations.md)). When an adapter is enabled,
+mean a channel is usable: the five adapters ship in this release, and whether one connects depends on the
+reader's credentials, the platform-side switches and the network
+(see [Status and limitations](../reference/status-and-limitations.md)). When adapter behaviour changes,
 update that page in the same change.
 
 ## Writing a test

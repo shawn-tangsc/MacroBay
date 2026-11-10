@@ -34,8 +34,8 @@ Claude Code 兼容的 Messages 路由。智能体模型选择器只显示满足�
 
 ## 渠道功能可用吗？
 
-不可用。Telegram、Slack、Lark、Discord、QQ、WeChat 集成仍在平台代码里，渠道设置页也能看到，可以
-创建渠道、保存凭据；但本版本没有启用任何适配器，因此不会收发消息。详见
+可以创建并启用。Telegram、Slack、Discord、QQ、飞书五个适配器都在这一版里；能不能真正连上取决于你的
+凭据、平台侧开关与网络（本机直连不通需先配代理）。WeChat 仍不可用。详见
 [状态与限制](./status-and-limitations.zh-CN.md)。
 
 ## 支持 Windows 或 Linux 吗？

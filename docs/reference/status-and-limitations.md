@@ -21,11 +21,9 @@ supported yet.
 
 ### Channel integrations
 
-Platform code for Telegram, Slack, Lark, Discord, QQ, and WeChat is present, and the channel settings
-page is reachable from the desktop shell: channels can be created, and credentials can be stored for
-the adapters that have a runtime implementation. No adapter is enabled in this release, and the app
-offers no way to enable one, so a channel created here sends and receives nothing. Treat channels as
-unavailable until an adapter is deliberately enabled.
+All five adapters — Telegram, Slack, Discord, QQ and Lark — can be created and enabled. Whether one
+actually connects depends on your credentials, the platform-side switches and the network (a direct
+connection from this machine needs a proxy first). WeChat is still unavailable.
 
 ### Official BLS calendar
 
