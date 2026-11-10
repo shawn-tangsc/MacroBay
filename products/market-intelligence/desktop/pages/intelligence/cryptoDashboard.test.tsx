@@ -195,7 +195,7 @@ describe('crypto intelligence dashboard', () => {
 
   it.each([
     ['empty', { state: 'empty' as const, asOf }, 'empty'],
-    ['unavailable', { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const }, 'error']
+    ['unavailable', { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const }, 'unreadable']
   ] as const)('renders the %s sentiment read as its own state, not as the other one', async (_name, result, expected) => {
     // The gauge is the one place the reader sees risk appetite. "We could not read it" and "there
     // is no index yet" are different facts, and only one of them is the reader's fault to fix.
