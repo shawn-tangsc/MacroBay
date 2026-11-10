@@ -1,9 +1,3 @@
-/** The product has one settings home: calendar feeds, providers and collection policy all live in
- *  Intelligence Sources, so a calendar request and a sources request are the same destination. */
-export const MARKET_INTELLIGENCE_SETTINGS_PANELS = {
-  intelligenceSources: 'market-intelligence.intelligence-sources'
-} as const
-
 /** Built-in shell settings sections this product navigates to; the proxy section lives in `preferences`. */
 export const PLATFORM_SETTINGS_PANELS = {
   preferences: 'preferences',
@@ -14,16 +8,21 @@ export const PLATFORM_SETTINGS_PANELS = {
 export type AppShellNavigateDetail = {
   navKey?: string
   settingsPanelKey?: string
+  /** 「请产品的设置抽屉打开某一屏」：产品页按自己的 `productId` 过滤消费（架构师 2026-11-11 签）。 */
+  settingsDrawer?: { productId: string; menuId: string }
 }
 
 export function navigateAppShell(detail: AppShellNavigateDetail): void {
   window.dispatchEvent(new CustomEvent('app-shell:navigate', { detail }))
 }
 
+/**
+ * 产品的配置入口：**开自己的配置抽屉**（用户 2026-11-11：平台设置里不再显示产品配置）。
+ * 平台设置里那一页已经撤掉，这里若还指过去，壳层会回落别的面板——点了落到不相关的地方。
+ */
 export function openIntelligenceSourcesSettings(): void {
   navigateAppShell({
-    navKey: 'settings',
-    settingsPanelKey: MARKET_INTELLIGENCE_SETTINGS_PANELS.intelligenceSources
+    settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' }
   })
 }
 

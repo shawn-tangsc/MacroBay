@@ -21,20 +21,10 @@ describe('market-intelligence product manifest', () => {
     })
   })
 
-  it('puts the run log between the source settings and the notifications', () => {
-    const sections = marketIntelligenceProductManifest.shellContributions?.settingsSections ?? []
-    expect(sections.map((section) => section.id)).toEqual([
-      'intelligence-sources',
-      'intelligence-run-log',
-      'intelligence-notification'
-    ])
-    // Order is what the shell sorts by; ids alone would let the menu drift apart from the intent.
-    const [sources, runLog, notifications] = sections
-    expect(sources!.order).toBeLessThan(runLog!.order)
-    expect(runLog!.order).toBeLessThan(notifications!.order)
-    // One name for the page and the menu entry: the heading comes from the copy table.
-    expect(runLog!.title).toEqual({ 'zh-CN': '运行日志', 'en-US': 'Run log' })
-    expect(runLog!.module).toBe('./desktop/settings/run-log')
+  it('no longer contributes any platform settings section', () => {
+    // 用户 2026-11-11：通用设置里不再显示产品配置；运行日志、通知、情报源三条页面全部撤下，
+    // 内容改由产品自己的配置抽屉承载。抽屉的菜单集由 `settingsDrawerDeclaration` 守卫对齐。
+    expect(marketIntelligenceProductManifest.shellContributions?.settingsSections).toEqual([])
   })
 
   it('keeps one blank intelligence page without removing existing intelligence capabilities', () => {
@@ -65,20 +55,12 @@ describe('market-intelligence product manifest', () => {
     expect(serviceMethods).toEqual(expect.arrayContaining(preservedMethods))
   })
 
-  it('keeps the intelligence source settings and collection connection contract', () => {
-    expect(marketIntelligenceProductManifest.shellContributions?.settingsSections).toEqual(
-      expect.arrayContaining([
-        {
-          id: 'intelligence-sources',
-          title: { 'zh-CN': '情报源', 'en-US': 'Intelligence Sources' },
-          icon: 'database',
-          order: 10,
-          module: './desktop/settings/intelligence-sources',
-          // 壳层的「去启用」按意图找这一页（不认产品面板 id），声明在设置分区上。
-          navIntent: 'resource-sources'
-        }
-      ])
-    )
+  it('keeps the intelligence source settings contract, now carried by our own drawer', () => {
+    // 用户 2026-11-11：平台设置侧不再显示产品配置——三条贡献全撤，改由产品抽屉承载。
+    expect(marketIntelligenceProductManifest.shellContributions?.settingsSections).toEqual([])
+    // 抽屉只声明菜单 id（壳层据此决定「去设置」出不出现）；菜单集由抽屉守卫对齐。
+    expect(marketIntelligenceProductManifest.shellContributions?.settingsDrawer?.map((menu) => menu.id))
+      .toEqual(['sources', 'sourcesData', 'processing', 'analysis', 'briefing', 'notifications', 'runLog'])
 
     const sourceMethods = [
       'intelligenceSources.listDefinitions',
@@ -124,7 +106,9 @@ describe('market-intelligence product manifest', () => {
     const portalSources = [portal, model].join('\n')
     // The page composes these injected read-only clients and nothing else; each is named here so
     // another one cannot slip in without this list changing.
-    const approvedClients = ['../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
+    // `cellEnabledClient` 在这一页只被 `read` / `readSelection` 读（业务开关的格快照），
+    // 写入口由抽屉宿主自己持有——所以它仍属这一页的**只读**客户端。
+    const approvedClients = ['../../shared/ipc/cellEnabledClient', '../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
 
     expect(page).toContain('AgentPortal')
     const imports = [...page.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1])

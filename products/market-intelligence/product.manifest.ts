@@ -62,32 +62,21 @@ export const marketIntelligenceProductManifest = {
         module: './desktop/pages/intelligence'
       }
     ],
-    settingsSections: [
-      {
-        id: 'intelligence-sources',
-        title: { 'zh-CN': '情报源', 'en-US': 'Intelligence Sources' },
-        icon: 'database',
-        order: 10,
-        module: './desktop/settings/intelligence-sources',
-        // 资源任务空态的「去启用」由壳层按业务意图带路，壳层不写死我们的面板 id。
-        navIntent: 'resource-sources'
-      },
-      {
-        // 设置 → 情报 → 运行日志：这个模块做过什么。从情报源页的标签搬出来，配置与记录各占一页。
-        id: 'intelligence-run-log',
-        title: { 'zh-CN': '运行日志', 'en-US': 'Run log' },
-        icon: 'scroll-text',
-        order: 11,
-        module: './desktop/settings/run-log'
-      },
-      {
-        // 设置 → 情报 → 通知：只放「这三条推不推手机」，本机两档在通用通知页（界面规范 §9d）。
-        id: 'intelligence-notification',
-        title: { 'zh-CN': '通知', 'en-US': 'Notifications' },
-        icon: 'message-square-text',
-        order: 12,
-        module: './desktop/settings/intelligence-notification'
-      }
+    /* 平台设置侧不再放本产品的配置：全部改由产品自己的配置抽屉承载（用户 2026-11-11）。
+       平台侧渲染逻辑没变，仍按注册数据驱动；这里撤的是「贡献」，不是能力。 */
+    settingsSections: [],
+    /* 产品自己的配置抽屉有几屏（架构师 2026-11-11 签）：**只放 id、不放标题**，
+       壳层据此决定「去设置」入口出不出现。菜单集必须与抽屉实际菜单一致，
+       由 `desktop/settings/config-drawer/settingsDrawerDeclaration.test.tsx` 守着——
+       守卫从抽屉自己的 `DRAWER_MENUS` 取集合，不在这里再抄一份。 */
+    settingsDrawer: [
+      { id: 'sources' },
+      { id: 'sourcesData' },
+      { id: 'processing' },
+      { id: 'analysis' },
+      { id: 'briefing' },
+      { id: 'notifications' },
+      { id: 'runLog' }
     ]
   },
   routes: [],
