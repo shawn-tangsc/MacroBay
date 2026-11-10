@@ -70,17 +70,19 @@ function cssBlock(source: string, marker: string): string {
 }
 
 describe('the old source drawer has no entry left', () => {
-  it('sends every entry to the new drawer, with the filter each one means', () => {
-    // 入口只指向一个函数：四处（门户/看板配置来源、样例「连数据」、行尾管理来源、日报页配置来源）
-    // 与日历「日历设置」，都走 openConfigDrawer，且筛选预设写死在这里。
+  it('sends every entry to the new drawer, through the one request builder', () => {
+    // 入口都指向 `openConfigDrawer`，而「采集与数据」那几处的位置由 `sourcesDataRequestFor` 拼：
+    // 六处（门户配置来源、样例「连数据」、日报页配置来源、看板行尾管理来源、日历设置、舆情设置）
+    // 各自知道要落哪一项，但**请求形状只有一处**——`focus.menu` 漏了会被归一化当成不匹配丢掉定位，
+    // 那种错在真机上只表现为「点了停在第一屏」。
     expect(page).not.toContain('setSourceDrawerOpen(true)')
-    // 看板这几处进「采集与数据」（业务设置），数据源那一屏只从菜单进。
-    expect(page).toContain("openConfigDrawer('sourcesData', 'dashboard')")
-    // 日历那一颗走「采集与数据 + 日历业务」这一屏（新签名是第一参 menu、第二参 filter）。
-    expect(page).toContain("openConfigDrawer('sourcesData', 'calendar')")
-    expect(page.match(/openConfigDrawer\('sourcesData', 'dashboard'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
-    // 日历那一颗必须显式传：不传就退回旧行为（打开旧抽屉）。
-    expect(page).toContain('onOpenSettings={() => openConfigDrawer')
+    expect(page).not.toContain("openConfigDrawer('sourcesData', 'dashboard')")
+    expect(page).not.toContain("openConfigDrawer('sourcesData', 'calendar')")
+    expect(page.match(/sourcesDataRequestFor\(/g)?.length ?? 0).toBeGreaterThanOrEqual(6)
+    // 日历那一颗显式说业务：不传就退回「看板」第一屏。
+    expect(page).toContain("sourcesDataRequestFor({ business: 'calendar' })")
+    // 位置来自调用方时原样转交（舆情 / 行尾「管理这个来源」）。
+    expect(page.match(/sourcesDataRequestFor\(focus\)/g)?.length ?? 0).toBe(2)
   })
 
   it('no longer references the old drawer at all', () => {

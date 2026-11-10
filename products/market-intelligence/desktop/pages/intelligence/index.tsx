@@ -130,7 +130,7 @@ function IntelligencePageBody(): React.ReactElement {
   }
   /** 门户/看板「配置来源」：**新抽屉**，预设看板筛选（旧看板抽屉入口一并收口）。 */
   const openCryptoSources = (): void => {
-    openConfigDrawer('sourcesData', 'dashboard')
+    openConfigDrawer(sourcesDataRequestFor())
   }
   const toggleSample = async (): Promise<void> => {
     if (sample.state.active) {
@@ -185,7 +185,7 @@ function IntelligencePageBody(): React.ReactElement {
       {sample.state.active && activeView === 'dashboard' ? (
         <SampleModeBanner
           busy={sample.busy}
-          onConnect={() => { void sample.exit().then(() => openConfigDrawer('sourcesData', 'dashboard')) }}
+          onConnect={() => { void sample.exit().then(() => openConfigDrawer(sourcesDataRequestFor())) }}
           onExit={() => { void sample.exit() }}
           scenarioNow={sample.state.scenarioNow}
           text={sampleText.banner as SampleModeBannerText}
@@ -197,7 +197,7 @@ function IntelligencePageBody(): React.ReactElement {
           text={text.dashboard.dailyBriefing}
           eventTitles={text.analysisWorkspace.readableNames.eventName}
           onBack={() => setActiveView('dashboard')}
-          onConfigureSources={() => openConfigDrawer('sourcesData', 'dashboard')}
+          onConfigureSources={() => openConfigDrawer(sourcesDataRequestFor())}
           onConfigureWebSearch={openWebSearchSettings}
           onOpenSettings={() => openConfigDrawer('briefing')}
         />
@@ -208,7 +208,7 @@ function IntelligencePageBody(): React.ReactElement {
           onBack={() => setActiveView('dashboard')}
           openTarget={calendarTarget}
           text={text.calendar}
-          onOpenSettings={() => openConfigDrawer({ menu: 'sourcesData', focus: { menu: 'sourcesData', business: 'calendar' } })}
+          onOpenSettings={() => openConfigDrawer(sourcesDataRequestFor({ business: 'calendar' }))}
         />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
@@ -256,7 +256,7 @@ function IntelligencePageBody(): React.ReactElement {
           macroRatesClient={macroRatesClient}
           dashboardFeedStatusClient={dashboardFeedStatusClient}
           now={sampleNow}
-          onConfigureSources={() => openConfigDrawer('sourcesData', 'dashboard')}
+          onConfigureSources={() => openConfigDrawer(sourcesDataRequestFor())}
           onManageSource={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
           initialSettingsMenu={configDrawerMenu}
           {...(configDrawerSourceId === undefined ? {} : { initialSourceId: configDrawerSourceId })}
