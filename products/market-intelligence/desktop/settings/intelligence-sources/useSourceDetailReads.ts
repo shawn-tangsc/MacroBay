@@ -17,9 +17,13 @@ export function isCalendarSource(source: Readonly<{ kind: string }>): boolean {
 export function useSourceDetailReads(provider: ProviderView, showSourceDetails: boolean | undefined): Readonly<{
   details: Record<string, SourceDetailRead>
   retryDetail: (sourceId: string) => void
-  refreshDetail: (sourceId: string) => Promise<void>
+  /** 跑完后台刷新；返回这次刷新有没有成功（失败时四格保留旧值并立一行状态）。 */
+  refreshDetail: (sourceId: string) => Promise<boolean>
+  /** 哪些源「刚跑完、读数还没刷新」——只在这一次运行之后成立，下一次成功刷新就消失。 */
+  refreshStaleById: Readonly<Record<string, boolean>>
 }> {
   const [details, setDetails] = useState<Record<string, SourceDetailRead>>({})
+  const [refreshStaleById, setRefreshStaleById] = useState<Readonly<Record<string, boolean>>>({})
 
   const loadDetail = useCallback(async (sourceId: string, active: () => boolean): Promise<void> => {
     setDetails((current) => ({ ...current, [sourceId]: { state: 'loading' } }))
@@ -66,19 +70,32 @@ export function useSourceDetailReads(provider: ProviderView, showSourceDetails: 
    * 不把它画成 `loading`——那会把整块四格（连同刚显示出来的「跑了什么结果」）卸载再重挂，
    * 读者会看到行闪一下、结果也没了。刷新失败保留旧读数，四格不空。
    */
-  const refreshDetail = useCallback(async (sourceId: string): Promise<void> => {
+  const refreshDetail = useCallback(async (sourceId: string): Promise<boolean> => {
     try {
       const state = await intelligenceSourcesClient.getPageState(sourceId)
       const detail = state?.detail
-      if (detail !== undefined) {
-        setDetails((current) => ({ ...current, [sourceId]: { state: 'ready' as const, detail } }))
+      if (detail === undefined) {
+        setRefreshStaleById((current) => ({ ...current, [sourceId]: true }))
+        return false
       }
+      setDetails((current) => ({ ...current, [sourceId]: { state: 'ready' as const, detail } }))
+      // 刷到新值就把状态话撤掉；下一次运行开始前它不会再出现。
+      setRefreshStaleById((current) => {
+        if (current[sourceId] !== true) return current
+        const next = { ...current }
+        delete next[sourceId]
+        return next
+      })
+      return true
     } catch {
-      // 刷新是补充，不是主读：失败不把已经显示的四格抹掉。
+      // 刷新是补充，不是主读：失败不把已经显示的四格抹掉，但**必须立一行状态**，
+      // 否则读者会以为「跑完了」上面那些读数就是刚跑出来的。
+      setRefreshStaleById((current) => ({ ...current, [sourceId]: true }))
+      return false
     }
   }, [])
 
-  return { details, retryDetail, refreshDetail }
+  return { details, retryDetail, refreshDetail, refreshStaleById }
 }
 
 /** 只需要 `kind` 的调用点（标签行）用这一份，避免再抄一遍 kind 判断。 */

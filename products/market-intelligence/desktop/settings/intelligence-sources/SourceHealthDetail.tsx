@@ -39,6 +39,8 @@ export type SourceHealthLabels = Readonly<{
   unknownReason: string
   whyNotCollecting: string
   runNowAnswer: string
+  /** 「刚跑完，读数还没刷新」：四格保留旧值时的状态句（不是「没有数据」）。 */
+  refreshStale: string
   reasons: Readonly<Record<SourceHealthIdleReason, string>>
   runNow: Readonly<Record<SourceRunNowAnswer, string>>
   /** B5 立即运行的三态文案（可运行 / 正在运行 / 跑完自动恢复）。 */
@@ -64,6 +66,8 @@ export function SourceHealthDetail(props: {
   resolveText: (key: string) => string
   /** 不可用源的整组说明里那一句（「自动同步已停止」）；与原因句串在同一格。 */
   automaticSyncStopped: string
+  /** 刚跑完、后台刷新没成功：四格保留旧值，旁边补一句状态。 */
+  refreshStale?: boolean
   timeZone: string
 }): React.ReactElement | null {
   const { labels, read, source } = props
@@ -133,6 +137,10 @@ export function SourceHealthDetail(props: {
     {/* 「拿不到」不是「没有」：读不到逐次记录时把原因写在下面，读者不会把「未知」读成「从没采过」。
         不可用的「自动同步已停止」也放这里：原因格只留那句读者说法，避免挤成三行。 */}
     {notes.length > 0 ? <p className="intelligence-source-note intelligence-source-note--health">{notes.join(' · ')}</p> : null}
+    {/* 跑完但读数没刷新：四格还是旧的，必须说出来——否则「跑完了」会把旧读数读成刚采到的。 */}
+    {props.refreshStale === true
+      ? <p className="intelligence-source-note intelligence-source-note--health" role="status">{labels.refreshStale}</p>
+      : null}
   </div>
 }
 

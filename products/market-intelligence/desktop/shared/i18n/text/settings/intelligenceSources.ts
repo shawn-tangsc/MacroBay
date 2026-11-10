@@ -459,6 +459,7 @@ export const intelligenceSourcesText = {
     unknownReason: '这类来源只按提供方汇总运行，没有逐次记录',
     whyNotCollecting: '为什么没在采',
     runNowAnswer: '能不能立刻采',
+    refreshStale: '刚跑完，读数还没刷新',
     reasons: {
       disabled: '已停用',
       'missing-credential': '缺凭据',
@@ -966,6 +967,7 @@ export const intelligenceSourcesText = {
     unknownReason: 'This kind of source is summarised per provider; there is no run-by-run record',
     whyNotCollecting: 'Why it is not collecting',
     runNowAnswer: 'Can it run now',
+    refreshStale: 'Just ran; the readings have not refreshed yet',
     reasons: {
       disabled: 'Turned off',
       'missing-credential': 'Missing credential',

@@ -260,4 +260,68 @@ describe('ProviderDetail health detail (B4)', () => {
     expect(container.querySelector('.state-view')).toBeNull()
     expect(pageStateRequests(invoke)).not.toContain('macro-calendar-fed')
   })
+
+  it('keeps the old readings and says so when the background refresh fails', async () => {
+    // 跑完刷新失败：四格保留旧值 + 一行状态；不许把旧读数当成刚采到的，也不许写成「没有数据」。
+    let reads = 0
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method !== 'intelligenceSources.getPageState') return undefined
+      reads += 1
+      if (reads === 1) return { detail: detail('2026-11-09T04:00:00.000Z') }
+      throw new Error('refresh-failed')
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = await render(createElement(ProviderDetail, {
+      labels: labels(),
+      onRunNow: async () => ({ kind: 'succeeded' as const, notice: '采集成功。' }),
+      provider: provider([source({ sourceId: 's1', displayName: 'S1' })]),
+      showSourceDetails: true,
+      supportsRunNowById: { s1: true }
+    }))
+
+    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === settingsText.health.runAction.run)
+    await act(async () => { runButton?.click() })
+    await flush()
+
+    // 旧值还在，状态句出现；不是「今天还没有」那种「没有数据」。
+    expect(container.textContent).toContain('11-09 12:00 GMT+8')
+    expect(container.textContent).toContain(settingsText.health.refreshStale)
+    // 状态句与「没有数据」不是一句：不是 never-ran / noSuccess 那两档。
+    expect(container.textContent).not.toContain(settingsText.health.reasons['never-ran'])
+  })
+
+  it('clears that status as soon as a later refresh succeeds', async () => {
+    // 对偶面：先失败立起状态，再成功一次——新值替换旧值、状态话消失。
+    let reads = 0
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method !== 'intelligenceSources.getPageState') return undefined
+      reads += 1
+      if (reads === 2) throw new Error('refresh-failed')
+      return { detail: detail(reads === 1 ? '2026-11-09T04:00:00.000Z' : '2026-11-10T04:30:00.000Z') }
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    const container = await render(createElement(ProviderDetail, {
+      labels: labels(),
+      onRunNow: async () => ({ kind: 'succeeded' as const, notice: '采集成功。' }),
+      provider: provider([source({ sourceId: 's1', displayName: 'S1' })]),
+      showSourceDetails: true,
+      supportsRunNowById: { s1: true }
+    }))
+
+    const runOnce = async (): Promise<void> => {
+      const button = [...container.querySelectorAll('button')].find((node) => node.textContent === settingsText.health.runAction.run)
+      await act(async () => { button?.click() })
+      await flush()
+    }
+    await runOnce()
+    expect(container.textContent).toContain('11-09 12:00 GMT+8')
+    expect(container.textContent).toContain(settingsText.health.refreshStale)
+
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    await runOnce()
+    expect(container.textContent).toContain('11-10 12:30 GMT+8')
+    expect(container.textContent).not.toContain(settingsText.health.refreshStale)
+  })
 })

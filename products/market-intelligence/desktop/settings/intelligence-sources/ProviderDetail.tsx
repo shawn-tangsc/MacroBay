@@ -179,7 +179,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [networkFailure, setNetworkFailure] = useState(false)
 
 
-  const { details, retryDetail, refreshDetail } = useSourceDetailReads(provider, showSourceDetails)
+  const { details, retryDetail, refreshDetail, refreshStaleById } = useSourceDetailReads(provider, showSourceDetails)
 
   const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
     const outcome = await onRunNow!(sourceId)
@@ -416,6 +416,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             onRetry={() => retryDetail(source.sourceId)}
             {...(onRunNow === undefined ? {} : { onRunNow: runAndRefresh })}
             read={details[source.sourceId] ?? { state: 'loading' }}
+            refreshStale={refreshStaleById[source.sourceId] === true}
             resolveText={resolveText}
             source={source}
             {...(supportsRunNowById?.[source.sourceId] === undefined ? {} : { supportsRunNow: supportsRunNowById[source.sourceId] })}
