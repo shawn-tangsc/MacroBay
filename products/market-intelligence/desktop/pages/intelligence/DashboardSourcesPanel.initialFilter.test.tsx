@@ -137,8 +137,8 @@ describe('筛选页签在业务设置下常显', () => {
 describe('业务设置 › 看板：每行都有格级开关', () => {
   it('renders one switch per card row (not zero)', async () => {
     const container = await renderPanel('dashboard')
-    const rows = container.querySelectorAll('.business-card__row')
-    const switches = container.querySelectorAll('.business-card__row [role="switch"]')
+    const rows = container.querySelectorAll('[data-cell-id]')
+    const switches = container.querySelectorAll('[data-cell-id] [role="switch"]')
     expect(rows.length).toBeGreaterThan(0)
     expect(switches.length).toBe(rows.length)
   })

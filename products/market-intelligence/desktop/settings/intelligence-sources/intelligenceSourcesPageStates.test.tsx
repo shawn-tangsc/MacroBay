@@ -265,3 +265,21 @@ describe('sources settings page states', () => {
     expect(dom.querySelector('[role="group"]')).not.toBeNull()
   })
 })
+
+describe('设置页 › 业务设置：每行都有格级开关', () => {
+  it('renders one switch per cell row in the settings host too', async () => {
+    // 防「抽屉有、设置页没有」复发：两个宿主各一条同形判据。
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({ loading: false, settingsView: settingsViewOneProvider() }) as never
+    )
+    const dom = await render()
+    const businessTab = [...dom.querySelectorAll<HTMLButtonElement>('.intelligence-catalog-filters button')]
+      .find((button) => button.textContent === zhText.sourceFilters.dashboard)
+    expect(businessTab).not.toBeUndefined()
+    await act(async () => { businessTab!.click() })
+    const rows = dom.querySelectorAll('[data-cell-id]')
+    const switches = dom.querySelectorAll('[data-cell-id] [role="switch"]')
+    expect(rows.length).toBeGreaterThan(0)
+    expect(switches.length).toBe(rows.length)
+  })
+})
