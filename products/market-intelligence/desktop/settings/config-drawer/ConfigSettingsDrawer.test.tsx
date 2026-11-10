@@ -653,3 +653,14 @@ describe('config drawer close guard', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('the card sits 16 from the menu', () => {
+  it('gives the pane 16 of left padding and the card no negative margin', () => {
+    // 「菜单 ──16── 卡边」钉成数字：pane 左内距 16 + 卡不得用负外边距抵消它。
+    const css = readFileSync(join(__dirname, 'configDrawer.css'), 'utf8')
+    const pane = /\.config-drawer__pane\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(pane).toContain('padding: 16px')
+    const card = /\.config-drawer__card\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(card).not.toMatch(/margin(?:-left)?:\s*-/u)
+  })
+})

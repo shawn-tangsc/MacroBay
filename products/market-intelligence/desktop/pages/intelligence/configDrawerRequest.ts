@@ -32,3 +32,16 @@ export function normalizeConfigDrawerRequest(
   if (input.focus !== undefined && input.focus.menu !== input.menu) return { menu: input.menu }
   return input
 }
+
+/**
+ * 壳层「去设置」跳转 → 本产品要开的菜单；**不认识就 `undefined`**（什么都不做）。
+ *
+ * 只认自己的 productId 与登记表里的菜单：猜一个默认屏会让读者点了 A 停在 B。
+ */
+export function menuFromSettingsDrawer(
+  detail: Readonly<{ productId?: string; menuId?: string }> | undefined
+): ConfigDrawerMenu | undefined {
+  if (detail?.productId !== 'market-intelligence') return undefined
+  const menuId = detail.menuId
+  return menuId !== undefined && MENUS.includes(menuId) ? (menuId as ConfigDrawerMenu) : undefined
+}

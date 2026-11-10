@@ -14,7 +14,7 @@ import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
 import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
-import { normalizeConfigDrawerRequest, type OpenConfigDrawerRequest } from './configDrawerRequest'
+import { menuFromSettingsDrawer, normalizeConfigDrawerRequest, type OpenConfigDrawerRequest } from './configDrawerRequest'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
@@ -93,11 +93,9 @@ function IntelligencePageBody(): React.ReactElement {
   useEffect(() => {
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<{ settingsDrawer?: { productId?: string; menuId?: string } }>).detail
-      const target = detail?.settingsDrawer
-      if (target?.productId !== 'market-intelligence') return
-      const menuId = target.menuId
-      if (menuId === undefined || !(DRAWER_MENUS as readonly string[]).includes(menuId)) return
-      openConfigDrawer(menuId as ConfigDrawerMenu)
+      const menu = menuFromSettingsDrawer(detail?.settingsDrawer)
+      if (menu === undefined) return
+      openConfigDrawer(menu)
     }
     window.addEventListener('app-shell:navigate', handler)
     return () => window.removeEventListener('app-shell:navigate', handler)

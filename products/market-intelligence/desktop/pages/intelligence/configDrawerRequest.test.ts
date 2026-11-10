@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeConfigDrawerRequest } from './configDrawerRequest'
+import { menuFromSettingsDrawer, normalizeConfigDrawerRequest } from './configDrawerRequest'
 
 /**
  * 「永远打开、永不白屏」的判据：非法输入一律**退到该菜单的默认位置**，而不是拒绝打开或停在空白屏。
@@ -27,5 +27,20 @@ describe('normalizeConfigDrawerRequest', () => {
   it('still accepts the old bare-menu form', () => {
     expect(normalizeConfigDrawerRequest('runLog')).toEqual({ menu: 'runLog' })
     expect(normalizeConfigDrawerRequest(undefined)).toEqual({ menu: 'sources' })
+  })
+})
+
+describe('the shell jump maps to a menu only when it is ours and known', () => {
+  it('opens the run log for our own runLog jump', () => {
+    expect(menuFromSettingsDrawer({ productId: 'market-intelligence', menuId: 'runLog' })).toBe('runLog')
+  })
+
+  it('ignores another product', () => {
+    expect(menuFromSettingsDrawer({ productId: 'something-else', menuId: 'runLog' })).toBeUndefined()
+  })
+
+  it('ignores a menu it does not know, instead of guessing a default', () => {
+    expect(menuFromSettingsDrawer({ productId: 'market-intelligence', menuId: 'nope' })).toBeUndefined()
+    expect(menuFromSettingsDrawer(undefined)).toBeUndefined()
   })
 })
