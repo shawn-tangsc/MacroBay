@@ -49,8 +49,19 @@ const CONTENT_SETTING_KEYS = {
   sentiment: 'setting:notifications.push-outlet'
 } as const satisfies Record<Exclude<ItemKey, 'calendar'>, string>
 
+/** 日历详情里已迁移的四行（日历开关 / 提前量 / 重要性 / 落地筛选）。 */
+const CALENDAR_SETTING_KEYS = [
+  'setting:notifications.calendar.enabled',
+  'setting:notifications.calendar.lead',
+  'setting:notifications.calendar.importance',
+  'setting:notifications.calendar.landed-filter'
+] as const
+
 /** 已迁移到「按声明渲染」的键：守卫①②只认这份清单，不按文件位置推断。 */
-export const MIGRATED_SETTING_KEYS: readonly string[] = Object.values(CONTENT_SETTING_KEYS)
+export const MIGRATED_SETTING_KEYS: readonly string[] = [
+  ...Object.values(CONTENT_SETTING_KEYS),
+  ...CALENDAR_SETTING_KEYS
+]
 
 function contentDescriptor(key: Exclude<ItemKey, 'calendar'>): SettingDescriptor {
   const descriptor = settingRegistry.notifications.find((row) => row.key === CONTENT_SETTING_KEYS[key])

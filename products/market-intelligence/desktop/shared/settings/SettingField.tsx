@@ -55,6 +55,8 @@ export type SettingFieldProps = Readonly<{
   helpAriaLabelKey?: string
   /** 行名字自身的类名（各屏现状不同，由调用方给，保 A1 的 DOM 逐字不变）。 */
   labelTextClassName?: string
+  /** `multiSelect` 每一项的类名（各屏现状不同，由调用方给）。 */
+  checkboxClassName?: string
   /** `unimplemented` 的一行说明，由页面给句子。 */
   unimplementedText?: string
   /** 页面渲染的行级状态（保存中 / 存不上）。组件不生产、不改写、不吞掉。 */
@@ -142,6 +144,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
       return row(<MultiSelect
         ariaLabel={label}
         disabled={props.disabled === true || props.busy === true}
+        checkboxClassName={props.checkboxClassName}
         onChange={props.onChange}
         options={optionsOf(descriptor.field.optionsFrom, props.view, props.resolveOptionLabel)}
         value={props.value}
@@ -188,6 +191,7 @@ function optionsOf(
 
 function MultiSelect(props: Readonly<{
   ariaLabel: string
+  checkboxClassName?: string
   disabled: boolean
   onChange?: (next: unknown) => void
   options: readonly ResolvedOption[]
@@ -206,6 +210,7 @@ function MultiSelect(props: Readonly<{
       const key = String(option.value)
       return <Checkbox
         checked={selected.includes(key)}
+        className={props.checkboxClassName}
         disabled={props.disabled}
         key={key}
         onChange={(event) => toggle(key, event.target.checked)}

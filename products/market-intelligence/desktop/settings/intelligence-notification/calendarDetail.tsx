@@ -8,12 +8,28 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 
 import { CALENDAR_REMINDER_LEAD_MINUTES } from '../../../contracts/calendarEventReminder'
 import { CalendarLandedCountriesRow } from './calendarLandedCountriesRow'
+import type { SettingDescriptor } from '../../shared/settings/descriptorTypes'
+import { settingRegistry } from '../../shared/settings/registry'
+import { SettingField } from '../../shared/settings/SettingField'
 import { SettingsGroup, SettingsInfo, SettingsRow } from './settingsRow'
 import type { CalendarReminderSettingsState } from './useCalendarReminderSettings'
 import type { useSurfaceSelection } from './useSurfaceSelection'
 import { CALENDAR_LANDED_FILTER_KEYS, CALENDAR_REMINDER_LEAD_KEYS } from './notificationKeys'
 
 type SurfaceState = ReturnType<typeof useSurfaceSelection>
+
+/** 详情行对应的声明：按 key 找，不兜底——声明缺了就是编译/测试的红。 */
+function detailDescriptor(key: string): SettingDescriptor {
+  const descriptor = settingRegistry.notifications.find((row) => row.key === key)
+  if (!descriptor) throw new Error(`missing setting descriptor: ${key}`)
+  return descriptor
+}
+
+const ROW_CLASS = 'intelligence-notification-form-row'
+const LABEL_CLASS = 'intelligence-notification-form-label'
+const LABEL_TEXT_CLASS = 'intelligence-notification-form-label-text'
+const CONTROL_CLASS = 'intelligence-notification-form-control'
+
 
 /**
  * 「日历事件」的详情（界面规范 v1.10 §8，版式对齐定版预览稿）。
@@ -112,16 +128,20 @@ export function CalendarDetail(props: Readonly<{
       title={text['pages.intelligence.notification.calendar.before'] ?? ''}
     >
       {/* 关着时只留一行状态摘要（提前量 + 重要性），不让两个控件看起来能用却不起作用。 */}
-      <SettingsRow
-        label={text['pages.intelligence.notification.calendar.beforeRow'] ?? ''}
-        last={!value.enabled}
+      <SettingField
+        busy={reminder.saving}
+        controlWrapperClassName={CONTROL_CLASS}
+        copyClassName={LABEL_CLASS}
+        descriptor={detailDescriptor('setting:notifications.calendar.enabled')}
+        labelTextClassName={LABEL_TEXT_CLASS}
+        onChange={(next) => reminder.update({ enabled: next === true })}
+        resolveOptionLabel={() => ''}
+        resolveText={props.resolveText}
+        rowClassName={`${ROW_CLASS}${!value.enabled ? ' is-last' : ''}`}
+        showHelp={false}
+        value={value.enabled}
+        view={value}
       >
-        <Switch
-          aria-label={text['pages.intelligence.notification.calendar.beforeRow'] ?? ''}
-          checked={value.enabled}
-          disabled={reminder.saving}
-          onChange={() => reminder.update({ enabled: !value.enabled })}
-        />
         {/* 关着时把**已存的值**摆出来（状态 + 提前量 + 重要性），不是一句话：
             正文只允许字段名、当前值、控件。 */}
         {value.enabled
@@ -136,44 +156,40 @@ export function CalendarDetail(props: Readonly<{
             ].join(text['pages.intelligence.notification.joiner'] ?? ' / ')}
           </span>}
         {props.upcomingAction ?? null}
-      </SettingsRow>
+      </SettingField>
       {value.enabled
         ? <>
-          <SettingsRow label={text['pages.intelligence.notification.calendar.lead'] ?? ''}>
-            <Segmented
-              ariaLabelKey="pages.intelligence.notification.calendar.lead"
-              items={CALENDAR_REMINDER_LEAD_MINUTES.map((minutes) => ({
-                value: String(minutes),
-                labelKey: CALENDAR_REMINDER_LEAD_KEYS[minutes]
-              }))}
-              onChange={(next) => reminder.update({ leadMinutes: Number(next) as typeof value.leadMinutes })}
-              resolveText={props.resolveText}
-              value={String(value.leadMinutes)}
-            />
-          </SettingsRow>
-          <SettingsRow label={text['pages.intelligence.notification.calendar.importance'] ?? ''} last>
-            <div
-              aria-label={text['pages.intelligence.notification.calendar.importance']}
-              className="intelligence-notification-form-checks"
-              role="group"
-            >
-              {(['high', 'medium', 'low'] as const).map((level) => (
-                <Checkbox
-                  checked={value.importance.includes(level)}
-                  className="intelligence-notification-form-check"
-                  disabled={reminder.saving}
-                  key={level}
-                  onChange={() => reminder.update({
-                    importance: value.importance.includes(level)
-                      ? value.importance.filter((entry) => entry !== level)
-                      : [...value.importance, level]
-                  })}
-                >
-                  {text[`pages.intelligence.notification.importance.${level}`] ?? level}
-                </Checkbox>
-              ))}
-            </div>
-          </SettingsRow>
+          <SettingField
+            busy={reminder.saving}
+            controlWrapperClassName={CONTROL_CLASS}
+            copyClassName={LABEL_CLASS}
+            descriptor={detailDescriptor('setting:notifications.calendar.lead')}
+            labelTextClassName={LABEL_TEXT_CLASS}
+            onChange={(next) => reminder.update({ leadMinutes: Number(next) as typeof value.leadMinutes })}
+            resolveOptionLabel={(option, source) =>
+              text[`pages.intelligence.notification.leads.${String(option)}`] ?? String(option)}
+            resolveText={props.resolveText}
+            rowClassName={ROW_CLASS}
+            showHelp={false}
+            value={value.leadMinutes}
+            view={value}
+          />
+          <SettingField
+            busy={reminder.saving}
+            checkboxClassName="intelligence-notification-form-check"
+            controlWrapperClassName={CONTROL_CLASS}
+            copyClassName={LABEL_CLASS}
+            descriptor={detailDescriptor('setting:notifications.calendar.importance')}
+            labelTextClassName={LABEL_TEXT_CLASS}
+            onChange={(next) => reminder.update({ importance: next as typeof value.importance })}
+            resolveOptionLabel={(option) =>
+              text[`pages.intelligence.notification.importance.${String(option)}`] ?? String(option)}
+            resolveText={props.resolveText}
+            rowClassName={`${ROW_CLASS} is-last`}
+            showHelp={false}
+            value={value.importance}
+            view={value}
+          />
         </>
         : null}
       {reminder.saveFailedField === 'enabled' || reminder.saveFailedField === 'leadMinutes' || reminder.saveFailedField === 'importance'
@@ -186,27 +202,23 @@ export function CalendarDetail(props: Readonly<{
     </SettingsGroup>
 
     <SettingsGroup title={text['pages.intelligence.notification.calendar.after'] ?? ''}>
-      <SettingsRow
-        info={{
-          ariaLabelKey: 'pages.intelligence.notification.calendar.landedInfoAria',
-          labelKeys: ['pages.intelligence.notification.landed.cost'],
-          resolveText: props.resolveText
-        }}
-        label={text['pages.intelligence.notification.calendar.landedRow'] ?? ''}
-        last={false}
+      <SettingField
+        busy={reminder.saving}
+        controlWrapperClassName={CONTROL_CLASS}
+        copyClassName={LABEL_CLASS}
+        descriptor={detailDescriptor('setting:notifications.calendar.landed-filter')}
+        helpAriaLabelKey="pages.intelligence.notification.calendar.landedInfoAria"
+        labelTextClassName={LABEL_TEXT_CLASS}
+        onChange={(next) => reminder.update({ landedFilter: next as typeof value.landedFilter })}
+        resolveOptionLabel={(option) =>
+          text[`pages.intelligence.notification.landed.${String(option)}`] ?? String(option)}
+        resolveText={props.resolveText}
+        rowClassName={ROW_CLASS}
+        value={value.landedFilter}
+        view={value}
       >
-        <Segmented
-          ariaLabelKey="pages.intelligence.notification.calendar.landedRow"
-          items={(['surprise-only', 'also-matched'] as const).map((filter) => ({
-            value: filter,
-            labelKey: CALENDAR_LANDED_FILTER_KEYS[filter]
-          }))}
-          onChange={(next) => reminder.update({ landedFilter: next as typeof value.landedFilter })}
-          resolveText={props.resolveText}
-          value={value.landedFilter}
-        />
         {props.landedAction ?? null}
-      </SettingsRow>
+      </SettingField>
       <CalendarLandedCountriesRow
         last
         onChange={(next) => reminder.update({ landedCountries: next })}

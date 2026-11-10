@@ -150,6 +150,9 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
   container?.remove()
+  // 浮层由组件挂到 document.body 的 overlay 容器里，不在本测试的 container 内；
+  // 不清理会把上一例的浮层留给下一例（按「第一个浮层」取时尤其明显）。
+  document.body.innerHTML = ''
   container = undefined
   delete (window as unknown as { platform?: unknown }).platform
   vi.restoreAllMocks()
@@ -367,6 +370,25 @@ describe('intelligence notification settings', () => {
     expect(keys()).toEqual(['setting:notifications.channel-event.briefing-ready'])
     await selectItem(2)
     expect(keys()).toEqual(['setting:notifications.push-outlet'])
+
+    // 日历详情：开关打开时四行都从声明渲染；关着时只剩开关那一行 + 页面状态摘要。
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'us', codes: [] } }
+        }
+        if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+        return { enabled: true }
+      })
+    })
+    await render()
+    await selectItem(3)
+    expect(keys()).toEqual([
+      'setting:notifications.calendar.enabled',
+      'setting:notifications.calendar.lead',
+      'setting:notifications.calendar.importance',
+      'setting:notifications.calendar.landed-filter'
+    ])
 
     // 页面 → 注册表：渲染出的每个键都必须在已迁移清单里，且是 settings 面上的真实声明。
     for (const key of keys()) {
