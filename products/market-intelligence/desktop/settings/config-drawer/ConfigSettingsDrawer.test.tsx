@@ -504,6 +504,32 @@ describe('config settings drawer (static layout)', () => {
     }
   })
 
+  it('puts the two source screens in the same card, with one page name and one divider', () => {
+    // 用户能一眼看出的三件：有卡边、左上角有页名、菜单与卡之间 16。
+    // 卡内只允许一条主分隔线：卡体自己不再画边框（`card-body` 无 border，分隔线由屏内 `.config-drawer__split` 给）。
+    const mountWith = (menu: string, props: Record<string, unknown>): Document => {
+      document.body.replaceChildren()
+      root?.unmount()
+      root = undefined
+      host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      act(() => root?.render(
+        <ConfigSettingsDrawer {...{ initialMenu: menu as never, onClose: () => undefined, open: true, ...props }} />
+      ))
+      return document
+    }
+    for (const [menu, prop] of [['sources', 'sourcesPanel'], ['sourcesData', 'sourcesDataPanel']] as const) {
+      const doc = mountWith(menu, { [prop]: <div data-fake-screen="true" /> })
+      const card = doc.querySelector('[data-drawer-card="true"]')
+      expect(card, `${menu} 必须有内容卡`).not.toBeNull()
+      expect(doc.querySelector('.config-drawer__card-title')?.textContent?.trim().length ?? 0).toBeGreaterThan(0)
+      // 卡体不画边框：卡内唯一的分隔线来自屏内两栏。
+      const body = doc.querySelector<HTMLElement>('.config-drawer__card-body')!
+      expect(body.className).toContain('config-drawer__card-body')
+    }
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {
