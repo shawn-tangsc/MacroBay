@@ -22,6 +22,8 @@ vi.mock('@products/generated/shellRegistry', () => ({
   productMenuEntries: [],
   productPanelEntries: [],
   productApprovalFieldLabels: {},
+  // 通知中心那颗「去设置」读它；漏了就会让整个壳在挂载时炸（mock 必须与模块导出对齐）。
+  productSettingsDrawers: [],
   productSettingsEntries: [{
     id: 'sample-product.source-settings',
     productId: 'sample-product',
@@ -188,7 +190,13 @@ describe('R87 landing', () => {
     await settle()
 
     // 面板真的换了（不是只把侧栏点亮）：高亮的就是那一项，名字取自注册表本身。
-    const panelEntry = productSettingsEntries.find((entry) => entry.id === panelKey)
+    // 注：本构建的 `productSettingsEntries` 是空数组（产品已撤注册），生成物的类型是 `readonly []`，
+    // `.find` 会被收成 `never`——这里按条目形状取，运行时仍是 mock 里那一条。
+    const entries = productSettingsEntries as readonly {
+      id: string
+      title: { 'zh-CN': string; 'en-US': string }
+    }[]
+    const panelEntry = entries.find((entry) => entry.id === panelKey)
     expect(panelEntry).toBeDefined()
     expect(activeSettingsPanel(host)).toBe(
       resolveLocalizedTitle(panelEntry!.title, settingsLanguage())

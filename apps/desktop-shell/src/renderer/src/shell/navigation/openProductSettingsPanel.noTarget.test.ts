@@ -13,7 +13,9 @@ import { APP_NAVIGATE_EVENT } from '@platform/workspace/navigation/navigationReq
  */
 vi.mock('@products/generated/shellRegistry', () => ({
   productMenuEntries: [],
-  productSettingsEntries: []
+  productSettingsEntries: [],
+  // 本文件不读抽屉声明；保留完整导出的形状，免得模块以后新增消费者时这条 mock 先炸。
+  productSettingsDrawers: []
 }))
 
 const { findProductSettingsPanelByIntent, openProductSettingsPanelByIntent } = await import('./openProductSettingsPanel')
