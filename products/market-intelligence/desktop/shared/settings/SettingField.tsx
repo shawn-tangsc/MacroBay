@@ -38,6 +38,13 @@ export type SettingFieldProps = Readonly<{
   controlWrapperClassName?: string
   headClassName?: string
   disabled?: boolean
+  /** 控件级「正在保存」表现（switch 的 loading）；状态本身仍由页面持有。 */
+  busy?: boolean
+  /**
+   * 是否把 `helpKey` 渲染成 ⓘ。默认渲染（声明有说明就该能看）；
+   * 迁移旧屏时若该行现状没有 ⓘ，调用方显式传 `false` 以保 A1 的 DOM 不变。
+   */
+  showHelp?: boolean
   onChange?: (next: unknown) => void
   /** 行名、说明、ⓘ 读屏名都从这里解析；不在这里拼句子。 */
   resolveText: (key: string) => string
@@ -60,7 +67,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
   // 按实例化的行的行名是**数据**（来源名 / feed 名）；静态行才用文案键。
   const label = descriptor.labelText ? descriptor.labelText(props.view) : props.resolveText(descriptor.copy?.labelKey ?? '')
   const helpKey = descriptor.copy?.helpKey
-  const info = helpKey === undefined
+  const info = helpKey === undefined || props.showHelp === false
     ? null
     : <SettingsInfo
       ariaLabelKey={props.helpAriaLabelKey ?? helpKey}
@@ -84,7 +91,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
 
   if (descriptor.availability === 'unimplemented') {
     // 未实现项没有控件：一行说明就够，不画一个「以后能开」的灰控件。
-    return row(<span className="intelligence-notification-form-note" role="status">{props.unimplementedText ?? ''}</span>)
+    return row(<span className="intelligence-notification-form-note" role="note">{props.unimplementedText ?? ''}</span>)
   }
 
   switch (descriptor.field.kind) {
@@ -92,7 +99,8 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
       return row(<Switch
         aria-label={label}
         checked={props.value === true}
-        disabled={props.disabled === true}
+        disabled={props.disabled === true || props.busy === true}
+        loading={props.busy === true}
         onChange={(next) => props.onChange?.(next)}
         size="small"
       />)
@@ -100,7 +108,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
       const optionsFrom = descriptor.field.optionsFrom
       return row(<Select
         aria-label={label}
-        disabled={props.disabled === true}
+        disabled={props.disabled === true || props.busy === true}
         onChange={(next) => props.onChange?.(next)}
         options={optionsOf(optionsFrom).map((option) => ({
           value: option.value,
@@ -113,7 +121,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
     case 'multiSelect':
       return row(<MultiSelect
         ariaLabel={label}
-        disabled={props.disabled === true}
+        disabled={props.disabled === true || props.busy === true}
         onChange={props.onChange}
         optionsFrom={descriptor.field.optionsFrom}
         resolveOptionLabel={props.resolveOptionLabel}
@@ -122,7 +130,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
     case 'number':
       return row(<InputNumber
         aria-label={label}
-        disabled={props.disabled === true}
+        disabled={props.disabled === true || props.busy === true}
         max={descriptor.field.max}
         min={descriptor.field.min}
         onChange={(next) => props.onChange?.(next)}
