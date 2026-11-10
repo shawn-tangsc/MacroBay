@@ -16,6 +16,8 @@ type Labels = {
   categories: Record<SourceCategory, string>
   providerNames: Record<string, string>
   providerSummary: string
+  /** 「含 {count} 个取不到的源」：只进目录行的可访问名，不在屏幕上多画一行。 */
+  unavailableCount: string
 }
 
 /** One list, so the visible order and the option values cannot drift apart. */
@@ -82,6 +84,8 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
             const summary = labels.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
             // 标记档由投影给出，与抽屉读同一份（组件不看 enabled/unavailable）。
             const markerClass = catalogMarkerClass(provider.healthMarker)
+            // ring 是装饰（aria-hidden），读屏听不到「取不到」——把数量补进这一行的可访问名。
+            const unavailableCount = provider.sources.filter((source) => source.enabled && source.unavailable !== undefined).length
             return <section className="intelligence-provider-group" key={provider.providerId}>
               {/* 例外登记（ui-spec R1）：这是**两行内容 + 选中态的行容器**，不是命令按钮。
                   antd `Button` 会把子节点包进自己的 span 并带 padding/height，可见形状会变，
@@ -100,6 +104,9 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
                   <strong>{labels.providerNames[provider.providerId] ?? provider.displayName}</strong>
                   <small>{summary}</small>
                 </span>
+                {unavailableCount > 0
+                  ? <span className="intelligence-source-sr-only">{labels.unavailableCount.replace('{count}', String(unavailableCount))}</span>
+                  : null}
                 <span className="intelligence-provider-state">
                   {markerClass === undefined ? null : <i className={markerClass} aria-hidden="true" />}
                   <ChevronRight aria-hidden="true" size={13} />

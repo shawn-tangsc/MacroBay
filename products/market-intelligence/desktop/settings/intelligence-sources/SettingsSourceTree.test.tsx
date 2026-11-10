@@ -48,7 +48,7 @@ describe('SettingsSourceTree', () => {
       }
       await act(async () => root!.render(createElement(SettingsSourceTree, {
         filter: 'all',
-        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}' },
+        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCount: '含 {count} 个取不到的源' },
         onFilterChange: vi.fn(),
         onSelectProvider: vi.fn(),
         selectedProviderId: undefined,
@@ -71,7 +71,7 @@ describe('SettingsSourceTree', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(SettingsSourceTree, {
       filter: 'calendar',
-      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}' },
+      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCount: '含 {count} 个取不到的源' },
       onFilterChange: vi.fn(),
       onSelectProvider: vi.fn(),
       selectedProviderId: undefined,
@@ -80,5 +80,50 @@ describe('SettingsSourceTree', () => {
     await act(async () => { await Promise.resolve() })
 
     expect(host.querySelector('[data-state="empty"]')).toBeNull()
+  })
+
+  it('puts how many sources cannot be reached into the row name, and only when there is one', async () => {
+    // ring 是 aria-hidden 的装饰：读屏听不到「取不到」。目录行自己补一句数量。
+    const base = (unavailable: boolean) => ({
+      groups: [{
+        category: 'macro',
+        providers: [{
+          providerId: 'bls', displayName: 'BLS', category: 'macro', credential: 'none',
+          healthMarker: unavailable ? 'ring' : 'none',
+          sources: [{
+            sourceId: 'bls', displayName: 'BLS', providerId: 'bls', panels: ['dashboard'], visibility: 'visible',
+            kind: 'official-calendar', enabled: true, healthState: 'off', healthMarker: unavailable ? 'ring' : 'none',
+            ...(unavailable ? { unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-09' } } : {})
+          }]
+        }]
+      }],
+      counts: { total: 1, enabled: 1, pending: 0, failed: 0 }
+    } as never)
+
+    const render = async (unavailable: boolean): Promise<HTMLElement> => {
+      const host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      await act(async () => root!.render(createElement(SettingsSourceTree, {
+        filter: 'all',
+        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCount: '含 {count} 个取不到的源' },
+        onFilterChange: vi.fn(),
+        onSelectProvider: vi.fn(),
+        selectedProviderId: undefined,
+        view: base(unavailable)
+      })))
+      await act(async () => { await Promise.resolve() })
+      return host
+    }
+
+    const withOne = await render(true)
+    const row = withOne.querySelector('.intelligence-provider-row')
+    expect(row?.textContent).toContain('含 1 个取不到的源')
+    // 装饰环仍是 aria-hidden，不拿它当语义载体。
+    expect(row?.querySelector('.intelligence-provider-state i')?.getAttribute('aria-hidden')).toBe('true')
+
+    const withNone = await render(false)
+    expect(withNone.textContent).not.toContain('取不到的源')
+    expect(withNone.querySelector('.intelligence-source-sr-only')).toBeNull()
   })
 })
