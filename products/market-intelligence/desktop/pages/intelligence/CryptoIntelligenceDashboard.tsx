@@ -10,6 +10,7 @@ import { NotificationSettingsPanel } from '../../settings/intelligence-notificat
 import { MarketAnalysisSettingsDialog } from './MarketAnalysisSettingsDialog'
 import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
 import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
+import { RunLogDrawerPanel } from './RunLogDrawerPanel'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
@@ -267,6 +268,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
             variant="inline" />}
           briefingPanel={<DailyBriefingSettingsPanel onDirtyChange={setBriefingDirty} />}
           processingPanel={<ProcessingSettingsPanel />}
+          runLogPanel={<RunLogDrawerPanel />}
           notificationsPanel={<NotificationSettingsPanel />}
               sourcesPanel={<DashboardSourcesPanel />} />}
           </DrawerDiscardConfirm>
