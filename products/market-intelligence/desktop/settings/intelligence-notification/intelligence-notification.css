@@ -303,7 +303,11 @@
   margin-left: 8px;
 }
 
-/* 区块标题左缘与行标签左缘对齐：卡头内距跟行内距同一套（12）。 */
+/* 区块标题左缘与行标签左缘对齐：卡头内距跟行内距同一套（12）。
+   **这条不是「把区块压平」**——压平（无框/无圆角/无底色/无外层内距/卡头无底线）现在由
+   `SettingsSection variant="flat"` 提供，屏里不许再写第二份；这里只补平方向的对齐，
+   删了会让标题比行标签左移 12（2026-11-11 量过的四个数：行内距 12、标签列 160、
+   控件左缘 192、行高 44）。 */
 .intelligence-notification-drawer .settings-section > .settings-section__header {
   padding-left: 12px;
   padding-right: 12px;

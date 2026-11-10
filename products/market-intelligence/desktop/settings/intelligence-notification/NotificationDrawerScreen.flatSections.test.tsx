@@ -9,6 +9,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { clearAllWriteFailures } from './channelEventWriteFailures'
 import { NotificationDrawerScreen } from './NotificationDrawerScreen'
+import { NotificationPageScreen } from './NotificationPageScreen'
 import { intelligenceNotificationText } from './text'
 
 /**
@@ -79,10 +80,16 @@ async function render(): Promise<HTMLElement> {
 
 describe('抽屉里的区块是 flat 档', () => {
   it('renders every block flat: no border, no background, no padding, no header rule', async () => {
-    const css = readFileSync('platform/ui/components/settings-section/styles.css', 'utf8')
-    const style = document.createElement('style')
-    style.textContent = css
-    document.head.append(style)
+    // 两份样式一起注入：组件那份给 flat 的复位，**本屏那份也可能偷偷写第二份压平规则**——
+    // 只注入组件那份，屏里再写一份 border 也量不出来（那就是假绿）。
+    for (const file of [
+      'platform/ui/components/settings-section/styles.css',
+      'products/market-intelligence/desktop/settings/intelligence-notification/intelligence-notification.css'
+    ]) {
+      const style = document.createElement('style')
+      style.textContent = readFileSync(file, 'utf8')
+      document.head.append(style)
+    }
 
     install()
     const container = await render()
@@ -91,15 +98,48 @@ describe('抽屉里的区块是 flat 档', () => {
     for (const block of blocks) {
       expect(block.getAttribute('data-variant')).toBe('flat')
       const computed = getComputedStyle(block)
-      expect(computed.borderTopWidth).toBe('0px')
-      expect(computed.paddingTop).toBe('0px')
+      // 卡内区块：**边框 0、底色透明、内距 0**（左右也 0——旧的压平覆盖是横向内距）。
+      expect([computed.borderTopWidth, computed.borderRightWidth, computed.borderBottomWidth, computed.borderLeftWidth])
+        .toEqual(['0px', '0px', '0px', '0px'])
+      expect([computed.paddingTop, computed.paddingRight, computed.paddingBottom, computed.paddingLeft])
+        .toEqual(['0px', '0px', '0px', '0px'])
       // `background: none` 在 happy-dom 里读成 `none`，浏览器里是透明；两种都算「没底色」。
       expect(['transparent', 'rgba(0, 0, 0, 0)', 'none']).toContain(computed.backgroundColor)
       const header = block.querySelector<HTMLElement>('.settings-section__header')
       expect(header).not.toBeNull()
-      expect(getComputedStyle(header!).borderBottomWidth).toBe('0px')
+      const headerStyle = getComputedStyle(header!)
+      expect(headerStyle.borderBottomWidth).toBe('0px')
+      // 卡头复位成 `0 0 8px`；左右那 12 是**对齐覆盖**（标题左缘 == 行标签左缘），不是压平。
+      expect([headerStyle.paddingTop, headerStyle.paddingBottom]).toEqual(['0px', '8px'])
+      expect([headerStyle.paddingLeft, headerStyle.paddingRight]).toEqual(['12px', '12px'])
     }
     // 区块里的内容还在（不是把整块画没了）。
     expect(container.textContent).toContain(text['pages.intelligence.notification.calendarSection'])
+  })
+
+  it('leaves the settings page on the card variant: only the drawer is flat', async () => {
+    for (const file of [
+      'platform/ui/components/settings-section/styles.css',
+      'products/market-intelligence/desktop/settings/intelligence-notification/intelligence-notification.css'
+    ]) {
+      const style = document.createElement('style')
+      style.textContent = readFileSync(file, 'utf8')
+      document.head.append(style)
+    }
+    install()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<ShellLanguageProvider language="zh-CN"><NotificationPageScreen /></ShellLanguageProvider>)
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    const block = container.querySelector<HTMLElement>('.settings-section')
+    expect(block).not.toBeNull()
+    // 设置页那边区块自己就是容器：不传 variant，保持卡片档。
+    // 只断 `data-variant`：`border: 1px solid var(--border)` 在 happy-dom 里 var() 解不出来，
+    // 量 `borderTopWidth` 会得到空串（那是量具的限制，不是「框没了」）。
+    expect(block!.getAttribute('data-variant')).toBe('card')
   })
 })
