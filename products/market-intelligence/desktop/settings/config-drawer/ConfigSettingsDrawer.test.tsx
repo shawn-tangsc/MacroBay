@@ -9,9 +9,10 @@ import { join } from 'node:path'
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ConfigSettingsDrawer } from './ConfigSettingsDrawer'
+import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS } from './drawerPreviewRows'
 
 let root: Root | undefined
@@ -75,5 +76,62 @@ describe('config settings drawer (static layout)', () => {
         return [`${name}:${index + 1} imports '${specifier}'`]
       }))
     expect(offenders).toEqual([])
+  })
+
+  it('tells "could not read" from "nothing there", and retries', () => {
+    // 两种「空」长得像，必须分别断言：读不到 → error + 重试；确实没有 → empty。
+    const onRetry = vi.fn()
+    const open = (view: DrawerScreenView<DrawerRowView>): HTMLElement => {
+      document.body.replaceChildren()
+      root?.unmount()
+      root = undefined
+      host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      act(() => root?.render(
+        <ConfigSettingsDrawer initialMenu="notifications" notificationsView={view} onClose={() => undefined} open />
+      ))
+      return document.body
+    }
+
+    const failed = open({ state: 'error', onRetry })
+    expect(failed.querySelector('[data-drawer-screen="error"]')).not.toBeNull()
+    expect(failed.querySelector('[data-drawer-screen="empty"]')).toBeNull()
+    act(() => { failed.querySelector<HTMLElement>('.state-view__action')?.click() })
+    expect(onRetry).toHaveBeenCalledTimes(1)
+
+    const empty = open({ state: 'ready', rows: [] })
+    expect(empty.querySelector('[data-drawer-screen="empty"]')).not.toBeNull()
+    expect(empty.querySelector('[data-drawer-screen="error"]')).toBeNull()
+  })
+
+  it('renders the host rows, a per-row disabled property and an inline action', () => {
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const onSelect = vi.fn()
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        initialMenu="notifications"
+        notificationsView={{ state: 'ready', rows: [
+          { key: 'pushStrength', value: '最低强度' },
+          { key: 'masterSwitch', value: '关', disabled: true, action: { labelKey: 'test', onSelect } }
+        ] }}
+        onClose={() => undefined}
+        open />
+    ))
+
+    // 每屏根节点必须存在——只断「没报错」抓不到「什么都没渲染」。
+    expect(document.querySelector('[data-drawer-screen="ready"]')).not.toBeNull()
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-drawer-row]')]
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.querySelector('.config-drawer__value')?.textContent).toBe('最低强度')
+    expect(rows[1]?.className).toContain('is-disabled')
+    expect(rows[0]?.className).not.toContain('is-disabled')
+    act(() => { rows[1]?.querySelector<HTMLElement>('.config-drawer__row-action')?.click() })
+    expect(onSelect).toHaveBeenCalledTimes(1)
   })
 })

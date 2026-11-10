@@ -4,10 +4,14 @@ import { Drawer } from '@platform/ui/components/drawer'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Info } from 'lucide-react'
 
+import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
 import { productText } from '../../shared/i18n/productText'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
+import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
 import './configDrawer.css'
 
 /**
@@ -28,12 +32,22 @@ export type ConfigSettingsDrawerProps = {
   open: boolean
   onClose: () => void
   initialMenu?: ConfigDrawerMenu
+  /** 通知屏视图：**宿主读好再传**，抽屉不自己取数；不传则保留静态版式。 */
+  notificationsView?: DrawerScreenView<DrawerRowView>
+  /** 行键与平台键的解析入口（文案）。 */
+  resolveText?: (key: string) => string
 }
 
 /** 值是占位符：这一版不带任何数据，也不许编数字。 */
 const EMPTY_VALUE = '—'
 
-export function ConfigSettingsDrawer({ open, onClose, initialMenu = 'sources' }: ConfigSettingsDrawerProps): React.ReactElement {
+export function ConfigSettingsDrawer({
+  open,
+  onClose,
+  initialMenu = 'sources',
+  notificationsView,
+  resolveText: resolveTextProp
+}: ConfigSettingsDrawerProps): React.ReactElement {
   const copy = productText[useShellLanguage()].pages.intelligence.portal.dashboard.configDrawer
   const [menu, setMenu] = useState<ConfigDrawerMenu>(initialMenu)
   const navRef = useRef<HTMLElement>(null)
@@ -82,7 +96,9 @@ export function ConfigSettingsDrawer({ open, onClose, initialMenu = 'sources' }:
       </nav>
       <section aria-label={menuLabel(menu)} className="config-drawer__pane">
         <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
-        {screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
+        {menu === 'notifications' && notificationsView !== undefined
+          ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={notificationsView} />)
+          : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{group.titleKey}</div>}
           {group.rows.map((row) => <div className="config-drawer__row" key={row.key}>
             <span className="config-drawer__label">{rowLabel(row.labelKey)}</span>
@@ -93,6 +109,49 @@ export function ConfigSettingsDrawer({ open, onClose, initialMenu = 'sources' }:
       </section>
     </div>
   </Drawer>
+}
+
+/**
+ * 通知屏：**只渲染宿主传来的视图**。每屏根节点带 `data-drawer-screen`，用例据此分辨四态——
+ * 只断「没报错」抓不到「看起来渲染了、其实什么都没出来」。
+ */
+function NotificationsScreen({ view, resolveText }: {
+  view: DrawerScreenView<DrawerRowView>
+  resolveText: (key: string) => string
+}): React.ReactElement {
+  if (view.state === 'loading') {
+    return (<div data-drawer-screen="loading"><LoadingState ariaLabel={resolveText('ui.loading.label')} /></div>)
+  }
+  if (view.state === 'error') {
+    return (
+      <div data-drawer-screen="error">
+        <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: view.onRetry }}
+          reasonCode="unreadable"
+          resolveText={resolveText}
+          state="error" />
+      </div>
+    )
+  }
+  if (view.rows.length === 0) {
+    // `not-yet`：确实还没有、也没有可做的动作（要求挂动作的码在这里语义不对）。
+    return (<div data-drawer-screen="empty"><StateView reasonCode="not-yet" resolveText={resolveText} state="empty" /></div>)
+  }
+  return (
+    <div data-drawer-screen="ready">
+      {view.rows.map((row) => (
+        <div className={row.disabled === true ? 'config-drawer__row is-disabled' : 'config-drawer__row'} data-drawer-row={row.key} key={row.key}>
+          <span className="config-drawer__label">{resolveText(row.key)}</span>
+          <span className="config-drawer__value">{row.value ?? '—'}</span>
+          {row.action === undefined ? null : (
+            <button className="config-drawer__row-action" disabled={row.action.disabled === true} onClick={row.action.onSelect} type="button">
+              {resolveText(row.action.labelKey)}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 /** 控件只画外观：不带行为、不带值。 */
