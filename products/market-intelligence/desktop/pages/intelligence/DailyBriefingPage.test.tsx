@@ -18,7 +18,6 @@ const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dai
 /** Both settings blocks read the same view; the drawer is what shows them side by side. */
 const settingsView: DailyBriefingSettingsView = {
   settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: true },
-  generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
   language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 } },
   webSearchSupported: false,
   resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
@@ -1181,8 +1180,9 @@ describe('daily briefing page', () => {
     await toggleEditorial()
 
     await act(async () => { document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-    // Both sections were ready, so both writes were attempted and both were rejected.
-    expect(document.body.textContent).toContain(text.settingsDrawer.saveFailed.replace('{sections}', `${text.settingsDrawer.sectionFailed.generation}、${text.settingsDrawer.sectionFailed.ai}`))
+    // Only the AI block has a save now: the period list writes itself, so there is no generation
+    // write left that could be rejected here.
+    expect(document.body.textContent).toContain(text.settingsDrawer.saveFailed.replace('{sections}', text.settingsDrawer.sectionFailed.ai))
 
     await act(async () => { closeButton().click(); await Promise.resolve() })
     expect(discardQuestionVisible()).toBe(true)
@@ -1525,7 +1525,6 @@ describe('daily briefing page', () => {
     })
     const failed = document.querySelector<HTMLElement>('[data-settings-save-failed]')!
     // Two forms, one save: a bare "save failed" would leave the reader guessing which block to fix.
-    expect(failed.textContent).toContain(text.settingsDrawer.sectionFailed.generation)
     expect(failed.textContent).toContain(text.settingsDrawer.sectionFailed.ai)
     expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
   })
@@ -2605,8 +2604,7 @@ describe('language fallback on the brief page', () => {
 
   const fallbackView = {
     settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-    generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
-    language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } },
+      language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } },
     webSearchSupported: false,
     resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
   }

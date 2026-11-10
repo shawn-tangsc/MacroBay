@@ -212,7 +212,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
 
   // 三项事实一次读出来（web search、时区、写不了的语言），外加"该重读了"这个计数：抽屉关了、窗口
   // 重新聚焦、别的窗口改了设置，都只是把计数 +1。
-  const { webSearchEnabled, languageFallback, zoneInvalid, settingsReloadKey, reloadSettings } = useBriefingSettingsFacts(client)
+  const { webSearchEnabled, languageFallback, settingsReloadKey, reloadSettings } = useBriefingSettingsFacts(client)
 
   /**
    * The one way an edition is read: a row click and a language switch both land here, with the
@@ -261,7 +261,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     ...(isDailyBriefingWindowHours(screenWindowHours) ? { windowHours: screenWindowHours } : {})
   }
   const { runBriefing } = useBriefingRunActions({
-    client, locale, zoneInvalid, timeZone,
+    client, locale, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions, todayDate,
     // 跑完停在**刚生成的那一版**：选中项按它的身份设全（`02` v2.129 G4）。
     onDocument: (document) => {
@@ -415,7 +415,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       timeZone={timeZone}
       defaultDate={selected.date}
       latestDate={todayDate}
-      zoneInvalid={zoneInvalid !== null}
       systemZone={screenDocument !== undefined && readyZone(view) === 'system'}
       onManualRun={onManualRun}
       {...(manualRunningLabel === undefined ? {} : { runningLabel: manualRunningLabel })}

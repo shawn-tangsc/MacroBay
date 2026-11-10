@@ -88,10 +88,8 @@ import type { PolicyPathQueryService } from './policy-path/policyPathQueryServic
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createEditionLanguageSettingsService, createEditionLanguageSettingsJsonStorage } from './daily-briefing/dailyBriefingLanguageSettingsService'
 import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
-import {
-  createDailyBriefingGenerationSettingsJsonStorage,
-  createDailyBriefingGenerationSettingsService
-} from './daily-briefing/dailyBriefingGenerationSettingsService'
+import { readDailyBriefingPeriodsSettings } from './daily-briefing/dailyBriefingGenerationSettings'
+import { createJsonFileStorage } from '@platform/storage/jsonFileStorage'
 import {
   createDailyBriefingSettingsService,
   type DailyBriefingSettingsService
@@ -785,17 +783,15 @@ export function getIntelligenceModule(
       // The one-time move of the old settings' periods into this file. Lazy closures on purpose:
       // the two services are assembled further down, and the move runs on the first read, which is
       // the job registration below — after both exist.
+      // The one-time move reads the old file through its pure reader — never through a service
+      // that could write it — so the file stays exactly as the previous version left it.
       legacyPeriodsMigration: {
-        readLegacyPeriods: () => dailyBriefingGenerationSettings.getPeriods(),
+        readLegacyPeriods: async () => {
+          const raw = await createJsonFileStorage<unknown>(join(dataDir, 'daily-briefing-generation-settings.json'), undefined).read()
+          return readDailyBriefingPeriodsSettings(raw, new Date().toISOString()).periods
+        },
         additionalLanguages: async () => (await dailyBriefingLanguageSettings.getSettings()).additional,
         ...(hooks?.log ? { log: hooks.log } : {})
-      },
-      // A save in the settings page changes when the edition runs; the schedule is rebuilt from the
-      // same file the runtime reads, so the new hour applies without a restart.
-      onPeriodsChanged: () => {
-        void briefingPeriodsSource.getPeriods()
-          .then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone()))
-          .catch(() => undefined)
       },
       // Asked only when a stored period predates "language belongs to a period": one read of the
       // links before today, then periodId → the languages its editions were actually written in.
@@ -810,21 +806,10 @@ export function getIntelligenceModule(
         return byPeriod
       }
     })
-    const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
-      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
-      onSaved: () => { void briefingPeriodsSource.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
-    })
     const dailyBriefingLanguageSettings = createEditionLanguageSettingsService({
       storage: createEditionLanguageSettingsJsonStorage(join(dataDir, 'daily-briefing-language-settings.json')), uiLanguage: getAppLanguage })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
-      generation: dailyBriefingGenerationSettings,
-      // The settings page and the runtime read the same period file: the first period is what the
-      // generation block edits, and a save rebuilds the schedule from it instead of waiting for a
-      // restart.
-      periods: briefingPeriodsSource.editor,
-      locale: getAppLanguage,
-      timeZone: shellTimeZone,
       language: dailyBriefingLanguageSettings
     })
     const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions

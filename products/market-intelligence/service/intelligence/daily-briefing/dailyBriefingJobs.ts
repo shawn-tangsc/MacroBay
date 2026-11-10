@@ -2,7 +2,6 @@ import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import type { JobRuntime } from '@platform/jobs'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingGenerationSettingsService } from './dailyBriefingGenerationSettingsService'
 import type { DailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import type { DailyBriefAttemptCleanup } from './dailyBriefSessionRetention'
 import type { DailyBriefingService } from './dailyBriefingService'

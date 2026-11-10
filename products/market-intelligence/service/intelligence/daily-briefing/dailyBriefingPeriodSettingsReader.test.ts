@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createBriefingPeriodStore } from './dailyBriefingPeriodStore'
-import { createDailyBriefingGenerationSettingsService } from './dailyBriefingGenerationSettingsService'
 import { readConfiguredBriefingPeriods } from './dailyBriefingPeriodSettingsReader'
 
 const memory = (initial: unknown) => {
@@ -20,11 +19,4 @@ describe('period configuration reader (S7a, capability only)', () => {
     ])
   })
 
-  it('does not switch the settings service yet: it still reads the old global settings', async () => {
-    // §11.6b: until the migration commit, a never-configured store must not answer for the reader.
-    const settingsStorage = memory({ periods: [{ id: 'default', generationTime: '08:00', windowHours: 24 }], updatedAt: '2026-11-01T00:00:00.000Z' })
-    const settings = createDailyBriefingGenerationSettingsService({ storage: settingsStorage as never })
-    expect((await settings.getPeriods())[0]?.generationTime).toBe('08:00')
-    expect(settingsStorage.write).not.toHaveBeenCalled()
-  })
 })

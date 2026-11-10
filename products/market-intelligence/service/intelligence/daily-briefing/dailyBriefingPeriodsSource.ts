@@ -1,9 +1,9 @@
 import { createJsonFileStorage } from '@platform/storage/jsonFileStorage'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { BriefingPeriod, BriefingPeriodDraft } from '../../../contracts/dailyBriefingPeriod'
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import { runBriefingPeriodDataMigration, type LegacySavedPeriod } from './dailyBriefingPeriodDataMigration'
-import { createBriefingPeriodStore, type BriefingPeriodSaveResult } from './dailyBriefingPeriodStore'
+import { createBriefingPeriodStore } from './dailyBriefingPeriodStore'
 
 /**
  * The runtime's period list: the reader's own configuration, not the old global settings.
@@ -42,24 +42,7 @@ export function createBriefingPeriodsSource(input: Readonly<{
     /** Platform log: the move's failures are reported there, never swallowed. */
     log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   }>
-  /**
-   * Called after a write through `editor` actually saved. The schedule is rebuilt from the same
-   * file the runtime reads, so a hour changed in settings takes effect without a restart.
-   */
-  onPeriodsChanged?: () => void
-}>): Readonly<{
-  getPeriods: () => Promise<readonly BriefingPeriod[]>
-  /**
-   * The settings seam's write path, over the same store the runtime reads: the first period is
-   * edited by id, a store with no periods creates one. Both wait for the one-time move first, so a
-   * save can never act on a file the migration has not written yet.
-   */
-  editor: Readonly<{
-    list: (locale: DailyBriefingLocale) => Promise<readonly BriefingPeriod[]>
-    update: (id: string, draft: BriefingPeriodDraft) => Promise<BriefingPeriodSaveResult>
-    create: (draft: BriefingPeriodDraft) => Promise<BriefingPeriodSaveResult>
-  }>
-}> {
+}>): Readonly<{ getPeriods: () => Promise<readonly BriefingPeriod[]> }> {
   const storage = createJsonFileStorage<unknown>(input.filePath, undefined)
   const store = createBriefingPeriodStore({
     storage,
@@ -89,24 +72,6 @@ export function createBriefingPeriodsSource(input: Readonly<{
     getPeriods: async () => {
       await prepare()
       return store.list(await input.locale())
-    },
-    editor: Object.freeze({
-      list: async (locale: DailyBriefingLocale) => {
-        await prepare()
-        return store.list(locale)
-      },
-      update: async (id: string, draft: BriefingPeriodDraft) => {
-        await prepare()
-        const result = await store.update(id, draft)
-        if (result.state === 'saved') input.onPeriodsChanged?.()
-        return result
-      },
-      create: async (draft: BriefingPeriodDraft) => {
-        await prepare()
-        const result = await store.create(draft)
-        if (result.state === 'saved') input.onPeriodsChanged?.()
-        return result
-      }
-    })
+    }
   })
 }

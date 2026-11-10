@@ -94,21 +94,6 @@ export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
   | Readonly<{ state: 'missing' }>
   | Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }>
-export type DailyBriefingGenerationSettingsView = Readonly<{
-  /** Every saved period, projected by the service. The list is the view; there is no flat copy. */
-  periods: readonly DailyBriefingPeriodView[]
-}>
-
-export type DailyBriefingPeriodView = Readonly<{
-  id: string
-  name?: string
-  generationTime: string
-  generationTimeZone: string | null
-  generationTimeZoneInvalid: string | null
-  windowHours: number
-  cronExpression: string
-}>
-
 export type DailyBriefingLanguageView = Readonly<{
   settings: Readonly<{ primary: 'follow-ui'; additional: readonly DailyBriefingLocale[] }>
   plan: Readonly<{
@@ -121,8 +106,6 @@ export type DailyBriefingLanguageView = Readonly<{
 export type DailyBriefingSettingsView = Readonly<{
   /** The AI editorial preference. */
   settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string }>
-  /** When the automatic edition runs and what interval it covers. */
-  generation: DailyBriefingGenerationSettingsView
   /** The one global language preference and the plan derived from it (primary, extras, write count). */
   language: DailyBriefingLanguageView
   /** Whether the editor agent's model can take Anthropic server-side WebSearch/WebFetch. */
@@ -139,7 +122,6 @@ export type DailyBriefingSettingsPatch = Readonly<{
   modelId?: string
   webSearchEnabled?: boolean
   webSearchAuthorizedAt?: string
-  generation?: Readonly<{ generationTime?: string; windowHours?: number }>
   language?: Readonly<{ additional?: readonly DailyBriefingLocale[] }>
 }>
 
@@ -349,7 +331,7 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
   try {
     const value = await read()
     if (!isRecord(value) || !isRecord(value.settings) || !isAiSettings(value.settings) ||
-      !isGenerationSettings(value.generation) || !isLanguageView(value.language) || typeof value.webSearchSupported !== 'boolean' ||
+      !isLanguageView(value.language) || typeof value.webSearchSupported !== 'boolean' ||
       !isResolvedModel(value.resolved)) {
       return { state: 'unavailable', failureCode: 'daily-briefing-settings-invalid' }
     }
@@ -357,7 +339,6 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
       state: 'available',
       view: {
         settings: value.settings,
-        generation: value.generation,
         language: value.language,
         webSearchSupported: value.webSearchSupported,
         resolved: value.resolved
@@ -366,21 +347,6 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
   } catch {
     return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
   }
-}
-
-function isGenerationSettings(value: unknown): value is DailyBriefingGenerationSettingsView {
-  // The list is the only statement of the schedule. A second copy of the first period at this level
-  // is how the page and the schedule start disagreeing without anything breaking.
-  return isExact(value, ['periods']) && Array.isArray(value.periods) &&
-    value.periods.length > 0 && value.periods.every(isPeriodView)
-}
-
-function isPeriodView(value: unknown): value is DailyBriefingPeriodView {
-  return isRecord(value) && isText(value.id) && isText(value.generationTime) && isText(value.cronExpression) &&
-    typeof value.windowHours === 'number' && Number.isFinite(value.windowHours) &&
-    (value.name === undefined || isText(value.name)) &&
-    (value.generationTimeZone === null || isText(value.generationTimeZone)) &&
-    (value.generationTimeZoneInvalid === null || isText(value.generationTimeZoneInvalid))
 }
 
 function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } {

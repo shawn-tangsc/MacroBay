@@ -26,7 +26,7 @@ type Actions = ReturnType<typeof useBriefingRunActions>
 function Harness(input: Readonly<{ actions: (value: Actions) => void; setEditions: (next: (current: readonly DailyBriefingEditionSummary[]) => readonly DailyBriefingEditionSummary[]) => void }>): null {
   const actions = useBriefingRunActions({
     client: { regenerate: vi.fn(() => new Promise<never>(() => undefined)) },
-    locale: 'zh-CN', zoneInvalid: null, timeZone: 'Asia/Shanghai',
+    locale: 'zh-CN', timeZone: 'Asia/Shanghai',
     setView: vi.fn(), setRegenerating: vi.fn(), setRegenerateFailure: vi.fn(),
     setEditions: input.setEditions as never,
     todayDate: '2026-11-05'

@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { createBriefingPeriodStore, type BriefingPeriodStorage } from '../daily-briefing/dailyBriefingPeriodStore'
-import { createDailyBriefingGenerationSettingsService } from '../daily-briefing/dailyBriefingGenerationSettingsService'
 import { registerDailyBriefingPeriodIpc } from './registerDailyBriefingPeriodIpc'
 
 /** Captures the four methods the module registers, so they can be called like the renderer would. */
@@ -57,7 +56,6 @@ describe('the period write seam', () => {
       read: vi.fn(async () => settingsFile),
       write: vi.fn(async (value: unknown) => { settingsFile = value })
     }
-    const settings = createDailyBriefingGenerationSettingsService({ storage: settingsStorage })
 
     const saved = await handlers.get(M.create)!({ draft: { generationTime: '09:00', windowHours: 12, language: 'en-US' }, locale: 'en-US' })
     expect(saved).toMatchObject({ state: 'saved' })
@@ -69,8 +67,6 @@ describe('the period write seam', () => {
     // The old generation settings file is byte-for-byte what it was: these methods do not touch it.
     expect(settingsStorage.write).not.toHaveBeenCalled()
     expect(settingsFile).toEqual({ periods: [{ id: 'default', generationTime: '07:00', windowHours: 24 }], updatedAt: 'before' })
-    // ...and the old service still reads what it had.
-    expect((await settings.getPeriods())[0]?.generationTime).toBe('07:00')
   })
 
   it('updates one row without touching its neighbour, and removes one without disturbing the rest', async () => {

@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import {
-  createDailyBriefingGenerationSettingsService,
-  createInMemoryDailyBriefingGenerationSettingsStorage
-} from './dailyBriefingGenerationSettingsService'
+import { readDailyBriefingPeriodsSettings } from './dailyBriefingGenerationSettings'
 import {
   createEditionLanguageSettingsService,
   createInMemoryEditionLanguageSettingsStorage
@@ -80,19 +77,13 @@ function comparable(periods: readonly Readonly<{ id: string; generationTime: str
 
 describe('the period list read two ways', () => {
   it('the old settings view and the period store describe the same periods, in the same order', async () => {
-    const generation = createDailyBriefingGenerationSettingsService({
-      storage: createInMemoryDailyBriefingGenerationSettingsStorage(LEGACY_SETTINGS),
-      now: () => NOW,
-      timeZone: () => 'Asia/Shanghai'
-    })
     const language = createEditionLanguageSettingsService({
       storage: createInMemoryEditionLanguageSettingsStorage({ primary: 'follow-ui', additional: ADDITIONAL, updatedAt: NOW }),
       uiLanguage: () => UI_LOCALE
     })
-    // The old settings file's own read path. It is still the source the migration copied from, so
-    // this compares two independent readings of one fixture — not the store with itself (2b moved
-    // the settings page onto the store, so reading the page here would be circular).
-    const view = await generation.getView()
+    // The old settings file's own read path — the pure reader the one-time move reads it through.
+    // It compares two independent readings of one fixture, never the store with itself.
+    const view = readDailyBriefingPeriodsSettings(LEGACY_SETTINGS, NOW)
     const additional = (await language.getSettings()).additional
     const store = createBriefingPeriodStore({
       storage: { read: async () => STORE_DOCUMENT, write: async () => undefined },

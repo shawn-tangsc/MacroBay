@@ -1,7 +1,6 @@
 import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import { DEFAULT_PERIOD_ID, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { briefingScheduledCutoff } from './dailyBriefingWindow'
-import type { DailyBriefingGenerationSettingsService } from './dailyBriefingGenerationSettingsService'
 import type { DailyBriefingStore } from './dailyBriefingService'
 
 /**

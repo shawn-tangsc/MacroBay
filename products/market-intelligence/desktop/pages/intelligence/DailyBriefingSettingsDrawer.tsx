@@ -10,10 +10,7 @@ import { Popover } from '@platform/ui/components/popover'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { DailyBriefingAiSettingsSection, useDailyBriefingAiSettings } from './DailyBriefingAiSettingsSection'
-import {
-  DailyBriefingGenerationSettingsSection,
-  useDailyBriefingGenerationSettings
-} from './DailyBriefingGenerationSettingsSection'
+import { DailyBriefingGenerationSettingsSection } from './DailyBriefingGenerationSettingsSection'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 import './dailyBriefingSettingsDrawer.css'
@@ -47,7 +44,6 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
   onConfigureWebSearch: () => void
 }>): React.ReactElement {
   const resolveProductText = useProductTextKey()
-  const generation = useDailyBriefingGenerationSettings({ client, enabled: open })
   const ai = useDailyBriefingAiSettings({ client, enabled: open })
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState<readonly BriefingSettingsSection[]>([])
@@ -58,7 +54,7 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
   // Not gated on `ready`: a section whose save just failed still holds the reader's edits, and that
   // is exactly the moment a close must ask. A `load-failed` section has no draft, so its `dirty` is
   // false on its own — the gate was adding no protection, only losing the save-failed case.
-  const dirty = generation.dirty || ai.dirty
+  const dirty = ai.dirty
 
   useEffect(() => {
     if (open) return
@@ -75,7 +71,6 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
   }, [open, section])
 
   const ready: readonly BriefingSettingsSection[] = [
-    ...(generation.state === 'ready' ? (['generation'] as const) : []),
     ...(ai.state === 'ready' ? (['ai'] as const) : [])
   ]
   const canSave = ready.length > 0 && !saving
@@ -86,7 +81,6 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
     // Sequential, not parallel: both blocks write the same settings record, and two concurrent
     // partial writes can clobber each other on a last-write-wins store.
     const rejected: BriefingSettingsSection[] = []
-    if (ready.includes('generation') && !await generation.save()) rejected.push('generation')
     if (ready.includes('ai') && !await ai.save()) rejected.push('ai')
     setSaving(false)
     if (rejected.length > 0) {
@@ -140,7 +134,7 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
       <div className="mi-briefing-settings__group-head">
         <h3 className="mi-briefing-settings__heading" id={SECTION_IDS.generation}>{text.settingsDrawer.sections.generation}</h3>
       </div>
-      <DailyBriefingGenerationSettingsSection {...generation} text={text} />
+      <DailyBriefingGenerationSettingsSection text={text} />
     </section>
     <section className="mi-briefing-settings__section" data-settings-section="ai" ref={aiSection} aria-labelledby={SECTION_IDS.ai}>
       <h3 className="mi-briefing-settings__heading" id={SECTION_IDS.ai}>{text.settingsDrawer.sections.ai}</h3>

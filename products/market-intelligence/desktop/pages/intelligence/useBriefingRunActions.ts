@@ -61,7 +61,6 @@ export function useBriefingRunActions(input: Readonly<{
   client: Pick<DailyBriefingClient, 'regenerate'>
   locale: 'zh-CN' | 'en-US'
   /** An unreadable stored zone means the run works on the UTC clock, and says so on screen. */
-  zoneInvalid: string | null
   timeZone: string
   setView: (next: DailyBriefingPageViewState | ((current: DailyBriefingPageViewState) => DailyBriefingPageViewState)) => void
   setRegenerating: (busy: boolean) => void
@@ -109,7 +108,7 @@ export function useBriefingRunActions(input: Readonly<{
   const run = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>; rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }> }> = {}): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({
     client: input.client,
     locale: options.locale ?? input.locale,
-    timeZone: input.zoneInvalid ? 'UTC' : input.timeZone,
+    timeZone: input.timeZone,
     // 期号必须一路传到服务：没有它，这一跑会落到 `default` 那一期上，把别的期覆盖掉。
     ...(options.periodId === undefined ? {} : { periodId: options.periodId }),
     ...(options.generation === undefined ? {} : { generation: options.generation }),

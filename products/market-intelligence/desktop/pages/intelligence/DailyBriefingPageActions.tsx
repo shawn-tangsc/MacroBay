@@ -27,7 +27,7 @@ import { briefingEditionDeleteCopy, type BriefingEditionDeleteTarget } from './b
  * 分开放的后果不是"按钮多了"——读者会把"重新生成今天"当成"重新生成这一版"来点。两组各有自己的
  * 禁用条件，也各有自己的理由，混在一行就说不清是哪一组的。
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, runningLabel, targetDate, timeZone, defaultDate, latestDate, todayReady, zoneInvalid, systemZone, onManualRun, onOpenSettings }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, runningLabel, targetDate, timeZone, defaultDate, latestDate, todayReady, systemZone, onManualRun, onOpenSettings }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -45,7 +45,6 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   /** 弹框可选的最晚日期：日历今天，未来不许选（`02` v2.129 G1）。 */
   latestDate: string
   todayReady: boolean
-  zoneInvalid: boolean
   systemZone: boolean
   /** 手动生成一次：三个字段由弹框收集，这里只把结果交出去。 */
   /** 一次按下的结果；撞上已有那一版时带一句话和"替换"这个动作，由弹框就地发问。 */
@@ -103,7 +102,6 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
       onClose={() => { setManualOpen(false); setManualProblem(undefined); setManualDuplicate(undefined) }}
     />
     {todayReady ? <>
-      {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
       {/* The settings zone was unusable, so the window was computed in the machine's zone. The
           reader configured a time and is getting another day boundary; saying nothing would let
           them read the edition against the wrong one. */}
