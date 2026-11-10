@@ -1665,9 +1665,9 @@
 
 .business-card__row {
   display: grid;
-  /* 格名列可以窄到 96（最长格名「永续持仓名义额」放不下时按 160 上限给），
-     **源名列必须吃到剩余宽度**——写成固定宽或 0 会让源名逐字竖排（真机第一次渲染就撞到了）。 */
-  grid-template-columns: minmax(96px, 160px) minmax(0, 1fr);
+  /* 三列：格名 / 源名 / **行尾开关**。少了第三列，开关会被挤到下一行行首（真机撞到过两次）：
+     行高因此变高、开关跑到格名下面。第三列 `auto` 让开关固定贴住行右缘，与源行同一条右缘。 */
+  grid-template-columns: minmax(96px, 160px) minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   min-height: 44px;
@@ -1694,6 +1694,14 @@
   font-weight: 600;
   font-size: var(--font-meta);
   white-space: nowrap;
+}
+
+.business-card__toggle {
+  /* 开关本身不另加尺寸/颜色覆盖：与源行那颗是同一个 antd `Switch`、同 size，颜色由主题 token 给。
+     这里只负责把它放在第三列右缘。 */
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
 }
 
 .business-card__value {

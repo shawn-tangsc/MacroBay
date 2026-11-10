@@ -135,6 +135,8 @@ describe('business cards keep their padding', () => {
     // 同一个选择器还有 :hover 规则，只要求「基础规则里有一行是 0 12」。
     const row = rulesFor(css, 'business-card__row')
     expect(row.some((body) => /padding\s*:\s*0\s+12px/u.test(body))).toBe(true)
+    // 三列：少了行尾那列 `auto`，开关就掉到第二行（这条就是那次事故的判据）。
+    expect(row.some((body) => /grid-template-columns\s*:[^;]*minmax\(96px,\s*160px\)[^;]*minmax\(0,\s*1fr\)[^;]*auto/u.test(body))).toBe(true)
     // 一行是**圆角描边的整行容器**（照源行那套）：把描边/圆角删掉变成通栏行就红。
     expect(row.some((body) => /border\s*:\s*1px solid/u.test(body))).toBe(true)
     expect(row.some((body) => /border-radius\s*:\s*8px/u.test(body))).toBe(true)
