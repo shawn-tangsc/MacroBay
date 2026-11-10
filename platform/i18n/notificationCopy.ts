@@ -43,8 +43,6 @@ export type NotificationCopyTable = {
   'notification.event.platform.analysis.quota-exhausted.title': string
   'notification.event.platform.analysis.quota-exhausted.body.line': string,
   'notification.event.platform.analysis.quota-exhausted.body.global': string,
-  'notification.analysis-line.event': string,
-  'notification.analysis-line.calendar': string,
   'notification.event.platform.analysis.quota-exhausted.reason': string
   'notification.event.platform.provider.credential-invalid.title': string
   'notification.event.platform.provider.credential-invalid.body': string,
@@ -88,7 +86,7 @@ export type NotificationCopyTable = {
   'notification.action.open-settings': string
   /**
    * 日报失败事件的动作：打开日报。**只服务历史记录**（v2.58）：那一笔起产品动作改用自己的键
-   * （`notification.action.market-intelligence.open-briefing`，引用形状 `labelRef`），新记录不再写这个键。
+   * （产品动作改用自己的键，引用形状 `labelRef`），新记录不再写这个键。
    *
    * **删它的条件**：库里 `actions[].labelKey === 'notification.action.open-briefing'` 的记录数降到 0
    * （保留期 30 天）。在那之前删掉，老通知的按钮会凭空消失——记录里存的是当初那个键，不是句子。
@@ -136,8 +134,6 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.quota-exhausted.title': "今天的分析次数用完了",
     'notification.event.platform.analysis.quota-exhausted.body.line': "{line}今天已用 {used} 次，上限 {limit} 次；之后再发起同类分析会被拒绝，已有的报告不受影响。",
     'notification.event.platform.analysis.quota-exhausted.body.global': "今天各类自动分析的总次数已经用完",
-    'notification.analysis-line.event': "行情变动分析",
-    'notification.analysis-line.calendar': "日历事件分析",
     'notification.event.platform.analysis.quota-exhausted.reason': '分析调用到了当天的上限，在那之前发起分析会被拒绝。',
     'notification.event.platform.provider.credential-invalid.title': "{provider} 的密钥失效了",
     'notification.event.platform.provider.credential-invalid.body': "保存的密钥已经不被接受，去设置里重新填一把才能继续调用。",
@@ -202,8 +198,6 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.quota-exhausted.title': "Today's analysis quota is used up",
     'notification.event.platform.analysis.quota-exhausted.body.line': "{line}: {used} of {limit} analyses used today; further runs on this line will be refused, and reports you already have are unaffected.",
     'notification.event.platform.analysis.quota-exhausted.body.global': "today's overall automatic-analysis budget is spent",
-    'notification.analysis-line.event': "market-move analysis",
-    'notification.analysis-line.calendar': "calendar-event analysis",
     'notification.event.platform.analysis.quota-exhausted.reason': 'Analysis calls have reached the day\'s limit; further requests are refused until it resets.',
     'notification.event.platform.provider.credential-invalid.title': "The key for {provider} stopped working",
     'notification.event.platform.provider.credential-invalid.body': "The saved key is no longer accepted; enter a new one in settings to keep using the provider.",

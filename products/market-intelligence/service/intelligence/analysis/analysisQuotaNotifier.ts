@@ -3,9 +3,9 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
-import { notificationCopy } from '@platform/i18n/notificationCopy'
 import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
+import { marketIntelligenceNotificationCopy } from '../../../desktop/shared/i18n/text/notifications'
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 
 /**
@@ -34,8 +34,8 @@ export type AnalysisQuota = Readonly<{ used: number; limit: number; occurredAt: 
 
 /** 两条分析线给读者看的名字：只在额度这一句里用，定义在平台文案表（唯一出处）。 */
 const LINE_COPY_KEYS = {
-  event: 'notification.analysis-line.event',
-  calendar: 'notification.analysis-line.calendar'
+  event: 'notification.analysis-line.market-intelligence.event',
+  calendar: 'notification.analysis-line.market-intelligence.calendar'
 } as const
 
 /** UTC 自然日（`YYYY-MM-DD`）：记账口径，不跟读者的显示时区走。 */
@@ -61,8 +61,8 @@ export function buildAnalysisQuotaRequest(quota: AnalysisQuota): NotificationSub
         params: { used: String(quota.used), limit: String(quota.limit) },
         // 线名两种语言不同，按语言各给一份；数字两种语言相同。
         paramsByLanguage: {
-          'zh-CN': { line: notificationCopy['zh-CN'][LINE_COPY_KEYS[quota.scope.line]] },
-          'en-US': { line: notificationCopy['en-US'][LINE_COPY_KEYS[quota.scope.line]] }
+          'zh-CN': { line: marketIntelligenceNotificationCopy['zh-CN'][LINE_COPY_KEYS[quota.scope.line]] },
+          'en-US': { line: marketIntelligenceNotificationCopy['en-US'][LINE_COPY_KEYS[quota.scope.line]] }
         }
       })
   })

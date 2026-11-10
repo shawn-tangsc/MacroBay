@@ -118,6 +118,9 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: '分析结论',
     [BODY(IDS.analysisConclusion)]: '这次分析的结论已经出来了。',
     [REASON(IDS.analysisConclusion)]: '你订阅了信号触发的分析结论提醒。',
+    // 分析额度那条正文里的线名：句子属于产品自己的分析线，平台文案表里不再寄存（v2.59）。
+    'notification.analysis-line.market-intelligence.event': '行情变动分析',
+    'notification.analysis-line.market-intelligence.calendar': '日历事件分析',
 
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
     [BODY(IDS.timezoneInvalid)]: '去设置里改成有效的时区，日报会恢复自动生成。',
@@ -195,6 +198,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: 'Analysis conclusion',
     [BODY(IDS.analysisConclusion)]: 'The conclusion from this analysis is ready.',
     [REASON(IDS.analysisConclusion)]: 'You subscribed to signal-triggered analysis conclusions.',
+    // Line names used inside the analysis-quota sentence: they belong to this product's analysis lines,
+    // so the platform copy table no longer carries them (v2.59).
+    'notification.analysis-line.market-intelligence.event': 'market-move analysis',
+    'notification.analysis-line.market-intelligence.calendar': 'calendar-event analysis',
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
     [BODY(IDS.timezoneInvalid)]: 'Set a valid time zone in settings and the briefing will generate automatically again.',
