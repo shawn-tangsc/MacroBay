@@ -9,7 +9,7 @@ import { ChannelFields, parseAllowedChatIds, type ChannelFieldValues, type Chann
 import type { Agent, Channel } from './channelSettingsPresentation'
 
 /**
- * 编辑弹层：与新建**同一套六字段布局**（需求 v7）。
+ * 编辑弹层：与新建**同一套字段布局**（需求 v7）。
  *
  * 编辑时 Token 只有圆点，没有输入框：改 Token 是另一条路径（换 Token），不在这里顺手可改。
  * 弹层自己不发请求：保存由页面调 IPC，成功后页面关掉它——「关闭」因此只有一个原因。
@@ -22,17 +22,11 @@ export function ChannelEditDialog(props: {
   policyPresence: ChannelPolicyPresence
   /** 保存没通过时的就地一句话（回读没确认到凭据）。页面级那句在遮罩后面，读者看不见。 */
   saveError?: string | null
-  /** 读者已有的工作区：工作目录下拉的真实选项。 */
-  workspaces?: readonly { id: string; name: string; path: string }[]
-  /** 「选择文件夹…」：返回工作区编号（取消返回 null）。 */
-  onChooseWorkspace?: () => Promise<string | null>
   saving: boolean
   onCancel: () => void
   onSave: (input: {
     name: string
     agentId: string
-    workspaceId: string | null
-    permissionMode: ChannelFieldValues['permissionMode']
     allowedChatIds: readonly string[]
     /** 空串＝保持原 Token；非空＝整串替换。 */
     token: string
@@ -43,15 +37,13 @@ export function ChannelEditDialog(props: {
     name: target.name,
     agentId: target.agentId,
     token: '',
-    workspaceId: target.workspace?.type === 'user' ? target.workspace.workspaceId : null,
-    permissionMode: target.permissionMode ?? null,
     allowedChatIdsText: (target.allowedChatIds ?? []).join('\n')
   })
   const [values, setValues] = useState<ChannelFieldValues>(fromChannel(channel))
 
   useEffect(() => {
     setValues(fromChannel(channel))
-  }, [channel.id, channel.name, channel.agentId, channel.workspace, channel.permissionMode])
+  }, [channel.id, channel.name, channel.agentId])
 
   return (
     <Modal
@@ -73,8 +65,6 @@ export function ChannelEditDialog(props: {
               props.onSave({
                 name: values.name.trim(),
                 agentId: values.agentId,
-                workspaceId: values.workspaceId,
-                permissionMode: values.permissionMode,
                 allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText),
                 token: values.token
               })
@@ -113,8 +103,6 @@ export function ChannelEditDialog(props: {
         mode="edit"
         policyPresence={props.policyPresence}
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
-        onChooseWorkspace={props.onChooseWorkspace}
-        workspaces={props.workspaces}
         tokenState={channel.credential.status}
         values={values}
       />

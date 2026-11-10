@@ -1388,66 +1388,54 @@ describe('channel test message through the management service', () => {
   })
 })
 
-describe('channel settings overrides (workspace / allowed chats / permission mode)', () => {
+describe('channel settings: the allow list is the only per-channel override', () => {
   function created() {
     const h = harness()
     const channel = h.service.create({
       type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a',
-      workspace: { type: 'user', workspaceId: 'workspace-1' },
-      allowedChatIds: ['111', '222'],
-      permissionMode: 'plan'
+      allowedChatIds: ['111', '222']
     }).channel!
     return { ...h, channel }
   }
 
-  it('stores the three fields on the channel row and reads them back', () => {
+  it('stores the allow list and leaves the two inherited columns empty', () => {
     const { service, database, channel } = created()
-    expect(channel.workspace).toEqual({ type: 'user', workspaceId: 'workspace-1' })
     expect(channel.allowedChatIds).toEqual(['111', '222'])
-    expect(channel.permissionMode).toBe('plan')
+    // 权限与工作目录是智能体级的事实：频道这一行不给第二个答案，读出来就是「继承 / 系统目录」。
+    expect(channel.workspace).toEqual({ type: 'system' })
+    expect(channel.permissionMode).toBeNull()
 
     const row = database.connection.prepare('select workspace_json, active_chat_ids_json, permission_mode from agent_channels where id = ?').get(channel.id)
-    expect(row).toEqual({
-      workspace_json: '{"type":"user","workspaceId":"workspace-1"}',
-      active_chat_ids_json: '["111","222"]',
-      permission_mode: 'plan'
-    })
-    expect(service.get(channel.id)?.permissionMode).toBe('plan')
+    expect(row).toEqual({ workspace_json: null, active_chat_ids_json: '["111","222"]', permission_mode: null })
+    expect(service.get(channel.id)?.permissionMode).toBeNull()
   })
 
-  it('defaults to the system workspace, allow-all chats and an inherited permission mode', () => {
+  it('ignores a workspace or permission mode an old client still sends', () => {
     const { service, database } = harness()
-    const channel = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!
+    // 老界面（或别的入口）还可能带着这两个字段来；它们不再有写入权。
+    const legacy = { workspace: { type: 'user', workspaceId: 'workspace-1' }, permissionMode: 'plan' as const }
+    const channel = service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', ...legacy }).channel!
+    expect(database.connection.prepare('select workspace_json, permission_mode from agent_channels where id = ?').get(channel.id))
+      .toEqual({ workspace_json: null, permission_mode: null })
     expect(channel.workspace).toEqual({ type: 'system' })
-    expect(channel.allowedChatIds).toEqual([])
     expect(channel.permissionMode).toBeNull()
-    // 「继承」必须落 null：落成助手级默认值 'default' 就和「显式选了 default」分不开了。
-    expect(database.connection.prepare('select permission_mode from agent_channels where id = ?').get(channel.id)).toEqual({ permission_mode: null })
   })
 
-  it('changes only the fields that were passed, and an empty list clears the allowlist', () => {
+  it('keeps the stored values of those columns when an old row is edited', () => {
     const { service, database, channel } = created()
-    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', permissionMode: null })
-    const inherited = service.get(channel.id)!
-    expect(inherited.permissionMode).toBeNull()
-    expect(inherited.workspace).toEqual({ type: 'user', workspaceId: 'workspace-1' })
-    expect(inherited.allowedChatIds).toEqual(['111', '222'])
+    database.connection.prepare("update agent_channels set workspace_json='{\"type\":\"user\",\"workspaceId\":\"legacy\"}', permission_mode='plan' where id=?").run(channel.id)
 
-    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: [] })
+    service.update({ id: channel.id, name: 'Telegram 2', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: [] })
+    // 「列保留、停止写入」：老值原样留着，不被清掉，也不被这次编辑改写。
+    expect(database.connection.prepare('select name, workspace_json, permission_mode from agent_channels where id = ?').get(channel.id))
+      .toEqual({ name: 'Telegram 2', workspace_json: '{"type":"user","workspaceId":"legacy"}', permission_mode: 'plan' })
     expect(service.get(channel.id)?.allowedChatIds).toEqual([])
     expect(database.connection.prepare('select active_chat_ids_json from agent_channels where id = ?').get(channel.id)).toEqual({ active_chat_ids_json: null })
-
-    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', workspace: { type: 'system' } })
-    const reset = service.get(channel.id)!
-    expect(reset.workspace).toEqual({ type: 'system' })
-    expect(reset.allowedChatIds).toEqual([])
   })
 
-  it('rejects a malformed workspace, an oversized allowlist entry and an unknown permission mode', () => {
+  it('rejects an oversized allowlist entry', () => {
     const { service } = harness()
-    expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', workspace: { type: 'user' } })).toThrow('channel-input-invalid')
     expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: ['x'.repeat(65)] })).toThrow('channel-input-invalid')
-    expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', permissionMode: 'yolo' })).toThrow('channel-input-invalid')
   })
 })
 

@@ -204,28 +204,6 @@ export function readAgents(value: unknown): Agent[] {
 }
 
 /**
- * `agents.getState()` 里的工作区列表 → 下拉能用的选项。
- *
- * 只收 `type === 'user'`：系统默认目录不是「一条工作区」，它由「不使用工作目录」表达。
- * 字段照样逐个验（那个口子还没标类型），少一个字段就丢掉这一条，而不是把 undefined 画进下拉。
- */
-export function readWorkspaces(value: unknown): { id: string; name: string; path: string }[] {
-  if (typeof value !== 'object' || value === null) return []
-  const bucket = value as Record<string, unknown>
-  const list = bucket.workspaces
-  if (!Array.isArray(list)) return []
-  return list.flatMap((entry) => {
-    if (typeof entry !== 'object' || entry === null) return []
-    const fields = entry as Record<string, unknown>
-    const { id, name, path, type } = fields
-    if (type !== 'user') return []
-    return typeof id === 'string' && typeof name === 'string' && typeof path === 'string'
-      ? [{ id, name, path }]
-      : []
-  })
-}
-
-/**
  * 「发送测试消息」的回执 → 行内那一句话。
  *
  * **没有「已送达」**：我们只能证明通道接受了，证明不了读者手机上显示了。四种失败原因各一句，

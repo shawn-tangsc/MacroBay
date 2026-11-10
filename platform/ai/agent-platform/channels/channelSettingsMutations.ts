@@ -1,20 +1,20 @@
 /**
- * 频道的新建与编辑（需求 v7 六字段里的三项在这里落库）。
+ * 频道的新建与编辑（「这条频道是什么」+「允许哪些会话」在这里落库）。
  *
- * 三项的存储只有一处：`agent_channels` 那一行。管理服务写它，旧读模型
+ * 存储只有一处：`agent_channels` 那一行。管理服务写它，旧读模型
  * （`createAgentPlatformRepositories`）也读它——不存在「两边各存一份」。
  *
  * 语义（与 `channelSettingsInputs` 同一套）：
- * - 工作目录缺省＝系统默认目录；
- * - 允许的会话 ID 缺省／空＝**允许所有**，落库存 `null` 而不是 `'[]'`；
- * - 权限模式缺省／`null`＝继承助手，**不落 `'default'`**。
+ * - 工作目录与权限模式**不再由读者写入**（2026-11-10 撤掉两个控件）：权限是智能体级的事实，
+ *   频道级目录会是第二个工作区权威；两列保留，老值原样留着；
+ * - 允许的会话 ID 缺省／空＝**允许所有**，落库存 `null` 而不是 `'[]'`。
  */
 import { randomUUID } from 'node:crypto'
 
 import type { ChannelManagementRepository } from './ChannelManagementRepository'
 import type { ChannelManagementResult } from './ChannelManagementContracts'
 import { assertIdentifier } from './ChannelManagementContracts'
-import { assertManagedChannelType, parseAllowedChatIds, parsePermissionMode, parseWorkspace } from './channelSettingsInputs'
+import { assertManagedChannelType, parseAllowedChatIds } from './channelSettingsInputs'
 
 export type ChannelMutationDeps = {
   repository: ChannelManagementRepository
@@ -30,9 +30,7 @@ export function createManagedChannel(deps: ChannelMutationDeps, input: {
     name: unknown
     agentId: unknown
     actorId: unknown
-    workspace?: unknown
     allowedChatIds?: unknown
-    permissionMode?: unknown
   }): ChannelManagementResult {
     if (Object.hasOwn(input, 'id')) throw new Error('channel-input-invalid')
     const id = randomUUID()
@@ -48,10 +46,7 @@ export function createManagedChannel(deps: ChannelMutationDeps, input: {
       name: assertIdentifier(input.name, 120),
       agentId,
       now,
-      workspace: parseWorkspace(input.workspace),
-      allowedChatIds: parseAllowedChatIds(input.allowedChatIds) ?? [],
-      // 缺省＝继承（null），绝不落助手级默认 'default'。
-      permissionMode: parsePermissionMode(input.permissionMode) ?? null
+      allowedChatIds: parseAllowedChatIds(input.allowedChatIds) ?? []
     })
     if (!created) {
       return { ok: false, code: 'channel-not-found' }
@@ -65,9 +60,7 @@ export function updateManagedChannel(deps: ChannelMutationDeps, input: {
     name: unknown
     agentId: unknown
     actorId: unknown
-    workspace?: unknown
     allowedChatIds?: unknown
-    permissionMode?: unknown
   }): ChannelManagementResult {
     const id = deps.requireMutableChannel(input.id)
     const actorId = assertIdentifier(input.actorId)
@@ -78,9 +71,7 @@ export function updateManagedChannel(deps: ChannelMutationDeps, input: {
       name: assertIdentifier(input.name, 120),
       agentId,
       now: deps.now(),
-      ...(input.workspace === undefined ? {} : { workspace: parseWorkspace(input.workspace) }),
-      ...(parseAllowedChatIds(input.allowedChatIds) === undefined ? {} : { allowedChatIds: parseAllowedChatIds(input.allowedChatIds)! }),
-      ...(parsePermissionMode(input.permissionMode) === undefined ? {} : { permissionMode: parsePermissionMode(input.permissionMode)! })
+      ...(parseAllowedChatIds(input.allowedChatIds) === undefined ? {} : { allowedChatIds: parseAllowedChatIds(input.allowedChatIds)! })
     }
     const ok = deps.repository.update(id, patch)
     if (ok) deps.stopRuntime(id)

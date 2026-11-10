@@ -24,7 +24,7 @@ type ChannelRow = {
   credential_health: 'configured' | 'missing' | 'unavailable'
   requested_enabled: number
   migration_state: string
-  workspace_json: string
+  workspace_json: string | null
   active_chat_ids_json: string | null
   permission_mode: string | null
   created_at: string
@@ -282,8 +282,9 @@ function toSafeView(row: ChannelRow): ChannelManagementSafeView {
   }
 }
 
-/** 存的是原始 JSON；读不出来就当系统默认目录，不猜一个工作区 id。 */
-function readWorkspace(value: string): ChannelWorkspaceOverride {
+/** 存的是原始 JSON；`null`（这一版新建的行）与坏 JSON 一样落回系统默认目录，不猜一个工作区 id。 */
+function readWorkspace(value: string | null): ChannelWorkspaceOverride {
+  if (value === null) return { type: 'system' }
   try {
     const parsed = JSON.parse(value) as { type?: unknown; workspaceId?: unknown }
     if (parsed?.type === 'user' && typeof parsed.workspaceId === 'string' && parsed.workspaceId.length > 0) {

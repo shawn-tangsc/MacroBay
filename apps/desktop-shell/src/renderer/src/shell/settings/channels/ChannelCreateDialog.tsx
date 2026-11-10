@@ -10,10 +10,10 @@ import { ChannelFields, parseAllowedChatIds, type ChannelFieldValues } from './C
 import type { Agent } from './channelSettingsPresentation'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
-const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '', workspaceId: null, permissionMode: null, allowedChatIdsText: '' }
+const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '', allowedChatIdsText: '' }
 
 /**
- * 「＋ 添加」的弹层：六字段布局与编辑弹层共用（需求 v7 要求新建和编辑统一）。
+ * 「＋ 添加」的弹层：与编辑弹层共用同一套字段（需求 v7 要求新建和编辑统一）。
  *
  * Token 只在这里出现一次，且**只进不出**：提交走平台的凭据交接（WebCrypto 加密后再过 IPC），
  * 成功后立刻清空草稿。列表里它永远只是星号——这一条是安全口径，不是排版偏好。
@@ -23,18 +23,12 @@ export function ChannelCreateDialog(props: {
   labels: PlatformText['settings']
   /** 创建失败/凭据没存上时的就地一句话：页面级那句在遮罩后面，读者看不见。 */
   saveError?: string | null
-  /** 读者已有的工作区：工作目录下拉的真实选项。 */
-  workspaces?: readonly { id: string; name: string; path: string }[]
-  /** 「选择文件夹…」：返回工作区编号（取消返回 null）。 */
-  onChooseWorkspace?: () => Promise<string | null>
   saving: boolean
   onCancel: () => void
   onCreate: (input: {
     name: string
     agentId: string
     token: string
-    workspaceId: string | null
-    permissionMode: ChannelFieldValues['permissionMode']
     allowedChatIds: readonly string[]
   }) => void
 }): React.ReactElement {
@@ -66,8 +60,6 @@ export function ChannelCreateDialog(props: {
                 name: values.name.trim(),
                 agentId: values.agentId,
                 token: values.token,
-                workspaceId: values.workspaceId,
-                permissionMode: values.permissionMode,
                 allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText)
               })
             }
@@ -88,8 +80,6 @@ export function ChannelCreateDialog(props: {
         mode="create"
         policyPresence="none"
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
-        onChooseWorkspace={props.onChooseWorkspace}
-        workspaces={props.workspaces}
         values={values}
       />
     </Modal>

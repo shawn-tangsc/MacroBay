@@ -6,16 +6,12 @@ import { IconButton } from '@platform/ui/components/icon-button'
 
 import type { PlatformText } from '../../../i18n/platformText'
 
-import type { Agent, ChannelPermissionMode } from './channelSettingsPresentation'
+import type { Agent } from './channelSettingsPresentation'
 
 export type ChannelFieldValues = {
   name: string
   agentId: string
   token: string
-  /** `null` = 系统默认目录。 */
-  workspaceId: string | null
-  /** `null` = 继承助手设置（**不是** `'default'`，那是助手级默认值）。 */
-  permissionMode: ChannelPermissionMode | null
   /** 逗号或换行分隔的原始文本：保存时才解析成列表。 */
   allowedChatIdsText: string
 }
@@ -32,13 +28,15 @@ export function parseAllowedChatIds(text: string): string[] {
 }
 
 /**
- * 新建与编辑共用的六字段布局（原型 B，顺序即必填到可选）：
- * 名称 → 绑定智能体 → 工作目录 → Bot Token → 允许的会话 ID → 频道权限模式。
+ * 新建与编辑共用的字段布局（顺序即必填到可选）：
+ * 名称 → 绑定智能体 → Bot Token → 允许的会话 ID。
  *
  * **两个弹层共用这一个组件**，因为需求定的是「新建和编辑统一，别做两套」。
  *
- * 三个字段现在都能真正保存（工作目录、权限模式自 `64853a9`；允许的会话 ID 自 `3a0e262`，
- * 那一笔把入站判定改成了「列表非空只放行名单内、空且无策略＝允许所有」）。
+ * 这一屏只回答两件事：「这条频道是什么（名字/类型/凭据）」+「开不开」。工作目录与权限模式
+ * 曾在这里各占一栏，2026-11-10 撤掉：权限是**智能体级**的事实，频道再存一份就是读者拦不住、
+ * 却以为拦住了的假安全感；入站会话用的是智能体工作区，频道级目录会成为第二个工作区权威。
+ * 两个存储列留着（不迁移、不删），但不再由读者写入。
  *
  * 「允许的会话 ID」的文案必须**跟着真实状态**走：空列表在「没有显式名单」的频道上等于
  * 允许所有，这一步有风险；而同一个空列表在「已有显式名单」的频道上并不放开任何人。
@@ -55,35 +53,11 @@ export function ChannelFields(props: {
    * `configured` → 留空＝不改；`missing` → 填一个，留空什么都不会存；`unavailable` → 填新的换掉它。
    */
   tokenState?: 'configured' | 'missing' | 'unavailable'
-  /** 读者已有的工作区（只列 `user` 那类）。 */
-  workspaces?: readonly { id: string; name: string; path: string }[]
-  /** 选文件夹：返回工作区编号（用户取消返回 null）。登记动作在主进程，这里只拿编号。 */
-  onChooseWorkspace?: () => Promise<string | null>
   onChange: (patch: Partial<ChannelFieldValues>) => void
 }): React.ReactElement {
   const { labels, values } = props
   // 输入中的新 Token 临时可见；旧值永远不经过这个开关（接口里就没有旧值）。
   const [tokenVisible, setTokenVisible] = useState(false)
-
-  const CHOOSE_WORKSPACE = '__choose-directory__'
-  const workspaceChoices = props.workspaces ?? []
-  const currentMissing =
-    values.workspaceId !== null && !workspaceChoices.some((workspace) => workspace.id === values.workspaceId)
-  const workspaceOptions = [
-    { value: 'system', label: labels.channelWorkspaceDefault },
-    // 已经选过、但不在读者现有工作区列表里的那条（被删掉了）：原样回显它，不悄悄换成别的。
-    ...(currentMissing ? [{ value: values.workspaceId as string, label: labels.channelWorkspaceCurrent }] : []),
-    ...workspaceChoices.map((workspace) => ({ value: workspace.id, label: workspace.name })),
-    { value: CHOOSE_WORKSPACE, label: labels.channelWorkspaceChoose }
-  ]
-
-  const permissionOptions = [
-    { value: 'inherit', label: labels.channelPermissionInherit },
-    { value: 'default', label: labels.channelPermissionDefault },
-    { value: 'acceptEdits', label: labels.channelPermissionAcceptEdits },
-    { value: 'bypassPermissions', label: labels.channelPermissionBypass },
-    { value: 'plan', label: labels.channelPermissionPlan }
-  ]
 
   return (
     <div className="channel-fields">
@@ -102,25 +76,6 @@ export function ChannelFields(props: {
         style={{ marginTop: 10, width: '100%' }}
         value={values.agentId.length === 0 ? undefined : values.agentId}
       />
-
-      <FieldShell label={labels.channelFieldWorkspace}>
-        <Select
-          aria-label={labels.channelFieldWorkspace}
-          onChange={(value: string) => {
-            // 「选择文件夹…」不是一次选择：它要先调系统窗口、登记工作区，拿到编号后才改这一栏。
-            if (value === CHOOSE_WORKSPACE) {
-              void props.onChooseWorkspace?.().then((workspaceId) => {
-                if (workspaceId !== null && workspaceId !== undefined) props.onChange({ workspaceId })
-              })
-              return
-            }
-            props.onChange({ workspaceId: value === 'system' ? null : value })
-          }}
-          options={workspaceOptions}
-          style={{ width: '100%' }}
-          value={values.workspaceId ?? 'system'}
-        />
-      </FieldShell>
 
       <FieldShell label={labels.channelCredential}>
         {props.mode === 'create' ? (
@@ -193,18 +148,6 @@ export function ChannelFields(props: {
               : `${labels.channelAllowedChatsAll} ${labels.channelAllowedChatsRisk}`}
         </p>
       )}
-
-      <FieldShell label={labels.channelFieldPermissionMode}>
-        <Select
-          aria-label={labels.channelFieldPermissionMode}
-          onChange={(value: string) =>
-            props.onChange({ permissionMode: value === 'inherit' ? null : (value as ChannelPermissionMode) })
-          }
-          options={permissionOptions}
-          style={{ width: '100%' }}
-          value={values.permissionMode ?? 'inherit'}
-        />
-      </FieldShell>
     </div>
   )
 }

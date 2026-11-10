@@ -12,12 +12,10 @@ import { CHANNEL_DISPLAY_NAME } from '@platform/channels/channelDisplayNames'
 import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
 import {
-  chooseWorkspaceFolder,
   enableChannelWithSelfCheck,
   readCredentialConfigured,
   runChannelAction,
-  sendChannelTestMessage,
-  workspacePayload
+  sendChannelTestMessage
 } from './channelSettingsActions'
 import { ChannelEditDialog } from './ChannelEditDialog'
 import type { ChannelPolicyPresence } from './ChannelFields'
@@ -31,12 +29,10 @@ import {
   channelFailureReason,
   mutationFailureSentence,
   readAgents,
-  readWorkspaces,
   toCatalog,
   toChannel
 } from './channelSettingsPresentation'
-import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
-import type { AgentWorkspaceChoice } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
+import type { Agent, Catalog, Channel } from './channelSettingsPresentation'
 
 
 /**
@@ -54,8 +50,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [catalog, setCatalog] = useState<Catalog[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
-  /** 读者已有的工作区（只列 `user` 那一类）：工作目录下拉的真实选项。 */
-  const [workspaces, setWorkspaces] = useState<readonly AgentWorkspaceChoice[]>([])
   const [selectedType, setSelectedType] = useState<ChannelPlatformType>('telegram')
   const [initialLoading, setInitialLoading] = useState(true)
   const [readError, setReadError] = useState(false)
@@ -89,12 +83,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const reload = async (): Promise<void> => {
     try {
-      const [nextCatalog, nextChannels, agentState, workspaceState] = await Promise.all([
+      const [nextCatalog, nextChannels, agentState] = await Promise.all([
         window.platform.channels.catalog(),
         window.platform.channels.list(),
-        window.platform.agents.listAgents({}),
-        // 工作目录下拉要的是工作区本体（编号 + 名字），它挂在整份智能体状态上。
-        window.platform.agents.getState()
+        window.platform.agents.listAgents({})
       ])
       setCatalog(nextCatalog.map(toCatalog))
       const rows = nextChannels.map(toChannel)
@@ -102,7 +94,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       // 「有没有绑定会话」是另一个口：列表先上屏，这一位后到，读不到就不给入口。
       void conversationEntry.readFlags(rows)
       setAgents(readAgents(agentState))
-      setWorkspaces(readWorkspaces(workspaceState))
       setReadError(false)
       setStale(false)
     } catch {
@@ -159,15 +150,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     }
   }
 
-  /** 「选择文件夹…」：取消不改选择，失败说一句，成功把新旧工作区并进下拉并选中它。 */
-  const chooseWorkspace = (): Promise<string | null> => chooseWorkspaceFolder({ labels, setSaveError, setWorkspaces })
-
   const createChannel = async (input: {
     name: string
     agentId: string
     token: string
-    workspaceId: string | null
-    permissionMode: ChannelPermissionMode | null
     allowedChatIds: readonly string[]
   }): Promise<void> => {
     setSavingEdit(true)
@@ -181,9 +167,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         type: selectedType,
         name: input.name,
         agentId: input.agentId,
-        workspace: workspacePayload(input.workspaceId),
-        // `null` 就是继承助手；不传 `'default'`，两者必须分得开。
-        permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       }))
@@ -227,8 +210,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const saveEdit = async (input: {
     name: string
     agentId: string
-    workspaceId: string | null
-    permissionMode: ChannelPermissionMode | null
     allowedChatIds: readonly string[]
     token: string
   }): Promise<void> => {
@@ -242,8 +223,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         id: editor.channel.id,
         name: input.name,
         agentId: input.agentId,
-        workspace: workspacePayload(input.workspaceId),
-        permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       })
@@ -420,11 +399,9 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           agents={agents}
           labels={labels}
           onCancel={() => setEditor(null)}
-          onChooseWorkspace={chooseWorkspace}
           onCreate={(input) => void createChannel(input)}
           saveError={saveError}
           saving={savingEdit}
-          workspaces={workspaces}
         />
       ) : null}
 
@@ -435,11 +412,9 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           labels={labels}
           policyPresence={policyPresence}
           onCancel={() => setEditor(null)}
-          onChooseWorkspace={chooseWorkspace}
           onSave={(input) => void saveEdit(input)}
           saveError={saveError}
           saving={savingEdit}
-          workspaces={workspaces}
         />
       ) : null}
 

@@ -290,18 +290,8 @@ export type PlatformText = {
     channelTestNoTarget: string
     channelTestAmbiguousTarget: string
     channelTestRejected: string
-    /** 编辑弹层的六字段标签；新建与编辑共用同一套。 */
-    channelFieldWorkspace: string
+    /** 编辑弹层的字段标签；新建与编辑共用同一套。 */
     channelFieldAllowedChats: string
-    channelFieldPermissionMode: string
-    channelWorkspaceDefault: string
-    /** 下拉最后一项：调系统选目录窗口，选完登记成工作区并选中它。 */
-    channelWorkspaceChoose: string
-    /** 选目录/登记失败：如实说没成功，不静默退回「不使用工作目录」。 */
-    channelWorkspaceFailed: string
-    channelPermissionInherit: string
-    /** 后端还没接的字段：禁用并说明，不许做成「能改、保存成功、其实没存」。 */
-    channelFieldNotSavable: string
     /** 编辑弹层里 Token：旧值不可读；留空表示不修改，输入新值表示整串替换。 */
     channelTokenReadOnly: string
     channelTokenReplaceHint: string
@@ -315,13 +305,6 @@ export type PlatformText = {
     channelCredentialUnverified: string
     /** 新建成功但 Token 没落库：先说频道已经建好，免得用户以为要再点一次「创建」。 */
     channelCreatedWithoutCredential: string
-    /** 权限模式四档的人话（null 那一档是「继承助手设置」）。 */
-    channelPermissionDefault: string
-    channelPermissionAcceptEdits: string
-    channelPermissionBypass: string
-    channelPermissionPlan: string
-    /** 工作目录：读者已经指定过一个工作区时，那一项的名字（本版没有工作区目录接口，只能回显它）。 */
-    channelWorkspaceCurrent: string
     /** 允许的会话 ID：留空在「没有显式名单」的频道上等于允许所有，风险句要整块可见。 */
     channelAllowedChatsHint: string
     channelAllowedChatsRisk: string
@@ -1757,14 +1740,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       // 同样不许指路到没有入口的地方：界面里现在没有「选一个对话」的操作，只能如实说清限制。
       channelTestAmbiguousTarget: '绑了不止一个对话，这条没有发',
       channelTestRejected: '通道拒收了，原因见日志',
-      channelFieldWorkspace: '工作目录',
       channelFieldAllowedChats: '允许的会话 ID',
-      channelFieldPermissionMode: '频道权限模式',
-      channelWorkspaceDefault: '不使用工作目录',
-      channelWorkspaceChoose: '选择文件夹…',
-      channelWorkspaceFailed: '没能用上这个文件夹，可以再试一次',
-      channelPermissionInherit: '继承助手设置',
-      channelFieldNotSavable: '这一版还保存不了这一项',
       channelTokenReadOnly: '旧 Token 不会显示，也不会被复制；留空表示不修改。',
       channelTokenReplaceHint: '留空表示不修改；输入新 Token 会整串替换',
       channelTokenCurrent: '当前已存：{mask}',
@@ -1773,11 +1749,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelCredentialSaveFailed: 'Token 没存上，请重试',
       channelCredentialUnverified: '没确认到是否存上，重开弹层看一下',
       channelCreatedWithoutCredential: '频道建好了，但 Token 没存上——在「编辑」里重新填一次',
-      channelPermissionDefault: '每次都要问',
-      channelPermissionAcceptEdits: '自动接受修改',
-      channelPermissionBypass: '完全放行',
-      channelPermissionPlan: '只做计划',
-      channelWorkspaceCurrent: '当前工作区',
       channelAllowedChatsHint: '多个会话 ID 用逗号或换行分隔。',
       channelAllowedChatsRisk: '留空＝允许所有会话——任何人都能用这个机器人。',
       channelAllowedChatsAll: '现在是允许所有：任何人都能用这个机器人。',
@@ -3129,14 +3100,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTestNoTarget: 'Send this bot a message from your phone first; that conversation is then remembered automatically',
       channelTestAmbiguousTarget: 'Bound to more than one conversation, so nothing was sent',
       channelTestRejected: 'The channel rejected it; see the log',
-      channelFieldWorkspace: 'Working folder',
       channelFieldAllowedChats: 'Allowed chat IDs',
-      channelFieldPermissionMode: 'Channel permission mode',
-      channelWorkspaceDefault: 'Do not use a working folder',
-      channelWorkspaceChoose: 'Choose a folder…',
-      channelWorkspaceFailed: 'That folder could not be used; try again',
-      channelPermissionInherit: 'Inherit the agent setting',
-      channelFieldNotSavable: 'This version cannot save this field yet',
       channelTokenReadOnly: 'The existing token is never shown or copied; leave empty to keep it.',
       channelTokenReplaceHint: 'Leave empty to keep the current token; typing a new one replaces it',
       channelTokenCurrent: 'Currently stored: {mask}',
@@ -3145,11 +3109,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelCredentialSaveFailed: 'the token was not saved; retry',
       channelCredentialUnverified: 'not confirmed as stored; reopen this dialog to check',
       channelCreatedWithoutCredential: 'the channel was created, but the token was not saved — enter it again in Edit',
-      channelPermissionDefault: 'Ask every time',
-      channelPermissionAcceptEdits: 'Accept edits automatically',
-      channelPermissionBypass: 'Allow everything',
-      channelPermissionPlan: 'Plan only',
-      channelWorkspaceCurrent: 'Current working folder',
       channelAllowedChatsHint: 'Separate several chat IDs with commas or new lines.',
       channelAllowedChatsRisk: 'Empty means every conversation is allowed — anyone can use this bot.',
       channelAllowedChatsAll: 'Everyone is allowed right now: anyone can use this bot.',
