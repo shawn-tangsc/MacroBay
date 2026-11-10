@@ -835,6 +835,28 @@ describe('通知配置后的测试按钮（R201）', () => {
     expect(details?.textContent).toContain('timezone-unreadable')
   })
 
+  it('tells a rejected send from an unconfirmed one and from a send that never went', async () => {
+    const cases: Array<[string, string]> = [
+      ['channel-rejected', '没送到：通道拒收了这一次发送'],
+      ['unknown-after-send', '已经发出去了，但还没收到回执'],
+      ['not-attempted', '没有发出去：这一次没有走通道']
+    ]
+    for (const [reasonCode, sentence] of cases) {
+      install({
+        getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+        sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode }))
+      })
+      await render()
+      await selectItem(2)
+      await clickTestButton('sentiment')
+      const shown = container?.querySelector('[data-test-result="failed"]')?.textContent ?? ''
+      expect(shown, reasonCode).toContain(sentence)
+      // 原因码仍然只在折叠区出现，不进句子。
+      expect(shown, reasonCode).not.toContain(reasonCode)
+      root?.unmount()
+    }
+  })
+
   it('disables the button and says why when that config item is off', async () => {
     install({
       getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
