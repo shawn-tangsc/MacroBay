@@ -375,3 +375,10 @@
 .config-drawer__detail-foot {
   padding-top: 12px;
 }
+
+/*
+ * `provider-row` 第三格是 18px 状态点，写不下「读不到」这类词，所以把第三格改成状态词位；
+ * 46 / `7 9` / 圆角 7 / 选中浅底 / hover 全部沿用家族，不另改数值。
+ */
+.config-drawer__list-row { grid-template-columns: minmax(0,1fr) auto; }
+.config-drawer__list-row .provider-row-copy strong { font-size: var(--font-body); }
