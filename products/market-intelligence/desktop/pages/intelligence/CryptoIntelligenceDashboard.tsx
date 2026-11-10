@@ -35,7 +35,7 @@ import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
 import { projectPositioningSourceRow, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { FeedStatusStrip } from './DashboardFeedStatusStrip'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { filterFeedRowsByCells, resolveDashboardReadGates, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
+import { filterFeedRowsByCells, hiddenDivergenceLegs, resolveDashboardReadGates, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -166,7 +166,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const [sourcesDraftDirty, setSourcesDraftDirty] = useState(false)
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !readsReady || !readGates.positioning, now, window: positioningWindow })
-  const divergence = useDashboardDivergence({ client: divergenceClient, now })
+  const divergence = useDashboardDivergence({ client: divergenceClient, now, disabled: !readsReady || !readGates.divergence })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
   // shows the reader the state they are already looking at.
   const [capitalReloadKey, setCapitalReloadKey] = useState(0)
@@ -327,7 +327,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         {/* A conclusion about the card above it, not another section: the reader asks "so what do
             these two legs mean together" while looking at the chart, and a band of its own read
             as an unrelated module. */}
-        <DivergencePanel state={divergence.state} text={text.divergence} onRetry={divergence.reload} />
+        {readsReady && readGates.divergence ? <DivergencePanel state={divergence.state} text={text.divergence} onRetry={divergence.reload} hiddenLegs={hiddenDivergenceLegs(cellState.cells)} /> : null}
       </div>
 
       {/* 持仓那一格**转述卡片算出来的判定**（`positioningState`），不自己判新鲜度：

@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
-import { divergencePolicy } from '../../../../contracts/marketDivergence'
+import { divergencePolicy, type DivergenceLegId } from '../../../../contracts/marketDivergence'
 import { productText } from '../../../shared/i18n/productText'
 import { DivergencePanel } from './DivergencePanel'
 
@@ -20,9 +20,13 @@ const scoped = (child: ReactElement): ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: child })
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.divergence
-const render = (state: Parameters<typeof DivergencePanel>[0]['state'], locale: 'zh-CN' | 'en-US' = 'zh-CN') =>
+const render = (
+  state: Parameters<typeof DivergencePanel>[0]['state'],
+  locale: 'zh-CN' | 'en-US' = 'zh-CN',
+  extra: { hiddenLegs?: readonly DivergenceLegId[] } = {}
+) =>
   renderToStaticMarkup(scoped(createElement(DivergencePanel, {
-    state, onRetry: () => undefined, text: productText[locale].pages.intelligence.portal.dashboard.divergence
+    state, onRetry: () => undefined, text: productText[locale].pages.intelligence.portal.dashboard.divergence, ...extra
   })))
 
 const row = {
@@ -515,5 +519,45 @@ describe('divergence panel · the explanation sits behind one icon', () => {
         .toEqual([...text.notes])
     })
     await act(async () => { root.unmount() })
+  })
+})
+
+
+describe('divergence panel · legs the reader turned off', () => {
+  it('drops the pairs and refusals a disabled leg would have decided', async () => {
+    // 价格腿关掉：用到价格腿的那一组（narrative-price）与它被挡下的说明都不许出现；
+    // 稳定币腿那一组不涉及价格腿，照旧判、照旧画。
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children:
+          createElement(DivergencePanel, {
+            state: answer([row, observedRow], [priceStale, stablecoinMissing]),
+            onRetry: () => undefined,
+            text,
+            hiddenLegs: ['price']
+          }) }))
+      })
+      const summary = container.querySelector<HTMLButtonElement>('.mi-divergence__summary')!
+      await act(async () => { summary.click() })
+      expect(container.querySelector('[data-pair="narrative-price"]')).toBeNull()
+      expect(container.querySelector('[data-pair="liquidity-leverage"]')).not.toBeNull()
+      // 被关掉的腿挡下的「没判成」也不出现：那句话会把它说成腿缺失，而其实是读者自己关的。
+      expect(container.querySelector('[data-reason="leg-stale"]')).toBeNull()
+      const withheld = container.querySelector('[data-reason="leg-missing"]')
+      expect(withheld).not.toBeNull()
+      expect(withheld!.textContent).toContain(text.pairNames['liquidity-leverage'])
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('renders nothing when every pair needs a leg the reader turned off', () => {
+    // 留下的配对数为 0、没判成的说明也为 0：整张卡不画，免得只留一句「没有结论」——
+    // 而原因其实是读者自己关掉的那一格。
+    expect(render(answer([observedRow], [priceStale]), 'zh-CN', { hiddenLegs: ['price'] })).toBe('')
   })
 })

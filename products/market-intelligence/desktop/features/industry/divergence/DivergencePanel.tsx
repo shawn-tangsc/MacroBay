@@ -34,12 +34,17 @@ export const divergenceNoteKeys = Object.freeze([
  * the readings one click away. Direction colour therefore never reaches the summary line: with two
  * pairs pointing different ways it would be wrong for one of them.
  */
-export function DivergencePanel({ state, text, onRetry }: Readonly<{
+export function DivergencePanel({ state, text, onRetry, hiddenLegs = [] }: Readonly<{
   state: DashboardDivergenceViewState
   text: DivergencePanelText
   /** Always required: a failed read has one honest next step, and it must not appear and vanish. */
   onRetry: () => void
-}>): React.ReactElement {
+  /**
+   * 读者在设置里关掉的腿：这些腿参与的配对**一条都不判、不画**，被它们挡住的「没判成」说明也一并去掉。
+   * 理由：结论是从这些腿上算出来的；腿都关了还留一条结论，就是在用读者已经关掉的数据下判断。
+   */
+  hiddenLegs?: readonly DivergenceLegId[]
+}>): React.ReactElement | null {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
   const detailId = useId()
@@ -48,8 +53,10 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   // 不再先切片再补 `Z`——那是在调用点重造一个时刻。
   const when = (value: string) => formatTime(value)
 
-  const rows = state.state === 'available' ? state.rows : []
-  const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
+  const rows = (state.state === 'available' ? state.rows : [])
+    .filter(row => !row.legs.some(leg => hiddenLegs.includes(leg.id)))
+  const withheld = (state.state === 'available' || state.state === 'empty' ? state.withheld : [])
+    .filter(entry => !hiddenLegs.includes(entry.leg))
   const grouped = groupWithheld(withheld)
   /** A pair, not a reason: two pairs refused for the same missing leg are still two refusals. */
   const pairCount = new Set(withheld.map(entry => entry.pairId)).size
@@ -61,6 +68,9 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
    * open, so it is a plain paragraph — not a disabled button, and not a button that does nothing.
    */
   const expandable = rows.length > 0 || pairCount > 0
+  // 全部配对都被关掉的腿挡下时整张卡不画：留着它只会是一句「没有结论」，而原因是读者自己关的格。
+  // 只对「读到」的两种状态生效——读失败仍然是读失败，照旧画错误态。
+  if (hiddenLegs.length > 0 && (state.state === 'available' || state.state === 'empty') && rows.length === 0 && pairCount === 0) return null
 
   if (state.state === 'loading') {
     return (

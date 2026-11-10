@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import type { CrossAssetStatusId } from '../../features/industry/cross-asset/crossAssetStatusRegistry'
+import type { DivergenceLegId } from '../../../contracts/marketDivergence'
 import type { DashboardFeedRow, DashboardFeedRowId } from './dashboardFeedStatusModel'
 import { DASHBOARD_SOURCE_MODULES, cellIdOf } from '../../settings/intelligence-sources/dashboardSourceModules'
 
@@ -68,6 +69,23 @@ export function filterFeedRowsByCells(
   return rows.filter((row) => isAnyCellEnabled(cells, FEED_ROW_CELLS[row.id]))
 }
 
+/**
+ * 背离卡的腿 → 它读的那一格。`funding` / `sentiment` 两条腿没有自己的格（资金费率跟 OI 同源、
+ * 舆情不是源开关），所以不在这张表里——它们永远按「开」算。
+ */
+export const DIVERGENCE_LEG_CELLS: Readonly<Partial<Record<DivergenceLegId, string>>> = Object.freeze({
+  stablecoin: dashboardCellId('divergence', 'capital-flows'),
+  etf: dashboardCellId('divergence', 'capital-flows-aggregate'),
+  'open-interest': dashboardCellId('divergence', 'leverage'),
+  price: dashboardCellId('divergence', 'price')
+})
+
+/** 被读者关掉的腿：这些腿参与的配对不判、不画；没格可关的腿不会出现在这里。 */
+export function hiddenDivergenceLegs(cells: Readonly<Record<string, boolean>>): readonly DivergenceLegId[] {
+  const entries = Object.entries(DIVERGENCE_LEG_CELLS) as ReadonlyArray<readonly [DivergenceLegId, string]>
+  return entries.filter(([, cellId]) => !isCellEnabled(cells, cellId)).map(([leg]) => leg)
+}
+
 export type DashboardReadGates = Readonly<{
   /** 不画的行（不是画 0、不是占位）：交给市场状态表按 id 过滤。 */
   hiddenStatusRows: readonly CrossAssetStatusId[]
@@ -79,6 +97,8 @@ export type DashboardReadGates = Readonly<{
   capital: boolean
   positioning: boolean
   policyPath: boolean
+  /** 四格全关就没有一条腿可判：不读、整张卡不画。 */
+  divergence: boolean
 }>
 
 export function resolveDashboardReadGates(cells: Readonly<Record<string, boolean>>): DashboardReadGates {
@@ -93,7 +113,8 @@ export function resolveDashboardReadGates(cells: Readonly<Record<string, boolean
     fearGreed: isCellEnabled(cells, dashboardCellId('fear-greed', 'index')),
     capital: isAnyCellEnabled(cells, [dashboardCellId('capital', 'stablecoin'), dashboardCellId('capital', 'etf')]),
     positioning: isAnyCellEnabled(cells, [dashboardCellId('positioning', 'oi'), dashboardCellId('positioning', 'funding')]),
-    policyPath: isCellEnabled(cells, dashboardCellId('policy-path', 'probability'))
+    policyPath: isCellEnabled(cells, dashboardCellId('policy-path', 'probability')),
+    divergence: (Object.values(DIVERGENCE_LEG_CELLS) as readonly string[]).some((cellId) => isCellEnabled(cells, cellId))
   }
 }
 
