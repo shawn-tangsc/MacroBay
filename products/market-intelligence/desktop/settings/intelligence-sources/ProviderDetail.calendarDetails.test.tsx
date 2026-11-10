@@ -241,6 +241,36 @@ describe('ProviderDetail source details', () => {
     expect(container.textContent).toContain(settingsText.jobNotRegistered)
   })
 
+  it('offers 高级 only while the source is enabled, and reacts as soon as the switch moves', async () => {
+    // 用户 2026-11-10：未启用的源不该有「高级」——没有采集在进行，展开看那几行没有意义。
+    // 整颗不渲染（不是禁用、不是灰掉、不占位）；开关一拨当帧就出现。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        onToggleSource: async () => true,
+        provider: {
+          ...fedProvider(),
+          sources: [source({ sourceId: 'federal-reserve-rss', displayName: 'Fed RSS', enabled: false })]
+        },
+        showSourceDetails: true
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.querySelector('.source-provider-detail__advanced')).toBeNull()
+    const toggle = container.querySelector<HTMLElement>('.source-provider-detail__row > [role="switch"]')
+    expect(toggle).not.toBeNull()
+    await act(async () => { toggle?.click() })
+    await flush()
+    expect(container.querySelectorAll('.source-provider-detail__advanced')).toHaveLength(1)
+  })
+
   it('lists every module that uses the source, from the dashboard grouping mapping', async () => {
     // 判据：共用源必须列全——`binance-futures-positioning` 供 4 个模块（跨资产 / 永续 / 背离卡 / 行情卡），
     // 只列一个即红；一个模块都不用的源整行不显示（那是内部账，不写「无模块使用」）。
