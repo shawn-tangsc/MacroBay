@@ -243,6 +243,37 @@ describe('market-intelligence product bootstrap', () => {
     }
   })
 
+  it('drops a product-owned schedule when the reader switches its source off, and puts it back on', async () => {
+    rmSync(join(tmpdir(), 'market-intelligence-bootstrap-test'), { recursive: true, force: true })
+    const jobRuntime = createJobRuntime()
+    bootServices({
+      platformFetch: vi.fn(),
+      register: vi.fn(),
+      jobRuntime,
+      eventBusRuntime: createEventBusRuntime(),
+      registerProductAgentToolHandler: vi.fn(),
+      registerProductCache: vi.fn(),
+      secretVault: vault()
+    })
+    const sources = getIntelligenceModule(jobRuntime).sourcesService
+    const jobId = 'market-intelligence.collect-policy-path'
+    try {
+      // 免钥匙 + live + 被政策路径模块用到 → 默认开着，启动就该有这条排期。
+      await vi.waitFor(() => expect(jobRuntime.listSchedules().map((definition) => definition.id)).toContain(jobId))
+
+      // 产品自有作业的排期由 `onSourceEnabledChanged` 这条接线驱动（`sourceEnableListeners` →
+      // `policyPathRuntime.sync`）。把接线拆掉，下面这句就会一直等到超时。
+      await sources.setEnabled({ sourceId: 'policy-path-market', enabled: false })
+      await vi.waitFor(() => expect(jobRuntime.listSchedules().map((definition) => definition.id)).not.toContain(jobId))
+
+      await sources.setEnabled({ sourceId: 'policy-path-market', enabled: true })
+      await vi.waitFor(() => expect(jobRuntime.listSchedules().map((definition) => definition.id)).toContain(jobId))
+    } finally {
+      rmSync(join(tmpdir(), 'market-intelligence-bootstrap-test'), { recursive: true, force: true })
+      resetIntelligenceModuleForTests()
+    }
+  })
+
   it('registers the static product IPC baseline before the registry becomes active', () => {
     const registry = createProductIpcRegistry()
 
