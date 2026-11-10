@@ -436,8 +436,9 @@
 /*
  * 内容卡（骨架一处）：右侧正文整块是一张卡，七个屏都渲染在它里面。
  * 数值照界面设计 `2026-11-11-settings-drawer-skeleton-numbers.md`：圆角 8、1px `--border`、
- * `--surface` 底、高 100%、内距 16（窄屏 12）；卡头 `16 16 12` + 页名 16/1.35/650。
- * **卡头不滚，卡体是唯一滚动容器**；短内容屏也撑满 100%、内容顶对齐，所以切菜单时卡框不动。
+ * `--surface` 底、高 100%、内距 16（窄屏 12）。**卡体是唯一滚动容器**（界面设计用探针量过长内容：
+ * scrollHeight 1112 > clientHeight 300、不溢出卡）；短内容屏也撑满 100%、内容顶对齐，切菜单时卡框不动。
+ * 卡头页名已按用户要求删除（菜单已高亮当前屏）。
  */
 .config-drawer__card {
   display: grid;
@@ -465,12 +466,10 @@
 }
 
 /*
- * 临时覆盖：`SettingsSection` 现在自带卡样式（1px 边 + 圆角 + surface 底），卡里再套就是双框 + 双内距。
- * 界面设计的裁定是「卡内区块去边框/圆角/底色，只留标题 + 行 + 分隔线」。
- * **只写 border、不写 border-radius**（`sectionContainerGuard` 判「同一规则同时出现两者」）。
- * 等 `SettingsSection` 出 flat 变体后删掉这条，改成传 variant。
+ * 区块之间的分隔线归卡体画（1px 通到卡边、间距 16）：区块自画会被卡体 16 内距截住。
+ * 卡内区块的「去边框/圆角/底色、区块头 `0 0 8px` 无底线」已由 `SettingsSection` 的 `variant="flat"` 提供
+ * （`6887263`），这里不再留覆盖。
  */
-/* flat 第三半：区块之间的分隔线归卡体画（1px 通到卡边、间距 16），因为区块自画会被 16 内距截住。 */
 .config-drawer__card .settings-section + .settings-section {
   margin-top: 16px;
   padding-top: 16px;
