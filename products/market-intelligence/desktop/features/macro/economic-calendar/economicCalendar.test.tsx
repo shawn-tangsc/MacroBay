@@ -2091,8 +2091,8 @@ describe('macro economic calendar', () => {
     } finally { vi.useRealTimers() }
   })
 
-  it('日历设置的出口可由宿主接管；没接管时仍打开旧看板抽屉（行为不变）', async () => {
-    // C9 分两步走的第一步：这一笔只加可选出口，默认路径一个字不改。
+  it('日历设置的出口可由宿主接管；没接管时退回情报源设置页（旧看板抽屉已删）', async () => {
+    // C9：宿主给了就落到配置抽屉；没给时不再有旧抽屉可开（`24a0b4f` 已删），退回设置页。
     const copy = productText['zh-CN'].pages.intelligence.portal.calendar
     const onOpenSettings = vi.fn()
     const provided = await renderCalendar({
@@ -2103,18 +2103,20 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => button(provided.container, copy.calendarSettings).click())
     expect(onOpenSettings).toHaveBeenCalledTimes(1)
-    expect(document.body.querySelector('.mi-dashboard-source-drawer')).toBeNull()
     await act(async () => provided.root.unmount())
     provided.container.remove()
 
+    const navigation = vi.fn()
+    window.addEventListener('app-shell:navigate', navigation)
     const fallback = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
       getEventDetail: async () => unavailableDetail()
     })
     await flush()
     await act(async () => button(fallback.container, copy.calendarSettings).click())
-    await flush()
-    expect(document.body.querySelector('.mi-dashboard-source-drawer')).not.toBeNull()
+    expect(navigation).toHaveBeenCalledTimes(1)
+    expect(navigation.mock.calls[0]?.[0].detail).toEqual({ navKey: 'settings', settingsPanelKey: 'market-intelligence.intelligence-sources' })
+    window.removeEventListener('app-shell:navigate', navigation)
   })
 
   it('keeps the month when only a neighbouring month fails, and marks the edges incomplete', async () => {

@@ -88,7 +88,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
    */
   const [followCurrentMonth, setFollowCurrentMonth] = useState(() =>
     !openTarget?.month || openTarget.month === economicCalendarCurrentMonth(initialQuery.asOf))
-  const [calendarPanelOpen, setCalendarPanelOpen] = useState(false)
   const gridMonths = economicCalendarGridMonths(selectedMonth)
   // The named month leads the read: it owns the grid and is what a manual refresh targets.
   const readMonths = [selectedMonth, ...gridMonths.filter(month => month !== selectedMonth)]
@@ -361,7 +360,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
           />
           <Button aria-label={text.monthNavigation.next} icon={<ChevronRight aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))}>{text.monthNavigation.next}</Button>
           <Button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)}>{text.monthNavigation.current}</Button>
-          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => (onOpenSettings === undefined ? setCalendarPanelOpen(true) : onOpenSettings())}>{text.calendarSettings}</Button>
+          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => (onOpenSettings ?? openIntelligenceSourcesSettings)()}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
           <Button icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack}>{text.backToDashboard}</Button>
         </div>
@@ -399,6 +398,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
           state={monthState}
           text={text}
           onRetryMonth={() => loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))}
+          {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
           marketMonthRead={market.namedMonthState}
           marketLoading={market.loading}
           onRetryMarket={() => void market.refresh()}

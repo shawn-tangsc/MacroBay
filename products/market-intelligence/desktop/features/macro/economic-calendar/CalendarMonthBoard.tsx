@@ -29,7 +29,7 @@ const economicCalendarEmptyStateActionPolicy = { emptyEventCount: 0 } as const
  * state: every value arrives as a prop, so the grid can be reasoned about — and tested — without the
  * page's effects.
  */
-export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable, officialFeeds, onRetryMonth, marketMonthRead, marketLoading, onRetryMarket }: {
+export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable, officialFeeds, onRetryMonth, onOpenSettings, marketMonthRead, marketLoading, onRetryMarket }: {
   statusNow: string
   today: string
   asOf: string
@@ -49,6 +49,8 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
   /** 重读这个月：`unavailable` 那句旁边的「重试」按它，重试是再读一次，不是再跑一次采集。 */
   onRetryMonth?: () => void
+  /** 「去启用」的去处：与页头那颗设置同一个目的地（宿主接的配置抽屉）。 */
+  onOpenSettings?: () => void
   /** 市场侧**命名月自己**的读取结论（按月；相邻月失败不进来）。 */
   marketMonthRead?: MarketCalendarMonthRead
   /** 窗口级 loading：命名月还没轮到读时，这里不许下任何结论。 */
@@ -68,7 +70,7 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   })
   const monthFailure = state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
   const marketFailure = marketMonthRead?.status === 'failed' ? marketMonthFailureSentence(marketMonthRead.reason, text) : undefined
-  if (surface === 'disabled') return <CalendarNoSourceEnabledState text={text} />
+  if (surface === 'disabled') return <CalendarNoSourceEnabledState text={text} {...(onOpenSettings === undefined ? {} : { onOpenSettings })} />
   if (surface === 'loading') return <CalendarState month={month} text={text.status.loading} loading />
   if (surface === 'official-unavailable') return <CalendarState month={month} text={officialUnavailable!} loading={false} unavailable />
   // 「读不到」：错误态 + 原因 + 重试。原因取这一侧真正失败的那一句；两侧都失败时官方那句在前。

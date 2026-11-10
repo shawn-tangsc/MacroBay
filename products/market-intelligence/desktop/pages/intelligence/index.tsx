@@ -173,7 +173,7 @@ function IntelligencePageBody(): React.ReactElement {
           onBack={() => setActiveView('dashboard')}
           openTarget={calendarTarget}
           text={text.calendar}
-          onOpenSettings={() => openConfigDrawer('sources', 'calendar')}
+          onOpenSettings={() => openConfigDrawer('sourcesData', 'calendar')}
         />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
