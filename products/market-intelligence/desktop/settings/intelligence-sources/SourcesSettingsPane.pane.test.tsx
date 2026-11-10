@@ -24,16 +24,26 @@ afterEach(async () => {
 const view = {
   groups: [{
     category: 'macro',
-    providers: [{
-      providerId: 'p1', displayName: 'RealMarketAPI', category: 'macro', credential: 'none', healthMarker: 'none',
-      sources: [{
-        sourceId: 'realmarketapi-market', providerId: 'p1', displayName: 'RealMarketAPI', agents: [], panels: ['dashboard'],
-        visibility: 'visible', collection: 'adapter', kind: 'feed', capabilities: {}, readiness: 'live',
-        enabled: true, healthState: 'healthy', healthMarker: 'none'
-      }]
-    }]
+    providers: [
+      {
+        providerId: 'p1', displayName: 'RealMarketAPI', category: 'macro', credential: 'none', healthMarker: 'none',
+        sources: [{
+          sourceId: 'realmarketapi-market', providerId: 'p1', displayName: 'RealMarketAPI', agents: [], panels: ['dashboard'],
+          visibility: 'visible', collection: 'adapter', kind: 'feed', capabilities: {}, readiness: 'live',
+          enabled: true, healthState: 'healthy', healthMarker: 'none'
+        }]
+      },
+      {
+        providerId: 'p2', displayName: 'Ethereum Foundation', category: 'macro', credential: 'none', healthMarker: 'none',
+        sources: [{
+          sourceId: 'ethereum-foundation-blog', providerId: 'p2', displayName: 'Ethereum Foundation', agents: [], panels: [],
+          visibility: 'visible', collection: 'adapter', kind: 'feed', capabilities: {}, readiness: 'live',
+          enabled: true, healthState: 'healthy', healthMarker: 'none'
+        }]
+      }
+    ]
   }],
-  counts: { total: 1, enabled: 1, pending: 0, failed: 0 }
+  counts: { total: 2, enabled: 2, pending: 0, failed: 0 }
 } as never
 
 async function render(pane?: 'sources' | 'business'): Promise<HTMLElement> {

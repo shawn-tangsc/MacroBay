@@ -125,7 +125,9 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           sourceNames={sourceNames} />
         : <SettingsSourceTree
           bare
-          filter={props.filter}
+          /* 「数据源」这屏**平铺不分组**、列全部可见源（灰的也在）；模块分组只留给「采集与数据」的卡片。 */
+          flat={props.pane === 'sources'}
+          filter={props.pane === 'sources' ? 'all' : props.filter}
           labels={props.treeLabels}
           onFilterChange={props.onFilterChange}
           onSelectProvider={props.onSelectProvider}

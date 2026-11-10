@@ -101,9 +101,14 @@ function isOfficialCalendarSource(sourceId: string): boolean {
 }
 
 /** One flat row per provider; capabilities live in the detail pane. */
-export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
+export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
   /** 只交**列表本体**（不画外层栏与页签）：页签条由 `SourcesSettingsPane` 统一画，切 tab 才不重挂载。 */
   bare?: boolean
+  /**
+   * 平铺、**不分组**：`数据源` 那一屏就是一条列表（用户 2026-11-11「都没有分组了」）。
+   * 全部可见源都在，按 绿 → 红 → 灰 排序，同级保持原顺序。
+   */
+  flat?: boolean
   filter: SourceFilter
   /** 这一面显示哪几块筛选：设置页默认六项；抽屉只传四块（日历 / 看板 / 舆情 / 待接入）。 */
   filters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>

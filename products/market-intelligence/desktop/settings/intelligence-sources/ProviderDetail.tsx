@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
+import { StateView } from '@platform/ui/components/state'
 import { IconButton } from '@platform/ui/components/icon-button'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
@@ -460,6 +461,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     </header>
     {/* 卡二 = 源项列表卡：所有能力行装进**一张卡**，行间只用细分隔线（外层已经有卡了，双层框会显脏）。 */}
     <div className="source-provider-detail__list source-provider-detail__card">
+      {/* 空列表：卡二给平台的空态，不留一张空壳卡（用户 2026-11-11）。 */}
+      {sources.length === 0
+        ? <StateView reasonCode="not-yet" size="md" state="empty" />
+        : null}
       {sources.map((source) => {
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0
