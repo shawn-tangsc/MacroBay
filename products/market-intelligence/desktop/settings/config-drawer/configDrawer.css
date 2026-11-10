@@ -301,12 +301,24 @@
 
 .config-drawer__source-item:disabled:hover { background: none; }
 
-/* 来源与采集：两栏（列表 196 + 详情），间距 12。 */
+/* 来源与采集：两栏（来源树 + 详情），间距 12。
+   用户 2026-11-10：抽屉加宽是为了让**来源树这一栏**更宽——196 会把长名字截成「美国商品期货交易委…」。
+   所以这一栏给到 300–400，其余宽度全给详情；**只改抽屉这条**，设置页那套（`.intelligence-overview-grid`
+   的 260–340）是另一个面，不动。 */
 .config-drawer__split {
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+}
+
+/* 抽屉吃的是 `min(1040px, 92vw)`：窄屏时若还占 400，右详情里那张两列网格
+   （`minmax(112px,180px) + minmax(360px,520px)`）会被压到 360 以下，出现横向挤压。
+   这时把来源树收回 340 上限，先保证详情那一列有位置。 */
+@media (max-width: 1180px) {
+  .config-drawer__split {
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  }
 }
 
 .config-drawer__detail {

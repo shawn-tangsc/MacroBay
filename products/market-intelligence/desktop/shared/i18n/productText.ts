@@ -346,7 +346,7 @@ mi: miText['zh-CN'],
               openModelService: '去模型服务',
               menus: {
                 sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
-                briefing: '日报', notifications: '通知', runLog: '运行日志', platform: '平台与模型'
+                briefing: '日报', notifications: '通知', runLog: '运行日志'
               },
               groups: {
                 thisSource: '这一条源',
@@ -1833,7 +1833,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               openModelService: 'Open model service',
               menus: {
                 sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',
-                briefing: 'Daily briefing', notifications: 'Notifications', runLog: 'Run log', platform: 'Platform and models'
+                briefing: 'Daily briefing', notifications: 'Notifications', runLog: 'Run log'
               },
               groups: {
                 thisSource: 'This source',

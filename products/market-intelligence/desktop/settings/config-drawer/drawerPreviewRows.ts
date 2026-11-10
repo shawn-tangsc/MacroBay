@@ -42,7 +42,7 @@ export type PreviewScreen = {
 }
 
 /** 六个菜单（顺序即左栏顺序）。 */
-export const DRAWER_MENUS = ['sources', 'processing', 'analysis', 'briefing', 'notifications', 'runLog', 'platform'] as const
+export const DRAWER_MENUS = ['sources', 'processing', 'analysis', 'briefing', 'notifications', 'runLog'] as const
 export type ConfigDrawerMenu = (typeof DRAWER_MENUS)[number]
 
 /** 已经确认存在的文案键（写在这里 = 我核过它今天就在文案表里）。 */
@@ -147,21 +147,7 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
       }
     ]
   },
-  {
-    menu: 'platform',
-    groups: [
-      {
-        rows: [
-          { key: 'timeZone', labelKey: 'configDrawer.rows.timeZone', control: 'readonly', info: true },
-          { key: 'language', labelKey: 'configDrawer.rows.language', control: 'readonly' },
-          { key: 'theme', labelKey: 'configDrawer.rows.theme', control: 'readonly' },
-          { key: 'proxy', labelKey: 'configDrawer.rows.proxy', control: 'readonly' },
-          { key: 'notificationJump', labelKey: 'configDrawer.rows.notificationJump', control: 'info' },
-          { key: 'modelServiceJump', labelKey: 'configDrawer.rows.modelServiceJump', control: 'info' }
-        ]
-      }
-    ]
-  }
+
 ]
 
 /** 还是**静态占位**的屏各自的·行数（日报已接真数据，不在表里）。 */
@@ -171,6 +157,5 @@ export const DRAWER_PREVIEW_ROW_COUNTS: Readonly<Partial<Record<ConfigDrawerMenu
   analysis: 2,
   briefing: 7,
   notifications: 10,
-  runLog: 0,
-  platform: 6
+  runLog: 0
 }

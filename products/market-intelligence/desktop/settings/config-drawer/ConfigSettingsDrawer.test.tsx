@@ -36,32 +36,6 @@ function mount(menu: (typeof DRAWER_MENUS)[number]): HTMLElement {
 }
 
 
-/** 平台屏的挂载助手：这两条用例只差「传了哪些值」。 */
-function openPlatform(
-  values: Record<string, string>,
-  onOpen: (target: string) => void = () => undefined,
-  onRetry?: () => void
-): HTMLElement {
-  document.body.replaceChildren()
-  root?.unmount()
-  root = undefined
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  act(() => root?.render(
-    <ConfigSettingsDrawer
-      initialMenu="platform"
-      onClose={() => undefined}
-      onOpenPlatformSettings={onOpen as never}
-      {...(onRetry === undefined ? {} : { onRetryPlatformValues: onRetry })}
-      open
-      platformValues={values}
-      resolveText={(key) => key} />
-  ))
-  return document.body
-}
-
-
 /** 来源屏的挂载助手：这一屏现在只放宿主渲染好的那一块（旧的扁平源行已退役）。 */
 function openSourcesPanel(panel: React.ReactNode): HTMLElement {
   document.body.replaceChildren()
@@ -98,11 +72,11 @@ function openRows(rows: ReadonlyArray<{ key: string; value?: string; emptyLabel?
 
 describe('config settings drawer (static layout)', () => {
   it('shows every registered menu, with the current one marked once', () => {
-    // 七屏：来源 / 内容处理 / AI 分析 / 日报 / 通知 / 运行日志 / 平台与模型。
+    // 六屏：来源 / 内容处理 / AI 分析 / 日报 / 通知 / 运行日志。
     const body = mount('sources')
     const items = [...body.querySelectorAll<HTMLElement>('.settings-nav-item')]
     expect(items).toHaveLength(DRAWER_MENUS.length)
-    expect(items).toHaveLength(7)
+    expect(items).toHaveLength(6)
     // 选中态是 `aria-current="page"`（设置页那套导航），编号格已经不在了。
     expect(items.filter((item) => item.getAttribute('aria-current') === 'page')).toHaveLength(1)
     expect(items.filter((item) => item.classList.contains('active'))).toHaveLength(1)
@@ -196,92 +170,6 @@ describe('config settings drawer (static layout)', () => {
     expect(rows[0]?.className).not.toContain('is-disabled')
     act(() => { rows[1]?.querySelector<HTMLElement>('.config-drawer__row-action')?.click() })
     expect(onSelect).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows the values the host passed, in four sections', () => {
-    // 只证明「传了值就显示值」；缺值怎么画由下一条管。
-    const container = openPlatform({
-      timeZone: 'Asia/Shanghai',
-      language: '中文',
-      theme: '深色',
-      proxy: '系统代理',
-      modelService: '已配置'
-    })
-    const rows = [...container.querySelectorAll<HTMLElement>('[data-drawer-row]')]
-    expect(rows.map((row) => row.querySelector('.config-drawer__value')?.textContent))
-      .toEqual(['中文', 'Asia/Shanghai', '深色', '系统代理', '已配置'])
-    expect(container.querySelectorAll('[data-platform-section]')).toHaveLength(4)
-    expect(container.textContent).not.toContain('configDrawer.unreadable')
-  })
-
-  it('has exactly one "去平台设置" per section, and zero actions inside row bodies', () => {
-    // 本轮规格：全屏最多四颗；行体内不许再出现跳转——button / a[href] / [role=link] 一起算。
-    const container = openPlatform({ timeZone: 'Asia/Shanghai' })
-    const sections = [...container.querySelectorAll<HTMLElement>('[data-platform-section]')]
-    expect(sections).toHaveLength(4)
-
-    for (const section of sections) {
-      expect(section.querySelectorAll('[data-platform-section-action]')).toHaveLength(1)
-      const rowBodies = [...section.querySelectorAll<HTMLElement>('[data-drawer-row]')]
-      expect(rowBodies.length).toBeGreaterThan(0)
-      for (const row of rowBodies) {
-        // 行体内的「跳转/动作」必须为 0；唯一允许的按钮是原因 ⓘ（信息触发，不是动作）。
-        const actions = [...row.querySelectorAll<HTMLElement>('button, a[href], [role="link"]')]
-          .filter((element) => element.closest('[data-drawer-info]') === null)
-        expect(actions).toHaveLength(0)
-      }
-    }
-    expect(container.querySelectorAll('[data-platform-section-action]')).toHaveLength(4)
-  })
-
-  it('shows "could not read" for a missing platform value, with the reason behind an ⓘ', () => {
-    // 这一屏最容易把「没读到」画成「没设置」：缺键必须显示状态词 + ⓘ，且不是空串。
-    const container = openPlatform({ timeZone: 'Asia/Shanghai' })
-    const rows = [...container.querySelectorAll<HTMLElement>('[data-drawer-row]')]
-    expect(rows).toHaveLength(5)
-
-    const missing = rows.filter((row) => row.getAttribute('data-drawer-row') !== 'timeZone')
-    for (const row of missing) {
-      const value = row.querySelector('.config-drawer__value')
-      expect(value?.textContent).toContain('读不到')
-      expect(value?.textContent).not.toContain('configDrawer.')
-      // 原因只进 ⓘ：值位里必须有一颗可点的信息按钮。
-      expect(value?.querySelector('button')).not.toBeNull()
-    }
-    // 有值的那一行照旧显示值，不套状态词。
-    const present = rows.find((row) => row.getAttribute('data-drawer-row') === 'timeZone')
-    expect(present?.querySelector('.config-drawer__value')?.textContent).toBe('Asia/Shanghai')
-  })
-
-  it('sends each section action to the host with its own navigation target', () => {
-    const onOpen = vi.fn()
-    const container = openPlatform({ timeZone: 'Asia/Shanghai' }, onOpen)
-
-    const languageTime = container.querySelector<HTMLElement>('[data-platform-section="languageTime"] [data-platform-section-action]')
-    act(() => { languageTime?.click() })
-    expect(onOpen).toHaveBeenLastCalledWith('preferences')
-
-    const models = container.querySelector<HTMLElement>('[data-platform-section="modelService"] [data-platform-section-action]')
-    act(() => { models?.click() })
-    expect(onOpen).toHaveBeenLastCalledWith('models')
-    expect(onOpen).toHaveBeenCalledTimes(2)
-  })
-
-  it('offers a whole-screen re-read: inline when one row is missing, error state when all are', () => {
-    // 重试是**读**不是保存：局部缺值一行状态词 + 一次重新读取；整屏都读不到才用错误态。
-    const partialRetry = vi.fn()
-    const partial = openPlatform({ timeZone: 'Asia/Shanghai' }, undefined, partialRetry)
-    expect(partial.querySelector('[data-drawer-screen="error"]')).toBeNull()
-    const retry = partial.querySelector<HTMLElement>('[data-platform-retry]')
-    expect(retry).not.toBeNull()
-    act(() => { retry?.click() })
-    expect(partialRetry).toHaveBeenCalledTimes(1)
-
-    const allRetry = vi.fn()
-    const all = openPlatform({}, undefined, allRetry)
-    expect(all.querySelector('[data-drawer-screen="error"]')).not.toBeNull()
-    act(() => { all.querySelector<HTMLElement>('.state-view__action')?.click() })
-    expect(allRetry).toHaveBeenCalledTimes(1)
   })
 
   it('renders the host-provided sources panel inside the two-column split', () => {

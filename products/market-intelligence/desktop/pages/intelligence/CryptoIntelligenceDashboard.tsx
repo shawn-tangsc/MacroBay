@@ -12,7 +12,6 @@ import { AnalysisSettingsPanel } from './AnalysisSettingsPanel'
 import { DailyBriefingSettingsPanel, type BriefingScreenState } from './DailyBriefingSettingsPanel'
 import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
 import { RunLogDrawerPanel } from './RunLogDrawerPanel'
-import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
@@ -144,7 +143,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     lastOpenRequest.current = openSettingsRequest
     setSettingsDrawerOpen(true)
   }, [openSettingsRequest])
-  const platformDrawerValues = usePlatformDrawerValues()
   // 「AI 分析」那一屏：屏自己读、自己存，把「有没有改动 / 保存中 / 失败句 / 保存动作」报上来；
   // 底部那条保存栏由抽屉壳给（壳只认这四样，不读数据）。
   // 有底部保存栏的屏都按同一份契约上报（脏 / 保存中 / 失败句 / 保存动作）。同一时刻只有一屏挂载，
@@ -261,7 +259,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
             else openPreferencesSettings()
           }}
           open={settingsDrawerOpen}
-          platformValues={platformDrawerValues}
           analysisPanel={<AnalysisSettingsPanel onState={setDrawerScreen} />}
           screenDirty={drawerScreen.dirty}
           onScreenSave={drawerScreen.save}

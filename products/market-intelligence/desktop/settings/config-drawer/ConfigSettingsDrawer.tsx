@@ -13,7 +13,6 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
-import { PlatformScreen } from './PlatformScreen'
 import { SourcesStaticScreen } from './SourcesStaticScreen'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
 import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView } from './drawerScreenView'
@@ -124,7 +123,7 @@ const EMPTY_VALUE = '—'
 const DRAWER_NAV_GROUPS: ReadonlyArray<{ id: string; menus: readonly ConfigDrawerMenu[] }> = [
   { id: 'collect', menus: ['sources', 'processing'] },
   { id: 'output', menus: ['analysis', 'briefing', 'notifications'] },
-  { id: 'record', menus: ['runLog', 'platform'] }
+  { id: 'record', menus: ['runLog'] }
 ]
 
 /** 六屏各一颗图标（不再用 1–6 编号）。 */
@@ -134,8 +133,7 @@ const DRAWER_MENU_ICONS: Readonly<Record<ConfigDrawerMenu, typeof Info>> = {
   analysis: Sparkles,
   briefing: Newspaper,
   notifications: Bell,
-  runLog: ScrollText,
-  platform: MonitorCog
+  runLog: ScrollText
 }
 
 export function ConfigSettingsDrawer({
@@ -325,14 +323,7 @@ export function ConfigSettingsDrawer({
         {menu === 'notifications' && notificationsPanel === undefined && notificationsView !== undefined
           ? (<NotificationsScreen resolveText={resolveText} view={notificationsView} />)
           : null}
-        {menu === 'platform' && platformValues !== undefined
-          ? (<PlatformScreen
-            onOpen={onOpenPlatformSettings}
-            onRetry={onRetryPlatformValues}
-            resolveText={resolveText}
-            values={platformValues} />)
-          : null}
-        {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisPanel !== undefined) || (menu === 'runLog' && runLogPanel !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
+                {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisPanel !== undefined) || (menu === 'runLog' && runLogPanel !== undefined) || menu === 'sources'
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{groupLabel(group.titleKey)}</div>}
