@@ -350,6 +350,10 @@ mi: miText['zh-CN'],
                 theme: '显示风格',
                 proxy: '代理模式',
                 modelService: '模型服务'
+              },
+              /** 行尾那颗「去设置改」：值只读的屏用它指向宿主给的设置入口。 */
+              actions: {
+                changeInSettings: '去设置改'
               }
             },
             /** One sentence per failure code, shared by every card that reads module signals. */
@@ -1777,6 +1781,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 theme: 'Display style',
                 proxy: 'Proxy mode',
                 modelService: 'Model service'
+              },
+              actions: {
+                changeInSettings: 'Change in settings'
               }
             },
             signalRead: {
