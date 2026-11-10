@@ -16,6 +16,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { SourcesStaticScreen } from './SourcesStaticScreen'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
 import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
+import { ConfigDrawerContentCard } from './ConfigDrawerContentCard'
 import './configDrawer.css'
 
 /**
@@ -304,6 +305,7 @@ export function ConfigSettingsDrawer({
         /* 有「左树 + 右详情」这一屏时，滚动交给两栏各自（菜单那一栏也自己滚），整块不滚。 */
         /* 只有真正的分栏屏（来源：左树 + 右详情）才吃两栏；通知屏是单列，套 split 会让卡片按内容宽度塌缩。 */
         className={`config-drawer__pane${splitPane && ' config-drawer__pane--split'}`}>
+        <ConfigDrawerContentCard split={splitPane} title={menuLabel(menu)}>
         {menu === 'sourcesData' && sourcesDataPanel !== undefined
           ? <div className="config-drawer__split">{sourcesDataPanel}</div>
           : null}
@@ -343,6 +345,7 @@ export function ConfigSettingsDrawer({
             <PreviewControlView control={row.control} info={row.info === true} />
           </div>)}
         </div>)}
+        </ConfigDrawerContentCard>
       </section>
     </div>
   </Drawer>

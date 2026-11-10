@@ -432,3 +432,76 @@
 
 .config-drawer__save:disabled { opacity: 0.6; cursor: default; }
 
+
+/*
+ * 内容卡（骨架一处）：右侧正文整块是一张卡，七个屏都渲染在它里面。
+ * 数值照界面设计 `2026-11-11-settings-drawer-skeleton-numbers.md`：圆角 8、1px `--border`、
+ * `--surface` 底、高 100%、内距 16（窄屏 12）；卡头 `16 16 12` + 页名 16/1.35/650。
+ * **卡头不滚，卡体是唯一滚动容器**；短内容屏也撑满 100%、内容顶对齐，所以切菜单时卡框不动。
+ */
+.config-drawer__card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.config-drawer__card-head { padding: 16px 16px 12px; }
+
+.config-drawer__card-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 650;
+}
+
+.config-drawer__card-body {
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.config-drawer__card-body--split { display: grid; grid-template-columns: 1fr; }
+
+@media (max-width: 560px) {
+  .config-drawer__card-body { padding: 12px; }
+}
+
+/*
+ * 临时覆盖：`SettingsSection` 现在自带卡样式（1px 边 + 圆角 + surface 底），卡里再套就是双框 + 双内距。
+ * 界面设计的裁定是「卡内区块去边框/圆角/底色，只留标题 + 行 + 分隔线」。
+ * **只写 border、不写 border-radius**（`sectionContainerGuard` 判「同一规则同时出现两者」）。
+ * 等 `SettingsSection` 出 flat 变体后删掉这条，改成传 variant。
+ */
+/* 删本条的条件：`SettingsSection` 的 `variant="flat"` 落地即删，改成传 variant。 */
+.config-drawer__card .settings-section {
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+/* flat 第二半：区块头本来有 `padding: 10px 14px` + `border-bottom`，与卡体 16 叠成 30 左缩进，
+   标题下还多一条线。flat 下头部只留「上 0、下 8」且无底线。 */
+.config-drawer__card .settings-section > .settings-section__header {
+  padding: 0 0 8px;
+  border-bottom: 0;
+}
+
+/* flat 第三半：区块之间的分隔线归卡体画（1px 通到卡边、间距 16），因为区块自画会被 16 内距截住。 */
+.config-drawer__card .settings-section + .settings-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  /* 通到卡边：抵消卡体的左右内距，让线贴到卡片两侧。 */
+  margin-inline: -16px;
+  padding-inline: 16px;
+}
+
+@media (max-width: 560px) {
+  .config-drawer__card .settings-section + .settings-section { margin-inline: -12px; padding-inline: 12px; }
+}

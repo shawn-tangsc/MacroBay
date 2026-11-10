@@ -475,6 +475,35 @@ describe('config settings drawer (static layout)', () => {
     expect(document.documentElement.getAttribute('data-settings-drawer')).toBeNull()
   })
 
+  it('puts every screen inside the one content card, never outside it', () => {
+    // 骨架一处：七个屏都渲染在 `.config-drawer__card` 里；把 children 挂到 section 直下（卡外）必须红。
+    const panelProp: Record<string, string> = {
+      processing: 'processingPanel', analysis: 'analysisPanel',
+      briefing: 'briefingPanel', notifications: 'notificationsPanel', runLog: 'runLogPanel'
+    }
+    for (const menu of DRAWER_MENUS) {
+      document.body.replaceChildren()
+      root?.unmount()
+      root = undefined
+      host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      const prop = panelProp[menu]
+      act(() => root?.render(
+        <ConfigSettingsDrawer
+          {...{ initialMenu: menu, onClose: () => undefined, open: true, ...(prop === undefined ? {} : { [prop]: <div data-fake-screen="true" /> }) }} />
+      ))
+      const card = document.body.querySelector('[data-drawer-card="true"]')
+      expect(card, `${menu} 屏必须有内容卡`).not.toBeNull()
+      // 卡体是唯一滚动容器：卡本身不加滚动，滚动落在卡体上。
+      expect(card!.className).toContain('config-drawer__card')
+      expect(document.body.querySelector('.config-drawer__card-body')).not.toBeNull()
+      // 屏内容不在 section 直下（否则就是「卡外」）。
+      const screen = document.body.querySelector('[data-fake-screen="true"]')
+      if (screen !== null) expect(card!.contains(screen)).toBe(true)
+    }
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {
