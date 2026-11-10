@@ -162,7 +162,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
   }
 }
 
-type ResolvedOption = Readonly<{ value: string | number; locked?: boolean; label: string }>
+type ResolvedOption = Readonly<{ value: string | number; label: string }>
 
 /**
  * 解析一行选项：静态集合（真闭集）或视图来源（`{ kind: 'view', field }`）。
@@ -181,7 +181,7 @@ function optionsOf(
     return values.map((value) => ({ value, label: resolveOptionLabel(value) }))
   }
   return SETTING_OPTION_SETS[from].map((option) => ({
-    ...option,
+    value: option.value,
     label: resolveOptionLabel(option.value, from)
   }))
 }
@@ -194,21 +194,19 @@ function MultiSelect(props: Readonly<{
   value: unknown
 }>): ReactElement {
   const selected = Array.isArray(props.value) ? props.value.map(String) : []
-  // 固定项（如通知中心）永远在值里：关掉它不是一个可选操作，值里也绝不能少。
-  const locked = props.options.filter((option) => option.locked === true).map((option) => String(option.value))
   const toggle = (option: string, checked: boolean): void => {
-    const next = checked
-      ? [...selected.filter((value) => value !== option), option]
-      : selected.filter((value) => value !== option)
-    props.onChange?.([...locked, ...next.filter((value) => !locked.includes(value))])
+    props.onChange?.(
+      checked
+        ? [...selected.filter((value) => value !== option), option]
+        : selected.filter((value) => value !== option)
+    )
   }
   return <div aria-label={props.ariaLabel} className="intelligence-notification-form-checks" role="group">
     {props.options.map((option) => {
       const key = String(option.value)
-      const checked = option.locked === true || selected.includes(key)
       return <Checkbox
-        checked={checked}
-        disabled={props.disabled || option.locked === true}
+        checked={selected.includes(key)}
+        disabled={props.disabled}
         key={key}
         onChange={(event) => toggle(key, event.target.checked)}
       >

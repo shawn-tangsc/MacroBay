@@ -167,24 +167,6 @@ describe('SettingField', () => {
     expect(control?.textContent).toContain('calendar-landed-scopes:us')
   })
 
-  it('multiSelect keeps a locked option checked, disabled and present in the emitted value', async () => {
-    const onChange = vi.fn()
-    const container = await mount(renderField(SURFACES_ROW, {
-      value: ['center', 'channel'],
-      onChange,
-      view: { selection: { center: true, channel: true, toast: false } }
-    }))
-    const boxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    expect(boxes).toHaveLength(4)
-    const center = boxes.find((box) => box.closest('label')?.textContent?.includes('notification-surfaces:center'))
-    expect(center?.checked).toBe(true)
-    expect(center?.disabled).toBe(true)
-
-    const toast = boxes.find((box) => box.closest('label')?.textContent?.includes('notification-surfaces:toast'))
-    await act(async () => { toast?.click() })
-    // 中心恒收：勾一个别的面时，值里仍然带着它。
-    expect(onChange).toHaveBeenCalledWith(['center', 'channel', 'toast'])
-  })
 
   it('multiSelect toggles a plain option off and on', async () => {
     const onChange = vi.fn()
