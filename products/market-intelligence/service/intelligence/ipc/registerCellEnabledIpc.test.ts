@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -87,5 +88,17 @@ describe('the cell-enabled IPC bridge', () => {
       .rejects.toThrow('cellId must be a non-empty string')
     await expect(Promise.resolve(handlers.get(INTELLIGENCE_IPC_METHODS.setCellEnabled)!({ cellId: 'a' })))
       .rejects.toThrow('enabled must be a boolean')
+  })
+})
+
+/**
+ * 真机上出过一次：`registerIntelligenceIpc.ts` 只 import 了这个注册器却**没有调用它**，
+ * 渲染层拿到的是 `Unknown product IPC method "…readCellEnabled"`——桥的两端都对、装配处漏了一行。
+ * 这条钉的就是「导入 ≠ 注册」。
+ */
+describe('the aggregated registrar actually registers the cell-enabled methods', () => {
+  it('calls registerCellEnabledIpc from registerIntelligenceIpc', () => {
+    const source = readFileSync(new URL('./registerIntelligenceIpc.ts', import.meta.url), 'utf8')
+    expect(source).toContain('registerCellEnabledIpc(register, getCellEnabledStore())')
   })
 })
