@@ -419,6 +419,7 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
     ...(typeof value.windowHours === 'number' && Number.isSafeInteger(value.windowHours) ? { windowHours: value.windowHours } : {}),
     ...(languages ? { languages } : {}),
     ...(value.periodDeleted === true ? { periodDeleted: true } : {}),
+    ...(isText(value.sessionId) ? { sessionId: value.sessionId } : {}),
     ...(value.isCurrent === true ? { isCurrent: true } : {})
   })
 }

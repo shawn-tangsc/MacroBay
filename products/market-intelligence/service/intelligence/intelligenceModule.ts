@@ -79,7 +79,7 @@ import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import type { BriefingPeriodsEditor } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
-import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
+import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort, findLatestBriefingSessionId } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
 import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
@@ -944,6 +944,11 @@ export function getIntelligenceModule(
         getView: () => dailyBriefingAiSettings.getView(),
         ...(hooks?.isWebSearchProviderReady ? { isWebSearchProviderReady: hooks.isWebSearchProviderReady } : {})
       }),
+      // E9「打开会话」：会话 id 只走这一条查找（身份是期 × 语言），列表只消费它的返回值。
+      sessionIdOf: (input) => findLatestBriefingSessionId({
+        ...(hooks?.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
+        ...(hooks?.log ? { log: hooks.log } : {})
+      }, { agentId: 'daily-brief-editor', editionDate: input.date, periodId: input.periodId, locale: input.locale })
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched
