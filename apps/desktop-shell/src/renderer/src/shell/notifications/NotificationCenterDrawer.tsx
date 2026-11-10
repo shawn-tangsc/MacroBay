@@ -12,6 +12,7 @@ import type {
 import type { PlatformText } from '../../i18n/platformText'
 
 import { createNotificationCenterSource, type NotificationCenterSource } from './notificationCenterSource'
+import type { NotificationCenterSettingsEntry } from './notificationCenterSettingsEntry'
 
 import './notificationCenter.css'
 
@@ -32,6 +33,12 @@ type NotificationCenterDrawerProps = {
   /** 通知自带的动作要真的做那件事：把 deeplink 交给外壳打开，而不是再标一次已读。 */
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   source?: NotificationCenterSource
+  /**
+   * 产品注册的设置抽屉（`productSettingsDrawers` 里声明了 `notifications` 那一屏）。
+   * **没有就是 null**：不渲染按钮——不要为了「完整」摆一个点了没反应的入口。
+   */
+  settingsEntry?: NotificationCenterSettingsEntry | null
+  onOpenSettings?: (entry: NotificationCenterSettingsEntry) => void
 }
 
 /**
@@ -55,7 +62,9 @@ export function NotificationCenterDrawer({
   onClose,
   labels,
   onOpenDeeplink,
-  source
+  source,
+  settingsEntry,
+  onOpenSettings
 }: NotificationCenterDrawerProps): React.ReactElement {
   const [state, setState] = useState<LoadState>('loading')
   const [items, setItems] = useState<readonly NotificationCenterItem[]>([])
@@ -148,6 +157,14 @@ export function NotificationCenterDrawer({
                 onClick={() => setConfirmDelete(true)}>
                 {labels.centerDeleteRead}
               </Button>
+              {settingsEntry !== undefined && settingsEntry !== null && onOpenSettings !== undefined ? (
+                <Button
+                  size="small"
+                  data-notification-open-settings
+                  onClick={() => onOpenSettings(settingsEntry)}>
+                  {labels.centerOpenSettings}
+                </Button>
+              ) : null}
             </>
           )}
         </div>

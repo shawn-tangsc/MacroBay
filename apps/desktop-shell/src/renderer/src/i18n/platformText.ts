@@ -1271,6 +1271,8 @@ export type PlatformText = {
     centerUnreadGroup: string
     centerEarlierGroup: string
     centerMarkAllRead: string
+    /** 通知中心底部「去设置」：只在产品声明了设置抽屉时渲染。 */
+    centerOpenSettings: string
     centerMarkRead: string
     centerReadDone: string
     centerDeleteRead: string
@@ -2660,6 +2662,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerUnreadGroup: '未读',
       centerEarlierGroup: '已读',
       centerMarkAllRead: '全部标为已读',
+      centerOpenSettings: '去设置',
       centerMarkRead: '标为已读',
       centerReadDone: '已全部标为已读',
       centerDeleteRead: '删除已读',
@@ -4040,6 +4043,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerUnreadGroup: 'Unread',
       centerEarlierGroup: 'Earlier',
       centerMarkAllRead: 'Mark all as read',
+      centerOpenSettings: 'Open settings',
       centerMarkRead: 'Mark as read',
       centerReadDone: 'All marked as read',
       centerDeleteRead: 'Delete read',

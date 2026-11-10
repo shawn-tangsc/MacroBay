@@ -28,6 +28,7 @@ import { WindowControls } from './window/WindowControls'
 import { NotificationBell } from './notifications/NotificationBell'
 import { NotificationBanner } from './notifications/NotificationBanner'
 import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
+import { openNotificationCenterSettings, resolveNotificationCenterSettingsEntry } from './notifications/notificationCenterSettingsEntry'
 import { InUseModelRetiredBanner } from './model-service/InUseModelRetiredBanner'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
 import { WorkspaceTabStrip, type WorkspaceTabDraftGuard } from './workspace/WorkspaceTabStrip'
@@ -120,6 +121,8 @@ export function AppShellView(props: AppShellViewProps): React.ReactElement {
   } = props
   const activateNavKey = onActivateNavKey
   const setActiveNavKey = onActivateNavKey
+  // 通知中心那颗「去设置」：只有产品声明了抽屉、且有唯一产品页可落时才存在；否则 null（不渲染）。
+  const notificationSettingsEntry = resolveNotificationCenterSettingsEntry(undefined, productMenuEntries)
 
   function renderWorkspace(): React.ReactElement {
     return (
@@ -392,6 +395,8 @@ export function AppShellView(props: AppShellViewProps): React.ReactElement {
       <NotificationCenterDrawer
         open={notificationCenterOpen}
         onOpenDeeplink={openNotificationTarget}
+        settingsEntry={notificationSettingsEntry}
+        {...(notificationSettingsEntry === null ? {} : { onOpenSettings: openNotificationCenterSettings })}
         onClose={() => {
           setNotificationCenterOpen(false)
           // 关闭后焦点回铃铛：键盘用户不该被扔回文档开头。
