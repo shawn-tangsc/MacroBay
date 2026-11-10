@@ -11,7 +11,7 @@ import { productText } from '../../shared/i18n/productText'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
-import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView } from './drawerScreenView'
+import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView, DrawerSourceRow, DrawerSourcesView } from './drawerScreenView'
 import './configDrawer.css'
 
 /**
@@ -34,6 +34,10 @@ export type ConfigSettingsDrawerProps = {
   initialMenu?: ConfigDrawerMenu
   /** 通知屏视图：**宿主读好再传**，抽屉不自己取数；不传则保留静态版式。 */
   notificationsView?: DrawerScreenView<DrawerRowView>
+  /** 来源与采集：源列表由宿主读好（现成 `getPanelView`），抽屉只渲染。 */
+  sourcesView?: DrawerSourcesView
+  /** 选中一条源（右侧详情区等 S1 落地再接）。 */
+  onSelectSource?: (sourceId: string) => void
   /** 平台与模型那一屏的当前值：**宿主读好再传**，缺键就是「读不到」。 */
   platformValues?: DrawerPlatformValues
   /** 行尾「去平台设置」跳转：走宿主给的导航入口，抽屉不拼路由。 */
@@ -50,6 +54,8 @@ export function ConfigSettingsDrawer({
   onClose,
   initialMenu = 'sources',
   notificationsView,
+  sourcesView,
+  onSelectSource,
   platformValues,
   onOpenPlatformSettings,
   resolveText: resolveTextProp
@@ -102,6 +108,9 @@ export function ConfigSettingsDrawer({
       </nav>
       <section aria-label={menuLabel(menu)} className="config-drawer__pane">
         <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
+        {menu === 'sources' && sourcesView !== undefined
+          ? (<SourcesScreen onSelect={onSelectSource} resolveText={resolveTextProp ?? ((key: string) => key)} view={sourcesView} />)
+          : null}
         {menu === 'notifications' && notificationsView !== undefined
           ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={notificationsView} />)
           : null}
@@ -111,7 +120,7 @@ export function ConfigSettingsDrawer({
             resolveText={resolveTextProp ?? ((key: string) => key)}
             values={platformValues} />)
           : null}
-        {(menu === 'notifications' && notificationsView !== undefined) || (menu === 'platform' && platformValues !== undefined)
+        {(menu === 'notifications' && notificationsView !== undefined) || (menu === 'platform' && platformValues !== undefined) || (menu === 'sources' && sourcesView !== undefined)
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{group.titleKey}</div>}
@@ -165,6 +174,57 @@ function NotificationsScreen({ view, resolveText }: {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * 来源与采集：**只渲染宿主读来的源列表**（宿主用现成 `getPanelView`）。
+ *
+ * 四态与通知屏同一套：「读不到」是错误态 + 重试，「确实没有源」是空态——两者必须能分开断言。
+ * 右侧详情区这一版只留占位：真实字段等 S1 落地再接，先不编。
+ */
+function SourcesScreen({ view, resolveText, onSelect }: {
+  view: DrawerSourcesView
+  resolveText: (key: string) => string
+  onSelect?: (sourceId: string) => void
+}): React.ReactElement {
+  if (view.state === 'loading') {
+    return (<div data-drawer-screen="loading"><LoadingState ariaLabel={resolveText('ui.loading.label')} /></div>)
+  }
+  if (view.state === 'error') {
+    return (
+      <div data-drawer-screen="error">
+        <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: view.onRetry }}
+          reasonCode="unreadable"
+          resolveText={resolveText}
+          state="error" />
+      </div>
+    )
+  }
+  if (view.rows.length === 0) {
+    return (<div data-drawer-screen="empty"><StateView reasonCode="not-yet" resolveText={resolveText} state="empty" /></div>)
+  }
+  return (
+    <div data-drawer-screen="ready">
+      <div className="config-drawer__source-list">
+        {view.rows.map((source) => (
+          <button
+            className="config-drawer__source-item"
+            data-drawer-source={source.sourceId}
+            key={source.sourceId}
+            onClick={() => onSelect?.(source.sourceId)}
+            type="button">
+            <span className="config-drawer__source-name">{source.name}</span>
+            {source.statusLabel === undefined ? null : (
+              <span className="config-drawer__source-status">{source.statusLabel}</span>
+            )}
+            {/* 启用与否只说事实；开关等 S1 落地再接，避免这里多出第二个写入口。 */}
+            {source.enabled ? null : <span className="config-drawer__source-off">—</span>}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

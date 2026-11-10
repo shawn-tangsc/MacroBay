@@ -32,3 +32,14 @@ export type DrawerPlatformValues = {
 
 /** 跳转目标：平台基本设置页 / 模型服务页。抽屉不拼路由，只转达这个目标。 */
 export type DrawerPlatformTarget = 'preferences' | 'models'
+
+/** 来源列表里的一条：只放读者要判断的三样——名字、状态词、启不启用。 */
+export type DrawerSourceRow = {
+  sourceId: string
+  name: string
+  /** 状态词（已格式化）；不给就是不画状态词，不编一个「正常」。 */
+  statusLabel?: string
+  enabled: boolean
+}
+
+export type DrawerSourcesView = DrawerScreenView<DrawerSourceRow>

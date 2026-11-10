@@ -12,7 +12,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ConfigSettingsDrawer } from './ConfigSettingsDrawer'
-import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
+import type { DrawerRowView, DrawerScreenView, DrawerSourcesView } from './drawerScreenView'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS } from './drawerPreviewRows'
 
 let root: Root | undefined
@@ -52,6 +52,27 @@ function openPlatform(values: Record<string, string>, onOpen: (target: string) =
       open
       platformValues={values}
       resolveText={(key) => key} />
+  ))
+  return document.body
+}
+
+
+/** 来源屏的挂载助手：只差「宿主读了什么」。 */
+function openSources(view: DrawerSourcesView, onSelect: (sourceId: string) => void = () => undefined): HTMLElement {
+  document.body.replaceChildren()
+  root?.unmount()
+  root = undefined
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  act(() => root?.render(
+    <ConfigSettingsDrawer
+      initialMenu="sources"
+      onClose={() => undefined}
+      onSelectSource={onSelect}
+      open
+      resolveText={(key) => key}
+      sourcesView={view} />
   ))
   return document.body
 }
@@ -189,5 +210,37 @@ describe('config settings drawer (static layout)', () => {
     const rows = [...container.querySelectorAll<HTMLElement>('[data-drawer-row]')]
     act(() => { rows[4]?.querySelector<HTMLElement>('.config-drawer__row-action')?.click() })
     expect(onOpen).toHaveBeenCalledWith('models')
+  })
+
+  it('shows the sources the host read, and reports the selection back', () => {
+    const onSelect = vi.fn()
+    const container = openSources(
+      { state: 'ready', rows: [
+        { sourceId: 'bls', name: 'BLS 官方日历', statusLabel: '不可用', enabled: true },
+        { sourceId: 'fed', name: 'Fed 官方日历', enabled: false }
+      ] },
+      onSelect
+    )
+    expect(container.querySelector('[data-drawer-screen="ready"]')).not.toBeNull()
+    const items = [...container.querySelectorAll<HTMLElement>('[data-drawer-source]')]
+    expect(items).toHaveLength(2)
+    expect(items[0]?.textContent).toContain('BLS 官方日历')
+    expect(items[0]?.textContent).toContain('不可用')
+    act(() => { items[1]?.click() })
+    expect(onSelect).toHaveBeenCalledWith('fed')
+  })
+
+  it('tells "could not read the sources" from "there are no sources"', () => {
+    // 两条分开断言：读不到 → error + 重试；确实没有源 → empty。
+    const onRetry = vi.fn()
+    const failed = openSources({ state: 'error', onRetry })
+    expect(failed.querySelector('[data-drawer-screen="error"]')).not.toBeNull()
+    expect(failed.querySelector('[data-drawer-screen="empty"]')).toBeNull()
+    act(() => { failed.querySelector<HTMLElement>('.state-view__action')?.click() })
+    expect(onRetry).toHaveBeenCalledTimes(1)
+
+    const empty = openSources({ state: 'ready', rows: [] })
+    expect(empty.querySelector('[data-drawer-screen="empty"]')).not.toBeNull()
+    expect(empty.querySelector('[data-drawer-screen="error"]')).toBeNull()
   })
 })
