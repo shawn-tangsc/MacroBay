@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
@@ -13,6 +13,7 @@ import { marketIntelligenceAgents } from './agentPortalModel'
 import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
+import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
@@ -68,18 +69,38 @@ function IntelligencePageBody(): React.ReactElement {
    * 所以这里只 bump 一个**递增计数**——布尔表达不了「已经开着又点了一次」，而连点入口很常见。
    */
   const [configDrawerRequest, setConfigDrawerRequest] = useState(0)
-  const [configDrawerMenu, setConfigDrawerMenu] = useState<'sources' | 'sourcesData' | 'processing' | 'briefing'>('sources')
+  const [configDrawerMenu, setConfigDrawerMenu] = useState<ConfigDrawerMenu>('sources')
   /**
    * 「来源与采集」这一屏挂载时的初值过滤器（只作初值，之后的筛选由那一屏自己管）。
    * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
    */
   const [initialSourceFilter, setInitialSourceFilter] = useState<SourceFilter>()
-  const openConfigDrawer = (menu: 'sources' | 'sourcesData' | 'processing' | 'briefing', filter?: SourceFilter): void => {
+  const openConfigDrawer = (menu: ConfigDrawerMenu, filter?: SourceFilter): void => {
     setConfigDrawerMenu(menu)
     setInitialSourceFilter(filter)
     setConfigDrawerRequest((value) => value + 1)
     setActiveView('dashboard')
   }
+
+  /**
+   * 壳层的「去设置」跳转：`AppShellNavigateDetail.settingsDrawer` 带 `{ productId, menuId }`。
+   *
+   * 只认自己的产品，且 `menuId` 必须是登记表里的七屏之一——不认识就**什么都不做**
+   * （不猜、不落默认屏：那会让读者点了 A 却停在 B）。
+   */
+  useEffect(() => {
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<{ settingsDrawer?: { productId?: string; menuId?: string } }>).detail
+      const target = detail?.settingsDrawer
+      if (target?.productId !== 'market-intelligence') return
+      const menuId = target.menuId
+      if (menuId === undefined || !(DRAWER_MENUS as readonly string[]).includes(menuId)) return
+      openConfigDrawer(menuId as ConfigDrawerMenu)
+    }
+    window.addEventListener('app-shell:navigate', handler)
+    return () => window.removeEventListener('app-shell:navigate', handler)
+    // 只订阅一次：处理器只调 setState，不读 props/state 快照。
+  }, [])
   /**
    * 打开「情报」直接落在看板。
    * 用户 2026-11-06：智能体选择页先留着不删，多智能体方案未定前不改结构，只改默认落点。
