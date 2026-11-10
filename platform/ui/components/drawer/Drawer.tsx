@@ -14,8 +14,8 @@ import { fillLabelParams } from '../textKeyParams'
  * 不另起一套：焦点陷阱、滚动锁、portal、遮罩、Esc 与焦点回位都是它的能力，重写一遍只会漏。
  *
  * 三条写进类型或结构、不靠评审：
- * - `size` 是四档闭集（`narrow` 420 / `large` 640 / `wide` 860 / `full` 1040），**不收 `width`、
- *   不收 `style`、不收 `styles`**；超宽屏上限 `92vw` 也在这里定，调用方不写第二份；
+ * - `size` 是四档闭集（`narrow` 420 / `large` 640 / `wide` 860 / `full` 1280），**不收 `width`、
+ *   不收 `style`、不收 `styles`**；超宽屏上限 `94vw` 也在这里定，调用方不写第二份；
  * - 头部只有两档：`titleKey`（有标题）或 `ariaLabelKey`（无头，但必须有名字）——没有名字的
  *   对话框，读屏只会念「对话框」；
  * - `mode` 只有 `modal` / `inline`，遮罩、Esc、焦点锁定、容器归它决定，不收对应布尔。
@@ -37,10 +37,10 @@ export const DRAWER_SIZES = ['narrow', 'large', 'wide', 'full'] as const
 
 export type DrawerSize = (typeof DRAWER_SIZES)[number]
 
-const SIZE_PX: Record<DrawerSize, number> = { narrow: 420, large: 640, wide: 860, full: 1040 }
+const SIZE_PX: Record<DrawerSize, number> = { narrow: 420, large: 640, wide: 860, full: 1280 }
 
-/** 超宽屏上限：档位像素与 92vw 取小。调用方写一份就是两套规则。 */
-const VIEWPORT_CAP = '92vw'
+/** 超宽屏上限：档位像素与 94vw 取小。调用方写一份就是两套规则。 */
+const VIEWPORT_CAP = '94vw'
 
 export type DrawerMode = 'modal' | 'inline'
 export type DrawerSide = 'left' | 'right'

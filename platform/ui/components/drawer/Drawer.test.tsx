@@ -131,12 +131,12 @@ describe('Drawer', () => {
     expect(DRAWER_SIZES).toEqual(['narrow', 'large', 'wide', 'full'])
   })
 
-  it('measures each size from the one table, capped at 92vw', async () => {
+  it('measures each size from the one table, capped at 94vw', async () => {
     const expected: Record<string, string> = {
-      narrow: 'min(420px, 92vw)',
-      large: 'min(640px, 92vw)',
-      wide: 'min(860px, 92vw)',
-      full: 'min(1040px, 92vw)'
+      narrow: 'min(420px, 94vw)',
+      large: 'min(640px, 94vw)',
+      wide: 'min(860px, 94vw)',
+      full: 'min(1280px, 94vw)'
     }
 
     for (const [size, width] of Object.entries(expected)) {
