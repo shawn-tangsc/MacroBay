@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
-import { createElement } from 'react'
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -106,6 +107,44 @@ describe('the two cells of the capital card speak their own source state', () =>
     expect(missingRow).toContain(dataText.configureSources)
     // 未配置与未启用都不用错误色：它们不是故障，是读者要动手的事。
     for (const markup of [onlyEtfOff, missingRow]) expect(markup).not.toContain('data-state="unreadable"')
+  })
+
+  it('sends each row action to its own cell, so two "去启用" cannot both mean the card', async () => {
+    // 两格各自一颗动作：稳定币那颗落 `capital:stablecoin`、ETF 那颗落 `capital:etf`。
+    // 两颗都落卡级（或两颗共用同一个回跳）就是把「哪一格关了」又模糊掉了——判据在宿主接线时兑现，
+    // 这里先钉住卡片只把每一行自己的 `onOpenSources` 交给那一行。
+    const openStablecoin = vi.fn()
+    const openEtf = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => root.render(createElement(ShellLanguageProvider, {
+      language: 'zh-CN',
+      children: createElement(ShellTimeZoneProvider, {
+        timeZone: 'UTC',
+        children: createElement(CapitalConditionsPanel, {
+          text,
+          state: { state: 'loading' },
+          onRefresh: () => undefined,
+          cellAvailability: {
+            stablecoin: { state: 'disabled', sourceLabel: '稳定币', onOpenSources: openStablecoin },
+            etf: { state: 'disabled', sourceLabel: 'ETF', onOpenSources: openEtf }
+          }
+        })
+      })
+    })))
+    const rowButton = (label: string): HTMLButtonElement =>
+      [...container.querySelectorAll('p.mi-source-state')]
+        .find((row) => row.textContent?.includes(label))!
+        .querySelector('button')!
+    expect([...container.querySelectorAll('button')]).toHaveLength(2)
+    await act(async () => rowButton('（稳定币）').click())
+    expect(openStablecoin).toHaveBeenCalledTimes(1)
+    expect(openEtf).not.toHaveBeenCalled()
+    await act(async () => rowButton('（ETF）').click())
+    expect(openEtf).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+    container.remove()
   })
 
   it('leaves the read failure to the reading itself, with a retry in the row', () => {
