@@ -52,7 +52,6 @@ async function render(sources: ReadonlyArray<never>, cellEnabled: Readonly<Recor
       cellEnabled,
       labels,
       provider: { providerId: 'p', displayName: 'P', category: 'macro', credential: 'none', healthMarker: 'none', sources },
-      readOnlyToggles: true,
       showSourceDetails: true
     } as never) }))
   })

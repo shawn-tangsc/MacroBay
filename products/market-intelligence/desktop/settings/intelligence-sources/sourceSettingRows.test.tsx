@@ -96,7 +96,9 @@ function viewOf(entry: SourceView): unknown {
   }
 }
 
-async function mount(enabledWrite = vi.fn(async () => true)): Promise<HTMLElement> {
+async function mount(
+  enabledWrite: (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean) => Promise<boolean> = async () => true
+): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -148,27 +150,34 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
     }
   })
 
-  it('leaves enabling to the card switch: no switch on this screen writes anything', async () => {
-    // 用户 2026-11-11：启停的编辑入口只在「采集与数据」的卡片项；这一屏的开关（页头组开关与能力行）
-    // 都是只读展示。点它们不产生任何写入，也不会走 IPC。
+  it('keeps the capability rows read-only: only the header group switch writes', async () => {
+    // 用户 2026-11-12：编辑入口是「数据源」页头那颗组开关（写源自己的 `enabled`）；能力行仍只读。
+    // 点能力行不产生任何写入，也不会走 IPC。
     const invoke = vi.fn(async (_productId: string, _method: string) => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
-    const write = vi.fn(async () => true)
+    const write = vi.fn(async (_source: Readonly<{ sourceId: string; kind: string }>, _enabled: boolean) => true)
     const container = await mount(write)
 
-    // 只看「启停」类开关：页头组开关 + 能力行的 `setting:sources.enabled@…`。
-    // 「纳入情绪分析」那颗不属于启停，仍是可编辑的，别把它算进来。
-    const switches = [...container.querySelectorAll<HTMLButtonElement>(
-      '.source-provider-detail__group-toggle button[role="switch"], [data-setting-key^="setting:sources.enabled"] button[role="switch"]'
+    // 能力行的 `setting:sources.enabled@…`：只读、零写。
+    const rows = [...container.querySelectorAll<HTMLButtonElement>(
+      '[data-setting-key^="setting:sources.enabled"] button[role="switch"]'
     )]
-    expect(switches.length).toBeGreaterThan(0)
-    for (const control of switches) {
+    expect(rows.length).toBeGreaterThan(0)
+    for (const control of rows) {
       expect(control.disabled).toBe(true)
       await act(async () => { control.click() })
     }
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-
     expect(write).not.toHaveBeenCalled()
+
+    // 页头组开关可编辑：点一次只写可操作项（s2 待接入不参与）。
+    const header = container.querySelector<HTMLButtonElement>('.source-provider-detail__group-toggle button[role="switch"]')
+    expect(header?.disabled).toBe(false)
+    await act(async () => { header?.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(write.mock.calls[0]?.[0]).toMatchObject({ sourceId: 's1' })
+    expect(write.mock.calls[0]?.[1]).toBe(false)
     expect(invoke.mock.calls.some(([, method]) => method === 'intelligenceSources.setEnabled')).toBe(false)
   })
 })

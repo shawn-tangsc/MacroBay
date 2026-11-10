@@ -80,7 +80,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, readOnlyToggles, cellEnabled, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, cellEnabled, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -105,14 +105,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    */
   surface?: 'settings' | 'panel'
   /**
-   * 能力行的启停**只读**（用户 2026-11-11）：只显示状态、不发写请求。
-   * **页头那颗组开关是这一屏唯一的可编辑入口**（整组一起开/关）；「采集与数据」里的卡片项开关也仍可编辑。
-   * 凭据（API Key）、测试连接、高级都要留着——把这屏的钥匙入口删掉，凭据门禁就成了死路。
-   */
-  readOnlyToggles?: boolean
-  /**
    * 格级开关快照（`采集与数据` 里那些项）。**能力行的只读状态读它**：任一相关格开着 = 开，全关 = 关；
-   * **采集与数据里没有对应格的源（日历 feed / 新闻 / 维护备用）= 恒显示关**，不退回 `enabled`。
+   * 无格但在「日历 / 舆情」里列着的源（日历 feed 六条、新闻四条）读**源自己的 `enabled`**（出现了且启用才算开）；
+   * 采集与数据里根本没出现的（维护备用 / 只供分析 / 未接入）→ 关。
    * 页头那颗组开关管的是**源自己的采集**（`enabled`）——两件事，别混。
    */
   cellEnabled?: Readonly<Record<string, boolean>>
@@ -439,13 +434,15 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               resolveText={resolveText} />
             : null}
           <Switch
-            /* 编辑状态只在「采集与数据」里（用户 2026-11-12）：这一屏的组开关**只读**，只显示状态。 */
-            aria-disabled
+            /* 页头这颗是**源采集开关的唯一编辑入口**（用户 2026-11-12 撤回「关格顺带停源」后回归）：
+               它写源自己的 `enabled`（整组写；待接入项不参与，缺凭据时禁用）。
+               下面能力行的开关仍然只读——行上显示的是「采集与数据」里有没有用它。 */
+            aria-disabled={providerPending || providerCredentialMissing ? true : undefined}
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
             checked={providerGroupEnabled}
-            disabled
-            onChange={() => undefined}
+            disabled={providerPending || providerCredentialMissing}
+            onChange={(next) => void toggleProvider(next)}
             size="small" />
         </span>
       </div>

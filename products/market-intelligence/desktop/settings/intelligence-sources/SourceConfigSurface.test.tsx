@@ -198,8 +198,8 @@ function surfaceBlock(relativePath: string): string {
 }
 
 describe('the config surface adapts a host that only has the three write callbacks', () => {
-  it('keeps the run path, and leaves enabling to the card switch instead of this screen', async () => {
-    const write = vi.fn(async () => {})
+  it('keeps the run path, and writes enabling only through the header group switch', async () => {
+    const write = vi.fn(async (_source: Readonly<{ sourceId: string; kind: string }>, _enabled: boolean, _origin: string) => {})
     const run = vi.fn(async () => {})
     const sourceView = source()
     const props: SourceConfigSurfaceProps = {
@@ -227,15 +227,23 @@ describe('the config surface adapts a host that only has the three write callbac
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(run).toHaveBeenCalledWith(sourceView.sourceId)
 
-    // 启停的编辑入口已经挪到「采集与数据」的卡片项（用户 2026-11-11）；这一屏的开关只读，
-    // 点它不产生任何写入——写入那条路仍由宿主提供，只是这里不再触发。
-    const toggles = [...container.querySelectorAll<HTMLButtonElement>('button[role="switch"]')]
-    expect(toggles.length).toBeGreaterThan(0)
-    for (const toggle of toggles) {
+    // 启停的编辑入口是页头那颗组开关（用户 2026-11-12）；能力行仍只读，点了不写。
+    const rows = [...container.querySelectorAll<HTMLButtonElement>('.source-provider-detail__list button[role="switch"]')]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const toggle of rows) {
       expect(toggle.disabled).toBe(true)
       await act(async () => { toggle.click() })
     }
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(write).not.toHaveBeenCalled()
+
+    // 页头组开关走宿主那条写入口，并带上宿主声明的 origin。
+    const header = container.querySelector<HTMLButtonElement>('.source-provider-detail__group-toggle button[role="switch"]')
+    expect(header?.disabled).toBe(false)
+    await act(async () => { header?.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(write.mock.calls[0]?.[1]).toBe(false)
+    expect(write.mock.calls[0]?.[2]).toBe('calendar-drawer')
   })
 })

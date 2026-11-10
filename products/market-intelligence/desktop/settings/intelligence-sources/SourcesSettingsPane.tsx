@@ -78,8 +78,6 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     .flatMap((group) => group.providers)
     .find((entry) => entry.providerId === props.selectedProviderId)
   const { providerId: _selected, ...surface } = props.surface
-  /* 「数据源」那一屏只读：启停的唯一编辑入口是「采集与数据」里的卡片开关。 */
-  const readOnlyToggles = props.pane === 'sources'
 
   const isBusiness = props.pane === undefined ? props.filter === 'dashboard' : props.pane === 'business'
   const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
@@ -107,10 +105,9 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
      否则界面上主备两个源会同时显示为开（用户 2026-11-11：同一格只有一个源在用）。 */
   const isCellEnabled = (cellId: string): boolean | undefined => cellEnabled[cellId]
   /**
-   * 卡片项那颗开关同时表示两件事（用户 2026-11-12）：**这一格用哪个源** 与 **这个源要不要开**。
-   * - 打开：写格 true（+ 选中该源）+ 把源本身设为启用（`onToggleSource(sourceId, true)`）；
-   * - 关闭：写格 false；**只有这个源再没有任何开着的格在用**时才把源停用
-   *   （停了它才会注销采集 job）。别的格还在用 → 不动源开关。
+   * 卡片项那颗开关**只写格**（用户 2026-11-12）：打开时写格 true + 选中该源；关闭时只写格 false。
+   * **不碰源的启停**——源采不采只由「数据源」页头那颗决定。用户原话：「关某个源项，怎么能自动把源也关了」；
+   * 以前「关最后一个格就把源停掉」会让关一格顺带把整条源的采集 job 注销，这条退路已经删掉。
    */
   const cellSourceOf = new Map<string, string>()
   for (const module of modulesForBusiness('dashboard')) {
@@ -119,22 +116,10 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
   const onCellToggle = props.cellEnabledIo === undefined
     ? undefined
     : (cellId: string, enabled: boolean): void => {
-      const next = { ...cellEnabled, [cellId]: enabled }
-      setCellEnabled(next)
+      setCellEnabled((current) => ({ ...current, [cellId]: enabled }))
       void props.cellEnabledIo?.write(cellId, enabled).catch(() => undefined)
       const sourceId = cellSourceOf.get(cellId)
-      if (sourceId === undefined) return
-      const toggleSource = props.surface.onToggleSource
-      if (enabled) {
-        props.cellEnabledIo?.writeSelection?.(cellId, sourceId)
-        if (toggleSource !== undefined) void toggleSource({ sourceId, kind: '' }, true)
-        return
-      }
-      // 这个源还有别的开着的格在用？有就不动源开关。
-      const stillUsed = [...cellSourceOf.entries()].some(([otherCellId, otherSourceId]) => otherSourceId === sourceId
-        && otherCellId !== cellId
-        && next[otherCellId] !== false)
-      if (!stillUsed && toggleSource !== undefined) void toggleSource({ sourceId, kind: '' }, false)
+      if (enabled && sourceId !== undefined) props.cellEnabledIo?.writeSelection?.(cellId, sourceId)
     }
 
   /* **一个骨架**：页签条只在这一处渲染一次；两个分类只换「列表」与「内容」。
@@ -182,7 +167,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {props.notice}
           {provider === undefined
             ? null
-            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} cellEnabled={cellEnabled} readOnlyToggles={readOnlyToggles} /></div>}
+            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} cellEnabled={cellEnabled} /></div>}
         </>}
     </div>
   </>

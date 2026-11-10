@@ -9,9 +9,13 @@ import { productText } from '../../shared/i18n/productText'
 import { SourcesSettingsPane } from './SourcesSettingsPane'
 
 /**
- * 卡片项那颗开关同时表示两件事（用户 2026-11-12）：这一格用哪个源 **和** 这个源要不要开。
- * - 开：写格 true + 选中该源 + 把源设为启用；
- * - 关：写格 false；**只有这个源再没有任何开着的格在用**时才停用源（否则不动它）。
+ * 卡片项那颗开关**只写格**（用户 2026-11-12）：
+ * - 开：写格 true + 选中该源；
+ * - 关：写格 false。
+ *
+ * 源采不采只由「数据源」页头那颗决定——关一格**不许**顺手把源停掉（用户原话：
+ * 「关某个源项，怎么能自动把源也关了」）。所以两条用例都断言 `onToggleSource` **零调用**；
+ * 谁把「关最后一格就停源」加回来，这两条都会红。
  */
 const t = productText['zh-CN'].settings.intelligenceSources
 let root: ReturnType<typeof createRoot> | undefined
@@ -73,27 +77,24 @@ async function render(initial: Readonly<Record<string, boolean>> = {}) {
   return { host, onToggleSource, writes, selections }
 }
 
-describe('卡片项开关 = 格选择 + 源启停', () => {
-  it('turns the source on when a cell is enabled', async () => {
-    // 这一格先关着，点它才算「打开」。
+describe('卡片项开关只写格，不碰源启停', () => {
+  it('writes the cell and its selection when a cell is enabled, and never toggles the source', async () => {
     const { host, onToggleSource, writes, selections } = await render({ 'quotes:btc': false })
     const row = host.querySelector<HTMLElement>('[data-cell-id="quotes:btc"]')
     const control = row?.querySelector<HTMLElement>('[role="switch"]')
     await act(async () => { control?.click() })
     expect(writes).toContainEqual(['quotes:btc', true])
     expect(selections).toContainEqual(['quotes:btc', 'binance-futures-positioning'])
-    expect(onToggleSource).toHaveBeenCalledWith({ sourceId: 'binance-futures-positioning', kind: '' }, true)
+    expect(onToggleSource).not.toHaveBeenCalled()
   })
 
-  it('keeps the source on while another cell of it is still used', async () => {
-    const { host, onToggleSource } = await render()
-    // 先开 BTC 那一格，再关它——同源的 ETH/纳指两格仍是「缺键默认开」，所以源不该被停用。
-    const row = host.querySelector<HTMLElement>('[data-cell-id="quotes:btc"]')
+  it('writes only the cell when it is disabled — even when it is the last cell using that source', async () => {
+    // 纳指那格是 binance-futures-positioning 的唯一一格：关它，源仍必须保持启用。
+    const { host, onToggleSource, writes } = await render({ 'quotes:ndx': true })
+    const row = host.querySelector<HTMLElement>('[data-cell-id="quotes:ndx"]')
     const control = row?.querySelector<HTMLElement>('[role="switch"]')
     await act(async () => { control?.click() })
-    await act(async () => { control?.click() })
-    const disableCalls = onToggleSource.mock.calls
-      .filter((call) => (call as unknown as [unknown, boolean])[1] === false)
-    expect(disableCalls).toHaveLength(0)
+    expect(writes).toContainEqual(['quotes:ndx', false])
+    expect(onToggleSource).not.toHaveBeenCalled()
   })
 })
