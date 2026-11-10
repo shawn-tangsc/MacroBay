@@ -1,4 +1,4 @@
-import { CalendarDays, CircleDashed, CircleSlash, Copy, RefreshCw } from 'lucide-react'
+import { CalendarDays, CircleDashed, CircleSlash, Copy, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button, Tooltip } from 'antd'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -237,6 +237,13 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
       </div>
     </li>
   )
+  /**
+   * 遮罩只在「一条源都用不了」时出现：来源三态（没配置/没启用）或这一读没读出来。
+   * 部分可用不遮——那会把能看的事件一起挡掉。
+   */
+  const veil: 'missing' | 'disabled' | 'unreadable' | undefined = sourcesState !== 'available'
+    ? sourcesState
+    : state === 'error' ? 'unreadable' : undefined
   return <section className="mi-calendar-card" aria-label={text.title}>
     <header>
       <h2>{text.title}</h2>
@@ -247,50 +254,48 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
         they are looking at while scanning further down the schedule — so it stays outside the
         scroll region instead of travelling with the rows. */}
     <div className="mi-calendar-card__body">
-      {/* 来源三态（共享类，调用点不写颜色）：没配 / 没启用时**整卡一句 + 一个动作**，
-          不画空列表、不摆「暂无」。判据来自投影，不由卡片现算。 */}
-      {sourcesState !== 'available' ? <div className="mi-source-card" data-state={sourcesState}>
-        <p className="mi-source-state" data-state={sourcesState}>
-          {sourcesState === 'missing'
-            ? <CircleDashed aria-hidden className="mi-source-state__icon" size={14} />
-            : <CircleSlash aria-hidden className="mi-source-state__icon" size={14} />}
-          {resolveKey(sourcesState === 'missing'
-            ? 'pages.intelligence.portal.data.sourcesNotConfigured'
-            : 'pages.intelligence.portal.data.sourcesNotEnabled')}
-        </p>
-        <div className="mi-source-card__actions">
-          <Button onClick={() => openIntelligenceSourcesSettings()} size="small">
-            {resolveKey(sourcesState === 'missing'
-              ? 'pages.intelligence.portal.data.configureSources'
-              : 'pages.intelligence.portal.data.enableSources')}
-          </Button>
+      {/* 卡内三态（2026-11-11 终稿）：卡框与标题照常，**数据区照常渲染**，只在上面盖一层遮罩；
+          遮罩里居中一句 + 恰一颗按钮，底下内容包 `inert`，Tab 只停在按钮上。
+          只有一条源都用不了才盖；部分可用就照常列，不遮。 */}
+      <div className="mi-source-veil-host" {...(veil === undefined ? {} : { 'data-veiled': 'true' })}>
+        <div {...(veil === undefined ? {} : { inert: true })}>
+          {veil === undefined && state === 'loading' ? <LoadingState label={text.loading} /> : null}
+          {veil === undefined && state === 'error' ? <StateView state="error" reasonCode="unreadable" size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
+          {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
+          {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
+          {state === 'ready' && projection.state === 'available' && projection.today.length === 0
+            ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
+            : null}
+          {state === 'ready' && projection.today.length > 0 ? <>
+            <p className="mi-calendar-card__section">{text.todaySection}</p>
+            <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
+          </> : null}
+          {state === 'ready' && projection.upcoming.length > 0 ? <>
+            <p className="mi-calendar-card__section">{text.upcomingSection}</p>
+            <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
+          </> : null}
         </div>
-      </div> : null}
-      {/* state-ternary: reviewed — 这一枝只渲染加载组件，没有内容容器；下面几处列表各自按 length 判。 */}
-      {sourcesState === 'available' && state === 'loading' ? <LoadingState label={text.loading} /> : null}
-      {/* state-ternary: reviewed — 这一枝只渲染错误组件；读失败与「今天没有事件」是两个判断，不是一件事。 */}
-      {sourcesState === 'available' && state === 'error' ? <StateView state="error" reasonCode="unreadable" size="md"
-        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
-      {/* state-ternary: reviewed — 只加一行「数据是旧的」附注，列表照常在下；旧数据不许被这条删掉。 */}
-      {sourcesState === 'available' && state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
-      {/* Readable months with no events at all: the card's answer is "nothing here", not a gap.
-          Keeping it as a line (not a state surface) is the point — there is no window left to widen
-          and no button that would produce an event. */}
-      {/* state-ternary: reviewed — 一行说明，不承担列表；内容块按数组长度判。 */}
-      {sourcesState === 'available' && state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
-      {sourcesState === 'available' && state === 'ready' && projection.state === 'available' && projection.today.length === 0
-        ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
-        : null}
-      {/* state-ternary: reviewed — 状态只证明读完了，真正的开关是 `today.length > 0`：数据在就画，不靠状态位藏内容。 */}
-      {sourcesState === 'available' && state === 'ready' && projection.today.length > 0 ? <>
-        <p className="mi-calendar-card__section">{text.todaySection}</p>
-        <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
-      </> : null}
-      {/* state-ternary: reviewed — 同上：开关是 `upcoming.length > 0`，状态不决定这块内容画不画。 */}
-      {sourcesState === 'available' && state === 'ready' && projection.upcoming.length > 0 ? <>
-        <p className="mi-calendar-card__section">{text.upcomingSection}</p>
-        <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
-      </> : null}
+        {veil === undefined ? null : <div className="mi-source-veil" data-state={veil}>
+          <p className="mi-source-state" data-state={veil}>
+            {veil === 'missing' ? <CircleDashed aria-hidden className="mi-source-state__icon" size={14} />
+              : veil === 'disabled' ? <CircleSlash aria-hidden className="mi-source-state__icon" size={14} />
+                : <TriangleAlert aria-hidden className="mi-source-state__icon" size={14} />}
+            {resolveKey(veil === 'missing'
+              ? 'pages.intelligence.portal.data.sourcesNotConfigured'
+              : veil === 'disabled'
+                ? 'pages.intelligence.portal.data.sourcesNotEnabled'
+                : 'pages.intelligence.portal.data.temporarilyUnavailable')}
+          </p>
+          <Button onClick={veil === 'unreadable' ? onRefresh : () => openIntelligenceSourcesSettings()} size="small">
+            {resolveKey(veil === 'missing'
+              ? 'pages.intelligence.portal.data.configureSources'
+              : veil === 'disabled'
+                ? 'pages.intelligence.portal.data.enableSources'
+                : 'pages.intelligence.portal.data.retry')}
+          </Button>
+        </div>}
+      </div>
     </div>
   </section>
 }
