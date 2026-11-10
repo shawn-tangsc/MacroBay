@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { BriefingRegenerateFailure } from './runBriefingRegenerate'
@@ -114,6 +116,19 @@ export function useBriefingRunActions(input: Readonly<{
     trigger: BriefingRunTrigger
   }>) => Promise<void>
 }> {
+  /**
+   * 起手时那一行原来是什么样：是**新挂的临时行**（跑完删掉），还是**已有的一行被就地改成
+   * generating**（跑完要还回去）。只靠"长得像临时行"来收，会把失败那一行也删掉——重读一旦
+   * 失败，读者就永远看不到那一行了。
+   */
+  const startedRow = useRef<Readonly<{
+    date: string
+    periodId: string
+    locale: 'zh-CN' | 'en-US'
+    created: boolean
+    languages: DailyBriefingEditionSummary['languages']
+  }> | null>(null)
+
   const run = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>; rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }> }> = {}): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({
     client: input.client,
     locale: options.locale ?? input.locale,
@@ -155,13 +170,39 @@ export function useBriefingRunActions(input: Readonly<{
     if (placeholderDate === undefined) return
     const startedPeriodId = options.periodId ?? 'default'
     input.onRunStarted?.(startedPeriodId)
-    input.setEditions((current) => withGeneratingRow(current, {
-      date: placeholderDate,
-      periodId: startedPeriodId,
-      locale: options.locale ?? input.locale,
-      manual: options.trigger === 'manual',
-      ...(runPeriodTime === undefined ? {} : { periodTime: runPeriodTime })
-    }))
+    input.setEditions((current) => {
+      const existing = current.find((row) => row.date === placeholderDate
+        && row.periodId === startedPeriodId && row.locale === (options.locale ?? input.locale))
+      startedRow.current = {
+        date: placeholderDate,
+        periodId: startedPeriodId,
+        locale: options.locale ?? input.locale,
+        created: existing === undefined,
+        languages: existing?.languages
+      }
+      return withGeneratingRow(current, {
+        date: placeholderDate,
+        periodId: startedPeriodId,
+        locale: options.locale ?? input.locale,
+        manual: options.trigger === 'manual',
+        ...(runPeriodTime === undefined ? {} : { periodTime: runPeriodTime })
+      })
+    })
+  }
+
+  /** 跑完（失败/超时）把起手那一步收回：临时行删掉，已有的一行恢复它原来的语言状态。 */
+  const restoreStartedRow = (rows: readonly DailyBriefingEditionSummary[]): readonly DailyBriefingEditionSummary[] => {
+    const started = startedRow.current
+    startedRow.current = null
+    if (!started) return rows.filter((row) => !isGeneratingPlaceholder(row))
+    return rows.flatMap((row) => {
+      if (row.date !== started.date || row.periodId !== started.periodId || row.locale !== started.locale) return [row]
+      if (started.created) return []
+      const restored: { -readonly [K in keyof DailyBriefingEditionSummary]: DailyBriefingEditionSummary[K] } = { ...row }
+      if (started.languages === undefined) delete restored.languages
+      else restored.languages = started.languages
+      return [restored as DailyBriefingEditionSummary]
+    })
   }
 
   return {
@@ -177,9 +218,11 @@ export function useBriefingRunActions(input: Readonly<{
       // 读者只会看到标题在转、步骤一个都不出。这一行是**这一刻的事实**（确实在跑），跑完由服务
       // 返回的结果替换；失败时下一轮重读会把这一行去掉。
       const document = await run(request)
-      // 跑失败/超时也要把这行收回：它是"正在跑"的临时事实，不是一条版次。留着它会变成一行永远
-      // "生成中"的幽灵（进程崩过的那次尤其明显）。判据只用"占位行 + 语言正在生成"这两个特征。
-      if (!document) input.setEditions((current) => current.filter((row) => !isGeneratingPlaceholder(row)))
+      // 跑失败/超时也要把起手那一步收回去：新挂的临时行删掉；**已有的一行**（失败那行最常见）
+      // 还回它原来的语言状态——不能按"看起来像临时行"去删，它本来就是一条真版次行。
+      // 重读失败时也要收：否则这一行会永远停在"生成中"，一个永不结束的正在跑比旧失败更糟。
+      if (!document) input.setEditions(restoreStartedRow)
+      if (document) startedRow.current = null
       // 临时行是页面编出来表示"这次在跑"的：跑完先按**它自己的身份**删掉，再挂真实结果。
       // 只靠"合并碰巧覆盖"会留两处幽灵：语言那格没被覆盖（一直显示生成中）、身份对不上时整行不走。
       if (document) {

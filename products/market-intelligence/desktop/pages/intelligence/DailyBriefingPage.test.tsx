@@ -1908,6 +1908,130 @@ it('leaves the previous failure the moment the reader regenerates a failed issue
   settleRun({ state: 'unavailable', failureCode: 'editorial-timeout' })
 })
 
+it('shows the second attempt\u2019s steps and reason when the re-run fails too', async () => {
+  // 与上一条成对：面板走了还不够，**再一次失败**时必须显示这一次的步骤与原因，
+  // 拿第一次那份就红（用户 2026-11-10 的现场就是"一直显示上一次的"）。
+  const today = '2026-10-30'
+  const traceOf = (failedStage: string, failureCode: string, at: string) => ({
+    attemptId: `attempt-${failedStage}`,
+    startedAt: at,
+    finishedAt: at,
+    state: 'failed' as const,
+    stages: traceStageIds.map((id, position) => {
+      const failedAt = traceStageIds.indexOf(failedStage as (typeof traceStageIds)[number])
+      return {
+        id,
+        state: position < failedAt ? 'success' as const : position === failedAt ? 'failed' as const : 'skipped' as const,
+        startedAt: at,
+        finishedAt: at,
+        durationMs: 1_000,
+        ...(position === failedAt ? { failureCode } : {})
+      }
+    })
+  })
+  const first = traceOf('selection', 'editorial-timeout', `${today}T04:00:00.000Z`)
+  const second = traceOf('writing', 'provider-error', `${today}T04:05:00.000Z`)
+  const listed = [{
+    date: today, periodId: 'period_failed', locale: 'en-US' as const, availableLocales: [] as const,
+    state: 'missing' as const, attemptCount: 1,
+    languages: [{ locale: 'en-US' as const, state: 'missing' as const, reason: 'run-failed' as const }]
+  }]
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })),
+    get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: first })),
+    // 第二次也失败，但失败在不同的阶段、不同的原因。
+    regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'provider-error', generationTrace: second }))
+  })
+  const dom = await renderPage(client)
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  await act(async () => { row.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+  expect(dom.querySelector<HTMLElement>('[data-briefing-stage-panel][data-state="failed"]')?.getAttribute('data-failure-code')).toBe('editorial-timeout')
+
+  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+  for (let round = 0; round < 8; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 正文说的是**第二次**：原因、失败阶段、失败码都是新的；第一次那份不留。
+  const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+  expect(panel.getAttribute('data-failure-code')).toBe('provider-error')
+  expect(panel.textContent).toContain(text.aiSettings.failure['provider-error'])
+  expect(panel.textContent).not.toContain(text.aiSettings.failure['editorial-timeout'])
+  const failedStage = panel.querySelector<HTMLElement>('[data-stage-state="failed"]')
+  expect(failedStage?.getAttribute('data-stage')).toBe('writing')
+  expect(panel.querySelector<HTMLElement>('[data-stage="selection"]')?.getAttribute('data-stage-state')).not.toBe('failed')
+})
+
+it('keeps a published edition readable while it is being regenerated, badge and all', async () => {
+  // 已发布的那一期重跑：正文走 ready-replacing（旧版照常可读 + 一句"看的是上一版"），
+  // 语言徽标不许跟着变成"生成中"。
+  const today = '2026-10-30'
+  const englishDocument = { ...briefingDocument(today), edition: { ...briefingDocument(today).edition, locale: 'en-US' as const } }
+  const listed = [{
+    date: today, periodId: 'default', locale: 'en-US' as const, availableLocales: ['en-US'] as const,
+    state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`,
+    readingsAvailable: 4,
+    languages: [{ locale: 'en-US' as const, state: 'published' as const }]
+  }]
+  let settleRun: (value: unknown) => void = () => undefined
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })),
+    getToday: vi.fn(async () => ({ state: 'available' as const, document: englishDocument })),
+    get: vi.fn(async () => ({ state: 'available' as const, document: englishDocument })),
+    regenerate: vi.fn(() => new Promise((resolve) => { settleRun = resolve })),
+    getProgress: vi.fn(async () => ({ state: 'idle' as const }))
+  })
+  const dom = await renderPage(client)
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+  const badge = () => dom.querySelector('[data-edition-locale="en-US"]')?.textContent
+  expect(badge()).toBe(text.history.languages['en-US'])
+
+  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 旧正文还在、顶上说了"看的是上一版"；语言徽标一个字没变。
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+  expect(dom.querySelector('[data-briefing-previous-version="true"]')).not.toBeNull()
+  expect(badge()).toBe(text.history.languages['en-US'])
+  settleRun({ state: 'available', document: englishDocument })
+})
+
+it('does not leave the row "generating" when the run fails and the reload fails too', async () => {
+  // 行是**就地**改成 generating 的，收回靠"跑完重读一次"。如果这次重读也失败（列表读不到），
+  // 那一行就会永远停在生成中——一条永远不会结束的"正在跑"比显示旧失败更糟。
+  const today = '2026-10-30'
+  const trace = generationTraceFixture('failed', 'selection', 'editorial-timeout')
+  const listed = [{
+    date: today, periodId: 'period_failed', locale: 'en-US' as const, availableLocales: [] as const,
+    state: 'missing' as const, attemptCount: 1,
+    languages: [{ locale: 'en-US' as const, state: 'missing' as const, reason: 'run-failed' as const }]
+  }]
+  let listCalls = 0
+  const client = fakeClient({
+    list: vi.fn(async () => {
+      listCalls += 1
+      return listCalls === 1
+        ? { state: 'available' as const, result: { editions: listed, today } }
+        : { state: 'unavailable' as const, failureCode: 'list-unreadable' }
+    }),
+    get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: trace })),
+    // 这一次也失败，紧接着的重读也失败。
+    regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: trace }))
+  })
+  const dom = await renderPage(client)
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  await act(async () => { row.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+  for (let round = 0; round < 10; round += 1) await act(async () => { await Promise.resolve() })
+
+  const after = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  expect(after.getAttribute('aria-busy')).not.toBe('true')
+  expect(dom.querySelector('[data-rail-title="running"]')).toBeNull()
+  // 回到"失败"那一行（不是生成中），正文也可以继续显示失败原因。
+  expect(dom.querySelector('[data-daily-brief-failure]')).not.toBeNull()
+})
+
 it('never lets another issue\u2019s document stand in for the selected one', async () => {
   const today = '2026-10-30'
   const listed = [
