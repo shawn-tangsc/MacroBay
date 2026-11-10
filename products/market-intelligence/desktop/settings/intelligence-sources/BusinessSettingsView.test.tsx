@@ -131,8 +131,8 @@ describe('内容区页头与卡片项的行结构', () => {
       sourceNames: t.sourceNames
     })))
     const row = host.querySelector('.business-card__row')
+    // 日历那面的格名就是各条 feed 的读者名，右列是源名。
     expect(row?.querySelector('.business-card__label')?.textContent).toBeTruthy()
-    // 日历/舆情那一面是无格名的：源名在左列、右列留空。
-    expect(row?.querySelector('.business-card__value')?.textContent).toBe('')
+    expect(row?.querySelector('.business-card__value')?.textContent).toBeTruthy()
   })
 })

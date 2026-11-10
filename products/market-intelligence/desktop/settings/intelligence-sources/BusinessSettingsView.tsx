@@ -1,10 +1,14 @@
 import { ChevronRight } from 'lucide-react'
 
+import { Switch } from 'antd'
+
 import { SettingsInfo } from '../settingsInfo'
 import {
   AI_ANALYSIS_MODULE,
+  cellIdOf,
   modulesForBusiness,
   sourceCountForBusiness,
+  type DashboardCell,
   type DashboardSourceModule
 } from './dashboardSourceModules'
 
@@ -74,6 +78,9 @@ export function BusinessSettingsContent(props: {
   business: BusinessKey
   sourceNames: Readonly<Record<string, string>>
   resolveText: (key: string) => string
+  /** 格级启停：**注入接口**，真实存储在存储线那边；缺键 = 启用。 */
+  isCellEnabled?: (cellId: string) => boolean
+  onCellToggle?: (cellId: string, enabled: boolean) => void
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
@@ -95,7 +102,7 @@ export function BusinessSettingsContent(props: {
                 resolveText={props.resolveText} />
               : null}
           </div>
-          {module.cells.map((cell, index) => cardRow(module, index, cell.label, cell.sourceId, nameOf))}
+          {module.cells.map((cell) => cellRow(module, cell, nameOf, props))}
         </section>)
         : null}
       {props.business === 'dashboard'
@@ -104,28 +111,50 @@ export function BusinessSettingsContent(props: {
           {/* 日历 / 舆情：平铺源名（不写格名、没有组头）。 */}
           {modulesForBusiness(props.business)
             .flatMap((module) => module.cells)
-            .map((cell, index) => cardRow(undefined, index, '', cell.sourceId, nameOf))}
+            .map((cell) => cellRow(undefined, cell, nameOf, props))}
         </section>}
     </div>
   </div>
 }
 
-/** 卡片里的一行：格名（可空）→ 源名；整行可点，点了切到情报源。 */
-function cardRow(
+/**
+ * 卡片里的一行：格名（可空）→ 源名 + 行尾的**格级开关**。
+ *
+ * 这一行是**纯行**：没有 `onClick`、不是 `<button>`、没有 `role`/`tabIndex`（用户 2026-11-11 取消点击跳转）。
+ * 开关管的是「这一格在模块里读不读」，与源自己的采集开关无关；关掉时整行次要化（不隐藏）。
+ * 可访问名带格名，否则读屏只听到一个没有对象的「开关」。
+ */
+function cellRow(
   module: DashboardSourceModule | undefined,
-  index: number,
-  label: string,
-  sourceId: string,
-  nameOf: (sourceId: string) => string
+  cell: DashboardCell,
+  nameOf: (sourceId: string) => string,
+  props: {
+    isCellEnabled?: (cellId: string) => boolean
+    onCellToggle?: (cellId: string, enabled: boolean) => void
+    resolveText: (key: string) => string
+  }
 ): React.ReactElement {
-  /* 卡片项是**纯行**，不是入口：不跳页签、不选中源、不加选中态（用户 2026-11-11）。
-     要看某个源，读者自己去「情报源」页签找。 */
+  const cellId = cellIdOf(module?.id ?? 'list', cell)
+  const enabled = props.isCellEnabled?.(cellId) ?? true
+  const label = cell.label === '' ? nameOf(cell.sourceId) : cell.label
+  const toggleKey = enabled ? 'settings.intelligenceSources.cellEnabled.disable' : 'settings.intelligenceSources.cellEnabled.enable'
   return <div
     className="business-card__row"
-    data-business-row={sourceId}
-    key={`${module?.id ?? 'list'}-${index}`}>
+    data-business-row={cell.sourceId}
+    data-cell-enabled={enabled ? 'true' : 'false'}
+    data-cell-id={cellId}
+    key={cellId}>
     {/* 「AI 分析用」卡与日历/舆情列表是**无格名**的：源名放左列、右列留空，行样式与别的行一致。 */}
-    <span className="business-card__label">{label === '' ? nameOf(sourceId) : label}</span>
-    <span className="business-card__value">{label === '' ? null : nameOf(sourceId)}</span>
+    <span className="business-card__label">{label}</span>
+    <span className="business-card__value">{cell.label === '' ? null : nameOf(cell.sourceId)}</span>
+    {props.onCellToggle === undefined
+      ? null
+      : <span className="business-card__toggle">
+        <Switch
+          aria-label={props.resolveText(toggleKey).replace('{cell}', label)}
+          checked={enabled}
+          onChange={(next) => props.onCellToggle?.(cellId, next)}
+          size="small" />
+      </span>}
   </div>
 }

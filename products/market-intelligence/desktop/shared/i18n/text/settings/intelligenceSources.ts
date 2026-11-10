@@ -466,6 +466,8 @@ export const intelligenceSourcesText = {
   /* 「AI 分析用」组头旁那颗 ⓘ：说明不进正文。 */
   aiAnalysisNote: '这些源没有看板位，数据只给 AI 分析读。',
   aiAnalysisNoteAria: 'AI 分析用的说明',
+  /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
+  cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
   /** 源详情里那行：这个源被哪些模块用（0 个模块时整行不显示）。 */
   usedInModules: '用在哪些模块',
   /* 「日历」筛选下的两个组名：判据是 calendarFeedRegistry 的 owner，不是手抄表（用户 2026-11-10）。 */
@@ -1011,6 +1013,7 @@ export const intelligenceSourcesText = {
   },
   aiAnalysisNote: 'These sources have no dashboard slot; only AI analysis reads them.',
   aiAnalysisNoteAria: 'About sources used by AI analysis',
+  cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
   usedInModules: 'Used in modules',
   detailsBlockTitle: 'Health and collection policy',
   health: {

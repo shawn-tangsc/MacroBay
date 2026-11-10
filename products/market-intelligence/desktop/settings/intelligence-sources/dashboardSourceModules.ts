@@ -14,6 +14,11 @@
 export type DashboardCell = Readonly<{
   /** 格名（读数格叫法，取自冻结文档 §1/§3）；`''` = 这一行不写格名、只列源名。 */
   label: string
+  /**
+   * 格级启停的**稳定键**（不是数组下标——模块顺序一变就会串格）。
+   * 全局 `cellId = <moduleId>:<cellKey>`，卡片渲染、看板判断、以后存储迁移都读这一处。
+   */
+  cellKey: string
   sourceId: string
   /** 这一行是主源的备用回落（格名写成「美元（备用）」这种）。 */
   fallback?: boolean
@@ -31,6 +36,34 @@ export type DashboardSourceModule = Readonly<{
 
 const TITLES = 'settings.intelligenceSources.dashboardModuleTitles'
 
+/**
+ * 格名 → 稳定键。**这一份是唯一出处**：卡片渲染、看板按格判断、以后的存储迁移都从这里取，
+ * 别处不许再按格名或下标拼键。新加一格 = 在这张表里加一行（漏了会编译不过，因为 `cellKey` 必填）。
+ *
+ * 不含 `macro-calendar:*` / `news:*`：日历与舆情在业务设置里是**平铺源名**、没有格，
+ * 等选源模型定它们要不要格级开关（用户 2026-11-11）。
+ */
+const CELL_SLUGS: Readonly<Record<string, string>> = {
+  纳指: 'ndx',
+  美元: 'usd',
+  '美元（备用）': 'usd-fallback',
+  黄金: 'gold',
+  '黄金（备用）': 'gold-fallback',
+  BTC: 'btc',
+  ETH: 'eth',
+  离岸人民币: 'cnh',
+  '10Y': 'ust10y',
+  政策路径概率: 'probability',
+  恐惧与贪婪: 'index',
+  稳定币: 'stablecoin',
+  ETF: 'etf',
+  永续持仓名义额: 'oi',
+  资金费率: 'funding',
+  资金腿: 'capital',
+  杠杆腿: 'leverage',
+  价格腿: 'price'
+}
+
 /** `[格名, 源 id, 是不是备用行]` → 模块；`sourceIds` 由 cells 派生，两处不会不一致。 */
 function moduleOf(
   id: string,
@@ -39,6 +72,8 @@ function moduleOf(
 ): DashboardSourceModule {
   const cells: DashboardCell[] = rows.map(([label, sourceId, fallback]) => ({
     label,
+    // 无格名的那几行（AI 分析用）用源 id 当键：它同样稳定、不随顺序变。
+    cellKey: label === '' ? sourceId : (CELL_SLUGS[label] ?? label),
     sourceId,
     ...(fallback === true ? { fallback: true } : {})
   }))
@@ -142,4 +177,9 @@ export function modulesForBusiness(business: keyof typeof BUSINESS_MODULE_IDS): 
 /** 这张业务用到多少个源（去重；副标题「N 个源」读它）。按 cells 现算——卡片少一行，这里的数就变。 */
 export function sourceCountForBusiness(business: keyof typeof BUSINESS_MODULE_IDS): number {
   return new Set(modulesForBusiness(business).flatMap((module) => module.cells.map((cell) => cell.sourceId))).size
+}
+
+/** 全局格 id：`<moduleId>:<cellKey>`。卡片、看板判断、存储都读它。 */
+export function cellIdOf(moduleId: string, cell: DashboardCell): string {
+  return `${moduleId}:${cell.cellKey}`
 }
