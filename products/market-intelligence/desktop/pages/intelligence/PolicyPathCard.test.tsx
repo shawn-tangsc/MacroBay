@@ -49,8 +49,8 @@ it.each([
   ['missing', 'sourcesNotConfigured', 'configureSources'],
   ['disabled', 'sourcesNotEnabled', 'enableSources'],
   ['unreadable', 'temporarilyUnavailable', 'retry']
-] as const)('keeps the card frame and covers it with the %s scrim', async (state, sentenceKey, actionKey) => {
-  // 用户 2026-11-11：没配置源的模块不能藏——卡框与标题保留，卡内盖半透明遮罩，
+] as const)('keeps the card frame and covers the data area with the %s veil', async (state, sentenceKey, actionKey) => {
+  // 用户 2026-11-11：没配置源的模块不能藏——卡框与标题保留，卡内数据区盖半透明遮罩，
   // 遮罩里居中一句 + 一颗按钮；三态各自的句子与动作不同。
   const shared = productText['zh-CN'].pages.intelligence.portal.data
   let configured = 0
@@ -64,19 +64,36 @@ it.each([
       text, state, onConfigure: () => { configured += 1 }, onRetry: () => { retried += 1 }
     })
   })))
-  // 卡还在：标题仍在，遮罩存在且带同一个 data-state。
+  // 卡还在：标题仍在，且遮罩盖的是数据区、不盖标题。
   expect(host.querySelector('.mi-policy-card')).not.toBeNull()
   expect(host.querySelector('.mi-policy-card__head')?.textContent).toBe(text.title)
-  const scrim = host.querySelector('.mi-policy-card__scrim')
-  expect(scrim?.getAttribute('data-state')).toBe(state)
-  expect(scrim?.textContent).toContain(shared[sentenceKey])
-  // 遮罩里恰一颗按钮，点了做对应动作（读不到只重读、不跳转）。
-  const buttons = [...scrim!.querySelectorAll('button')]
+  const veilHost = host.querySelector('.mi-policy-card > header + .mi-source-veil-host[data-veiled="true"]')
+  expect(veilHost, 'the veil host sits under the header, in the data area').not.toBeNull()
+  const veil = veilHost!.querySelector('.mi-source-veil')
+  expect(veil?.getAttribute('data-state')).toBe(state)
+  expect(veil?.textContent).toContain(shared[sentenceKey])
+  // 旧那组（自画的整卡遮罩块）不许回来：它的类名在共享表里已经标退役。
+  expect(host.querySelector('.mi-source-card')).toBeNull()
+  // 遮罩里恰一颗按钮（整张卡也只有它可聚焦），点了做对应动作（读不到只重读、不跳转）。
+  const buttons = [...host.querySelectorAll<HTMLButtonElement>('button')]
   expect(buttons).toHaveLength(1)
+  expect(veil!.contains(buttons[0]!)).toBe(true)
   expect(buttons[0]?.textContent).toBe(shared[actionKey])
   await act(async () => buttons[0]!.click())
   expect(state === 'unreadable' ? retried : configured).toBe(1)
   expect(state === 'unreadable' ? configured : retried).toBe(0)
+})
+
+/**
+ * 共享表里 `.mi-source-card*` 标着「退役中」：这张卡是它最后一个使用者，迁到 `.mi-source-veil-*`
+ * 之后全仓没人再用它，共享表那一组才可以删。这里钉住「不再回头用它」，否则退役永远退不掉。
+ */
+it('veils through the shared veil group, not the retiring whole-card block', () => {
+  // 用例只查 CSS：类是共享表里的那一份，图上不再出现由上面三态用例各断言一次（查渲染结果，
+  // 不查源码文本——注释里提到它不代表用它）。自画的那层遮罩规则也一并撤掉。
+  const styles = readFileSync('products/market-intelligence/desktop/pages/intelligence/policyPathCard.css', 'utf8')
+  expect(styles).not.toContain('mi-source-card')
+  expect(styles).not.toContain('mi-policy-card__scrim')
 })
 
 it('explains the odds in the drawer instead of a hand-drawn bubble on the card', async () => {

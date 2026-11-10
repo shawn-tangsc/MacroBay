@@ -177,12 +177,6 @@
 .mi-policy-card__bar i[data-outcome='other'] { background: #3b4048; }
 .mi-policy-card__bar i[data-outcome='cut-50-plus'] { background: #2c7a49; }
 
-/* 缺源遮罩（2026-11-11）：卡框与标题在外面，内容区被这层盖住；颜色走 token 的 color-mix，
-   不写死 rgba。遮罩里的内容居中，且**只有那颗按钮可聚焦**（内容区本身不带可聚焦元素）。 */
-.mi-policy-card--unavailable { position: relative; }
-.mi-policy-card__scrim {
-  position: relative; z-index: 1;
-  align-content: center; justify-items: center; text-align: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-}
+/* 缺源遮罩（2026-11-11）：卡框与标题在外面，数据区被共享表的 `.mi-source-veil-*` 盖住，
+   样式只在共享表里有一份，这里不再自画。这一支底下没有可滚的数据（读数本身不在），
+   所以不需要「按可见窗撑高宿主」那条形态规则——宿主高度由共享表的 `min-height` 给。 */

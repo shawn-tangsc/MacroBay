@@ -1,5 +1,5 @@
 import { Button } from 'antd'
-import { CircleSlash, TriangleAlert } from 'lucide-react'
+import { CircleDashed, CircleSlash, TriangleAlert } from 'lucide-react'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -96,15 +96,17 @@ const STALENESS_KEY = {
 } as const
 
 /**
- * 缺源时的整卡：**卡框与标题保留**，卡内盖一层半透明遮罩，遮罩里居中一句话 + 一颗按钮。
+ * 缺源时的整卡：**卡框与标题保留**，卡内数据区盖一层共享遮罩（`.mi-source-veil-*`），
+ * 遮罩里居中一句话 + 一颗按钮。与日历卡、资金面卡同一形态，不再用退役中的 `.mi-source-card`。
  *
  * 为什么不是「整卡不渲染」：用户 2026-11-11 明确「没配置源的模块不能藏」——藏起来读者会以为
  * 这一块被删了。三态各有各的话与动作（共享文案键）：
- * - `missing`（还没配置来源）→「去设置配置」；
+ * - `missing`（还没配置来源）→「去配置」；
  * - `disabled`（来源没有启用）→「去启用」；
  * - `unreadable`（暂时读不到）→「再试一次」，不跳转。
  *
- * 遮罩颜色走主题 token 的 `color-mix`，不写死 rgba；遮罩里**只有那颗按钮可聚焦**。
+ * 这一支底下**没有**「压着的数据」：读数本身就不在（宿主里只有遮罩，没有可 `inert` 的内容）。
+ * 遮罩高度由共享表的 `min-height` 撑住，卡不塌；颜色走主题 token，调用点不写颜色。
  */
 export function PolicyPathUnavailable({ text, state, onConfigure, onRetry }: Readonly<{
   text: PolicyPathCardText
@@ -122,17 +124,19 @@ export function PolicyPathUnavailable({ text, state, onConfigure, onRetry }: Rea
     ? 'pages.intelligence.portal.data.configureSources'
     : state === 'disabled' ? 'pages.intelligence.portal.data.enableSources' : 'pages.intelligence.portal.data.retry'
   const select = state === 'unreadable' ? () => onRetry?.() : () => onConfigure?.()
-  return <section className="mi-policy-card mi-policy-card--unavailable" aria-label={text.title} data-staleness={state}>
+  // 三态的图标与日历卡同一套：没配置是空心圈，没启用是斜线，读不到是警告。
+  const Icon = state === 'missing' ? CircleDashed : state === 'disabled' ? CircleSlash : TriangleAlert
+  // 卡上不带 `data-staleness`：那个属性说的是「读到了」的卡有多新（live/delayed/stale），
+  // 这三态不是新鲜度；状态只在遮罩与状态句上用 `data-state` 说一次。
+  return <section className="mi-policy-card" aria-label={text.title}>
     <header className="mi-policy-card__head"><h2>{text.title}</h2></header>
-    {/* 遮罩：卡框与标题在外面，内容区整块被盖住；高度由共享卡的最小高度撑住，不塌不裁。 */}
-    <div className="mi-policy-card__scrim mi-source-card" data-state={state}>
-      <p className="mi-source-state" data-state={state}>
-        {state === 'missing' ? <CircleSlash aria-hidden className="mi-source-state__icon" size={14} />
-          : state === 'disabled' ? <CircleSlash aria-hidden className="mi-source-state__icon" size={14} />
-            : <TriangleAlert aria-hidden className="mi-source-state__icon" size={14} />}
-        {resolveKey(sentenceKey)}
-      </p>
-      <div className="mi-source-card__actions">
+    <div className="mi-source-veil-host" data-veiled="true">
+      <div className="mi-source-veil" data-state={state}>
+        <p className="mi-source-state" data-state={state}>
+          <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
+          {resolveKey(sentenceKey)}
+        </p>
+        {/* 遮罩里恰一颗按钮：没配置/没启用 → 去配置，读不到 → 再试一次。 */}
         <Button onClick={select} size="small">{resolveKey(actionKey)}</Button>
       </div>
     </div>
