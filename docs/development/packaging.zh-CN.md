@@ -227,6 +227,7 @@ CI 跑的也是同一条命令，所以本页不再自己维护一份清单。
 
 然后在干净机器上安装产物，验证：
 
+- **发布自检通过**：`pnpm exec tsx scripts/release/check-superseded-origins.mts --user-data "<安装版的数据目录>"` ——在**装好的包**上跑、指向安装版的数据目录，不是源码窗口的 profile；输出必须有 `rows marked superseded without an origin reference: 0` 与 `PASS`，没跑过 0.4.1 那条问题构建的机器会以 `PASS` 加说明的形式出现，不是报错；
 - 首次启动和模型服务配置；
 - 一次真实智能体对话；
 - 本地数据写入 `userData`；

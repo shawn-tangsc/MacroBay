@@ -17,7 +17,18 @@
 | `pnpm seed:briefing-history` | 需要造「那一次已清理」的门槛 5 证据时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用 | 取这部分证据的人 | 临时目录里的 `daily-briefings.sqlite` 与 `daily-brief-sessions.sqlite` + 指向该目录的截图 |
 | `pnpm seed:analysis-quota` | 需要造「今天的分析额度已用尽」来验 P3 时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用，然后触发一次自动分析（市场日历「Refresh now」或模块信号） | 验 P3 的这条线 | 脚本输出 `seeded <UTC 日>: event 48/48, calendar 9/9` 那一行 + 临时目录里的 `market-analysis.sqlite` + 中心出现一条 P3（正文含「今天已用 48 次 / 上限 48 次」），同一天再触发不新增 |
 | `pnpm docs:event-ids` | 改动通知事件 id、或改文档里引用这些 id 的段落时 | 改这块的实现方 | 报告里 `197 篇文档 / N 个已声明事件 id / 零处对不上` 那一行 + 退出码 0（**不接受 `skipped`**） |
+| `scripts/release/check-superseded-origins.mts`（命令见下） | 每次发版、在**装好这一版包**的机器上跑一次；指向安装版的数据目录，不是源码窗口 | 发版的人 | 输出里 `rows marked superseded without an origin reference: 0` + `PASS`；库/表/列不存在时也是 `PASS` 并说明「那段代码没跑过」 |
 | `pnpm release:preflight`（带 `vX.Y.Z --online` 两个参数） | 打任何 `v*` 标签**之前**；必须在干净、且 HEAD 正好等于 `origin/main` 的 `main` 上 | 发版的人 | `preflight passed for vX.Y.Z` 那一行 + 退出码 0 |
+
+
+上面那条发布自检的命令（`--user-data` 指到**安装版**的数据目录）：
+
+```bash
+pnpm exec tsx scripts/release/check-superseded-origins.mts --user-data "<安装版的数据目录>"
+```
+
+它的判据只有一句：0.4.1 那条问题构建会把「没有身份链接的历史会话」标成 `superseded` 且 `origin_ref` 为空；
+跑过那条构建的机器上，这个计数必须为 0（不为 0 会逐条打印会话 id 与写入时间，并退 1）。
 
 ## `check:boot-page` 为什么不进 `verify`
 
