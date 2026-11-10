@@ -183,6 +183,7 @@ function main(): void {
     console.log(`正文说明句门禁：基线过期——${stale.length} 个位置已经不在正文里，请用 --lower/--remove 把基线改小：`)
     for (const id of stale) console.log(`  ${id}`)
   }
+  if (failed) process.exit(1)
   console.log(`正文说明句门禁通过：${counts.size} 个位置、合计 ${[...counts.values()].reduce((s, v) => s + v, 0)} 处，都是既有基线（只降不升）。`)
 
 }
