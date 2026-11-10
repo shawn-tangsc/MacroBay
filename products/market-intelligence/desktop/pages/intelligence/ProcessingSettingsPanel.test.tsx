@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -111,6 +114,19 @@ const row = (key: string): HTMLElement =>
 const sentimentRow = (): HTMLElement => row('sentimentModel')
 const sentimentSelect = (): HTMLElement | null => sentimentRow().querySelector('.ant-select') as HTMLElement | null
 const sentimentSwitch = (): HTMLInputElement | null => sentimentRow().querySelector('.ant-switch') as HTMLInputElement | null
+
+describe('ProcessingSettingsPanel · 区块容器的框只由平台组件给', () => {
+  it('屏里不再写第二份边框/圆角/底色（两套数必然一处改、另一处不跟）', () => {
+    const root = process.cwd()
+    const panel = readFileSync(join(root, 'products/market-intelligence/desktop/pages/intelligence/ProcessingSettingsPanel.tsx'), 'utf8')
+    expect(panel).toContain("from '@platform/ui/components/settings-section'")
+
+    const css = readFileSync(join(root, 'products/market-intelligence/desktop/pages/intelligence/ProcessingSettingsPanel.css'), 'utf8')
+    // 只许写平台那件表达不了的（对齐、状态小字位置）；`.settings-section` 本体一条规则都不许有。
+    expect(css).not.toMatch(/\.settings-section(?!__)\s*\{/)
+    expect(css).not.toMatch(/\.settings-section__(header|body)\s*\{/)
+  })
+})
 
 describe('ProcessingSettingsPanel · 一个区块一个圆角容器', () => {
   it('整屏只有区块容器这一层：两个区块、行里没有第二个带边框的盒子', async () => {
