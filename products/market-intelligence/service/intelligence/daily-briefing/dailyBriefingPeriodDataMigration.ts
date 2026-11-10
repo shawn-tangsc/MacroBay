@@ -45,6 +45,10 @@ function replicaId(baseId: string, language: DailyBriefingLocale): string {
  * gets a stable derived id. Order follows the old file — the reader's list must not be re-sorted by
  * a migration.
  *
+ * The English rows are **not a new behaviour added by this migration**: "also generate an English
+ * edition" was ticked in the old settings, so the reader had already asked for those editions.
+ * Collapsing them into the primary row would silently switch that choice off during the upgrade.
+ *
  * A (hour, window, language) triple that already exists is dropped: the store cannot hold two rows
  * that mean the same edition, and the old file could carry them from earlier repairs.
  */
