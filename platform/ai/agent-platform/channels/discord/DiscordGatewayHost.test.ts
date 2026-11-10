@@ -87,6 +87,81 @@ describe('discord gateway host', () => {
     expect(JSON.stringify(harness.audits())).not.toContain(TOKEN)
   })
 
+  it('sends a message into the pipeline before it advances the cursor', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message('{"op":0,"s":7,"t":"MESSAGE_CREATE","d":{"id":"msg-1","channel_id":"222","guild_id":"333","content":"hi there","author":{"id":"444"},"mentions":[{"id":"999"}]}}')
+    await flush()
+
+    expect(harness.inboundRequests[0]).toMatchObject({
+      providerEventKey: 'discord:event:msg-1',
+      providerConversationKey: 'discord:conversation:guild:222',
+      providerUserKey: 'discord:user:444',
+      conversationKind: 'group',
+      mentionedBot: true,
+      text: 'hi there'
+    })
+    // 先送管道、再提序号：反过来就是「告诉网关处理过了」，一次失败就永久丢消息。
+    expect(harness.order).toEqual(['receive', 'commit'])
+    expect(harness.runtime.commitIfCurrent).toHaveBeenCalledWith('discord-a', 1, 7)
+  })
+
+  it('does not advance the cursor when the pipeline asks to retry', async () => {
+    const harness = await createHarness({ receive: async () => ({ disposition: 'retry' }) })
+    harness.sockets[0].message(HELLO)
+    const before = harness.runtime.commitIfCurrent.mock.calls.length
+    harness.sockets[0].message('{"op":0,"s":9,"t":"MESSAGE_CREATE","d":{"id":"msg-2","channel_id":"222","guild_id":"333","content":"again","author":{"id":"444"}}}')
+    await flush()
+
+    expect(harness.inbound.receive).toHaveBeenCalledOnce()
+    expect(harness.runtime.commitIfCurrent).toHaveBeenCalledTimes(before)
+    expect(harness.audits()).toContain('discord-inbound-retry')
+  })
+
+  it('does not advance the cursor when the pipeline throws', async () => {
+    const harness = await createHarness({ receive: async () => { throw new Error('pipeline down') } })
+    harness.sockets[0].message(HELLO)
+    const before = harness.runtime.commitIfCurrent.mock.calls.length
+    harness.sockets[0].message('{"op":0,"s":10,"t":"MESSAGE_CREATE","d":{"id":"msg-3","channel_id":"222","guild_id":"333","author":{"id":"444"}}}')
+    await flush()
+
+    expect(harness.runtime.commitIfCurrent).toHaveBeenCalledTimes(before)
+    expect(harness.audits()).toContain('discord-inbound-failed')
+  })
+
+  it('consumes its own echoed message without delivering or auditing it', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message('{"op":0,"s":11,"t":"MESSAGE_CREATE","d":{"id":"msg-4","channel_id":"222","guild_id":"333","content":"my reply","author":{"id":"999","bot":true}}}')
+    await flush()
+
+    expect(harness.inbound.receive).not.toHaveBeenCalled()
+    expect(harness.audits()).toEqual([])
+    // 已消费：序号照常推进，否则它自己发的每条消息都会把游标卡住。
+    expect(harness.runtime.commitIfCurrent).toHaveBeenCalledWith('discord-a', 1, 11)
+  })
+
+  it('keys deduplication on the message id, not on its text', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message('{"op":0,"s":12,"t":"MESSAGE_CREATE","d":{"id":"msg-5","channel_id":"222","guild_id":"333","content":"first","author":{"id":"444"}}}')
+    harness.sockets[0].message('{"op":0,"s":13,"t":"MESSAGE_CREATE","d":{"id":"msg-5","channel_id":"222","guild_id":"333","content":"edited later","author":{"id":"444"}}}')
+    await flush()
+
+    const keys = harness.inboundRequests.map((request) => request.providerEventKey)
+    expect(keys).toEqual(['discord:event:msg-5', 'discord:event:msg-5'])
+  })
+
+  it('does not deliver a message that arrived on a socket which already closed', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].onclose?.({})
+    harness.sockets[0].message('{"op":0,"s":14,"t":"MESSAGE_CREATE","d":{"id":"msg-6","channel_id":"222","guild_id":"333","author":{"id":"444"}}}')
+    await flush()
+
+    expect(harness.inbound.receive).not.toHaveBeenCalled()
+  })
+
   it('ignores frames that arrive on a socket which already closed', async () => {
     const harness = await createHarness()
     harness.sockets[0].message(HELLO)
@@ -210,12 +285,32 @@ class FakeSocket {
   }
 }
 
-async function createHarness(options: { token?: string | null; commitSequence?: () => boolean } = {}) {
+async function createHarness(options: {
+  token?: string | null
+  commitSequence?: () => boolean
+  receive?: (request: Record<string, unknown>) => Promise<{ disposition: string }>
+} = {}) {
   const clock = new FakeClock()
   const sockets: FakeSocket[] = []
   const auditCodes: string[] = []
+  /** 调用顺序：管道确认与序号提交的先后是这一笔最要紧的判据。 */
+  const order: string[] = []
+  const inboundRequests: Array<Record<string, unknown>> = []
+  const inbound = {
+    receive: vi.fn(async (request: Record<string, unknown>) => {
+      inboundRequests.push(request)
+      order.push('receive')
+      const result = options.receive ? await options.receive(request) : { disposition: 'acknowledged' }
+      // 真服务在「落库之后」才调 acknowledge；假管道照同一条顺序来。
+      if (result.disposition !== 'retry') await (request.acknowledge as () => Promise<void>)()
+      return result
+    })
+  }
   const runtime = {
-    commitIfCurrent: vi.fn(options.commitSequence ?? (() => true)),
+    commitIfCurrent: vi.fn((...args: unknown[]) => {
+      order.push('commit')
+      return options.commitSequence ? options.commitSequence() : true
+    }),
     auditIfCurrent: vi.fn((_channelId: string, _generation: number, code: string) => {
       auditCodes.push(code)
       return true
@@ -227,6 +322,8 @@ async function createHarness(options: { token?: string | null; commitSequence?: 
     gatewayUrl: 'wss://gateway.discord.gg',
     token: async () => (options.token === null ? null : (options.token ?? TOKEN)),
     intents: 33_281,
+    inbound: inbound as never,
+    botUserId: '999',
     runtime: runtime as unknown as DiscordRuntimeRepository,
     createPlatformWebSocket: class {
       constructor(_url: string) {
@@ -247,6 +344,9 @@ async function createHarness(options: { token?: string | null; commitSequence?: 
     clock,
     sockets,
     runtime,
+    inbound,
+    inboundRequests,
+    order,
     audits: () => [...auditCodes],
     wire: (index: number) => sockets[index]?.sent.map(parseWire) ?? []
   }

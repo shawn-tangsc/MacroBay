@@ -1,7 +1,10 @@
+import type { ChannelInboundService } from '../ChannelInboundService'
+import { readDiscordMessageCreate } from './DiscordGatewayDispatch'
 import type { DiscordGatewayFrame } from './DiscordGatewayProtocol'
 import { parseDiscordGatewayFrame } from './DiscordGatewayProtocol'
 import { DiscordGatewaySession, type DiscordGatewayClock, type DiscordGatewayEnd } from './DiscordGatewaySession'
 import { DiscordRuntimeRepository } from './DiscordRuntimeRepository'
+import { normalizeDiscordEvent } from './DiscordUpdateNormalizer'
 
 type Socket = {
   close: () => void
@@ -15,10 +18,13 @@ type Factory = new (url: string) => Socket
 /**
  * Discord 网关宿主：把 socket 接到状态机（`DiscordGatewaySession`）上，并负责「断了以后怎么回来」。
  *
- * 这一层**不解析业务事件**：帧解析交给 `DiscordGatewayProtocol`，连接语义交给状态机，它自己只管
- * 三件事——开/关 socket、把结束原因写成审计、按退避排下一次连接。
- * 消息类 dispatch 留到下一笔接进管道；**在那之前一个字节都不提交序号**，否则游标会跨过一条没送进
- * 管道的消息，重连后就永远补不回来。
+ * 这一层负责三件事——开/关 socket、把结束原因写成审计、按退避排下一次连接；外加一条最要紧的顺序：
+ * **先送进管道、管道确认之后才提交序号**。反过来（先提交再投递）就等于告诉网关「这条我处理过了」，
+ * 一次投递失败就永久丢消息，重连也补不回来。
+ *
+ * 消息类事件由 `DiscordGatewayDispatch` 压成有界形状，去重键来自 `message.id` 本身。
+ * 机器人自己发的消息会被网关回显给我们：那一条「忽略」并且推进序号——它是我们自己消费掉的，
+ * 不是坏帧，也不该每发一条消息就写一行审计。
  *
  * 时间与 socket 都可注入：用例用假时钟、假 socket 确定性重跑心跳与退避，一条真连接都不开。
  */
@@ -37,6 +43,9 @@ export class DiscordGatewayHost {
     /** 凭据只在内存里读；这里拿不到就一条连接都不开。 */
     token: () => Promise<string | null>
     intents: number
+    inbound: ChannelInboundService
+    /** 机器人自己的 id（`/users/@me`）：判断「这条消息是不是在叫我」。拿不到时只有私信算叫我。 */
+    botUserId: string | null
     runtime: DiscordRuntimeRepository
     createPlatformWebSocket: Factory
     isCurrent: () => boolean
@@ -126,21 +135,96 @@ export class DiscordGatewayHost {
       this.audit('discord-gateway-frame-invalid')
       return
     }
-    if (this.isLifecycleDispatch(frame)) {
+    const lifecycle = this.lifecycleDispatch(frame)
+    if (lifecycle) {
       // 连上了：退避计数从头算。
       this.attempt = 0
-      if (!this.commitSequence(frame.sequence)) {
-        // 旧代际：这条连接已经不属于当前运行时，写入被丢弃后**立刻停**，别继续消费它的帧。
-        this.audit('discord-sequence-stale')
-        this.close()
-        return
-      }
+      this.commitOrStop(lifecycle.sequence)
+      this.session?.receive(frame)
+      return
+    }
+    if (frame.kind === 'dispatch') {
+      void this.handleDispatch(frame, socket)
+      return
     }
     this.session?.receive(frame)
   }
 
-  private isLifecycleDispatch(frame: DiscordGatewayFrame): frame is Extract<DiscordGatewayFrame, { kind: 'dispatch' }> {
-    return frame.kind === 'dispatch' && (frame.event === 'READY' || frame.event === 'RESUMED')
+  /** 一条 dispatch 的处理：消息进管道，其余事件读过就算消费。序号只在确认之后推进。 */
+  private async handleDispatch(frame: Extract<DiscordGatewayFrame, { kind: 'dispatch' }>, socket: Socket): Promise<void> {
+    if (frame.event !== 'MESSAGE_CREATE') {
+      // 成员变更、表情、正在输入……这一版不投递它们；读过即消费，不然游标会永远卡在它们前面。
+      this.commitOrStop(frame.sequence)
+      return
+    }
+    const read = readDiscordMessageCreate(frame.data, this.deps.botUserId)
+    if (read.kind === 'ignored') {
+      // 我们自己发出去、又被回显的那条：消费掉，但不记审计（否则每发一条消息都多一行噪声）。
+      this.commitOrStop(frame.sequence)
+      return
+    }
+    if (read.kind === 'invalid') {
+      // 读不懂的消息体：重放也读不懂，记一条并消费掉，别让它把后面所有消息都堵在游标后面。
+      this.audit('discord-event-invalid')
+      this.commitOrStop(frame.sequence)
+      return
+    }
+    const fact = normalizeDiscordEvent(read.seam)
+    if (!fact) {
+      this.audit('discord-event-invalid')
+      this.commitOrStop(frame.sequence)
+      return
+    }
+
+    /** 管道在**落库之后**才调它；序号提交挂在这里，才真正是「先入管道、再提序号」。 */
+    let acknowledged = false
+    let result: Awaited<ReturnType<ChannelInboundService['receive']>>
+    try {
+      result = await this.deps.inbound.receive({
+        channelId: this.deps.channelId,
+        generation: this.deps.generation,
+        providerEventKey: fact.eventKey,
+        providerConversationKey: fact.conversationKey,
+        providerUserKey: fact.userKey,
+        conversationKind: fact.conversationKind,
+        mentionedBot: fact.mentionedBot,
+        ...(fact.text === undefined ? {} : { text: fact.text }),
+        ...(fact.attachments ? { attachments: fact.attachments } : {}),
+        acknowledge: async () => {
+          // 连接已经被换掉：这条确认对不上任何现役 socket，抛出去让管道按 retry 处理。
+          if (!this.current(socket)) throw new Error('discord-gateway-socket-replaced')
+          if (!this.deps.runtime.commitIfCurrent(this.deps.channelId, this.deps.generation, frame.sequence)) {
+            this.audit('discord-sequence-stale')
+            this.close()
+            throw new Error('discord-sequence-stale')
+          }
+          acknowledged = true
+        }
+      })
+    } catch {
+      this.audit('discord-inbound-failed')
+      return
+    }
+    if (!this.current(socket)) return
+    if (result.disposition === 'retry') {
+      // 管道说这条没接住：序号**不许**前移，让它下次重连时被补发。
+      this.audit('discord-inbound-retry')
+      return
+    }
+    // 兜底：管道没走 acknowledge 也算这条已消费（正常路径下不会发生，宁可推进也别把游标卡死）。
+    if (!acknowledged) this.commitOrStop(frame.sequence)
+  }
+
+  /** 提交序号；被拒（旧代际）就记一条并立刻停，别继续消费一条已经过期连接上的帧。 */
+  private commitOrStop(sequence: number): void {
+    if (this.commitSequence(sequence)) return
+    this.audit('discord-sequence-stale')
+    this.close()
+  }
+
+  /** 返回帧本身而不是 boolean：用类型谓词说「false 就不是 dispatch」会把后面那条分支判成不可达。 */
+  private lifecycleDispatch(frame: DiscordGatewayFrame): Extract<DiscordGatewayFrame, { kind: 'dispatch' }> | null {
+    return frame.kind === 'dispatch' && (frame.event === 'READY' || frame.event === 'RESUMED') ? frame : null
   }
 
   /** 序号落库的唯一入口：`commitIfCurrent` 同时是鉴权（代际/启用状态），过期的写一律返回 false。 */
