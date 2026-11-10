@@ -7,7 +7,7 @@ import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 
 import { BusinessSettingsContent, BusinessSettingsView, type BusinessKey } from './BusinessSettingsView'
-import { modulesForBusiness } from './dashboardSourceModules'
+import { duplicateCellIds, modulesForBusiness } from './dashboardSourceModules'
 
 const t = productText['zh-CN'].settings.intelligenceSources
 const resolveText = (key: string): string => resolveProductTextKey('zh-CN', key)
@@ -134,5 +134,12 @@ describe('内容区页头与卡片项的行结构', () => {
     // 日历那面的格名就是各条 feed 的读者名，右列是源名。
     expect(row?.querySelector('.business-card__label')?.textContent).toBeTruthy()
     expect(row?.querySelector('.business-card__value')?.textContent).toBeTruthy()
+  })
+})
+
+describe('格键唯一', () => {
+  it('has no duplicate cellId inside any module', () => {
+    // 背离卡的「资金腿」撞过一次键，`divergence:*` 因此接不上。这条守全表（跨模块同名允许）。
+    expect(duplicateCellIds()).toEqual([])
   })
 })

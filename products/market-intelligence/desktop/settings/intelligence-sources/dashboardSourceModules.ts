@@ -59,7 +59,6 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   ETF: 'etf',
   永续持仓名义额: 'oi',
   资金费率: 'funding',
-  资金腿: 'capital',
   杠杆腿: 'leverage',
   价格腿: 'price'
 }
@@ -68,12 +67,13 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
 function moduleOf(
   id: string,
   labelKey: string,
-  rows: ReadonlyArray<readonly [string, string, boolean?]>
+  rows: ReadonlyArray<readonly [string, string, boolean?, string?]>
 ): DashboardSourceModule {
-  const cells: DashboardCell[] = rows.map(([label, sourceId, fallback]) => ({
+  const cells: DashboardCell[] = rows.map(([label, sourceId, fallback, explicitKey]) => ({
     label,
-    // 无格名的那几行（AI 分析用）用源 id 当键：它同样稳定、不随顺序变。
-    cellKey: label === '' ? sourceId : (CELL_SLUGS[label] ?? label),
+    /* 键的优先级：显式给的最优先（同一格名出现两次时必须显式区分，例如背离卡的两条「资金腿」），
+       其次是 `CELL_SLUGS` 的表，最后退回格名本身；无格名的行（AI 分析用）用源 id。 */
+    cellKey: explicitKey ?? (label === '' ? sourceId : (CELL_SLUGS[label] ?? label)),
     sourceId,
     ...(fallback === true ? { fallback: true } : {})
   }))
@@ -101,10 +101,11 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     ['资金费率', 'binance-futures-positioning']
   ]),
   moduleOf('divergence', `${TITLES}.divergence`, [
-    ['资金腿', 'defillama-stablecoins'],
-    ['资金腿', '0xrouter-aggregate-provider'],
-    ['杠杆腿', 'binance-futures-positioning'],
-    ['价格腿', 'binance-futures-positioning']
+    // 同一格名「资金腿」出现两次（稳定币腿 / 聚合行情腿），必须显式给唯一键，否则 cellId 撞车。
+    ['资金腿', 'defillama-stablecoins', false, 'capital-flows'],
+    ['资金腿', '0xrouter-aggregate-provider', false, 'capital-flows-aggregate'],
+    ['杠杆腿', 'binance-futures-positioning', false, 'leverage'],
+    ['价格腿', 'binance-futures-positioning', false, 'price']
   ]),
   moduleOf('macro-calendar', 'pages.intelligence.portal.dashboard.macroReleaseDynamics.sourceName', [
     ['Fed 官方日程', 'macro-calendar-fed'],
@@ -126,10 +127,11 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     ['10Y', 'fred-rates-liquidity']
   ]),
   moduleOf('news', 'pages.intelligence.portal.newsSentiment.title', [
-    ['新闻条目', 'sec-rss'],
-    ['新闻条目', 'coindesk-rss'],
-    ['新闻条目', 'binance-announcements'],
-    ['新闻条目', 'okx-latest-announcements']
+    // 四条同为「新闻条目」：显式按源给键，避免同模块内 cellId 撞车。
+    ['新闻条目', 'sec-rss', false, 'sec-rss'],
+    ['新闻条目', 'coindesk-rss', false, 'coindesk-rss'],
+    ['新闻条目', 'binance-announcements', false, 'binance-announcements'],
+    ['新闻条目', 'okx-latest-announcements', false, 'okx-latest-announcements']
   ])
 ]
 
@@ -182,4 +184,21 @@ export function sourceCountForBusiness(business: keyof typeof BUSINESS_MODULE_ID
 /** 全局格 id：`<moduleId>:<cellKey>`。卡片、看板判断、存储都读它。 */
 export function cellIdOf(moduleId: string, cell: DashboardCell): string {
   return `${moduleId}:${cell.cellKey}`
+}
+
+/**
+ * 守卫：**同一模块内 `cellId` 不得重复**（`quotes:*` 与 `cross-asset:*` 里都有「美元」是允许的，
+ * 那是不同模块）。背离卡的「资金腿」出现过两次、键撞车，就是把 `divergence:*` 接不上的根因。
+ */
+export function duplicateCellIds(): readonly string[] {
+  const seen = new Set<string>()
+  const dupes = new Set<string>()
+  for (const module of DASHBOARD_TAB_MODULES) {
+    for (const cell of module.cells) {
+      const id = cellIdOf(module.id, cell)
+      if (seen.has(id)) dupes.add(id)
+      seen.add(id)
+    }
+  }
+  return [...dupes]
 }
