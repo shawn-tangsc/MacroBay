@@ -459,6 +459,8 @@ export const intelligenceSourcesText = {
     policyPath: '政策路径',
     marketState: '市场状态'
   },
+  /* 采集与数据里「背后的源没开启」的项：整行可点，跳到那个源的配置页。 */
+  openSourceConfig: '打开 {name} 的配置',
   /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
   cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
   /* 需要 API Key 但还没配：开关不可用，旁边一颗 ⓘ 说这一句（正文不放整句）。 */
@@ -1009,6 +1011,7 @@ export const intelligenceSourcesText = {
     policyPath: 'Policy path',
     marketState: 'Market state'
   },
+  openSourceConfig: 'Open the settings for {name}',
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
   credentialRequiredToEnable: 'Set the API key first',
   credentialRequiredToEnableAria: 'About why this switch cannot be turned on yet',

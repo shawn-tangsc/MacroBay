@@ -141,6 +141,10 @@ export function BusinessSettingsContent(props: {
    */
   isCellEnabled?: (cellId: string) => boolean | undefined
   onCellToggle?: (cellId: string, enabled: boolean) => void
+  /** 源自己的采集开关（投影值）；`false` = 这一项背后的源没开 → 不可编辑、红辉光、点击跳配置页。 */
+  isSourceEnabled?: (sourceId: string) => boolean | undefined
+  /** 未开启的项点击后跳到那个源的配置页（宿主实现切屏与选中）。 */
+  onOpenSourceConfig?: (sourceId: string) => void
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
@@ -158,7 +162,9 @@ export function BusinessSettingsContent(props: {
       resolveText: props.resolveText,
       siblings,
       sourceId: cell.sourceId,
-      ...(props.onCellToggle === undefined ? {} : { onCellToggle: props.onCellToggle })
+      ...(props.isSourceEnabled === undefined ? {} : { sourceEnabled: props.isSourceEnabled(cell.sourceId) }),
+      ...(props.onCellToggle === undefined ? {} : { onCellToggle: props.onCellToggle }),
+      ...(props.onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig: props.onOpenSourceConfig })
     })
   }
   return <div className="intelligence-detail-scroll">
@@ -269,10 +275,14 @@ function cellRow(args: {
   label: string
   sourceId: string
   siblings: readonly string[]
+  /** 源自己的采集开关；`false` = 源没开（这一项不可编辑，红辉光，点击去配置它）。 */
+  sourceEnabled?: boolean
   onCellToggle?: (cellId: string, enabled: boolean) => void
+  onOpenSourceConfig?: (sourceId: string) => void
   resolveText: (key: string) => string
 }): React.ReactElement {
   const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
+  const sourceOff = args.sourceEnabled === false
   const toggleKey = enabled
     ? 'settings.intelligenceSources.cellEnabled.disable'
     : 'settings.intelligenceSources.cellEnabled.enable'
@@ -286,19 +296,37 @@ function cellRow(args: {
     }
     onCellToggle(cellId, false)
   }
+  const openConfig = (): void => {
+    if (!sourceOff || args.onOpenSourceConfig === undefined) return
+    args.onOpenSourceConfig(sourceId)
+  }
   return <div
+    aria-label={sourceOff ? args.resolveText('settings.intelligenceSources.openSourceConfig').replace('{name}', label) : undefined}
     className="business-card__row"
     data-business-row={sourceId}
     data-cell-enabled={enabled ? 'true' : 'false'}
     data-cell-id={cellId}
-    key={cellId}>
+    data-source-disabled={sourceOff ? 'true' : undefined}
+    key={cellId}
+    onClick={sourceOff ? openConfig : undefined}
+    onKeyDown={sourceOff
+      ? (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        openConfig()
+      }
+      : undefined}
+    role={sourceOff ? 'button' : undefined}
+    tabIndex={sourceOff ? 0 : undefined}>
     <span className="business-card__label">{label}</span>
     {onCellToggle === undefined
       ? null
       : <span className="business-card__toggle">
         <Switch
+          aria-disabled={sourceOff ? true : undefined}
           aria-label={args.resolveText(toggleKey).replace('{cell}', label)}
           checked={enabled}
+          disabled={sourceOff}
           onChange={onSelect}
           size="small" />
       </span>}

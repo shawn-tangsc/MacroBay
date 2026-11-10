@@ -45,6 +45,8 @@ export type SourcesSettingsPaneProps = {
    * 画六项页签、按 `filter` 切「情报源 / 业务设置」。
    */
   pane?: 'sources' | 'business'
+  /** 采集与数据里「源没开启」的项点击后跳配置页；宿主实现切屏与选中。 */
+  onOpenSourceConfig?: (sourceId: string) => void
   /**
    * 格级启停的读写（宿主注入；真实来源是 main 侧 `createCellEnabledStore`，走 IPC 或直接传函数）。
    * 读失败一律按「启用」显示——不把开关画成关闭（那会假装读者关过它）。
@@ -78,6 +80,12 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
 
   const isBusiness = props.pane === undefined ? props.filter === 'dashboard' : props.pane === 'business'
   const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
+  /* 源自己的采集开关（投影值）：采集与数据里的项靠它判断「背后的源开没开」。 */
+  const sourceEnabledById = new Map<string, boolean>()
+  for (const group of props.view?.groups ?? []) {
+    for (const provider of group.providers) for (const source of provider.sources) sourceEnabledById.set(source.sourceId, source.enabled)
+  }
+  const isSourceEnabled = (sourceId: string): boolean | undefined => sourceEnabledById.get(sourceId)
   /**
    * 格级启停：缺键 = 启用；读失败也按启用显示。**只在这里存一份读回来的显式值**，
    * 存储层之外不再造第二份默认值表。
@@ -140,6 +148,8 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           business={business}
           {...(onCellToggle === undefined ? {} : { onCellToggle })}
           isCellEnabled={isCellEnabled}
+          isSourceEnabled={isSourceEnabled}
+          {...(props.onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig: props.onOpenSourceConfig })}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <>

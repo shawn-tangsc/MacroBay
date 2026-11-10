@@ -167,6 +167,35 @@ describe('内容区页头与卡片项的行结构', () => {
   })
 })
 
+describe('采集与数据：源没开启的项', () => {
+  it('disables the switch, marks the row and opens that source settings on click', async () => {
+    const opened: string[] = []
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BusinessSettingsContent, {
+      business: 'dashboard',
+      isSourceEnabled: (sourceId: string) => sourceId !== 'binance-futures-positioning',
+      onCellToggle: () => undefined,
+      onOpenSourceConfig: (sourceId: string) => { opened.push(sourceId) },
+      resolveText,
+      sourceNames: t.sourceNames
+    })))
+    const off = host.querySelector<HTMLElement>('[data-business-row="binance-futures-positioning"]')!
+    expect(off.getAttribute('data-source-disabled')).toBe('true')
+    // 开关不可编辑（antd 的 disabled 会同时带 aria-disabled）。
+    expect(off.querySelector('[role="switch"]')?.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => { off.click() })
+    expect(opened).toEqual(['binance-futures-positioning'])
+
+    // 源开着的项：没有红框标记，点击也不跳转。
+    const on = host.querySelector<HTMLElement>('[data-business-row="realmarketapi-market"]')!
+    expect(on.getAttribute('data-source-disabled')).toBeNull()
+    await act(async () => { on.click() })
+    expect(opened).toEqual(['binance-futures-positioning'])
+  })
+})
+
 describe('格键唯一', () => {
   it('has no duplicate cellId inside any module', () => {
     // 背离卡的「资金腿」撞过一次键，`divergence:*` 因此接不上。这条守全表（跨模块同名允许）。

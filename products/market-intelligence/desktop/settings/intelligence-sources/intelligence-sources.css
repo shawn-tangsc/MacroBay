@@ -1705,6 +1705,18 @@
   white-space: nowrap;
 }
 
+/* 背后的源没开启：这一项不可编辑，边框红辉光，整行可点跳到那个源的配置页（用户 2026-11-11）。 */
+.business-card__row[data-source-disabled='true'] {
+  border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent),
+    0 0 10px color-mix(in srgb, var(--danger) 35%, transparent);
+  cursor: pointer;
+}
+
+.business-card__row[data-source-disabled='true']:hover {
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface-soft));
+}
+
 .business-card__toggle {
   /* 开关本身不另加尺寸/颜色覆盖：与源行那颗是同一个 antd `Switch`、同 size，颜色由主题 token 给。
      这里只负责把它放在第三列右缘。 */
