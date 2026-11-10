@@ -23,7 +23,14 @@ import { sendIntelligenceTestNotification, type IntelligenceTestDeps } from './s
 
 const NOW = '2026-11-08T05:00:00.000Z'
 const ONE_CHANNEL: PushChannelResolution = { ok: true, channelId: 'slack', channelName: 'Slack' }
-const ACCEPTED: NotificationSubmitOutcome = { kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }
+// 提交被接受 + **通道那一跳真的被受理**：回执要的是这两件事同时成立。
+const ACCEPTED: NotificationSubmitOutcome = {
+  kind: 'accepted',
+  recordId: 'r1',
+  levels: ['center', 'channel'],
+  suppressedLevels: [],
+  delivery: { push: { state: 'sent-accepted', at: NOW } }
+}
 const NO_PUSH_CHANNEL: PushChannelResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} }
 const TWO_PUSH_CHANNELS: PushChannelResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 2, multiple: true, states: {} }
 
@@ -69,6 +76,25 @@ describe('sendIntelligenceTestNotification — 通道先判', () => {
       resolvePushChannel: async () => TWO_PUSH_CHANNELS
     }))
     expect(result).toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 2 })
+  })
+})
+
+describe('the receipt follows the real push, not the submit', () => {
+  const cases: Array<[NotificationSubmitOutcome, unknown]> = [
+    // 通道受理 → 才算发到手机。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center', 'channel'], suppressedLevels: [], delivery: { push: { state: 'sent-accepted', at: NOW } } }, { state: 'sent', channelId: 'slack', channelName: 'Slack' }],
+    // 发出去了没拿到回执：既不是成功也不是失败。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center', 'channel'], suppressedLevels: [], delivery: { push: { state: 'sent-unconfirmed', at: NOW } } }, { state: 'unavailable', reasonCode: 'unknown-after-send' }],
+    // 通道拒收（含熔断挡下）。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center', 'channel'], suppressedLevels: [], delivery: { push: { state: 'failed', reason: 'channel-rejected', at: NOW } } }, { state: 'unavailable', reasonCode: 'channel-rejected' }],
+    // 提交被接受但通道那一档根本没被尝试：不算「发到手机」。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }, { state: 'unavailable', reasonCode: 'not-attempted' }],
+    // 合并进已有记录：这次没有发生投递。
+    [{ kind: 'merged', recordId: 'r1', occurrenceCount: 2, mergedEventTypes: [] }, { state: 'unavailable', reasonCode: 'not-attempted' }]
+  ]
+  it.each(cases)('maps %j to the receipt the button shows', async (outcome, expected) => {
+    const receipt = await sendIntelligenceTestNotification('sentiment', deps({ submit: async () => outcome }))
+    expect(receipt).toEqual(expected)
   })
 })
 

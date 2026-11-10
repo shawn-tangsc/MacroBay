@@ -101,7 +101,17 @@ export async function sendIntelligenceTestNotification(
   const now = (deps.now ?? (() => new Date().toISOString()))()
   const language = await (deps.getAppLanguage ?? (async () => 'zh-CN' as const))()
   const outcome = await deps.submit(buildIntelligenceTestRequest(kind, buildSampleTestPayload(kind, now, language)))
-  // 提交被拒是传输层的事（凭据/网络/目标），不是「没数据」：闭集里最接近的一档仍是 `read-failed`。
   if (outcome.kind === 'rejected') return { state: 'unavailable', reasonCode: 'read-failed' }
-  return { state: 'sent', channelId: channel.channelId, channelName: channel.channelName }
+  if (outcome.kind === 'collapsed') return { state: 'unavailable', reasonCode: 'not-attempted' }
+  if (outcome.kind === 'delegated') return { state: 'unavailable', reasonCode: 'not-attempted' }
+  // 合并：这一条并进了已有的那条，**这次没发生投递**——回「已发到手机」就是假事实。
+  if (outcome.kind === 'merged') return { state: 'unavailable', reasonCode: 'not-attempted' }
+
+  // 提交被接受 ≠ 手机响了。回执只认**通道那一跳的真实证据**（`delivery.push`，与记录同源）：
+  const push = outcome.delivery?.push?.state
+  if (push === 'sent-accepted') return { state: 'sent', channelId: channel.channelId, channelName: channel.channelName }
+  if (push === 'sent-unconfirmed') return { state: 'unavailable', reasonCode: 'unknown-after-send' }
+  if (push === 'failed') return { state: 'unavailable', reasonCode: 'channel-rejected' }
+  // 没有 push 条目：通道这一档根本没被尝试（免打扰/开关/未批准都在上游就挡掉了）。
+  return { state: 'unavailable', reasonCode: 'not-attempted' }
 }

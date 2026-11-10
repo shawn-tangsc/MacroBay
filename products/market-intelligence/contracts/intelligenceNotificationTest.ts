@@ -33,6 +33,15 @@ export type IntelligenceTestUnavailableReason =
   | 'source-disabled'
   | 'timezone-unreadable'
   | 'read-failed'
+  /**
+   * 提交成功、但**通道那一跳没成**：三种处境必须分开说，否则「手机没响」只有一个笼统的失败句。
+   * - `channel-rejected`：通道拒收（或被频控/熔断挡下）；
+   * - `unknown-after-send`：发出去了，但没拿到回执——既不是成功也不是失败；
+   * - `not-attempted`：通道那一档根本没被尝试（提交被折叠/合并，或通道档没进这次提交）。
+   */
+  | 'channel-rejected'
+  | 'unknown-after-send'
+  | 'not-attempted'
 
 export type IntelligenceTestReceipt =
   | Readonly<{ state: 'sent'; channelId: string; channelName: string }>
