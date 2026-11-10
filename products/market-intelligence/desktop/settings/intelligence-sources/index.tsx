@@ -10,6 +10,7 @@ import type { IntelligenceSourceProfile } from '../../../service/intelligence/sc
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { productText } from '../../shared/i18n/productText'
 import type { SourceFilter } from './SettingsSourceTree'
+import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { SourcesSettingsPane } from './SourcesSettingsPane'
 import { SourceSpecificSection } from './SourceSpecificSection'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
@@ -95,6 +96,8 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
   return (
     <section className="settings-workspace intelligence-sources-workspace">
       <SourcesSettingsPane
+        /* 与抽屉、看板读取链同一个客户端实例：同一份存储。 */
+        cellEnabledIo={{ read: () => cellEnabledClient.read(), write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled) }}
         filter={sourceFilter}
         notice={<>
           {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">
