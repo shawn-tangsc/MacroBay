@@ -1477,14 +1477,6 @@
 }
 .intelligence-sources-view-body { grid-column: 1 / -1; min-height: 0; }
 
-/* 不可用源的采集策略组：整组停用后，说明为什么、什么时候恢复（通用句，不针对某个源）。 */
-.source-provider-detail__policy-stopped {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: var(--font-meta);
-  line-height: var(--line-meta);
-}
-
 /* 只给读屏：目录行里「含 N 个取不到的源」这句（ring 是装饰，不能当语义载体）。 */
 .intelligence-source-sr-only {
   position: absolute;
@@ -1498,16 +1490,15 @@
   border: 0;
 }
 
-/* 「采集策略」现在是常显区块（用户 2026-11-10）：标题仍是 13/650 的分区块档，
-   短标跟在标题后面按 meta 档（muted 小字），与原先折叠头那格同一读法。 */
+/* 「采集策略」整块可折叠、默认展开（用户 2026-11-10）：头行（档位、箭头、`aria-*`、整行可点）
+   全部归壳 `CollapsibleGroup`，这里只负责它落在这个区块容器里的位置。
+   区块自己已有 16/18 内距，头行不再各加 12——否则标题与下面两行的左缘对不上。
+   壳那行 `padding: 0 12px !important` 是平台组件的，覆盖它只能同等 `!important`（选择器更具体）。 */
 .source-provider-detail__policy {
   display: grid;
   gap: 8px;
 }
 
-.source-provider-detail__policy-badge {
-  margin-left: 8px;
-  color: var(--muted);
-  font-size: var(--font-meta);
-  font-weight: 400;
+.source-provider-detail__policy .collapsible-group .ant-collapse-header {
+  padding: 0 !important;
 }

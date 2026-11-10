@@ -42,7 +42,6 @@ function labels(): ProviderDetailLabels {
     apiKey: settingsText.apiKey,
     unavailableReasonCode: settingsText.unavailableReasonCode,
     unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria,
-    collectionPolicyStopped: settingsText.collectionPolicyStopped,
     automaticSyncStopped: settingsText.automaticSyncStopped,
     lastSuccessfulSync: settingsText.lastSuccessfulSync,
     health: settingsText.health

@@ -36,7 +36,6 @@ export type SourceConfigText = {
   apiKey: ProviderDetailLabels['apiKey']
   unavailableReasonCode: ProviderDetailLabels['unavailableReasonCode']
   unavailableReasonCodeAria: ProviderDetailLabels['unavailableReasonCodeAria']
-  collectionPolicyStopped: ProviderDetailLabels['collectionPolicyStopped']
   automaticSyncStopped: ProviderDetailLabels['automaticSyncStopped']
   lastSuccessfulSync: ProviderDetailLabels['lastSuccessfulSync']
   health: ProviderDetailLabels['health']
@@ -113,7 +112,6 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
     apiKey: props.text.apiKey,
     unavailableReasonCode: props.text.unavailableReasonCode,
     unavailableReasonCodeAria: props.text.unavailableReasonCodeAria,
-    collectionPolicyStopped: props.text.collectionPolicyStopped,
     automaticSyncStopped: props.text.automaticSyncStopped,
     lastSuccessfulSync: props.text.lastSuccessfulSync,
     health: props.text.health,

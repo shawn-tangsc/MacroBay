@@ -40,7 +40,6 @@ function labels(): ProviderDetailLabels {
     connectionUnsupported: settingsText.connectionUnsupported,
     unavailableReasonCode: settingsText.unavailableReasonCode,
     unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria,
-    collectionPolicyStopped: settingsText.collectionPolicyStopped,
     automaticSyncStopped: settingsText.automaticSyncStopped,
     lastSuccessfulSync: settingsText.lastSuccessfulSync,
     apiKey: settingsText.apiKey,

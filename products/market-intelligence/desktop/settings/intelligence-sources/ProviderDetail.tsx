@@ -1,7 +1,8 @@
 import { Alert, Button, Input } from 'antd'
 import { Eye, EyeOff } from 'lucide-react'
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { IconButton } from '@platform/ui/components/icon-button'
 
@@ -22,6 +23,14 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+
+/**
+ * 「这一行为什么不能改」的两句话与那颗 ⓘ 的读屏名（都是键，句子由 `resolveText` 解析）。
+ * 取不到的源说第一句、还没接入的源说第二句——同一个位置只挂一颗 ⓘ，正文里没有它们的位置。
+ */
+const NOT_CONFIGURABLE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.notConfigurableAria'
+const COLLECTION_POLICY_STOPPED_KEY = 'settings.intelligenceSources.collectionPolicyStopped'
+const PLANNED_NOT_CONFIGURABLE_KEY = 'settings.intelligenceSources.collectionPolicy.plannedNotConfigurable'
 
 export type ProviderDetailLabels = {
   sourceNames: Record<string, string>
@@ -49,8 +58,6 @@ export type ProviderDetailLabels = {
   unavailableReasonCode: string
   /** ⓘ 的名字（与正文那句分开：一个是名字，一个是句子）。 */
   unavailableReasonCodeAria: string
-  /** 不可用源策略组停用时那一句（通用）。 */
-  collectionPolicyStopped: string
   automaticSyncStopped: string
   lastSuccessfulSync: string
   /** B4 四格：今天有没有读数 / 上次成功 / 为什么没在采 / 能不能立刻采。 */
@@ -147,12 +154,18 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** 唯一一处「这是哪个面」的判定：注册表渲染只发生在设置页那一侧。 */
   const isSettingsSurface = (surface ?? 'panel') === 'settings'
   /*
-    每个源策略组的「停用原因」id 前缀。原因句在组开头，视觉上谁都看得见，但读屏不看位置——
-    键盘用户 Tab 进一片灰控件只会听到一串「不可用」，不知道为什么。所以用 `role="group"` +
-    `aria-describedby` 把原因挂到这一组上。**id 按源派生**：同一屏有多个不可用源时，
-    组件级单个 id 会让每组的 <p> 撞同一个 id，`aria-describedby` 只能解析到第一个。
+    采集策略组的折叠状态：只存**被收起**的源 id，默认（不在集合里）是展开。
+    展开态是视图状态，不是读者设置——不进 store、不落盘，切走再回来仍是默认展开。
   */
-  const policyGroupIdBase = useId()
+  const [collapsedPolicyIds, setCollapsedPolicyIds] = useState<ReadonlySet<string>>(() => new Set())
+  const setPolicyOpen = useCallback((sourceId: string, open: boolean) => {
+    setCollapsedPolicyIds((current) => {
+      const next = new Set(current)
+      if (open) next.delete(sourceId)
+      else next.add(sourceId)
+      return next
+    })
+  }, [])
   // 读者已经配好自定义代理时，不再把「需要连接 本地代理」当成他还没做的事（MI-11-R196）。
   const proxyConfigured = useProxyConfigured()
   // 「上次成功同步」是读者可见的日期：走统一格式化（跟读者时区），不自己切 ISO 字符串。
@@ -349,7 +362,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0
         const unavailable = source.unavailable
-        const policyStoppedId = `${policyGroupIdBase}-policy-${source.sourceId}`
         const tags = [
           unused || source.visibility === 'pending'
             ? labels.badges.pending
@@ -387,41 +399,39 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             {...(supportsRunNowById?.[source.sourceId] === undefined ? {} : { supportsRunNow: supportsRunNowById[source.sourceId] })}
             timeZone={timeZone}
           />
-          {/* 采集策略（频率档 / 范围 / 是否纳入舆情）：每个源常显，读者不必先选中它。
-              产品自有采集的源只留启用开关，预设与范围不适用（组件自己写那句说明）。 */}
-          {/* 采集策略（频率档 / 范围 / 纳入情绪分析）：每个源一组，**默认收起**。
-              壳 `CollapsibleGroup` 已有自定义内容形态，头行档位、箭头、`aria-controls`、缩进都由
-              壳提供（另一条线 e20dd88 落地），本页不再自绘折叠头。 */}
+          {/* 采集策略（频率档 / 纳入情绪分析）：每个源一组，**可折叠、默认展开**（用户 2026-11-10：
+              一进来就要看采集预设，折起来只是把这块收短）。壳 `CollapsibleGroup` 提供头行档位、
+              箭头、`aria-controls`、整行可点与默认收起的那套行为，本页不另写折叠头，只把默认值翻成展开。 */}
           {policy && policy.profiles[source.sourceId]
             ? <section className="intelligence-section source-provider-detail__policy">
-              {/* 「采集策略」**常显**，不再收起展开：用户 2026-11-10 要它默认露在外面。
-                  标题 13/650（`--font-section` 档），短标与原因句随内容一起常显——拆掉折叠头不等于
-                  可以把「暂不可改」「同步已停止…」丢掉。 */}
-              <div className="intelligence-section-title">{policy.labels.title}
-                {unavailable && policy.labels.stoppedBadge !== undefined
-                  ? <span className="source-provider-detail__policy-badge">{policy.labels.stoppedBadge}</span>
-                  : null}
-              </div>
-              {/* 不可用的源不该还能改采集策略：整组停用，并说清为什么、什么时候恢复。
-                  这句是**通用结构**——所有不可用源同一句，不针对某一个源。 */}
-              {unavailable
-                ? <p className="source-provider-detail__policy-stopped" id={policyStoppedId}>{labels.collectionPolicyStopped}</p>
-                : null}
-              {/* 原因必须能被读屏关联到**这一组控件**：可用时不留组语义、也不留悬空 id。 */}
-              <div {...(unavailable ? { 'aria-describedby': policyStoppedId, role: 'group' } : {})}>
+              <CollapsibleGroup
+                /* 展开态是视图状态，不是读者设置：不进 store，切了源就回默认展开。 */
+                maxBodyHeight={null}
+                {...(unavailable && policy.labels.stoppedBadge !== undefined ? { metaText: policy.labels.stoppedBadge } : {})}
+                onOpenChange={(open) => setPolicyOpen(source.sourceId, open)}
+                open={!collapsedPolicyIds.has(source.sourceId)}
+                resolveText={resolveText}
+                titleKey="settings.intelligenceSources.collectionPolicy.title">
                 <CollectionPolicySection
                   configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
                   sourceId={source.sourceId}
                   draftProfile={policy.profiles[source.sourceId]!}
                   enabledConfigurable={source.visibility !== 'pending' && !unavailable}
                   labels={policy.labels}
+                  /* 「为什么这行不能改」只进采集预设行那颗 ⓘ：取不到与还没接入，同一个位置两句不同的话。
+                     正文里不再有整行说明——那句话以前占一行，读者读到的是一段没有控件的话。 */
+                  notConfigurable={unavailable
+                    ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: COLLECTION_POLICY_STOPPED_KEY }
+                    : source.visibility === 'pending'
+                      ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: PLANNED_NOT_CONFIGURABLE_KEY }
+                      : undefined}
                   onChange={(patch) => policy.onChange(source.sourceId, patch)}
                   resolveText={resolveText}
-                  /* 标题由外层区块画：这一屏「采集策略」只出现一次。 */
+                  /* 标题由折叠头画：这一屏「采集策略」只出现一次。 */
                   showTitle={false}
                   supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
                 />
-              </div>
+              </CollapsibleGroup>
             </section>
             : null}
         </div>

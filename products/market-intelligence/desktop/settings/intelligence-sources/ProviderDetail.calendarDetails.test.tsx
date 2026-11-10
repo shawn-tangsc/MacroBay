@@ -42,7 +42,6 @@ function labels(): ProviderDetailLabels {
     apiKey: settingsText.apiKey,
     unavailableReasonCode: settingsText.unavailableReasonCode,
     unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria,
-    collectionPolicyStopped: settingsText.collectionPolicyStopped,
     automaticSyncStopped: settingsText.automaticSyncStopped,
     lastSuccessfulSync: settingsText.lastSuccessfulSync,
     health: settingsText.health
@@ -411,9 +410,9 @@ describe('ProviderDetail source details', () => {
     expect(`${rowStatus}${rowTags}`).not.toContain(settingsText.status.disabled)
   })
 
-  it('ties the frozen-policy reason to the policy group, so a screen reader hears why', async () => {
-    // 界面设计 2026-11-10：整组置灰时，那句原因只是一个 <p>。视觉上它在组开头谁都看得见，
-    // 但读屏不看位置——键盘用户 Tab 进一片灰控件只会听到一串「不可用」，不知道为什么。
+  it('keeps the frozen-policy reason out of the body and in the preset row ⓘ', async () => {
+    // 用户 2026-11-10：声明性文字不要直接显示在界面上。那句原因以前是一个 <p>（整行说明），
+    // 现在只住「采集预设」字段名旁的 ⓘ；正文里既没有那句话，也没有指向它的悬空描述符。
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const container = document.createElement('div')
@@ -449,17 +448,25 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const group = container.querySelector<HTMLElement>('.source-provider-detail__policy [role="group"]')
-    expect(group).not.toBeNull()
-    const describedBy = group?.getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
-    // 指到的必须是那句原因本身，不是一个悬空 id。
-    expect(document.getElementById(describedBy as string)?.textContent).toBe(settingsText.collectionPolicyStopped)
+    // 正文不含那句原因，也不再留指向它的常驻节点（`.policy-stopped` 整行说明已经没有了）。
+    expect(container.textContent).not.toContain(settingsText.collectionPolicyStopped)
+    expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
+    // 原先包住控件的那层组语义一起撤掉：句子搬进浮层后没有常驻节点可当描述符，
+    // 留着 `role="group"` 只剩一个说不清自己的分组。触发器自己的 `aria-describedby`
+    // 由平台 `Popover` 挂、指向它自己的浮层内容，不属于这一条。
+    expect(container.querySelector('.source-provider-detail__policy [role="group"]')).toBeNull()
+    // 它住在「采集预设」字段名旁那颗 ⓘ 里：点开才读到。
+    const info = container.querySelector<HTMLButtonElement>(
+      `.source-provider-detail__policy [aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)
+    expect(info).not.toBeNull()
+    await act(async () => { info?.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(document.body.textContent).toContain(settingsText.collectionPolicyStopped)
   })
 
-  it('gives every unavailable source its own description id', async () => {
-    // 组件级单个 id 会让两组的 <p> 撞同一个 id，`aria-describedby` 只解析得到第一个——
-    // 第二个源的读者照样听不到原因。这条钉死「按源派生」。
+  it('gives every unavailable source its own reason ⓘ', async () => {
+    // 同一屏两个不可用源：每颗 ⓘ 属于它自己那一组，不能只画一颗、也不能两颗挤在同一个块里。
+    // （以前这里钉的是「每组的描述符 id 不同」；句子搬进浮层后没有常驻描述符，判据换成每组的 ⓘ。）
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const container = document.createElement('div')
@@ -491,16 +498,19 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const groups = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__policy [role="group"]')]
-    expect(groups).toHaveLength(2)
-    const ids = groups.map((group) => group.getAttribute('aria-describedby'))
-    expect(new Set(ids).size).toBe(2)
-    for (const id of ids) {
-      expect(document.getElementById(id as string)?.textContent).toBe(settingsText.collectionPolicyStopped)
+    const policies = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__policy')]
+    expect(policies).toHaveLength(2)
+    for (const policy of policies) {
+      expect(policy.querySelectorAll<HTMLElement>(`[aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toHaveLength(1)
     }
+    expect(container.textContent).not.toContain(settingsText.collectionPolicyStopped)
+    const first = policies[0]?.querySelector<HTMLButtonElement>(`[aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)
+    await act(async () => { first?.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(document.body.textContent).toContain(settingsText.collectionPolicyStopped)
   })
 
-  it('leaves no group semantics and no dangling description on a usable source', async () => {
+  it('leaves no group semantics, no dangling description and no frozen note on a usable source', async () => {
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const container = document.createElement('div')
@@ -517,7 +527,10 @@ describe('ProviderDetail source details', () => {
     await flush()
 
     expect(container.querySelector('.source-provider-detail__policy [role="group"]')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__policy [aria-describedby]')).toBeNull()
     expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
+    // 可用的源不该说自己「不能改」：那颗 ⓘ 只属于取不到 / 还没接入的组。
+    expect(container.querySelector(`.source-provider-detail__policy [aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toBeNull()
   })
 
   it('words the row pill from the projected health state, not from a second read of the runtime status', async () => {
@@ -653,20 +666,51 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const header = container.querySelector('.source-provider-detail__policy .intelligence-section-title')
-    // 套娃修好后，这一块里**只有一个标题元素**（外层区块的），内层 `CollectionPolicySection` 不再画标题。
+    const header = container.querySelector('.source-provider-detail__policy .ant-collapse-header')
+    // 折叠头由壳画：这一块里**只有一个标题元素**，内层 `CollectionPolicySection` 不再画标题。
     // 用结构断言而不是数文本：`textContent` 会把控件可访问名之类的文案也算进去，数不干净。
-    expect(container.querySelectorAll('.source-provider-detail__policy .intelligence-section-title')).toHaveLength(1)
+    expect(container.querySelectorAll('.source-provider-detail__policy .collapsible-group__title')).toHaveLength(1)
+    expect(container.querySelectorAll('.source-provider-detail__policy .intelligence-section-title')).toHaveLength(0)
     // 这一块里带框的容器只有外层一个（内层不再包一层带 border/radius 的 section）。
     expect(container.querySelectorAll('.source-provider-detail__policy .intelligence-section')).toHaveLength(0)
+    // 短标进壳的 meta 槽（头行右侧那格），**默认展开**——不能用「先点开才看得见」当默认。
     expect(header?.textContent).toContain(settingsText.collectionPolicy.stoppedBadge)
-    // 「短标」不是「把整句搬上来」：那句长原因只在展开区里。
+    expect(header?.getAttribute('aria-expanded')).toBe('true')
+    // 「短标」不是「把整句搬上来」：头行里没有那句长原因，正文里也没有（它只在 ⓘ 里）。
     expect(header?.textContent).not.toContain(settingsText.collectionPolicyStopped)
-    expect(container.querySelector('.source-provider-detail__policy')?.textContent).toContain(settingsText.collectionPolicyStopped)
-    // 这块现在**没有折叠交互**：没有可展开的头行、没有 aria-expanded。
-    // 折叠壳本身不在了：没有 `.collapsible-group`、也没有折叠头（`ant-collapse-header`）。
-    expect(container.querySelector('.collapsible-group')).toBeNull()
-    expect(container.querySelector('.ant-collapse-header')).toBeNull()
+    expect(container.textContent).not.toContain(settingsText.collectionPolicyStopped)
+    // 折叠交互回来了：壳在，头行可聚焦整行都是按钮。
+    expect(container.querySelector('.collapsible-group')).not.toBeNull()
+    expect(header).not.toBeNull()
+    // 默认展开 = 展开区活着：读者一进来就要看采集预设，不该先点一下。
+    expect(container.querySelector('.source-provider-detail__policy .ant-collapse-content-active')).not.toBeNull()
+  })
+
+  it('collapses the policy block when the reader closes it, and opens it back', async () => {
+    // 默认展开不等于不能收：头行点一下收起来，再点一下回来（用户 2026-11-10 要的是这个，不是常显）。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        policy: policyFor(['macro-calendar-fed']),
+        provider: fedProvider()
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    const headerFor = (): HTMLElement | null => container.querySelector<HTMLElement>('.source-provider-detail__policy .ant-collapse-header')
+    expect(headerFor()?.getAttribute('aria-expanded')).toBe('true')
+    await act(async () => { headerFor()?.click() })
+    await flush()
+    expect(headerFor()?.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => { headerFor()?.click() })
+    await flush()
+    expect(headerFor()?.getAttribute('aria-expanded')).toBe('true')
   })
 
   it('leaves a usable policy group unmarked', async () => {
@@ -685,7 +729,8 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    // 可用源的策略块同样常显、但没有「暂不可改」这枚短标。
+    // 可用源的策略块同样默认展开，但没有「暂不可改」这枚短标。
     expect(container.textContent).not.toContain(settingsText.collectionPolicy.stoppedBadge)
+    expect(container.querySelector('.source-provider-detail__policy .ant-collapse-header')?.getAttribute('aria-expanded')).toBe('true')
   })
 })

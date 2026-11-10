@@ -7,11 +7,17 @@ export type CollectionPolicyLabels = {
   collectionPreset: string
   manualPresetNote: string
   includeInSentiment: string
-  plannedNotConfigurable?: string
   /** 收起态头行那枚短标（这组现在不能改）；空/没给就不挂。 */
   stoppedBadge?: string
   presets: Record<string, string>
 }
+
+/**
+ * 「这一行为什么现在不能改」的说明句：**只走 ⓘ**，正文没有它的位置（用户 2026-11-10：
+ * 声明性文字不要直接显示在界面上）。`labelKey` 由调用方给——同一个位置在两种情况下说两句不同的话：
+ * 源取不到（同步已停止）与源还没接入（尚未实现）。
+ */
+export type CollectionPolicyNotConfigurable = Readonly<{ ariaLabelKey: string; labelKey: string }>
 
 /**
  * 采集策略：频率档 / 是否纳入情绪分析。
@@ -33,6 +39,11 @@ export function CollectionPolicySection(props: {
   enabledConfigurable?: boolean
   labels: CollectionPolicyLabels
   resolveText: (key: string) => string
+  /**
+   * 这一行不能改的原因（键 + 读屏名）。给了就挂到「采集预设」字段名旁的 ⓘ 里，
+   * **正文不留整句**：整行说明这种位置已经没有了。
+   */
+  notConfigurable?: CollectionPolicyNotConfigurable
   /** 外层区块已经画了标题时传 false：同一屏里「采集策略」只出现一次。 */
   showTitle?: boolean
   onChange: (patch: Partial<IntelligenceSourceProfile>) => void
@@ -40,14 +51,11 @@ export function CollectionPolicySection(props: {
   const configurable = props.configurable ?? true
   const enabledConfigurable = props.enabledConfigurable ?? configurable
   // 产品自有采集的源：预设与情绪开关都不适用，读者要看到「为什么这行是灰的」——那句解释进 ⓘ，
-  // 不占正文（正文只允许字段名、当前值、控件）。pending 那句是**状态**，留在正文。
+  // 不占正文（正文只允许字段名、当前值、控件）。
   const productOwned = enabledConfigurable && !configurable
   return (
     <div className="intelligence-policy-rows">
       {props.showTitle === false ? null : <div className="intelligence-section-title">{props.labels.title}</div>}
-      {!enabledConfigurable && props.labels.plannedNotConfigurable ? (
-        <p className="intelligence-source-note">{props.labels.plannedNotConfigurable}</p>
-      ) : null}
       {/* 两行都从声明来（值/可见性/行键），顺序就是 `SOURCE_ROWS` 的声明顺序：预设在前、情绪在后。 */}
       <div className="intelligence-setting-grid">
         <SourcePresetRow
@@ -58,6 +66,7 @@ export function CollectionPolicySection(props: {
           profile={props.draftProfile}
           resolveText={props.resolveText}
           sourceId={props.sourceId}
+          {...(props.notConfigurable === undefined ? {} : { notConfigurable: props.notConfigurable })}
         />
         <SourceSentimentRow
           disabled={!configurable}

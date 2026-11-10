@@ -12,9 +12,13 @@ const labels = {
   collectionPreset: 'Collection preset',
   manualPresetNote: 'Manual mode does not collect automatically.',
   includeInSentiment: 'Include in sentiment',
-  plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
   presets: { manual: 'Manual', balanced: 'Balanced', frequent: 'Frequent' }
 }
+
+const NOT_CONFIGURABLE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.notConfigurableAria'
+const PLANNED_NOTE_KEY = 'settings.intelligenceSources.collectionPolicy.plannedNotConfigurable'
+const PLANNED_NOTE = 'This source is not implemented yet and cannot be enabled or configured.'
+const NOT_CONFIGURABLE = { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: PLANNED_NOTE_KEY }
 
 /** 行名与 ⓘ 的句子都经 `resolveText` 解析（注册表只持键）；这里给真句子，不给键本身。 */
 const copy: Record<string, string> = {
@@ -22,7 +26,9 @@ const copy: Record<string, string> = {
   'settings.intelligenceSources.collectionPolicy.collectionPreset': labels.collectionPreset,
   'settings.intelligenceSources.collectionPolicy.productOwnedNote':
     'A product-owned job collects this source; the switch at the end of its row controls it.',
-  'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria': 'About collection policy'
+  'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria': 'About collection policy',
+  [NOT_CONFIGURABLE_ARIA_KEY]: 'About why this row cannot be changed',
+  [PLANNED_NOTE_KEY]: PLANNED_NOTE
 }
 const resolveText = (key: string): string => copy[key] ?? key
 
@@ -58,14 +64,22 @@ describe('CollectionPolicySection', () => {
     expect(changes).toContainEqual({ includeInSentiment: true })
   })
 
-  it('fails closed with a note for a source that is not implemented yet', async () => {
-    // 「尚未实现，暂不可启用或配置」是**状态**，留在正文（读者要知道为什么这颗开关是灰的）。
+  it('fails closed and keeps the "not implemented" sentence in the ⓘ, not in the body', async () => {
+    // 用户 2026-11-10：那句话以前是正文里一段没有控件的话；现在它只住「采集预设」字段名旁的 ⓘ。
+    // 状态本身读者照样看得见：行尾开关与预设控件都是禁用的。
     const container = await render({ configurable: false, enabledConfigurable: false, supportsSentiment: false })
 
-    expect(container.textContent).toContain(labels.plannedNotConfigurable)
+    expect(container.textContent).not.toContain(PLANNED_NOTE)
+    expect(document.body.textContent).not.toContain(PLANNED_NOTE)
     expect(container.textContent).not.toContain(copy['settings.intelligenceSources.collectionPolicy.productOwnedNote'])
-    expect(infoTriggers(container)).toHaveLength(0)
+    expect(infoTriggers(container, copy[NOT_CONFIGURABLE_ARIA_KEY]!)).toHaveLength(1)
     expect(switchControls(container)).toHaveLength(0)
+
+    const trigger = infoTriggers(container, copy[NOT_CONFIGURABLE_ARIA_KEY]!)[0]!
+    await act(async () => { trigger.click() })
+    await act(async () => { await Promise.resolve() })
+    // 浮层走 portal，内容在 document.body 里。
+    expect(document.body.textContent).toContain(PLANNED_NOTE)
   })
 
   it('explains a product-owned source in a field-level info trigger, not in the body prose', async () => {
@@ -75,7 +89,7 @@ describe('CollectionPolicySection', () => {
 
     const note = copy['settings.intelligenceSources.collectionPolicy.productOwnedNote']!
     expect(container.textContent).not.toContain(note)
-    expect(container.textContent).not.toContain(labels.plannedNotConfigurable)
+    expect(container.textContent).not.toContain(PLANNED_NOTE)
     // 恰一颗，名字是它自己的（说明不继承字段名，否则读屏会念两遍）。
     expect(infoTriggers(container)).toHaveLength(1)
     expect(infoTriggers(container)[0]!.getAttribute('aria-label')).toBe(
@@ -100,6 +114,8 @@ async function render(props: {
     enabledConfigurable={props.enabledConfigurable}
     draftProfile={profile()}
     labels={labels}
+    /* 这一行不能改时，原因（键）由调用方给——正文里没有它的位置。 */
+    {...(props.enabledConfigurable === false ? { notConfigurable: NOT_CONFIGURABLE } : {})}
     resolveText={resolveText}
     supportsSentiment={props.supportsSentiment}
     onChange={props.onChange ?? (() => undefined)}
@@ -111,9 +127,12 @@ function switchControls(container: HTMLElement): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>('[role="switch"]')]
 }
 
-/** ⓘ：字段名旁那颗只说明、不承载动作的图标按钮。 */
-function infoTriggers(container: HTMLElement): HTMLElement[] {
-  return [...container.querySelectorAll<HTMLElement>(`[aria-label="${copy['settings.intelligenceSources.collectionPolicy.productOwnedNoteAria']}"]`)]
+/** ⓘ：字段名旁那颗只说明、不承载动作的图标按钮（按它的读屏名取，不按位置）。 */
+function infoTriggers(
+  container: HTMLElement,
+  ariaLabel = copy['settings.intelligenceSources.collectionPolicy.productOwnedNoteAria']!
+): HTMLElement[] {
+  return [...container.querySelectorAll<HTMLElement>(`[aria-label="${ariaLabel}"]`)]
 }
 
 function profile(): IntelligenceSourceProfile {

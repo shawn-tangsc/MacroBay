@@ -177,9 +177,11 @@ describe('sources settings page states', () => {
     // 注意：平台壳为了 `aria-controls` 永远指向**存在**的节点，内容从首帧就挂载、收起时是
     // `display: none`——所以这里判「不显示」，不判「不在 DOM 里」（判 DOM 存在与否会被真正的显隐问题骗过）。
     expect(dom.textContent).toContain(zhText.collectionPolicy.title)
-    // 「采集策略」现在是**常显区块**（用户 2026-11-10 去掉折叠），所以不再有「默认收起、点头行展开」
-    // 这一步：直接查内容是否已经在 DOM 里。
-    expect(dom.querySelector('.collapsible-group')).toBeNull()
+    // 这块现在是**可折叠、默认展开**（用户 2026-11-10：「不要收起展开」改成「能收，但默认露出来」）：
+    // 头行有展开/收起，首帧就是展开态，所以控件不用先点一下才在屏上。
+    const header = dom.querySelector<HTMLElement>('.source-provider-detail__policy .ant-collapse-header')
+    expect(header).not.toBeNull()
+    expect(header?.getAttribute('aria-expanded')).toBe('true')
     const section = dom.querySelector('.intelligence-section:has(.intelligence-setting-grid)')
     expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
     expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)

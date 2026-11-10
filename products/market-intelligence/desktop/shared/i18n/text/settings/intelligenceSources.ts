@@ -390,6 +390,8 @@ export const intelligenceSourcesText = {
     manualPresetNote: '手动模式启用后不会自动采集，需点击「立即运行」。',
     manualPresetNoteAria: '采集预设说明',
     plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
+    /* 那颗 ⓘ 的读屏名：取不到与尚未接入共用同一颗（句子不同）。 */
+    notConfigurableAria: '这一行不能修改的说明',
     productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由该来源那一行末尾的开关控制；采集预设不适用于它。',
     productOwnedNoteAria: '采集策略说明',
     /* 收起态头行那枚短标：只说这组现在不能改，不搬展开区那句原因。 */
@@ -912,6 +914,7 @@ export const intelligenceSourcesText = {
     manualPresetNote: 'Manual mode does not collect automatically after enable. Use Run Now.',
     manualPresetNoteAria: 'About the collection preset',
     plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
+    notConfigurableAria: 'About why this row cannot be changed',
     productOwnedNote: 'A product-owned job collects this source; the switch at the end of its row controls it, while the collection preset does not apply.',
     productOwnedNoteAria: 'About this source’s collection policy',
     stoppedBadge: 'Read-only for now',
