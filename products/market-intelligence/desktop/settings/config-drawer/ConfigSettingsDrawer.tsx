@@ -11,7 +11,7 @@ import { productText } from '../../shared/i18n/productText'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
-import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
+import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView } from './drawerScreenView'
 import './configDrawer.css'
 
 /**
@@ -34,6 +34,10 @@ export type ConfigSettingsDrawerProps = {
   initialMenu?: ConfigDrawerMenu
   /** 通知屏视图：**宿主读好再传**，抽屉不自己取数；不传则保留静态版式。 */
   notificationsView?: DrawerScreenView<DrawerRowView>
+  /** 平台与模型那一屏的当前值：**宿主读好再传**，缺键就是「读不到」。 */
+  platformValues?: DrawerPlatformValues
+  /** 行尾「去平台设置」跳转：走宿主给的导航入口，抽屉不拼路由。 */
+  onOpenPlatformSettings?: (target: DrawerPlatformTarget) => void
   /** 行键与平台键的解析入口（文案）。 */
   resolveText?: (key: string) => string
 }
@@ -46,6 +50,8 @@ export function ConfigSettingsDrawer({
   onClose,
   initialMenu = 'sources',
   notificationsView,
+  platformValues,
+  onOpenPlatformSettings,
   resolveText: resolveTextProp
 }: ConfigSettingsDrawerProps): React.ReactElement {
   const copy = productText[useShellLanguage()].pages.intelligence.portal.dashboard.configDrawer
@@ -98,6 +104,15 @@ export function ConfigSettingsDrawer({
         <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
         {menu === 'notifications' && notificationsView !== undefined
           ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={notificationsView} />)
+          : null}
+        {menu === 'platform' && platformValues !== undefined
+          ? (<PlatformScreen
+            onOpen={onOpenPlatformSettings}
+            resolveText={resolveTextProp ?? ((key: string) => key)}
+            values={platformValues} />)
+          : null}
+        {(menu === 'notifications' && notificationsView !== undefined) || (menu === 'platform' && platformValues !== undefined)
+          ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{group.titleKey}</div>}
           {group.rows.map((row) => <div className="config-drawer__row" key={row.key}>
@@ -150,6 +165,46 @@ function NotificationsScreen({ view, resolveText }: {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * 平台与模型：**只读 + 跳转**，一个字都不写。
+ *
+ * 这一屏最容易把「没读到」画成「没设置」：所以值缺失时显示「读不到」，不是空白。
+ * 跳转走宿主给的入口（平台基本设置 / 模型服务页），抽屉不拼路由。
+ */
+const PLATFORM_ROWS: readonly { key: string; value: keyof DrawerPlatformValues; target: DrawerPlatformTarget }[] = [
+  { key: 'configDrawer.rows.timeZone', value: 'timeZone', target: 'preferences' },
+  { key: 'configDrawer.rows.language', value: 'language', target: 'preferences' },
+  { key: 'configDrawer.rows.theme', value: 'theme', target: 'preferences' },
+  { key: 'configDrawer.rows.proxy', value: 'proxy', target: 'preferences' },
+  { key: 'configDrawer.rows.modelService', value: 'modelService', target: 'models' }
+]
+
+function PlatformScreen({ values, onOpen, resolveText }: {
+  values: DrawerPlatformValues
+  onOpen?: (target: DrawerPlatformTarget) => void
+  resolveText: (key: string) => string
+}): React.ReactElement {
+  return (
+    <div data-drawer-screen="ready">
+      {PLATFORM_ROWS.map((row) => {
+        const value = values[row.value]
+        return (
+          <div className="config-drawer__row" data-drawer-row={row.value} key={row.value}>
+            <span className="config-drawer__label">{resolveText(row.key)}</span>
+            {/* 缺值 = 读不到，不是「没设置」；空白会把两件事画成一件。 */}
+            <span className="config-drawer__value">{value ?? resolveText('configDrawer.unreadable')}</span>
+            {onOpen === undefined ? null : (
+              <button className="config-drawer__row-action" onClick={() => onOpen(row.target)} type="button">
+                {resolveText('configDrawer.openPlatformSettings')}
+              </button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

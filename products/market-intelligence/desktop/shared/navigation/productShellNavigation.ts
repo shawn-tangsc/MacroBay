@@ -36,10 +36,18 @@ export function openModelSettings(): void {
   navigateAppShell({ navKey: 'settings', settingsPanelKey: PLATFORM_SETTINGS_PANELS.models })
 }
 
-/** Opens the built-in Basic Settings page that owns proxy mode, proxy address and proxy self-test. */
-export function openProxySettings(): void {
+/**
+ * 平台「基本设置」页：时区、语言、显示风格、代理模式与自检都在这页。
+ * 抽屉里四行指向同一页，所以入口按页面命名，不按代理命名。
+ */
+export function openPreferencesSettings(): void {
   navigateAppShell({
     navKey: 'settings',
     settingsPanelKey: PLATFORM_SETTINGS_PANELS.preferences
   })
+}
+
+/** 代理那一行用的就是同一页；保留这个名字给既有调用点。 */
+export function openProxySettings(): void {
+  openPreferencesSettings()
 }

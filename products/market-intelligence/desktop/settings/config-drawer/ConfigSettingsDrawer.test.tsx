@@ -134,4 +134,37 @@ describe('config settings drawer (static layout)', () => {
     act(() => { rows[1]?.querySelector<HTMLElement>('.config-drawer__row-action')?.click() })
     expect(onSelect).toHaveBeenCalledTimes(1)
   })
+
+  it('shows "could not read" for a missing platform value, never a blank cell', () => {
+    // 这屏最容易把「没读到」画成「没设置」：缺键必须显示「读不到」。
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const onOpen = vi.fn()
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        initialMenu="platform"
+        onClose={() => undefined}
+        onOpenPlatformSettings={onOpen}
+        open
+        platformValues={{ timeZone: 'Asia/Shanghai' }}
+        resolveText={(key) => key} />
+    ))
+
+    expect(document.querySelector('[data-drawer-screen="ready"]')).not.toBeNull()
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-drawer-row]')]
+    expect(rows).toHaveLength(5)
+    // 有值的照常显示；缺值的显示「读不到」，且不是空串。
+    expect(rows[0]?.querySelector('.config-drawer__value')?.textContent).toBe('Asia/Shanghai')
+    for (const row of rows.slice(1)) {
+      const cell = row.querySelector('.config-drawer__value')?.textContent ?? ''
+      expect(cell).toBe('configDrawer.unreadable')
+      expect(cell.trim()).not.toBe('')
+    }
+    act(() => { rows[4]?.querySelector<HTMLElement>('.config-drawer__row-action')?.click() })
+    expect(onOpen).toHaveBeenCalledWith('models')
+  })
 })
