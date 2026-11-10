@@ -9,7 +9,6 @@ import { productText } from '../../shared/i18n/productText'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
 import { SourcesSettingsPane } from '../../settings/intelligence-sources/SourcesSettingsPane'
 import { useIntelligenceSourcesSettings } from '../../settings/intelligence-sources/useIntelligenceSourcesSettings'
-import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
 
 /**
  * 配置抽屉「来源与采集」那两栏：**设置页同一块实现**（`SourcesSettingsPane`）。
@@ -26,7 +25,6 @@ export function DashboardSourcesPanel(): React.ReactElement {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const settings = useIntelligenceSourcesSettings(t)
-  const translation = useIntelligenceTranslationSettings(t.translationPreferences)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings
   // 采集策略：每源一份 profile；是否支持情绪分析由源定义决定（同一个事实只读一处）。
   const policyProfiles: Readonly<Record<string, IntelligenceSourceProfile>> = Object.fromEntries(
@@ -79,24 +77,6 @@ export function DashboardSourcesPanel(): React.ReactElement {
       onRunNow: runSourceNow,
       onToggleSource: toggleSourceEnabled,
       onDraftChange: setDraftDirty,
-      ...(language !== 'en-US'
-        ? {
-          translation: {
-            settings: translation.settings,
-            loading: translation.loading,
-            moduleStatus: translation.moduleStatus,
-            modelProviders: translation.modelProviders,
-            saving: translation.saving,
-            savedThisSession: translation.savedThisSession,
-            queuing: translation.queuing,
-            labels: t.translationPreferences,
-            notice: translation.notice,
-            errorMessage: translation.errorMessage,
-            onChange: (patch) => void translation.updateSettings(patch),
-            onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds)
-          }
-        }
-        : {}),
       showSourceDetails: true,
       surface: 'settings'
     }}
