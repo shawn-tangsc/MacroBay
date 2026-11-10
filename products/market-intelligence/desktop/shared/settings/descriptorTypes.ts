@@ -184,7 +184,8 @@ export type SettingOption = Readonly<{ value: string | number; locked?: boolean 
  * 不另抄一份列表；`notification-surfaces` 的 `center` 是固定勾选项（通知中心恒收）。
  */
 export const SETTING_OPTION_SETS: Readonly<Record<SettingOptionsSource, readonly SettingOption[]>> = Object.freeze({
-  'news-push-thresholds': Object.freeze([{ value: 'low' }, { value: 'medium' }, { value: 'high' }]),
+  // 顺序跟页面那颗 `Segmented` 一致（高 / 中 / 低，`03-fields` 同序）：换了顺序 DOM 就变了。
+  'news-push-thresholds': Object.freeze([{ value: 'high' }, { value: 'medium' }, { value: 'low' }]),
   'calendar-reminder-leads': Object.freeze(CALENDAR_REMINDER_LEAD_MINUTES.map((value) => ({ value }))),
   'calendar-reminder-importance': Object.freeze([{ value: 'high' }, { value: 'medium' }, { value: 'low' }]),
   'calendar-landed-filter': Object.freeze([{ value: 'surprise-only' }, { value: 'also-matched' }]),

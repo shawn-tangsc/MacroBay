@@ -307,6 +307,12 @@ describe('settings registry self-checks', () => {
     expect(codes?.copy?.helpAriaKey).toBe('pages.intelligence.notification.countries.customInfoAria')
   })
 
+  it('keeps the push-threshold options in the order the page shows them', () => {
+    // 页面那颗 `Segmented` 是「高 / 中 / 低」（`03-fields` 同序）。选项顺序不同，DOM 就变了——
+    // 迁移后读者看到的三段会左右颠倒，那是可感知的行为变化，不是重构。
+    expect(SETTING_OPTION_SETS['news-push-thresholds'].map((option) => option.value)).toEqual(['high', 'medium', 'low'])
+  })
+
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
     const surfaces = settingRegistry.notifications.find(
       (row) => row.key === 'setting:notifications.surfaces'
