@@ -85,6 +85,14 @@ describe('the period list says which action failed', () => {
     expect(alerts).not.toContain(copy.saveFailed)
     // 删失败不动列表：那一期还在眼前，读者能再试一次，而不是面对一个空列表。
     expect(host.querySelector<HTMLElement>('[data-period-id="period-a"]')).not.toBeNull()
+    // 再点一次删除就是重试（同一颗行尾按钮、同一个确认框）。
+    await act(async () => { trash?.click() })
+    await flush()
+    const confirmAgain = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === copy.deleteConfirm)
+    await act(async () => { confirmAgain?.click() })
+    await flush()
+    expect(client.remove).toHaveBeenCalledTimes(2)
   })
 
   it('still says 「没存上」 when saving is what failed', async () => {
@@ -106,6 +114,12 @@ describe('the period list says which action failed', () => {
     const alerts = [...host.querySelectorAll<HTMLElement>('[role="alert"]')].map((node) => node.textContent)
     expect(alerts).toContain(copy.saveFailed)
     expect(alerts).not.toContain(copy.removeFailed)
+    // 失败后弹框留着、读者填的值还在（不清空），再按一次保存就是重试。
+    expect(document.querySelector('[data-period-dialog="true"]')).not.toBeNull()
+    expect(document.body.textContent).toContain('08:00')
+    await act(async () => { saveButton?.click() })
+    await flush()
+    expect(client.update).toHaveBeenCalledTimes(2)
   })
 
   it('labels the reload button with what it does, and it re-reads the list', async () => {
