@@ -1,0 +1,26 @@
+/*
+ * 看板「来源未配置 / 未启用 / 读不到」三态：唯一实现，各模块引用，不许覆写内部规则。
+ * 规范：docs-private/05-desktop/ui-audit/2026-11-11-source-availability-styles.md
+ * data-state 只有三个值：missing | disabled | unreadable。
+ */
+.mi-source-state {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: var(--font-meta); line-height: var(--line-meta);
+}
+.mi-source-state__icon { flex: none; }
+.mi-source-state[data-state='unreadable'] { color: var(--text); }
+.mi-source-state[data-state='unreadable'] .mi-source-state__icon { color: var(--danger); }
+
+.mi-source-card {
+  display: grid; gap: 8px; padding: 16px; min-height: 120px; align-content: center;
+}
+.mi-source-card__title {
+  margin: 0; font-size: 13px; font-weight: 650; line-height: 1.4; color: var(--text-strong);
+}
+.mi-source-card__actions { display: flex; gap: 8px; }
+
+.mi-source-row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 12px; color: var(--muted); cursor: pointer;
+}
+.mi-source-row[aria-disabled='true'] { cursor: default; }
