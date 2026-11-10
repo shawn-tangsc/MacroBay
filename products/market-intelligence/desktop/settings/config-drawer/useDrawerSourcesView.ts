@@ -32,6 +32,8 @@ export function useDrawerSourcesView(
         const rows = settings.groups.flatMap((group) => group.providers.flatMap((provider) => provider.sources.map((source) => ({
           sourceId: source.sourceId,
           name: source.displayName,
+          // 供应商名：列表按它分组（同一页里 30 多个源，不分组就是一堵名字墙）。
+          groupName: provider.displayName,
           // 正文只给人话：原因码走映射表，表里没有就兜底，**绝不把码漏出来**。
           statusLabel: source.unavailable
             ? // 第三个参数是 kind：官方日历 / 市场日历 / 其它各说各的话，

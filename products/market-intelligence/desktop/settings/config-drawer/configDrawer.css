@@ -136,6 +136,23 @@
   background: var(--surface);
 }
 
+/* 供应商分组标题：三十多个源平铺就是一堵名字墙，按供应商断开才读得下去。 */
+.config-drawer__source-group {
+  padding: 12px 12px 4px;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  font-weight: 600;
+}
+
+/* 详情区里那一句状态：与药丸同一个词，只是换行显示。 */
+.config-drawer__source-detail-status {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
 .config-drawer__source-item {
   display: flex;
   align-items: center;
