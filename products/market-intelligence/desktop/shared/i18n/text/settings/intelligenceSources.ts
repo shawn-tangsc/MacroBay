@@ -464,6 +464,9 @@ export const intelligenceSourcesText = {
   },
   /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
   cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
+  /* 需要 API Key 但还没配：开关不可用，旁边一颗 ⓘ 说这一句（正文不放整句）。 */
+  credentialRequiredToEnable: '先配置 API Key',
+  credentialRequiredToEnableAria: '为什么这个开关现在不能开',
   /** 源详情里那行：这个源被哪些模块用（0 个模块时整行不显示）。 */
   usedInModules: '用在哪些模块',
   /* 「日历」筛选下的两个组名：判据是 calendarFeedRegistry 的 owner，不是手抄表（用户 2026-11-10）。 */
@@ -1007,6 +1010,8 @@ export const intelligenceSourcesText = {
     marketState: 'Market state'
   },
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
+  credentialRequiredToEnable: 'Set the API key first',
+  credentialRequiredToEnableAria: 'About why this switch cannot be turned on yet',
   usedInModules: 'Used in modules',
   detailsBlockTitle: 'Health and collection policy',
   health: {

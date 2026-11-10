@@ -307,6 +307,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       return
     }
     // 尚未迁移的宿主（看板抽屉，S2 收口）：旧路径，写完由宿主自己重读（投影追上后同样自愈）。
+    // 缺凭据时不发写请求（后端另有同一条拒绝；这里是界面侧的第一道闸）。
+    if (provider.credential === 'api-key' && credentialStatus?.hasCredential === false) return
     await setSourceEnabled(source, enabled).then(() => onChanged?.()).catch(rollback)
   }
 
@@ -414,6 +416,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
            两条路径在同一组件里，状态药丸与标签行只有一份。 */
         return <div className="source-provider-detail__block" key={source.sourceId}>
           <SourceEnabledRow
+            /* 需要 API Key 的源，Key 没配好之前开关灰着（判据在服务层：`hasCredential`）。
+               界面只画，不自己造默认值——投影给什么 `enabled` 就画什么。 */
+            {...(provider.credential === 'api-key' && credentialStatus?.hasCredential === false
+              ? { credentialMissing: true }
+              : {})}
             {...(source.enabled
               ? {
                 advanced: {

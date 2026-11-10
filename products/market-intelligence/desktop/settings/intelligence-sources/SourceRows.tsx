@@ -50,6 +50,11 @@ export type SourceEnabledRowProps = Readonly<{
    * 按钮自己的 `aria-expanded` / `aria-controls` 指向展开区容器（用户 2026-11-10）。
    */
   advanced?: Readonly<{ expanded: boolean; controlsId: string; onToggle: () => void }>
+  /**
+   * 需要 API Key 但还没配好：开关灰着不可点（`aria-disabled` 可读），旁边一颗 ⓘ 说「先配置 API Key」。
+   * 读者配好并验证通过后由上级把这个值变掉，开关自动可用。
+   */
+  credentialMissing?: boolean
   source: SourceView
   /** 已解析好的来源名（`sourceNames` 有的用文案，没有的用投影里的名字）。 */
   name: string
@@ -120,13 +125,21 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
         onClick={props.advanced.onToggle}
         size="small"
         type="text">{resolveText(ADVANCED_KEY)}</Button>}
+    {props.credentialMissing === true
+      ? <SettingsInfo
+        ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
+        labelKeys={['settings.intelligenceSources.credentialRequiredToEnable']}
+        resolveText={resolveText} />
+      : null}
     <Switch
       /* The row's label is the source name; the switch has to say what it does, or a screen
          reader reads the same name twice and cannot tell the two controls apart. */
       aria-label={(enabled ? labels.toggleSource.disable : labels.toggleSource.enable).replace('{name}', label)}
+      aria-disabled={props.credentialMissing === true ? true : undefined}
       checked={enabled}
-      disabled={source.visibility === 'pending'}
-      onChange={props.onToggle}
+      /* 缺凭据时灰着：不调写接口、状态也不变（后端另有同一条拒绝，界面不是唯一防线）。 */
+      disabled={source.visibility === 'pending' || props.credentialMissing === true}
+      onChange={(next) => { if (props.credentialMissing === true) return; props.onToggle(next) }}
       /* ui-spec §8.3：开关唯一实现是 antd Switch，统一 small（32×18），默认尺寸不在允许写法内。 */
       size="small"
     />
