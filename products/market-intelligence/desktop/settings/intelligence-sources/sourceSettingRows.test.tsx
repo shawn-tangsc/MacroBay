@@ -136,11 +136,38 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
 
   it('renders nothing that is not a menu 1 declaration for the settings surface', async () => {
     const container = await mount()
-    for (const key of renderedKeys(container)) {
-      const template = key.replace(/@[^@]+$/, '@<sourceId>')
+    const sourceIds = provider().sources.map((entry) => entry.sourceId)
+    // 反查走 DOM 上的 `data-setting-template`，**不按实例键的字符串形状反推**（把 `@xxx` 换回
+    // `<sourceId>` 那种写法）：实例 id 里出现 `@`、或模板换了占位符，按形状反推会静默错成
+    // 「多一条 / 少一条」，这正是 `#history:` 那次事故的形状。模板由声明原样写到 DOM，守卫只做等值。
+    const rows = [...container.querySelectorAll('[data-setting-key]')].map((node) => ({
+      key: node.getAttribute('data-setting-key') ?? '',
+      template: node.getAttribute('data-setting-template')
+    }))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const { key, template } of rows) {
+      expect(template).toBeTruthy()
       const declared = settingRegistry.sources.find((row) => row.key === template)
-      expect(declared?.surfaces).toEqual(['settings'])
+      expect({ template, surfaces: declared?.surfaces }).toEqual({ template, surfaces: ['settings'] })
+      // 实例键 = 模板展开这一行的源 id，恰好一个源对得上（模板里的 `<sourceId>` 只由页面实例决定）。
+      const matches = sourceIds.filter((sourceId) => key === template?.replace('<sourceId>', sourceId))
+      expect({ key, matches }).toEqual({ key, matches: [matches[0]] })
     }
+  })
+
+  it('carries the template on every keyed row, so the guard never guesses the instance shape', async () => {
+    // 守卫的**输入**：模板属性必须由声明原样写下来。缺了它，上面那条反查就只能回到「按字符串
+    // 形状反推」；手拼一个模板则会让反查认到一条不存在的声明。三种行都在，缺一种这里就少一个值。
+    const container = await mount()
+    const templates = new Set(
+      [...container.querySelectorAll('[data-setting-key]')]
+        .map((node) => node.getAttribute('data-setting-template'))
+    )
+    expect([...templates].sort()).toEqual([
+      'setting:sources.collection-preset@<sourceId>',
+      'setting:sources.enabled@<sourceId>',
+      'setting:sources.include-in-sentiment@<sourceId>'
+    ])
   })
 
   it('keeps every key literal out of the screen files (no hand-written per-key ifs)', () => {

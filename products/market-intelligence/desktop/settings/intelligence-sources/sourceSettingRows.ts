@@ -64,3 +64,18 @@ export function visibleSourceRows(view: unknown): readonly SourceRowView[] {
 export function sourceRowInstanceKey(template: SourceRowTemplate, sourceId: string): string {
   return template.replace('<sourceId>', sourceId)
 }
+
+/**
+ * 行上的一对锚点：**实例键**给「这一行恰好出现一次」用，**模板**给「反查声明」用。
+ *
+ * 为什么模板要单独写成一个属性、而不是让守卫把实例键按字符串形状反推（把 `@xxx` 换回
+ * `<sourceId>`）：那是**按字符串形状判断**，实例 id 里一旦出现 `@`（或模板将来换成别的占位符）
+ * 就会反推错，而且错的方向是「多一条/少一条」这种最难发现的样子。这条在本仓有过先例
+ * （`#history:` 那次）。所以模板由声明原样写到 DOM 上，守卫只做等值比较。
+ */
+export function sourceRowAttributes(template: SourceRowTemplate, sourceId: string): Readonly<Record<string, string>> {
+  return {
+    'data-setting-key': sourceRowInstanceKey(template, sourceId),
+    'data-setting-template': template
+  }
+}

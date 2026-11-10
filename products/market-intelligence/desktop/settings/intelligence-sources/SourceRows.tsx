@@ -6,7 +6,7 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 import { SettingsInfo } from '../settingsInfo'
 import { healthStateBadge } from './sourceHealthTone'
 import { SETTING_OPTION_SETS, type SettingOptionsSource } from '../../shared/settings/descriptorTypes'
-import { SOURCE_ROW_TEMPLATES, sourceRowInstanceKey, sourceRowView } from './sourceSettingRows'
+import { SOURCE_ROW_TEMPLATES, sourceRowAttributes, sourceRowView } from './sourceSettingRows'
 import type { ProviderDetailLabels } from './ProviderDetail'
 import type { CollectionPolicyLabels, CollectionPolicyNotConfigurable } from './CollectionPolicySection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -97,7 +97,7 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
      所以它自己写这两层，不改通用设置行的形状。三列：内容 / 高级 / 开关。 */
   return <div
     className="source-provider-detail__row"
-    data-setting-key={sourceRowInstanceKey(SOURCE_ROW_TEMPLATES.enabled, source.sourceId)}
+    {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.enabled, source.sourceId)}
   >
     <div className="source-provider-detail__main">
       <strong>{label}</strong>
@@ -230,7 +230,7 @@ export function SourcePresetRow(props: SourcePresetRowProps): React.ReactElement
         />
         : null}
     </>}
-    rowAttributes={{ 'data-setting-key': sourceRowInstanceKey(SOURCE_ROW_TEMPLATES.collectionPreset, props.sourceId) }}
+    rowAttributes={sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, props.sourceId)}
     rowClassName="intelligence-setting-row"
   >
     <div className="intelligence-preset-control">
@@ -267,7 +267,7 @@ export function SourceSentimentRow(props: SourceSentimentRowProps): React.ReactE
     controlWrapperClassName="intelligence-setting-control"
     copyClassName="intelligence-setting-label"
     label={label}
-    rowAttributes={{ 'data-setting-key': sourceRowInstanceKey(SOURCE_ROW_TEMPLATES.includeInSentiment, props.sourceId) }}
+    rowAttributes={sourceRowAttributes(SOURCE_ROW_TEMPLATES.includeInSentiment, props.sourceId)}
     rowClassName="intelligence-setting-row"
   >
     <Switch
