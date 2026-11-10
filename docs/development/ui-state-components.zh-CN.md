@@ -42,7 +42,7 @@ import { StateView } from '@platform/ui/components/state'
 | `reasonCode` | 闭集，每个态一套 | `empty` / `error` / `disabled` / `permission` | 原因**码**，不是句子。键是 `ui.state.<state>.reason.<code>`。别的态的码用在这里编译不过。 |
 | `action` | `{ labelKey, onSelect }` | `empty`（除 `not-yet`）、`error`、`disabled` / `target-disabled`、`permission` 必填；`not-yet`、`capability-not-wired` 不许有 | 至多一个动作，文案也只收键。读者没有可做的事时，传动作编译不过。 |
 | `details` | `{ summaryKey, bodyKey }` | 仅 `error` | 排障详情，默认折叠。 |
-| `size` | `'sm' \| 'md' \| 'lg'` | 可选，默认 `md` | `lg` 整页（220）、`md` 卡内（80）。`sm` 保留、本批不许用。 |
+| `size` | `'sm' \| 'md' \| 'lg'` | 可选，默认 `md` | `lg` 整页（220）、`md` 卡内（80）、`sm` **行内**（行、列表里的一小块；**无固定高度，按内容撑开**）。`sm` 只用于行内，不得用于整页（`lg`）或卡内（`md`）场景。 |
 | `children` | `ReactNode` | 仅 `normal` | 区域自己的内容。 |
 | `className` | `string` | 可选 | 只做定位，不重设内部样式。 |
 
@@ -95,10 +95,10 @@ import { StateView } from '@platform/ui/components/state'
 | --- | --- | --- |
 | `lg` | 整页 | `220` |
 | `md`（默认） | 卡内、抽屉正文 | `80` |
-| `sm` | 列表行 / 表格体 | 本批不开放 |
+| `sm` | 列表行 / 表格体（行内） | 无——按内容撑开 |
 
-两个数值只有组件里一张表，写进 `style.minHeight`。调用点不许传像素值，页面 CSS 也不许再写一份
-`min-height`。
+`lg` / `md` 两个数值只有组件里一张表，写进 `style.minHeight`；`sm` 没有固定高度，按内容撑开。
+调用点不许传像素值，页面 CSS 也不许再写一份 `min-height`。
 
 ## 文案
 

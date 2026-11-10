@@ -117,7 +117,7 @@ type StateViewBase = {
    * 只有测试需要注入 `(key) => key` 时才传——不要把它当成「产品自带一份文案表」的入口。
    */
   resolveText?: (key: StateViewTextKey) => string
-  /** 尺寸词只有一个来源（§3）：`lg` 整页 220、`md` 卡内 80、`sm` 本批不开放。 */
+  /** 尺寸词只有一个来源（§3）：`lg` 整页 220、`md` 卡内 80、`sm` 行内（无固定高度，按内容撑开）。 */
   size?: StateSize
   className?: string
   /** 产品原因句入口（§17）；只覆盖原因句这一格，`normal` / `loading` 传了编译不过。 */
@@ -206,7 +206,7 @@ export type StateViewProps =
   | (StateViewBase & { state: 'disabled'; reasonCode: 'precondition-unsaved'; action?: StateViewAction })
   | (StateViewBase & { state: 'permission'; reasonCode: 'not-granted'; action?: StateViewAction })
 
-/** 量出来的两个高度：整页 220、卡内 80（§13）。`sm` 是行内档，本批不给固定高度。 */
+/** 量出来的两个高度：整页 220、卡内 80（§13）。`sm` 是行内档，不给固定高度（按内容撑开）。 */
 const MIN_HEIGHT: Record<StateSize, number | undefined> = { sm: undefined, md: 80, lg: 220 }
 
 type IconState = 'empty' | 'error' | 'disabled' | 'permission'
