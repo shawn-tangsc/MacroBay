@@ -94,14 +94,15 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
 
   return (
     <section className="settings-workspace intelligence-sources-workspace">
-        {/* C8：另一处保存了同一域、而本页有草稿——只提示，不覆盖；两个动作由读者选。 */}
-        {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">
-          <span>{t.otherSideChanged}</span>
-          <Button onClick={reloadFromOtherSide} type="link">{t.reloadOtherSide}</Button>
-          <Button onClick={dismissOtherSideChanged} type="link">{t.keepEditing}</Button>
-        </div> : null}
       <SourcesSettingsPane
         filter={sourceFilter}
+        notice={<>
+          {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">
+            <span>{t.otherSideChanged}</span>
+            <Button onClick={reloadFromOtherSide} type="link">{t.reloadOtherSide}</Button>
+            <Button onClick={dismissOtherSideChanged} type="link">{t.keepEditing}</Button>
+          </div> : null}
+        </>}
         onFilterChange={setSourceFilter}
         onSelectProvider={(providerId) => setSelectedProviderId(providerId)}
         selectedProviderId={selectedProviderId}

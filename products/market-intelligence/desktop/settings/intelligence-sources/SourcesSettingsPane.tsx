@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
@@ -21,6 +21,11 @@ export type SourcesSettingsPaneProps = {
   onFilterChange: (filter: SourceFilter) => void
   /** 左栏标题与分类名等文案。 */
   treeLabels: Parameters<typeof SettingsSourceTree>[0]['labels']
+  /**
+   * 右栏顶部那条页面级提示（「别处改了 / 保留草稿」）。**内容与动作仍归页面**，
+   * 这里只提供位置——它在右栏里、紧挨被提示的那一版，位置与抽取前一致。
+   */
+  notice?: ReactNode
   /** 右栏那份「事实 + 文案」组装件需要的全部入参（由调用方原样给）。 */
   surface: Omit<SourceConfigSurfaceProps, 'provider'> & { providerId?: string }
 }
@@ -41,6 +46,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
       onSelectProvider={props.onSelectProvider}
     />
     <div className="settings-detail-pane intelligence-detail-pane">
+      {props.notice}
       {provider === undefined
         ? null
         : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} /></div>}
