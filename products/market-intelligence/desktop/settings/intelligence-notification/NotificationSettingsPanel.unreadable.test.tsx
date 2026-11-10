@@ -132,7 +132,9 @@ describe('an unreadable calendar settings block is never drawn as off', () => {
   it('renders the real controls of both condition blocks when their switches are on', async () => {
     install(false)
     const container = await render()
-    const sections = container.querySelectorAll('.intelligence-notification-drawer > .settings-section')
+    // 三块各自套了一个定位锚点（`data-notification-section`，`focus.notifications.section` 用），
+    // 所以这里按后代找，不按直接子元素——判据仍是「三块、顺序固定」，不依赖有没有包一层。
+    const sections = container.querySelectorAll('.intelligence-notification-drawer .settings-section')
     expect(sections).toHaveLength(3)
     // 舆情条件：三档分段（role=group，按钮带 aria-pressed），不是一句话也不是灰控件。
     expect(sections[1]?.querySelector('[role="group"]')).not.toBeNull()

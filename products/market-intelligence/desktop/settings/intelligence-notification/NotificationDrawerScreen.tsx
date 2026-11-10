@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useEffect, useRef, type ReactElement } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { SettingsSection } from '@platform/ui/components/settings-section'
@@ -60,7 +60,10 @@ function descriptorOf(key: string): SettingDescriptor {
   return descriptor
 }
 
-export function NotificationDrawerScreen(): ReactElement {
+/** 屏内三块：与 `data-notification-section` 上的名字同一套。 */
+export type NotificationSection = 'push' | 'sentiment' | 'calendar'
+
+export function NotificationDrawerScreen({ initialSection }: { initialSection?: NotificationSection } = {}): ReactElement {
   const language = useShellLanguage()
   const text = intelligenceNotificationText[language]
   const resolveText = (key: string): string => text[key] ?? ''
@@ -69,6 +72,27 @@ export function NotificationDrawerScreen(): ReactElement {
   const threshold = useNewsPushThreshold()
   const reminder = useCalendarReminderSettings()
   const surfaces = useSurfaceSelection(CALENDAR_GROUP_EVENT_ID)
+  /*
+    只作初值、只成功滚一次：读者自己滚到别处之后，这里不再把他拽回来。
+
+    依赖里有 `status`：这一屏首帧是加载态（那时三块还没画出来，锚点找不到），
+    所以不能只在挂载时试一次——要等内容到了再定位。`focusedRef` 保证「只滚一次」，
+    后续状态变化（重读、保存回执）都不会再动读者的位置。
+  */
+  const focusedRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (initialSection === undefined || focusedRef.current !== null) return
+    const anchor = document.querySelector<HTMLElement>(`[data-notification-section="${initialSection}"]`)
+    if (anchor === null) return
+    focusedRef.current = anchor
+    anchor.scrollIntoView?.({ block: 'nearest' })
+    anchor.setAttribute('data-focused', 'true')
+  }, [initialSection, status])
+  // 卸载时收掉标记：它是这块面板的一次性定位，不是持久状态。
+  useEffect(() => () => {
+    focusedRef.current?.removeAttribute('data-focused')
+    focusedRef.current = null
+  }, [])
 
   if (status === 'loading') {
     return <div className="intelligence-notification-panel" data-notification-panel="true">
@@ -217,6 +241,7 @@ export function NotificationDrawerScreen(): ReactElement {
     </InlineNotice>}
 
     <div className="intelligence-notification-drawer">
+      <div data-notification-section="push">
       <SettingsSection
         variant="flat"
         info={<SettingsInfo
@@ -237,9 +262,11 @@ export function NotificationDrawerScreen(): ReactElement {
         />)}
         {calendarRow()}
       </SettingsSection>
+      </div>
 
       {/* 舆情条件：**整块常显**（用户 2026-11-11：关着时也要能选到门槛这一项）。
           关着 → 门槛行灰着，并写明「先打开舆情提醒」；打开 → 可改。 */}
+      <div data-notification-section="sentiment">
       <SettingsSection variant="flat" title={text['pages.intelligence.notification.sentimentSection'] ?? ''}>
         <NewsPushThresholdRow
           disabled={!outlet.enabled}
@@ -249,10 +276,12 @@ export function NotificationDrawerScreen(): ReactElement {
           text={text}
         />
       </SettingsSection>
+      </div>
 
       {/* 日历提醒：**整块常显**（用户 2026-11-11：换位置不是减功能）。关着时仍给已存值摘要，
           并且「测试发生后」仍可点（平台那一屏只按设置读不到禁用，不看组开关）；
           只有组开着时才画开始前条件与发生后的过滤 / 国家。 */}
+      <div data-notification-section="calendar">
       <SettingsSection variant="flat" title={text['pages.intelligence.notification.calendarSection'] ?? ''}>
           {reminder.status === 'error'
             ? <SettingsRow copyClassName={LABEL_CLASS} label={text['pages.intelligence.notification.status.unreadable'] ?? ''} rowClassName={ROW_CLASS}>
@@ -362,6 +391,7 @@ export function NotificationDrawerScreen(): ReactElement {
               </SettingsRow>
             </>}
       </SettingsSection>
+      </div>
     </div>
   </div>
 }

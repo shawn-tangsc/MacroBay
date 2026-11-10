@@ -14,7 +14,8 @@ export type ConfigDrawerFocus =
   // 两个值就是 DOM 上那两个锚点（`data-processing-section`）：契约与页面共用一套词，不再翻译一次。
   | { menu: 'processing'; section?: 'translation' | 'sentiment' }
   | { menu: 'briefing'; section?: 'generation' | 'ai' | 'model' | 'webSearch' }
-  | { menu: 'notifications'; section?: 'events' | 'channels' | 'quietHours' }
+  // 三个值就是这一屏真画出来的三块（`data-notification-section`）：推送提醒 / 舆情条件 / 日历提醒。
+  | { menu: 'notifications'; section?: 'push' | 'sentiment' | 'calendar' }
   | { menu: 'analysis' }
   | { menu: 'runLog' }
 

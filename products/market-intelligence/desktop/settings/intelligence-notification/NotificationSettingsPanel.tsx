@@ -16,11 +16,13 @@ import { NotificationPageScreen } from './NotificationPageScreen'
 export { itemForFocus } from './NotificationPageScreen'
 export { MIGRATED_SETTING_KEYS } from './NotificationPageScreen'
 
-export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }: Readonly<{
+export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer', initialSection }: Readonly<{
   focusEntityId?: string | null
   variant?: 'page' | 'drawer'
+  /** 抽屉那一面的屏内定位（只作初值）；设置页那一面不认这个口。 */
+  initialSection?: 'push' | 'sentiment' | 'calendar'
 }>): ReactElement {
   return variant === 'page'
     ? <NotificationPageScreen focusEntityId={focusEntityId} />
-    : <NotificationDrawerScreen />
+    : <NotificationDrawerScreen {...(initialSection === undefined ? {} : { initialSection })} />
 }
