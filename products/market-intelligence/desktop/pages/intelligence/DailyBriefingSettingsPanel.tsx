@@ -227,7 +227,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
 
     >
         {periodsFailed
-          ? <div className="briefing-settings-error" role="alert">
+          ? <div className="briefing-settings-error" data-banner-tone="danger" role="alert">
             <span>{copy.loadFailed}</span>
             <Button data-briefing-periods-retry-load="true" onClick={loadPeriods} type="link">{copy.retryLoad}</Button>
           </div>
@@ -327,7 +327,15 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
       title={text.settingsDrawer.sections.ai}
     >
         {ai.webSearchBlocked || !ai.webSearchSupported ? <div className="briefing-settings-notice" data-banner-tone="caution" role="status">
-          <span>{ai.webSearchBlocked ? text.aiSettings.webSearchBannerNoSource : text.aiSettings.webSearchBannerUnsupported}</span>
+          <span>{ai.webSearchBlocked ? text.aiSettings.webSearchNeedsSetup : text.aiSettings.webSearchBannerUnsupported}</span>
+          {/* 动作槽：真跳转（宿主的导航回调），不是占位空函数。两条同时出现时只保留阻塞那条的动作。 */}
+          <Button
+            className="briefing-settings-notice__action"
+            data-banner-action={ai.webSearchBlocked ? 'configure-web-search' : 'open-web-search-providers'}
+            onClick={openWebSearchSettings}
+            type="link">
+            {ai.webSearchBlocked ? text.aiSettings.webSearchBannerConfigure : text.aiSettings.webSearchBannerProviders}
+          </Button>
           {/* 细节进 ⓘ：一条横幅最多一句正文；平台统一的横幅组件落地后换掉这层。 */}
           <Popover
             labelKey={ai.webSearchBlocked
@@ -347,7 +355,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
           />
         </div> : null}
         {ai.state === 'load-failed'
-          ? <p className="briefing-settings-error" role="alert">{text.aiSettings.loadFailed}</p>
+          ? <p className="briefing-settings-error" data-banner-tone="danger" role="alert">{text.aiSettings.loadFailed}</p>
           : ai.state === 'loading' || ai.draft === null
             ? <LoadingState label={text.aiSettings.loading} minHeight={90} />
             : <>
@@ -378,6 +386,28 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                   }}
                 />
               </SettingsRow>
+              {ai.webSearchSupported ? null : <SettingsRow
+                copyClassName="config-drawer__label"
+                headClassName="config-drawer__label-head"
+                controlWrapperClassName="config-drawer__control"
+                label={<>
+                  <strong>{text.aiSettings.researchMode}</strong>
+                  <Popover
+                    labelKey={WEB_SEARCH_DETAIL_KEY}
+                    resolveText={resolveText}
+                    trigger={(triggerProps) => <IconButton
+                      {...triggerProps}
+                      ariaLabelKey={WEB_SEARCH_DETAIL_KEY}
+                      icon={CircleHelp}
+                      resolveText={resolveText}
+                      size="sm"
+                      variant="plain"
+                    />}
+                  />
+                </>}
+                rowClassName="config-drawer__row">
+                <span className="briefing-settings-row__value">{text.aiSettings.researchModePlatform}</span>
+              </SettingsRow>}
 
               {ai.draft.editorialEnabled ? <SettingsRow
                 copyClassName="config-drawer__label"

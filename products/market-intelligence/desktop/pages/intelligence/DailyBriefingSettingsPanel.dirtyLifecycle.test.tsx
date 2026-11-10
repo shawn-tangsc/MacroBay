@@ -6,8 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
+import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import { DailyBriefingSettingsPanel, type BriefingScreenState } from './DailyBriefingSettingsPanel'
+
+vi.mock('../../shared/navigation/productShellNavigation', () => ({
+  openModelSettings: vi.fn(),
+  openWebSearchSettings: vi.fn()
+}))
 
 /**
  * 日报设置屏（重做版）的判据：脏的进出走 `onState`，三段与只读事实按设置页骨架渲染。
@@ -387,17 +393,8 @@ describe('the period list’s criteria, moved from the retired block', () => {
   })
 })
 
-describe('the AI block’s warnings are one short banner, details behind the ⓘ', () => {
-  it('says what the fallback is in one line when the model has no built-in search', async () => {
-    const { host } = await mount({ webSearchSupported: false })
-    const banners = host.querySelectorAll('[data-banner-tone="caution"]')
-    expect(banners).toHaveLength(1)
-    expect(banners[0]?.textContent).toContain('当前模型不支持内置搜索，补查将走平台 Web Search')
-    // 细节（需已启用搜索源）不在正文，进 ⓘ。
-    expect(host.textContent).not.toContain('需已启用搜索源')
-  })
-
-  it('merges the two warnings into one banner instead of stacking them', async () => {
+describe('the AI block’s warnings are one banner each, with a real jump', () => {
+  it('keeps the search-provider sentence on the caution banner and offers 去配置', async () => {
     const { host, last } = await mount({ webSearchSupported: false })
     // 打开「允许补查」再保存：没有可用搜索源 → 被拒绝并留一条阻塞状态。
     const webSearchSwitch = switches(host)[1]
@@ -405,9 +402,56 @@ describe('the AI block’s warnings are one short banner, details behind the ⓘ
     await act(async () => { last()?.save() })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    const banners = [...host.querySelectorAll('[data-banner-tone="caution"]')]
+    const banners = [...host.querySelectorAll<HTMLElement>('[data-banner-tone="caution"]')]
     expect(banners).toHaveLength(1)
-    expect(banners[0]?.textContent).toContain('搜索源没配置，补查暂时开不了')
-    expect(host.textContent).not.toContain('当前模型不支持内置搜索')
+    // 指令句保留原文（它是状态 + 下一步动作，不是解释）。
+    expect(banners[0]?.textContent).toContain('无法开启：请先在 设置 → 网页搜索 → 供应商 配置并启用搜索源。')
+    const action = banners[0]?.querySelector<HTMLButtonElement>('[data-banner-action="configure-web-search"]')
+    expect(action?.textContent).toBe('去配置')
+    await act(async () => action!.click())
+    expect(vi.mocked(openWebSearchSettings)).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers 去网页搜索供应商 on the unsupported-model banner, and keeps 补查方式 as a row', async () => {
+    const { host } = await mount({ webSearchSupported: false })
+    const banners = [...host.querySelectorAll<HTMLElement>('[data-banner-tone="caution"]')]
+    expect(banners).toHaveLength(1)
+    expect(banners[0]?.textContent).toContain('当前模型不支持内置搜索，补查将走平台 Web Search')
+    const action = banners[0]?.querySelector<HTMLButtonElement>('[data-banner-action="open-web-search-providers"]')
+    expect(action?.textContent).toBe('去网页搜索供应商')
+    // 普通设置行照旧：补查方式 = 平台 Web Search（整句细节在它的 ⓘ 里）。
+    expect(host.textContent).toContain('补查方式')
+    expect(host.textContent).toContain('平台 Web Search')
+    expect(host.textContent).not.toContain('需已启用搜索源')
+  })
+
+  it('marks read and write failures as danger banners, and keeps the retry inside', async () => {
+    stubBridge()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
+    ))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    // 期列表读失败：红色档横幅 + 横幅里的重试（读失败不是空态）。
+    const invoke = (window as unknown as { platform: { products: { invoke: (...args: unknown[]) => Promise<unknown> } } }).platform.products
+    invoke.invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'intelligence.dailyBriefing.listPeriods') throw new Error('list-failed')
+      if (method === 'intelligence.dailyBriefing.getSettings') return aiView
+      return undefined
+    }) as never
+    await act(async () => root!.unmount()); root = undefined; document.body.replaceChildren()
+    const failed = document.createElement('div')
+    document.body.append(failed)
+    root = createRoot(failed)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
+    ))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const danger = failed.querySelector<HTMLElement>('[data-banner-tone="danger"]')
+    expect(danger).not.toBeNull()
+    expect(danger?.querySelector('[data-briefing-periods-retry-load="true"]')).not.toBeNull()
   })
 })
