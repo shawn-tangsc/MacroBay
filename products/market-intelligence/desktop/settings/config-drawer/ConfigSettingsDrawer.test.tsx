@@ -655,6 +655,29 @@ describe('config drawer close guard', () => {
   })
 })
 
+describe('every screen starts 16 from the card edge', () => {
+  it('pins the processing screen to the card body padding, with no negative margin', () => {
+    const css = readFileSync(join(__dirname, 'configDrawer.css'), 'utf8')
+    const body = /\.config-drawer__card-body\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(body).toContain('padding: 16px')
+    const panel = /\.config-drawer__card \.config-drawer-processing\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(panel).toContain('margin: 0')
+    expect(panel).toContain('padding: 0')
+    expect(panel).not.toMatch(/margin[^;]*-\d/u)
+  })
+})
+
+describe('the two source screens show exactly one frame', () => {
+  it('flattens the inner panels so the outer card is the only frame', () => {
+    // 用户：「这两屏只能看到一圈边框」。内层面板去框、去圆角、去底色；数据源的 `border-right` 是两栏分隔线，保留。
+    const css = readFileSync(join(__dirname, 'configDrawer.css'), 'utf8')
+    expect(css).toContain('.config-drawer__card .intelligence-catalog-pane {')
+    expect(css).toContain('.config-drawer__card .business-card {')
+    expect(css).toMatch(/\.config-drawer__card \.business-card \{[^}]*border: 0/u)
+    expect(css).toMatch(/\.config-drawer__card \.business-card \{[^}]*border-radius: 0/u)
+  })
+})
+
 describe('the inner cards keep a single 16 to the content card', () => {
   it('does not double the padding of the business view', () => {
     // 采集与数据屏的内层 `.business-settings__content` 自带 16：卡体也有 16，叠起来就是 32 的厚边。

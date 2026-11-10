@@ -490,3 +490,38 @@
  * - 采集与数据屏的 `.business-settings__content` 自己还有 16，与卡体 16 叠成 32，这里归零。
  */
 .config-drawer__card .business-settings__content { padding: 0; }
+
+/*
+ * 用户口径（2026-11-11）：「这两屏只能看到一圈边框」——外层骨架卡就是内容卡，内层面板不再自套一层框。
+ * 只去掉**外框/圆角/底色**，布局与内容（左树/右详情、分组、行）原样保留；卡内到第一层内容恰好 16。
+ * 数据源屏的树用 `border-right` 作两栏分隔线，这条**保留**（它是分隔线，不是第二圈框）。
+ */
+.config-drawer__card .intelligence-catalog-pane {
+  border-radius: 0;
+  background: none;
+}
+
+.config-drawer__card .settings-detail-pane { background: none; }
+
+/* 采集与数据的模块卡：改成骨架内的区块（无框无圆角无底色），组间用一条发丝线分隔。 */
+.config-drawer__card .business-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.config-drawer__card .business-card + .business-card {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/*
+ * 内容处理屏：第一层内容到卡内缘的距离必须与采集与数据屏**相等（16）**。
+ * 该屏根节点自己不带内距、也不许用负边距把内容顶到卡边——这里只是把这条钉死，
+ * 真正的 16 仍由卡体的 `padding: 16` 给（不在屏里再加一层）。
+ */
+.config-drawer__card .config-drawer-processing {
+  margin: 0;
+  padding: 0;
+}
