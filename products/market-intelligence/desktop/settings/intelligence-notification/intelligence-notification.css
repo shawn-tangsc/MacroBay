@@ -312,7 +312,9 @@
 /* ── 带提示的行：提示只占控件列、12 号、最多一行、与控件垂直居中 ──
    规则（Chief 2026-11-10 定）：提示出现/消失时控件不许左右或上下跳；同一区块里两行带提示
    也不许差出一行——所以提示是控件列里的**单行省略**文本，不换行、不把控件推下去。
-   错误是偶发的；为了守住 44 把「没存上」藏进 ⓘ，等于让读者去别处找线索。 */
+   错误是偶发的；为了守住 44 把「没存上」藏进 ⓘ，等于让读者去别处找线索。
+   **截断只截补充说明，不截错误本身**：行内提示至少留下「没存上」这类可判定的核心；
+   若文案哪天变成「没存上：<原因>」，原因要挪进 ⓘ，别让 ellipsis 吃掉读者唯一能懂的部分。 */
 .intelligence-notification-drawer .config-drawer__value,
 .intelligence-notification-drawer .intelligence-notification-form-control {
   display: flex;

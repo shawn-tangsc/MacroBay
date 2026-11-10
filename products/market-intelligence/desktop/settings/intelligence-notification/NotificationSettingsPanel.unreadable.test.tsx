@@ -30,7 +30,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function install(calendarFails: boolean, options: { deliverableChannels?: readonly unknown[] } = {}): void {
+function install(calendarFails: boolean, options: { deliverableChannels?: readonly unknown[]; writeFails?: boolean } = {}): void {
   const productsInvoke = vi.fn(async (_productId: string, method: string) => {
     if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
     if (String(method).includes('getNewsPushOutletState')) return { enabled: true }
@@ -43,7 +43,10 @@ function install(calendarFails: boolean, options: { deliverableChannels?: readon
   ;(window as unknown as { platform: unknown }).platform = {
     notifications: {
       getChannelEvents: vi.fn(async () => ({})),
-      setChannelEvent: vi.fn(async (eventId: string, enabled: boolean) => ({ eventId, enabled })),
+      setChannelEvent: vi.fn(async (eventId: string, enabled: boolean) => {
+        if (options.writeFails === true) throw new Error('ipc failed')
+        return { eventId, enabled }
+      }),
       getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, desktopEnabled: false, pushWired: true, channels: options.deliverableChannels ?? [{ deliverable: true }], lastPushFailureAt: null, lastPushFailureReason: null })),
       getSurfaceSelection: vi.fn(async () => ({ key: 'calendar-events', available: ['channel', 'toast'], selection: { channel: true, toast: true }, conflict: false })),
       setSurfaceSelection: vi.fn(async () => undefined)
@@ -68,6 +71,20 @@ async function selectCalendar(container: HTMLElement): Promise<void> {
     .find((button) => button.textContent?.includes(text['pages.intelligence.notification.rows.calendar.title']))
   await act(async () => { row?.click(); await Promise.resolve() })
 }
+
+describe('a failed write stays a short, readable row note', () => {
+  it('keeps the core sentence and never turns it into "core: reason"', async () => {
+    install(false, { writeFails: true })
+    const container = await render()
+    const firstSwitch = container.querySelector('.config-drawer__row input[role="switch"], .config-drawer__row .ant-switch')
+    await act(async () => { (firstSwitch as HTMLElement | null)?.click(); await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const note = container.querySelector('.intelligence-notification-form-note')
+    expect(note).not.toBeNull()
+    // 核心必须留：截断只允许发生在补充说明上；原因/细节要进 ⓘ，不能靠 ellipsis 吃掉唯一能懂的部分。
+    expect(note?.textContent).toBe(text['pages.intelligence.notification.saveFailed'])
+    expect(note?.textContent).not.toMatch(/[:：]/)
+  })
+})
 
 describe('the channel-not-ready banner', () => {
   it('is a caution banner with the state sentence and a real action to the channel settings', async () => {
