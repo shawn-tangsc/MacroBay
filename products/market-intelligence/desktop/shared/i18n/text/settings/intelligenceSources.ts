@@ -467,6 +467,9 @@ export const intelligenceSourcesText = {
   /* 需要 API Key 但还没配：开关不可用，旁边一颗 ⓘ 说这一句（正文不放整句）。 */
   credentialRequiredToEnable: '先配置 API Key',
   credentialRequiredToEnableAria: '为什么这个开关现在不能开',
+  /* 页头那颗**整组**启停（该来源下全部能力）：可访问名带来源名，别只念「开关」。 */
+  toggleProviderEnable: '启用 {name} 的全部能力',
+  toggleProviderDisable: '停用 {name} 的全部能力',
   /** 源详情里那行：这个源被哪些模块用（0 个模块时整行不显示）。 */
   usedInModules: '用在哪些模块',
   /* 「日历」筛选下的两个组名：判据是 calendarFeedRegistry 的 owner，不是手抄表（用户 2026-11-10）。 */
@@ -1012,6 +1015,8 @@ export const intelligenceSourcesText = {
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
   credentialRequiredToEnable: 'Set the API key first',
   credentialRequiredToEnableAria: 'About why this switch cannot be turned on yet',
+  toggleProviderEnable: 'Turn on every capability of {name}',
+  toggleProviderDisable: 'Turn off every capability of {name}',
   usedInModules: 'Used in modules',
   detailsBlockTitle: 'Health and collection policy',
   health: {

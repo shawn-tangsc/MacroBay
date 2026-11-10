@@ -1287,6 +1287,15 @@
   white-space: nowrap;
 }
 
+.source-provider-detail__group-toggle {
+  /* 页头行最右：开关贴右缘，与名字那一行同一条中线；不折行（`.title-row` 已是 nowrap）。 */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+
 .source-provider-detail__name-actions {
   display: inline-flex;
   flex: none;

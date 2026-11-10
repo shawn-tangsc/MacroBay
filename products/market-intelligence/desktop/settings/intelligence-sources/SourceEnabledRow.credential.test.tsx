@@ -37,7 +37,7 @@ function labels() {
   }
 }
 
-async function render(credentialMissing: boolean): Promise<{ host: HTMLElement; onToggle: ReturnType<typeof vi.fn> }> {
+async function render(credentialMissing: boolean, enabled = false): Promise<{ host: HTMLElement; onToggle: ReturnType<typeof vi.fn> }> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -55,7 +55,7 @@ async function render(credentialMissing: boolean): Promise<{ host: HTMLElement; 
           : key === 'settings.intelligenceSources.credentialRequiredToEnableAria'
             ? t.credentialRequiredToEnableAria
             : '',
-        source,
+        source: { ...(source as Record<string, unknown>), enabled } as never,
         tags: [],
         unavailable: false,
         ...(credentialMissing ? { credentialMissing: true } : {})
@@ -86,5 +86,26 @@ describe('源行的启停开关按「需不需要 Key」分两种', () => {
     expect(host.querySelector(`[aria-label="${t.credentialRequiredToEnableAria}"]`)).toBeNull()
     await act(async () => { control?.click() })
     expect(onToggle).toHaveBeenCalledWith(true)
+  })
+})
+
+describe('默认值只读投影，界面不自己造', () => {
+  it('shows a no-key source as on when the projection says enabled', async () => {
+    // 免钥匙源的「默认启用」由服务层 profile 缺省给；界面读到什么画什么。
+    const { host, onToggle } = await render(false, true)
+    const control = host.querySelector<HTMLElement>('[role="switch"]')
+    expect(control?.getAttribute('aria-checked')).toBe('true')
+    expect(control?.getAttribute('aria-disabled')).toBeNull()
+    await act(async () => { control?.click() })
+    expect(onToggle).toHaveBeenCalledWith(false)
+  })
+
+  it('keeps a key-required source off and unusable when the projection says disabled', async () => {
+    const { host, onToggle } = await render(true, false)
+    const control = host.querySelector<HTMLElement>('[role="switch"]')
+    expect(control?.getAttribute('aria-checked')).toBe('false')
+    expect(control?.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => { control?.click() })
+    expect(onToggle).not.toHaveBeenCalled()
   })
 })

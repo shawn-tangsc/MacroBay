@@ -1,4 +1,4 @@
-import { Alert, Button, Input } from 'antd'
+import { Alert, Button, Input, Switch } from 'antd'
 import { Eye, EyeOff } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 
@@ -9,6 +9,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
+import { SettingsInfo } from '../settingsInfo'
 import { SourceEnabledRow, needsJob } from './SourceRows'
 import { SourceDetailsBlock } from './SourceDetailsBlock'
 import type { SourceHealthLabels } from './SourceHealthDetail'
@@ -41,6 +42,8 @@ export type ProviderDetailLabels = {
   status: { enabled: string; disabled: string }
   capabilities: string
   toggleSource: Readonly<{ enable: string; disable: string }>
+  /** 页头那颗**整组**启停的可访问名（带来源名）。缺省时退回源开关那套说法。 */
+  toggleProvider?: Readonly<{ enable: string; disable: string }>
   credentials: string
   website: string
   signup: string
@@ -75,7 +78,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, readOnlyToggles, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -99,6 +102,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    * 不各自传布尔、也不各自决定「要不要走注册表」——同一个事实两处判，迟早两处不一致。
    */
   surface?: 'settings' | 'panel'
+  /**
+   * 启停**只读**：抽屉「数据源」那一屏只显示状态、不给编辑（用户 2026-11-11）。
+   * 启停的唯一编辑入口是「采集与数据」里的卡片项开关。凭据与「高级」不受影响。
+   */
+  readOnlyToggles?: boolean
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -324,6 +332,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   }
 
   const providerName = labels.providerNames[provider.providerId] ?? provider.displayName
+  /** 整组启停：全开 = on、全关 = off、**混合按 off**（点击后全开）。 */
+  const providerGroupEnabled = sources.length > 0 && sources.every((source) => source.enabled)
+  const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
+  const toggleProvider = async (next: boolean): Promise<void> => {
+    if (providerCredentialMissing) return
+    for (const source of sources) if (source.enabled !== next) await toggle(source, next)
+  }
   const hasProxySource = provider.sources.some((source) => source.requiresProxy)
 
   return <ErrorBoundary key={provider.providerId} scope="source-detail"><section className="source-provider-detail">
@@ -368,6 +383,24 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               onClick={() => window.open(provider.signupUrl!, '_blank', 'noopener,noreferrer')}
               size="small">{labels.signup}</Button>
             : null}
+        </span>
+        {/* 整组启停：这一行代表一个来源，开关管它下面**全部能力**（用户 2026-11-11，照模型服务供应商那排布）。
+            全开 = on、全关 = off、**混合按 off 显示**（点击后全开）——否则读者看不出到底开没开。 */}
+        <span className="source-provider-detail__group-toggle">
+          {providerCredentialMissing
+            ? <SettingsInfo
+              ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
+              labelKeys={['settings.intelligenceSources.credentialRequiredToEnable']}
+              resolveText={resolveText} />
+            : null}
+          <Switch
+            aria-disabled={providerCredentialMissing ? true : undefined}
+            aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
+              ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
+            checked={providerGroupEnabled}
+            disabled={providerCredentialMissing}
+            onChange={(next) => { if (!providerCredentialMissing) void toggleProvider(next) }}
+            size="small" />
         </span>
       </div>
       {/* 「需要 API Key」那行分组标题删掉了（用户 2026-11-10）：下面那行的标签 `API Key` 自己就说清了，
@@ -429,6 +462,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
           <SourceEnabledRow
             /* 需要 API Key 的源，Key 没配好之前开关灰着（判据在服务层：`hasCredential`）。
                界面只画，不自己造默认值——投影给什么 `enabled` 就画什么。 */
+            /* 组开关（页头最右那颗）是**唯一可编辑入口**：能力行的开关只读展示状态，点了不发写请求。 */
+            readOnlyEnabled={readOnlyToggles === true}
             {...(provider.credential === 'api-key' && credentialStatus?.hasCredential === false
               ? { credentialMissing: true }
               : {})}

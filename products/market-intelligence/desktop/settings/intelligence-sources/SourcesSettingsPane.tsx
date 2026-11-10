@@ -73,6 +73,8 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     .flatMap((group) => group.providers)
     .find((entry) => entry.providerId === props.selectedProviderId)
   const { providerId: _selected, ...surface } = props.surface
+  /* 「数据源」那一屏只读：启停的唯一编辑入口是「采集与数据」里的卡片开关。 */
+  const readOnlyToggles = props.pane === 'sources'
 
   const isBusiness = props.pane === undefined ? props.filter === 'dashboard' : props.pane === 'business'
   const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
@@ -142,7 +144,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {props.notice}
           {provider === undefined
             ? null
-            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} /></div>}
+            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} readOnlyToggles={readOnlyToggles} /></div>}
         </>}
     </div>
   </>

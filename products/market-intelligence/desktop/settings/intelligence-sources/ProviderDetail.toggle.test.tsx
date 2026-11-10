@@ -106,15 +106,15 @@ describe('one enable value, one write (S1)', () => {
     await act(async () => { root?.render(createElement(Host)); await Promise.resolve() })
     await flush()
 
-    const switches = container.querySelectorAll<HTMLButtonElement>('[data-pane="a"] button[role="switch"]')
-    expect(switches).toHaveLength(1)
-    await act(async () => { switches[0]!.click() })
+    // 页头那颗**组开关**是启停的唯一可编辑入口；能力行那颗只读展示（点了不发写请求）。
+    const headerSwitch = '[data-pane="a"] .source-provider-detail__group-toggle button[role="switch"]'
+    await act(async () => { container.querySelector<HTMLButtonElement>(headerSwitch)?.click() })
     await flush()
 
     // 一次写入；两处读同一个值，都跟着变成关。
     expect(writes).toEqual([['s1', false]])
     for (const pane of ['a', 'b']) {
-      expect(container.querySelector(`[data-pane="${pane}"] button[role="switch"]`)?.getAttribute('aria-checked')).toBe('false')
+      expect(container.querySelector(`[data-pane="${pane}"] .source-provider-detail__group-toggle button[role="switch"]`)?.getAttribute('aria-checked')).toBe('false')
     }
   })
 
