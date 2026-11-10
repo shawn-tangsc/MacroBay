@@ -112,8 +112,10 @@
 .channel-detail-title {
   margin: 0;
   color: var(--text-strong);
-  font-size: 16px;
-  font-weight: 600;
+  /* 设置页里的页标题与卡片/区块标题同一档：13 / 1.4 / 650（界面设计 2026-11-10 定）。 */
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .channel-detail-purpose {
