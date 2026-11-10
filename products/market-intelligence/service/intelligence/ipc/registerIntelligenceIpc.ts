@@ -27,6 +27,7 @@ import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNot
 import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
 import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
 import type { IntelligenceNotificationTestWiring } from './notificationTestWiring'
+import { getCellEnabledStore, registerCellEnabledIpc } from './registerCellEnabledIpc'
 
 const PRODUCT_ID = 'market-intelligence'
 
