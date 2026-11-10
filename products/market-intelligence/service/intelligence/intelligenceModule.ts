@@ -30,7 +30,7 @@ import { createMarketAnalysisSettingsService } from './application/marketAnalysi
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
-import { seedDefaultEnabledSources } from './application/defaultEnabledSources'
+import { migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
 import {
   createIntelligenceCredentialJsonStorage,
   createIntelligenceCredentialStore
@@ -728,7 +728,12 @@ export function getIntelligenceModule(
     // The dashboard's first screen (sentiment, fear & greed, stablecoin capital) is fed by sources
     // that need no credential; a fresh install should not require toggling them on before the cards
     // can do anything. An existing profile wins, so a reader's "off" is never overridden.
-    const ensureDefaultSources = seedDefaultEnabledSources(profileStore).catch(() => undefined)
+    // 一次性迁移：老安装里「免钥匙 + live」的源曾被旧默认写成关，这里打开一次（标记写在
+    // `intelligence-source-migration-markers.json`，之后读者再关就是关）。
+    const ensureDefaultSources = migrateKeylessSourceDefaults({
+      markerPath: join(dataDir, 'intelligence-source-migration-markers.json'),
+      store: profileStore
+    }).catch(() => undefined)
     // 历史日报编辑会话的身份归位：只改身份字段（消息与内容不动），幂等，失败不阻断启动但要留痕。
     const earlierBriefingSessionMigration = ensureDefaultSources
       .then(() => claimExistingBriefingSessions({
