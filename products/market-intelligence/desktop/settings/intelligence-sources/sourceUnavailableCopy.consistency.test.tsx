@@ -44,11 +44,11 @@ function labels(): ProviderDetailLabels {
   }
 }
 
-function source(reasonCode: string): SourceView {
+function source(reasonCode: string, kind: 'official-calendar' | 'market-calendar' = 'official-calendar'): SourceView {
   return {
     sourceId: 'macro-calendar-bls', providerId: 'bls', displayName: 'BLS official schedule',
     agents: ['crypto'], panels: ['economic-calendar'], visibility: 'visible', collection: 'provider',
-    kind: 'official-calendar', capabilities: { runNow: 'provider', testConnection: true }, readiness: 'live',
+    kind, capabilities: { runNow: 'provider', testConnection: true }, readiness: 'live',
     enabled: true, healthState: 'off', healthMarker: 'ring',
     unavailable: {
       reasonCode: reasonCode as never,
@@ -59,7 +59,7 @@ function source(reasonCode: string): SourceView {
   }
 }
 
-async function detailText(reasonCode: string): Promise<string> {
+async function detailText(reasonCode: string, kind: 'official-calendar' | 'market-calendar' = 'official-calendar'): Promise<string> {
   const invoke = vi.fn(async () => undefined)
   ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
   const container = document.createElement('div')
@@ -70,7 +70,7 @@ async function detailText(reasonCode: string): Promise<string> {
       labels: labels(),
       provider: {
         providerId: 'bls', displayName: 'Bureau of Labor Statistics (BLS)', category: 'macro',
-        credential: 'none', healthMarker: 'ring', sources: [source(reasonCode)]
+        credential: 'none', healthMarker: 'ring', sources: [source(reasonCode, kind)]
       } as ProviderView,
       showSourceDetails: true
     }) }))
@@ -82,7 +82,7 @@ async function detailText(reasonCode: string): Promise<string> {
 
 describe('one reason-code table for both surfaces', () => {
   it('gives the same sentence for a known code in the drawer and in the detail', async () => {
-    const sentence = sourceUnavailableSentence('official-endpoint-returned-403', drawerCopy.sourceUnavailable)
+    const sentence = sourceUnavailableSentence('official-endpoint-returned-403', drawerCopy.sourceUnavailable, 'official-calendar')
     const cell = await detailText('official-endpoint-returned-403')
     expect(cell).toContain(sentence)
     // 码本身不进正文（只在 ⓘ 里）。
@@ -90,10 +90,27 @@ describe('one reason-code table for both surfaces', () => {
   })
 
   it('falls back to the same sentence for an unknown code, in both places', async () => {
-    const sentence = sourceUnavailableSentence('endpoint-vanished-somewhere', drawerCopy.sourceUnavailable)
+    const sentence = sourceUnavailableSentence('endpoint-vanished-somewhere', drawerCopy.sourceUnavailable, 'official-calendar')
     expect(sentence).toBe(drawerCopy.sourceUnavailable)
     const cell = await detailText('endpoint-vanished-somewhere')
     expect(cell).toContain(sentence)
     expect(cell).not.toContain('endpoint-vanished-somewhere')
+  })
+})
+
+describe('the same code says different things to different kinds', () => {
+  it('never calls an aggregate a 官方源: official and market calendars get different sentences', async () => {
+    const code = 'official-endpoint-returned-403'
+    const official = sourceUnavailableSentence(code, drawerCopy.sourceUnavailable, 'official-calendar')
+    const market = sourceUnavailableSentence(code, drawerCopy.sourceUnavailable, 'market-calendar')
+    expect(official).toContain('官方源')
+    expect(market).not.toContain('官方源')
+    expect(market).toContain('市场日历源')
+
+    const officialCell = await detailText(code, 'official-calendar')
+    const marketCell = await detailText(code, 'market-calendar')
+    expect(officialCell).toContain(official)
+    expect(marketCell).toContain(market)
+    expect(officialCell).not.toBe(marketCell)
   })
 })

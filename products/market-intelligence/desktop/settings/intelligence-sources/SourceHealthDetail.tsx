@@ -115,6 +115,7 @@ export function SourceHealthDetail(props: {
       <HealthCell cell="idle-reason" label={labels.whyNotCollecting}>
         {view.idleReason === 'unavailable'
           ? <UnavailableReason
+            kind={source.kind}
             reasonCode={view.unavailableReasonCode}
             resolveText={props.resolveText} />
           : labels.reasons[view.idleReason]}
@@ -154,11 +155,12 @@ function HealthCell(props: {
 function UnavailableReason(props: {
   reasonCode?: string
   resolveText: (key: string) => string
+  kind: string
 }): React.ReactElement {
   const reasonCode = props.reasonCode
   // 表里没有的码退回「取不到（原因见详情）」，永远不抛错；也不从码里截数字（码名一改，403 就变了）。
   // 兜底句与抽屉**同一个文案键**，不是两句长得像的话。
-  const sentence = sourceUnavailableSentence(reasonCode, props.resolveText(SOURCE_UNAVAILABLE_FALLBACK_KEY))
+  const sentence = sourceUnavailableSentence(reasonCode, props.resolveText(SOURCE_UNAVAILABLE_FALLBACK_KEY), props.kind)
   return <>
     <span>{sentence}</span>
     <Popover

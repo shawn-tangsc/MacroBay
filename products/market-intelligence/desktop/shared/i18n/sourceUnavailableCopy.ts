@@ -8,8 +8,25 @@
  * 设置页的详情（`SourceHealthDetail.tsx`）与配置抽屉都调用这里：两处对同一个码给同一句话，
  * 加码只改这一处。
  */
-const UNAVAILABLE_SENTENCE: Readonly<Record<string, string>> = {
-  'official-endpoint-returned-403': '官方源暂时不可用（403）'
+/**
+ * 一个码在**不同来源类型**下不是同一句话：403 对官方日历是「官方源」，对聚合商 feed
+ * 就不能也叫官方源。句子按 `kind` 分组，登记方不用记住「这个码只给某一类用」。
+ * `kind` 缺省时给不指认归属的那句（「这个来源暂时不可用」）——宁可不说是哪一类，也不叫错。
+ */
+type SentenceGroup = 'official' | 'market' | 'other'
+
+const UNAVAILABLE_SENTENCE: Readonly<Record<string, Readonly<Record<SentenceGroup, string>>>> = {
+  'official-endpoint-returned-403': {
+    official: '官方源暂时不可用（403）',
+    market: '市场日历源暂时不可用（403）',
+    other: '这个来源暂时不可用（403）'
+  }
+}
+
+function sentenceGroupOf(kind: string | undefined): SentenceGroup {
+  if (kind === 'official-calendar') return 'official'
+  if (kind === 'market-calendar') return 'market'
+  return 'other'
 }
 
 /**
@@ -20,9 +37,9 @@ export const SOURCE_UNAVAILABLE_FALLBACK_KEY = 'pages.intelligence.portal.dashbo
 
 const CODE_LIKE = /^[a-z0-9]+(?:-[a-z0-9]+)+$/u
 
-export function sourceUnavailableSentence(reasonCode: string | undefined, fallback: string): string {
+export function sourceUnavailableSentence(reasonCode: string | undefined, fallback: string, kind?: string): string {
   if (reasonCode === undefined) return fallback
-  return UNAVAILABLE_SENTENCE[reasonCode] ?? fallback
+  return UNAVAILABLE_SENTENCE[reasonCode]?.[sentenceGroupOf(kind)] ?? fallback
 }
 
 /** 兜底：看起来像内部码就绝不显示原文。 */
