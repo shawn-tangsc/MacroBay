@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { SettingsRow } from './SettingsRow'
+import { SettingField } from '../../../../products/market-intelligence/desktop/shared/settings/SettingField'
 
 describe('the optional meta slot and the two DOM-shape switches', () => {
   it('keeps today\'s default markup when neither switch is passed', () => {
@@ -23,14 +24,38 @@ describe('the optional meta slot and the two DOM-shape switches', () => {
     expect(html).toBe('<div class="row"><div class="copy"><strong>Name</strong><span class="pill">ok</span></div><button>x</button></div>')
   })
 
-  it('allows only one call site for the shape switches, so settings rows do not split into two visual families', () => {
+  it('allows only one call site for the shape switches (copyAs / labelAs / switchSize), so settings rows do not split into two visual families', () => {
     const files = execFileSync('git', ['ls-files', '*.tsx', '*.ts'], { encoding: 'utf8' })
       .split('\n').filter((p) => p !== '' && !p.includes('.test.') && !p.endsWith('SettingsRow.tsx') && !p.endsWith('SettingField.tsx'))
     const callSites = files.filter((file) => {
       if (!existsSync(file)) return false
       const source = readFileSync(file, 'utf8')
-      return /\b(?:copyAs|labelAs)\s*=/.test(source)
+      return /\b(?:copyAs|labelAs|switchSize)\s*=/.test(source)
     })
     expect(callSites.length).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('the third shape switch: the switch size', () => {
+  const descriptor = {
+    key: 'setting:probe.switch', menu: 'sources', surfaces: ['settings'], level: 'product',
+    field: { kind: 'switch' }, read: { command: 'x', select: () => true },
+    write: { kind: 'value', command: 'x', toPayload: () => ({}) }, availability: 'live'
+  } as never
+
+  it('keeps the default size when switchSize is not passed', () => {
+    const html = renderToStaticMarkup(createElement(SettingField, {
+      descriptor, view: {}, value: true, rowClassName: 'row', copyClassName: 'copy',
+      resolveText: () => '', resolveOptionLabel: () => ''
+    } as never))
+    expect(html).not.toContain('ant-switch-small')
+  })
+
+  it('renders the small switch only when the caller asks for it', () => {
+    const html = renderToStaticMarkup(createElement(SettingField, {
+      descriptor, view: {}, value: true, rowClassName: 'row', copyClassName: 'copy',
+      switchSize: 'small', resolveText: () => '', resolveOptionLabel: () => ''
+    } as never))
+    expect(html).toContain('ant-switch-small')
   })
 })
