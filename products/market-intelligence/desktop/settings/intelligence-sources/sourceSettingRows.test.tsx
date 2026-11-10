@@ -148,20 +148,27 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
     }
   })
 
-  it('keeps the single enable write path when the row is declaration-driven', async () => {
+  it('leaves enabling to the card switch: no switch on this screen writes anything', async () => {
+    // 用户 2026-11-11：启停的编辑入口只在「采集与数据」的卡片项；这一屏的开关（页头组开关与能力行）
+    // 都是只读展示。点它们不产生任何写入，也不会走 IPC。
     const invoke = vi.fn(async (_productId: string, _method: string) => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const write = vi.fn(async () => true)
     const container = await mount(write)
 
-    // 启停的唯一可编辑入口是**页头的组开关**（能力行那颗已改成只读，用户 2026-11-11）。
-    const toggle = container.querySelector<HTMLButtonElement>('.source-provider-detail__group-toggle button[role="switch"]')!
-    await act(async () => { toggle.click() })
+    // 只看「启停」类开关：页头组开关 + 能力行的 `setting:sources.enabled@…`。
+    // 「纳入情绪分析」那颗不属于启停，仍是可编辑的，别把它算进来。
+    const switches = [...container.querySelectorAll<HTMLButtonElement>(
+      '.source-provider-detail__group-toggle button[role="switch"], [data-setting-key^="setting:sources.enabled"] button[role="switch"]'
+    )]
+    expect(switches.length).toBeGreaterThan(0)
+    for (const control of switches) {
+      expect(control.disabled).toBe(true)
+      await act(async () => { control.click() })
+    }
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    expect(write).toHaveBeenCalledTimes(1)
-    expect(write).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 's1' }), false)
-    // 组件自己不再调 IPC——启用仍只有宿主那一条写入口。
+    expect(write).not.toHaveBeenCalled()
     expect(invoke.mock.calls.some(([, method]) => method === 'intelligenceSources.setEnabled')).toBe(false)
   })
 })

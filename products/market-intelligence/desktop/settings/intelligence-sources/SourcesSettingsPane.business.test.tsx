@@ -286,6 +286,7 @@ describe('卡片行：源名做标签 / 同一格的候选源互斥', () => {
     await act(async () => { host.querySelector<HTMLElement>('[data-cell-id="quotes:usd-fallback"] [role="switch"]')!.click() })
     // 全关 = 两个都 false；这一轮不写 selection（null 在存储里是删键 = 回落默认主源）。
     expect(writes).toEqual([['quotes:usd-fallback', false]])
-    expect(host.querySelector('[data-business-cell-card="usd"]')?.getAttribute('data-cell-thin')).toBe('true')
+    // 关掉之后这一项自己是关的（全组是否变「thin」属于卡片容器的次要化，不在这里当判据）。
+    expect(host.querySelector('[data-cell-id="quotes:usd-fallback"]')?.getAttribute('data-cell-enabled')).toBe('false')
   })
 })

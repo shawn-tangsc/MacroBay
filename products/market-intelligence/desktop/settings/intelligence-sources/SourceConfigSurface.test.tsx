@@ -198,7 +198,7 @@ function surfaceBlock(relativePath: string): string {
 }
 
 describe('the config surface adapts a host that only has the three write callbacks', () => {
-  it('turns them into the one switch/run path, with the host origin', async () => {
+  it('keeps the run path, and leaves enabling to the card switch instead of this screen', async () => {
     const write = vi.fn(async () => {})
     const run = vi.fn(async () => {})
     const sourceView = source()
@@ -227,9 +227,15 @@ describe('the config surface adapts a host that only has the three write callbac
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(run).toHaveBeenCalledWith(sourceView.sourceId)
 
-    const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"]')!
-    await act(async () => { toggle.click() })
+    // 启停的编辑入口已经挪到「采集与数据」的卡片项（用户 2026-11-11）；这一屏的开关只读，
+    // 点它不产生任何写入——写入那条路仍由宿主提供，只是这里不再触发。
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>('button[role="switch"]')]
+    expect(toggles.length).toBeGreaterThan(0)
+    for (const toggle of toggles) {
+      expect(toggle.disabled).toBe(true)
+      await act(async () => { toggle.click() })
+    }
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect(write).toHaveBeenCalledWith(expect.objectContaining({ sourceId: sourceView.sourceId }), false, 'calendar-drawer')
+    expect(write).not.toHaveBeenCalled()
   })
 })

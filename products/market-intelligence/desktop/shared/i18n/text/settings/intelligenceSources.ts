@@ -204,7 +204,7 @@ export const intelligenceSourcesText = {
     'sec-rss': '美国证监会新闻稿：执法与规则提案',
     'solana-status': '维护备用，暂不向读者提供内容',
     'treasury-fiscal-data': '美国财政部账户的每日余额',
-    'twelve-data-market': '美元、黄金与离岸人民币的报价',
+    'twelve-data-market': '美元与黄金的报价',
   },
   sourceNames: {
     'macro-calendar-fed': '美联储官方日程', 'federal-reserve-rss': '美联储新闻稿',

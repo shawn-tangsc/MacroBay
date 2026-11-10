@@ -550,7 +550,7 @@ mi: miText['zh-CN'],
                 'stablecoin-capital-conditions': { name: 'DeFiLlama 稳定币资金面', description: '已验证的美元稳定币资金面', status: '来源设置' },
                 'zero-x-router-aggregate-provider': { name: '0xRouter', description: '聚合数据供应商配置', status: '来源设置' },
                 'policy-path-market': { name: 'FOMC 决议市场', description: 'Polymarket 对下一次 FOMC 会议各结果档的定价；只存衍生读数与链接。', status: '来源设置' },
-                'twelve-data-market': { name: 'Twelve Data', description: '美元（ICE 篮子合成）、黄金、离岸人民币与稳定币溢价；免费额度 8 次/分钟、800 次/天。', status: '来源设置' },
+                'twelve-data-market': { name: 'Twelve Data', description: '美元（ICE 篮子合成）、黄金与稳定币溢价；免费额度 8 次/分钟、800 次/天。', status: '来源设置' },
                 'realmarketapi-market': { name: 'RealMarketAPI', description: '真实 ICE 美元指数（DXY）；每 5 分钟采集一次，未配置或数据失效时回退到 ICE 篮子合成值。', status: '来源设置' }
               }
             },
