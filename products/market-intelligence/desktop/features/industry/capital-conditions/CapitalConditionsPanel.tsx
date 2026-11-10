@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from 'antd'
-import { Info, RefreshCw } from 'lucide-react'
+import { CircleDashed, CircleSlash, Info, RefreshCw } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -16,6 +16,7 @@ import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
 import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import '../../../shared/styles/sourceAvailability.css'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import {
   isCapitalConditionsRetryable,
@@ -89,20 +90,27 @@ type Text = {
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 
 /**
- * 整卡级的两态输入：`missing` = 没配置来源，`disabled` = 有源但没启用。
+ * 一格（稳定币 / ETF）的来源两态：`missing` = 这格没有可用的源，`disabled` = 有源但没启用。
  *
- * **只收这两种**：「读不到」由读数自己说（这一格没读成就是没读成，宿主不必再通知一遍），
- * 而「没配置 / 没启用」是卡片自己推不出来的事实，只能由宿主给。
+ * **只收这两种**：「读不到」由读数自己说（`EtfTable` / `EtfFlow` 本来就有行内重试），而「没配置 /
+ * 没启用」是卡片自己推不出来的事实，只能由宿主给。
  *
- * 动作跟状态**放在一起**，不另设一个可选的 `onOpenSources`：说得出一态，就必须说得出读者该去哪。
- * 整卡级的两态走平台 `StateView`（未配置 `empty·none-installed`、未启用 `disabled·target-disabled`），
- * 行级/格级才用共享可用性卡 `mi-source-*`——同一位置只许一种画法（界面设计 2026-11-11）。
+ * 动作跟状态放在一起，不另设一个可选的 `onOpenSources`：说得出一态，就必须说得出读者该去哪。
+ *
+ * 这张卡是**多行多值卡**：两格能分别判断，所以两态**逐格标**（共享行内状态 `mi-source-state`），
+ * **不再叠一张整卡状态面**——同一张卡只许一种形态（界面设计 2026-11-11 §二）。
  */
 export type DashboardSourceAvailability =
   | Readonly<{ state: 'missing'; onOpenSources: () => void }>
   | Readonly<{ state: 'disabled'; sourceLabel: string; onOpenSources: () => void }>
 
-export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false, sourceAvailability }: Readonly<{
+/** 两格的来源可用性各一份；缺键 = 这一格没问题，照旧画读数。 */
+export type DashboardCapitalCellAvailability = Readonly<{
+  stablecoin?: DashboardSourceAvailability
+  etf?: DashboardSourceAvailability
+}>
+
+export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false, cellAvailability }: Readonly<{
   state: DashboardCapitalConditionsState
   text: Text
   /** Re-collect when the host can, otherwise re-read the stored snapshot. Always a real action. */
@@ -110,10 +118,10 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   refreshing?: boolean
   refreshFailed?: boolean
   /**
-   * 这张卡的原因**不是「读不到」而是「没配置 / 没启用」**时由宿主给：判定顺序是
-   * 未配置 → 未启用 → 读不到（来源配置属于宿主，卡片不自己推断）。不给 = 按读数的结果画。
+   * 逐格的「没配置 / 没启用」由宿主给：判定顺序是 未配置 → 未启用 → 读不到（来源配置属于宿主，
+   * 卡片不自己推断）。缺键 = 按读数画。
    */
-  sourceAvailability?: DashboardSourceAvailability
+  cellAvailability?: DashboardCapitalCellAvailability
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const dataText = useProductTextKey() as (key: string) => string
@@ -129,23 +137,16 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   }
   // 命中消失时把弹层一起关掉：故事已经不成立，留着一段讲它的文字就是旧真相。
   useEffect(() => { if (!alertChip) setDetailOpen(false) }, [alertChip])
-  // 判定顺序不许倒：没配置 → 没启用 → 读不到。前两态是读者要动手的事，不是系统故障。
-  // 「读不到」不在这里：它由下面那条 `state.state !== 'available'` 的分支负责（`f6cded2` 的
-  // 五种成因、重启/重试/刷新三种动作都在那儿），同一位置不许再画第二套。
-  if (sourceAvailability) return <section className="mi-capital-conditions" aria-label={text.title}>
+  // 两格各自判断，判定顺序不许倒：没配置 → 没启用 → 读不到。前两态逐格标在行内（见 `CellSourceState`），
+  // 「读不到」由读数自己说（`EtfTable` / `EtfFlow` 的行内重试）——三种说法互不冒充，也不叠整卡状态面。
+  //
+  // 两格都没启用/没配置时**这一次根本不去读**（宿主把读口关了），所以卡片不许停在「正在加载」：
+  // 它照旧渲染，两行各自说自己那一态。这也是「关掉来源不等于这张卡消失」的判据。
+  if (cellAvailability?.stablecoin && cellAvailability.etf) return <section className="mi-capital-conditions" aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
-      {/* 未配置 = 没有可用的源（`empty·none-installed`，动作「打开设置」：读者下一步是去设置里加一个源）；
-          未启用 = 有源但关掉了（`disabled·target-disabled`，动作「去启用」，状态词后面点名是哪个源）。
-          两态都不用错误色，也不给重试——重试一个没配置/没启用的源永远读不出来。
-          动作文字一律取平台闭集（`STATE_VIEW_ACTION_KEYS`），调用点不硬写「去配置 / 再试一次」。 */}
-      {sourceAvailability.state === 'missing'
-        ? <StateView state="empty" reasonCode="none-installed"
-            productReason={{ key: 'pages.intelligence.portal.data.sourcesNotConfigured', resolve: (key: string) => dataText(key) }}
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: sourceAvailability.onOpenSources }} />
-        : <StateView state="disabled" reasonCode="target-disabled"
-            productReason={{ key: 'pages.intelligence.portal.data.sourcesNotEnabled', resolve: (key: string) => `${dataText(key)}（${sourceAvailability.sourceLabel}）` }}
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.enable, onSelect: sourceAvailability.onOpenSources }} />}
+      <CellSourceState availability={cellAvailability.stablecoin} dataText={dataText} />
+      <CellSourceState availability={cellAvailability.etf} dataText={dataText} />
     </div>
   </section>
 
@@ -189,8 +190,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         <div className="mi-capital-conditions__header-band">
           <h2>{text.title}</h2>
           {/* The module rule's chip sits beside the title, at most one per card. It is drawn only
-              when the rule had something to say; a quiet card renders no element at all. */}
-          {state.etfSignal && state.etfSignal.state !== 'hidden'
+              when the rule had something to say; a quiet card renders no element at all.
+              ETF 那一格没启用时牌子也不画：它是那一格的读数产物，格子关着还报规则就是在说旧话。 */}
+          {state.etfSignal && state.etfSignal.state !== 'hidden' && !cellAvailability?.etf
             ? <EtfOutflowChip chip={state.etfSignal} text={text} onRetry={onRefresh}
                 onToggle={() => setDetailOpen(true)} triggerRef={chipTrigger} />
             : null}
@@ -208,10 +210,18 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         {/* These are the last numbers that read successfully. Saying so is the difference between
             "old" and "gone", and only one of those is true after a failed re-read. */}
         {state.stale ? <p className="mi-capital-conditions__stale" role="status">{text.staleRead}</p> : null}
-        <StablecoinTable state={state} text={text} />
-        <EtfTable reading={state.etfReading} text={text} onRetry={onRefresh} />
+        {/* 两格各自说话：这一格没配置/没启用就**在这一行**说，并只给这一颗动作；
+            另一格没问题的照旧画读数——关掉一格不许把整张卡降级。 */}
+        {cellAvailability?.stablecoin
+          ? <CellSourceState availability={cellAvailability.stablecoin} dataText={dataText} />
+          : <StablecoinTable state={state} text={text} />}
+        {cellAvailability?.etf
+          ? <CellSourceState availability={cellAvailability.etf} dataText={dataText} />
+          : <EtfTable reading={state.etfReading} text={text} onRetry={onRefresh} />}
       </div>
-      <EtfFlow reading={state.etfReading} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
+      {cellAvailability?.etf
+        ? null
+        : <EtfFlow reading={state.etfReading} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />}
     </div>
   </section>
 }
@@ -251,6 +261,28 @@ function StablecoinTable({ state, text }: { state: AvailableState; text: Text })
  * 另一支显示「未知」+ 具体原因；两支都读不到才整块换成错误态。
  * 窗口不等长只让**对比列**不可比，不把两份数字一起撤掉（「ETH 晚一天整份作废」就是这么来的）。
  */
+/**
+ * 一格的「没配置 / 没启用」：**行内一句 + 一颗动作**，用共享类 `mi-source-state`
+ * （规范 `2026-11-11-source-availability-styles.md`；行级/格级就长这样）。
+ *
+ * 未配置与未启用都不用错误色——它们不是故障，是读者要动手的事；读不到不在这一支（由读数自己说）。
+ */
+function CellSourceState({ availability, dataText }: Readonly<{
+  availability: DashboardSourceAvailability
+  dataText: (key: string) => string
+}>): React.ReactElement {
+  const missing = availability.state === 'missing'
+  const Icon = missing ? CircleDashed : CircleSlash
+  const sentence = dataText(missing ? 'pages.intelligence.portal.data.sourcesNotConfigured' : 'pages.intelligence.portal.data.sourcesNotEnabled')
+  return <p className="mi-source-state" data-state={availability.state}>
+    <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
+    <span>{missing ? sentence : `${sentence}（${availability.sourceLabel}）`}</span>
+    <Button onClick={availability.onOpenSources} size="small" type="link">
+      {dataText(missing ? 'pages.intelligence.portal.data.configureSources' : 'pages.intelligence.portal.data.enableSources')}
+    </Button>
+  </p>
+}
+
 function EtfTable({ reading, text, onRetry }: { reading?: DashboardEtfReading; text: Text; onRetry: () => void }): React.ReactElement {
   const unreadable = reading === undefined || reading.state === 'unreadable'
   const coverage = unreadable ? undefined : reading.coverage
