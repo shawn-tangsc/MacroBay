@@ -1,15 +1,15 @@
 import { Alert, Button, Input, Switch } from 'antd'
-import { Eye, EyeOff, Info } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { useCallback, useEffect, useId, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
 import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
+import { SourceHealthDetail, type SourceDetailRead, type SourceHealthLabels } from './SourceHealthDetail'
 import { healthStateBadge } from './sourceHealthTone'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -18,11 +18,9 @@ import { openProxySettings } from '../../shared/navigation/productShellNavigatio
 import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
 import { useProxyConfigured } from '../../shared/useProxyConfigured'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellDay } from '@platform/ui/time/shellTimeFormat'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import type { ProviderView, SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 
 function isCalendar(source: SourceView): boolean {
   return source.kind === 'official-calendar' || source.kind === 'market-calendar'
@@ -58,6 +56,8 @@ export type ProviderDetailLabels = {
   collectionPolicyStopped: string
   automaticSyncStopped: string
   lastSuccessfulSync: string
+  /** B4 四格：今天有没有读数 / 上次成功 / 为什么没在采 / 能不能立刻采。 */
+  health: SourceHealthLabels
 }
 
 /**
@@ -78,18 +78,6 @@ function SourceHealthPill({ state, resolveText, unavailable }: {
   return <StatusPill labelKey={badge.labelKey} resolveText={resolveText} tone={badge.tone} />
 }
 
-/**
- * 原因码 → 读者看到的说法。**不许从码里截数字**：码名一改，「403」就会变成别的东西、甚至取不到。
- * 表里没有的码退回不带数字的那句，永远不抛错。加一个码就在这里加一行，别在别处写第二份映射。
- */
-const UNAVAILABLE_SENTENCE: Readonly<Record<string, string>> = {
-  'official-endpoint-returned-403': '官方源暂时不可用（403）'
-}
-
-function unavailableSentence(reasonCode: string, fallback: string): string {
-  return UNAVAILABLE_SENTENCE[reasonCode] ?? fallback
-}
-
 function needsJob(source: SourceView): boolean {
   return source.collection === 'adapter'
     || source.collection === 'job'
@@ -102,9 +90,11 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById }: {
   labels: ProviderDetailLabels
   provider: ProviderView
+  /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
+  supportsRunNowById?: Readonly<Record<string, boolean>>
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -130,7 +120,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [credentialStatus, setCredentialStatus] = useState<{ hasCredential: boolean; maskedPreview?: string }>()
   const [credentialFeedback, setCredentialFeedback] = useState<'saved' | 'failed'>()
   const [savingCredential, setSavingCredential] = useState(false)
-  const [details, setDetails] = useState<Record<string, SafeIntelligenceSourceDetailView | undefined>>({})
+  const [details, setDetails] = useState<Record<string, SourceDetailRead>>({})
   const [runningSourceId, setRunningSourceId] = useState<string>()
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
@@ -151,18 +141,49 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
 
   useEffect(() => { setSources(provider.sources) }, [provider])
 
+  /**
+   * 每个源的详情：**读取失败是一种状态，不是「没有数据」**（读者要能重试）。
+   * 日历 feed 不读通用详情（它不在通用目录里，问一次只会得到「未知来源」）——记 `skipped`，
+   * 四格里读不到的那两格写「未知」并说明原因。
+   */
+  const loadDetail = useCallback(async (sourceId: string, active: () => boolean): Promise<void> => {
+    setDetails((current) => ({ ...current, [sourceId]: { state: 'loading' } }))
+    try {
+      const state = await intelligenceSourcesClient.getPageState(sourceId)
+      if (!active()) return
+      const detail = state?.detail
+      setDetails((current) => ({
+        ...current,
+        [sourceId]: detail === undefined ? { state: 'failed' } : { state: 'ready', detail }
+      }))
+    } catch {
+      if (!active()) return
+      setDetails((current) => ({ ...current, [sourceId]: { state: 'failed' } }))
+    }
+  }, [])
+
   useEffect(() => {
     if (!showSourceDetails) return
     let active = true
-    // Calendar feeds are registry-only sources: they have provider profiles and a scheduler, but
-    // no entry in the generic intelligence-source catalog. Asking getPageState for one throws
-    // "Unknown intelligence source"; their health badge comes from the calendar fallback below.
-    void Promise.all(provider.sources.filter((source) => !isCalendar(source)).map(async (source) => {
-      const state = await intelligenceSourcesClient.getPageState(source.sourceId).catch(() => undefined)
-      return [source.sourceId, state?.detail] as const
-    })).then((entries) => { if (active) setDetails(Object.fromEntries(entries)) })
+    const sources = provider.sources.filter((source) => !isCalendar(source))
+    setDetails((current) => {
+      const next: Record<string, SourceDetailRead> = {}
+      for (const source of provider.sources) {
+        next[source.sourceId] = isCalendar(source)
+          ? { state: 'skipped' }
+          // 同一屏重渲染时保留已读到的结果：重读由「重试」触发，不因为父级刷新把四格闪空。
+          : current[source.sourceId]?.state === 'ready' ? current[source.sourceId]! : { state: 'loading' }
+      }
+      return next
+    })
+    for (const source of sources) void loadDetail(source.sourceId, () => active)
     return () => { active = false }
-  }, [provider.providerId, showSourceDetails])
+  }, [provider.providerId, showSourceDetails, loadDetail])
+
+  /** 读失败后的重试：重新问这一次源，不改任何设置。 */
+  const retryDetail = useCallback((sourceId: string): void => {
+    void loadDetail(sourceId, () => true)
+  }, [loadDetail])
 
 
 
@@ -340,44 +361,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               hover）——「看着能点、其实没有去处」是这一版在清的一类假可用。 */}
           <div className="source-provider-detail__main">
             <strong>{name}</strong>
-            {/* 状态串：**状态词 → 人话原因 → 上次成功**，一条 ` · ` 串起来，最多两行。 */}
+            {/* 一行药丸：只报**状态**。原因、上次成功、能不能立刻采都收进下面那四格——
+                同一个事实两处说，迟早一处新一处旧。 */}
             <span className="source-provider-detail__status">
               <SourceHealthPill
                 state={source.collection === 'none' ? undefined : source.healthState}
                 resolveText={resolveText}
                 unavailable={Boolean(unavailable)} />
-            {/* 「不可用」不是失败：药丸之外必须给出同一句原因，读者才知道为什么取不到、数据有多旧。 */}
-            {unavailable
-              ? <span className="source-provider-detail__unavailable">
-                {[
-                  unavailableSentence(unavailable.reasonCode, resolveText('settings.intelligenceSources.unavailableShort')),
-                  labels.automaticSyncStopped,
-                  // 读不出合法时刻就不写这一句，而不是印一段切出来的字符串。
-                  ...(unavailable.lastSuccessfulSyncAt
-                    ? (() => {
-                      const day = formatShellDay(unavailable.lastSuccessfulSyncAt, timeZone)
-                      return day === null ? [] : [labels.lastSuccessfulSync.replace('{date}', day)]
-                    })()
-                    : [])
-                ].join(' · ')}
-              </span>
-              : null}
-            {/* 原因码不进正文：它在 ⓘ 里，恰一处、默认不显示。正文那句是给读者的说法。 */}
-            {unavailable
-              ? <Popover
-                content={<code className="source-provider-detail__reason-code">{unavailable.reasonCode}</code>}
-                trigger={(triggerProps) => (
-                  <IconButton
-                    {...triggerProps}
-                    ariaLabelKey="settings.intelligenceSources.unavailableReasonCodeAria"
-                    icon={Info}
-                    resolveText={resolveText}
-                    size="sm"
-                    /* 圆形字形（Info / CircleHelp / HelpCircle）一律显式 plain：无框无底、悬停才出浅底；
-                       solid 只属于工具栏那一排（iconGlyphVariantGuard）。 */
-                    variant="plain" />
-                )} />
-              : null}
             </span>
             {/* 第二行：归属与任务状态。纯文本 ` · ` 串起，不再是一排药丸。 */}
             <span className="source-provider-detail__tags-line">
@@ -397,6 +387,17 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             size="small"
           />
           </div>
+          {/* B4 四格：读不到逐次记录的源（日历 feed）不画成「没有」，写「未知」并说明原因。 */}
+          <SourceHealthDetail
+            automaticSyncStopped={labels.automaticSyncStopped}
+            labels={labels.health}
+            onRetry={() => retryDetail(source.sourceId)}
+            read={details[source.sourceId] ?? { state: 'loading' }}
+            resolveText={resolveText}
+            source={source}
+            {...(supportsRunNowById?.[source.sourceId] === undefined ? {} : { supportsRunNow: supportsRunNowById[source.sourceId] })}
+            timeZone={timeZone}
+          />
           {/* 采集策略（频率档 / 范围 / 是否纳入舆情）：每个源常显，读者不必先选中它。
               产品自有采集的源只留启用开关，预设与范围不适用（组件自己写那句说明）。 */}
           {/* 采集策略（频率档 / 范围 / 纳入情绪分析）：每个源一组，**默认收起**。

@@ -43,7 +43,8 @@ function labels(): ProviderDetailLabels {
     collectionPolicyStopped: settingsText.collectionPolicyStopped,
     automaticSyncStopped: settingsText.automaticSyncStopped,
     lastSuccessfulSync: settingsText.lastSuccessfulSync,
-    apiKey: settingsText.apiKey
+    apiKey: settingsText.apiKey,
+    health: settingsText.health
   }
 }
 

@@ -44,7 +44,8 @@ function labels(): ProviderDetailLabels {
     unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria,
     collectionPolicyStopped: settingsText.collectionPolicyStopped,
     automaticSyncStopped: settingsText.automaticSyncStopped,
-    lastSuccessfulSync: settingsText.lastSuccessfulSync
+    lastSuccessfulSync: settingsText.lastSuccessfulSync,
+    health: settingsText.health
   }
 }
 
@@ -187,7 +188,7 @@ describe('ProviderDetail source details', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => {
-      root?.render(createElement(ProviderDetail, {
+      root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children: createElement(ProviderDetail, {
         labels: labels(),
         provider: {
           providerId: 'bls',
@@ -209,9 +210,8 @@ describe('ProviderDetail source details', () => {
             }
           })]
         },
-        showSourceDetails: true,
-      
-      }))
+        showSourceDetails: true
+      }) }))
       await Promise.resolve()
     })
     await flush()
@@ -226,7 +226,8 @@ describe('ProviderDetail source details', () => {
     expect(reasonTrigger).not.toBeNull()
     expect(container.querySelectorAll('[aria-label="原因码"]')).toHaveLength(1)
     expect(container.textContent).toContain('自动同步已停止')
-    expect(container.textContent).toContain('2026-10-22')
+    // 四格里的「上次成功」走统一格式化：07:29Z 在东八区是 10-22 15:29。
+    expect(container.textContent).toContain('10-22 15:29 GMT+8')
     expect(container.querySelector('.status-pill--ok')).toBeNull()
     // 「未安排」不许显示成「已启用」。
     expect(container.textContent).toContain(settingsText.jobNotRegistered)
@@ -346,8 +347,9 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    expect(container.textContent).toContain('2026-10-21')
-    expect(container.textContent).not.toContain('2026-10-22')
+    // 紧凑时刻仍是同一个格式化入口：02:00Z 在纽约是前一天 22:00（EDT），不是 10-22。
+    expect(container.textContent).toContain('10-21 22:00 GMT-4')
+    expect(container.textContent).not.toContain('10-22')
   })
 
   it('does not paint “enabled” next to “unavailable”: one of them has to win', async () => {
@@ -392,8 +394,11 @@ describe('ProviderDetail source details', () => {
 
     // 状态串与标签行现在是两行（页头的「1 项能力 · 已启用 1」是另一件事）。
     const rowStatus = container.querySelector('.source-provider-detail__status')?.textContent ?? ''
+    const rowHealth = container.querySelector('.source-provider-detail__health')?.textContent ?? ''
     const rowTags = container.querySelector('.source-provider-detail__tags-line')?.textContent ?? ''
-    expect(rowStatus).toContain('官方源暂时不可用')
+    // 药丸只说状态；原因、上次成功在四格里，同一件事只出现一次。
+    expect(rowStatus).toContain('不可用')
+    expect(rowHealth).toContain('官方源暂时不可用')
     expect(rowTags).toContain(settingsText.jobNotRegistered)
     expect(`${rowStatus}${rowTags}`).not.toContain(settingsText.status.enabled)
     expect(`${rowStatus}${rowTags}`).not.toContain(settingsText.status.disabled)

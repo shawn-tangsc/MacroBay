@@ -454,6 +454,38 @@ export const intelligenceSourcesText = {
     consecutiveFailures: '连续失败',
     lastRunSummary: '最近运行摘要',
     empty: '暂无',
+    /* 不可用原因的读者说法：码只进 ⓘ，正文用这里映射好的那句话（英文界面也走这一份）。 */
+    unavailableReasons: {
+      'official-endpoint-returned-403': '官方源暂时不可用（403）'
+    },
+    /* B4 来源健康四格：今天有没有读数 / 上次成功 / 为什么没在采 / 能不能立刻采。 */
+    todayReading: '今天的读数',
+    todayReadingYes: '有 · {time}',
+    todayReadingNo: '今天还没有',
+    noSuccess: '没有成功记录',
+    unknown: '未知',
+    unknownReason: '这类来源只按提供方汇总运行，没有逐次记录',
+    whyNotCollecting: '为什么没在采',
+    runNowAnswer: '能不能立刻采',
+    reasons: {
+      disabled: '已停用',
+      'missing-credential': '缺凭据',
+      unavailable: '平台取不到',
+      'never-ran': '从没成功采过',
+      'not-ready': '还没接入完成',
+      manual: '手动模式，不会自动采集',
+      'product-owned': '由产品自己的采集作业负责',
+      collecting: '按计划采集中',
+      unknown: '未知'
+    },
+    runNow: {
+      yes: '可以',
+      unsupported: '这个来源不能在这里运行',
+      'not-ready': '还没接入完成',
+      unavailable: '现在取不到数据，恢复后再试',
+      'missing-credential': '先填好凭据',
+      disabled: '先启用这个来源'
+    },
     statuses: {
       healthy: '健康',
       'multiple-failures': '多次失败',
@@ -930,6 +962,36 @@ export const intelligenceSourcesText = {
     consecutiveFailures: 'Consecutive Failures',
     lastRunSummary: 'Last Run Summary',
     empty: 'None',
+    unavailableReasons: {
+      'official-endpoint-returned-403': 'The official source is temporarily unavailable (403)'
+    },
+    todayReading: "Today's reading",
+    todayReadingYes: 'Yes · {time}',
+    todayReadingNo: 'Nothing yet today',
+    noSuccess: 'No successful run yet',
+    unknown: 'Unknown',
+    unknownReason: 'This kind of source is summarised per provider; there is no run-by-run record',
+    whyNotCollecting: 'Why it is not collecting',
+    runNowAnswer: 'Can it run now',
+    reasons: {
+      disabled: 'Turned off',
+      'missing-credential': 'Missing credential',
+      unavailable: 'The platform cannot reach it',
+      'never-ran': 'No successful run yet',
+      'not-ready': 'Not wired up yet',
+      manual: 'Manual mode: it does not collect on its own',
+      'product-owned': "Collected by the product's own job",
+      collecting: 'Collecting on schedule',
+      unknown: 'Unknown'
+    },
+    runNow: {
+      yes: 'Yes',
+      unsupported: 'This source cannot run from here',
+      'not-ready': 'Not wired up yet',
+      unavailable: 'It cannot be reached right now; try again after it recovers',
+      'missing-credential': 'Set the credential first',
+      disabled: 'Turn the source on first'
+    },
     statuses: {
       healthy: 'Healthy',
       'multiple-failures': 'Repeated failures',

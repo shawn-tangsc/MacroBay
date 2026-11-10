@@ -1026,15 +1026,29 @@
   max-width: 100%;
 }
 
-.source-provider-detail__unavailable {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
+/* B4 四格：单独一行，宽度按整块算（不挤在 32px 开关那一列里）。 */
+.source-provider-detail__health {
+  margin-top: 8px;
+}
+
+.source-provider-detail__health .intelligence-health-value {
   min-width: 0;
-  color: var(--muted);
+  color: var(--text-strong);
   font-size: var(--font-meta);
+  font-weight: 650;
   line-height: var(--line-meta);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* 「未知」不是「没有」：降成一档，别让它读起来像一个结论。 */
+.source-provider-detail__health .intelligence-health-value[data-unknown='true'] {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.intelligence-source-note--health {
+  margin-top: 6px;
 }
 
 /* 第二行：归属与任务状态，纯文本 ` · ` 串起。 */

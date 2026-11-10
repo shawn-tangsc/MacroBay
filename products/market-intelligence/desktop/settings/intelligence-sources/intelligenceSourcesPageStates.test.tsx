@@ -113,6 +113,7 @@ afterEach(async () => {
   root = undefined
   host?.remove()
   host = undefined
+  Reflect.deleteProperty(window, 'platform')
   vi.restoreAllMocks()
 })
 
@@ -122,6 +123,7 @@ const render = async () => {
   root = createRoot(host)
   await act(async () => root!.render(createElement(IntelligenceSourcesSettingsSection)))
   await act(async () => { await Promise.resolve() })
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
   return host
 }
 
@@ -218,6 +220,15 @@ describe('sources settings page states', () => {
   })
 
   it('draws the page once the read is done', async () => {
+    // 详情是另一条读（每源一次）：读成了才画健康四格。这里给一条最小详情，
+    // 否则页面会如实落「详情读不到」的错误态——那是另一条用例的事。
+    ;(window as unknown as { platform: unknown }).platform = {
+      products: {
+        invoke: vi.fn(async (_productId: string, method: string) => method === 'intelligenceSources.getPageState'
+          ? { detail: { health: { sourceId: 's1', runtimeStatus: 'healthy', connectivityStatus: 'connected', consecutiveFailures: 0 } } }
+          : undefined)
+      }
+    }
     vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
       sourcesState({
         loading: false,
