@@ -8,7 +8,8 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { DEFAULT_CALENDAR_REMINDER_SETTINGS } from '../../../contracts/calendarEventReminder'
 import { intelligenceNotificationText } from './text'
-import IntelligenceNotificationSettingsSection, { itemForFocus } from './index'
+import IntelligenceNotificationSettingsSection, { itemForFocus, MIGRATED_SETTING_KEYS } from './index'
+import { settingRegistry } from '../../shared/settings/registry'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS } from './useChannelEventSettings'
 
@@ -354,6 +355,40 @@ describe('intelligence notification settings', () => {
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.surfaceBlocked.toast'])
   })
 
+  it('renders every migrated row from its declaration, exactly one key at a time', async () => {
+    install()
+    await render()
+    const keys = (): string[] =>
+      [...(container?.querySelectorAll('[data-setting-key]') ?? [])].map((node) => node.getAttribute('data-setting-key') ?? '')
+
+    // 默认选第一项（模块信号触发）。
+    expect(keys()).toEqual(['setting:notifications.channel-event.signal-triggered'])
+    await selectItem(1)
+    expect(keys()).toEqual(['setting:notifications.channel-event.briefing-ready'])
+    await selectItem(2)
+    expect(keys()).toEqual(['setting:notifications.push-outlet'])
+
+    // 页面 → 注册表：渲染出的每个键都必须在已迁移清单里，且是 settings 面上的真实声明。
+    for (const key of keys()) {
+      expect(MIGRATED_SETTING_KEYS).toContain(key)
+      const declared = settingRegistry.notifications.find((row) => row.key === key)
+      expect(declared?.surfaces).toEqual(['settings'])
+    }
+  })
+
+  it('keeps the value the reader just picked when a channel toggle fails to save', async () => {
+    // G8：写失败时控件保留读者刚选的值，只在本行说「这次没存上」，不回退、不只弹提示。
+    install({ setChannelEvent: vi.fn(async () => { throw new Error('write-failed') }) })
+    await render()
+    const row = container?.querySelector('[data-setting-key="setting:notifications.channel-event.signal-triggered"]')
+    const toggle = row?.querySelector<HTMLButtonElement>('button[role="switch"]')
+    expect(toggle?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => { toggle?.click(); await Promise.resolve() })
+    await act(async () => { await Promise.resolve() })
+    expect(toggle?.getAttribute('aria-checked')).toBe('false')
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.saveFailed'])
+  })
+
   it('says so in place when a surface tick fails to save, instead of silently reverting', async () => {
     // 缺陷（用户 2026-11-07「通知方式这里不能改」）：写失败时页面一声不响、勾选回原样，
     // 读者看到的就是「点了没反应」。这条钉住「失败必须当场说」。
@@ -482,9 +517,8 @@ describe('intelligence notification settings', () => {
       .toContain(text['pages.intelligence.notification.threshold.cost'])
   })
 
-  it('says so when saving the tier fails, and keeps the value the service still reports', async () => {
-    // 用户 2026-11-07「点了没反应」那类缺陷的防线：写失败必须当场说，而且界面跟着服务的值走，
-    // 不许本地先翻过去再悄悄回滚。
+  it('says so when saving the tier fails, and keeps the value the reader just picked', async () => {
+    // 写失败必须当场说；按 G8，控件保留读者刚选的值（不回退、不只弹提示）。
     const invoke = vi.fn(async (_productId: string, method: string) => {
       if (String(method).includes('saveNewsPushThreshold')) throw new Error('write failed')
       if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
@@ -501,8 +535,9 @@ describe('intelligence notification settings', () => {
     await act(async () => { await Promise.resolve() })
 
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.saveFailed'])
+    // G8：读者按的是「高」，失败后就该仍然是「高」，不是偷偷回到服务端的「中」。
     expect(group.querySelector('[aria-pressed="true"]')?.textContent)
-      .toBe(text['pages.intelligence.notification.threshold.medium'])
+      .toBe(text['pages.intelligence.notification.threshold.high'])
   })
 
 })

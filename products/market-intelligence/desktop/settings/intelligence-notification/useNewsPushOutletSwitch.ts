@@ -55,6 +55,8 @@ export function useNewsPushOutletSwitch(
   const setEnabledAndReRead = useCallback((next: boolean) => {
     setSaving(true)
     setSaveFailed(false)
+    // 先显示读者刚选的值；失败也不回退（G8），成功再以服务端读回的值覆盖。
+    setEnabled(next)
     void client.setEnabled(next).then(
       () => {
         // 重新读一次，而不是把 `next` 直接写进 state：写进去的是**我们的意愿**，
@@ -68,6 +70,7 @@ export function useNewsPushOutletSwitch(
           () => { setSaving(false); setSaveFailed(true) }
         )
       },
+      // 写失败：保留刚选的值，只报这一行没存上。
       () => { setSaving(false); setSaveFailed(true) }
     )
   }, [client])

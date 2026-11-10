@@ -4,6 +4,8 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
+import type { SettingDescriptor } from '../../shared/settings/descriptorTypes'
+import { settingRegistry } from '../../shared/settings/registry'
 import { intelligenceNotificationText } from './text'
 import { CalendarDetail } from './calendarDetail'
 import { ContentDetail } from './contentDetail'
@@ -39,6 +41,24 @@ const ROW_BY_ITEM = Object.fromEntries(
 ) as Readonly<Record<ItemKey, (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]>>
 
 const CALENDAR_GROUP_EVENT_ID = 'market-intelligence.calendar.event-upcoming'
+
+/** 三条内容项各自对应哪一条声明：页面不自己拼字段，只按 key 找声明。 */
+const CONTENT_SETTING_KEYS = {
+  signal: 'setting:notifications.channel-event.signal-triggered',
+  briefing: 'setting:notifications.channel-event.briefing-ready',
+  sentiment: 'setting:notifications.push-outlet'
+} as const satisfies Record<Exclude<ItemKey, 'calendar'>, string>
+
+/** 已迁移到「按声明渲染」的键：守卫①②只认这份清单，不按文件位置推断。 */
+export const MIGRATED_SETTING_KEYS: readonly string[] = Object.values(CONTENT_SETTING_KEYS)
+
+function contentDescriptor(key: Exclude<ItemKey, 'calendar'>): SettingDescriptor {
+  const descriptor = settingRegistry.notifications.find((row) => row.key === CONTENT_SETTING_KEYS[key])
+  // 没有兜底：声明缺失就是编译/测试的红，不许静默少一行。
+  if (!descriptor) throw new Error(`missing setting descriptor: ${CONTENT_SETTING_KEYS[key]}`)
+  return descriptor
+}
+
 
 /** 从通知中心点「去设置」进来时落到对应那一项；定位不到落第一项，不猜。 */
 export function itemForFocus(focusEntityId: string | null | undefined): ItemKey {
@@ -159,9 +179,10 @@ export default function IntelligenceNotificationSettingsSection(
               />}
             />
             : <ContentDetail
+              descriptor={contentDescriptor(selected)}
+              resolveText={resolveText}
               enabled={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true}
               failed={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saveFailed : failedEventId === ROW_BY_ITEM[selected].eventId}
-              name={itemName(selected)}
               onChange={(next) => {
                 if (ROW_BY_ITEM[selected].control === 'outlet') outlet.setEnabled(next)
                 else toggle(ROW_BY_ITEM[selected].eventId, next)

@@ -112,7 +112,8 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
   }, [load])
 
   const toggle = useCallback((eventId: string, enabled: boolean) => {
-    const previous = values[eventId] ?? true
+    // 读者刚选的值先留下；写失败也**不回退**（G8）：本行给「这次没存上，请重试」，
+    // 读者按的是开就是开，不是「先显示开、再偷偷变回关」。
     setValues((current) => ({ ...current, [eventId]: enabled }))
     setFailedEventId(null)
     setSavingEventId(eventId)
@@ -121,8 +122,7 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
         await notificationApi().setChannelEvent(eventId, enabled)
       } catch {
         if (!mounted.current) return
-        // 回滚到点之前的值：界面绝不显示「开着」而设置里其实是关的。
-        setValues((current) => ({ ...current, [eventId]: previous }))
+        // 不回退：保留读者刚选的值，只报这一行没存上。
         setFailedEventId(eventId)
       } finally {
         if (mounted.current) setSavingEventId(null)

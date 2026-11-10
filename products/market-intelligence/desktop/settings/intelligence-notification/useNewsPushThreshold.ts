@@ -49,6 +49,8 @@ export function useNewsPushThreshold(
   const setThreshold = useCallback((next: NewsSentimentTierThreshold) => {
     setSaving(true)
     setSaveFailed(false)
+    // 先显示读者刚选的档；失败不回退（G8），成功再以服务端读回的值覆盖。
+    setValue(next)
     void client.save(next).then(
       (state) => {
         // 写完读回的值说了算：服务端没改成，界面就跟着它回到原值。
