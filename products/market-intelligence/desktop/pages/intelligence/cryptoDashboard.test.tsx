@@ -929,3 +929,155 @@ function event(overrides: Partial<MacroEconomicCalendarEventView> = {}): MacroEc
 async function flush(): Promise<void> {
   await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 }
+
+/**
+ * 宿主接线的两条路径（来源：资金情绪在已提交树上实跑 3/3 绿，本文件并库；它的临时
+ * `__probe*.test.tsx` 已删、不入库）。
+ *
+ * 为什么这两个读口必须注入：`cellEnabledIo`（格级启用/选源）与 `dashboardFeedStatusClient`（源级启用表）
+ * 在应用里**永远**被注入，而页面级用例以前从没传过——所有依赖它们的路径（遮罩、行内状态、
+ * 首帧加载态）在测试里都走不到，`decideCellRead is not defined` / `LoadingState is not defined`
+ * 这类缺 import 的错因此看不见。以下用例一律把两个口注入，并用确定性微任务轮次推进（不 sleep）。
+ */
+describe('host wiring: cells switched off and sources judged', () => {
+  const dashboardText = productText['zh-CN'].pages.intelligence.portal.dashboard
+  const dataText = productText['zh-CN'].pages.intelligence.portal.data
+  const readableSentiment = { state: 'available' as const, asOf, score: 22, bucket: 'extreme-fear' as const, observedAt: '2026-08-04T10:00:00.000Z' }
+  const allEnabled = [
+    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
+    { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+  ]
+
+  async function settle(container: HTMLElement, selector: string): Promise<void> {
+    for (let round = 0; round < 20; round += 1) {
+      if (container.querySelector(selector) !== null) return
+      await act(async () => { await Promise.resolve() })
+    }
+  }
+
+  async function renderCells(cells: Record<string, boolean>, extra: Record<string, unknown>) {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: allEnabled }) },
+      onConfigureSources: () => undefined, onManageSource: vi.fn(), onOpenCalendar: () => undefined,
+      text: dashboardText, cellEnabledIo: { read: async () => cells },
+      ...extra
+    } as never)))
+    return container
+  }
+
+  it('cell off: the sentiment card stays, veils the reading, and offers one enable action', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'fear-greed:index': false }, {
+      fearGreedClient: fearGreedClient(readableSentiment as never), onManageSource
+    })
+    await settle(container, '.mi-crypto-dashboard__sentiment .mi-source-veil')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    expect(card.querySelector('h2')?.textContent).toBe(dashboardText.sentiment.title)
+    const veil = card.querySelector('.mi-source-veil')!
+    expect(veil.getAttribute('data-state')).toBe('disabled')
+    expect(veil.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
+    const buttons = [...veil.querySelectorAll('button')]
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]?.textContent).toBe(dataText.enableSources)
+    expect(card.textContent).not.toContain('22')
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-segment')).toBeNull()
+    expect(card.querySelector('.state-view')).toBeNull()
+    await act(async () => buttons[0]!.click())
+    expect(onManageSource).toHaveBeenCalledTimes(1)
+  })
+
+  it('read failure: the veil says temporarily unreadable with one retry', async () => {
+    const container = await renderCells({}, {
+      fearGreedClient: fearGreedClient({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' } as never)
+    })
+    await settle(container, '.mi-crypto-dashboard__sentiment .mi-source-veil')
+    const veil = container.querySelector('.mi-crypto-dashboard__sentiment .mi-source-veil')!
+    expect(veil.getAttribute('data-state')).toBe('unreadable')
+    expect(veil.textContent).toContain(dataText.temporarilyUnavailable)
+    const buttons = [...veil.querySelectorAll('button')]
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]?.textContent).toBe(dataText.retry)
+    expect(container.querySelector('.mi-crypto-dashboard__sentiment .state-view')).toBeNull()
+  })
+
+  it('cell on and readable: the gauge, no veil', async () => {
+    const container = await renderCells({}, { fearGreedClient: fearGreedClient(readableSentiment as never) })
+    await settle(container, '.mi-crypto-dashboard__gauge-segment')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    expect(card.querySelector('.mi-source-veil')).toBeNull()
+    expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment')).toHaveLength(5)
+    expect(card.textContent).toContain('22')
+  })
+})
+
+describe('host wiring: capital cells, one row at a time', () => {
+  const dashboardText = productText['zh-CN'].pages.intelligence.portal.dashboard
+  const dataText = productText['zh-CN'].pages.intelligence.portal.data
+  const capitalSnapshot = {
+    state: 'available' as const, asOf, conclusion: 'partial' as const, etf: { state: 'unavailable' as const },
+    coreStablecoins: {
+      observedAt: '2026-08-04T23:00:00.000Z', verifiedAt: asOf, currentUsd: 254_900_000_000,
+      change1dUsd: 82_400_000, change1dPercent: 0.0323, change7dUsd: 82_400_000, change7dPercent: 0.0323,
+      change30dUsd: -500_000_000, change30dPercent: -0.21
+    }
+  }
+
+  async function renderCapital(cells: Record<string, boolean>, query = vi.fn(async () => capitalSnapshot)) {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(),
+      capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) },
+      onConfigureSources: () => undefined, onManageSource: vi.fn(), onOpenCalendar: () => undefined,
+      text: dashboardText, cellEnabledIo: { read: async () => cells }
+    } as never)))
+    for (let round = 0; round < 20; round += 1) {
+      const card = container.querySelector('.mi-capital-conditions')
+      if (card && (card.querySelector('.mi-capital-conditions__stable-table') !== null || card.querySelector('.mi-source-state') !== null)) break
+      await act(async () => { await Promise.resolve() })
+    }
+    return { container, query }
+  }
+
+  it('only ETF off: that row says it, the other cell keeps reading', async () => {
+    const { container } = await renderCapital({ 'capital:etf': false })
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+    const rows = [...card.querySelectorAll('.mi-source-state')]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.getAttribute('data-state')).toBe('disabled')
+    expect(rows[0]?.textContent).toContain(`${dataText.sourcesNotEnabled}（ETF）`)
+    expect([...card.querySelectorAll('button')].filter((b) => b.textContent === dataText.enableSources)).toHaveLength(1)
+    expect(card.querySelector('.state-view')).toBeNull()
+  })
+
+  it('both off: the card stays with two rows, and the read is never started', async () => {
+    const { container, query } = await renderCapital({ 'capital:stablecoin': false, 'capital:etf': false })
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.querySelectorAll('.mi-source-state[data-state="disabled"]')).toHaveLength(2)
+    expect([...card.querySelectorAll('button')].filter((b) => b.textContent === dataText.enableSources)).toHaveLength(2)
+    expect(card.querySelector('.state-view')).toBeNull()
+    // 门禁只剩在请求上：两格都关时一次都不发（关键断言，不许写成只看卡在不在）。
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('neither off: the ordinary card, no source-state rows', async () => {
+    const { container } = await renderCapital({})
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.querySelector('.mi-source-state')).toBeNull()
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+  })
+})
