@@ -331,6 +331,14 @@ mi: miText['zh-CN'],
                 sentimentFollowsFastModel: '跟随快速模型',
                 sentimentUnknownReason: '评分模型设置读不到'
               },
+              cards: {
+                languageTime: '语言与时区',
+                appearance: '外观',
+                network: '网络',
+                modelService: '模型服务'
+              },
+              unreadableReason: '这次没从平台设置读到',
+              retry: '重新读取',
               openPlatformSettings: '去平台设置',
               menus: {
                 sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
@@ -1805,6 +1813,14 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 sentimentFollowsFastModel: 'Follows the fast model',
                 sentimentUnknownReason: 'The scoring model settings could not be read'
               },
+              cards: {
+                languageTime: 'Language and time zone',
+                appearance: 'Appearance',
+                network: 'Network',
+                modelService: 'Model service'
+              },
+              unreadableReason: 'Could not read it from the platform settings this time',
+              retry: 'Read again',
               openPlatformSettings: 'Open platform settings',
               menus: {
                 sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',
