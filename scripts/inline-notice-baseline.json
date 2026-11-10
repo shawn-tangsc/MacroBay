@@ -1,113 +1,149 @@
 {
-  "note": "裸 <p role=\"alert\"> 存量：只减不增；新出现的直接红。每条带 owner 与清理时机。",
+  "note": "裸 <p role=\"alert\"> 存量：只减不增；新出现的直接红。每条带 owner、kind（debt/by-design）、why；debt 才计清理目标。",
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/settings/NotificationSettingsScreen.tsx": {
       "count": 1,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "换成 InlineNotice 后从基线删除",
+      "kind": "debt",
+      "why": "区块级：通知设置保存/读取失败"
     },
     "apps/desktop-shell/src/renderer/src/shell/settings/model-service/ModelProviderApiKeyField.tsx": {
       "count": 1,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "apps/desktop-shell/src/renderer/src/shell/settings/channels/ChannelEditDialog.tsx": {
       "count": 1,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "apps/desktop-shell/src/renderer/src/shell/settings/channels/ChannelSettingsPage.tsx": {
       "count": 1,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "apps/desktop-shell/src/renderer/src/shell/settings/channels/ChannelCreateDialog.tsx": {
       "count": 1,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentAskUserQuestionCard.tsx": {
       "count": 1,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderPage.tsx": {
       "count": 2,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "换成 InlineNotice 后从基线删除",
+      "kind": "debt",
+      "why": "整页级：供应商连接/配置失败的横幅"
     },
     "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceKeySection.tsx": {
       "count": 1,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelsSection.tsx": {
       "count": 2,
       "owner": "平台设置线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "products/market-intelligence/desktop/settings/config-drawer/ConfigSettingsDrawer.tsx": {
       "count": 1,
       "owner": "前端组件线（我，替换中）",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "换成 InlineNotice 后从基线删除",
+      "kind": "debt",
+      "why": "抽屉级：保存栏上方的失败句（我替换中）"
     },
     "products/market-intelligence/desktop/features/industry/capital-conditions/CapitalConditionsPanel.tsx": {
       "count": 1,
       "owner": "情报看板线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "换成 InlineNotice 后从基线删除",
+      "kind": "debt",
+      "why": "面板级：整块数据读不到"
     },
     "products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentSettingsModal.tsx": {
       "count": 1,
       "owner": "配置/舆情线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "products/market-intelligence/desktop/pages/intelligence/BriefingManualRunDialog.tsx": {
       "count": 3,
       "owner": "简报线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisTimeline.tsx": {
       "count": 3,
       "owner": "分析线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSettingsDialog.tsx": {
       "count": 1,
       "owner": "分析线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "products/market-intelligence/desktop/pages/intelligence/BriefingPeriodDialog.tsx": {
       "count": 2,
       "owner": "简报线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     },
     "products/market-intelligence/desktop/pages/intelligence/DailyBriefingSettingsPanel.tsx": {
       "count": 2,
       "owner": "简报线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "换成 InlineNotice 后从基线删除",
+      "kind": "debt",
+      "why": "区块级：保存失败点名哪一块"
     },
     "products/market-intelligence/desktop/pages/intelligence/DailyBriefingDeleteOutcomeNote.tsx": {
       "count": 2,
       "owner": "简报线",
       "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
-      "clearWhen": "换成 InlineNotice 后从基线删除"
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
     }
   }
 }

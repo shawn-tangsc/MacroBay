@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  */
 const ROOT = process.cwd()
 const BASELINE = JSON.parse(readFileSync(join(ROOT, 'scripts/inline-notice-baseline.json'), 'utf8')) as {
-  entries: Record<string, { count: number; owner: string; shared: string; clearWhen: string }>
+  entries: Record<string, { count: number; owner: string; shared: string; kind: 'debt' | 'by-design'; why: string; clearWhen: string }>
 }
 
 /** 纯函数：源码 → 裸 `<p role="alert">` 的行号。 */
@@ -56,10 +56,14 @@ describe('warnings are notices, not bare paragraphs', () => {
     expect(offenders).toEqual([])
   })
 
-  it('keeps every baseline entry owned and dated', () => {
+  it('keeps every baseline entry owned, classified and explained', () => {
+    // A 类（debt）才是「该换横幅」的债，清完就删；B 类（by-design：字段校验、弹框一行、行级提示）
+    // 永远不清零——但守卫仍保证它不新增、不变多，免得有人把字段校验改成一条大横幅。
     for (const [path, entry] of Object.entries(BASELINE.entries)) {
       expect(entry.owner.length, `${path} 的 owner`).toBeGreaterThan(1)
-      expect(entry.clearWhen.length, `${path} 的清理时机`).toBeGreaterThan(5)
+      expect(['debt', 'by-design']).toContain(entry.kind)
+      expect(entry.why.length, `${path} 的分类理由`).toBeGreaterThan(5)
+      if (entry.kind === 'debt') expect(entry.clearWhen).toContain('InlineNotice')
     }
   })
 })
