@@ -18,6 +18,7 @@ import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import '../../../shared/styles/sourceAvailability.css'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
+import type { SourceCellOff } from '../shared/sourceCellOff'
 import {
   isCapitalConditionsRetryable,
   type DashboardCapitalConditionsState,
@@ -103,7 +104,7 @@ type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'availab
  * 这张卡是**多行多值卡**：两格能分别判断，所以逐格标（共享行内状态 `mi-source-state`），
  * **不叠整卡状态面**——同一张卡只许一种形态（界面设计 2026-11-11 §二）。
  */
-export type DashboardCapitalCellOff = Readonly<{ sourceLabel: string; onOpenSources: () => void }>
+export type DashboardCapitalCellOff = SourceCellOff
 
 /** 两格各一份；缺键 = 这一格没问题，照旧画读数。 */
 export type DashboardCapitalCellAvailability = Readonly<{
