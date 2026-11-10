@@ -106,6 +106,30 @@ describe('the three read commands describe the same source from one computation'
     expect(detail?.profile.enabled).toBe(facts.settings.enabled)
   })
 
+  it('projects a saved "on" as off while the source is not ready, keeping the stored preference', async () => {
+    const notReady = 'bea-economic-series'          // readiness: planned
+    const live = 'binance-futures-positioning'      // readiness: live
+    const service = createIntelligenceSourcesService({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage([
+        profile(notReady, { enabled: true }),
+        profile(live, { enabled: true })
+      ])),
+      pipeline: { getHealth: () => ({ runtimeStatus: 'healthy' as const, consecutiveFailures: 0 }), reportConnectivityProbe: vi.fn() } as unknown as IntelligencePipeline,
+      jobRuntime: createJobRuntime()
+    })
+
+    const detail = await service.getPageState({ sourceId: notReady })
+    // 读者存过的偏好原样保留……
+    expect(detail.detail!.profile.enabled).toBe(true)
+
+    const view = await service.getSettingsView()
+    const sources = view.groups.flatMap((group) => group.providers).flatMap((provider) => provider.sources)
+    // ……但投影出的「现在真的在采」必须是 false：未接入的源不许显示成在采。
+    expect(sources.find((source) => source.sourceId === notReady)?.enabled).toBe(false)
+    // live 的源不受影响。
+    expect(sources.find((source) => source.sourceId === live)?.enabled).toBe(true)
+  })
+
   it('shows a saved calendar feed as enabled, exactly as the job that runs it', async () => {
     // 回归（S0 `23fc2da` 引入）：这三条日历源只在 providerRegistry / calendarFeedRegistry 里，
     // 不在通用目录里。当时 `readConfigSurface` 只对目录源读 profile，日历作业写进去的 profile 被漏掉，

@@ -101,11 +101,14 @@ export function hasProductOwnedCollection(definition: IntelligenceSourceDefiniti
 
 /**
  * 通用运行时**采不采**这个源：`collection: 'none'` 的语义就是「不是通用适配器采」，与
- * `readiness` 无关——`twelve-data-market` 这类源改成 live 之后由产品侧供数，通用运行时仍不该排期。
- * `collectionOwner: 'product'` 是同一件事的另一种写法，两条都判。
+ * `readiness` 无关——`twelve-data-market` / `policy-path-market` 这类源改成 live 之后由产品侧供数，
+ * 通用运行时仍不该排期。
+ *
+ * 只看注册表的 `collection`，不按 `collectionOwner: 'product'` 一刀切：0xRouter 的 ETF 现况是
+ * 产品自有刷新，但它走的是**受治理的采集任务**（`etfFlowHistory.refresh`），仍需要通用运行时给它
+ * 排期与 reconcile；按 owner 一刀切会把那条真链路停掉（启动恢复用例抓到的）。
  */
 export function genericRuntimeCollects(definition: IntelligenceSourceDefinition): boolean {
-  if (hasProductOwnedCollection(definition)) return false
   return getSource(definition.sourceId)?.collection !== 'none'
 }
 

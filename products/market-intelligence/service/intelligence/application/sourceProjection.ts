@@ -263,7 +263,9 @@ export function sourceConfigSurface(input: {
       // 没有 profile 的源不进事实表：读不到「读者的选择」时，宁可不出现，也不拿默认值冒充。
       return []
     }
-    const enabled = profile.enabled === true
+    // **有效启用**：读者存了开、并且这个源真的接进来了（`readiness === 'live'`）才算开。
+    // 存量的 `profile.enabled` 原样保留（读者偏好照存），只是投影出来的值不能替未接入的源充数。
+    const enabled = profile.enabled === true && (definition.readiness ?? 'live') === 'live'
     const health = input.healthById[definition.sourceId]
     const healthState = sourceHealthState({
       enabled,
