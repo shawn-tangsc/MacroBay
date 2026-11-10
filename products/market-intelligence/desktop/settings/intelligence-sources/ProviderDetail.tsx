@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
+import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { StatusPill } from '@platform/ui/components/status-pill'
 
@@ -284,7 +285,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const providerName = labels.providerNames[provider.providerId] ?? provider.displayName
   const hasProxySource = provider.sources.some((source) => source.requiresProxy)
 
-  return <section className="source-provider-detail">
+  return <ErrorBoundary scope="source-detail"><section className="source-provider-detail">
     {/* 分工（2026-11-10 界面设计定）：**横幅只管「配了没通」**，未配代理由行尾那颗「需要代理」
         药丸承担——同一件事不许两处说，未配时代理只需要一个入口。所以这里是 `proxyConfigured`
         **且** `networkFailure`，不再是「未配或失败」。 */}
@@ -438,5 +439,5 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
 
       {translation ? <TranslationPreferencesSection {...translation} sourceIds={provider.sources.map((source) => source.sourceId)} /> : null}
     </div> : null}
-  </section>
+  </section></ErrorBoundary>
 }
