@@ -5,7 +5,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
-import { DASHBOARD_TAB_MODULES } from './dashboardSourceModules'
+import { DASHBOARD_TAB_MODULES, modulesUsingSource } from './dashboardSourceModules'
 import { SettingsInfo } from '../settingsInfo'
 import { catalogMarkerClass } from './sourceHealthTone'
 
@@ -201,7 +201,9 @@ export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChan
                 aria-current={provider.providerId === selectedProviderId ? 'true' : undefined}
                 /* 行状态只给**头像**上色：待接入（优先）→ 灰、全关 → 红、至少一项启用 → 绿。
                    源名与副标题的文字色不跟状态走（用户 2026-11-11）。 */
-                data-provider-state={provider.sources.every((source) => source.visibility === 'pending')
+                data-provider-state={(provider.sources.every((source) => source.visibility === 'pending')
+                  /* 待接入，或**没有任何看板模块用到**（维护备用 / 只进分析 / 未接入）→ 灰：它们是「还没用起来」那一档。 */
+                  || !provider.sources.some((source) => modulesUsingSource(source.sourceId).length > 0))
                   ? 'pending'
                   : provider.sources.some((source) => source.enabled) ? 'enabled' : 'disabled'}
                 className={`intelligence-provider-row${provider.providerId === selectedProviderId ? ' selected' : ''}`}

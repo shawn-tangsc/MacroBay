@@ -467,6 +467,9 @@ export const intelligenceSourcesText = {
   /* 需要 API Key 但还没配：开关不可用，旁边一颗 ⓘ 说这一句（正文不放整句）。 */
   credentialRequiredToEnable: '先配置 API Key',
   credentialRequiredToEnableAria: '为什么这个开关现在不能开',
+  /* 待接入的源：整组启停不可操作，提示只说「还没接入」（短句，不是长说明）。 */
+  providerPending: '这个源还没接入',
+  providerPendingAria: '为什么这个开关现在不能开',
   /* 页头那颗**整组**启停（该来源下全部能力）：可访问名带来源名，别只念「开关」。 */
   toggleProviderEnable: '启用 {name} 的全部能力',
   toggleProviderDisable: '停用 {name} 的全部能力',
@@ -1015,6 +1018,8 @@ export const intelligenceSourcesText = {
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
   credentialRequiredToEnable: 'Set the API key first',
   credentialRequiredToEnableAria: 'About why this switch cannot be turned on yet',
+  providerPending: 'This source is not wired up yet',
+  providerPendingAria: 'About why this switch cannot be turned on yet',
   toggleProviderEnable: 'Turn on every capability of {name}',
   toggleProviderDisable: 'Turn off every capability of {name}',
   usedInModules: 'Used in modules',

@@ -44,7 +44,7 @@ async function renderRow(sources: ReadonlyArray<Record<string, unknown>>): Promi
         category: 'macro',
         providers: [{
           providerId: 'p', displayName: 'P', category: 'macro', credential: 'none', healthMarker: 'none',
-          sources: sources.map((item, index) => src(`s${index}`, item))
+          sources: sources.map((item, index) => src(String(item.sourceId ?? `s${index}`), item))
         }]
       }],
       counts: { total: sources.length, enabled: 0, pending: 0, failed: 0 }
@@ -56,17 +56,23 @@ async function renderRow(sources: ReadonlyArray<Record<string, unknown>>): Promi
 describe('来源行状态属性（只给头像上色）', () => {
   it('marks a pending source as pending even when it is disabled', async () => {
     // 待接入优先于未启用：待接入的源即使 enabled=false 也走灰，不显示红。
-    const host = await renderRow([{ visibility: 'pending', enabled: false }])
+    const host = await renderRow([{ sourceId: 'coindesk-rss', visibility: 'pending', enabled: false }])
+    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('pending')
+  })
+
+  it('greys a source that no dashboard module uses, whatever its switch says', async () => {
+    // `ethereum-foundation-blog` 这类：0 模块使用 → 灰，与开/关无关（用户 2026-11-11）。
+    const host = await renderRow([{ sourceId: 'ethereum-foundation-blog', enabled: true }])
     expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('pending')
   })
 
   it('marks a fully disabled source as disabled', async () => {
-    const host = await renderRow([{ enabled: false }, { enabled: false }])
+    const host = await renderRow([{ sourceId: 'coindesk-rss', enabled: false }, { sourceId: 'sec-rss', enabled: false }])
     expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('disabled')
   })
 
   it('marks a source with at least one enabled capability as enabled', async () => {
-    const host = await renderRow([{ enabled: false }, { enabled: true }])
+    const host = await renderRow([{ sourceId: 'coindesk-rss', enabled: false }, { sourceId: 'sec-rss', enabled: true }])
     expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('enabled')
     expect(host.textContent).toContain('2/1')
   })

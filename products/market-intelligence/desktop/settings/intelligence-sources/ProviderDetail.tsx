@@ -336,6 +336,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** 整组启停：全开 = on、全关 = off、**混合按 off**（点击后全开）。 */
   const providerGroupEnabled = sources.length > 0 && sources.every((source) => source.enabled)
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
+  /* 待接入 > 缺凭据 > 可操作：还没接入的源，整组启停不可操作，提示也说「还没接入」而不是「先配钥匙」。 */
+  const providerPending = sources.length > 0 && sources.every((source) => source.visibility === 'pending')
   const toggleProvider = async (next: boolean): Promise<void> => {
     if (providerCredentialMissing) return
     for (const source of sources) if (source.enabled !== next) await toggle(source, next)
@@ -390,20 +392,24 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         {/* 整组启停：这一行代表一个来源，开关管它下面**全部能力**（用户 2026-11-11，照模型服务供应商那排布）。
             全开 = on、全关 = off、**混合按 off 显示**（点击后全开）——否则读者看不出到底开没开。 */}
         <span className="source-provider-detail__group-toggle">
-          {providerCredentialMissing
+          {providerPending || providerCredentialMissing
             ? <SettingsInfo
-              ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
-              labelKeys={['settings.intelligenceSources.credentialRequiredToEnable']}
+              ariaLabelKey={providerPending
+                ? 'settings.intelligenceSources.providerPendingAria'
+                : 'settings.intelligenceSources.credentialRequiredToEnableAria'}
+              labelKeys={[providerPending
+                ? 'settings.intelligenceSources.providerPending'
+                : 'settings.intelligenceSources.credentialRequiredToEnable']}
               resolveText={resolveText} />
             : null}
           <Switch
-            aria-disabled={providerCredentialMissing || readOnlyToggles ? true : undefined}
+            aria-disabled={providerCredentialMissing || providerPending || readOnlyToggles ? true : undefined}
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
             checked={providerGroupEnabled}
-            disabled={providerCredentialMissing || readOnlyToggles === true}
+            disabled={providerCredentialMissing || providerPending || readOnlyToggles === true}
             onChange={(next) => {
-              if (providerCredentialMissing || readOnlyToggles === true) return
+              if (providerCredentialMissing || providerPending || readOnlyToggles === true) return
               void toggleProvider(next)
             }}
             size="small" />
