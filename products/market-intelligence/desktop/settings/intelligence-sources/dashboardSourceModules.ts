@@ -141,11 +141,7 @@ export const AI_ANALYSIS_MODULE: DashboardSourceModule = moduleOf('ai-analysis',
   ['', 'defillama-tvl']
 ])
 
-/**
- * 看板业务里出现的卡：只有各模块。**没有「AI 分析用」这张卡**——AI 分析读的就是各模块的数据，
- * 不该有自己的一摊源（用户 2026-11-11）。那 4 个只进分析的源照旧采集、仍在「情报源」页签可见。
- */
-/** 看板业务里出现的卡：各模块 + 末尾「AI 分析用」（**暂时保留**：等用户查清 AI 分析为什么用这 4 个源）。 */
+/** 看板业务里出现的卡：各模块 + 末尾「AI 分析用」。 */
 export const DASHBOARD_TAB_MODULES: readonly DashboardSourceModule[] = [...DASHBOARD_SOURCE_MODULES, AI_ANALYSIS_MODULE]
 
 /** 反查：这个源被哪些模块用（详情那行「用在哪些模块」读它，顺序与卡片一致）。 */

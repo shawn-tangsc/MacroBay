@@ -527,11 +527,20 @@ describe('crypto intelligence dashboard', () => {
     expect(dollar.textContent).toContain('合成值')
   })
 
+  it('injects the cell-enabled client from the page into the dashboard (one instance)', () => {
+    // 注入式客户端：页面构造一次、往下传；看板与抽屉读同一份存储。
+    // 这条同时钉住「别为了接线去破 IPC 边界」——原始 IPC/transport/service 路径仍然被上一条禁止。
+    expect(page).toContain('cellEnabledClient')
+    expect(page).toContain('CryptoIntelligenceDashboard')
+    expect(page).toContain('cellEnabledIo')
+    expect(page).toContain('readSelection')
+  })
+
   it('contains no IPC, service, network, AI, or chart path', () => {
     const sources = [page, portal, dashboard].join('\n')
     // The injected read-only clients are the only IPC these files may name; every other line
     // still has to stay free of transport, service and network paths.
-    const injectedClientImports = ['../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
+    const injectedClientImports = ['../../shared/ipc/cellEnabledClient', '../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
     const withoutInjectedClients = sources.split('\n')
       .filter(line => !injectedClientImports.some(client => line.includes(client))).join('\n')
 

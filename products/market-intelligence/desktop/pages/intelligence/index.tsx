@@ -10,6 +10,7 @@ import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } 
 import { AgentPortal } from './AgentPortal'
 import { useCryptoActivation } from './useCryptoActivation'
 import { marketIntelligenceAgents } from './agentPortalModel'
+import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
@@ -201,6 +202,8 @@ function IntelligencePageBody(): React.ReactElement {
           />}
         >
         <CryptoIntelligenceDashboard
+          /* 格级启停：与抽屉、设置页**同一个单例**（一份存储），页面构造一次往下传。 */
+          cellEnabledIo={{ read: () => cellEnabledClient.read(), readSelection: () => cellEnabledClient.readSelection() }}
           key={sample.sessionKey}
           locale={language}
           briefingEnabled={!sample.state.active}
