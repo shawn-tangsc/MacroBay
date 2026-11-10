@@ -35,7 +35,21 @@ type DrawerRead =
   | Readonly<{ status: 'ready'; view: PanelView; sampleFallback: boolean }>
   | Readonly<{ status: 'unavailable' }>
 
-export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', open, onClose, titleKey, sampleActive = false }: {
+/** 写入来源标记：用于「自己写的重读不触发、别处写的要重读」。闭集，新增来源要同时审视订阅端。 */
+export type SourceWriteOrigin = 'dashboard-drawer' | 'settings-page'
+
+export function DashboardPanelDrawer({
+  initialSourceId,
+  panelId = 'dashboard',
+  open,
+  onClose,
+  titleKey,
+  sampleActive = false,
+  onWriteSourceEnabled,
+  onRunSource,
+  onTestSource,
+  writeOrigin
+}: {
   initialSourceId?: string
   panelId?: PanelId
   open: boolean
@@ -44,6 +58,17 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
   titleKey?: string
   /** Only an explicit sample session may stand in the registry projection for a failed read. */
   sampleActive?: boolean
+  /**
+   * 写入口，由**宿主注入**：抽屉不自己调数据层。
+   *
+   * 这一步只加类型与透传，调用点一个没改——不传时行为与今天完全一致。
+   * `writeOrigin` 是这次写入的来源标记：宿主用它区分「自己写的」和「别处写的」，
+   * 订阅 `settingsRevision` 时按它忽略自己那一次，避免自己写触发自己重读。
+   */
+  onWriteSourceEnabled?: (source: SourceView, enabled: boolean, origin: SourceWriteOrigin) => Promise<void>
+  onRunSource?: (sourceId: string) => Promise<void>
+  onTestSource?: (sourceId: string) => Promise<void>
+  writeOrigin?: SourceWriteOrigin
 }): React.ReactElement {
   const language = useShellLanguage()
   const resolveKey = useProductTextKey()
