@@ -8,7 +8,8 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 
 import { LoadingState } from '@platform/ui/components/loading'
-import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
+import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CapitalFlowChart } from './CapitalFlowChart'
 import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
@@ -96,6 +97,8 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   refreshFailed?: boolean
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  // 提示条动作的标签走平台状态文案（与错误态那颗「重试」同一个词），不另造一句。
+  const stateViewText = useStateViewText()
   // 状态与信号并列：牌子上是「有没有这条信号」，这一句回答「这次分析到哪一步」。
   const analysisSentence = useSignalAnalysisSentence(state.state === 'available' ? state.etfSignalAnalysis : undefined)
   const alertChip = state.state === 'available' && state.etfSignal?.state === 'alert' ? state.etfSignal : undefined
@@ -132,7 +135,16 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           only useful action here is to ask the sources to be collected again. */}
       {onRefresh ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
         icon={<RefreshCw aria-hidden="true" size={13} />} loading={refreshing} onClick={onRefresh} size="small" type="link">{text.refresh}</Button> : null}
-      {refreshFailed ? <p className="mi-capital-conditions__refresh-error" role="alert">{text.refreshFailed}</p> : null}
+      {/* 面板级「重新采集失败」：走平台提示条（danger 自带 role="alert"），动作是真的再读一次，
+          不是空函数。正文只留一句；这条文案本身没有第二句细节，所以没有可挪进 ⓘ 的部分。 */}
+      {refreshFailed
+        ? <InlineNotice
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }}
+            resolveText={(key) => (key === STATE_VIEW_ACTION_KEYS.retry ? stateViewText(STATE_VIEW_ACTION_KEYS.retry) : key)}
+            tone="danger">
+            {text.refreshFailed}
+          </InlineNotice>
+        : null}
     </div>
   </section>
 

@@ -696,8 +696,16 @@ describe('CapitalConditionsPanel', () => {
     document.body.append(container)
     root = createRoot(container)
 
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh: () => undefined, refreshFailed: true })))
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe(text.refreshFailed)
+    const refresh = vi.fn()
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh: refresh, refreshFailed: true })))
+    // 平台提示条：danger 自带 role="alert"，正文是那一句；动作必须真的再读一次，不是空函数。
+    const notice = container.querySelector('[data-inline-notice="danger"]')
+    expect(notice?.getAttribute('role')).toBe('alert')
+    expect(notice?.textContent).toContain(text.refreshFailed)
+    const noticeAction = [...(notice?.querySelectorAll('button') ?? [])].find((button) => button.textContent?.trim() === 'Retry')
+    expect(noticeAction, 'the notice offers a real retry').toBeDefined()
+    await act(async () => noticeAction!.click())
+    expect(refresh).toHaveBeenCalledTimes(1)
 
     // `loading` already means a read is in flight, so the control must not start a second one.
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'loading' }, onRefresh: () => undefined, refreshing: true })))
