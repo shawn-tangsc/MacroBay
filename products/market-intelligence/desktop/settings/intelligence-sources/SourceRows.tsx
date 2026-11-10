@@ -108,6 +108,9 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
 
 const PRODUCT_OWNED_NOTE_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNote'
 const PRODUCT_OWNED_NOTE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria'
+/** 「手动模式不会自动采集」那句说明的键与 ⓘ 读屏名（文案在设置页文案表里，已存在）。 */
+const MANUAL_PRESET_NOTE_KEY = 'settings.intelligenceSources.collectionPolicy.manualPresetNote'
+const MANUAL_PRESET_NOTE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.manualPresetNoteAria'
 
 export type SourcePresetRowProps = Readonly<{
   sourceId: string
@@ -150,6 +153,15 @@ export function SourcePresetRow(props: SourcePresetRowProps): React.ReactElement
           resolveText={props.resolveText}
         />
         : null}
+      {/* 「手动模式不会自动采集」是**说明**，按规范进同一颗 ⓘ；正文只留控件。
+          只有选到「手动」才挂，避免给别的档位多一颗没话说的 ⓘ。 */}
+      {!props.productOwned && row.value === 'manual'
+        ? <SettingsInfo
+          ariaLabelKey={MANUAL_PRESET_NOTE_ARIA_KEY}
+          labelKeys={[MANUAL_PRESET_NOTE_KEY]}
+          resolveText={props.resolveText}
+        />
+        : null}
     </>}
     rowAttributes={{ 'data-setting-key': sourceRowInstanceKey(SOURCE_ROW_TEMPLATES.collectionPreset, props.sourceId) }}
     rowClassName="intelligence-setting-row"
@@ -162,9 +174,6 @@ export function SourcePresetRow(props: SourcePresetRowProps): React.ReactElement
         options={options}
         value={typeof row.value === 'string' ? row.value : undefined}
       />
-      {row.value === 'manual' ? (
-        <p className="intelligence-source-note">{props.labels.manualPresetNote}</p>
-      ) : null}
     </div>
   </SettingsRow>
 }

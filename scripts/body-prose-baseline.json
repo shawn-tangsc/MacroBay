@@ -1,6 +1,6 @@
 {
   "note": "正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts",
-  "total": 145,
+  "total": 148,
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/AppShellPreferencesPane.tsx :: proxyRequestHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/ProviderConnectionCheckEnvironmentBlock.tsx :: customProxyFailureHint": 1,
@@ -127,6 +127,8 @@
     "products/market-intelligence/desktop/settings/intelligence-sources/ProviderDetail.tsx :: emptyHint": 1,
     "products/market-intelligence/desktop/settings/intelligence-sources/ProviderDetail.tsx :: inviteNote": 1,
     "products/market-intelligence/desktop/settings/intelligence-sources/ProviderDetail.tsx :: savedHint": 1,
+    "products/market-intelligence/desktop/settings/intelligence-sources/SourceConfigSurface.tsx :: inviteNote": 2,
+    "products/market-intelligence/desktop/settings/intelligence-sources/SourceRows.tsx :: manualPresetNote": 1,
     "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx :: allSourcesNote": 1,
     "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx :: missingHint": 1,
     "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx :: noSourceHint": 2,
@@ -134,5 +136,9 @@
     "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx :: settings.intelligenceSources.syncRun.noSourceHint": 2,
     "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx :: settings.intelligenceSources.syncRun.oldRecordNote": 2,
     "products/market-intelligence/desktop/settings/intelligence-sources/index.tsx :: inviteNote": 1
+  },
+  "entryNotes": {
+    "products/market-intelligence/desktop/settings/intelligence-sources/SourceConfigSurface.tsx :: inviteNote": "装配层透传：SourceConfigSurface 把 props.text.inviteNote 交给 ProviderDetail 渲染，真正渲染处 ProviderDetail.tsx 已登记 1 次；本处不进正文（该文件里两处：类型声明 + 透传给 ProviderDetail，都不是渲染）。翻案条件：若哪一笔让 ProviderDetail 自己取文案、这处透传被删，这条要跟着删。",
+    "products/market-intelligence/desktop/settings/intelligence-sources/SourceRows.tsx :: manualPresetNote": "说明句已搬进采集预设行的 ⓘ；此处只剩 `labels` 类型与 ⓘ 的键名引用，正文不再渲染它。翻案条件：若哪天又把这句画回正文，这条要删掉并让它红。"
   }
 }
