@@ -16,7 +16,6 @@ import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
-import { DashboardPanelDrawer } from './DashboardPanelDrawer'
 import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../settings/intelligence-sources/sourceWrites'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
@@ -63,7 +62,6 @@ function IntelligencePageBody(): React.ReactElement {
   const sampleText = text.sampleMode
   const sampleNow = sample.now
   const { activation, sourceCounts, retry: retryActivation } = useCryptoActivation()
-  const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
   /**
    * 配置抽屉的「请求打开」：入口在别的视图里（日报页 / 日历 / 门户），抽屉自己住在看板那一层。
    * 所以这里只 bump 一个**递增计数**——布尔表达不了「已经开着又点了一次」，而连点入口很常见。
@@ -240,17 +238,6 @@ function IntelligencePageBody(): React.ReactElement {
           text={text}
         />
       )}
-      {sourceDrawerOpen ? <DashboardPanelDrawer
-        onClose={() => setSourceDrawerOpen(false)}
-        open
-        // The registry projection may stand in for a failed read only while the reader is looking
-        // at sample data: outside it, a failed read is stated as failed, never as a source list.
-        sampleActive={sample.state.active}
-        writeOrigin="dashboard-drawer"
-        onWriteSourceEnabled={(source, enabled, origin) => writeSourceEnabled(source, enabled, origin)}
-        onRunSource={runSourceNowOnce}
-        onTestSource={testSourceConnectionOnce}
-      /> : null}
     </div>
   )
 }

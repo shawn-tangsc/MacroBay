@@ -514,18 +514,12 @@ button.mi-agent-card__status:focus-visible {
  *
  * 回归：`drawerDragRegion.test.tsx` 断言这两条规则存在，且被声明的元素**包含**关闭按钮。
  */
-.mi-dashboard-source-drawer,
-.mi-agent-drawer {
-  -webkit-app-region: no-drag;
-}
 
-.mi-dashboard-source-drawer .ant-drawer-body {
   container-type: inline-size;
   min-height: 0;
   padding: 0;
 }
 
-.mi-dashboard-source-drawer__layout {
   display: grid;
   grid-template-columns: minmax(250px, 31%) minmax(0, 1fr);
   min-height: 100%;
@@ -628,7 +622,6 @@ button.mi-agent-card__status:focus-visible {
 .mi-dashboard-source-catalog__navigate { color: var(--muted); }
 .mi-dashboard-source-catalog__item.selected .mi-dashboard-source-catalog__navigate { color: var(--accent); }
 
-.mi-dashboard-source-drawer__detail {
   display: grid;
   align-content: start;
   gap: 14px;
@@ -638,39 +631,29 @@ button.mi-agent-card__status:focus-visible {
   padding: 16px;
 }
 
-.mi-dashboard-source-drawer__detail > header {
   display: grid;
   gap: 4px;
 }
 
-.mi-dashboard-source-drawer__detail h2,
-.mi-dashboard-source-drawer__detail p {
-  margin: 0;
-}
 
-.mi-dashboard-source-drawer__detail p {
   color: var(--muted);
   font-size: 12px;
 }
 
-.mi-dashboard-source-drawer__profile-controls {
   display: grid;
   gap: 12px;
 }
 
-.mi-dashboard-source-drawer__profile-controls > label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
   gap: 12px;
 }
 
-.mi-dashboard-source-drawer__profile-controls .ant-select {
   min-width: 150px;
 }
 
 @container (max-width: 520px) {
-  .mi-dashboard-source-drawer__layout {
     grid-template-columns: minmax(0, 1fr);
   }
 

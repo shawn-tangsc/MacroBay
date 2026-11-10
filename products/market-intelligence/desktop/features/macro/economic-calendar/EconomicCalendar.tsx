@@ -37,7 +37,6 @@ import { CalendarEventStatusPolicy } from './calendarEventStatusModel'
 import { useCalendarStatusClock } from './useCalendarStatusClock'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { shouldShowMarketCalendarProxyNotice } from './marketCalendarProxyNotice'
-import { DashboardPanelDrawer } from '../../../pages/intelligence/DashboardPanelDrawer'
 import { economicCalendarMonthLoadingPolicy, toDetailEvent } from './economicCalendarMonthResult'
 import type { EconomicCalendarText } from './economicCalendarText'
 import { useEconomicCalendarMonthWindow, type EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
@@ -419,10 +418,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
         </section>
       </div>
       </div>
-      <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)}
-        writeOrigin="dashboard-drawer" onWriteSourceEnabled={(source, enabled, origin) => writeSourceEnabled(source, enabled, origin)}
-        onRunSource={runSourceNowOnce} onTestSource={testSourceConnectionOnce}
-      />
       <CalendarDetailSurface
         blsUnavailableNotice={blsAvailability.notice}
         blsRefreshBlocked={blsAvailability.refreshBlocked}
