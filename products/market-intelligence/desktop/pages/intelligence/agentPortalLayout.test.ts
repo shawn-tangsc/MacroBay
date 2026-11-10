@@ -94,7 +94,13 @@ describe('market intelligence agent portal layout', () => {
     expect(portal).toContain('mi-agent-card__lens')
     expect(portal).toContain('mi-agent-card__footer')
     expect(portal).toContain('mi-agent-card__entry')
-    expect(portal).toContain('mi-agent-card__switch')
+    // H2 之后事实变了：示例开关用平台 `Switch`，不再手绘轨道/滑块，也没有独立类名。
+    // 这条守同一件事的另一面——**用组件**，并且旧类名连样式一起清掉（留一条没人用的样式，
+    // 下一个就会照着它再自绘一个开关）。
+    expect(portal).toContain('<Switch')
+    expect(portal).toContain("from 'antd'")
+    expect(portal).not.toContain('mi-agent-card__switch')
+    expect(portalStyles).not.toContain('mi-agent-card__switch')
     expect(portal).toContain('disabled={!isAvailable}')
     expect(portal).toContain('onClick={isAvailable ? onPrimary : undefined}')
     expect(portalStyles).toContain('--mi-terminal-bg')
