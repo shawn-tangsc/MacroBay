@@ -261,39 +261,21 @@
   white-space: nowrap;
 }
 
-/* ── 抽屉面外壳：notice + 两栏两段式 ──
-   抽屉壳给 pane 加了 `--split`（两行：标题 / 内容）；本屏在内容那格里再分「提示 / 两栏」：
-   提示按内容高、两栏吃掉剩余高度并各自滚。少了这一条，split 的 100% 会和提示叠在一起。 */
+/* ── 抽屉面外壳：单列屏，滚动交给抽屉的 pane 整块滚（与日报、平台与模型同一手感）──
+   屏里不设高度、不接管滚动：百分比高度要成立就得让壳给确定行高，那条链一碰 overflow 就
+   回到「卡片被裁」；提示条跟着内容一起滚。 */
 .intelligence-notification-panel {
-  display: flex;
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  flex-direction: column;
-  /* 在 `display:grid` 的 pane 里按内容收缩过：明确拉满，单列屏跟着 pane 变宽。 */
-  align-self: stretch;
+  min-width: 0;
 }
 
-.intelligence-notification-panel > .intelligence-notification-panel__notice,
-.intelligence-notification-panel > .intelligence-notification-narrow {
-  flex: none;
-}
-
-.intelligence-notification-panel > .config-drawer__split {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-}
-
-/* 抽屉面：单列区块（推送提醒 / 舆情条件 / 日历提醒），整列自己滚，区块间距 16。 */
+/* 抽屉面：单列区块（推送提醒 / 舆情条件 / 日历提醒），区块间距 16。 */
 .intelligence-notification-drawer {
   display: flex;
   width: 100%;
-  flex: 1;
+  min-width: 0;
   flex-direction: column;
   gap: 16px;
-  min-height: 0;
-  overflow-y: auto;
 }
 
 /* ── 抽屉面：区块容器（边框 / 圆角 / 底色 / 卡头内距）由 `SettingsSection` 统一提供 ──
