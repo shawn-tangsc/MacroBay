@@ -36,14 +36,4 @@ export type DrawerRowView = {
   action?: { labelKey: string; onSelect: () => void; disabled?: boolean }
 }
 
-/** 平台与模型那一屏的当前值：**宿主读好再传**；缺键就是「读不到」，不是「没设置」。 */
-export type DrawerPlatformValues = {
-  timeZone?: string
-  language?: string
-  theme?: string
-  proxy?: string
-  modelService?: string
-}
-
-/** 跳转目标：平台基本设置页 / 模型服务页。抽屉不拼路由，只转达这个目标。 */
 export type DrawerPlatformTarget = 'preferences' | 'models'

@@ -15,7 +15,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { SourcesStaticScreen } from './SourcesStaticScreen'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
-import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView } from './drawerScreenView'
+import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
 import './configDrawer.css'
 
 /**
@@ -78,15 +78,6 @@ export type ConfigSettingsDrawerProps = {
    * 与 `sourcesPanel` / `notificationsPanel` 同一条边界：内容与读写都在宿主那边。
    */
   briefingPanel?: React.ReactNode
-  /** 平台与模型那一屏的当前值：**宿主读好再传**，缺键就是「读不到」。 */
-  platformValues?: DrawerPlatformValues
-  /** 区块标题右侧「去平台设置」跳转：走宿主给的导航入口，抽屉不拼路由。 */
-  onOpenPlatformSettings?: (target: DrawerPlatformTarget) => void
-  /**
-   * 平台与模型那一屏的「重新读取」：**读，不是保存**。宿主没给就不画按钮（不留假控件），
-   * 缺值行仍显示状态词 + ⓘ。
-   */
-  onRetryPlatformValues?: () => void
   /** 行键与平台键的解析入口（文案）。 */
   resolveText?: (key: string) => string
   /**
@@ -148,9 +139,6 @@ export function ConfigSettingsDrawer({
   briefingView,
   briefingPanel,
   sourcesPanel,
-  platformValues,
-  onOpenPlatformSettings,
-  onRetryPlatformValues,
   resolveText: resolveTextProp,
   isScreenDirty,
   screenDirty,

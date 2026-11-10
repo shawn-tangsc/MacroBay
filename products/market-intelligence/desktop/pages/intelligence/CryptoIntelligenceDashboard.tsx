@@ -253,11 +253,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           initialMenu={initialSettingsMenu}
           isScreenDirty={() => hostScreenDirty(drawerScreen.dirty, sourcesDraftDirty)}
           onClose={() => setSettingsDrawerOpen(false)}
-          onOpenPlatformSettings={(target) => {
-            // 只转达目标，不拼路由（页面对应关系在导航层）。
-            if (target === 'models') openModelSettings()
-            else openPreferencesSettings()
-          }}
           open={settingsDrawerOpen}
           analysisPanel={<AnalysisSettingsPanel onState={setDrawerScreen} />}
           screenDirty={drawerScreen.dirty}
