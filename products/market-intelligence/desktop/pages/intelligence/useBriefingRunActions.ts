@@ -14,13 +14,6 @@ import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
  * cannot end up describing the outcome differently. Kept out of the page because it is a
  * capability, not layout.
  */
-/** 临时挂上去的"生成中"行：没有正文、语言状态是 generating。 */
-function isGeneratingPlaceholder(row: DailyBriefingEditionSummary): boolean {
-  return row.state === 'missing'
-    && row.summaryLine === undefined
-    && (row.languages ?? []).some((language) => language.state === 'generating')
-}
-
 /** 正在跑的那一行：列表据此显示「生成中」，而不是等重读之后才出现。 */
 function withGeneratingRow(
   rows: readonly DailyBriefingEditionSummary[],
@@ -194,7 +187,9 @@ export function useBriefingRunActions(input: Readonly<{
   const restoreStartedRow = (rows: readonly DailyBriefingEditionSummary[]): readonly DailyBriefingEditionSummary[] => {
     const started = startedRow.current
     startedRow.current = null
-    if (!started) return rows.filter((row) => !isGeneratingPlaceholder(row))
+    // 没有记录 = 这一次什么都没改（`begin` 之前就退了）：一行都不动。
+    // **不按形状判**：临时行与"被就地改成 generating 的真行"长得一模一样，形状判断迟早误删。
+    if (!started) return rows
     return rows.flatMap((row) => {
       if (row.date !== started.date || row.periodId !== started.periodId || row.locale !== started.locale) return [row]
       if (started.created) return []

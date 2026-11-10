@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act, createElement, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -54,6 +54,26 @@ async function render(): Promise<(current: readonly DailyBriefingEditionSummary[
   return captured!
 }
 
+/** 带真实行状态的夹具：`runBriefing` 会多次改列表，收尾要看最终那一份。 */
+function StatefulHarness(input: Readonly<{
+  initial: readonly DailyBriefingEditionSummary[]
+  regenerate: () => Promise<unknown>
+  onRows: (rows: readonly DailyBriefingEditionSummary[]) => void
+  onActions: (actions: Actions) => void
+}>): null {
+  const [rows, setRows] = useState<readonly DailyBriefingEditionSummary[]>(input.initial)
+  useEffect(() => { input.onRows(rows) }, [rows, input])
+  const actions = useBriefingRunActions({
+    client: { regenerate: input.regenerate as never },
+    locale: 'zh-CN', timeZone: 'Asia/Shanghai',
+    setView: vi.fn(), setRegenerating: vi.fn(), setRegenerateFailure: vi.fn(),
+    setEditions: (updater) => setRows((current) => updater(current)),
+    todayDate: '2026-11-05'
+  })
+  input.onActions(actions)
+  return null
+}
+
 describe('every entry point starts a run the same way', () => {
   it('hangs the generating row for a run started by "generate this language"', async () => {
     const updater = await render()
@@ -61,6 +81,40 @@ describe('every entry point starts a run the same way', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ date: '2026-11-05', periodId: 'default', locale: 'zh-CN', state: 'missing' })
     expect((rows[0]!.languages ?? []).some((language) => language.state === 'generating')).toBe(true)
+  })
+
+  it('deletes only the row this run created — a lookalike row of another period stays', async () => {
+    // 收尾不许按"长得像临时行"删：失败后那次清理曾经把**被就地改成 generating 的真行**一起删了。
+    // 判据：这次跑没碰过的那一行（哪怕形状刚好一样）必须原样在。
+    const failed: DailyBriefingEditionSummary = {
+      date: '2026-11-05', periodId: 'default', locale: 'zh-CN', availableLocales: [],
+      state: 'missing', attemptCount: 1,
+      languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }]
+    }
+    const lookalike: DailyBriefingEditionSummary = {
+      date: '2026-11-05', periodId: 'period_other', locale: 'zh-CN', availableLocales: [],
+      state: 'missing',
+      languages: [{ locale: 'zh-CN', state: 'generating' }]
+    }
+    let rows: readonly DailyBriefingEditionSummary[] = []
+    let actions!: Actions
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(createElement(StatefulHarness, {
+        initial: [failed, lookalike],
+        regenerate: async () => ({ state: 'unavailable', failureCode: 'editorial-timeout' }),
+        onRows: (next) => { rows = next },
+        onActions: (value) => { actions = value }
+      }))
+    })
+    await act(async () => { await actions.runBriefing({ periodId: 'default', locale: 'zh-CN', trigger: 'regenerate' }) })
+
+    expect(rows.map((row) => row.periodId)).toEqual(['default', 'period_other'])
+    // 被就地改过的那一行还回失败态；没碰过的那一行一个字没动。
+    expect(rows[0]!.languages).toEqual(failed.languages)
+    expect(rows[1]).toBe(lookalike)
   })
 
   it('turns an existing failed row into "generating" instead of leaving it failed', async () => {
