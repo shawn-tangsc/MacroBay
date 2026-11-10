@@ -40,6 +40,12 @@ export type SourcesSettingsPaneProps = {
   /** 这一面显示哪几块筛选（抽屉传四块，设置页默认六项）。 */
   treeFilters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>
   /**
+   * 宿主指定「这一屏要哪个视图」（用户 2026-11-11：抽屉把它拆成两个菜单项，页签条整条去掉）。
+   * 给了 `pane` 就**不画页签条**、也不再按 `filter` 二选一；没给（平台设置页那面）保持原行为：
+   * 画六项页签、按 `filter` 切「情报源 / 业务设置」。
+   */
+  pane?: 'sources' | 'business'
+  /**
    * 格级启停的读写（宿主注入；真实来源是 main 侧 `createCellEnabledStore`，走 IPC 或直接传函数）。
    * 读失败一律按「启用」显示——不把开关画成关闭（那会假装读者关过它）。
    */
@@ -68,7 +74,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     .find((entry) => entry.providerId === props.selectedProviderId)
   const { providerId: _selected, ...surface } = props.surface
 
-  const isBusiness = props.filter === 'dashboard'
+  const isBusiness = props.pane === undefined ? props.filter === 'dashboard' : props.pane === 'business'
   const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
   /**
    * 格级启停：缺键 = 启用；读失败也按启用显示。**只在这里存一份读回来的显式值**，
@@ -99,14 +105,16 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
      切换 tab 时页签条的 DOM 节点不重挂载（用户 2026-11-11：「tab 一切你整个重做了」）。 */
   return <>
     <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
-      <div className="intelligence-catalog-filters">
-        <Segmented
-          ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
-          items={props.treeFilters ?? DEFAULT_FILTERS}
-          onChange={(value) => props.onFilterChange(value as SourceFilter)}
-          resolveText={resolveText}
-          value={props.filter} />
-      </div>
+      {props.pane === undefined
+        ? <div className="intelligence-catalog-filters">
+          <Segmented
+            ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
+            items={props.treeFilters ?? DEFAULT_FILTERS}
+            onChange={(value) => props.onFilterChange(value as SourceFilter)}
+            resolveText={resolveText}
+            value={props.filter} />
+        </div>
+        : null}
       {isBusiness
         ? <BusinessSettingsView
           business={business}
