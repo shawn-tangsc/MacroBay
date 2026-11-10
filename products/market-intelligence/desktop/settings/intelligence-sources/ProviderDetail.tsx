@@ -364,12 +364,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       .filter((cell) => cell.sourceId === sourceId)
       .map((cell) => cellIdOf(module.id, cell)))
     if (cells.length > 0) return cells.some((cellId) => cellEnabled?.[cellId] === true)
-    /* 无格但在采集与数据里以平铺项出现（日历六条 / 新闻四条）：读**这些源自己的 `enabled`**；
-       完全没出现在采集与数据里的（维护备用 / 只供分析 / 未接入）→ 一律关，不看自己的 `enabled`。 */
-    const listedElsewhere = [...BUSINESS_MODULE_IDS.calendar, ...BUSINESS_MODULE_IDS.sentiment]
-      .some((moduleId) => DASHBOARD_SOURCE_MODULES.find((module) => module.id === moduleId)?.sourceIds.includes(sourceId) === true)
-    if (!listedElsewhere) return false
-    return sources.find((entry) => entry.sourceId === sourceId)?.enabled === true
+    /* 采集与数据里没有对应格的源（日历 feed / 新闻 / 维护备用）→ **恒显示关**
+       （用户 2026-11-11 最新口径：读的是「采集与数据里有的项的启用状态」，不在的默认关闭）。 */
+    return false
   }
 
   const toggleProvider = async (next: boolean): Promise<void> => {
