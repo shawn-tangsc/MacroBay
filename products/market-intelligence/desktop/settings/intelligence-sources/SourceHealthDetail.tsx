@@ -7,6 +7,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { SOURCE_UNAVAILABLE_FALLBACK_KEY, sourceUnavailableSentence } from '../../shared/i18n/sourceUnavailableCopy'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import {
@@ -38,8 +39,6 @@ export type SourceHealthLabels = Readonly<{
   unknownReason: string
   whyNotCollecting: string
   runNowAnswer: string
-  /** 原因码 → 读者说法（英文界面也走同一份，正文里不出现码）。 */
-  unavailableReasons: Readonly<Record<string, string>>
   reasons: Readonly<Record<SourceHealthIdleReason, string>>
   runNow: Readonly<Record<SourceRunNowAnswer, string>>
   /** B5 立即运行的三态文案（可运行 / 正在运行 / 跑完自动恢复）。 */
@@ -117,7 +116,6 @@ export function SourceHealthDetail(props: {
         {view.idleReason === 'unavailable'
           ? <UnavailableReason
             reasonCode={view.unavailableReasonCode}
-            labels={labels}
             resolveText={props.resolveText} />
           : labels.reasons[view.idleReason]}
       </HealthCell>
@@ -152,16 +150,15 @@ function HealthCell(props: {
   </div>
 }
 
-/** 不可用原因：格内只放读者说法这一句（不超过两行），码只进 ⓘ、恰一处。 */
+/** 不可用原因：格内只放读者说法这一句（不超过两行），码只进 ⓘ、恰一处。映射表全仓一份（shared）。 */
 function UnavailableReason(props: {
-  labels: SourceHealthLabels
   reasonCode?: string
   resolveText: (key: string) => string
 }): React.ReactElement {
-  const reasonCode = props.reasonCode ?? ''
-  // 表里没有的码退回不带数字的那句，永远不抛错；也不从码里截数字（码名一改，403 就变了）。
-  const sentence = props.labels.unavailableReasons[reasonCode]
-    ?? props.resolveText('settings.intelligenceSources.unavailableShort')
+  const reasonCode = props.reasonCode
+  // 表里没有的码退回「取不到（原因见详情）」，永远不抛错；也不从码里截数字（码名一改，403 就变了）。
+  // 兜底句与抽屉**同一个文案键**，不是两句长得像的话。
+  const sentence = sourceUnavailableSentence(reasonCode, props.resolveText(SOURCE_UNAVAILABLE_FALLBACK_KEY))
   return <>
     <span>{sentence}</span>
     <Popover

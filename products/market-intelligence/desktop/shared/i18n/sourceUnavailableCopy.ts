@@ -5,12 +5,18 @@
  * 表里没有的码退回兜底那句（「取不到（原因见详情）」），**绝不把码漏出来**——
  * 码名一改就会变成读者读不懂的串。
  *
- * 注意：`settings/intelligence-sources/ProviderDetail.tsx` 里还有一份同样的映射，
- * 那份要迁到这张表（该文件归存储缓存，等它那一笔）。在那之前以这张为准，不要加第三份。
+ * 设置页的详情（`SourceHealthDetail.tsx`）与配置抽屉都调用这里：两处对同一个码给同一句话，
+ * 加码只改这一处。
  */
 const UNAVAILABLE_SENTENCE: Readonly<Record<string, string>> = {
   'official-endpoint-returned-403': '官方源暂时不可用（403）'
 }
+
+/**
+ * 兜底句的文案键：两个面都解析**同一个键**，不许各自再写一句「取不到」。
+ * 值在 `productText` 的配置抽屉文案组里（`取不到（原因见详情）`）。
+ */
+export const SOURCE_UNAVAILABLE_FALLBACK_KEY = 'pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable'
 
 const CODE_LIKE = /^[a-z0-9]+(?:-[a-z0-9]+)+$/u
 

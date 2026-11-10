@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
+import { SOURCE_UNAVAILABLE_FALLBACK_KEY } from '../../shared/i18n/sourceUnavailableCopy'
 import { SourceHealthDetail } from './SourceHealthDetail'
 import type { SourceDetailRead } from './SourceHealthDetail'
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
@@ -55,7 +56,9 @@ async function render(read: SourceDetailRead, extra: { source?: SourceView; supp
         ? '原因码'
         : key === 'settings.intelligenceSources.health.runAction.infoAria'
           ? text.health.runAction.runningInfoAria
-          : (text as unknown as Record<string, string>)[key] ?? '',
+          : key === SOURCE_UNAVAILABLE_FALLBACK_KEY
+            ? productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
+            : (text as unknown as Record<string, string>)[key] ?? '',
       source: extra.source ?? source(),
       ...(extra.supportsRunNow === undefined ? {} : { supportsRunNow: extra.supportsRunNow }),
       timeZone: 'Asia/Shanghai'
@@ -150,11 +153,13 @@ describe('run now (B5)', () => {
         onRetry: () => {},
         onRunNow: runNow,
         read: ready({ lastSuccessAt: '2026-11-09T04:00:00.000Z' }),
-        resolveText: (key: string) => key === 'settings.intelligenceSources.unavailableReasonCodeAria'
+      resolveText: (key: string) => key === 'settings.intelligenceSources.unavailableReasonCodeAria'
           ? '原因码'
           : key === 'settings.intelligenceSources.health.runAction.infoAria'
             ? text.health.runAction.runningInfoAria
-            : (text as unknown as Record<string, string>)[key] ?? '',
+            : key === SOURCE_UNAVAILABLE_FALLBACK_KEY
+              ? productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
+              : (text as unknown as Record<string, string>)[key] ?? '',
         source: extra.source ?? source(),
         supportsRunNow: extra.supportsRunNow ?? true,
         timeZone: 'Asia/Shanghai'
