@@ -5,6 +5,7 @@ import { openModelSettings, openPreferencesSettings } from '../../shared/navigat
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import { useDrawerSourcesView } from '../../settings/config-drawer/useDrawerSourcesView'
 import { DashboardSourcesPanel } from './DashboardSourcesPanel'
+import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useMemo, useState, type ReactNode } from 'react'
 
@@ -209,6 +210,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           }}
           open={settingsDrawerOpen}
           platformValues={platformDrawerValues}
+          notificationsPanel={<NotificationSettingsPanel />}
           sourcesPanel={<DashboardSourcesPanel />}
           sourcesView={drawerSourcesView} />
       </ErrorBoundary>

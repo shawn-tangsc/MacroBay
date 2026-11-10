@@ -322,6 +322,25 @@ describe('config settings drawer (static layout)', () => {
     expect(row.querySelectorAll('.config-drawer__label button')).toHaveLength(1)
   })
 
+  it('renders the host-provided notifications panel instead of the placeholder rows', () => {
+    // 这一屏搬的是设置页那一块（同一块实现）：宿主传了节点就只渲染它，不再叠一层静态行。
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        initialMenu="notifications"
+        notificationsPanel={<div data-panel="notifications">the settings screen, moved in</div>}
+        onClose={() => undefined}
+        open />
+    ))
+    expect(document.body.querySelector('[data-panel="notifications"]')).not.toBeNull()
+    expect(document.body.querySelectorAll('[data-drawer-row]')).toHaveLength(0)
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {
