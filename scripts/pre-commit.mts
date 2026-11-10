@@ -14,6 +14,7 @@
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { findCallers, programFiles } from './pre-commit-callers.mts'
+import { filesWithUnstagedChanges } from './pre-commit-unstaged.mts'
 import { materializeCommitTree, readDeletedPaths } from './pre-commit-tree.mts'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -87,6 +88,21 @@ const owns = (path: string): boolean => codeStaged.includes(path)
 const normalize = (path: string): string => path.replace(/^\.\//, '')
 
 say(`预检 ${codeStaged.length} 个代码文件（预算 ${Math.round(BUDGET_MS / 1000)}s）`)
+
+/**
+ * 第二条警示：**要提交的文件同时还有未暂存改动**（只警告、不拦截）。
+ *
+ * `git commit -- <路径>` 提交的是工作区里那份文件的当前内容，不读暂存区：文件里留着别人的在途 hunk，
+ * 按路径提交就会一起带进 HEAD。2026-11-10 真撞过一次。只警告的理由：`git add -p` 分次暂存是正常手法，
+ * 把正常提交堵死比这个风险更糟。
+ */
+const drifted = filesWithUnstagedChanges({ cwd: root, staged: codeStaged })
+if (drifted.length > 0) {
+  say(`注意：${drifted.length} 个要提交的文件还有未暂存改动——\`git commit -- <路径>\` 按工作区当前内容提交，`)
+  say('      这些改动会跟着进库（要只交一部分，请先 `git add` 完整文件，或确认那一段是你要提交的）：')
+  for (const path of drifted.slice(0, 10)) say(`      - ${path}`)
+  if (drifted.length > 10) say(`      …还有 ${drifted.length - 10} 个`)
+}
 
 // ── 1. 四条按目录扫的守卫（很便宜，先跑）：红了也要看是谁的文件 ──────────────────────
 const guard = spawnSync('node_modules/.bin/vitest', ['run', ...GUARDS], {
