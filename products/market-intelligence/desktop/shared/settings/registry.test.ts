@@ -267,13 +267,29 @@ describe('settings registry self-checks', () => {
     expect(validateSettingRegistry(withRow(single))).toEqual([])
   })
 
+  it('gives each row the help lines its page shows, in one ⓘ with its own screen-reader name', () => {
+    // 页面现状：国家范围一颗 ⓘ 里两条说明（范围 + 「全部国家」的含义），读屏名是 `rowInfoAria`；
+    // 触达面那张卡的 ⓘ 读屏名是 `calendar.aboutAria`。声明层照抄这两处，迁移后 DOM 不变。
+    const flat = Object.values(settingRegistry).flat()
+    const scope = flat.find((row) => row.key === 'setting:notifications.calendar.landed-countries.scope')
+    expect(scope?.copy?.helpKeys).toEqual([
+      'pages.intelligence.notification.countries.scopeNote',
+      'pages.intelligence.notification.countries.allNote'
+    ])
+    expect(scope?.copy?.helpAriaKey).toBe('pages.intelligence.notification.countries.rowInfoAria')
+    expect(scope?.copy?.helpKey).toBeUndefined()
+
+    const surfaces = flat.find((row) => row.key === 'setting:notifications.surfaces')
+    expect(surfaces?.copy?.helpKeys).toEqual(['pages.intelligence.notification.calendar.surfacesNote'])
+    expect(surfaces?.copy?.helpAriaKey).toBe('pages.intelligence.notification.calendar.aboutAria')
+  })
+
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
     const surfaces = settingRegistry.notifications.find(
       (row) => row.key === 'setting:notifications.surfaces'
     ) as SettingDescriptor
-    // 行**还没翻**：翻行要与存储缓存的组件（`MultiSelect` 认视图来源）同笔，否则它那半屏会在
-    // 中间态少选项。形状本身已支持，见下面 `view-options` 那条。
-    expect(surfaces.field).toEqual({ kind: 'multiSelect', optionsFrom: 'notification-surfaces' })
+    // 选项来自视图：平台返回的 `available` 才是今天的真值（静态四项会把中心画成可勾、还多两项）。
+    expect(surfaces.field).toEqual({ kind: 'multiSelect', optionsFrom: { kind: 'view', field: 'available' } })
     expect(surfaces.level).toBe('platform')
     if (surfaces.write?.kind !== 'command') throw new Error('the surfaces row must be a command write')
 

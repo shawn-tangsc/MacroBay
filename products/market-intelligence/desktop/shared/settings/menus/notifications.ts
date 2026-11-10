@@ -198,7 +198,12 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     defaultValueFrom: 'calendarReminder.landedCountryScope',
     copy: {
       labelKey: 'pages.intelligence.notification.countries.row',
-      helpKey: 'pages.intelligence.notification.countries.scopeNote'
+      // 一颗 ⓘ 两条说明：范围说明 + 「全部国家」的含义；读屏名单独给（不继承字段名）。
+      helpKeys: [
+        'pages.intelligence.notification.countries.scopeNote',
+        'pages.intelligence.notification.countries.allNote'
+      ],
+      helpAriaKey: 'pages.intelligence.notification.countries.rowInfoAria'
     },
     availability: 'live'
   },
@@ -232,7 +237,8 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     menu: 'notifications',
     surfaces: ['settings'],
     level: 'platform',
-    field: { kind: 'multiSelect', optionsFrom: 'notification-surfaces' },
+    // 选项来自平台返回的 `available`（今天只有 channel / toast；中心恒收、不在可选项里）。
+    field: { kind: 'multiSelect', optionsFrom: { kind: 'view', field: 'available' } },
     read: {
       command: 'platform:notifications-get-surface-selection',
       select: (view) => readViewField(view, 'selection')
@@ -254,7 +260,8 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     },
     copy: {
       labelKey: 'pages.intelligence.notification.calendar.surfaceRow',
-      helpKey: 'pages.intelligence.notification.calendar.surfacesNote'
+      helpKeys: ['pages.intelligence.notification.calendar.surfacesNote'],
+      helpAriaKey: 'pages.intelligence.notification.calendar.aboutAria'
     },
     availability: 'live'
   }

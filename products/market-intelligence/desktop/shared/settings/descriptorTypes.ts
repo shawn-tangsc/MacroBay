@@ -69,7 +69,6 @@ export type SettingOptionsSource =
   | 'calendar-landed-scopes'
   | 'calendar-landed-country-codes'
   | 'collection-presets'
-  | 'notification-surfaces'
 
 /**
  * `select` 用哪个原语。**这是「怎么长」，不是「值是什么形状」**——契约 §1.1 的原话是
@@ -191,14 +190,7 @@ export const SETTING_OPTION_SETS: Readonly<Record<SettingOptionsSource, readonly
   'calendar-landed-filter': Object.freeze([{ value: 'surprise-only' }, { value: 'also-matched' }]),
   'calendar-landed-scopes': Object.freeze([{ value: 'us' }, { value: 'all' }, { value: 'custom' }]),
   'calendar-landed-country-codes': Object.freeze(CALENDAR_LANDED_COUNTRY_CODES.map((value) => ({ value }))),
-  'collection-presets': Object.freeze([{ value: 'manual' }, { value: 'balanced' }, { value: 'frequent' }]),
-  'notification-surfaces': Object.freeze([
-    // 中心恒收：选项在、但固定勾选且不能取消；不靠「少一项」表达。
-    { value: 'center', locked: true },
-    { value: 'channel' },
-    { value: 'toast' },
-    { value: 'desktop' }
-  ])
+  'collection-presets': Object.freeze([{ value: 'manual' }, { value: 'balanced' }, { value: 'frequent' }])
 })
 
 /** 从 `unknown` 视图里取具名字段；取不到就是 `undefined`，不让渲染层猜。 */
