@@ -803,7 +803,8 @@ describe('通知配置后的测试按钮（R201）', () => {
       await Promise.resolve()
     })
     expect(stubs.sendTest).toHaveBeenCalledTimes(1)
-    expect(container?.textContent).toContain('刚发过')
+    // 冷却必须**说清还要等多久**，不能只把按钮变灰（那会被读成坏了/没权限）。
+    expect(container?.textContent).toMatch(/刚发过，\d+ 秒后再试/)
   })
 
   it('says the per-row 「nothing to send」 sentence and never shows a reason code', async () => {
