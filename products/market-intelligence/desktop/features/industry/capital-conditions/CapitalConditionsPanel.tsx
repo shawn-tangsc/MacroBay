@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from 'antd'
-import { Info, RefreshCw } from 'lucide-react'
+import { CircleDashed, CircleSlash, Info, RefreshCw, TriangleAlert } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -16,6 +16,7 @@ import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
 import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import '../../../shared/styles/sourceAvailability.css'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import {
   isCapitalConditionsRetryable,
@@ -88,17 +89,40 @@ type Text = {
 
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 
-export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false }: Readonly<{
+/** 卡片级的三态输入：`missing` = 没配置来源，`disabled` = 有源但没启用；两者都不是「读不到」。 */
+export type DashboardSourceAvailability =
+  | Readonly<{ state: 'missing' }>
+  | Readonly<{ state: 'disabled'; sourceLabel: string }>
+
+/** 三态共用的文案键（平台/看板的既有那一组，不另造一句）。 */
+const SOURCE_STATE_KEYS = {
+  missing: 'pages.intelligence.portal.data.sourcesNotConfigured',
+  disabled: 'pages.intelligence.portal.data.sourcesNotEnabled',
+  unreadable: 'pages.intelligence.portal.data.temporarilyUnavailable',
+  configure: 'pages.intelligence.portal.data.configureSources',
+  enable: 'pages.intelligence.portal.data.enableSources',
+  retry: 'pages.intelligence.portal.data.retry'
+} as const
+
+export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false, sourceAvailability, onOpenSources }: Readonly<{
   state: DashboardCapitalConditionsState
   text: Text
   /** Re-collect when the host can, otherwise re-read the stored snapshot. Always a real action. */
   onRefresh: () => void
   refreshing?: boolean
   refreshFailed?: boolean
+  /**
+   * 这张卡的原因**不是「读不到」而是「没配置 / 没启用」**时由宿主给：判定顺序是
+   * 未配置 → 未启用 → 读不到（来源配置属于宿主，卡片不自己推断）。不给 = 按读数的结果画。
+   */
+  sourceAvailability?: DashboardSourceAvailability
+  /** 「去设置配置 / 去启用」的跳转由宿主给；不给就不渲染那颗动作（不画一颗点了没用的按钮）。 */
+  onOpenSources?: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   // 提示条动作的标签走平台状态文案（与错误态那颗「重试」同一个词），不另造一句。
   const stateViewText = useStateViewText()
+  const dataText = useProductTextKey() as (key: string) => string
   // 状态与信号并列：牌子上是「有没有这条信号」，这一句回答「这次分析到哪一步」。
   const analysisSentence = useSignalAnalysisSentence(state.state === 'available' ? state.etfSignalAnalysis : undefined)
   const alertChip = state.state === 'available' && state.etfSignal?.state === 'alert' ? state.etfSignal : undefined
@@ -111,6 +135,19 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   }
   // 命中消失时把弹层一起关掉：故事已经不成立，留着一段讲它的文字就是旧真相。
   useEffect(() => { if (!alertChip) setDetailOpen(false) }, [alertChip])
+  // 判定顺序不许倒：没配置 → 没启用 → 读不到。前两态是读者要动手的事，不是系统故障。
+  const sourceState = sourceAvailability?.state ?? (state.state === 'unavailable' && isCapitalConditionsRetryable(state.reason) ? 'unreadable' : undefined)
+  if (sourceState) return <SourceStateCard
+    data={dataText}
+    failureNotice={text.refreshFailed}
+    onOpenSources={onOpenSources}
+    onRetry={sourceState === 'unreadable' ? onRefresh : undefined}
+    refreshFailed={refreshFailed}
+    retryLabel={text.refresh}
+    sourceLabel={sourceAvailability?.state === 'disabled' ? sourceAvailability.sourceLabel : undefined}
+    state={sourceState}
+    title={text.title} />
+
   if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
@@ -177,6 +214,54 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         <EtfTable reading={state.etfReading} text={text} onRetry={onRefresh} />
       </div>
       <EtfFlow reading={state.etfReading} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
+    </div>
+  </section>
+}
+
+/**
+ * 三态整卡：没配置来源 / 来源没启用 / 暂时读不到。
+ *
+ * 用共享类名（`mi-source-card` / `mi-source-state` + `data-state` 三值），**不自己画一套**：
+ * 规范在 `05-desktop/ui-audit/2026-11-11-source-availability-styles.md`。三句话不许互相冒充——
+ * 「没启用」写成「读不到」会让读者去点一个永远不会成功的重试；反之会把该动手的事说成等一等。
+ * 未配置与未启用**不用错误色**（`--muted`），只有读不到那一态带 `--danger` 的警示图标。
+ */
+function SourceStateCard({ state, title, sourceLabel, data, retryLabel, failureNotice, refreshFailed, onOpenSources, onRetry }: Readonly<{
+  state: 'missing' | 'disabled' | 'unreadable'
+  title: string
+  sourceLabel?: string
+  data: (key: string) => string
+  /** 读不到那一态的主动作用是**再采集**（这张卡的动作本来就是重新采集，不是重读一次）。 */
+  retryLabel: string
+  failureNotice?: string
+  refreshFailed?: boolean
+  onOpenSources?: () => void
+  onRetry?: () => void
+}>): React.ReactElement {
+  const Icon = state === 'missing' ? CircleDashed : state === 'disabled' ? CircleSlash : TriangleAlert
+  const sentence = state === 'missing' ? data(SOURCE_STATE_KEYS.missing)
+    : state === 'disabled' ? data(SOURCE_STATE_KEYS.disabled)
+      : data(SOURCE_STATE_KEYS.unreadable)
+  return <section className="mi-capital-conditions mi-source-card" data-source-state={state} aria-label={title}>
+    <h2 className="mi-source-card__title">{title}</h2>
+    <p className="mi-source-state" data-state={state}>
+      <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
+      {sentence}{state === 'disabled' && sourceLabel ? `（${sourceLabel}）` : ''}
+    </p>
+    {/* 再采集失败与「读不到」是两件事：前者是读者刚按过、这次没成；后者是这一格现在没有数。 */}
+    {state === 'unreadable' && refreshFailed && failureNotice
+      ? <InlineNotice tone="danger">{failureNotice}</InlineNotice>
+      : null}
+    <div className="mi-source-card__actions">
+      {state === 'unreadable'
+        ? <>
+          {onRetry ? <Button onClick={onRetry} size="small" type="default">{retryLabel}</Button> : null}
+          {/* 次入口：读数一直不好时，读者下一步是去数据源看这一格。 */}
+          {onOpenSources ? <Button onClick={onOpenSources} size="small" type="link">{data(SOURCE_STATE_KEYS.configure)}</Button> : null}
+        </>
+        : onOpenSources
+          ? <Button onClick={onOpenSources} size="small" type="default">{data(state === 'missing' ? SOURCE_STATE_KEYS.configure : SOURCE_STATE_KEYS.enable)}</Button>
+          : null}
     </div>
   </section>
 }

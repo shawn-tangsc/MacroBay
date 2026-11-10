@@ -18,6 +18,7 @@ import type { DashboardCapitalConditionsState } from './capitalConditionsModel'
  * 点一百次也不会好——给一个必然再失败的按钮，比没有按钮更坏。下面两条钉住这条界线。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
+const dataText = productText['zh-CN'].pages.intelligence.portal.data
 const retryLabel = resolveStateViewText('zh-CN', 'ui.state.action.retry')
 const restartLabel = resolveStateViewText('zh-CN', 'ui.state.action.restart-app')
 
@@ -44,10 +45,14 @@ describe('a capital-conditions card that could not read', () => {
     expect(markup).toContain(restartLabel)
   })
 
-  it('offers the retry when the read itself failed', () => {
+  it('shows the read-failure state with a re-collection action, not the restart copy', () => {
     const markup = render({ state: 'unavailable', reason: 'query-failed' })
 
-    expect(markup).toContain(retryLabel)
+    // 三态里的「读不到」：一句状态 + 一颗主动作（这张卡的主动作是再采集，不是重读一次）。
+    expect(markup).toContain('data-source-state="unreadable"')
+    expect(markup).toContain('data-state="unreadable"')
+    expect(markup).toContain(dataText.temporarilyUnavailable)
+    expect(markup).toContain(text.refresh)
     // 读失败不是版本问题，别把重开应用的话塞给他。
     expect(markup).not.toContain(text.contractMismatch)
   })

@@ -324,9 +324,11 @@ describe('CapitalConditionsPanel', () => {
 
     // "Could not read" is an error, never an empty: a panel that says "nothing here" when the
     // query failed tells the reader the opposite of what happened.
-    expect(markup).toContain('data-state="error"')
-    expect(markup).toContain('data-size="md"')
+    // 「读不到」现在是三态之一：一个 data-state + 一句状态，不是平台的空/错状态面。
+    expect(markup).toContain('data-source-state="unreadable"')
+    expect(markup).toContain('data-state="unreadable"')
     expect(markup).not.toContain('data-state="empty"')
+    expect(markup).not.toContain('class="state-view')
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
   })
 
@@ -637,7 +639,7 @@ describe('CapitalConditionsPanel', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
-    const action = container.querySelector<HTMLButtonElement>('.state-view__action')!
+    const action = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')!
     expect(action).not.toBeNull()
     await act(async () => action.click())
     expect(onRefresh).toHaveBeenCalledTimes(1)
@@ -667,7 +669,7 @@ describe('CapitalConditionsPanel', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
-    const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__refresh')!
+    const button = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')!
     expect(button.textContent).toBe(text.refresh)
     await act(async () => button.click())
     expect(onRefresh).toHaveBeenCalledOnce()
@@ -702,9 +704,9 @@ describe('CapitalConditionsPanel', () => {
     const notice = container.querySelector('[data-inline-notice="danger"]')
     expect(notice?.getAttribute('role')).toBe('alert')
     expect(notice?.textContent).toContain(text.refreshFailed)
-    const noticeAction = [...(notice?.querySelectorAll('button') ?? [])].find((button) => button.textContent?.trim() === 'Retry')
-    expect(noticeAction, 'the notice offers a real retry').toBeDefined()
-    await act(async () => noticeAction!.click())
+    // 读不到那一态的主动作就是再采集；失败提示只说明「刚按过、这次没成」，不再挂第二颗同名按钮。
+    const action = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')
+    await act(async () => action!.click())
     expect(refresh).toHaveBeenCalledTimes(1)
 
     // `loading` already means a read is in flight, so the control must not start a second one.
