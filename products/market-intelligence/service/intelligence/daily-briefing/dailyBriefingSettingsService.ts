@@ -4,14 +4,17 @@ import type { EditionLanguageSettingsPatch } from './dailyBriefingLanguageSettin
 import type { EditionLanguageSettingsService, EditionLanguageSettingsView } from './dailyBriefingLanguageSettingsService'
 
 /**
- * The reader settings that shape one edition, behind one IPC seam:
+ * 日报的 **AI 编辑与语言设置**（早期口径把它连同期列表一起叫「旧设置」；期列表已搬走，这里只剩这组）：
  *
- * - `settings` is the AI editorial preference (model, web search, on/off);
- * - `language` is the one global language preference and the plan derived from it.
+ * - `settings` 是 AI 编辑偏好（模型、WebSearch、编辑开关）；
+ * - `language` 是那一个全局语言偏好，以及由它推出来的语言计划。
  *
- * The period list — when each edition runs and how far back it looks — is no longer part of this
- * surface: it has its own store and its own IPC methods, so a second copy here could only disagree
- * with the schedule. They stay separate shapes on purpose: saving one never rewrites another.
+ * 期列表（每一期什么时候跑、回看多久）**不在这里**：它有自己的一份存储和自己的 IPC 方法，
+ * 在这一面再放一份只会与排期各说一套。两种形状故意分开：保存其中一个永远不改另一个。
+ *
+ * **这是抽屉日报屏这组设置唯一的读写口**（`intelligence.dailyBriefing.getSettings` /
+ * `saveSettings`）。它不是可以「顺手清掉」的旧账——删掉等于让读者少一组设置；真要删，必须先给它
+ * 一条新路径（新增专属 IPC 并切调用点，或等 C7 把那屏换新面）。台账 C15c 记的就是这句话。
  */
 export type DailyBriefingSettingsPatch = DailyBriefingAiSettingsPatch & Readonly<{
   language?: EditionLanguageSettingsPatch

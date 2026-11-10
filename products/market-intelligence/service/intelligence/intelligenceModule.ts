@@ -265,8 +265,11 @@ export type IntelligenceModule = {
   /** The deterministic core-fact pass, exposed for logs and focused verification. */
   dailyBriefFactEnsure: ReturnType<typeof createDailyBriefFactEnsure>
   /**
-   * The daily-brief settings seam. The name predates the generation setting; the value is the
-   * composed settings service, and `dailyBriefingAiSettings` inside the module is the AI-only part.
+   * 日报的 **AI 编辑与语言设置**：模型 / WebSearch / 编辑开关 + 全局语言偏好，
+   * 由 `dailyBriefingSettingsService` 组合 AI 与语言两个服务而来。抽屉日报屏的 `getSettings` /
+   * `saveSettings` 是这组设置**唯一的读写口**——删掉它等于让读者少一组设置（要删必须先给它一条
+   * 新路径，B：新增专属 IPC 并切调用点；C：C7 换新面）。
+   * 字段名 `dailyBriefingAiSettings` 是历史名（早期只装 AI 那半），改名会动四处调用点，本批不动。
    */
   dailyBriefingAiSettings: DailyBriefingSettingsService
   rawRecordStore: ReturnType<typeof createRawRecordStore>

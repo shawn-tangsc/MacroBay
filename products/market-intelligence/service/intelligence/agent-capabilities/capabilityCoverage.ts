@@ -146,6 +146,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.dailyBriefing.listAttempts': excluded('internal-view'),
   'intelligence.dailyBriefing.regenerate': excluded('internal-view'),
   'intelligence.dailyBriefing.getProgress': excluded('internal-view'),
+  // 日报的 AI 编辑与语言设置：抽屉日报屏唯一的读写口（模型 / WebSearch / 编辑开关 / 语言）。
+  // 期列表早就搬走了，这里只剩这组设置；删这两条等于让读者少一组设置（台账 C15c）。
   'intelligence.dailyBriefing.getSettings': excluded('user-private-data'),
   'intelligence.dailyBriefing.saveSettings': excluded('user-private-data'),
   'intelligence.dailyBriefing.getStorageState': excluded('internal-view'),
