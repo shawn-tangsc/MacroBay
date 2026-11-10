@@ -89,7 +89,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -106,6 +106,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   onToggleSource?: (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean) => Promise<boolean>
   /** 本页有没有未保存的输入（凭据框）：另一处保存时，有草稿就只提示、不覆盖。 */
   onDraftChange?: (dirty: boolean) => void
+  /**
+   * 这一份渲染在哪个面上（`settings` = 设置页；默认 `panel` = 看板/日历抽屉）。
+   *
+   * **判定只在本组件内部做一次**（下面那个 `isSettingsSurface`）；调用点只声明自己是哪个面，
+   * 不各自传布尔、也不各自决定「要不要走注册表」——同一个事实两处判，迟早两处不一致。
+   */
+  surface?: 'settings' | 'panel'
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -164,6 +171,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
   const resolveText = useProductTextKey()
+  /** 唯一一处「这是哪个面」的判定：注册表渲染只发生在设置页那一侧。 */
+  const isSettingsSurface = (surface ?? 'panel') === 'settings'
   /*
     每个源策略组的「停用原因」id 前缀。原因句在组开头，视觉上谁都看得见，但读屏不看位置——
     键盘用户 Tab 进一片灰控件只会听到一串「不可用」，不知道为什么。所以用 `role="group"` +

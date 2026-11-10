@@ -72,6 +72,8 @@ export type SourceConfigSurfaceProps = {
   translation?: Parameters<typeof ProviderDetail>[0]['translation']
   onChanged?: () => void
   showSourceDetails?: boolean
+  /** 这一份渲染在哪个面上；判定本身在 `ProviderDetail` 内部做一次。 */
+  surface?: 'settings' | 'panel'
 }
 
 export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.ReactElement {
@@ -134,5 +136,6 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
     {...(props.translation === undefined ? {} : { translation: props.translation })}
     {...(props.onChanged === undefined ? {} : { onChanged: props.onChanged })}
     showSourceDetails={props.showSourceDetails ?? true}
+    {...(props.surface === undefined ? {} : { surface: props.surface })}
   />
 }

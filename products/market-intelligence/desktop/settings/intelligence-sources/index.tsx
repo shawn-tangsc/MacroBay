@@ -121,6 +121,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
             onDraftChange={setDraftDirty}
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
             showSourceDetails
+            surface="settings"
           /></div> : null
         })() : null}
       </div>
