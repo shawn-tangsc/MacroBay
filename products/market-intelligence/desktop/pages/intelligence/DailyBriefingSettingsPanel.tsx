@@ -20,11 +20,11 @@ import type { BriefingPeriod, BriefingPeriodDraft } from '../../../contracts/dai
 import { dailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { dailyBriefingPeriodClient } from '../../shared/ipc/dailyBriefingPeriodClient'
 import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { BriefingPeriodDialog } from './BriefingPeriodDialog'
 import './briefingSettingsScreen.css'
 import { useDailyBriefingAiSettings } from './useDailyBriefingAiSettings'
-import type { DailyBriefingText } from './dailyBriefingText'
 
 /** 一期一条排期：定义 id = 产品基 id + 期 id；按 productId 与前缀两重认。 */
 const BRIEFING_JOB_PREFIX = 'market-intelligence.dailyBriefing.'
@@ -76,7 +76,8 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
   const language = useShellLanguage()
   const text = productText[language].pages.intelligence.portal.dashboard.dailyBriefing
   const copy = text.settings.periods
-  const resolveText = (key: string): string => resolveProductKey(language, key)
+  // 点分键解析全产品只有一处（`useProductTextKey`：展平表 + 未知键回空串），这里不再自己走一遍嵌套对象。
+  const resolveText = useProductTextKey()
   const ai = useDailyBriefingAiSettings({ client: dailyBriefingClient, enabled: true })
   const confirm = useConfirm()
 
@@ -487,16 +488,3 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
     />
   </div>
 }
-
-/** 产品文案的点分键解析（本屏多处用；未知键返回空串，绝不回退成键名）。 */
-export function resolveProductKey(language: 'zh-CN' | 'en-US', key: string): string {
-  let node: unknown = productText[language]
-  for (const part of key.split('.')) {
-    if (typeof node !== 'object' || node === null) return ''
-    node = (node as Record<string, unknown>)[part]
-  }
-  return typeof node === 'string' ? node : ''
-}
-
-/** 屏自己用的文案类型别名（供测试构造）。 */
-export type BriefingScreenText = DailyBriefingText
