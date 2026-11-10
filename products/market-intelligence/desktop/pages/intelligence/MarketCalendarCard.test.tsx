@@ -62,6 +62,36 @@ it('keeps the frame and the rows, and veils only the data area when no source is
   expect(content, 'the content behind the veil is inert').not.toBeNull()
   // 旧实现（整块换掉卡）会把列表删掉，也会留一个 `.mi-source-card` 块。
   expect(host.querySelector('.mi-source-card')).toBeNull()
+  // 遮罩钉在可见窗上：滚动容器自己带上标记，遮罩宿主是它的**直接**子元素（那条 `>` 规则靠这个）。
+  // 这一窗比内容矮时（事件多的一天），遮罩若随内容长高，那句话与按钮就落在窗外了。
+  const body = host.querySelector('.mi-calendar-card__body')
+  expect(body?.getAttribute('data-veiled')).toBe('true')
+  // 遮罩宿主是**直接**子元素：那条 `>` 规则只对直接子元素生效，包深一层就静默失效。
+  const veilHost = body?.firstElementChild
+  expect(veilHost?.classList.contains('mi-source-veil-host')).toBe(true)
+  expect(veilHost?.querySelector('.mi-source-veil')).not.toBeNull()
+})
+
+// 遮罩不是常驻样式：源都可用时这一窗照常滚，别把正常的滚动一起关掉。
+it('leaves the body scrolling when every source is usable', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
+    sourcesState="available" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  expect(host.querySelector('.mi-source-veil')).toBeNull()
+  const body = host.querySelector('.mi-calendar-card__body')
+  expect(body).not.toBeNull()
+  expect(body?.hasAttribute('data-veiled')).toBe(false)
+})
+
+it('locks the visible window while veiled, and keeps the veil in it', () => {
+  const bodyStart = styles.indexOf(".mi-calendar-card__body[data-veiled='true'] {")
+  expect(bodyStart, 'the veiled window stops scrolling').toBeGreaterThan(-1)
+  expect(styles.slice(bodyStart, styles.indexOf('}', bodyStart))).toContain('overflow: hidden')
+  const hostStart = styles.indexOf(".mi-calendar-card__body[data-veiled='true'] > .mi-source-veil-host {")
+  expect(hostStart, 'the veil fills the window instead of growing with the rows').toBeGreaterThan(-1)
+  expect(styles.slice(hostStart, styles.indexOf('}', hostStart))).toContain('height: 100%')
+  // 正常态那条仍在：只有遮罩态才不滚。
+  const baseStart = styles.indexOf('.mi-calendar-card__body {')
+  expect(styles.slice(baseStart, styles.indexOf('}', baseStart))).toContain('overflow: auto')
 })
 
 it('keeps the body and says "no source configured yet" behind the veil', async () => {

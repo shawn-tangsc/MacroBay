@@ -1345,6 +1345,12 @@ button.mi-agent-card__status:focus-visible {
    under it owns the scrollbar. */
 .mi-calendar-card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--surface); }
 .mi-calendar-card__body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* 遮罩态：这一窗不再滚。滚动容器是窗自己，只锁遮罩宿主挡不住这一窗的滚动——内容照留在 DOM 里
+   （`inert`），只是被这一窗裁住。 */
+.mi-calendar-card__body[data-veiled='true'] { overflow: hidden; }
+/* 遮罩铺满可见窗而不是随内容长高：事件多的一天内容比窗高，宿主若按内容撑高，那句话与按钮
+   就会落在窗外，读者只剩一片模糊。窗高由网格行给出（`minmax(0, …)`），所以 `100%` 是确定的。 */
+.mi-calendar-card__body[data-veiled='true'] > .mi-source-veil-host { height: 100%; }
 .mi-calendar-card > header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .mi-calendar-card > header h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
 .mi-calendar-card__open { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }

@@ -253,10 +253,11 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
     {/* Only the list scrolls. The header is the card's identity — the reader keeps seeing what
         they are looking at while scanning further down the schedule — so it stays outside the
         scroll region instead of travelling with the rows. */}
-    <div className="mi-calendar-card__body">
+    <div className="mi-calendar-card__body" {...(veil === undefined ? {} : { 'data-veiled': 'true' })}>
       {/* 卡内三态（2026-11-11 终稿）：卡框与标题照常，**数据区照常渲染**，只在上面盖一层遮罩；
           遮罩里居中一句 + 恰一颗按钮，底下内容包 `inert`，Tab 只停在按钮上。
-          只有一条源都用不了才盖；部分可用就照常列，不遮。 */}
+          只有一条源都用不了才盖；部分可用就照常列，不遮。
+          `data-veiled` 同时打在**滚动容器**上：这一窗比内容矮时，遮罩要钉在窗里，不能跟着内容滚走。 */}
       <div className="mi-source-veil-host" {...(veil === undefined ? {} : { 'data-veiled': 'true' })}>
         <div {...(veil === undefined ? {} : { inert: true })}>
           {veil === undefined && state === 'loading' ? <LoadingState label={text.loading} /> : null}
