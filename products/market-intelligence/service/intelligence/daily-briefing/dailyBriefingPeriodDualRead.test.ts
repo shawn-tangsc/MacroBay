@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingAiSettingsView } from './dailyBriefingAiSettingsService'
 import {
   createDailyBriefingGenerationSettingsService,
   createInMemoryDailyBriefingGenerationSettingsStorage
@@ -11,7 +10,6 @@ import {
   createInMemoryEditionLanguageSettingsStorage
 } from './dailyBriefingLanguageSettingsService'
 import { createBriefingPeriodStore } from './dailyBriefingPeriodStore'
-import { createDailyBriefingSettingsService } from './dailyBriefingSettingsService'
 
 const UI_LOCALE: DailyBriefingLocale = 'zh-CN'
 const NOW = '2026-11-10T00:00:00.000Z'
@@ -47,15 +45,6 @@ const STORE_DOCUMENT = {
     { id: 'period_legacy_default_en-US', generationTime: '07:00', windowHours: 24, language: 'en-US', origin: 'legacy-settings' }
   ],
   markers: { 'migrated.legacyGlobalSettings.v1': NOW }
-}
-
-function aiStub(): { getView: () => Promise<DailyBriefingAiSettingsView>; save: () => Promise<DailyBriefingAiSettingsView> } {
-  const view: DailyBriefingAiSettingsView = {
-    settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-    resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' },
-    webSearchSupported: true
-  }
-  return { getView: vi.fn(async () => view), save: vi.fn(async () => view) }
 }
 
 /** The old rows as the reader's list will read them: primary language first, then each extra. */
@@ -100,17 +89,18 @@ describe('the period list read two ways', () => {
       storage: createInMemoryEditionLanguageSettingsStorage({ primary: 'follow-ui', additional: ADDITIONAL, updatedAt: NOW }),
       uiLanguage: () => UI_LOCALE
     })
-    const settings = createDailyBriefingSettingsService({ ai: aiStub(), generation, language })
-
-    // The settings page's read path: `getView().generation.periods`.
-    const view = await settings.getView()
+    // The old settings file's own read path. It is still the source the migration copied from, so
+    // this compares two independent readings of one fixture — not the store with itself (2b moved
+    // the settings page onto the store, so reading the page here would be circular).
+    const view = await generation.getView()
+    const additional = (await language.getSettings()).additional
     const store = createBriefingPeriodStore({
       storage: { read: async () => STORE_DOCUMENT, write: async () => undefined },
       defaultLanguage: () => UI_LOCALE
     })
     const stored = await store.list(UI_LOCALE)
 
-    const expected = expandAdditional(view.generation.periods, view.language.settings.additional)
+    const expected = expandAdditional(view.periods, additional)
     // The same fixture, row by row and in order: a re-sorted or dropped row is a red test.
     expect(comparable(stored)).toEqual(comparable(expected))
     // Spelled out so a failure says which of the four facts moved, not just "arrays differ".
