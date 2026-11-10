@@ -62,9 +62,11 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
     void write
       .then((result) => {
         if (result.state === 'saved') {
-          setPeriods(result.periods)
           setAdding(false)
           setEditing(undefined)
+          // **保存后重读**：写入回执里的列表是服务端写的那一刻的快照，不是读者下一次看到的真相；
+          // 重读一次（同一个 `list`），弹窗与期存储逐项一致。
+          load()
           return
         }
         // The dialog already names the conflicting row from the same list, so a rejection here means

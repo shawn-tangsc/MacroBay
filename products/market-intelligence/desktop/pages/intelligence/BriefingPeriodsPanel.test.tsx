@@ -128,4 +128,63 @@ describe('the period list says which action failed', () => {
     // 读回来之后显示的是那一期，而不是"再加一期"的空态。
     expect(host.querySelector<HTMLElement>('[data-period-id="period-a"]')).not.toBeNull()
   })
+
+  it('re-reads the store after saving, instead of trusting the write receipt', async () => {
+    // 保存回执里的列表是「写的那一刻」的快照；读者下一次看到的是重读结果。回执故意给旧值，
+    // 只有真的重读，界面才会显示服务端的新时刻。
+    const stale: BriefingPeriod = { ...period, generationTime: '08:00' }
+    const fresh: BriefingPeriod = { ...period, generationTime: '08:30' }
+    const list = vi.fn()
+      .mockResolvedValueOnce([stale])
+      .mockResolvedValueOnce([fresh])
+    const client = fakeClient({
+      list,
+      update: vi.fn(async () => ({ state: 'saved' as const, periods: [stale] }))
+    })
+    await render(client)
+
+    const pencil = buttonByLabel(copy.editRow.replace('{index}', '1'))
+    await act(async () => { pencil?.click() })
+    await flush()
+    const saveButton = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.periodDialog.save)
+    await act(async () => { saveButton?.click() })
+    await flush()
+
+    expect(client.update).toHaveBeenCalledWith('period-a', expect.anything(), 'zh-CN')
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(host.textContent).toContain('08:30')
+    expect(host.textContent).not.toContain('08:00')
+  })
+
+  it('changes one period without touching the others', async () => {
+    // 判据对偶：改 A 的时刻，B 的时刻/窗口/语言逐项不变；写错键（覆盖整表）会当场红。
+    const a: BriefingPeriod = { id: 'period-a', generationTime: '08:00', windowHours: 24, language: 'zh-CN' }
+    const b: BriefingPeriod = { id: 'period-b', generationTime: '09:00', windowHours: 48, language: 'en-US' }
+    const list = vi.fn()
+      .mockResolvedValueOnce([a, b])
+      .mockResolvedValueOnce([{ ...a, generationTime: '08:30' }, b])
+    const client = fakeClient({ list, update: vi.fn(async () => ({ state: 'saved' as const, periods: [a, b] })) })
+    await render(client)
+
+    const editA = buttonByLabel(copy.editRow.replace('{index}', '1'))
+    await act(async () => { editA?.click() })
+    await flush()
+    const saveButton = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.periodDialog.save)
+    await act(async () => { saveButton?.click() })
+    await flush()
+
+    // 写的身份只有 A：命令是 update，不是 create、也不是整表覆盖。
+    expect(client.update).toHaveBeenCalledTimes(1)
+    expect(client.update).toHaveBeenCalledWith('period-a', expect.anything(), 'zh-CN')
+    expect(client.create).not.toHaveBeenCalled()
+
+    const rowB = host.querySelector<HTMLElement>('[data-period-id="period-b"]')?.textContent ?? ''
+    expect(rowB).toContain('09:00')
+    expect(rowB).toContain('48')
+    expect(rowB).toContain((text.settings.languageNames as Record<string, string>)['en-US'] ?? '英文')
+    const rowA = host.querySelector<HTMLElement>('[data-period-id="period-a"]')?.textContent ?? ''
+    expect(rowA).toContain('08:30')
+  })
 })
