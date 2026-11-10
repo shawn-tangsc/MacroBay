@@ -57,6 +57,8 @@ export type SettingFieldProps = Readonly<{
   labelTextClassName?: string
   /** `multiSelect` 每一项的类名（各屏现状不同，由调用方给）。 */
   checkboxClassName?: string
+  /** `select`（antd）的样式；旧屏给过 `minWidth` 的由调用方传，保 DOM 不变。 */
+  selectStyle?: Readonly<Record<string, string | number>>
   /** `unimplemented` 的一行说明，由页面给句子。 */
   unimplementedText?: string
   /** 页面渲染的行级状态（保存中 / 存不上）。组件不生产、不改写、不吞掉。 */
@@ -108,7 +110,6 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
         disabled={props.disabled === true || props.busy === true}
         loading={props.busy === true}
         onChange={(next) => props.onChange?.(next)}
-        size="small"
       />)
     case 'select': {
       const options = optionsOf(descriptor.field.optionsFrom, props.view, props.resolveOptionLabel)
@@ -137,6 +138,7 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
         onChange={(next) => props.onChange?.(next)}
         options={options.map((option) => ({ value: option.value, label: option.label }))}
         size="small"
+        {...(props.selectStyle === undefined ? {} : { style: props.selectStyle })}
         value={props.value as string | number | undefined}
       />)
     }

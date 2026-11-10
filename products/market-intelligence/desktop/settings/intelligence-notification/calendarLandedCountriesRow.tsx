@@ -92,13 +92,13 @@ export function CalendarLandedCountriesRow(props: Readonly<{
         text[`pages.intelligence.notification.countries.${String(option)}`] ?? String(option)}
       resolveText={props.resolveText}
       rowClassName={ROW_CLASS}
+      selectStyle={{ minWidth: 180 }}
       value={draft.scope}
       view={{ landedCountries: draft }}
     />
     {draft.scope === 'custom'
       ? <SettingField
         busy={saving}
-        checkboxClassName="intelligence-notification-form-check"
         controlWrapperClassName={CONTROL_CLASS}
         copyClassName={LABEL_CLASS}
         descriptor={countryDescriptor('setting:notifications.calendar.landed-countries.codes')}
