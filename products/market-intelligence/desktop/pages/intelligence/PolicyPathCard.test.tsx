@@ -85,10 +85,11 @@ it.each([
 })
 
 /**
- * 共享表里 `.mi-source-card*` 标着「退役中」：这张卡是它最后一个使用者，迁到 `.mi-source-veil-*`
- * 之后全仓没人再用它，共享表那一组才可以删。这里钉住「不再回头用它」，否则退役永远退不掉。
+ * 共享表里**不许再出现** `.mi-source-card*`（那一组已删，`2753869`）：这张卡造型走共享遮罩
+ * `.mi-source-veil-*`，本地也不再自画遮罩规则。这条从现在起是真判据——原来那句「它标着退役中」
+ * 描述的是一个已经不存在的东西。
  */
-it('veils through the shared veil group, not the retiring whole-card block', () => {
+it('veils through the shared veil group, with no local scrim rule of its own', () => {
   // 用例只查 CSS：类是共享表里的那一份，图上不再出现由上面三态用例各断言一次（查渲染结果，
   // 不查源码文本——注释里提到它不代表用它）。自画的那层遮罩规则也一并撤掉。
   const styles = readFileSync('products/market-intelligence/desktop/pages/intelligence/policyPathCard.css', 'utf8')
