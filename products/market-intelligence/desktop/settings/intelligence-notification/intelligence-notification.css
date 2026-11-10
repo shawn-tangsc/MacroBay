@@ -283,3 +283,38 @@
 .intelligence-notification-drawer > .settings-section {
   width: 100%;
 }
+
+/* ── 抽屉面：把两种行归一成同一套对齐（否则分段/国家那两行会各自偏移）──
+   行内距 12、标签列 160、控件左缘 = 12 + 160 + 12(gap) + 8(控件前距) = 192；
+   行高 44、行间发丝线、末行无线。阈值行与国家行原本是设置页那套（内距 0、标签与控件间距 16），
+   在本屏内改成同一套数字，不改它们给设置页用的默认值。 */
+.intelligence-notification-drawer .intelligence-notification-form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-row:last-child,
+.intelligence-notification-drawer .intelligence-notification-form-row.is-last {
+  border-bottom: 0;
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-label {
+  flex: 0 0 160px;
+  min-width: 0;
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+}
+
+/* 区块标题左缘与行标签左缘对齐：卡头内距跟行内距同一套（12）。 */
+.intelligence-notification-drawer .settings-section > .settings-section__header {
+  padding-left: 12px;
+  padding-right: 12px;
+}
