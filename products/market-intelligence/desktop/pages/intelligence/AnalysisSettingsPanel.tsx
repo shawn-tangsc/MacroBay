@@ -102,7 +102,7 @@ export function AnalysisSettingsPanel({ onState }: Readonly<{
       {refusal === 'model-unconfigured' ? text.refusalModelUnconfigured
         : refusal === 'model-unavailable' ? text.refusalModelUnavailable : text.refusalFailed}
     </p>}
-    <SettingsSection title={text.settingsTitle}>
+    <SettingsSection title={text.settingsTitle} variant="flat">
       <SettingsRow
         copyClassName="config-drawer__label"
         headClassName="config-drawer__label-head"

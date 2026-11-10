@@ -478,20 +478,6 @@
  * **只写 border、不写 border-radius**（`sectionContainerGuard` 判「同一规则同时出现两者」）。
  * 等 `SettingsSection` 出 flat 变体后删掉这条，改成传 variant。
  */
-/* 删本条的条件：`SettingsSection` 的 `variant="flat"` 落地即删，改成传 variant。 */
-.config-drawer__card .settings-section {
-  border: 0;
-  background: none;
-  padding: 0;
-}
-
-/* flat 第二半：区块头本来有 `padding: 10px 14px` + `border-bottom`，与卡体 16 叠成 30 左缩进，
-   标题下还多一条线。flat 下头部只留「上 0、下 8」且无底线。 */
-.config-drawer__card .settings-section > .settings-section__header {
-  padding: 0 0 8px;
-  border-bottom: 0;
-}
-
 /* flat 第三半：区块之间的分隔线归卡体画（1px 通到卡边、间距 16），因为区块自画会被 16 内距截住。 */
 .config-drawer__card .settings-section + .settings-section {
   margin-top: 16px;
