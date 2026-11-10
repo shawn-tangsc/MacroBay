@@ -10,8 +10,7 @@
  * 2. 白名单里**按文件路径**登记的存量站点，每条写清理由与「换它会怎样」。
  *    反对按注释/函数名放行——那等于写上属性再配一句解释就过。
  *
- * 白名单的**登记出处是 `docs/ui-rules.md`**（评审可见），本文件里的常量只是它的执行副本：
- * 改白名单要两处一起改，否则评审看不到理由。
+ * 白名单只在本文件里，每条都写成**欠账**（理由 + 清掉后删这一行）；它不是「已批准例外」。
  *
  * 扫描只证明「写法还在」，**不能证明渲染正确**——台账只写「结构守住了」。
  */
@@ -33,8 +32,6 @@ const PLATFORM_SWITCH_FILES = new Set<string>()
  * 写在这里只是为了让门禁能跑，不是给历史遗留发通行证。
  */
 const ALLOWED: Readonly<Record<string, string>> = {
-  'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelDrawer.tsx':
-    '欠账：换平台 Switch 要同步改抽屉行高；清掉后删这一行',
   'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx':
     '欠账：换平台 Switch 要同步改卡片行高；清掉后删这一行'
 }
@@ -49,6 +46,24 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out
 }
 
+/**
+ * 剥掉注释再扫：**注释里写这串属性不是违规**。
+ * 真实误报：`ModelServiceModelDrawer.tsx:250` 的注释里带着这串字面量，被逐行扫成了手写开关，
+ * 白白记了一笔欠账。块注释与行注释都要剥（`//` 与 `/* … *\/`），否则以后任何一句
+ * 「不要手写 <该属性>」的说明都会变成违规。
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//gu, '')
+    .split('\n')
+    .map((line) => {
+      const index = line.indexOf('//')
+      // 行注释：只剥第一次出现的 `//`（URL 里的 `//` 会先撞上，但那行本来也不含被守的属性字面量）。
+      return index === -1 ? line : line.slice(0, index)
+    })
+    .join('\n')
+}
+
 const hits: string[] = []
 for (const root of SCANNED_ROOTS) {
   let files: string[] = []
@@ -57,7 +72,7 @@ for (const root of SCANNED_ROOTS) {
     const relativePath = relative(ROOT, file).split('\\').join('/')
     if (PLATFORM_SWITCH_FILES.has(relativePath)) continue
     if (ALLOWED[relativePath] !== undefined) continue
-    const source = readFileSync(file, 'utf8')
+    const source = stripComments(readFileSync(file, 'utf8'))
     source.split('\n').forEach((line, index) => {
       if (line.includes('role="switch"')) hits.push(`${relativePath}:${index + 1}`)
     })
