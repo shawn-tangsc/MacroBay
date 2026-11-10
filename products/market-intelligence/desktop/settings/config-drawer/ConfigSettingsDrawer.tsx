@@ -223,7 +223,10 @@ function SourcesScreen({ view, resolveText, onSelect }: {
               <span className="config-drawer__source-status">{source.statusLabel}</span>
             )}
             {/* 启用与否只说事实；开关等 S1 落地再接，避免这里多出第二个写入口。 */}
-            {source.enabled ? null : <span className="config-drawer__source-off">—</span>}
+            {/* 行尾点：none 不画；ring 空心环、warn 实心黄、bad 实心红。 */}
+            {source.healthMarker === undefined || source.healthMarker === 'none'
+              ? null
+              : <span className={`config-drawer__source-dot config-drawer__source-dot--${source.healthMarker}`} />}
           </button>
         ))}
       </div>

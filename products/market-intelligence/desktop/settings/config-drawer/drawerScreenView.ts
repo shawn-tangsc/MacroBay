@@ -37,6 +37,8 @@ export type DrawerPlatformTarget = 'preferences' | 'models'
 export type DrawerSourceRow = {
   sourceId: string
   name: string
+  /** 健康标记，投影给什么画什么；`none` 就是不画（**不是**「健康」，只是没有标记）。 */
+  healthMarker?: 'none' | 'ring' | 'warn' | 'bad'
   /** 状态词（已格式化）；不给就是不画状态词，不编一个「正常」。 */
   statusLabel?: string
   enabled: boolean

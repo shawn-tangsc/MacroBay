@@ -185,16 +185,6 @@
   line-height: var(--line-meta);
 }
 
-/* 行尾状态点：8×8。warn 实心黄、bad 实心红、unavailable 空心环，其余不画。 */
-.config-drawer__source-off {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  border: 1.5px solid var(--muted);
-  background: transparent;
-}
-
 /* 选中：整行 `--surface-soft` + 左侧 2px `--accent`。 */
 .config-drawer__source-item[aria-current='true'] {
   box-shadow: inset 2px 0 0 var(--accent);
@@ -262,3 +252,20 @@
   min-width: 0;
   margin-left: 8px;
 }
+
+/* 行尾健康点四档（规格）：none 不画、ring 空心环、warn 实心黄、bad 实心红。 */
+.config-drawer__source-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.config-drawer__source-dot--ring {
+  border: 1.5px solid var(--muted);
+  background: transparent;
+}
+
+.config-drawer__source-dot--warn { background: var(--warn); }
+
+.config-drawer__source-dot--bad { background: var(--danger); }

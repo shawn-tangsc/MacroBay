@@ -38,7 +38,9 @@ export function useDrawerSourcesView(
             // 不传会退到「这个来源…」，BLS 在抽屉里就和详情不是同一句。
             sourceUnavailableSentence(source.unavailable.reasonCode, unavailableFallback, source.kind)
             : undefined,
-          enabled: source.enabled
+          enabled: source.enabled,
+          // 投影给什么画什么；拿不到就是 none，不猜健康也不猜故障。
+          healthMarker: source.healthMarker
         }))))
         setView({ state: 'ready', rows })
       })
