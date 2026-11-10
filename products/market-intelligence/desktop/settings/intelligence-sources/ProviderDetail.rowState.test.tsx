@@ -74,18 +74,18 @@ describe('能力行状态读格开关', () => {
     expect(rowSwitch(on, 'binance-futures-positioning')?.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('shows a no-cell source that is listed in 采集与数据 as on', async () => {
-    // 舆情 / 日历那几条没有自己的格开关，但确实在采集与数据里列着 —— 视为开。
+  it('always shows a no-cell source as off, even when its own enabled is true', async () => {
+    // 用户 2026-11-11 最新口径：读「采集与数据里有的项的启用状态」；**没有对应格的默认关闭**。
     const host = await render([source('binance-announcements', 'feed')] as never, {})
-    expect(rowSwitch(host, 'binance-announcements')?.getAttribute('aria-checked')).toBe('true')
+    expect(rowSwitch(host, 'binance-announcements')?.getAttribute('aria-checked')).toBe('false')
   })
 
   it('shows maintenance and un-wired sources with no place in 采集与数据 as off', async () => {
     const host = await render(
-      [source('binance-api-updates'), source('binance-asset-page', 'adapter')] as never,
+      [source('binance-api-updates'), source('treasury-fiscal-data', 'adapter')] as never,
       {}
     )
     expect(rowSwitch(host, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('false')
-    expect(rowSwitch(host, 'binance-asset-page')?.getAttribute('aria-checked')).toBe('false')
+    expect(rowSwitch(host, 'treasury-fiscal-data')?.getAttribute('aria-checked')).toBe('false')
   })
 })

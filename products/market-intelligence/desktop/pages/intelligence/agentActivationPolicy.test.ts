@@ -66,7 +66,7 @@ describe('projectActivation', () => {
     const projection = projectActivation(view([
       group('spot-momentum', [
         source('binance-spot-market', { enabled: true }),
-        source('binance-asset-page', { visibility: 'pending' }),
+        source('treasury-fiscal-data', { visibility: 'pending' }),
         source('twelve-data-market', { visibility: 'hidden' })
       ]),
       group('fear-greed', [source('binance-spot-market', { enabled: true })])

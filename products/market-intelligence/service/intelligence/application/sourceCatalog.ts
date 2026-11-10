@@ -572,24 +572,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     adapterConfig: { endpointUrl: 'https://api.coingecko.com/api/v3/global' }
   }),
   source({
-    sourceId: 'binance-asset-page',
-    displayName: 'Binance Asset Page',
-    sourceGroup: 'exchange-announcement',
-    adapterType: 'html-page-poller',
-    category: 'exchange-announcement',
-    defaultScopePolicy: 'watchlist-priority',
-    parserStrategy: 'binance-asset-page-v1',
-    intelligenceLayer: 'asset',
-    dataDomain: 'asset-market',
-    reliabilityTier: 'page-extract',
-    eventFamily: 'mixed',
-    readiness: 'planned',
-    readinessNote:
-      '保持未启用：实测 https://www.binance.com/en/price/ethereum 返回 202 且响应体为空（反爬挑战），页面数据无法稳定取得，且没有对应解析器。',
-    supportedImpactScopes: ['symbol', 'watchlist'],
-    adapterConfig: { pageUrl: 'https://www.binance.com/en/price/ethereum' }
-  }),
-  source({
     sourceId: zeroXRouterSourcePolicy.sourceId,
     displayName: '0xRouter',
     sourceGroup: zeroXRouterSourcePolicy.sourceGroup,

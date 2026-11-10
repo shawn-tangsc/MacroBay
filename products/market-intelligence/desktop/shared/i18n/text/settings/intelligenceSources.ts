@@ -172,7 +172,6 @@ export const intelligenceSourcesText = {
     'bea-economic-series': '美国经济分析局的 GDP 与 PCE',
     'binance-announcements': '币安公告：上币、下架与规则变更',
     'binance-api-updates': '维护备用，暂不向读者提供内容',
-    'binance-asset-page': '币安资产页上的现价与涨跌幅',
     'binance-futures-positioning': '永续合约的持仓名义额与资金费率',
     'binance-spot-market': 'BTC 与 ETH 的现货报价与成交额',
     'bls-economic-series': '美国劳工统计局的经济指标数值',
@@ -215,7 +214,7 @@ export const intelligenceSourcesText = {
     'treasury-fiscal-data': '财政部财政数据', 'sec-rss': 'SEC 监管公告', 'cftc-rss': 'CFTC 监管公告',
     'binance-announcements': '币安公告', 'binance-api-updates': '币安 API 更新',
     'binance-spot-market': '币安现货行情', 'binance-futures-positioning': '币安合约持仓',
-    'binance-asset-page': '币安资产页', 'okx-latest-announcements': 'OKX 最新公告',
+    'okx-latest-announcements': 'OKX 最新公告',
     'okx-api-announcements': 'OKX API 公告', 'coingecko-market': 'CoinGecko 行情',
     'defillama-stablecoins': 'DeFiLlama 稳定币', 'defillama-tvl': 'DeFiLlama TVL',
     'alternative-fear-greed': '恐惧与贪婪指数', 'coindesk-rss': 'CoinDesk 新闻',
@@ -340,7 +339,6 @@ export const intelligenceSourcesText = {
     'binance-api-updates': 'Binance API 更新',
     'binance-spot-market': 'Binance 现货行情',
     'binance-futures-positioning': 'Binance 合约持仓',
-    'binance-asset-page': 'Binance 资产页',
     'okx-latest-announcements': 'OKX 最新公告',
     'okx-api-announcements': 'OKX API 公告',
     'coindesk-rss': 'CoinDesk RSS',
@@ -459,7 +457,6 @@ export const intelligenceSourcesText = {
      这里只放**没有现成标题键**的那几个。 */
   dashboardModuleTitles: {
     policyPath: '政策路径',
-    divergence: '背离卡',
     marketState: '市场状态'
   },
   /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
@@ -739,7 +736,6 @@ export const intelligenceSourcesText = {
     'bea-economic-series': 'BEA figures for GDP and PCE',
     'binance-announcements': 'Binance announcements: listings, delistings and rule changes',
     'binance-api-updates': 'Maintenance only; nothing here is shown to readers yet',
-    'binance-asset-page': 'Price and change as shown on Binance asset pages',
     'binance-futures-positioning': 'Perpetual open interest and the funding rate',
     'binance-spot-market': 'BTC and ETH spot quotes with turnover',
     'bls-economic-series': 'US BLS economic indicator values',
@@ -782,7 +778,7 @@ export const intelligenceSourcesText = {
     'treasury-fiscal-data': 'Treasury fiscal data', 'sec-rss': 'SEC regulatory notices', 'cftc-rss': 'CFTC regulatory notices',
     'binance-announcements': 'Binance announcements', 'binance-api-updates': 'Binance API updates',
     'binance-spot-market': 'Binance spot market', 'binance-futures-positioning': 'Binance futures positioning',
-    'binance-asset-page': 'Binance asset page', 'okx-latest-announcements': 'OKX latest announcements',
+    'okx-latest-announcements': 'OKX latest announcements',
     'okx-api-announcements': 'OKX API announcements', 'coingecko-market': 'CoinGecko market data',
     'defillama-stablecoins': 'DeFiLlama stablecoins', 'defillama-tvl': 'DeFiLlama TVL',
     'alternative-fear-greed': 'Fear and greed index', 'coindesk-rss': 'CoinDesk news',
@@ -902,7 +898,6 @@ export const intelligenceSourcesText = {
     'binance-api-updates': 'Binance API Updates',
     'binance-spot-market': 'Binance Spot Market',
     'binance-futures-positioning': 'Binance Futures Positioning',
-    'binance-asset-page': 'Binance Asset Page',
     'okx-latest-announcements': 'OKX Latest Announcements',
     'okx-api-announcements': 'OKX API Announcements',
     'coindesk-rss': 'CoinDesk RSS',
@@ -1012,7 +1007,6 @@ export const intelligenceSourcesText = {
   businessSubtitle: { modules: '{count} modules', sources: '{count} sources' },
   dashboardModuleTitles: {
     policyPath: 'Policy path',
-    divergence: 'Divergence',
     marketState: 'Market state'
   },
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },

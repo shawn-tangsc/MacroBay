@@ -59,8 +59,6 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   ETF: 'etf',
   永续持仓名义额: 'oi',
   资金费率: 'funding',
-  杠杆腿: 'leverage',
-  价格腿: 'price'
 }
 
 /** `[格名, 源 id, 是不是备用行]` → 模块；`sourceIds` 由 cells 派生，两处不会不一致。 */
@@ -91,13 +89,6 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
   moduleOf('positioning', 'pages.intelligence.portal.dashboard.positioning.title', [
     ['永续持仓名义额', 'binance-futures-positioning'],
     ['资金费率', 'binance-futures-positioning']
-  ]),
-  moduleOf('divergence', `${TITLES}.divergence`, [
-    // 同一格名「资金腿」出现两次（稳定币腿 / 聚合行情腿），必须显式给唯一键，否则 cellId 撞车。
-    ['资金腿', 'defillama-stablecoins', false, 'capital-flows'],
-    ['资金腿', '0xrouter-aggregate-provider', false, 'capital-flows-aggregate'],
-    ['杠杆腿', 'binance-futures-positioning', false, 'leverage'],
-    ['价格腿', 'binance-futures-positioning', false, 'price']
   ]),
   moduleOf('macro-calendar', 'pages.intelligence.portal.dashboard.macroReleaseDynamics.sourceName', [
     ['Fed 官方日程', 'macro-calendar-fed'],
@@ -154,7 +145,7 @@ export function modulesUsingSource(sourceId: string): readonly DashboardSourceMo
  * 副标题里的数字从这里算，不写死。
  */
 export const BUSINESS_MODULE_IDS = {
-  dashboard: ['policy-path', 'fear-greed', 'capital', 'positioning', 'divergence', 'quotes'],
+  dashboard: ['policy-path', 'fear-greed', 'capital', 'positioning', 'quotes'],
   calendar: ['macro-calendar'],
   sentiment: ['news']
 } as const
@@ -177,7 +168,7 @@ export function cellIdOf(moduleId: string, cell: DashboardCell): string {
 
 /**
  * 守卫：**同一模块内 `cellId` 不得重复**（`quotes:*` 与 `cross-asset:*` 里都有「美元」是允许的，
- * 那是不同模块）。背离卡的「资金腿」出现过两次、键撞车，就是把 `divergence:*` 接不上的根因。
+ * 那是不同模块）。同一个模块里**格名重复必须有显式唯一键**，否则 cellId 撞车——这条守卫就是它。
  */
 export function duplicateCellIds(): readonly string[] {
   const seen = new Set<string>()

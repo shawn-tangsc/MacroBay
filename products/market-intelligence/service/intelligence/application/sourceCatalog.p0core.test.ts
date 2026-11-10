@@ -38,7 +38,7 @@ describe('P0 core source catalog metadata', () => {
     // The two remaining zero-credential candidates stay unlit on purpose: Binance's asset page answers
     // with an empty challenge body, and the Treasury fiscal dataset moved away from the configured
     // `/accounting/od/` paths to the Daily Treasury Statement's `/accounting/dts/` ones.
-    expect(getIntelligenceSourceDefinition('binance-asset-page')?.readiness).toBe('planned')
+    expect(getIntelligenceSourceDefinition('bea-economic-series')?.readiness).toBe('planned')
     expect(getIntelligenceSourceDefinition('treasury-fiscal-data')?.readiness).toBe('planned')
 
     for (const sourceId of [

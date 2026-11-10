@@ -154,7 +154,8 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
     const write = vi.fn(async () => true)
     const container = await mount(write)
 
-    const toggle = container.querySelector<HTMLButtonElement>('[data-setting-key="setting:sources.enabled@s1"] button[role="switch"]')!
+    // 启停的唯一可编辑入口是**页头的组开关**（能力行那颗已改成只读，用户 2026-11-11）。
+    const toggle = container.querySelector<HTMLButtonElement>('.source-provider-detail__group-toggle button[role="switch"]')!
     await act(async () => { toggle.click() })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 

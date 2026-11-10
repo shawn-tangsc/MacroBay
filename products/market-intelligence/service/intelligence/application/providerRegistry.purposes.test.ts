@@ -29,7 +29,6 @@ describe('the derived panels match what the registry declared before purposes ex
     ['binance-api-updates', []],
     ['binance-spot-market', []],
     ['binance-futures-positioning', ['dashboard']],
-    ['binance-asset-page', []],
     ['okx-latest-announcements', ['dashboard']],
     ['okx-api-announcements', []],
     ['coingecko-market', []],

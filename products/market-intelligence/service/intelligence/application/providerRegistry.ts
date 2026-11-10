@@ -258,8 +258,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       src({ sourceId: 'binance-announcements', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-announcements', displayName: 'Binance announcements', purposes: ['dashboard', 'briefing', 'sentiment'], requiresProxy: true, adapterRef: 'binance-announcements' }),
       src({ purposes: [], maintenanceOnly: true, sourceId: 'binance-api-updates', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-api-updates', displayName: 'Binance API updates', requiresProxy: true, adapterRef: 'binance-api-updates' }),
       src({ purposes: ['analysis'], sourceId: 'binance-spot-market', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-spot-market', displayName: 'Binance spot market', requiresProxy: true, adapterRef: 'binance-spot-market' }),
-      src({ sourceId: 'binance-futures-positioning', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-futures-positioning', displayName: 'Binance futures positioning', purposes: ['dashboard', 'briefing'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' }),
-      src({ purposes: [], sourceId: 'binance-asset-page', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-asset-page', displayName: 'Binance asset page', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'binance-asset-page' })
+      src({ sourceId: 'binance-futures-positioning', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-futures-positioning', displayName: 'Binance futures positioning', purposes: ['dashboard', 'briefing'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' })
     ]
   }),
   provider({
@@ -398,7 +397,7 @@ export const agentRegistry: readonly AgentDefinition[] = [
     activation: 'available',
     groups: [
       { groupId: 'fear-greed', agentId: 'crypto', tier: 'required', sourceIds: ['alternative-fear-greed'] },
-      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market', 'binance-asset-page'] },
+      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market'] },
       { groupId: 'funding-rate', agentId: 'crypto', tier: 'required', sourceIds: ['binance-futures-positioning'] },
       {
         groupId: 'macro-calendar',

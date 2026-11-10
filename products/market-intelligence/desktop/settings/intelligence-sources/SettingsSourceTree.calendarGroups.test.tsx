@@ -207,8 +207,9 @@ describe('the dashboard filter groups by module', () => {
     for (const id of MAINTENANCE) expect(shown).not.toContain(id)
     // 只标了 analysis 用途、没有任何模块挂的那 4 个也不出现（那张卡是错的，已删）。
     for (const id of ANALYSIS_ONLY) expect(shown).not.toContain(id)
-    // 共用源按模块重复出现：合并「跨资产」后，`binance-futures-positioning` 在 3 个模块下各一次。
-    expect(shown.filter((name) => name === 'binance-futures-positioning')).toHaveLength(3)
+    // 共用源按模块重复出现：背离卡删掉之后，`binance-futures-positioning` 只在 2 个模块下各一次
+    // （市场状态、永续持仓与资金费率）。
+    expect(shown.filter((name) => name === 'binance-futures-positioning')).toHaveLength(2)
   })
 
   it('drops a source from the module group when the mapping no longer lists it', async () => {
