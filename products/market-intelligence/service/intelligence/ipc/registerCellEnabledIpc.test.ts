@@ -51,7 +51,9 @@ describe('the cell-enabled IPC bridge', () => {
   it('lets a read failure reject instead of swallowing it', async () => {
     const handlers = capture({
       readCellEnabled: async () => { throw new Error('cell-enabled: unreadable') },
-      setCellEnabled: async () => undefined
+      setCellEnabled: async () => undefined,
+      readCellSelection: async () => ({}),
+      setCellSelection: async () => undefined
     })
 
     await expect(Promise.resolve(handlers.get(INTELLIGENCE_IPC_METHODS.readCellEnabled)!(undefined)))

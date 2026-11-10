@@ -83,4 +83,69 @@ describe('cell enabled store', () => {
     expect(readFileSync(file, 'utf8')).toBe(before)
     expect(statSync(file).mtimeMs).toBe(beforeMtime)
   })
+
+  it('remembers which source a cell chose, and a null choice removes the key', async () => {
+    const file = tempFile()
+    await createCellEnabledStore(file).setCellSelection('quotes:usd', 'realmarketapi-market')
+    expect(await createCellEnabledStore(file).readCellSelection()).toEqual({ 'quotes:usd': 'realmarketapi-market' })
+
+    await createCellEnabledStore(file).setCellSelection('quotes:usd', null)
+    const stored = JSON.parse(readFileSync(file, 'utf8')) as { selections?: Record<string, unknown> }
+    // 写 null = 把键删掉（缺键就是「没选」），不是留一个空串。
+    expect(stored.selections && Object.prototype.hasOwnProperty.call(stored.selections, 'quotes:usd')).toBe(false)
+    expect(await createCellEnabledStore(file).readCellSelection()).toEqual({})
+  })
+
+  it('keeps the legacy cells field exactly as it was when only a selection is written', async () => {
+    const file = tempFile()
+    await createCellEnabledStore(file).setCellEnabled('quotes:ndx', false)
+    const before = JSON.parse(readFileSync(file, 'utf8')) as { cells: Record<string, unknown>; version: number }
+
+    await createCellEnabledStore(file).setCellSelection('quotes:usd', 'twelve-data-market')
+
+    const after = JSON.parse(readFileSync(file, 'utf8')) as { cells: Record<string, unknown>; version: number; selections: Record<string, unknown> }
+    expect(after.cells).toEqual(before.cells)
+    expect(after.version).toBe(before.version + 1)
+    expect(after.selections).toEqual({ 'quotes:usd': 'twelve-data-market' })
+  })
+
+  it('keeps unknown fields and unreadable selections when one choice is written', async () => {
+    const file = tempFile()
+    writeFileSync(file, JSON.stringify({
+      version: 5,
+      cells: { 'quotes:ndx': false },
+      selections: { 'weird:cell': 42, 'quotes:gold': 'realmarketapi-market' },
+      futureField: ['kept']
+    }), 'utf8')
+
+    await createCellEnabledStore(file).setCellSelection('quotes:usd', 'twelve-data-market')
+
+    const stored = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
+    expect(stored.version).toBe(6)
+    expect(stored.futureField).toEqual(['kept'])
+    expect(stored.cells).toEqual({ 'quotes:ndx': false })
+    expect(stored.selections).toMatchObject({
+      'weird:cell': 42,
+      'quotes:gold': 'realmarketapi-market',
+      'quotes:usd': 'twelve-data-market'
+    })
+    // 读结果只给字符串；非字符串留在文档里，不作为「显式选择」交出去。
+    expect(await createCellEnabledStore(file).readCellSelection()).toEqual({
+      'quotes:gold': 'realmarketapi-market',
+      'quotes:usd': 'twelve-data-market'
+    })
+  })
+
+  it('short-circuits a same-value selection write and leaves reads untouched', async () => {
+    const file = tempFile()
+    await createCellEnabledStore(file).setCellSelection('quotes:usd', 'realmarketapi-market')
+    const before = readFileSync(file, 'utf8')
+    const beforeMtime = statSync(file).mtimeMs
+
+    await createCellEnabledStore(file).setCellSelection('quotes:usd', 'realmarketapi-market')
+    await createCellEnabledStore(file).readCellSelection()
+
+    expect(readFileSync(file, 'utf8')).toBe(before)
+    expect(statSync(file).mtimeMs).toBe(beforeMtime)
+  })
 })
