@@ -32,8 +32,8 @@ const PLATFORM_SWITCH_FILES = new Set<string>()
  * 写在这里只是为了让门禁能跑，不是给历史遗留发通行证。
  */
 const ALLOWED: Readonly<Record<string, string>> = {
-  'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx':
-    '欠账：换平台 Switch 要同步改卡片行高；清掉后删这一行'
+  // 空：欠账已清（AgentPortal 的自绘 role="switch" 已换成 antd Switch，2026-11-10）。
+  // 这张表只减不增；将来新增一处不写在这里，先问它为什么不换组件。
 }
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
