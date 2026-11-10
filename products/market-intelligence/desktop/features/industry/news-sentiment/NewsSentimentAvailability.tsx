@@ -43,6 +43,7 @@ export function NewsSentimentAvailabilityVeil(props: Readonly<{
             ariaLabelKey="news.sentiment.availability.reason"
             icon={Info}
             onSelect={() => undefined}
+            variant="plain"
             resolveText={(key: string) => (key === 'news.sentiment.availability.reason' ? props.text.availability.reasonAria : '')}
             size="sm" />
         )} />

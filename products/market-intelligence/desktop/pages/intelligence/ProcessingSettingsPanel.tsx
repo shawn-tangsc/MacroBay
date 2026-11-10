@@ -189,6 +189,7 @@ export function ProcessingSettingsPanel({ initialSection }: { initialSection?: P
                   ariaLabelKey="configDrawer.rowReason"
                   icon={Info}
                   onSelect={() => undefined}
+                  variant="plain"
                   resolveText={(key: string) => (key === 'configDrawer.rowReason' ? copy.values.sentimentUnknownReason : '')}
                   size="sm" />
               )} />
@@ -273,7 +274,8 @@ function Unreadable(props: Readonly<{ reason: string }>): React.ReactElement {
           icon={Info}
           onSelect={() => undefined}
           resolveText={(key: string) => (key === 'configDrawer.rowReason' ? props.reason : '')}
-          size="sm" />
+          size="sm"
+          variant="plain" />
       )} />
   </>
 }
