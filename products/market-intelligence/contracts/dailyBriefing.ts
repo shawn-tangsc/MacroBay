@@ -438,6 +438,11 @@ export type DailyBriefingEditionSummary = Readonly<{
   /** The period's configuration is gone; the row still reads, marked as a deleted period. */
   periodDeleted?: boolean
   /**
+   * 这一版**最新一次生成**用的那条会话（E9）。查不到、或链接读失败时**整格不出现**，所以这里
+   * 只有"有会话"一种状态——不给禁用占位，那等于向读者承诺"本来该有"。
+   */
+  sessionId?: string
+  /**
    * 排期过了点、今天该有却没有（`02` v2.149 甲案）：第二行写「到点时没能生成」。
    * 和"跑了但失败"（这次没生成出来）、"正文位空着"（这一期没有生成）是三句话。
    */

@@ -44,6 +44,30 @@ const summaries = (rows: readonly DailyBriefingStoredEdition[], expected: readon
     configuredLanguages: () => expected
   })
 
+describe('the session a row was generated with (E9)', () => {
+  it('attaches the session it is told about, and leaves it out when there is none or the read fails', async () => {
+    const rows = [edition('zh-CN')]
+    const [withSession] = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      sessionId: async () => 'session-1'
+    })
+    expect(withSession?.sessionId).toBe('session-1')
+
+    const [without] = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      sessionId: async () => null
+    })
+    expect(without?.sessionId).toBeUndefined()
+
+    // 读失败与"确实没有"在界面上是同一件事：这一行不显示入口，而不是显示一个坏值或禁用占位。
+    const [unreadable] = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      sessionId: async () => { throw new Error('lookup failed') }
+    })
+    expect(unreadable?.sessionId).toBeUndefined()
+  })
+})
+
 describe('history rows take incompleteness from the run', () => {
   it('marks one published language of a two-language period as partial', async () => {
     const [summary] = await summaries([edition('zh-CN')], ['zh-CN', 'en-US'])

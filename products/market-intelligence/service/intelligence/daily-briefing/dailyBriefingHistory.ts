@@ -10,6 +10,7 @@ import {
 } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPeriodRun, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 import { briefingRailDates } from './dailyBriefingRailDates'
+import { dayAfter, lastDays } from './briefingHistoryWindows'
 
 /**
  * Whether a period still exists in the configuration.
@@ -61,6 +62,11 @@ export async function readBriefingHistory(input: Readonly<{
    * 既看不出缺了，也看不出是没跑还是被跳过。没到点、历史日、手动期、被删过——四种都不给这一行。
    */
   missedPeriods?: readonly Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>[]
+  /**
+   * 这一版最新一次生成用的会话 id（E9）。返回 `null` 表示"没有、或读不到"——两者在界面上
+   * **都是不显示**：这条动作是入口不是信息，缺席不会让读者看错数据。
+   */
+  sessionId?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<string | null>
 }>): Promise<Readonly<{ editions: readonly DailyBriefingEditionSummary[]; dates: readonly string[] }>> {
   // 窗口右端多留**一天**：`today` 是读者日历上的一天，而版次的日期由截止时刻所在的读者本地
   // 日期决定，两者可以差一天（`02` v2.129 G2：有版次的日期一律不许被窗口截掉）。往后的日子不会
@@ -94,7 +100,8 @@ export async function readBriefingHistory(input: Readonly<{
     scheduledTime: input.scheduledTime,
     ...(input.periodPresence ? { periodPresence: input.periodPresence } : {}),
     ...(input.isRunning ? { isRunning: input.isRunning } : {}),
-    ...(input.configuredLanguages ? { configuredLanguages: input.configuredLanguages } : {})
+    ...(input.configuredLanguages ? { configuredLanguages: input.configuredLanguages } : {}),
+    ...(input.sessionId ? { sessionId: input.sessionId } : {})
   })
   return Object.freeze({
     editions,
@@ -106,17 +113,6 @@ export async function readBriefingHistory(input: Readonly<{
       today: input.today
     })
   })
-}
-
-/** 次日（UTC 日期串上的一天）。只用于日期窗口，不参与任何"现在是哪一期"的推导。 */
-function dayAfter(date: string): string {
-  return new Date(Date.parse(`${date}T00:00:00.000Z`) + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
-}
-
-function lastDays(today: string, days: number): readonly string[] {
-  const start = Date.parse(`${today}T00:00:00.000Z`)
-  return Object.freeze(Array.from({ length: days }, (_, index) =>
-    new Date(start - (days - 1 - index) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)))
 }
 
 /**
@@ -192,6 +188,8 @@ export async function briefingHistorySummaries(input: Readonly<{
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
+  /** 这一版最新一次生成用的会话 id（E9）；`null` 与读失败都落到"这一行不显示入口"。 */
+  sessionId?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<string | null>
 }>): Promise<readonly DailyBriefingEditionSummary[]> {
   // Group every language of a period together: the three-state needs to know which languages exist,
   // not just which one is shown. The primary language is written last so it wins as the row's face.
@@ -315,6 +313,8 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
   attemptState?: (date: string, periodId: string, locale: DailyBriefingLocale) => AttemptState | undefined
+  /** 这一版最新一次生成用的会话 id；`null` 与读失败都落到"这一行不显示入口"。 */
+  sessionId?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<string | null>
   /** 这一天的尝试记录：没有版次的行从它取状态（失败 / 没跑完 / 读者取消），不问审计表。 */
   attemptRuns?: readonly Readonly<{
     date: string
@@ -393,6 +393,8 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
     }
   }
   const presence = input.periodPresence ? await input.periodPresence(periodId) : undefined
+  // E9：这一版最新一次生成用的会话。查不到 / 读失败都当"没有"——行上不显示入口，不留占位。
+  const sessionId = input.sessionId ? await input.sessionId(date, periodId, input.primary).catch(() => null) : null
   return {
     ...summary,
     languages: languagesOf(availableLocales, {
@@ -406,7 +408,8 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
     ...(presence === 'absent' ? { periodDeleted: true } : {}),
     // "Missing one version" only describes an issue that still has a version to compare with.
     ...(completeness.state === 'missing-version' && published ? { state: 'partial' as const } : {}),
-    ...(period.missedAtCutoff === true ? { missedAtCutoff: true } : {})
+    ...(period.missedAtCutoff === true ? { missedAtCutoff: true } : {}),
+    ...(sessionId ? { sessionId } : {})
   }
 }
 

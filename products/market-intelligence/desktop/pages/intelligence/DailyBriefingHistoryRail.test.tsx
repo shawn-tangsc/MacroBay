@@ -818,3 +818,42 @@ describe('“running” is only the row that says so (2026-11-06)', () => {
     expect(host.querySelector('[data-rail-title="running"]')).toBeNull()
   })
 })
+
+describe('the session action on a language row (E9)', () => {
+  it('puts one text action at the row end, only when the edition names a session', () => {
+    render({ editions: [edition({ sessionId: 'session-1', periodTime: '2026-11-02T00:00:00.000Z' })], onOpenSession: async () => true })
+    const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
+    const action = host.querySelector<HTMLButtonElement>('[data-open-session]')!
+    expect(action).not.toBeNull()
+    expect(action.textContent).toBe(text.history.openSession)
+    // 可访问名点名是哪一版（日期 + 时刻），否则读屏听到一串「打开会话」分不清。
+    expect(action.getAttribute('aria-label')).toContain('11/02')
+    expect(action.getAttribute('aria-label')).toContain('08:00')
+    // 行按钮的可访问名里不出现「打开会话」：两颗按钮名字不许一样。
+    expect(row.getAttribute('aria-label')).toBeNull()
+    expect(row.textContent).not.toContain(text.history.openSession)
+    // 动作是行按钮的**兄弟**（嵌套可聚焦元素会让键盘卡住），点行尾不等于点行。
+    expect(row.contains(action)).toBe(false)
+
+    // 没有会话就整格不出现，不留禁用占位（那等于承诺"本来该有"）。
+    render({ editions: [edition()] })
+    expect(host.querySelector('[data-open-session]')).toBeNull()
+  })
+
+  it('opens the row’s own session, and says so in place when it is already gone', async () => {
+    const onOpenSession = vi.fn(async () => true)
+    render({ editions: [edition({ sessionId: 'session-1' })], onOpenSession })
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-open-session]')!.click() })
+    await flush()
+    expect(onOpenSession).toHaveBeenCalledWith({ sessionId: 'session-1', date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
+
+    const declined = vi.fn(async () => false)
+    render({ editions: [edition({ sessionId: 'session-gone' })], onOpenSession: declined })
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-open-session]')!.click() })
+    await flush()
+    expect(declined).toHaveBeenCalledTimes(1)
+    // 会话已经不在了：就地一句，不跳转、动作位也不再留着点。
+    expect(host.querySelector('[data-session-gone]')?.textContent).toBe(text.history.sessionMissing)
+    expect(host.querySelector('[data-open-session]')).toBeNull()
+  })
+})

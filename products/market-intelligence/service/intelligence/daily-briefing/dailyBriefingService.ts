@@ -42,7 +42,7 @@ import { candidateOverflow, cutoffDate, isOutputTruncation, turnFailureCode, wit
 import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
-import { briefingScheduledTimeFor, readBriefingHistory } from './dailyBriefingHistory'
+import { readBriefingListHistory } from './dailyBriefingListHistory'
 import { missedScheduledPeriods } from './dailyBriefingMissedPeriods'
 import { createAutoRetryingResolve } from './dailyBriefingAutoRetry'
 export type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
@@ -359,6 +359,11 @@ export function createDailyBriefingService(deps: Readonly<{
   generationSettings?: () => Promise<DailyBriefingGeneration>
   /** 期配置列表：`regenerate` 按 `periodId` 取这一期自己的时刻、窗口与语言（缺省退回旧口径）。 */
   readPeriods?: () => Promise<readonly BriefingPeriod[]>
+  /**
+   * E9：这一版最新一次生成用的会话 id。**查不到或读失败都返回 `null`**——列表据此不显示
+   * 「打开会话」，而不是显示一个禁用占位（那等于承诺"本来该有"）。
+   */
+  sessionIdOf?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => Promise<string | null>
   noticeSubmit?: DailyBriefingNoticeSubmit
   /** 结构化诊断（appLog）：导读被扣时那条日志走它；缺省时只是不记。 */
   log?: import('./dailyBriefReadinessGate').BriefingDiagnosticLog
@@ -650,24 +655,17 @@ export function createDailyBriefingService(deps: Readonly<{
     const schedule = await generation()
     const window = briefingWindow(now(), input.timeZone, schedule)
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    const listed = await readBriefingHistory({
-      store: deps.store,
-      locale: input.locale,
-      today: window.date,
-      retentionDays: dailyBriefingPolicy.retentionDays,
-      scheduledTime: briefingScheduledTimeFor(await (deps.readPeriods?.().catch(() => []) ?? Promise.resolve([])), schedule.generationTime),
-      // 排期期今天该有却没有 → 也要留一行说明（`02` v2.149 甲案），否则它悄悄没有。
-      missedPeriods: await missedScheduledPeriods({ store: deps.store, periods: async () => (deps.readPeriods?.() ?? Promise.resolve([])), today: window.date, now: now(), readerTimeZone: input.timeZone, fallbackLocale: input.locale }),
+    const listed = await readBriefingListHistory({
+      store: deps.store, locale: input.locale, today: window.date, timeZone: input.timeZone,
+      generationTime: schedule.generationTime, now: now(),
+      periods: await (deps.readPeriods?.().catch(() => []) ?? Promise.resolve([])),
       // "Generating" is a live fact: the stored run row outlives the process that wrote it.
-      isRunning: (date, periodId) => [...runs.progress.keys()].some((key) => key.startsWith(`${date}:${periodId}:`))
+      progressKeys: () => runs.progress.keys(),
+      ...(deps.sessionIdOf ? { sessionIdOf: deps.sessionIdOf } : {})
     })
     return { state: 'available', result: { editions: listed.editions, dates: listed.dates, today: window.date } }
   }
 
-  const getProgress = createBriefingProgressReader({
-    now,
-    readGeneration: generation,
-    progressOf: progressLookup(runs.progress, runs.key)
-  })
+  const getProgress = createBriefingProgressReader({ now, readGeneration: generation, progressOf: progressLookup(runs.progress, runs.key) })
   return { getToday, regenerate, publishToPhone: createPublishToPhone({ store: deps.store, submit: deps.noticeSubmit, redeliver: deps.redeliverPush, log: deps.log, now }), list, ...reads, getProgress }
 }
