@@ -1,0 +1,123 @@
+/* 配置抽屉（静态版式）：所有数值取自档位与主档，不从别处搬数。 */
+.config-drawer {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  min-height: 100%;
+}
+
+.config-drawer__nav {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 8px 6px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.config-drawer__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.config-drawer__nav-item[aria-current='true'] {
+  background: var(--surface);
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.config-drawer__nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.config-drawer__nav-index {
+  width: 16px;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  text-align: center;
+}
+
+.config-drawer__pane {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 16px;
+}
+
+.config-drawer__pane-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-section);
+  font-weight: 650;
+  line-height: var(--line-section);
+}
+
+.config-drawer__group {
+  display: grid;
+  gap: 6px;
+}
+
+.config-drawer__group-title {
+  color: var(--muted-strong);
+  font-size: var(--font-section);
+  font-weight: 600;
+  line-height: var(--line-section);
+}
+
+.config-drawer__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.config-drawer__label {
+  flex: 0 0 160px;
+  color: var(--text);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+}
+
+.config-drawer__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.config-drawer__switch {
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.config-drawer__select,
+.config-drawer__number {
+  flex: none;
+  width: 120px;
+  height: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.config-drawer__select--multi {
+  width: 160px;
+}
