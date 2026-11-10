@@ -1,7 +1,7 @@
-import type { ReactElement, ReactNode } from 'react'
+import type { ReactElement } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
-import { SettingsSectionHeader } from '@platform/ui/components/settings-section'
+import { SettingsSection } from '@platform/ui/components/settings-section'
 import { InlineNotice } from '@platform/ui/components/inline-notice'
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -53,14 +53,6 @@ const ROW_CLASS = 'config-drawer__row'
 const LABEL_CLASS = 'config-drawer__label'
 const LABEL_TEXT_CLASS = 'config-drawer__label'
 const CONTROL_CLASS = 'config-drawer__value'
-
-/** 区块：与平台 `SettingsSection` 同 DOM（标题 13/650 + ⓘ + body），只是多一个 ⓘ 槽。 */
-function Section({ title, info, children }: Readonly<{ title: string; info?: ReactNode; children: ReactNode }>): ReactElement {
-  return <section className="settings-section" data-settings-section-block="true">
-    <SettingsSectionHeader info={info} title={title} />
-    <div className="settings-section__body">{children}</div>
-  </section>
-}
 
 function descriptorOf(key: string): SettingDescriptor {
   const descriptor = settingRegistry.notifications.find((row) => row.key === key)
@@ -225,7 +217,8 @@ export function NotificationDrawerScreen(): ReactElement {
     </InlineNotice>}
 
     <div className="intelligence-notification-drawer">
-      <Section
+      <SettingsSection
+        variant="flat"
         info={<SettingsInfo
           ariaLabelKey="pages.intelligence.notification.infoAria"
           labelKeys={['pages.intelligence.notification.groupInfo.2', 'pages.intelligence.notification.channelNotReady']}
@@ -243,11 +236,11 @@ export function NotificationDrawerScreen(): ReactElement {
           resolveText={resolveText}
         />)}
         {calendarRow()}
-      </Section>
+      </SettingsSection>
 
       {/* 舆情条件：**整块常显**（用户 2026-11-11：关着时也要能选到门槛这一项）。
           关着 → 门槛行灰着，并写明「先打开舆情提醒」；打开 → 可改。 */}
-      <Section title={text['pages.intelligence.notification.sentimentSection'] ?? ''}>
+      <SettingsSection variant="flat" title={text['pages.intelligence.notification.sentimentSection'] ?? ''}>
         <NewsPushThresholdRow
           disabled={!outlet.enabled}
           last
@@ -255,12 +248,12 @@ export function NotificationDrawerScreen(): ReactElement {
           state={threshold}
           text={text}
         />
-      </Section>
+      </SettingsSection>
 
       {/* 日历提醒：**整块常显**（用户 2026-11-11：换位置不是减功能）。关着时仍给已存值摘要，
           并且「测试发生后」仍可点（平台那一屏只按设置读不到禁用，不看组开关）；
           只有组开着时才画开始前条件与发生后的过滤 / 国家。 */}
-      <Section title={text['pages.intelligence.notification.calendarSection'] ?? ''}>
+      <SettingsSection variant="flat" title={text['pages.intelligence.notification.calendarSection'] ?? ''}>
           {reminder.status === 'error'
             ? <SettingsRow copyClassName={LABEL_CLASS} label={text['pages.intelligence.notification.status.unreadable'] ?? ''} rowClassName={ROW_CLASS}>
               <StateView
@@ -368,7 +361,7 @@ export function NotificationDrawerScreen(): ReactElement {
                 />
               </SettingsRow>
             </>}
-      </Section>
+      </SettingsSection>
     </div>
   </div>
 }

@@ -1,4 +1,4 @@
-import type { ProductManifest } from '../../platform/product-manifest'
+import type { ProductManifest, ProductSettingsSectionContribution } from '../../platform/product-manifest'
 import type { NotificationEventDeclaration } from '../../platform/notifications/contracts/notificationEventCatalog'
 import { MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS } from './contracts/notificationApprovals'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
@@ -64,7 +64,7 @@ export const marketIntelligenceProductManifest = {
     ],
     /* 平台设置侧不再放本产品的配置：全部改由产品自己的配置抽屉承载（用户 2026-11-11）。
        平台侧渲染逻辑没变，仍按注册数据驱动；这里撤的是「贡献」，不是能力。 */
-    settingsSections: [],
+    settingsSections: [] as readonly ProductSettingsSectionContribution[],
     /* 产品自己的配置抽屉有几屏（架构师 2026-11-11 签）：**只放 id、不放标题**，
        壳层据此决定「去设置」入口出不出现。菜单集必须与抽屉实际菜单一致，
        由 `desktop/settings/config-drawer/settingsDrawerDeclaration.test.tsx` 守着——
