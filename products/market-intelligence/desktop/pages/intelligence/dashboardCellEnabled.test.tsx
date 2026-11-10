@@ -23,23 +23,10 @@ afterEach(() => {
 function clients() {
   const crossAssetQuery = vi.fn(async () => ({ state: 'unavailable' as const, cause: 'query' as const }))
   const fearGreedQuery = vi.fn(async () => ({ state: 'empty' as const, asOf }))
-  // 一条可判的配对（杠杆腿那一组）：关掉「价格腿」不影响它，正好用来看卡片是否还在。
   const macroQuery = vi.fn(async (_input?: { dollarSourceId?: string }) => ({ state: 'unavailable' as const }))
-  const divergenceQuery = vi.fn(async () => ({
-    state: 'available' as const, asOf, escalated: false, withheld: [],
-    rows: [{
-      pairId: 'liquidity-leverage' as const, direction: 'bearish' as const,
-      legs: [
-        { id: 'stablecoin' as const, value: -1.2, unit: 'percent' as const, observedAt: '2026-08-04T22:00:00.000Z' },
-        { id: 'open-interest' as const, value: 3.4, unit: 'percent' as const, observedAt: '2026-08-04T23:00:00.000Z' },
-        { id: 'funding' as const, value: 0.01, unit: 'percent-per-8h' as const, observedAt: '2026-08-04T23:00:00.000Z' }
-      ]
-    }]
-  }))
   return {
     crossAssetQuery,
     fearGreedQuery,
-    divergenceQuery,
     macroQuery,
     crossAssetClient: {
       acquire: vi.fn(async () => ({ state: 'active' as const, leaseId: 'lease-1' })),
@@ -49,7 +36,6 @@ function clients() {
       query: crossAssetQuery
     },
     fearGreedClient: { querySnapshot: fearGreedQuery },
-    divergenceClient: { query: divergenceQuery },
     macroMarketClient: { query: macroQuery }
   }
 }
@@ -70,7 +56,6 @@ async function render(cellEnabledIo: CellEnabledIo | undefined) {
           fundingRateClient: { query: async () => ({ state: 'empty' as const, asOf }) },
           openInterestClient: { query: async () => ({ state: 'empty' as const, asOf, window: '7d' as const }) },
           crossAssetClient: built.crossAssetClient as never,
-          divergenceClient: built.divergenceClient as never,
           macroMarketClient: built.macroMarketClient as never,
           now: () => new Date(asOf),
           onConfigureSources: () => undefined,
@@ -126,26 +111,6 @@ describe('dashboard cells read only when the reader left them on', () => {
     const off = await render({ read: async () => ({ [dashboardCellId('fear-greed', 'index')]: false }) })
     expect(off.fearGreedQuery).not.toHaveBeenCalled()
     expect(off.container.querySelector('[data-sentiment-gauge]')).toBeNull()
-  })
-
-  it('stops the 背离 read and drops the card only when every leg cell is off', async () => {
-    const allOff = await render({
-      read: async () => ({
-        [dashboardCellId('divergence', 'capital-flows')]: false,
-        [dashboardCellId('divergence', 'capital-flows-aggregate')]: false,
-        [dashboardCellId('divergence', 'leverage')]: false,
-        [dashboardCellId('divergence', 'price')]: false
-      })
-    })
-    expect(allOff.divergenceQuery).not.toHaveBeenCalled()
-    expect(allOff.container.querySelector('.mi-divergence')).toBeNull()
-  })
-
-  it('keeps reading the 背离 card while any leg it needs is still on', async () => {
-    const partial = await render({ read: async () => ({ [dashboardCellId('divergence', 'price')]: false }) })
-    // 价格腿关掉，稳定币腿那一组还判得出来：这一路照样读，卡也还在（用到价格腿的配对由面板滤掉）。
-    expect(partial.divergenceQuery).toHaveBeenCalled()
-    expect(partial.container.querySelector('.mi-divergence')).not.toBeNull()
   })
 
   it('asks the dollar reading for the source the reader chose, and only that one', async () => {
