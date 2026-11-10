@@ -49,6 +49,8 @@ async function render(input: Readonly<{
   liveState?: CrossAssetLiveState; range?: '1h' | '24h'
   /** 读者在设置里关掉的格（行 id）；不给就是全都没关。 */
   hideStatusRows?: readonly ('index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate')[]
+  /** 每行的三态；配合 `cellStateLabels` 才生效。 */
+  rowStates?: Partial<Record<'index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate', 'disabled' | 'unreadable'>>
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -75,7 +77,11 @@ async function render(input: Readonly<{
   }
   await act(async () => root.render(createElement(ScopedPanel, {
     client: client as never, text,
-    ...(input.hideStatusRows === undefined ? {} : { hideStatusRows: input.hideStatusRows })
+    ...(input.hideStatusRows === undefined ? {} : { hideStatusRows: input.hideStatusRows }),
+    ...(input.rowStates === undefined ? {} : {
+      rowStates: input.rowStates,
+      cellStateLabels: { disabled: '数据未被启用', unreadable: '暂时读不到' }
+    })
   })))
   return { host, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
 }
@@ -193,6 +199,36 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       expect(indexRow.querySelector('.mi-cross-asset__not-connected')?.textContent).not.toMatch(/[0-9]/)
       expect(indexRow.textContent).not.toMatch(/\d+\.\d+/)
       expect(page.host.querySelector('[data-index-proxy="true"]')).toBeNull()
+    } finally { await page.unmount() }
+  })
+})
+
+
+describe('cross-asset chart with only some lines usable', () => {
+  it('keeps the chart while at least one line is usable, and drops only the others', async () => {
+    const page = await render({
+      nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs),
+      rowStates: { index: 'disabled', eth: 'disabled' }
+    })
+    try {
+      // 一条可用（BTC）→ 图在，坐标正常；不可用的线不画。
+      expect(page.host.querySelector('[data-cross-asset-region="chart"]')).not.toBeNull()
+      expect(page.host.querySelector('[data-asset-line="btc"]')).not.toBeNull()
+      expect(page.host.querySelector('[data-asset-line="index"]')).toBeNull()
+      expect(page.host.querySelector('[data-asset-line="eth"]')).toBeNull()
+    } finally { await page.unmount() }
+  })
+
+  it('drops the whole chart and shows the state sentence only when no line is usable', async () => {
+    const page = await render({
+      nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs),
+      rowStates: { index: 'disabled', btc: 'disabled', eth: 'disabled' }
+    })
+    try {
+      expect(page.host.querySelector('[data-cross-asset-region="chart"]')).toBeNull()
+      expect(page.host.querySelector('[data-asset-line]')).toBeNull()
+      expect(page.host.querySelector('[data-state="disabled"]')).not.toBeNull()
+      expect(page.host.textContent).toContain('数据未被启用')
     } finally { await page.unmount() }
   })
 })

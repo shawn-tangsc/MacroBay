@@ -263,6 +263,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   const visibleRows = hideStatusRows === undefined || hideStatusRows.length === 0
     ? statusRows
     : statusRows.filter(row => !hideStatusRows.includes(row.id))
+  // 跨资产图：三条线都不可用才整图不画（至少一条可用就照画）。
+  const chartLineStates = (['index', 'btc', 'eth'] as const).map(id => rowStates?.[id])
+  const allChartLinesUnusable = cellStateLabels !== undefined && chartLineStates.every(state => state !== undefined)
+  const chartLineUnreadable = chartLineStates.includes('unreadable')
   const intradayRows = visibleRows.filter(row => !dailyRowIds.includes(row.id))
   const dailyRows = visibleRows.filter(row => dailyRowIds.includes(row.id))
 
@@ -334,7 +338,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         </table>
         <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>
-      {crossAssetReadingEnabled ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
+      {crossAssetReadingEnabled && !allChartLinesUnusable ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <FocusPopover
           {...historyHint}
           resolveText={resolveProductText}
@@ -377,15 +381,6 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
             per figure, so a legend reading 「纳斯达克 100」 can never sit above `QQQUSDT`'s curve. */}
         {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}
         {(() => {
-          const lineStates = (['index', 'btc', 'eth'] as const).map(id => rowStates?.[id])
-          // 至少一条线可用就照画；一条都没有才降级成那一句。宿主没给文案时保持旧行为。
-          if (cellStateLabels !== undefined && lineStates.every(state => state !== undefined)) {
-            // 一条能用的线都没有：整图不画，只留那一句（未启用 / 暂时读不到）。
-            return <CellStateCard
-              kind={lineStates.includes('unreadable') ? 'unreadable' : 'disabled'}
-              label={lineStates.includes('unreadable') ? cellStateLabels.unreadable : cellStateLabels.disabled}
-              onSelect={() => { if (lineStates.includes('unreadable')) void view.refresh() }} />
-          }
           return snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
           hiddenLines={chartLinesHiddenBy([...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {})])}
           events={eventLines.lines} eventsCollapsed={eventLines.collapsed} onSelectEvent={selectEvent}
@@ -408,7 +403,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
               : <StateView state="error" reasonCode="unreadable" size="md"
                   action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />
         })()}
-      </div> : null}
+      </div> : allChartLinesUnusable ? <CellStateCard
+        kind={chartLineUnreadable ? 'unreadable' : 'disabled'}
+        label={chartLineUnreadable ? cellStateLabels!.unreadable : cellStateLabels!.disabled}
+        onSelect={() => { if (chartLineUnreadable) void view.refresh() }} /> : null}
       {/* The reading line (design 142): one footnote spanning the panel, under the chart it explains.
           It is the product's own statement about the chart, kept apart from the model's conclusion — a
           reader must be able to tell "this is how the figure reads" from "this is what we think". */}
