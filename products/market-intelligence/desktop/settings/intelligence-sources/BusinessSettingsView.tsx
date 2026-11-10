@@ -59,6 +59,16 @@ export function cellGroupsOf(cells: readonly DashboardCell[]): readonly CellGrou
   return groups
 }
 
+/**
+ * 官方源那一张卡里，每行要说清**这个官方源管什么**（用户 2026-11-11：「要能看出 CPI 的官方源、
+ * 利率的官方源」）。覆盖口径是读者语言，写在这里一处；官方源加进来时补一行，不写说明长句。
+ */
+const OFFICIAL_COVERAGE: Readonly<Record<string, string>> = {
+  'macro-calendar-fed': '利率决议',
+  'macro-calendar-bea': 'GDP / PCE',
+  'macro-calendar-bls': 'CPI / 就业'
+}
+
 /** 日历按 feed 的 `owner` 分官方 / 聚合；舆情只有一张。判据来自注册表，不在组件里写源 id。 */
 export function otherBusinessGroups(
   business: BusinessKey,
@@ -139,13 +149,14 @@ export function BusinessSettingsContent(props: {
   const renderCell = (
     moduleId: string,
     cell: DashboardCell,
-    siblings: readonly string[]
+    siblings: readonly string[],
+    labelOverride?: string
   ): React.ReactElement => {
     const cellId = cellIdOf(moduleId, cell)
     return cellRow({
       cellId,
       enabled: props.isCellEnabled?.(cellId) ?? cell.fallback !== true,
-      label: nameOf(cell.sourceId),
+      label: labelOverride ?? nameOf(cell.sourceId),
       resolveText: props.resolveText,
       siblings,
       sourceId: cell.sourceId,
@@ -215,11 +226,15 @@ export function BusinessSettingsContent(props: {
               <div
                 className="business-cell__items"
                 style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
-                {group.cells.map((cell) => renderCell(
-                  modulesForBusiness(props.business)[0]?.id ?? props.business,
-                  cell,
-                  []
-                ))}
+                {group.cells.map((cell) => {
+                  const coverage = group.key === 'official' ? OFFICIAL_COVERAGE[cell.sourceId] : undefined
+                  return renderCell(
+                    modulesForBusiness(props.business)[0]?.id ?? props.business,
+                    cell,
+                    [],
+                    coverage === undefined ? undefined : `${coverage} · ${nameOf(cell.sourceId)}`
+                  )
+                })}
               </div>
             </div>)}
           </div>

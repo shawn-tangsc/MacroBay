@@ -93,6 +93,9 @@ describe('业务设置的左列', () => {
     const cards = [...calendar.host.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
     expect(cards.map((card) => card.getAttribute('data-business-cell-card'))).toEqual(['official', 'aggregate'])
     expect(cards.map((card) => card.querySelector('.business-cell__title')?.textContent)).toEqual(['官方源', '聚合源'])
+    // 官方源那几行要说清它管什么（用户 2026-11-11：看得出 CPI 的官方源、利率的官方源）。
+    const official = cards[0]!.textContent ?? ''
+    for (const coverage of ['利率决议', 'GDP / PCE', 'CPI / 就业']) expect(official).toContain(coverage)
     // 卡片项是纯行：不是按钮、没有 onClick、点了不导航（用户 2026-11-11 取消点击跳转）。
     for (const row of [...calendar.host.querySelectorAll('.business-card__row')]) {
       expect(row.tagName).not.toBe('BUTTON')
