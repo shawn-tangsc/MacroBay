@@ -121,9 +121,9 @@ export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilt
   const resolveText = useProductTextKey()
   const visibleFilters = filters ?? FILTERS
   /**
-   * 列表形态（C5）：默认分组；**看板那一档自动平铺**（原型：全部 / 日历按 provider 分组，
-   * 看板 / 舆情 / 待接入 / 进阶一律平铺）。状态留住是为了将来给读者一个显式开关时不必改结构，
-   * 现在它只由 `filter` 驱动。
+   * 列表形态（C5）：默认分组；**只有「看板」这一档自动平铺**，其余几档保持默认的分组形态
+   * （舆情 / 待接入 / 进阶本来就不画组头，但那是分组维度的平铺，不是网格）。状态留住是为了
+   * 将来给读者一个显式开关时不必改结构，现在它只由 `filter` 驱动。
    */
   const [mode, setMode] = useState<'grouped' | 'tiles'>('grouped')
   useEffect(() => { setMode(filter === 'dashboard' ? 'tiles' : 'grouped') }, [filter])
