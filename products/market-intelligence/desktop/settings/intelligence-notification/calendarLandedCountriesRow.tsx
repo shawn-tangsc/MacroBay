@@ -9,6 +9,9 @@ import {
   type CalendarLandedCountryScope,
   type CalendarLandedCountrySelection
 } from '../../../contracts/calendarLandedCountries'
+import type { SettingDescriptor } from '../../shared/settings/descriptorTypes'
+import { settingRegistry } from '../../shared/settings/registry'
+import { SettingField } from '../../shared/settings/SettingField'
 import { SettingsRow } from './settingsRow'
 
 /**
@@ -21,6 +24,18 @@ import { SettingsRow } from './settingsRow'
  *   计数变 `8 / 8` 并出现「最多选 8 个」；`n ≤ 7` 时那句不出现。
  * - 文案全部走 i18n 键，组件内零句子。
  */
+const ROW_CLASS = 'intelligence-notification-form-row'
+const LABEL_CLASS = 'intelligence-notification-form-label'
+const LABEL_TEXT_CLASS = 'intelligence-notification-form-label-text'
+const CONTROL_CLASS = 'intelligence-notification-form-control'
+
+/** 国家两行的声明：按 key 找，不兜底——声明缺了就是编译/测试的红。 */
+function countryDescriptor(key: string): SettingDescriptor {
+  const descriptor = settingRegistry.notifications.find((row) => row.key === key)
+  if (!descriptor) throw new Error(`missing setting descriptor: ${key}`)
+  return descriptor
+}
+
 export function CalendarLandedCountriesRow(props: Readonly<{
   selection: CalendarLandedCountrySelection
   saving: boolean
@@ -66,28 +81,20 @@ export function CalendarLandedCountriesRow(props: Readonly<{
   }))
 
   return <>
-    <SettingsRow
-      info={{
-        ariaLabelKey: 'pages.intelligence.notification.countries.rowInfoAria',
-        // 这一项的说明与「全部国家」那一档的含义，都在 ⓘ 里；正文只剩字段名、当前值和控件。
-        labelKeys: [
-          'pages.intelligence.notification.countries.scopeNote',
-          'pages.intelligence.notification.countries.allNote'
-        ],
-        resolveText: props.resolveText
-      }}
-      label={label}
-    >
-      <Select<CalendarLandedCountryScope>
-        aria-label={label}
-        disabled={saving}
-        onChange={chooseScope}
-        options={options}
-        size="small"
-        style={{ minWidth: 180 }}
-        value={draft.scope}
-      />
-    </SettingsRow>
+    <SettingField
+      busy={saving}
+      controlWrapperClassName={CONTROL_CLASS}
+      copyClassName={LABEL_CLASS}
+      descriptor={countryDescriptor('setting:notifications.calendar.landed-countries.scope')}
+      labelTextClassName={LABEL_TEXT_CLASS}
+      onChange={(next) => chooseScope(next as CalendarLandedCountryScope)}
+      resolveOptionLabel={(option) =>
+        text[`pages.intelligence.notification.countries.${String(option)}`] ?? String(option)}
+      resolveText={props.resolveText}
+      rowClassName={ROW_CLASS}
+      value={draft.scope}
+      view={{ landedCountries: draft }}
+    />
     {draft.scope === 'custom'
       ? <SettingsRow
         info={{

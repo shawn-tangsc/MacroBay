@@ -388,7 +388,8 @@ describe('intelligence notification settings', () => {
       'setting:notifications.calendar.enabled',
       'setting:notifications.calendar.lead',
       'setting:notifications.calendar.importance',
-      'setting:notifications.calendar.landed-filter'
+      'setting:notifications.calendar.landed-filter',
+      'setting:notifications.calendar.landed-countries.scope'
     ])
 
     // 页面 → 注册表：渲染出的每个键都必须在已迁移清单里，且是 settings 面上的真实声明。

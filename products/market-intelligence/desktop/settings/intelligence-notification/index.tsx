@@ -55,7 +55,8 @@ const CALENDAR_SETTING_KEYS = [
   'setting:notifications.calendar.enabled',
   'setting:notifications.calendar.lead',
   'setting:notifications.calendar.importance',
-  'setting:notifications.calendar.landed-filter'
+  'setting:notifications.calendar.landed-filter',
+  'setting:notifications.calendar.landed-countries.scope'
 ] as const
 
 /** 已迁移到「按声明渲染」的键：守卫①②只认这份清单，不按文件位置推断。 */
