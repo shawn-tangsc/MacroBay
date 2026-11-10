@@ -1901,3 +1901,11 @@
   display: grid;
   place-items: center;
 }
+
+/* `focus.sourceId` 定位到的那一行：一条描边即「这是你要找的那一行」。
+   只用属性 + CSS，不改 DOM 形状、不加 tabIndex、不做受控选中。 */
+.intelligence-detail-pane [data-source-row][data-focused='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}

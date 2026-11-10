@@ -196,7 +196,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   useEffect(() => {
     if (initialSourceId === undefined) return
     const row = document.querySelector<HTMLElement>(`[data-source-row="${initialSourceId}"]`)
-    row?.scrollIntoView?.({ block: 'nearest' })
+    if (row === null) return
+    row.scrollIntoView?.({ block: 'nearest' })
+    // 唯一的「标记」：一个属性 + 一条 CSS 描边。不隐藏 DOM、不加 tabIndex、不动富行形状。
+    row.setAttribute('data-focused', 'true')
+    return () => { row.removeAttribute('data-focused') }
   }, [initialSourceId])
 
   const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
