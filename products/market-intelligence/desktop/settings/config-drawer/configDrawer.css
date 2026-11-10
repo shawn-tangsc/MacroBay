@@ -382,3 +382,36 @@
  */
 .config-drawer__list-row { grid-template-columns: minmax(0,1fr) auto; }
 .config-drawer__list-row .provider-row-copy strong { font-size: var(--font-body); }
+
+/* 底部统一保存栏：由抽屉壳给（`Drawer` 的 footer，不随内容滚走）；无改动时不出现。 */
+.config-drawer__savebar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.config-drawer__savebar-failed {
+  align-self: stretch;
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
+.config-drawer__save {
+  min-height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  font: inherit;
+  font-size: var(--font-body);
+  cursor: pointer;
+}
+
+.config-drawer__save:disabled { opacity: 0.6; cursor: default; }

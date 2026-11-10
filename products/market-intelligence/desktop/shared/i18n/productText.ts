@@ -320,6 +320,8 @@ mi: miText['zh-CN'],
                 cancel: '继续编辑'
               },
               values: {
+                save: '保存',
+                saving: '保存中…',
                 autoUnknown: '未知',
                 autoUnknownReason: '排期是否注册读不到',
                 modelFollowsDefault: '跟随平台默认模型',
@@ -1802,6 +1804,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 cancel: 'Keep editing'
               },
               values: {
+                save: 'Save',
+                saving: 'Saving…',
                 autoUnknown: 'Unknown',
                 autoUnknownReason: 'Whether the schedule is registered could not be read',
                 modelFollowsDefault: 'Follows the platform default model',

@@ -94,9 +94,12 @@ function openRows(rows: ReadonlyArray<{ key: string; value?: string; emptyLabel?
 describe('config settings drawer (static layout)', () => {
   it('shows the six menus, with the current one marked once', () => {
     const body = mount('sources')
-    const items = [...body.querySelectorAll<HTMLElement>('.config-drawer__nav-item')]
+    const items = [...body.querySelectorAll<HTMLElement>('.settings-nav-item')]
     expect(items).toHaveLength(6)
-    expect(items.filter((item) => item.getAttribute('aria-current') === 'true')).toHaveLength(1)
+    // 选中态是 `aria-current="page"`（设置页那套导航），编号格已经不在了。
+    expect(items.filter((item) => item.getAttribute('aria-current') === 'page')).toHaveLength(1)
+    expect(items.filter((item) => item.classList.contains('active'))).toHaveLength(1)
+    expect(body.querySelector('.config-drawer__nav-index')).toBeNull()
   })
 
   it('exposes one DOM snapshot per screen, and every screen has rows', () => {
@@ -343,6 +346,44 @@ describe('config settings drawer (static layout)', () => {
     ))
     expect(document.body.querySelector('[data-panel="analysis"]')).not.toBeNull()
     expect(document.body.querySelectorAll('[data-drawer-row]')).toHaveLength(0)
+  })
+
+  it('shows the save bar only while the current screen reports unsaved edits', () => {
+    // 壳只认屏上报的三样；没有脏就整屏只有内容（用户不许灰按钮）。
+    const open = (props: Partial<React.ComponentProps<typeof ConfigSettingsDrawer>>): HTMLElement => {
+      document.body.replaceChildren()
+      root?.unmount()
+      root = undefined
+      host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      act(() => root?.render(<ConfigSettingsDrawer initialMenu="briefing" onClose={() => undefined} open {...props} />))
+      return document.body
+    }
+
+    // 额外挂一个「假的测试屏」，证明壳里没有写死任何一屏——栏只看上报的脏与动作。
+    const fakeScreen = <div data-fake-screen="true">screen</div>
+    expect(open({ briefingPanel: fakeScreen }).querySelector('[data-drawer-savebar]')).toBeNull()
+
+    const save = vi.fn()
+    const dirty = open({ briefingPanel: fakeScreen, onScreenSave: save, screenDirty: true })
+    const bar = dirty.querySelector<HTMLElement>('[data-drawer-savebar]')!
+    expect(bar).not.toBeNull()
+    act(() => { bar.querySelector<HTMLButtonElement>('.config-drawer__save')!.click() })
+    expect(save).toHaveBeenCalledTimes(1)
+
+    // 保存中不可连点。
+    const saving = open({ briefinPanel: fakeScreen, onScreenSave: save, screenDirty: true, screenSaving: true } as never)
+    expect(saving.querySelector<HTMLButtonElement>('.config-drawer__save')!.disabled).toBe(true)
+
+    // 失败句在按钮上方一行、是 alert；栏仍在（可以再点）。
+    const failed = open({ briefingPanel: fakeScreen, screenDirty: true, screenSaveFailure: '保存失败：AI 编辑' })
+    const alert = failed.querySelector('[data-drawer-savebar] [role="alert"]')!
+    expect(alert.textContent).toContain('保存失败：AI 编辑')
+    expect(failed.querySelector('[data-drawer-savebar] .config-drawer__save')).not.toBeNull()
+
+    // 保存成功后屏报 dirty=false：栏消失。
+    expect(open({ briefingPanel: fakeScreen, screenDirty: false }).querySelector('[data-drawer-savebar]')).toBeNull()
   })
 
   it('never prints an internal key name on any static screen', () => {

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { Drawer } from '@platform/ui/components/drawer'
 import { Popover } from '@platform/ui/components/popover'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { Info } from 'lucide-react'
+import { Bell, Info, ListTree, MonitorCog, Newspaper, ScanText, Sparkles } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -84,6 +84,13 @@ export type ConfigSettingsDrawerProps = {
    * 三条关闭路径（✕ / 遮罩 / Esc）都过同一个 `requestClose`，所以三处不会各堵一条。
    */
   isScreenDirty?: (menu: ConfigDrawerMenu) => boolean
+  /** 当前屏有没有未保存改动：**只有它才能让底部保存栏出现**（无改动不出灰按钮）。 */
+  screenDirty?: boolean
+  /** 保存动作与状态，都由屏上报；壳不读数据、不知道保存的是什么。 */
+  onScreenSave?: () => void
+  screenSaving?: boolean
+  /** 保存失败那一句（放在按钮上方一行，`role="alert"`）。 */
+  screenSaveFailure?: string
   /**
    * 「丢掉未保存的改动」那一问怎么弹：**由宿主给**（它就是平台 `useConfirm`），抽屉只负责
    * 决定什么时候问、问什么、以及确认后调一次关闭。文案也在这里传出去，宿主不另写一句。
@@ -100,6 +107,23 @@ export type ConfigSettingsDrawerProps = {
 /** 值是占位符：这一版不带任何数据，也不许编数字。 */
 const EMPTY_VALUE = '—'
 
+/** 左列分三组（设置页那套导航：分组标题 + 图标项）；顺序即 `DRAWER_MENUS` 的顺序。 */
+const DRAWER_NAV_GROUPS: ReadonlyArray<{ id: string; menus: readonly ConfigDrawerMenu[] }> = [
+  { id: 'collect', menus: ['sources', 'processing'] },
+  { id: 'output', menus: ['analysis', 'briefing', 'notifications'] },
+  { id: 'platform', menus: ['platform'] }
+]
+
+/** 六屏各一颗图标（不再用 1–6 编号）。 */
+const DRAWER_MENU_ICONS: Readonly<Record<ConfigDrawerMenu, typeof Info>> = {
+  sources: ListTree,
+  processing: ScanText,
+  analysis: Sparkles,
+  briefing: Newspaper,
+  notifications: Bell,
+  platform: MonitorCog
+}
+
 export function ConfigSettingsDrawer({
   open,
   onClose,
@@ -115,6 +139,10 @@ export function ConfigSettingsDrawer({
   onOpenPlatformSettings,
   resolveText: resolveTextProp,
   isScreenDirty,
+  screenDirty,
+  onScreenSave,
+  screenSaving,
+  screenSaveFailure,
   confirmDiscard
 }: ConfigSettingsDrawerProps): React.ReactElement {
   const language = useShellLanguage()
@@ -157,7 +185,7 @@ export function ConfigSettingsDrawer({
     const index = DRAWER_MENUS.indexOf(menu)
     const next = (index + delta + DRAWER_MENUS.length) % DRAWER_MENUS.length
     setMenu(DRAWER_MENUS[next]!)
-    navRef.current?.querySelectorAll<HTMLElement>('.config-drawer__nav-item')[next]?.focus()
+    navRef.current?.querySelectorAll<HTMLElement>('.settings-nav-item')[next]?.focus()
   }
 
   /**
@@ -189,25 +217,39 @@ export function ConfigSettingsDrawer({
     resolveText={resolveText}
     /* 这一屏是三栏（菜单 + 列表 196 + 详情）：`wide`(860) 下详情只剩一半，所以用 `full`(1040)。 */
     size="full"
+    footer={screenDirty === true ? <div className="config-drawer__savebar" data-drawer-savebar="true">
+      {screenSaveFailure === undefined ? null : <p className="config-drawer__savebar-failed" role="alert">{screenSaveFailure}</p>}
+      <button
+        className="config-drawer__save"
+        disabled={screenSaving === true}
+        onClick={onScreenSave}
+        type="button">{screenSaving === true ? copy.values.saving ?? '' : copy.values.save ?? ''}</button>
+    </div> : undefined}
     titleKey="configDrawer.title">
     <div className="config-drawer">
       <nav
         aria-label={menuLabel(menu)}
-        className="config-drawer__nav"
+        className="settings-nav"
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown') { event.preventDefault(); move(1) }
           if (event.key === 'ArrowUp') { event.preventDefault(); move(-1) }
         }}
         ref={navRef}>
-        {DRAWER_MENUS.map((key, index) => <button
-          aria-current={key === menu ? 'true' : undefined}
-          className="config-drawer__nav-item"
-          key={key}
-          onClick={() => setMenu(key)}
-          type="button">
-          <span className="config-drawer__nav-index">{index + 1}</span>
-          {menuLabel(key)}
-        </button>)}
+        {DRAWER_NAV_GROUPS.map((group) => <section className="settings-nav-group" key={group.id}>
+          <div className="settings-nav-group-title">{menuLabel(group.menus[0])}</div>
+          {group.menus.map((key) => {
+            const Icon = DRAWER_MENU_ICONS[key]
+            return <button
+              aria-current={key === menu ? 'page' : undefined}
+              className={`settings-nav-item${key === menu ? ' active' : ''}`}
+              key={key}
+              onClick={() => setMenu(key)}
+              type="button">
+              <Icon aria-hidden="true" size={17} />
+              <span>{menuLabel(key)}</span>
+            </button>
+          })}
+        </section>)}
       </nav>
       <section
         aria-label={menuLabel(menu)}
