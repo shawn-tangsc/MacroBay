@@ -296,10 +296,11 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   onBack?: () => void
   onConfigureSources?: () => void
   onOpenModelSettings?: () => void
+  onOpenSettings?: () => void
   locale?: 'zh-CN' | 'en-US'
   text?: typeof text
 }> = {}): Promise<HTMLDivElement> {
-  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, locale = 'zh-CN', text: textOverride } = options
+  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, onOpenSettings, locale = 'zh-CN', text: textOverride } = options
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -311,6 +312,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
       onBack={onBack}
       onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
+      {...(onOpenSettings ? { onOpenSettings } : {})}
       client={client as never}
     /></ToastHost></ConfirmProvider></ConfigProvider>)
   })
@@ -1323,6 +1325,22 @@ describe('daily briefing page', () => {
     expect(gaps).toBeGreaterThanOrEqual(0)
     expect(stages).toBeGreaterThan(gaps)
     expect(attempts).toBeGreaterThan(stages)
+  })
+
+  it('hands the settings entry to the host when the page is given one', async () => {
+    // C9：抽屉要变成唯一入口。页面这一层拿到 onOpenSettings 就把页头那颗交出去，
+    // 自己不再开那个设置抽屉（同一个入口不能开两个面）。
+    const getSettings = vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    const onOpenSettings = vi.fn()
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument() })),
+      getSettings,
+      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    })
+    const dom = await renderPage(client, { onOpenSettings })
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(dom.querySelector('[data-settings-section]')).toBeNull()
   })
 
   it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {

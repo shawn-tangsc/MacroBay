@@ -3,13 +3,14 @@ import { Button } from 'antd'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
+import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
 import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
 import { MarketAnalysisSettingsDialog } from './MarketAnalysisSettingsDialog'
 import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
 import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { Info } from 'lucide-react'
@@ -85,7 +86,7 @@ type CryptoDashboardText = {
 
 type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, openSettingsRequest }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -96,6 +97,14 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
+  /**
+   * 页面层请求打开配置抽屉的那一屏（日报页、日历、门户的入口在别的视图里，够不到这个抽屉）。
+   *
+   * 只转达意图：`openSettingsRequest` 每变一次就按 `initialSettingsMenu` 打开一次；
+   * 抽屉本身仍住在这一层——四个面板的 hook 都在这里，不为了入口把它搬家。
+   */
+  initialSettingsMenu?: ConfigDrawerMenu
+  openSettingsRequest?: number
 }): React.ReactElement {
   const resolveProductKey = useProductTextKey()
   const calendarState = useDashboardEconomicCalendar({ client, now })
@@ -106,6 +115,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
   // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
+  // 页面层的入口（日报页 / 日历 / 门户）通过计数请求打开某��屏：计数一变就打开一次。
+  const lastOpenRequest = useRef(openSettingsRequest ?? 0)
+  useEffect(() => {
+    if (openSettingsRequest === undefined || openSettingsRequest === lastOpenRequest.current) return
+    lastOpenRequest.current = openSettingsRequest
+    setSettingsDrawerOpen(true)
+  }, [openSettingsRequest])
   const platformDrawerValues = usePlatformDrawerValues()
   // 「AI 分析」那一屏：**就是那个对话框的内容本体**（`variant="inline"`）。用户 2026-11-10：
   // 「为什么不原封不动拿过来」——所以不画第二套，同一个组件、同一段实现、同一条写路径。
@@ -204,6 +220,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           抽屉崩了不许影响背后这一页。 */}
       <ErrorBoundary scope="drawer">
         <ConfigSettingsDrawer
+          /* 计数变化就重新挂载：每次都落到请求的那一屏（连点同一个入口也算一次）。 */
+          key={`settings-drawer-${openSettingsRequest ?? 0}`}
+          initialMenu={initialSettingsMenu}
           onClose={() => setSettingsDrawerOpen(false)}
           onOpenPlatformSettings={(target) => {
             // 只转达目标，不拼路由（页面对应关系在导航层）。

@@ -64,6 +64,17 @@ function IntelligencePageBody(): React.ReactElement {
   const { activation, sourceCounts, retry: retryActivation } = useCryptoActivation()
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
   /**
+   * 配置抽屉的「请求打开」：入口在别的视图里（日报页 / 日历 / 门户），抽屉自己住在看板那一层。
+   * 所以这里只 bump 一个**递增计数**——布尔表达不了「已经开着又点了一次」，而连点入口很常见。
+   */
+  const [configDrawerRequest, setConfigDrawerRequest] = useState(0)
+  const [configDrawerMenu, setConfigDrawerMenu] = useState<'sources' | 'briefing'>('sources')
+  const openConfigDrawer = (menu: 'sources' | 'briefing'): void => {
+    setConfigDrawerMenu(menu)
+    setConfigDrawerRequest((value) => value + 1)
+    setActiveView('dashboard')
+  }
+  /**
    * 打开「情报」直接落在看板。
    * 用户 2026-11-06：智能体选择页先留着不删，多智能体方案未定前不改结构，只改默认落点。
    * 用户 2026-11-09：看板页头那颗「返回 Agent」整个去掉——那个说法已经不存在——**选择页仍留着，
@@ -146,6 +157,7 @@ function IntelligencePageBody(): React.ReactElement {
           onBack={() => setActiveView('dashboard')}
           onConfigureSources={() => setSourceDrawerOpen(true)}
           onConfigureWebSearch={openWebSearchSettings}
+          onOpenSettings={() => openConfigDrawer('briefing')}
         />
       ) : activeView === 'calendar' ? (
         <EconomicCalendar
@@ -199,6 +211,8 @@ function IntelligencePageBody(): React.ReactElement {
           now={sampleNow}
           onConfigureSources={() => setSourceDrawerOpen(true)}
           onManageSource={() => setSourceDrawerOpen(true)}
+          initialSettingsMenu={configDrawerMenu}
+          openSettingsRequest={configDrawerRequest}
           onOpenCalendar={() => setActiveView('calendar')}
           text={text.dashboard}
         />

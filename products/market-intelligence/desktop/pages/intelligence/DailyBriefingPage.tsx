@@ -82,7 +82,7 @@ import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
  * page keeps the history rail and report in one full-width surface.
  */
-export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigureSources, onConfigureWebSearch, onOpenModelSettings, client = dailyBriefingClient }: Readonly<{
+export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigureSources, onConfigureWebSearch, onOpenModelSettings, onOpenSettings, client = dailyBriefingClient }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   text: DailyBriefingText
   eventTitles?: Record<string, string>
@@ -91,6 +91,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   onConfigureWebSearch?: () => void
   /** Overrides the built-in platform model-service navigation. */
   onOpenModelSettings?: () => void
+  /**
+   * 页面层给的「打开配置抽屉」入口（C9：抽屉成为唯一入口）。
+   *
+   * 给了它，页头那颗与失败面板那颗都走它；**没给时**仍用页面自己那个设置抽屉——那是这一层
+   * 的旧路径，等外壳删除时一起收掉，但这一笔只加东西、不改可见行为。
+   */
+  onOpenSettings?: () => void
   client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'> & Partial<Pick<DailyBriefingClient, 'listAttempts' | 'deletePeriod'>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
@@ -418,7 +425,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       systemZone={screenDocument !== undefined && readyZone(view) === 'system'}
       onManualRun={onManualRun}
       {...(manualRunningLabel === undefined ? {} : { runningLabel: manualRunningLabel })}
-      onOpenSettings={() => setSettingsSection('generation')}
+      onOpenSettings={() => (onOpenSettings === undefined ? setSettingsSection('generation') : onOpenSettings())}
       onBack={onBack}
     />
     <div className={bodyClass}>
@@ -470,7 +477,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句
         // 「正在重新生成」=读者认定在重跑当前版。重跑当前版仍保留旧正文可读。
-        onOpenSettings: () => setSettingsSection('ai'), onConfigureSources,
+        onOpenSettings: () => (onOpenSettings === undefined ? setSettingsSection('ai') : onOpenSettings()), onConfigureSources,
         onDeleteRetry: retryDelete
       }} />
       <DailyBriefingAppendix {...{
