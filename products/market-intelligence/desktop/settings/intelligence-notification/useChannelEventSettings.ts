@@ -74,11 +74,6 @@ type NotificationApi = {
     channels: readonly unknown[]
     lastDelivery?: LastDelivery | null
   }>
-  /**
-   * 通道状态变化广播（平台层）：通道启用/就绪一变就重读一次投递设置。
-   * 现在还没有这个方法（频道线在补），缺了就不订阅——**绝不改成轮询**。
-   */
-  onChannelStateChanged?: (callback: () => void) => (() => void)
 }
 
 function notificationApi(): NotificationApi {
@@ -143,27 +138,6 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
   useEffect(() => {
     void load()
   }, [load])
-
-  /**
-   * 通道状态变化时**只重读投递设置**（通道是否可用、最近一次投递），不重读事件开关：
-   * 一次广播一次读，不是轮询；没有广播方法就不订阅。
-   */
-  useEffect(() => {
-    const api = window.platform?.notifications as NotificationApi | undefined
-    if (api?.onChannelStateChanged === undefined) return
-    let active = true
-    const unsubscribe = api.onChannelStateChanged(() => {
-      void api.getDeliverySettings().then(
-        (delivery) => {
-          if (!active || !mounted.current) return
-          setChannelReady(isChannelReady(delivery))
-          setLastDelivery(delivery.lastDelivery ?? null)
-        },
-        () => { /* 读不到就保持现状：一次广播失败不该把已显示的横幅抹掉 */ }
-      )
-    })
-    return () => { active = false; unsubscribe() }
-  }, [])
 
   const toggle = useCallback((eventId: string, enabled: boolean) => {
     // 读者刚选的值先留下；写失败也**不回退**（G8）：本行给「这次没存上，请重试」，
