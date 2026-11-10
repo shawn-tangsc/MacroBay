@@ -19,6 +19,7 @@ const labels = {
 /** 行名与 ⓘ 的句子都经 `resolveText` 解析（注册表只持键）；这里给真句子，不给键本身。 */
 const copy: Record<string, string> = {
   'settings.intelligenceSources.collectionPolicy.includeInSentiment': labels.includeInSentiment,
+  'settings.intelligenceSources.collectionPolicy.collectionPreset': labels.collectionPreset,
   'settings.intelligenceSources.collectionPolicy.productOwnedNote':
     'A product-owned job collects this source; the switch at the end of its row controls it.',
   'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria': 'About collection policy'

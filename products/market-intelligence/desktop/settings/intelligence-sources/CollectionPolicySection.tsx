@@ -1,10 +1,6 @@
-import { Select } from 'antd'
-
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
-import { SettingsInfo } from '../settingsInfo'
-import { SettingsRow } from '@platform/ui/components/settings-row'
 
-import { SourceSentimentRow } from './SourceRows'
+import { SourcePresetRow, SourceSentimentRow } from './SourceRows'
 
 export type CollectionPolicyLabels = {
   title: string
@@ -16,10 +12,6 @@ export type CollectionPolicyLabels = {
   stoppedBadge?: string
   presets: Record<string, string>
 }
-
-/** 「采集预设不适用于这个源」那句说明住在 ⓘ 里，正文只留字段名与控件。 */
-const PRODUCT_OWNED_NOTE_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNote'
-const PRODUCT_OWNED_NOTE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria'
 
 /**
  * 采集策略：频率档 / 是否纳入情绪分析。
@@ -54,60 +46,26 @@ export function CollectionPolicySection(props: {
       {!enabledConfigurable && props.labels.plannedNotConfigurable ? (
         <p className="intelligence-source-note">{props.labels.plannedNotConfigurable}</p>
       ) : null}
+      {/* 两行都从声明来（值/可见性/行键），顺序就是 `SOURCE_ROWS` 的声明顺序：预设在前、情绪在后。 */}
       <div className="intelligence-setting-grid">
-        <SettingRow
-          aside={productOwned
-            ? <SettingsInfo
-              ariaLabelKey={PRODUCT_OWNED_NOTE_ARIA_KEY}
-              labelKeys={[PRODUCT_OWNED_NOTE_KEY]}
-              resolveText={props.resolveText}
-            />
-            : undefined}
-          label={props.labels.collectionPreset}
-        >
-          <div className="intelligence-preset-control">
-            <Select
-              className="intelligence-select"
-              value={props.draftProfile.collectionPreset}
-              disabled={!configurable}
-              options={Object.entries(props.labels.presets).map(([value, label]) => ({ value, label }))}
-              onChange={(collectionPreset) => props.onChange({ collectionPreset })}
-            />
-            {props.draftProfile.collectionPreset === 'manual' ? (
-              <p className="intelligence-source-note">{props.labels.manualPresetNote}</p>
-            ) : null}
-          </div>
-        </SettingRow>
-      {/* 出现与否由注册表声明的 `visibleWhen` 决定（`view.supportsSentiment`），页面不再另判一次。 */}
-      <SourceSentimentRow
-        disabled={!configurable}
-        onChange={props.onChange}
-        profile={props.draftProfile}
-        resolveText={props.resolveText}
-        sourceId={props.sourceId}
-        supportsSentiment={props.supportsSentiment}
-      />
+        <SourcePresetRow
+          configurable={configurable}
+          labels={props.labels}
+          onChange={props.onChange}
+          productOwned={productOwned}
+          profile={props.draftProfile}
+          resolveText={props.resolveText}
+          sourceId={props.sourceId}
+        />
+        <SourceSentimentRow
+          disabled={!configurable}
+          onChange={props.onChange}
+          profile={props.draftProfile}
+          resolveText={props.resolveText}
+          sourceId={props.sourceId}
+          supportsSentiment={props.supportsSentiment}
+        />
       </div>
     </section>
-  )
-}
-
-function SettingRow(props: {
-  label: string
-  /** 字段名旁的 ⓘ：整句说明只住在这里。 */
-  aside?: React.ReactNode
-  children: React.ReactNode
-}): React.ReactElement {
-  // 结构来自共享组件（类名仍由本页给）：只换来源，DOM 与类名逐字不变。
-  return (
-    <SettingsRow
-      controlWrapperClassName="intelligence-setting-control"
-      copyClassName={props.aside === undefined
-        ? 'intelligence-setting-label'
-        : 'intelligence-setting-label intelligence-setting-label--with-info'}
-      label={<>{props.label}{props.aside}</>}
-      rowClassName="intelligence-setting-row">
-      {props.children}
-    </SettingsRow>
   )
 }

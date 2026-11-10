@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,16 +7,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import { settingRegistry } from '../../shared/settings/registry'
 import { ProviderDetail, type ProviderDetailLabels } from './ProviderDetail'
-import { MIGRATED_SOURCE_SETTING_KEYS } from './sourceSettingRows'
+import { visibleSourceRows } from './sourceSettingRows'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 
 /**
- * C2 第 3 步·来源屏：菜单 1 的三行按注册表声明渲染。
+ * C2 · 来源屏：菜单 1 的三行**由声明决定**（值、可见性、行键），行长什么样住在 `SourceRows`。
  *
- * 双向守卫（与通知屏同一套口径，架构师 2026-11-10 那三条）：
- * ① 视图里成立的声明，页面必须渲染（`data-setting-key` 在 DOM 上）；
- * ② 页面渲染的每一行，都必须是菜单 1 的真实声明且 `surfaces` 含 `settings`。
- * 只做 ①，清单里新加一行而页面不画不会红；只做 ②，页面多画一行也不会红。
+ * 三条判据（Chief 2026-11-10 改动后）：
+ * ① 行的存在与顺序由 `SOURCE_ROWS` 决定；
+ * ② 行的值与可见性读声明（`read.select` / `visibleWhen`）；
+ * ③ 写入仍走宿主那一条，页面里没有按 key 手写的 if、也没有字面量键。
+ *
+ * 这套用例是**双向**的：声明里对这份视图成立的行必须在 DOM 上（少画会红），
+ * 画出来的每个键也必须是真的菜单 1 声明且只给设置页（多画会红）。
  */
 const settingsText = productText['zh-CN'].settings.intelligenceSources
 
@@ -65,17 +69,31 @@ function provider(): ProviderView {
 
 const SUPPORTS_SENTIMENT: Readonly<Record<string, boolean>> = { s1: true, s2: false }
 
+/** 页面把它交给两行策略行的同一份 profile（值从声明读，但视图必须给到）。 */
+const PROFILES: Readonly<Record<string, { collectionPreset?: string; includeInSentiment?: boolean }>> = {
+  s1: { collectionPreset: 'balanced', includeInSentiment: true },
+  s2: { collectionPreset: 'manual', includeInSentiment: false }
+}
+
 function policy(): NonNullable<Parameters<typeof ProviderDetail>[0]['policy']> {
   return {
     onChange: () => undefined,
-    profiles: {
-      s1: { collectionPreset: 'balanced', includeInSentiment: true },
-      s2: { collectionPreset: 'manual', includeInSentiment: false }
-    } as never,
+    profiles: PROFILES as never,
     supportsSentimentById: SUPPORTS_SENTIMENT,
     labels: {
-      title: 'p', collectionPreset: 'c', manualPresetNote: 'm', includeInSentiment: 'i', presets: {}
+      title: 'p', collectionPreset: 'c', manualPresetNote: 'm', includeInSentiment: 'i',
+      presets: { manual: '手动', balanced: '均衡', frequent: '频繁' }
     }
+  }
+}
+
+/** 一个源的完整视图：三行各自的 `read.select` / `visibleWhen` 都从这一份里取。 */
+function viewOf(entry: SourceView): unknown {
+  return {
+    ...entry,
+    displayName: entry.displayName,
+    profile: PROFILES[entry.sourceId],
+    supportsSentiment: SUPPORTS_SENTIMENT[entry.sourceId] === true
   }
 }
 
@@ -102,45 +120,36 @@ function renderedKeys(container: HTMLElement): string[] {
     .map((node) => node.getAttribute('data-setting-key') ?? '')
 }
 
-describe('the source screen renders menu 1 from the registry (C2)', () => {
-  it('renders one enabled row per source, keyed by the declared instance key', async () => {
+describe('the source screen renders menu 1 from the declarations (C2)', () => {
+  it('renders the declared rows, in declaration order, and hides what visibleWhen hides', async () => {
     const container = await mount()
-    expect(renderedKeys(container).sort()).toEqual([
-      'setting:sources.enabled@s1',
-      'setting:sources.enabled@s2',
-      // 情绪开关只给声明说「这个源支持」的那些源（s1 支持、s2 不支持）。
+    const expected = provider().sources.flatMap((entry) => visibleSourceRows(viewOf(entry))
+      .map((row) => row.template.replace('<sourceId>', entry.sourceId)))
+
+    // ① 顺序取自声明（先启用、再预设、再情绪），不是页面自己排的；② 不可见的行不出现。
+    expect(renderedKeys(container)).toEqual(expected)
+    expect(expected.filter((key) => key.startsWith('setting:sources.include-in-sentiment'))).toEqual([
       'setting:sources.include-in-sentiment@s1'
     ])
   })
 
-  it('renders every migrated declaration and nothing outside the registry', async () => {
+  it('renders nothing that is not a menu 1 declaration for the settings surface', async () => {
     const container = await mount()
-    const keys = renderedKeys(container)
-
-    // ① 清单 → 页面：清单里每一条，只要它对这份源视图成立，就必须画出来（不是「大概画了」）。
-    const expected = provider().sources.flatMap((entry) => MIGRATED_SOURCE_SETTING_KEYS
-      .filter((template) => {
-        const declared = settingRegistry.sources.find((row) => row.key === template)
-        return declared?.visibleWhen?.({
-          sourceId: entry.sourceId,
-          displayName: entry.displayName,
-          enabled: entry.enabled,
-          profile: {},
-          supportsSentiment: SUPPORTS_SENTIMENT[entry.sourceId] === true
-        }) ?? true
-      })
-      .map((template) => template.replace('<sourceId>', entry.sourceId)))
-    expect(keys.sort()).toEqual(expected.sort())
-
-    // ② 页面 → 清单：渲染出来的每个键都必须是菜单 1 的真实声明，且只给设置页这一面。
-    for (const key of keys) {
+    for (const key of renderedKeys(container)) {
       const template = key.replace(/@[^@]+$/, '@<sourceId>')
       const declared = settingRegistry.sources.find((row) => row.key === template)
       expect(declared?.surfaces).toEqual(['settings'])
     }
   })
 
-  it('keeps the single enable write path when the row is registry-rendered', async () => {
+  it('keeps every key literal out of the screen files (no hand-written per-key ifs)', () => {
+    for (const file of ['ProviderDetail.tsx', 'CollectionPolicySection.tsx']) {
+      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+      expect(source).not.toContain('setting:sources.')
+    }
+  })
+
+  it('keeps the single enable write path when the row is declaration-driven', async () => {
     const invoke = vi.fn(async (_productId: string, _method: string) => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const write = vi.fn(async () => true)

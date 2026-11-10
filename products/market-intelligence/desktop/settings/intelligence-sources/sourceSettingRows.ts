@@ -15,15 +15,6 @@ export const SOURCE_ROW_TEMPLATES = Object.freeze({
 
 export type SourceRowTemplate = (typeof SOURCE_ROW_TEMPLATES)[keyof typeof SOURCE_ROW_TEMPLATES]
 
-/**
- * 已经改由注册表渲染的菜单 1 行。守卫①②只认这份清单，不按文件位置推断——
- * 没进清单的行仍是旧写法，进了清单就必须真的画出来。
- */
-export const MIGRATED_SOURCE_SETTING_KEYS: readonly SourceRowTemplate[] = [
-  SOURCE_ROW_TEMPLATES.enabled,
-  SOURCE_ROW_TEMPLATES.includeInSentiment
-]
-
 const BY_TEMPLATE: ReadonlyMap<string, SettingDescriptor> = new Map(
   settingRegistry.sources.map((row) => [row.key, row])
 )
@@ -33,6 +24,40 @@ export function sourceRowDescriptor(template: SourceRowTemplate): SettingDescrip
   const descriptor = BY_TEMPLATE.get(template)
   if (!descriptor) throw new Error(`missing setting descriptor: ${template}`)
   return descriptor
+}
+
+/**
+ * 一条声明在这份视图里的**值**与**可见性**：屏幕不再自己读字段、也不再自己判条件。
+ * 值取 `read.select(view)`（与声明写下的读法同一处），可见性取 `visibleWhen`（缺省可见）。
+ */
+export type SourceRowView = Readonly<{
+  template: SourceRowTemplate
+  descriptor: SettingDescriptor
+  value: unknown
+  visible: boolean
+}>
+
+export function sourceRowView(template: SourceRowTemplate, view: unknown): SourceRowView {
+  const descriptor = sourceRowDescriptor(template)
+  return {
+    template,
+    descriptor,
+    value: descriptor.read.select(view),
+    visible: descriptor.visibleWhen?.(view) ?? true
+  }
+}
+
+/**
+ * 这份视图里能看到的菜单 1 行，**顺序就是 `SOURCE_ROWS` 的声明顺序**。
+ * 屏幕照它排列，不自己写「先启用、再预设、再情绪」——那是第二份顺序表。
+ */
+export function visibleSourceRows(view: unknown): readonly SourceRowView[] {
+  const templates = Object.values(SOURCE_ROW_TEMPLATES)
+  return settingRegistry.sources
+    .filter((row): row is typeof row & { key: SourceRowTemplate } =>
+      (templates as readonly string[]).includes(row.key))
+    .map((row) => sourceRowView(row.key, view))
+    .filter((row) => row.visible)
 }
 
 /** 模板 → 这一份视图里的实例键（`data-setting-key` 用它，守卫按它认行）。 */

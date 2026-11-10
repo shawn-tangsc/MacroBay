@@ -371,7 +371,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             onToggle={(enabled) => void toggle(source, enabled)}
             proxyConfigured={proxyConfigured}
             resolveText={resolveText}
-            settingsSurface={isSettingsSurface}
             source={source}
             tags={tags}
             unavailable={Boolean(unavailable)}
