@@ -92,7 +92,8 @@ export function ConfigSettingsDrawer({
     onClose={onClose}
     open={open}
     resolveText={resolveText}
-    size="wide"
+    /* 这一屏是三栏（菜单 + 列表 196 + 详情）：`wide`(860) 下详情只剩一半，所以用 `full`(1040)。 */
+    size="full"
     titleKey="configDrawer.title">
     <div className="config-drawer">
       <nav
