@@ -23,10 +23,7 @@
   gap: 4px;
 }
 
-/* 区块内的一行小字（保存失败/已保存）：不再画一个盒子。 */
-.config-drawer-processing__note {
-  margin: 0;
-  padding: 4px 12px 8px;
-  font-size: var(--font-meta);
-  line-height: var(--line-meta);
+/* 提示条贴区块内边：它自带内距与边框，这里只给外侧留白，不另画盒子。 */
+.config-drawer-processing .inline-notice {
+  margin: 8px 12px;
 }

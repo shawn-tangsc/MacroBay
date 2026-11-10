@@ -29,6 +29,7 @@ import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
 const copy = productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer
 const settingsText = productText['zh-CN'].pages.intelligence.portal.newsSentiment.settingsModal
 const labels = productText['zh-CN'].settings.intelligenceSources.translationPreferences
+const dataText = productText['zh-CN'].pages.intelligence.portal.data
 
 const PROVIDERS: SafeModelProvider[] = [
   {
@@ -181,6 +182,8 @@ describe('ProcessingSettingsPanel · 一个区块一个圆角容器', () => {
     expect(stats.textContent).toContain('读不到')
     expect(stats.textContent).not.toContain('0')
     expect(stats.querySelector('[aria-label], button[aria-label]')).not.toBeNull()
+    // 读失败也是红色提示条（保存/读失败同一档），不是行内自绘的一行小字。
+    expect(host!.querySelector('[data-inline-notice="danger"]')?.textContent).toContain(labels.loadFailed)
   })
 })
 
@@ -243,9 +246,25 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
     await act(async () => { target.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     await act(async () => {})
 
-    expect(sentimentRow().textContent).toContain(settingsText.failed)
+    // 失败是**红色提示条**（不是行内一闪而过的字）：role=alert、带「再试一次」。
+    const notice = host!.querySelector('[data-inline-notice="danger"]') as HTMLElement
+    expect(notice).not.toBeNull()
+    expect(notice.getAttribute('role')).toBe('alert')
+    expect(notice.textContent).toContain(settingsText.failed)
+    const retry = [...notice.querySelectorAll('button')]
+      .find((button) => button.textContent === dataText.retry)
+    expect(retry).not.toBeUndefined()
+
+    // 控件回到原值：没写成就不能显示成写成了。
     expect(sentimentRow().querySelector('.ant-select-selection-item')?.textContent)
       .toBe(settingsText.followFast.replace('{name}', 'Provider · Fast'))
+
+    // 「再试一次」重放的是同一次写，不是让读者再拨一遍开关。
+    saveSettings.mockResolvedValue(EXPLICIT)
+    await act(async () => { retry?.click() })
+    await act(async () => {})
+    expect(saveSettings).toHaveBeenCalledTimes(2)
+    expect(saveSettings).toHaveBeenLastCalledWith({ providerId: 'p', modelId: 'chat' })
   })
 
   it('保存中不许连点：请求在飞时控件禁用，第 N 次操作不再发第二次写', async () => {
@@ -267,6 +286,24 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
   it('读不到时是「未知」+ 原因进 ⓘ，不许落成「规则判断」', async () => {
     getSettings.mockRejectedValue(new Error('read failed'))
     await mount()
+
+    // 读不到是黄灯（不是失败）：短句 + 动作「去模型服务」，原因仍在行的 ⓘ 里。
+    const notice = host!.querySelector('[data-inline-notice="caution"]') as HTMLElement
+    expect(notice).not.toBeNull()
+    expect(notice.getAttribute('role')).toBe('status')
+    expect(notice.textContent).toContain(copy.unreadable)
+
+    const jump = [...notice.querySelectorAll('button')]
+      .find((button) => button.textContent === copy.openModelService)
+    expect(jump).not.toBeUndefined()
+    const navigations: unknown[] = []
+    const listener = (event: Event): void => { navigations.push((event as CustomEvent).detail) }
+    window.addEventListener('app-shell:navigate', listener)
+    await act(async () => { jump?.click() })
+    window.removeEventListener('app-shell:navigate', listener)
+    expect(navigations).toContainEqual({ navKey: 'settings', settingsPanelKey: 'models' })
+    // 同一时刻只出一条提示条。
+    expect(host!.querySelectorAll('[data-inline-notice]')).toHaveLength(1)
 
     expect(sentimentRow().textContent).toContain(copy.values.autoUnknown)
     expect(sentimentRow().textContent).not.toContain(copy.values.sentimentRuleOnly)

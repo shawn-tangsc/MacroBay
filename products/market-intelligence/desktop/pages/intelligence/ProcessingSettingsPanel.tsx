@@ -3,17 +3,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { SettingsSection } from '@platform/ui/components/settings-section'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { Info } from 'lucide-react'
-import { Button, Select, Switch, Typography } from 'antd'
+import { Button, Select, Switch } from 'antd'
 
 import type { NewsSentimentSettingsView } from '../../../service/intelligence/schema/newsSentiment'
 import type { SafeIntelligenceTranslationSettings } from '../../../service/intelligence/schema/intelligenceTranslation'
 import { newsSentimentClient } from '../../shared/ipc/newsSentimentClient'
+import { openModelSettings } from '../../shared/navigation/productShellNavigation'
 import { productText } from '../../shared/i18n/productText'
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
 import './ProcessingSettingsPanel.css'
@@ -40,6 +42,8 @@ export function ProcessingSettingsPanel(): React.ReactElement {
   const language = useShellLanguage()
   const sourcesText = productText[language].settings.intelligenceSources
   const copy = productText[language].pages.intelligence.portal.dashboard.configDrawer
+  // 「再试一次」这一句是共用词表里的那一句（读不到与失败的下一步都指向它），不另写一条。
+  const dataText = productText[language].pages.intelligence.portal.data
   const settingsText = productText[language].pages.intelligence.portal.newsSentiment.settingsModal
   const labels = sourcesText.translationPreferences
   const translation = useIntelligenceTranslationSettings(labels)
@@ -145,7 +149,7 @@ export function ProcessingSettingsPanel(): React.ReactElement {
         </div>
         {translation.errorMessage === null || translation.errorMessage === undefined
           ? null
-          : <Text className="config-drawer-processing__note" role="alert" type="danger">{translation.errorMessage}</Text>}
+          : <InlineNotice tone="danger">{translation.errorMessage}</InlineNotice>}
       </>}
     </SettingsSection>
     </div>
@@ -186,14 +190,28 @@ export function ProcessingSettingsPanel(): React.ReactElement {
             onChange={(next) => void sentiment.setEnabled(next)}
             size="small" />
           : null}
-        {sentiment.saveFailed ? <Text role="status" type="danger">{settingsText.failed}</Text> : null}
       </div>
+      {/* 两条只出一条：保存失败优先（红色），读不到是黄灯——读不到不是失败。 */}
+      {sentiment.saveFailed
+        ? <InlineNotice
+          action={{ labelKey: 'portal.data.retry', onSelect: () => void sentiment.retry() }}
+          resolveText={(key) => (key === 'portal.data.retry' ? dataText.retry : key)}
+          tone="danger">
+          {settingsText.failed}
+        </InlineNotice>
+        : sentiment.state === 'unreadable'
+          ? <InlineNotice
+            action={{ labelKey: 'configDrawer.openModelService', onSelect: openModelSettings }}
+            resolveText={(key) => (key === 'configDrawer.openModelService' ? copy.openModelService : key)}
+            tone="caution">
+            {copy.unreadable}
+          </InlineNotice>
+          : null}
     </SettingsSection>
     </div>
   </div>
 }
 
-const { Text } = Typography
 
 /** 一行一个字段：标签左、控件右，行间一条发丝线（行本身不再带边框/底色）。 */
 function FieldRow(props: Readonly<{ label: string; rowKey: string; children: React.ReactNode }>): React.ReactElement {
@@ -294,6 +312,8 @@ type SentimentModelActions = {
   saveFailed: boolean
   setEnabled: (next: boolean) => Promise<void>
   selectModel: (ref: string) => Promise<void>
+  /** 重放上一次失败的写；没有失败过就是空操作。 */
+  retry: () => Promise<void>
 }
 
 /**
@@ -304,6 +324,8 @@ function useSentimentModelSettings(): SentimentModelState & SentimentModelAction
   const [state, setState] = useState<SentimentModelState>({ state: 'loading' })
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  /** 失败的那一次写请求；「再试一次」重放它，而不是让读者把开关再拨回去。 */
+  const [failedPatch, setFailedPatch] = useState<{ modelScoringEnabled?: boolean; providerId?: string; modelId?: string }>()
 
   useEffect(() => {
     let active = true
@@ -328,6 +350,7 @@ function useSentimentModelSettings(): SentimentModelState & SentimentModelAction
       const view = await newsSentimentClient.saveSettings(patch)
       setState(toSentimentModelState(view, state.providers))
     } catch {
+      setFailedPatch(patch)
       setSaveFailed(true)
     } finally {
       setSaving(false)
@@ -342,7 +365,8 @@ function useSentimentModelSettings(): SentimentModelState & SentimentModelAction
     selectModel: (ref) => {
       const [providerId = '', modelId = ''] = ref.split(':')
       return write({ providerId, modelId })
-    }
+    },
+    retry: () => (failedPatch === undefined ? Promise.resolve() : write(failedPatch))
   }
 }
 
