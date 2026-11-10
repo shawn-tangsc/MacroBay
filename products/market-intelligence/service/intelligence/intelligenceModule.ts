@@ -77,6 +77,7 @@ import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReading
 import { applyDailyBriefingSchedules } from './jobs/registerDailyBriefingJob'
 import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
+import type { BriefingPeriodsEditor } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
@@ -256,6 +257,11 @@ export type IntelligenceModule = {
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
   dailyBriefingService: DailyBriefingService
   deleteDailyBriefingPeriod: DailyBriefingPeriodDeletion
+  /**
+   * The reader's period store behind the runtime's list — the same instance, so the settings
+   * surface's writes go through the one-time move and cannot create a second, marker-less file.
+   */
+  briefingPeriods: BriefingPeriodsEditor
   /** The deterministic core-fact pass, exposed for logs and focused verification. */
   dailyBriefFactEnsure: ReturnType<typeof createDailyBriefFactEnsure>
   /**
@@ -974,7 +980,7 @@ export function getIntelligenceModule(
       newsSentiment: newsSentimentExposure,
       sourcesService,
       publicQueryService,
-      dailyBriefingService, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks,
+      dailyBriefingService, briefingPeriods: briefingPeriodsSource.editor, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks,
         ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}) }),
       dailyBriefFactEnsure,
       dailyBriefingAiSettings: dailyBriefingSettings,

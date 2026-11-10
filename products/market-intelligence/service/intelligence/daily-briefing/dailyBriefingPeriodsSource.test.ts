@@ -114,3 +114,74 @@ describe('periods written before the language was part of a period', () => {
     expect(await readFile(filePath, 'utf8')).toBe(before)
   })
 })
+
+/**
+ * C15a: the settings surface now writes through this same source. Every method must therefore wait
+ * for the one-time move — a write that lands first would produce a period file without the marker,
+ * and the next start would read "periods exist" and skip the move for good.
+ */
+describe('the write seam waits for the one-time move', () => {
+  const legacyMigration = {
+    readLegacyPeriods: async () => [
+      { id: 'default', generationTime: '07:00', windowHours: 24 },
+      { id: 'evening', generationTime: '21:30', windowHours: 12 }
+    ],
+    additionalLanguages: async () => [] as const
+  }
+
+  it('an update on a fresh upgrade moves the old rows first, marker included', async () => {
+    const filePath = await tempFile('daily-briefing-periods.json')
+    const source = createBriefingPeriodsSource({
+      filePath,
+      locale: async () => 'zh-CN',
+      legacyPeriodsMigration: legacyMigration
+    })
+
+    // Deliberately no `getPeriods()` before this: the settings page's first action can be a write.
+    const result = await source.editor.update('default', { generationTime: '08:00', windowHours: 24, language: 'zh-CN' })
+
+    expect(result.state).toBe('saved')
+    const document = JSON.parse(await readFile(filePath, 'utf8')) as {
+      periods: readonly { id: string; generationTime: string }[]
+      markers?: Record<string, unknown>
+    }
+    // The old second period is still there — the move ran before the write, not after it.
+    expect(document.periods.map((period) => period.id)).toEqual(['default', 'evening'])
+    expect(document.periods.map((period) => period.generationTime)).toEqual(['08:00', '21:30'])
+    expect(typeof document.markers?.['migrated.legacyGlobalSettings.v1']).toBe('string')
+  })
+
+  it('create and remove wait too, and never drop the marker', async () => {
+    const filePath = await tempFile('daily-briefing-periods.json')
+    const source = createBriefingPeriodsSource({
+      filePath,
+      locale: async () => 'zh-CN',
+      legacyPeriodsMigration: legacyMigration
+    })
+
+    const created = await source.editor.create({ generationTime: '09:00', windowHours: 12, language: 'en-US' })
+    expect(created.state).toBe('saved')
+    const removed = await source.editor.remove('evening')
+    expect(removed.state).toBe('removed')
+
+    const document = JSON.parse(await readFile(filePath, 'utf8')) as {
+      periods: readonly { id: string; generationTime: string }[]
+      markers?: Record<string, unknown>
+    }
+    expect(document.periods.map((period) => period.generationTime).sort()).toEqual(['07:00', '09:00'])
+    expect(typeof document.markers?.['migrated.legacyGlobalSettings.v1']).toBe('string')
+  })
+
+  it('list answers after the move, so the panel never shows an empty file as "no periods"', async () => {
+    const filePath = await tempFile('daily-briefing-periods.json')
+    const source = createBriefingPeriodsSource({
+      filePath,
+      locale: async () => 'zh-CN',
+      legacyPeriodsMigration: legacyMigration
+    })
+
+    const listed = await source.editor.list('zh-CN')
+
+    expect(listed.map((period) => period.id)).toEqual(['default', 'evening'])
+  })
+})

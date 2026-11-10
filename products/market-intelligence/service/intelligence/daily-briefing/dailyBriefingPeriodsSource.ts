@@ -1,9 +1,28 @@
 import { createJsonFileStorage } from '@platform/storage/jsonFileStorage'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
+import type { BriefingPeriod, BriefingPeriodDraft } from '../../../contracts/dailyBriefingPeriod'
 import { runBriefingPeriodDataMigration, type LegacySavedPeriod } from './dailyBriefingPeriodDataMigration'
-import { createBriefingPeriodStore } from './dailyBriefingPeriodStore'
+import {
+  createBriefingPeriodStore,
+  type BriefingPeriodRemoveResult,
+  type BriefingPeriodSaveResult
+} from './dailyBriefingPeriodStore'
+
+/**
+ * The write side of the runtime's period store: the four methods the settings surface uses.
+ *
+ * Every method waits for the one-time move first. That is the whole point of sharing this instance
+ * with the IPC seam: a write that lands before the move would either work on a file that is about to
+ * be replaced, or create a document without the move's marker — after which the next start reads
+ * "stored periods" and skips the move for good, dropping the reader's old rows.
+ */
+export type BriefingPeriodsEditor = Readonly<{
+  list: (locale: DailyBriefingLocale) => Promise<readonly BriefingPeriod[]>
+  create: (draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => Promise<BriefingPeriodSaveResult>
+  update: (id: string, draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => Promise<BriefingPeriodSaveResult>
+  remove: (id: string, language?: DailyBriefingLocale) => Promise<BriefingPeriodRemoveResult>
+}>
 
 /**
  * The runtime's period list: the reader's own configuration, not the old global settings.
@@ -42,7 +61,11 @@ export function createBriefingPeriodsSource(input: Readonly<{
     /** Platform log: the move's failures are reported there, never swallowed. */
     log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   }>
-}>): Readonly<{ getPeriods: () => Promise<readonly BriefingPeriod[]> }> {
+}>): Readonly<{
+  getPeriods: () => Promise<readonly BriefingPeriod[]>
+  /** The same store, for the seam that edits periods from the settings page. */
+  editor: BriefingPeriodsEditor
+}> {
   const storage = createJsonFileStorage<unknown>(input.filePath, undefined)
   const store = createBriefingPeriodStore({
     storage,
@@ -68,10 +91,30 @@ export function createBriefingPeriodsSource(input: Readonly<{
     }
     return prepared
   }
+  const editor: BriefingPeriodsEditor = Object.freeze({
+    list: async (locale: DailyBriefingLocale) => {
+      await prepare()
+      return store.list(locale)
+    },
+    create: async (draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => {
+      await prepare()
+      return store.create(draft, language)
+    },
+    update: async (id: string, draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => {
+      await prepare()
+      return store.update(id, draft, language)
+    },
+    remove: async (id: string, language?: DailyBriefingLocale) => {
+      await prepare()
+      return store.remove(id, language)
+    }
+  })
+
   return Object.freeze({
     getPeriods: async () => {
       await prepare()
       return store.list(await input.locale())
-    }
+    },
+    editor
   })
 }
