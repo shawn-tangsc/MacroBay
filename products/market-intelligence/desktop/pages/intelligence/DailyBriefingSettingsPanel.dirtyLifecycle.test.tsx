@@ -387,12 +387,27 @@ describe('the period list’s criteria, moved from the retired block', () => {
   })
 })
 
-describe('the AI block’s explanations live behind the row, not in the body', () => {
-  it('turns the unsupported-search sentence into a 补查方式 row with its own ⓘ', async () => {
+describe('the AI block’s warnings are one short banner, details behind the ⓘ', () => {
+  it('says what the fallback is in one line when the model has no built-in search', async () => {
     const { host } = await mount({ webSearchSupported: false })
-    expect(host.textContent).toContain('补查方式')
-    expect(host.textContent).toContain('平台 Web Search')
-    // 整句解释不在正文里（进 ⓘ 的浮层），正文只留行名与值。
-    expect(host.textContent).not.toContain('当前模型不支持 Anthropic 内置搜索')
+    const banners = host.querySelectorAll('[data-banner-tone="caution"]')
+    expect(banners).toHaveLength(1)
+    expect(banners[0]?.textContent).toContain('当前模型不支持内置搜索，补查将走平台 Web Search')
+    // 细节（需已启用搜索源）不在正文，进 ⓘ。
+    expect(host.textContent).not.toContain('需已启用搜索源')
+  })
+
+  it('merges the two warnings into one banner instead of stacking them', async () => {
+    const { host, last } = await mount({ webSearchSupported: false })
+    // 打开「允许补查」再保存：没有可用搜索源 → 被拒绝并留一条阻塞状态。
+    const webSearchSwitch = switches(host)[1]
+    await act(async () => webSearchSwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => { last()?.save() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    const banners = [...host.querySelectorAll('[data-banner-tone="caution"]')]
+    expect(banners).toHaveLength(1)
+    expect(banners[0]?.textContent).toContain('搜索源没配置，补查暂时开不了')
+    expect(host.textContent).not.toContain('当前模型不支持内置搜索')
   })
 })

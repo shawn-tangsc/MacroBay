@@ -34,6 +34,9 @@ const EDIT_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.per
 const DELETE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.deleteRow'
 const AUTO_RETRY_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.autoRetry'
 const AUTO_REASON_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.autoUnknownReason'
+const WEB_SEARCH_DETAIL_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchUnsupported'
+const WEB_SEARCH_SETUP_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchNeedsSetup'
+const WEB_SEARCH_BOTH_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchBannerBothDetails'
 const EMPTY_HINT_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.emptyHint'
 const GENERATION_NOTE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note'
 const GENERATION_NOTE_LABEL_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel'
@@ -323,7 +326,26 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
     <SettingsSection
       title={text.settingsDrawer.sections.ai}
     >
-        {ai.webSearchBlocked ? <p className="briefing-settings-notice" role="status">{text.aiSettings.webSearchNeedsSetup}</p> : null}
+        {ai.webSearchBlocked || !ai.webSearchSupported ? <div className="briefing-settings-notice" data-banner-tone="caution" role="status">
+          <span>{ai.webSearchBlocked ? text.aiSettings.webSearchBannerNoSource : text.aiSettings.webSearchBannerUnsupported}</span>
+          {/* 细节进 ⓘ：一条横幅最多一句正文；平台统一的横幅组件落地后换掉这层。 */}
+          <Popover
+            labelKey={ai.webSearchBlocked
+              ? (ai.webSearchSupported ? WEB_SEARCH_SETUP_KEY : WEB_SEARCH_BOTH_KEY)
+              : WEB_SEARCH_DETAIL_KEY}
+            resolveText={resolveText}
+            trigger={(triggerProps) => <IconButton
+              {...triggerProps}
+              ariaLabelKey={ai.webSearchBlocked
+                ? (ai.webSearchSupported ? WEB_SEARCH_SETUP_KEY : WEB_SEARCH_BOTH_KEY)
+                : WEB_SEARCH_DETAIL_KEY}
+              icon={CircleHelp}
+              resolveText={resolveText}
+              size="sm"
+              variant="plain"
+            />}
+          />
+        </div> : null}
         {ai.state === 'load-failed'
           ? <p className="briefing-settings-error" role="alert">{text.aiSettings.loadFailed}</p>
           : ai.state === 'loading' || ai.draft === null
@@ -356,28 +378,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                   }}
                 />
               </SettingsRow>
-              {ai.webSearchSupported ? null : <SettingsRow
-                copyClassName="config-drawer__label"
-                headClassName="config-drawer__label-head"
-                controlWrapperClassName="config-drawer__control"
-                label={<>
-                  <strong>{text.aiSettings.researchMode}</strong>
-                  <Popover
-                    labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchUnsupported"
-                    resolveText={resolveText}
-                    trigger={(triggerProps) => <IconButton
-                      {...triggerProps}
-                      ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchUnsupported"
-                      icon={CircleHelp}
-                      resolveText={resolveText}
-                      size="sm"
-                      variant="plain"
-                    />}
-                  />
-                </>}
-                rowClassName="config-drawer__row">
-                <span className="briefing-settings-row__value">{text.aiSettings.researchModePlatform}</span>
-              </SettingsRow>}
+
               {ai.draft.editorialEnabled ? <SettingsRow
                 copyClassName="config-drawer__label"
                 controlWrapperClassName="config-drawer__control"

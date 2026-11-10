@@ -8,4 +8,4 @@
 .briefing-settings-empty { display: flex; align-items: center; gap: 4px; padding: 8px 12px; color: var(--mi-dashboard-muted); }
 
 .briefing-settings-error { display: flex; align-items: center; gap: 12px; padding: 8px 12px; color: var(--mi-dashboard-caution); }
-.briefing-settings-notice { margin: 0 0 8px; padding: 0 12px; color: var(--mi-dashboard-muted); }
+.briefing-settings-notice { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 0 12px; color: var(--mi-dashboard-muted); }
