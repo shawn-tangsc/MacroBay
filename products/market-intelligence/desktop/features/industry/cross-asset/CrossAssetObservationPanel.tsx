@@ -21,6 +21,7 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
 import { chartLinesHiddenBy, CrossAssetReturnChart } from './CrossAssetReturnChart'
+import { CellStateCard, CellStateRow, type CellStateKind } from '../../../pages/intelligence/DashboardCellState'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
@@ -125,7 +126,7 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>
 }
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, crossAssetReadingEnabled = true }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, cellStateLabels, crossAssetReadingEnabled = true }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
@@ -147,6 +148,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * 格 → 行的换算在 `dashboardCellEnabled` 那一处做，这里只按 id 过滤。
    */
   hideStatusRows?: readonly CrossAssetStatusId[]
+  /** 每行现在的三态：有值就画状态行（不是删行）；没有就画数据行。 */
+  rowStates?: Readonly<Partial<Record<CrossAssetStatusId, CellStateKind>>>
+  /** 三态那两句由宿主传（跨资产自己的文案表里没有它们，别在这里造第二份）。 */
+  cellStateLabels?: Readonly<{ disabled: string; unreadable: string }>
   /** 三行行情（索引 / BTC / ETH）与图表同读一份跨资产快照：三格都关掉时整路不发请求。 */
   crossAssetReadingEnabled?: boolean
   /** The calendar, read by month: it is the only place this panel learns what happened and when. */
@@ -228,7 +233,17 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
-  const renderStatusRow = (row: (typeof statusRows)[number]): React.ReactElement => row.state === 'loading'
+  const renderStatusRow = (row: (typeof statusRows)[number]): React.ReactElement => {
+    const state = cellStateLabels === undefined ? undefined : rowStates?.[row.id]
+    if (state !== undefined) {
+      const name = row.id === 'index' || row.id === 'btc' || row.id === 'eth'
+        ? text.assets[row.id]
+        : text.assetLabels[row.id]
+      return <CellStateRow id={row.id} name={name} kind={state}
+        label={state === 'unreadable' ? cellStateLabels!.unreadable : cellStateLabels!.disabled}
+        colSpan={2 + crossAssetWindows.length} />
+    }
+    return row.state === 'loading'
     ? <LoadingStatusRow key={row.id} id={row.id} text={text} />
     : row.state === 'planned'
       ? <PlannedStatusRow key={row.id} id={row.id} text={text} />
@@ -241,6 +256,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
           : row.id === 'index'
             ? <IndexStatusRow key={row.id} snapshot={snapshot} text={text} formatTime={formatTime} />
             : <AssetStatusRow key={row.id} id={row.id} snapshot={snapshot} text={text} />
+  }
   const dailyRowIds = ['us10y', 'realRate']
   // 关掉的格整行不画：不是 0，也不是「未接入」那种占位。
   const visibleRows = hideStatusRows === undefined || hideStatusRows.length === 0
@@ -359,8 +375,17 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         {/* The legend and the tooltip carry the same name the row does: one panel, one instrument name
             per figure, so a legend reading 「纳斯达克 100」 can never sit above `QQQUSDT`'s curve. */}
         {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}
-        {snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
-          hiddenLines={chartLinesHiddenBy(hideStatusRows ?? [])}
+        {(() => {
+          const lineStates = (['index', 'btc', 'eth'] as const).map(id => rowStates?.[id])
+          // 至少一条线可用就照画；一条都没有才降级成那一句。宿主没给文案时保持旧行为。
+          if (cellStateLabels !== undefined && lineStates.every(state => state !== undefined)) {
+            // 一条能用的线都没有：整图不画，只留那一句（未启用 / 暂时读不到）。
+            return <CellStateCard title={text.chart}
+              kind={lineStates.includes('unreadable') ? 'unreadable' : 'disabled'}
+              label={lineStates.includes('unreadable') ? cellStateLabels.unreadable : cellStateLabels.disabled} />
+          }
+          return snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
+          hiddenLines={chartLinesHiddenBy([...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {})])}
           events={eventLines.lines} eventsCollapsed={eventLines.collapsed} onSelectEvent={selectEvent}
           text={{ ...text, assets: { ...text.assets, index: indexRowName(snapshot, text) },
             // The macro lines carry the very names the 市场状态 rows beside them carry: one instrument,
@@ -369,7 +394,6 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
           : view.state === 'loading'
             ? <LoadingState label={text.loading} fill />
             // 查询失败是「读不到」，不是「没有」：走统一状态面，码用 unreadable（程序故障，可重试）。
-            // 「来源被关」那一支等设置深链入口落地后再拆成 disabled · target-disabled。
             // 主进程发来的快照不符合本版契约（版本不一致）时，重试读的是同一份契约：主进程更新后就
             // 会成功，没更新就仍然失败——原因句因此明说要重启应用，重试不是空按钮，但它也不是解药。
             // `unreadable` 在动作表里是 required，`retry` 是它唯一允许的动作（契约 §16）。
@@ -380,7 +404,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
                   productReason={{ key: 'mi.crossAsset.contractMismatch', resolve: () => text.contractMismatch }}
                   action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void window.platform.app.relaunch() } }} />
               : <StateView state="error" reasonCode="unreadable" size="md"
-                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />
+        })()}
       </div> : null}
       {/* The reading line (design 142): one footnote spanning the panel, under the chart it explains.
           It is the product's own statement about the chart, kept apart from the model's conclusion — a
