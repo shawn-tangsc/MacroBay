@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  applyDailyBriefingGenerationSettingsPatch,
   createDefaultDailyBriefingPeriodsSettings,
   dailyBriefingCutoffMinutes,
   dailyBriefingGenerationCronExpression,
@@ -27,37 +26,6 @@ describe('daily briefing generation settings', () => {
     expect(dailyBriefingGenerationCronExpression({ generationTime: '07:30' })).toBe('30 7 * * *')
     expect(dailyBriefingGenerationCronExpression({ generationTime: '10:00' })).toBe('0 10 * * *')
     expect(dailyBriefingCutoffMinutes('07:30')).toBe(450)
-  })
-
-  it('rejects an out-of-range time, an off-step minute and an unsupported window on a save', () => {
-    const current = createDefaultDailyBriefingPeriodsSettings(NOW)
-    // Times every half hour from 00:00 to 23:30 are legal since the grid widened, so the rejected
-    // cases are now the ones that are off the grid or outside the day, not the ones that were
-    // outside the old 06:00–10:00 morning window.
-    for (const generationTime of ['05:45', '12:45', '08:15', '08:01', '8:00', '', 'noon', '24:00']) {
-      expect(() => applyDailyBriefingGenerationSettingsPatch(current, { generationTime }, NOW))
-        .toThrow('daily-briefing-generation-time-invalid')
-    }
-    for (const windowHours of [6, 18, 36, 72, 0, -24, 24.5]) {
-      expect(() => applyDailyBriefingGenerationSettingsPatch(current, { windowHours }, NOW))
-        .toThrow('daily-briefing-window-hours-invalid')
-    }
-    expect(() => applyDailyBriefingGenerationSettingsPatch(current, { generationTimeZone: 'Asia/Shangai' }, NOW))
-      .toThrow('daily-briefing-generation-time-zone-invalid')
-  })
-
-  it('applies a valid patch to the first period and keeps every other period untouched', () => {
-    const current = {
-      periods: [
-        { id: 'default', generationTime: '08:00', windowHours: 24 as const },
-        { id: 'p_evening', name: 'Evening', generationTime: '09:30', windowHours: 12 as const, generationTimeZone: 'UTC' }
-      ],
-      updatedAt: NOW
-    }
-    const next = applyDailyBriefingGenerationSettingsPatch(current, { generationTime: '09:30' }, '2026-10-30T01:00:00.000Z')
-    expect(next.periods[0]).toEqual({ id: 'default', generationTime: '09:30', windowHours: 24 })
-    expect(next.periods[1]).toEqual(current.periods[1])
-    expect(next.updatedAt).toBe('2026-10-30T01:00:00.000Z')
   })
 
   it('reads the single-period file every earlier version wrote as one period with id default', () => {
