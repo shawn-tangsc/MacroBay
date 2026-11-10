@@ -96,7 +96,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     <section className="settings-workspace intelligence-sources-workspace">
       <SettingsSourceTree
         filter={sourceFilter}
-        labels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCount: t.unavailableCount }}
+        labels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
         selectedProviderId={selectedProviderId}
         view={settingsView}
         onFilterChange={setSourceFilter}

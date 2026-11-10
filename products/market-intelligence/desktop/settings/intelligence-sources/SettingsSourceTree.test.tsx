@@ -48,7 +48,7 @@ describe('SettingsSourceTree', () => {
       }
       await act(async () => root!.render(createElement(SettingsSourceTree, {
         filter: 'all',
-        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCount: '含 {count} 个取不到的源' },
+        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
         onFilterChange: vi.fn(),
         onSelectProvider: vi.fn(),
         selectedProviderId: undefined,
@@ -71,7 +71,7 @@ describe('SettingsSourceTree', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(SettingsSourceTree, {
       filter: 'calendar',
-      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCount: '含 {count} 个取不到的源' },
+      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
       onFilterChange: vi.fn(),
       onSelectProvider: vi.fn(),
       selectedProviderId: undefined,
@@ -82,7 +82,7 @@ describe('SettingsSourceTree', () => {
     expect(host.querySelector('[data-state="empty"]')).toBeNull()
   })
 
-  it('puts how many sources cannot be reached into the row name, and only when there is one', async () => {
+  it('puts how many unavailable sources there are into the row name, and only when there is at least one', async () => {
     // ring 是 aria-hidden 的装饰：读屏听不到「取不到」。目录行自己补一句数量。
     const base = (unavailable: boolean) => ({
       groups: [{
@@ -106,7 +106,7 @@ describe('SettingsSourceTree', () => {
       root = createRoot(host)
       await act(async () => root!.render(createElement(SettingsSourceTree, {
         filter: 'all',
-        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCount: '含 {count} 个取不到的源' },
+        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
         onFilterChange: vi.fn(),
         onSelectProvider: vi.fn(),
         selectedProviderId: undefined,
@@ -118,12 +118,50 @@ describe('SettingsSourceTree', () => {
 
     const withOne = await render(true)
     const row = withOne.querySelector('.intelligence-provider-row')
-    expect(row?.textContent).toContain('含 1 个取不到的源')
+    expect(row?.textContent).toContain('含 1 个不可用的源')
     // 装饰环仍是 aria-hidden，不拿它当语义载体。
     expect(row?.querySelector('.intelligence-provider-state i')?.getAttribute('aria-hidden')).toBe('true')
 
     const withNone = await render(false)
-    expect(withNone.textContent).not.toContain('取不到的源')
+    expect(withNone.textContent).not.toContain('不可用的源')
     expect(withNone.querySelector('.intelligence-source-sr-only')).toBeNull()
+
+    // 英文单复数用**真实渲染**断言：count=1 与 count=2 各一次（不许出现「1 sources」）。
+    const englishLabels = {
+      title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}',
+      unavailableCountOne: '{count} unavailable source', unavailableCountOther: '{count} unavailable sources'
+    }
+    const englishView = (ids: readonly string[]): never => ({
+      groups: [{
+        category: 'macro',
+        providers: [{
+          providerId: 'bls', displayName: 'BLS', category: 'macro', credential: 'none', healthMarker: 'ring',
+          sources: ids.map((id) => ({
+            sourceId: id, displayName: id, providerId: 'bls', panels: ['dashboard'], visibility: 'visible',
+            kind: 'official-calendar', enabled: true, healthState: 'off', healthMarker: 'ring',
+            unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-09' }
+          }))
+        }]
+      }],
+      counts: { total: ids.length, enabled: ids.length, pending: 0, failed: 0 }
+    } as never)
+    const renderEnglish = async (ids: readonly string[]): Promise<HTMLElement> => {
+      const host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      await act(async () => root!.render(createElement(SettingsSourceTree, {
+        filter: 'all', labels: englishLabels, onFilterChange: vi.fn(), onSelectProvider: vi.fn(),
+        selectedProviderId: undefined, view: englishView(ids)
+      })))
+      await act(async () => { await Promise.resolve() })
+      return host
+    }
+
+    const one = await renderEnglish(['a'])
+    expect(one.querySelector('.intelligence-provider-row')?.textContent).toContain('1 unavailable source')
+    expect(one.querySelector('.intelligence-provider-row')?.textContent).not.toContain('1 unavailable sources')
+
+    const two = await renderEnglish(['a', 'b'])
+    expect(two.querySelector('.intelligence-provider-row')?.textContent).toContain('2 unavailable sources')
   })
 })

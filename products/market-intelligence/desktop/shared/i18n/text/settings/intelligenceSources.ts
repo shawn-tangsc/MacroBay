@@ -429,7 +429,8 @@ export const intelligenceSourcesText = {
    * 全句只用在会显示内容的地方（经济日历错误态、日报）。
    */
   unavailableShort: '官方源暂时不可用',
-  unavailableCount: '含 {count} 个取不到的源',
+  unavailableCountOne: '含 {count} 个不可用的源',
+  unavailableCountOther: '含 {count} 个不可用的源',
   unavailableReasonCode: '原因码：{code}',
   /** 只给 ⓘ 的可访问名用：它是名字，不是句子（句子那个带 `{code}`）。 */
   unavailableReasonCodeAria: '原因码',
@@ -941,7 +942,8 @@ export const intelligenceSourcesText = {
     empty: 'No extra visible fields for this source.'
   },
   unavailableShort: 'The official source is temporarily unavailable',
-  unavailableCount: '{count} sources cannot be reached',
+  unavailableCountOne: '{count} unavailable source',
+  unavailableCountOther: '{count} unavailable sources',
   unavailableReasonCode: 'Reason code: {code}',
   unavailableReasonCodeAria: 'Reason code',
   'health.runAction.infoAria': 'About Run now',
