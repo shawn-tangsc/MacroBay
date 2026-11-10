@@ -1606,3 +1606,78 @@
   border-top: 0;
 }
 
+/* 「业务设置」内容区：左列三项 + 右列卡片 / 源名列表。
+   卡片里一行一项「格名 → 源名」，行样式沿用设置行那一套（44 高、左右内距 12、发丝线），不自画一套。 */
+.business-settings {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.business-settings__nav {
+  display: flex;
+  align-items: flex-start;
+}
+
+.business-settings__content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  align-content: start;
+}
+
+.business-card {
+  display: grid;
+  min-width: 0;
+  padding: 4px 0;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 82%, var(--bg));
+}
+
+.business-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.business-card__row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.business-card__row:hover {
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+}
+
+.business-card__label {
+  min-width: 0;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  white-space: nowrap;
+}
+
+.business-card__value {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--font-meta);
+  font-weight: 500;
+}
+

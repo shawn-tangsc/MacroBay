@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
+import { productText } from '../../shared/i18n/productText'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 
 /**
@@ -93,5 +94,39 @@ describe('the drawer sources panel filter', () => {
     const text = container.querySelector('.intelligence-catalog-pane')?.textContent ?? ''
     expect(text).toContain('日历源')
     expect(text).not.toContain('看板源')
+  })
+})
+
+describe('业务设置：只有卡片，没有源详情头', () => {
+  const text = productText['zh-CN'].settings.intelligenceSources
+
+  it('shows module cards and no source-level detail at all', async () => {
+    const container = await renderPanel('dashboard')
+    expect(container.querySelector('.business-settings')).not.toBeNull()
+    // 卡片在：跨资产、行情卡、AI 分析用（末卡带 ⓘ）。
+    expect(container.querySelector('[data-business-card="cross-asset"]')).not.toBeNull()
+    expect(container.querySelector('[data-business-card="quotes"]')).not.toBeNull()
+    expect(container.querySelector('[data-business-card="ai-analysis"]')).not.toBeNull()
+    // **不出现任何源级详情**：没有源名 <h2>、没有那几颗按钮与那两行标签。
+    const body = container.textContent ?? ''
+    expect(container.querySelector('h2')).toBeNull()
+    expect(body).not.toContain(text.testConnection)
+    expect(body).not.toContain(text.signup)
+    expect(body).not.toContain(text.apiKey.label)
+    expect(container.querySelector('.source-provider-detail__row')).toBeNull()
+    // 也没有状态词与「高级」。
+    expect(body).not.toContain(text.advancedToggle)
+    expect(body).not.toContain(text.status.disabled)
+  })
+
+  it('switches to the sources tab when a card row is clicked', async () => {
+    const container = await renderPanel('dashboard')
+    const row = container.querySelector<HTMLButtonElement>('[data-business-card="cross-asset"] .business-card__row')
+    expect(row).not.toBeNull()
+    await act(async () => { row?.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    // 切回「情报源」：那一面的树出现，业务设置的卡片消失。
+    expect(container.querySelector('.business-settings')).toBeNull()
+    expect(container.querySelector('.intelligence-catalog-pane')).not.toBeNull()
   })
 })

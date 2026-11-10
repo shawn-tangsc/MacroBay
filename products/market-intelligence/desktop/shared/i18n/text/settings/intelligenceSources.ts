@@ -450,6 +450,9 @@ export const intelligenceSourcesText = {
   keepEditing: '继续编辑',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
+  /* 「业务设置」左列那三项（用户 2026-11-10：切到业务设置后左列只有这三项）。 */
+  businessTabs: { dashboard: '看板', calendar: '日历', sentiment: '舆情' },
+  businessTabsAria: '业务设置',
   /* 看板页签的分组名：能复用既有标题键的都用既有键（各模块在 dashboardSourceModules 里指过去），
      这里只放**没有现成标题键**的那几个。 */
   dashboardModuleTitles: {
@@ -995,6 +998,8 @@ export const intelligenceSourcesText = {
     official: 'Official sources',
     aggregate: 'Aggregators'
   },
+  businessTabs: { dashboard: 'Dashboard', calendar: 'Calendar', sentiment: 'Sentiment' },
+  businessTabsAria: 'Business settings',
   dashboardModuleTitles: {
     policyPath: 'Policy path',
     divergence: 'Divergence',
