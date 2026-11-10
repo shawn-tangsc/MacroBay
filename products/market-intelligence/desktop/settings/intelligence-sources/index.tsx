@@ -9,8 +9,8 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { productText } from '../../shared/i18n/productText'
-import { SourceConfigSurface } from './SourceConfigSurface'
-import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
+import type { SourceFilter } from './SettingsSourceTree'
+import { SourcesSettingsPane } from './SourcesSettingsPane'
 import { SourceSpecificSection } from './SourceSpecificSection'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { useIntelligenceTranslationSettings } from './useIntelligenceTranslationSettings'
@@ -94,37 +94,30 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
 
   return (
     <section className="settings-workspace intelligence-sources-workspace">
-      <SettingsSourceTree
-        filter={sourceFilter}
-        labels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
-        selectedProviderId={selectedProviderId}
-        view={settingsView}
-        onFilterChange={setSourceFilter}
-        onSelectProvider={(providerId) => setSelectedProviderId(providerId)}
-      />
-      <div className="settings-detail-pane intelligence-detail-pane">
         {/* C8：另一处保存了同一域、而本页有草稿——只提示，不覆盖；两个动作由读者选。 */}
         {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">
           <span>{t.otherSideChanged}</span>
           <Button onClick={reloadFromOtherSide} type="link">{t.reloadOtherSide}</Button>
           <Button onClick={dismissOtherSideChanged} type="link">{t.keepEditing}</Button>
         </div> : null}
-        {selectedProviderId ? (() => {
-          const provider = settingsView?.groups.flatMap((group) => group.providers).find((entry) => entry.providerId === selectedProviderId)
-          return provider ? <div className="intelligence-detail-scroll"><SourceConfigSurface
-            text={t}
-            provider={provider}
-            policy={{ labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById }}
-            supportsRunNowById={supportsRunNowById}
-            onRunNow={runSourceNow}
-            onToggleSource={toggleSourceEnabled}
-            onDraftChange={setDraftDirty}
-            translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
-            showSourceDetails
-            surface="settings"
-          /></div> : null
-        })() : null}
-      </div>
+      <SourcesSettingsPane
+        filter={sourceFilter}
+        onFilterChange={setSourceFilter}
+        onSelectProvider={(providerId) => setSelectedProviderId(providerId)}
+        selectedProviderId={selectedProviderId}
+        surface={{
+          text: t,
+          policy: { labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById },
+          supportsRunNowById,
+          onRunNow: runSourceNow,
+          onToggleSource: toggleSourceEnabled,
+          onDraftChange: setDraftDirty,
+          translation: language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined,
+          showSourceDetails: true,
+          surface: 'settings'
+        }}
+        treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
+        view={settingsView} />
     </section>
   )
 }
