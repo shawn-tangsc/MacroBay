@@ -184,33 +184,6 @@ describe('Lark Release C contracts', () => {
     expect(lark.send).not.toHaveBeenCalled()
   })
 
-  it('rejects a source socket replaced before durable inbound acknowledgement without committing state', async () => {
-    const database = createAgentPlatformDatabase(':memory:')
-    seedActiveLark(database)
-    const socket = new FakeSocket()
-    let release!: () => void
-    const receive = vi.fn(async (input: { acknowledge: () => Promise<void> }) => {
-      await new Promise<void>((resolve) => { release = resolve })
-      await expect(input.acknowledge()).rejects.toThrow('lark-current-gate-failed')
-      return { disposition: 'retry' as const }
-    })
-    const host = new LarkLongConnectionHost({
-      channelId: 'lark-a', generation: 1, socketUrl: 'wss://fake', inbound: { receive } as never, runtime: new LarkRuntimeRepository(database),
-      hashEventKey: async () => 'opaque-event', parseVerifiedEnvelope: () => ({ facts: {
-        eventKey: 'lark:event:e1', conversationKey: 'lark:conversation:chat:chat_1', userKey: 'lark:user:user_1', conversationKind: 'direct', mentionedBot: true, text: 'hello'
-      }, acknowledgeWire: '{"ack":"opaque"}' }),
-      reconnectSocketUrl: async () => null,
-      createPlatformWebSocket: class { constructor(_url: string) { return socket as never } } as never,
-      isCurrent: () => true, signal: new AbortController().signal
-    })
-    host.start()
-    socket.onmessage?.({ data: '{}' })
-    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce())
-    socket.onclose?.({})
-    release()
-    await vi.waitFor(() => expect(database.connection.prepare('select count(*) as count from channel_lark_runtime_state').get()).toEqual({ count: 0 }))
-    expect(socket.sent).toEqual([])
-  })
 })
 
 class FakeSocket {

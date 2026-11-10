@@ -1,82 +1,121 @@
 import type { ChannelInboundService } from '../ChannelInboundService'
+import { readLarkMessageEvent } from './LarkEventEnvelope'
+import {
+  createLarkLongConnection,
+  type LarkLongConnection,
+  type LarkLongConnectionEvent,
+  type LarkProxyDecision
+} from './LarkLongConnectionClient'
 import { LarkRuntimeRepository } from './LarkRuntimeRepository'
-import type { LarkInboundFact } from './LarkContracts'
+import { normalizeLarkEvent } from './LarkUpdateNormalizer'
 
-type Socket = { close: () => void; send: (value: string) => void; onopen: ((event: unknown) => void) | null; onclose: ((event: unknown) => void) | null; onerror: ((event: unknown) => void) | null; onmessage: ((event: { data: unknown }) => void) | null }
-type Factory = new (url: string) => Socket
-
-type VerifiedEnvelope = { facts: LarkInboundFact; acknowledgeWire: string }
-
-/** Generic typed seam for a publicly verified Lark envelope. Composition does not supply an unverified URL or framing. */
+/**
+ * 飞书长连接宿主：把包装层（`LarkLongConnectionClient`）接到入站管道上。
+ *
+ * 两条纪律在这里**再成立一次**（不是只在包装层）：
+ * 1. `resolveProxy` 解析不出来 → 宿主记 `lark-proxy-unresolved` 并不建立连接。
+ *    包装层已经拒过一次，宿主这一层再拒一次是因为「这条通道到底有没有连上」必须由宿主说了算——
+ *    否则运行时会以为自己跑起来了，而读者在界面上看到一个「已启用」却收不到消息。
+ * 2. 确认只在**落库之后**：`inbound.receive` 的 `acknowledge` 里提交游标，回调抛错即不确认，
+ *    让平台重推。反过来（先确认再落库）一次写失败就永久丢消息。
+ */
 export class LarkLongConnectionHost {
-  private socket: Socket | null = null
-  private readonly closed = new WeakSet<object>()
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private reconnectAttempt = 0
+  private connection: LarkLongConnection | null = null
+  private stopped = false
 
-  constructor(private readonly deps: { channelId: string; generation: number; socketUrl: string; inbound: ChannelInboundService; runtime: LarkRuntimeRepository; hashEventKey: (key: string) => Promise<string>; parseVerifiedEnvelope: (data: string) => VerifiedEnvelope | null; reconnectSocketUrl: () => Promise<string | null>; createPlatformWebSocket: Factory; isCurrent: () => boolean; signal: AbortSignal; timers?: { setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout } }) {}
+  constructor(private readonly deps: {
+    channelId: string
+    generation: number
+    appId: string
+    appSecret: string
+    /** 平台那一侧：读网络设置 + 解析系统代理。返回 `null` = 解析不出来（不是直连）。 */
+    resolveProxy: (targetUrl: string) => Promise<LarkProxyDecision | null>
+    inbound: ChannelInboundService
+    runtime: LarkRuntimeRepository
+    hashEventKey: (eventKey: string) => Promise<string>
+    isCurrent: () => boolean
+    signal: AbortSignal
+    handshakeTimeoutMs?: number
+    /** 只给用例注入；生产用包装层的默认工厂。 */
+    createConnection?: (input: { onEvent: (event: LarkLongConnectionEvent) => Promise<void> }) => LarkLongConnection
+  }) {}
 
-  start(): void {
-    this.open(this.deps.socketUrl)
-  }
-  private open(socketUrl: string): void {
-    if (this.deps.signal.aborted || !this.deps.isCurrent()) return
-    const socket = new this.deps.createPlatformWebSocket(socketUrl)
-    this.socket = socket
-    socket.onopen = () => { if (this.current(socket)) this.reconnectAttempt = 0 }
-    socket.onmessage = (event) => { void this.handle(event.data, socket) }
-    socket.onerror = () => this.audit(socket, 'lark-socket-error')
-    socket.onclose = () => {
-      this.closed.add(socket)
-      if (this.socket !== socket) return
-      this.socket = null
-      this.scheduleReconnect()
+  async start(): Promise<boolean> {
+    if (this.stopped || !this.currentGeneration()) return false
+    const connection = this.deps.createConnection?.({ onEvent: (event) => this.handle(event) }) ??
+      createLarkLongConnection({
+        appId: this.deps.appId,
+        appSecret: this.deps.appSecret,
+        resolveProxy: this.deps.resolveProxy,
+        ...(this.deps.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: this.deps.handshakeTimeoutMs })
+      })
+    this.connection = connection
+    // 包装层按同一条规则先拒一次；这里再判一次结果并落审计，运行时才不会以为自己连着。
+    const result = await connection.connect({ onEvent: (event) => this.handle(event) })
+    if (!result.ok) {
+      this.audit(result.code)
+      this.connection = null
+      return false
     }
-    this.deps.signal.addEventListener('abort', () => this.close(), { once: true })
-  }
-  close(): void {
-    if (this.reconnectTimer) (this.deps.timers?.clearTimeout ?? clearTimeout)(this.reconnectTimer)
-    this.reconnectTimer = null
-    if (this.socket) this.closed.add(this.socket)
-    this.socket?.close()
-    this.socket = null
+    return this.currentGeneration()
   }
 
-  private scheduleReconnect(): void {
-    if (this.reconnectTimer || this.deps.signal.aborted || !this.deps.isCurrent()) return
-    if (this.reconnectAttempt >= 5) return this.auditClosed('lark-reconnect-exhausted')
-    const delay = Math.min(30_000, 1_000 * 2 ** this.reconnectAttempt++)
-    this.reconnectTimer = (this.deps.timers?.setTimeout ?? setTimeout)(() => { this.reconnectTimer = null; void this.reconnect() }, delay)
-  }
-  private async reconnect(): Promise<void> {
-    if (this.deps.signal.aborted || !this.deps.isCurrent()) return
-    try {
-      const url = await this.deps.reconnectSocketUrl()
-      if (!url || this.deps.signal.aborted || !this.deps.isCurrent()) return this.scheduleReconnect()
-      this.open(url)
-    } catch { this.scheduleReconnect() }
+  stop(): void {
+    if (this.stopped) return
+    this.stopped = true
+    this.connection?.close()
+    this.connection = null
   }
 
-  private async handle(data: unknown, source: Socket): Promise<void> {
-    if (!this.current(source)) return
-    if (typeof data !== 'string' || data.length > 1_000_000) return this.close()
-    let envelope: VerifiedEnvelope | null
-    try { envelope = this.deps.parseVerifiedEnvelope(data) } catch { this.audit(source, 'lark-envelope-invalid'); return }
-    if (!envelope) { this.audit(source, 'lark-event-ignored'); return }
-    const fact = envelope.facts
+  /** 事件 → 归一层 → 入站管道。抛错 = 不确认（平台会重推）。 */
+  private async handle(event: LarkLongConnectionEvent): Promise<void> {
+    if (this.stopped || !this.currentGeneration()) throw new Error('lark-host-not-current')
+    const read = readLarkMessageEvent(event)
+    if (read.kind === 'ignored') return
+    if (read.kind === 'invalid') {
+      this.audit('lark-event-invalid')
+      // 坏形状重推也读不懂：不抛错（确认掉），免得一条坏消息把后面全堵住。
+      return
+    }
+    const fact = normalizeLarkEvent(read.seam)
+    if (!fact) {
+      this.audit('lark-event-invalid')
+      return
+    }
+
     const result = await this.deps.inbound.receive({
-      channelId: this.deps.channelId, generation: this.deps.generation, providerEventKey: fact.eventKey,
-      ...(fact.messageKey ? { providerMessageKey: fact.messageKey } : {}), providerConversationKey: fact.conversationKey, providerUserKey: fact.userKey,
-      conversationKind: fact.conversationKind, mentionedBot: fact.mentionedBot, ...(fact.text === undefined ? {} : { text: fact.text }), ...(fact.attachments ? { attachments: fact.attachments } : {}),
+      channelId: this.deps.channelId,
+      generation: this.deps.generation,
+      providerEventKey: fact.eventKey,
+      ...(fact.messageKey ? { providerMessageKey: fact.messageKey } : {}),
+      providerConversationKey: fact.conversationKey,
+      providerUserKey: fact.userKey,
+      conversationKind: fact.conversationKind,
+      mentionedBot: fact.mentionedBot,
+      ...(fact.text === undefined ? {} : { text: fact.text }),
+      ...(fact.attachments ? { attachments: fact.attachments } : {}),
       acknowledge: async () => {
-        const hash = await this.deps.hashEventKey(fact.eventKey)
-        if (!this.current(source) || !this.deps.runtime.commitIfCurrent(this.deps.channelId, this.deps.generation, hash) || !this.current(source)) throw new Error('lark-current-gate-failed')
-        source.send(envelope.acknowledgeWire)
+        const eventHash = await this.deps.hashEventKey(fact.eventKey)
+        if (!this.currentGeneration()) throw new Error('lark-current-gate-failed')
+        if (!this.deps.runtime.commitIfCurrent(this.deps.channelId, this.deps.generation, eventHash)) {
+          this.audit('lark-sequence-stale')
+          throw new Error('lark-sequence-stale')
+        }
       }
     })
-    if (result.disposition === 'retry') this.audit(source, 'lark-inbound-retry')
+    if (result.disposition === 'retry') {
+      // 管道没接住：抛错让平台重推（不会确认这一条）。
+      this.audit('lark-inbound-retry')
+      throw new Error('lark-inbound-retry')
+    }
   }
-  private current(socket: Socket): boolean { return !this.deps.signal.aborted && this.deps.isCurrent() && this.socket === socket && !this.closed.has(socket) }
-  private audit(socket: Socket, code: string): void { if (this.current(socket)) this.deps.runtime.auditIfCurrent(this.deps.channelId, this.deps.generation, code) }
-  private auditClosed(code: string): void { this.deps.runtime.auditIfCurrent(this.deps.channelId, this.deps.generation, code) }
+
+  private currentGeneration(): boolean {
+    return !this.deps.signal.aborted && this.deps.isCurrent()
+  }
+
+  private audit(code: string): void {
+    if (!this.currentGeneration()) return
+    this.deps.runtime.auditIfCurrent(this.deps.channelId, this.deps.generation, code)
+  }
 }

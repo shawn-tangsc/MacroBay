@@ -55,7 +55,11 @@ export type LarkLongConnectionDeps = {
 }
 
 export type LarkLongConnection = {
-  connect: (handlers: { onEvent: (event: LarkLongConnectionEvent) => void }) => Promise<LarkLongConnectionResult>
+  /**
+   * `onEvent` 的返回值就是「这条我处理完了」：**抛错则不确认**，让平台重推。
+   * 所以调用方必须在它里面等到「落库 + 提交游标」都完成才返回。
+   */
+  connect: (handlers: { onEvent: (event: LarkLongConnectionEvent) => Promise<void> | void }) => Promise<LarkLongConnectionResult>
   close: () => void
 }
 
@@ -110,11 +114,12 @@ const defaultWsClientFactory: LarkWsClientFactory = (options) => {
 }
 
 /** 只订阅消息事件，并把 SDK 的回调折成我们自己的形状。 */
-function createDispatcher(onEvent: (event: LarkLongConnectionEvent) => void): unknown {
+function createDispatcher(onEvent: (event: LarkLongConnectionEvent) => Promise<void> | void): unknown {
   const dispatcher = new EventDispatcher({})
   dispatcher.register({
+    // 返回值/抛错由 SDK 决定是否确认：抛错即不确认，平台会重推。
     'im.message.receive_v1': async (payload: unknown) => {
-      onEvent(toLongConnectionEvent(payload))
+      await onEvent(toLongConnectionEvent(payload))
     }
   })
   return dispatcher
