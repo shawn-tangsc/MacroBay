@@ -45,14 +45,14 @@ describe('a capital-conditions card that could not read', () => {
     expect(markup).toContain(restartLabel)
   })
 
-  it('shows the read-failure state with a re-collection action, not the restart copy', () => {
+  it('shows the read-failure state with one retry, not the restart copy', () => {
     const markup = render({ state: 'unavailable', reason: 'query-failed' })
 
-    // 三态里的「读不到」：一句状态 + 一颗主动作（这张卡的主动作是再采集，不是重读一次）。
-    expect(markup).toContain('data-source-state="unreadable"')
-    expect(markup).toContain('data-state="unreadable"')
+    // 整卡三态里的「读不到」：平台错误面 + 产品那句「暂时读不到」+ 恰一颗动作（重试）。
+    expect(markup).toContain('state-view--error')
     expect(markup).toContain(dataText.temporarilyUnavailable)
-    expect(markup).toContain(text.refresh)
+    expect(markup).toContain(retryLabel)
+    expect((markup.match(/<button\b/g) ?? [])).toHaveLength(1)
     // 读失败不是版本问题，别把重开应用的话塞给他。
     expect(markup).not.toContain(text.contractMismatch)
   })

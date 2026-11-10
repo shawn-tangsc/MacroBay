@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from 'antd'
-import { CircleDashed, CircleSlash, Info, RefreshCw, TriangleAlert } from 'lucide-react'
+import { Info, RefreshCw } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -9,14 +9,13 @@ import { Popover } from '@platform/ui/components/popover'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { InlineNotice } from '@platform/ui/components/inline-notice'
-import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CapitalFlowChart } from './CapitalFlowChart'
 import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
 import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
-import '../../../shared/styles/sourceAvailability.css'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import {
   isCapitalConditionsRetryable,
@@ -89,22 +88,21 @@ type Text = {
 
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 
-/** 卡片级的三态输入：`missing` = 没配置来源，`disabled` = 有源但没启用；两者都不是「读不到」。 */
+/**
+ * 整卡级的两态输入：`missing` = 没配置来源，`disabled` = 有源但没启用。
+ *
+ * **只收这两种**：「读不到」由读数自己说（这一格没读成就是没读成，宿主不必再通知一遍），
+ * 而「没配置 / 没启用」是卡片自己推不出来的事实，只能由宿主给。
+ *
+ * 动作跟状态**放在一起**，不另设一个可选的 `onOpenSources`：说得出一态，就必须说得出读者该去哪。
+ * 整卡级的两态走平台 `StateView`（未配置 `empty·none-installed`、未启用 `disabled·target-disabled`），
+ * 行级/格级才用共享可用性卡 `mi-source-*`——同一位置只许一种画法（界面设计 2026-11-11）。
+ */
 export type DashboardSourceAvailability =
-  | Readonly<{ state: 'missing' }>
-  | Readonly<{ state: 'disabled'; sourceLabel: string }>
+  | Readonly<{ state: 'missing'; onOpenSources: () => void }>
+  | Readonly<{ state: 'disabled'; sourceLabel: string; onOpenSources: () => void }>
 
-/** 三态共用的文案键（平台/看板的既有那一组，不另造一句）。 */
-const SOURCE_STATE_KEYS = {
-  missing: 'pages.intelligence.portal.data.sourcesNotConfigured',
-  disabled: 'pages.intelligence.portal.data.sourcesNotEnabled',
-  unreadable: 'pages.intelligence.portal.data.temporarilyUnavailable',
-  configure: 'pages.intelligence.portal.data.configureSources',
-  enable: 'pages.intelligence.portal.data.enableSources',
-  retry: 'pages.intelligence.portal.data.retry'
-} as const
-
-export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false, sourceAvailability, onOpenSources }: Readonly<{
+export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false, sourceAvailability }: Readonly<{
   state: DashboardCapitalConditionsState
   text: Text
   /** Re-collect when the host can, otherwise re-read the stored snapshot. Always a real action. */
@@ -116,12 +114,8 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
    * 未配置 → 未启用 → 读不到（来源配置属于宿主，卡片不自己推断）。不给 = 按读数的结果画。
    */
   sourceAvailability?: DashboardSourceAvailability
-  /** 「去设置配置 / 去启用」的跳转由宿主给；不给就不渲染那颗动作（不画一颗点了没用的按钮）。 */
-  onOpenSources?: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  // 提示条动作的标签走平台状态文案（与错误态那颗「重试」同一个词），不另造一句。
-  const stateViewText = useStateViewText()
   const dataText = useProductTextKey() as (key: string) => string
   // 状态与信号并列：牌子上是「有没有这条信号」，这一句回答「这次分析到哪一步」。
   const analysisSentence = useSignalAnalysisSentence(state.state === 'available' ? state.etfSignalAnalysis : undefined)
@@ -136,17 +130,24 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   // 命中消失时把弹层一起关掉：故事已经不成立，留着一段讲它的文字就是旧真相。
   useEffect(() => { if (!alertChip) setDetailOpen(false) }, [alertChip])
   // 判定顺序不许倒：没配置 → 没启用 → 读不到。前两态是读者要动手的事，不是系统故障。
-  const sourceState = sourceAvailability?.state ?? (state.state === 'unavailable' && isCapitalConditionsRetryable(state.reason) ? 'unreadable' : undefined)
-  if (sourceState) return <SourceStateCard
-    data={dataText}
-    failureNotice={text.refreshFailed}
-    onOpenSources={onOpenSources}
-    onRetry={sourceState === 'unreadable' ? onRefresh : undefined}
-    refreshFailed={refreshFailed}
-    retryLabel={text.refresh}
-    sourceLabel={sourceAvailability?.state === 'disabled' ? sourceAvailability.sourceLabel : undefined}
-    state={sourceState}
-    title={text.title} />
+  // 「读不到」不在这里：它由下面那条 `state.state !== 'available'` 的分支负责（`f6cded2` 的
+  // 五种成因、重启/重试/刷新三种动作都在那儿），同一位置不许再画第二套。
+  if (sourceAvailability) return <section className="mi-capital-conditions" aria-label={text.title}>
+    <div className="mi-capital-conditions__summary">
+      <h2>{text.title}</h2>
+      {/* 未配置 = 没有可用的源（`empty·none-installed`，动作「打开设置」：读者下一步是去设置里加一个源）；
+          未启用 = 有源但关掉了（`disabled·target-disabled`，动作「去启用」，状态词后面点名是哪个源）。
+          两态都不用错误色，也不给重试——重试一个没配置/没启用的源永远读不出来。
+          动作文字一律取平台闭集（`STATE_VIEW_ACTION_KEYS`），调用点不硬写「去配置 / 再试一次」。 */}
+      {sourceAvailability.state === 'missing'
+        ? <StateView state="empty" reasonCode="none-installed"
+            productReason={{ key: 'pages.intelligence.portal.data.sourcesNotConfigured', resolve: (key: string) => dataText(key) }}
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: sourceAvailability.onOpenSources }} />
+        : <StateView state="disabled" reasonCode="target-disabled"
+            productReason={{ key: 'pages.intelligence.portal.data.sourcesNotEnabled', resolve: (key: string) => `${dataText(key)}（${sourceAvailability.sourceLabel}）` }}
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.enable, onSelect: sourceAvailability.onOpenSources }} />}
+    </div>
+  </section>
 
   if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
@@ -163,25 +164,22 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
                 productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.contractMismatch', resolve: () => text.contractMismatch }}
                 action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void window.platform.app.relaunch() } }} />
             : isCapitalConditionsRetryable(state.reason)
-              // 「读了但没读成」才给重试。
-              ? <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
+              // 「读了但没读成」才给重试：`unreadable` 的码表只允许这一颗动作，规格上的「再试一次」。
+              // 句子取产品那句「暂时读不到」——它就是这一态的名字，平台句换成同义的旁白只会多一套词。
+              ? <StateView state="error" reasonCode="unreadable"
+                  productReason={{ key: 'pages.intelligence.portal.data.temporarilyUnavailable', resolve: (key: string) => dataText(key) }}
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
               // 其余（时钟不合法、客户端没接上、数字无法显示）都是接线或数据问题：读者能做的是再读一次，
               // 所以给的是 refresh 而不是一个必然失败的 retry。
               : <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.refresh, onSelect: onRefresh }} />}
-      {/* The state above is what the last read returned. Re-reading it changes nothing, so the
-          only useful action here is to ask the sources to be collected again. */}
-      {onRefresh ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
+      {/* 重读/重采集那颗只在**没有状态面可给动作**的两态出现（等待中、确实空）：
+          错误态的三颗动作已经在 `StateView` 里，这里再放一颗就是同一个 `onRefresh` 的两颗按钮。 */}
+      {state.state === 'loading' || state.state === 'empty' ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
         icon={<RefreshCw aria-hidden="true" size={13} />} loading={refreshing} onClick={onRefresh} size="small" type="link">{text.refresh}</Button> : null}
-      {/* 面板级「重新采集失败」：走平台提示条（danger 自带 role="alert"），动作是真的再读一次，
-          不是空函数。正文只留一句；这条文案本身没有第二句细节，所以没有可挪进 ⓘ 的部分。 */}
-      {refreshFailed
-        ? <InlineNotice
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }}
-            resolveText={(key) => (key === STATE_VIEW_ACTION_KEYS.retry ? stateViewText(STATE_VIEW_ACTION_KEYS.retry) : key)}
-            tone="danger">
-            {text.refreshFailed}
-          </InlineNotice>
-        : null}
+      {/* 面板级「重新采集失败」：走平台提示条（danger 自带 `role="alert"`）。**只报事、不带动作**：
+          上面那颗状态面的动作就是同一个 `onRefresh`，同一张卡里放两颗做同一件事的按钮，正是
+          这次要收掉的形状。正文只留一句；这条文案没有第二句细节，所以没有可挪进 ⓘ 的部分。 */}
+      {refreshFailed ? <InlineNotice tone="danger">{text.refreshFailed}</InlineNotice> : null}
     </div>
   </section>
 
@@ -214,54 +212,6 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         <EtfTable reading={state.etfReading} text={text} onRetry={onRefresh} />
       </div>
       <EtfFlow reading={state.etfReading} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
-    </div>
-  </section>
-}
-
-/**
- * 三态整卡：没配置来源 / 来源没启用 / 暂时读不到。
- *
- * 用共享类名（`mi-source-card` / `mi-source-state` + `data-state` 三值），**不自己画一套**：
- * 规范在 `05-desktop/ui-audit/2026-11-11-source-availability-styles.md`。三句话不许互相冒充——
- * 「没启用」写成「读不到」会让读者去点一个永远不会成功的重试；反之会把该动手的事说成等一等。
- * 未配置与未启用**不用错误色**（`--muted`），只有读不到那一态带 `--danger` 的警示图标。
- */
-function SourceStateCard({ state, title, sourceLabel, data, retryLabel, failureNotice, refreshFailed, onOpenSources, onRetry }: Readonly<{
-  state: 'missing' | 'disabled' | 'unreadable'
-  title: string
-  sourceLabel?: string
-  data: (key: string) => string
-  /** 读不到那一态的主动作用是**再采集**（这张卡的动作本来就是重新采集，不是重读一次）。 */
-  retryLabel: string
-  failureNotice?: string
-  refreshFailed?: boolean
-  onOpenSources?: () => void
-  onRetry?: () => void
-}>): React.ReactElement {
-  const Icon = state === 'missing' ? CircleDashed : state === 'disabled' ? CircleSlash : TriangleAlert
-  const sentence = state === 'missing' ? data(SOURCE_STATE_KEYS.missing)
-    : state === 'disabled' ? data(SOURCE_STATE_KEYS.disabled)
-      : data(SOURCE_STATE_KEYS.unreadable)
-  return <section className="mi-capital-conditions mi-source-card" data-source-state={state} aria-label={title}>
-    <h2 className="mi-source-card__title">{title}</h2>
-    <p className="mi-source-state" data-state={state}>
-      <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
-      {sentence}{state === 'disabled' && sourceLabel ? `（${sourceLabel}）` : ''}
-    </p>
-    {/* 再采集失败与「读不到」是两件事：前者是读者刚按过、这次没成；后者是这一格现在没有数。 */}
-    {state === 'unreadable' && refreshFailed && failureNotice
-      ? <InlineNotice tone="danger">{failureNotice}</InlineNotice>
-      : null}
-    <div className="mi-source-card__actions">
-      {state === 'unreadable'
-        ? <>
-          {onRetry ? <Button onClick={onRetry} size="small" type="default">{retryLabel}</Button> : null}
-          {/* 次入口：读数一直不好时，读者下一步是去数据源看这一格。 */}
-          {onOpenSources ? <Button onClick={onOpenSources} size="small" type="link">{data(SOURCE_STATE_KEYS.configure)}</Button> : null}
-        </>
-        : onOpenSources
-          ? <Button onClick={onOpenSources} size="small" type="default">{data(state === 'missing' ? SOURCE_STATE_KEYS.configure : SOURCE_STATE_KEYS.enable)}</Button>
-          : null}
     </div>
   </section>
 }

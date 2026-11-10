@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
+import { resolveStateViewText } from '@platform/ui/components/state/stateViewText'
 import { CapitalConditionsPanel } from './CapitalConditionsPanel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -324,11 +325,11 @@ describe('CapitalConditionsPanel', () => {
 
     // "Could not read" is an error, never an empty: a panel that says "nothing here" when the
     // query failed tells the reader the opposite of what happened.
-    // 「读不到」现在是三态之一：一个 data-state + 一句状态，不是平台的空/错状态面。
-    expect(markup).toContain('data-source-state="unreadable"')
-    expect(markup).toContain('data-state="unreadable"')
+    // 整卡级的「读不到」走平台错误面（`error` + 产品原因句），不是一个空块、也不是共享行卡。
+    expect(markup).toContain('state-view--error')
+    expect(markup).toContain('data-state-icon="error"')
     expect(markup).not.toContain('data-state="empty"')
-    expect(markup).not.toContain('class="state-view')
+    expect(markup).not.toContain('mi-source-card')
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
   })
 
@@ -639,7 +640,7 @@ describe('CapitalConditionsPanel', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
-    const action = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')!
+    const action = container.querySelector<HTMLButtonElement>('.state-view__action')!
     expect(action).not.toBeNull()
     await act(async () => action.click())
     expect(onRefresh).toHaveBeenCalledTimes(1)
@@ -661,7 +662,7 @@ describe('CapitalConditionsPanel', () => {
     expect(onRefresh).toHaveBeenCalledTimes(2)
   })
 
-  it.each(['zh-CN', 'en-US'] as const)('offers %s readers a re-collection action instead of another read while unavailable', async (locale) => {
+  it.each(['zh-CN', 'en-US'] as const)('gives %s readers exactly one action on the read-failure state', async (locale) => {
     const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
     const onRefresh = vi.fn()
     const container = document.createElement('div')
@@ -669,9 +670,12 @@ describe('CapitalConditionsPanel', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
-    const button = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')!
-    expect(button.textContent).toBe(text.refresh)
-    await act(async () => button.click())
+    // 整卡三态的按钮文字取平台闭集（`ui.state.action.*`），调用点不硬写「再试一次 / 重新采集来源」——
+    // 同一个动作两张嘴，读者会以为是两件事。
+    const actions = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    expect(actions).toHaveLength(1)
+    expect(actions[0]?.textContent).toBe(resolveStateViewText(locale, 'ui.state.action.retry'))
+    await act(async () => actions[0]!.click())
     expect(onRefresh).toHaveBeenCalledOnce()
     expect(container.textContent).not.toContain(text.refreshFailed)
   })
@@ -692,22 +696,20 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).not.toContain(text.staleRead)
   })
 
-  it('reports a failed re-collection and blocks a second request while it runs', async () => {
+  it('reports a failed re-collection as a notice, with no second button for the same action', async () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
 
-    const refresh = vi.fn()
-    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh: refresh, refreshFailed: true })))
-    // 平台提示条：danger 自带 role="alert"，正文是那一句；动作必须真的再读一次，不是空函数。
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh: () => undefined, refreshFailed: true })))
+    // 平台提示条：danger 自带 role="alert"，正文是那一句。
     const notice = container.querySelector('[data-inline-notice="danger"]')
     expect(notice?.getAttribute('role')).toBe('alert')
     expect(notice?.textContent).toContain(text.refreshFailed)
-    // 读不到那一态的主动作就是再采集；失败提示只说明「刚按过、这次没成」，不再挂第二颗同名按钮。
-    const action = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')
-    await act(async () => action!.click())
-    expect(refresh).toHaveBeenCalledTimes(1)
+    // 提示条只报事：同一个 `onRefresh` 在状态面里已经有一颗，这里不许再挂一颗做同一件事的按钮。
+    expect(notice?.querySelector('button')).toBeNull()
+    expect([...container.querySelectorAll<HTMLButtonElement>('button')]).toHaveLength(1)
 
     // `loading` already means a read is in flight, so the control must not start a second one.
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'loading' }, onRefresh: () => undefined, refreshing: true })))
