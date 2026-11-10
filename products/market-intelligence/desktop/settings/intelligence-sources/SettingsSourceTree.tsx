@@ -109,6 +109,10 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
       {(view?.groups ?? []).map((group) => {
         const providers = group.providers
           .map((provider) => ({ ...provider, sources: provider.sources.filter((source) => matchesFilter(source, filter)) }))
+          /* 这里按**源**筛掉空行：供应商行只在它旗下至少有一个匹配源时才出现。
+             一条容易误会的推论是「我在待接入里看到过它」——待接入显示的是**供应商行**
+             （供应商旗下有一个 pending 源，整行就会出现），不等于那个源本身在待接入里。
+             判断某个源在哪一块可见，要按它的 `visibility` / `panels` / `purposes` 算，不要按供应商名。 */
           .filter((provider) => provider.sources.length > 0)
         if (providers.length === 0) return null
         return <div className="intelligence-catalog-group" key={group.category}>

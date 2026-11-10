@@ -647,6 +647,11 @@ describe('ProviderDetail source details', () => {
     await flush()
 
     const header = container.querySelector('.source-provider-detail__policy .intelligence-section-title')
+    // 套娃修好后，这一块里**只有一个标题元素**（外层区块的），内层 `CollectionPolicySection` 不再画标题。
+    // 用结构断言而不是数文本：`textContent` 会把控件可访问名之类的文案也算进去，数不干净。
+    expect(container.querySelectorAll('.source-provider-detail__policy .intelligence-section-title')).toHaveLength(1)
+    // 这一块里带框的容器只有外层一个（内层不再包一层带 border/radius 的 section）。
+    expect(container.querySelectorAll('.source-provider-detail__policy .intelligence-section')).toHaveLength(0)
     expect(header?.textContent).toContain(settingsText.collectionPolicy.stoppedBadge)
     // 「短标」不是「把整句搬上来」：那句长原因只在展开区里。
     expect(header?.textContent).not.toContain(settingsText.collectionPolicyStopped)
