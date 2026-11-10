@@ -99,6 +99,7 @@ describe('source health detail (B4)', () => {
     const container = await render(ready({}), {
       source: source({
         collection: 'provider',
+        kind: 'official-calendar',
         unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z', decidedAt: '2026-11-08' }
       })
     })
