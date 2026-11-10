@@ -84,9 +84,10 @@
 .config-drawer__pane-title {
   margin: 0;
   color: var(--text-strong);
-  font-size: var(--font-section);
+  /* 页面主名：16 / 1.35 / 650（界面设计 2026-11-10 定档）。 */
+  font-size: 16px;
   font-weight: 650;
-  line-height: var(--line-section);
+  line-height: 1.35;
 }
 
 .config-drawer__group {
@@ -97,9 +98,10 @@
 .config-drawer__group-title {
   margin-bottom: 8px;
   color: var(--muted-strong);
-  font-size: var(--font-section);
-  font-weight: 600;
-  line-height: var(--line-section);
+  /* 区块名：13 / 1.4 / 650。抽屉里只有三级：16 页名 → 13 区块名 → 12 行标签。 */
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 /* 设置行的形状：左标签、右值/控件、行尾动作；行与行只用发丝线分隔，不画卡片。 */
