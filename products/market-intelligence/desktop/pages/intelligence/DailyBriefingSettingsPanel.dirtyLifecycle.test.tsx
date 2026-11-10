@@ -188,6 +188,14 @@ describe('the briefing settings screen’s two sections', () => {
     expect(row.querySelector('[data-period-delete="default"]')?.getAttribute('aria-label')).toBe('删除第 1 期')
   })
 
+  it('draws its blocks flat, because the drawer already draws the card around them', async () => {
+    // 抽屉正文本身就是一张卡（`ConfigDrawerContentCard`）。区块再画一遍框 = 双框 + 双重内距
+    // （左缩进 30）。形态由 `SettingsSection` 的两档定义，调用点只说「我在卡里」。
+    const { host } = await mount()
+    const blocks = [...host.querySelectorAll<HTMLElement>('[data-settings-section-block="true"]')]
+    expect(blocks.map((block) => block.getAttribute('data-variant'))).toEqual(['flat', 'flat'])
+  })
+
   it('keeps「添加一期」out of the way when the period list cannot be read', async () => {
     stubBridge()
     const host = document.createElement('div')

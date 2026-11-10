@@ -212,8 +212,11 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
     : `${text.aiSettings.followDefault} · ${ai.defaultModel.providerName} / ${ai.defaultModel.modelName}`
 
   return <div className="briefing-settings-screen" data-briefing-settings-panel="true">
+    {/* 两块都传 `flat`：抽屉正文**本身就是一张卡**（`ConfigDrawerContentCard`），区块再画框就是
+        双框 + 双重内距（左缩进 30）。形态只由 `SettingsSection` 定义，调用点不自己写压平的 CSS。 */}
     <SettingsSection
       title={text.settingsDrawer.sections.generation}
+      variant="flat"
       info={<Popover
         labelKey={GENERATION_NOTE_KEY}
         resolveText={resolveText}
@@ -336,6 +339,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
 
     <SettingsSection
       title={text.settingsDrawer.sections.ai}
+      variant="flat"
     >
         {ai.webSearchBlocked || !ai.webSearchSupported ? <InlineNotice
           action={{
