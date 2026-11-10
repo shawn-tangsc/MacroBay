@@ -18,6 +18,7 @@ import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import { DashboardPanelDrawer } from './DashboardPanelDrawer'
 import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../settings/intelligence-sources/sourceWrites'
+import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
 import { createCalendarCardReactionReader } from './calendarCardReaction'
 
@@ -68,9 +69,15 @@ function IntelligencePageBody(): React.ReactElement {
    * 所以这里只 bump 一个**递增计数**——布尔表达不了「已经开着又点了一次」，而连点入口很常见。
    */
   const [configDrawerRequest, setConfigDrawerRequest] = useState(0)
-  const [configDrawerMenu, setConfigDrawerMenu] = useState<'sources' | 'briefing'>('sources')
-  const openConfigDrawer = (menu: 'sources' | 'briefing'): void => {
+  const [configDrawerMenu, setConfigDrawerMenu] = useState<'sources' | 'processing' | 'briefing'>('sources')
+  /**
+   * 「来源与采集」这一屏挂载时的初值过滤器（只作初值，之后的筛选由那一屏自己管）。
+   * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
+   */
+  const [initialSourceFilter, setInitialSourceFilter] = useState<SourceFilter>()
+  const openConfigDrawer = (menu: 'sources' | 'processing' | 'briefing', filter?: SourceFilter): void => {
     setConfigDrawerMenu(menu)
+    setInitialSourceFilter(filter)
     setConfigDrawerRequest((value) => value + 1)
     setActiveView('dashboard')
   }
@@ -212,6 +219,7 @@ function IntelligencePageBody(): React.ReactElement {
           onConfigureSources={() => setSourceDrawerOpen(true)}
           onManageSource={() => setSourceDrawerOpen(true)}
           initialSettingsMenu={configDrawerMenu}
+          initialSourceFilter={initialSourceFilter}
           openSettingsRequest={configDrawerRequest}
           onOpenCalendar={() => setActiveView('calendar')}
           text={text.dashboard}
