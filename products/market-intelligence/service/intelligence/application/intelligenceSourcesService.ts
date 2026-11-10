@@ -233,18 +233,35 @@ export function createIntelligenceSourcesService(deps: {
    * 做纯计算——旧实现里 `getPageState` 对选中源读两次健康，正是「三条命令各算一遍」的口子。
    */
   async function readConfigSurface(filter: { panelId?: PanelId; sourceId?: string } = {}) {
-    const rawDefinitions = listIntelligenceSourceDefinitions()
+    // **profile 覆盖要按注册表里的可见源来读**：日历 feed（`macro-calendar-*`）只在
+    // `providerRegistry` / `calendarFeedRegistry` 里，不在通用目录里；只看目录会把它们保存过的
+    // profile 漏掉，设置页就把「正在跑」画成「你已停用」。
+    const registrySources = allSources().filter((source) => source.visibility !== 'hidden')
+    const catalogDefinitions = listIntelligenceSourceDefinitions()
       .filter((definition) => definition.visibility !== 'hidden')
-    const registryById = new Map(allSources().map((source) => [source.sourceId, source]))
-    const registryDefinitions = rawDefinitions
-      .flatMap((definition) => registryById.get(definition.sourceId) ?? [])
+    const catalogById = new Map(catalogDefinitions.map((definition) => [definition.sourceId, definition]))
+
     const profileById: Record<string, IntelligenceSourceProfile> = {}
+    for (const source of registrySources) {
+      const stored = await deps.profileStore.getProfile(source.sourceId)
+      if (stored !== undefined) {
+        profileById[source.sourceId] = stored
+        continue
+      }
+      // 没存过 profile 的源：目录源按默认 profile 参与视图（与旧实现一致）；日历 feed 没有默认，
+      // 保持「没有配置」——它在设置页照旧显示为关着的，不拿默认值冒充读者的选择。
+      if (catalogById.has(source.sourceId)) {
+        profileById[source.sourceId] = await deps.profileStore.resolveProfile(source.sourceId)
+      }
+    }
+
+    // 健康读数**只对能读的源读**（目录源），不因为上面扩大了 profile 覆盖面就跟着扩。
     const healthViewById: Record<string, Awaited<ReturnType<typeof readHealth>>> = {}
     const healthById: Record<string, Readonly<{ runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'; consecutiveFailures: number }>> = {}
     const credentialStatusById: Record<string, Readonly<{ hasCredential: boolean; maskedPreview?: string; lastValidatedAt?: string }>> = {}
-    for (const definition of rawDefinitions) {
-      const profile = await deps.profileStore.resolveProfile(definition.sourceId)
-      profileById[definition.sourceId] = profile
+    for (const definition of catalogDefinitions) {
+      const profile = profileById[definition.sourceId]
+      if (profile === undefined) continue
       const health = await readHealth(definition.sourceId, profile)
       healthViewById[definition.sourceId] = health
       healthById[definition.sourceId] = {
@@ -256,11 +273,11 @@ export function createIntelligenceSourcesService(deps: {
       }
     }
     return {
-      rawDefinitions,
+      rawDefinitions: catalogDefinitions,
       profileById,
       healthViewById,
       surface: sourceConfigSurface({
-        definitions: registryDefinitions,
+        definitions: registrySources,
         profileById,
         healthById,
         jobRegisteredById: jobRegistration(),

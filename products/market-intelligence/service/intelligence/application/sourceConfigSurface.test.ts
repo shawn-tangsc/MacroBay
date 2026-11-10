@@ -106,6 +106,41 @@ describe('the three read commands describe the same source from one computation'
     expect(detail?.profile.enabled).toBe(facts.settings.enabled)
   })
 
+  it('shows a saved calendar feed as enabled, exactly as the job that runs it', async () => {
+    // 回归（S0 `23fc2da` 引入）：这三条日历源只在 providerRegistry / calendarFeedRegistry 里，
+    // 不在通用目录里。当时 `readConfigSurface` 只对目录源读 profile，日历作业写进去的 profile 被漏掉，
+    // 设置页就把「正在跑」画成「你已停用」——正好是我们在清的那类「拿不到画成没有」。
+    const FEED = 'macro-calendar-0xrouter-economic-data'
+    const definition = getIntelligenceSourceDefinition(FEED)
+    const stored = createSourceProfileStore(createInMemoryProfileStorage([
+      { ...createDefaultSourceProfile(definition ?? { sourceId: FEED } as never), sourceId: FEED, enabled: true }
+    ]))
+    const service = createIntelligenceSourcesService({
+      profileStore: stored,
+      pipeline: { getHealth: () => ({ runtimeStatus: 'healthy' as const, consecutiveFailures: 0 }), reportConnectivityProbe: vi.fn() } as unknown as IntelligencePipeline,
+      jobRuntime: createJobRuntime()
+    })
+
+    const settings = await service.getSettingsView()
+    const fromSettings = settings.groups
+      .flatMap((group) => group.providers)
+      .flatMap((provider) => provider.sources)
+      .find((source) => source.sourceId === FEED)
+
+    expect(fromSettings, 'the calendar feed must be listed').toBeDefined()
+    expect(fromSettings?.enabled, 'a saved profile means the reader enabled it').toBe(true)
+
+    // 三命令对同一条日历 feed 的事实逐字段一致（这条与上面第一条判据同源，但覆盖「无健康读数」的情形）。
+    const panel = await service.getPanelView({ panelId: 'economic-calendar' })
+    const fromPanel = panel?.providers
+      .flatMap((provider) => provider.sources)
+      .find((source) => source.sourceId === FEED)
+    expect(fromPanel?.enabled).toBe(fromSettings?.enabled)
+    expect(fromPanel?.healthState).toBe(fromSettings?.healthState)
+    expect(fromPanel?.healthMarker).toBe(fromSettings?.healthMarker)
+    expect(fromPanel?.jobRegistered).toBe(fromSettings?.jobRegistered)
+  })
+
   it('reads each source\'s health exactly once per page read, instead of twice for the selected one', async () => {
     const { service, reads } = buildService()
     reads.length = 0
