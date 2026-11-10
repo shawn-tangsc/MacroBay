@@ -192,6 +192,23 @@ describe('Drawer', () => {
     expect(document.querySelector('.ant-drawer-mask')).toBeNull()
   })
 
+  it('does not claim aria-modal on an inline panel, and keeps it on the modal one', async () => {
+    // 流内面板无遮罩、不锁焦点、背景照样能操作，`aria-modal="true"` 却在对读屏说「其余内容
+    // 不可用」——与事实相反，读屏用户会被卡在面板里（2026-11-11 用到 `inline` 时量到）。
+    // `role="dialog"` 留着：它确实是一块有名字的面板区域，只是不是模态。
+    await mount({ mode: 'inline' })
+    const inlinePanel = document.querySelector('.ant-drawer-content')
+    expect(inlinePanel?.getAttribute('role')).toBe('dialog')
+    expect(inlinePanel?.getAttribute('aria-modal')).toBeNull()
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    // 浮层反过来：它真的锁住其余内容，这句话必须还在。
+    await mount()
+    expect(document.querySelector('.ant-drawer-content')?.getAttribute('aria-modal')).toBe('true')
+  })
+
   it('opens an inline panel without moving focus, and closes it on Escape from anywhere', async () => {
     // 改之前这条是红的：inline 走 antd 默认 autoFocus、又关掉了 keyboard，
     // 于是「焦点被拽进面板」且「按 Esc 毫无反应」——两个毛病一起被这条钉住。

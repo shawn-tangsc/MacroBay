@@ -175,7 +175,12 @@ export function Drawer(props: DrawerProps): ReactElement {
       maskClosable={!inline}
       keyboard={!inline}
       // 流内面板不抢焦点；浮层保持 antd 默认（锁焦点、Esc 归它）。
-      {...(inline ? { autoFocus: false, getContainer: false as const } : {})}
+      /*
+        流内面板也不许自称模态：antd 的面板把 `aria-modal="true"` 写死，而 `inline` 没有遮罩、
+        不锁焦点、背景照样能操作——读屏却被告诉「其余内容不可用」。显式传 `undefined` 让这个属性
+        不输出（面板的 rest 展开在我们这个值之后）；`modal` 一个字不改，那句话仍由 antd 说。
+      */
+      {...(inline ? { autoFocus: false, getContainer: false as const, 'aria-modal': undefined } : {})}
       {...(headless ? { styles: { header: { display: 'none' } } } : {})}
       rootClassName={['drawer', `drawer--${size}`, `drawer--${props.mode}`, inline ? `drawer--${props.side ?? 'right'}` : '']
         .filter(Boolean)
