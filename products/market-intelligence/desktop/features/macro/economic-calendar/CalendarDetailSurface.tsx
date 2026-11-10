@@ -23,7 +23,7 @@ export type CalendarDetailState =
  * this file only decides what the reader sees for a market event, a loading read, a failed read, or
  * the official event itself, in that order.
  */
-export function CalendarDetailSurface({ contentId, when, selectedMarket, selectedLinkedMarket, sourceAdvanced, marketSources, detailState, refreshState, client, text, now, onClose, onRefresh, onReleaseTimeChanged, onRetry, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode }: {
+export function CalendarDetailSurface({ contentId, when, selectedMarket, selectedLinkedMarket, sourceAdvanced, marketSources, detailState, refreshState, client, text, now, onClose, returnFocusTo, onRefresh, onReleaseTimeChanged, onRetry, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode }: {
   contentId: string | undefined
   when: string | undefined
   selectedMarket: MarketCalendarEvent | undefined
@@ -36,6 +36,8 @@ export function CalendarDetailSurface({ contentId, when, selectedMarket, selecte
   text: EconomicCalendarText
   now: () => Date
   onClose: () => void
+  /** 关闭时把焦点还给「被点的那一行」——锚点由页面给（本页的行标记），抽屉不猜。 */
+  returnFocusTo?: (contentId: string) => HTMLElement | null
   onRefresh: (operation: EconomicCalendarRefreshOperation, eventKey: string) => Promise<void>
   onReleaseTimeChanged: () => Promise<void>
   onRetry: () => void
@@ -47,7 +49,8 @@ export function CalendarDetailSurface({ contentId, when, selectedMarket, selecte
   blsRefreshBlockedCode?: string
 }): ReactElement {
   return (
-    <CalendarInspector contentId={contentId} onClose={onClose} open={contentId !== undefined} when={when}>
+    <CalendarInspector contentId={contentId} onClose={onClose} open={contentId !== undefined} when={when}
+      {...(returnFocusTo === undefined ? {} : { returnFocusTo })}>
       {selectedMarket && sourceAdvanced ? <p className="mi-economic-calendar__comparison-rule" data-source-advanced>{text.market.sourceAdvanced}</p> : null}
       {selectedMarket ? <MarketCalendarInspector event={selectedMarket} source={marketSources.find(source => source.eventType === selectedMarket.eventType)} text={text} /> : null}
       {selectedLinkedMarket ? <MarketCalendarInspector event={selectedLinkedMarket} source={marketSources.find(source => source.eventType === selectedLinkedMarket.eventType)} text={text} /> : null}

@@ -59,8 +59,8 @@
      panel's 480px). The drawer this replaced was a maskless overlay, and that is what this page
      needs: the reader opens an event to read it *against* the month, not to lose the month.
 
-     `position: relative` anchors the overlay: `.mi-calendar-detail` is absolutely positioned
-     within this element, so opening it cannot move the grid. */
+     `position: relative` anchors the overlay layer (`.mi-calendar-detail-layer`) the detail drawer
+     sits in, so opening it cannot move the grid. */
   position: relative;
   display: flex;
   flex-direction: column;
@@ -81,18 +81,24 @@
   overflow: hidden;
 }
 /*
- * The detail as a maskless overlay, at every width: left edge, full height, the panel's own
- * `--side-panel-width` (min(480px, 46vw)). Out of flow, so the seven week columns keep exactly the
- * width they had before the drawer was opened; closing it leaves nothing behind.
+ * 详情的承载（R38，2026-11-11）：**平台抽屉**（`inline` + `large` 640），只做框。
  *
- * No mask on purpose: the reader picks the next event from the rows the panel does not cover, and a
- * grey sheet over the board would swallow that click.
+ * 这里只解决一件事：抽屉是**覆盖层，不进流**。平台 `inline` 抽屉按 antd 的根是 `position: fixed`
+ * 的，所以把它放进这只定位层里、改锚到宿主容器（日历页是 `<main>`，看板是面板区），
+ * 七列周视图的列宽因此开/关都不变（被排进流内就是 R34 回归）。
+ * 层本身不接收指针：无遮罩时「外部」就是日历，读者点另一行就是换内容。
  */
-.mi-economic-calendar .mi-calendar-detail {
+.mi-calendar-detail-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.mi-calendar-detail-layer > .drawer--inline {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
-  z-index: 2;
+  inset-inline-end: auto;
   max-height: 100%;
 }
 
@@ -165,7 +171,9 @@
 .mi-calendar-day-list { min-width: 0; min-height: 0; overflow-y: auto; overflow-wrap: anywhere; }
 /* 10px, not 20: `SidePanel`'s body already pads 10px, and the detail keeps the 20px it had in the
    drawer. Both numbers are visible here on purpose — this rule and the panel's padding are a pair. */
-.mi-calendar-detail-container { min-width: 0; overflow-wrap: anywhere; padding: 10px; }
+/* 正文容器：抽屉那层是 `flush`（不引入新内距），所以 20px 由这里给——与旧面板的
+   10（面板体）+ 10（容器）合计一致，字段位置一字不差。 */
+.mi-calendar-detail-container { min-width: 0; overflow-wrap: anywhere; padding: 20px; }
 .mi-calendar-day-list { display: grid; align-content: start; gap: var(--mi-calendar-group-gap); padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
 .mi-calendar-day-list [data-calendar-group], .mi-calendar-detail-container [data-calendar-group] { border-top: 1px solid var(--mi-economic-line); padding-top: var(--mi-calendar-group-gap); margin-top: var(--mi-calendar-group-gap); }
 .mi-calendar-day-list [data-calendar-group] > h3, .mi-calendar-detail-container [data-calendar-group] > h3 { color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); margin: 0 0 var(--mi-calendar-group-title-gap); }

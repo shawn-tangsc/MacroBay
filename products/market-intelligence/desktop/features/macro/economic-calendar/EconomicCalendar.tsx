@@ -315,6 +315,16 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
     setSelectedLinkedMarket(undefined)
     setDetailState({ state: 'idle' })
   }
+  /**
+   * 关闭详情时焦点回到**被点的那一行**：`inline` 抽屉不抢焦点，但读者 Tab 进抽屉后按 Esc，
+   * 焦点会落到 body。锚点用本页自己的行标记给——抽屉不猜（看板那边的行是另一种元素）。
+   */
+  const returnFocusTo = (eventKey: string): HTMLElement | null => {
+    const matches = [...document.querySelectorAll<HTMLElement>('button[data-calendar-row]')]
+      .filter(row => row.dataset.eventKey === eventKey || row.dataset.marketEvent === eventKey)
+    // 当日列表里那一行优先：读者是从那里点开的；月格里同名的一格是另一条路（它自己也有一条行）。
+    return matches.find(row => row.closest('[data-calendar-day-list]') !== null) ?? matches[0] ?? null
+  }
   /** Picking the same event again is how the reader puts the drawer away. */
   const selectItem = (item: CalendarDayItem) => {
     const alreadyOpen = item.source === 'market'
@@ -331,8 +341,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
 
   return (
     <main className="intelligence-page mi-economic-calendar" aria-label={text.title}>
-      {/* The calendar side of the row. The detail panel is the second child (see the CSS comment on
-          `row-reverse`), so this wrapper is what the panel squeezes — toolbar included. */}
+      {/* The calendar side of the row. 详情是覆盖在它上面的抽屉（不在这一列里，见 CSS 的
+          `.mi-calendar-detail-layer`），所以这一列（工具条 + 周视图 + 当日列表）宽度不受它影响。 */}
       <div className="mi-economic-calendar__column">
       <header className="mi-economic-calendar__header">
         <div className="mi-economic-calendar__heading">
@@ -429,6 +439,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
         marketSources={market.sources}
         now={now}
         onClose={clearDetail}
+        returnFocusTo={returnFocusTo}
         onRefresh={async (operation, eventKey) => {
           if (refreshState?.pending) return
           setRefreshState({ eventKey, operation, pending: true })

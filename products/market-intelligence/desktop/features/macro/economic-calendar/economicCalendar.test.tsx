@@ -377,13 +377,15 @@ describe('macro economic calendar', () => {
     await flush()
     const detail = container.querySelector<HTMLElement>('[data-calendar-detail-container]')!
     expect(detail.textContent).toContain(copy.events.cpi)
-    // A maskless overlay, not a column and not a modal: no drawer, no mask, no dialog role.
-    const panel = container.querySelector('aside')
-    expect(panel?.classList.contains('side-panel')).toBe(true)
+    // 承载是平台抽屉（R38）：`inline`、无遮罩、不进日历那一列。抽屉只做框，正文是原来那一份。
+    const panel = container.querySelector('.ant-drawer-content')
     expect(panel?.classList.contains('mi-calendar-detail')).toBe(true)
-    expect(container.querySelector('.ant-drawer')).toBeNull()
+    expect(container.querySelector('.ant-drawer')?.classList.contains('drawer--inline')).toBe(true)
+    expect(container.querySelector('.ant-drawer')?.classList.contains('drawer--large')).toBe(true)
+    // 无遮罩：日历还在背后、可点，点另一行就是换内容。
     expect(container.querySelector('.ant-drawer-mask')).toBeNull()
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    // 抽屉在宿主内的覆盖层里，而不是日历那一列的子元素——列宽因此不受它影响（R34）。
+    expect(container.querySelector('[data-calendar-detail-layer]')).not.toBeNull()
     // 元素级样式要跟着块走：规则写在面板自己的类上，而不是写在一个已不存在的 antd 抽屉上。
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
     for (const rule of ['.mi-calendar-detail dt', '.mi-calendar-detail dd', '.mi-calendar-detail h2']) {
@@ -401,7 +403,7 @@ describe('macro economic calendar', () => {
     const pageBody = pageRule.slice(0, pageRule.indexOf('\n}'))
     expect(pageBody).toContain('flex-direction: column')
     expect(pageBody).not.toContain('row-reverse')
-    const overlaySelector = '.mi-economic-calendar .mi-calendar-detail {'
+    const overlaySelector = '.mi-calendar-detail-layer > .drawer--inline {'
     expect(layout).toContain(overlaySelector)
     const overlayRule = layout.slice(layout.indexOf(overlaySelector))
     const overlayBody = overlayRule.slice(overlayRule.indexOf('{') + 1, overlayRule.indexOf('\n}'))
@@ -411,9 +413,9 @@ describe('macro economic calendar', () => {
     // 覆盖层不许按屏宽切换形态：以前 ≥1300 并排、<1300 才覆盖，同一份数据两种布局正是这次回归的形态。
     expect(layout).not.toContain('@media (max-width: 1299px)')
     // 结构上的第二道保险：面板不在日历列里，所以工作区（月份网格 + 当日列表）无法把它算进列宽。
-    expect(container.querySelector('.mi-economic-calendar__column .mi-calendar-detail')).toBeNull()
+    expect(container.querySelector('.mi-economic-calendar__column [data-calendar-detail-layer]')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__column .mi-economic-calendar__header')).not.toBeNull()
-    expect(container.querySelector('.mi-economic-calendar > .mi-calendar-detail')).not.toBeNull()
+    expect(container.querySelector('.mi-economic-calendar > [data-calendar-detail-layer]')).not.toBeNull()
     // The reused body's tokens travel with the surface. Opened from the market dashboard there is no
     // `.mi-economic-calendar` ancestor, and an undefined `var()` is invalid at computed-value time —
     // it unsets the property instead of falling back — so the body silently lost its padding and the
@@ -455,12 +457,14 @@ describe('macro economic calendar', () => {
       await act(async () => container.querySelector<HTMLButtonElement>('[data-market-event]')!.click())
       await flush()
       expect(container.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
-      // One panel, not two: the second pick swaps the content of the same column.
-      expect(container.querySelectorAll('aside.side-panel')).toHaveLength(1)
+      // One drawer, not two: the second pick swaps the content of the same drawer.
+      expect(container.querySelectorAll('[data-calendar-detail-layer]')).toHaveLength(1)
       expect(container.querySelector('.mi-market-calendar__inspector')?.textContent).toContain(market.title)
       expect(container.querySelector('[data-release-time-row]')).toBeNull()
       // The list it replaced is still standing behind it.
       expect(container.querySelector('[data-calendar-day-list]')).not.toBeNull()
+      // 换内容不许动焦点：读者连着翻下一条，被拽回上一行就断了。
+      expect(document.activeElement?.closest('[data-calendar-detail-layer]')).toBeNull()
     } finally { spy.mockRestore() }
   })
   it('collapses the panel when the reader picks the same event again, and closes it on Escape', async () => {
@@ -484,6 +488,10 @@ describe('macro economic calendar', () => {
     expect(container.querySelector('[data-calendar-detail-container]')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__inspector')).toBeNull()
     expect(container.querySelector('[data-calendar-day-list] [data-event-key="US.CPI.AUGUST"]')).not.toBeNull()
+    // 焦点只在**关闭**时归还：Tab 进抽屉后按 Esc 焦点本来会落到 body，所以要显式还给被点的那一行。
+    // 那一行按 key 认（月格里也有同名一行，读者点的是当日列表里这条）。
+    expect(document.activeElement?.getAttribute('data-event-key')).toBe('US.CPI.AUGUST')
+    expect(document.activeElement?.closest('[data-calendar-day-list]')).not.toBeNull()
   })
   it('closes the panel from its header control and keeps the day list standing', async () => {
     const event = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
@@ -492,7 +500,9 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => eventButton(container, event.eventKey).click())
     await flush()
-    await act(async () => container.querySelector<HTMLButtonElement>('aside button')!.click())
+    // 出口是抽屉标题行右端那颗 ×（无遮罩时它是除 Esc 之外唯一的关闭手势）。
+    await act(async () => container.querySelector<HTMLButtonElement>('.ant-drawer-header button[aria-label]')!.click())
+    await flush()
     expect(container.querySelector('[data-calendar-detail-container]')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__inspector')).toBeNull()
     expect(container.querySelector('[data-calendar-day-list]')).not.toBeNull()
@@ -2322,3 +2332,4 @@ function cssRule(styles: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(styles)?.[1] ?? ''
 }
+
