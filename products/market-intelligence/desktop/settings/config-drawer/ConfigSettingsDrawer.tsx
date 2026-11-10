@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { Drawer } from '@platform/ui/components/drawer'
 import { Popover } from '@platform/ui/components/popover'
@@ -13,7 +13,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { SourcesStaticScreen } from './SourcesStaticScreen'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
-import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView, DrawerSourceRow, DrawerSourcesView } from './drawerScreenView'
+import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView } from './drawerScreenView'
 import './configDrawer.css'
 
 /**
@@ -48,8 +48,6 @@ export type ConfigSettingsDrawerProps = {
    * 与 `sourcesPanel` 同一条边界：内容与读写都在宿主那边，抽屉只把它放进这一屏。
    */
   notificationsPanel?: React.ReactNode
-  /** 来源与采集：源列表由宿主读好（现成 `getPanelView`），抽屉只渲染。 */
-  sourcesView?: DrawerSourcesView
   /**
    * 来源与采集：**宿主渲染好的「左树 + 右详情」整块**。
    *
@@ -57,8 +55,6 @@ export type ConfigSettingsDrawerProps = {
    * 抽屉只负责把它放进两栏。传了它就不再用下面的静态版或扁平列表。
    */
   sourcesPanel?: React.ReactNode
-  /** 选中一条源（右侧详情区等 S1 落地再接）。 */
-  onSelectSource?: (sourceId: string) => void
   /** 分析屏视图（简报线给的 `useDrawerAnalysisView`）：两行值已是成句文案，原样渲染。 */
   analysisView?: DrawerScreenView<DrawerRowView>
   /** 日报屏视图（`useDrawerBriefingView`，五行只读），宿主读好传进来。 */
@@ -90,9 +86,7 @@ export function ConfigSettingsDrawer({
   analysisView,
   briefingView,
   briefingPanel,
-  sourcesView,
   sourcesPanel,
-  onSelectSource,
   platformValues,
   onOpenPlatformSettings,
   resolveText: resolveTextProp
@@ -154,19 +148,10 @@ export function ConfigSettingsDrawer({
         /* 有「左树 + 右详情」这一屏时，滚动交给两栏各自（菜单那一栏也自己滚），整块不滚。 */
         className={`config-drawer__pane${menu === 'sources' && sourcesPanel !== undefined ? ' config-drawer__pane--split' : ''}`}>
         <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
-        {menu === 'sources' && sourcesPanel !== undefined
-          ? (<div className="config-drawer__split">{sourcesPanel}</div>)
-          : null}
-        {menu === 'sources' && sourcesPanel === undefined && sourcesView === undefined
-          ? (<SourcesStaticScreen />)
-          : null}
-        {menu === 'sources' && sourcesPanel === undefined && sourcesView !== undefined
-          ? (<SourcesScreen
-            labels={{ enabled: copy.rows.enabled }}
-            onSelect={onSelectSource}
-            resolveText={resolveTextProp ?? ((key: string) => key)}
-            values={{ on: copy.values.autoOn, off: copy.values.autoOff }}
-            view={sourcesView} />)
+        {menu === 'sources'
+          ? sourcesPanel === undefined
+            ? (<SourcesStaticScreen />)
+            : (<div className="config-drawer__split">{sourcesPanel}</div>)
           : null}
         {menu === 'processing' && processingPanel !== undefined
           ? processingPanel
@@ -258,111 +243,6 @@ function NotificationsScreen({ view, resolveText }: {
           )}
         </div>
       ))}
-    </div>
-  )
-}
-
-/**
- * 来源与采集：**只渲染宿主读来的源列表**（宿主用现成 `getSettingsView`）。
- *
- * 四态**都在同一副两栏骨架里**（列表 196 + 详情 + 间距 12）——加载时不能塌成一栏。
- * 「读不到」是错误态 + 重试，「确实没有源」是空态，两者必须能分开断言。
- */
-function SourcesScreen({ view, resolveText, onSelect, labels, values }: {
-  view: DrawerSourcesView
-  resolveText: (key: string) => string
-  onSelect?: (sourceId: string) => void
-  /** 详情区那两行：标签与「开/关」两个字都由外层给，屏内不新造文案。 */
-  labels: Readonly<{ enabled: string }>
-  values: Readonly<{ on: string; off: string }>
-}): React.ReactElement {
-  // 空态与就绪态都来自 `ready`，但两者在页面上是两件事：空态不画列表，只画空状态。
-  const screen = view.state === 'ready' && view.rows.length === 0 ? 'empty' : view.state
-  // 没选过就落在第一个源上：右侧不再是「—」，读者一眼能看到某个源现在什么样。
-  const [pickedId, setPickedId] = useState<string | undefined>(undefined)
-  // 只有 `ready` 才有 rows：加载/错误/空态下不能去读它。
-  const readyRows = view.state === 'ready' ? view.rows : []
-  const selected = readyRows.find((row) => row.sourceId === pickedId) ?? readyRows[0]
-  const setPicked = setPickedId
-
-  const frame = (detail: React.ReactNode, list: React.ReactElement | null): React.ReactElement => (
-    <div data-drawer-screen={screen} data-drawer-screen-name="sources">
-      <div className="config-drawer__split">
-        <div className="config-drawer__source-list">{list}</div>
-        <div className="config-drawer__detail">{detail}</div>
-      </div>
-    </div>
-  )
-
-  if (view.state === 'loading') {
-    return frame(<LoadingState ariaLabel={resolveText('ui.loading.label')} />, null)
-  }
-  if (view.state === 'error') {
-    return frame(
-      <StateView
-        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: view.onRetry }}
-        reasonCode="unreadable"
-        resolveText={resolveText}
-        state="error" />,
-      null
-    )
-  }
-  if (view.rows.length === 0) {
-    // `not-yet`：确实还没有源；要求挂动作的码在这里语义不对。
-    return frame(<StateView reasonCode="not-yet" resolveText={resolveText} state="empty" />, null)
-  }
-  return frame(
-    <SourceDetail source={selected} labels={labels} values={values} />,
-    <>
-      {view.rows.map((source, index) => (
-        <Fragment key={source.sourceId}>
-          {/* 供应商分组：三十多个源平铺就是一堵名字墙；同名分组只画一次标题。 */}
-          {source.groupName !== undefined && source.groupName !== view.rows[index - 1]?.groupName
-            ? <div className="config-drawer__source-group">{source.groupName}</div>
-            : null}
-          <button
-            aria-current={source.sourceId === selected?.sourceId ? 'true' : undefined}
-            className="config-drawer__source-item"
-            data-drawer-source={source.sourceId}
-            onClick={() => { setPicked(source.sourceId); onSelect?.(source.sourceId) }}
-            type="button">
-            <span className="config-drawer__source-name">{source.name}</span>
-            {source.statusLabel === undefined ? null : (
-              <span className="config-drawer__source-status">{source.statusLabel}</span>
-            )}
-          {/* 行尾点：none 不画；ring 空心环、warn 实心黄、bad 实心红。 */}
-          {source.healthMarker === undefined || source.healthMarker === 'none'
-            ? null
-            : <span className={`config-drawer__source-dot config-drawer__source-dot--${source.healthMarker}`} />}
-          </button>
-        </Fragment>
-      ))}
-    </>
-  )
-}
-
-/**
- * 详情区：选中那个源的三条事实。
- *
- * 没有选中时不画任何东西——以前这里挂的是一个「—」标题，读者看到会以为整块坏了。
- * 只列事实，不给动作：这一列是「看看它现在什么样」，不是第二个设置面。
- */
-function SourceDetail({ source, labels, values }: {
-  source: DrawerSourceRow | undefined
-  labels: Readonly<{ enabled: string }>
-  values: Readonly<{ on: string; off: string }>
-}): React.ReactElement | null {
-  if (source === undefined) return null
-  return (
-    <div data-drawer-source-detail={source.sourceId}>
-      <div className="config-drawer__group-title">{source.name}</div>
-      {source.statusLabel === undefined ? null : (
-        <p className="config-drawer__source-detail-status">{source.statusLabel}</p>
-      )}
-      <div className="config-drawer__row">
-        <span className="config-drawer__label">{labels.enabled}</span>
-        <span className="config-drawer__value">{source.enabled ? values.on : values.off}</span>
-      </div>
     </div>
   )
 }

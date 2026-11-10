@@ -63,6 +63,75 @@ describe('SettingsSourceTree', () => {
     }
   })
 
+  it('lists a source that only belongs to the calendar panel, like any other', async () => {
+    // 配置面要的是**全部源**。曾经想用「按面板取」那条数据链喂这一屏，那样「只给日历」和
+    // 「哪都不给」的源会在列表里消失，读者会以为没有这个源。树吃的是 `SettingsView`，
+    // 所以按面板筛这一步根本不存在——这条钉的就是「不许按面板筛」。
+    const calendarOnly = {
+      sourceId: 'macro-calendar-bls', displayName: 'BLS', providerId: 'bls', panels: ['economic-calendar'], visibility: 'visible',
+      kind: 'official-calendar', enabled: true, healthState: 'healthy', healthMarker: 'none'
+    }
+    const dashboardOnly = {
+      sourceId: 'binance-open-interest', displayName: 'Binance', providerId: 'binance', panels: ['dashboard'], visibility: 'visible',
+      kind: 'adapter', enabled: true, healthState: 'healthy', healthMarker: 'none'
+    }
+    const view = {
+      groups: [
+        { category: 'macro', providers: [{ providerId: 'bls', displayName: 'BLS', category: 'macro', credential: 'none', sources: [calendarOnly], healthMarker: 'none' }] },
+        { category: 'digital-assets', providers: [{ providerId: 'binance', displayName: 'Binance', category: 'digital-assets', credential: 'api-key', sources: [dashboardOnly], healthMarker: 'none' }] }
+      ],
+      counts: { total: 2, enabled: 2, pending: 0, failed: 0 }
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(SettingsSourceTree, {
+      filter: 'all',
+      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+      onFilterChange: vi.fn(),
+      onSelectProvider: vi.fn(),
+      selectedProviderId: undefined,
+      view: view as never
+    })))
+    await act(async () => { await Promise.resolve() })
+    const names = [...host.querySelectorAll('.intelligence-provider-main strong')].map((node) => node.textContent)
+    expect(names).toEqual(['BLS', 'Binance'])
+  })
+
+  it('reports the provider the reader picked, and marks it as current', async () => {
+    // 「选中哪个供应商」这件事现在在这里发生：抽屉里那屏的选择状态就是这颗回调。
+    const onSelectProvider = vi.fn()
+    const provider = (providerId: string, displayName: string): unknown => ({
+      providerId, displayName, category: 'macro', credential: 'none', healthMarker: 'none',
+      sources: [{
+        sourceId: `${providerId}-s`, displayName, providerId, panels: ['dashboard'], visibility: 'visible',
+        kind: 'adapter', enabled: true, healthState: 'healthy', healthMarker: 'none'
+      }]
+    })
+    const view = {
+      groups: [{ category: 'macro', providers: [provider('bls', 'BLS'), provider('fed', 'Fed')] }],
+      counts: { total: 2, enabled: 2, pending: 0, failed: 0 }
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(SettingsSourceTree, {
+      filter: 'all',
+      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+      onFilterChange: vi.fn(),
+      onSelectProvider,
+      selectedProviderId: 'fed',
+      view: view as never
+    })))
+    await act(async () => { await Promise.resolve() })
+    const rows = [...host.querySelectorAll<HTMLButtonElement>('.intelligence-provider-row')]
+    expect(rows).toHaveLength(2)
+    expect(rows.filter((row) => row.getAttribute('aria-current') === 'true')).toHaveLength(1)
+    expect(rows[1]?.getAttribute('aria-current')).toBe('true')
+    await act(async () => rows[0]?.click())
+    expect(onSelectProvider).toHaveBeenCalledWith('bls')
+  })
+
   it('does not call an unsettled read "filtered out"', async () => {
     // 空数组的 `every` 恒真：`view` 还没到时会画成「筛选后没有来源」+「清除筛选」。
     // 未结算不是被筛掉了——任何提前渲染的调用点都会立刻误导。

@@ -12,7 +12,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ConfigSettingsDrawer } from './ConfigSettingsDrawer'
-import type { DrawerRowView, DrawerScreenView, DrawerSourcesView } from './drawerScreenView'
+import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS } from './drawerPreviewRows'
 
 let root: Root | undefined
@@ -57,8 +57,8 @@ function openPlatform(values: Record<string, string>, onOpen: (target: string) =
 }
 
 
-/** 来源屏的挂载助手：只差「宿主读了什么」。 */
-function openSources(view: DrawerSourcesView, onSelect: (sourceId: string) => void = () => undefined): HTMLElement {
+/** 来源屏的挂载助手：这一屏现在只放宿主渲染好的那一块（旧的扁平源行已退役）。 */
+function openSourcesPanel(panel: React.ReactNode): HTMLElement {
   document.body.replaceChildren()
   root?.unmount()
   root = undefined
@@ -66,13 +66,7 @@ function openSources(view: DrawerSourcesView, onSelect: (sourceId: string) => vo
   document.body.append(host)
   root = createRoot(host)
   act(() => root?.render(
-    <ConfigSettingsDrawer
-      initialMenu="sources"
-      onClose={() => undefined}
-      onSelectSource={onSelect}
-      open
-      resolveText={(key) => key}
-      sourcesView={view} />
+    <ConfigSettingsDrawer initialMenu="sources" onClose={() => undefined} open sourcesPanel={panel} />
   ))
   return document.body
 }
@@ -227,74 +221,25 @@ describe('config settings drawer (static layout)', () => {
     expect(onOpen).toHaveBeenCalledWith('models')
   })
 
-  it('shows the sources the host read, and reports the selection back', () => {
-    const onSelect = vi.fn()
-    const container = openSources(
-      { state: 'ready', rows: [
-        { sourceId: 'bls', name: 'BLS 官方日历', statusLabel: '不可用', enabled: true },
-        { sourceId: 'fed', name: 'Fed 官方日历', enabled: false }
-      ] },
-      onSelect
-    )
-    expect(container.querySelector('[data-drawer-screen="ready"]')).not.toBeNull()
-    const items = [...container.querySelectorAll<HTMLElement>('[data-drawer-source]')]
-    expect(items).toHaveLength(2)
-    expect(items[0]?.textContent).toContain('BLS 官方日历')
-    expect(items[0]?.textContent).toContain('不可用')
-    act(() => { items[1]?.click() })
-    expect(onSelect).toHaveBeenCalledWith('fed')
+  it('renders the host-provided sources panel inside the two-column split', () => {
+    // 抽屉这一层的判据只剩一条：宿主给的整块放进两栏，不再自己拼源行。
+    const container = openSourcesPanel(<div data-panel="sources">the settings pane, moved in</div>)
+    expect(container.querySelector('.config-drawer__split [data-panel="sources"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-drawer-source]')).toHaveLength(0)
   })
 
-  it('tells "could not read the sources" from "there are no sources"', () => {
-    // 两条分开断言：读不到 → error + 重试；确实没有源 → empty。
-    const onRetry = vi.fn()
-    const failed = openSources({ state: 'error', onRetry })
-    expect(failed.querySelector('[data-drawer-screen="error"]')).not.toBeNull()
-    expect(failed.querySelector('[data-drawer-screen="empty"]')).toBeNull()
-    act(() => { failed.querySelector<HTMLElement>('.state-view__action')?.click() })
-    expect(onRetry).toHaveBeenCalledTimes(1)
-
-    const empty = openSources({ state: 'ready', rows: [] })
-    expect(empty.querySelector('[data-drawer-screen="empty"]')).not.toBeNull()
-    expect(empty.querySelector('[data-drawer-screen="error"]')).toBeNull()
-  })
-
-  it('shows every source the settings view returned, including calendar-only ones', () => {
-    // 回归：配置面要的是**全部源**。曾经想用 `getPanelView(panelId)` 喂这一屏，而它只有
-    // `dashboard` / `economic-calendar` 两个面板——那样「只给日历」和「哪都不给」的源会在抽屉里消失，
-    // 读者会以为没有这个源。这条用例把「6 个源（含 1 个只在日历里）→ 6 行」钉死。
-    const container = openSources({
-      state: 'ready',
-      rows: [
-        { sourceId: 'bls', name: 'BLS 官方日历', statusLabel: '官方源暂时不可用', enabled: true },
-        { sourceId: 'fed', name: 'Fed 官方日历', enabled: true },
-        { sourceId: 'market', name: '市场日历', enabled: true },
-        { sourceId: 'binance', name: 'Binance 期货持仓', enabled: false },
-        { sourceId: 'fear-greed', name: '恐惧贪婪指数', enabled: true },
-        { sourceId: 'news-rss', name: '新闻 RSS', enabled: false }
-      ]
-    })
-    expect(container.querySelectorAll('[data-drawer-source]')).toHaveLength(6)
-  })
-
-  it('keeps the two-column skeleton in every state, so loading does not collapse to one column', () => {
-    // 四态都要两栏：加载时塌成一栏，读者看到的是布局跳变。
-    for (const view of [
-      { state: 'loading' as const },
-      { state: 'error' as const, onRetry: () => undefined },
-      { state: 'ready' as const, rows: [] }
-    ]) {
-      const container = openSources(view as never)
-      expect(container.querySelector('.config-drawer__split')).not.toBeNull()
-      expect(container.querySelector('.config-drawer__source-list')).not.toBeNull()
-      expect(container.querySelector('.config-drawer__detail')).not.toBeNull()
-    }
+  it('keeps the split and a placeholder when the host passes no panel yet', () => {
+    // 没有面板时不许空白：静态占位顶上（空屏比「—」更糟，读者会以为抽屉坏了）。
+    const container = document.body
+    const fallback = container.querySelector('.config-drawer__split')
+    expect(fallback).toBeNull()
+    const withFallback = mount('sources')
+    expect(withFallback.querySelector('.config-drawer__split')).not.toBeNull()
+    expect((withFallback.querySelector('.config-drawer__source-list')?.children.length ?? 0)).toBeGreaterThan(0)
   })
 
   it('never puts two empty markers in one row, and uses a status word for state-type gaps', () => {
     // 共享行为变更：通知 / 日报 / 处理等屏都走这条规则。
-    const container = openSources({ state: 'ready', rows: [] })
-    expect(container).not.toBeNull()
     const rowsWithGap = openRows([
       { key: 'translation', emptyLabel: '没启用' },
       { key: 'sentimentModel', value: '跟随快速模型：GPT-4.1' },

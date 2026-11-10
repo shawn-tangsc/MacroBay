@@ -45,18 +45,3 @@ export type DrawerPlatformValues = {
 
 /** 跳转目标：平台基本设置页 / 模型服务页。抽屉不拼路由，只转达这个目标。 */
 export type DrawerPlatformTarget = 'preferences' | 'models'
-
-/** 来源列表里的一条：只放读者要判断的三样——名字、状态词、启不启用。 */
-export type DrawerSourceRow = {
-  sourceId: string
-  name: string
-  /** 这个源属于哪个供应商：列表按它分组，读者才不必在一长串名字里找。 */
-  groupName?: string
-  /** 健康标记，投影给什么画什么；`none` 就是不画（**不是**「健康」，只是没有标记）。 */
-  healthMarker?: 'none' | 'ring' | 'warn' | 'bad'
-  /** 状态词（已格式化）；不给就是不画状态词，不编一个「正常」。 */
-  statusLabel?: string
-  enabled: boolean
-}
-
-export type DrawerSourcesView = DrawerScreenView<DrawerSourceRow>

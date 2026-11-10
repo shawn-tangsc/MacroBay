@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -44,6 +46,27 @@ export function DashboardSourcesPanel(): React.ReactElement {
     if (first !== undefined) setSelectedProviderId(first.providerId)
   }, [settingsView, selectedProviderId])
 
+  // 四态：读不到是**错误态 + 真重试**，确实没有源是**空态**，加载中不许把树画成「没有源」。
+  // 这三条以前由抽屉里那套扁平源行给，扁平屏退役后必须落在这里，否则「读不到」会被画成「一个源都没配」。
+  const state = sourcesPanelState({ errorCode: settings.errorCode, loading: settings.loading, view: settingsView })
+  if (state === 'loading') {
+    return <div className="config-drawer__sources-state" data-sources-state="loading"><LoadingState label={t.loading} fill /></div>
+  }
+  if (state === 'error') {
+    return <div className="config-drawer__sources-state" data-sources-state="error">
+      <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: settings.reload }}
+        reasonCode="unreadable"
+        size="md"
+        state="error" />
+    </div>
+  }
+  if (state === 'empty') {
+    return <div className="config-drawer__sources-state" data-sources-state="empty">
+      <StateView reasonCode="not-yet" size="md" state="empty" />
+    </div>
+  }
+
   return <SourcesSettingsPane
     filter={sourceFilter}
     onFilterChange={setSourceFilter}
@@ -79,4 +102,21 @@ export function DashboardSourcesPanel(): React.ReactElement {
     }}
     treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
     view={settingsView} />
+}
+
+/**
+ * 这一屏的四态判据（纯函数：加载 / 读不到 / 确实没有 / 就绪）。
+ *
+ * - `view` 还没到、也还没报错 → **loading**。这一档不能画成空列表：读者会以为一个源都没配；
+ * - 没有 `view` 且已有错误码 → **error**（要能重试，不能退化成空态）；
+ * - 读到了但一个供应商都没有 → **empty**（这才是「确实没有」）；
+ * - 其余 → ready。
+ */
+export function sourcesPanelState(input: Readonly<{
+  loading: boolean
+  errorCode: string | null
+  view: { groups: readonly { providers: readonly unknown[] }[] } | undefined
+}>): 'loading' | 'error' | 'empty' | 'ready' {
+  if (input.view === undefined) return input.errorCode === null ? 'loading' : 'error'
+  return input.view.groups.some((group) => group.providers.length > 0) ? 'ready' : 'empty'
 }
