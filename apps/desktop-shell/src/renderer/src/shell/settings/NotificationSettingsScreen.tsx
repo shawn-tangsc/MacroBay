@@ -9,6 +9,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 import { StateView } from '@platform/ui/components/state'
 
 import './notifications/notificationSettings.css'
@@ -124,9 +125,8 @@ export function NotificationSettingsScreen(props: {
       {state.status === 'ready' ? (
         <div className="notification-card" data-notification-settings-card>
           {writeFailed ? (
-            <p className="notification-settings-write-failed" role="alert" data-notification-write-failed>
-              {text.writeFailed}
-            </p>
+            /* 区块级写失败：平台的红色横幅给角色与颜色，正文只留那一句；没有更多细节就不挂 ⓘ。 */
+            <InlineNotice tone="danger">{text.writeFailed}</InlineNotice>
           ) : null}
 
           <section className="notification-group" aria-label={text.localGroup}>

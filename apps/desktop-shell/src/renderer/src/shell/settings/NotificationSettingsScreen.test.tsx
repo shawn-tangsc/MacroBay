@@ -153,7 +153,7 @@ describe('notification settings is two switches, one test button and a footer', 
     })
 
     expect(container.querySelectorAll('button[role="switch"]')[0]!.getAttribute('aria-checked')).toBe('false')
-    expect(container.querySelector('[data-notification-write-failed]')?.textContent).toContain(text.writeFailed)
+    expect(container.querySelector('[data-inline-notice="danger"]')?.textContent).toContain(text.writeFailed)
     // 不给内部码，也不假装成功。
     expect(container.textContent).not.toContain('write-failed')
   })
@@ -170,7 +170,7 @@ describe('notification settings is two switches, one test button and a footer', 
     })
 
     expect(container.querySelectorAll('button[role="switch"]')[0]!.getAttribute('aria-checked')).toBe('true')
-    expect(container.querySelector('[data-notification-write-failed]')).toBeNull()
+    expect(container.querySelector('[data-inline-notice="danger"]')).toBeNull()
   })
 
   it('shows the three hint triggers, and the desktop one explains what we cannot read', async () => {
@@ -248,7 +248,7 @@ describe('notification settings is two switches, one test button and a footer', 
       })
     }
 
-    expect(container.querySelectorAll('[data-notification-write-failed]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-inline-notice="danger"]')).toHaveLength(1)
   })
 
   it('says only 「没发出去」 in the sentence and puts the reason code in a collapsed area', async () => {

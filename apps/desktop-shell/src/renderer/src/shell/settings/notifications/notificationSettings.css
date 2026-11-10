@@ -255,11 +255,3 @@
   font-weight: 500;
 }
 
-/* 写操作没存上：红色只落在左侧 2px 竖条上，句子用中性色（--danger 在正文档读不清）。 */
-.notification-settings-write-failed {
-  margin: 0 0 14px;
-  padding-left: 10px;
-  border-left: 2px solid var(--danger);
-  color: var(--muted-strong);
-  font-size: 12.5px;
-}
