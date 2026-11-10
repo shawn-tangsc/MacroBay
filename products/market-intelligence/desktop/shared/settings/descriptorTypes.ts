@@ -123,8 +123,13 @@ export type SettingDescriptor = Readonly<{
   write?: SettingWrite
   /** 值缺失时显示什么：只许是 `SERVER_DEFAULTS` 的键（编译期）。 */
   defaultValueFrom?: ServerDefaultKey
-  /** 只依赖 `view` 与页面上下文 `ctx`；假 = 不渲染，不是禁用。 */
-  visibleWhen?: (view: SettingView, ctx: SettingContext) => boolean
+  /**
+   * 何时出现：**只依赖 `view`**；假 = 不渲染，不是禁用。
+   *
+   * 契约（§1 ⑧ / G10）定的是单参 `(view) => boolean`：条件要用的能力事实必须先放进视图，
+   * 不由渲染层另传一份上下文。第二参留成可选只为三段迁移不红树——调用点改单参后删掉它。
+   */
+  visibleWhen?: (view: SettingView, context?: SettingContext) => boolean
   /**
    * 行名：静态行用 `labelKey`；按实例化的行可用 `labelText(view)` 取视图数据（来源名/feed 名）。
    * `labelText` 只许出现在 `keyedBy` 行上，且**不许写字面量句子**。

@@ -196,12 +196,18 @@ describe('settings registry self-checks', () => {
     expect(validateSettingRegistry(withRow(feedTemplate))).not.toContain('template-key-mismatch')
   })
 
-  it('ctx is read-only context: include-in-sentiment visibility comes from the page', () => {
+  it('reads the capability fact from the view, and hides the row when the fact is missing', () => {
+    // 能力事实只从视图来（契约 §1 ⑧/G10）：页面算视图时把 `supportsSentiment` 一并给出。
+    // 视图里没有这条事实 ⇒ **整行不渲染**，不许默认 true，也不许由渲染层另传一份上下文。
     const row = settingRegistry.sources.find((entry) => entry.key === 'setting:sources.include-in-sentiment@<sourceId>') as SettingDescriptor
-    const view = { sourceId: 'coindesk-rss', profile: { includeInSentiment: true } }
-    expect(row.visibleWhen?.(view, { supportsSentimentById: { 'coindesk-rss': true } })).toBe(true)
-    expect(row.visibleWhen?.(view, { supportsSentimentById: { 'coindesk-rss': false } })).toBe(false)
-    expect(row.visibleWhen?.(view, {})).toBe(false)
+    const view = (supportsSentiment?: boolean) => ({
+      sourceId: 'coindesk-rss',
+      profile: { includeInSentiment: true },
+      ...(supportsSentiment === undefined ? {} : { supportsSentiment })
+    })
+    expect(row.visibleWhen?.(view(true))).toBe(true)
+    expect(row.visibleWhen?.(view(false))).toBe(false)
+    expect(row.visibleWhen?.(view())).toBe(false)
   })
 
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {

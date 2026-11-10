@@ -61,7 +61,8 @@ export const SOURCE_ROWS: readonly SettingDescriptor[] = Object.freeze([
     availability: 'live'
   },
   {
-    // 纳入情绪分析：可见性由页面算好的只读上下文决定；ctx 不进注册表，也不从它推可写值。
+    // 纳入情绪分析：可见性由**视图里的能力事实**决定（`view.supportsSentiment`，页面算视图时一并给）。
+    // 缺这条事实 ⇒ 整行不渲染（不是默认 true）；不接受渲染层另传上下文。
     key: 'setting:sources.include-in-sentiment@<sourceId>',
     keyedBy: 'sourceId',
     menu: 'sources',
@@ -80,10 +81,15 @@ export const SOURCE_ROWS: readonly SettingDescriptor[] = Object.freeze([
         includeInSentiment: value === true
       })
     },
-    visibleWhen: (view, ctx) => {
+    visibleWhen: (view, legacyContext) => {
+      // 视图给了事实就**只认视图**（这是契约要求的那条路）。
+      const supportsSentiment = readViewField(view, 'supportsSentiment')
+      if (typeof supportsSentiment === 'boolean') return supportsSentiment
+      // 过渡：页面还没把事实拼进视图时，退回旧的只读上下文——只在「视图里根本没有这一格」时生效。
+      // TODO(C17 第三步)：调用点改单参后，连同 `SettingContext` 一起删掉这一段，缺事实即不渲染。
       const sourceId = readViewField(view, 'sourceId')
       if (typeof sourceId !== 'string') return false
-      return readViewField(readViewField(ctx, 'supportsSentimentById'), sourceId) === true
+      return readViewField(readViewField(legacyContext, 'supportsSentimentById'), sourceId) === true
     },
     copy: { labelKey: 'settings.intelligenceSources.collectionPolicy.includeInSentiment' },
     availability: 'live'
