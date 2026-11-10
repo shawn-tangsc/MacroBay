@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 
 import { SettingsRow as SharedSettingsRow } from '@platform/ui/components/settings-row'
+import { SettingsSectionHeader } from '@platform/ui/components/settings-section'
 
 import { SettingsInfo, type SettingsInfoSpec } from '../settingsInfo'
 
@@ -42,18 +43,20 @@ export type SettingsRowInfo = SettingsInfoSpec
 
 export { SettingsInfo }
 
-/** 一组字段：组标题 + 行；组与组之间靠 24 间距 + 1px 分隔线分开（首组不带线）。 */
+/**
+ * 一组字段：区块标题 + 行。
+ *
+ * 用平台 `SettingsSectionHeader` + 同一套 `settings-section` 结构（抽屉六屏与设置页共用），
+ * ⓘ 由平台那个 header 的 info 槽给、间距 4；不再自绘组头与分隔线。
+ */
 export function SettingsGroup(props: Readonly<{
   title: string
   /** 组标题旁的可选说明（ⓘ），不是正文。 */
   aside?: ReactNode
   children: ReactNode
 }>): ReactElement {
-  return <section className="intelligence-notification-form-group">
-    <div className="intelligence-notification-form-group-head">
-      <h3 className="intelligence-notification-form-group-title">{props.title}</h3>
-      {props.aside ?? null}
-    </div>
-    {props.children}
+  return <section className="settings-section" data-settings-section-block="true">
+    <SettingsSectionHeader title={props.title} info={props.aside} />
+    <div className="settings-section__body">{props.children}</div>
   </section>
 }

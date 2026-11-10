@@ -1,60 +1,77 @@
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useState, type ReactElement } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { SettingsSection } from '@platform/ui/components/settings-section'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import type { SettingDescriptor } from '../../shared/settings/descriptorTypes'
 import { settingRegistry } from '../../shared/settings/registry'
-import { intelligenceNotificationText } from './text'
+import { SettingField } from '../../shared/settings/SettingField'
 import { CalendarDetail } from './calendarDetail'
-import { ContentDetail } from './contentDetail'
 import { NewsPushThresholdRow } from './newsPushThresholdRow'
-import { NotificationList, type NotificationListItem } from './notificationList'
-import { SettingsSection } from '@platform/ui/components/settings-section'
-import { StatusPill } from '@platform/ui/components/status-pill'
 import { SettingsInfo } from './settingsRow'
+import { TestNotificationButton } from './testNotificationButton'
+import { intelligenceNotificationText } from './text'
 import { useCalendarReminderSettings } from './useCalendarReminderSettings'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS, useChannelEventSettings } from './useChannelEventSettings'
 import { useNewsPushOutletSwitch } from './useNewsPushOutletSwitch'
 import { useNewsPushThreshold } from './useNewsPushThreshold'
 import { useNotificationLayout } from './useNarrowWindow'
 import { useSurfaceSelection } from './useSurfaceSelection'
-import { TestNotificationButton } from './testNotificationButton'
-
-import './intelligence-notification.css'
 
 /**
- * 设置 → 情报 → 通知的**整块内容**：设置页与产品内「配置」抽屉共用同一块实现。
+ * 情报 · 通知（设置页与配置抽屉共用这一份内容）。
  *
- * 为什么抽出来：抽屉里那一屏要和设置页长得一模一样（用户 2026-11-10「现成的挪进去」），
- * 而抽屉目录不许 import 数据层——所以由宿主渲染本组件，把整块当节点交给抽屉。
+ * 版式与「来源与采集」同一套语言：
+ * - 左：目录列表（分组标题 + 行 + 状态词），容器与行都用 `intelligence-catalog-pane` 那一套；
+ * - 右：`SettingsSection` + 设置行（区块标题 13/650、行 44、标签 160、控件左缘对齐）；
+ * - 整屏级提示（通道未就绪）在内容上方一条 inline notice；解释进 ⓘ，不单独悬空；
+ * - 抽屉不画页标题；860 断点只属设置页（那一面量自己的宽度，窄了把列表换成下拉）。
  *
- * 两个面只差**外壳**，不差内容：
- * - `page`：原样保留设置页的 `<section class="settings-workspace intelligence-notification-workspace">`
- *   与页标题（页面需要它，且断点量的是这一块的宽度）；
- * - `drawer`：只画内容，标题与页边距归抽屉（不做嵌套标题）。
+ * 数据只在 hook 里：读命令、写命令、文案键各一份，本文件不碰 IPC。
  */
 
 type ItemKey = (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]['itemKey']
 
 const ITEM_KEYS: readonly ItemKey[] = INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => row.itemKey)
-
 const ROW_BY_ITEM = Object.fromEntries(
   INTELLIGENCE_CHANNEL_EVENT_ROWS.map((row) => [row.itemKey, row])
 ) as Readonly<Record<ItemKey, (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]>>
-
 const CALENDAR_GROUP_EVENT_ID = 'market-intelligence.calendar.event-upcoming'
 
-/** 三条内容项各自对应哪一条声明：页面不自己拼字段，只按 key 找声明。 */
-const CONTENT_SETTING_KEYS = {
+const SWITCH_DESCRIPTOR_BY_ITEM: Readonly<Record<Exclude<ItemKey, 'calendar'>, string>> = {
   signal: 'setting:notifications.channel-event.signal-triggered',
   briefing: 'setting:notifications.channel-event.briefing-ready',
   sentiment: 'setting:notifications.push-outlet'
-} as const satisfies Record<Exclude<ItemKey, 'calendar'>, string>
+}
 
-/** 日历详情里已迁移的四行（日历开关 / 提前量 / 重要性 / 落地筛选）。 */
-const CALENDAR_SETTING_KEYS = [
+const ROW_CLASS = 'intelligence-notification-form-row'
+const LABEL_CLASS = 'intelligence-notification-form-label'
+const LABEL_TEXT_CLASS = 'intelligence-notification-form-label-text'
+const CONTROL_CLASS = 'intelligence-notification-form-control'
+
+function descriptorOf(key: string): SettingDescriptor {
+  const descriptor = settingRegistry.notifications.find((row) => row.key === key)
+  // 没有兜底：声明缺失是编译/测试的红，不许静默少一行。
+  if (!descriptor) throw new Error(`missing setting descriptor: ${key}`)
+  return descriptor
+}
+
+/** 从通知中心点「去设置」进来时落到对应那一项；定位不到落第一项，不猜。 */
+export function itemForFocus(focusEntityId: string | null | undefined): ItemKey {
+  if (!focusEntityId) return 'signal'
+  const row = INTELLIGENCE_CHANNEL_EVENT_ROWS.find((entry) => entry.eventId === focusEntityId)
+  if (row) return row.itemKey
+  if (focusEntityId.startsWith('market-intelligence.calendar.')) return 'calendar'
+  if (focusEntityId === 'market-intelligence.macro.event-landed') return 'calendar'
+  return 'signal'
+}
+
+export const MIGRATED_SETTING_KEYS: readonly string[] = [
+  ...Object.values(SWITCH_DESCRIPTOR_BY_ITEM),
+  'setting:notifications.push-threshold',
   'setting:notifications.surfaces',
   'setting:notifications.calendar.enabled',
   'setting:notifications.calendar.lead',
@@ -62,34 +79,7 @@ const CALENDAR_SETTING_KEYS = [
   'setting:notifications.calendar.landed-filter',
   'setting:notifications.calendar.landed-countries.scope',
   'setting:notifications.calendar.landed-countries.codes'
-] as const
-
-/** 已迁移到「按声明渲染」的键：守卫①②只认这份清单，不按文件位置推断。 */
-export const MIGRATED_SETTING_KEYS: readonly string[] = [
-  ...Object.values(CONTENT_SETTING_KEYS),
-  // 强度门槛是舆情详情里的第二行，不属于列表项本身，单独列在这里。
-  'setting:notifications.push-threshold',
-  ...CALENDAR_SETTING_KEYS
 ]
-
-function contentDescriptor(key: Exclude<ItemKey, 'calendar'>): SettingDescriptor {
-  const descriptor = settingRegistry.notifications.find((row) => row.key === CONTENT_SETTING_KEYS[key])
-  // 没有兜底：声明缺失就是编译/测试的红，不许静默少一行。
-  if (!descriptor) throw new Error(`missing setting descriptor: ${CONTENT_SETTING_KEYS[key]}`)
-  return descriptor
-}
-
-/** 从通知中心点「去设置」进来时落到对应那一项；定位不到落第一项，不猜。 */
-export function itemForFocus(focusEntityId: string | null | undefined): ItemKey {
-  if (!focusEntityId) return 'signal'
-  // 每一行按自己的 id 命中自己：舆情通知必须落到舆情行，不许再借别的行的事件 id。
-  const row = INTELLIGENCE_CHANNEL_EVENT_ROWS.find((entry) => entry.eventId === focusEntityId)
-  if (row) return row.itemKey
-  // 宏观事件与日历「开始前」共用同一组表面选择（`calendar-events`），定位到日历行。
-  if (focusEntityId.startsWith('market-intelligence.calendar.')) return 'calendar'
-  if (focusEntityId === 'market-intelligence.macro.event-landed') return 'calendar'
-  return 'signal'
-}
 
 export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }: Readonly<{
   /** 从通知中心点「去设置」进来时落到哪一项（只有设置页会传）。 */
@@ -107,48 +97,25 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
   const [selected, setSelected] = useState<ItemKey>(() => itemForFocus(focusEntityId))
   const { setSectionRef, layout } = useNotificationLayout()
 
-  const itemName = (key: ItemKey): string => text[ROW_BY_ITEM[key].titleKey] ?? ''
-
-  /** 状态词只在列表行出现一次（详情标题不重复同一句）。 */
-  const itemState = (key: ItemKey): string => {
+  /** 列表里那一行只报**状态**；「读取中」不是 settled 状态，不画药丸。 */
+  const listState = (key: ItemKey): 'on' | 'off' | 'unreadable' | 'loading' => {
     if (key === 'calendar') {
-      if (reminder.status === 'loading') return text['pages.intelligence.notification.status.loading'] ?? ''
-      if (reminder.value === undefined) return text['pages.intelligence.notification.status.unreadable'] ?? ''
-      return reminder.value.enabled
-        ? (text['pages.intelligence.notification.status.calendarOn'] ?? '').replace(
-          '{lead}',
-          text[`pages.intelligence.notification.leads.${reminder.value.leadMinutes}`] ?? ''
-        )
-        : text['pages.intelligence.notification.status.off'] ?? ''
+      if (reminder.status === 'loading') return 'loading'
+      if (reminder.value === undefined) return 'unreadable'
+      return reminder.value.enabled ? 'on' : 'off'
     }
     const row = ROW_BY_ITEM[key]
-    const enabled = row.control === 'outlet'
-      ? outlet.enabled
-      : row.control === 'surface-group'
-        ? reminder.value?.enabled === true
-        : values[row.eventId] ?? true
-    return enabled
-      ? text['pages.intelligence.notification.status.on'] ?? ''
-      : text['pages.intelligence.notification.status.off'] ?? ''
+    const enabled = row.control === 'outlet' ? outlet.enabled : values[row.eventId] ?? true
+    return enabled ? 'on' : 'off'
   }
 
-  const items: readonly NotificationListItem[] = ITEM_KEYS.map((key) => ({
-    key,
-    name: itemName(key),
-    state: itemState(key)
-  }))
+  const itemName = (key: ItemKey): string => text[ROW_BY_ITEM[key].titleKey] ?? ''
+  const stateWord = (key: ItemKey): string => {
+    const state = listState(key)
+    return text[`pages.intelligence.notification.status.${state}`] ?? ''
+  }
 
-  /**
-   * 宽窄两种形态只属于**设置页**：那一页挂在外壳的三列里，窗口 1280 时它可能只剩 600，所以要量
-   * 它自己的宽度，低于 860 换控件。
-   *
-   * 配置抽屉**固定宽版**：抽屉宽度由壳层决定（恒 `full` = 1040，扣掉菜单 208 与内边距 32 后约 800），
-   * 不随读者窗口变——在那里量宽会导致「永远 < 860、永远只有下拉」，读者再也看不到列表。
-   */
-  const narrow = variant === 'page' && layout.mode === 'dropdown'
-
-  /** 两个面的外壳：设置页保留自己的 section（页面要标题、断点量这一块宽），抽屉只给内容。 */
-  const shell = (children: ReactNode, busy = false): ReactElement => variant === 'page'
+  const shell = (children: ReactElement, busy = false): ReactElement => variant === 'page'
     ? <section aria-busy={busy ? 'true' : undefined} className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>{children}</section>
     : <div className="intelligence-notification-panel" data-notification-panel="true">{children}</div>
 
@@ -163,21 +130,86 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
     />)
   }
 
-  /** 列表里那一行只报**状态**（一个词一个事实）；「加载中」不是 settled 状态，不画药丸。 */
-  const listState = (key: ItemKey): 'on' | 'off' | 'unreadable' | 'loading' => {
-    if (key === 'calendar') {
-      if (reminder.status === 'loading') return 'loading'
-      if (reminder.value === undefined) return 'unreadable'
-      return reminder.value.enabled ? 'on' : 'off'
-    }
+  const narrow = variant === 'page' && layout.mode === 'dropdown'
+
+  /** 抽屉固定双栏；设置页窄窗把列表换成下拉（860 只属设置页这一面）。 */
+  const list = narrow
+    ? <div className="intelligence-notification-narrow">
+      <select
+        aria-label={text['pages.intelligence.notification.groupTitle'] ?? ''}
+        onChange={(event) => setSelected(event.target.value as ItemKey)}
+        value={selected}
+      >
+        {ITEM_KEYS.map((key) => <option key={key} value={key}>
+          {`${itemName(key)}${text['pages.intelligence.notification.joiner'] ?? ' / '}${stateWord(key)}`}
+        </option>)}
+      </select>
+    </div>
+    : <aside className="intelligence-catalog-pane">
+      <div className="intelligence-catalog-list">
+        <div className="intelligence-catalog-group">
+          <div className="intelligence-catalog-group-title">{text['pages.intelligence.notification.rowsGroup'] ?? ''}</div>
+          {ITEM_KEYS.map((key) => {
+            const state = listState(key)
+            return <section className="intelligence-provider-group" key={key}>
+              <button
+                aria-current={key === selected ? 'true' : undefined}
+                className={`intelligence-provider-row${key === selected ? ' selected' : ''}`}
+                onClick={() => setSelected(key)}
+                type="button"
+              >
+                <span className="intelligence-provider-main"><strong>{itemName(key)}</strong></span>
+                {state === 'loading'
+                  ? <span className="intelligence-notification-row-loading">{text['pages.intelligence.notification.status.loading'] ?? ''}</span>
+                  : <StatusPill
+                    labelKey={`pages.intelligence.notification.status.${state}`}
+                    resolveText={resolveText}
+                    tone={state === 'on' ? 'ok' : 'muted'}
+                  />}
+              </button>
+            </section>
+          })}
+        </div>
+      </div>
+    </aside>
+
+  const switchRow = (key: Exclude<ItemKey, 'calendar'>): ReactElement => {
     const row = ROW_BY_ITEM[key]
     const enabled = row.control === 'outlet' ? outlet.enabled : values[row.eventId] ?? true
-    return enabled ? 'on' : 'off'
+    const saving = row.control === 'outlet' ? outlet.saving : savingEventId === row.eventId
+    const failed = row.control === 'outlet' ? outlet.saveFailed : failedEventIds.has(row.eventId)
+    return <SettingField
+      busy={saving}
+      controlWrapperClassName={CONTROL_CLASS}
+      copyClassName={LABEL_CLASS}
+      descriptor={descriptorOf(SWITCH_DESCRIPTOR_BY_ITEM[key])}
+      labelTextClassName={LABEL_TEXT_CLASS}
+      onChange={(next) => {
+        if (row.control === 'outlet') outlet.setEnabled(next === true)
+        else toggle(row.eventId, next === true)
+      }}
+      resolveOptionLabel={() => ''}
+      resolveText={resolveText}
+      rowClassName={ROW_CLASS}
+      value={enabled}
+      view={{}}
+    >
+      {failed
+        ? <span className="intelligence-notification-form-note" role="status">{text['pages.intelligence.notification.saveFailed'] ?? ''}</span>
+        : null}
+      {key === 'sentiment'
+        ? <TestNotificationButton
+          channelReady={channelReady}
+          disabled={!enabled}
+          kind="sentiment"
+          labelKey="pages.intelligence.notification.test.sentiment"
+          resolveText={resolveText}
+        />
+        : null}
+    </SettingField>
   }
-  const toneOf = (state: 'on' | 'off' | 'unreadable'): 'ok' | 'muted' =>
-    state === 'on' ? 'ok' : 'muted'
 
-  const detailBody = selected === 'calendar'
+  const detail = selected === 'calendar'
     ? <CalendarDetail
       landedAction={<TestNotificationButton
         channelReady={channelReady}
@@ -198,29 +230,8 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
         resolveText={resolveText}
       />}
     />
-    : <ContentDetail
-      /* 三元已经排除 calendar：这一支只会拿到三个内容项。 */
-      descriptor={contentDescriptor(selected as Exclude<ItemKey, 'calendar'>)}
-      resolveText={resolveText}
-      enabled={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true}
-      failed={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saveFailed : failedEventIds.has(ROW_BY_ITEM[selected].eventId)}
-      onChange={(next) => {
-        if (ROW_BY_ITEM[selected].control === 'outlet') outlet.setEnabled(next)
-        else toggle(ROW_BY_ITEM[selected].eventId, next)
-      }}
-      saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
-      saving={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saving : savingEventId === ROW_BY_ITEM[selected].eventId}
-      showHelp={variant === 'drawer'}
-      action={selected === 'sentiment'
-        ? <TestNotificationButton
-          channelReady={channelReady}
-          disabled={!(ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true)}
-          kind="sentiment"
-          labelKey="pages.intelligence.notification.test.sentiment"
-          resolveText={resolveText}
-        />
-        : undefined}
-    >
+    : <SettingsSection title={itemName(selected)}>
+      {switchRow(selected)}
       {selected === 'sentiment'
         ? <NewsPushThresholdRow
           last
@@ -229,86 +240,29 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
           text={text}
         />
         : null}
-    </ContentDetail>
-
-  if (variant === 'drawer') {
-    return shell(<>
-      {/* 整屏级事实：通道不通先让读者知道；解释挂在它旁边那颗 ⓘ 里，不单独悬空一行。 */}
-      {channelReady ? null : <p className="intelligence-notification-panel__notice" role="status">
-        {text['pages.intelligence.notification.channelNotReadyState']}
-        <SettingsInfo
-          ariaLabelKey="pages.intelligence.notification.infoAria"
-          labelKeys={['pages.intelligence.notification.channelNotReady']}
-          resolveText={resolveText}
-        />
-      </p>}
-      {/* 分栏外壳沿用抽屉那一个（`config-drawer__split`）；左栏 296 由本屏给，右栏自适应。 */}
-      <div className="config-drawer__split intelligence-notification-split">
-        <aside className="intelligence-catalog-pane">
-          <div className="intelligence-catalog-list">
-            <div className="intelligence-catalog-group">
-              <div className="intelligence-catalog-group-title">{text['pages.intelligence.notification.rowsGroup'] ?? ''}</div>
-              {items.map((item) => {
-                const state = listState(item.key as ItemKey)
-                return <section className="intelligence-provider-group" key={item.key}>
-                  <button
-                    aria-current={item.key === selected ? 'true' : undefined}
-                    className={`intelligence-provider-row${item.key === selected ? ' selected' : ''}`}
-                    onClick={() => setSelected(item.key as ItemKey)}
-                    type="button"
-                  >
-                    <span className="intelligence-provider-main"><strong>{item.name}</strong></span>
-                    {state === 'loading'
-                      ? <span className="intelligence-notification-row-loading">{text['pages.intelligence.notification.status.loading'] ?? ''}</span>
-                      : <StatusPill
-                        labelKey={`pages.intelligence.notification.status.${state}`}
-                        resolveText={resolveText}
-                        tone={toneOf(state)}
-                      />}
-                  </button>
-                </section>
-              })}
-            </div>
-          </div>
-        </aside>
-        <section className="settings-detail-pane">
-          <SettingsSection title={itemName(selected)}>{detailBody}</SettingsSection>
-        </section>
-      </div>
-    </>)
-  }
+    </SettingsSection>
 
   return shell(<>
-    {/* 设置页那一面：自己的页标题 + 一处整组 ⓘ；抽屉那一面不画标题，解释挂在通道提示旁。 */}
-    <div className="intelligence-notification-head">
-      <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
+    {/* 整屏级事实：通道不通时读者先知道，再看内容；解释挂在紧邻的 ⓘ 上。 */}
+    {channelReady ? null : <p className="intelligence-notification-panel__notice" role="status">
+      {text['pages.intelligence.notification.channelNotReadyState']}
       <SettingsInfo
         ariaLabelKey="pages.intelligence.notification.infoAria"
-        labelKeys={[
-          'pages.intelligence.notification.groupInfo.2',
-          'pages.intelligence.notification.channelNotReady'
-        ]}
+        labelKeys={['pages.intelligence.notification.channelNotReady']}
         resolveText={resolveText}
       />
-    </div>
-    <div className="intelligence-notification-panes">
-      <NotificationList
-        ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''}
-        items={items}
-        narrow={narrow}
-        onSelect={(key) => setSelected(key as ItemKey)}
-        selected={selected}
-      />
-      <div className="intelligence-notification-detail">
-        {/* 详情标题不再重复列表里的名字：同一个名字写两处，迟早有一处说法不同。 */}
-        <div className="intelligence-notification-card">
-          {detailBody}
-          {/* 只报**状态**（还没有可用频道）；「勾选会保留、等频道能用时生效」那句解释在标题旁的 ⓘ 里。 */}
-          {channelReady ? null : <p className="intelligence-notification-form-note" role="status">
-            {text['pages.intelligence.notification.channelNotReadyState']}
-          </p>}
-        </div>
-      </div>
+    </p>}
+    <div className="config-drawer__split intelligence-notification-split">
+      {list}
+      <section className="settings-detail-pane">
+        {/* 设置页那一面才有页标题；抽屉自己有页名，不画第二个。 */}
+        {variant === 'page'
+          ? <>
+            <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
+            {detail}
+          </>
+          : detail}
+      </section>
     </div>
   </>)
 }

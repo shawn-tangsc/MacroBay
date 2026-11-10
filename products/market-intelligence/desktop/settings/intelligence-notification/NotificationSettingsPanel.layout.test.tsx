@@ -110,7 +110,7 @@ describe('the notification settings panel layout', () => {
   it('keeps the settings page in two columns exactly at 860', async () => {
     const container = await renderPanel('page', 860)
     expect(container.querySelector('select')).toBeNull()
-    expect(container.querySelector('.intelligence-notification-list')).not.toBeNull()
+    expect(container.querySelector('.intelligence-catalog-pane')).not.toBeNull()
   })
 
   it('leaves the page-level heading to the drawer own title, and keeps it on the page', async () => {
@@ -153,10 +153,10 @@ describe('the notification settings panel layout', () => {
     root = undefined
     document.body.replaceChildren()
 
-    // 设置页那一面形状不变：标题与整组 ⓘ 仍在同一个 head 里。
+    // 设置页那一面：页标题在详情列里；通道提示与它那颗 ⓘ 同样在内容上方。
     const page = await renderPanel('page')
-    expect(page.querySelector('.intelligence-notification-head .intelligence-notification-title')).not.toBeNull()
-    expect([...page.querySelectorAll('.intelligence-notification-head button')]
+    expect(page.querySelector('.settings-detail-pane .intelligence-notification-title')).not.toBeNull()
+    expect([...page.querySelectorAll('.intelligence-notification-panel__notice button')]
       .some((button) => button.getAttribute('aria-label') === infoAria)).toBe(true)
   })
 })

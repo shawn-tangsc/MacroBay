@@ -101,7 +101,7 @@ async function render(focusEntityId?: string): Promise<HTMLDivElement> {
 }
 
 function listItems(): HTMLButtonElement[] {
-  return [...(container?.querySelectorAll<HTMLButtonElement>('.intelligence-notification-list-item') ?? [])]
+  return [...(container?.querySelectorAll<HTMLButtonElement>('.intelligence-provider-row') ?? [])]
 }
 
 async function selectItem(index: number): Promise<void> {
@@ -198,7 +198,7 @@ describe('row-to-event binding', () => {
 describe('intelligence notification settings', () => {
   it('lists four items, selects the first, and folds the landed notice into the calendar item', async () => {
     await render()
-    const names = listItems().map((item) => item.querySelector('.intelligence-notification-list-name')?.textContent)
+    const names = listItems().map((item) => item.querySelector('.intelligence-provider-row strong')?.textContent)
     expect(names).toEqual([
       text['pages.intelligence.notification.rows.signalTriggered.title'],
       text['pages.intelligence.notification.rows.briefingReady.title'],
@@ -249,23 +249,20 @@ describe('intelligence notification settings', () => {
       expect(cells[0]?.classList.contains('intelligence-notification-form-label')).toBe(true)
       expect(cells[1]?.classList.contains('intelligence-notification-form-control')).toBe(true)
     }
-    // 整块详情放在一张卡里（620 上限、左对齐），不是一个带内边距的裸容器。
-    expect(container?.querySelectorAll('.intelligence-notification-card')).toHaveLength(1)
+    // 日历这一项按「通知方式 / 开始前 / 发生后」三块排，每块都是平台区块（不再是一张卡）。
+    expect(container?.querySelectorAll('.settings-section')).toHaveLength(3)
   })
 
-  it('keeps the grid to exactly two children, with the head outside it', async () => {
-    // 上一版把 标题 / 列表 / 详情 三个块塞进两列网格：自动排布把标题放窄格、详情挤到第二行。
-    // 这条断言抓的就是那个形状——只量 resolveNotificationLayout() 的数字抓不到它。
+  it('keeps the two columns as exactly two children, and the page title inside the detail column', async () => {
+    // 标题不再单独占一行网格元素：它是详情列里的页名，两栏只有「列表 / 详情」两个孩子。
     await render()
-    const panes = container?.querySelector('.intelligence-notification-panes')
+    const panes = container?.querySelector('.config-drawer__split')
     expect(panes).not.toBeNull()
     const children = [...(panes?.children ?? [])]
     expect(children).toHaveLength(2)
-    expect(children[0]?.classList.contains('intelligence-notification-list')).toBe(true)
-    expect(children[1]?.classList.contains('intelligence-notification-detail')).toBe(true)
-    const head = container?.querySelector('.intelligence-notification-head')
-    expect(head).not.toBeNull()
-    expect(panes?.contains(head ?? null)).toBe(false)
+    expect(children[0]?.classList.contains('intelligence-catalog-pane')).toBe(true)
+    expect(children[1]?.classList.contains('settings-detail-pane')).toBe(true)
+    expect(children[1]?.querySelector('.intelligence-notification-title')).not.toBeNull()
   })
 
   it('shows the calendar detail with one surface choice and both segments', async () => {
@@ -285,7 +282,7 @@ describe('intelligence notification settings', () => {
     expect(body.indexOf(text['pages.intelligence.notification.calendar.surfaces']!))
       .toBeLessThan(body.indexOf(text['pages.intelligence.notification.calendar.before']!))
     // 桌面两条都没批 → 这一项的详情里根本不该出现桌面（页脚那句是另一件事）。
-    const detail = container?.querySelector('.intelligence-notification-calendar-detail')?.textContent ?? ''
+    const detail = container?.querySelector('.settings-detail-pane')?.textContent ?? ''
     expect(detail).not.toContain('桌面')
     // 状态词只在列表里出现一次，详情标题不再重复同一个名字。
     expect(container?.querySelector('.intelligence-notification-detail-title')).toBeNull()
@@ -328,14 +325,14 @@ describe('intelligence notification settings', () => {
     sectionWidth = 1000
     await render()
     await act(async () => { await Promise.resolve() })
-    expect(container?.querySelector('.intelligence-notification-panes')).not.toBeNull()
-    expect(container?.querySelector('.intelligence-notification-list')).not.toBeNull()
+    expect(container?.querySelector('.config-drawer__split')).not.toBeNull()
+    expect(container?.querySelector('.intelligence-catalog-pane')).not.toBeNull()
   })
 
   it('collapses the lead and importance controls while the reminder is off and says what would happen', async () => {
     await render()
     await selectItem(3)
-    const detail = container?.querySelector('.intelligence-notification-calendar-detail')?.textContent ?? ''
+    const detail = container?.querySelector('.settings-detail-pane')?.textContent ?? ''
     // 关着时摆出**已存的值**（状态 / 提前量 / 重要性），不是一句话。
     expect(detail).toContain(
       [text['pages.intelligence.notification.status.off'], text['pages.intelligence.notification.leads.60'], text['pages.intelligence.notification.importance.high']]
