@@ -45,25 +45,38 @@ const render = async (candidate: PolicyPathReading, cardText: PolicyPathCardText
   return host
 }
 
-it('replaces a reading that could not be read with the settled error state, not a blank slot', async () => {
-  // 2026-11-11 裁定：读不到 = settled 错误态（平台 StateView）；未配置/未启用才是共享可用性卡。
-  // 注意：`staleness === 'unavailable'` 是**市场报价**的新鲜度（结算期卡片合法地没有报价），
-  // 不是整卡读不到，所以那张错误态由宿主在「读数本身没出来」时渲染。
+it.each([
+  ['missing', 'sourcesNotConfigured', 'configureSources'],
+  ['disabled', 'sourcesNotEnabled', 'enableSources'],
+  ['unreadable', 'temporarilyUnavailable', 'retry']
+] as const)('keeps the card frame and covers it with the %s scrim', async (state, sentenceKey, actionKey) => {
+  // 用户 2026-11-11：没配置源的模块不能藏——卡框与标题保留，卡内盖半透明遮罩，
+  // 遮罩里居中一句 + 一颗按钮；三态各自的句子与动作不同。
+  const shared = productText['zh-CN'].pages.intelligence.portal.data
+  let configured = 0
   let retried = 0
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(ShellLanguageProvider, {
     language: 'zh-CN',
-    children: createElement(PolicyPathUnavailable, { text, onRetry: () => { retried += 1 } })
+    children: createElement(PolicyPathUnavailable, {
+      text, state, onConfigure: () => { configured += 1 }, onRetry: () => { retried += 1 }
+    })
   })))
-  expect(host.querySelector('.state-view--error')).not.toBeNull()
-  // 读者看到的是卡片自己那句，不是平台兜底句。
-  expect(host.textContent).toContain(text.unavailable)
-  const buttons = [...host.querySelectorAll('button')]
+  // 卡还在：标题仍在，遮罩存在且带同一个 data-state。
+  expect(host.querySelector('.mi-policy-card')).not.toBeNull()
+  expect(host.querySelector('.mi-policy-card__head')?.textContent).toBe(text.title)
+  const scrim = host.querySelector('.mi-policy-card__scrim')
+  expect(scrim?.getAttribute('data-state')).toBe(state)
+  expect(scrim?.textContent).toContain(shared[sentenceKey])
+  // 遮罩里恰一颗按钮，点了做对应动作（读不到只重读、不跳转）。
+  const buttons = [...scrim!.querySelectorAll('button')]
   expect(buttons).toHaveLength(1)
+  expect(buttons[0]?.textContent).toBe(shared[actionKey])
   await act(async () => buttons[0]!.click())
-  expect(retried).toBe(1)
+  expect(state === 'unreadable' ? retried : configured).toBe(1)
+  expect(state === 'unreadable' ? configured : retried).toBe(0)
 })
 
 it('explains the odds in the drawer instead of a hand-drawn bubble on the card', async () => {

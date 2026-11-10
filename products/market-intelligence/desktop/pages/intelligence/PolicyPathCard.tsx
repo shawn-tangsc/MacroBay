@@ -1,9 +1,12 @@
 import { Button } from 'antd'
+import { CircleSlash, TriangleAlert } from 'lucide-react'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+
+import '../../shared/styles/sourceAvailability.css'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { policyPathDay } from './policyPathMonth'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
@@ -93,17 +96,46 @@ const STALENESS_KEY = {
 } as const
 
 /**
- * 整卡「读不到」：这条读数没读出来时替换整张卡（**不许留白**）。
+ * 缺源时的整卡：**卡框与标题保留**，卡内盖一层半透明遮罩，遮罩里居中一句话 + 一颗按钮。
  *
- * 用平台 `StateView`（settled 错误态，Chief/界面设计 2026-11-11 裁定），唯一动作是「再试一次」。
- * 「未配置 / 未启用」不是错误，走共享可用性卡，不在这一处。
+ * 为什么不是「整卡不渲染」：用户 2026-11-11 明确「没配置源的模块不能藏」——藏起来读者会以为
+ * 这一块被删了。三态各有各的话与动作（共享文案键）：
+ * - `missing`（还没配置来源）→「去设置配置」；
+ * - `disabled`（来源没有启用）→「去启用」；
+ * - `unreadable`（暂时读不到）→「再试一次」，不跳转。
+ *
+ * 遮罩颜色走主题 token 的 `color-mix`，不写死 rgba；遮罩里**只有那颗按钮可聚焦**。
  */
-export function PolicyPathUnavailable({ text, onRetry }: Readonly<{ text: PolicyPathCardText; onRetry?: () => void }>): React.ReactElement {
-  return <section className="mi-policy-card" aria-label={text.title} data-staleness="unavailable">
+export function PolicyPathUnavailable({ text, state, onConfigure, onRetry }: Readonly<{
+  text: PolicyPathCardText
+  state: 'missing' | 'disabled' | 'unreadable'
+  /** 去配置 / 去启用：落到配置抽屉的来源那一屏（具体到本模块由宿主接线）。 */
+  onConfigure?: () => void
+  /** 再试一次：只重读，不跳转。 */
+  onRetry?: () => void
+}>): React.ReactElement {
+  const resolveKey = useProductTextKey()
+  const sentenceKey = state === 'missing'
+    ? 'pages.intelligence.portal.data.sourcesNotConfigured'
+    : state === 'disabled' ? 'pages.intelligence.portal.data.sourcesNotEnabled' : 'pages.intelligence.portal.data.temporarilyUnavailable'
+  const actionKey = state === 'missing'
+    ? 'pages.intelligence.portal.data.configureSources'
+    : state === 'disabled' ? 'pages.intelligence.portal.data.enableSources' : 'pages.intelligence.portal.data.retry'
+  const select = state === 'unreadable' ? () => onRetry?.() : () => onConfigure?.()
+  return <section className="mi-policy-card mi-policy-card--unavailable" aria-label={text.title} data-staleness={state}>
     <header className="mi-policy-card__head"><h2>{text.title}</h2></header>
-    <StateView state="error" reasonCode="unreadable" size="md"
-      productReason={{ key: 'pages.intelligence.portal.dashboard.policyPath.unavailable', resolve: () => text.unavailable }}
-      action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => onRetry?.() }} />
+    {/* 遮罩：卡框与标题在外面，内容区整块被盖住；高度由共享卡的最小高度撑住，不塌不裁。 */}
+    <div className="mi-policy-card__scrim mi-source-card" data-state={state}>
+      <p className="mi-source-state" data-state={state}>
+        {state === 'missing' ? <CircleSlash aria-hidden className="mi-source-state__icon" size={14} />
+          : state === 'disabled' ? <CircleSlash aria-hidden className="mi-source-state__icon" size={14} />
+            : <TriangleAlert aria-hidden className="mi-source-state__icon" size={14} />}
+        {resolveKey(sentenceKey)}
+      </p>
+      <div className="mi-source-card__actions">
+        <Button onClick={select} size="small">{resolveKey(actionKey)}</Button>
+      </div>
+    </div>
   </section>
 }
 

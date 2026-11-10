@@ -330,13 +330,17 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         text={crossAssetText} /> : null}
-      {readsReady && readGates.policyPath && (policyPath?.state === 'available' ? (() => {
-        const card = <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
-          month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
-        // The rail is the layout's, not this page's: portal into its slot when it exists so the card
-        // sits above the calendar, and fall back to the page flow when rendered on its own.
-        return policySlot ? createPortal(card, policySlot) : card
-      })() : <PolicyPathUnavailable text={text.policyPath} onRetry={policyPathRead.reload} />)}
+      {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源都没启用」+ 去启用；
+          读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
+      {readsReady ? (readGates.policyPath
+        ? (policyPath?.state === 'available' ? (() => {
+          const card = <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
+            month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
+          // The rail is the layout's, not this page's: portal into its slot when it exists so the card
+          // sits above the calendar, and fall back to the page flow when rendered on its own.
+          return policySlot ? createPortal(card, policySlot) : card
+        })() : <PolicyPathUnavailable state="unreadable" text={text.policyPath} onRetry={policyPathRead.reload} />)
+        : <PolicyPathUnavailable state="disabled" text={text.policyPath} onConfigure={onConfigureSources} />) : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
