@@ -6,8 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactEl
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 import { NetworkProxyBanner } from '../../../shared/NetworkProxyBanner'
 import { openIntelligenceSourcesSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
-import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
-import { writeSourceEnabled } from '../../../settings/intelligence-sources/sourceWrites'
+import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../../settings/intelligence-sources/sourceWrites'
 import {
   createEconomicCalendarQuery,
   economicCalendarCurrentMonth,
@@ -421,7 +420,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       </div>
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)}
         writeOrigin="dashboard-drawer" onWriteSourceEnabled={(source, enabled, origin) => writeSourceEnabled(source, enabled, origin)}
-        onRunSource={async (sourceId) => { await intelligenceSourcesClient.runNow(sourceId) }} onTestSource={async (sourceId) => { await intelligenceSourcesClient.testConnection(sourceId) }}
+        onRunSource={runSourceNowOnce} onTestSource={testSourceConnectionOnce}
       />
       <CalendarDetailSurface
         blsUnavailableNotice={blsAvailability.notice}
