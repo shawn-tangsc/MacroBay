@@ -333,7 +333,7 @@ mi: miText['zh-CN'],
                 sentimentFollowsFastModel: '跟随快速模型',
                 sentimentUnknownReason: '评分模型设置读不到'
               },
-              cards: {
+              sections: {
                 languageTime: '语言与时区',
                 appearance: '外观',
                 network: '网络',
@@ -1818,7 +1818,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 sentimentFollowsFastModel: 'Follows the fast model',
                 sentimentUnknownReason: 'The scoring model settings could not be read'
               },
-              cards: {
+              sections: {
                 languageTime: 'Language and time zone',
                 appearance: 'Appearance',
                 network: 'Network',

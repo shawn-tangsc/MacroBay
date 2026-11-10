@@ -25,7 +25,7 @@ type PlatformSection = Readonly<{
 const PLATFORM_SECTIONS: readonly PlatformSection[] = [
   {
     id: 'languageTime',
-    titleKey: 'configDrawer.cards.languageTime',
+    titleKey: 'configDrawer.sections.languageTime',
     target: 'preferences',
     rows: [
       { key: 'configDrawer.rows.language', value: 'language' },
@@ -34,19 +34,19 @@ const PLATFORM_SECTIONS: readonly PlatformSection[] = [
   },
   {
     id: 'appearance',
-    titleKey: 'configDrawer.cards.appearance',
+    titleKey: 'configDrawer.sections.appearance',
     target: 'preferences',
     rows: [{ key: 'configDrawer.rows.theme', value: 'theme' }]
   },
   {
     id: 'network',
-    titleKey: 'configDrawer.cards.network',
+    titleKey: 'configDrawer.sections.network',
     target: 'preferences',
     rows: [{ key: 'configDrawer.rows.proxy', value: 'proxy' }]
   },
   {
     id: 'modelService',
-    titleKey: 'configDrawer.cards.modelService',
+    titleKey: 'configDrawer.sections.modelService',
     target: 'models',
     rows: [{ key: 'configDrawer.rows.modelService', value: 'modelService' }]
   }

@@ -10,7 +10,6 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 
 import { productText } from '../../shared/i18n/productText'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import { Button } from 'antd'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
