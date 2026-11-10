@@ -18,7 +18,7 @@ import type { MacroRatesReading, MacroRatesSnapshotView } from '../../../../cont
 import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import { useCrossAssetObservation } from './useCrossAssetObservation'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
-import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows } from './crossAssetStatusRegistry'
+import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
 import { CrossAssetReturnChart } from './CrossAssetReturnChart'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
@@ -125,7 +125,7 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>
 }
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, crossAssetReadingEnabled = true }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
@@ -142,6 +142,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * invented name.
    */
   text: Text & Readonly<{ eventTitles?: Record<string, string> }>
+  /**
+   * 读者在设置里关掉的格：这些行**不渲染**（不是画 0、不是占位）。行 id 归本面板自己的表，
+   * 格 → 行的换算在 `dashboardCellEnabled` 那一处做，这里只按 id 过滤。
+   */
+  hideStatusRows?: readonly CrossAssetStatusId[]
+  /** 三行行情（索引 / BTC / ETH）与图表同读一份跨资产快照：三格都关掉时整路不发请求。 */
+  crossAssetReadingEnabled?: boolean
   /** The calendar, read by month: it is the only place this panel learns what happened and when. */
   calendar?: Readonly<{ queryMonth: (input: { month: string; asOf: string }) => Promise<unknown> }>
   /**
@@ -163,7 +170,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
 }): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductText = useProductTextKey()
-  const view = useCrossAssetObservation({ client })
+  const view = useCrossAssetObservation({ client, enabled: crossAssetReadingEnabled })
   const snapshot = view.snapshot
   /**
    * The window's events, reduced to drawable lines by the page's own calendar read.
@@ -235,8 +242,12 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
             ? <IndexStatusRow key={row.id} snapshot={snapshot} text={text} formatTime={formatTime} />
             : <AssetStatusRow key={row.id} id={row.id} snapshot={snapshot} text={text} />
   const dailyRowIds = ['us10y', 'realRate']
-  const intradayRows = statusRows.filter(row => !dailyRowIds.includes(row.id))
-  const dailyRows = statusRows.filter(row => dailyRowIds.includes(row.id))
+  // 关掉的格整行不画：不是 0，也不是「未接入」那种占位。
+  const visibleRows = hideStatusRows === undefined || hideStatusRows.length === 0
+    ? statusRows
+    : statusRows.filter(row => !hideStatusRows.includes(row.id))
+  const intradayRows = visibleRows.filter(row => !dailyRowIds.includes(row.id))
+  const dailyRows = visibleRows.filter(row => dailyRowIds.includes(row.id))
 
   return <section className="mi-cross-asset" data-cross-asset-workspace aria-label={text.title}>
     <div className="mi-cross-asset__body">
@@ -306,7 +317,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         </table>
         <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>
-      <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
+      {crossAssetReadingEnabled ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <FocusPopover
           {...historyHint}
           resolveText={resolveProductText}
@@ -369,7 +380,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
                   action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void window.platform.app.relaunch() } }} />
               : <StateView state="error" reasonCode="unreadable" size="md"
                   action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
-      </div>
+      </div> : null}
       {/* The reading line (design 142): one footnote spanning the panel, under the chart it explains.
           It is the product's own statement about the chart, kept apart from the model's conclusion — a
           reader must be able to tell "this is how the figure reads" from "this is what we think". */}

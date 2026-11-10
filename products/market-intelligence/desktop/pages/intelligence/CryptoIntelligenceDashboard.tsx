@@ -35,6 +35,7 @@ import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
 import { projectPositioningSourceRow, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { FeedStatusStrip } from './DashboardFeedStatusStrip'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
+import { filterFeedRowsByCells, resolveDashboardReadGates, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -108,7 +109,7 @@ type CryptoDashboardText = {
 
 type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, openSettingsRequest }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, openSettingsRequest, cellEnabledIo }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -119,6 +120,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
+  /**
+   * 格级启用的读口（宿主注入；真实来源是主进程那份 `intelligence-cell-enabled.json`）。
+   * 不传 = 全都启用：看板在设置那条链路接上之前行为一字不变。
+   */
+  cellEnabledIo?: CellEnabledIo
   /**
    * 页面层请求打开配置抽屉的那一屏（日报页、日历、门户的入口在别的视图里，够不到这个抽屉）。
    *
@@ -131,9 +137,14 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   openSettingsRequest?: number
 }): React.ReactElement {
   const resolveProductKey = useProductTextKey()
+  // 格级启用：先算出「哪些格读、哪些格不读」，再决定要不要调各 client（关掉的格一次请求都不发）。
+  const cellState = useDashboardCellEnabled({ io: cellEnabledIo })
+  const readGates = resolveDashboardReadGates(cellState.cells)
+  /** 启用表读完之前一处都不读：否则关掉的格在首帧仍会发一次请求。 */
+  const readsReady = cellState.ready
   const calendarState = useDashboardEconomicCalendar({ client, now })
-  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, now })
-  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
+  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readGates.fearGreed, now })
+  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, disabled: !readsReady || !readGates.positioning, now })
   // Positioning is read per window rather than reshaped in the browser: the fold and
   // the liquidation lookback belong to the query, so switching windows is one more read.
   const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
@@ -154,26 +165,26 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 来源屏的草稿（多半是凭据框）：只参与**关闭确认**，不喂保存栏——凭据不该被一次「保存」代劳。
   const [sourcesDraftDirty, setSourcesDraftDirty] = useState(false)
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
-  const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
+  const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !readsReady || !readGates.positioning, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
   // shows the reader the state they are already looking at.
   const [capitalReloadKey, setCapitalReloadKey] = useState(0)
   const [capitalRefreshing, setCapitalRefreshing] = useState(false)
   const [capitalRefreshFailed, setCapitalRefreshFailed] = useState(false)
-  const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, now, reloadKey: capitalReloadKey })
+  const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !readsReady || !readGates.capital, now, reloadKey: capitalReloadKey })
   // One macro read feeds two readers: the 市场状态 table inside the panel and the 来源状态 strip
   // below, so the strip cannot disagree with the figures it is describing.
-  const macroView = useMacroMarketSnapshot({ client: macroMarketClient })
+  const macroView = useMacroMarketSnapshot({ client: macroMarketClient, disabled: !readsReady || !readGates.macroMarket })
   // The two rate rows read FRED's official daily closes through their own door: a daily reading cannot
   // ride the fifteen-minute macro snapshot without being repainted as if it were intraday.
-  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient })
+  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !readsReady || !readGates.macroRates })
   // The 来源状态 strip's per-feed lines: the reader's switches and last outcomes, plus the cross-asset
   // snapshot that says which index leg is answering. Read at its own slow cadence, and read-only.
-  const feedView = useDashboardFeedStatus({ client: dashboardFeedStatusClient, crossAssetClient })
+  const feedView = useDashboardFeedStatus({ client: readsReady ? dashboardFeedStatusClient : undefined, crossAssetClient: readsReady && readGates.crossAsset ? crossAssetClient : undefined })
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
-  const policyPath = usePolicyPathReading(true)
+  const policyPath = usePolicyPathReading(readsReady && readGates.policyPath)
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
@@ -186,7 +197,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     macroClient: Boolean(macroMarketClient), macroState: macroView.state, ratesState: macroRatesView.state,
     ...(macroView.snapshot ? { macro: macroView.snapshot } : {}),
     ...(macroRatesView.snapshot ? { rates: macroRatesView.snapshot } : {}),
-    indexLoading: Boolean(crossAssetClient) && feedView.indexState === 'loading',
+    // 启用表读完之前也按「还在读」画：这一格还没资格说「读不到」。
+    indexLoading: !readsReady || (Boolean(crossAssetClient) && feedView.indexState === 'loading'),
     ...(feedView.index ? { index: feedView.index } : {}),
     ...(feedView.feed ? { feed: feedView.feed } : {})
   })
@@ -276,8 +288,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           as part of this dashboard without the dashboard knowing timeline data. */}
       <div ref={conclusionSlot} data-dashboard-conclusion-slot />
 
-      {crossAssetClient ? <CrossAssetObservationPanel
+      {(crossAssetClient && (readGates.crossAsset || readGates.macroMarket || readGates.macroRates)) ? <CrossAssetObservationPanel
         client={crossAssetClient}
+        hideStatusRows={readGates.hiddenStatusRows}
+        crossAssetReadingEnabled={readsReady && readGates.crossAsset}
         macroSnapshot={macroView.snapshot}
         macroState={macroView.state}
         rates={macroRatesView.snapshot}
@@ -290,7 +304,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         text={crossAssetText} /> : null}
-      {policyPath?.state === 'available' ? (() => {
+      {readsReady && readGates.policyPath && policyPath?.state === 'available' ? (() => {
         const card = <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
           month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
         // The rail is the layout's, not this page's: portal into its slot when it exists so the card
@@ -302,14 +316,14 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">
-        <SentimentPanel fearGreedState={fearGreedState} text={text} onRetry={reloadFearGreed} />
-        <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
+        {readsReady && readGates.fearGreed ? <SentimentPanel fearGreedState={fearGreedState} text={text} onRetry={reloadFearGreed} /> : null}
+        {readsReady && readGates.capital ? <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
           onRefresh={() => void refreshCapitalConditions()}
-          refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} />
+          refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} /> : null}
       </div>
       <div className="mi-crypto-dashboard__positioning-row">
-        <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
-          onWindowChange={setPositioningWindow} text={text.positioning} />
+        {readsReady && readGates.positioning ? <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
+          onWindowChange={setPositioningWindow} text={text.positioning} /> : null}
         {/* A conclusion about the card above it, not another section: the reader asks "so what do
             these two legs mean together" while looking at the chart, and a band of its own read
             as an unrelated module. */}
@@ -318,7 +332,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
 
       {/* 持仓那一格**转述卡片算出来的判定**（`positioningState`），不自己判新鲜度：
               阈值只在 `dashboardPositioningPresentationPolicy` 里存在一次，行与卡不可能各判一套。 */}
-      <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} positioning={positioningState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
+      <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} positioning={positioningState} fundingRateState={fundingRateState} feedRows={filterFeedRowsByCells(feedRows, cellState.cells)} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
       </div>
     </main>
   )

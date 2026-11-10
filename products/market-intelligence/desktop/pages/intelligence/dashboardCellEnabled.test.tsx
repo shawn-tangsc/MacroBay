@@ -1,0 +1,118 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { productText } from '../../shared/i18n/productText'
+import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
+import { dashboardCellId, QUOTES_STATUS_ROW_CELLS } from './dashboardCellEnabled'
+
+const asOf = '2026-08-05T00:00:00.000Z'
+const text = productText['zh-CN'].pages.intelligence.portal.dashboard
+let root: Root | undefined
+
+afterEach(() => {
+  act(() => root?.unmount())
+  root = undefined
+  vi.useRealTimers()
+  document.body.replaceChildren()
+})
+
+/** 一格都不关时的基线：跨资产那一路问一次快照（BTC/ETH 要它）。 */
+function clients() {
+  const crossAssetQuery = vi.fn(async () => ({ state: 'unavailable' as const, cause: 'query' as const }))
+  const fearGreedQuery = vi.fn(async () => ({ state: 'empty' as const, asOf }))
+  return {
+    crossAssetQuery,
+    fearGreedQuery,
+    crossAssetClient: {
+      acquire: vi.fn(async () => ({ state: 'active' as const, leaseId: 'lease-1' })),
+      renew: vi.fn(async () => ({ state: 'active' as const })),
+      release: vi.fn(async () => undefined),
+      refresh: vi.fn(async () => undefined),
+      query: crossAssetQuery
+    },
+    fearGreedClient: { querySnapshot: fearGreedQuery }
+  }
+}
+
+async function render(cellEnabledIo: { read: () => Promise<Record<string, boolean>> } | undefined) {
+  vi.useFakeTimers()
+  const built = clients()
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root!.render(
+      createElement(ShellTimeZoneProvider, {
+        timeZone: 'UTC',
+        children: createElement(CryptoIntelligenceDashboard, {
+          client: { queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }) },
+          fearGreedClient: built.fearGreedClient,
+          fundingRateClient: { query: async () => ({ state: 'empty' as const, asOf }) },
+          openInterestClient: { query: async () => ({ state: 'empty' as const, asOf, window: '7d' as const }) },
+          crossAssetClient: built.crossAssetClient as never,
+          now: () => new Date(asOf),
+          onConfigureSources: () => undefined,
+          onManageSource: () => undefined,
+          onOpenCalendar: () => undefined,
+          text,
+          ...(cellEnabledIo === undefined ? {} : { cellEnabledIo })
+        } as never)
+      })
+    )
+  })
+  // 两拍：一格读盘（启用表）+ 各 client 的首次异步答案。
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+  return { container: host, ...built }
+}
+
+describe('dashboard cells read only when the reader left them on', () => {
+  it('keeps every 市场状态 row when the enable map is missing a key', async () => {
+    const { container } = await render({ read: async () => ({}) })
+    const rows = Array.from(container.querySelectorAll('[data-status-row]')).map((row) => row.getAttribute('data-status-row'))
+    expect(rows).toContain('index')
+    expect(rows).toContain('btc')
+    expect(rows).toContain('eth')
+  })
+
+  it('drops the disabled 纳指 row, keeps BTC/ETH, and leaves the shared collection untouched', async () => {
+    const ndxCell = QUOTES_STATUS_ROW_CELLS.index[0]!
+    const on = await render(undefined)
+    const off = await render({ read: async () => ({ [ndxCell]: false }) })
+
+    // ① 纳指那一格不渲染，同源的 BTC/ETH 两格照旧。
+    expect(off.container.querySelector('[data-status-row="index"]')).toBeNull()
+    expect(off.container.querySelector('[data-status-row="btc"]')).not.toBeNull()
+    expect(off.container.querySelector('[data-status-row="eth"]')).not.toBeNull()
+    // ② 关掉一格不等于关掉源：跨资产那一路的调用次数与不关时相同（BTC/ETH 仍要它）。
+    expect(off.crossAssetQuery).toHaveBeenCalledTimes(on.crossAssetQuery.mock.calls.length)
+    expect(off.crossAssetQuery.mock.calls.length).toBeGreaterThan(0)
+  })
+
+  it('stops the cross-asset read entirely when every cell it feeds is off', async () => {
+    const off = await render({
+      read: async () => ({
+        [QUOTES_STATUS_ROW_CELLS.index[0]!]: false,
+        [QUOTES_STATUS_ROW_CELLS.btc[0]!]: false,
+        [QUOTES_STATUS_ROW_CELLS.eth[0]!]: false
+      })
+    })
+    expect(off.crossAssetQuery).not.toHaveBeenCalled()
+    expect(off.container.querySelector('[data-status-row="index"]')).toBeNull()
+  })
+
+  it('does not read the fear-and-greed snapshot when its only cell is off', async () => {
+    const off = await render({ read: async () => ({ [dashboardCellId('fear-greed', 'index')]: false }) })
+    expect(off.fearGreedQuery).not.toHaveBeenCalled()
+    expect(off.container.querySelector('[data-sentiment-gauge]')).toBeNull()
+  })
+
+  it('reads everything when the enable map cannot be read (缺省 = 启用)', async () => {
+    const { crossAssetQuery, fearGreedQuery, container } = await render({ read: async () => { throw new Error('unreadable') } })
+    expect(crossAssetQuery).toHaveBeenCalled()
+    expect(fearGreedQuery).toHaveBeenCalled()
+    expect(container.querySelector('[data-status-row="index"]')).not.toBeNull()
+  })
+})

@@ -7,9 +7,14 @@ import { projectDashboardFearGreedSnapshot, type DashboardFearGreedState } from 
 type Input = {
   client: Pick<IntelligenceFearGreedClient, 'querySnapshot'>
   now: () => Date
+  /**
+   * 读者把这一格关掉了：一次请求都不发，状态停在等待态——卡片由上层整张跳过，这里不给结论。
+   * 与「没接上客户端」（读不到）是两件事，不能共用一个 undefined。
+   */
+  disabled?: boolean
 }
 
-export function useDashboardFearGreed({ client, now }: Input): Readonly<{ state: DashboardFearGreedState; reload: () => void }> {
+export function useDashboardFearGreed({ client, now, disabled = false }: Input): Readonly<{ state: DashboardFearGreedState; reload: () => void }> {
   const [state, setState] = useState<DashboardFearGreedState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [mountInput] = useState(() => ({ client, now }))
@@ -20,6 +25,7 @@ export function useDashboardFearGreed({ client, now }: Input): Readonly<{ state:
     let active = true
     // 每次重试先回到加载态，读者才看得出这一下真的重新问了。
     setState({ state: 'loading' })
+    if (disabled) return () => { active = false }
     const asOf = readCanonicalClock(mountInput.now)
     if (!asOf) {
       setState({ state: 'unavailable' })
@@ -31,7 +37,7 @@ export function useDashboardFearGreed({ client, now }: Input): Readonly<{ state:
       if (active) setState({ state: 'unavailable' })
     })
     return () => { active = false }
-  }, [mountInput, attempt])
+  }, [mountInput, attempt, disabled])
 
   return { state, reload }
 }

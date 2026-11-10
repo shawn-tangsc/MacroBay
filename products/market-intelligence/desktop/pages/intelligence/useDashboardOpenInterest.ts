@@ -17,6 +17,8 @@ export function useDashboardOpenInterest(input: Readonly<{
   window: OpenInterestWindow
   /** Defaults to the real bridge; a test hands in its own reader. */
   signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }
+  /** 读者把持仓那两格关掉了：不读、停在等待态；卡片由上层整张跳过。 */
+  disabled?: boolean
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
@@ -26,6 +28,7 @@ export function useDashboardOpenInterest(input: Readonly<{
 
   useEffect(() => {
     let active = true
+    if (input.disabled === true) { setState({ state: 'loading' }); return () => { active = false } }
     const asOf = readClock(mountInput.now)
     if (!asOf || typeof mountInput.client?.query !== 'function') {
       setState({ state: 'unavailable', cause: 'query-failed', onReload: reload })
@@ -52,7 +55,7 @@ export function useDashboardOpenInterest(input: Readonly<{
       .catch(() => { if (active) setState({ state: 'unavailable', cause: 'query-failed', onReload: reload }) })
     return () => { active = false }
     // `mountInput` is captured once on purpose: the clock must not re-read on every render.
-  }, [mountInput, window, attempt])
+  }, [mountInput, window, attempt, input.disabled])
 
   return state
 }

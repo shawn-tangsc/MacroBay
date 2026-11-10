@@ -34,7 +34,7 @@ export type MacroMarketViewState = 'loading' | 'ready' | 'unavailable'
  * Reads the macro-market snapshot for the 市场状态 table. No client, a failed call and an
  * `unavailable` answer all land on the same empty view, which the table renders as 未接入.
  */
-export function useMacroMarketSnapshot({ client }: { client?: MacroMarketSnapshotClient }): {
+export function useMacroMarketSnapshot({ client, disabled = false }: { client?: MacroMarketSnapshotClient; /** 读者把美元/黄金两格都关掉时为 true：不读、停在加载态。 */ disabled?: boolean }): {
   snapshot: MacroMarketSnapshotView | undefined
   state: MacroMarketViewState
 } {
@@ -43,6 +43,8 @@ export function useMacroMarketSnapshot({ client }: { client?: MacroMarketSnapsho
   const snapshotRef = useRef<MacroMarketSnapshotView>(undefined)
   const [state, setState] = useState<MacroMarketViewState>('loading')
   useEffect(() => {
+    // 关掉的格不读，也不给结论：停在加载态，表格里那几行由上层整行跳过。
+    if (disabled) { setSnapshot(undefined); setState('loading'); return }
     if (!client) {
       setSnapshot(undefined)
       setState('unavailable')
@@ -69,6 +71,6 @@ export function useMacroMarketSnapshot({ client }: { client?: MacroMarketSnapsho
     }
     void poll()
     return () => { active = false; clearTimeout(timer) }
-  }, [client])
+  }, [client, disabled])
   return { snapshot, state }
 }

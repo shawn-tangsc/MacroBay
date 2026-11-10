@@ -19,6 +19,8 @@ type Input = {
   reloadKey?: number
   /** Bumped by the panel's 重试, which re-reads without asking the sources for a new copy. */
   retryKey?: number
+  /** 读者把资本这两格关掉了：不读、停在等待态；卡片由上层整张跳过。 */
+  disabled?: boolean
 }
 
 /**
@@ -31,7 +33,7 @@ type Input = {
  */
 export const capitalConditionsReadRetryDelaysMs = [400, 1200] as const
 
-export function useCapitalConditions({ client, signalClient, now, reloadKey = 0, retryKey = 0 }: Input): DashboardCapitalConditionsState {
+export function useCapitalConditions({ client, signalClient, now, reloadKey = 0, retryKey = 0, disabled = false }: Input): DashboardCapitalConditionsState {
   const [state, setState] = useState<DashboardCapitalConditionsState>({ state: 'loading' })
   const [mountInput] = useState(() => ({ client, signalClient, now }))
   // The attempt loop outlives a single render, so it reads the newest state from a ref instead of
@@ -45,6 +47,7 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
   useEffect(() => {
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
+    if (disabled) { apply({ state: 'loading' }); return () => { active = false } }
     const asOf = readCanonicalClock(mountInput.now)
     const queryClient = mountInput.client
     if (!asOf || !queryClient) {
@@ -87,7 +90,7 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
 
     read(0)
     return () => { active = false; if (timer) clearTimeout(timer) }
-  }, [mountInput, reloadKey, retryKey])
+  }, [mountInput, reloadKey, retryKey, disabled])
 
   return state
 }
