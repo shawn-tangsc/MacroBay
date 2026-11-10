@@ -391,10 +391,6 @@ mi: miText['zh-CN'],
                 notifyEventCalendar: '日历',
                 notifyTiers: '四档提醒',
                 quietHours: '免打扰时段',
-              },
-              /** 行尾那颗「去设置改」：值只读的屏用它指向宿主给的设置入口。 */
-              actions: {
-                changeInSettings: '去设置改'
               }
             },
             /** One sentence per failure code, shared by every card that reads module signals. */
@@ -1863,9 +1859,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 notifyEventCalendar: 'Calendar',
                 notifyTiers: 'Four alert tiers',
                 quietHours: 'Quiet hours',
-              },
-              actions: {
-                changeInSettings: 'Change in settings'
               }
             },
             signalRead: {
