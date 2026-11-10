@@ -442,6 +442,21 @@ describe('config settings drawer (static layout)', () => {
     expect(open({ briefingPanel: fakeScreen, screenDirty: false }).querySelector('[data-drawer-savebar]')).toBeNull()
   })
 
+  it('keeps a bottom safe area only while the save bar is shown', () => {
+    const open = (dirty: boolean): HTMLElement => {
+      document.body.replaceChildren()
+      root?.unmount()
+      root = undefined
+      host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      act(() => root?.render(<ConfigSettingsDrawer initialMenu="briefing" onClose={() => undefined} open screenDirty={dirty} />))
+      return document.body
+    }
+    expect(open(true).querySelector<HTMLElement>('.config-drawer')!.style.scrollPaddingBottom).not.toBe('0px')
+    expect(open(false).querySelector<HTMLElement>('.config-drawer')!.style.scrollPaddingBottom).toBe('0px')
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {

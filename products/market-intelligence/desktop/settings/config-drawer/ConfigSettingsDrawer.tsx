@@ -242,7 +242,16 @@ export function ConfigSettingsDrawer({
         type="button">{screenSaving === true ? copy.values.saving ?? '' : copy.values.save ?? ''}</button>
     </div> : undefined}
     titleKey="configDrawer.title">
-    <div className="config-drawer">
+    <div
+      className="config-drawer"
+      /* 保存栏是固定栏：它出现时给滚动容器留出等高的底部安全区，最后一格获得焦点也不会被压住。
+         不出现时安全区为 0（不留白）。 */
+      onFocus={(event) => {
+        // `nearest` 而不是 `center`：只为「看得见」，不把整屏猛地拽一下。
+        const target = event.target as HTMLElement | null
+        target?.scrollIntoView?.({ block: 'nearest' })
+      }}
+      style={{ scrollPaddingBottom: screenDirty === true ? '56px' : '0px' }}>
       <nav
         aria-label={menuLabel(menu)}
         className="settings-nav"
