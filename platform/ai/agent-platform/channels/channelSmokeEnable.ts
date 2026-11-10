@@ -42,6 +42,10 @@ export const CHANNEL_SMOKE_REASONS = [
   'discord-provider-rejected',
   'discord-network-unavailable',
   'discord-rate-limited',
+  // QQ 自检（换 token + 取网关）：同样三种说法。
+  'qq-provider-rejected',
+  'qq-network-unavailable',
+  'qq-rate-limited',
   // 凭据根本没存 / 存过但读不出来：两种处境，两种说法，不许合成一个。
   'channel-credential-missing',
   'channel-credential-unavailable',
@@ -72,6 +76,7 @@ function normalizeReason(code: string | undefined, adapterType: string): Channel
   if (adapterType === 'telegram') return 'telegram-network-unavailable'
   if (adapterType === 'slack') return 'slack-network-unavailable'
   if (adapterType === 'discord') return 'discord-network-unavailable'
+  if (adapterType === 'qq') return 'qq-network-unavailable'
   return 'adapter-not-supported'
 }
 

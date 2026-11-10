@@ -15,6 +15,7 @@ const catalogEntries = [
   { type: 'telegram', status: 'supported', reason: 'release-a-pending', implemented: true, credentialFields: ['bot_token'] },
   { type: 'slack', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token', 'app_token'] },
   { type: 'discord', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token'] },
+  { type: 'qq', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['app_id', 'client_secret'] },
   // 没实现的平台目录里仍有一行，但**列表里不出现**：列表回答的是「我现在能用哪个」。
   { type: 'feishu', status: 'blocked', reason: 'adapter-blocked', implemented: false, credentialFields: [] }
 ]
@@ -540,7 +541,7 @@ describe('the platform list follows the approved layout', () => {
       node.querySelectorAll('span')[1]?.textContent?.trim()
     )
     // 判据来自目录的 `implemented`：接上了才出现；飞书没实现，所以不在列表里。
-    expect(order).toEqual(['Telegram', 'Slack', 'Discord'])
+    expect(order).toEqual(['Telegram', 'Slack', 'Discord', 'QQ'])
     expect(container.textContent).not.toContain('飞书')
   })
 
@@ -563,7 +564,7 @@ describe('the platform list follows the approved layout', () => {
 
     // 飞书目录里有行、但 implemented=false：列表里一个位置都不占，也不留空块或按不动的项。
     expect(container.textContent).not.toContain('飞书')
-    expect([...container.querySelectorAll('.channel-platform-item')]).toHaveLength(3)
+    expect([...container.querySelectorAll('.channel-platform-item')]).toHaveLength(4)
     expect(container.querySelector('[data-state="empty"]')).toBeNull()
   })
 
@@ -572,8 +573,8 @@ describe('the platform list follows the approved layout', () => {
     const container = await mount()
 
     // 每个列出来的平台都有自己的图形；Discord 接上之后也在。
-    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(3)
-    for (const platform of ['telegram', 'slack', 'discord']) {
+    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(4)
+    for (const platform of ['telegram', 'slack', 'discord', 'qq']) {
       expect(container.querySelector(`.channel-platform-logo[data-platform-logo="${platform}"]`)).not.toBeNull()
     }
   })

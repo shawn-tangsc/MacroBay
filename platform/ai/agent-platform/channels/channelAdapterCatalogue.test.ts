@@ -13,12 +13,13 @@ import { projectChannelCatalog } from './channelCatalogProjection'
  * 代码看上去一切正常，别家点启用却只能得到「未支持」。
  */
 describe('channel adapter catalogue', () => {
-  it('says Discord is implemented and leaves Lark / QQ / WeChat honest', () => {
+  it('says Discord and QQ are implemented and leaves Lark / WeChat honest', () => {
     expect(channelAdapterDescriptor('discord').implemented).toBe(true)
     expect(channelAdapterDescriptor('telegram').implemented).toBe(true)
     expect(channelAdapterDescriptor('slack').implemented).toBe(true)
-    // 飞书缺可引用的 framing 文档、QQ 运行时还没接、微信没有入站通路：都不许提前说「能开」。
-    for (const key of ['lark', 'qq', 'wechat'] as const) {
+    expect(channelAdapterDescriptor('qq').implemented).toBe(true)
+    // 飞书缺可引用的 framing 文档、微信没有入站通路：都不许提前说「能开」。
+    for (const key of ['lark', 'wechat'] as const) {
       expect(channelAdapterDescriptors[key].implemented, key).toBe(false)
     }
   })
@@ -28,6 +29,10 @@ describe('channel adapter catalogue', () => {
     expect(catalog.find((entry) => entry.type === 'discord')).toMatchObject({
       implemented: true,
       credentialFields: ['bot_token']
+    })
+    expect(catalog.find((entry) => entry.type === 'qq')).toMatchObject({
+      implemented: true,
+      credentialFields: ['app_id', 'client_secret']
     })
     expect(catalog.find((entry) => entry.type === 'feishu')).toMatchObject({ implemented: false })
   })

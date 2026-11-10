@@ -87,7 +87,9 @@ describe('QQ Release D contracts', () => {
     database.connection.exec("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('telegram-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('telegram-a',1,'active','2026-07-20'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('qq-a','qq-owner','enable',1,'2026-07-20','2026-07-20'),('telegram-a','telegram-owner','enable',1,'2026-07-20','2026-07-20')")
     const management = new ChannelManagementRepository(database)
     expect(management.activeRuntimeOwners('2026-07-20T00:00:00.000Z')).toEqual([{ channelId: 'telegram-a', generation: 1, token: 'telegram-owner' }])
-    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('qq-a')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
+    // QQ 现在是**已实现**的适配器：运行时被围栏（代际作废、owner 失效），但读者点的「启用」意图留着
+    // ——自检放行靠那次点击，清掉它等于让人每次重启都要再点一次。
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('qq-a')).toEqual({ requested_enabled: 1, lifecycle_state: 'enabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('qq-a')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(management.stopAllRuntimeAndFence('2026-07-20T00:01:00.000Z')).toContain('telegram-a')
   })

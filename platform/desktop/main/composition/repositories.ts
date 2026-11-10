@@ -12,6 +12,7 @@ import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createChannelSmokeRouter } from '../../../ai/agent-platform/channels/channelSmokeEnable'
 import { createDiscordChannelSmoke } from '../../../ai/agent-platform/channels/discord/discordChannelSmoke'
+import { createQqChannelSmoke } from '../../../ai/agent-platform/channels/qq/qqChannelSmoke'
 import { createSlackChannelSmoke } from '../../../ai/agent-platform/channels/slack/slackChannelSmoke'
 import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
 import { reconcileSingleEnabledChannel } from '../../../ai/agent-platform/channels/singleEnabledChannel'
@@ -109,6 +110,14 @@ const channelManagementService = new ChannelManagementService({
     }),
     // Discord 一次 `/users/@me` 同时证明凭据活着、出网通、bot 存在。
     discord: createDiscordChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net'
+    }),
+    // QQ 两步：换 access token（证凭据活）+ 取网关地址（证 token 能用、出网通）。
+    qq: createQqChannelSmoke({
       credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
       readSecret: (ref) => channelCredentialVault.get(ref),
       getPlatformFetch,
