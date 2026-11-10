@@ -52,6 +52,7 @@ type Props = {
   onBack: () => void
   /** Set by the dashboard card: the month (and event) the reader asked to see. */
   openTarget?: { month: string; eventKey?: string }
+  /** 宿主可把「日历设置」改指配置抽屉；**不给就保持旧行为**（打开看板抽屉），行为不变。 */ onOpenSettings?: () => void
 }
 
 const economicCalendarMonthValueAnchorPolicy = {
@@ -73,7 +74,7 @@ function toEconomicCalendarMonthPickerValue(month: string): Dayjs {
   return dayjs(`${month}-${economicCalendarMonthValueAnchorPolicy.day}T${economicCalendarMonthValueAnchorPolicy.localHour}:00:00`)
 }
 
-export function EconomicCalendar({ client, now, text, onBack, openTarget }: Props): ReactElement {
+export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpenSettings }: Props): ReactElement {
   const [initialQuery] = useState(() => createEconomicCalendarQuery(now()))
   const [statusNow, updateStatusClock] = useCalendarStatusClock(now)
   const timeZone = useShellTimeZone()
@@ -361,7 +362,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           />
           <Button aria-label={text.monthNavigation.next} icon={<ChevronRight aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))}>{text.monthNavigation.next}</Button>
           <Button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)}>{text.monthNavigation.current}</Button>
-          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => setCalendarPanelOpen(true)}>{text.calendarSettings}</Button>
+          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => (onOpenSettings === undefined ? setCalendarPanelOpen(true) : onOpenSettings())}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
           <Button icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack}>{text.backToDashboard}</Button>
         </div>
