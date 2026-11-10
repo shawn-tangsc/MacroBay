@@ -404,6 +404,30 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
     expect(html).toContain('role="status"')
   })
 
+  it('gives the render-failed code its own title instead of "could not read"', () => {
+    // 渲染崩了不是读失败：读没失败，是没画出来。标题分档落在这里，别的码不许借道。
+    const html = markup({
+      state: 'error',
+      reasonCode: 'render-failed',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.retry', onSelect: () => undefined }
+    })
+
+    const title = /class="state-view__title"[^>]*>([^<]*)</.exec(html)?.[1]
+    expect(title).toBe('ui.state.error.render-failed')
+    expect(html).toContain('ui.state.error.reason.render-failed')
+    // 出口先给「重试」：一次偶发崩溃不该逼读者丢掉整页状态。
+    expect(html).toContain('ui.state.action.retry')
+
+    // 反向：普通读失败仍是那句「读取失败」标题，标题分档没有顺手改掉别的码。
+    const plain = /class="state-view__title"[^>]*>([^<]*)</.exec(markup({
+      state: 'error',
+      reasonCode: 'unreadable',
+      resolveText: key
+    }))?.[1]
+    expect(plain).toBe('ui.state.error')
+  })
+
   it('falls back to the platform sentence when the product asks for a missing key', () => {
     const html = markup({
       state: 'empty',

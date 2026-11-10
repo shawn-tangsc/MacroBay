@@ -70,12 +70,14 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.empty.reason.older-than-window',
   'ui.state.empty.reason.nothing-in-window',
   'ui.state.error',
+  'ui.state.error.render-failed',
   'ui.state.error.reason.unreadable',
   'ui.state.error.reason.unavailable',
   'ui.state.error.reason.operation-failed',
   'ui.state.error.reason.needs-restart',
   'ui.state.error.reason.page-load-failed',
   'ui.state.error.reason.notification-unknown',
+  'ui.state.error.reason.render-failed',
   'ui.state.error.details',
   'ui.state.disabled',
   'ui.state.disabled.reason.capability-not-wired',
@@ -201,6 +203,13 @@ export type StateViewProps =
       action?: StateViewAction
       details?: StateDetails
     })
+  // 渲染崩了：这一块画不出来。它不是「没读到」，标题也不该说「读取失败」——所以走下面的标题分档。
+  | (StateViewBase & {
+      state: 'error'
+      reasonCode: 'render-failed'
+      action?: StateViewAction
+      details?: StateDetails
+    })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: StateViewAction })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action?: StateViewAction })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'precondition-unsaved'; action?: StateViewAction })
@@ -252,13 +261,21 @@ function StateIcon({ state }: { state: IconState }): ReactElement {
   )
 }
 
+/**
+ * 标题分档：默认标题按 `state` 取（「读取失败」「这里还没有内容」…），**渲染崩了不是读失败**，
+ * 所以那几个码另给一句标题。只登记「按状态取会说不实」的码；别把这里当成第二个标题入口。
+ */
+const TITLE_BY_CODE: Readonly<Record<string, StateViewTextKey>> = {
+  'error.render-failed': 'ui.state.error.render-failed'
+}
+
 /** 文案键的拼法只在这一处：产品选码，不拼键；测试与文案表都按它取键。 */
 export function stateViewTextKeys(
   state: Exclude<StateViewState, 'normal' | 'loading'>,
   reasonCode: string
 ): { title: StateViewTextKey; reason: StateViewTextKey } {
   return {
-    title: `ui.state.${state}` as StateViewTextKey,
+    title: TITLE_BY_CODE[`${state}.${reasonCode}`] ?? (`ui.state.${state}` as StateViewTextKey),
     reason: `ui.state.${state}.reason.${reasonCode}` as StateViewTextKey
   }
 }

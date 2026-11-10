@@ -84,6 +84,7 @@ import { StateView } from '@platform/ui/components/state'
 | `error` | `needs-restart` | 必填：重启应用 —— `restart-app` | 本地接口缺失，只有重启才加载。 |
 | `error` | `page-load-failed` | 必填：重新载入界面 —— `reload-page` | 页面本身没有加载成功。恢复办法是重载页面——不是 `retry`（那次操作重试），也不是 `restart-app`（代价完全不同）。 |
 | `error` | `notification-unknown` | 必填：重试 —— `retry` | 通知读不出来，而且原因还没查清——这不代表没有通知。不许退成「空」（那是在说没有），也不许推到权限（权限查不到≠没给）。 |
+| `error` | `render-failed` | 必填：先重试，反复出现再重载界面 —— `retry` / `reload-page` | 画这一块的时候抛了错：不是「没读到」（`unreadable`），也不是「页面没加载」（`page-load-failed`）——是渲染这一步崩了。先 `retry`，反复出现再 `reload-page`；标题另给一句，不说「读取失败」。 |
 | `disabled` | `capability-not-wired` | 不许有 | 平台侧没接通，读者没做错。 |
 | `disabled` | `target-disabled` | 必填：去启用 —— `enable` | 目标被停用了。 |
 | `disabled` | `precondition-unsaved` | 必填：保存 —— `save` | 表单还没保存，保存之后才能继续。 |

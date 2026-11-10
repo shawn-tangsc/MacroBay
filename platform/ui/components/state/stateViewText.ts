@@ -64,6 +64,9 @@ const ZH_CN: StateViewCopy = {
       'ui.state.error.reason.page-load-failed': '这个页面没有加载成功',
       // 状态不明：拿不到，且说不清原因——必须明说「这不代表没有通知」，否则读者会把读不到当成今天没事。
       'ui.state.error.reason.notification-unknown': '通知暂时读不出来，原因还没查清；这不代表没有通知',
+      // 渲染崩了：标题不能说「读取失败」——读没失败，是没画出来。
+      'ui.state.error.render-failed': '这块界面没有画出来',
+      'ui.state.error.reason.render-failed': '画的时候出错了。重载界面可以恢复；反复出现请把技术详情里的原话发给我们',
       'ui.state.disabled': '这个功能当前不可用',
       'ui.state.disabled.reason.capability-not-wired': '这项能力平台侧还没接通，不是你的问题；现在没有可做的操作',
       'ui.state.disabled.reason.target-disabled': '目标已经被停用，先重新启用',
@@ -113,6 +116,9 @@ const EN_US: StateViewCopy = {
       'ui.state.error.reason.page-load-failed': 'This page did not load',
       'ui.state.error.reason.notification-unknown':
         "Notifications aren't available right now, and we don't know why yet. This doesn't mean there are none.",
+      'ui.state.error.render-failed': 'This screen did not draw',
+      'ui.state.error.reason.render-failed':
+        'It failed while drawing. Reloading the interface brings it back; if it keeps happening, send us what the details say.',
       'ui.state.disabled': 'This is not available right now',
       'ui.state.disabled.reason.capability-not-wired': 'This capability is not wired up on the platform side yet; nothing is wrong on your side, and there is nothing to do here',
       'ui.state.disabled.reason.target-disabled': 'The target is turned off — turn it back on',
