@@ -80,7 +80,6 @@ async function render(filter: 'all' | 'calendar' | 'dashboard'): Promise<HTMLEle
       title: 'Sources',
       categories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商' } as never,
       providerNames: {},
-      providerSummary: '{total}/{enabled}',
       unavailableCountOne: '含 {count} 个不可用的源',
       unavailableCountOther: '含 {count} 个不可用的源'
     },
@@ -184,7 +183,6 @@ describe('the dashboard filter groups by module', () => {
         title: 'Sources',
         categories: { macro: '宏观' } as never,
         providerNames: {},
-        providerSummary: '{total}/{enabled}',
         unavailableCountOne: '含 {count} 个不可用的源',
         unavailableCountOther: '含 {count} 个不可用的源'
       },

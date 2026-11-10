@@ -63,7 +63,7 @@ async function render(initial: Readonly<Record<string, boolean>> = {}) {
         } as never,
         treeLabels: {
           title: t.title, categories: t.sourceCategories, providerNames: t.providerNames,
-          providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne,
+          unavailableCountOne: t.unavailableCountOne,
           unavailableCountOther: t.unavailableCountOther
         } as never,
         view: {

@@ -260,7 +260,6 @@ export const intelligenceSourcesText = {
   agentNames: { crypto: '数字货币', stocks: '股票', futures: '期货' },
   panelNames: { dashboard: '看板', 'economic-calendar': '日历' },
   toggleSource: { enable: '启用 {name}', disable: '停用 {name}' },
-  providerSummary: '{total} 项 · 已启用 {enabled}',
   /* 源那一行行尾那颗展开按钮：两个字，不是说明。 */
   advancedToggle: '高级',
   credentialsRequired: '需要 API Key',
@@ -822,7 +821,6 @@ export const intelligenceSourcesText = {
   agentNames: { crypto: 'Crypto', stocks: 'Stocks', futures: 'Futures' },
   panelNames: { dashboard: 'Dashboard', 'economic-calendar': 'Calendar' },
   toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
-  providerSummary: '{total} sources · {enabled} enabled',
   advancedToggle: 'Advanced',
   credentialsRequired: 'API key required',
   website: 'Website',

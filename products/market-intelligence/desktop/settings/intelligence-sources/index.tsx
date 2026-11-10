@@ -120,7 +120,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
           showSourceDetails: true,
           surface: 'settings'
         }}
-        treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
+        treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
         view={settingsView} />
     </section>
   )

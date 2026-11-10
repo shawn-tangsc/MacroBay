@@ -63,7 +63,6 @@ const TREE_LABELS: SourcesSettingsPaneProps['treeLabels'] = {
   title: settingsText.title,
   categories: settingsText.sourceCategories,
   providerNames: settingsText.providerNames,
-  providerSummary: settingsText.providerSummary,
   unavailableCountOne: settingsText.unavailableCountOne,
   unavailableCountOther: settingsText.unavailableCountOther
 }

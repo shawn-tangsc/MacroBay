@@ -34,7 +34,7 @@ function source(sourceId: string, enabled: boolean, visibility = 'visible') {
 function labels() {
   return {
     sourceNames: {}, providerNames: {}, panelNames: t.panelNames, badges: t.sourceBadges,
-    status: t.status, capabilities: t.providerSummary, toggleSource: t.toggleSource,
+    status: t.status, toggleSource: t.toggleSource,
     toggleProvider: { enable: t.toggleProviderEnable, disable: t.toggleProviderDisable },
     credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote,
     testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered,

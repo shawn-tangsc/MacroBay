@@ -27,7 +27,6 @@ function labels(): ProviderDetailLabels {
     panelNames: settingsText.panelNames,
     badges: settingsText.sourceBadges,
     status: settingsText.status,
-    capabilities: settingsText.providerSummary,
     toggleSource: settingsText.toggleSource,
     credentials: settingsText.credentialsRequired,
     website: settingsText.website,

@@ -33,8 +33,7 @@ async function renderRow(sources: ReadonlyArray<Record<string, unknown>>, provid
   await act(async () => root!.render(createElement(SettingsSourceTree, {
     filter: 'all',
     labels: {
-      title: 'Sources', categories: { macro: '宏观' } as never, providerNames: {},
-      providerSummary: '{total}/{enabled}', unavailableCountOne: '{count} 个不可用', unavailableCountOther: '{count} 个不可用'
+      title: 'Sources', categories: { macro: '宏观' } as never, providerNames: {}, unavailableCountOne: '{count} 个不可用', unavailableCountOther: '{count} 个不可用'
     },
     onFilterChange: vi.fn(),
     onSelectProvider: vi.fn(),
@@ -74,7 +73,6 @@ describe('来源行状态属性（只给头像上色）', () => {
   it('marks a source with at least one enabled capability as enabled', async () => {
     const host = await renderRow([{ sourceId: 'coindesk-rss', enabled: false }, { sourceId: 'sec-rss', enabled: true }])
     expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('enabled')
-    expect(host.textContent).toContain('2/1')
   })
 })
 

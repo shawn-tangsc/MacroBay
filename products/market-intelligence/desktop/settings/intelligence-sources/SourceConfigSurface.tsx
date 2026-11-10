@@ -41,7 +41,6 @@ export type SourceConfigText = {
   health: ProviderDetailLabels['health']
   /** 设置页文案里的药丸词表与「N 项能力 · 已启用 M」模板。 */
   sourceBadges: { pending: string; advanced: string; calendar: string; proxy: string }
-  providerSummary: string
 }
 
 export type SourceConfigPolicy = NonNullable<Parameters<typeof ProviderDetail>[0]['policy']>
@@ -123,7 +122,6 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
       calendar: props.text.sourceBadges.calendar,
       proxy: props.text.sourceBadges.proxy
     },
-    capabilities: props.text.providerSummary
   }
   return <ProviderDetail
     {...(props.initialSourceId === undefined ? {} : { initialSourceId: props.initialSourceId })}

@@ -27,7 +27,6 @@ function labels(): ProviderDetailLabels {
     panelNames: settingsText.panelNames,
     badges: settingsText.sourceBadges,
     status: settingsText.status,
-    capabilities: settingsText.providerSummary,
     toggleSource: settingsText.toggleSource,
     credentials: settingsText.credentialsRequired,
     website: settingsText.website,
@@ -409,7 +408,6 @@ describe('ProviderDetail source details', () => {
     await flush()
 
     expect(container.textContent).not.toContain('项能力')
-    expect(container.textContent).not.toContain(settingsText.providerSummary.replace('{total}', '').replace('{enabled}', '').trim())
   })
 
   it('falls back to the sentence without a number when the reason code is unknown', async () => {

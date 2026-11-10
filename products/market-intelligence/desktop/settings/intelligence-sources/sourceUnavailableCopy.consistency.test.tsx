@@ -37,7 +37,7 @@ afterEach(async () => {
 function labels(): ProviderDetailLabels {
   return {
     sourceNames: {}, providerNames: {}, panelNames: settingsText.panelNames, badges: settingsText.sourceBadges,
-    status: settingsText.status, capabilities: settingsText.providerSummary, toggleSource: settingsText.toggleSource,
+    status: settingsText.status, toggleSource: settingsText.toggleSource,
     credentials: settingsText.credentialsRequired, website: settingsText.website, signup: settingsText.signup,
     inviteNote: settingsText.inviteNote, testConnection: settingsText.testConnection, jobRegistered: settingsText.jobRegistered,
     jobNotRegistered: settingsText.jobNotRegistered, connectionSucceeded: settingsText.connectionSucceeded,

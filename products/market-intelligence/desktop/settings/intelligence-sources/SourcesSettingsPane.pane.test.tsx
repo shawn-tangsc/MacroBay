@@ -70,8 +70,7 @@ async function render(pane?: 'sources' | 'business'): Promise<HTMLElement> {
           title: t.title,
           categories: t.sourceCategories,
           providerNames: t.providerNames,
-          providerSummary: t.providerSummary,
-          unavailableCountOne: t.unavailableCountOne,
+                    unavailableCountOne: t.unavailableCountOne,
           unavailableCountOther: t.unavailableCountOther
         } as never,
         view

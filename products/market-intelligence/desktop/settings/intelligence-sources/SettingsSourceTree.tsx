@@ -18,7 +18,6 @@ type Labels = {
   title: string
   categories: Record<SourceCategory, string>
   providerNames: Record<string, string>
-  providerSummary: string
   /** 「含 {count} 个不可用的源」：只进目录行的可访问名，不在屏幕上多画一行。单复数是两个键。 */
   unavailableCountOne: string
   unavailableCountOther: string
@@ -207,8 +206,6 @@ export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilt
                   resolveText={resolveText} />}
             </div>}
           {sortByState(providers).map((provider) => {
-            const enabled = provider.sources.filter((source) => source.enabled).length
-            const summary = labels.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
             // 标记档由投影给出，与抽屉读同一份（组件不看 enabled/unavailable）。
             const markerClass = catalogMarkerClass(provider.healthMarker)
             // ring 是装饰（aria-hidden），读屏听不到「取不到」——把数量补进这一行的可访问名。
@@ -233,7 +230,6 @@ export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilt
                 </span>
                 <span className="intelligence-provider-main">
                   <strong>{labels.providerNames[provider.providerId] ?? provider.displayName}</strong>
-                  <small>{summary}</small>
                 </span>
                 {unavailableCount > 0
                   ? <span className="intelligence-source-sr-only">{unavailableCountText.replace('{count}', String(unavailableCount))}</span>

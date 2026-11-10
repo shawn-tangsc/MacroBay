@@ -26,7 +26,7 @@ afterEach(async () => {
 
 const labels = {
   sourceNames: {}, providerNames: {}, panelNames: t.panelNames, badges: t.sourceBadges, status: t.status,
-  capabilities: t.providerSummary, toggleSource: t.toggleSource,
+  toggleSource: t.toggleSource,
   toggleProvider: { enable: t.toggleProviderEnable, disable: t.toggleProviderDisable },
   credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote,
   testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered,

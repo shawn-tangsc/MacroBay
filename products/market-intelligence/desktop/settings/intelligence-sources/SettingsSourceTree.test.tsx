@@ -48,7 +48,7 @@ describe('SettingsSourceTree', () => {
       }
       await act(async () => root!.render(createElement(SettingsSourceTree, {
         filter: 'all',
-        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+        labels: { title: 'Sources', categories: {} as never, providerNames: {}, unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
         onFilterChange: vi.fn(),
         onSelectProvider: vi.fn(),
         selectedProviderId: undefined,
@@ -87,7 +87,7 @@ describe('SettingsSourceTree', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(SettingsSourceTree, {
       filter: 'all',
-      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+      labels: { title: 'Sources', categories: {} as never, providerNames: {}, unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
       onFilterChange: vi.fn(),
       onSelectProvider: vi.fn(),
       selectedProviderId: undefined,
@@ -117,7 +117,7 @@ describe('SettingsSourceTree', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(SettingsSourceTree, {
       filter: 'all',
-      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+      labels: { title: 'Sources', categories: {} as never, providerNames: {}, unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
       onFilterChange: vi.fn(),
       onSelectProvider,
       selectedProviderId: 'fed',
@@ -140,7 +140,7 @@ describe('SettingsSourceTree', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(SettingsSourceTree, {
       filter: 'calendar',
-      labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+      labels: { title: 'Sources', categories: {} as never, providerNames: {}, unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
       onFilterChange: vi.fn(),
       onSelectProvider: vi.fn(),
       selectedProviderId: undefined,
@@ -175,7 +175,7 @@ describe('SettingsSourceTree', () => {
       root = createRoot(host)
       await act(async () => root!.render(createElement(SettingsSourceTree, {
         filter: 'all',
-        labels: { title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}', unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+        labels: { title: 'Sources', categories: {} as never, providerNames: {}, unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
         onFilterChange: vi.fn(),
         onSelectProvider: vi.fn(),
         selectedProviderId: undefined,
@@ -197,7 +197,7 @@ describe('SettingsSourceTree', () => {
 
     // 英文单复数用**真实渲染**断言：count=1 与 count=2 各一次（不许出现「1 sources」）。
     const englishLabels = {
-      title: 'Sources', categories: {} as never, providerNames: {}, providerSummary: '{total}/{enabled}',
+      title: 'Sources', categories: {} as never, providerNames: {},
       unavailableCountOne: '{count} unavailable source', unavailableCountOther: '{count} unavailable sources'
     }
     const englishView = (ids: readonly string[]): never => ({
