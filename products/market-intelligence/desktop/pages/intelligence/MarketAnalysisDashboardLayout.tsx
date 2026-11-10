@@ -202,6 +202,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           text={text.analysisTimeline}
         />
         <AnalysisTimelineDrawer
+          onOpenSettings={() => setAnalysisSettingsOpen(true)}
           onClose={() => setTimelineOpen(false)}
           onOpenChange={setOpenEntry}
           open={timelineOpen}
