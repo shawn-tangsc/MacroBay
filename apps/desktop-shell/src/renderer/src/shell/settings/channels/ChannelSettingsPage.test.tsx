@@ -13,6 +13,9 @@ let root: Root | undefined
 
 const catalogEntries = [
   { type: 'telegram', status: 'supported', reason: 'release-a-pending', implemented: true, credentialFields: ['bot_token'] },
+  { type: 'slack', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token', 'app_token'] },
+  { type: 'discord', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token'] },
+  // 没实现的平台目录里仍有一行，但**列表里不出现**：列表回答的是「我现在能用哪个」。
   { type: 'feishu', status: 'blocked', reason: 'adapter-blocked', implemented: false, credentialFields: [] }
 ]
 
@@ -536,8 +539,9 @@ describe('the platform list follows the approved layout', () => {
     const order = [...container.querySelectorAll('.channel-platform-item')].map((node) =>
       node.querySelectorAll('span')[1]?.textContent?.trim()
     )
-    // 产品 2026-11-09：未实现的四个（飞书 / QQ / 微信 / Discord）撤下，只留能开的两个。
-    expect(order).toEqual(['Telegram', 'Slack'])
+    // 判据来自目录的 `implemented`：接上了才出现；飞书没实现，所以不在列表里。
+    expect(order).toEqual(['Telegram', 'Slack', 'Discord'])
+    expect(container.textContent).not.toContain('飞书')
   })
 
   it('never shows another platform sentence once the selection changes', async () => {
@@ -548,34 +552,30 @@ describe('the platform list follows the approved layout', () => {
     const slack = [...container.querySelectorAll('.channel-platform-item')].find((node) => node.textContent?.includes('Slack'))
     await act(async () => (slack as HTMLButtonElement).click())
 
-    // Slack 这版接不了：说明换成那一句，且不再出现 Telegram 的说明。
-    expect(container.textContent).toContain(labels.channelUnsupportedPane)
+    // 选中项换了，说明跟着换：不再出现 Telegram 那句。
+    expect(container.textContent).toContain(labels.channelPlatformPurpose.slack)
     expect(container.textContent).not.toContain(labels.channelPlatformPurpose.telegram)
   })
 
-  it('leaves a platform that cannot be connected with its name, what it is for, why not, and no empty block', async () => {
+  it('does not list a platform the catalog has not implemented', async () => {
     installPlatform()
     const container = await mount()
 
-    const slack = [...container.querySelectorAll('.channel-platform-item')].find((node) => node.textContent?.includes('Slack'))
-    await act(async () => (slack as HTMLButtonElement).click())
-
-    // 三样都要：名字在标题，用途与原因各一句——缺用途时读者不知道这个平台是干什么的。
-    expect(container.querySelector('.channel-detail-title')?.textContent).toBe('Slack')
-    expect(container.textContent).toContain(labels.channelPlatformPurpose.slack)
-    expect(container.textContent).toContain(labels.channelUnsupportedPane)
+    // 飞书目录里有行、但 implemented=false：列表里一个位置都不占，也不留空块或按不动的项。
+    expect(container.textContent).not.toContain('飞书')
+    expect([...container.querySelectorAll('.channel-platform-item')]).toHaveLength(3)
     expect(container.querySelector('[data-state="empty"]')).toBeNull()
-    expect([...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)).toBeUndefined()
   })
 
   it('gives every listed platform its own mark', async () => {
     installPlatform()
     const container = await mount()
 
-    // 列表只留能开的两个平台（产品 2026-11-09），每个都有自己的图形。
-    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(2)
-    expect(container.querySelector('.channel-platform-logo[data-platform-logo="telegram"]')).not.toBeNull()
-    expect(container.querySelector('.channel-platform-logo[data-platform-logo="slack"]')).not.toBeNull()
+    // 每个列出来的平台都有自己的图形；Discord 接上之后也在。
+    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(3)
+    for (const platform of ['telegram', 'slack', 'discord']) {
+      expect(container.querySelector(`.channel-platform-logo[data-platform-logo="${platform}"]`)).not.toBeNull()
+    }
   })
 })
 

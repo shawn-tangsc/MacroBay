@@ -38,6 +38,10 @@ export const CHANNEL_SMOKE_REASONS = [
   'slack-provider-rejected',
   'slack-network-unavailable',
   'slack-rate-limited',
+  // Discord 自检：被拒 / 连不通 / 限流，同样三种说法。
+  'discord-provider-rejected',
+  'discord-network-unavailable',
+  'discord-rate-limited',
   // 凭据根本没存 / 存过但读不出来：两种处境，两种说法，不许合成一个。
   'channel-credential-missing',
   'channel-credential-unavailable',
@@ -67,6 +71,7 @@ function normalizeReason(code: string | undefined, adapterType: string): Channel
   // 超时/异常/空码都属于「这一次没连上」：按适配器给各自那条网络不可用；没实现的才归到未支持。
   if (adapterType === 'telegram') return 'telegram-network-unavailable'
   if (adapterType === 'slack') return 'slack-network-unavailable'
+  if (adapterType === 'discord') return 'discord-network-unavailable'
   return 'adapter-not-supported'
 }
 

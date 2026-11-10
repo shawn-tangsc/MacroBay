@@ -11,6 +11,7 @@ import { createAgentPlatformDatabase } from '../../../ai/agent-platform/db/creat
 import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createChannelSmokeRouter } from '../../../ai/agent-platform/channels/channelSmokeEnable'
+import { createDiscordChannelSmoke } from '../../../ai/agent-platform/channels/discord/discordChannelSmoke'
 import { createSlackChannelSmoke } from '../../../ai/agent-platform/channels/slack/slackChannelSmoke'
 import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
 import { reconcileSingleEnabledChannel } from '../../../ai/agent-platform/channels/singleEnabledChannel'
@@ -100,6 +101,14 @@ const channelManagementService = new ChannelManagementService({
     }),
     // Slack 两把凭据各证一件事：auth.test 证 Bot Token，apps.connections.open 证 App Token 与 Socket Mode。
     slack: createSlackChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net'
+    }),
+    // Discord 一次 `/users/@me` 同时证明凭据活着、出网通、bot 存在。
+    discord: createDiscordChannelSmoke({
       credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
       readSecret: (ref) => channelCredentialVault.get(ref),
       getPlatformFetch,
