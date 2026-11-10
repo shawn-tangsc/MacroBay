@@ -302,14 +302,25 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       })
     }
     if (onToggleSource !== undefined) {
-      if (!(await onToggleSource(source, enabled))) rollback()
+      if (!(await onToggleSource(source, enabled))) {
+        rollback()
+        // 宿主那条路同样可能因为缺凭据被拒：切回「缺凭据」态，开关灰着并给出同一句提示。
+        if (provider.credential === 'api-key') setCredentialStatus({ hasCredential: false })
+      }
       // 成功不立刻删：那次重读还没回来之前删掉会闪回旧值；投影追上后由上面的自愈 effect 清掉。
       return
     }
     // 尚未迁移的宿主（看板抽屉，S2 收口）：旧路径，写完由宿主自己重读（投影追上后同样自愈）。
     // 缺凭据时不发写请求（后端另有同一条拒绝；这里是界面侧的第一道闸）。
     if (provider.credential === 'api-key' && credentialStatus?.hasCredential === false) return
-    await setSourceEnabled(source, enabled).then(() => onChanged?.()).catch(rollback)
+    await setSourceEnabled(source, enabled).then(() => onChanged?.()).catch((error: unknown) => {
+      rollback()
+      /* 后端拒绝（例如还没配钥匙）：**保持关闭**，并把这一行切回「缺凭据」态——
+         同一颗 ⓘ 说同一句「先配置 API Key」，不另写一份文案。 */
+      if ((error as { reasonCode?: string }).reasonCode === 'credential-required') {
+        setCredentialStatus({ hasCredential: false })
+      }
+    })
   }
 
   const providerName = labels.providerNames[provider.providerId] ?? provider.displayName

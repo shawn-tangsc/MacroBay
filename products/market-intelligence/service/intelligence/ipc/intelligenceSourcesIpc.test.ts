@@ -693,8 +693,9 @@ describe('intelligenceSources service', () => {
     // The dedicated macro-market job reads this back through the profile.
     const detail = await service.getDetail('twelve-data-market')
     expect(detail.profile.enabled).toBe(true)
-    // `readiness: 'planned'` still forces the generic runtime off, so nothing was scheduled and the
-    // unadapted `rest-api-poller` collect job does not even exist for this source.
+    // 挡住通用运行时的**不是** `readiness`（这条源 2026-11-11 改成 live 了），而是
+    // `genericRuntimeCollects`：`collectionOwner: 'product'` / `collection: 'none'` 一律不采。
+    // 所以没有排期、也没有这条 `rest-api-poller` collect job。改 readiness 不会解开这道闸。
     expect(resolveRuntimeConfig({
       definition: getIntelligenceSourceDefinition('twelve-data-market')!,
       profile: detail.profile,
