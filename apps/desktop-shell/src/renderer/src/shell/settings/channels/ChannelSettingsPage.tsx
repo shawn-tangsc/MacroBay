@@ -328,7 +328,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                   </p>
                 )}
               </div>
-              {notConnectable ? null : (
+              {notConnectable || rows.length === 0 ? null : (
                 <Button
                   className="channel-add-button"
                   icon={<Plus size={14} />}

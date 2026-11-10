@@ -80,6 +80,17 @@ function stateOf(container: HTMLElement, state: string): Element | null {
   return container.querySelector(`[data-state="${state}"]`)
 }
 
+/**
+ * 打开「新建」弹层：空态时右上角那颗「添加」不画（原型：一屏一颗动作），入口是 `StateView` 的「创建」；
+ * 非空时走右上角。两种都只点**一颗**，用它取即可。
+ */
+async function openCreate(container: HTMLElement): Promise<void> {
+  const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
+  const target = add ?? container.querySelector<HTMLElement>('[data-state="empty"] .state-view__action')
+  await act(async () => target?.click())
+  await act(async () => {})
+}
+
 async function mount(): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -253,13 +264,27 @@ describe('the channel dialog has one authority for permission and working folder
     expect(Object.keys(payload ?? {}).sort()).toEqual(['actorId', 'agentId', 'allowedChatIds', 'id', 'name'])
   })
 
+  it('keeps the allow-list explanation in the ⓘ, not in the body', async () => {
+    installPlatform({ list: vi.fn(async () => []) })
+    const container = await mount()
+    await openCreate(container)
+
+    // 正文只有字段名 / 值 / 控件（加一行状态）；解释在字段名旁边那颗 ⓘ 里，点开才出现。
+    expect(document.body.textContent).not.toContain(labels.channelAllowedChatsHint)
+    const info = [...document.body.querySelectorAll('button')].find(
+      (node) => node.getAttribute('aria-label') === labels.channelAllowedChatsInfoAria
+    ) as HTMLButtonElement | undefined
+    expect(info).toBeDefined()
+    await act(async () => info?.click())
+    await act(async () => {})
+    expect(document.body.textContent).toContain(labels.channelAllowedChatsHint)
+  })
+
   it('offers the same four fields when creating', async () => {
     const channels = installPlatform({ list: vi.fn(async () => []) })
     const container = await mount()
 
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
+    await openCreate(container)
 
     expect(labelledFields()).toEqual([labels.channelCredential, labels.channelFieldAllowedChats])
     expect(selects()).toBe(1)
@@ -583,17 +608,18 @@ describe('the platform list follows the approved layout', () => {
 })
 
 describe('an empty platform', () => {
-  it('says no Telegram channel yet, and leaves the only add button at the top right', async () => {
+  it('says no Telegram channel yet, and shows exactly one create action', async () => {
     installPlatform({ list: vi.fn(async () => []) })
     const container = await mount()
 
-    // 空态按组件契约：标准两行（通用标题 + 原因句）加一个「添加」动作，不再叠加自己的一句话。
+    // 空态按组件契约：标准两行（通用标题 + 原因句）加一个「创建」动作。
+    // **一屏只有这一颗**：右上角那颗「添加」在空态时不画（同一件事两个入口，读者会以为是两件事）。
     const empty = container.querySelector('[data-state="empty"]')
     expect(empty).not.toBeNull()
     expect(empty?.querySelectorAll('.state-view__title, .state-view__reason').length).toBe(2)
     expect(empty?.querySelector('.state-view__action')).not.toBeNull()
     const addButtons = [...container.querySelectorAll('button')].filter((node) => node.textContent?.trim() === labels.channelAdd)
-    expect(addButtons).toHaveLength(1)
+    expect(addButtons).toHaveLength(0)
   })
 })
 
@@ -728,9 +754,7 @@ describe('saving a credential has to prove itself', () => {
     })
     const container = await mount()
 
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
+    await openCreate(container)
 
     const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
     await act(async () => typeInto(name, 'Telegram 9'))
@@ -791,9 +815,7 @@ describe('creating a channel reads the real result', () => {
 
   /** 走完新建弹层：名称 + 助手 + Token，然后点「创建频道」。 */
   async function fillCreateDialog(container: HTMLElement): Promise<void> {
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
+    await openCreate(container)
 
     const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
     await act(async () => typeInto(name, 'Telegram 9'))
@@ -917,8 +939,15 @@ describe('the token you are typing can be checked', () => {
     ) as HTMLButtonElement
     await act(async () => toggle.click())
     expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).getAttribute('type')).toBe('text')
-    expect(document.body.querySelector('[data-token-visible-hint]')?.textContent).toBe(labels.channelTokenVisibleHint)
     expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    // 「只在本机显示」这句解释进字段名旁的 ⓘ（正文只留一行状态）；点开就能看到。
+    const info = [...document.body.querySelectorAll('button')].find(
+      (node) => node.getAttribute('aria-label') === labels.channelTokenInfoAria
+    ) as HTMLButtonElement | undefined
+    expect(info).toBeDefined()
+    await act(async () => info?.click())
+    await act(async () => {})
+    expect(document.body.textContent).toContain(labels.channelTokenVisibleHint)
 
     await act(async () => toggle.click())
     expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).getAttribute('type')).toBe('password')
@@ -935,9 +964,7 @@ describe('the channel screen no longer picks a working folder', () => {
     installPlatform({ list: vi.fn(async () => [{ ...channel, workspace: { type: 'user', workspaceId: 'ws-1' } }]) })
     const container = await mount()
 
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
+    await openCreate(container)
 
     const agentsBridge = window.platform.agents as unknown as { ensureWorkspace: ReturnType<typeof vi.fn> }
     const appBridge = window.platform.app as unknown as { selectDirectory: ReturnType<typeof vi.fn> }

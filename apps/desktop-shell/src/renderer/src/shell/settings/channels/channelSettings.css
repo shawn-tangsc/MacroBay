@@ -339,6 +339,13 @@
   font-size: var(--font-body);
 }
 
+/* 字段名一行：名字 + 旁边那颗 ⓘ（说明进 ⓘ，正文只留一行状态）。 */
+.channel-field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Token 输入框 + 显示切换：按钮在框右侧同一行，不挤掉输入宽度。 */
 .channel-field-with-toggle {
   display: flex;

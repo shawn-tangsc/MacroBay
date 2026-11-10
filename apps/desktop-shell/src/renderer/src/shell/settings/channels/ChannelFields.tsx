@@ -4,6 +4,8 @@ import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 
+import { SettingInfoPopover } from '../SettingInfoPopover'
+
 import type { PlatformText } from '../../../i18n/platformText'
 
 import type { Agent } from './channelSettingsPresentation'
@@ -77,7 +79,19 @@ export function ChannelFields(props: {
         value={values.agentId.length === 0 ? undefined : values.agentId}
       />
 
-      <FieldShell label={labels.channelCredential}>
+      <FieldShell
+        info={
+          <SettingInfoPopover
+            hintKeys={[props.tokenState === 'missing' ? 'channelTokenEnterHint' : props.tokenState === 'unavailable' ? 'channelTokenUnavailableHint' : 'channelTokenReadOnly', ...(tokenVisible ? ['channelTokenVisibleHint'] : [])]}
+            infoLabelKey="settings.channels.tokenInfo"
+            resolveText={(key: string) =>
+              key === 'settings.channels.tokenInfo'
+                ? labels.channelTokenInfoAria
+                : (labels as unknown as Record<string, string>)[key] ?? ''
+            }
+          />
+        }
+        label={labels.channelCredential}>
         {props.mode === 'create' ? (
           <Input.Password
             aria-label={labels.channelCredential}
@@ -111,13 +125,8 @@ export function ChannelFields(props: {
                 tooltipKey="settings.channels.tokenVisibility"
               />
             </div>
-            {tokenVisible ? (
-              <small className="channel-field-hint" data-token-visible-hint>
-                {labels.channelTokenVisibleHint}
-              </small>
-            ) : null}
             <small className="channel-field-hint">
-              {/* 三档三句：「留空＝不修改」只在真有一把可读的凭据时才是实话。 */}
+              {/* 正文最多一行：三档三句里只留**当前状态**那一句；「显示/隐藏」的解释进 ⓘ。 */}
               {props.tokenState === 'missing'
                 ? labels.channelTokenEnterHint
                 : props.tokenState === 'unavailable'
@@ -128,7 +137,19 @@ export function ChannelFields(props: {
         )}
       </FieldShell>
 
-      <FieldShell hint={labels.channelAllowedChatsHint} label={labels.channelFieldAllowedChats}>
+      <FieldShell
+        info={
+          <SettingInfoPopover
+            hintKey="channelAllowedChatsHint"
+            infoLabelKey="settings.channels.allowedChatsInfo"
+            resolveText={(key: string) =>
+              key === 'settings.channels.allowedChatsInfo'
+                ? labels.channelAllowedChatsInfoAria
+                : (labels as unknown as Record<string, string>)[key] ?? ''
+            }
+          />
+        }
+        label={labels.channelFieldAllowedChats}>
         <Input.TextArea
           aria-label={labels.channelFieldAllowedChats}
           autoSize={{ minRows: 2, maxRows: 4 }}
@@ -152,16 +173,25 @@ export function ChannelFields(props: {
   )
 }
 
+/**
+ * 一个字段 = 字段名（旁边可挂一颗 ⓘ）+ 控件（下边最多一行状态句）。
+ *
+ * **说明进 ⓘ**（用户口径，2026-11-11）：字段名旁边的 ⓘ 承载解释，正文只留字段名 / 值 / 控件 /
+ * 一行状态。外壳从 `<label>` 换成 `<div>`：控件各自带 `aria-label`（见上），而 `<label>` 里再放一颗
+ * 按钮会让 label 的关联对象变成那颗按钮——那正是「点字段名没反应」的来源。
+ */
 function FieldShell(props: {
   label: string
-  hint?: string
+  info?: React.ReactNode
   children: React.ReactNode
 }): React.ReactElement {
   return (
-    <label className="channel-field">
-      <span className="channel-field-label">{props.label}</span>
+    <div className="channel-field">
+      <div className="channel-field-label-row">
+        <span className="channel-field-label">{props.label}</span>
+        {props.info}
+      </div>
       {props.children}
-      {props.hint === undefined ? null : <small className="channel-field-hint">{props.hint}</small>}
-    </label>
+    </div>
   )
 }
