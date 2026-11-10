@@ -21,6 +21,11 @@ export function ContentDetail(props: Readonly<{
   action?: ReactNode
   /** 追加在这一行下面的行（舆情那一项用它放「强度门槛」）。 */
   children?: ReactNode
+  /**
+   * 行名旁那颗 ⓘ 画不画：设置页把它省掉（那一屏有一处整组 ⓘ），抽屉里它必须跟着这一行
+   * ——「为什么勾了还不响」的解释不能飘在别处。句子来自声明里的 `helpKey`，不在这里写。
+   */
+  showHelp?: boolean
 }>): ReactElement {
   const last = props.children === undefined
   return <div className="intelligence-notification-content-detail">
@@ -33,7 +38,7 @@ export function ContentDetail(props: Readonly<{
       onChange={(next) => props.onChange(next === true)}
       resolveOptionLabel={() => ''}
       resolveText={props.resolveText}
-      showHelp={false}
+      showHelp={props.showHelp ?? false}
       rowClassName={`intelligence-notification-form-row${last ? ' is-last' : ''}`}
       value={props.enabled}
       view={{}}

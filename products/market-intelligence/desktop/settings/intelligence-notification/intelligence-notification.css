@@ -331,3 +331,29 @@
 .intelligence-notification-test-reason summary {
   cursor: pointer;
 }
+
+/* ── 抽屉面（配置抽屉「通知」屏）：分栏吃满宽度，左栏 296 由本屏给 ──
+   外壳沿用抽屉那一个 `config-drawer__split`（不新造容器）；这里只改列宽，296 是通知列表
+   需要的最小宽度（名字 + 状态词一行放得下），不是另立一套布局。 */
+.config-drawer__split.intelligence-notification-split {
+  grid-template-columns: 296px minmax(0, 1fr);
+  gap: 16px;
+}
+
+/* 整屏级事实（通道未就绪）放两栏上方：读者先知道不通，再看内容；解释在紧邻的 ⓘ 里。 */
+.intelligence-notification-panel__notice {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  line-height: 1.5;
+}
+
+/* 「读取中」不是 settled 状态，不画成药丸——一行小字就是占位，不冒充状态。 */
+.intelligence-notification-row-loading {
+  color: var(--muted);
+  font-size: var(--font-body);
+  white-space: nowrap;
+}

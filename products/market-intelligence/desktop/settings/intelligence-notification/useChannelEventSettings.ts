@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import {
+  clearWriteFailure,
+  failedWriteDesired,
+  failedWriteIds,
+  markWriteFailed
+} from './channelEventWriteFailures'
+
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 
 /**
@@ -43,7 +50,8 @@ export type ChannelEventSettingsState = {
   /** 正在保存的那一条（开关同时禁用，防连点）。 */
   savingEventId: string | null
   /** 保存失败的那一条；只影响它自己那一行。 */
-  failedEventId: string | null
+  /** 哪些行还挂着「没存上」：模块级记录，跨挂载存活，写成功或平台值已等于想写值才清。 */
+  failedEventIds: ReadonlySet<string>
   /** 频道是否可用（可用 = 推送端口装配好且至少一个可投递目标）。不可用不禁用开关。 */
   channelReady: boolean
   reload: () => void
@@ -76,7 +84,7 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
   const [status, setStatus] = useState<ChannelEventSettingsState['status']>('loading')
   const [values, setValues] = useState<ChannelEventValues>({})
   const [savingEventId, setSavingEventId] = useState<string | null>(null)
-  const [failedEventId, setFailedEventId] = useState<string | null>(null)
+  const [failedIds, setFailedIds] = useState<readonly string[]>(() => failedWriteIds())
   const [channelReady, setChannelReady] = useState(true)
   // 卸载后不再 setState：这一屏会被设置页挂载/卸载，慢响应回来时组件可能已经走了。
   const mounted = useRef(true)
@@ -89,7 +97,7 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
 
   const load = useCallback(async () => {
     setStatus('loading')
-    setFailedEventId(null)
+    // 进屏不清失败表：读者关掉再回来，提示还在，直到写成功（或平台值已等于想写值）。
     try {
       const api = notificationApi()
       const [stored, delivery] = await Promise.all([api.getChannelEvents(), api.getDeliverySettings()])
@@ -98,6 +106,11 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
       for (const row of INTELLIGENCE_CHANNEL_EVENT_ROWS) {
         next[row.eventId] = stored[row.eventId] ?? true
       }
+      // 平台读回来的值等于当时想写的值 ⇒ 那次写其实生效了，别让不存在的失败一直挂着。
+      for (const eventId of failedWriteIds()) {
+        if (stored[eventId] === failedWriteDesired(eventId)) clearWriteFailure(eventId)
+      }
+      setFailedIds(failedWriteIds())
       setValues(next)
       setChannelReady(isChannelReady(delivery))
       setStatus('ready')
@@ -115,15 +128,18 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
     // 读者刚选的值先留下；写失败也**不回退**（G8）：本行给「这次没存上，请重试」，
     // 读者按的是开就是开，不是「先显示开、再偷偷变回关」。
     setValues((current) => ({ ...current, [eventId]: enabled }))
-    setFailedEventId(null)
+    // 只清这一行：别的行没存上是别的行的事，不连坐。
+    clearWriteFailure(eventId)
+    setFailedIds(failedWriteIds())
     setSavingEventId(eventId)
     void (async () => {
       try {
         await notificationApi().setChannelEvent(eventId, enabled)
       } catch {
         if (!mounted.current) return
-        // 不回退：保留读者刚选的值，只报这一行没存上。
-        setFailedEventId(eventId)
+        // 不回退：保留读者刚选的值，只报这一行没存上；记录活到写成功为止。
+        markWriteFailed(eventId, enabled)
+        setFailedIds(failedWriteIds())
       } finally {
         if (mounted.current) setSavingEventId(null)
       }
@@ -135,11 +151,11 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
       status,
       values,
       savingEventId,
-      failedEventId,
+      failedEventIds: new Set(failedIds),
       channelReady,
       reload: () => void load(),
       toggle
     }),
-    [status, values, savingEventId, failedEventId, channelReady, load, toggle]
+    [status, values, savingEventId, failedIds, channelReady, load, toggle]
   )
 }

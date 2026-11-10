@@ -11,6 +11,8 @@ import { CalendarDetail } from './calendarDetail'
 import { ContentDetail } from './contentDetail'
 import { NewsPushThresholdRow } from './newsPushThresholdRow'
 import { NotificationList, type NotificationListItem } from './notificationList'
+import { SettingsSection } from '@platform/ui/components/settings-section'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import { SettingsInfo } from './settingsRow'
 import { useCalendarReminderSettings } from './useCalendarReminderSettings'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS, useChannelEventSettings } from './useChannelEventSettings'
@@ -97,7 +99,7 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
   const language = useShellLanguage()
   const text = intelligenceNotificationText[language]
   const resolveText = (key: string): string => text[key] ?? ''
-  const { status, values, savingEventId, failedEventId, channelReady, reload, toggle } = useChannelEventSettings()
+  const { status, values, savingEventId, failedEventIds, channelReady, reload, toggle } = useChannelEventSettings()
   const outlet = useNewsPushOutletSwitch()
   const threshold = useNewsPushThreshold()
   const reminder = useCalendarReminderSettings()
@@ -161,15 +163,125 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
     />)
   }
 
-  return shell(<>
-    {/* 标题一行：13.5/600/正常色，上 16 下 12。抽屉自己有这一屏的标题，所以**只在设置页画标题**
-        （不做嵌套标题）；那颗 ⓘ 两面都画——它是「为什么勾了还不响」的唯一解释，抽屉马上是唯一入口，
-        把解释留在旧页面上等于把答案藏起来。
-        抽屉里 ⓘ 紧跟它所解释的这组行（界面设计 2026-11-10：位置一变，读者会以为它解释的是别的东西）。 */}
-    <div className={`intelligence-notification-head${variant === 'drawer' ? ' intelligence-notification-head--drawer' : ''}`}>
-      {variant === 'page'
-        ? <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
+  /** 列表里那一行只报**状态**（一个词一个事实）；「加载中」不是 settled 状态，不画药丸。 */
+  const listState = (key: ItemKey): 'on' | 'off' | 'unreadable' | 'loading' => {
+    if (key === 'calendar') {
+      if (reminder.status === 'loading') return 'loading'
+      if (reminder.value === undefined) return 'unreadable'
+      return reminder.value.enabled ? 'on' : 'off'
+    }
+    const row = ROW_BY_ITEM[key]
+    const enabled = row.control === 'outlet' ? outlet.enabled : values[row.eventId] ?? true
+    return enabled ? 'on' : 'off'
+  }
+  const toneOf = (state: 'on' | 'off' | 'unreadable'): 'ok' | 'muted' =>
+    state === 'on' ? 'ok' : 'muted'
+
+  const detailBody = selected === 'calendar'
+    ? <CalendarDetail
+      landedAction={<TestNotificationButton
+        channelReady={channelReady}
+        disabled={reminder.value === undefined}
+        kind="calendar-landed"
+        labelKey="pages.intelligence.notification.test.calendarLanded"
+        resolveText={resolveText}
+      />}
+      reminder={reminder}
+      resolveText={resolveText}
+      surfaces={surfaces}
+      text={text}
+      upcomingAction={<TestNotificationButton
+        channelReady={channelReady}
+        disabled={reminder.value === undefined || !reminder.value.enabled}
+        kind="calendar-upcoming"
+        labelKey="pages.intelligence.notification.test.calendarUpcoming"
+        resolveText={resolveText}
+      />}
+    />
+    : <ContentDetail
+      /* 三元已经排除 calendar：这一支只会拿到三个内容项。 */
+      descriptor={contentDescriptor(selected as Exclude<ItemKey, 'calendar'>)}
+      resolveText={resolveText}
+      enabled={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true}
+      failed={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saveFailed : failedEventIds.has(ROW_BY_ITEM[selected].eventId)}
+      onChange={(next) => {
+        if (ROW_BY_ITEM[selected].control === 'outlet') outlet.setEnabled(next)
+        else toggle(ROW_BY_ITEM[selected].eventId, next)
+      }}
+      saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
+      saving={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saving : savingEventId === ROW_BY_ITEM[selected].eventId}
+      showHelp={variant === 'drawer'}
+      action={selected === 'sentiment'
+        ? <TestNotificationButton
+          channelReady={channelReady}
+          disabled={!(ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true)}
+          kind="sentiment"
+          labelKey="pages.intelligence.notification.test.sentiment"
+          resolveText={resolveText}
+        />
+        : undefined}
+    >
+      {selected === 'sentiment'
+        ? <NewsPushThresholdRow
+          last
+          resolveText={resolveText}
+          state={threshold}
+          text={text}
+        />
         : null}
+    </ContentDetail>
+
+  if (variant === 'drawer') {
+    return shell(<>
+      {/* 整屏级事实：通道不通先让读者知道；解释挂在它旁边那颗 ⓘ 里，不单独悬空一行。 */}
+      {channelReady ? null : <p className="intelligence-notification-panel__notice" role="status">
+        {text['pages.intelligence.notification.channelNotReadyState']}
+        <SettingsInfo
+          ariaLabelKey="pages.intelligence.notification.infoAria"
+          labelKeys={['pages.intelligence.notification.channelNotReady']}
+          resolveText={resolveText}
+        />
+      </p>}
+      {/* 分栏外壳沿用抽屉那一个（`config-drawer__split`）；左栏 296 由本屏给，右栏自适应。 */}
+      <div className="config-drawer__split intelligence-notification-split">
+        <aside className="intelligence-catalog-pane">
+          <div className="intelligence-catalog-list">
+            <div className="intelligence-catalog-group">
+              <div className="intelligence-catalog-group-title">{text['pages.intelligence.notification.rowsGroup'] ?? ''}</div>
+              {items.map((item) => {
+                const state = listState(item.key as ItemKey)
+                return <section className="intelligence-provider-group" key={item.key}>
+                  <button
+                    aria-current={item.key === selected ? 'true' : undefined}
+                    className={`intelligence-provider-row${item.key === selected ? ' selected' : ''}`}
+                    onClick={() => setSelected(item.key as ItemKey)}
+                    type="button"
+                  >
+                    <span className="intelligence-provider-main"><strong>{item.name}</strong></span>
+                    {state === 'loading'
+                      ? <span className="intelligence-notification-row-loading">{text['pages.intelligence.notification.status.loading'] ?? ''}</span>
+                      : <StatusPill
+                        labelKey={`pages.intelligence.notification.status.${state}`}
+                        resolveText={resolveText}
+                        tone={toneOf(state)}
+                      />}
+                  </button>
+                </section>
+              })}
+            </div>
+          </div>
+        </aside>
+        <section className="settings-detail-pane">
+          <SettingsSection title={itemName(selected)}>{detailBody}</SettingsSection>
+        </section>
+      </div>
+    </>)
+  }
+
+  return shell(<>
+    {/* 设置页那一面：自己的页标题 + 一处整组 ⓘ；抽屉那一面不画标题，解释挂在通道提示旁。 */}
+    <div className="intelligence-notification-head">
+      <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
       <SettingsInfo
         ariaLabelKey="pages.intelligence.notification.infoAria"
         labelKeys={[
@@ -179,7 +291,6 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
         resolveText={resolveText}
       />
     </div>
-
     <div className="intelligence-notification-panes">
       <NotificationList
         ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''}
@@ -191,57 +302,7 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
       <div className="intelligence-notification-detail">
         {/* 详情标题不再重复列表里的名字：同一个名字写两处，迟早有一处说法不同。 */}
         <div className="intelligence-notification-card">
-          {selected === 'calendar'
-            ? <CalendarDetail
-              landedAction={<TestNotificationButton
-                channelReady={channelReady}
-                disabled={reminder.value === undefined}
-                kind="calendar-landed"
-                labelKey="pages.intelligence.notification.test.calendarLanded"
-                resolveText={resolveText}
-              />}
-              reminder={reminder}
-              resolveText={resolveText}
-              surfaces={surfaces}
-              text={text}
-              upcomingAction={<TestNotificationButton
-                channelReady={channelReady}
-                disabled={reminder.value === undefined || !reminder.value.enabled}
-                kind="calendar-upcoming"
-                labelKey="pages.intelligence.notification.test.calendarUpcoming"
-                resolveText={resolveText}
-              />}
-            />
-            : <ContentDetail
-              descriptor={contentDescriptor(selected)}
-              resolveText={resolveText}
-              enabled={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true}
-              failed={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saveFailed : failedEventId === ROW_BY_ITEM[selected].eventId}
-              onChange={(next) => {
-                if (ROW_BY_ITEM[selected].control === 'outlet') outlet.setEnabled(next)
-                else toggle(ROW_BY_ITEM[selected].eventId, next)
-              }}
-              saveFailedText={text['pages.intelligence.notification.saveFailed'] ?? ''}
-              saving={ROW_BY_ITEM[selected].control === 'outlet' ? outlet.saving : savingEventId === ROW_BY_ITEM[selected].eventId}
-              action={selected === 'sentiment'
-                ? <TestNotificationButton
-                  channelReady={channelReady}
-                  disabled={!(ROW_BY_ITEM[selected].control === 'outlet' ? outlet.enabled : values[ROW_BY_ITEM[selected].eventId] ?? true)}
-                  kind="sentiment"
-                  labelKey="pages.intelligence.notification.test.sentiment"
-                  resolveText={resolveText}
-                />
-                : undefined}
-            >
-              {selected === 'sentiment'
-                ? <NewsPushThresholdRow
-                  last
-                  resolveText={resolveText}
-                  state={threshold}
-                  text={text}
-                />
-                : null}
-            </ContentDetail>}
+          {detailBody}
           {/* 只报**状态**（还没有可用频道）；「勾选会保留、等频道能用时生效」那句解释在标题旁的 ⓘ 里。 */}
           {channelReady ? null : <p className="intelligence-notification-form-note" role="status">
             {text['pages.intelligence.notification.channelNotReadyState']}
