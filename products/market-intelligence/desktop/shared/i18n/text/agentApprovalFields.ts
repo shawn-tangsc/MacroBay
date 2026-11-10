@@ -14,10 +14,6 @@ export const marketIntelligenceAgentApprovalFieldLabels = {
     sourceId: { 'zh-CN': '情报源', 'en-US': 'Source' },
     collectionPreset: { 'zh-CN': '采集节奏', 'en-US': 'Collection preset' },
     includeInSentiment: { 'zh-CN': '计入情绪', 'en-US': 'Include in sentiment' },
-    scopePolicy: { 'zh-CN': '范围策略', 'en-US': 'Scope policy' },
-    rawArchiveEnabled: { 'zh-CN': '原始归档', 'en-US': 'Raw archive' },
-    retentionMode: { 'zh-CN': '保留策略', 'en-US': 'Retention' },
-    autoReplayAfterParserUpgrade: { 'zh-CN': '解析器升级后重放', 'en-US': 'Replay after parser upgrade' }
   },
   operate_intelligence_source: {
     action: { 'zh-CN': '动作', 'en-US': 'Action' },

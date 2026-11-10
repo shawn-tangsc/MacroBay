@@ -116,10 +116,6 @@ export const configureIntelligenceSourceInputSchema = {
     sourceId: { type: 'string', 'x-maxStringLength': 160 },
     collectionPreset: { type: 'string', enum: ['manual', 'balanced', 'frequent'] },
     includeInSentiment: { type: 'boolean' },
-    scopePolicy: { type: 'string', enum: ['all', 'watchlist-priority', 'active-position-priority'] },
-    rawArchiveEnabled: { type: 'boolean' },
-    retentionMode: { type: 'string', enum: ['compact', 'balanced', 'extended'] },
-    autoReplayAfterParserUpgrade: { type: 'boolean' },
     monitoredSymbols: { type: 'array', maxItems: 200, items: { type: 'string' } },
     enabled: { type: 'boolean' },
     // Declared only so the action guard can name it; no action accepts it.
@@ -249,10 +245,6 @@ export const intelligenceWriteActionRules: Readonly<Record<string, CapabilityAct
         'sourceId',
         'collectionPreset',
         'includeInSentiment',
-        'scopePolicy',
-        'rawArchiveEnabled',
-        'retentionMode',
-        'autoReplayAfterParserUpgrade',
         'monitoredSymbols'
       ],
       required: ['sourceId']

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { configureIntelligenceSourceInputSchema, intelligenceWriteActionRules } from '../../../../service/intelligence/agent-capabilities/writeCapabilitySchemas'
 
 import { structuredApprovalInput, type AgentApprovalLabelTable } from '@renderer/shell/agents/agentApprovalFields'
 import { productApprovalFieldLabels } from '@products/generated/shellRegistry'
@@ -27,10 +28,6 @@ const LEGACY_ZH: Readonly<Record<string, string>> = {
   sourceId: '情报源',
   collectionPreset: '采集节奏',
   includeInSentiment: '计入情绪',
-  scopePolicy: '范围策略',
-  rawArchiveEnabled: '原始归档',
-  retentionMode: '保留策略',
-  autoReplayAfterParserUpgrade: '解析器升级后重放',
   monitoredSymbols: '监控标的',
   enabled: '启用',
   itemId: '情报条目',
@@ -59,10 +56,6 @@ const LEGACY_EN: Readonly<Record<string, string>> = {
   sourceId: 'Source',
   collectionPreset: 'Collection preset',
   includeInSentiment: 'Include in sentiment',
-  scopePolicy: 'Scope policy',
-  rawArchiveEnabled: 'Raw archive',
-  retentionMode: 'Retention',
-  autoReplayAfterParserUpgrade: 'Replay after parser upgrade',
   monitoredSymbols: 'Monitored symbols',
   enabled: 'Enabled',
   itemId: 'Item',
@@ -104,6 +97,23 @@ const LANGUAGES = ['zh-CN', 'en-US'] as const
 function modelToolName(tool: string): string {
   return `mcp__market-intelligence__${tool}`
 }
+
+describe('the frozen profile fields are absent from the model-facing write surface', () => {
+  const FROZEN = ['scopePolicy', 'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade'] as const
+
+  it('keeps them off the write schema, the action field list, and the approval card', () => {
+    // C10：这四项从智能体写入口撤掉（值是既有事实，冻结）。三处任一加回来，这条就红。
+    const properties = Object.keys(configureIntelligenceSourceInputSchema.properties)
+    for (const field of FROZEN) expect(properties).not.toContain(field)
+
+    const rule = intelligenceWriteActionRules.configure_intelligence_source['save-profile']
+    const actionFields = 'fields' in rule ? rule.fields : rule
+    for (const field of FROZEN) expect(actionFields).not.toContain(field)
+
+    const labels = marketIntelligenceAgentApprovalFieldLabels.configure_intelligence_source
+    for (const field of FROZEN) expect(Object.keys(labels)).not.toContain(field)
+  })
+})
 
 describe('approval field copy: declared labels match what readers saw before', () => {
   it('declares exactly the five write capabilities the shell used to recognise', () => {
@@ -150,11 +160,7 @@ describe('approval field copy: declared labels match what readers saw before', (
         'action',
         'sourceId',
         'collectionPreset',
-        'includeInSentiment',
-        'scopePolicy',
-        'rawArchiveEnabled',
-        'retentionMode',
-        'autoReplayAfterParserUpgrade'
+        'includeInSentiment'
       ],
       operate_intelligence_source: [
         'action',

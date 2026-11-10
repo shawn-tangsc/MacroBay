@@ -19,10 +19,6 @@ type ConfigureSourceInput = {
   sourceId?: string
   collectionPreset?: IntelligenceCollectionPreset
   includeInSentiment?: boolean
-  scopePolicy?: IntelligenceScopePolicy
-  rawArchiveEnabled?: boolean
-  retentionMode?: IntelligenceRetentionMode
-  autoReplayAfterParserUpgrade?: boolean
   monitoredSymbols?: string[]
   enabled?: boolean
 }
@@ -156,12 +152,6 @@ function profilePatch(value: ConfigureSourceInput): Partial<SaveIntelligenceSour
   const patch: Partial<SaveIntelligenceSourceProfileInput> = {}
   if (value.collectionPreset !== undefined) patch.collectionPreset = value.collectionPreset
   if (value.includeInSentiment !== undefined) patch.includeInSentiment = value.includeInSentiment
-  if (value.scopePolicy !== undefined) patch.scopePolicy = value.scopePolicy
-  if (value.rawArchiveEnabled !== undefined) patch.rawArchiveEnabled = value.rawArchiveEnabled
-  if (value.retentionMode !== undefined) patch.retentionMode = value.retentionMode
-  if (value.autoReplayAfterParserUpgrade !== undefined) {
-    patch.autoReplayAfterParserUpgrade = value.autoReplayAfterParserUpgrade
-  }
   if (value.monitoredSymbols !== undefined) patch.monitoredSymbols = [...value.monitoredSymbols]
   return patch
 }

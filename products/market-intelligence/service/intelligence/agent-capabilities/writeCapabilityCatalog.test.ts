@@ -157,10 +157,6 @@ describe('write capability catalog', () => {
         sourceId: 'coingecko-trending',
         collectionPreset: 'frequent',
         includeInSentiment: false,
-        scopePolicy: 'watchlist-priority',
-        rawArchiveEnabled: true,
-        retentionMode: 'extended',
-        autoReplayAfterParserUpgrade: true,
         monitoredSymbols: ['BTCUSDT']
       })
     ).toEqual({ ok: true })
