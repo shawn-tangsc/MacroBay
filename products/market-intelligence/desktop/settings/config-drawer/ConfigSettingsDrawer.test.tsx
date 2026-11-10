@@ -326,6 +326,25 @@ describe('config settings drawer (static layout)', () => {
     expect(document.body.querySelectorAll('[data-drawer-row]')).toHaveLength(0)
   })
 
+  it('renders the host-provided analysis panel instead of a second layout', () => {
+    // AI 分析那一屏就是设置对话框的内容本体（inline），抽屉只把它放进来：不加标题、不加边距。
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        analysisPanel={<div data-panel="analysis">the analysis settings form, inline</div>}
+        initialMenu="analysis"
+        onClose={() => undefined}
+        open />
+    ))
+    expect(document.body.querySelector('[data-panel="analysis"]')).not.toBeNull()
+    expect(document.body.querySelectorAll('[data-drawer-row]')).toHaveLength(0)
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {

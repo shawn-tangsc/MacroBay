@@ -22,6 +22,12 @@ export function MarketAnalysisSettingsDialog(props: {
   open: boolean
   text: MarketAnalysisTimelineText
   onClose: () => void
+  /**
+   * `modal`（默认）= 原样：遮罩 + 标题 + 页脚按钮。
+   * `inline` = **同一段内容不套 Modal**（产品内「配置」抽屉那一屏用它）：没有遮罩、没有第二个标题、
+   * 不自己加外边距，开关/说明/模型/保存/取消一样不少。两个外壳共用下面这一段实现，写入口只有一条。
+   */
+  variant?: 'modal' | 'inline'
 }): React.ReactElement {
   const { text } = props
   const language = useShellLanguage()
@@ -61,23 +67,14 @@ export function MarketAnalysisSettingsDialog(props: {
     if (await settingsState.save(draft)) props.onClose()
   }
 
-  return (
-    <Modal
-      open={props.open}
-      width="standard"
-      titleKey={ANALYSIS_SETTINGS_TITLE_KEY}
-      resolveText={(key) => (key === ANALYSIS_SETTINGS_TITLE_KEY ? text.settingsTitle : '')}
-      onClose={props.onClose}
-      className="mi-analysis-timeline__settings-dialog"
-      // 骨架不内置主按钮：保存/取消由调用方给，顺序与原 antd 默认页脚一致。
-      footer={
-        <>
-          <Button onClick={props.onClose}>{text.cancel}</Button>
-          <Button type="primary" loading={settingsState.saving} onClick={() => void submit()}>
-            {settingsState.saving ? text.saving : text.save}
-          </Button>
-        </>
-      }>
+  const footer = <>
+    <Button onClick={props.onClose}>{text.cancel}</Button>
+    <Button type="primary" loading={settingsState.saving} onClick={() => void submit()}>
+      {settingsState.saving ? text.saving : text.save}
+    </Button>
+  </>
+
+  const body = <>
       <div className="mi-analysis-timeline__settings-row">
         <div>
           <strong>{text.analysisEnabled}</strong>
@@ -112,6 +109,27 @@ export function MarketAnalysisSettingsDialog(props: {
       {refusalText(settingsState.refusal) ? (
         <p role="alert" className="mi-analysis-timeline__settings-error">{refusalText(settingsState.refusal)}</p>
       ) : null}
+  </>
+
+  // 内联外壳：同一个 body + 同一套按钮，只是不套 Modal（抽屉自己有标题与容器）。
+  if (props.variant === 'inline') {
+    return <div className="mi-analysis-timeline__settings-inline" data-analysis-settings-inline="true">
+      {body}
+      <div className="mi-analysis-timeline__settings-inline-actions">{footer}</div>
+    </div>
+  }
+
+  return (
+    <Modal
+      open={props.open}
+      width="standard"
+      titleKey={ANALYSIS_SETTINGS_TITLE_KEY}
+      resolveText={(key) => (key === ANALYSIS_SETTINGS_TITLE_KEY ? text.settingsTitle : '')}
+      onClose={props.onClose}
+      className="mi-analysis-timeline__settings-dialog"
+      // 骨架不内置主按钮：保存/取消由调用方给，顺序与原 antd 默认页脚一致。
+      footer={footer}>
+      {body}
     </Modal>
   )
 }

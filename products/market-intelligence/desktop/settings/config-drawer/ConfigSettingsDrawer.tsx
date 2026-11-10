@@ -56,8 +56,13 @@ export type ConfigSettingsDrawerProps = {
    * 抽屉只负责把它放进两栏。传了它就不再用下面的静态版或扁平列表。
    */
   sourcesPanel?: React.ReactNode
-  /** 分析屏视图（简报线给的 `useDrawerAnalysisView`）：两行值已是成句文案，原样渲染。 */
-  analysisView?: DrawerScreenView<DrawerRowView>
+  /**
+   * AI 分析：**宿主渲染好的整块**——就是「AI 分析设置」对话框的内容本体（`variant="inline"`）。
+   *
+   * 开关、说明、模型选择、保存/取消都是那一份实现；抽屉不加标题、不加边距，也不造第二个写入口。
+   * 原来那条「只读两行 + 去设置改」的 `analysisView` 路径随它退役。
+   */
+  analysisPanel?: React.ReactNode
   /** 日报屏视图（`useDrawerBriefingView`，五行只读），宿主读好传进来。 */
   briefingView?: DrawerScreenView<DrawerRowView>
   /**
@@ -84,7 +89,7 @@ export function ConfigSettingsDrawer({
   processingPanel,
   notificationsView,
   notificationsPanel,
-  analysisView,
+  analysisPanel,
   briefingView,
   briefingPanel,
   sourcesPanel,
@@ -175,8 +180,8 @@ export function ConfigSettingsDrawer({
         {menu === 'processing' && processingPanel !== undefined
           ? processingPanel
           : null}
-        {menu === 'analysis' && analysisView !== undefined
-          ? (<NotificationsScreen resolveText={resolveText} view={analysisView} />)
+        {menu === 'analysis' && analysisPanel !== undefined
+          ? analysisPanel
           : null}
         {menu === 'briefing' && briefingPanel !== undefined
           ? briefingPanel
@@ -196,7 +201,7 @@ export function ConfigSettingsDrawer({
             resolveText={resolveText}
             values={platformValues} />)
           : null}
-        {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
+        {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisPanel !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{groupLabel(group.titleKey)}</div>}
