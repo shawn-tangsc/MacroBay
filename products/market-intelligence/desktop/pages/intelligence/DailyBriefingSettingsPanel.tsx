@@ -34,6 +34,7 @@ const EDIT_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.per
 const DELETE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.deleteRow'
 const AUTO_RETRY_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.autoRetry'
 const AUTO_REASON_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.autoUnknownReason'
+const EMPTY_HINT_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.emptyHint'
 const GENERATION_NOTE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note'
 const GENERATION_NOTE_LABEL_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel'
 
@@ -233,7 +234,19 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
             : periods.length === 0
               ? <div className="briefing-settings-empty" data-briefing-periods-empty="true">
                 <p>{copy.empty}</p>
-                <p className="briefing-settings-empty__hint">{copy.emptyHint}</p>
+                {/* 说明句进 ⓘ：正文只留「没有一期」这个事实，不铺解释。 */}
+                <Popover
+                  labelKey={EMPTY_HINT_KEY}
+                  resolveText={resolveText}
+                  trigger={(triggerProps) => <IconButton
+                    {...triggerProps}
+                    ariaLabelKey={EMPTY_HINT_KEY}
+                    icon={CircleHelp}
+                    resolveText={resolveText}
+                    size="sm"
+                    variant="plain"
+                  />}
+                />
               </div>
               : periods.map((period, index) => <SettingsRow
                 copyClassName="config-drawer__label"
