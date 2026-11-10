@@ -11,7 +11,10 @@ import { runEditorialGate } from './dailyBriefAgentEditorialGate'
  * 2. 重写后仍命中 → 这一版按 `invalid-output-language` 失败，**不删段、不翻译**；
  * 3. 没给检查器（例如事实层）→ 行为不变，直接通过。
  */
-function harness(checkLanguage?: (document: DailyBriefingDocument) => readonly Readonly<{ path: string }>[]) {
+function harness(
+  checkLanguage?: (document: DailyBriefingDocument) => readonly Readonly<{ path: string }>[],
+  maximumRounds = 1
+) {
   const repairs: string[] = []
   const runner = {
     continue: vi.fn(async (_sessionId: string, text: string) => {
@@ -26,7 +29,7 @@ function harness(checkLanguage?: (document: DailyBriefingDocument) => readonly R
       runner,
       sessionId: 's1',
       written: '{"first":true}',
-      maximumRounds: 1,
+      maximumRounds,
       toolInvocations: [],
       stage: () => undefined,
       repairPrompt: (code: string, detail: string | undefined) => `repair ${code}${detail ? ` ${detail}` : ''}`,
@@ -60,6 +63,20 @@ describe('the editorial gate checks the language of the built document', () => {
     expect(outcome.failureDetail).toBe('conclusion.summary')
     // 只重写一次：没有第二轮的修复，也没有悄悄删段或翻译。
     expect(test.repairs).toHaveLength(1)
+  })
+
+  it('spends exactly one repair on the language, however many rounds the rest of validation may use', async () => {
+    // B6 / 用户口径：命中就重写**一次**，重写后仍命中就整版拒发。编辑闸对别的失败会重写多轮
+    // （`maximumRounds` 3），但语言不是"多改几次就好了"的东西——把三轮都花在同一段中文上，
+    // 只是三次同样的失败；读者等的每一轮都是白等。
+    const test = harness(() => [{ path: 'next.focus.why' }], 3)
+    const outcome = await runEditorialGate(test.input)
+
+    expect(outcome.state).toBe('failed')
+    if (outcome.state !== 'failed') throw new Error('unreachable')
+    expect(outcome.failureCode).toBe('invalid-output-language')
+    expect(test.repairs).toHaveLength(1)
+    expect(test.repairs[0]).toContain('next.focus.why')
   })
 
   it('leaves the gate unchanged when there is no checker', async () => {

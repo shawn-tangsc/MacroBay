@@ -68,6 +68,11 @@ export async function runEditorialGate(input: Readonly<{
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
   let lastFailures: readonly Readonly<{ code: string; detail?: string }>[] | undefined
+  /**
+   * 语言只给一次重写机会（B6）：别的失败可以按 `maximumRounds` 多轮打磨，语言不行——重写后
+   * 还是那种语言，说明这一版就是不该发出去，再赌两轮只是让读者多等两次同样的失败。
+   */
+  let languageRepairUsed = false
   for (let attempt = 0; attempt <= input.maximumRounds; attempt++) {
     // Each check times itself. A check that fails closes before the repair it triggers, so the repair
     // row owns the seconds it spends and the validation row does not silently include them.
@@ -99,8 +104,11 @@ export async function runEditorialGate(input: Readonly<{
     // and a reader who only ever sees the kind cannot act on it.
     const described = lastFailures ? describeFailures(lastFailures) : undefined
     stage({ stage: 'validation', state: 'failed', failureCode, ...(described ? { failureDetail: described } : failureDetail ? { failureDetail } : {}) })
+    // 已经为语言重写过一次：这次仍命中就整版拒发，不再调用模型。
+    if (failureCode === 'invalid-output-language' && languageRepairUsed) break
     if (attempt >= input.maximumRounds) break
     if (input.signal?.aborted) return { state: 'cancelled', failureDetail: 'aborted', toolInvocations: Object.freeze(tools) }
+    if (failureCode === 'invalid-output-language') languageRepairUsed = true
     const repairStage = `repair-${attempt + 1}` as DailyBriefTurnStage
     stage({ stage: repairStage, state: 'begin' })
     try {

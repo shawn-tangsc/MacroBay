@@ -538,6 +538,40 @@ describe('the citable set (Chief 2026-11-06)', () => {
     expect(repair.map((stage) => stage.state)).toEqual(['begin', 'success'])
   })
 
+  it('refuses an English edition that stays Chinese after one repair, and names the section', async () => {
+    // B6 / `04` §3.4.2：语言按**渲染出来的文档**判（不是模型那份 JSON），命中先重写一次；
+    // 重写仍命中 → 整版拒发（`invalid-output-language`），**不删段、不翻译**。读者看到的是
+    // 「语言与本期不一致 + 重写也没改过来」；日志里点名到段（`next.focus.why`），
+    // 好让下一个人知道是哪个字段写错了语言，而不是只知道"整份不对"。
+    const chinese = '资金面转弱，稳定币连续收缩，风险偏好回落。'
+    const continues: string[] = []
+    const finishes: string[] = []
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async (_sessionId: string, text: string) => {
+        continues.push(text)
+        // 写作与重写都写成中文：这是「英文期里混进中文」的最坏情形。
+        return { assistantText: JSON.stringify(editorial('US.FOMC', chinese)), toolInvocations: [] }
+      }),
+      finish: vi.fn(async (_sessionId: string, outcome: string) => { finishes.push(outcome) })
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') throw new Error('an English edition written in Chinese must be refused')
+    expect(result.failureCode).toBe('invalid-output-language')
+    // 只重写一次，且重写要求说的是「本期语言」这条要求，不是句式规则。
+    const languageRepairs = continues.filter((text) => text.includes('contains text that is not written in'))
+    expect(languageRepairs).toHaveLength(1)
+    expect(languageRepairs[0]).toContain('next.focus.why')
+    // 拒发时点名到段：这是日志/排查能读到的那一层。
+    expect(result.failureDetail).toBe('next.focus.why')
+    expect(finishes).toEqual(['failed'])
+  })
+
   it('records a stopped turn as cancelled, never as the model writing bad JSON', async () => {
     // 真机：应用在写作中途被关，运行时把回合停成「已停止。」。它不是一个坏答案，
     // 拿去解析只会得到 invalid-json，再去重写只会撞上已释放的运行时。
