@@ -63,6 +63,22 @@ function provider(): ProviderView {
   }
 }
 
+const SUPPORTS_SENTIMENT: Readonly<Record<string, boolean>> = { s1: true, s2: false }
+
+function policy(): NonNullable<Parameters<typeof ProviderDetail>[0]['policy']> {
+  return {
+    onChange: () => undefined,
+    profiles: {
+      s1: { collectionPreset: 'balanced', includeInSentiment: true },
+      s2: { collectionPreset: 'manual', includeInSentiment: false }
+    } as never,
+    supportsSentimentById: SUPPORTS_SENTIMENT,
+    labels: {
+      title: 'p', collectionPreset: 'c', manualPresetNote: 'm', includeInSentiment: 'i', presets: {}
+    }
+  }
+}
+
 async function mount(enabledWrite = vi.fn(async () => true)): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -71,6 +87,7 @@ async function mount(enabledWrite = vi.fn(async () => true)): Promise<HTMLElemen
     root?.render(<ProviderDetail
       labels={labels()}
       onToggleSource={enabledWrite}
+      policy={policy()}
       provider={provider()}
       showSourceDetails
       surface="settings"
@@ -90,7 +107,9 @@ describe('the source screen renders menu 1 from the registry (C2)', () => {
     const container = await mount()
     expect(renderedKeys(container).sort()).toEqual([
       'setting:sources.enabled@s1',
-      'setting:sources.enabled@s2'
+      'setting:sources.enabled@s2',
+      // 情绪开关只给声明说「这个源支持」的那些源（s1 支持、s2 不支持）。
+      'setting:sources.include-in-sentiment@s1'
     ])
   })
 
@@ -102,7 +121,13 @@ describe('the source screen renders menu 1 from the registry (C2)', () => {
     const expected = provider().sources.flatMap((entry) => MIGRATED_SOURCE_SETTING_KEYS
       .filter((template) => {
         const declared = settingRegistry.sources.find((row) => row.key === template)
-        return declared?.visibleWhen?.({ sourceId: entry.sourceId, displayName: entry.displayName, enabled: entry.enabled, profile: {} }) ?? true
+        return declared?.visibleWhen?.({
+          sourceId: entry.sourceId,
+          displayName: entry.displayName,
+          enabled: entry.enabled,
+          profile: {},
+          supportsSentiment: SUPPORTS_SENTIMENT[entry.sourceId] === true
+        }) ?? true
       })
       .map((template) => template.replace('<sourceId>', entry.sourceId)))
     expect(keys.sort()).toEqual(expected.sort())

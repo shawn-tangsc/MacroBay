@@ -9,7 +9,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
-import { SourceEnabledRow, needsJob } from './SourceEnabledRow'
+import { SourceEnabledRow, needsJob } from './SourceRows'
 import { SourceHealthDetail, type SourceHealthLabels } from './SourceHealthDetail'
 import { isCalendarSource, useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
@@ -411,6 +411,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               {/* 原因必须能被读屏关联到**这一组控件**：可用时不留组语义、也不留悬空 id。 */}
               <div {...(unavailable ? { 'aria-describedby': policyStoppedId, role: 'group' } : {})}>
                 <CollectionPolicySection
+                  sourceId={source.sourceId}
                   configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
                   draftProfile={policy.profiles[source.sourceId]!}
                   enabledConfigurable={source.visibility !== 'pending' && !unavailable}

@@ -1,8 +1,10 @@
-import { Select, Switch } from 'antd'
+import { Select } from 'antd'
 
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { SettingsInfo } from '../settingsInfo'
 import { SettingsRow } from '@platform/ui/components/settings-row'
+
+import { SourceSentimentRow } from './SourceRows'
 
 export type CollectionPolicyLabels = {
   title: string
@@ -27,6 +29,8 @@ const PRODUCT_OWNED_NOTE_ARIA_KEY = 'settings.intelligenceSources.collectionPoli
  * 读者一动就互相打架（2026-11-10 用户实测：动组内那颗，上面整行被关掉）。
  */
 export function CollectionPolicySection(props: {
+  /** 这一组属于哪个源：按源实例化的设置行要用它派生实例键。 */
+  sourceId: string
   draftProfile: IntelligenceSourceProfile
   supportsSentiment: boolean
   configurable?: boolean
@@ -74,16 +78,15 @@ export function CollectionPolicySection(props: {
             ) : null}
           </div>
         </SettingRow>
-      {props.supportsSentiment ? (
-          <SettingRow label={props.labels.includeInSentiment}>
-            <Switch
-              size="small"
-              checked={props.draftProfile.includeInSentiment}
-              disabled={!configurable}
-              onChange={(includeInSentiment) => props.onChange({ includeInSentiment })}
-            />
-          </SettingRow>
-      ) : null}
+      {/* 出现与否由注册表声明的 `visibleWhen` 决定（`view.supportsSentiment`），页面不再另判一次。 */}
+      <SourceSentimentRow
+        disabled={!configurable}
+        onChange={props.onChange}
+        profile={props.draftProfile}
+        resolveText={props.resolveText}
+        sourceId={props.sourceId}
+        supportsSentiment={props.supportsSentiment}
+      />
       </div>
     </section>
   )

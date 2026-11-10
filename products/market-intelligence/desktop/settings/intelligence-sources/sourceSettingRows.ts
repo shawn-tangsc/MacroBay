@@ -20,7 +20,8 @@ export type SourceRowTemplate = (typeof SOURCE_ROW_TEMPLATES)[keyof typeof SOURC
  * 没进清单的行仍是旧写法，进了清单就必须真的画出来。
  */
 export const MIGRATED_SOURCE_SETTING_KEYS: readonly SourceRowTemplate[] = [
-  SOURCE_ROW_TEMPLATES.enabled
+  SOURCE_ROW_TEMPLATES.enabled,
+  SOURCE_ROW_TEMPLATES.includeInSentiment
 ]
 
 const BY_TEMPLATE: ReadonlyMap<string, SettingDescriptor> = new Map(

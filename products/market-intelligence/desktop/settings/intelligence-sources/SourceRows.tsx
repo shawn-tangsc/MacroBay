@@ -6,7 +6,16 @@ import { SettingField } from '../../shared/settings/SettingField'
 import { healthStateBadge } from './sourceHealthTone'
 import { SOURCE_ROW_TEMPLATES, sourceRowDescriptor, sourceRowInstanceKey } from './sourceSettingRows'
 import type { ProviderDetailLabels } from './ProviderDetail'
+import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
+
+/**
+ * 菜单 1 的行组件：**形状开关（`copyAs` / `labelAs` / `switchSize`）只住在这个文件里**。
+ * 它们是 DOM 形状的逃生口，不是设计意图——放在一处，才看得住「同一屏不出现两种行形状」。
+ *
+ * 现在住这里的两行：逐源启用（`SourceEnabledRow`）、纳入情绪分析（`SourceSentimentRow`）。
+ * 采集预设那行等设置行组件能表达它自己的控件列与条件 ⓘ 之后再搬进来。
+ */
 
 /**
  * 一个源的**启用行**：名字 · 状态药丸 · 归属标签行 —— 开关。
@@ -115,4 +124,37 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
       size="small"
     />
   </div>
+}
+
+/**
+ * 「纳入情绪分析」一行：静态行名 + 一个小开关。
+ *
+ * 出现与否由声明自己的 `visibleWhen` 决定（`view.supportsSentiment`）——页面不再另判一次，
+ * 否则「同一份事实两处判」会先在新源上分叉。值仍是页面/profile 的，组件不持有 IO。
+ */
+export type SourceSentimentRowProps = Readonly<{
+  sourceId: string
+  profile: IntelligenceSourceProfile
+  supportsSentiment: boolean
+  disabled: boolean
+  onChange: (patch: Partial<IntelligenceSourceProfile>) => void
+  resolveText: (key: string) => string
+}>
+
+export function SourceSentimentRow(props: SourceSentimentRowProps): React.ReactElement {
+  return <SettingField
+    controlWrapperClassName="intelligence-setting-control"
+    copyClassName="intelligence-setting-label"
+    descriptor={sourceRowDescriptor(SOURCE_ROW_TEMPLATES.includeInSentiment)}
+    disabled={props.disabled}
+    instanceKey={sourceRowInstanceKey(SOURCE_ROW_TEMPLATES.includeInSentiment, props.sourceId)}
+    onChange={(next) => props.onChange({ includeInSentiment: next === true })}
+    resolveOptionLabel={() => ''}
+    resolveText={props.resolveText}
+    rowClassName="intelligence-setting-row"
+    showHelp={false}
+    switchSize="small"
+    value={props.profile.includeInSentiment}
+    view={{ sourceId: props.sourceId, profile: props.profile, supportsSentiment: props.supportsSentiment }}
+  />
 }

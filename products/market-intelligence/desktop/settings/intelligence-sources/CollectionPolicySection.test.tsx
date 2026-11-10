@@ -16,8 +16,9 @@ const labels = {
   presets: { manual: 'Manual', balanced: 'Balanced', frequent: 'Frequent' }
 }
 
-/** 这两条只经 ⓘ 解析，不当作正文标签传进来——所以键必须真的能被解析到。 */
+/** 行名与 ⓘ 的句子都经 `resolveText` 解析（注册表只持键）；这里给真句子，不给键本身。 */
 const copy: Record<string, string> = {
+  'settings.intelligenceSources.collectionPolicy.includeInSentiment': labels.includeInSentiment,
   'settings.intelligenceSources.collectionPolicy.productOwnedNote':
     'A product-owned job collects this source; the switch at the end of its row controls it.',
   'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria': 'About collection policy'
@@ -93,6 +94,7 @@ async function render(props: {
   document.body.append(container)
   root = createRoot(container)
   await act(async () => root?.render(<CollectionPolicySection
+    sourceId="s1"
     configurable={props.configurable}
     enabledConfigurable={props.enabledConfigurable}
     draftProfile={profile()}
