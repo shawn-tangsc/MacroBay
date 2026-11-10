@@ -168,3 +168,18 @@ describe('provider row state colours the avatar only', () => {
     for (const selector of stateRules) expect(selector).toContain('.intelligence-source-avatar')
   })
 })
+
+describe('the drawer content area fills the visible box', () => {
+  it('gives the content column and the state slot a full height', () => {
+    // 用户 2026-11-11：错误态挤在左上角一小块。判据落在规则本体：这层必须 100% 高，
+    // 且不许出现 fit-content / max-content / height: auto 这类把容器缩成内容大小的写法。
+    // 真正撑满的是滚动层与状态槽：内容列本身还有别的只设宽度的规则，所以判这两处。
+    const scroll = rulesFor(css, 'intelligence-detail-scroll').join('\n')
+    expect(scroll).toContain('height: 100%')
+    const state = rulesFor(css, 'config-drawer__sources-state').join('\n')
+    expect(state).toContain('height: 100%')
+    for (const body of [...rulesFor(css, 'intelligence-detail-pane'), ...rulesFor(css, 'config-drawer__sources-state')]) {
+      expect(body).not.toMatch(/(?:fit-content|max-content|height\s*:\s*auto)/u)
+    }
+  })
+})
