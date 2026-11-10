@@ -41,6 +41,12 @@ export type DiscordGatewayEndReason =
   | 'heartbeat-timeout'
   | 'invalid-session-resume'
   | 'invalid-session-reidentify'
+  /** 关闭码 4013 / 4014：这个 bot 没被授权这些 intent，重连多少次都一样。 */
+  | 'intents-disallowed'
+  /** 关闭码 4003 / 4004：Token 不对或被吊销。 */
+  | 'credential-rejected'
+  /** 关闭码 4008：连得太急。 */
+  | 'rate-limited-close'
   | 'transport-closed'
   | 'stopped'
 
@@ -124,8 +130,26 @@ export class DiscordGatewaySession {
     }
   }
 
-  /** 传输自己断了（error / 对端关闭）：保留 Resume 材料，下一条连接直接 Resume。 */
-  interrupt(): void {
+  /**
+   * 传输自己断了（error / 对端关闭）：保留 Resume 材料，下一条连接直接 Resume。
+   *
+   * `closeCode` 是唯一能把三种「连不上」分开的线索（Discord 文档的 Close Event Codes）：
+   * 4013 / 4014 是 intent 没被授权、4003 / 4004 是凭据不对、4008 是连得太急，
+   * 其余（1000 / 1006 这类传输层关闭）才走 Resume。不分辨的话，读者只会看到「一直在重连」。
+   */
+  interrupt(closeCode: number | null = null): void {
+    if (closeCode === 4_013 || closeCode === 4_014) {
+      this.end('failed', 'intents-disallowed', closeCode, 0)
+      return
+    }
+    if (closeCode === 4_003 || closeCode === 4_004) {
+      this.end('failed', 'credential-rejected', closeCode, 0)
+      return
+    }
+    if (closeCode === 4_008) {
+      this.end('failed', 'rate-limited-close', closeCode, 0)
+      return
+    }
     this.end('disconnected', 'transport-closed', null, 0)
   }
 

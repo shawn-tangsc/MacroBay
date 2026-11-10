@@ -116,12 +116,12 @@ export class DiscordGatewayHost {
     })
     socket.onmessage = (event) => { this.handle(event.data, socket) }
     socket.onerror = () => { if (this.current(socket)) this.audit('discord-gateway-error') }
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       this.closed.add(socket)
       if (this.socket !== socket) return
       this.socket = null
-      // 传输自己断了：保留 Resume 材料，交给状态机收尾（它会带出 retryAfterMs）。
-      session.interrupt()
+      // 传输自己断了：关闭码是唯一能把「intent 没授权 / Token 不对 / 连得太急 / 普通掉线」分开的线索。
+      session.interrupt(closeCodeOf(event))
     }
     if (!this.deps.signal.aborted) this.deps.signal.addEventListener('abort', () => this.close(), { once: true })
   }
@@ -242,6 +242,12 @@ export class DiscordGatewayHost {
     const code = auditCodeFor(end)
     if (code) this.audit(code)
     if (end.kind === 'stopped' || this.stopped || !this.currentGeneration()) return
+    // 有两类结束，重连多少次都不会变好：intent 没被授权、凭据被拒。停下并留一句人话，
+    // 别让它每 30 秒撞一次墙、把真正的线索埋在一串「重连中」里。
+    if (end.reason === 'intents-disallowed' || end.reason === 'credential-rejected') {
+      this.close()
+      return
+    }
     const delay = Math.max(end.retryAfterMs, backoffMs(this.attempt))
     this.attempt += 1
     this.clearReconnect()
@@ -307,9 +313,19 @@ function auditCodeFor(end: DiscordGatewayEnd): string | null {
     case 'heartbeat-timeout': return 'discord-gateway-zombie'
     case 'invalid-session-resume': return 'discord-gateway-session-resumable'
     case 'invalid-session-reidentify': return 'discord-gateway-session-reset'
+    case 'intents-disallowed': return 'discord-intents-disallowed'
+    case 'credential-rejected': return 'discord-credential-rejected'
+    case 'rate-limited-close': return 'discord-gateway-rate-limited'
     case 'transport-closed': return 'discord-gateway-transport-closed'
     case 'stopped': return null
   }
+}
+
+/** 关闭事件里的码：`ws` 与浏览器样式都会带，读不懂就当没有（按普通掉线处理）。 */
+function closeCodeOf(event: unknown): number | null {
+  if (!event || typeof event !== 'object') return null
+  const code = (event as { code?: unknown }).code
+  return typeof code === 'number' && Number.isInteger(code) ? code : null
 }
 
 /** 1s → 2s → 4s …… 封顶 30s：与平台其余轮询宿主同一节奏，别为一家发明另一套。 */

@@ -200,6 +200,29 @@ describe('discord gateway host', () => {
     expect(harness.runtime.commitIfCurrent).toHaveBeenCalledTimes(commitsBefore)
   })
 
+  it('stops on a close code that no reconnect can fix, and says which one', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].drop(4_014)
+
+    expect(harness.audits()).toContain('discord-intents-disallowed')
+    // 4014 是「这个 bot 没被授权这些 intent」：每 30 秒撞一次墙只会把线索埋掉。
+    harness.clock.advance(120_000)
+    await flush()
+    expect(harness.sockets).toHaveLength(1)
+  })
+
+  it('still reconnects after an ordinary transport drop', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].drop(1_006)
+
+    expect(harness.audits()).toContain('discord-gateway-transport-closed')
+    harness.clock.advance(1_000)
+    await flush()
+    expect(harness.sockets).toHaveLength(2)
+  })
+
   it('records a frame it cannot read instead of guessing, and keeps the connection', async () => {
     const harness = await createHarness()
     harness.sockets[0].message('not-json')
@@ -295,6 +318,12 @@ class FakeSocket {
 
   message(raw: string): void {
     this.onmessage?.({ data: raw })
+  }
+
+  /** 对端关闭：真实 socket 会带关闭码，这里照同样形状交出来。 */
+  drop(code?: number): void {
+    this.closed = true
+    this.onclose?.(code === undefined ? {} : { code })
   }
 }
 

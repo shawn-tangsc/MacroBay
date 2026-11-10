@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createAgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
 import { DiscordDeliveryTransport } from './DiscordDeliveryTransport'
-import { DiscordRuntimeManager } from './DiscordRuntimeManager'
+import { DISCORD_DEFAULT_INTENTS, DiscordRuntimeManager } from './DiscordRuntimeManager'
 import { DiscordRuntimeRepository } from './DiscordRuntimeRepository'
 
 /**
@@ -87,6 +87,16 @@ describe('discord runtime manager', () => {
       text: 'hello',
       idempotencyKey: 'opaque-2'
     })).resolves.toEqual({ kind: 'failed', code: 'delivery-host-unavailable' })
+  })
+})
+
+describe('discord default intents', () => {
+  it('asks for message content and nothing else privileged', () => {
+    // 4014 的成因就是这个掩码：只要有一个特权位没在 Portal 打开，整条连接被拒。
+    expect(DISCORD_DEFAULT_INTENTS).toBe((1 << 0) | (1 << 9) | (1 << 12) | (1 << 15))
+    expect(DISCORD_DEFAULT_INTENTS & (1 << 8)).toBe(0) // GUILD_PRESENCES：不要在线状态
+    expect(DISCORD_DEFAULT_INTENTS & (1 << 1)).toBe(0) // GUILD_MEMBERS：不要成员名单
+    expect(DISCORD_DEFAULT_INTENTS & (1 << 15)).not.toBe(0) // MESSAGE_CONTENT：读正文必须有
   })
 })
 

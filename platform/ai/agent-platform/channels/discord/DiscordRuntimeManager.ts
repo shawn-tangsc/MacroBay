@@ -127,10 +127,14 @@ export class DiscordRuntimeManager {
 }
 
 /**
- * 默认订阅位（Discord 文档的 Intents 位表）：
- * `GUILDS`(1<<0) + `GUILD_MESSAGES`(1<<9) + `DIRECT_MESSAGES`(1<<12) + `MESSAGE_CONTENT`(1<<15)。
+ * 默认订阅位（Discord 文档的 Intents 位表，逐位核对过）：
+ * `GUILDS`(1<<0) + `GUILD_MESSAGES`(1<<9) + `DIRECT_MESSAGES`(1<<12) + `MESSAGE_CONTENT`(1<<15) = 37377。
  *
- * `MESSAGE_CONTENT` 是特权 intent：没在开发者后台给这个机器人打开时，连接照样建立、但收不到正文。
- * 界面上看不出差别，所以启用自检要把这一句提前说出来——这是要用户在后台点开的东西，不是代码能补的。
+ * **特权位只要一个**：`MESSAGE_CONTENT`（读正文必须有）。
+ * `GUILD_PRESENCES`(1<<8)、`GUILD_MEMBERS`(1<<1) 我们不需要——多要一个特权位，就多一个被网关拒的理由。
+ *
+ * `MESSAGE_CONTENT` 没在开发者后台打开时，网关会用 **4014 Disallowed intent(s)** 直接关掉整条连接
+ * （不是「连上了但收不到正文」）。所以宿主把 4014 单独译成 `discord-intents-disallowed` 并**停下不再重连**：
+ * 这不是适配器坏了，是后台少点了一个开关，重连一万次也不会变好。
  */
 export const DISCORD_DEFAULT_INTENTS = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15)

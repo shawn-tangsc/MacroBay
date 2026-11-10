@@ -127,6 +127,35 @@ describe('discord gateway session', () => {
     expect(next.session.nextPlan()).toEqual({ kind: 'identify' })
   })
 
+  it('names the three close codes that no reconnect can fix', () => {
+    // 4014 / 4013：intent 没被授权（Discord 文档 Close Event Codes）。重连多少次都一样。
+    for (const code of [4_013, 4_014]) {
+      const denied = createHarness()
+      denied.receive(HELLO)
+      denied.session.interrupt(code)
+      expect(denied.ends).toEqual([{ kind: 'failed', reason: 'intents-disallowed', closeCode: code, retryAfterMs: 0 }])
+    }
+    // 4003 / 4004：凭据不对或被吊销。
+    for (const code of [4_003, 4_004]) {
+      const rejected = createHarness()
+      rejected.receive(HELLO)
+      rejected.session.interrupt(code)
+      expect(rejected.ends[0]).toMatchObject({ kind: 'failed', reason: 'credential-rejected', closeCode: code })
+    }
+    const limited = createHarness()
+    limited.receive(HELLO)
+    limited.session.interrupt(4_008)
+    expect(limited.ends[0]).toMatchObject({ kind: 'failed', reason: 'rate-limited-close' })
+
+    // 普通掉线（1006 或没有码）仍走 Resume。
+    for (const code of [1_006, null]) {
+      const dropped = createHarness()
+      dropped.receive(HELLO)
+      dropped.session.interrupt(code)
+      expect(dropped.ends[0]).toMatchObject({ kind: 'disconnected', reason: 'transport-closed' })
+    }
+  })
+
   it('keeps a READY without a usable session id connected, but plans a fresh identify next time', () => {
     const harness = createHarness()
     harness.receive(HELLO)
