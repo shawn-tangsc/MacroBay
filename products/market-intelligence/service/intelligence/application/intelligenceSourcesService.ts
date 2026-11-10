@@ -1,7 +1,9 @@
 import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 
 import { listIntelligenceSourceDefinitions, getIntelligenceSourceDefinition } from './sourceCatalog'
-import { agentView, panelView, settingsView, type AgentView, type PanelView, type SettingsView, type SourceHealthFact
+import {
+  agentView, panelView, settingsView, sourceConfigSurface,
+  type AgentView, type PanelView, type SettingsView, type SourceConfigFact, type SourceHealthFact
 } from './sourceProjection'
 import { allSources, type AgentId, type PanelId } from './providerRegistry'
 import { projectJobRegistration } from './sourceJobRegistration'
@@ -211,6 +213,90 @@ export function createIntelligenceSourcesService(deps: {
     return projectJobRegistration(allSources(), scheduled)
   }
 
+  /** 健康读数：一处读、两处用（事实表与详情）。传进来的 profile 由调用方读好，避免重复读盘。 */
+  async function readHealth(sourceId: string, profile: IntelligenceSourceProfile) {
+    if (sourceId === 'defillama-stablecoins') {
+      const health = await deps.capitalConditions?.getHealth(profile.enabled)
+      if (health) {
+        return toCapitalConditionsSafeHealthView(sourceId, health, profile.enabled)
+      }
+    }
+    const pipelineHealth = deps.pipeline.getHealth(sourceId)
+    return toSafeHealthView(sourceId, pipelineHealth, profile.enabled)
+  }
+
+  /**
+   * C4-S0：**一份事实的唯一计算点**。
+   *
+   * 三个读命令（全量 / 按面板 / 按源）都从这里拿事实，差异只剩「筛了哪些源」与「带不带详情」。
+   * 这里把 profile、健康读数、任务注册、凭据状态各读一次，交给 `sourceProjection.sourceConfigSurface`
+   * 做纯计算——旧实现里 `getPageState` 对选中源读两次健康，正是「三条命令各算一遍」的口子。
+   */
+  async function readConfigSurface(filter: { panelId?: PanelId; sourceId?: string } = {}) {
+    const rawDefinitions = listIntelligenceSourceDefinitions()
+      .filter((definition) => definition.visibility !== 'hidden')
+    const registryById = new Map(allSources().map((source) => [source.sourceId, source]))
+    const registryDefinitions = rawDefinitions
+      .flatMap((definition) => registryById.get(definition.sourceId) ?? [])
+    const profileById: Record<string, IntelligenceSourceProfile> = {}
+    const healthViewById: Record<string, Awaited<ReturnType<typeof readHealth>>> = {}
+    const healthById: Record<string, Readonly<{ runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'; consecutiveFailures: number }>> = {}
+    const credentialStatusById: Record<string, Readonly<{ hasCredential: boolean; maskedPreview?: string; lastValidatedAt?: string }>> = {}
+    for (const definition of rawDefinitions) {
+      const profile = await deps.profileStore.resolveProfile(definition.sourceId)
+      profileById[definition.sourceId] = profile
+      const health = await readHealth(definition.sourceId, profile)
+      healthViewById[definition.sourceId] = health
+      healthById[definition.sourceId] = {
+        runtimeStatus: health.runtimeStatus,
+        consecutiveFailures: health.consecutiveFailures
+      }
+      if (sourceSupportsCredentials(definition.authMode)) {
+        credentialStatusById[definition.sourceId] = await buildCredentialStatus(definition.sourceId, profile.credentialRef)
+      }
+    }
+    return {
+      rawDefinitions,
+      profileById,
+      healthViewById,
+      surface: sourceConfigSurface({
+        definitions: registryDefinitions,
+        profileById,
+        healthById,
+        jobRegisteredById: jobRegistration(),
+        credentialStatusById,
+        ...(filter.panelId === undefined ? {} : { panelId: filter.panelId }),
+        ...(filter.sourceId === undefined ? {} : { sourceId: filter.sourceId })
+      })
+    }
+  }
+
+  /** 详情 = 同一份事实 + 运行时配置 / 计划规则 / 预算 / worker 状态；健康读数用外面读好的那一份。 */
+  function buildDetailFromFact(
+    fact: SourceConfigFact,
+    health: Awaited<ReturnType<typeof readHealth>>
+  ): SafeIntelligenceSourceDetailView {
+    const definition = requireDefinition(fact.sourceId)
+    const runtimeConfig = resolveRuntimeConfig({
+      definition,
+      profile: fact.profile,
+      hasCredential: Boolean(fact.profile.credentialRef)
+    })
+    const worker = deps.workerRuntime?.getWorker(`market-intelligence.worker:${fact.sourceId}`)
+    const scheduleInput = safeScheduleRuleInput(fact.sourceId, fact.profile)
+    const scheduleRule = scheduleInput ? resolveSafeDashboardSourceScheduleRule(scheduleInput) : undefined
+    const requestBudget = requestBudgetFor(definition.requestGovernance)
+    return sanitizeSafeView({
+      definition: toSafeDefinition(definition),
+      profile: fact.profile,
+      runtimeConfig,
+      ...(scheduleRule ? { scheduleRule } : {}),
+      ...(requestBudget ? { requestBudget } : {}),
+      health: { ...health, workerStatus: worker?.status },
+      credentialStatus: fact.credentialStatus
+    })
+  }
+
   return {
     initializeRuntime,
 
@@ -262,11 +348,20 @@ export function createIntelligenceSourcesService(deps: {
     },
 
     async getSettingsView(): Promise<SettingsView> {
-      const profiles = await deps.profileStore.listProfiles()
-      const enabledById: Record<string, boolean> = {}
-      for (const profile of profiles) enabledById[profile.sourceId] = profile.enabled === true
-      const knownSourceIds = new Set(profiles.map((profile) => profile.sourceId))
-      return settingsView({ enabledById, healthById: await this.healthFacts(), jobRegisteredById: jobRegistration(), knownSourceIds })
+      // 全量：事实只算一次（`readConfigSurface`），这里只把它摊成设置视图。
+      return settingsView((await readConfigSurface()).surface.state)
+    },
+
+    /** C4-S0：一份事实的唯一计算点在 `sourceProjection.sourceConfigSurface`（见本文件 `readConfigSurface`）。 */
+    async sourceConfigSurface(filter: { panelId?: PanelId; sourceId?: string } = {}) {
+      const read = await readConfigSurface(filter)
+      // 投影对外只给事实本身（定义换成安全形状）；筛过的集合由参数决定，形状不另开一套。
+      return {
+        facts: read.surface.facts.map((fact) => ({
+          ...fact,
+          definition: toSafeDefinition(requireDefinition(fact.sourceId))
+        }))
+      }
     },
 
     async getAgentView(input: { agentId: string }): Promise<AgentView | undefined> {
@@ -277,24 +372,21 @@ export function createIntelligenceSourcesService(deps: {
     },
 
     async getPanelView(input: { panelId: string }): Promise<PanelView | undefined> {
-      const profiles = await deps.profileStore.listProfiles()
-      const enabledById: Record<string, boolean> = {}
-      for (const profile of profiles) enabledById[profile.sourceId] = profile.enabled === true
-      return panelView(input.panelId as PanelId, { enabledById, healthById: await this.healthFacts(), jobRegisteredById: jobRegistration() })
+      // 面板：同一份事实，只按 `panelId` 筛源；形状还是那一个。
+      return panelView(input.panelId as PanelId, (await readConfigSurface({ panelId: input.panelId as PanelId })).surface.state)
     },
 
     async getPageState(input?: { sourceId?: string }) {
-      const definitions = this.listDefinitions()
+      // 分页读：同一份事实，只按 `sourceId` 取详情。健康读数每个源**只读一次**——旧实现里选中的
+      // 那个源会被读两次（一次进 `sourceHealthById`、一次进详情），那就是「三条命令各算一遍」的入口。
+      const read = await readConfigSurface()
+      const definitions = read.rawDefinitions.map(toSafeDefinition)
       const selectedSourceId = input?.sourceId ?? definitions[0]?.sourceId
-      const detail = selectedSourceId ? await this.getDetail(selectedSourceId) : undefined
-      const sourceHealthById = Object.fromEntries(
-        await Promise.all(
-          definitions.map(async (definition) => {
-            const health = await this.getHealth({ sourceId: definition.sourceId })
-            return [definition.sourceId, health] as const
-          })
-        )
-      )
+      const selectedFact = selectedSourceId === undefined ? undefined : read.surface.byId[selectedSourceId]
+      const detail = selectedSourceId === undefined || selectedFact === undefined
+        ? undefined
+        : buildDetailFromFact(selectedFact, read.healthViewById[selectedSourceId])
+      const sourceHealthById = read.healthViewById
       return sanitizeSafeView({
         definitions,
         selectedSourceId,
@@ -304,33 +396,11 @@ export function createIntelligenceSourcesService(deps: {
     },
 
     async getDetail(sourceId: string): Promise<SafeIntelligenceSourceDetailView> {
-      const definition = requireDefinition(sourceId)
-      const profile = await deps.profileStore.resolveProfile(sourceId)
-      const runtimeConfig = resolveRuntimeConfig({
-        definition,
-        profile,
-        hasCredential: Boolean(profile.credentialRef)
-      })
-      const health = await this.getHealth({ sourceId })
-      const worker = deps.workerRuntime?.getWorker(`market-intelligence.worker:${sourceId}`)
-      const scheduleInput = safeScheduleRuleInput(definition.sourceId, profile)
-      const scheduleRule = scheduleInput ? resolveSafeDashboardSourceScheduleRule(scheduleInput) : undefined
-      const requestBudget = requestBudgetFor(definition.requestGovernance)
-
-      return sanitizeSafeView({
-        definition: toSafeDefinition(definition),
-        profile,
-        runtimeConfig,
-        ...(scheduleRule ? { scheduleRule } : {}),
-        ...(requestBudget ? { requestBudget } : {}),
-        health: {
-          ...health,
-          workerStatus: worker?.status
-        },
-        credentialStatus: sourceSupportsCredentials(definition.authMode)
-          ? await buildCredentialStatus(sourceId, profile.credentialRef)
-          : undefined
-      })
+      requireDefinition(sourceId)
+      const read = await readConfigSurface({ sourceId })
+      const fact = read.surface.byId[sourceId]
+      if (fact === undefined) throw new Error(`Unknown intelligence source "${sourceId}".`)
+      return buildDetailFromFact(fact, read.healthViewById[sourceId])
     },
 
     async saveProfile(input: SaveIntelligenceSourceProfileInput) {
@@ -514,14 +584,7 @@ export function createIntelligenceSourcesService(deps: {
 
     async getHealth(input: { sourceId: string }) {
       const profile = await deps.profileStore.resolveProfile(input.sourceId)
-      if (input.sourceId === 'defillama-stablecoins') {
-        const health = await deps.capitalConditions?.getHealth(profile.enabled)
-        if (health) {
-          return toCapitalConditionsSafeHealthView(input.sourceId, health, profile.enabled)
-        }
-      }
-      const pipelineHealth = deps.pipeline.getHealth(input.sourceId)
-      return toSafeHealthView(input.sourceId, pipelineHealth, profile.enabled)
+      return readHealth(input.sourceId, profile)
     }
   }
 }

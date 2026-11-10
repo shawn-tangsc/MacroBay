@@ -2,6 +2,7 @@ import {
   officialCalendarFeedsAvailability,
   type CalendarOfficialFeedsAvailability
 } from './officialCalendarAvailability'
+import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import {
   agentRegistry,
   allSources,
@@ -209,6 +210,93 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     healthState,
     healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),
     ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {})
+  }
+}
+
+/**
+ * 一份事实（C4-S0）：**三个读命令的唯一计算点**。
+ *
+ * 设置视图 / 面板视图 / 单源分页读的都是这同一份 per-source 事实；三者之间只允许两处差异——
+ * **筛了哪些源**（全量 / 按 panelId / 按 sourceId）与**带不带详情**（详情再叠运行时配置、计划规则等）。
+ * 任何一处自己再算一遍 `enabled` / 健康档 / 任务注册，都会让同一屏出现两份互相打架的事实。
+ *
+ * 这里只做纯计算：profile、健康读数、任务注册、凭据状态都由调用方一次读好传进来。
+ */
+export type SourceConfigFact = Readonly<{
+  sourceId: string
+  definition: SourceDefinition
+  /** 调用方读好的 profile（`resolveProfile` 会给未存过的源一份默认）。 */
+  profile: IntelligenceSourceProfile
+  enabled: boolean
+  health?: SourceHealthFact
+  healthState: SourceHealthState
+  healthMarker: SourceHealthMarker
+  jobRegistered?: boolean
+  credentialStatus?: Readonly<{ hasCredential: boolean; maskedPreview?: string; lastValidatedAt?: string }>
+}>
+
+export type SourceConfigSurface = Readonly<{
+  /** 按 `panelId` / `sourceId` 筛过的事实；没给就是全量。 */
+  facts: readonly SourceConfigFact[]
+  byId: Readonly<Record<string, SourceConfigFact>>
+  /** 同一份事实摊成既有视图要的形状——三个命令共用一个 state，不再各自拼。 */
+  state: ProjectionState
+}>
+
+export function sourceConfigSurface(input: {
+  definitions?: readonly SourceDefinition[]
+  profileById: Readonly<Record<string, IntelligenceSourceProfile>>
+  healthById: Readonly<Record<string, SourceHealthFact>>
+  jobRegisteredById: Readonly<Record<string, boolean>>
+  credentialStatusById?: Readonly<Record<string, SourceConfigFact['credentialStatus']>>
+  panelId?: PanelId
+  sourceId?: string
+}): SourceConfigSurface {
+  const definitions = (input.definitions ?? allSources()).filter((source) => {
+    if (input.panelId !== undefined && !source.panels.includes(input.panelId)) return false
+    if (input.sourceId !== undefined && source.sourceId !== input.sourceId) return false
+    return true
+  })
+  const facts = definitions.flatMap((definition): SourceConfigFact[] => {
+    const profile = input.profileById[definition.sourceId]
+    if (profile === undefined) {
+      // 没有 profile 的源不进事实表：读不到「读者的选择」时，宁可不出现，也不拿默认值冒充。
+      return []
+    }
+    const enabled = profile.enabled === true
+    const health = input.healthById[definition.sourceId]
+    const healthState = sourceHealthState({
+      enabled,
+      ...(definition.unavailable === undefined ? {} : { unavailable: true }),
+      ...(health === undefined ? {} : { health })
+    })
+    const jobRegistered = input.jobRegisteredById[definition.sourceId]
+    const credentialStatus = input.credentialStatusById?.[definition.sourceId]
+    return [{
+      sourceId: definition.sourceId,
+      definition,
+      profile,
+      enabled,
+      ...(health === undefined ? {} : { health }),
+      healthState,
+      healthMarker: sourceHealthMarker({
+        enabled,
+        ...(definition.unavailable === undefined ? {} : { unavailable: true }),
+        state: healthState
+      }),
+      ...(jobRegistered === undefined ? {} : { jobRegistered }),
+      ...(credentialStatus === undefined ? {} : { credentialStatus })
+    }]
+  })
+  return {
+    facts,
+    byId: Object.fromEntries(facts.map((fact) => [fact.sourceId, fact])),
+    state: {
+      enabledById: Object.fromEntries(facts.map((fact) => [fact.sourceId, fact.enabled])),
+      healthById: input.healthById,
+      jobRegisteredById: input.jobRegisteredById,
+      knownSourceIds: new Set(Object.keys(input.profileById))
+    }
   }
 }
 
