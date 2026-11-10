@@ -189,6 +189,15 @@ describe('source issue submission', () => {
       expect(request.producerId).toBe('market-intelligence.collectSource')
       expect((request.actions as unknown[]).length).toBeGreaterThan(0)
       expect(request.occurredAt).toBe(NOW)
+      // 落点是产品抽屉「数据源」屏；源 id 随载荷带着，focus 消费落地后用它选中该源。
+      // 反向：改回 `settingsSectionId:'intelligence-sources'`（已撤注册的面板）这条即红。
+      const action = (request.actions as Array<{ deeplink?: Record<string, unknown> }>)[0]
+      expect(action?.deeplink).toMatchObject({
+        settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' },
+        entityType: 'source',
+        entityId: SOURCE_ID
+      })
+      expect(action?.deeplink).not.toHaveProperty('settingsSectionId')
     }
   })
 

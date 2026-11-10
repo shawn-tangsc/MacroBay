@@ -212,12 +212,17 @@ function sourceIssueActions(sourceId: string): readonly NotificationAction[] {
   ]
 }
 
-/** 落点：设置页的情报源面板，定位到这个来源。 */
+/**
+ * 落点：**产品自己的配置抽屉「数据源」屏**（用户 2026-11-11：平台设置里那一页已撤）。
+ *
+ * `entityId` 仍是这个源 id——focus 消费落地后用它选中该源；不带 `settingsSectionId`，
+ * 那个面板 id 已经不存在，写了只会走到「不认识就不导航」。
+ */
 function sourceIssueDeeplink(sourceId: string) {
   return {
     scope: 'product' as const,
     productId: 'market-intelligence',
-    settingsSectionId: 'intelligence-sources',
+    settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' },
     entityType: 'source',
     entityId: sourceId
   }
