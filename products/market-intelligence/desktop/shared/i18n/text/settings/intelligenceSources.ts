@@ -483,7 +483,9 @@ export const intelligenceSourcesText = {
     todayReadingYes: '有 · {time}',
     todayReadingNo: '今天还没有',
     noSuccess: '没有成功记录',
-    unknown: '未知',
+    /* 「未知」要自解释：这一档既可能是日历类源没有逐次记录、也可能是这一屏读失败。
+       原因进同一行标签旁的 ⓘ，值这里给能读懂的短词（不许只印两个字）。 */
+    unknown: '状态暂时读不到',
     unknownReason: '这类来源只按提供方汇总运行，没有逐次记录',
     /* 这两句只进标签旁的 ⓘ：正文只留状态词（用户 2026-11-10）。 */
     unknownReasonAria: '未知原因的说明',
@@ -500,7 +502,7 @@ export const intelligenceSourcesText = {
       manual: '手动模式，不会自动采集',
       'product-owned': '由产品自己的采集作业负责',
       collecting: '按计划采集中',
-      unknown: '未知'
+      unknown: '状态暂时读不到'
     },
     /* B5 立即运行：三态（可运行 / 正在运行 / 结果）。禁用时按钮文案就是原因，
        这一行再用 role=status 说一句「跑完会自动恢复」——禁用按钮不进 Tab、读屏也读不到。 */
@@ -1015,7 +1017,7 @@ export const intelligenceSourcesText = {
     todayReadingYes: 'Yes · {time}',
     todayReadingNo: 'Nothing yet today',
     noSuccess: 'No successful run yet',
-    unknown: 'Unknown',
+    unknown: 'Status unreadable for now',
     unknownReason: 'This kind of source is summarised per provider; there is no run-by-run record',
     unknownReasonAria: 'About unknown readings',
     automaticSyncStoppedAria: 'About automatic sync stopping',
@@ -1031,7 +1033,7 @@ export const intelligenceSourcesText = {
       manual: 'Manual mode: it does not collect on its own',
       'product-owned': "Collected by the product's own job",
       collecting: 'Collecting on schedule',
-      unknown: 'Unknown'
+      unknown: 'Status unreadable for now'
     },
     runAction: {
       run: 'Run now',
