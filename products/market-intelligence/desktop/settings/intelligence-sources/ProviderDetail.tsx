@@ -104,7 +104,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   surface?: 'settings' | 'panel'
   /**
    * 启停**只读**：抽屉「数据源」那一屏只显示状态、不给编辑（用户 2026-11-11）。
-   * 启停的唯一编辑入口是「采集与数据」里的卡片项开关。凭据与「高级」不受影响。
+   * 启停的唯一编辑入口是「采集与数据」里的卡片项开关。**凭据（API Key）、测试连接、高级都要留着**
+   * ——把这屏的钥匙入口删掉，凭据门禁就成了死路。
    */
   readOnlyToggles?: boolean
   /** Render source settings below the capability list. */
@@ -396,12 +397,15 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               resolveText={resolveText} />
             : null}
           <Switch
-            aria-disabled={providerCredentialMissing ? true : undefined}
+            aria-disabled={providerCredentialMissing || readOnlyToggles ? true : undefined}
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
             checked={providerGroupEnabled}
-            disabled={providerCredentialMissing}
-            onChange={(next) => { if (!providerCredentialMissing) void toggleProvider(next) }}
+            disabled={providerCredentialMissing || readOnlyToggles === true}
+            onChange={(next) => {
+              if (providerCredentialMissing || readOnlyToggles === true) return
+              void toggleProvider(next)
+            }}
             size="small" />
         </span>
       </div>
