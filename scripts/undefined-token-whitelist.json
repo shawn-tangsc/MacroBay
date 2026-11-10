@@ -68,5 +68,20 @@
     "injectedBy": "AgentSessionMessages.tsx:172",
     "file": "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionMessages.tsx",
     "reason": "同一份字号设置注入到 Agent 面板；与 AssistantChatPane 成对，两边必须读同一个设置。"
+  },
+  "--module-span": {
+    "injectedBy": "BusinessSettingsView.tsx（行内 style 写在 .business-card / .business-cell / .business-cell__items 上）",
+    "file": "products/market-intelligence/desktop/settings/intelligence-sources/BusinessSettingsView.tsx",
+    "reason": "--module-span 是运行时按「这一格/这个模块有几个源」算出来的列跨度，一张卡一个值；写进 tokens.css 等于给它一个假的固定值，和布局算法漂开。"
+  },
+  "--cell-span": {
+    "injectedBy": "BusinessSettingsView.tsx（行内 style 写在 .business-card / .business-cell / .business-cell__items 上）",
+    "file": "products/market-intelligence/desktop/settings/intelligence-sources/BusinessSettingsView.tsx",
+    "reason": "--cell-span 是运行时按「这一格/这个模块有几个源」算出来的列跨度，一张卡一个值；写进 tokens.css 等于给它一个假的固定值，和布局算法漂开。"
+  },
+  "--cell-items": {
+    "injectedBy": "BusinessSettingsView.tsx（行内 style 写在 .business-card / .business-cell / .business-cell__items 上）",
+    "file": "products/market-intelligence/desktop/settings/intelligence-sources/BusinessSettingsView.tsx",
+    "reason": "--cell-items 是运行时按「这一格/这个模块有几个源」算出来的列跨度，一张卡一个值；写进 tokens.css 等于给它一个假的固定值，和布局算法漂开。"
   }
 }
