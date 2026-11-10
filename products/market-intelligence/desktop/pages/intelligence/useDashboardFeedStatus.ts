@@ -35,7 +35,12 @@ export function useDashboardFeedStatus({ client, crossAssetClient }: {
   const [index, setIndex] = useState<CrossAssetSnapshot>()
   const [indexState, setIndexState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
   useEffect(() => {
-    if (!client && !crossAssetClient) return
+    // 没有读口 = 这一份表**读不到**，不是「还在读」。停在 loading 会让上层 `decisionsUsable`
+    // 恒为 false，整页一处都不读也不报错——静默停读（今晚 5 条用例被这个形状吃掉过一次）。
+    if (!client && !crossAssetClient) {
+      setFeedState('failed')
+      return
+    }
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
     const read = async (): Promise<void> => {
