@@ -129,9 +129,9 @@
 .config-drawer__value {
   flex: 1 1 auto;
   min-width: 0;
+  /* 值与控件**左缘对齐标签列的右边界**（不右对齐）：右对齐会让每行控件位置各不相同，
+     整页看着就散——这条以 `@platform/ui/components/settings-row` 的既有决定为准。 */
   margin-left: 8px;
-  /* 值靠右、与行尾动作相邻：读者一眼看到「这一项现在是什么」。 */
-  text-align: right;
   color: var(--muted);
   font-size: var(--font-body);
   line-height: var(--line-body);
