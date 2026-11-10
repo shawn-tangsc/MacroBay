@@ -63,7 +63,7 @@ export function ProcessingSettingsPanel(): React.ReactElement {
 
   return <div className="config-drawer-processing" data-processing-panel="true">
     <div data-processing-section="translation">
-    <SettingsSection title={labels.title}>
+    <SettingsSection title={labels.title} variant="flat">
       {translation.loading ? <LoadingState label={labels.loading} minHeight={60} /> : null}
       {!translation.loading && settings === undefined
         ? <SettingsRow
@@ -155,7 +155,7 @@ export function ProcessingSettingsPanel(): React.ReactElement {
     </div>
 
     <div data-processing-section="sentiment">
-    <SettingsSection title={copy.groups.sentimentScoring}>
+    <SettingsSection title={copy.groups.sentimentScoring} variant="flat">
       {/* 两行：开关是「是否用模型判断情绪」的总开关，模型是它打开后才有的第二行。
           关着时只在开关那一行的值位写「规则判断」，不画灰掉的下拉。 */}
       <SettingsRow

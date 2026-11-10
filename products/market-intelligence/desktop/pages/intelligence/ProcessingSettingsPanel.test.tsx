@@ -136,6 +136,10 @@ describe('ProcessingSettingsPanel · 一个区块一个圆角容器', () => {
     await mount()
 
     expect(host!.querySelectorAll('.settings-section')).toHaveLength(2)
+    // 抽屉正文本身就是一张卡：区块再用卡形态就是双框 + 双重内距，所以两段都必须 flat。
+    for (const section of host!.querySelectorAll('.settings-section')) {
+      expect(section.getAttribute('data-variant')).toBe('flat')
+    }
     // 旧卡片那套「每字段一个边框盒子」一个都不许剩。
     expect(host!.querySelectorAll('.intelligence-section')).toHaveLength(0)
     expect(host!.querySelectorAll('.intelligence-setting-row')).toHaveLength(0)
