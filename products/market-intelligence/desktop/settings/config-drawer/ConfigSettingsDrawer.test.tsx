@@ -124,22 +124,15 @@ describe('config settings drawer (static layout)', () => {
   })
 
   it('imports nothing from the data layer: the "no data" promise is falsifiable', () => {
-    // 「不接数据」不是口头保证。抽屉目录里出现任何数据层 import 就该红——包括 IPC、视图、
-    // 以及本产品自己的 service。允许的只有平台 UI 组件、React、图标、本目录的纯数据与样式。
-    const dir = __dirname
-    // **文案不算数据**：i18n 表是静态文本，接进来不会让抽屉开始读视图/IPC。
-    // 真正要挡的是 IPC、视图、service 这些「会让这一版偷偷开始取数」的 import。
-    // `antd` 是**控件库**不是数据层：静态版画一颗禁用按钮用它，不会让抽屉开始取数。
-    const allowedPrefixes = ['react', 'react-dom', 'lucide-react', 'antd', '@platform/ui/', './', '../../shared/i18n/']
-    const offenders = readdirSync(dir)
-      .filter((name) => name.endsWith('.tsx') && !name.includes('.test.'))
-      .flatMap((name) => readFileSync(join(dir, name), 'utf8').split('\n').flatMap((line, index) => {
-        if (!/^import .* from '/u.test(line)) return []
-        const specifier = /from '([^']+)'/u.exec(line)?.[1] ?? ''
-        if (allowedPrefixes.some((prefix) => specifier.startsWith(prefix))) return []
-        return [`${name}:${index + 1} imports '${specifier}'`]
-      }))
-    expect(offenders).toEqual([])
+    expect(dataLayerOffenders(readDrawerDirSources())).toEqual([])
+  })
+
+  it('catches a data-layer import when one appears: the guard is actually watching', () => {
+    // 反证：「0 offenders」只证明没人写，不证明它在盯。喂一份假源码，守卫必须报出来。
+    const fake = [{ name: 'FakeScreen.tsx', source: "import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'\n" }]
+    expect(dataLayerOffenders(fake)).toEqual([
+      "FakeScreen.tsx:1 imports '../../shared/ipc/intelligenceSourcesClient'"
+    ])
   })
 
   it('tells "could not read" from "nothing there", and retries', () => {
@@ -346,4 +339,28 @@ describe('config settings drawer (static layout)', () => {
       expect(text).not.toMatch(/^[a-z]+\.[a-z]/iu)
     }
   })
+
+/**
+ * 抽屉目录的「不接数据」判据（纯函数：源码进、违规出行）。
+ *
+ * 允许的前缀只有：React、图标、**antd（控件库不是数据层）**、平台 UI、本目录、产品文案。
+ * IPC、视图、产品 service 一律算违规。**文案不是数据**这条也在这里体现。
+ */
+function dataLayerOffenders(files: ReadonlyArray<{ name: string; source: string }>): string[] {
+  const allowedPrefixes = ['react', 'react-dom', 'lucide-react', 'antd', '@platform/ui/', './', '../../shared/i18n/']
+  return files.flatMap((file) => file.source.split('\n').flatMap((line, index) => {
+    if (!/^import .* from '/u.test(line)) return []
+    const specifier = /from '([^']+)'/u.exec(line)?.[1] ?? ''
+    if (allowedPrefixes.some((prefix) => specifier.startsWith(prefix))) return []
+    return [`${file.name}:${index + 1} imports '${specifier}'`]
+  }))
+}
+
+/** 读抽屉目录里非测试的 .tsx。 */
+function readDrawerDirSources(): ReadonlyArray<{ name: string; source: string }> {
+  return readdirSync(__dirname)
+    .filter((name) => name.endsWith('.tsx') && !name.includes('.test.'))
+    .map((name) => ({ name, source: readFileSync(join(__dirname, name), 'utf8') }))
+}
+
 })
