@@ -9,6 +9,10 @@ import type { EconomicCalendar } from './EconomicCalendar'
  *
  * 这条是**编译期判据**：把 `onOpenSettings` 改回可选，下面那句 `@ts-expect-error` 就变成
  * 「未使用的指令」，`tsc` 当场红——比运行期用例更早拦住「又把回退塞回页面」。
+ *
+ * **什么时候删掉这行 expect-error**：等「日历设置」这颗入口整体迁进配置抽屉、页面不再持有这个
+ * 回调（或该入口被删）时，把这条断言与函数一起删掉。它不是免死金牌——留着它却让类型真的坏掉，
+ * 只有两种可能：这个人改错了，或者删除条件已经到了。不许为了让它「继续安静」而放宽类型。
  */
 export function hostMustChooseTheDestination(withoutOpener: Omit<ComponentProps<typeof EconomicCalendar>, 'onOpenSettings'>): ComponentProps<typeof EconomicCalendar> {
   // @ts-expect-error 宿主必须给「设置」的去处，不传编译不过
