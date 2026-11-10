@@ -12,6 +12,9 @@ import { productText } from '../../../shared/i18n/productText'
  * 那是内部标识。这里只比给读者看的字。
  *
  * 英文明细里是小写（句子中间），手机标题在方括号里首字母大写——所以只比词本身，不比大小写。
+ *
+ * 设置页那一行会在档位词后面补一句括号说明（「低（三档都推）」）——**词的比较只看开头那个词**，
+ * 括号里是代价说明，不是第二个名字；把整串拿去比会把「补了句说明」误判成「换了词」。
  */
 const CARD_KEY = { low: 'weak', medium: 'medium', high: 'strong' } as const
 const TIERS = ['low', 'medium', 'high'] as const
@@ -27,7 +30,9 @@ describe('news sentiment tier words', () => {
         const alertWord = alert[tier]
         const settingsWord = settings[`pages.intelligence.notification.threshold.${tier === 'high' ? 'high' : tier}`]
         expect(cardWord.toLowerCase()).toBe(alertWord.toLowerCase())
-        expect(settingsWord?.toLowerCase()).toBe(alertWord.toLowerCase())
+        // 取开头那个词：中英都用空白或全角/半角括号分隔说明。
+        const settingsTierWord = (settingsWord ?? '').split(/[\s（(]/)[0] ?? ''
+        expect(settingsTierWord.toLowerCase()).toBe(alertWord.toLowerCase())
       }
     })
   }

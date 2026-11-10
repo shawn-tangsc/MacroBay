@@ -27,7 +27,11 @@ export function NewsSentimentCard(props: {
   loading: boolean
   failed: boolean
   onOpenAll: () => void
-  onOpenSettings: () => void
+  /**
+   * 「设置」入口的去处（宿主给：打开配置抽屉并停在内容处理屏）。
+   * **不给就不画这颗入口**——这一版之后这条线没有本地设置面，留一颗点了没反应的按钮就是假控件。
+   */
+  onOpenSettings?: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
   /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
@@ -111,7 +115,7 @@ export function NewsSentimentCard(props: {
             value={includeNeutral ? 'all' : 'exclude'}
           />
           <Button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} size="small" type="link">{text.openAll} →</Button>
-          {hasIconText(text, 'news.sentiment.settings') ? (
+          {hasIconText(text, 'news.sentiment.settings') && props.onOpenSettings !== undefined ? (
             <IconButton
               ariaLabelKey="news.sentiment.settings"
               icon={Settings}

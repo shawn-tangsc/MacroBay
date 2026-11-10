@@ -894,47 +894,36 @@ describe('NewsSentimentFeature', () => {
 })
 
 describe('settings entry', () => {
-  // 宿主给了回调（= 打开配置抽屉并停在内容处理屏）就调它、不开本地弹框；没给就退回本地弹框。
-  // 两条成对写：只测一边的话，「传了却还开弹框」或「没传就什么都不开」都能溜过去。
-  const settledClient = (): NewsSentimentClient => client({ query: vi.fn(async () => VIEW) })
-  // 弹框里那块翻译面自己接 IPC：这里只判「哪个入口被打开」，把桥桩成读不到，
-  // 免得一次未处理的 rejection 把用例判红（那与入口无关）。
-  beforeEach(() => {
-    ;(window as unknown as { platform: unknown }).platform = { products: { invoke: vi.fn(async () => undefined) } }
-  })
-  afterEach(() => {
-    Reflect.deleteProperty(window, 'platform')
-  })
+  // 这一版之后这条线**没有本地设置面**：入口只把读者送到宿主的配置抽屉（内容处理屏）。
+  // 所以两条判据是「没去处就不画入口」与「有去处就调它一次」——不是「弹不弹本地框」。
+  const settingsTrigger = (container: HTMLElement): HTMLButtonElement | null =>
+    container.querySelector<HTMLButtonElement>(`button[aria-label="${text.settings}"]`)
 
-  const openSettingsEntry = async (container: HTMLElement): Promise<void> => {
-    const settings = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.settings}"]`)
-    expect(settings).not.toBeNull()
-    await act(async () => { settings?.click() })
-    await act(async () => {})
-  }
-
-  it('opens the local modal when the host passes no callback', async () => {
+  it('draws no settings entry when the host gives it nowhere to go (no local surface, no dead button)', async () => {
     const container = await mount(
-      <NewsSentimentFeature text={text} client={settledClient()} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+      <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => VIEW) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
-    await openSettingsEntry(container)
 
-    const modal = document.body.querySelector('.ant-modal')
-    expect(modal?.textContent).toContain(text.settingsModal.title)
+    expect(settingsTrigger(container)).toBeNull()
   })
 
-  it('calls the host callback once and does not open the local modal when one is given', async () => {
+  it('calls the host callback once when one is given, and opens no local dialog', async () => {
     const onOpenSettings = vi.fn()
     const container = await mount(
       <NewsSentimentFeature
         onOpenSettings={onOpenSettings}
         text={text}
-        client={settledClient()}
+        client={client({ query: vi.fn(async () => VIEW) })}
         now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
-    await openSettingsEntry(container)
+
+    const trigger = settingsTrigger(container)
+    expect(trigger).not.toBeNull()
+    await act(async () => { trigger?.click() })
+    await act(async () => {})
 
     expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    // 没有本地弹框可开了：连 `.ant-modal` 都不该出现。
     expect(document.body.querySelector('.ant-modal')).toBeNull()
   })
 })

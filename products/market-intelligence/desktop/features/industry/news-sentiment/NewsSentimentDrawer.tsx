@@ -38,7 +38,8 @@ export function NewsSentimentDrawer(props: {
   onFilters: (next: Partial<NewsSentimentFilters>) => void
   onWindowChange: (window: NewsSentimentWindow) => void
   onClose: () => void
-  onOpenSettings: () => void
+  /** 同卡片：宿主不给去处就不画这颗入口（这一版之后没有本地设置面）。 */
+  onOpenSettings?: () => void
   onRefresh: () => void
   client: Pick<NewsSentimentClient, 'getItem' | 'rescore' | 'rebuild' | 'translateBody'>
   translationEnabled?: boolean
@@ -180,7 +181,9 @@ export function NewsSentimentDrawer(props: {
             value={props.window}
           />
           <Button className="mi-news-drawer__action" onClick={props.onRefresh} size="small">{text.refresh}</Button>
-          <Button className="mi-news-drawer__action" onClick={props.onOpenSettings} size="small">{text.drawer.settings}</Button>
+          {props.onOpenSettings === undefined ? null : (
+            <Button className="mi-news-drawer__action" onClick={props.onOpenSettings} size="small">{text.drawer.settings}</Button>
+          )}
           <Button
             className="mi-news-drawer__action"
             disabled={Boolean(actionBusy)}

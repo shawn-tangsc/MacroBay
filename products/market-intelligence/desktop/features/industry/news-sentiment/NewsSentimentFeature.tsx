@@ -10,7 +10,6 @@ import type { NewsSentimentWindow } from '../../../../service/intelligence/schem
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { NewsSentimentDrawer } from './NewsSentimentDrawer'
-import { NewsSentimentSettingsModal } from './NewsSentimentSettingsModal'
 import { useNewsSentiment } from './useNewsSentiment'
 
 import './newsSentiment.css'
@@ -77,7 +76,6 @@ export function NewsSentimentFeature(props: {
   // 语言来自壳层上下文——产品不许自带语言参数，也不再从 app 层借解析函数。
   const resolveStateText = useStateViewText()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [focusItemId, setFocusItemId] = useState<string>()
 
   return (
@@ -86,7 +84,7 @@ export function NewsSentimentFeature(props: {
         failed={state.failed}
         loading={state.loading}
         onOpenAll={() => setDrawerOpen(true)}
-        onOpenSettings={() => (props.onOpenSettings === undefined ? setSettingsOpen(true) : props.onOpenSettings())}
+        onOpenSettings={props.onOpenSettings}
         onEnableSources={enableSources}
         onRefresh={state.refresh}
         onRunSources={runSources}
@@ -106,7 +104,7 @@ export function NewsSentimentFeature(props: {
         loading={state.loading}
         onClose={() => setDrawerOpen(false)}
         onFilters={state.setFilters}
-        onOpenSettings={() => (props.onOpenSettings === undefined ? setSettingsOpen(true) : props.onOpenSettings())}
+        onOpenSettings={props.onOpenSettings}
         onRefresh={state.refresh}
         onWindowChange={state.setWindow}
         open={drawerOpen}
@@ -114,13 +112,6 @@ export function NewsSentimentFeature(props: {
         view={state.view}
         window={state.window}
         resolveStateText={resolveStateText}
-      />
-      <NewsSentimentSettingsModal
-          showTranslation={translationEnabled}
-        client={client}
-        onClose={() => setSettingsOpen(false)}
-        open={settingsOpen}
-        text={props.text}
       />
     </>
   )
