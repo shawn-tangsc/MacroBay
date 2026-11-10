@@ -24,7 +24,7 @@ const SCAN_ROOTS = ['apps', 'platform', 'products']
 const SKIP_DIRS = new Set(['node_modules', 'out', 'dist', '.git', 'coverage'])
 
 /** ⓘ 的入口：这些位置出现说明句是**允许**的（默认收起、悬停/聚焦展开）。 */
-const ALLOWED_CONTEXT = /helpTrigger\(|\bPopover\b|content=|aria-|title=|ariaLabelKey=/u
+const ALLOWED_CONTEXT = /helpTrigger\(|\bPopover\b|content=|lines=|aria-|title=|ariaLabelKey=/u
 
 type Finding = { file: string; line: number; key: string }
 
@@ -169,16 +169,19 @@ function main(): void {
   }
   const stale = Object.keys(baseline).filter((id) => !counts.has(id))
 
+  // **一次跑完、分类报全**：正文命中 / 基线过期 各列一遍再统一退出。
+  // 早退会让「想验自己那半」的人跑去 /tmp 跑副本，拿副本数当证据。
+  let failed = false
   if (added.length || grown.length) {
-    console.log('正文说明句门禁未通过（说明句只许进 ⓘ：helpTrigger / Popover content / aria-* / title=）：')
+    failed = true
+    console.log('正文说明句门禁未通过（说明句只许进 ⓘ：helpTrigger / Popover content=` 或 `lines=` / aria-* / title=）：')
     for (const line of [...added, ...grown]) console.log(`  ${line}`)
-    console.log('处理方式：把这句话收进 ⓘ（`helpTrigger(...)` 或 `Popover` 的 `content`），或删掉它。不许放宽基线。')
-    process.exit(1)
+    console.log('处理方式：把这句话收进 ⓘ（`helpTrigger(...)` 或 `Popover` 的 `content`/`lines`），或删掉它。不许放宽基线。')
   }
   if (stale.length) {
-    console.log(`正文说明句门禁：基线过期——${stale.length} 个位置已经不在正文里，请把基线改小：`)
-    for (const id of stale.slice(0, 10)) console.log(`  ${id}`)
-    process.exit(1)
+    failed = true
+    console.log(`正文说明句门禁：基线过期——${stale.length} 个位置已经不在正文里，请用 --lower/--remove 把基线改小：`)
+    for (const id of stale) console.log(`  ${id}`)
   }
   console.log(`正文说明句门禁通过：${counts.size} 个位置、合计 ${[...counts.values()].reduce((s, v) => s + v, 0)} 处，都是既有基线（只降不升）。`)
 
