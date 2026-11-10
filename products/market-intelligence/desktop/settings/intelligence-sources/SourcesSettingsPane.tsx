@@ -61,14 +61,6 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
   const { providerId: _selected, ...surface } = props.surface
 
   const isBusiness = props.filter === 'dashboard'
-  const providerOf = (sourceId: string): string | undefined => props.view?.groups
-    .flatMap((group) => group.providers)
-    .find((entry) => entry.sources.some((source) => source.sourceId === sourceId))?.providerId
-  const onSelectSource = (sourceId: string): void => {
-    const providerId = providerOf(sourceId)
-    if (providerId !== undefined) props.onSelectProvider(providerId)
-    props.onFilterChange('all')
-  }
   const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
 
   /* **一个骨架**：页签条只在这一处渲染一次；两个分类只换「列表」与「内容」。
@@ -87,7 +79,6 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
         ? <BusinessSettingsView
           business={business}
           onBusinessChange={setBusiness}
-          onSelectSource={onSelectSource}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <SettingsSourceTree
@@ -103,7 +94,6 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
       {isBusiness
         ? <BusinessSettingsContent
           business={business}
-          onSelectSource={onSelectSource}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <>

@@ -29,7 +29,6 @@ export function BusinessSettingsView(props: {
   business: BusinessKey
   onBusinessChange: (business: BusinessKey) => void
   /** 点某一行 → 切到「情报源」并选中这个源（宿主负责切页签）。 */
-  onSelectSource: (sourceId: string) => void
   /** 源 id → 读者看到的名字（来自产品文案，不在组件里写源名）。 */
   sourceNames: Readonly<Record<string, string>>
   resolveText: (key: string) => string
@@ -73,7 +72,6 @@ export function BusinessSettingsView(props: {
 /** 右内容区：卡片 / 平铺源名。没有源级详情。 */
 export function BusinessSettingsContent(props: {
   business: BusinessKey
-  onSelectSource: (sourceId: string) => void
   sourceNames: Readonly<Record<string, string>>
   resolveText: (key: string) => string
 }): React.ReactElement {
@@ -97,7 +95,7 @@ export function BusinessSettingsContent(props: {
                 resolveText={props.resolveText} />
               : null}
           </div>
-          {module.cells.map((cell, index) => cardRow(module, index, cell.label, cell.sourceId, nameOf, props.onSelectSource))}
+          {module.cells.map((cell, index) => cardRow(module, index, cell.label, cell.sourceId, nameOf))}
         </section>)
         : null}
       {props.business === 'dashboard'
@@ -106,7 +104,7 @@ export function BusinessSettingsContent(props: {
           {/* 日历 / 舆情：平铺源名（不写格名、没有组头）。 */}
           {modulesForBusiness(props.business)
             .flatMap((module) => module.cells)
-            .map((cell, index) => cardRow(undefined, index, '', cell.sourceId, nameOf, props.onSelectSource))}
+            .map((cell, index) => cardRow(undefined, index, '', cell.sourceId, nameOf))}
         </section>}
     </div>
   </div>
@@ -118,16 +116,16 @@ function cardRow(
   index: number,
   label: string,
   sourceId: string,
-  nameOf: (sourceId: string) => string,
-  onSelectSource: (sourceId: string) => void
+  nameOf: (sourceId: string) => string
 ): React.ReactElement {
-  return <button
+  /* 卡片项是**纯行**，不是入口：不跳页签、不选中源、不加选中态（用户 2026-11-11）。
+     要看某个源，读者自己去「情报源」页签找。 */
+  return <div
     className="business-card__row"
-    key={`${module?.id ?? 'list'}-${index}`}
-    onClick={() => onSelectSource(sourceId)}
-    type="button">
+    data-business-row={sourceId}
+    key={`${module?.id ?? 'list'}-${index}`}>
     {/* 「AI 分析用」卡与日历/舆情列表是**无格名**的：源名放左列、右列留空，行样式与别的行一致。 */}
     <span className="business-card__label">{label === '' ? nameOf(sourceId) : label}</span>
     <span className="business-card__value">{label === '' ? null : nameOf(sourceId)}</span>
-  </button>
+  </div>
 }

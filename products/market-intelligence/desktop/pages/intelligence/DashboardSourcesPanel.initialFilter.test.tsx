@@ -119,16 +119,6 @@ describe('业务设置：只有卡片，没有源详情头', () => {
     expect(body).not.toContain(text.status.disabled)
   })
 
-  it('switches to the sources tab when a card row is clicked', async () => {
-    const container = await renderPanel('dashboard')
-    const row = container.querySelector<HTMLButtonElement>('[data-business-card="cross-asset"] .business-card__row')
-    expect(row).not.toBeNull()
-    await act(async () => { row?.click() })
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    // 切回「情报源」：那一面的树出现，业务设置的卡片消失。
-    expect(container.querySelector('.business-settings__content')).toBeNull()
-    expect(container.querySelector('.intelligence-catalog-pane')).not.toBeNull()
-  })
 })
 
 describe('筛选页签在业务设置下常显', () => {

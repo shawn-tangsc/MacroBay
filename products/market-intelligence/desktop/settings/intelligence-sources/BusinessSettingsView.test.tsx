@@ -19,21 +19,19 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-async function renderContent(business: BusinessKey): Promise<{ host: HTMLElement; onSelectSource: ReturnType<typeof vi.fn> }> {
+async function renderContent(business: BusinessKey): Promise<{ host: HTMLElement }> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  const onSelectSource = vi.fn()
   await act(async () => root!.render(createElement(BusinessSettingsContent, {
     business,
-    onSelectSource,
     resolveText,
     sourceNames: t.sourceNames
   })))
-  return { host, onSelectSource }
+  return { host }
 }
 
-async function render(business: BusinessKey): Promise<{ host: HTMLElement; onSelectSource: ReturnType<typeof vi.fn> }> {
+async function render(business: BusinessKey): Promise<{ host: HTMLElement }> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -41,11 +39,10 @@ async function render(business: BusinessKey): Promise<{ host: HTMLElement; onSel
   await act(async () => root!.render(createElement(BusinessSettingsView, {
     business,
     onBusinessChange: vi.fn(),
-    onSelectSource,
     resolveText,
     sourceNames: t.sourceNames
   })))
-  return { host, onSelectSource }
+  return { host }
 }
 
 describe('业务设置的左列', () => {
@@ -94,8 +91,12 @@ describe('业务设置的左列', () => {
     expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(6)
     expect(calendar.host.textContent).not.toContain('官方源')
     expect(calendar.host.textContent).not.toContain('聚合源')
-    await act(async () => { calendar.host.querySelector<HTMLButtonElement>('.business-card__row')?.click() })
-    expect(calendar.onSelectSource).toHaveBeenCalledWith('macro-calendar-fed')
+    // 卡片项是纯行：不是按钮、没有 onClick、点了不导航（用户 2026-11-11 取消点击跳转）。
+    for (const row of [...calendar.host.querySelectorAll('.business-card__row')]) {
+      expect(row.tagName).not.toBe('BUTTON')
+      expect(row.getAttribute('role')).toBeNull()
+      expect(row.getAttribute('tabindex')).toBeNull()
+    }
 
     const sentiment = await renderContent('sentiment')
     expect(sentiment.host.querySelectorAll('.business-card__row')).toHaveLength(4)
@@ -111,7 +112,6 @@ describe('内容区页头与卡片项的行结构', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(BusinessSettingsContent, {
       business: 'dashboard',
-      onSelectSource: vi.fn(),
       resolveText,
       sourceNames: t.sourceNames
     })))
@@ -127,7 +127,6 @@ describe('内容区页头与卡片项的行结构', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(BusinessSettingsContent, {
       business: 'calendar',
-      onSelectSource: vi.fn(),
       resolveText,
       sourceNames: t.sourceNames
     })))
