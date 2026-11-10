@@ -284,6 +284,18 @@ describe('settings registry self-checks', () => {
     expect(surfaces?.copy?.helpAriaKey).toBe('pages.intelligence.notification.calendar.aboutAria')
   })
 
+  it('keeps the second help line on the push-threshold row, so its ⓘ does not lose the cost sentence', () => {
+    // 页面现状：这一行的 ⓘ 是两条说明（怎么算 + 一天可能几十条），读屏名是专用键 `threshold.aria`。
+    // 只迁成一条会让读者看不到「代价」那句——DOM 变了，DOM 变了就是行为变了。
+    const threshold = Object.values(settingRegistry).flat().find((row) => row.key === 'setting:notifications.push-threshold')
+    expect(threshold?.copy?.helpKeys).toEqual([
+      'pages.intelligence.notification.threshold.info',
+      'pages.intelligence.notification.threshold.cost'
+    ])
+    expect(threshold?.copy?.helpAriaKey).toBe('pages.intelligence.notification.threshold.aria')
+    expect(threshold?.copy?.helpKey).toBeUndefined()
+  })
+
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
     const surfaces = settingRegistry.notifications.find(
       (row) => row.key === 'setting:notifications.surfaces'

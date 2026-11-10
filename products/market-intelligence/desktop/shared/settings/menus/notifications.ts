@@ -110,7 +110,12 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     defaultValueFrom: 'newsPushThreshold',
     copy: {
       labelKey: 'pages.intelligence.notification.threshold.row',
-      helpKey: 'pages.intelligence.notification.threshold.info'
+      // 两条说明（怎么算 + 代价），读屏名是专用键——与页面那一行的 ⓘ 逐字一致。
+      helpKeys: [
+        'pages.intelligence.notification.threshold.info',
+        'pages.intelligence.notification.threshold.cost'
+      ],
+      helpAriaKey: 'pages.intelligence.notification.threshold.aria'
     },
     availability: 'live'
   },
