@@ -106,6 +106,8 @@ describe('config settings drawer (static layout)', () => {
     // 选中态是 `aria-current="page"`（设置页那套导航），编号格已经不在了。
     expect(items.filter((item) => item.getAttribute('aria-current') === 'page')).toHaveLength(1)
     expect(items.filter((item) => item.classList.contains('active'))).toHaveLength(1)
+    // 本判据的红证 = 把 `<span className="config-drawer__nav-index">` 放回导航项，断言即挂
+    // （2026-11-10 实测：`expected <span> to be null`）。断「不存在」的用例都照这个写法带一句怎么弄红。
     expect(body.querySelector('.config-drawer__nav-index')).toBeNull()
   })
 
