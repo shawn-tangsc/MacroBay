@@ -51,6 +51,12 @@ export const QUOTES_STATUS_ROW_CELLS: Readonly<Record<CrossAssetStatusId, readon
  * 一格可以选哪些源：这一格的主源 + 紧跟其后的备用行（`fallback: true`）。
  * 源名仍从那一处表取，不在这里另列；配对靠表里的行结构，不靠格名里的「（备用）」后缀。
  */
+/** 一格在读者面前叫什么（从唯一那张表取，别在调用点写字面量）。 */
+export function cellLabel(moduleId: string, cellKey: string): string | undefined {
+  const module = DASHBOARD_SOURCE_MODULES.find((candidate) => candidate.id === moduleId)
+  return module?.cells.find((candidate) => candidate.cellKey === cellKey)?.label
+}
+
 export function cellSourceChoices(moduleId: string, cellKey: string): readonly string[] {
   const module = DASHBOARD_SOURCE_MODULES.find((candidate) => candidate.id === moduleId)
   const index = module?.cells.findIndex((candidate) => candidate.cellKey === cellKey) ?? -1

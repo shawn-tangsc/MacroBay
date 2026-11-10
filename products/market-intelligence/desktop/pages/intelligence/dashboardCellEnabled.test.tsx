@@ -7,6 +7,7 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { dashboardCellId, QUOTES_STATUS_ROW_CELLS, type CellEnabledIo } from './dashboardCellEnabled'
+import { dashboardFeedStatusPublicPolicy } from '../../../contracts/macro/dashboardFeedStatusContracts'
 
 const asOf = '2026-08-05T00:00:00.000Z'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard
@@ -40,7 +41,7 @@ function clients() {
   }
 }
 
-async function render(cellEnabledIo: CellEnabledIo | undefined) {
+async function render(cellEnabledIo: CellEnabledIo | undefined, extraProps: Record<string, unknown> = {}) {
   vi.useFakeTimers()
   const built = clients()
   const host = document.createElement('div')
@@ -56,13 +57,20 @@ async function render(cellEnabledIo: CellEnabledIo | undefined) {
           fundingRateClient: { query: async () => ({ state: 'empty' as const, asOf }) },
           openInterestClient: { query: async () => ({ state: 'empty' as const, asOf, window: '7d' as const }) },
           crossAssetClient: built.crossAssetClient as never,
+          dashboardFeedStatusClient: {
+            query: async () => ({
+              state: 'available' as const,
+              sources: dashboardFeedStatusPublicPolicy.sourceIds.map(sourceId => ({ sourceId, enabled: true, hasCredential: true }))
+            })
+          },
           macroMarketClient: built.macroMarketClient as never,
           now: () => new Date(asOf),
           onConfigureSources: () => undefined,
           onManageSource: () => undefined,
           onOpenCalendar: () => undefined,
           text,
-          ...(cellEnabledIo === undefined ? {} : { cellEnabledIo })
+          ...(cellEnabledIo === undefined ? {} : { cellEnabledIo }),
+          ...extraProps
         } as never)
       })
     )
@@ -86,8 +94,10 @@ describe('dashboard cells read only when the reader left them on', () => {
     const on = await render(undefined)
     const off = await render({ read: async () => ({ [ndxCell]: false }) })
 
-    // ① 纳指那一格不渲染，同源的 BTC/ETH 两格照旧。
-    expect(off.container.querySelector('[data-status-row="index"]')).toBeNull()
+    // ① 纳指那一行改成「数据未被启用」的状态行（不是删行），同源的 BTC/ETH 两格照旧。
+    const indexRow = off.container.querySelector('[data-status-row="index"]')!
+    expect(indexRow.getAttribute('data-source-state')).toBe('disabled')
+    expect(indexRow.textContent).toContain('数据未被启用')
     expect(off.container.querySelector('[data-status-row="btc"]')).not.toBeNull()
     expect(off.container.querySelector('[data-status-row="eth"]')).not.toBeNull()
     // ② 关掉一格不等于关掉源：跨资产那一路的调用次数与不关时相同（BTC/ETH 仍要它）。
@@ -104,7 +114,9 @@ describe('dashboard cells read only when the reader left them on', () => {
       })
     })
     expect(off.crossAssetQuery).not.toHaveBeenCalled()
-    expect(off.container.querySelector('[data-status-row="index"]')).toBeNull()
+    // 三条线都不可用：图不画，行留成状态行。
+    expect(off.container.querySelector('[data-asset-line="index"]')).toBeNull()
+    expect(off.container.querySelector('[data-status-row="index"]')?.getAttribute('data-source-state')).toBe('disabled')
   })
 
   it('does not read the fear-and-greed snapshot when its only cell is off', async () => {
@@ -134,5 +146,22 @@ describe('dashboard cells read only when the reader left them on', () => {
     expect(crossAssetQuery).toHaveBeenCalled()
     expect(fearGreedQuery).toHaveBeenCalled()
     expect(container.querySelector('[data-status-row="index"]')).not.toBeNull()
+  })
+})
+
+
+describe('policy path keeps one placement in every state', () => {
+  it('renders the disabled card inside the right-rail slot, not in the main column', async () => {
+    const slot = document.createElement('div')
+    slot.setAttribute('data-dashboard-policy-slot', '')
+    document.body.append(slot)
+    const { container } = await render(
+      { read: async () => ({ [dashboardCellId('policy-path', 'probability')]: false }) },
+      { policySlot: slot }
+    )
+    // 三支都进同一个落点：没启用这一支也在右栏（句子由 `PolicyPathUnavailable` 自己给）。
+    expect(slot.textContent).toContain('来源没有启用')
+    expect(container.textContent).not.toContain('来源没有启用')
+    slot.remove()
   })
 })

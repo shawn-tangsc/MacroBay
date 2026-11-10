@@ -28,6 +28,7 @@ import { useDashboardOpenInterest } from './useDashboardOpenInterest'
 import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
+import type { DashboardCapitalCellAvailability, DashboardCapitalCellOff } from '../../features/industry/capital-conditions/CapitalConditionsPanel'
 
 import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
 import { dashboardRealSourcePolicy, FearGreedGaugePresentationPolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
@@ -37,7 +38,8 @@ import { projectPositioningSourceRow, type DashboardPositioningViewState } from 
 import { projectPositioningCells } from './dashboardPositioningSourceState'
 import { FeedStatusStrip } from './DashboardFeedStatusStrip'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { cellSourceChoices, dashboardCellId, filterFeedRowsByCells, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
+import { cellLabel, cellSourceChoices, dashboardCellId, decideCellRead, filterFeedRowsByCells, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo, type CellReadDecision, type SourceEnabledMap } from './dashboardCellEnabled'
+import { CellStateCard } from './DashboardCellState'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -105,6 +107,7 @@ type CryptoDashboardText = {
   policyPath: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['policyPath']
   sentiment: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
   feedStatus: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['feedStatus']
+  cellState: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['cellState']
   context: { sourceStatus: { title: string } }
   dailyBriefing: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['dailyBriefing']
 }
@@ -144,6 +147,45 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const readGates = resolveDashboardReadGates(cellState.cells)
   /** 启用表读完之前一处都不读：否则关掉的格在首帧仍会发一次请求。 */
   const readsReady = cellState.ready
+  // 源级启用表先读：下面的每一次读都要按它判断，不能「读完再丢掉」。
+  // 状态条那块即将删除，这里只保留它的读口给门禁用。
+  const feedView = useDashboardFeedStatus({
+    client: readsReady ? dashboardFeedStatusClient : undefined,
+    crossAssetClient: readsReady && readGates.crossAsset ? crossAssetClient : undefined
+  })
+  const sourceEnabled: SourceEnabledMap | undefined =
+    feedView.feedState === 'ready' && feedView.feed?.state === 'available'
+      ? Object.fromEntries(feedView.feed.sources.map(source => [source.sourceId, source.enabled]))
+      : undefined
+  const decisionsUsable = feedView.feedState !== 'loading'
+  const decide = (moduleId: string, cellKey: string): CellReadDecision =>
+    decideCellRead({ moduleId, cellKey, cells: cellState.cells, selections: cellState.selections, sources: sourceEnabled })
+  const readable = (moduleId: string, cellKey: string): boolean => decisionsUsable && decide(moduleId, cellKey).kind === 'read'
+  const anyReadable = (...cells: ReadonlyArray<readonly [string, string]>): boolean =>
+    cells.some(([moduleId, cellKey]) => readable(moduleId, cellKey))
+  const cellStateLabels = { disabled: text.cellState.notEnabled, unreadable: text.cellState.sourceUnknown }
+  /**
+   * 资金面两格各一颗「去启用」：**两个独立闭包**，读者点哪一格就落到哪一格。
+   * 落点目前只到设置抽屉的默认位置（`focus` 通道前端线还没落），等它落地后把 cellId 填进 focus。
+   */
+  const capitalCellOff = (cellKey: string): DashboardCapitalCellOff | undefined =>
+    isCellEnabled(cellState.cells, dashboardCellId('capital', cellKey))
+      ? undefined
+      : { sourceLabel: cellLabel('capital', cellKey) ?? '', onOpenSources: () => onManageSource() }
+  const capitalCellAvailability: DashboardCapitalCellAvailability = {
+    ...(capitalCellOff('stablecoin') === undefined ? {} : { stablecoin: capitalCellOff('stablecoin') }),
+    ...(capitalCellOff('etf') === undefined ? {} : { etf: capitalCellOff('etf') })
+  }
+  // 市场状态表每一行：读不到 / 未启用就画状态行（不是删行）。
+  const QUOTES_ROW_CELL_KEYS = {
+    index: 'ndx', btc: 'btc', eth: 'eth', dxy: 'usd', gold: 'gold', us10y: 'ust10y', realRate: 'ust10y'
+  } as const
+  const rowStates = Object.fromEntries(Object.entries(QUOTES_ROW_CELL_KEYS).flatMap(([row, cellKey]) => {
+    if (!decisionsUsable) return []
+    const decision = decide('quotes', cellKey)
+    if (decision.kind === 'read') return []
+    return [[row, decision.kind === 'source-unknown' ? 'unreadable' : 'disabled']]
+  }))
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readGates.fearGreed, now })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
@@ -169,7 +211,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 来源屏的草稿（多半是凭据框）：只参与**关闭确认**，不喂保存栏——凭据不该被一次「保存」代劳。
   const [sourcesDraftDirty, setSourcesDraftDirty] = useState(false)
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
-  const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !readsReady || !readGates.positioning, now, window: positioningWindow })
+  const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !anyReadable(['positioning', 'oi'], ['positioning', 'funding']), now, window: positioningWindow })
   // 两格各自的源可用性：判定按「未配置 → 未启用 → 读不到」的顺序，来自源注册表与格级启用表，
   // 页面不自己判。两格同源，但启用是逐格的——只关一格时另一格照旧显示。
   const positioningCells = readsReady
@@ -189,22 +231,19 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const [capitalReloadKey, setCapitalReloadKey] = useState(0)
   const [capitalRefreshing, setCapitalRefreshing] = useState(false)
   const [capitalRefreshFailed, setCapitalRefreshFailed] = useState(false)
-  const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !readsReady || !readGates.capital, now, reloadKey: capitalReloadKey })
+  const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !anyReadable(['capital', 'stablecoin'], ['capital', 'etf']), now, reloadKey: capitalReloadKey })
   // One macro read feeds two readers: the 市场状态 table inside the panel and the 来源状态 strip
   // below, so the strip cannot disagree with the figures it is describing.
   // 美元格选了源就按选的那条读；没选过（缺键）与今天一样，走默认主源。
   const dollarSourceId = selectedDollarSourceId(cellState.selections)
   const macroView = useMacroMarketSnapshot({
     client: macroMarketClient,
-    disabled: !readsReady || !readGates.macroMarket,
+    disabled: !anyReadable(['quotes', 'usd'], ['quotes', 'gold']),
     ...(dollarSourceId === undefined ? {} : { dollarSourceId })
   })
   // The two rate rows read FRED's official daily closes through their own door: a daily reading cannot
   // ride the fifteen-minute macro snapshot without being repainted as if it were intraday.
-  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !readsReady || !readGates.macroRates })
-  // The 来源状态 strip's per-feed lines: the reader's switches and last outcomes, plus the cross-asset
-  // snapshot that says which index leg is answering. Read at its own slow cadence, and read-only.
-  const feedView = useDashboardFeedStatus({ client: readsReady ? dashboardFeedStatusClient : undefined, crossAssetClient: readsReady && readGates.crossAsset ? crossAssetClient : undefined })
+  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !anyReadable(['quotes', 'ust10y']) })
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
   const policyPathRead = usePolicyPathReading(readsReady && readGates.policyPath)
@@ -314,10 +353,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           as part of this dashboard without the dashboard knowing timeline data. */}
       <div ref={conclusionSlot} data-dashboard-conclusion-slot />
 
-      {(crossAssetClient && (readGates.crossAsset || readGates.macroMarket || readGates.macroRates)) ? <CrossAssetObservationPanel
+      {crossAssetClient ? <CrossAssetObservationPanel
         client={crossAssetClient}
-        hideStatusRows={readGates.hiddenStatusRows}
-        crossAssetReadingEnabled={readsReady && readGates.crossAsset}
+        rowStates={rowStates}
+        cellStateLabels={cellStateLabels}
+        crossAssetReadingEnabled={anyReadable(['quotes', 'ndx'], ['quotes', 'btc'], ['quotes', 'eth'])}
         macroSnapshot={macroView.snapshot}
         macroState={macroView.state}
         rates={macroRatesView.snapshot}
@@ -332,24 +372,30 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         text={crossAssetText} /> : null}
       {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源都没启用」+ 去启用；
           读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
-      {readsReady ? (readGates.policyPath
-        ? (policyPath?.state === 'available' ? (() => {
-          const card = <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
-            month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
-          // The rail is the layout's, not this page's: portal into its slot when it exists so the card
-          // sits above the calendar, and fall back to the page flow when rendered on its own.
-          return policySlot ? createPortal(card, policySlot) : card
-        })() : <PolicyPathUnavailable state="unreadable" text={text.policyPath} onRetry={policyPathRead.reload} />)
-        : <PolicyPathUnavailable state="disabled" text={text.policyPath} onConfigure={onConfigureSources} />) : null}
+      {readsReady ? (() => {
+        // 三支（读到 / 读不到 / 没启用）**同一个落点**：右栏日历卡上方那块 `policySlot`。
+        // 只有读到那支走 portal 会让另外两支落进主栏——用户 2026-11-11 截图报的正是这个。
+        const card = readGates.policyPath
+          ? (policyPath?.state === 'available'
+            ? <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
+                month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
+            : <PolicyPathUnavailable state="unreadable" text={text.policyPath} onRetry={policyPathRead.reload} />)
+          : <PolicyPathUnavailable state="disabled" text={text.policyPath} onConfigure={onConfigureSources} />
+        // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
+        return policySlot ? createPortal(card, policySlot) : card
+      })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">
         {readsReady && readGates.fearGreed ? <SentimentPanel fearGreedState={fearGreedState} text={text} onRetry={reloadFearGreed} /> : null}
-        {readsReady && readGates.capital ? <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
+        {/* 资金面卡自己逐格标「没配置 / 没启用」（`ef952ba`），宿主只把两格的状态传进去，
+            不再用「两格都能读」决定画不画卡——那正是用户骂的整卡隐藏。 */}
+        {readsReady ? <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
           onRefresh={() => void refreshCapitalConditions()}
-          refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} /> : null}
+          refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed}
+          cellAvailability={capitalCellAvailability} /> : null}
       </div>
       <div className="mi-crypto-dashboard__positioning-row">
         {readsReady ? <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}

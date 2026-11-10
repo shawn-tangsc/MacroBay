@@ -11,7 +11,18 @@ import { productText } from '../../shared/i18n/productText'
 import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { AgentPortal } from './AgentPortal'
-import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
+import { CryptoIntelligenceDashboard as RawCryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
+import { dashboardFeedStatusPublicPolicy } from '../../../contracts/macro/dashboardFeedStatusContracts'
+
+/** 测试里默认「所有源都已启用」：源状态是新的读取前提，不传就等于「读不到」，会把整套断言打乱。 */
+const allSourcesEnabled = {
+  query: async () => ({
+    state: 'available' as const,
+    sources: dashboardFeedStatusPublicPolicy.sourceIds.map(sourceId => ({ sourceId, enabled: true, hasCredential: true }))
+  })
+}
+const CryptoIntelligenceDashboard = (props: Parameters<typeof RawCryptoIntelligenceDashboard>[0]): React.ReactElement =>
+  createElement(RawCryptoIntelligenceDashboard, { dashboardFeedStatusClient: allSourcesEnabled, ...props })
 import type { DashboardFeedRowState } from './dashboardFeedStatusModel'
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -66,7 +77,8 @@ describe('the old source drawer has no entry left', () => {
     expect(page).not.toContain('setSourceDrawerOpen(true)')
     // 看板这几处进「采集与数据」（业务设置），数据源那一屏只从菜单进。
     expect(page).toContain("openConfigDrawer('sourcesData', 'dashboard')")
-    expect(page).toContain("openConfigDrawer('sources', 'calendar')")
+    // 日历那一颗走「采集与数据 + 日历业务」这一屏（新签名是第一参 menu、第二参 filter）。
+    expect(page).toContain("openConfigDrawer('sourcesData', 'calendar')")
     expect(page.match(/openConfigDrawer\('sourcesData', 'dashboard'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
     // 日历那一颗必须显式传：不传就退回旧行为（打开旧抽屉）。
     expect(page).toContain('onOpenSettings={() => openConfigDrawer')
