@@ -41,6 +41,23 @@ describe('notification deeplink handler', () => {
 
     expect(calls).toEqual(['center:false'])
   })
+
+  it('does not navigate at all when the named panel is not in this build', () => {
+    // 「给了目标但不认识」（产品卸载 / 注册被撤）不是「没给目标」：后者才允许回落默认面板。
+    const calls: string[] = []
+    const handler = createNotificationDeeplinkHandler({
+      productMenuEntries: [],
+      navigate: (key) => calls.push(`navigate:${key}`),
+      setSettingsPanelKey: (key) => calls.push(`panel:${key}`),
+      setNotificationCenterOpen: (open) => calls.push(`center:${open}`),
+      isSettingsPanelAvailable: () => false
+    })
+
+    handler({ scope: 'product', settingsSectionId: 'retired-panel' })
+
+    // 只有「关抽屉」这一下；没有 panel、没有 navigate——落地到哪儿由「目标不存在」决定，不是猜。
+    expect(calls).toEqual(['center:false'])
+  })
 })
 
 /**

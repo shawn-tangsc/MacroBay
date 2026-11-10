@@ -23,11 +23,26 @@ export function createNotificationDeeplinkHandler(deps: {
   setNotificationCenterOpen: (open: boolean) => void
   /** 设置面板里要定位的那一行；面板自己负责滚过去并高亮。 */
   setFocusEntityId?: (id: string | null) => void
+  /**
+   * 严格判据：目标设置面板在本构建里真的存在吗。
+   *
+   * 「没给目标」才允许回落默认面板；「给了目标但不认识」（产品卸载、注册被撤）必须**整条不导航**——
+   * 回落 models 会让读者以为点错了页，而代码里没有任何痕迹。
+   */
+  isSettingsPanelAvailable?: (key: string) => boolean
 }): (deeplink: NotificationDeeplink) => void {
   return (deeplink) => {
     deps.setNotificationCenterOpen(false)
     const target = resolveNotificationNavigation(deeplink, deps.productMenuEntries)
     if (target === null) return
+    if (
+      target.settingsPanelKey !== undefined &&
+      deps.isSettingsPanelAvailable !== undefined &&
+      !deps.isSettingsPanelAvailable(target.settingsPanelKey)
+    ) {
+      // 目标存在与否是**导航**的判据：不认识就整条不导航（也不回落 models）。
+      return
+    }
     if (target.settingsPanelKey !== undefined) deps.setSettingsPanelKey(target.settingsPanelKey)
     if (target.navKey !== undefined) deps.navigate(target.navKey)
     // 定位只在设置面板有意义：换个分区就把上一次的定位清掉，否则下次进面板会莫名其妙高亮一行。

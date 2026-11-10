@@ -40,12 +40,15 @@ export type NotificationNavigationTarget = Readonly<{
  * 任务失败的通知发的是 `entityType: 'job-definition'` + `entityId`（`taskFailureNotifier.ts:44`），
  * 所以它必须落到任务自动化面板并定位到那一行；只落面板不定位，读者还得自己在一张表里找。
  *
- * 分析失败的通知发的是 `entityType: 'analysis-run'` + 分析运行 id：它落到运行日志（排障页），
- * 并按 id 定位到那条记录。这里登记的是**面板 id**，不是旧的分区名（运行日志已经独立成面板）。
+ * **只登记平台自己的面板**：平台认识的面板在这里；产品面板的落点由产品自己给（通知数据里的
+ * 目的地，或产品声明 `entityType → destination`），壳层不写产品面板 id——写一个就多一处
+ * 「产品撤了注册、壳里还指着一个不存在的页」。
+ *
+ * 分析失败（`entityType: 'analysis-run'`）因此**没有平台面板落点**：在产品给出目的地之前，
+ * 这条通知只有记录、没有跳转（功能关闭 = 不渲染、不导航），而不是先落到一个错的面板。
  */
 const ENTITY_SETTINGS_PANEL: Readonly<Record<string, string>> = {
-  'job-definition': 'task-automation',
-  'analysis-run': 'intelligence-run-log'
+  'job-definition': 'task-automation'
 }
 
 /**
