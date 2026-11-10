@@ -70,7 +70,11 @@ export async function handleConfigureIntelligenceSource(
       sourceId,
       read: () => readSourceSnapshot(deps, sourceId),
       execute: async () => {
-        await sourcesService.setEnabled({ sourceId, enabled })
+        const result = await sourcesService.setEnabled({ sourceId, enabled })
+        if (result.state === 'rejected') {
+          // 需要钥匙却没配：这是**拒绝**，不是保存成功；把原因码原样交给调用方。
+          throw new Error(result.reasonCode)
+        }
         return { state: 'saved', sourceId, enabled }
       }
     })

@@ -21,6 +21,7 @@ import {
   resolveSafeDashboardSourceScheduleRule
 } from './sourceRuntimeConfig'
 import {
+  sourceRequiresCredential,
   sourceSupportsCredentials,
   type IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
@@ -411,7 +412,19 @@ export function createIntelligenceSourcesService(deps: {
     },
 
     async setEnabled(input: { sourceId: string; enabled: boolean }) {
-      return this.saveProfile({ sourceId: input.sourceId, enabled: input.enabled })
+      // 需要 API Key 的源：钥匙没配好之前，**任何启用请求都由后端拒绝**（不靠界面灰掉）。
+      // 关闭永远允许；不需要钥匙的源不受影响。
+      if (input.enabled) {
+        const definition = requireDefinition(input.sourceId)
+        if (sourceRequiresCredential(definition.authMode)) {
+          const profile = await deps.profileStore.resolveProfile(input.sourceId)
+          if (!profile.credentialRef) {
+            return Object.freeze({ state: 'rejected' as const, reasonCode: 'credential-required' as const })
+          }
+        }
+      }
+      const detail = await this.saveProfile({ sourceId: input.sourceId, enabled: input.enabled })
+      return Object.freeze({ state: 'saved' as const, detail })
     },
 
     async testCredentials(input: { sourceId: string; credentialDraft?: string }) {

@@ -17,6 +17,49 @@ import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
 import { realMarketApiPriceResponse } from '../macro-market/realMarketApiResponseFixtures'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 
+describe('enabling a source needs its credential first', () => {
+  it('refuses to enable a key-requiring source and leaves the profile off', async () => {
+    const service = createService()
+    const result = await service.setEnabled({ sourceId: 'twelve-data-market', enabled: true })
+    expect(result).toEqual({ state: 'rejected', reasonCode: 'credential-required' })
+    expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(false)
+  })
+
+  it('allows disabling it at any time', async () => {
+    const service = createService()
+    const result = await service.setEnabled({ sourceId: 'twelve-data-market', enabled: false })
+    expect(result.state).toBe('saved')
+  })
+
+  it('allows enabling once the credential is saved', async () => {
+    const service = createService()
+    await service.testCredentials({ sourceId: 'twelve-data-market', credentialDraft: TWELVE_DATA_KEY })
+    const result = await service.setEnabled({ sourceId: 'twelve-data-market', enabled: true })
+    expect(result.state).toBe('saved')
+    expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(true)
+  })
+
+  it('leaves keyless sources unaffected', async () => {
+    const service = createService()
+    const result = await service.setEnabled({ sourceId: 'federal-reserve-rss', enabled: true })
+    expect(result.state).toBe('saved')
+  })
+})
+
+describe('defaults for a source with no profile row', () => {
+  it('starts keyless sources on, and key-requiring ones off', async () => {
+    const service = createService()
+    expect((await service.getPageState({ sourceId: 'federal-reserve-rss' })).detail!.profile.enabled).toBe(true)
+    expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(false)
+  })
+
+  it('keeps an explicit off for a keyless source', async () => {
+    const service = createService()
+    await service.saveProfile({ sourceId: 'federal-reserve-rss', enabled: false })
+    expect((await service.getPageState({ sourceId: 'federal-reserve-rss' })).detail!.profile.enabled).toBe(false)
+  })
+})
+
 describe('intelligenceSources service', () => {
   it('returns definitions, detail, profile, runtime config, and health in page state', async () => {
     const service = createService()

@@ -15,7 +15,9 @@ describe('sourceRuntimeConfig', () => {
     const definition = requireDefinition('coindesk-rss')
     const config = resolveRuntimeConfig({ definition })
 
-    expect(config.enabled).toBe(false)
+    // 免钥匙的源首次运行即启用（用户 2026-11-11 定的默认）：没 profile 行时按注册表的
+    // authMode 判，这里 coindesk-rss 不需要钥匙，所以默认就是开的。
+    expect(config.enabled).toBe(true)
     expect(config.collectionPreset).toBe('balanced')
     expect(config.scopePolicy).toBe('watchlist-priority')
     expect(config.retentionMode).toBe('balanced')
@@ -161,6 +163,7 @@ describe('sourceRuntimeConfig', () => {
       }
     })
 
+    // 计划中/夹具就绪的源仍被校验挡下：默认值不改变「没准备好就不采」这条。
     expect(config.enabled).toBe(false)
     expect(issues.some((issue) => issue.code === 'source-not-ready')).toBe(true)
   })
@@ -175,6 +178,7 @@ describe('sourceRuntimeConfig', () => {
       }
     })
 
+    // 计划中/夹具就绪的源仍被校验挡下：默认值不改变「没准备好就不采」这条。
     expect(config.enabled).toBe(false)
     expect(issues.some((issue) => issue.code === 'source-not-ready')).toBe(true)
     expect(issues.some((issue) => issue.code === 'missing-credential')).toBe(false)

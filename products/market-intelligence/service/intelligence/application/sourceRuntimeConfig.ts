@@ -49,7 +49,9 @@ export function createDefaultSourceProfile(
   return {
     profileId: `${definition.sourceId}-profile`,
     sourceId: definition.sourceId,
-    enabled: false,
+    // 默认值**只在这里定一次**：免钥匙的源首次运行即启用；需要 API Key 的源默认关着，
+    // 配好钥匙并通过校验后才允许打开。读者显式存过的 profile 一律以存量为准，不经过这一行。
+    enabled: !sourceRequiresCredential(definition.authMode),
     collectionPreset: definition.defaultCollectionPreset,
     includeInSentiment: definition.supportsSentiment,
     scopePolicy: definition.defaultScopePolicy,
