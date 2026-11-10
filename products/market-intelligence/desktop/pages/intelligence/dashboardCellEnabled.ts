@@ -82,6 +82,44 @@ export function selectedDollarSourceId(
   return allowed.has(chosen) ? chosen : undefined
 }
 
+/** 源级启用表：`sourceId → enabled`；整表读不到时是 undefined（未知），不许当成「全都启用」。 */
+export type SourceEnabledMap = Readonly<Record<string, boolean>>
+
+/**
+ * 一处读点的决定，只有四种。三种显示句子与它一一对应，不许混：
+ * - `read`：这一格选中的源启用了，去读（`sourceId` 就是读哪一个；`explicit` 表示读者显式选过）；
+ * - `not-enabled`：这一格没选中（`cells === false`）或没有可选的源 → **数据未被启用**；
+ * - `source-disabled`：选中的源被停用 → **数据未被启用**；
+ * - `source-unknown`：源状态读不到 → **暂时读不到**（不许默认成启用）。
+ */
+export type CellReadDecision =
+  | Readonly<{ kind: 'read'; sourceId: string; explicit: boolean }>
+  | Readonly<{ kind: 'not-enabled' }>
+  | Readonly<{ kind: 'source-disabled'; sourceId: string }>
+  | Readonly<{ kind: 'source-unknown'; sourceId: string }>
+
+export function decideCellRead(input: Readonly<{
+  moduleId: string
+  cellKey: string
+  cells: Readonly<Record<string, boolean>>
+  selections: Readonly<Record<string, string>>
+  /** 源级启用表；`undefined` = 这一份还没读到/读不到 → 未知。 */
+  sources: SourceEnabledMap | undefined
+}>): CellReadDecision {
+  const cellId = dashboardCellId(input.moduleId, input.cellKey)
+  if (!isCellEnabled(input.cells, cellId)) return { kind: 'not-enabled' }
+  const choices = cellSourceChoices(input.moduleId, input.cellKey)
+  const explicit = input.selections[cellId]
+  const chosen = explicit !== undefined && choices.includes(explicit) ? explicit : choices[0]
+  if (chosen === undefined) return { kind: 'not-enabled' }
+  if (input.sources === undefined) return { kind: 'source-unknown', sourceId: chosen }
+  const enabled = input.sources[chosen]
+  if (enabled === undefined) return { kind: 'source-unknown', sourceId: chosen }
+  return enabled
+    ? { kind: 'read', sourceId: chosen, explicit: explicit !== undefined && explicit === chosen }
+    : { kind: 'source-disabled', sourceId: chosen }
+}
+
 export function isCellEnabled(cells: Readonly<Record<string, boolean>>, cellId: string): boolean {
   return cells[cellId] ?? true
 }

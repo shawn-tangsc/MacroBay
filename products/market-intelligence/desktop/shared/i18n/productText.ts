@@ -261,6 +261,14 @@ mi: miText['zh-CN'],
               loadMore: '加载更多',
               settings: '设置'
             },
+            availability: {
+              disabled: '来源没有启用',
+              unreadable: '暂时读不到',
+              reasonAria: '为什么这样显示',
+              reasonDisabled: '四个新闻源都没有启用；启用之后这里才有内容。',
+              reasonFailed: '四个新闻源都启用着，但这次采集失败。',
+              reasonNeverRan: '四个新闻源都启用着，但还没有跑过一次。'
+            },
             settingsModal: {
               title: '舆情设置',
               modelScoring: '使用模型判断新闻方向',
@@ -883,6 +891,14 @@ mi: miText['zh-CN'],
                 disabled: '未启用', 'credential-missing': '未配置 API Key', unavailable: '不可用'
               },
               manageSettings: '管理宏观市场设置'
+            },
+            /**
+             * 格级/源级的两种「不读」结局。三句话不许混：未启用（没选中/源停用）、暂时读不到
+             * （源状态读不到）、读不到（源启用但没数据，走各卡自己的读不到句）。
+             */
+            cellState: {
+              notEnabled: '数据未被启用',
+              sourceUnknown: '暂时读不到'
             },
             // 来源状态 one row per feed. The synthetic/proxy words are filled with the panel's own tags
             // (`crossAsset.syntheticTag`/`proxyTag`), so a row can never label the same reading two ways.
@@ -1741,6 +1757,14 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               loadMore: 'Load more',
               settings: 'Settings'
             },
+            availability: {
+              disabled: 'Sources are off',
+              unreadable: 'Temporarily unavailable',
+              reasonAria: 'Why this is shown',
+              reasonDisabled: 'All four news sources are switched off; turn one on to see items here.',
+              reasonFailed: 'All four news sources are on, but this collection failed.',
+              reasonNeverRan: 'All four news sources are on, but none has run yet.'
+            },
             settingsModal: {
               title: 'Sentiment settings',
               modelScoring: 'Use a model to judge news direction',
@@ -2325,6 +2349,11 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 disabled: 'Disabled', 'credential-missing': 'API key not configured', unavailable: 'Unavailable'
               },
               manageSettings: 'Manage macro market settings'
+            },
+            /** Two policy verdicts; 读不到 stays each card's own sentence. */
+            cellState: {
+              notEnabled: 'Data is not enabled',
+              sourceUnknown: 'Status is temporarily unavailable'
             },
             // One row per feed in Source status. `{tag}` is the panel's own synthetic/proxy label.
             feedStatus: {

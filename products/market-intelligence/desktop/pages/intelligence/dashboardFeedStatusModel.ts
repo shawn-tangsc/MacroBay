@@ -212,7 +212,8 @@ export function dashboardFeedRowText(row: DashboardFeedRow, text: DashboardFeedT
 }
 
 function detailOf(row: DashboardFeedRow, text: DashboardFeedText, tags: DashboardFeedTags, nowMs: number): string {
-  const source = text.sourceNames[row.sourceId]
+  // 行只会是那四个 feed id（类型收窄了），这里按宽索引取，免得给每个源都编一个显示名。
+  const source = (text.sourceNames as Readonly<Record<string, string>>)[row.sourceId] ?? ''
   const usage = row.fallback === 'synthetic' ? format(text.usage.synthetic, { tag: tags.synthetic })
     : row.fallback === 'proxy' ? format(text.usage.proxy, { tag: tags.proxy })
       : text.usage.none

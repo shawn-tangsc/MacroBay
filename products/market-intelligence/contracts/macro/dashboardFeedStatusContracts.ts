@@ -18,9 +18,19 @@ const dashboardFeedStatusFailureCodes = Object.freeze([
   'response-invalid', 'response-unavailable', 'authentication-failed', 'decryption-failed'
 ] as const)
 
-/** The sources that really feed the dashboard's macro and cross-asset rows, and no others. */
+/**
+ * The sources the dashboard's reads depend on. The board now decides per cell whether its source is
+ * enabled, so this list carries every source those cells can name — the macro/cross-asset feeds,
+ * the perpetual one behind 持仓/费率/纳指, the capital providers, the sentiment index, the policy
+ * venue, and the six calendar feeds. Nothing else: a source outside this list cannot be judged.
+ */
 const dashboardFeedSourceIds = Object.freeze([
-  'realmarketapi-market', 'twelve-data-market', 'fred-rates-liquidity'
+  'realmarketapi-market', 'twelve-data-market', 'fred-rates-liquidity',
+  'binance-futures-positioning', 'defillama-stablecoins', '0xrouter-aggregate-provider',
+  'alternative-fear-greed', 'policy-path-market',
+  'macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls',
+  'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+  'macro-calendar-0xrouter-central-bank-activities'
 ] as const)
 
 export const dashboardFeedStatusPublicPolicy = Object.freeze({
@@ -41,11 +51,15 @@ export const dashboardFeedStatusPublicPolicy = Object.freeze({
     }),
     'twelve-data-market': Object.freeze({ lastSuccessAtMs: 'lastRunAtMs' }),
     'fred-rates-liquidity': Object.freeze({})
-  }),
+  }) as Readonly<Partial<Record<DashboardFeedSourceId, Readonly<{
+    outcome?: string
+    failureCode?: string
+    lastSuccessAtMs?: string
+  }>>>>,
   /** `unavailable:<code>` is the one outcome spelling that names a failure. */
   unavailableOutcomePrefix: 'unavailable:',
-  maximumSources: 3,
-  maximumSnapshotBytes: 4 * 1024
+  maximumSources: 14,
+  maximumSnapshotBytes: 8 * 1024
 } as const)
 
 export type DashboardFeedSourceId = typeof dashboardFeedSourceIds[number]
