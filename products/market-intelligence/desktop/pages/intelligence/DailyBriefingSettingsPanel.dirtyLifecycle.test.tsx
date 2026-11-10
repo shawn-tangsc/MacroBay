@@ -352,7 +352,7 @@ describe('the period list’s criteria, moved from the retired block', () => {
       <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
     ))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    const retry = host.querySelector<HTMLButtonElement>('[data-briefing-periods-retry-load="true"]')
+    const retry = host.querySelector<HTMLButtonElement>('[data-inline-notice="danger"] .inline-notice__action')
     expect(retry).not.toBeNull()
     await act(async () => retry!.click())
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
@@ -402,11 +402,11 @@ describe('the AI block’s warnings are one banner each, with a real jump', () =
     await act(async () => { last()?.save() })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    const banners = [...host.querySelectorAll<HTMLElement>('[data-banner-tone="caution"]')]
+    const banners = [...host.querySelectorAll<HTMLElement>('[data-inline-notice="caution"]')]
     expect(banners).toHaveLength(1)
     // 指令句保留原文（它是状态 + 下一步动作，不是解释）。
     expect(banners[0]?.textContent).toContain('无法开启：请先在 设置 → 网页搜索 → 供应商 配置并启用搜索源。')
-    const action = banners[0]?.querySelector<HTMLButtonElement>('[data-banner-action="configure-web-search"]')
+    const action = banners[0]?.querySelector<HTMLButtonElement>('.inline-notice__action')
     expect(action?.textContent).toBe('去配置')
     await act(async () => action!.click())
     expect(vi.mocked(openWebSearchSettings)).toHaveBeenCalledTimes(1)
@@ -414,11 +414,13 @@ describe('the AI block’s warnings are one banner each, with a real jump', () =
 
   it('offers 去网页搜索供应商 on the unsupported-model banner, and keeps 补查方式 as a row', async () => {
     const { host } = await mount({ webSearchSupported: false })
-    const banners = [...host.querySelectorAll<HTMLElement>('[data-banner-tone="caution"]')]
+    const banners = [...host.querySelectorAll<HTMLElement>('[data-inline-notice="caution"]')]
     expect(banners).toHaveLength(1)
     expect(banners[0]?.textContent).toContain('当前模型不支持内置搜索，补查将走平台 Web Search')
-    const action = banners[0]?.querySelector<HTMLButtonElement>('[data-banner-action="open-web-search-providers"]')
+    const action = banners[0]?.querySelector<HTMLButtonElement>('.inline-notice__action')
     expect(action?.textContent).toBe('去网页搜索供应商')
+    await act(async () => action!.click())
+    expect(vi.mocked(openWebSearchSettings)).toHaveBeenCalled()
     // 普通设置行照旧：补查方式 = 平台 Web Search（整句细节在它的 ⓘ 里）。
     expect(host.textContent).toContain('补查方式')
     expect(host.textContent).toContain('平台 Web Search')
@@ -450,8 +452,10 @@ describe('the AI block’s warnings are one banner each, with a real jump', () =
       <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
     ))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    const danger = failed.querySelector<HTMLElement>('[data-banner-tone="danger"]')
+    const danger = failed.querySelector<HTMLElement>('[data-inline-notice="danger"]')
     expect(danger).not.toBeNull()
-    expect(danger?.querySelector('[data-briefing-periods-retry-load="true"]')).not.toBeNull()
+    expect(danger?.getAttribute('role')).toBe('alert')
+    const retry = danger?.querySelector<HTMLButtonElement>('.inline-notice__action')
+    expect(retry?.textContent).toBe('再读一次')
   })
 })

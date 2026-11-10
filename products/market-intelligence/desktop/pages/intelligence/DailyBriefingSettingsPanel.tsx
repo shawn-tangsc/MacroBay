@@ -6,6 +6,7 @@ import { parseConfiguredModelRef, type ConfiguredModelRef } from '@platform/ai/m
 import type { JobScheduleView } from '@platform/jobs'
 import { useConfirm } from '@platform/ui/components/confirm'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { SettingsRow } from '@platform/ui/components/settings-row'
@@ -34,6 +35,9 @@ const EDIT_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.per
 const DELETE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.deleteRow'
 const AUTO_RETRY_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.autoRetry'
 const AUTO_REASON_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.autoUnknownReason'
+const PERIOD_RETRY_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.retryLoad'
+const WEB_SEARCH_CONFIGURE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchBannerConfigure'
+const WEB_SEARCH_PROVIDERS_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchBannerProviders'
 const WEB_SEARCH_DETAIL_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchUnsupported'
 const WEB_SEARCH_SETUP_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchNeedsSetup'
 const WEB_SEARCH_BOTH_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchBannerBothDetails'
@@ -227,10 +231,12 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
 
     >
         {periodsFailed
-          ? <div className="briefing-settings-error" data-banner-tone="danger" role="alert">
-            <span>{copy.loadFailed}</span>
-            <Button data-briefing-periods-retry-load="true" onClick={loadPeriods} type="link">{copy.retryLoad}</Button>
-          </div>
+          ? <InlineNotice
+            action={{ labelKey: PERIOD_RETRY_KEY, onSelect: loadPeriods }}
+            resolveText={resolveText}
+            tone="danger">
+            {copy.loadFailed}
+          </InlineNotice>
           : periods === null
             ? <LoadingState label={copy.loading} minHeight={90} />
             : periods.length === 0
@@ -326,17 +332,14 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
     <SettingsSection
       title={text.settingsDrawer.sections.ai}
     >
-        {ai.webSearchBlocked || !ai.webSearchSupported ? <div className="briefing-settings-notice" data-banner-tone="caution" role="status">
-          <span>{ai.webSearchBlocked ? text.aiSettings.webSearchNeedsSetup : text.aiSettings.webSearchBannerUnsupported}</span>
-          {/* 动作槽：真跳转（宿主的导航回调），不是占位空函数。两条同时出现时只保留阻塞那条的动作。 */}
-          <Button
-            className="briefing-settings-notice__action"
-            data-banner-action={ai.webSearchBlocked ? 'configure-web-search' : 'open-web-search-providers'}
-            onClick={openWebSearchSettings}
-            type="link">
-            {ai.webSearchBlocked ? text.aiSettings.webSearchBannerConfigure : text.aiSettings.webSearchBannerProviders}
-          </Button>
-          {/* 细节进 ⓘ：一条横幅最多一句正文；平台统一的横幅组件落地后换掉这层。 */}
+        {ai.webSearchBlocked || !ai.webSearchSupported ? <InlineNotice
+          action={{
+            labelKey: ai.webSearchBlocked ? WEB_SEARCH_CONFIGURE_KEY : WEB_SEARCH_PROVIDERS_KEY,
+            onSelect: openWebSearchSettings
+          }}
+          resolveText={resolveText}
+          tone="caution">
+          {ai.webSearchBlocked ? text.aiSettings.webSearchNeedsSetup : text.aiSettings.webSearchBannerUnsupported}
           <Popover
             labelKey={ai.webSearchBlocked
               ? (ai.webSearchSupported ? WEB_SEARCH_SETUP_KEY : WEB_SEARCH_BOTH_KEY)
@@ -353,9 +356,9 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
               variant="plain"
             />}
           />
-        </div> : null}
+        </InlineNotice> : null}
         {ai.state === 'load-failed'
-          ? <p className="briefing-settings-error" data-banner-tone="danger" role="alert">{text.aiSettings.loadFailed}</p>
+          ? <InlineNotice tone="danger">{text.aiSettings.loadFailed}</InlineNotice>
           : ai.state === 'loading' || ai.draft === null
             ? <LoadingState label={text.aiSettings.loading} minHeight={90} />
             : <>
