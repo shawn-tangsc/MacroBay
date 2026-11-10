@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 
 import { SettingsRow as SharedSettingsRow } from '@platform/ui/components/settings-row'
-import { SettingsSectionHeader } from '@platform/ui/components/settings-section'
+import { SettingsSection } from '@platform/ui/components/settings-section'
 
 import { SettingsInfo, type SettingsInfoSpec } from '../settingsInfo'
 
@@ -46,8 +46,8 @@ export { SettingsInfo }
 /**
  * 一组字段：区块标题 + 行。
  *
- * 用平台 `SettingsSectionHeader` + 同一套 `settings-section` 结构（抽屉六屏与设置页共用），
- * ⓘ 由平台那个 header 的 info 槽给、间距 4；不再自绘组头与分隔线。
+ * 直接交给平台 `SettingsSection`（当前只服务设置页那一面，用默认 `card`）：
+ * 组头、ⓘ 槽、分隔线与区块形态都只有那一份实现，这里不再自绘一个「长得像」的。
  */
 export function SettingsGroup(props: Readonly<{
   title: string
@@ -55,8 +55,5 @@ export function SettingsGroup(props: Readonly<{
   aside?: ReactNode
   children: ReactNode
 }>): ReactElement {
-  return <section className="settings-section" data-settings-section-block="true">
-    <SettingsSectionHeader title={props.title} info={props.aside} />
-    <div className="settings-section__body">{props.children}</div>
-  </section>
+  return <SettingsSection info={props.aside} title={props.title}>{props.children}</SettingsSection>
 }
