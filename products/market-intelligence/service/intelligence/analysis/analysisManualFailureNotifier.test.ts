@@ -56,18 +56,16 @@ describe('manual analysis failure notice', () => {
       .toBe('this analysis did not finish')
   })
 
-  it('links into the run record, and carries the labelled action the event requires', () => {
+  it('carries an acknowledgement, not a link — the run log has no entry points any more', () => {
     const request = buildManualAnalysisFailureRequest(failedRun)
-    expect(request?.deeplink).toEqual(expect.objectContaining({
-      scope: 'product', productId: 'market-intelligence', entityType: 'analysis-run', entityId: 'mi-ar-manual-1'
-    }))
+    // 用户 2026-11-11：运行记录只做审计、不设入口。这条通知只报事，按钮只确认收到。
+    expect(request).not.toHaveProperty('deeplink')
     // `requiresUserAction` is declared for this event: an action-less submit is refused as
-    // `missing-action`, so the label row in the platform copy table is what makes it deliverable.
+    // `missing-action`, so the acknowledgement is what makes it deliverable.
     expect(request?.actions).toEqual([{
-      id: 'open-run-log',
-      labelKey: 'notification.event.platform.analysis.manual-failed.open',
-      kind: 'open',
-      deeplink: expect.objectContaining({ entityId: 'mi-ar-manual-1' })
+      id: 'acknowledge',
+      labelRef: { scope: 'product', productId: 'market-intelligence', key: expect.stringContaining('acknowledge') },
+      kind: 'acknowledge'
     }])
   })
 

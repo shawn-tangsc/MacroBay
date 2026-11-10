@@ -215,11 +215,19 @@ export const requestSourceCredentialInputSchema = {
 export const requestSourceCredentialOutputSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['handoff', 'sourceId', 'settingsSectionId', 'fields'],
+  required: ['handoff', 'sourceId', 'settingsDrawer', 'fields'],
   properties: {
     handoff: { type: 'string', enum: ['credential-entry'] },
     sourceId: { type: 'string' },
-    settingsSectionId: { type: 'string', enum: ['intelligence-sources'] },
+    settingsDrawer: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['productId', 'menuId'],
+      properties: {
+        productId: { type: 'string', enum: ['market-intelligence'] },
+        menuId: { type: 'string', enum: ['sources'] }
+      }
+    },
     fields: { type: 'array', items: { type: 'string' } }
   }
 } as const

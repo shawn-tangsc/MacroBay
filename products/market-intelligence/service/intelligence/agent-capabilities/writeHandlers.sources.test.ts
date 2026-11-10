@@ -339,13 +339,13 @@ describe('credential handoff', () => {
     const result = (await handler('request-source-credential')(
       { sourceId: 'fred-rates-liquidity' },
       context
-    )) as { handoff: string; sourceId: string; settingsSectionId: string; fields: string[] }
+    )) as { handoff: string; sourceId: string; settingsDrawer: { productId: string; menuId: string }; fields: string[] }
     const serialized = JSON.stringify(result)
 
     expect(result).toEqual({
       handoff: 'credential-entry',
       sourceId: 'fred-rates-liquidity',
-      settingsSectionId: 'intelligence-sources',
+      settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' },
       fields: ['apiKey']
     })
     expect(serialized).not.toContain('maskedPreview')

@@ -34,6 +34,12 @@ export function productNotificationActionKey(productId: string, actionId: string
 export const OPEN_BRIEFING_ACTION_KEY = productNotificationActionKey('market-intelligence', 'open-briefing')
 
 /**
+ * 「知道了」：分析失败那条通知的动作。运行记录是审计页、不设入口（用户 2026-11-11），
+ * 所以这条通知只报事——按一下确认收到，不把人送到任何一屏。
+ */
+export const ACKNOWLEDGE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'acknowledge')
+
+/**
  * 事件下的任意一段文案键：`notification.event.<id>.<path>`（如 `country.US`、`indicator.cpi`）。
  *
  * 与其余几个生成函数同源：手写全串会在事件改名时静默失效，而这类键数量多、最容易手写。

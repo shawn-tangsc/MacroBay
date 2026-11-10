@@ -144,25 +144,6 @@ const ABANDON_COPY: Readonly<Record<AnalysisAbandonKind, Readonly<{ 'zh-CN': str
 })
 
 /**
- * Where the notice opens, and **when it was sent**.
- *
- * The instant travels with the link because a run id carries no time: a deleted id and an id that
- * never existed look identical in the store. Only the moment the notice was written lets the run log
- * tell "this run is past its retention period" from "there is no such record" — without it the
- * reader, holding a notice we sent, would be told the record does not exist.
- */
-export function analysisNoticeDeeplink(runId: string, occurredAt: string) {
-  return {
-    scope: 'product' as const,
-    productId: 'market-intelligence',
-    settingsSectionId: 'intelligence-sources',
-    entityType: 'analysis-run',
-    entityId: runId,
-    ...(occurredAt ? { params: { at: occurredAt } } : {})
-  }
-}
-
-/**
  * The three variables the declaration names, and nothing else.
  *
  * Exported for its test: the key string is the platform's to compose, and a second composer here
@@ -204,8 +185,6 @@ export function buildAnalysisFailureNoticeRequest(
   // 封闭表查表，不是三元链：门禁要能在提交点认出「这条事件到底是谁在发」，三元挑出来的整
   // request 在它眼里是个不透明变量。表里每个值都是 id，整张表就算可解析。
   const eventTypeId = ANALYSIS_EVENT_ID_BY_KIND[decision.kind]
-  const runId = decision.kind === 'attempt-abandoned' ? decision.runId : decision.kind === 'recovered' ? decision.episodeRunId : ''
-  const deeplink = runId ? analysisNoticeDeeplink(runId, occurredAt) : undefined
   // Per language, never one bag for both: a shared `{kind}` value puts a Chinese word inside an
   // English sentence. The abandoned body carries no count — the platform's shared sentence reports
   // "共 N 次", and printing a second number in the body contradicts it on the same screen.
@@ -237,7 +216,8 @@ export function buildAnalysisFailureNoticeRequest(
     actions: [],
     dedupeVars: { builder: 'template', vars },
     rendered,
-    ...(deeplink ? { deeplink } : {}),
+    // No destination: the run log is an audit screen with no entry points (user 2026-11-11), so the
+    // notice reports the failure and stops there instead of pointing at a page we no longer expose.
     occurredAt
   }
 }

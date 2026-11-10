@@ -1,7 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
-import { ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import { ACKNOWLEDGE_ACTION_KEY, ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 
 /**
@@ -105,17 +105,6 @@ export function manualAnalysisFailureReasonCopy(input: Pick<AnalysisManualFailur
   return REASON_COPY[input.failureDetailCode ?? ''] ?? REASON_COPY[input.failureCode] ?? FALLBACK_REASON
 }
 
-/** The deep link lands on the run-log page, where the code and the record can be read. */
-export function manualAnalysisFailureDeeplink(runId: string) {
-  return {
-    scope: 'product' as const,
-    productId: 'market-intelligence',
-    settingsSectionId: 'intelligence-sources',
-    entityType: 'analysis-run',
-    entityId: runId
-  }
-}
-
 /**
  * A pure request builder: the same failure always produces the same request field for field, which
  * is what makes "one notice per manual attempt" checkable.
@@ -125,7 +114,6 @@ export function manualAnalysisFailureDeeplink(runId: string) {
  */
 export function buildManualAnalysisFailureRequest(input: AnalysisManualFailure): NotificationSubmitRequest | undefined {
   const reason = manualAnalysisFailureReasonCopy(input)
-  const deeplink = manualAnalysisFailureDeeplink(input.runId)
   // Both sentences are composed here, from the product's own cause table; the platform's copy
   // table only owns the sentence around them. Undefined means the copy is not there, and a
   // half-composed notice is worse than silence.
@@ -139,16 +127,18 @@ export function buildManualAnalysisFailureRequest(input: AnalysisManualFailure):
     producerId: RUN_MARKET_ANALYSIS_JOB,
     dedupeVars: { builder: 'template', vars: { runId: input.runId } },
     rendered,
-    // The event declares `requiresUserAction`, so a notice without an action is rejected outright;
-    // the copy row for the label exists now (`…manual-failed.open`), which is what the old TODO
-    // was waiting for. Same deep link as the card: the run record is where the code can be read.
+    // The event declares `requiresUserAction`, so a notice without an action is rejected outright.
+    // The action is a plain acknowledgement, not a way into the run log: the run log is an audit
+    // screen with no entry points (user 2026-11-11), so this notice only reports the fact.
     actions: [{
-      id: 'open-run-log',
-      labelKey: 'notification.event.platform.analysis.manual-failed.open',
-      kind: 'open',
-      deeplink
+      id: 'acknowledge',
+      labelRef: Object.freeze({
+        scope: 'product' as const,
+        productId: 'market-intelligence',
+        key: ACKNOWLEDGE_ACTION_KEY
+      }),
+      kind: 'acknowledge' as const
     }],
-    deeplink,
     occurredAt: input.occurredAt
   }
 }

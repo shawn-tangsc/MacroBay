@@ -147,7 +147,9 @@ export async function handleRequestSourceCredential(
   return {
     handoff: 'credential-entry',
     sourceId,
-    settingsSectionId: 'intelligence-sources',
+    // 落点是产品自己的配置抽屉「数据源」屏（架构师 2026-11-11 签的 `settingsDrawer` 形状）：
+    // 平台设置里那一页已经撤掉，这里不许再留一个指向不存在面板的 id。
+    settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' },
     fields: sourceRequiresCredential(definition.authMode) ? ['apiKey'] : []
   }
 }

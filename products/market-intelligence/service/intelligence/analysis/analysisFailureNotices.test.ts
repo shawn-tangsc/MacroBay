@@ -7,7 +7,6 @@ import { planNotificationSubmit } from '@platform/notifications/runtime/notifica
 
 import {
   analysisFailureNoticePolicy,
-  analysisNoticeDeeplink,
   analysisRunOutcomesOf,
   ANALYSIS_EVENT_ID_BY_KIND,
   analysisFailureNoticeDedupeVars,
@@ -85,11 +84,14 @@ describe('the three failure notices', () => {
     expect(outcomes.map(run => [run.id, run.line])).toEqual([['r2', 'calendar'], ['r3', 'event'], ['r1', 'event']])
   })
 
-  it('carries the sending instant in the link, so an expired run is not mistaken for a missing one', () => {
-    const deeplink = analysisNoticeDeeplink('run-5', at(0))
-    // 运行 id 不带时间：删掉的 id 和从没存在过的 id 在库里一模一样，只有这个时刻能分开它们。
-    expect(deeplink.params).toEqual({ at: at(0) })
-    expect(analysisNoticeDeeplink('run-5', '')).not.toHaveProperty('params')
+  it('carries no destination at all — the run log is audit-only and has no entry points', () => {
+    // 用户 2026-11-11：运行记录不设入口（审计用）。通知只报事，不许把人送进任何一屏。
+    const request = buildAnalysisFailureNoticeRequest(
+      { kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 3 },
+      at(0)
+    )
+    expect(request).not.toHaveProperty('deeplink')
+    expect(request?.actions).toEqual([])
   })
 
   it('passes only the declaration’s variables and lets the platform compose the key', () => {
