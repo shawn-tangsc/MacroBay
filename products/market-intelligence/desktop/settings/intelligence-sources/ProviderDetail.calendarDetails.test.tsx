@@ -442,7 +442,7 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const group = container.querySelector<HTMLElement>('.collapsible-group__body [role="group"]')
+    const group = container.querySelector<HTMLElement>('.source-provider-detail__policy [role="group"]')
     expect(group).not.toBeNull()
     const describedBy = group?.getAttribute('aria-describedby')
     expect(describedBy).toBeTruthy()
@@ -484,7 +484,7 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const groups = [...container.querySelectorAll<HTMLElement>('.collapsible-group__body [role="group"]')]
+    const groups = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__policy [role="group"]')]
     expect(groups).toHaveLength(2)
     const ids = groups.map((group) => group.getAttribute('aria-describedby'))
     expect(new Set(ids).size).toBe(2)
@@ -509,7 +509,7 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    expect(container.querySelector('.collapsible-group__body [role="group"]')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__policy [role="group"]')).toBeNull()
     expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
   })
 
@@ -646,11 +646,15 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const header = container.querySelector('.collapsible-group__head')
+    const header = container.querySelector('.source-provider-detail__policy .intelligence-section-title')
     expect(header?.textContent).toContain(settingsText.collectionPolicy.stoppedBadge)
     // 「短标」不是「把整句搬上来」：那句长原因只在展开区里。
     expect(header?.textContent).not.toContain(settingsText.collectionPolicyStopped)
-    expect(container.querySelector('.collapsible-group__body')?.textContent).toContain(settingsText.collectionPolicyStopped)
+    expect(container.querySelector('.source-provider-detail__policy')?.textContent).toContain(settingsText.collectionPolicyStopped)
+    // 这块现在**没有折叠交互**：没有可展开的头行、没有 aria-expanded。
+    // 折叠壳本身不在了：没有 `.collapsible-group`、也没有折叠头（`ant-collapse-header`）。
+    expect(container.querySelector('.collapsible-group')).toBeNull()
+    expect(container.querySelector('.ant-collapse-header')).toBeNull()
   })
 
   it('leaves a usable policy group unmarked', async () => {
@@ -669,6 +673,7 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    expect(container.querySelector('.collapsible-group__head')?.textContent).not.toContain(settingsText.collectionPolicy.stoppedBadge)
+    // 可用源的策略块同样常显、但没有「暂不可改」这枚短标。
+    expect(container.textContent).not.toContain(settingsText.collectionPolicy.stoppedBadge)
   })
 })

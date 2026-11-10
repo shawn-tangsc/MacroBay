@@ -2,7 +2,6 @@ import { Alert, Button, Input } from 'antd'
 import { Eye, EyeOff } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 
-import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { IconButton } from '@platform/ui/components/icon-button'
 
@@ -394,14 +393,15 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               壳 `CollapsibleGroup` 已有自定义内容形态，头行档位、箭头、`aria-controls`、缩进都由
               壳提供（另一条线 e20dd88 落地），本页不再自绘折叠头。 */}
           {policy && policy.profiles[source.sourceId]
-            ? <CollapsibleGroup
-              resolveText={(key) => key === 'settings.intelligenceSources.collectionPolicy.title' ? policy.labels.title : ''}
-              titleKey="settings.intelligenceSources.collectionPolicy.title"
-              /* 收起态头行只挂一枚**短标**（这组现在不能改）：不搬展开区那句原因，两处不重复。
-                 没有它，头行看起来完全正常，读者点开才发现里面全灰，会以为自己点坏了。
-                 用的是壳自己的 `meta` 槽（「共 N 条」那一格），不为这一枚标去改共享组件。 */
-              {...(unavailable ? { metaText: policy.labels.stoppedBadge } : {})}
-            >
+            ? <section className="intelligence-section source-provider-detail__policy">
+              {/* 「采集策略」**常显**，不再收起展开：用户 2026-11-10 要它默认露在外面。
+                  标题 13/650（`--font-section` 档），短标与原因句随内容一起常显——拆掉折叠头不等于
+                  可以把「暂不可改」「同步已停止…」丢掉。 */}
+              <div className="intelligence-section-title">{policy.labels.title}
+                {unavailable && policy.labels.stoppedBadge !== undefined
+                  ? <span className="source-provider-detail__policy-badge">{policy.labels.stoppedBadge}</span>
+                  : null}
+              </div>
               {/* 不可用的源不该还能改采集策略：整组停用，并说清为什么、什么时候恢复。
                   这句是**通用结构**——所有不可用源同一句，不针对某一个源。 */}
               {unavailable
@@ -410,8 +410,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               {/* 原因必须能被读屏关联到**这一组控件**：可用时不留组语义、也不留悬空 id。 */}
               <div {...(unavailable ? { 'aria-describedby': policyStoppedId, role: 'group' } : {})}>
                 <CollectionPolicySection
-                  sourceId={source.sourceId}
                   configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
+                  sourceId={source.sourceId}
                   draftProfile={policy.profiles[source.sourceId]!}
                   enabledConfigurable={source.visibility !== 'pending' && !unavailable}
                   labels={policy.labels}
@@ -420,7 +420,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
                   supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
                 />
               </div>
-            </CollapsibleGroup>
+            </section>
             : null}
         </div>
       })}

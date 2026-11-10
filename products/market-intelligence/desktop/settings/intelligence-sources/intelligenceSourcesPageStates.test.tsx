@@ -177,14 +177,9 @@ describe('sources settings page states', () => {
     // 注意：平台壳为了 `aria-controls` 永远指向**存在**的节点，内容从首帧就挂载、收起时是
     // `display: none`——所以这里判「不显示」，不判「不在 DOM 里」（判 DOM 存在与否会被真正的显隐问题骗过）。
     expect(dom.textContent).toContain(zhText.collectionPolicy.title)
-    const collapsedGrid = dom.querySelector<HTMLElement>('.intelligence-setting-grid')
-    expect(collapsedGrid?.closest<HTMLElement>('.ant-collapse-content')?.style.display).toBe('none')
-    // 壳 `CollapsibleGroup` 到了自定义内容形态：头行由壳负责（档位、箭头、`aria-controls`）。
-    const header = [...dom.querySelectorAll<HTMLElement>('.collapsible-group .ant-collapse-header')]
-      .find((element) => element.textContent?.includes(zhText.collectionPolicy.title))!
-    await act(async () => { header.click() })
-    await act(async () => { await Promise.resolve() })
-
+    // 「采集策略」现在是**常显区块**（用户 2026-11-10 去掉折叠），所以不再有「默认收起、点头行展开」
+    // 这一步：直接查内容是否已经在 DOM 里。
+    expect(dom.querySelector('.collapsible-group')).toBeNull()
     const section = dom.querySelector('.intelligence-section:has(.intelligence-setting-grid)')
     expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
     expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)

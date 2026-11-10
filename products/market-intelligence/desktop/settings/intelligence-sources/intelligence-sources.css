@@ -1490,3 +1490,17 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* 「采集策略」现在是常显区块（用户 2026-11-10）：标题仍是 13/650 的分区块档，
+   短标跟在标题后面按 meta 档（muted 小字），与原先折叠头那格同一读法。 */
+.source-provider-detail__policy {
+  display: grid;
+  gap: 8px;
+}
+
+.source-provider-detail__policy-badge {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  font-weight: 400;
+}
