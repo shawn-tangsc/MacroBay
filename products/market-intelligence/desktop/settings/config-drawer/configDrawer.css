@@ -207,3 +207,26 @@
 }
 
 .config-drawer__source-item:disabled:hover { background: none; }
+
+/* 来源与采集：两栏（列表 196 + 详情），间距 12。 */
+.config-drawer__split {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.config-drawer__detail {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+/* 两栏里列表自己不再需要宽度与下边距（外层已定）。 */
+.config-drawer__split .config-drawer__source-list {
+  width: auto;
+  margin-bottom: 0;
+}

@@ -208,6 +208,8 @@ function SourcesScreen({ view, resolveText, onSelect }: {
   }
   return (
     <div data-drawer-screen="ready">
+      {/* 两栏：列表 196 + 详情 + 间距 12。详情区这一版是占位（真实字段等写路径接上）。 */}
+      <div className="config-drawer__split">
       <div className="config-drawer__source-list">
         {view.rows.map((source) => (
           <button
@@ -224,6 +226,10 @@ function SourcesScreen({ view, resolveText, onSelect }: {
             {source.enabled ? null : <span className="config-drawer__source-off">—</span>}
           </button>
         ))}
+      </div>
+      <div className="config-drawer__detail">
+        <div className="config-drawer__group-title">—</div>
+      </div>
       </div>
     </div>
   )
