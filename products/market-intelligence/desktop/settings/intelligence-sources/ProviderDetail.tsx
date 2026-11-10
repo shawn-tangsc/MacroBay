@@ -380,14 +380,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         <span className="source-provider-detail__name-actions">
           {provider.website && !hideWebsite
             ? <Button
-              autoInsertSpace={false}
               className="source-provider-detail__name-action"
               onClick={() => window.open(provider.website!, '_blank', 'noopener,noreferrer')}
               size="small">{labels.website}</Button>
             : null}
           {offersConnectionTest(provider)
             ? <Button
-              autoInsertSpace={false}
               className="source-provider-detail__name-action"
               disabled={testingConnection}
               loading={testingConnection}
@@ -396,7 +394,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             : null}
           {provider.signupUrl
             ? <Button
-              autoInsertSpace={false}
               className="source-provider-detail__name-action"
               onClick={() => window.open(provider.signupUrl!, '_blank', 'noopener,noreferrer')}
               size="small">{labels.signup}</Button>

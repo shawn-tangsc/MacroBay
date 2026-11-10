@@ -355,11 +355,14 @@ describe('ProviderDetail source details', () => {
     expect(row?.querySelector('h2')?.textContent).toContain('Federal Reserve Board (Fed)')
     const actions = row?.querySelector('.source-provider-detail__name-actions')
     const buttons = [...(actions?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
-    expect(buttons.map((button) => button.textContent)).toEqual([
+    // 组件不再各自关「中文间自动空格」——那是全局配置的事（`buttonSpaceGuard` 守）。
+    // 这里比的是标签内容，去掉 antd 在无全局配置时插入的空白即可，别把空格写进断言。
+    const label = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, '')
+    expect(buttons.map((button) => label(button.textContent))).toEqual([
       settingsText.website,
       settingsText.testConnection,
       settingsText.signup
-    ])
+    ].map(label))
     // 长得一样：同一套类名，都不是 antd 的 link 变体。
     for (const button of buttons) {
       expect(button.className).toContain('source-provider-detail__name-action')
