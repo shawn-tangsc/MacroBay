@@ -14,6 +14,7 @@ import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
 import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
+import { normalizeConfigDrawerRequest, type OpenConfigDrawerRequest } from './configDrawerRequest'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
@@ -75,7 +76,8 @@ function IntelligencePageBody(): React.ReactElement {
    * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
    */
   const [initialSourceFilter, setInitialSourceFilter] = useState<SourceFilter>()
-  const openConfigDrawer = (menu: ConfigDrawerMenu, filter?: SourceFilter): void => {
+  const openConfigDrawer = (input: ConfigDrawerMenu | OpenConfigDrawerRequest, filter?: SourceFilter): void => {
+    const menu = normalizeConfigDrawerRequest(input).menu
     setConfigDrawerMenu(menu)
     setInitialSourceFilter(filter)
     setConfigDrawerRequest((value) => value + 1)
