@@ -700,3 +700,35 @@ describe('the card sits 16 from the menu', () => {
     expect(card).not.toMatch(/margin(?:-left)?:\s*-/u)
   })
 })
+
+describe('单列屏铺满可视区', () => {
+  /*
+    判据只能读**规则本身**：happy-dom 不做布局，量不出「卡是不是占满可视区」。
+    所以这里钉两件事，并把它们写成一对：单列那一行必须拉伸（`minmax(0, 1fr)` + `stretch`），
+    卡必须扣掉上下 16 的外边距撑满那一行。删掉任何一半，另一半就失去意义（行拉伸了但卡不定高
+    等于没拉伸；卡定高了但行按内容走，百分比对着不定高算，等于没定高）。
+  */
+  const css = readFileSync(join(__dirname, 'configDrawer.css'), 'utf8')
+  const rule = (selector: string): string =>
+    new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'u').exec(css)?.[1] ?? ''
+
+  it('stretches the single-column row so the card can take the whole pane', () => {
+    const pane = rule('.config-drawer__pane:not(.config-drawer__pane--split)')
+    expect(pane).toContain('align-content: stretch')
+    expect(pane).toContain('grid-template-rows: minmax(0, 1fr)')
+  })
+
+  it('keeps the card exactly the pane height minus its two 16 margins', () => {
+    const card = rule('.config-drawer__card')
+    expect(card).toContain('height: calc(100% - 32px)')
+    expect(card).toContain('margin: 16px')
+    // 卡体是唯一滚动容器：卡自己不滚，滚的是卡体。
+    expect(card).toContain('overflow: hidden')
+  })
+
+  it('lets a single-column screen take the card width and shrink', () => {
+    const child = rule('.config-drawer__card-body:not(.config-drawer__card-body--split) > *')
+    expect(child).toContain('width: 100%')
+    expect(child).toContain('min-height: 0')
+  })
+})

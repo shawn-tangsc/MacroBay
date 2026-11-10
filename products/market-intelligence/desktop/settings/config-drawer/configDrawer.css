@@ -64,6 +64,25 @@
   min-height: 0;
 }
 
+/*
+ * 单列屏铺满可视区（用户 2026-11-11：「内容是圆角的，各自把当前的内容放到内容区域」）。
+ *
+ * 不加这一条时 `align-content: start` 让那一行按**内容高度**走，卡上的
+ * `height: calc(100% - 32px)` 就在对着一个不定高的盒子算——短内容时卡撑不满可视区，
+ * 需要自己滚的屏（运行日志、通知）也量不到可用高度。分栏屏那条 `.config-drawer__pane--split`
+ * 已经自己写了 `align-content: stretch` 与两行，所以这里只对单列生效。
+ */
+.config-drawer__pane:not(.config-drawer__pane--split) {
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* 单列屏的根节点跟着卡体走：宽度吃满、允许收缩，屏内自己滚时才量得到高度。 */
+.config-drawer__card-body:not(.config-drawer__card-body--split) > * {
+  width: 100%;
+  min-height: 0;
+}
+
 /* 「左树 + 右详情」那一屏：标题固定，两栏各自滚。 */
 .config-drawer__pane--split {
   align-content: stretch;
