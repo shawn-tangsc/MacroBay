@@ -71,13 +71,17 @@ function IntelligencePageBody(): React.ReactElement {
    */
   const [configDrawerRequest, setConfigDrawerRequest] = useState(0)
   const [configDrawerMenu, setConfigDrawerMenu] = useState<ConfigDrawerMenu>('sources')
+  /** 屏内定位（只随请求生效一次；读者自己点别的菜单/源后不再回拽）。 */
+  const [configDrawerSourceId, setConfigDrawerSourceId] = useState<string | undefined>(undefined)
   /**
    * 「来源与采集」这一屏挂载时的初值过滤器（只作初值，之后的筛选由那一屏自己管）。
    * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
    */
   const [initialSourceFilter, setInitialSourceFilter] = useState<SourceFilter>()
   const openConfigDrawer = (input: ConfigDrawerMenu | OpenConfigDrawerRequest, filter?: SourceFilter): void => {
-    const menu = normalizeConfigDrawerRequest(input).menu
+    const request = normalizeConfigDrawerRequest(input)
+    const menu = request.menu
+    setConfigDrawerSourceId(menu === 'sources' && request.focus?.menu === 'sources' ? request.focus.sourceId : undefined)
     setConfigDrawerMenu(menu)
     setInitialSourceFilter(filter)
     setConfigDrawerRequest((value) => value + 1)
@@ -199,6 +203,7 @@ function IntelligencePageBody(): React.ReactElement {
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
+          onOpenAnalysisSettings={() => openConfigDrawer({ menu: 'analysis' })}
           onOpenSettings={() => openConfigDrawer('processing')}
           onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
           text={text}
@@ -244,6 +249,7 @@ function IntelligencePageBody(): React.ReactElement {
           onConfigureSources={() => openConfigDrawer('sourcesData', 'dashboard')}
           onManageSource={() => openConfigDrawer('sourcesData', 'dashboard')}
           initialSettingsMenu={configDrawerMenu}
+          {...(configDrawerSourceId === undefined ? {} : { initialSourceId: configDrawerSourceId })}
           initialSourceFilter={initialSourceFilter}
           openSettingsRequest={configDrawerRequest}
           onOpenCalendar={() => setActiveView('calendar')}

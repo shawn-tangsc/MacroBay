@@ -50,6 +50,8 @@ export type SourceConfigSurfaceProps = {
   /** 设置页那一份文案；两个宿主传同一个来源。 */
   text: SourceConfigText
   provider: ProviderView
+  /** 只作初值：打开时把这一源所在行带进视野一次（抽屉的 `focus.sourceId`）。 */
+  initialSourceId?: string
   /** 采集策略：每个源常显；不传就是这一端不展示策略组（宿主自行承担可见差异）。 */
   policy?: SourceConfigPolicy
   /** 目录声明的「平台允许立即运行」，按源给。 */
@@ -124,6 +126,7 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
     capabilities: props.text.providerSummary
   }
   return <ProviderDetail
+    {...(props.initialSourceId === undefined ? {} : { initialSourceId: props.initialSourceId })}
     labels={labels}
     provider={props.provider}
     {...(props.policy === undefined ? {} : { policy: props.policy })}

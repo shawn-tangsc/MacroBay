@@ -132,6 +132,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    */
   initialSettingsMenu?: ConfigDrawerMenu
   /** 「来源与采集」那一屏挂载时的初值过滤器；不传就是看板默认（只作初值，不进受控状态）。 */
+  initialSourceId?: string
   initialSourceFilter?: SourceFilter
   openSettingsRequest?: number
 }): React.ReactElement {

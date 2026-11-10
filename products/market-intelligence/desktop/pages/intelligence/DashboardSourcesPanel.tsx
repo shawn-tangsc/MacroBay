@@ -31,6 +31,8 @@ export function DashboardSourcesPanel(props: {
   onDraftChange?: (dirty: boolean) => void
   /** 只渲染哪一屏：`sources` = 源树 + 详情；`business` = 业务设置。给了就不画页签条。 */
   pane?: 'sources' | 'business'
+  /** 抽屉的定位：只作初值，把该源那一行带进视野一次。 */
+  initialSourceId?: string
   /**
    * 打开抽屉时落哪一块筛选（前端可以在「打开配置」的请求里指定）。
    * **只当初始值**，不是受控 prop：读者点了别的 tab 就归读者，外部不许一直压着。不传仍是「看板」。
@@ -117,7 +119,8 @@ export function DashboardSourcesPanel(props: {
       onToggleSource: toggleSourceEnabled,
       onDraftChange: reportDraftDirty,
       showSourceDetails: true,
-      surface: 'settings'
+      surface: 'settings',
+      ...(props.initialSourceId === undefined ? {} : { initialSourceId: props.initialSourceId })
     }}
     treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
     view={settingsView} />
