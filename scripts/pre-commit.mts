@@ -16,7 +16,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { findCallers, programFiles } from './pre-commit-callers.mts'
 import { filesWithUnstagedChanges } from './pre-commit-unstaged.mts'
 import { materializeCommitTree, readDeletedPaths } from './pre-commit-tree.mts'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -96,6 +96,15 @@ say(`预检 ${codeStaged.length} 个代码文件（预算 ${Math.round(BUDGET_MS
  * 按路径提交就会一起带进 HEAD。2026-11-10 真撞过一次。只警告的理由：`git add -p` 分次暂存是正常手法，
  * 把正常提交堵死比这个风险更糟。
  */
+// 共享文件提示（只提示不阻断）：见 `scripts/shared-files.json` 的 why——两次「共享文件捎带」事故之后加的。
+try {
+  const shared = JSON.parse(readFileSync(join(root, 'scripts/shared-files.json'), 'utf8')) as { owners: Record<string, string> }
+  for (const path of codeStaged) {
+    const hit = Object.keys(shared.owners).find((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+    if (hit !== undefined) say(`共享文件：${path} 属于「${shared.owners[hit]}」，确认你是 owner；不是就把改动交给 owner 或等它落（只提示，不阻断）。`)
+  }
+} catch { /* 清单缺失时静默：钩子不因为提示功能而阻断提交 */ }
+
 const drifted = filesWithUnstagedChanges({ cwd: root, staged: codeStaged })
 if (drifted.length > 0) {
   say(`注意：${drifted.length} 个要提交的文件还有未暂存改动——\`git commit -- <路径>\` 按工作区当前内容提交，`)
