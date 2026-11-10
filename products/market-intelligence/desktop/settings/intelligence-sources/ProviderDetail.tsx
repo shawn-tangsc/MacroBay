@@ -79,7 +79,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface, initialSourceId }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -105,6 +105,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   surface?: 'settings' | 'panel'
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
+  /** 只作初值：挂载时把这一源所在行带进视野一次（不做受控、不写回状态；找不到就什么都不做）。 */
+  initialSourceId?: string
   /**
    * 每个源的采集策略（频率档 / 范围 / 是否纳入舆情）。页面上常显：读者不必先选中某个源。
    * 数据与写入都来自页面的 profile 列表，这里只画。
@@ -189,6 +191,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
 
 
   const { details, retryDetail, refreshDetail, refreshStaleById, beginRun } = useSourceDetailReads(provider, showSourceDetails)
+
+  // `focus.sourceId` 的落点：只在这块详情挂载时定位一次。找不到该行就什么都不做（不抛错、不改选中）。
+  useEffect(() => {
+    if (initialSourceId === undefined) return
+    const row = document.querySelector<HTMLElement>(`[data-source-row="${initialSourceId}"]`)
+    row?.scrollIntoView?.({ block: 'nearest' })
+  }, [initialSourceId])
 
   const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
     // 上一轮留下的「读数还没刷新」在这一轮开始时就该消失：否则它会和「正在运行」同时出声。

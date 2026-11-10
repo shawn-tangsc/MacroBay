@@ -76,6 +76,8 @@ export function sourceRowInstanceKey(template: SourceRowTemplate, sourceId: stri
 export function sourceRowAttributes(template: SourceRowTemplate, sourceId: string): Readonly<Record<string, string>> {
   return {
     'data-setting-key': sourceRowInstanceKey(template, sourceId),
-    'data-setting-template': template
+    'data-setting-template': template,
+    // 定位锚点（`focus.sourceId` 用）：宿主/抽屉靠它找「打开时要落到的那一行」，不依赖键格式。
+    'data-source-row': sourceId
   }
 }
