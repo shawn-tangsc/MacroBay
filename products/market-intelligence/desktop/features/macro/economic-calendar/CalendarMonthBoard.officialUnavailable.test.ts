@@ -56,7 +56,7 @@ describe('a month the official source could not be read for', () => {
     // 这一屏闪一下；月查询失败时更糟——「读不到」会被说成「来源全关」。空态只该在读完且确实为空时出现。
     const board = (state: Parameters<typeof CalendarMonthBoard>[0]['state']) => renderToStaticMarkup(createElement(CalendarMonthBoard, {
       asOf: '2026-11-01T00:00:00.000Z', coverage: 'complete', events: [], marketEvents: [], marketSources: [],
-      month: '2026-11', onOpenDay: () => undefined, onSelectItem: () => undefined, officialFeeds: 'disabled',
+      month: '2026-11', onOpenDay: () => undefined, onOpenSettings: () => undefined, onSelectItem: () => undefined, officialFeeds: 'disabled',
       selectedEventKey: undefined, state, statusNow: '2026-11-01T00:00:00.000Z', text: zh, today: '2026-11-01'
     }))
 

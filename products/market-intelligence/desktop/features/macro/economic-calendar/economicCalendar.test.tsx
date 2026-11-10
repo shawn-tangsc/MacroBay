@@ -1375,13 +1375,14 @@ describe('macro economic calendar', () => {
     expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
   })
 
-  it('A：一条官方腿都没启用 → 「去启用」，点它落到情报源设置，且不摆「本月没有」', async () => {
-    const navigation = vi.fn()
-    window.addEventListener('app-shell:navigate', navigation)
+  it('A：一条官方腿都没启用 → 「去启用」走宿主给的那一个去处，且不摆「本月没有」', async () => {
+    // 页面不再自带回退：去启用与页头「设置」是**同一个回调**，落到哪由宿主决定。
+    const onOpenSettings = vi.fn()
     const { container } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
       getEventDetail: async () => unavailableDetail(),
-      officialFeeds: 'disabled'
+      officialFeeds: 'disabled',
+      onOpenSettings
     })
 
     await flush()
@@ -1392,16 +1393,11 @@ describe('macro economic calendar', () => {
     expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
     expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
 
-    // 动作只有一个：「去启用」→ 情报源设置面板。
+    // 动作只有一个：「去启用」→ 宿主那一个去处（今天看板宿主传 `openConfigDrawer('sourcesData','calendar')`）。
     const action = state?.querySelector<HTMLElement>('button')
     expect(action?.textContent).toContain('去启用')
     await act(async () => action!.click())
-    expect(navigation).toHaveBeenCalledTimes(1)
-    expect(navigation.mock.calls[0]?.[0].detail).toEqual({
-      navKey: 'settings',
-      settingsPanelKey: 'market-intelligence.intelligence-sources'
-    })
-    window.removeEventListener('app-shell:navigate', navigation)
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
   })
 
   it('B：有可用腿、两边都读到且都为空 → 「本月没有任何事件」，且**不给动作**', async () => {
@@ -2091,32 +2087,20 @@ describe('macro economic calendar', () => {
     } finally { vi.useRealTimers() }
   })
 
-  it('日历设置的出口可由宿主接管；没接管时退回情报源设置页（旧看板抽屉已删）', async () => {
-    // C9：宿主给了就落到配置抽屉；没给时不再有旧抽屉可开（`24a0b4f` 已删），退回设置页。
+  it('日历设置的出口只有宿主那一个：点了就走宿主给的去处', async () => {
+    // 旧看板抽屉已删，页面不再自带「退回设置页」那条回退；必填由类型层保证
+    //（`economicCalendar.settingsEntry.props.test.ts`），这里断运行期只走宿主这一个回调。
     const copy = productText['zh-CN'].pages.intelligence.portal.calendar
     const onOpenSettings = vi.fn()
-    const provided = await renderCalendar({
+    const { container } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
       getEventDetail: async () => unavailableDetail(),
       onOpenSettings
     })
     await flush()
-    await act(async () => button(provided.container, copy.calendarSettings).click())
+    await act(async () => button(container, copy.calendarSettings).click())
     expect(onOpenSettings).toHaveBeenCalledTimes(1)
-    await act(async () => provided.root.unmount())
-    provided.container.remove()
-
-    const navigation = vi.fn()
-    window.addEventListener('app-shell:navigate', navigation)
-    const fallback = await renderCalendar({
-      queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
-      getEventDetail: async () => unavailableDetail()
-    })
-    await flush()
-    await act(async () => button(fallback.container, copy.calendarSettings).click())
-    expect(navigation).toHaveBeenCalledTimes(1)
-    expect(navigation.mock.calls[0]?.[0].detail).toEqual({ navKey: 'settings', settingsPanelKey: 'market-intelligence.intelligence-sources' })
-    window.removeEventListener('app-shell:navigate', navigation)
+    expect(document.body.querySelector('.mi-dashboard-source-drawer')).toBeNull()
   })
 
   it('keeps the month when only a neighbouring month fails, and marks the edges incomplete', async () => {
@@ -2203,7 +2187,7 @@ async function renderCalendar(client: {
   // 显示时区由窗口级 provider 提供；测试固定 Asia/Shanghai，断言才与宿主时区无关。
   // 刷新前的确认框由树内的 Modal 实例渲染（`useConfirm`），所以页面必须挂在 `ConfirmProvider` 下；
   // 没有宿主时组件按契约直接抛错，测试也会跟着炸——这正是我们要的。
-  const calendar = <ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} {...(client.onOpenSettings === undefined ? {} : { onOpenSettings: client.onOpenSettings })} text={client.text ?? productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider></ConfirmProvider>
+  const calendar = <ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} onOpenSettings={client.onOpenSettings ?? vi.fn()} text={client.text ?? productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider></ConfirmProvider>
   await act(async () => localRoot.render(client.strict ? <StrictMode>{calendar}</StrictMode> : calendar))
   return { container, root: localRoot, client: input }
 }

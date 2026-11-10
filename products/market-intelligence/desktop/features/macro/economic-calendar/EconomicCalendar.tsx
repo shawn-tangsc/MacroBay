@@ -51,7 +51,8 @@ type Props = {
   onBack: () => void
   /** Set by the dashboard card: the month (and event) the reader asked to see. */
   openTarget?: { month: string; eventKey?: string }
-  /** 宿主可把「日历设置」改指配置抽屉；**不给就保持旧行为**（打开看板抽屉），行为不变。 */ onOpenSettings?: () => void
+  /** 「日历设置」的去处：**必填**——旧看板抽屉已删，页面里不留第二条回退路（宿主自己决定落到哪）。 */
+  onOpenSettings: () => void
 }
 
 const economicCalendarMonthValueAnchorPolicy = {
@@ -360,7 +361,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
           />
           <Button aria-label={text.monthNavigation.next} icon={<ChevronRight aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))}>{text.monthNavigation.next}</Button>
           <Button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)}>{text.monthNavigation.current}</Button>
-          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => (onOpenSettings ?? openIntelligenceSourcesSettings)()}>{text.calendarSettings}</Button>
+          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={onOpenSettings}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
           <Button icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack}>{text.backToDashboard}</Button>
         </div>
@@ -398,7 +399,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
           state={monthState}
           text={text}
           onRetryMonth={() => loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))}
-          {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+          onOpenSettings={onOpenSettings}
           marketMonthRead={market.namedMonthState}
           marketLoading={market.loading}
           onRetryMarket={() => void market.refresh()}

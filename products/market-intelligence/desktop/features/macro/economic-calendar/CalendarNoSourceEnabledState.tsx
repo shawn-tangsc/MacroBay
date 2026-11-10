@@ -2,7 +2,6 @@ import type { ReactElement } from 'react'
 
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 
-import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
 import type { EconomicCalendarText } from './economicCalendarText'
 
 /**
@@ -15,10 +14,10 @@ import type { EconomicCalendarText } from './economicCalendarText'
  * 「启用」上，为这一个页面把 `open-settings` 加进去不值；读者要做的动作也确实就是去把来源启用。
  * 点击落到情报源设置面板：那里才是真正能动的地方。
  */
-export function CalendarNoSourceEnabledState({ text, onOpenSettings }: { text: EconomicCalendarText; onOpenSettings?: () => void }): ReactElement {
-  // 「去启用」与页头那颗设置**同一个目的地**（宿主接的配置抽屉）；没接时退回设置页。
+export function CalendarNoSourceEnabledState({ text, onOpenSettings }: { text: EconomicCalendarText; onOpenSettings: () => void }): ReactElement {
+  // 「去启用」与页头那颗设置**同一个目的地**（同一个回调，宿主决定落到哪）。
   return <StateView
-    action={{ labelKey: STATE_VIEW_ACTION_KEYS.enable, onSelect: onOpenSettings ?? openIntelligenceSourcesSettings }}
+    action={{ labelKey: STATE_VIEW_ACTION_KEYS.enable, onSelect: onOpenSettings }}
     className="mi-economic-calendar__no-source-state"
     productReason={{ key: 'mi.calendar.no-source-enabled', resolve: () => text.status.noSourceEnabled }}
     reasonCode="target-disabled"

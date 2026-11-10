@@ -68,7 +68,7 @@ async function renderInspector(subject: Record<string, unknown>, timeZone = 'Asi
     refreshFedFomcDecision: vi.fn(async () => ({ state: 'unavailable' as const })),
     syncBlsEmploymentSchedule: vi.fn(async () => ({ state: 'unavailable' as const }))
   }
-  const calendar = <ShellTimeZoneProvider timeZone={timeZone}><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
+  const calendar = <ShellTimeZoneProvider timeZone={timeZone}><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} onOpenSettings={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
   await act(async () => localRoot.render(calendar))
   for (let attempt = 0; attempt < 12; attempt += 1) await act(async () => { await Promise.resolve() })
   return { host: container, input }
