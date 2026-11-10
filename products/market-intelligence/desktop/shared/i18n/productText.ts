@@ -309,6 +309,37 @@ mi: miText['zh-CN'],
             configureSources: '配置情报源',
             /** 临时入口：打开静态配置抽屉（0.4.3 预览版）。 */
             configureSettings: '配置',
+            configDrawer: {
+              menus: {
+                sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
+                briefing: '日报', notifications: '通知', platform: '平台与模型'
+              },
+              rows: {
+                capabilities: '能力与凭据',
+                policyNote: '采集由谁负责',
+                sentimentModel: '情绪评分用哪个模型',
+                analysisSwitch: '是否分析',
+                analysisModel: '分析用哪个模型',
+                publishAt: '每天几点出',
+                window: '覆盖多长时间的数据',
+                editions: '一次生成几期',
+                briefingModel: '日报用哪个模型',
+                channels: '通道事件通知',
+                pushStrength: '推送强度',
+                calendar: '日历事件通知',
+                leadTime: '提前多久提醒',
+                importance: '只看哪些重要性',
+                landedFilter: '落地事件怎么筛',
+                countries: '自选哪些国家',
+                reach: '通知送到哪里',
+                masterSwitch: '通知总开关',
+                timeZone: '时区',
+                language: '语言',
+                theme: '显示风格',
+                proxy: '代理模式',
+                modelService: '模型服务'
+              }
+            },
             /** One sentence per failure code, shared by every card that reads module signals. */
             signalRead: {
               'query-failed': '这条信号有没有被分析过，这次没查到。上面的数字不受影响。',
@@ -1693,6 +1724,37 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             descriptionLabel: 'How to read this board',
             configureSources: 'Configure intelligence sources',
             configureSettings: 'Settings',
+            configDrawer: {
+              menus: {
+                sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',
+                briefing: 'Daily briefing', notifications: 'Notifications', platform: 'Platform and models'
+              },
+              rows: {
+                capabilities: 'Capabilities and credentials',
+                policyNote: 'Who runs collection',
+                sentimentModel: 'Sentiment model',
+                analysisSwitch: 'Analysis',
+                analysisModel: 'Analysis model',
+                publishAt: 'Publish time',
+                window: 'Data window',
+                editions: 'Editions per run',
+                briefingModel: 'Briefing model',
+                channels: 'Channel event alerts',
+                pushStrength: 'Push strength',
+                calendar: 'Calendar alerts',
+                leadTime: 'Lead time',
+                importance: 'Importance filter',
+                landedFilter: 'Landed filter',
+                countries: 'Countries',
+                reach: 'Where alerts appear',
+                masterSwitch: 'Master switch',
+                timeZone: 'Time zone',
+                language: 'Language',
+                theme: 'Display style',
+                proxy: 'Proxy mode',
+                modelService: 'Model service'
+              }
+            },
             signalRead: {
               'query-failed': 'We could not check whether this signal has been analysed. The numbers above are unaffected.',
               'invalid-as-of': 'We could not check, at this instant, whether this signal has been analysed. The numbers above are unaffected.',

@@ -58,7 +58,9 @@ describe('config settings drawer (static layout)', () => {
     // 「不接数据」不是口头保证。抽屉目录里出现任何数据层 import 就该红——包括 IPC、视图、
     // 以及本产品自己的 service。允许的只有平台 UI 组件、React、图标、本目录的纯数据与样式。
     const dir = __dirname
-    const allowedPrefixes = ['react', 'react-dom', 'lucide-react', '@platform/ui/', './']
+    // **文案不算数据**：i18n 表是静态文本，接进来不会让抽屉开始读视图/IPC。
+    // 真正要挡的是 IPC、视图、service 这些「会让这一版偷偷开始取数」的 import。
+    const allowedPrefixes = ['react', 'react-dom', 'lucide-react', '@platform/ui/', './', '../../shared/i18n/']
     const offenders = readdirSync(dir)
       .filter((name) => name.endsWith('.tsx') && !name.includes('.test.'))
       .flatMap((name) => readFileSync(join(dir, name), 'utf8').split('\n').flatMap((line, index) => {

@@ -4,6 +4,9 @@ import { Drawer } from '@platform/ui/components/drawer'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Info } from 'lucide-react'
 
+import { productText } from '../../shared/i18n/productText'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
 import './configDrawer.css'
 
@@ -31,10 +34,16 @@ export type ConfigSettingsDrawerProps = {
 const EMPTY_VALUE = '—'
 
 export function ConfigSettingsDrawer({ open, onClose, initialMenu = 'sources' }: ConfigSettingsDrawerProps): React.ReactElement {
+  const copy = productText[useShellLanguage()].pages.intelligence.portal.dashboard.configDrawer
   const [menu, setMenu] = useState<ConfigDrawerMenu>(initialMenu)
   const navRef = useRef<HTMLElement>(null)
   const screen = DRAWER_PREVIEW_SCREENS.find((candidate) => candidate.menu === menu)
-  const menuLabel = (key: ConfigDrawerMenu): string => key
+  const menuLabel = (key: ConfigDrawerMenu): string => copy.menus[key]
+  /** 行标签：清单里存的是 `configDrawer.rows.<name>` 的完整路径，这里取最后一段查文案。 */
+  const rowLabel = (labelKey: string): string => {
+    const name = labelKey.split('.').at(-1) ?? labelKey
+    return (copy.rows as Record<string, string>)[name] ?? labelKey
+  }
   const resolveText = (key: string): string => key === 'configDrawer.title' ? 'Settings' : key === 'ui.drawer.close' ? 'Close' : ''
 
   // 上下键在导航内移动；Home/End 跳首尾。焦点跟着走，读屏才跟得上。
@@ -68,16 +77,15 @@ export function ConfigSettingsDrawer({ open, onClose, initialMenu = 'sources' }:
           onClick={() => setMenu(key)}
           type="button">
           <span className="config-drawer__nav-index">{index + 1}</span>
-          {/* 菜单名走 i18n 键；文案表补上之前显示键名，不写死中文。 */}
-          {key}
+          {menuLabel(key)}
         </button>)}
       </nav>
       <section aria-label={menuLabel(menu)} className="config-drawer__pane">
-        <h2 className="config-drawer__pane-title">{menu}</h2>
+        <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
         {screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{group.titleKey}</div>}
           {group.rows.map((row) => <div className="config-drawer__row" key={row.key}>
-            <span className="config-drawer__label">{row.labelKey}</span>
+            <span className="config-drawer__label">{rowLabel(row.labelKey)}</span>
             <span className="config-drawer__value">{EMPTY_VALUE}</span>
             <PreviewControlView control={row.control} info={row.info === true} />
           </div>)}
