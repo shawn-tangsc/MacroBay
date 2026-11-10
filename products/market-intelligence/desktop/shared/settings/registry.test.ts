@@ -113,12 +113,12 @@ describe('settings registry self-checks', () => {
   })
 
   it('conditional rows declare visibleWhen instead of always showing', () => {
-    // 提前量 / 重要性：只在「开始前」开着时出现。
-    expect(LEAD.visibleWhen?.({ enabled: false }, {})).toBe(false)
-    expect(LEAD.visibleWhen?.({ enabled: true }, {})).toBe(true)
+    // 提前量 / 重要性：只在「开始前」开着时出现；条件只吃视图，一个参数。
+    expect(LEAD.visibleWhen?.({ enabled: false })).toBe(false)
+    expect(LEAD.visibleWhen?.({ enabled: true })).toBe(true)
     // 国家码：只在「自选国家」时出现。
-    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'us' } }, {})).toBe(false)
-    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'custom', codes: ['US'] } }, {})).toBe(true)
+    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'us' } })).toBe(false)
+    expect(COUNTRY_CODES.visibleWhen?.({ landedCountries: { scope: 'custom', codes: ['US'] } })).toBe(true)
   })
 
   it('menu 1 declares keyed templates instead of a source list', () => {
@@ -137,8 +137,8 @@ describe('settings registry self-checks', () => {
     }
     expect(row.read.command).toBe('intelligenceSources.getPageState')
     expect(row.read.select(view)).toBe('balanced')
-    expect(row.visibleWhen?.(view, {})).toBe(true)
-    expect(row.visibleWhen?.({}, {})).toBe(false)
+    expect(row.visibleWhen?.(view)).toBe(true)
+    expect(row.visibleWhen?.({})).toBe(false)
     if (row.write?.kind !== 'value') throw new Error('the preset row must be a value write')
     // 写的是「选中来源的 profile」：sourceId 从视图拿，渲染层不另传第二个参数。
     expect(row.write.toPayload('frequent', view)).toEqual({
@@ -208,6 +208,14 @@ describe('settings registry self-checks', () => {
     expect(row.visibleWhen?.(view(true))).toBe(true)
     expect(row.visibleWhen?.(view(false))).toBe(false)
     expect(row.visibleWhen?.(view())).toBe(false)
+  })
+
+  it('gives visibleWhen one argument, so nobody can smuggle a second judgement basis', () => {
+    // 契约 §1 ⑧ / G10：条件只看 `view`。第二参会变成一个「每行自带判断依据」的口子，
+    // 同一份事实就散成多份——这条钉住**形参个数**，把口子关在类型上，也关在用例上。
+    const conditional = Object.values(settingRegistry).flat().filter((row) => row.visibleWhen !== undefined)
+    expect(conditional.length).toBeGreaterThan(0)
+    for (const row of conditional) expect(row.visibleWhen?.length).toBe(1)
   })
 
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {

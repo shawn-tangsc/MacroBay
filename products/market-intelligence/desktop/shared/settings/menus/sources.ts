@@ -81,16 +81,7 @@ export const SOURCE_ROWS: readonly SettingDescriptor[] = Object.freeze([
         includeInSentiment: value === true
       })
     },
-    visibleWhen: (view, legacyContext) => {
-      // 视图给了事实就**只认视图**（这是契约要求的那条路）。
-      const supportsSentiment = readViewField(view, 'supportsSentiment')
-      if (typeof supportsSentiment === 'boolean') return supportsSentiment
-      // 过渡：页面还没把事实拼进视图时，退回旧的只读上下文——只在「视图里根本没有这一格」时生效。
-      // TODO(C17 第三步)：调用点改单参后，连同 `SettingContext` 一起删掉这一段，缺事实即不渲染。
-      const sourceId = readViewField(view, 'sourceId')
-      if (typeof sourceId !== 'string') return false
-      return readViewField(readViewField(legacyContext, 'supportsSentimentById'), sourceId) === true
-    },
+    visibleWhen: (view) => readViewField(view, 'supportsSentiment') === true,
     copy: { labelKey: 'settings.intelligenceSources.collectionPolicy.includeInSentiment' },
     availability: 'live'
   }

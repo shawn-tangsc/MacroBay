@@ -49,9 +49,6 @@ export type SettingAvailability = 'live' | 'unimplemented'
 /** 这一行读到的视图；`keyedBy` 行由页面把实例键与投影事实拼进来。 */
 export type SettingView = unknown
 
-/** 页面传下来的只读上下文（如 `supportsSentimentById`）；**不许存进注册表、不许从它推可写值**。 */
-export type SettingContext = unknown
-
 /** 控件可选项只许来自这里声明的集合，不许在行里手写列表。 */
 export type SettingOptionsSource =
   | 'news-push-thresholds'
@@ -124,12 +121,13 @@ export type SettingDescriptor = Readonly<{
   /** 值缺失时显示什么：只许是 `SERVER_DEFAULTS` 的键（编译期）。 */
   defaultValueFrom?: ServerDefaultKey
   /**
-   * 何时出现：**只依赖 `view`**；假 = 不渲染，不是禁用。
+   * 何时出现：**只依赖 `view`，只有一个参数**；假 = 不渲染，不是禁用。
    *
-   * 契约（§1 ⑧ / G10）定的是单参 `(view) => boolean`：条件要用的能力事实必须先放进视图，
-   * 不由渲染层另传一份上下文。第二参留成可选只为三段迁移不红树——调用点改单参后删掉它。
+   * 契约 §1 ⑧ / G10：条件要用的能力事实（如「这个源是否纳入情绪分析」）必须先放进视图，
+   * 由页面算视图时一并给出。**不开「渲染层另传上下文」的口子**——口子一开，每行都能自带一个
+   * 判断依据，同一份事实就散成多份。视图里缺这条事实 ⇒ 整行不渲染，不许默认 `true`。
    */
-  visibleWhen?: (view: SettingView, context?: SettingContext) => boolean
+  visibleWhen?: (view: SettingView) => boolean
   /**
    * 行名：静态行用 `labelKey`；按实例化的行可用 `labelText(view)` 取视图数据（来源名/feed 名）。
    * `labelText` 只许出现在 `keyedBy` 行上，且**不许写字面量句子**。
