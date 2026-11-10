@@ -33,8 +33,6 @@ const PLATFORM_SWITCH_FILES = new Set<string>()
  * 写在这里只是为了让门禁能跑，不是给历史遗留发通行证。
  */
 const ALLOWED: Readonly<Record<string, string>> = {
-  'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelDrawer.tsx':
-    '欠账：换平台 Switch 要同步改抽屉行高；清掉后删这一行',
   'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx':
     '欠账：换平台 Switch 要同步改卡片行高；清掉后删这一行'
 }

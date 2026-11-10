@@ -247,7 +247,7 @@ export function ModelServiceModelDrawer({
               <span className="model-drawer-label">{labels.freeModel}</span>
               <div>
                 <div className="model-drawer-switch-row">
-                  {/* 手写 `role="switch"` 是缺陷：换 antd `Switch`，尺寸走默认档（全仓一档，`small` 只在该用它的密排处）。 */}
+                  {/* 手写开关是缺陷：一律用平台 `Switch`（尺寸默认档；全仓一档，`small` 只在该用它的密排处）。 */}
                   <span data-model-free>
                     <Switch
                       aria-label={labels.freeModel}

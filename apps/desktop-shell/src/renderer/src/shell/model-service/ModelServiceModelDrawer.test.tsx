@@ -147,6 +147,28 @@ describe('PLAT-62 模型编辑抽屉', () => {
     expect(container.querySelector('[data-model-pin] button[role="switch"]')?.getAttribute('aria-checked')).toBe('false')
   })
 
+  it('keeps the switch accessible and keyboard-operable, with the row geometry untouched', async () => {
+    const container = await mount(createElement(Harness))
+    const free = container.querySelector<HTMLButtonElement>('[data-model-free] button[role="switch"]')
+
+    // 可访问名来自 labels（不是空串、也不是键名）。
+    expect(free?.getAttribute('aria-label')).toBe(labels.freeModel)
+
+    // 键盘可操作：它是**原生 `<button type="button">`**，Space/Enter 由浏览器原生激活；
+    // 方向键归组件（`rc-switch`）。这里钉「可聚焦的真按钮」，不模拟浏览器原生激活——
+    // 那验的是 happy-dom，不是我们的代码。
+    expect(free?.tagName).toBe('BUTTON')
+    expect(free?.getAttribute('type')).toBe('button')
+    expect(free?.disabled).toBe(false)
+    expect(free?.hasAttribute('tabindex') ? free.getAttribute('tabindex') : '0').not.toBe('-1')
+
+    // 行几何没被动过：开关仍直接挂在同一个行容器里，没有被新增 wrapper 或内联高度包一层。
+    const row = container.querySelector('[data-model-free]')?.closest('.model-drawer-switch-row')
+    expect(row?.className).toBe('model-drawer-switch-row')
+    expect(row?.getAttribute('style')).toBeNull()
+    expect(container.querySelector('[data-model-free]')?.getAttribute('style')).toBeNull()
+  })
+
   it('hides the pin row for a new model and saves once', async () => {
     const onSave = vi.fn()
     const container = await mount(createElement(Harness, { isEditing: false, onSave }))
