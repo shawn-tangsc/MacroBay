@@ -10,8 +10,11 @@ import { describe, expect, it } from 'vitest'
  * **只减不增**：新出现的裸告警直接红，不进基线——27 处是可见的债，不是豁免。
  */
 const ROOT = process.cwd()
-const BASELINE = JSON.parse(readFileSync(join(ROOT, 'scripts/inline-notice-baseline.json'), 'utf8')) as {
-  entries: Record<string, { count: number; owner: string; shared: string; kind: 'debt' | 'by-design'; why: string; clearWhen: string }>
+/** 基线按 owner 拆成 `scripts/inline-notice-baseline/<owner>.json`：一条线只改自己那份。 */
+const BASELINE: { entries: Record<string, { count: number; owner: string; shared: string; kind: 'debt' | 'by-design'; why: string; clearWhen: string }> } = {
+  entries: Object.assign({}, ...readdirSync(join(ROOT, 'scripts/inline-notice-baseline'))
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => (JSON.parse(readFileSync(join(ROOT, 'scripts/inline-notice-baseline', name), 'utf8')) as { entries: Record<string, never> }).entries))
 }
 
 /** 纯函数：源码 → 裸 `<p role="alert">` 的行号。 */

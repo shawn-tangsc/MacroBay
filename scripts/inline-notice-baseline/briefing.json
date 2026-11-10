@@ -1,0 +1,29 @@
+{
+  "owner": "briefing",
+  "entries": {
+    "products/market-intelligence/desktop/pages/intelligence/BriefingManualRunDialog.tsx": {
+      "count": 3,
+      "owner": "简报线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "products/market-intelligence/desktop/pages/intelligence/BriefingPeriodDialog.tsx": {
+      "count": 2,
+      "owner": "简报线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "products/market-intelligence/desktop/pages/intelligence/DailyBriefingDeleteOutcomeNote.tsx": {
+      "count": 2,
+      "owner": "简报线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    }
+  }
+}
