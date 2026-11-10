@@ -51,8 +51,8 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   '黄金（备用）': 'gold-fallback',
   BTC: 'btc',
   ETH: 'eth',
-  离岸人民币: 'cnh',
-  '10Y': 'ust10y',
+  离岸人民币汇率: 'cnh',
+  '美债 10 年期': 'ust10y',
   政策路径概率: 'probability',
   恐惧与贪婪: 'index',
   稳定币: 'stablecoin',
@@ -115,8 +115,9 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     ['美元（备用）', 'twelve-data-market', true],
     ['黄金', 'realmarketapi-market'],
     ['黄金（备用）', 'twelve-data-market', true],
-    ['离岸人民币', 'twelve-data-market'],
-    ['10Y', 'fred-rates-liquidity']
+    /* 卡片标题用读者能看懂的名字：`10Y` 不是每个人都当它是美债十年期（用户 2026-11-11）。 */
+    ['离岸人民币汇率', 'twelve-data-market'],
+    ['美债 10 年期', 'fred-rates-liquidity']
   ]),
   moduleOf('news', 'pages.intelligence.portal.newsSentiment.title', [
     // 四条同为「新闻条目」：显式按源给键，避免同模块内 cellId 撞车。
