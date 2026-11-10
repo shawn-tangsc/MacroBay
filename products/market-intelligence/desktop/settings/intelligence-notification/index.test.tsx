@@ -426,6 +426,45 @@ describe('intelligence notification settings', () => {
     }
   })
 
+  it('never leaks a setting anchor into visible text or an accessible name', async () => {
+    // `data-setting-key` 只当锚点：读者看到 `setting:…` 会把它当成内部码，读屏念出来更糟。
+    const leaks = (): string[] => {
+      const found: string[] = []
+      const root = container
+      if (root === null || root === undefined) return found
+      if ((root.textContent ?? '').includes('setting:')) found.push('text')
+      for (const element of root.querySelectorAll('*')) {
+        for (const attribute of element.attributes) {
+          if (attribute.name.startsWith('aria-') && attribute.value.includes('setting:')) {
+            found.push(`${attribute.name}:${element.tagName}`)
+          }
+        }
+      }
+      return found
+    }
+
+    install()
+    await render()
+    expect(leaks()).toEqual([])
+    await selectItem(1)
+    expect(leaks()).toEqual([])
+    await selectItem(2)
+    expect(leaks()).toEqual([])
+
+    const base = { leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'us', codes: [] } }
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) return { ...base, enabled: true }
+        if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+        return { enabled: true }
+      })
+    })
+    act(() => root?.unmount())
+    await render()
+    await selectItem(3)
+    expect(leaks()).toEqual([])
+  })
+
   it('keeps the value the reader just picked when a channel toggle fails to save', async () => {
     // G8：写失败时控件保留读者刚选的值，只在本行说「这次没存上」，不回退、不只弹提示。
     install({ setChannelEvent: vi.fn(async () => { throw new Error('write-failed') }) })
