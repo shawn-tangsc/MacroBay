@@ -1,0 +1,26 @@
+/* 设置区块：值照设置页现状（区块标题 13/650、标题与内容 8、区块之间 16）。只走 token。 */
+.settings-section { display: grid; gap: 8px; }
+.settings-section + .settings-section { margin-top: 16px; }
+
+.settings-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.settings-section__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-section);
+  font-weight: 650;
+  line-height: var(--line-section);
+}
+
+.settings-section__info { display: inline-flex; }
+.settings-section__action { display: inline-flex; }
+.settings-section__body { display: grid; }
