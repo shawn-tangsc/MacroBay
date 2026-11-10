@@ -268,3 +268,117 @@ describe('the drawer guard keeps the draft when the reader keeps editing', () =>
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * 旧期列表块（`BriefingPeriodsPanel`）退役前，它那四条判据搬到这里。
+ * 每条都只判行为，不判旧组件的类名。
+ */
+describe('the period list’s criteria, moved from the retired block', () => {
+  const a = { id: 'period-a', generationTime: '08:00', windowHours: 24, language: 'zh-CN' }
+  const b = { id: 'period-b', generationTime: '09:00', windowHours: 48, language: 'en-US' }
+
+  function stubList(overrides: Readonly<{
+    list?: (call: number) => Promise<unknown>
+    update?: (...args: unknown[]) => Promise<unknown>
+  }> = {}): { invoke: ReturnType<typeof vi.fn>; calls: { method: string; payload?: unknown }[] } {
+    const calls: { method: string; payload?: unknown }[] = []
+    let listCall = 0
+    const invoke = vi.fn(async (_product: string, method: string, payload?: unknown) => {
+      calls.push({ method, payload })
+      if (method === 'intelligence.dailyBriefing.getSettings') return aiView
+      if (method === 'intelligence.dailyBriefing.saveSettings') return aiView
+      if (method === 'intelligence.dailyBriefing.listPeriods') {
+        listCall += 1
+        return overrides.list === undefined ? [a, b] : overrides.list(listCall)
+      }
+      if (method === 'intelligence.dailyBriefing.updatePeriod') {
+        return overrides.update === undefined
+          ? { state: 'saved', period: a, periods: [a, b] }
+          : overrides.update(payload)
+      }
+      return undefined
+    })
+    vi.stubGlobal('platform', {
+      products: { invoke },
+      modelProviders: { list: vi.fn(async () => []) },
+      settings: { get: vi.fn(async () => ({ modelDefaults: { agentModelId: '' } })) }
+    })
+    return { invoke, calls }
+  }
+
+  it('shows the empty state only when the store really has no periods', async () => {
+    stubList({ list: async () => [] })
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
+    ))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(host.querySelector('[data-briefing-periods-empty="true"]')?.textContent).toContain('还没有设置任何一期')
+    expect(host.querySelector('[data-period-id]')).toBeNull()
+
+    await act(async () => root!.unmount()); root = undefined; document.body.replaceChildren()
+    stubList()
+    const filled = document.createElement('div')
+    document.body.append(filled)
+    root = createRoot(filled)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
+    ))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(filled.querySelector('[data-briefing-periods-empty="true"]')).toBeNull()
+    expect(filled.querySelectorAll('[data-period-id]')).toHaveLength(2)
+  })
+
+  it('re-reads after a read failure, and shows the periods instead of the empty state', async () => {
+    const stub = stubList({
+      list: (call) => call === 1 ? Promise.reject(new Error('list-failed')) : Promise.resolve([a])
+    })
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
+    ))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const retry = host.querySelector<HTMLButtonElement>('[data-briefing-periods-retry-load="true"]')
+    expect(retry).not.toBeNull()
+    await act(async () => retry!.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(stub.calls.filter((call) => call.method === 'intelligence.dailyBriefing.listPeriods')).toHaveLength(2)
+    expect(host.querySelector('[data-period-id="period-a"]')).not.toBeNull()
+    expect(host.querySelector('[data-briefing-periods-empty="true"]')).toBeNull()
+  })
+
+  it('writes one period by id, does not touch the other, and re-reads the store afterwards', async () => {
+    const stub = stubList()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN"><ConfirmProvider><DailyBriefingSettingsPanel onState={() => undefined} /></ConfirmProvider></ShellLanguageProvider>
+    ))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    // 打开第 1 期的编辑弹框，直接保存（草稿等于当前值，弹框允许保存）。
+    await act(async () => host.querySelector<HTMLElement>('[data-period-edit="period-a"]')!.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const save = [...document.querySelectorAll<HTMLButtonElement>('.ant-modal button')]
+      .find((button) => (button.textContent ?? '').replace(/\s+/gu, '') === '保存')
+    expect(save).not.toBeUndefined()
+    await act(async () => save!.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    const writes = stub.calls.filter((call) => call.method === 'intelligence.dailyBriefing.updatePeriod')
+    expect(writes).toHaveLength(1)
+    expect((writes[0]!.payload as { id: string }).id).toBe('period-a')
+    expect(stub.calls.some((call) => call.method === 'intelligence.dailyBriefing.createPeriod')).toBe(false)
+    // 写完重读：不是相信回执。
+    expect(stub.calls.filter((call) => call.method === 'intelligence.dailyBriefing.listPeriods')).toHaveLength(2)
+    // 另一期原样还在。
+    const rowB = host.querySelector<HTMLElement>('[data-period-id="period-b"]')?.textContent ?? ''
+    expect(rowB).toContain('09:00')
+    expect(rowB).toContain('48')
+  })
+})
