@@ -34,6 +34,16 @@ export interface GeneratedProductMenuEntry {
   load: () => Promise<unknown>
 }
 
+/**
+ * 产品设置抽屉的**声明**（生成期汇总）：`menus` 只有 id。壳层拿它判断「这个产品有没有可打开的抽屉」，
+ * 并据此决定通知中心那颗「去设置」渲不渲染；菜单名归产品，平台不解析。
+ */
+export interface GeneratedProductSettingsDrawerEntry {
+  productId: string
+  productName: LocalizedText
+  menus: readonly string[]
+}
+
 export interface GeneratedProductSettingsEntry {
   id: string
   productId: string
@@ -62,6 +72,7 @@ export interface GeneratedProductRegistry {
   menuEntries: readonly PreparedProductMenuEntry[]
   settingsEntries: readonly PreparedProductSettingsEntry[]
   panelEntries: readonly PreparedProductPanelEntry[]
+  settingsDrawers: readonly GeneratedProductSettingsDrawerEntry[]
   /**
    * 工具名 → 字段名 → 两种语言的一句话，由各产品在自己的 manifest 里声明、生成期汇总。
    * 壳层只读这张表：它不写任何产品字段名，取不到就退回 JSON 摘要。

@@ -100,6 +100,11 @@ type AppShellNavigateDetail = {
   navKey?: string
   settingsPanelKey?: string
   assistant?: AssistantOpenRequest
+  /**
+   * 「请产品的设置抽屉打开某一屏」（架构师 2026-11-11 签）：走同一条 `app-shell:navigate`，
+   * 不新增事件名。壳层**忽略**这个字段——它是给产品页读的，产品按自己的 `productId` 过滤。
+   */
+  settingsDrawer?: { productId: string; menuId: string }
 }
 
 type PlatformModelText = typeof platformText['zh-CN']['models']
