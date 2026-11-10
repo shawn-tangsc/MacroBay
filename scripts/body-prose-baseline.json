@@ -1,6 +1,6 @@
 {
   "note": "正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts",
-  "total": 130,
+  "total": 129,
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/AppShellPreferencesPane.tsx :: proxyRequestHint": 1,
     "apps/desktop-shell/src/renderer/src/shell/ProviderConnectionCheckEnvironmentBlock.tsx :: customProxyFailureHint": 1,
@@ -81,7 +81,6 @@
     "apps/desktop-shell/src/renderer/src/shell/workspace/workspaceWindowSurfaces.tsx :: windowHostUnavailableHint": 1,
     "platform/ui/components/state/StateView.tsx :: DisabledHint": 1,
     "platform/ui/components/state/StateView.tsx :: providerDisabledHint": 1,
-    "products/market-intelligence/desktop/features/industry/capital-conditions/CapitalConditionsPanel.tsx :: columnScopeNote": 1,
     "products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx :: historyHint": 1,
     "products/market-intelligence/desktop/features/industry/cross-asset/crossAssetStatusRows.tsx :: notConnectedHint": 2,
     "products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentSettingsModal.tsx :: judgeHint": 1,

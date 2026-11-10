@@ -60,6 +60,33 @@ export function mergeBaseline(
 }
 
 /** 直接运行时才扫仓库；被用例 import 时只导出纯函数（否则 import 会把整条门禁当副作用跑一遍）。 */
+
+/**
+ * 把浮层表达式整块剥掉：`lines={…}` / `content={…}` 里出现的是说明句的**入口**，不是正文。
+ * 块可能是跨行的，键还可能来自 helper（`key('columnScopeNote')`）——所以按花括号配平整块移除，
+ * 不做「同一行里有 `lines=`」那种按行判断（`CapitalConditionsPanel.tsx:352` 就是跨行的反例）。
+ */
+export function stripFloatingBlocks(text: string): string {
+  let out = ''
+  let index = 0
+  while (index < text.length) {
+    const match = /(?:lines|content)=\{/u.exec(text.slice(index))
+    if (match === null) { out += text.slice(index); break }
+    const start = index + match.index
+    out += text.slice(index, start)
+    let depth = 0
+    let cursor = start + match[0].length - 1
+    for (; cursor < text.length; cursor += 1) {
+      if (text[cursor] === '{') depth += 1
+      else if (text[cursor] === '}') { depth -= 1; if (depth === 0) { cursor += 1; break } }
+    }
+    // 用等量空白替换，保持行号不变（行号仍要指得准）。
+    out += text.slice(start, cursor).replace(/[^\n]/gu, ' ')
+    index = cursor
+  }
+  return out
+}
+
 const invokedDirectly = process.argv[1]?.endsWith('check-body-prose.mts') === true
 function main(): void {
   const findings: Finding[] = []
@@ -68,7 +95,7 @@ function main(): void {
     const absolute = join(ROOT, root)
     if (!existsSync(absolute)) continue
     for (const file of walk(absolute)) {
-      const text = readFileSync(file, 'utf8')
+      const text = stripFloatingBlocks(readFileSync(file, 'utf8'))
       text.split('\n').forEach((line, index) => {
         if (ALLOWED_CONTEXT.test(line)) return
         // 键**定义**不是用法：`const X_KEY = '…Hint'` 只是给这段文案起名字，真正渲染在别处。
