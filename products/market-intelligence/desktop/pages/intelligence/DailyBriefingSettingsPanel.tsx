@@ -9,7 +9,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { SettingsRow } from '@platform/ui/components/settings-row'
-import { SettingsSectionHeader } from '@platform/ui/components/settings-section'
+import { SettingsSection } from '@platform/ui/components/settings-section'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { platformText } from '@renderer/i18n/platformText'
 import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
@@ -204,26 +204,25 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
     : `${text.aiSettings.followDefault} · ${ai.defaultModel.providerName} / ${ai.defaultModel.modelName}`
 
   return <div className="briefing-settings-screen" data-briefing-settings-panel="true">
-    <section className="settings-section" data-settings-section-block="true">
-      <SettingsSectionHeader
-        title={text.settingsDrawer.sections.generation}
-        info={<Popover
-          labelKey={GENERATION_NOTE_KEY}
+    <SettingsSection
+      title={text.settingsDrawer.sections.generation}
+      info={<Popover
+        labelKey={GENERATION_NOTE_KEY}
+        resolveText={resolveText}
+        trigger={(triggerProps) => <IconButton
+          {...triggerProps}
+          ariaLabelKey={GENERATION_NOTE_LABEL_KEY}
+          icon={CircleHelp}
           resolveText={resolveText}
-          trigger={(triggerProps) => <IconButton
-            {...triggerProps}
-            ariaLabelKey={GENERATION_NOTE_LABEL_KEY}
-            icon={CircleHelp}
-            resolveText={resolveText}
-            size="sm"
-            variant="plain"
-          />}
+          size="sm"
+          variant="plain"
         />}
-        action={periodsFailed || periods === null
-          ? null
-          : <Button data-briefing-period-add="true" onClick={() => setAdding(true)} type="link">{copy.add}</Button>}
-      />
-      <div className="settings-section__body">
+      />}
+      action={periodsFailed || periods === null
+        ? null
+        : <Button data-briefing-period-add="true" onClick={() => setAdding(true)} type="link">{copy.add}</Button>}
+
+    >
         {periodsFailed
           ? <div className="briefing-settings-error" role="alert">
             <span>{copy.loadFailed}</span>
@@ -319,12 +318,11 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
             />
           </> : null}
         </SettingsRow> : null}
-      </div>
-    </section>
+    </SettingsSection>
 
-    <section className="settings-section" data-settings-section-block="true">
-      <SettingsSectionHeader title={text.settingsDrawer.sections.ai} />
-      <div className="settings-section__body">
+    <SettingsSection
+      title={text.settingsDrawer.sections.ai}
+    >
         {ai.webSearchBlocked ? <p className="briefing-settings-notice" role="status">{text.aiSettings.webSearchNeedsSetup}</p> : null}
         {ai.webSearchSupported ? null : <p className="briefing-settings-notice" role="status">{text.aiSettings.webSearchUnsupported}</p>}
         {ai.state === 'load-failed'
@@ -382,12 +380,11 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                 />
               </SettingsRow> : null}
             </>}
-      </div>
-    </section>
+    </SettingsSection>
 
-    <section className="settings-section" data-settings-section-block="true">
-      <SettingsSectionHeader title={text.settingsDrawer.platformTitle} />
-      <div className="settings-section__body">
+    <SettingsSection
+      title={text.settingsDrawer.platformTitle}
+    >
         <SettingsRow
           copyClassName="config-drawer__label"
           controlWrapperClassName="config-drawer__control"
@@ -402,8 +399,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
           rowClassName="config-drawer__row">
           <Button data-global-link="web-search" onClick={openWebSearchSettings} type="link">{drawerCopy.openPlatformSettings}</Button>
         </SettingsRow>
-      </div>
-    </section>
+    </SettingsSection>
 
     <BriefingPeriodDialog
       key={editing?.id ?? 'new'}

@@ -11,15 +11,17 @@ import type { ReactNode } from 'react'
  * （结构件、类名由调用方给），抽屉直接用那个，把 class 传成 `config-drawer__*`。
  * 所以这里只提供**区块**与**卡头**两件，避免同一概念出现两个 `SettingsRow`。
  */
-export function SettingsSection({ title, children, action }: Readonly<{
+export function SettingsSection({ title, children, action, info }: Readonly<{
   /** 区块名（读者可见文案，由调用方解析好再传）。 */
   title: string
   /** 标题右侧的动作槽（可选）：一颗按钮或一条跳转。 */
   action?: ReactNode
+  /** 标题旁的 ⓘ 槽（可选）：说明句进浮层，正文只留标题。 */
+  info?: ReactNode
   children: ReactNode
 }>): React.ReactElement {
   return <section className="settings-section" data-settings-section-block="true">
-    <SettingsSectionHeader action={action} title={title} />
+    <SettingsSectionHeader action={action} info={info} title={title} />
     <div className="settings-section__body">{children}</div>
   </section>
 }

@@ -32,6 +32,14 @@ describe('settings section', () => {
     expect(host.querySelector('.settings-section__body')?.textContent).toBe('row')
   })
 
+  it('renders a caller-supplied ⓘ slot inside the title, so a block does not hand-build the row', async () => {
+    const host = await mount(<SettingsSection info={<button data-info="true" type="button">i</button>} title="生成">
+      <span>row</span>
+    </SettingsSection>)
+    const title = host.querySelector('.settings-section__title')!
+    expect(title.querySelector('.settings-section__info [data-info="true"]')).not.toBeNull()
+  })
+
   it('keeps ⓘ next to the title instead of pushing it to the far end', async () => {
     const host = await mount(<SettingsSection title="分析设置" action={<button type="button">动作</button>}>
       <span>row</span>
