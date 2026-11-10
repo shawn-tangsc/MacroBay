@@ -111,6 +111,45 @@ describe('the notification settings panel layout', () => {
     expect(container.querySelector('.intelligence-notification-list')).not.toBeNull()
   })
 
+  it('keeps the same explanation ⓘ in the drawer, right above the rows it explains', async () => {
+    // 界面设计 2026-11-10：ⓘ 两面都画（同一组件、同一段文案），且**紧跟它所解释的那组行**——
+    // 位置一变，读者会以为它解释的是别的东西。
+    const infoAria = text['pages.intelligence.notification.infoAria']
+    const drawer = await renderPanel('drawer')
+    const head = drawer.querySelector('.intelligence-notification-head--drawer')
+    expect(head).not.toBeNull()
+    const drawerTrigger = [...(head?.querySelectorAll('button') ?? [])]
+      .find((button) => button.getAttribute('aria-label') === infoAria)
+    expect(drawerTrigger, '抽屉里必须有那颗 ⓘ').toBeDefined()
+    // 紧跟：head 的下一个兄弟就是它解释的两栏，中间没有别的块。
+    expect(head?.nextElementSibling?.className).toContain('intelligence-notification-panes')
+
+    await act(async () => {
+      drawerTrigger?.focus()
+      drawerTrigger?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const drawerLine = document.querySelector('[data-popover-line="0"]')?.textContent
+    expect(drawerLine).toBeTruthy()
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    const page = await renderPanel('page')
+    // page 面形状不变：标题与 ⓘ 仍同在一个 head 里。
+    expect(page.querySelector('.intelligence-notification-head .intelligence-notification-title')).not.toBeNull()
+    const pageTrigger = [...page.querySelectorAll('button')]
+      .find((button) => button.getAttribute('aria-label') === infoAria)
+    await act(async () => {
+      pageTrigger?.focus()
+      pageTrigger?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      await Promise.resolve()
+    })
+    // 同一段文案：两面展开后的第一行逐字相同。
+    expect(document.querySelector('[data-popover-line="0"]')?.textContent).toBe(drawerLine)
+  })
+
   it('leaves the page-level heading to the drawer own title, and keeps it on the page', async () => {
     // 抽屉自己有这一屏的页名（16），再画一遍这颗 13.5 的标题，读者会读成两个层级。
     // **不渲染**，不是用 CSS 藏起来——藏起来它还在 DOM 里，读屏仍会念到。

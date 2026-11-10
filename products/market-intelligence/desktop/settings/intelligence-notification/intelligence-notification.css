@@ -53,6 +53,11 @@
   margin-bottom: 12px;
 }
 
+/* 抽屉里没有页级标题，这颗 ⓘ 紧跟它解释的那组行：与内容间距 4（界面设计 2026-11-10 位置判据）。 */
+.intelligence-notification-head--drawer {
+  margin-bottom: 4px;
+}
+
 .intelligence-notification-title {
   margin: 0;
   font-size: 14px;

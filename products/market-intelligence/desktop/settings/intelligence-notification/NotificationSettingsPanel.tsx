@@ -162,21 +162,23 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
   }
 
   return shell(<>
-    {/* 标题一行：13.5/600/正常色，上 16 下 12；ⓘ 只放「为什么勾了还不响」。
-        抽屉自己有这一屏的标题，所以只在设置页画——不做嵌套标题。 */}
-    {variant === 'page'
-      ? <div className="intelligence-notification-head">
-        <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
-        <SettingsInfo
-          ariaLabelKey="pages.intelligence.notification.infoAria"
-          labelKeys={[
-            'pages.intelligence.notification.groupInfo.2',
-            'pages.intelligence.notification.channelNotReady'
-          ]}
-          resolveText={resolveText}
-        />
-      </div>
-      : null}
+    {/* 标题一行：13.5/600/正常色，上 16 下 12。抽屉自己有这一屏的标题，所以**只在设置页画标题**
+        （不做嵌套标题）；那颗 ⓘ 两面都画——它是「为什么勾了还不响」的唯一解释，抽屉马上是唯一入口，
+        把解释留在旧页面上等于把答案藏起来。
+        抽屉里 ⓘ 紧跟它所解释的这组行（界面设计 2026-11-10：位置一变，读者会以为它解释的是别的东西）。 */}
+    <div className={`intelligence-notification-head${variant === 'drawer' ? ' intelligence-notification-head--drawer' : ''}`}>
+      {variant === 'page'
+        ? <h2 className="intelligence-notification-title">{text['pages.intelligence.notification.groupTitle']}</h2>
+        : null}
+      <SettingsInfo
+        ariaLabelKey="pages.intelligence.notification.infoAria"
+        labelKeys={[
+          'pages.intelligence.notification.groupInfo.2',
+          'pages.intelligence.notification.channelNotReady'
+        ]}
+        resolveText={resolveText}
+      />
+    </div>
 
     <div className="intelligence-notification-panes">
       <NotificationList
