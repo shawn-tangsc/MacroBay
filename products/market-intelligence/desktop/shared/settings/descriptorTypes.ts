@@ -49,6 +49,17 @@ export type SettingAvailability = 'live' | 'unimplemented'
 /** 这一行读到的视图；`keyedBy` 行由页面把实例键与投影事实拼进来。 */
 export type SettingView = unknown
 
+/**
+ * 选项从哪儿来。两种，**都在声明层之外不留第二份列表**：
+ * - 静态集合名：真闭集（重要性、国家码、档位），值在 `SETTING_OPTION_SETS`；
+ * - `{ kind: 'view', field }`：选项由页面给的（如触达面：平台返回今天是哪几面），注册表只声明去哪儿取。
+ *
+ * 为什么要有第二种：静态四项会把「通知中心」画成可勾、还会多出页面今日不给的面——DOM 与行为都变。
+ */
+export type SettingOptionsRef =
+  | SettingOptionsSource
+  | Readonly<{ kind: 'view'; field: string }>
+
 /** 控件可选项只许来自这里声明的集合，不许在行里手写列表。 */
 export type SettingOptionsSource =
   | 'news-push-thresholds'
@@ -73,11 +84,11 @@ export type SettingField =
   | { readonly kind: 'switch' }
   | {
       readonly kind: 'select'
-      readonly optionsFrom: SettingOptionsSource
+      readonly optionsFrom: SettingOptionsRef
       /** 不声明 = antd `Select`（默认）；`segmented` 用平台 `Segmented`。 */
       readonly presentation?: SettingSelectPresentation
     }
-  | { readonly kind: 'multiSelect'; readonly optionsFrom: SettingOptionsSource }
+  | { readonly kind: 'multiSelect'; readonly optionsFrom: SettingOptionsRef }
   | { readonly kind: 'number'; readonly min?: number; readonly max?: number; readonly step?: number; readonly unitKey?: string }
   | { readonly kind: 'readonly' }
 
@@ -145,9 +156,25 @@ export type SettingDescriptor = Readonly<{
    * 行名：静态行用 `labelKey`；按实例化的行可用 `labelText(view)` 取视图数据（来源名/feed 名）。
    * `labelText` 只许出现在 `keyedBy` 行上，且**不许写字面量句子**。
    */
-  copy?: Readonly<{ labelKey?: string; helpKey?: string }>
+  copy?: SettingRowCopy
   labelText?: (view: SettingView) => string
   availability: SettingAvailability
+}>
+
+/**
+ * 行名与说明。正文只留名字与控件，说明一律进 ⓘ（契约 §3.2）。
+ *
+ * 说明可以是**一条**（`helpKey`）或**多条**（`helpKeys`，一行一条按顺序进浮层）；两者互斥，
+ * 同时写就是两种形状打架。`helpAriaKey` 是那颗 ⓘ 自己的读屏名——说明不继承字段名，否则读屏会念两遍。
+ */
+export type SettingRowCopy = Readonly<{
+  labelKey?: string
+  /** 单条说明的简写。 */
+  helpKey?: string
+  /** 多条说明，按顺序进同一颗 ⓘ。与 `helpKey` 互斥。 */
+  helpKeys?: readonly string[]
+  /** ⓘ 的读屏名；不写就沿用第一条说明的键。 */
+  helpAriaKey?: string
 }>
 
 /** 一个选项：值 + 是否固定勾选（`locked` 的项读者不能取消）。 */

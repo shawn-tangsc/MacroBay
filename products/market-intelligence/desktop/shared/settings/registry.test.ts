@@ -242,10 +242,37 @@ describe('settings registry self-checks', () => {
       .toContain('presentation-on-non-select')
   })
 
+  it('lets a row take its options from the view when the page decides them', () => {
+    // 形状：`optionsFrom` 可以是 `{ kind: 'view', field }`，注册表只声明去哪儿取、不另留一份列表。
+    // 触达面今天仍是静态集合（行与组件要同笔翻），但形状与校验已经就位。
+    const fromView = { ...PUSH_THRESHOLD, field: { kind: 'multiSelect', optionsFrom: { kind: 'view', field: 'available' } } as never }
+    expect(validateSettingRegistry(withRow(fromView))).toEqual([])
+    const noField = { ...PUSH_THRESHOLD, field: { kind: 'multiSelect', optionsFrom: { kind: 'view', field: '  ' } } as never }
+    expect(validateSettingRegistry(withRow(noField))).toContain('view-options-without-field')
+  })
+
+  it('supports several help lines with their own screen-reader name, without dropping the single form', () => {
+    // 形状：一行可以有多条说明（国家范围今天就是两条共用一颗 ⓘ），并可以给那颗 ⓘ 单独的读屏名；
+    // 单条 `helpKey` 保留。**行翻不翻由存储缓存那半笔决定**——它的 ⓘ 还没读 `helpKeys`。
+    const multi = { ...PUSH_THRESHOLD, copy: { labelKey: 'a', helpKeys: ['b', 'c'], helpAriaKey: 'd' } }
+    expect(validateSettingRegistry(withRow(multi))).toEqual([])
+    const both = { ...PUSH_THRESHOLD, copy: { labelKey: 'a', helpKey: 'b', helpKeys: ['c'] } }
+    expect(validateSettingRegistry(withRow(both))).toContain('help-both-forms')
+    const empty = { ...PUSH_THRESHOLD, copy: { labelKey: 'a', helpKeys: [] } }
+    expect(validateSettingRegistry(withRow(empty))).toContain('empty-help-keys')
+    const ariaOnly = { ...PUSH_THRESHOLD, copy: { labelKey: 'a', helpAriaKey: 'd' } }
+    expect(validateSettingRegistry(withRow(ariaOnly))).toContain('help-aria-without-help')
+    // 单条形态照旧可用。
+    const single = { ...PUSH_THRESHOLD, copy: { labelKey: 'a', helpKey: 'b' } }
+    expect(validateSettingRegistry(withRow(single))).toEqual([])
+  })
+
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
     const surfaces = settingRegistry.notifications.find(
       (row) => row.key === 'setting:notifications.surfaces'
     ) as SettingDescriptor
+    // 行**还没翻**：翻行要与存储缓存的组件（`MultiSelect` 认视图来源）同笔，否则它那半屏会在
+    // 中间态少选项。形状本身已支持，见下面 `view-options` 那条。
     expect(surfaces.field).toEqual({ kind: 'multiSelect', optionsFrom: 'notification-surfaces' })
     expect(surfaces.level).toBe('platform')
     if (surfaces.write?.kind !== 'command') throw new Error('the surfaces row must be a command write')
@@ -261,7 +288,7 @@ describe('settings registry self-checks', () => {
       eventTypeId: 'calendar-events',
       surfaces: {}
     })
-    expect(SETTING_OPTION_SETS['notification-surfaces']).toContainEqual({ value: 'center', locked: true })
+    // 选项不再登记在注册表里：平台返回的 `available` 才是今天的真值（静态四项已删，避免第二份列表）。
   })
 
   it('every optionsFrom names a set that actually exists, and no set is orphaned', () => {
@@ -269,8 +296,11 @@ describe('settings registry self-checks', () => {
     for (const rows of Object.values(settingRegistry)) {
       for (const row of rows) {
         if ('optionsFrom' in row.field) {
-          used.add(row.field.optionsFrom)
-          expect(SETTING_OPTION_SETS[row.field.optionsFrom].length).toBeGreaterThan(0)
+          const ref = row.field.optionsFrom
+          // 视图来源：注册表只声明去哪儿取，不登记静态集合（否则就是第二份列表）。
+          if (typeof ref !== 'string') continue
+          used.add(ref)
+          expect(SETTING_OPTION_SETS[ref].length).toBeGreaterThan(0)
         }
       }
     }

@@ -57,6 +57,10 @@ export type SettingRegistryIssue =
   | 'label-text-on-static-row'
   | 'template-key-mismatch'
   | 'presentation-on-non-select'
+  | 'view-options-without-field'
+  | 'help-both-forms'
+  | 'empty-help-keys'
+  | 'help-aria-without-help'
   | 'unknown-presentation'
 
 /**
@@ -109,6 +113,23 @@ export function validateSettingRegistry(
       if (descriptor.labelText === undefined && !hasLabelKey) issues.push('missing-label')
       if (descriptor.labelText !== undefined && descriptor.keyedBy === undefined) {
         issues.push('label-text-on-static-row')
+      }
+
+      // 选项来源：静态名必须存在；视图来源必须说清取哪一格（空字段等于没说）。
+      const optionsFrom = (descriptor.field as { optionsFrom?: unknown }).optionsFrom
+      if (typeof optionsFrom === 'object' && optionsFrom !== null) {
+        const ref = optionsFrom as { kind?: unknown; field?: unknown }
+        if (ref.kind !== 'view' || typeof ref.field !== 'string' || ref.field.trim() === '') {
+          issues.push('view-options-without-field')
+        }
+      }
+
+      // 说明形状：单条与多条互斥；多条不许为空；⭐ 之前先要求「有说明」才许给读屏名。
+      const copy = descriptor.copy
+      if (copy?.helpKey !== undefined && copy.helpKeys !== undefined) issues.push('help-both-forms')
+      if (copy?.helpKeys !== undefined && copy.helpKeys.length === 0) issues.push('empty-help-keys')
+      if (copy?.helpAriaKey !== undefined && copy.helpKey === undefined && (copy.helpKeys?.length ?? 0) === 0) {
+        issues.push('help-aria-without-help')
       }
 
       // 原语只在有「怎么长」这件事的控件上出现：单选能选 Segmented / antd Select，别的控件没有这一格。

@@ -8,6 +8,7 @@ import { SettingsInfo } from '../../settings/settingsInfo'
 import {
   SETTING_OPTION_SETS,
   type SettingDescriptor,
+  type SettingOptionsRef,
   type SettingOptionsSource
 } from './descriptorTypes'
 
@@ -103,14 +104,17 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
         size="small"
       />)
     case 'select': {
+      // 选项来源可能是视图（`{ kind: 'view', field }`）。静态集合这条路照旧；视图那条的取值与
+      // 标签解析归存储缓存那半笔接（C2 第 3 步），这里只把类型收窄，不替它决定措辞。
       const optionsFrom = descriptor.field.optionsFrom
+      const staticOptionsFrom = typeof optionsFrom === 'string' ? optionsFrom : undefined
       return row(<Select
         aria-label={label}
         disabled={props.disabled === true || props.busy === true}
         onChange={(next) => props.onChange?.(next)}
-        options={optionsOf(optionsFrom).map((option) => ({
+        options={staticOptionsFrom === undefined ? [] : optionsOf(staticOptionsFrom).map((option) => ({
           value: option.value,
-          label: props.resolveOptionLabel(optionsFrom, option.value)
+          label: props.resolveOptionLabel(staticOptionsFrom, option.value)
         }))}
         size="small"
         value={props.value as string | number | undefined}
@@ -145,12 +149,18 @@ function MultiSelect(props: Readonly<{
   ariaLabel: string
   disabled: boolean
   onChange?: (next: unknown) => void
-  optionsFrom: SettingOptionsSource
+  /**
+   * 选项来源：静态集合，或 `{ kind: 'view', field }`（视图给的）。视图那条的取值与标签解析归
+   * C2 第 3 步（存储缓存）接；今天没有行用视图来源，走静态集合的行为一字未变。
+   */
+  optionsFrom: SettingOptionsRef
   resolveOptionLabel: (source: SettingOptionsSource, value: string | number) => string
   value: unknown
 }>): React.ReactElement {
   const selected = Array.isArray(props.value) ? props.value.map(String) : []
-  const options = optionsOf(props.optionsFrom)
+  const staticOptionsFrom = typeof props.optionsFrom === 'string' ? props.optionsFrom : undefined
+  // 视图来源今天没有行用；静态集合这条行为一字未变。
+  const options = staticOptionsFrom === undefined ? [] : optionsOf(staticOptionsFrom)
   // 固定项（如通知中心）永远在值里：关掉它不是一个可选操作，值里也绝不能少。
   const locked = options.filter((option) => option.locked === true).map((option) => String(option.value))
   const toggle = (option: string, checked: boolean): void => {
@@ -169,7 +179,7 @@ function MultiSelect(props: Readonly<{
         key={key}
         onChange={(event) => toggle(key, event.target.checked)}
       >
-        {props.resolveOptionLabel(props.optionsFrom, option.value)}
+        {staticOptionsFrom === undefined ? String(option.value) : props.resolveOptionLabel(staticOptionsFrom, option.value)}
       </Checkbox>
     })}
   </div>
