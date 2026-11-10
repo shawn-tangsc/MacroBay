@@ -439,7 +439,7 @@ export const intelligenceSourcesText = {
   unavailableReasonCodeAria: '原因码',
   'health.runAction.infoAria': '立即运行的说明',
   /** 不可用源的策略组整组停用：**通用结构**，任何不可用源都同一句，不针对某个源。 */
-  collectionPolicyStopped: '同步已停止，恢复后才生效',
+  collectionPolicyStopped: '同步已停止；恢复后自动生效，恢复时间未知',
   /* C8：另一处保存了同一域，而本页有未保存的草稿。只提示，不覆盖。 */
   otherSideChanged: '另一处已修改了这里的设置，你正在填的内容没有动。',
   reloadOtherSide: '重新载入',
@@ -952,7 +952,7 @@ export const intelligenceSourcesText = {
   unavailableReasonCode: 'Reason code: {code}',
   unavailableReasonCodeAria: 'Reason code',
   'health.runAction.infoAria': 'About Run now',
-  collectionPolicyStopped: 'Sync has stopped; this applies again once it resumes',
+  collectionPolicyStopped: 'Sync has stopped; it applies again automatically once it resumes — when that happens is unknown',
   otherSideChanged: 'Something changed here in another place. What you are typing was left alone.',
   reloadOtherSide: 'Reload',
   keepEditing: 'Keep editing',
