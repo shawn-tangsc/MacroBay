@@ -84,20 +84,29 @@ export function CalendarDetail(props: Readonly<{
         </SettingsRow>
         : surfaces.status === 'loading'
           ? <LoadingState ariaLabel={text['pages.intelligence.notification.calendar.surfaces'] ?? ''} />
-          : <SettingsRow label={notifyLabel} last>
-            <div className="intelligence-notification-form-checks" role="group" aria-label={notifyLabel}>
-              {surfaces.available.map((surface) => (
-                <Checkbox
-                  checked={surfaces.selection[surface] ?? false}
-                  className="intelligence-notification-form-check"
-                  disabled={surfaces.saving}
-                  key={surface}
-                  onChange={() => surfaces.toggle(surface, !(surfaces.selection[surface] ?? false))}
-                >
-                  {text[`pages.intelligence.notification.surface.${surface}`] ?? surface}
-                </Checkbox>
-              ))}
-            </div>
+          : <SettingField
+            busy={surfaces.saving}
+            checkboxClassName="intelligence-notification-form-check"
+            controlWrapperClassName={CONTROL_CLASS}
+            copyClassName={LABEL_CLASS}
+            descriptor={detailDescriptor('setting:notifications.surfaces')}
+            labelTextClassName={LABEL_TEXT_CLASS}
+            onChange={(next) => {
+              const picked = Array.isArray(next) ? next.map(String) : []
+              // 控件给整份选择，命令收单个面的增量：只把变化的那一个面交给页面 toggle。
+              const changed = surfaces.available.find(
+                (surface) => picked.includes(surface) !== (surfaces.selection[surface] === true)
+              )
+              if (changed !== undefined) surfaces.toggle(changed, picked.includes(changed))
+            }}
+            resolveOptionLabel={(option) =>
+              text[`pages.intelligence.notification.surface.${String(option)}`] ?? String(option)}
+            resolveText={props.resolveText}
+            rowClassName={`${ROW_CLASS} is-last`}
+            showHelp={false}
+            value={surfaces.available.filter((surface) => surfaces.selection[surface] === true)}
+            view={surfaces}
+          >
             {/* 勾了却不会响：当场说清（「不许点了没反应」的同一件事），勾选框本身不灰。 */}
             {surfaces.conflict
               ? <span className="intelligence-notification-form-note" role="status">
@@ -116,7 +125,7 @@ export function CalendarDetail(props: Readonly<{
                 {text['pages.intelligence.notification.saveFailed']}
               </span>
               : null}
-          </SettingsRow>}
+          </SettingField>}
     </SettingsGroup>
 
     <SettingsGroup

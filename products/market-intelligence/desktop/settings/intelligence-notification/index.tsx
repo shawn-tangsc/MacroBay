@@ -51,6 +51,7 @@ const CONTENT_SETTING_KEYS = {
 
 /** 日历详情里已迁移的四行（日历开关 / 提前量 / 重要性 / 落地筛选）。 */
 const CALENDAR_SETTING_KEYS = [
+  'setting:notifications.surfaces',
   'setting:notifications.calendar.enabled',
   'setting:notifications.calendar.lead',
   'setting:notifications.calendar.importance',

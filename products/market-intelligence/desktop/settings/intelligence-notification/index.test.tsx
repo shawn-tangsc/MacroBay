@@ -384,6 +384,7 @@ describe('intelligence notification settings', () => {
     await render()
     await selectItem(3)
     expect(keys()).toEqual([
+      'setting:notifications.surfaces',
       'setting:notifications.calendar.enabled',
       'setting:notifications.calendar.lead',
       'setting:notifications.calendar.importance',
