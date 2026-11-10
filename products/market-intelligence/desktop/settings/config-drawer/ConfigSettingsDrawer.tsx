@@ -244,6 +244,12 @@ export function ConfigSettingsDrawer({
     })
   }
 
+  /* 两栏屏（用户 2026-11-11 拆成两个菜单之后）：
+     `数据源` = 左树 + 右详情，`采集与数据` = 左列表 + 右内容；两屏都吃「280 + 1fr」的分栏。
+     少了这一条，列表会横过来铺满整行、内容被压到下面——真机上就是这么错的。 */
+  const splitPane = (menu === 'sources' && sourcesPanel !== undefined)
+    || (menu === 'sourcesData' && sourcesDataPanel !== undefined)
+
   return <Drawer
     mode="modal"
     onClose={requestClose}
@@ -297,9 +303,9 @@ export function ConfigSettingsDrawer({
         aria-label={menuLabel(menu)}
         /* 有「左树 + 右详情」这一屏时，滚动交给两栏各自（菜单那一栏也自己滚），整块不滚。 */
         /* 只有真正的分栏屏（来源：左树 + 右详情）才吃两栏；通知屏是单列，套 split 会让卡片按内容宽度塌缩。 */
-        className={`config-drawer__pane${menu === 'sources' && sourcesPanel !== undefined ? ' config-drawer__pane--split' : ''}`}>
+        className={`config-drawer__pane${splitPane && ' config-drawer__pane--split'}`}>
         {menu === 'sourcesData' && sourcesDataPanel !== undefined
-          ? sourcesDataPanel
+          ? <div className="config-drawer__split">{sourcesDataPanel}</div>
           : null}
         {menu === 'sources'
           ? sourcesPanel === undefined

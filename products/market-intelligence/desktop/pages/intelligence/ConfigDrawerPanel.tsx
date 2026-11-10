@@ -17,7 +17,7 @@ import { ErrorBoundary } from '@platform/ui/components/error-boundary'
  * 没有传产品原因句的入口。要把它改成「这一块没能显示出来」需要平台组件开口子（已报前端组件线），
  * 本文件不自己画一套错误面。
  */
-export type ConfigDrawerScreen = 'sources' | 'analysis' | 'briefing' | 'processing' | 'run-log' | 'notifications'
+export type ConfigDrawerScreen = 'sources' | 'sourcesData' | 'analysis' | 'briefing' | 'processing' | 'run-log' | 'notifications'
 
 export function ConfigDrawerPanel({ screen, children }: {
   screen: ConfigDrawerScreen

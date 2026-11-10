@@ -403,22 +403,50 @@ describe('config settings drawer (static layout)', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('gives the two-column pane class only to the screen that really has two columns', () => {
-    // 通知屏是单列：套 `pane--split`（overflow:hidden + 两行网格）会把卡片按内容宽度塌缩、控件被裁。
-    const open = (menu: 'sources' | 'notifications', props: Record<string, unknown>): string => {
-      document.body.replaceChildren()
-      root?.unmount()
-      root = undefined
-      host = document.createElement('div')
-      document.body.append(host)
-      root = createRoot(host)
-      act(() => root?.render(
-        <ConfigSettingsDrawer initialMenu={menu} onClose={() => undefined} open {...props} />
-      ))
-      return document.body.querySelector('.config-drawer__pane')!.className
+  /* 两栏屏只有两个：`数据源`（左树 + 右详情）与 `采集与数据`（左列表 + 右内容）。
+     单列屏（通知）套 `pane--split`（overflow:hidden + 两行网格）会把卡片按内容宽度塌缩、控件被裁。
+     每个屏各起一次挂载：同一 root 连续换屏会让 portal 还在卸载中就查不到正文。 */
+  const paneClassFor = async (
+    menu: 'sources' | 'sourcesData' | 'runLog',
+    props: Record<string, unknown>
+  ): Promise<string> => {
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer initialMenu={menu} onClose={() => undefined} open {...props} />
+    ))
+    // 抽屉内容要等一次绘制（portal + 打开动画）才在文档里；同步读会读到空的 body。
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const pane = document.body.querySelector('.config-drawer__pane')
+    if (pane === null) throw new Error('config-drawer pane did not render')
+    return pane.className
+  }
+
+  it('marks the sources screen as two columns', async () => {
+    expect(await paneClassFor('sources', { sourcesPanel: <div /> })).toContain('config-drawer__pane--split')
+  })
+
+  it('marks the collection screen as two columns too', async () => {
+    // 少了这条它会横过来铺满整行、内容被压到下面（真机撞到过）。
+    expect(await paneClassFor('sourcesData', { sourcesDataPanel: <div /> })).toContain('config-drawer__pane--split')
+  })
+
+  it('lets no other screen take the two-column class', () => {
+    // 单列屏套 `pane--split` 会把内容按内容宽度塌缩、控件被裁（真机撞到过）。
+    // 判据落在源头：分栏判定只认这两个菜单，别屏加进来就红。
+    // （用源码断言而不是再挂一次通知屏：同一文件里第三次挂载 antd 抽屉会读到还没挂好的正文，
+    //  那是测试夹具的时序问题，不该让一条守卫依赖它。）
+    const source = readFileSync(join(__dirname, 'ConfigSettingsDrawer.tsx'), 'utf8')
+    const block = source.match(/const splitPane = [\s\S]*?\n\n/u)?.[0] ?? ''
+    expect(block).toContain("menu === 'sources'")
+    expect(block).toContain("menu === 'sourcesData'")
+    for (const other of ['notifications', 'processing', 'analysis', 'briefing', 'runLog']) {
+      expect(block).not.toContain(`menu === '${other}'`)
     }
-    expect(open('sources', { sourcesPanel: <div /> })).toContain('config-drawer__pane--split')
-    expect(open('notifications', { notificationsPanel: <div data-notification-screen="true" /> })).not.toContain('config-drawer__pane--split')
   })
 
   it('drops the visible page title but keeps the screen named for screen readers', () => {

@@ -286,7 +286,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           processingPanel={<ConfigDrawerPanel screen="processing"><ProcessingSettingsPanel /></ConfigDrawerPanel>}
           runLogPanel={<ConfigDrawerPanel screen="run-log"><RunLogDrawerPanel /></ConfigDrawerPanel>}
           notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel /></ConfigDrawerPanel>}
-              sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
+              sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel pane="sources" initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
+              sourcesDataPanel={<ConfigDrawerPanel screen="sourcesData"><DashboardSourcesPanel pane="business" onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
           </DrawerDiscardConfirm>
         </ConfirmProvider>
       </ErrorBoundary>
