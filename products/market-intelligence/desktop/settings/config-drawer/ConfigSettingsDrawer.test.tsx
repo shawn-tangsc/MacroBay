@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -49,5 +52,21 @@ describe('config settings drawer (static layout)', () => {
       expect(snapshot.rows).toBeGreaterThan(0)
       expect(snapshot.markup).toContain('config-drawer__value')
     }
+  })
+
+  it('imports nothing from the data layer: the "no data" promise is falsifiable', () => {
+    // 「不接数据」不是口头保证。抽屉目录里出现任何数据层 import 就该红——包括 IPC、视图、
+    // 以及本产品自己的 service。允许的只有平台 UI 组件、React、图标、本目录的纯数据与样式。
+    const dir = __dirname
+    const allowedPrefixes = ['react', 'react-dom', 'lucide-react', '@platform/ui/', './']
+    const offenders = readdirSync(dir)
+      .filter((name) => name.endsWith('.tsx') && !name.includes('.test.'))
+      .flatMap((name) => readFileSync(join(dir, name), 'utf8').split('\n').flatMap((line, index) => {
+        if (!/^import .* from '/u.test(line)) return []
+        const specifier = /from '([^']+)'/u.exec(line)?.[1] ?? ''
+        if (allowedPrefixes.some((prefix) => specifier.startsWith(prefix))) return []
+        return [`${name}:${index + 1} imports '${specifier}'`]
+      }))
+    expect(offenders).toEqual([])
   })
 })
