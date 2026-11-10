@@ -59,6 +59,14 @@ export type SourceConfigSurfaceProps = {
   onToggleSource?: (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean) => Promise<boolean>
   /** 立即运行，返回这一次的结果给行内显示。 */
   onRunNow?: (sourceId: string) => Promise<SourceRunOutcome>
+  /* ── 宿主契约（看板/日历抽屉用的那三个）：启用必须走带 origin 的写回调，另两个动作不发域信号。 */
+  /** 启用开关的宿主写入口；给了就优先于 `onToggleSource`，由本组件补 origin。 */
+  onWriteSourceEnabled?: (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean, origin: string) => Promise<void> | void
+  writeOrigin?: string
+  /** 立即运行（宿主只关心「发出去了」）；要行内结果就传 `onRunNow`，它更完整。 */
+  onRunSource?: (sourceId: string) => Promise<void>
+  /** 测试连接（宿主侧入口；当前 `ProviderDetail` 的探测按钮走平台共享实现，这里留作契约）。 */
+  onTestSource?: (sourceId: string) => Promise<void>
   /** 草稿状态（只报有没有）。 */
   onDraftChange?: (dirty: boolean) => void
   translation?: Parameters<typeof ProviderDetail>[0]['translation']
@@ -67,6 +75,23 @@ export type SourceConfigSurfaceProps = {
 }
 
 export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.ReactElement {
+  const onToggleSource = props.onToggleSource ?? (props.onWriteSourceEnabled === undefined
+    ? undefined
+    : async (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean): Promise<boolean> => {
+      try {
+        await props.onWriteSourceEnabled!(source, enabled, props.writeOrigin ?? 'source-config')
+        return true
+      } catch {
+        return false
+      }
+    })
+  const onRunNow = props.onRunNow ?? (props.onRunSource === undefined
+    ? undefined
+    // 宿主只有「发出去」这一档：不编造结果句子，行内显示空状态。
+    : async (sourceId: string): Promise<SourceRunOutcome> => {
+      await props.onRunSource!(sourceId)
+      return { kind: 'unknown', notice: '' }
+    })
   const labels: ProviderDetailLabels = {
     sourceNames: props.text.sourceNames,
     providerNames: props.text.providerNames,
@@ -103,8 +128,8 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
     provider={props.provider}
     {...(props.policy === undefined ? {} : { policy: props.policy })}
     {...(props.supportsRunNowById === undefined ? {} : { supportsRunNowById: props.supportsRunNowById })}
-    {...(props.onToggleSource === undefined ? {} : { onToggleSource: props.onToggleSource })}
-    {...(props.onRunNow === undefined ? {} : { onRunNow: props.onRunNow })}
+    {...(onToggleSource === undefined ? {} : { onToggleSource })}
+    {...(onRunNow === undefined ? {} : { onRunNow })}
     {...(props.onDraftChange === undefined ? {} : { onDraftChange: props.onDraftChange })}
     {...(props.translation === undefined ? {} : { translation: props.translation })}
     {...(props.onChanged === undefined ? {} : { onChanged: props.onChanged })}

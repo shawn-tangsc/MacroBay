@@ -114,4 +114,39 @@ describe('the settings page and the calendar panel render the same configuration
     expect(fromSettings.join('\n')).toContain(settingsText.collectionPolicy.title)
     expect(fromSettings.join('\n')).toContain(settingsText.health.runAction.run)
   })
+
+  it('turns the host write callbacks into the one switch/run path, with the host origin', async () => {
+    // 看板/日历宿主只有那三个回调：surface 负责把它们接到组件的「开关 / 立即运行」上。
+    const write = vi.fn(async () => {})
+    const run = vi.fn(async () => {})
+    const view = source()
+    const props: SourceConfigSurfaceProps = {
+      ...baseProps(view),
+      onToggleSource: undefined,
+      onRunNow: undefined,
+      onWriteSourceEnabled: write,
+      writeOrigin: 'calendar-drawer',
+      onRunSource: run
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children: createElement(SourceConfigSurface, props) }))
+      await Promise.resolve()
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    // 先跑一次；此时源还是启用态，运行入口在场。
+    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === settingsText.health.runAction.run)
+    expect(runButton).not.toBeUndefined()
+    await act(async () => { runButton?.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(run).toHaveBeenCalledWith(view.sourceId)
+
+    const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"]')!
+    await act(async () => { toggle.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(write).toHaveBeenCalledWith(expect.objectContaining({ sourceId: view.sourceId }), false, 'calendar-drawer')
+  })
 })
