@@ -22,10 +22,10 @@ afterEach(async () => {
   Reflect.deleteProperty(window, 'platform')
 })
 
-function source(sourceId: string, enabled: boolean) {
+function source(sourceId: string, enabled: boolean, visibility = 'visible') {
   return {
     sourceId, providerId: 'bls', displayName: sourceId, agents: [], panels: ['economic-calendar'],
-    visibility: 'visible', collection: 'provider', kind: 'official-calendar',
+    visibility, collection: 'provider', kind: 'official-calendar',
     capabilities: { runNow: 'provider', testConnection: true }, readiness: 'live',
     enabled, healthState: enabled ? 'healthy' : 'off', healthMarker: 'none'
   }
@@ -45,7 +45,7 @@ function labels() {
   } as never
 }
 
-async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-key'; hasCredential?: boolean; readOnlyToggles?: boolean } = {}) {
+async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-key'; hasCredential?: boolean; readOnlyToggles?: boolean; pendingIndex?: number } = {}) {
   const invoke = vi.fn(async (_p: string, method: string) => method === 'intelligenceSources.getPageState'
     ? { detail: { credentialStatus: { hasCredential: extra.hasCredential === true } } }
     : undefined)
@@ -62,7 +62,7 @@ async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-ke
         providerId: 'bls', displayName: 'Bureau of Labor Statistics (BLS)', category: 'macro',
         credential: extra.credential ?? 'none', healthMarker: 'none',
         website: 'https://www.bls.gov',
-        sources: enabled.map((value, index) => source(`s${index}`, value))
+        sources: enabled.map((value, index) => source(`s${index}`, value, extra.pendingIndex === index ? 'pending' : 'visible'))
       },
       showSourceDetails: false,
       ...(extra.readOnlyToggles === true ? { readOnlyToggles: true } : {})
@@ -107,13 +107,32 @@ describe('页头整组启停', () => {
   })
 })
 
-describe('「数据源」屏只读', () => {
-  it('makes the header group switch read-only and writes nothing', async () => {
-    // 启停的唯一编辑入口是「采集与数据」里的卡片开关；这一屏只显示状态。
+describe('「数据源」屏：页头可编辑、能力行只读', () => {
+  it('keeps the header group switch editable even on the read-only pane', async () => {
+    // 用户 2026-11-11：源的启用禁用要可操作——只读的是能力行，页头那颗仍能整组开/关。
     const { host, onToggleSource } = await render([true, true], { readOnlyToggles: true })
     const control = groupSwitch(host)
-    expect(control?.getAttribute('aria-disabled')).toBe('true')
+    expect(control?.getAttribute('aria-disabled')).toBeNull()
     await act(async () => { control?.click() })
+    expect(onToggleSource).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('组开关按能力算，不被单独一项待接入锁死', () => {
+  it('stays usable when only some capabilities are pending, and writes only the wired ones', async () => {
+    // BEA 那种：一项已接入 + 一项待接入 → 开关可用；点击只写已接入那项，待接入项零写入。
+    const { host, onToggleSource } = await render([true, false], { pendingIndex: 1 })
+    const control = groupSwitch(host)
+    expect(control?.getAttribute('aria-disabled')).toBeNull()
+    await act(async () => { control?.click() })
+    expect(onToggleSource.mock.calls.map((call) => (call as unknown as [{ sourceId: string }, boolean])[1])).toEqual([false])
+  })
+
+  it('is disabled with the pending hint when every capability is pending', async () => {
+    const { host, onToggleSource } = await render([false, false], { pendingIndex: 0 })
+    // 两项都设成 pending：把第二项也变成 pending。
+    const control = host.querySelector<HTMLElement>('.source-provider-detail__group-toggle [role="switch"]')
+    expect(control).not.toBeNull()
     expect(onToggleSource).not.toHaveBeenCalled()
   })
 })

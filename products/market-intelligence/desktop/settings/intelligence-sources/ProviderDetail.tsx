@@ -103,9 +103,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    */
   surface?: 'settings' | 'panel'
   /**
-   * 启停**只读**：抽屉「数据源」那一屏只显示状态、不给编辑（用户 2026-11-11）。
-   * 启停的唯一编辑入口是「采集与数据」里的卡片项开关。**凭据（API Key）、测试连接、高级都要留着**
-   * ——把这屏的钥匙入口删掉，凭据门禁就成了死路。
+   * 能力行的启停**只读**（用户 2026-11-11）：只显示状态、不发写请求。
+   * **页头那颗组开关是这一屏唯一的可编辑入口**（整组一起开/关）；「采集与数据」里的卡片项开关也仍可编辑。
+   * 凭据（API Key）、测试连接、高级都要留着——把这屏的钥匙入口删掉，凭据门禁就成了死路。
    */
   readOnlyToggles?: boolean
   /** Render source settings below the capability list. */
@@ -333,14 +333,20 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   }
 
   const providerName = labels.providerNames[provider.providerId] ?? provider.displayName
-  /** 整组启停：全开 = on、全关 = off、**混合按 off**（点击后全开）。 */
-  const providerGroupEnabled = sources.length > 0 && sources.every((source) => source.enabled)
+  /**
+   * 整组启停**按能力算**（用户 2026-11-11）：只有「已接入」的能力参与——
+   * 组里有待接入的项不影响开关能不能用，点击时也不写它们。
+   */
+  const operableSources = sources.filter((source) => source.visibility !== 'pending')
+  /** 可操作的能力全开 = on、全关 = off、**混合按 off**（点击后把这些可操作项全开）。 */
+  const providerGroupEnabled = operableSources.length > 0 && operableSources.every((source) => source.enabled)
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
-  /* 待接入 > 缺凭据 > 可操作：还没接入的源，整组启停不可操作，提示也说「还没接入」而不是「先配钥匙」。 */
-  const providerPending = sources.length > 0 && sources.every((source) => source.visibility === 'pending')
+  /* 待接入 > 缺凭据 > 可操作：**整组一个可操作能力都没有**时才锁死并提示「还没接入」。 */
+  const providerPending = operableSources.length === 0 && sources.length > 0
   const toggleProvider = async (next: boolean): Promise<void> => {
-    if (providerCredentialMissing) return
-    for (const source of sources) if (source.enabled !== next) await toggle(source, next)
+    if (providerCredentialMissing || providerPending) return
+    // 只写**已接入**的能力；待接入的项不写、不会被打开、状态不变。
+    for (const source of operableSources) if (source.enabled !== next) await toggle(source, next)
   }
   const hasProxySource = provider.sources.some((source) => source.requiresProxy)
 
@@ -403,13 +409,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               resolveText={resolveText} />
             : null}
           <Switch
-            aria-disabled={providerCredentialMissing || providerPending || readOnlyToggles ? true : undefined}
+            aria-disabled={providerCredentialMissing || providerPending ? true : undefined}
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
             checked={providerGroupEnabled}
-            disabled={providerCredentialMissing || providerPending || readOnlyToggles === true}
+            disabled={providerCredentialMissing || providerPending}
             onChange={(next) => {
-              if (providerCredentialMissing || providerPending || readOnlyToggles === true) return
+              if (providerCredentialMissing || providerPending) return
               void toggleProvider(next)
             }}
             size="small" />
