@@ -8,6 +8,20 @@ import { ConfigProvider } from 'antd'
 
 import type { JobScheduleView } from '@platform/jobs'
 
+/**
+ * 「资源来源」意图的目标从**夹具**来，不依赖这一版安装了什么产品：
+ * 产品撤了那条注册之后，这条用例仍要证明「有注册 → 按钮在、点了走通用入口」。
+ */
+const navIntent = vi.hoisted(() => ({
+  find: vi.fn(() => 'sample-product.source-settings' as string | undefined),
+  open: vi.fn(() => true)
+}))
+
+vi.mock('../../navigation/openProductSettingsPanel', () => ({
+  findProductSettingsPanelByIntent: navIntent.find,
+  openProductSettingsPanelByIntent: navIntent.open
+}))
+
 import { platformText } from '../../../i18n/platformText'
 import { TaskAutomationResourceJobsSection } from './TaskAutomationResourceJobsSection'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
@@ -254,6 +268,10 @@ describe('TaskAutomationResourceJobsSection empty states', () => {
     expect(container.textContent).toContain('一个都还没有启用')
     // 动作行由 StateView 自己渲染（`.state-view__action`），文案归平台词表。
     expect(container.querySelector('.state-view__action')).not.toBeNull()
+    // 按钮点了走**通用意图入口**，不是写死的面板 id；动作本身由壳层解析。
+    const action = container.querySelector<HTMLButtonElement>('.state-view__action')
+    await act(async () => { action?.click() })
+    expect(navIntent.open).toHaveBeenCalledWith('resource-sources')
   })
 
   it('drops the action and uses the plain not-yet code when no product is installed', async () => {
