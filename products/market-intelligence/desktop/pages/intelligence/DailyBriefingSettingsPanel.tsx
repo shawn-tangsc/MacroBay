@@ -393,6 +393,9 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                   }}
                 />
               </SettingsRow>
+              {/* 「补查方式」这一行只在当前模型**不支持**内置搜索时出现——只有那时补查才走平台
+                  Web Search，所以「去搜索供应商」也只挂在这里。模型支持内置搜索时**故意不给**入口：
+                  那时补查不走平台搜索，摆一颗会让读者以为自己缺了配置（2026-11-10 定，不加）。 */}
               {ai.webSearchSupported ? null : <SettingsRow
                 copyClassName="config-drawer__label"
                 headClassName="config-drawer__label-head"
