@@ -196,11 +196,30 @@ export function ConfigSettingsDrawer({
     return fromHost === key ? '' : fromHost
   }
 
+  /**
+   * 切屏也走**同一处前置检查**：当前屏有未保存改动时，切走和关抽屉一样先问一句
+   * （继续编辑 = 留在原屏；丢掉改动 = 才换屏）。不另造一套判断——`isScreenDirty` 与关窗共用。
+   */
+  const requestMenuChange = (next: ConfigDrawerMenu): void => {
+    if (next === menu) return
+    if (isScreenDirty?.(menu) !== true || confirmDiscard === undefined) {
+      setMenu(next)
+      return
+    }
+    confirmDiscard({
+      title: copy.discard.title,
+      body: copy.discard.body,
+      confirmLabel: copy.discard.confirm,
+      cancelLabel: copy.discard.cancel,
+      onDiscard: () => setMenu(next)
+    })
+  }
+
   // 上下键在导航内移动；Home/End 跳首尾。焦点跟着走，读屏才跟得上。
   const move = (delta: number): void => {
     const index = DRAWER_MENUS.indexOf(menu)
     const next = (index + delta + DRAWER_MENUS.length) % DRAWER_MENUS.length
-    setMenu(DRAWER_MENUS[next]!)
+    requestMenuChange(DRAWER_MENUS[next]!)
     navRef.current?.querySelectorAll<HTMLElement>('.settings-nav-item')[next]?.focus()
   }
 
@@ -266,7 +285,7 @@ export function ConfigSettingsDrawer({
               aria-current={key === menu ? 'page' : undefined}
               className={`settings-nav-item${key === menu ? ' active' : ''}`}
               key={key}
-              onClick={() => setMenu(key)}
+              onClick={() => requestMenuChange(key)}
               type="button">
               <Icon aria-hidden="true" size={17} />
               <span>{menuLabel(key)}</span>

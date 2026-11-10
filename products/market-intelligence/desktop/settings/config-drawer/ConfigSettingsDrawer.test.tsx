@@ -457,6 +457,35 @@ describe('config settings drawer (static layout)', () => {
     expect(open(false).querySelector<HTMLElement>('.config-drawer')!.style.scrollPaddingBottom).toBe('0px')
   })
 
+  it('asks before switching screens while the current one is dirty', () => {
+    // 切走与关抽屉是同一件事：脏时都要先问。选「继续编辑」留在原屏，选「丢掉改动」才换屏。
+    const asked: Array<{ onDiscard: () => void }> = []
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        confirmDiscard={((input: { onDiscard: () => void }) => { asked.push(input) }) as never}
+        initialMenu="briefing"
+        isScreenDirty={(menu) => menu === 'briefing'}
+        onClose={() => undefined}
+        open />
+    ))
+    const items = [...document.body.querySelectorAll<HTMLElement>('.settings-nav-item')]
+    const before = document.body.querySelector('.config-drawer__pane-title')?.textContent
+
+    act(() => { items[0]!.click() })
+    expect(asked).toHaveLength(1)
+    // 没有确认之前不换屏。
+    expect(document.body.querySelector('.config-drawer__pane-title')?.textContent).toBe(before)
+
+    act(() => { asked[0]!.onDiscard() })
+    expect(document.body.querySelector('.config-drawer__pane-title')?.textContent).not.toBe(before)
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {
