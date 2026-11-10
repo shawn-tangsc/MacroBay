@@ -1,3 +1,4 @@
+import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
 import { notifySettingsRevision } from '../../shared/events/settingsRevision'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
@@ -25,4 +26,17 @@ export async function writeSourceEnabled(
 /** 每个界面实例一个 origin；同一次保存不会引来自己那一轮重读。 */
 export function createSettingsOrigin(scope: string): string {
   return `${scope}-${Math.random().toString(36).slice(2)}`
+}
+
+/**
+ * 抽屉里另外两个动作。它们**不发域信号**（不改配置事实），但同样不许让页面自己出现
+ * `intelligenceSourcesClient`——`pages/intelligence/**` 有一条守卫禁止在页面里出现 IPC 名，
+ * 所以入口放在这里，页面只调函数。
+ */
+export async function runSourceNowOnce(sourceId: string): Promise<void> {
+  await intelligenceSourcesClient.runNow(sourceId)
+}
+
+export async function testSourceConnectionOnce(sourceId: string): Promise<void> {
+  await intelligenceSourcesClient.testConnection(sourceId)
 }

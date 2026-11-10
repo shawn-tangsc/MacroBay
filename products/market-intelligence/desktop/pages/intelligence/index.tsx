@@ -17,6 +17,7 @@ import { openWebSearchSettings } from '../../shared/navigation/productShellNavig
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import { DashboardPanelDrawer } from './DashboardPanelDrawer'
+import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../settings/intelligence-sources/sourceWrites'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
 import { createCalendarCardReactionReader } from './calendarCardReaction'
 
@@ -221,6 +222,10 @@ function IntelligencePageBody(): React.ReactElement {
         // The registry projection may stand in for a failed read only while the reader is looking
         // at sample data: outside it, a failed read is stated as failed, never as a source list.
         sampleActive={sample.state.active}
+        writeOrigin="dashboard-drawer"
+        onWriteSourceEnabled={(source, enabled, origin) => writeSourceEnabled(source, enabled, origin)}
+        onRunSource={runSourceNowOnce}
+        onTestSource={testSourceConnectionOnce}
       /> : null}
     </div>
   )
