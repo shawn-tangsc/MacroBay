@@ -1,6 +1,6 @@
 /* 日报设置屏的内容件：只给设置页骨架表达不了的几处（值、行尾动作、屏内状态），
    不改骨架的行/区块尺寸。文字色走产品看板变量，不引入新色。 */
-.briefing-settings-screen { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 720px; margin-inline: auto; }
+.briefing-settings-screen { display: flex; flex-direction: column; width: 100%; max-width: 720px; margin-inline: auto; }
 
 .briefing-settings-row__value { color: var(--mi-dashboard-text); }
 .briefing-settings-row__actions { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; }
