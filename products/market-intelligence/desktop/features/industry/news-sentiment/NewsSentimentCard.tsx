@@ -35,10 +35,11 @@ export function NewsSentimentCard(props: {
   onOpenSettings?: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
-  /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
-  onEnableSources: () => void
-  /** Collects the named sources now: "run once" after a first enable, "try again" after a failure. */
-  onRunSources: (sourceIds: readonly string[]) => void
+  /**
+   * 「来源没有启用」的去处：**只打开配置抽屉**（`focus.business = 'sentiment'`），不替读者开源。
+   * 不给就不画那颗动作——留一颗点了没反应的按钮就是假控件。
+   */
+  onOpenSources?: (focus: Readonly<{ business: 'sentiment' }>) => void
   /** Moves to the next wider window: the actions `older-than-window` and `nothing-in-window` advertise. */
   onWidenWindow: () => void
   includeNeutral?: boolean
@@ -158,11 +159,10 @@ export function NewsSentimentCard(props: {
       ) : emptyState && !causeUnknown ? (
         <EmptyCause
           text={text}
+          onOpenSources={props.onOpenSources}
           failedSourceIds={view?.readiness?.failedSourceIds ?? []}
           neverRanSourceIds={view?.readiness?.neverRanSourceIds ?? []}
-          onEnableSources={props.onEnableSources}
           onRefresh={props.onRefresh}
-          onRunSources={props.onRunSources}
           onWidenWindow={props.onWidenWindow}
           resolve={resolveStateReason}
           state={emptyState}
@@ -247,9 +247,7 @@ function EmptyCause(props: {
   state: import('./newsSentimentEmptyState').NewsSentimentEmptyState
   text: NewsSentimentText
   resolve: (key: string, params?: Record<string, string>) => string
-  /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
-  onEnableSources: () => void
-  onRunSources: (sourceIds: readonly string[]) => void
+  onOpenSources?: (focus: Readonly<{ business: 'sentiment' }>) => void
   onRefresh: () => void
   onWidenWindow: () => void
   failedSourceIds: readonly string[]
@@ -263,11 +261,17 @@ function EmptyCause(props: {
     <div className="mi-news-sentiment__state" data-news-sentiment-state={state.kind}>{node}</div>
   )
   // 三态那一格：形状由共享样式给，正文只有一句状态词，原因进 ⓘ。
-  const availability = (stateName: 'disabled' | 'unreadable', reason: string, actionLabel: string, onAction: () => void) => (
+  // 未启用没有宿主去处时**不给动作**（留一颗点了没反应的按钮是假控件）。
+  const availability = (
+    stateName: 'disabled' | 'unreadable',
+    reason: string,
+    actionLabel: string,
+    onAction: (() => void) | undefined
+  ) => (
     <div data-news-sentiment-state={state.kind}>
       <NewsSentimentAvailabilityCard
         actionLabel={actionLabel}
-        onAction={onAction}
+        {...(onAction === undefined ? {} : { onAction })}
         reason={reason}
         state={stateName}
         text={props.text} />
@@ -275,27 +279,21 @@ function EmptyCause(props: {
   )
   switch (state.kind) {
     case 'sources-disabled':
+      // 唯一编辑入口是配置抽屉：这里只把读者送过去，**不替他 setEnabled、不替他跑采集**。
       return availability(
         'disabled',
         props.text.availability.reasonDisabled,
         resolveStateText(STATE_VIEW_ACTION_KEYS.enable),
-        props.onEnableSources
+        props.onOpenSources === undefined ? undefined : () => props.onOpenSources!({ business: 'sentiment' })
       )
     case 'collection-failed':
-      // 「再试一次」在这里必须真的重新采集：只重读同一份库会得到同一个空窗口，
-      // 那颗按钮就名不副实了。
-      return availability(
-        'unreadable',
-        props.text.availability.reasonFailed,
-        resolveStateText(STATE_VIEW_ACTION_KEYS.retry),
-        () => props.onRunSources(props.failedSourceIds)
-      )
     case 'never-ran':
+      // 读不到只重试这一次读取，不跳转；不成功就还是这一格（卡片不会变成别的话）。
       return availability(
         'unreadable',
-        props.text.availability.reasonNeverRan,
+        state.kind === 'collection-failed' ? props.text.availability.reasonFailed : props.text.availability.reasonNeverRan,
         resolveStateText(STATE_VIEW_ACTION_KEYS.retry),
-        () => props.onRunSources(props.neverRanSourceIds)
+        () => props.onRefresh()
       )
     case 'stale':
       return wrap(

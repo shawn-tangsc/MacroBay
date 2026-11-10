@@ -27,9 +27,9 @@ export function NewsSentimentAvailabilityCard(props: Readonly<{
   text: NewsSentimentText
   /** 原因（一句话）进 ⓘ；正文只留状态词。 */
   reason: string
-  /** 主动作（每格只有一颗）。 */
+  /** 主动作（每格至多一颗）：没给去处就不画按钮，留一颗点了没反应的是假控件。 */
   actionLabel: string
-  onAction: () => void
+  onAction?: () => void
 }>): React.ReactElement {
   const Icon = props.state === 'unreadable' ? TriangleAlert : CircleSlash
   const sentence = props.state === 'unreadable' ? props.text.availability.unreadable : props.text.availability.disabled
@@ -49,8 +49,10 @@ export function NewsSentimentAvailabilityCard(props: Readonly<{
             size="sm" />
         )} />
     </p>
-    <div className="mi-source-card__actions">
-      <Button onClick={props.onAction} size="small">{props.actionLabel}</Button>
-    </div>
+    {props.onAction === undefined ? null : (
+      <div className="mi-source-card__actions">
+        <Button onClick={props.onAction} size="small">{props.actionLabel}</Button>
+      </div>
+    )}
   </div>
 }

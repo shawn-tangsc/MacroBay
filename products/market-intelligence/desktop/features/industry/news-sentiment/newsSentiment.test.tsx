@@ -82,7 +82,7 @@ async function mount(node: React.ReactElement): Promise<HTMLElement> {
 const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof NewsSentimentCard>[0]> = {}) =>
   mount(
     <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-      onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined}
+      onIncludeNeutralChange={() => undefined}
       onWidenWindow={() => undefined}
       onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
   )
@@ -141,7 +141,8 @@ describe('the settings entry belongs to whoever renders the feature', () => {
       .find((button) => (button.getAttribute('aria-label') ?? '').includes(text.settings))
     expect(entry).toBeDefined()
     await act(async () => { entry!.click(); await Promise.resolve() })
-    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    // 设置入口带落点：抽屉打开后停在「内容处理 › 情绪评分」那一节。
+    expect(onOpenSettings).toHaveBeenCalledWith({ section: 'sentiment' })
     expect(document.querySelector('[data-news-sentiment-settings]')).toBeNull()
   })
 })
@@ -277,35 +278,37 @@ describe('card empty states', () => {
 
   // "Try again" on a failed collection has to collect again. A plain re-read of the same store
   // shows the same empty window, so the button would name an action it cannot perform.
-  it('collects the failed sources again instead of only re-reading them', async () => {
-    const failedIds = ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']
-    const onRunSources = vi.fn()
+  it('retries the read on "再试一次" without opening the drawer', async () => {
     const onRefresh = vi.fn()
+    const onOpenSources = vi.fn()
     const container = await mountCard(
-      emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: failedIds }) }),
-      { onRefresh, onRunSources }
+      emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: ['sec-rss'] }) }),
+      { onRefresh, onOpenSources }
     )
 
     const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="collection-failed"] .mi-source-card__actions button')
     expect(button).not.toBeNull()
     await act(async () => { button?.click() })
 
-    expect(onRunSources).toHaveBeenCalledWith(failedIds)
-    expect(onRefresh).not.toHaveBeenCalled()
+    // 读不到不跳转：只重读这一次，抽屉一次都不开。
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+    expect(onOpenSources).not.toHaveBeenCalled()
+    // 重试没成功（这份 view 还是空的）就仍然是「暂时读不到」，不变成别的话。
+    expect(container.querySelector('.mi-source-card')?.getAttribute('data-state')).toBe('unreadable')
+    expect(container.textContent).toContain(text.availability.unreadable)
   })
 
   it('draws the three source states with one sentence and one action each', async () => {
-    const onEnableSources = vi.fn()
-    const onRunSources = vi.fn()
+    const onOpenSources = vi.fn()
     const onRefresh = vi.fn()
     const onWidenWindow = vi.fn()
 
-    const disabled = await mountCard(emptyView({ readiness: readiness({ enabledCount: 0 }) }), { onEnableSources })
+    const disabled = await mountCard(emptyView({ readiness: readiness({ enabledCount: 0 }) }), { onOpenSources })
     const failed = await mountCard(
       emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] }) }),
-      { onRunSources, onRefresh }
+      { onRefresh, onOpenSources }
     )
-    const neverRan = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4, neverRanSourceIds: ['sec-rss'] }) }), { onRunSources })
+    const neverRan = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4, neverRanSourceIds: ['sec-rss'] }) }), { onRefresh })
 
     // 未启用：共享类的整卡形状 + 一句状态词 + 主动作「去启用」；不用错误色（data-state 只有档位名）。
     const disabledCard = disabled.querySelector('.mi-source-card')
@@ -331,10 +334,13 @@ describe('card empty states', () => {
     await pressAction(disabled)
     await pressAction(failed)
     await pressAction(neverRan)
-    expect(onEnableSources).toHaveBeenCalledTimes(1)
-    expect(onRefresh).not.toHaveBeenCalled()
-    expect(onRunSources).toHaveBeenNthCalledWith(1, ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'])
-    expect(onRunSources).toHaveBeenNthCalledWith(2, ['sec-rss'])
+
+    // 未启用：只把读者送到抽屉的「采集与数据 / 舆情」落点，**不替他开源、不替他采集**。
+    expect(onOpenSources).toHaveBeenCalledTimes(1)
+    expect(onOpenSources).toHaveBeenCalledWith({ business: 'sentiment' })
+    // 读不到：两次都只是重读这一次，没有跳抽屉。
+    expect(onRefresh).toHaveBeenCalledTimes(2)
+    expect(onOpenSources).toHaveBeenCalledTimes(1)
 
     // 两种「读不到」的成因不同，区别写在 ⓘ 里（正文只留一句状态词）。
     const openReason = async (container: HTMLElement): Promise<string> => {
@@ -715,32 +721,29 @@ describe('NewsSentimentFeature', () => {
     expect(document.body.querySelector('[data-news-sentiment-translation-queue]')).toBeNull()
   })
 
-  it('enables the four sources, collects once and re-reads when the reader asks', async () => {
-    // The action says "enable", so it must switch the sources on and collect — not just open a page.
+  it('never switches sources on by itself: "去启用" only opens the drawer at the sentiment group', async () => {
+    // 唯一编辑入口是「采集与数据」：卡片不许替读者 setEnabled，也不许替他跑采集。
     const setEnabled = vi.fn(async () => ({ ok: true }))
     const runNow = vi.fn(async () => ({ action: 'run' }))
-    let tick = 0
+    const onOpenSources = vi.fn()
     const query = vi.fn(async () => ({
       ...VIEW, state: 'empty' as const, summary: undefined, items: [],
       readiness: { total: 4, enabledCount: 0, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [] }
     }))
-    const now = () => new Date(Date.UTC(2026, 9, 24, 13, 0, tick++))
     const container = await mount(
-      <NewsSentimentFeature text={text} client={client({ query })} now={now} sourcesClient={{ runNow, setEnabled }} />
+      <NewsSentimentFeature text={text} client={client({ query })} onOpenSources={onOpenSources} now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
     await act(async () => {})
+
     const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="sources-disabled"] .mi-source-card__actions button')
     expect(button).not.toBeNull()
     await act(async () => { button?.click() })
-    // 条件是「四个源都启用、各跑一次，卡片也重读过」，不是等一个 0ms 定时器：
-    // enable → collect → refresh 全是 Promise 链，链走完条件就成立，上限由 `vi.waitFor` 兜住。
-    await vi.waitFor(() => {
-      for (const sourceId of ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']) {
-        expect(setEnabled).toHaveBeenCalledWith(sourceId, true)
-        expect(runNow).toHaveBeenCalledWith(sourceId)
-      }
-      expect(query.mock.calls.length).toBeGreaterThan(1)
-    })
+    await act(async () => {})
+
+    expect(onOpenSources).toHaveBeenCalledWith({ business: 'sentiment' })
+    // 把批量开源加回来，这两条就红——这就是「只送到抽屉」的判据。
+    expect(setEnabled).not.toHaveBeenCalled()
+    expect(runNow).not.toHaveBeenCalled()
   })
 
   it('widens the window when the only data is older than the window', async () => {
@@ -810,7 +813,7 @@ describe('NewsSentimentFeature', () => {
     // each row is. The caveat stays in the data (the drawer still explains a row without a body).
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined}
+        onIncludeNeutralChange={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} onWidenWindow={() => undefined} text={text} view={VIEW} />
     )
     expect(container.textContent).not.toContain(text.engine.rules)
@@ -818,7 +821,7 @@ describe('NewsSentimentFeature', () => {
 
     const withCaveat = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined}
+        onIncludeNeutralChange={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} onWidenWindow={() => undefined} text={text}
         view={{ ...VIEW, caveats: ['news-body-limited'] }} />
     )
@@ -835,7 +838,7 @@ describe('NewsSentimentFeature', () => {
     const neutralOnly = { ...VIEW, items: [{ ...VIEW.items[0]!, polarity: 'neutral' as const }] }
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onEnableSources={() => undefined} onRunSources={() => undefined} onWidenWindow={() => undefined}
+        onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={neutralOnly} includeNeutral={false} onIncludeNeutralChange={onIncludeNeutralChange} />
     )
@@ -905,7 +908,7 @@ describe('NewsSentimentFeature', () => {
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined} onWidenWindow={() => undefined}
+        onIncludeNeutralChange={() => undefined} onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={{
           ...VIEW, state: 'empty', summary: undefined, items: [],
@@ -922,7 +925,7 @@ describe('NewsSentimentFeature', () => {
     // the card cannot support — the same mistake as writing 0% for an empty denominator.
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined} onWidenWindow={() => undefined}
+        onIncludeNeutralChange={() => undefined} onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} />
     )
@@ -946,6 +949,28 @@ describe('settings entry', () => {
     expect(settingsTrigger(container)).toBeNull()
   })
 
+  it('sends the drawer settings entry to the same place: processing › sentiment', async () => {
+    const onOpenSettings = vi.fn()
+    const container = await mount(
+      <NewsSentimentFeature
+        onOpenSettings={onOpenSettings}
+        text={text}
+        client={client({ query: vi.fn(async () => VIEW) })}
+        now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    // 抽屉里那颗「设置」：卡片上的入口打开抽屉后，抽屉再给一处同一目的地。
+    const openAll = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { openAll?.click() })
+    await act(async () => {})
+    // antd 会在两个汉字之间自动插空格（「设 置」），所以按类名取、再按去空白的文本选中那一颗。
+    const drawerSettings = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__action')]
+      .find((button) => (button.textContent ?? '').replace(/\s/g, '') === text.drawer.settings.replace(/\s/g, ''))
+    expect(drawerSettings).not.toBeUndefined()
+    await act(async () => { drawerSettings?.click() })
+    await act(async () => {})
+    expect(onOpenSettings).toHaveBeenCalledWith({ section: 'sentiment' })
+  })
+
   it('calls the host callback once when one is given, and opens no local dialog', async () => {
     const onOpenSettings = vi.fn()
     const container = await mount(
@@ -961,7 +986,8 @@ describe('settings entry', () => {
     await act(async () => { trigger?.click() })
     await act(async () => {})
 
-    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    // 设置入口带落点：抽屉打开后停在「内容处理 › 情绪评分」那一节。
+    expect(onOpenSettings).toHaveBeenCalledWith({ section: 'sentiment' })
     // 没有本地弹框可开了：连 `.ant-modal` 都不该出现。
     expect(document.body.querySelector('.ant-modal')).toBeNull()
   })
