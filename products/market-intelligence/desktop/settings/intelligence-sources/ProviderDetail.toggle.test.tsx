@@ -153,4 +153,75 @@ describe('one enable value, one write (S1)', () => {
       expect(container.querySelector(`[data-pane="${pane}"] button[role="switch"]`)?.getAttribute('aria-checked')).toBe('true')
     }
   })
+
+  it('does not let a confirmed local value shadow a later change from another place', async () => {
+    // 回归：一次成功拨动后乐观值从不清，另一处关掉同一个源、这边重读了仍显示开——C8 的联动失效。
+    function Host(): React.ReactElement {
+      const [serverEnabled, setServerEnabled] = useState(false)
+      const [tick, setTick] = useState(0)
+      const write = async (_target: Readonly<{ sourceId: string; kind: string }>, next: boolean): Promise<boolean> => {
+        // 写成功后宿主的重读带回新值（这里直接反映到 serverEnabled）。
+        setServerEnabled(next)
+        return true
+      }
+      return <div data-tick={tick}>
+        <button onClick={() => setServerEnabled(false)} type="button">server-off</button>
+        <button onClick={() => setTick((value) => value + 1)} type="button">rerender</button>
+        <ProviderDetail labels={labels()} onToggleSource={write} provider={provider(serverEnabled)} showSourceDetails />
+      </div>
+    }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => { root?.render(createElement(Host)); await Promise.resolve() })
+    await flush()
+
+    const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"]')!
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    await act(async () => { toggle.click() })
+    await flush()
+    expect(container.querySelector('button[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
+
+    // 另一处把同一个源关掉：宿主重读后必须跟着关。
+    const serverOff = [...container.querySelectorAll('button')].find((button) => button.textContent === 'server-off')
+    await act(async () => { serverOff?.click() })
+    await flush()
+    expect(container.querySelector('button[role="switch"]')?.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('keeps the value the reader just picked while the write is still in flight', async () => {
+    // 对立面：只做上一条会变成「一拨就弹回服务端旧值」，那是另一个 bug。
+    let resolveWrite: (ok: boolean) => void = () => {}
+    const write = vi.fn(() => new Promise<boolean>((resolve) => { resolveWrite = resolve }))
+
+    function Host(): React.ReactElement {
+      const [tick, setTick] = useState(0)
+      return <div data-tick={tick}>
+        <button onClick={() => setTick((value) => value + 1)} type="button">rerender</button>
+        <ProviderDetail labels={labels()} onToggleSource={write} provider={provider(false)} showSourceDetails />
+      </div>
+    }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => { root?.render(createElement(Host)); await Promise.resolve() })
+    await flush()
+
+    const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"]')!
+    await act(async () => { toggle.click() })
+    expect(container.querySelector('button[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
+
+    // 服务端还是旧值（false），但读者刚拨过、写还没回来：不许弹回去。
+    const rerender = [...container.querySelectorAll('button')].find((button) => button.textContent === 'rerender')
+    await act(async () => { rerender?.click() })
+    await flush()
+    expect(container.querySelector('button[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
+
+    resolveWrite(false)
+    await flush()
+    // 写失败才回滚。
+    expect(container.querySelector('button[role="switch"]')?.getAttribute('aria-checked')).toBe('false')
+  })
 })

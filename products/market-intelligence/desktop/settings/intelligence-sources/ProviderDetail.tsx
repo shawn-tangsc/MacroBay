@@ -128,11 +128,30 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    * （旧详情可能已经坏了），崩溃就会在切走之后又把新的一帧炸掉。
    */
   const [optimisticEnabled, setOptimisticEnabled] = useState<Readonly<Record<string, boolean>>>({})
-  const sources = provider.sources.map((source) =>
-    optimisticEnabled[source.sourceId] === undefined
-      ? source
-      : { ...source, enabled: optimisticEnabled[source.sourceId]! })
+  const sources = provider.sources.map((source) => {
+    const pending = optimisticEnabled[source.sourceId]
+    // ① 自愈：没有待确认值，或服务端已经等于刚拨的值 → 以服务端为准。
+    if (pending === undefined || pending === source.enabled) return source
+    return { ...source, enabled: pending }
+  })
   useEffect(() => { setOptimisticEnabled({}) }, [provider.providerId])
+  /**
+   * ② 一旦投影追上待确认值，就把这条乐观值删掉。否则一次成功拨动之后，这个源在整个挂载期
+   * 都被本地旧值遮住——设置页拨开 X、另一处关掉 X、这里重读了，行还显示开（C8 的联动失效）。
+   */
+  useEffect(() => {
+    setOptimisticEnabled((current) => {
+      const next = { ...current }
+      let changed = false
+      for (const source of provider.sources) {
+        if (next[source.sourceId] !== undefined && next[source.sourceId] === source.enabled) {
+          delete next[source.sourceId]
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [provider])
   const [credentialDraft, setCredentialDraft] = useState('')
   const [credentialPristine, setCredentialPristine] = useState(true)
   const [rawKey, setRawKey] = useState<string>()
@@ -277,9 +296,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     }
     if (onToggleSource !== undefined) {
       if (!(await onToggleSource(source, enabled))) rollback()
+      // 成功不立刻删：那次重读还没回来之前删掉会闪回旧值；投影追上后由上面的自愈 effect 清掉。
       return
     }
-    // 尚未迁移的宿主（看板抽屉，S2 收口）：旧路径，写完由宿主自己重读。
+    // 尚未迁移的宿主（看板抽屉，S2 收口）：旧路径，写完由宿主自己重读（投影追上后同样自愈）。
     await setSourceEnabled(source, enabled).then(() => onChanged?.()).catch(rollback)
   }
 
