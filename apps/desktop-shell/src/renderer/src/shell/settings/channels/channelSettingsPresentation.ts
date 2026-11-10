@@ -50,7 +50,8 @@ export type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported
 export const catalogTone: Record<Catalog['status'], StatusPillTone> = {
   supported: 'ok',
   planned: 'muted',
-  blocked: 'bad'
+  // 「没有真机验收证据」= 这个版本还不能启用，**不是故障**。画成红色会让六格里五格像系统坏了。
+  blocked: 'muted'
 }
 
 /**
