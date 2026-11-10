@@ -350,7 +350,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       configured
       onOpenProxySettings={openProxySettings}
     /> : null}
-    <header className="source-provider-detail__header">
+    {/* 卡一 = 页头卡：源名行 + API Key 行 + 邀请句**同一张卡**（用户 2026-11-11：
+        它们属于同一个「这个来源是什么、怎么连上」的事实，不该拆成三块）。 */}
+    <header className="source-provider-detail__header source-provider-detail__card">
       {/* 源名同一行：名字 + 「官网」+「测试连接」，三样一行、都是小号文字按钮（用户 2026-11-10）。
           它们属于「这是哪个源、它通不通」，不是页头的一排实心大按钮——所以整屏不再有
           「只装按钮的独立行」，provider 级测试连接也只有这一颗。 */}
@@ -440,7 +442,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         type={connectionFeedback === 'succeeded' ? 'success' : connectionFeedback === 'unsupported' ? 'warning' : 'error'}
       /> : null}
     </header>
-    <div className="source-provider-detail__list">
+    {/* 卡二 = 源项列表卡：所有能力行装进**一张卡**，行间只用细分隔线（外层已经有卡了，双层框会显脏）。 */}
+    <div className="source-provider-detail__list source-provider-detail__card">
       {sources.map((source) => {
         const name = labels.sourceNames[source.sourceId] ?? source.displayName
         const unused = source.panels.length === 0

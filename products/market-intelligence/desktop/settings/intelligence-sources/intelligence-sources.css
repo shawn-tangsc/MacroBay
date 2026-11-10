@@ -1818,4 +1818,28 @@
   opacity: 0.8;
 }
 
+/* 「数据源」详情：**两张卡**（用户 2026-11-11）——
+   卡一 = 页头（源名/动作/组开关 + API Key 行 + 邀请句），卡二 = 能力行列表。
+   卡间距 12（主档），卡内 12 内距；行间只用细分隔线，行自己不再带圆角描边。 */
+.source-provider-detail__card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px;
+}
 
+.source-provider-detail__card + .source-provider-detail__card {
+  margin-top: 12px;
+}
+
+/* 卡二里每一行换发丝线：外层已经有框，行再各自描边就成了双层框。 */
+.source-provider-detail__list.source-provider-detail__card .source-provider-detail__row {
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: transparent;
+}
+
+.source-provider-detail__list.source-provider-detail__card .source-provider-detail__row:first-child {
+  border-top: 0;
+}

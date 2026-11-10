@@ -82,10 +82,10 @@ describe('one horizontal centre line per row', () => {
   it('centres the row items and keeps the switch and the 高级 button off the edges', () => {
     // 用户 2026-11-10：名字 / meta / 高级 / 开关「高高低低」。判据落在 CSS 上（计算中线要无头浏览器量，
     // 那属于人看）：行容器 `align-items: center`，开关不留 margin，两颗行内控件同为 24 高。
-    for (const body of rulesFor(css, 'source-provider-detail__row')) {
-      expect(body).toContain('align-items: center')
-      expect(body).not.toContain('align-items: start')
-    }
+    // 同一选择器还有「卡二里换发丝线」那类只改边框的规则，所以只要求**基础规则里有**这一条。
+    const rowRules = rulesFor(css, 'source-provider-detail__row')
+    expect(rowRules.some((body) => body.includes('align-items: center'))).toBe(true)
+    for (const body of rowRules) expect(body).not.toContain('align-items: start')
     for (const body of rulesFor(css, 'ant-switch')) {
       expect(body).not.toMatch(/margin-top\s*:\s*[1-9]/u)
     }
