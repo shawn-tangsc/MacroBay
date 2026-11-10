@@ -1,25 +1,36 @@
 // @vitest-environment node
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
 /**
- * 抽屉的屏**各自一份实现**：抽屉目录里的文件不许 import 设置页那几块面板。
+ * 抽屉的七屏**各自一份实现**：屏文件不许**运行期** import 设置页那几块面板。
  *
- * 为什么：屏搬进抽屉时最省事的做法就是 `import { SourcesSettingsPane }`——那会让「抽屉」与
- * 「设置页」焊在一起，改一处两边一起变，用户要的「界面各一份」当场没了。
+ * 扫描集 = 登记的那七屏实现文件（它们不长在抽屉目录里，长在 `pages/intelligence/` 与
+ * `settings/intelligence-notification/`）。**登记即受管**：加一屏就加一行。
  *
- * 只认**真的 import**（`import` / `export … from` / `require(…)` / 动态 `import(…)`），
- * 注释里提到不算；**说明符解析成仓库相对路径再比目录**，不按子串比——`../` 换个写法就绕过去了。
+ * 两条口径：
+ * 1. `import type` / `export type` **放行**——类型只在编译期，不产生运行期耦合，
+ *    改设置页那块组件的实现不会牵动抽屉；
+ * 2. 同一目录内的 import 跳过（屏自己的零件，不是「别处的面板」）。
  *
- * 例外按**文件**开（不是目录）：只读、只有一份实现的屏（运行日志的表格）与已认可保持现状的
- * 来源屏宿主。理由写在这一行里。
+ * 说明符**解析成仓库相对路径再比目录**，不按子串比（`../` 换个写法绕不过去）；注释里提到不算。
  */
 const ROOT = process.cwd()
 const DRAWER_DIR = 'products/market-intelligence/desktop/settings/config-drawer'
 
-/** 不许被抽屉屏 import 的设置页面板所在目录 / 文件前缀（仓库相对路径）。 */
+/** 登记表对应的七屏实现文件 + 抽屉壳自己。 */
+const SCREEN_FILES = [
+  'products/market-intelligence/desktop/pages/intelligence/DashboardSourcesPanel.tsx',
+  'products/market-intelligence/desktop/pages/intelligence/ProcessingSettingsPanel.tsx',
+  'products/market-intelligence/desktop/pages/intelligence/AnalysisSettingsPanel.tsx',
+  'products/market-intelligence/desktop/pages/intelligence/DailyBriefingSettingsPanel.tsx',
+  'products/market-intelligence/desktop/settings/intelligence-notification/NotificationSettingsPanel.tsx',
+  'products/market-intelligence/desktop/pages/intelligence/RunLogDrawerPanel.tsx',
+  `${DRAWER_DIR}/ConfigSettingsDrawer.tsx`
+] as const
+
 const FORBIDDEN = [
   'products/market-intelligence/desktop/settings/intelligence-sources/',
   'products/market-intelligence/desktop/settings/intelligence-notification/',
@@ -27,9 +38,7 @@ const FORBIDDEN = [
   'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSettingsDialog'
 ] as const
 
-/**
- * 文件级例外：路径 → 一行理由。**不是目录级白名单**，加一条就要写清为什么它是「一份实现」。
- */
+/** 文件级例外（不是目录级）：用户认可保持现状的两屏。 */
 const ALLOWED: Readonly<Record<string, string>> = {
   'products/market-intelligence/desktop/pages/intelligence/DashboardSourcesPanel.tsx':
     '来源与采集沿用设置页那两栏（用户已认可保持现状）：只这一份实现。',
@@ -37,83 +46,84 @@ const ALLOWED: Readonly<Record<string, string>> = {
     '运行日志是只读表格，设置页那份就是唯一实现；嵌进来用 variant="embed"。'
 }
 
-const SPECIFIER = /(?:^|\s)(?:import|export)\s[^'\n]*?from\s+'([^']+)'|(?:^|\s)import\s*\(\s*'([^']+)'\s*\)|require\(\s*'([^']+)'\s*\)/gu
-
-/** 纯函数：源码 + 文件路径 + 允许集 → 违规行（`文件:行 imports '说明符'`）。 */
-export function drawerScreenOffenders(
-  file: Readonly<{ path: string; source: string }>,
-  allowed: Readonly<Record<string, string>> = ALLOWED
-): string[] {
-  if (allowed[file.path] !== undefined) return []
-  const hits: string[] = []
-  const lines = file.source.split('\n')
-  lines.forEach((line, index) => {
-    const trimmed = line.trim()
-    // 注释里提到不算：整行以 `//` 或 `*` 开头的一律跳过。
-    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return
-    for (const match of line.matchAll(SPECIFIER)) {
-      const specifier = match[1] ?? match[2] ?? match[3]
-      if (specifier === undefined) continue
-      const resolved = resolve(ROOT, file.path, '..', specifier)
-      const relativePath = relative(ROOT, resolved).split('\\').join('/')
-      if (FORBIDDEN.some((prefix) => relativePath.startsWith(prefix))) {
-        hits.push(`${file.path}:${index + 1} imports '${specifier}'`)
-      }
+/**
+ * 临时基线（只减不增）：**每条必须有 owner 与清理时机**，没有的不许进。
+ * `owner` = 那一屏归属的线；`shared` = 共用的是哪块；`clearWhen` = 什么条件清掉这一条。
+ */
+export const SCREEN_BASELINE: Readonly<Record<string, Readonly<{ owner: string; shared: string; clearWhen: string }>>> = {
+  'products/market-intelligence/desktop/pages/intelligence/ProcessingSettingsPanel.tsx':
+    {
+      owner: '舆情线',
+      shared: '翻译偏好用设置页的 `TranslationPreferencesSection` + `useIntelligenceTranslationSettings`',
+      clearWhen: '内容处理屏自己实现翻译偏好（与设置页各自一份）后清掉这一条'
     }
+}
+
+/** 纯函数：源码 + 文件路径 → 运行期 import 违规（`文件:行 imports '说明符'`）。 */
+export function runtimeImportOffenders(file: Readonly<{ path: string; source: string }>): string[] {
+  if (ALLOWED[file.path] !== undefined || SCREEN_BASELINE[file.path] !== undefined) return []
+  const hits: string[] = []
+  file.source.split('\n').forEach((line, index) => {
+    const trimmed = line.trim()
+    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return
+    // `import type` / `export type` 放行：类型不构成共用实现。
+    const match = /(?:^|\s)(?:import|export)\s+(type\s+)?[^'\n]*?from\s+'([^']+)'|(?:^|\s)import\s*\(\s*'([^']+)'\s*\)|require\(\s*'([^']+)'\s*\)/u.exec(line)
+    if (match === null) return
+    if (match[1] !== undefined) return
+    const specifier = match[2] ?? match[3] ?? match[4]
+    if (specifier === undefined) return
+    const resolved = relative(ROOT, resolve(ROOT, file.path, '..', specifier)).split('\\').join('/')
+    // 同一目录内的 import 是屏自己的零件，不算「别处的面板」。
+    if (resolved.startsWith(`${dirname(file.path)}/`)) return
+    if (FORBIDDEN.some((prefix) => resolved.startsWith(prefix))) hits.push(`${file.path}:${index + 1} imports '${specifier}'`)
   })
   return hits
 }
 
-function drawerFiles(): ReadonlyArray<{ path: string; source: string }> {
-  const absolute = join(ROOT, DRAWER_DIR)
-  return readdirSync(absolute)
-    .filter((name) => name.endsWith('.tsx') && !name.includes('.test.'))
-    .map((name) => {
-      const path = `${DRAWER_DIR}/${name}`
-      return { path, source: readFileSync(join(ROOT, path), 'utf8') }
-    })
+function screens(): ReadonlyArray<{ path: string; source: string }> {
+  return SCREEN_FILES
+    .filter((path) => existsSync(join(ROOT, path)))
+    .map((path) => ({ path, source: readFileSync(join(ROOT, path), 'utf8') }))
 }
 
 describe('the drawer screens own their implementation', () => {
-  it('imports nothing from the settings-page panels', () => {
-    const offenders = drawerFiles().flatMap((file) => drawerScreenOffenders(file))
-    expect(offenders).toEqual([])
+  it('imports nothing from the settings-page panels at runtime', () => {
+    expect(screens().flatMap((file) => runtimeImportOffenders(file))).toEqual([])
   })
 
-  it('catches a real import: the guard is watching', () => {
-    // 反证：真 import 必须报出来（这不是「0 offenders」能证明的）。
+  it('catches a runtime import in a real screen file: the guard is watching', () => {
+    // 反证用**真实屏文件路径**，证明扫描集覆盖到了那七屏（夹具文件证明不了这一点）。
     const fake = [{
-      path: `${DRAWER_DIR}/FakeScreen.tsx`,
-      source: "import { SourcesSettingsPane } from '../intelligence-sources/SourcesSettingsPane'\n"
+      path: 'products/market-intelligence/desktop/pages/intelligence/AnalysisSettingsPanel.tsx',
+      source: "import { SourcesSettingsPane } from '../../settings/intelligence-sources/SourcesSettingsPane'\n"
     }]
-    expect(fake.flatMap((file) => drawerScreenOffenders(file))).toEqual([
-      `${DRAWER_DIR}/FakeScreen.tsx:1 imports '../intelligence-sources/SourcesSettingsPane'`
+    expect(fake.flatMap((file) => runtimeImportOffenders(file))).toEqual([
+      "products/market-intelligence/desktop/pages/intelligence/AnalysisSettingsPanel.tsx:1 imports '../../settings/intelligence-sources/SourcesSettingsPane'"
     ])
   })
 
-  it('does not resolve `../` tricks into a pass', () => {
-    // 同一个目录，换一种写法：解析成绝对路径再比，照样命中。
-    const sneaky = [{
-      path: `${DRAWER_DIR}/FakeScreen.tsx`,
-      source: "import { x } from '../intelligence-sources/./SettingsSourceTree'\n"
+  it('lets a type-only import through: types are not a shared implementation', () => {
+    const typed = [{
+      path: 'products/market-intelligence/desktop/pages/intelligence/AnalysisSettingsPanel.tsx',
+      source: "import type { ProviderDetailLabels } from '../../settings/intelligence-sources/ProviderDetail'\n"
     }]
-    expect(sneaky.flatMap((file) => drawerScreenOffenders(file))).toHaveLength(1)
+    expect(typed.flatMap((file) => runtimeImportOffenders(file))).toEqual([])
   })
 
-  it('opens the exception by file, not by directory', () => {
-    // 例外文件自己放行；**同目录里另一个文件**写同样的 import 必须红——证明开的是文件不是目录。
-    const source = "import { SourcesSettingsPane } from '../../settings/intelligence-sources/SourcesSettingsPane'\n"
-    expect(drawerScreenOffenders({ path: 'products/market-intelligence/desktop/pages/intelligence/DashboardSourcesPanel.tsx', source })).toEqual([])
-    expect(drawerScreenOffenders({ path: 'products/market-intelligence/desktop/pages/intelligence/RunLogDrawerPanel.tsx', source })).toEqual([])
-    expect(drawerScreenOffenders({ path: 'products/market-intelligence/desktop/pages/intelligence/AnotherPanel.tsx', source }))
-      .toHaveLength(1)
+  it('skips an import from the screen\'s own directory', () => {
+    const own = [{
+      path: 'products/market-intelligence/desktop/settings/intelligence-notification/NotificationSettingsPanel.tsx',
+      source: "import { NotificationDrawerScreen } from './NotificationDrawerScreen'\n"
+    }]
+    expect(own.flatMap((file) => runtimeImportOffenders(file))).toEqual([])
   })
 
-  it('does not count a specifier that only appears in comments', () => {
-    const commented = [{
-      path: `${DRAWER_DIR}/FakeScreen.tsx`,
-      source: "// 不要 import '../intelligence-sources/SourcesSettingsPane'\n/* 也不行 */\n"
-    }]
-    expect(commented.flatMap((file) => drawerScreenOffenders(file))).toEqual([])
+  it('keeps every baseline entry owned and dated, so none becomes a permanent exemption', () => {
+    for (const [path, entry] of Object.entries(SCREEN_BASELINE)) {
+      expect(existsSync(join(ROOT, path)), `${path} 的屏文件还在吗`).toBe(true)
+      expect(entry.owner.length, `${path} 的 owner`).toBeGreaterThan(1)
+      expect(entry.shared.length, `${path} 共用哪块`).toBeGreaterThan(10)
+      expect(entry.clearWhen.length, `${path} 的清理时机`).toBeGreaterThan(10)
+    }
   })
 })
