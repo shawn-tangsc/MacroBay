@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { NotificationSettingsPanel } from './NotificationSettingsPanel'
+import { intelligenceNotificationText } from './text'
 
 /**
  * 宽窄两种形态**只属于设置页**。
@@ -15,6 +16,9 @@ import { NotificationSettingsPanel } from './NotificationSettingsPanel'
  * 配置抽屉**固定宽版**：抽屉恒 `full`(1040)，扣掉菜单 208 与内边距 32 只剩约 800——在那里量宽
  * 只会「永远 < 860、永远只有下拉」，读者再也看不到列表。所以 `variant='drawer'` 不量、不切。
  */
+const text = intelligenceNotificationText['zh-CN']
+const groupTitle = text['pages.intelligence.notification.groupTitle']
+
 const EVENT_IDS = {
   signal: 'notifications.channel-event.signal-triggered',
   briefing: 'notifications.channel-event.briefing-ready'
@@ -105,5 +109,21 @@ describe('the notification settings panel layout', () => {
     const container = await renderPanel('page', 860)
     expect(container.querySelector('select')).toBeNull()
     expect(container.querySelector('.intelligence-notification-list')).not.toBeNull()
+  })
+
+  it('leaves the page-level heading to the drawer own title, and keeps it on the page', async () => {
+    // 抽屉自己有这一屏的页名（16），再画一遍这颗 13.5 的标题，读者会读成两个层级。
+    // **不渲染**，不是用 CSS 藏起来——藏起来它还在 DOM 里，读屏仍会念到。
+    const drawer = await renderPanel('drawer')
+    expect(drawer.querySelector('.intelligence-notification-title')).toBeNull()
+    expect(drawer.textContent).not.toContain(groupTitle)
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    const page = await renderPanel('page')
+    expect(page.querySelector('.intelligence-notification-title')).not.toBeNull()
+    expect(page.querySelector('.intelligence-notification-title')?.textContent).toBe(groupTitle)
   })
 })
