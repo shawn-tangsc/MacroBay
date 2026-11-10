@@ -1,19 +1,18 @@
-import { Alert, Button, Input, Switch } from 'antd'
+import { Alert, Button, Input } from 'antd'
 import { Eye, EyeOff } from 'lucide-react'
 import { useCallback, useEffect, useId, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
+import { SourceEnabledRow, needsJob } from './SourceEnabledRow'
 import { SourceHealthDetail, type SourceHealthLabels } from './SourceHealthDetail'
 import { isCalendarSource, useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
-import { healthStateBadge } from './sourceHealthTone'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/intelligenceSourceTest'
@@ -22,7 +21,7 @@ import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
 import { useProxyConfigured } from '../../shared/useProxyConfigured'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
-import type { ProviderView, SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
+import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
 export type ProviderDetailLabels = {
@@ -57,31 +56,6 @@ export type ProviderDetailLabels = {
   lastSuccessfulSync: string
   /** B4 四格：今天有没有读数 / 上次成功 / 为什么没在采 / 能不能立刻采。 */
   health: SourceHealthLabels
-}
-
-/**
- * 一行药丸：**只读投影**（`SourceView.healthState`），词与色都走 `healthStateBadge` 那一处映射。
- * 视图层不再拿 `runtimeStatus`/失败数算一遍——同一份事实两处判，迟早一行绿一行红。
- * `off` 不画词（它盖住「没启用 / 取不到 / 没有读数」三种处境）；「取不到」那一种由行内「不可用」说。
- */
-function SourceHealthPill({ state, resolveText, unavailable }: {
-  state?: SourceHealthState
-  resolveText: (key: string) => string
-  unavailable: boolean
-}): React.ReactElement | null {
-  if (unavailable) {
-    return <StatusPill labelKey="settings.intelligenceSources.unavailableShort" resolveText={resolveText} tone="muted" />
-  }
-  const badge = state === undefined ? undefined : healthStateBadge(state)
-  if (badge === undefined) return null
-  return <StatusPill labelKey={badge.labelKey} resolveText={resolveText} tone={badge.tone} />
-}
-
-function needsJob(source: SourceView): boolean {
-  return source.collection === 'adapter'
-    || source.collection === 'job'
-    || source.kind === 'official-calendar'
-    || source.kind === 'market-calendar'
 }
 
 /** The one rule for the probe button, so a test can hold it without rendering the pane. */
@@ -388,38 +362,20 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
           isCalendarSource(source) ? labels.badges.calendar : null,
           ...source.panels.map((panel) => labels.panelNames[panel] ?? panel)
         ].filter((tag): tag is string => Boolean(tag))
+        /* 启用行：设置页那一面按菜单 1 的声明渲染，看板/日历那一面仍是旧形状——
+           两条路径在同一组件里，状态药丸与标签行只有一份。 */
         return <div key={source.sourceId}>
-          <div className="source-provider-detail__row">
-          {/* 非交互行：这个面板不提供「按源下钻」，所以它不画成入口（无按钮语义、无箭头、无
-              hover）——「看着能点、其实没有去处」是这一版在清的一类假可用。 */}
-          <div className="source-provider-detail__main">
-            <strong>{name}</strong>
-            {/* 一行药丸：只报**状态**。原因、上次成功、能不能立刻采都收进下面那四格——
-                同一个事实两处说，迟早一处新一处旧。 */}
-            <span className="source-provider-detail__status">
-              <SourceHealthPill
-                state={source.collection === 'none' ? undefined : source.healthState}
-                resolveText={resolveText}
-                unavailable={Boolean(unavailable)} />
-            </span>
-            {/* 第二行：归属与任务状态。纯文本 ` · ` 串起，不再是一排药丸。 */}
-            <span className="source-provider-detail__tags-line">
-              {[...new Set(tags)].join(' · ')}
-              {source.requiresProxy && !proxyConfigured ? <><i aria-hidden="true"> · </i><em className="source-provider-detail__proxy">{labels.badges.proxy}</em></> : null}
-              {needsJob(source) ? <><i aria-hidden="true"> · </i>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</> : null}
-            </span>
-          </div>
-          <Switch
-            /* The row's label is the source name; the switch has to say what it does, or a screen
-               reader reads the same name twice and cannot tell the two controls apart. */
-            aria-label={(source.enabled ? labels.toggleSource.disable : labels.toggleSource.enable).replace('{name}', name)}
-            checked={source.enabled}
-            disabled={source.visibility === 'pending'}
-            onChange={(enabled) => void toggle(source, enabled)}
-            /* ui-spec §8.3：开关唯一实现是 antd Switch，统一 small（32×18），默认尺寸不在允许写法内。 */
-            size="small"
+          <SourceEnabledRow
+            labels={labels}
+            name={name}
+            onToggle={(enabled) => void toggle(source, enabled)}
+            proxyConfigured={proxyConfigured}
+            resolveText={resolveText}
+            settingsSurface={isSettingsSurface}
+            source={source}
+            tags={tags}
+            unavailable={Boolean(unavailable)}
           />
-          </div>
           {/* B4 四格：读不到逐次记录的源（日历 feed）不画成「没有」，写「未知」并说明原因。 */}
           <SourceHealthDetail
             automaticSyncStopped={labels.automaticSyncStopped}
