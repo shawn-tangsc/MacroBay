@@ -286,7 +286,7 @@ describe('card empty states', () => {
       { onRefresh, onRunSources }
     )
 
-    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="collection-failed"] button')
+    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="collection-failed"] .mi-source-card__actions button')
     expect(button).not.toBeNull()
     await act(async () => { button?.click() })
 
@@ -294,67 +294,85 @@ describe('card empty states', () => {
     expect(onRefresh).not.toHaveBeenCalled()
   })
 
-  it('tells the five no-rows situations apart, each with its own next step', async () => {
+  it('draws the three source states with one sentence and one action each', async () => {
     const onEnableSources = vi.fn()
     const onRunSources = vi.fn()
     const onRefresh = vi.fn()
     const onWidenWindow = vi.fn()
-    const sentences = productText['zh-CN'].mi.newsSentiment
 
     const disabled = await mountCard(emptyView({ readiness: readiness({ enabledCount: 0 }) }), { onEnableSources })
-    const failed = await mountCard(emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] }) }), { onRunSources, onRefresh })
+    const failed = await mountCard(
+      emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] }) }),
+      { onRunSources, onRefresh }
+    )
     const neverRan = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4, neverRanSourceIds: ['sec-rss'] }) }), { onRunSources })
-    const stale = await mountCard(emptyView({ readiness: readiness(), latestKnownItemAt: '2026-10-24T09:00:00.000Z' }), { onWidenWindow })
-    const quiet = await mountCard(emptyView({ readiness: readiness() }))
 
-    // Five distinct product sentences; the platform skeleton never substitutes its own.
-    const five = [sentences['sources-disabled'], sentences['collection-failed'], sentences['never-ran'], sentences.stale, sentences.quiet]
-    expect(new Set(five).size).toBe(5)
-    const cases = [
-      [disabled, 'sources-disabled', sentences['sources-disabled']],
-      [failed, 'collection-failed', sentences['collection-failed']],
-      [neverRan, 'never-ran', sentences['never-ran']],
-      [stale, 'stale', sentences.stale.split('{time}')[0]!],
-      [quiet, 'quiet', sentences.quiet]
-    ] as const
-    for (const [container, kind, sentence] of cases) {
-      const reason = container.querySelector(`[data-news-sentiment-state="${kind}"] [data-reason-source]`)
-      // The cause is the product's sentence, taken through the platform entry — not the platform's.
-      expect(reason?.getAttribute('data-reason-source')).toBe('product')
-      expect(reason?.textContent).toContain(sentence)
-      expect(container.querySelector(`[data-news-sentiment-state="${kind}"]`)?.className).toBe('mi-news-sentiment__state')
+    // 未启用：共享类的整卡形状 + 一句状态词 + 主动作「去启用」；不用错误色（data-state 只有档位名）。
+    const disabledCard = disabled.querySelector('.mi-source-card')
+    expect(disabledCard?.getAttribute('data-state')).toBe('disabled')
+    expect(disabled.querySelector('.mi-source-state')?.getAttribute('data-state')).toBe('disabled')
+    expect(disabled.querySelector('.mi-source-state')?.textContent).toContain(text.availability.disabled)
+    expect(disabled.querySelector('.mi-source-card__actions button')).not.toBeNull()
+
+    // 读不到：同一种形状的另一个档位，图标换成警示（颜色由共享样式按 data-state 给）。
+    for (const container of [failed, neverRan]) {
+      expect(container.querySelector('.mi-source-card')?.getAttribute('data-state')).toBe('unreadable')
+      expect(container.querySelector('.mi-source-state')?.getAttribute('data-state')).toBe('unreadable')
+      expect(container.querySelector('.mi-source-state')?.textContent).toContain(text.availability.unreadable)
+      expect(container.querySelector('.mi-source-card__actions button')).not.toBeNull()
     }
-    // The stale sentence carries the formatted instant, and no placeholder survives to the screen.
-    const staleReason = stale.querySelector('[data-reason-source]')?.textContent ?? ''
-    expect(staleReason).not.toContain('{time}')
-    // A quiet period is a fact, but the reader can still look further back: the contract makes
-    // every `nothing-in-window` carry the widen action, so this one has a button too.
-    expect(quiet.querySelector('[data-news-sentiment-state="quiet"] button')).not.toBeNull()
 
-    const press = async (container: HTMLElement) => {
-      const button = container.querySelector<HTMLButtonElement>('.mi-news-sentiment__state button')
+    // 每一格只有一颗主动作，且各自做自己的事：去启用 / 重采失败源 / 重采没跑过的源。
+    const pressAction = async (container: HTMLElement): Promise<void> => {
+      const button = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')
       expect(button).not.toBeNull()
       await act(async () => { button?.click() })
     }
-    await press(disabled)
-    await press(failed)
-    await press(neverRan)
-    await press(stale)
-    // Each action really does its own thing: open the settings, run the failed sources, run the
-    // missing ones, widen the window. None of them is aliased to another, and none is a plain
-    // re-read standing in for an action it cannot perform.
+    await pressAction(disabled)
+    await pressAction(failed)
+    await pressAction(neverRan)
     expect(onEnableSources).toHaveBeenCalledTimes(1)
     expect(onRefresh).not.toHaveBeenCalled()
     expect(onRunSources).toHaveBeenNthCalledWith(1, ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'])
     expect(onRunSources).toHaveBeenNthCalledWith(2, ['sec-rss'])
-    expect(onWidenWindow).toHaveBeenCalledTimes(1)
+
+    // 两种「读不到」的成因不同，区别写在 ⓘ 里（正文只留一句状态词）。
+    const openReason = async (container: HTMLElement): Promise<string> => {
+      const info = container.querySelector<HTMLButtonElement>('.mi-source-state button')
+      expect(info).not.toBeNull()
+      // 浮层悬停/聚焦都开：聚焦就够了，且不依赖鼠标事件在 happy-dom 里的时序。
+      await act(async () => { info?.focus() })
+      await vi.waitFor(() => {
+        if (document.body.querySelector('.ant-popover') === null) throw new Error('Expected the reason popover.')
+      })
+      // 前面开过的那颗可能还钉着：把当下所有浮层拼起来找自己这句。
+      return [...document.body.querySelectorAll('.ant-popover')].map((node) => node.textContent ?? '').join(' ')
+    }
+    expect(await openReason(failed)).toContain(text.availability.reasonFailed)
+    expect(await openReason(neverRan)).toContain(text.availability.reasonNeverRan)
+
+    // 「确实没有数据」那两种（超出窗口 / 安静）仍走平台空态，并各自带动作。
+    const stale = await mountCard(emptyView({ readiness: readiness(), latestKnownItemAt: '2026-10-24T09:00:00.000Z' }), { onWidenWindow })
+    const quiet = await mountCard(emptyView({ readiness: readiness() }))
+    expect(stale.querySelector('[data-news-sentiment-state="stale"] .state-view')).not.toBeNull()
+    expect(quiet.querySelector('[data-news-sentiment-state="quiet"] .state-view')).not.toBeNull()
+    expect(quiet.querySelector('[data-news-sentiment-state="quiet"] button')).not.toBeNull()
+  })
+
+  it('keeps the rows when only some of the four sources are switched off', async () => {
+    // 部分可用不是「整卡不可用」：两个源关着、另两个有内容时，条目照常列出来。
+    const container = await mountCard({ ...VIEW, readiness: readiness({ enabledCount: 2 }) })
+    expect(container.querySelector('.mi-source-card')).toBeNull()
+    expect(container.querySelectorAll('.mi-news-sentiment__drivers button').length).toBeGreaterThan(0)
   })
 
   it('does not call an empty read "quiet" when the sources never ran', async () => {
     const sentences = productText['zh-CN'].mi.newsSentiment
     const container = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4 }) }))
+    // 三态里它落在「读不到」（源启用着但没读到），成因写进 ⓘ；不许说成「这段时间没有相关消息」。
     expect(container.textContent).not.toContain(sentences.quiet)
-    expect(container.textContent).toContain(sentences['never-ran'])
+    expect(container.querySelector('[data-news-sentiment-state="never-ran"] .mi-source-card')?.getAttribute('data-state'))
+      .toBe('unreadable')
   })
 })
 
@@ -711,7 +729,7 @@ describe('NewsSentimentFeature', () => {
       <NewsSentimentFeature text={text} client={client({ query })} now={now} sourcesClient={{ runNow, setEnabled }} />
     )
     await act(async () => {})
-    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="sources-disabled"] button')
+    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="sources-disabled"] .mi-source-card__actions button')
     expect(button).not.toBeNull()
     await act(async () => { button?.click() })
     // 条件是「四个源都启用、各跑一次，卡片也重读过」，不是等一个 0ms 定时器：

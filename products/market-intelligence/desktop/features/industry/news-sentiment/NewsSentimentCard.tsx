@@ -17,6 +17,7 @@ import { passesNeutralFilter } from './newsSentimentFilters'
 import { resolveNewsSentimentEmptyState } from './newsSentimentEmptyState'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 import { isNewsSentimentOutOfDate } from './newsSentimentFreshness'
+import { NewsSentimentAvailabilityCard } from './NewsSentimentAvailability'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
@@ -156,6 +157,7 @@ export function NewsSentimentCard(props: {
         </div>
       ) : emptyState && !causeUnknown ? (
         <EmptyCause
+          text={text}
           failedSourceIds={view?.readiness?.failedSourceIds ?? []}
           neverRanSourceIds={view?.readiness?.neverRanSourceIds ?? []}
           onEnableSources={props.onEnableSources}
@@ -243,6 +245,7 @@ export function NewsSentimentCard(props: {
  */
 function EmptyCause(props: {
   state: import('./newsSentimentEmptyState').NewsSentimentEmptyState
+  text: NewsSentimentText
   resolve: (key: string, params?: Record<string, string>) => string
   /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
   onEnableSources: () => void
@@ -259,41 +262,40 @@ function EmptyCause(props: {
   const wrap = (node: React.ReactElement) => (
     <div className="mi-news-sentiment__state" data-news-sentiment-state={state.kind}>{node}</div>
   )
+  // 三态那一格：形状由共享样式给，正文只有一句状态词，原因进 ⓘ。
+  const availability = (stateName: 'disabled' | 'unreadable', reason: string, actionLabel: string, onAction: () => void) => (
+    <div data-news-sentiment-state={state.kind}>
+      <NewsSentimentAvailabilityCard
+        actionLabel={actionLabel}
+        onAction={onAction}
+        reason={reason}
+        state={stateName}
+        text={props.text} />
+    </div>
+  )
   switch (state.kind) {
     case 'sources-disabled':
-      return wrap(
-        <StateView
-          action={{ labelKey: 'ui.state.action.enable', onSelect: props.onEnableSources }}
-          productReason={{ key: 'mi.newsSentiment.sources-disabled', resolve: (key, params) => props.resolve(key, params) }}
-          reasonCode="target-disabled"
-          resolveText={resolveStateText}
-          size="md"
-          state="disabled"
-        />
+      return availability(
+        'disabled',
+        props.text.availability.reasonDisabled,
+        resolveStateText(STATE_VIEW_ACTION_KEYS.enable),
+        props.onEnableSources
       )
     case 'collection-failed':
-      return wrap(
-        <StateView
-          // "Try again" here has to collect again: a plain re-read of the store would show the same
-          // empty window, so the button would name an action it cannot perform.
-          action={{ labelKey: 'ui.state.action.retry', onSelect: () => props.onRunSources(props.failedSourceIds) }}
-          productReason={{ key: 'mi.newsSentiment.collection-failed', resolve: (key, params) => props.resolve(key, params) }}
-          reasonCode="unreadable"
-          resolveText={resolveStateText}
-          size="md"
-          state="error"
-        />
+      // 「再试一次」在这里必须真的重新采集：只重读同一份库会得到同一个空窗口，
+      // 那颗按钮就名不副实了。
+      return availability(
+        'unreadable',
+        props.text.availability.reasonFailed,
+        resolveStateText(STATE_VIEW_ACTION_KEYS.retry),
+        () => props.onRunSources(props.failedSourceIds)
       )
     case 'never-ran':
-      return wrap(
-        <StateView
-          action={{ labelKey: 'ui.state.action.run-now', onSelect: () => props.onRunSources(props.neverRanSourceIds) }}
-          productReason={{ key: 'mi.newsSentiment.never-ran', resolve: (key, params) => props.resolve(key, params) }}
-          reasonCode="never-ran"
-          resolveText={resolveStateText}
-          size="md"
-          state="empty"
-        />
+      return availability(
+        'unreadable',
+        props.text.availability.reasonNeverRan,
+        resolveStateText(STATE_VIEW_ACTION_KEYS.retry),
+        () => props.onRunSources(props.neverRanSourceIds)
       )
     case 'stale':
       return wrap(
