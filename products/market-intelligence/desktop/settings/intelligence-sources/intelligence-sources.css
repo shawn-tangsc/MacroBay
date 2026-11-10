@@ -752,6 +752,20 @@
   padding: 6px 8px;
 }
 
+/* 「来源筛选」这一行**产品级局部覆写**：平台 `Segmented` 默认是 `nowrap + overflow-x: auto`
+   （那一份不给别处动），所以窄了会出现横向滚动条。这里只作用于这一行：
+   窄了换行、宽了单行，任何宽度都不出横向滚动条，也不省略、不裁切。
+   选择器一律带 `.intelligence-catalog-filters` 前缀，打不到别的屏。 */
+.intelligence-catalog-filters .segmented {
+  flex-wrap: wrap;
+  overflow: visible;
+  white-space: normal;
+}
+
+.intelligence-catalog-filters .segmented__item {
+  flex: 0 0 auto;
+}
+
 .intelligence-catalog-filter {
   border: 1px solid var(--border-subtle);
   border-radius: 10px;

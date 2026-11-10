@@ -95,3 +95,19 @@ describe('one horizontal centre line per row', () => {
     }
   })
 })
+
+describe('the source-filter row wraps instead of scrolling', () => {
+  it('overrides the segmented row locally so no width shows a horizontal scrollbar', () => {
+    // 平台 `Segmented` 默认 `nowrap + overflow-x: auto`；这一行在产品样式里覆写成换行。
+    // 判据落在规则本体（happy-dom 量不到滚动条）：wrap + 不 overflow-x:auto，且选择器带产品前缀。
+    const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/gu)]
+      .filter((match) => match[1]!.includes('.intelligence-catalog-filters .segmented')
+        && !match[1]!.includes('__item'))
+      .map((match) => match[2]!)
+    expect(rules.length).toBeGreaterThan(0)
+    expect(rules.some((body) => body.includes('flex-wrap: wrap'))).toBe(true)
+    expect(rules.some((body) => body.includes('overflow: visible'))).toBe(true)
+    // 覆写里不许再出现横向滚动。
+    for (const body of rules) expect(body).not.toContain('overflow-x: auto')
+  })
+})
