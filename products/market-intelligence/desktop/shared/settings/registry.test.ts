@@ -296,6 +296,17 @@ describe('settings registry self-checks', () => {
     expect(threshold?.copy?.helpKey).toBeUndefined()
   })
 
+  it('keeps both help lines on the country-codes row, so its ⓘ still says what is not chosen', () => {
+    // 页面现状：自选国家那一项的 ⓘ 是两条（只对给出国家的条目生效 + 只有选中的国家会推），
+    // 读屏名是专用键 `countries.customInfoAria`。只迁一条就少一句指路。
+    const codes = Object.values(settingRegistry).flat().find((row) => row.key === 'setting:notifications.calendar.landed-countries.codes')
+    expect(codes?.copy?.helpKeys).toEqual([
+      'pages.intelligence.notification.countries.customCost',
+      'pages.intelligence.notification.countries.emptyHint'
+    ])
+    expect(codes?.copy?.helpAriaKey).toBe('pages.intelligence.notification.countries.customInfoAria')
+  })
+
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
     const surfaces = settingRegistry.notifications.find(
       (row) => row.key === 'setting:notifications.surfaces'

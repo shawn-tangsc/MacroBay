@@ -231,7 +231,12 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     visibleWhen: (view) => readViewField(readViewField(view, 'landedCountries'), 'scope') === 'custom',
     copy: {
       labelKey: 'pages.intelligence.notification.countries.customTitle',
-      helpKey: 'pages.intelligence.notification.countries.customCost'
+      // 两条说明（只对给出国家的条目生效 + 只有选中的国家会推），读屏名专用——与页面一致。
+      helpKeys: [
+        'pages.intelligence.notification.countries.customCost',
+        'pages.intelligence.notification.countries.emptyHint'
+      ],
+      helpAriaKey: 'pages.intelligence.notification.countries.customInfoAria'
     },
     availability: 'live'
   },
