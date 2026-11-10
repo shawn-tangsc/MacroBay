@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 
-import { BusinessSettingsView, type BusinessKey } from './BusinessSettingsView'
+import { BusinessSettingsContent, BusinessSettingsView, type BusinessKey } from './BusinessSettingsView'
 import { modulesForBusiness } from './dashboardSourceModules'
 
 const t = productText['zh-CN'].settings.intelligenceSources
@@ -18,6 +18,20 @@ afterEach(async () => {
   root = undefined
   document.body.replaceChildren()
 })
+
+async function renderContent(business: BusinessKey): Promise<{ host: HTMLElement; onSelectSource: ReturnType<typeof vi.fn> }> {
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  const onSelectSource = vi.fn()
+  await act(async () => root!.render(createElement(BusinessSettingsContent, {
+    business,
+    onSelectSource,
+    resolveText,
+    sourceNames: t.sourceNames
+  })))
+  return { host, onSelectSource }
+}
 
 async function render(business: BusinessKey): Promise<{ host: HTMLElement; onSelectSource: ReturnType<typeof vi.fn> }> {
   const host = document.createElement('div')
@@ -76,16 +90,50 @@ describe('业务设置的左列', () => {
   })
 
   it('lists calendar and sentiment as flat source names, without group titles', async () => {
-    const calendar = await render('calendar')
+    const calendar = await renderContent('calendar')
     expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(6)
     expect(calendar.host.textContent).not.toContain('官方源')
     expect(calendar.host.textContent).not.toContain('聚合源')
     await act(async () => { calendar.host.querySelector<HTMLButtonElement>('.business-card__row')?.click() })
     expect(calendar.onSelectSource).toHaveBeenCalledWith('macro-calendar-fed')
 
-    const sentiment = await render('sentiment')
+    const sentiment = await renderContent('sentiment')
     expect(sentiment.host.querySelectorAll('.business-card__row')).toHaveLength(4)
     // 「舆情评分」不是源，不添行。
     expect(sentiment.host.textContent).not.toContain('舆情评分')
+  })
+})
+
+describe('内容区页头与卡片项的行结构', () => {
+  it('draws the business title once and no stats line', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BusinessSettingsContent, {
+      business: 'dashboard',
+      onSelectSource: vi.fn(),
+      resolveText,
+      sourceNames: t.sourceNames
+    })))
+    expect(host.querySelectorAll('.intelligence-section-title')).toHaveLength(1)
+    expect(host.querySelector('.intelligence-section-title')?.textContent).toBe(t.businessTabs.dashboard)
+    // 页面写「共 N 个模块」这类统计就是废话（用户 2026-11-11）：不许出现。
+    expect(host.textContent).not.toContain('共')
+  })
+
+  it('renders each item as a labeled row: 格名 left, 源名 right', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BusinessSettingsContent, {
+      business: 'calendar',
+      onSelectSource: vi.fn(),
+      resolveText,
+      sourceNames: t.sourceNames
+    })))
+    const row = host.querySelector('.business-card__row')
+    expect(row?.querySelector('.business-card__label')?.textContent).toBeTruthy()
+    // 日历/舆情那一面是无格名的：源名在左列、右列留空。
+    expect(row?.querySelector('.business-card__value')?.textContent).toBe('')
   })
 })

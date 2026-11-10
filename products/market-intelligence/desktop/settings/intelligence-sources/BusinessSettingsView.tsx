@@ -46,9 +46,10 @@ export function BusinessSettingsView(props: {
       : sourceCountForBusiness(business)
     return template.replace('{count}', String(count))
   }
-  return <div className="business-settings">
-    <div className="business-settings__nav">
-      {props.tabs}
+  /* 只交出**列表本体**：页签条与外层两栏归 `SourcesSettingsPane`（切 tab 不重挂载页签）。 */
+  void nameOf
+  return <div className="intelligence-catalog-list">
+      <div className="business-settings__nav">
       {/* 与来源树同一套行：头像位 + 主文字 + 副标题 + 右侧 chevron；选中态沿用树里那个类。 */}
       {BUSINESS_KEYS.map((key) => <button
         aria-current={props.business === key ? 'true' : undefined}
@@ -65,8 +66,23 @@ export function BusinessSettingsView(props: {
           <ChevronRight aria-hidden="true" size={13} />
         </span>
       </button>)}
-    </div>
-    <div className="business-settings__content">
+      </div>
+  </div>
+}
+
+/** 右内容区：卡片 / 平铺源名。没有源级详情。 */
+export function BusinessSettingsContent(props: {
+  business: BusinessKey
+  onSelectSource: (sourceId: string) => void
+  sourceNames: Readonly<Record<string, string>>
+  resolveText: (key: string) => string
+}): React.ReactElement {
+  const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
+  const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
+  return <div className="intelligence-detail-scroll">
+    <div className="business-settings__content" data-business-content={props.business}>
+      {/* 内容区页头：只写当前业务名，不写副标题、不写「共 N 个」这类统计（用户 2026-11-11）。 */}
+      <h3 className="intelligence-section-title">{props.resolveText(titleKey)}</h3>
       {props.business === 'dashboard'
         ? [...modulesForBusiness('dashboard'), AI_ANALYSIS_MODULE].map((module) => <section
           className="business-card"

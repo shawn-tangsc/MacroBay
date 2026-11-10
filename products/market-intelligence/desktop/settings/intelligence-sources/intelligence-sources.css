@@ -1627,19 +1627,23 @@
   padding: 0 0 4px;
 }
 
+/* 内容区：整片留 16 主档内距，卡片不贴边；页头与第一张卡、卡片与卡片之间都是 12；
+   最后一张卡片下面由这层 padding 收尾。 */
 .business-settings__content {
   display: grid;
   gap: 12px;
   min-width: 0;
   align-content: start;
+  padding: 16px;
 }
 
 /* 每个模块一张卡：卡片背景/描边/圆角/内距全走主题 token；卡片宽度吃满内容区，
    卡片之间 12（主档），右缘与内容区右缘对齐。 */
 .business-card {
   display: grid;
+  gap: 8px;
   min-width: 0;
-  padding: 4px 0;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
@@ -1653,6 +1657,7 @@
   gap: 8px;
   min-height: 32px;
   padding: 0 12px;
+  margin-bottom: 8px;
   color: var(--text-strong);
   font-size: 13px;
   font-weight: 650;
@@ -1667,9 +1672,11 @@
   align-items: center;
   min-height: 44px;
   padding: 0 12px;
-  border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  background: transparent;
+  /* 一行 = 一个圆角描边的整行容器，和源行同一套描边/圆角/底色/内距（用户 2026-11-11）；
+     不再用贯穿卡片宽度的 1px 分隔线。 */
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-soft) 35%, transparent);
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -1682,16 +1689,19 @@
 
 .business-card__label {
   min-width: 0;
-  color: var(--muted-strong);
+  color: var(--text);
+  /* 与源行名字同一档字重。 */
+  font-weight: 600;
   font-size: var(--font-meta);
   white-space: nowrap;
 }
 
 .business-card__value {
   min-width: 0;
-  color: var(--text-strong);
+  color: var(--muted);
   font-size: var(--font-meta);
-  font-weight: 500;
+  font-weight: 400;
+  text-align: right;
   /* 源名不换行：名字长就让这一列变宽，不许逐字折行。 */
   white-space: nowrap;
 }
