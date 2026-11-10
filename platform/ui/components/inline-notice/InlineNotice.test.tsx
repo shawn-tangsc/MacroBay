@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { InlineNotice } from './InlineNotice'
 
@@ -30,6 +30,19 @@ describe('inline notice', () => {
     expect((await mount(<InlineNotice tone="danger">保存失败</InlineNotice>)).querySelector('[data-inline-notice="danger"]')?.getAttribute('role')).toBe('alert')
     expect((await mount(<InlineNotice tone="caution">配置不完整</InlineNotice>)).querySelector('[data-inline-notice="caution"]')?.getAttribute('role')).toBe('status')
     expect((await mount(<InlineNotice tone="info">提示</InlineNotice>)).querySelector('[data-inline-notice="info"]')?.getAttribute('role')).toBe('status')
+  })
+
+  it('renders an optional action on the right, with the resolved label, and fires it', async () => {
+    const onSelect = vi.fn()
+    const host = await mount(<InlineNotice action={{ labelKey: 'go', onSelect }} resolveText={() => '去配置'} tone="caution">
+      搜索源没配
+    </InlineNotice>)
+    const button = host.querySelector<HTMLButtonElement>('.inline-notice__action')!
+    expect(button.textContent).toBe('去配置')
+    await act(async () => button.click())
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    // 文字按钮：不是靠颜色区分的链接样式。
+    expect(button.tagName).toBe('BUTTON')
   })
 
   it('carries the tone as a class and renders one line of text with an icon', async () => {

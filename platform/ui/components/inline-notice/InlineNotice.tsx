@@ -20,15 +20,27 @@ export type InlineNoticeTone = 'info' | 'caution' | 'danger'
 
 const ICONS = { info: Info, caution: AlertTriangle, danger: OctagonAlert } as const
 
-export function InlineNotice({ tone, children }: Readonly<{
+export function InlineNotice({ tone, children, action, resolveText }: Readonly<{
   tone: InlineNoticeTone
   /** 一句话（已解析好的文案）。 */
   children: ReactNode
+  /**
+   * 右侧的动作（**真的导航或动作**，不许传空函数——那是假控件）：
+   * 例如「搜索源没配 → 去配置」。文字按钮、垂直居中，`danger` 档也不染成主色按钮。
+   */
+  action?: Readonly<{ labelKey: string; onSelect: () => void }>
+  /** 只用于解析 `action.labelKey`；不给就原样显示键（调用方应总给）。 */
+  resolveText?: (key: string) => string
 }>): React.ReactElement {
   const Icon = ICONS[tone]
   const role = tone === 'danger' ? 'alert' : 'status'
   return <div className={`inline-notice inline-notice--${tone}`} data-inline-notice={tone} role={role}>
     <Icon aria-hidden="true" size={16} />
     <span className="inline-notice__text">{children}</span>
+    {action === undefined ? null : (
+      <button className="inline-notice__action" onClick={action.onSelect} type="button">
+        {resolveText === undefined ? action.labelKey : resolveText(action.labelKey)}
+      </button>
+    )}
   </div>
 }
