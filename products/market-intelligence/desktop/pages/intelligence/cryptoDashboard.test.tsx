@@ -370,7 +370,9 @@ describe('crypto intelligence dashboard', () => {
 
     const card = container.querySelector('.mi-positioning-panel')!
     expect(card).not.toBeNull()
-    expect(card.querySelector('[data-positioning-source-card]')).not.toBeNull()
+    // 整卡级归平台六态：两格都不可用时整块换 `StateView`，不是共享可用性卡。
+    expect(card.querySelector('.mi-source-card')).toBeNull()
+    expect(card.querySelector('.state-view[data-state="disabled"]')).not.toBeNull()
     expect(card.textContent).toContain(text.dashboard.positioning.sourceDisabled.replace('{source}', text.dashboard.positioning.sourceName))
     expect(card.textContent).toContain(text.dashboard.positioning.actionEnable)
     // 不是空态、也没有图表框架：三态与「确实没有数据」形状不同。

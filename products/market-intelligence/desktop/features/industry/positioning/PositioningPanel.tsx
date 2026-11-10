@@ -17,6 +17,7 @@ import type { OpenInterestWindow } from '../../../../contracts/openInterestHisto
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
 import type { DashboardFundingRateHistoryPoint, DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import {
@@ -195,12 +196,11 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const fundingReady = fundingCellState === 'available'
   // 每格一颗主动作：未配置 → 去配置；未启用 → 去启用（同一处，落在该源那一行）；读不到 → 再试一次。
   const cardSourceReason: PositioningCellReason | undefined = cells?.reasons.oi ?? cells?.reasons.funding
-  const cardSourceAction = cardSourceState === undefined ? undefined : sourceActionFor(cardSourceState, text, {
-    ...(onOpenSources ? { openSources: onOpenSources } : {}),
-    ...(cardSourceState === 'unreadable'
-      ? { retry: () => { positioningRetry?.(); onReloadFunding?.() } }
-      : {})
-  })
+  // 整卡「再试一次」把两格一起重读：两格都不可用时读者要的是「再读一次这张卡」。
+  const cardRetry = (): void => { positioningRetry?.(); onReloadFunding?.() }
+  // 整卡的动作不设成「有时没有」：`StateView` 的 required 码不给按钮就是把读者丢在没有出路的页面里。
+  // 宿主没接线时落到共享导航（同一个目的地：设置 → 情报源），所以这里永远有一颗真按钮。
+  const cardOpenSources = onOpenSources ?? openIntelligenceSourcesSettings
   // 两个时刻都来自投影（同源）：曲线末点与折叠前的最新读数。这里不再 `at(-1)` 现取——
   // 各算一处，窗口切换时就会出现「写着 01:00 · 01:45，但曲线末点其实不是 01:00」。
   const pointAt = available ? positioning.pointAt : undefined
@@ -290,9 +290,10 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       ) : null}
       <div className="mi-positioning-panel__body">
         {cardSourceState ? (
-          // 两格都不可用：整卡一句话 + 一颗主动作。不画灰掉的图表框架，也不留一串破折号。
-          <WholeCardSourceState state={cardSourceState} text={text} resolveText={resolveProductKey}
-            reason={cardSourceReason} action={cardSourceAction} />
+          // 两格一个可用都没有：整卡换平台 `StateView`（归属按形态定，用户 2026-11-11）。
+          // 共享可用性卡只服务格/行级；整卡级用平台六态，产品那句走 `productReason`。
+          <WholeCardStateView state={cardSourceState} text={text} reason={cardSourceReason}
+            onOpenSources={cardOpenSources} retry={cardRetry} resolveText={resolveProductKey} />
         ) : <>
         <div className="mi-positioning-panel__summary">
           <Asset asset="btc" text={text} rate={fundingReady ? btcRate.at(-1) : undefined} rateAgo={fundingReady ? btcRate.at(-4) : undefined}
@@ -409,24 +410,43 @@ function SourceReason({ reason, resolveText }: Readonly<{ reason: PositioningCel
   )
 }
 
-/** 整卡：两格都不可用时只说一句，给一颗主动作；不画图表框架。 */
-function WholeCardSourceState({ state, text, reason, action, resolveText }: Readonly<{
+/**
+ * 整卡三态（两格一个可用都没有）：落平台六态。
+ *
+ * 归属**按形态**定（用户 2026-11-11）：整卡级 → `StateView`；格级、行级 → 共享可用性卡。
+ * 三件事仍是三种说法，谁也不冒充谁：
+ * - 没配置 → `empty · none-installed`，产品句「还没有配置来源」，动作「打开设置」；
+ * - 没启用 → `disabled · target-disabled`，产品句点名是哪个源，动作「去启用」；
+ * - 读不到 → `error · unreadable`，产品句「暂时读不到」，一颗「重试」，原因进 `details`（默认折叠）。
+ *
+ * 动作标签是平台键表的闭集（`ui.state.action.*`），所以这里是「打开设置 / 去启用 / 重试」——
+ * 格级那句「去配置」不进整卡：两套词会把同一个入口说成两件事。
+ */
+function WholeCardStateView({ state, text, reason, onOpenSources, retry, resolveText }: Readonly<{
   state: 'missing' | 'disabled' | 'unreadable'
   text: PositioningPanelText
   reason?: PositioningCellReason
-  action?: SourceAction
+  onOpenSources: () => void
+  retry: () => void
   resolveText: (key: string) => string
 }>): React.ReactElement {
-  return (
-    <div className="mi-source-card" data-state={state} data-positioning-source-card="true">
-      <p className="mi-source-state" data-state={state}>
-        <SourceStateIcon state={state} />
-        {sourceSentence(state, text)}
-        {state === 'unreadable' && reason ? <SourceReason reason={reason} resolveText={resolveText} /> : null}
-      </p>
-      {action ? <div className="mi-source-card__actions"><Button onClick={action.onSelect}>{action.label}</Button></div> : null}
-    </div>
-  )
+  if (state === 'missing') {
+    return <StateView state="empty" reasonCode="none-installed" size="md"
+      action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: onOpenSources }}
+      productReason={{ key: 'mi.positioning.card-no-source', resolve: () => text.sourceMissing }} />
+  }
+  if (state === 'disabled') {
+    return <StateView state="disabled" reasonCode="target-disabled" size="md"
+      action={{ labelKey: STATE_VIEW_ACTION_KEYS.enable, onSelect: onOpenSources }}
+      productReason={{
+        key: 'mi.positioning.card-not-enabled',
+        resolve: () => text.sourceDisabled.replace('{source}', text.sourceName)
+      }} />
+  }
+  return <StateView state="error" reasonCode="unreadable" size="md"
+    action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
+    productReason={{ key: 'mi.positioning.card-unreadable', resolve: () => text.sourceUnreadable }}
+    {...(reason ? { details: { bodyText: resolveText(positioningSourceReasonKeys[reason]) } } : {})} />
 }
 
 /** 单格：另半照常显示，这一格用一行说清，配一颗主动作（不是灰按钮）。 */

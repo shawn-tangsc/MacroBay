@@ -231,13 +231,37 @@ describe('positioning panel', () => {
     expect(failed).not.toContain(text.contractMismatch)
   })
 
-  it('says 还没有配置来源 for the whole card when neither cell has a source', () => {
+  it('falls the whole card back to the platform empty view when neither cell has a source', () => {
+    // 整卡级归平台六态（用户 2026-11-11 按形态定的归属）：共享可用性卡只服务格级；
+    // 两格一个可用都没有时整卡换 `StateView`，产品那句走 `productReason`。
     const markup = render({ cells: { oi: 'missing', funding: 'missing', reasons: {} }, onOpenSources: () => undefined })
+    expect(markup).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
     expect(markup).toContain(text.sourceMissing)
-    expect(markup).toContain(text.actionConfigure)
-    // 三态不是空态：谁把它换成 StateView 的空态，这一条就红。
-    expect(markup).not.toContain('data-state="empty"')
+    expect(markup).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.open_settings))
+    // 共享卡与整卡级 StateView 不许同时出现在这一格位置上。
+    expect(markup).not.toContain('mi-source-card')
     expect(markup).not.toContain('mi-positioning-panel__chart')
+  })
+
+  it('falls the whole card back to the platform disabled view when both cells are off', () => {
+    const markup = render({ cells: { oi: 'disabled', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })
+    expect(markup).toMatch(/class="state-view[^"]*"[^>]*data-state="disabled"/)
+    expect(markup).toContain(text.sourceDisabled.replace('{source}', text.sourceName))
+    expect(markup).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.enable))
+    expect(markup).not.toContain('mi-source-card')
+  })
+
+  it('falls the whole card back to the platform error view with one retry when both reads fail', () => {
+    const markup = render({
+      positioning: { state: 'unavailable', cause: 'invalid-clock', onReload: () => undefined },
+      cells: { oi: 'unreadable', funding: 'unreadable', reasons: { oi: 'invalid-clock', funding: 'query-failed' } }
+    })
+    expect(markup).toMatch(/class="state-view[^"]*"[^>]*data-state="error"/)
+    expect(markup).toContain(text.sourceUnreadable)
+    expect(markup).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
+    // 原因不丢：进 `StateView` 的折叠区，不铺在正文。
+    expect(markup).toContain(text.sourceReasonClock)
+    expect(markup).not.toContain('mi-source-card')
   })
 
   it('says 来源没有启用 and names the source, keeping the other cell rendering', () => {
