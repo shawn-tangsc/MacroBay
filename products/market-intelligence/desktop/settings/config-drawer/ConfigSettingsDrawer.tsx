@@ -11,6 +11,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 import { productText } from '../../shared/i18n/productText'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
+import { SourcesStaticScreen } from './SourcesStaticScreen'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
 import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView, DrawerSourceRow, DrawerSourcesView } from './drawerScreenView'
 import './configDrawer.css'
@@ -121,6 +122,9 @@ export function ConfigSettingsDrawer({
       </nav>
       <section aria-label={menuLabel(menu)} className="config-drawer__pane">
         <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
+        {menu === 'sources' && sourcesView === undefined
+          ? (<SourcesStaticScreen />)
+          : null}
         {menu === 'sources' && sourcesView !== undefined
           ? (<SourcesScreen
             labels={{ enabled: copy.rows.enabled }}
@@ -144,7 +148,7 @@ export function ConfigSettingsDrawer({
             resolveText={resolveTextProp ?? ((key: string) => key)}
             values={platformValues} />)
           : null}
-        {(menu === 'briefing' && briefingView !== undefined) || (menu === 'notifications' && notificationsView !== undefined) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || (menu === 'sources' && sourcesView !== undefined)
+        {(menu === 'briefing' && briefingView !== undefined) || (menu === 'notifications' && notificationsView !== undefined) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{groupLabel(group.titleKey)}</div>}

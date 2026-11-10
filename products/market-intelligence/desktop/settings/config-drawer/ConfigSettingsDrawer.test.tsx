@@ -129,7 +129,8 @@ describe('config settings drawer (static layout)', () => {
     const dir = __dirname
     // **文案不算数据**：i18n 表是静态文本，接进来不会让抽屉开始读视图/IPC。
     // 真正要挡的是 IPC、视图、service 这些「会让这一版偷偷开始取数」的 import。
-    const allowedPrefixes = ['react', 'react-dom', 'lucide-react', '@platform/ui/', './', '../../shared/i18n/']
+    // `antd` 是**控件库**不是数据层：静态版画一颗禁用按钮用它，不会让抽屉开始取数。
+    const allowedPrefixes = ['react', 'react-dom', 'lucide-react', 'antd', '@platform/ui/', './', '../../shared/i18n/']
     const offenders = readdirSync(dir)
       .filter((name) => name.endsWith('.tsx') && !name.includes('.test.'))
       .flatMap((name) => readFileSync(join(dir, name), 'utf8').split('\n').flatMap((line, index) => {

@@ -286,3 +286,33 @@
 .config-drawer__source-dot--warn { background: var(--warn); }
 
 .config-drawer__source-dot--bad { background: var(--danger); }
+
+/* 来源屏静态元素：首字母圆标、详情区头部与底部动作。 */
+.config-drawer__source-badge {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+}
+
+.config-drawer__detail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.config-drawer__detail-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.config-drawer__detail-foot {
+  padding-top: 12px;
+}
