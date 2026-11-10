@@ -41,6 +41,8 @@ export type ConfigSettingsDrawerProps = {
   onSelectSource?: (sourceId: string) => void
   /** 分析屏视图（简报线给的 `useDrawerAnalysisView`）：两行值已是成句文案，原样渲染。 */
   analysisView?: DrawerScreenView<DrawerRowView>
+  /** 日报屏视图（`useDrawerBriefingView`，五行只读），宿主读好传进来。 */
+  briefingView?: DrawerScreenView<DrawerRowView>
   /** 平台与模型那一屏的当前值：**宿主读好再传**，缺键就是「读不到」。 */
   platformValues?: DrawerPlatformValues
   /** 行尾「去平台设置」跳转：走宿主给的导航入口，抽屉不拼路由。 */
@@ -58,6 +60,7 @@ export function ConfigSettingsDrawer({
   initialMenu = 'sources',
   notificationsView,
   analysisView,
+  briefingView,
   sourcesView,
   onSelectSource,
   platformValues,
@@ -118,6 +121,9 @@ export function ConfigSettingsDrawer({
         {menu === 'analysis' && analysisView !== undefined
           ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={analysisView} />)
           : null}
+        {menu === 'briefing' && briefingView !== undefined
+          ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={briefingView} />)
+          : null}
         {menu === 'notifications' && notificationsView !== undefined
           ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={notificationsView} />)
           : null}
@@ -127,7 +133,7 @@ export function ConfigSettingsDrawer({
             resolveText={resolveTextProp ?? ((key: string) => key)}
             values={platformValues} />)
           : null}
-        {(menu === 'notifications' && notificationsView !== undefined) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || (menu === 'sources' && sourcesView !== undefined)
+        {(menu === 'briefing' && briefingView !== undefined) || (menu === 'notifications' && notificationsView !== undefined) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || (menu === 'sources' && sourcesView !== undefined)
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{group.titleKey}</div>}

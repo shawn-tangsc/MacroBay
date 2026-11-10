@@ -115,7 +115,8 @@ describe('config settings drawer (static layout)', () => {
       const pane = body.querySelector<HTMLElement>('.config-drawer')
       return { menu: screen.menu, markup: pane?.outerHTML ?? '', rows: pane?.querySelectorAll('.config-drawer__row').length ?? 0 }
     })
-    expect(snapshots).toHaveLength(6)
+    // 日报屏已接真数据、从静态清单移除，快照只剩还在占位的五屏。
+    expect(snapshots).toHaveLength(DRAWER_PREVIEW_SCREENS.length)
     for (const snapshot of snapshots) {
       expect(snapshot.rows).toBeGreaterThan(0)
       expect(snapshot.markup).toContain('config-drawer__value')
