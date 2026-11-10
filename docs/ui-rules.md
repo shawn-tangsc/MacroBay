@@ -35,6 +35,7 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | Body sentence | 12 / 1.5 / 400 | `--font-body` / `--line-body` |
 | Group heading | 11.5 / 1.6 / 600 | `--font-section` / `--line-section` |
 | Reading note | 11.5 / 1.6 / 400 | same |
+| Page name (the screen's subject, e.g. a detail header) | 16 / 1.35 / 650 / `--text-strong` | **missing** (literal 16; the screen subject only — never a section title, never a row, **never a card header**: the config drawer's in-card title was removed, `3403c15`) |
 | Card / section title | 13 / 1.4 / 650 | **missing** |
 | Settings label | 13 / 1.4 / 400 | **missing** |
 | Table figure, axis | 11 / 1 / 400 or 600 + `tabular-nums` | **missing** |
@@ -51,6 +52,7 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 |---|---|
 | Allowed steps | **4 / 6 / 8 / 10 / 12 / 16** |
 | List row | height 44 (one line) / 60 (two); **32 for dense streams such as logs and message feeds**, inline padding 12, title to meta 8 |
+| Page outer padding | **24** (page frame only; never inline, never between blocks, and **never a card's inner padding** — a drawer card uses 16) |
 | New values | a non-step value is a defect; the existing ones merge file by file, no repo-wide rewrite |
 | Two-column rows (field area + trailing control) | field area **`flex: 1; min-width: 0`**, trailing control **`flex: none`** |
 
