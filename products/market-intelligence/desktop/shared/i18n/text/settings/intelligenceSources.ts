@@ -260,6 +260,8 @@ export const intelligenceSourcesText = {
   panelNames: { dashboard: '看板', 'economic-calendar': '日历' },
   toggleSource: { enable: '启用 {name}', disable: '停用 {name}' },
   providerSummary: '{total} 项能力 · 已启用 {enabled}',
+  /* 源那一行行尾那颗展开按钮：两个字，不是说明。 */
+  advancedToggle: '高级',
   credentialsRequired: '需要 API Key',
   website: '官网',
   signup: '注册 / 获取 Key',
@@ -446,6 +448,8 @@ export const intelligenceSourcesText = {
   keepEditing: '继续编辑',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
+  /* 右详情那一个折叠块的头：健康四格 + 采集策略都住在它里面（用户 2026-11-10）。 */
+  detailsBlockTitle: '健康与采集策略',
   health: {
     title: '来源健康',
     runtimeStatus: '运行状态',
@@ -468,7 +472,7 @@ export const intelligenceSourcesText = {
     runNowAnswer: '能不能立刻采',
     refreshStale: '刚跑完，读数还没刷新',
     reasons: {
-      disabled: '已停用',
+      disabled: '未启用',
       'missing-credential': '缺凭据',
       unavailable: '平台取不到',
       'never-ran': '从没成功采过',
@@ -489,7 +493,10 @@ export const intelligenceSourcesText = {
     },
     runNow: {
       yes: '可以',
-      unsupported: '这个来源不能在这里运行',
+      /* 正文只留状态词：为什么不能在这里运行进同一行标签旁的 ⓘ。 */
+      unsupported: '不可运行',
+      unsupportedReason: '平台没有为这个来源提供在这里运行的入口。',
+      unsupportedReasonAria: '为什么不可运行',
       'not-ready': '还没接入完成',
       unavailable: '现在取不到数据，恢复后再试',
       'missing-credential': '先填好凭据',
@@ -784,6 +791,7 @@ export const intelligenceSourcesText = {
   panelNames: { dashboard: 'Dashboard', 'economic-calendar': 'Calendar' },
   toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
   providerSummary: '{total} capabilities · {enabled} enabled',
+  advancedToggle: 'Advanced',
   credentialsRequired: 'API key required',
   website: 'Website',
   signup: 'Sign up / Get key',
@@ -961,6 +969,7 @@ export const intelligenceSourcesText = {
   keepEditing: 'Keep editing',
   automaticSyncStopped: 'Automatic sync stopped',
   lastSuccessfulSync: 'Last successful sync: {date}',
+  detailsBlockTitle: 'Health and collection policy',
   health: {
     title: 'Source Health',
     runtimeStatus: 'Runtime Status',
@@ -981,7 +990,7 @@ export const intelligenceSourcesText = {
     runNowAnswer: 'Can it run now',
     refreshStale: 'Just ran; the readings have not refreshed yet',
     reasons: {
-      disabled: 'Turned off',
+      disabled: 'Not enabled',
       'missing-credential': 'Missing credential',
       unavailable: 'The platform cannot reach it',
       'never-ran': 'No successful run yet',
@@ -1000,7 +1009,9 @@ export const intelligenceSourcesText = {
     },
     runNow: {
       yes: 'Yes',
-      unsupported: 'This source cannot run from here',
+      unsupported: 'Cannot run',
+      unsupportedReason: 'The platform does not offer a way to run this source from here.',
+      unsupportedReasonAria: 'About why it cannot run',
       'not-ready': 'Not wired up yet',
       unavailable: 'It cannot be reached right now; try again after it recovers',
       'missing-credential': 'Set the credential first',

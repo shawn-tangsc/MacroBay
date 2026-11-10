@@ -515,23 +515,6 @@
   line-height: 1.55;
 }
 
-.intelligence-health-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 12px;
-}
-
-.intelligence-health-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(90px, auto);
-  gap: 10px;
-  align-items: center;
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 68%, transparent);
-}
 
 .intelligence-translation-preferences {
   gap: 14px;
@@ -681,7 +664,6 @@
   }
 
   .intelligence-setting-grid,
-  .intelligence-health-list,
   .intelligence-translation-status {
     grid-template-columns: 1fr;
   }
@@ -728,7 +710,7 @@
 
   .intelligence-secret-row,
   .intelligence-setting-row,
-  .intelligence-health-item {
+  .source-provider-detail__form-row {
     grid-template-columns: 1fr;
     align-items: start;
     padding: 10px 12px;
@@ -1015,12 +997,15 @@
   /* 两列：左字段区吃满剩余宽度，右开关固定 34 + 8 间距。
      原来按字段分窄列，把名字和状态压成一字一格竖排——这是那一类的根因。 */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) auto 32px;
   column-gap: 8px;
   align-items: start;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  /* 边框用 inset 阴影画：`border` 会把内容再往里挤 1px，下面那张表单的第一列就对不齐了。
+     视觉完全一样（1px 细线 + 圆角），但内容左缘与表单行同为 12（主档）。 */
+  border: 0;
   border-radius: 8px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
   background: color-mix(in srgb, var(--surface-soft) 35%, transparent);
 }
 
@@ -1042,21 +1027,20 @@
 
 /* B4 四格：单独一行，宽度按整块算（不挤在 32px 开关那一列里）。 */
 .source-provider-detail__health {
-  margin-top: 8px;
+  display: grid;
 }
 
-.source-provider-detail__health .intelligence-health-value {
+.source-provider-detail__form-value {
   min-width: 0;
   color: var(--text-strong);
   font-size: var(--font-meta);
   font-weight: 650;
   line-height: var(--line-meta);
-  text-align: right;
   overflow-wrap: anywhere;
 }
 
 /* 「未知」不是「没有」：只靠颜色降一档，字重保持 400——用 500 等于「强调地拿不到」。 */
-.source-provider-detail__health .intelligence-health-value[data-unknown='true'] {
+.source-provider-detail__form-value[data-unknown='true'] {
   color: var(--muted);
   font-weight: 400;
 }
@@ -1490,15 +1474,60 @@
   border: 0;
 }
 
-/* 「采集策略」整块可折叠、默认展开（用户 2026-11-10）：头行（档位、箭头、`aria-*`、整行可点）
-   全部归壳 `CollapsibleGroup`，这里只负责它落在这个区块容器里的位置。
-   区块自己已有 16/18 内距，头行不再各加 12——否则标题与下面两行的左缘对不上。
-   壳那行 `padding: 0 12px !important` 是平台组件的，覆盖它只能同等 `!important`（选择器更具体）。 */
-.source-provider-detail__policy {
+/* 源那一行行尾的「高级」：文字按钮，右缘贴住开关左侧，不与开关抢行尾。 */
+.source-provider-detail__advanced.ant-btn {
+  height: 22px;
+  padding: 0 4px;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+}
+
+/* 展开后那张表单：健康两行（一行两组）+ 采集策略两行，**没有二级标题、没有卡片、没有嵌套框**。
+   左右内距 12 与上面那一行一致（那一行的细线走 inset 阴影，不占布局），所以左缘正好对齐；
+   下留 8，与列表 8 的 gap 合起来是 16（主档），下一行源不会贴死在表单后面。 */
+.source-provider-detail__form {
   display: grid;
+  margin: 8px 0;
+}
+
+/* 一行两组：列宽固定为 标签 / 值 / 标签 / 值（两组共用一套列宽，所以上下左缘对齐成竖线）。
+   窄到放不下时（媒体查询）退化成一行一组。 */
+.source-provider-detail__form-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 160px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+}
+
+/* 一组 = 标签 + 值：`display: contents` 让它俩直接落在上面那一行的栅格里（不额外套一层盒子）。 */
+.source-provider-detail__form-field {
+  display: contents;
+}
+
+.source-provider-detail__form-label {
+  min-width: 0;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.source-provider-detail__form-control {
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.source-provider-detail__policy .collapsible-group .ant-collapse-header {
-  padding: 0 !important;
+/* 采集策略那两行也走同一张表单的列宽：标签列 160、第二列与上面的值列同宽，
+   右侧两列留空——不为了凑满把控件拉宽（用户 2026-11-10）。 */
+.source-provider-detail__form .intelligence-setting-row {
+  grid-template-columns: 160px minmax(0, 1fr) 160px minmax(0, 1fr);
+  border-top: 0;
 }
+

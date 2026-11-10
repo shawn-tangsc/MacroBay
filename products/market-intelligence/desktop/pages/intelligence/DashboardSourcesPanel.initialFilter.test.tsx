@@ -77,11 +77,15 @@ async function renderPanel(initialFilter?: 'dashboard' | 'calendar'): Promise<HT
 }
 
 describe('the drawer sources panel filter', () => {
-  it('starts on the dashboard filter when no value is passed', async () => {
+  it('starts on 「全部」 when no value is passed, showing every source', async () => {
+    // 抽屉没有上下文时落在「全部」（用户 2026-11-10）；带上下文的入口仍预选对应分类。
     const container = await renderPanel()
     const text = container.querySelector('.intelligence-catalog-pane')?.textContent ?? ''
     expect(text).toContain('看板源')
-    expect(text).not.toContain('日历源')
+    expect(text).toContain('日历源')
+    // `Segmented` 的选中项是 `aria-pressed="true"`（一组互斥取值，不是页签）。
+    const selected = container.querySelector('.intelligence-catalog-filters [aria-pressed="true"]')
+    expect(selected?.textContent).toContain('全部')
   })
 
   it('uses the passed value only as the mount value', async () => {

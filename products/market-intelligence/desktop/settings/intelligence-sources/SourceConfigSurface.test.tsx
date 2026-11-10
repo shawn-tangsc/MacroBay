@@ -151,7 +151,7 @@ describe('the settings page and the config drawer render the same sources pane (
 
     expect(fromDrawer).toEqual(fromSettings)
     // 「逐项一致」不是「两边都少同一项」：策略组、四格、运行入口都得在。
-    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.title)
+    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.collectionPreset)
     expect(fromSettings.detail).toContain(settingsText.health.todayReading)
     expect(fromSettings.detail).toContain(settingsText.health.runNow.unavailable)
     // 目录一侧同样逐项一致（含那颗「不可用源」数量标记）。
@@ -163,7 +163,7 @@ describe('the settings page and the config drawer render the same sources pane (
     const fromSettings = await signature(settingsHost(sourceView))
     const fromDrawer = await signature(drawerHost(sourceView))
     expect(fromDrawer).toEqual(fromSettings)
-    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.title)
+    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.collectionPreset)
     expect(fromSettings.detail).toContain(settingsText.health.runAction.run)
   })
 

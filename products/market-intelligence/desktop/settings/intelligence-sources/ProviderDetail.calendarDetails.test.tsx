@@ -175,7 +175,8 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    expect(container.textContent).not.toContain(settingsText.health.statuses.healthy)
+    // 判「状态药丸没说健康」，不判整页文本：这一屏还有一列块标题「来源健康」，那个「健康」不是状态词。
+    expect(container.querySelector('.source-provider-detail__status')?.textContent ?? '').not.toContain(settingsText.health.statuses.healthy)
     expect(container.querySelector('.status-pill--ok')).toBeNull()
   })
 
@@ -224,8 +225,9 @@ describe('ProviderDetail source details', () => {
     const reasonTrigger = container.querySelector<HTMLElement>('[aria-label="原因码"]')
     expect(reasonTrigger).not.toBeNull()
     expect(container.querySelectorAll('[aria-label="原因码"]')).toHaveLength(1)
-    // 「自动同步已停止」是说明句，不进正文：它在「为什么没在采」那格标签旁的 ⓘ 里（用户 2026-11-10）。
-    expect(container.textContent).not.toContain('自动同步已停止')
+    // 「自动同步已停止」不出现在四格里（它在「为什么没在采」那格标签旁的 ⓘ 里）；
+    // 收起后那行摘要说的正是这个状态词——那是它该说的，不算重复说明。
+    expect(container.querySelector('.source-provider-detail__health')?.textContent ?? '').not.toContain('自动同步已停止')
     const stoppedTrigger = container.querySelector<HTMLButtonElement>('[aria-label="自动同步已停止的说明"]')
     expect(stoppedTrigger).not.toBeNull()
     await act(async () => { stoppedTrigger?.click() })
@@ -450,14 +452,14 @@ describe('ProviderDetail source details', () => {
 
     // 正文不含那句原因，也不再留指向它的常驻节点（`.policy-stopped` 整行说明已经没有了）。
     expect(container.textContent).not.toContain(settingsText.collectionPolicyStopped)
-    expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__form-stopped')).toBeNull()
     // 原先包住控件的那层组语义一起撤掉：句子搬进浮层后没有常驻节点可当描述符，
     // 留着 `role="group"` 只剩一个说不清自己的分组。触发器自己的 `aria-describedby`
     // 由平台 `Popover` 挂、指向它自己的浮层内容，不属于这一条。
-    expect(container.querySelector('.source-provider-detail__policy [role="group"]')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__form [role="group"]')).toBeNull()
     // 它住在「采集预设」字段名旁那颗 ⓘ 里：点开才读到。
     const info = container.querySelector<HTMLButtonElement>(
-      `.source-provider-detail__policy [aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)
+      `.source-provider-detail__form [aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)
     expect(info).not.toBeNull()
     await act(async () => { info?.click() })
     await act(async () => { await Promise.resolve() })
@@ -498,7 +500,7 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const policies = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__policy')]
+    const policies = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__form')]
     expect(policies).toHaveLength(2)
     for (const policy of policies) {
       expect(policy.querySelectorAll<HTMLElement>(`[aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toHaveLength(1)
@@ -526,11 +528,11 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    expect(container.querySelector('.source-provider-detail__policy [role="group"]')).toBeNull()
-    expect(container.querySelector('.source-provider-detail__policy [aria-describedby]')).toBeNull()
-    expect(container.querySelector('.source-provider-detail__policy-stopped')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__form [role="group"]')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__form [aria-describedby]')).toBeNull()
+    expect(container.querySelector('.source-provider-detail__form-stopped')).toBeNull()
     // 可用的源不该说自己「不能改」：那颗 ⓘ 只属于取不到 / 还没接入的组。
-    expect(container.querySelector(`.source-provider-detail__policy [aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toBeNull()
+    expect(container.querySelector(`.source-provider-detail__form [aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toBeNull()
   })
 
   it('words the row pill from the projected health state, not from a second read of the runtime status', async () => {
@@ -666,28 +668,30 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const header = container.querySelector('.source-provider-detail__policy .ant-collapse-header')
-    // 折叠头由壳画：这一块里**只有一个标题元素**，内层 `CollectionPolicySection` 不再画标题。
-    // 用结构断言而不是数文本：`textContent` 会把控件可访问名之类的文案也算进去，数不干净。
-    expect(container.querySelectorAll('.source-provider-detail__policy .collapsible-group__title')).toHaveLength(1)
-    expect(container.querySelectorAll('.source-provider-detail__policy .intelligence-section-title')).toHaveLength(0)
-    // 这一块里带框的容器只有外层一个（内层不再包一层带 border/radius 的 section）。
-    expect(container.querySelectorAll('.source-provider-detail__policy .intelligence-section')).toHaveLength(0)
-    // 短标进壳的 meta 槽（头行右侧那格），**默认展开**——不能用「先点开才看得见」当默认。
-    expect(header?.textContent).toContain(settingsText.collectionPolicy.stoppedBadge)
-    expect(header?.getAttribute('aria-expanded')).toBe('true')
-    // 「短标」不是「把整句搬上来」：头行里没有那句长原因，正文里也没有（它只在 ⓘ 里）。
-    expect(header?.textContent).not.toContain(settingsText.collectionPolicyStopped)
+    // 入口是源那一行行尾的「高级」文字按钮（开关左侧），**不是折叠头**：
+    // 标签两个字、带 aria-expanded / aria-controls，默认收起（用户 2026-11-10 第三次定稿）。
+    const advanced = container.querySelector<HTMLButtonElement>('.source-provider-detail__advanced')
+    expect(advanced).not.toBeNull()
+    expect(advanced?.textContent).toBe(settingsText.advancedToggle)
+    expect(advanced?.getAttribute('aria-expanded')).toBe('false')
+    const controls = advanced?.getAttribute('aria-controls') ?? ''
+    expect(controls).not.toBe('')
+    // 指向的容器**始终存在**（收起时只是 hidden），否则 aria-controls 指了个空 id。
+    const form = document.getElementById(controls)
+    expect(form).not.toBeNull()
+    expect((form as HTMLElement).hidden).toBe(true)
+    // 展开后直接是表单行：没有二级标题、没有四格卡片。
+    expect(container.querySelectorAll('.intelligence-section-title')).toHaveLength(0)
+    expect(container.textContent).not.toContain(settingsText.collectionPolicy.title)
+    expect(container.textContent).not.toContain(settingsText.detailsBlockTitle)
+    // 「暂不可改」这枚短标随二级标题一起撤了：整块只有表单行 + 行尾那颗按钮。
+    expect(container.textContent).not.toContain(settingsText.collectionPolicy.stoppedBadge)
+    // 那句长原因也不在正文里（只在「采集预设」行那颗 ⓘ 里）。
     expect(container.textContent).not.toContain(settingsText.collectionPolicyStopped)
-    // 折叠交互回来了：壳在，头行可聚焦整行都是按钮。
-    expect(container.querySelector('.collapsible-group')).not.toBeNull()
-    expect(header).not.toBeNull()
-    // 默认展开 = 展开区活着：读者一进来就要看采集预设，不该先点一下。
-    expect(container.querySelector('.source-provider-detail__policy .ant-collapse-content-active')).not.toBeNull()
   })
 
-  it('collapses the policy block when the reader closes it, and opens it back', async () => {
-    // 默认展开不等于不能收：头行点一下收起来，再点一下回来（用户 2026-11-10 要的是这个，不是常显）。
+  it('opens the detail form with the row-end 高级 button, and folds it back', async () => {
+    // 默认收起不等于看不到：行尾「高级」点一下展开，再点一下收回去；标签不变。
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const container = document.createElement('div')
@@ -703,14 +707,23 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const headerFor = (): HTMLElement | null => container.querySelector<HTMLElement>('.source-provider-detail__policy .ant-collapse-header')
-    expect(headerFor()?.getAttribute('aria-expanded')).toBe('true')
-    await act(async () => { headerFor()?.click() })
+    const advanced = (): HTMLButtonElement | null => container.querySelector<HTMLButtonElement>('.source-provider-detail__advanced')
+    const form = (): HTMLElement | null => {
+      const id = advanced()?.getAttribute('aria-controls') ?? ''
+      return id === '' ? null : document.getElementById(id)
+    }
+    expect(advanced()?.getAttribute('aria-expanded')).toBe('false')
+    expect(form()?.hidden).toBe(true)
+    await act(async () => { advanced()?.click() })
     await flush()
-    expect(headerFor()?.getAttribute('aria-expanded')).toBe('false')
-    await act(async () => { headerFor()?.click() })
+    expect(advanced()?.getAttribute('aria-expanded')).toBe('true')
+    expect(form()?.hidden).toBe(false)
+    // 标签不变：还是「高级」两个字。
+    expect(advanced()?.textContent).toBe(settingsText.advancedToggle)
+    await act(async () => { advanced()?.click() })
     await flush()
-    expect(headerFor()?.getAttribute('aria-expanded')).toBe('true')
+    expect(advanced()?.getAttribute('aria-expanded')).toBe('false')
+    expect(form()?.hidden).toBe(true)
   })
 
   it('leaves a usable policy group unmarked', async () => {
@@ -729,8 +742,9 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    // 可用源的策略块同样默认展开，但没有「暂不可改」这枚短标。
+    // 可用源的详情块同样默认收起，但没有「不可改」那颗 ⓘ，也没有那两句话。
+    expect(container.querySelector('.source-provider-detail__advanced')?.getAttribute('aria-expanded')).toBe('false')
     expect(container.textContent).not.toContain(settingsText.collectionPolicy.stoppedBadge)
-    expect(container.querySelector('.source-provider-detail__policy .ant-collapse-header')?.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector(`[aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toBeNull()
   })
 })

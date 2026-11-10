@@ -3,6 +3,7 @@ import { Info } from 'lucide-react'
 import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { SettingsRow } from '@platform/ui/components/settings-row'
 import { Popover } from '@platform/ui/components/popover'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
@@ -12,6 +13,7 @@ import type { SafeIntelligenceSourceDetailView } from '../../../service/intellig
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import {
   computeSourceHealthDetail,
+  type SourceHealthFacts,
   type SourceHealthIdleReason,
   type SourceRunNowAnswer
 } from './sourceHealthCells'
@@ -22,6 +24,7 @@ import {
  */
 const UNKNOWN_REASON_ARIA_KEY = 'settings.intelligenceSources.health.unknownReasonAria'
 const AUTOMATIC_SYNC_STOPPED_ARIA_KEY = 'settings.intelligenceSources.health.automaticSyncStoppedAria'
+const RUN_NOW_UNSUPPORTED_ARIA_KEY = 'settings.intelligenceSources.health.runNow.unsupportedReasonAria'
 
 /**
  * 一个源的详情读取状态。
@@ -36,6 +39,27 @@ export type SourceDetailRead =
   | Readonly<{ state: 'failed' }>
   | Readonly<{ state: 'skipped' }>
 
+/**
+ * `read` → 四格的输入。**只有这一份**：四格与右栏那行常显摘要读同一批事实，
+ * 各拼一份迟早一处有新一处旧（摘要说「最近成功」、格子里说没有）。
+ */
+export function sourceHealthFacts(
+  read: SourceDetailRead,
+  source: SourceView,
+  supportsRunNow: boolean | undefined,
+  now: Date,
+  timeZone: string
+): SourceHealthFacts {
+  const detail = read.state === 'ready' ? read.detail : undefined
+  return {
+    source,
+    ...(detail === undefined ? {} : { profile: detail.profile, health: detail.health, credentialStatus: detail.credentialStatus }),
+    ...(supportsRunNow === undefined ? {} : { supportsRunNow }),
+    now,
+    timeZone
+  }
+}
+
 export type SourceHealthLabels = Readonly<{
   todayReading: string
   todayReadingYes: string
@@ -49,7 +73,10 @@ export type SourceHealthLabels = Readonly<{
   /** 「刚跑完，读数还没刷新」：四格保留旧值时的状态句（不是「没有数据」）。 */
   refreshStale: string
   reasons: Readonly<Record<SourceHealthIdleReason, string>>
-  runNow: Readonly<Record<SourceRunNowAnswer, string>>
+  runNow: Readonly<Record<SourceRunNowAnswer, string>> & Readonly<{
+    /** 「不可运行」为什么：正文只留状态词，原因进同一行标签旁的 ⓘ。 */
+    unsupportedReason: string
+  }>
   /** B5 立即运行的三态文案（可运行 / 正在运行 / 跑完自动恢复）。 */
   runAction: Readonly<{ run: string; running: string; runningInfo: string; runningInfoAria: string; failedToStart: string }>
 }>
@@ -93,14 +120,7 @@ export function SourceHealthDetail(props: {
     </div>
   }
 
-  const detail = read.state === 'ready' ? read.detail : undefined
-  const view = computeSourceHealthDetail({
-    source,
-    ...(detail === undefined ? {} : { profile: detail.profile, health: detail.health, credentialStatus: detail.credentialStatus }),
-    ...(props.supportsRunNow === undefined ? {} : { supportsRunNow: props.supportsRunNow }),
-    now: new Date(),
-    timeZone: props.timeZone
-  })
+  const view = computeSourceHealthDetail(sourceHealthFacts(read, source, props.supportsRunNow, new Date(), props.timeZone))
 
   const todayValue = view.today.kind === 'yes'
     ? labels.todayReadingYes.replace('{time}', view.today.time)
@@ -111,7 +131,7 @@ export function SourceHealthDetail(props: {
 
   /**
    * 说明句只在标签旁的 ⓘ 里（用户 2026-11-10：声明性文字不要直接显示在界面上）。
-   * 值本身仍是状态词（「未知」/ 不可用那句读者说法），原因句跟着**它自己那一格**，不攒成一行。
+   * 值本身仍是状态词（「状态暂时读不到」/ 不可用那句读者说法），原因句跟着**它自己那一组**。
    */
   const unknownInfo = <HealthInfo
     ariaLabelKey={UNKNOWN_REASON_ARIA_KEY}
@@ -119,18 +139,21 @@ export function SourceHealthDetail(props: {
     sentence={labels.unknownReason} />
 
   return <div className="source-provider-detail__health" data-source-health={source.sourceId} data-health-read={read.state}>
-    <div className="intelligence-health-list">
-      <HealthCell
+    {/* 一行两组、像表格一样对齐：列宽由行统一给（160 / 值 / 160 / 值），上下左缘对齐成竖线。 */}
+    <div className="source-provider-detail__form-row">
+      <HealthField
         cell="today"
         info={view.today.kind === 'unknown' ? unknownInfo : undefined}
         label={labels.todayReading}
-        unknown={view.today.kind === 'unknown'}>{todayValue}</HealthCell>
-      <HealthCell
+        unknown={view.today.kind === 'unknown'}>{todayValue}</HealthField>
+      <HealthField
         cell="last-success"
         info={view.lastSuccess.kind === 'unknown' ? unknownInfo : undefined}
         label={labels.lastSuccessAt}
-        unknown={view.lastSuccess.kind === 'unknown'}>{lastSuccessValue}</HealthCell>
-      <HealthCell
+        unknown={view.lastSuccess.kind === 'unknown'}>{lastSuccessValue}</HealthField>
+    </div>
+    <div className="source-provider-detail__form-row">
+      <HealthField
         cell="idle-reason"
         info={view.idleReason === 'unavailable'
           ? <HealthInfo
@@ -145,8 +168,17 @@ export function SourceHealthDetail(props: {
             reasonCode={view.unavailableReasonCode}
             resolveText={props.resolveText} />
           : labels.reasons[view.idleReason]}
-      </HealthCell>
-      <HealthCell cell="run-now" interactive label={labels.runNowAnswer}>
+      </HealthField>
+      <HealthField
+        cell="run-now"
+        info={view.runNow === 'unsupported'
+          ? <HealthInfo
+            ariaLabelKey={RUN_NOW_UNSUPPORTED_ARIA_KEY}
+            resolveText={props.resolveText}
+            sentence={labels.runNow.unsupportedReason} />
+          : undefined}
+        interactive
+        label={labels.runNowAnswer}>
         {view.runNow === 'yes' && props.onRunNow !== undefined
           ? <RunNowControl
             labels={labels.runAction}
@@ -154,9 +186,9 @@ export function SourceHealthDetail(props: {
             resolveText={props.resolveText}
             sourceId={source.sourceId} />
           : labels.runNow[view.runNow]}
-      </HealthCell>
+      </HealthField>
     </div>
-    {/* 跑完但读数没刷新：四格还是旧的，必须说出来——否则「跑完了」会把旧读数读成刚采到的。
+    {/* 跑完但读数没刷新：这几行还是旧的，必须说出来——否则「跑完了」会把旧读数读成刚采到的。
         这句是**状态**（`role="status"`，读屏唯一的通知通道），不是解释，所以留在正文。 */}
     {props.refreshStale === true
       ? <p className="intelligence-source-note intelligence-source-note--health" role="status">{labels.refreshStale}</p>
@@ -183,23 +215,34 @@ function HealthInfo(props: {
     )} />
 }
 
-function HealthCell(props: {
+/**
+ * 一行两组的其中一组：标签 + 值。`display: contents` 让它俩直接成为外层那一行的栅格项，
+ * 所以**上下列的左缘天然对齐**（同一套列宽），不用给每一组各写一套 padding。
+ */
+function HealthField(props: {
   cell: 'today' | 'last-success' | 'idle-reason' | 'run-now'
   label: string
   unknown?: boolean
-  /** 值里放控件（立即运行那颗按钮）时不能用 `<strong>` 包一个可交互元素。 */
+  /** 值里放控件（立即运行那颗按钮）时不能用行内 `<span>` 包一个可交互元素。 */
   interactive?: boolean
-  /** 标签旁的 ⓘ（可选）：有它才加 `--with-info` 那档排布，没有的字宽不变。 */
+  /** 标签旁的 ⓘ（可选）：说明句只住这里，正文只留字段名与状态词。 */
   info?: React.ReactNode
   children: React.ReactNode
 }): React.ReactElement {
-  const valueProps = { className: 'intelligence-health-value', ...(props.unknown === true ? { 'data-unknown': 'true' } : {}) }
-  return <div className="intelligence-health-item" data-health-cell={props.cell}>
-    <span className={props.info === undefined ? 'intelligence-health-label' : 'intelligence-health-label intelligence-health-label--with-info'}>
+  const valueProps = {
+    className: 'source-provider-detail__form-value',
+    ...(props.unknown === true ? { 'data-unknown': 'true' } : {})
+  }
+  return <div className="source-provider-detail__form-field" data-health-cell={props.cell}>
+    <span className={props.info === undefined
+      ? 'source-provider-detail__form-label'
+      : 'source-provider-detail__form-label intelligence-health-label--with-info'}>
       {props.label}
       {props.info}
     </span>
-    {props.interactive === true ? <div {...valueProps}>{props.children}</div> : <strong {...valueProps}>{props.children}</strong>}
+    {props.interactive === true
+      ? <div {...valueProps}>{props.children}</div>
+      : <span {...valueProps}>{props.children}</span>}
   </div>
 }
 

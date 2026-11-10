@@ -173,16 +173,14 @@ describe('sources settings page states', () => {
     )
     const dom = await render()
 
-    // 默认收起：头行只有「采集策略」，四行控件不显示；展开后才出现（界面设计 2026-11-09）。
-    // 注意：平台壳为了 `aria-controls` 永远指向**存在**的节点，内容从首帧就挂载、收起时是
-    // `display: none`——所以这里判「不显示」，不判「不在 DOM 里」（判 DOM 存在与否会被真正的显隐问题骗过）。
-    expect(dom.textContent).toContain(zhText.collectionPolicy.title)
-    // 这块现在是**可折叠、默认展开**（用户 2026-11-10：「不要收起展开」改成「能收，但默认露出来」）：
-    // 头行有展开/收起，首帧就是展开态，所以控件不用先点一下才在屏上。
-    const header = dom.querySelector<HTMLElement>('.source-provider-detail__policy .ant-collapse-header')
-    expect(header).not.toBeNull()
-    expect(header?.getAttribute('aria-expanded')).toBe('true')
-    const section = dom.querySelector('.intelligence-section:has(.intelligence-setting-grid)')
+    // 默认收起：源那一行行尾只有「高级」+ 开关；点开之后才出现那张表单（用户 2026-11-10）。
+    expect(dom.textContent).toContain(zhText.advancedToggle)
+    const advanced = dom.querySelector<HTMLButtonElement>('.source-provider-detail__advanced')
+    expect(advanced).not.toBeNull()
+    expect(advanced?.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => { advanced?.click() })
+    expect(advanced?.getAttribute('aria-expanded')).toBe('true')
+    const section = dom.querySelector('.source-provider-detail__form')
     expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
     expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)
     expect(section).not.toBeNull()

@@ -1,4 +1,4 @@
-import { Select, Switch } from 'antd'
+import { Button, Select, Switch } from 'antd'
 
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { StatusPill } from '@platform/ui/components/status-pill'
@@ -45,6 +45,11 @@ function SourceHealthPill({ state, resolveText, unavailable }: {
 }
 
 export type SourceEnabledRowProps = Readonly<{
+  /**
+   * 行尾那颗「高级」：展开下面那张表单（健康四行 + 采集策略两行）。**默认收起**，
+   * 按钮自己的 `aria-expanded` / `aria-controls` 指向展开区容器（用户 2026-11-10）。
+   */
+  advanced?: Readonly<{ expanded: boolean; controlsId: string; onToggle: () => void }>
   source: SourceView
   /** 已解析好的来源名（`sourceNames` 有的用文案，没有的用投影里的名字）。 */
   name: string
@@ -71,7 +76,7 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
   const label = row.descriptor.labelText?.(view) || props.name
   const enabled = row.value === true
   /* 这一行是**列表行**，不是设置行：复制列是 `div`、标签是 `strong`（原来就是这样）。
-     所以它自己写这两层，不改通用设置行的形状。 */
+     所以它自己写这两层，不改通用设置行的形状。三列：内容 / 高级 / 开关。 */
   return <div
     className="source-provider-detail__row"
     data-setting-key={sourceRowInstanceKey(SOURCE_ROW_TEMPLATES.enabled, source.sourceId)}
@@ -86,13 +91,24 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
           resolveText={resolveText}
           unavailable={props.unavailable} />
       </span>
-      {/* 第二行：归属与任务状态。纯文本 ` · ` 串起，不再是一排药丸。 */}
+      {/* 第二行：归属与任务状态。纯文本 ` · ` 串起，不再是一排药丸。
+          「已启用／未启用」不进这一行：行尾开关就是那个状态本身，同一个事实两个词就是说两遍
+          （用户 2026-11-10 又一次确认这条）。 */}
       <span className="source-provider-detail__tags-line">
         {[...new Set(props.tags)].join(' · ')}
         {source.requiresProxy && !props.proxyConfigured ? <><i aria-hidden="true"> · </i><em className="source-provider-detail__proxy">{labels.badges.proxy}</em></> : null}
         {needsJob(source) ? <><i aria-hidden="true"> · </i>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</> : null}
       </span>
     </div>
+    {props.advanced === undefined
+      ? null
+      : <Button
+        aria-controls={props.advanced.controlsId}
+        aria-expanded={props.advanced.expanded}
+        className="source-provider-detail__advanced"
+        onClick={props.advanced.onToggle}
+        size="small"
+        type="text">{resolveText(ADVANCED_KEY)}</Button>}
     <Switch
       /* The row's label is the source name; the switch has to say what it does, or a screen
          reader reads the same name twice and cannot tell the two controls apart. */
@@ -105,6 +121,9 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
     />
   </div>
 }
+
+/** 行尾那颗展开按钮的文案键（「高级」两个字，不是说明）。 */
+const ADVANCED_KEY = 'settings.intelligenceSources.advancedToggle'
 
 const PRODUCT_OWNED_NOTE_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNote'
 const PRODUCT_OWNED_NOTE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria'

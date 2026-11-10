@@ -36,7 +36,7 @@ export function DashboardSourcesPanel(props: {
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
   // 抽屉落「看板」：打开就省一步。**设置页仍默认「全部」**（那是完整管理面），两边不一致是有意的。
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(props.initialFilter ?? 'dashboard')
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(props.initialFilter ?? 'all')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const settings = useIntelligenceSourcesSettings(t)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings

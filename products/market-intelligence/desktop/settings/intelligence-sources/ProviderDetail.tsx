@@ -1,6 +1,6 @@
 import { Alert, Button, Input } from 'antd'
 import { Eye, EyeOff } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
@@ -10,7 +10,8 @@ import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesC
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
 import { SourceEnabledRow, needsJob } from './SourceRows'
-import { SourceHealthDetail, type SourceHealthLabels } from './SourceHealthDetail'
+import { SourceDetailsBlock } from './SourceDetailsBlock'
+import type { SourceHealthLabels } from './SourceHealthDetail'
 import { isCalendarSource, useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
@@ -154,18 +155,22 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** 唯一一处「这是哪个面」的判定：注册表渲染只发生在设置页那一侧。 */
   const isSettingsSurface = (surface ?? 'panel') === 'settings'
   /*
-    采集策略组的折叠状态：只存**被收起**的源 id，默认（不在集合里）是展开。
-    展开态是视图状态，不是读者设置——不进 store、不落盘，切走再回来仍是默认展开。
+    「健康」与「采集策略」两块各自的展开集合：**默认收起**，读者点开才记进来（用户 2026-11-10：
+    两块加起来太长）。两块都收起后，右栏那行摘要常显——一眼仍能看到这条源通不通。
+    折叠是**视图状态**，不是读者设置：不进 store、不落盘；换了源（provider）回到默认收起。
   */
-  const [collapsedPolicyIds, setCollapsedPolicyIds] = useState<ReadonlySet<string>>(() => new Set())
-  const setPolicyOpen = useCallback((sourceId: string, open: boolean) => {
-    setCollapsedPolicyIds((current) => {
+  const [expandedBlocks, setExpandedBlocks] = useState<ReadonlySet<string>>(() => new Set())
+  /** 展开区容器 id 的前缀：`高级` 那颗按钮的 `aria-controls` 要指向一个**始终存在**的节点。 */
+  const detailsRegionIdBase = useId()
+  const setBlockOpen = useCallback((key: string, open: boolean) => {
+    setExpandedBlocks((current) => {
       const next = new Set(current)
-      if (open) next.delete(sourceId)
-      else next.add(sourceId)
+      if (open) next.add(key)
+      else next.delete(key)
       return next
     })
   }, [])
+  useEffect(() => { setExpandedBlocks(new Set()) }, [provider.providerId])
   // 读者已经配好自定义代理时，不再把「需要连接 本地代理」当成他还没做的事（MI-11-R196）。
   const proxyConfigured = useProxyConfigured()
   // 「上次成功同步」是读者可见的日期：走统一格式化（跟读者时区），不自己切 ISO 字符串。
@@ -375,8 +380,19 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         ].filter((tag): tag is string => Boolean(tag))
         /* 启用行：设置页那一面按菜单 1 的声明渲染，看板/日历那一面仍是旧形状——
            两条路径在同一组件里，状态药丸与标签行只有一份。 */
-        return <div key={source.sourceId}>
+        return <div className="source-provider-detail__block" key={source.sourceId}>
           <SourceEnabledRow
+            {...(source.enabled
+              ? {
+                advanced: {
+                  controlsId: `${detailsRegionIdBase}-${source.sourceId}`,
+                  expanded: expandedBlocks.has(source.sourceId),
+                  onToggle: () => setBlockOpen(source.sourceId, !expandedBlocks.has(source.sourceId))
+                }
+              }
+              /* 未启用的源不出现「高级」：没有采集在进行，展开看四行没有意义（用户 2026-11-10）。
+                 整颗不渲染——不是禁用、不是灰掉、也不占位。 */
+              : {})}
             labels={labels}
             name={name}
             onToggle={(enabled) => void toggle(source, enabled)}
@@ -386,12 +402,29 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             tags={tags}
             unavailable={Boolean(unavailable)}
           />
-          {/* B4 四格：读不到逐次记录的源（日历 feed）不画成「没有」，写「未知」并说明原因。 */}
-          <SourceHealthDetail
+          {/* 展开后那张表单（健康四行 + 采集策略两行）：默认收起，靠行尾那颗「高级」开。 */}
+          <SourceDetailsBlock
             automaticSyncStopped={labels.automaticSyncStopped}
-            labels={labels.health}
-            onRetry={() => retryDetail(source.sourceId)}
+            collectionPolicy={policy && policy.profiles[source.sourceId]
+              ? {
+                configurable: source.collection !== 'none' && source.visibility !== 'pending' && !unavailable,
+                enabledConfigurable: source.visibility !== 'pending' && !unavailable,
+                labels: policy.labels,
+                notConfigurable: unavailable
+                  ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: COLLECTION_POLICY_STOPPED_KEY }
+                  : source.visibility === 'pending'
+                    ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: PLANNED_NOT_CONFIGURABLE_KEY }
+                    : undefined,
+                onChange: (patch) => policy.onChange(source.sourceId, patch),
+                profile: policy.profiles[source.sourceId]!,
+                supportsSentiment: policy.supportsSentimentById[source.sourceId] === true
+              }
+              : undefined}
+            healthLabels={labels.health}
+            hidden={!expandedBlocks.has(source.sourceId)}
+            id={`${detailsRegionIdBase}-${source.sourceId}`}
             {...(onRunNow === undefined ? {} : { onRunNow: runAndRefresh })}
+            onRetry={() => retryDetail(source.sourceId)}
             read={details[source.sourceId] ?? { state: 'loading' }}
             refreshStale={refreshStaleById[source.sourceId] === true}
             resolveText={resolveText}
@@ -399,41 +432,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             {...(supportsRunNowById?.[source.sourceId] === undefined ? {} : { supportsRunNow: supportsRunNowById[source.sourceId] })}
             timeZone={timeZone}
           />
-          {/* 采集策略（频率档 / 纳入情绪分析）：每个源一组，**可折叠、默认展开**（用户 2026-11-10：
-              一进来就要看采集预设，折起来只是把这块收短）。壳 `CollapsibleGroup` 提供头行档位、
-              箭头、`aria-controls`、整行可点与默认收起的那套行为，本页不另写折叠头，只把默认值翻成展开。 */}
-          {policy && policy.profiles[source.sourceId]
-            ? <section className="intelligence-section source-provider-detail__policy">
-              <CollapsibleGroup
-                /* 展开态是视图状态，不是读者设置：不进 store，切了源就回默认展开。 */
-                maxBodyHeight={null}
-                {...(unavailable && policy.labels.stoppedBadge !== undefined ? { metaText: policy.labels.stoppedBadge } : {})}
-                onOpenChange={(open) => setPolicyOpen(source.sourceId, open)}
-                open={!collapsedPolicyIds.has(source.sourceId)}
-                resolveText={resolveText}
-                titleKey="settings.intelligenceSources.collectionPolicy.title">
-                <CollectionPolicySection
-                  configurable={source.collection !== 'none' && source.visibility !== 'pending' && !unavailable}
-                  sourceId={source.sourceId}
-                  draftProfile={policy.profiles[source.sourceId]!}
-                  enabledConfigurable={source.visibility !== 'pending' && !unavailable}
-                  labels={policy.labels}
-                  /* 「为什么这行不能改」只进采集预设行那颗 ⓘ：取不到与还没接入，同一个位置两句不同的话。
-                     正文里不再有整行说明——那句话以前占一行，读者读到的是一段没有控件的话。 */
-                  notConfigurable={unavailable
-                    ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: COLLECTION_POLICY_STOPPED_KEY }
-                    : source.visibility === 'pending'
-                      ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: PLANNED_NOT_CONFIGURABLE_KEY }
-                      : undefined}
-                  onChange={(patch) => policy.onChange(source.sourceId, patch)}
-                  resolveText={resolveText}
-                  /* 标题由折叠头画：这一屏「采集策略」只出现一次。 */
-                  showTitle={false}
-                  supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
-                />
-              </CollapsibleGroup>
-            </section>
-            : null}
         </div>
       })}
     </div>
