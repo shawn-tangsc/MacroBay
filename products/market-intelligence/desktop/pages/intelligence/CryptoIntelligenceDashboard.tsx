@@ -7,7 +7,7 @@ import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSetting
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
 import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
-import { MarketAnalysisSettingsDialog } from './MarketAnalysisSettingsDialog'
+import { AnalysisSettingsPanel, type AnalysisScreenState } from './AnalysisSettingsPanel'
 import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
 import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
 import { RunLogDrawerPanel } from './RunLogDrawerPanel'
@@ -144,11 +144,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     setSettingsDrawerOpen(true)
   }, [openSettingsRequest])
   const platformDrawerValues = usePlatformDrawerValues()
-  // 「AI 分析」那一屏：**就是那个对话框的内容本体**（`variant="inline"`）。用户 2026-11-10：
-  // 「为什么不原封不动拿过来」——所以不画第二套，同一个组件、同一段实现、同一条写路径。
-  // 内联外壳没有「关掉这一屏」这回事，所以「取消」的含义是**放弃这次未保存的改动**：
-  // 换 key 让它重新挂载、重新读一遍设置，草稿回到已保存的那一版。
-  const [analysisFormKey, setAnalysisFormKey] = useState(0)
+  // 「AI 分析」那一屏：屏自己读、自己存，把「有没有改动 / 保存中 / 失败句 / 保存动作」报上来；
+  // 底部那条保存栏由抽屉壳给（壳只认这四样，不读数据）。
+  const [analysisScreen, setAnalysisScreen] = useState<AnalysisScreenState>({ dirty: false, saving: false, save: () => undefined })
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
   const [briefingDirty, setBriefingDirty] = useState(false)
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
@@ -260,12 +258,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           }}
           open={settingsDrawerOpen}
           platformValues={platformDrawerValues}
-          analysisPanel={<MarketAnalysisSettingsDialog
-            key={analysisFormKey}
-            onClose={() => setAnalysisFormKey((value) => value + 1)}
-            open={settingsDrawerOpen}
-            text={productText[useShellLanguage()].pages.intelligence.portal.analysisTimeline}
-            variant="inline" />}
+          analysisPanel={<AnalysisSettingsPanel onState={setAnalysisScreen} />}
+          screenDirty={analysisScreen.dirty}
+          onScreenSave={analysisScreen.save}
+          screenSaving={analysisScreen.saving}
+          {...(analysisScreen.failure === undefined ? {} : { screenSaveFailure: analysisScreen.failure })}
           briefingPanel={<DailyBriefingSettingsPanel onDirtyChange={setBriefingDirty} />}
           processingPanel={<ProcessingSettingsPanel />}
           runLogPanel={<RunLogDrawerPanel />}
