@@ -98,6 +98,12 @@ export type NotificationRuntimeDependencies = {
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   /** 通道侧投影：可用通道 + 目标只读；没有通道线时为空数组。 */
   getPushTargets?: () => Promise<readonly unknown[]>
+  /** 通道侧「最近一次真实投递」；缺省时设置页只说「没有记录」，不猜。 */
+  lastDelivery?: (channelId: string) => {
+    status: 'delivered' | 'failed' | 'unknown-after-send'
+    at: string
+    conversationLabel: string | null
+  } | null
   /** 目标通道的**唯一派生**（技术方案 §1），主推送/升级/重投共用；缺省＝一条都没有，绝不回退读旧字段。 */
   resolvePushChannel?: () => Promise<PushChannelResolution>
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
@@ -379,7 +385,15 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */
   const reportProviderCredential = (input: ProviderCredentialSignal) => reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
-  const settingsPorts = { catalog: deps.catalog, getSettings: deps.getSettings, updateSettings: deps.updateSettings, getPushTargets: deps.getPushTargets, pushWired: () => deps.deliveryHooks?.push !== undefined }
+  const settingsPorts = {
+    catalog: deps.catalog,
+    getSettings: deps.getSettings,
+    updateSettings: deps.updateSettings,
+    getPushTargets: deps.getPushTargets,
+    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+    ...(deps.lastDelivery === undefined ? {} : { lastDelivery: deps.lastDelivery }),
+    pushWired: () => deps.deliveryHooks?.push !== undefined
+  }
   const settingsSurface = composeNotificationSettingsSurface(settingsPorts, { load, exclusive, persistWithDiagnostics, notifyChanged })
   const delivery = createNotificationDelivery({
     deliveryHooks: deps.deliveryHooks,

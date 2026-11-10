@@ -51,6 +51,15 @@ export type ChannelPushPortDeps = {
     list(): readonly ChannelManagementSafeView[]
     listDeliveryTargets(): { channels: readonly ChannelDeliveryTargetView[] }
     listConversations(input: { id: string; limit?: number }): readonly ChannelConversationSafeView[]
+  /**
+   * 这条通道最近一次真实投递（任意来源）。`null` = 一次都没投过——与「未就绪」是两件事，
+   * 界面必须分开说（2026-11-10：投递成功、横幅却写「通道未就绪」）。
+   */
+  lastDelivery?(channelId: string): {
+    status: 'delivered' | 'failed' | 'unknown-after-send'
+    at: string
+    conversationLabel: string | null
+  } | null
   }
   deliver(request: ChannelDeliveryRequest): Promise<ChannelDeliveryResult>
   /**

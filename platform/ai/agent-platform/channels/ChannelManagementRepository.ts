@@ -75,6 +75,29 @@ export class ChannelManagementRepository {
     return Boolean(this.database.connection.prepare('select 1 from agent_entities where id = ?').get(agentId))
   }
 
+  /**
+   * 这条通道最近一次**真实投递**（任意来源）的结局。
+   *
+   * 为什么要有它：读者看到的横幅说「通道未就绪」，而库里明明有成功的投递尝试——界面缺一个
+   * 他自己能核对的事实。会话标签从入站候选里按 `conversation_key_hash` 对出来，不往审计里复制姓名。
+   */
+  lastDelivery(channelId: string): { status: 'delivered' | 'failed' | 'unknown-after-send'; at: string; conversationLabel: string | null } | null {
+    const row = this.database.connection.prepare(
+      `select a.status as status, coalesce(a.completed_at, a.created_at) as at, c.display_label as label
+       from channel_delivery_attempts a
+       left join channel_conversations v on v.id = a.conversation_id
+       left join channel_inbound_candidates c
+         on c.channel_id = a.channel_id and c.conversation_key_hash = v.conversation_key_hash
+       where a.channel_id = ?
+       order by coalesce(a.completed_at, a.created_at) desc, a.id desc
+       limit 1`
+    ).get(channelId) as { status: string; at: string; label: string | null } | undefined
+    if (!row) return null
+    // 只认三种终态；别的值（queued 等）说明还没走完，按「没到手」处理更安全。
+    if (row.status !== 'delivered' && row.status !== 'failed' && row.status !== 'unknown-after-send') return null
+    return { status: row.status, at: row.at, conversationLabel: row.label }
+  }
+
   create(input: ManagedChannelCreateInput): boolean {
     return insertManagedChannel(this.database, input)
   }

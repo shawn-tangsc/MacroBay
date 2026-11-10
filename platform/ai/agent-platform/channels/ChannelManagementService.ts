@@ -103,6 +103,9 @@ export class ChannelManagementService {
   listConversations(input: { id: unknown; limit?: unknown }) { return this.inventory.listConversations(input) }
   runtimeStatus(input: { id: unknown }) { return this.inventory.runtimeStatus(input) }
   listDeliveryAttempts(input: { id: unknown; limit?: unknown; offset?: unknown }) { return this.inventory.listDeliveryAttempts(input) }
+
+  /** 通道页/通知屏要的「最近一次真实投递」：一条都没有时回 null（不是「未就绪」）。 */
+  lastDelivery(channelId: string) { return this.deps.repository.lastDelivery(channelId) }
   listDeliveryAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) { return this.inventory.listDeliveryAudits(input) }
   listRuntimeAudits(input: { id: unknown; limit?: unknown; cursor?: unknown }) { return this.inventory.listRuntimeAudits(input) }
 
