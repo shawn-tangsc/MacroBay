@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
 import type { CrossAssetStatusId } from '../../features/industry/cross-asset/crossAssetStatusRegistry'
-import type { DashboardFeedRow, DashboardFeedRowId } from './dashboardFeedStatusModel'
 import { DASHBOARD_SOURCE_MODULES, cellIdOf } from '../../settings/intelligence-sources/dashboardSourceModules'
 
 /**
@@ -132,21 +131,6 @@ export function isCellEnabled(cells: Readonly<Record<string, boolean>>, cellId: 
 
 export function isAnyCellEnabled(cells: Readonly<Record<string, boolean>>, cellIds: readonly string[]): boolean {
   return cellIds.some((cellId) => isCellEnabled(cells, cellId))
-}
-
-/** 来源状态条的每一行也读某一格：关掉那一格，这行不再出现（不是写「不可用」）。 */
-export const FEED_ROW_CELLS: Readonly<Record<DashboardFeedRowId, readonly string[]>> = Object.freeze({
-  dollar: QUOTES_STATUS_ROW_CELLS.dxy,
-  gold: QUOTES_STATUS_ROW_CELLS.gold,
-  rates: QUOTES_STATUS_ROW_CELLS.us10y,
-  index: QUOTES_STATUS_ROW_CELLS.index
-})
-
-export function filterFeedRowsByCells(
-  rows: readonly DashboardFeedRow[],
-  cells: Readonly<Record<string, boolean>>
-): readonly DashboardFeedRow[] {
-  return rows.filter((row) => isAnyCellEnabled(cells, FEED_ROW_CELLS[row.id]))
 }
 
 export type DashboardReadGates = Readonly<{

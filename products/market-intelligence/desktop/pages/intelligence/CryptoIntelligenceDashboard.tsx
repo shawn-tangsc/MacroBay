@@ -34,12 +34,10 @@ import type { DashboardCapitalCellAvailability, DashboardCapitalCellOff } from '
 import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
 import { dashboardRealSourcePolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
 import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
-import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
-import { projectPositioningSourceRow, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
+import type { DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { projectPositioningCells } from './dashboardPositioningSourceState'
-import { FeedStatusStrip } from './DashboardFeedStatusStrip'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { cellLabel, cellSourceChoices, dashboardCellId, decideCellRead, filterFeedRowsByCells, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo, type CellReadDecision, type SourceEnabledMap } from './dashboardCellEnabled'
+import { cellLabel, cellSourceChoices, dashboardCellId, decideCellRead, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo, type CellReadDecision, type SourceEnabledMap } from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -104,9 +102,7 @@ type CryptoDashboardText = {
   capitalConditions: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['capitalConditions']
   policyPath: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['policyPath']
   sentiment: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
-  feedStatus: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['feedStatus']
   cellState: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['cellState']
-  context: { sourceStatus: { title: string } }
   dailyBriefing: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['dailyBriefing']
 }
 
@@ -258,16 +254,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     () => ({ ...text.crossAsset, ...(calendarEventTitles ? { eventTitles: calendarEventTitles } : {}) }),
     [text.crossAsset, calendarEventTitles]
   )
-  const feedRows = projectDashboardFeedRows({
-    macroClient: Boolean(macroMarketClient), macroState: macroView.state, ratesState: macroRatesView.state,
-    ...(macroView.snapshot ? { macro: macroView.snapshot } : {}),
-    ...(macroRatesView.snapshot ? { rates: macroRatesView.snapshot } : {}),
-    // 启用表读完之前也按「还在读」画：这一格还没资格说「读不到」。
-    indexLoading: !readsReady || (Boolean(crossAssetClient) && feedView.indexState === 'loading'),
-    ...(feedView.index ? { index: feedView.index } : {}),
-    ...(feedView.feed ? { feed: feedView.feed } : {})
-  })
-  const nowMs = now().getTime()
   const refreshCapitalConditions = async (): Promise<void> => {
     // A host without a collection layer still has a real retry: re-reading the stored snapshot.
     if (!collectCapitalConditionsSources) {
@@ -414,43 +400,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
 
       {/* 持仓那一格**转述卡片算出来的判定**（`positioningState`），不自己判新鲜度：
               阈值只在 `dashboardPositioningPresentationPolicy` 里存在一次，行与卡不可能各判一套。 */}
-      <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} positioning={positioningState} fundingRateState={fundingRateState} feedRows={filterFeedRowsByCells(feedRows, cellState.cells)} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
       </div>
     </main>
   )
-}
-
-/**
- * 来源状态. The first three rows describe the panels that own a snapshot of their own; the feeds behind
- * the 市场状态 / 跨市场 table are printed by `FeedStatusStrip` below them — 异常优先, so a fallback is
- * stated where the figure it explains is described without making a healthy board cost a line per feed.
- */
-function DashboardSidebar({ calendarState, fearGreedState, positioning, fundingRateState, feedRows, nowMs, text, onManageSource, onOpenCalendar }: { calendarState: DashboardEconomicCalendarState; fearGreedState: DashboardFearGreedState; positioning: DashboardPositioningViewState; fundingRateState: DashboardFundingRateHistoryState; feedRows: ReturnType<typeof projectDashboardFeedRows>; nowMs: number; text: CryptoDashboardText; onManageSource: () => void; onOpenCalendar: () => void }): React.ReactElement {
-  const tags = { synthetic: text.crossAsset.syntheticTag, proxy: text.crossAsset.proxyTag, realIndex: text.crossAsset.indexNames.real }
-  const formatTime = useShellTimeFormat()
-  /**
-   * 三行的词根只有一个：**读到 / 偏旧 · 截至 {时刻} / 读不到**（产品 2026-11-10，决定记录 §15）。
-   * 「偏旧」永远是读到但过期——不并进「读不到」；日历那行没有新鲜度规则，所以不出现偏旧。
-   */
-  const positioningRow = projectPositioningSourceRow(positioning, fundingRateState)
-  const positioningRowText = positioningRow.kind === 'stale'
-    ? text.positioning.sourceStates.stale.replace('{time}', formatTime(positioningRow.since))
-    : positioningRow.kind === 'read'
-      ? positioningRow.fundingPartial ? text.positioning.sourceStates.partial : text.positioning.sourceStates.available
-      : positioningRow.kind === 'unreadable'
-        ? text.positioning.sourceStates.unavailable
-        : positioningRow.kind === 'empty' ? text.positioning.sourceStates.empty : text.positioning.sourceStates.loading
-  const positionedState = positioningRow.kind === 'read' ? (positioningRow.fundingPartial ? 'partial' : 'available')
-    : positioningRow.kind === 'stale' ? 'stale'
-      : positioningRow.kind === 'unreadable' ? 'unavailable' : positioningRow.kind
-  const fearGreedRowText = fearGreedState.state === 'stale'
-    ? text.fearGreed.sourceStates.stale.replace('{time}', formatTime(fearGreedState.observedAt))
-    : text.fearGreed.sourceStates[fearGreedState.state]
-  return <section className="mi-crypto-dashboard__source-region"><header><h2>{text.context.sourceStatus.title}</h2></header>{dashboardRealSourcePolicy.map((source) => source.sourceId === 'economic-calendar'
-    ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={calendarState.state} key={source.sourceId}><i /><span>{text.macroReleaseDynamics.sourceName}</span><small>{text.macroReleaseDynamics.sourceStates[calendarState.state]}</small><div><Button onClick={onOpenCalendar} size="small" type="text">{text.macroReleaseDynamics.calendarAction}</Button><Button onClick={() => onManageSource()} size="small" type="text">{text.macroReleaseDynamics.manageSettings}</Button></div></div>
-    : source.sourceId === 'fear-greed'
-      ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fearGreedState.state} key={source.sourceId}><i /><span>{text.fearGreed.sourceName}</span><small>{fearGreedRowText}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.fearGreed.manageSettings}</Button></div></div>
-      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={positionedState} key={source.sourceId}><i /><span>{text.positioning.sourceName}</span><small>{positioningRowText}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.positioning.manageSettings}</Button></div></div>)}
-    <FeedStatusStrip rows={feedRows} text={text.feedStatus} tags={tags} nowMs={nowMs} onManageSource={onManageSource} />
-  </section>
 }

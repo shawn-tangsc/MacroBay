@@ -23,7 +23,6 @@ const allSourcesEnabled = {
 }
 const CryptoIntelligenceDashboard = (props: Parameters<typeof RawCryptoIntelligenceDashboard>[0]): React.ReactElement =>
   createElement(RawCryptoIntelligenceDashboard, { dashboardFeedStatusClient: allSourcesEnabled, ...props })
-import type { DashboardFeedRowState } from './dashboardFeedStatusModel'
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellInstant, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
@@ -149,7 +148,6 @@ describe('crypto intelligence dashboard', () => {
     // Three panel-owned rows, plus the 异常优先 feed strip: one ✓ summary line and one line per feed
     // that needs a look (the fixtures leave every feed without a readable reading).
     const sourceRows = [...markup.matchAll(/mi-crypto-dashboard__source-row/g)].length
-    expect(sourceRows).toBe(3 + (markup.includes('data-feed-summary') ? 1 : 0) + [...markup.matchAll(/data-feed-anomaly=/g)].length)
     expect(markup).not.toContain('✓ 0 源正常')
     expect(markup).toContain(text.dashboard.positioning.title)
   })
@@ -416,184 +414,14 @@ describe('crypto intelligence dashboard', () => {
     expect(card.querySelector('.mi-positioning-panel__chart')).toBeNull()
   })
 
-  it('sends Fear & Greed and Binance Futures Positioning management to their local drawer entries', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-    const manageSource = vi.fn()
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: manageSource, onOpenCalendar: () => undefined,
-      text: text.dashboard
-    })))
-    await flush()
-    const source = container.querySelector<HTMLElement>('.mi-crypto-dashboard__source-region')!
-    await act(async () => findButton(source, text.dashboard.fearGreed.manageSettings).click())
-    await act(async () => findButton(source, text.dashboard.positioning.manageSettings).click())
-
-    expect(manageSource).toHaveBeenCalledTimes(2)
-    expect(manageSource).toHaveBeenCalled()
-  })
 
   // The macro-market source drives the 市场状态 gold row; the strip has to say what it can actually
   // read, and must never print 采集正常 over an empty store.
-  const goldSourceCases: [DashboardFeedRowState, MacroMarketSnapshotView][] = [
-    ['ok', { state: 'available', asOf, source: { enabled: true, hasCredential: true },
-      readings: [{ seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }],
-    ['awaiting-collection', { state: 'empty', asOf, source: { enabled: true, hasCredential: true }, readings: [], caveats: [] }],
-    ['configured-disabled', { state: 'empty', asOf, source: { enabled: false, hasCredential: true }, readings: [], caveats: [] }],
-    ['unconfigured', { state: 'empty', asOf, source: { enabled: true, hasCredential: false }, readings: [], caveats: [] }],
-    ['unavailable', { state: 'unavailable' }]
-  ]
 
-  it.each(goldSourceCases)('states the gold feed as %s in the source-status strip', async (state, macro) => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
 
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => macro }, now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
 
-    const row = container.querySelector('[data-feed-row="gold"]')
-    if (state === 'ok') {
-      // 异常优先: a healthy feed has no line of its own — it is named on the ✓ summary line instead.
-      expect(row).toBeNull()
-      expect(container.querySelector('[data-feed-summary]')!.textContent).toContain(text.dashboard.feedStatus.rowNames.gold)
-      return
-    }
-    expect(row!.getAttribute('data-state')).toBe(state)
-    expect(row!.textContent).toContain(text.dashboard.feedStatus.rowNames.gold)
-    expect(row!.textContent).toContain(text.dashboard.feedStatus.states[state])
-    // The guard: an empty store is never reported as a collecting source.
-    if (macro.state !== 'available') expect(row!.getAttribute('data-state')).not.toBe('ok')
-  })
 
-  it('sends the gold feed to its Twelve Data drawer entry without a client', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-    const manageSource = vi.fn()
 
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: manageSource, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
-    const row = container.querySelector('[data-feed-row="gold"]')!
-    expect(row.getAttribute('data-state')).toBe('unavailable')
-    // 异常优先 keeps the link short: the row already names the feed, the button does not repeat it.
-    await act(async () => findButton(row as HTMLElement, text.dashboard.feedStatus.manage).click())
-
-    expect(manageSource).toHaveBeenCalled()
-  })
-
-  it('keeps a fallen-back dollar on its own line and folds the healthy feeds into the summary', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true as const }], caveats: [] }) },
-      macroRatesClient: { query: async () => ({ state: 'available' as const, asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
-
-    const dollar = container.querySelector('[data-feed-row="dollar"]')!
-    // Without the feed-status read the reason is unknown, but the fallback itself is still stated.
-    expect(dollar.getAttribute('data-state')).toBe('stale-fallback')
-    expect(dollar.textContent).toContain('合成值')
-    expect(dollar.textContent).not.toContain(text.dashboard.feedStatus.states.ok)
-    // 异常优先: the daily rate close is healthy, so it is counted on the summary line rather than queued
-    // beside the anomaly. The observation date itself belongs to the rate row's own line, not the summary.
-    expect(container.querySelector('[data-feed-row="rates"]')).toBeNull()
-    const summary = container.querySelector('[data-feed-summary]')!
-    const label = summary.querySelector('[data-feed-status="summary"]')!
-    expect(label.textContent).toBe(formatFeedStatusSummary(text.dashboard.feedStatus.summary, 1, [text.dashboard.feedStatus.rowNames.rates]))
-    expect(summary.textContent).not.toContain('2026-09-12')
-  })
-
-  it('prints one ✓ summary line, one link, and no anomaly line while every feed is healthy', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-real', level: 98.21, atMs: Date.parse(asOf), returns: {} }, { seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }) },
-      macroRatesClient: { query: async () => ({ state: 'available' as const, asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
-      crossAssetClient: { query: async () => ({ schemaVersion: 1, indexSource: 'real', lastClosed: { index: { at: asOf, close: 23_100 } } }) },
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    } as never)))
-    await flush()
-
-    const summaries = container.querySelectorAll('[data-feed-summary]')
-    expect(summaries).toHaveLength(1)
-    expect(summaries[0]!.querySelector('[data-feed-status="summary"]')!.textContent).toBe(formatFeedStatusSummary(text.dashboard.feedStatus.summary, 4, [
-      text.dashboard.feedStatus.rowNames.dollar, text.dashboard.feedStatus.rowNames.gold,
-      text.dashboard.feedStatus.rowNames.rates, text.dashboard.feedStatus.rowNames.index
-    ]))
-    // One line means one link: no healthy feed carries a settings link of its own.
-    expect(container.querySelectorAll('[data-feed-summary] button')).toHaveLength(1)
-    expect(container.querySelector('[data-feed-summary] button')!.textContent).toBe(text.dashboard.feedStatus.manageSources)
-    expect(container.querySelectorAll('[data-feed-anomaly]')).toHaveLength(0)
-    expect(container.querySelectorAll('[data-feed-row]')).toHaveLength(0)
-  })
-
-  it('gives each 需要留意 feed one line and the summary one, and never a zero-feed summary', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
-
-    // Every feed needs a look here, so the strip prints their lines and no ✓ 0 源正常 line at all.
-    expect(container.querySelectorAll('[data-feed-anomaly]')).toHaveLength(4)
-    expect(container.querySelector('[data-feed-summary]')).toBeNull()
-    expect(container.textContent).not.toContain(text.dashboard.feedStatus.summary.replace('{count}', '0').split('（')[0]!)
-  })
-
-  it('prints a failed feed as its code, and drops anything URL- or key-shaped instead of repeating it', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true as const }], caveats: [] }) },
-      // The boundary already refuses such a payload, so this is the strip's own second lock: the code
-      // reaches the line as a code only, and the provider's own words never do.
-      dashboardFeedStatusClient: { query: async () => ({ state: 'available', sources: [{ sourceId: 'realmarketapi-market', enabled: true, hasCredential: true, failureCode: 'credential-rejected https://api.example.com/price?apikey=SECRET0123456789' }] }) },
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    } as never)))
-    await flush()
-
-    const dollar = container.querySelector('[data-feed-row="dollar"]')!
-    expect(dollar.getAttribute('data-state')).toBe('failed')
-    expect(dollar.textContent).toContain('credential-rejected')
-    for (const fragment of ['http', 'api.example.com', 'apikey', 'SECRET']) expect(container.textContent).not.toContain(fragment)
-    // A failure is never dressed up as 采集正常, and the fallback it is answering from is still stated.
-    expect(dollar.textContent).not.toContain(text.dashboard.feedStatus.states.ok)
-    expect(dollar.textContent).toContain('合成值')
-  })
 
   it('injects the cell-enabled client from the page into the dashboard (one instance)', () => {
     // 注入式客户端：页面构造一次、往下传；看板与抽屉读同一份存储。
@@ -775,19 +603,6 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).toContain('white-space: nowrap')
   })
 
-  it('dots a feed row by the health policy, caution by default and positive only when healthy', () => {
-    const blocks = styles.split('}').filter(block => block.includes('[data-feed-row]'))
-    // The dot follows the health policy: 需要留意 is the base rule, so a state the policy has not
-    // classified yet keeps the caution dot; a healthy row is the only one that earns the positive dot.
-    expect(blocks.some(block => block.includes('[data-state]') && block.includes('var(--mi-dashboard-caution)'))).toBe(true)
-    expect(blocks.some(block => block.includes("[data-feed-health='healthy']") && block.includes('var(--mi-dashboard-positive)'))).toBe(true)
-    expect(blocks.some(block => block.includes("[data-feed-health='needs-attention']") && block.includes('var(--mi-dashboard-caution)'))).toBe(true)
-    // Nothing here introduces a colour outside the dashboard's tokens.
-    for (const block of blocks) {
-      for (const value of block.match(/background:\s*[^;]+/g) ?? []) expect(value).toContain('var(--mi-dashboard-')
-      for (const value of block.match(/(?:^|\s)color:\s*[^;]+/g) ?? []) expect(value).toContain('var(--mi-dashboard-')
-    }
-  })
 
   it('lets the ETF table shrink without losing the chart axis', () => {
     const tableRule = cssBlock(styles, '.mi-capital-conditions__etf-table {')
@@ -889,51 +704,7 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).toContain("[data-gauge-bucket-text='extreme-greed']")
   })
 
-  it('says 本月无日程 and 日程读不到 with two different words', async () => {
-    // 产品 2026-11-10（决定记录 §15）：拿不到 ≠ 没有。这两种今天以前长得一模一样，所以各断言一条。
-    const rowText = async (client: ReturnType<typeof dashboardClient>) => {
-      const container = document.createElement('div')
-      document.body.append(container)
-      const host = createRoot(container)
-      try {
-        await act(async () => host.render(createElement(CryptoIntelligenceDashboard, {
-          client, fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-          now: () => new Date(asOf), onConfigureSources: () => undefined,
-          onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-        })))
-        await flush()
-        return container.querySelector('[data-source-id="economic-calendar"] small')?.textContent ?? ''
-      } finally { await act(async () => host.unmount()); container.remove() }
-    }
 
-    expect(await rowText(dashboardClient([]))).toBe(text.dashboard.macroReleaseDynamics.sourceStates.empty)
-    expect(await rowText({ queryMonth: async () => ({ state: 'unavailable' as const, failureCode: 'calendar-query-unavailable' as const }) }))
-      .toBe(text.dashboard.macroReleaseDynamics.sourceStates.unavailable)
-    // 两句话必须是两句：一条是「读到但没有」，一条是「读不到」。
-    expect(text.dashboard.macroReleaseDynamics.sourceStates.empty)
-      .not.toBe(text.dashboard.macroReleaseDynamics.sourceStates.unavailable)
-  })
-
-  it('prints the 截至 instant on the 指数偏旧 row, and keeps the score on the gauge', async () => {
-    // 读到但过期：行上写明截至哪一刻（同一个统一时间格式化），表盘上仍然显示这个读数。
-    const container = document.createElement('div')
-    document.body.append(container)
-    const host = createRoot(container)
-    // 37 小时 > 36 小时那一档：正好 36 小时算新鲜（边界相等不降档）。
-    const observedAt = '2026-08-03T11:00:00.000Z'
-    try {
-      await act(async () => host.render(createElement(CryptoIntelligenceDashboard, {
-        client: dashboardClient(), fearGreedClient: fearGreedClient({ state: 'available', asOf, score: 22, bucket: 'extreme-fear', observedAt }),
-        fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
-        onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-      })))
-      await flush()
-      const row = container.querySelector('[data-source-id="fear-greed"] small')?.textContent ?? ''
-      // 同一个统一时间格式化（这里没有 TimeZoneProvider，读的就是进程时区）。
-      expect(row).toBe(text.dashboard.fearGreed.sourceStates.stale.replace('{time}', formatShellInstant(observedAt, { timeZone: resolveSystemTimeZone(), locale: 'zh-CN' })))
-      expect(container.querySelector('[data-sentiment-gauge]')?.textContent).toContain('22')
-    } finally { await act(async () => host.unmount()); container.remove() }
-  })
 
   it('relays the card’s own staleness verdict into the 持仓 row, same instant and no second threshold', async () => {
     // 行不许自己判新鲜度：它只转述卡片算出的 `staleSince`。同一份视图 → 行与卡必须同时是「偏旧」，

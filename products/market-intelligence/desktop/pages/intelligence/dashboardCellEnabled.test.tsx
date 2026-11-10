@@ -122,7 +122,10 @@ describe('dashboard cells read only when the reader left them on', () => {
   it('does not read the fear-and-greed snapshot when its only cell is off', async () => {
     const off = await render({ read: async () => ({ [dashboardCellId('fear-greed', 'index')]: false }) })
     expect(off.fearGreedQuery).not.toHaveBeenCalled()
-    expect(off.container.querySelector('[data-sentiment-gauge]')).toBeNull()
+    // 卡仍在（用户 2026-11-11：不能因为没启用就不渲染），读数区被遮罩盖住。
+    const card = off.container.querySelector('.mi-crypto-dashboard__sentiment')
+    expect(card).not.toBeNull()
+    expect(card!.querySelector('.mi-source-veil')?.getAttribute('data-state')).toBe('disabled')
   })
 
   it('asks the dollar reading for the source the reader chose, and only that one', async () => {
