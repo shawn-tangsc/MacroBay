@@ -14,7 +14,8 @@ import { productText } from '../../shared/i18n/productText'
  * - 分析用哪个模型：没选就说「跟随默认助手模型」；选了就给模型名（`provider / model`）；
  *   **说不清就不给值**——不许拿一个默认模型名把这一格填满。
  *
- * 每行行尾一颗「去设置改」，走宿主给的入口（抽屉不拼路由、不调写命令）。
+ * 每行行尾一颗「去设置改」：**只把目标 `'analysis'` 交出去**，打哪个弹框、跳哪一面由宿主决定。
+ * 抽屉和这里都不拼路由、不调写命令。
  *
  * 抽屉不自己取数：这里只认宿主给的 `read`。宿主用现成的两样东西拼事实——
  * `marketAnalysisTimelineClient.getSettings()`（开没开、选了哪个模型）与
@@ -22,6 +23,15 @@ import { productText } from '../../shared/i18n/productText'
  * 拼法见 `drawerAnalysisFactsFrom`。`getSettings()` 读失败是 `undefined`，**宿主必须抛**，
  * 让这一屏走错误态；别把它当成「没配置」。
  */
+
+/**
+ * 抽屉能交出去的设置目标——**闭集**，不是 `string`：宿主拿到它再决定往哪走。
+ *
+ * 现在只有三个。加一屏就在这里加一个，**别给每屏再加一个回调**：六屏六个 prop，最后还是要收成
+ * 一个枚举。传别的值在调用点就是编译错误。
+ */
+export const DRAWER_SETTINGS_TARGETS = ['preferences', 'models', 'analysis'] as const
+export type DrawerSettingsTarget = (typeof DRAWER_SETTINGS_TARGETS)[number]
 
 /** 「用哪个模型」的三种真话。第三种是「说不出来」，由渲染层留空，**不许替读者挑一个**。 */
 export type DrawerModelFact =
@@ -66,9 +76,10 @@ const ROW_KEYS = {
 export function drawerAnalysisRows(
   facts: DrawerAnalysisFacts,
   copy: DrawerAnalysisCopy,
-  onOpenSettings: () => void
+  onOpenSettings: (target: DrawerSettingsTarget) => void
 ): readonly DrawerRowView[] {
-  const action = { labelKey: ROW_KEYS.changeInSettings, onSelect: onOpenSettings }
+  // 这一屏只知道一件事：要改的是分析设置。至于打开的是弹框还是页面，宿主去决定。
+  const action = { labelKey: ROW_KEYS.changeInSettings, onSelect: () => onOpenSettings('analysis') }
   const modelValue = modelFactValue(facts.model, copy)
   return [
     {
@@ -126,7 +137,7 @@ export function drawerAnalysisFactsFrom(input: Readonly<{
 export function useDrawerAnalysisView(
   active: boolean,
   read: () => Promise<DrawerAnalysisFacts>,
-  onOpenSettings: () => void
+  onOpenSettings: (target: DrawerSettingsTarget) => void
 ): DrawerScreenView<DrawerRowView> | undefined {
   const language = useShellLanguage()
   const latest = useRef({ read, onOpenSettings })
@@ -149,7 +160,7 @@ export function useDrawerAnalysisView(
         }
         setView({
           state: 'ready',
-          rows: drawerAnalysisRows(facts, copy, () => latest.current.onOpenSettings())
+          rows: drawerAnalysisRows(facts, copy, (target) => latest.current.onOpenSettings(target))
         })
       })
       .catch(() => {

@@ -7,8 +7,8 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import type { DrawerRowView } from '../../settings/config-drawer/drawerScreenView'
-import type { DrawerAnalysisFacts } from './useDrawerAnalysisView'
-import { drawerAnalysisFactsFrom, useDrawerAnalysisView } from './useDrawerAnalysisView'
+import type { DrawerAnalysisFacts, DrawerSettingsTarget } from './useDrawerAnalysisView'
+import { DRAWER_SETTINGS_TARGETS, drawerAnalysisFactsFrom, useDrawerAnalysisView } from './useDrawerAnalysisView'
 
 /**
  * 配置抽屉「AI 分析」屏的只读视图。四态各钉一条，另外三条钉「不许编」：
@@ -31,7 +31,7 @@ type View = ReturnType<typeof useDrawerAnalysisView>
 
 function Harness(input: Readonly<{
   read: () => Promise<DrawerAnalysisFacts>
-  onOpenSettings: () => void
+  onOpenSettings: (target: DrawerSettingsTarget) => void
   onView: (view: View) => void
 }>): null {
   input.onView(useDrawerAnalysisView(true, input.read, input.onOpenSettings))
@@ -40,7 +40,7 @@ function Harness(input: Readonly<{
 
 async function mount(
   read: () => Promise<DrawerAnalysisFacts>,
-  onOpenSettings: () => void = () => undefined
+  onOpenSettings: (target: DrawerSettingsTarget) => void = () => undefined
 ): Promise<Readonly<{ current: () => View; rerender: (nextRead: () => Promise<DrawerAnalysisFacts>) => Promise<void> }>> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -141,8 +141,8 @@ describe('the drawer’s AI analysis screen', () => {
     expect(rows.map((row) => row.key)).toEqual(['configDrawer.rows.analysisSwitch', 'configDrawer.rows.analysisModel'])
   })
 
-  it('gives every row the host’s one settings entry, and never a switch of its own', async () => {
-    const onOpenSettings = vi.fn()
+  it('hands the host the “analysis” target, and never a switch of its own', async () => {
+    const onOpenSettings = vi.fn<(target: DrawerSettingsTarget) => void>()
     const screen = await mount(
       async () => ({ enabled: true, model: { state: 'follows-default' } }),
       onOpenSettings
@@ -156,8 +156,17 @@ describe('the drawer’s AI analysis screen', () => {
       rows[0]?.action?.onSelect()
       rows[1]?.action?.onSelect()
     })
-    // 两颗动作指向宿主同一个入口（抽屉不拼路由）。
+    // 两颗动作交出的是同一个闭集里的目标：这一屏只知道「要改分析设置」；打弹框还是跳页面归宿主。
     expect(onOpenSettings).toHaveBeenCalledTimes(2)
+    expect(onOpenSettings.mock.calls).toEqual([['analysis'], ['analysis']])
+  })
+
+  it('keeps the settings targets a closed set, so a typo cannot reach the host', () => {
+    // `DrawerSettingsTarget` 从这份数组推导：加目标只能在这里加，但传别的值（比如 'notifications'）
+    // 在调用点就是编译错误。这条钉住今天恰好这三个，避免有人把它改成 `string`。
+    expect(DRAWER_SETTINGS_TARGETS).toEqual(['preferences', 'models', 'analysis'])
+    const targets: readonly DrawerSettingsTarget[] = DRAWER_SETTINGS_TARGETS
+    expect(targets).toHaveLength(3)
   })
 
   it('does not read again when the host passes a new inline read on a re-render', async () => {
