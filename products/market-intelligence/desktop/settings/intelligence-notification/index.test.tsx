@@ -320,6 +320,33 @@ describe('intelligence notification settings', () => {
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.surfaces'])
   })
 
+  it('draws each settled state word from the explicit map: on, off, unreadable', async () => {
+    // 状态词由 `STATUS_WORD_KEY` 显式映射（状态 → 文案键），不是把状态拼进键：拼出来的键
+    // `statusPillKeyGuard` 与文案表守卫都读不到，缺键也只在运行时显示成空。三种 settled 状态各断一句。
+    const productsInvokeFor = (state: 'on' | 'off' | 'unreadable') => vi.fn(async (_productId: string, method: string) => {
+      if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+      if (String(method).includes('getNewsPushOutletState')) return { enabled: true }
+      if (String(method).includes('getCalendarReminderSettings')) {
+        // 「读不到」是读失败，不是「关着」——这条来自 2026-11-01 的口径，状态词必须跟着分。
+        if (state === 'unreadable') throw new Error('read-failed')
+        return { enabled: state === 'on', leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
+      }
+      return { enabled: true }
+    })
+
+    for (const [state, key] of [
+      ['on', 'pages.intelligence.notification.status.on'],
+      ['off', 'pages.intelligence.notification.status.off'],
+      ['unreadable', 'pages.intelligence.notification.status.unreadable']
+    ] as const) {
+      install({ productsInvoke: productsInvokeFor(state) })
+      await render()
+      // 日历是第 4 行（列表顺序：模块信号 / 日报完成 / 舆情 / 日历）。
+      expect(listItems()[3]?.textContent, state).toContain(text[key])
+      await act(async () => { root?.unmount() })
+    }
+  })
+
   it('keeps three columns at a 1000 container even though the window is wider', async () => {
     // 专抓「按窗口宽度判断」那个错：容器 1000 排得下三列（页面最小 860），不该切下拉。
     sectionWidth = 1000

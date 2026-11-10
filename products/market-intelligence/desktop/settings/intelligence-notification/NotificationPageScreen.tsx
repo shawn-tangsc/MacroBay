@@ -41,6 +41,20 @@ const ROW_BY_ITEM = Object.fromEntries(
 ) as Readonly<Record<ItemKey, (typeof INTELLIGENCE_CHANNEL_EVENT_ROWS)[number]>>
 const CALENDAR_GROUP_EVENT_ID = 'market-intelligence.calendar.event-upcoming'
 
+/**
+ * 列表行的状态词：**显式映射**（状态 → 文案键），不许把状态拼进键。
+ *
+ * 拼出来的键（`status.${state}`）有三处代价：`statusPillKeyGuard` 读不到它、文案表的键集合守卫
+ * 也读不到它，而缺一个键只会在运行时显示成空；这一份 `Record` 把状态集合写死，缺一个状态就是
+ * 类型红。当前状态：已开 / 关着 / 读不到 / 读取中（读取中不画药丸，但窄窗下拉的选项文本要用）。
+ */
+const STATUS_WORD_KEY: Readonly<Record<'on' | 'off' | 'unreadable' | 'loading', string>> = Object.freeze({
+  'on': 'pages.intelligence.notification.status.on',
+  'off': 'pages.intelligence.notification.status.off',
+  'unreadable': 'pages.intelligence.notification.status.unreadable',
+  'loading': 'pages.intelligence.notification.status.loading'
+})
+
 const SWITCH_DESCRIPTOR_BY_ITEM: Readonly<Record<Exclude<ItemKey, 'calendar'>, string>> = {
   signal: 'setting:notifications.channel-event.signal-triggered',
   briefing: 'setting:notifications.channel-event.briefing-ready',
@@ -97,7 +111,7 @@ export function NotificationPageScreen({ focusEntityId }: Readonly<{
   const { setSectionRef, layout } = useNotificationLayout()
 
   /** 列表里那一行只报**状态**；「读取中」不是 settled 状态，不画药丸。 */
-  const listState = (key: ItemKey): 'on' | 'off' | 'unreadable' | 'loading' => {
+  const listState = (key: ItemKey): keyof typeof STATUS_WORD_KEY => {
     if (key === 'calendar') {
       if (reminder.status === 'loading') return 'loading'
       if (reminder.value === undefined) return 'unreadable'
@@ -109,10 +123,7 @@ export function NotificationPageScreen({ focusEntityId }: Readonly<{
   }
 
   const itemName = (key: ItemKey): string => text[ROW_BY_ITEM[key].titleKey] ?? ''
-  const stateWord = (key: ItemKey): string => {
-    const state = listState(key)
-    return text[`pages.intelligence.notification.status.${state}`] ?? ''
-  }
+  const stateWord = (key: ItemKey): string => text[STATUS_WORD_KEY[listState(key)]] ?? ''
 
   const shell = (children: ReactElement, busy = false): ReactElement =>
     <section aria-busy={busy ? 'true' : undefined} className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>{children}</section>
@@ -160,7 +171,7 @@ export function NotificationPageScreen({ focusEntityId }: Readonly<{
                 {state === 'loading'
                   ? <span className="intelligence-notification-row-loading">{text['pages.intelligence.notification.status.loading'] ?? ''}</span>
                   : <StatusPill
-                    labelKey={`pages.intelligence.notification.status.${state}`}
+                    labelKey={STATUS_WORD_KEY[state]}
                     resolveText={resolveText}
                     tone={state === 'on' ? 'ok' : 'muted'}
                   />}
