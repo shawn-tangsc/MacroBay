@@ -59,21 +59,23 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
       {
         titleKey: 'configDrawer.groups.thisSource',
         rows: [
-          { key: 'enabled', labelKey: 'configDrawer.rows.enabled', control: 'switch' },
-          { key: 'capabilities', labelKey: 'configDrawer.rows.capabilities', control: 'readonly' }
-        ]
-      },
-      {
-        titleKey: 'configDrawer.groups.status',
-        rows: [
+          { key: 'enabled', labelKey: 'configDrawer.rows.sourcesEnabled', control: 'switch' },
+          { key: 'health', labelKey: 'configDrawer.rows.healthBadge', control: 'noteRow' },
+          { key: 'apiKey', labelKey: 'configDrawer.rows.apiKey', control: 'readonly' },
+          { key: 'capabilityBoard', labelKey: 'configDrawer.rows.capabilityBoard', control: 'switch' },
+          { key: 'capabilityCalendar', labelKey: 'configDrawer.rows.capabilityCalendar', control: 'switch' },
+          { key: 'testConnection', labelKey: 'configDrawer.rows.testConnection', control: 'info' },
+          { key: 'runNow', labelKey: 'configDrawer.rows.runNow', control: 'info' }
         ]
       },
       {
         titleKey: 'configDrawer.groups.policy',
         rows: [
-          { key: 'preset', labelKey: EXISTING_LABEL_KEYS.collectionPreset, control: 'select' },
-          { key: 'sentiment', labelKey: EXISTING_LABEL_KEYS.includeInSentiment, control: 'switch' },
-          { key: 'policyNote', labelKey: 'configDrawer.rows.policyNote', control: 'noteRow', info: true }
+          { key: 'preset', labelKey: 'configDrawer.rows.preset', control: 'select' },
+          { key: 'focusMarkets', labelKey: 'configDrawer.rows.focusMarkets', control: 'readonly' },
+          { key: 'retention', labelKey: 'configDrawer.rows.retention', control: 'readonly' },
+          { key: 'syncRuns', labelKey: 'configDrawer.rows.syncRuns', control: 'readonly' },
+          { key: 'calendarFeeds', labelKey: 'configDrawer.rows.calendarFeeds', control: 'switch' }
         ]
       }
     ]
@@ -83,8 +85,11 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
     groups: [
       {
         rows: [
-          { key: 'translation', labelKey: EXISTING_LABEL_KEYS.translation, control: 'multiSelect' },
-          { key: 'sentimentModel', labelKey: 'configDrawer.rows.sentimentModel', control: 'select' }
+          { key: 'autoTranslate', labelKey: 'configDrawer.rows.autoTranslate', control: 'readonly' },
+          { key: 'targetLocale', labelKey: 'configDrawer.rows.targetLocale', control: 'readonly' },
+          { key: 'translationModel', labelKey: 'configDrawer.rows.translationModel', control: 'readonly' },
+          { key: 'sentimentModel', labelKey: 'configDrawer.rows.sentimentModel', control: 'readonly' },
+          { key: 'retentionMode', labelKey: 'configDrawer.rows.retentionMode', control: 'readonly' }
         ]
       }
     ]
@@ -94,8 +99,8 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
     groups: [
       {
         rows: [
-          { key: 'analysisSwitch', labelKey: 'configDrawer.rows.analysisSwitch', control: 'switch' },
-          { key: 'analysisModel', labelKey: 'configDrawer.rows.analysisModel', control: 'select' }
+          { key: 'analysisSwitch', labelKey: 'configDrawer.rows.analysisSwitch', control: 'readonly' },
+          { key: 'analysisModel', labelKey: 'configDrawer.rows.analysisModel', control: 'readonly' }
         ]
       }
     ]
@@ -108,7 +113,10 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
           { key: 'publishAt', labelKey: 'configDrawer.rows.publishAt', control: 'readonly' },
           { key: 'window', labelKey: 'configDrawer.rows.window', control: 'readonly' },
           { key: 'editions', labelKey: 'configDrawer.rows.editions', control: 'readonly' },
-          { key: 'model', labelKey: 'configDrawer.rows.briefingModel', control: 'readonly' }
+          { key: 'generationLanguage', labelKey: 'configDrawer.rows.generationLanguage', control: 'readonly' },
+          { key: 'aiEditing', labelKey: 'configDrawer.rows.aiEditing', control: 'readonly' },
+          { key: 'aiBackfill', labelKey: 'configDrawer.rows.aiBackfill', control: 'readonly' },
+          { key: 'briefingModel', labelKey: 'configDrawer.rows.briefingModel', control: 'readonly' }
         ]
       }
     ]
@@ -117,17 +125,18 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
     menu: 'notifications',
     groups: [
       {
+        titleKey: 'configDrawer.groups.status',
         rows: [
-          { key: 'channels', labelKey: 'configDrawer.rows.channels', control: 'switch' },
-          { key: 'pushStrength', labelKey: 'configDrawer.rows.pushStrength', control: 'select' },
-          { key: 'calendar', labelKey: 'configDrawer.rows.calendar', control: 'switch' },
-          { key: 'leadTime', labelKey: 'configDrawer.rows.leadTime', control: 'select' },
-          { key: 'importance', labelKey: 'configDrawer.rows.importance', control: 'multiSelect' },
-          { key: 'landedFilter', labelKey: 'configDrawer.rows.landedFilter', control: 'select' },
-          // 条件行：只有「落地筛选 = 自选国家」时才出现。
-          { key: 'countries', labelKey: 'configDrawer.rows.countries', control: 'multiSelect', when: 'landedFilter === custom' },
+          { key: 'notifyEvents', labelKey: 'configDrawer.rows.notifyEvents', control: 'readonly' },
+          { key: 'notifyChannels', labelKey: 'configDrawer.rows.channels', control: 'switch' },
+          { key: 'notifyStrength', labelKey: 'configDrawer.rows.pushStrength', control: 'select' },
+          { key: 'notifyCalendar', labelKey: 'configDrawer.rows.calendar', control: 'switch' },
+          { key: 'notifyLead', labelKey: 'configDrawer.rows.leadTime', control: 'select' },
+          { key: 'notifyImportance', labelKey: 'configDrawer.rows.importance', control: 'multiSelect' },
+          { key: 'notifyFilter', labelKey: 'configDrawer.rows.landedFilter', control: 'select' },
+          { key: 'notifyCountries', labelKey: 'configDrawer.rows.countries', control: 'multiSelect', when: 'landedFilter === custom' },
           { key: 'reach', labelKey: 'configDrawer.rows.reach', control: 'multiSelect' },
-          { key: 'masterSwitch', labelKey: 'configDrawer.rows.masterSwitch', control: 'readonly' }
+          { key: 'quietHours', labelKey: 'configDrawer.rows.quietHours', control: 'readonly' }
         ]
       }
     ]
@@ -141,19 +150,20 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
           { key: 'language', labelKey: 'configDrawer.rows.language', control: 'readonly' },
           { key: 'theme', labelKey: 'configDrawer.rows.theme', control: 'readonly' },
           { key: 'proxy', labelKey: 'configDrawer.rows.proxy', control: 'readonly' },
-          { key: 'modelService', labelKey: 'configDrawer.rows.modelService', control: 'readonly' }
+          { key: 'notificationJump', labelKey: 'configDrawer.rows.notificationJump', control: 'info' },
+          { key: 'modelServiceJump', labelKey: 'configDrawer.rows.modelServiceJump', control: 'info' }
         ]
       }
     ]
   }
 ]
 
-/** 交付时报数用：每屏多少行（组标题与说明行都算行，方便和原型逐项对）。 */
+/** 交付时报数用：每屏多少行（与盘点清单逐项对应）。 */
 export const DRAWER_PREVIEW_ROW_COUNTS: Readonly<Record<ConfigDrawerMenu, number>> = {
-  sources: DRAWER_PREVIEW_SCREENS[0]!.groups.reduce((sum, group) => sum + group.rows.length, 0),
-  processing: DRAWER_PREVIEW_SCREENS[1]!.groups.reduce((sum, group) => sum + group.rows.length, 0),
-  analysis: DRAWER_PREVIEW_SCREENS[2]!.groups.reduce((sum, group) => sum + group.rows.length, 0),
-  briefing: DRAWER_PREVIEW_SCREENS[3]!.groups.reduce((sum, group) => sum + group.rows.length, 0),
-  notifications: DRAWER_PREVIEW_SCREENS[4]!.groups.reduce((sum, group) => sum + group.rows.length, 0),
-  platform: DRAWER_PREVIEW_SCREENS[5]!.groups.reduce((sum, group) => sum + group.rows.length, 0)
+  sources: 12,
+  processing: 5,
+  analysis: 2,
+  briefing: 7,
+  notifications: 10,
+  platform: 6
 }
