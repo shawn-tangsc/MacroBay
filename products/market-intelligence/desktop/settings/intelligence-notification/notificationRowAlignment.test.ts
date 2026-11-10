@@ -11,9 +11,12 @@ import { describe, expect, it } from 'vitest'
 const drawerCss = readFileSync(join(__dirname, '../../settings/config-drawer/configDrawer.css'), 'utf8')
 const screenCss = readFileSync(join(__dirname, 'intelligence-notification.css'), 'utf8')
 
-function rule(css: string, selector: string): string {
-  const at = css.indexOf(`${selector} {`)
-  expect(at, `缺少规则：${selector}`).toBeGreaterThan(-1)
+function rule(css: string, selector: string, occurrence = 0): string {
+  let at = -1
+  for (let i = 0; i <= occurrence; i += 1) {
+    at = css.indexOf(`${selector} {`, at + 1)
+    expect(at, `缺少规则：${selector}`).toBeGreaterThan(-1)
+  }
   const end = css.indexOf('\n}', at)
   return css.slice(at, end)
 }
@@ -35,6 +38,17 @@ describe('the notification drawer rows share one set of alignment numbers', () =
       .toContain('flex: 0 0 160px')
     expect(rule(screenCss, '.intelligence-notification-drawer .intelligence-notification-form-control'))
       .toContain('margin-left: 8px')
+  })
+
+  it('keeps a row note on one line inside the control column, centred with the controls', () => {
+    // 同一条选择器前面还有一份归一化规则；这里要的是后加的「提示与控件同一行」那份。
+    const control = rule(screenCss, '.intelligence-notification-drawer .intelligence-notification-form-control', 1)
+    expect(control).toContain('display: flex')
+    expect(control).toContain('align-items: center')
+    expect(rule(screenCss, '.intelligence-notification-drawer .intelligence-notification-form-note'))
+      .toContain('white-space: nowrap')
+    expect(rule(screenCss, '.intelligence-notification-drawer .intelligence-notification-form-note'))
+      .toContain('text-overflow: ellipsis')
   })
 
   it('puts the block title on the same left edge as the row labels', () => {

@@ -308,3 +308,26 @@
   padding-left: 12px;
   padding-right: 12px;
 }
+
+/* ── 带提示的行：提示只占控件列、12 号、最多一行、与控件垂直居中 ──
+   规则（Chief 2026-11-10 定）：提示出现/消失时控件不许左右或上下跳；同一区块里两行带提示
+   也不许差出一行——所以提示是控件列里的**单行省略**文本，不换行、不把控件推下去。
+   错误是偶发的；为了守住 44 把「没存上」藏进 ⓘ，等于让读者去别处找线索。 */
+.intelligence-notification-drawer .config-drawer__value,
+.intelligence-notification-drawer .intelligence-notification-form-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-note {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
