@@ -125,6 +125,27 @@ describe('icon label keys', () => {
   })
 })
 
+describe('the settings entry belongs to whoever renders the feature', () => {
+  it('calls the host callback instead of opening its own dialog when one is given', async () => {
+    const onOpenSettings = vi.fn()
+    const container = await mount(
+      <NewsSentimentFeature
+        client={client({ query: async () => VIEW })}
+        now={() => new Date('2026-10-24T13:00:00.000Z')}
+        onOpenSettings={onOpenSettings}
+        text={text} />
+    )
+    // 列表与卡片各有一颗入口：两颗都走宿主，弹框一个都不该出现。
+    // 这颗入口是图标按钮：可访问名取 `news.sentiment.settings`，不是可见文字。
+    const entry = [...container.querySelectorAll<HTMLElement>('button[aria-label]')]
+      .find((button) => (button.getAttribute('aria-label') ?? '').includes(text.settings))
+    expect(entry).toBeDefined()
+    await act(async () => { entry!.click(); await Promise.resolve() })
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('[data-news-sentiment-settings]')).toBeNull()
+  })
+})
+
 describe('a read that has not settled is not a failure', () => {
   // "Not read yet" is neither "nothing there" nor "failed". These three pin the order of states,
   // not a lucky frame: nothing settled may ever paint an error or an empty view.
