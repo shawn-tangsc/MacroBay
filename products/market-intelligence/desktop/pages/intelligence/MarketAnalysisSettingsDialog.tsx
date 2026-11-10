@@ -1,5 +1,5 @@
 import { Button, Switch } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseConfiguredModelRef, type ConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { Modal } from '@platform/ui/components/modal'
@@ -18,6 +18,21 @@ const ANALYSIS_SETTINGS_TITLE_KEY = 'mi.analysis.settingsTitle'
  * The analysis switches, extracted from the timeline so both the timeline mask and the
  * latest-conclusion card can open the same dialog. The dialog is the only writer.
  */
+/** 分析设置表单里的那一份草稿；与「读到/存下的值」比较判断有没有未保存改动。 */
+type AnalysisDraft = Readonly<{ enabled: boolean; providerId: string; modelId: string }>
+
+function analysisDraftOf(settings: Readonly<{ enabled: boolean; providerId: string; modelId: string }> | undefined): AnalysisDraft {
+  return {
+    enabled: settings?.enabled ?? false,
+    providerId: settings?.providerId ?? '',
+    modelId: settings?.modelId ?? ''
+  }
+}
+
+function sameAnalysisDraft(a: AnalysisDraft, b: AnalysisDraft): boolean {
+  return a.enabled === b.enabled && a.providerId === b.providerId && a.modelId === b.modelId
+}
+
 export function MarketAnalysisSettingsDialog(props: {
   open: boolean
   text: MarketAnalysisTimelineText
@@ -32,15 +47,22 @@ export function MarketAnalysisSettingsDialog(props: {
   const { text } = props
   const language = useShellLanguage()
   const settingsState = useMarketAnalysisSettings()
-  const [draft, setDraft] = useState<{ enabled: boolean; providerId: string; modelId: string } | null>(null)
+  const [draft, setDraft] = useState<AnalysisDraft | null>(null)
+  // 草稿上一次接受的基线：读到的值，或刚保存成功的值。判断「本地有没有未保存的改动」只靠它。
+  const [baseline, setBaseline] = useState<AnalysisDraft | null>(null)
+  // effect 只读最新的草稿与基线，**不把它们放进依赖**：否则 setState 会自己把自己再触发一遍。
+  const latestDraft = useRef<{ draft: AnalysisDraft | null; baseline: AnalysisDraft | null }>({ draft: null, baseline: null })
+  useEffect(() => { latestDraft.current = { draft, baseline } }, [draft, baseline])
 
   useEffect(() => {
     if (!props.open) return
-    setDraft({
-      enabled: settingsState.settings?.enabled ?? false,
-      providerId: settingsState.settings?.providerId ?? '',
-      modelId: settingsState.settings?.modelId ?? ''
-    })
+    const next = analysisDraftOf(settingsState.settings)
+    const { draft: local, baseline: base } = latestDraft.current
+    // 另一处保存会广播回来、重新读设置（`useMarketAnalysisSettings` 的 listeners）。读者手上还有
+    // 未保存的改动时，外部值不许覆盖它——那不是「同步」，是把人正在写的东西静默丢掉。
+    if (local !== null && base !== null && !sameAnalysisDraft(local, base)) return
+    setDraft(next)
+    setBaseline(next)
   }, [props.open, settingsState.settings])
 
   const modelCandidates = useMemo<ModelPickerCandidate[]>(
@@ -64,7 +86,11 @@ export function MarketAnalysisSettingsDialog(props: {
 
   const submit = async (): Promise<void> => {
     if (!draft) return
-    if (await settingsState.save(draft)) props.onClose()
+    if (await settingsState.save(draft)) {
+      // 保存成功的值就是新的基线：否则这次保存之后仍算「有未保存改动」，关窗会误拦。
+      setBaseline(draft)
+      props.onClose()
+    }
   }
 
   const footer = <>
