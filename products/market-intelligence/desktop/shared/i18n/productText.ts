@@ -314,7 +314,9 @@ mi: miText['zh-CN'],
               unreadable: '读不到',
               values: {
                 modelServiceConfigured: '已配置',
-                modelServiceUnconfigured: '未配置'
+                modelServiceUnconfigured: '未配置',
+                autoOn: '开',
+                autoOff: '关'
               },
               openPlatformSettings: '去平台设置',
               menus: {
@@ -332,6 +334,8 @@ mi: miText['zh-CN'],
                 window: '统计窗口',
                 editions: '一次生成几期',
                 briefingModel: '日报用哪个模型',
+                briefingLanguages: '生成语言',
+                autoGeneration: '自动生成',
                 channels: '通道事件通知',
                 pushStrength: '最低强度',
                 calendar: '日历事件通知',
@@ -1737,7 +1741,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               unreadable: 'Could not read',
               values: {
                 modelServiceConfigured: 'Configured',
-                modelServiceUnconfigured: 'Not configured'
+                modelServiceUnconfigured: 'Not configured',
+                autoOn: 'On',
+                autoOff: 'Off'
               },
               openPlatformSettings: 'Open platform settings',
               menus: {
@@ -1755,6 +1761,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 window: 'Statistics window',
                 editions: 'Editions per run',
                 briefingModel: 'Briefing model',
+                briefingLanguages: 'Edition languages',
+                autoGeneration: 'Auto-generation',
                 channels: 'Channel event alerts',
                 pushStrength: 'Minimum strength',
                 calendar: 'Calendar alerts',
