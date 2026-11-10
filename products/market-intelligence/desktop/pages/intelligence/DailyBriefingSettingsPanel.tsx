@@ -1,4 +1,5 @@
 import { Button } from 'antd'
+import { useEffect } from 'react'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
@@ -18,10 +19,15 @@ import { DailyBriefingSettingsBlocks, useDailyBriefingSettingsBlocks } from './D
  *
  * 这里也不画标题：标题归配置抽屉（不做嵌套标题）。
  */
-export function DailyBriefingSettingsPanel(): React.ReactElement {
+export function DailyBriefingSettingsPanel({ onDirtyChange }: Readonly<{
+  /** 把「这一屏有未保存的改动」报给宿主的配置抽屉：它据此在关窗前问一句（不报脏的屏不拦）。 */
+  onDirtyChange?: (dirty: boolean) => void
+}> = {}): React.ReactElement {
   const language = useShellLanguage()
   const text = productText[language].pages.intelligence.portal.dashboard.dailyBriefing
   const blocks = useDailyBriefingSettingsBlocks({ client: dailyBriefingClient, open: true })
+  // 脏判据直接用块自己的那份（它今天就在决定关窗要不要问），这里不新造第二个脏状态。
+  useEffect(() => { onDirtyChange?.(blocks.dirty) }, [blocks.dirty, onDirtyChange])
 
   return <div className="mi-briefing-settings-panel" data-briefing-settings-panel="true">
     <DailyBriefingSettingsBlocks

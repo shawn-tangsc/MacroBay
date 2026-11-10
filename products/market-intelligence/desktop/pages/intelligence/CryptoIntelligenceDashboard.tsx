@@ -1,5 +1,6 @@
 import { Button } from 'antd'
 
+import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
@@ -58,6 +59,25 @@ import { createPortal } from 'react-dom'
 import { PolicyPathCard } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
+
+/**
+ * 把平台 `useConfirm` 变成抽屉要的 `confirmDiscard`：必须在 provider 之内取，所以单独一层。
+ * 弹窗本身（居中在抽屉之上、「继续编辑」默认聚焦、Esc=继续编辑、「丢掉改动」静止即红）由平台
+ * `Confirm` 负责，这里只转交文案与动作。
+ */
+function DrawerDiscardConfirm({ children }: Readonly<{
+  children: (confirmDiscard: NonNullable<React.ComponentProps<typeof ConfigSettingsDrawer>['confirmDiscard']>) => ReactNode
+}>): React.ReactElement {
+  const confirm = useConfirm()
+  return <>{children((input) => confirm({
+    title: input.title,
+    description: input.body,
+    confirmLabel: input.confirmLabel,
+    cancelLabel: input.cancelLabel,
+    tone: 'danger',
+    onConfirm: input.onDiscard
+  }))}</>
+}
 
 type CryptoDashboardText = {
   workspaceLabel: string
@@ -128,6 +148,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 内联外壳没有「关掉这一屏」这回事，所以「取消」的含义是**放弃这次未保存的改动**：
   // 换 key 让它重新挂载、重新读一遍设置，草稿回到已保存的那一版。
   const [analysisFormKey, setAnalysisFormKey] = useState(0)
+  // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
+  const [briefingDirty, setBriefingDirty] = useState(false)
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
@@ -219,10 +241,16 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {/* TODO(0.4.3-settings-drawer): 数据接入后删除。静态版式抽屉，只画结构；内容区包一层边界——
           抽屉崩了不许影响背后这一页。 */}
       <ErrorBoundary scope="drawer">
-        <ConfigSettingsDrawer
+        {/* 局部一层 ConfirmProvider：这一块被单独渲染（页面用例、抽屉用例）时也拿得到确认框；
+            应用里它嵌在 AppShell 的 provider 之内，文案与主题照样跟着走。 */}
+        <ConfirmProvider>
+          <DrawerDiscardConfirm>
+            {(confirmDiscard) => <ConfigSettingsDrawer
+              confirmDiscard={confirmDiscard}
           /* 计数变化就重新挂载：每次都落到请求的那一屏（连点同一个入口也算一次）。 */
           key={`settings-drawer-${openSettingsRequest ?? 0}`}
           initialMenu={initialSettingsMenu}
+          isScreenDirty={(menu) => menu === 'briefing' && briefingDirty}
           onClose={() => setSettingsDrawerOpen(false)}
           onOpenPlatformSettings={(target) => {
             // 只转达目标，不拼路由（页面对应关系在导航层）。
@@ -237,10 +265,12 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
             open={settingsDrawerOpen}
             text={productText[useShellLanguage()].pages.intelligence.portal.analysisTimeline}
             variant="inline" />}
-          briefingPanel={<DailyBriefingSettingsPanel />}
+          briefingPanel={<DailyBriefingSettingsPanel onDirtyChange={setBriefingDirty} />}
           processingPanel={<ProcessingSettingsPanel />}
           notificationsPanel={<NotificationSettingsPanel />}
-          sourcesPanel={<DashboardSourcesPanel />} />
+              sourcesPanel={<DashboardSourcesPanel />} />}
+          </DrawerDiscardConfirm>
+        </ConfirmProvider>
       </ErrorBoundary>
 
       {/* Named mount point: the analysis workspace portals its latest-conclusion

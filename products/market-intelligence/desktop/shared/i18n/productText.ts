@@ -313,6 +313,12 @@ mi: miText['zh-CN'],
               title: '设置',
               sourceUnavailable: '取不到（原因见详情）',
               unreadable: '读不到',
+              discard: {
+                title: '有改动没保存，要丢掉吗？',
+                body: '关掉之后没保存的改动都不保留。',
+                confirm: '丢掉改动',
+                cancel: '继续编辑'
+              },
               values: {
                 autoUnknown: '未知',
                 autoUnknownReason: '排期是否注册读不到',
@@ -1781,6 +1787,12 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               title: 'Settings',
               sourceUnavailable: 'Not available (see details)',
               unreadable: 'Could not read',
+              discard: {
+                title: 'You have unsaved changes. Discard them?',
+                body: 'Closing now keeps none of the unsaved edits.',
+                confirm: 'Discard changes',
+                cancel: 'Keep editing'
+              },
               values: {
                 autoUnknown: 'Unknown',
                 autoUnknownReason: 'Whether the schedule is registered could not be read',

@@ -77,6 +77,24 @@ export type ConfigSettingsDrawerProps = {
   onOpenPlatformSettings?: (target: DrawerPlatformTarget) => void
   /** 行键与平台键的解析入口（文案）。 */
   resolveText?: (key: string) => string
+  /**
+   * 这一屏有没有**未保存的改动**：`true` 就拦一下，先问「继续编辑 / 丢掉改动」。
+   *
+   * 只有报脏的屏会拦，没报脏的屏行为一字不变；以后加第二屏只加报脏，不改抽屉接口。
+   * 三条关闭路径（✕ / 遮罩 / Esc）都过同一个 `requestClose`，所以三处不会各堵一条。
+   */
+  isScreenDirty?: (menu: ConfigDrawerMenu) => boolean
+  /**
+   * 「丢掉未保存的改动」那一问怎么弹：**由宿主给**（它就是平台 `useConfirm`），抽屉只负责
+   * 决定什么时候问、问什么、以及确认后调一次关闭。文案也在这里传出去，宿主不另写一句。
+   */
+  confirmDiscard?: (input: {
+    title: string
+    body: string
+    confirmLabel: string
+    cancelLabel: string
+    onDiscard: () => void
+  }) => void
 }
 
 /** 值是占位符：这一版不带任何数据，也不许编数字。 */
@@ -95,7 +113,9 @@ export function ConfigSettingsDrawer({
   sourcesPanel,
   platformValues,
   onOpenPlatformSettings,
-  resolveText: resolveTextProp
+  resolveText: resolveTextProp,
+  isScreenDirty,
+  confirmDiscard
 }: ConfigSettingsDrawerProps): React.ReactElement {
   const language = useShellLanguage()
   const copy = productText[language].pages.intelligence.portal.dashboard.configDrawer
@@ -140,9 +160,31 @@ export function ConfigSettingsDrawer({
     navRef.current?.querySelectorAll<HTMLElement>('.config-drawer__nav-item')[next]?.focus()
   }
 
+  /**
+   * 关闭前置检查：**先问再关**。三条路径（右上 ✕ / 点遮罩 / Esc）都由平台的 `Drawer` 汇到这一个
+   * 回调上，所以不会出现「只堵一条」。没报脏就直接关一次；报脏就先弹确认，确认里也只调一次。
+   */
+  const requestClose = (): void => {
+    if (isScreenDirty?.(menu) !== true) {
+      onClose()
+      return
+    }
+    if (confirmDiscard === undefined) {
+      onClose()
+      return
+    }
+    confirmDiscard({
+      title: copy.discard.title,
+      body: copy.discard.body,
+      confirmLabel: copy.discard.confirm,
+      cancelLabel: copy.discard.cancel,
+      onDiscard: onClose
+    })
+  }
+
   return <Drawer
     mode="modal"
-    onClose={onClose}
+    onClose={requestClose}
     open={open}
     resolveText={resolveText}
     /* 这一屏是三栏（菜单 + 列表 196 + 详情）：`wide`(860) 下详情只剩一半，所以用 `full`(1040)。 */

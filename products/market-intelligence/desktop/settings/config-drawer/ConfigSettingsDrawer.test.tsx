@@ -387,3 +387,82 @@ function readDrawerDirSources(): ReadonlyArray<{ name: string; source: string }>
 }
 
 })
+
+/**
+ * 关窗前的守卫（界面设计 2026-11-10 签的判据）：
+ *
+ * 1. 只有真报脏才问；没改过就关，什么都不问；
+ * 2. ✕ / 遮罩 / Esc 三条路径都过同一处前置检查；
+ * 3. **先问再关**——确认之前关闭回调一次都不许被调；
+ * 4. 确认后才调一次关闭。
+ *
+ * 弹窗本身（居中在抽屉之上、「继续编辑」在前且默认聚焦、Esc 等于继续编辑、「丢掉改动」静止即红
+ * `ant-btn-dangerous`）由平台 `Confirm` 负责，已有 `Confirm.test.tsx` /
+ * `ConfirmProvider.test.tsx` 断言；这里注入一个假的 `confirmDiscard`，只验抽屉「何时问、问几次、问完关一次」。
+ */
+describe('config drawer close guard', () => {
+  function mountGuarded(isDirty: boolean, onClose: () => void = () => undefined, confirmDiscard: (input: { onDiscard: () => void }) => void = () => undefined): HTMLElement {
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        confirmDiscard={confirmDiscard as never}
+        initialMenu="briefing"
+        isScreenDirty={(menu) => menu === 'briefing' && isDirty}
+        onClose={onClose}
+        open />
+    ))
+    return document.body
+  }
+
+  const closeButton = (body: HTMLElement): HTMLElement => body.querySelector<HTMLElement>('.drawer__header-actions button')!
+
+  it('asks before closing when the screen is dirty, and closes once only after the reader confirms', () => {
+    const onClose = vi.fn()
+    const asked: Array<{ onDiscard: () => void }> = []
+    const body = mountGuarded(true, onClose, (input) => { asked.push(input) })
+    act(() => { closeButton(body).click() })
+    expect(asked).toHaveLength(1)
+    // 先问再关：确认之前关闭回调一次都没被调。
+    expect(onClose).not.toHaveBeenCalled()
+    // 文案是抽屉给的这一份，宿主不另写一句。
+    expect((asked[0] as unknown as { title: string }).title).toBe('有改动没保存，要丢掉吗？')
+    act(() => { asked[0]!.onDiscard() })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('takes the same asking path on Escape and on a mask click', () => {
+    const byMask = vi.fn()
+    const maskAsked = vi.fn()
+    const maskBody = mountGuarded(true, byMask, maskAsked)
+    act(() => { maskBody.querySelector<HTMLElement>('.ant-drawer-mask')?.click() })
+    expect(maskAsked).toHaveBeenCalledTimes(1)
+    expect(byMask).not.toHaveBeenCalled()
+    document.body.replaceChildren()
+
+    const byEscape = vi.fn()
+    const escAsked = vi.fn()
+    const escBody = mountGuarded(true, byEscape, escAsked)
+    // antd 的 Esc 监听挂在抽屉本身，且要求它在焦点里：先聚焦，再发 Esc（真实键盘就是这样）。
+    const target = escBody.querySelector<HTMLElement>('.ant-drawer')
+    act(() => {
+      target?.focus()
+      target?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape', keyCode: 27 }))
+    })
+    expect(escAsked).toHaveBeenCalledTimes(1)
+    expect(byEscape).not.toHaveBeenCalled()
+  })
+
+  it('closes straight away, asking nothing, when the screen reports no unsaved edits', () => {
+    const onClose = vi.fn()
+    const asked = vi.fn()
+    const body = mountGuarded(false, onClose, asked)
+    act(() => { closeButton(body).click() })
+    expect(asked).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
