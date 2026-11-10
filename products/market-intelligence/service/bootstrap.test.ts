@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { rmSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -64,9 +64,11 @@ describe('market-intelligence product bootstrap', () => {
       expect(await registry.invoke('market-intelligence', crossAssetMethods.query, { range: '1h' })).toEqual({ state: 'unavailable' })
     } finally { open.mockRestore(); for (const dispose of disposers) await dispose() }
   })
-  it('gives the brief the reader time zone, not a silent UTC', async () => {
-    // Before the wiring existed, the product never received this hook and every installation ran
-    // the brief on UTC while the interface said otherwise. The case is red without the forwarding.
+  it('serves the schedule from the period list, with no generation block left in settings', async () => {
+    // The old check read the reader's zone out of the settings view's `generation` block. That block
+    // is gone: the schedule is its own store now, and the settings view must not carry a second copy
+    // of it. The reader's zone is decided where a stored wall-clock time is read, so a period has no
+    // zone of its own to be silently wrong about.
     rmSync(join(tmpdir(), 'market-intelligence-bootstrap-test'), { recursive: true, force: true })
     const registry = createProductIpcRegistry()
     bootServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
@@ -74,10 +76,12 @@ describe('market-intelligence product bootstrap', () => {
       getTimeZone: () => 'Asia/Shanghai' })
     try {
       registry.seal()
-      const view = await registry.invoke('market-intelligence', 'intelligence.dailyBriefing.getSettings', {}) as
-        Readonly<{ generation: Readonly<{ periods: readonly Readonly<{ generationTimeZone: string | null }>[] }> }>
-      // Nothing is stored for a fresh install, so the period means "the reader's zone".
-      expect(view.generation.periods[0]?.generationTimeZone).toBe('Asia/Shanghai')
+      const view = await registry.invoke('market-intelligence', 'intelligence.dailyBriefing.getSettings', {}) as Record<string, unknown>
+      expect('generation' in view).toBe(false)
+      const periods = await registry.invoke('market-intelligence', 'intelligence.dailyBriefing.listPeriods', { locale: 'zh-CN' }) as
+        readonly Readonly<Record<string, unknown>>[]
+      expect(periods[0]).toMatchObject({ id: 'default', generationTime: '07:00', windowHours: 24 })
+      expect('generationTimeZone' in periods[0]!).toBe(false)
     } finally {
       // 模块没有 dispose（历史上那行是可选的空调用）；清场用既有的测试重置入口。
       resetIntelligenceModuleForTests()
@@ -401,3 +405,13 @@ describe('market-intelligence product bootstrap', () => {
 })
 
 function vault() { return { put: vi.fn(), rotate: vi.fn(), delete: vi.fn(), has: vi.fn(async () => false) } as never }
+
+describe('the period store has one instance', () => {
+  it('bootstrap does not rebuild it from a file path', () => {
+    // C15a: a second store over the same file had no migration gate, so a write from the settings
+    // page could create a period file without the move's marker. The instance now comes from the
+    // module; this guard fails if anyone puts the path back.
+    const source = readFileSync(new URL('./bootstrap.ts', import.meta.url), 'utf8')
+    expect(source).not.toContain('daily-briefing-periods.json')
+  })
+})

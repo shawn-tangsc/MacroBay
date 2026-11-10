@@ -5,8 +5,7 @@ import type { DailyBriefingService } from '../daily-briefing/dailyBriefingServic
 import type { DailyBriefingPeriodDeletion } from '../daily-briefing/dailyBriefingPeriodDeletion'
 import type { DailyBriefingSettingsPatch, DailyBriefingSettingsService } from '../daily-briefing/dailyBriefingSettingsService'
 import { withRunDeadline } from '../daily-briefing/dailyBriefingRunDeadline'
-import { createBriefingPeriodStore } from '../daily-briefing/dailyBriefingPeriodStore'
-import { createJsonFileStorage } from '@platform/storage/jsonFileStorage'
+import type { BriefingPeriodsEditor } from '../daily-briefing/dailyBriefingPeriodsSource'
 import { registerDailyBriefingPeriodIpc } from './registerDailyBriefingPeriodIpc'
 
 const PRODUCT_ID = 'market-intelligence'
@@ -31,15 +30,11 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
 })
 
 /** Read-only: one generation per (day, locale) on first open, then the stored edition. */
-export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService, settings?: DailyBriefingSettingsService, deletePeriod?: DailyBriefingPeriodDeletion, periodsFile?: string): void {
-  // The period configuration lives in its own file beside the product's data; when the caller gives
-  // the path, its four methods are registered here so the boot line stays one call.
-  if (periodsFile) {
-    registerDailyBriefingPeriodIpc(register, createBriefingPeriodStore({
-      storage: createJsonFileStorage<unknown>(periodsFile, undefined),
-      defaultLanguage: () => 'zh-CN'
-    }))
-  }
+export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService, settings?: DailyBriefingSettingsService, deletePeriod?: DailyBriefingPeriodDeletion, periods?: BriefingPeriodsEditor): void {
+  // The period configuration's four methods hang off the runtime's own store. It is the same
+  // instance the scheduler reads, so every write passes the one-time move and no second store can
+  // produce a file without the move's marker.
+  if (periods) registerDailyBriefingPeriodIpc(register, periods)
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getToday, async (payload) =>
     service.getToday(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.list, async (payload) =>

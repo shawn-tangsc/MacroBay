@@ -185,3 +185,51 @@ describe('the publish-to-phone payload carries the edition identity, and nothing
     expect(deletePeriod).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('the period write seam shares the runtime store', () => {
+  it('a write on a fresh upgrade moves the old rows first and keeps the marker', async () => {
+    const { mkdtemp, readFile, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { createBriefingPeriodsSource } = await import('../daily-briefing/dailyBriefingPeriodsSource')
+    const dir = await mkdtemp(join(tmpdir(), 'briefing-ipc-move-'))
+    try {
+      const periodsPath = join(dir, 'daily-briefing-periods.json')
+      const source = createBriefingPeriodsSource({
+        filePath: periodsPath,
+        locale: async () => 'zh-CN',
+        legacyPeriodsMigration: {
+          readLegacyPeriods: async () => [
+            { id: 'default', generationTime: '07:00', windowHours: 24 },
+            { id: 'evening', generationTime: '21:30', windowHours: 12 }
+          ],
+          additionalLanguages: async () => []
+        }
+      })
+      const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+      registerDailyBriefingIpc((( _product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+        handlers.set(method, handler)
+      }) as never, service, undefined, undefined, source.editor)
+
+      // No runtime read first: this is the settings page's first write on an upgraded install.
+      const saved = await handlers.get(DAILY_BRIEFING_IPC_METHODS.updatePeriod)!({
+        id: 'default',
+        draft: { generationTime: '08:00', windowHours: 24, language: 'zh-CN' },
+        locale: 'zh-CN'
+      })
+
+      expect(saved).toMatchObject({ state: 'saved' })
+      const document = JSON.parse(await readFile(periodsPath, 'utf8')) as {
+        periods: readonly { id: string; generationTime: string }[]
+        markers?: Record<string, unknown>
+      }
+      // The old second period survives: the move ran before the write, not after it.
+      expect(document.periods.map((period) => period.id)).toEqual(['default', 'evening'])
+      expect(document.periods.map((period) => period.generationTime)).toEqual(['08:00', '21:30'])
+      // A period file without the marker is the state that would skip the move forever.
+      expect(typeof document.markers?.['migrated.legacyGlobalSettings.v1']).toBe('string')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})

@@ -18,7 +18,7 @@ import {
  * "stored periods" and skips the move for good, dropping the reader's old rows.
  */
 export type BriefingPeriodsEditor = Readonly<{
-  list: (locale: DailyBriefingLocale) => Promise<readonly BriefingPeriod[]>
+  list: (locale?: DailyBriefingLocale) => Promise<readonly BriefingPeriod[]>
   create: (draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => Promise<BriefingPeriodSaveResult>
   update: (id: string, draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => Promise<BriefingPeriodSaveResult>
   remove: (id: string, language?: DailyBriefingLocale) => Promise<BriefingPeriodRemoveResult>
@@ -92,7 +92,7 @@ export function createBriefingPeriodsSource(input: Readonly<{
     return prepared
   }
   const editor: BriefingPeriodsEditor = Object.freeze({
-    list: async (locale: DailyBriefingLocale) => {
+    list: async (locale?: DailyBriefingLocale) => {
       await prepare()
       return store.list(locale)
     },
