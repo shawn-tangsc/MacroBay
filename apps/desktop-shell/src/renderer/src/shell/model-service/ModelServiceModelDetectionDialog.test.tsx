@@ -299,4 +299,20 @@ describe('PLAT-82 检测模型对话框（可多选 + 进度 + 停止）', () =>
     expect(zh.detectProtocolSummaryPassed(3)).toBe('协议支持：已测 3 个模型，全部通过')
     expect(zh.detectProtocolSummaryFailed(3, 1)).toBe('协议支持：已测 3 个模型，1 项不通')
   })
+
+  it('renders the close action as an accessible icon button, not an antd text button', async () => {
+    const { container } = await renderDialog()
+    const close = container.querySelector<HTMLButtonElement>('[data-detect-close]')
+
+    expect(close).not.toBeNull()
+    // 读屏名不为空（走键解析，不是把键名念出来）。
+    expect(close?.getAttribute('aria-label')).toBe(labels.detectClose)
+    expect(close?.getAttribute('aria-label')?.trim().length).toBeGreaterThan(0)
+    // 平台图标按钮：`icon-button` + `ant-btn-icon-only`，尺寸 24（md 档，行内写死）。
+    expect(close?.classList.contains('icon-button')).toBe(true)
+    expect(close?.classList.contains('ant-btn-icon-only')).toBe(true)
+    expect(close?.querySelector('svg')).not.toBeNull()
+    expect(close?.style.width).toBe('24px')
+    expect(close?.style.height).toBe('24px')
+  })
 })
