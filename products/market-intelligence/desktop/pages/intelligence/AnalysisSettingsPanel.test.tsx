@@ -89,6 +89,13 @@ describe('the drawer analysis screen', () => {
     const block = container.querySelector('[data-settings-section-block]')!
     // 提示在区块**上方**：不是夹在两行之间。
     expect(notice!.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(text.refusalModelUnavailable).toBeTruthy()
+
+    // 这一条的另一半（壳那四条测的是「收到失败句怎么画」）：面板**真的会在写失败时把句子交出去**，
+    // 而且交的是失败句，不是「保存中 / 已保存」。
+    const failure = state().failure
+    expect(failure).toBeDefined()
+    expect(failure).toBe(text.refusalModelUnavailable)
+    expect(failure).not.toContain('保存中')
+    expect(failure).not.toContain('已保存')
   })
 })
