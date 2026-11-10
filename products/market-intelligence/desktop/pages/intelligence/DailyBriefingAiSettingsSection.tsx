@@ -181,7 +181,8 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
   const { draft, defaultModel, providers, candidates, webSearchSupported, webSearchBlocked, update } = state
 
   if (state.state === 'load-failed') {
-    return <p className="mi-daily-briefing__settings-error" role="alert">{text.aiSettings.failed}</p>
+    // 读不到 ≠ 存不上：两条各说各的。把「拿不到」写成「保存失败」，读者会去改一个本来就没问题的东西。
+    return <p className="mi-daily-briefing__settings-error" role="alert">{text.aiSettings.loadFailed}</p>
   }
   if (state.state === 'loading' || !draft) {
     return <LoadingState label={text.aiSettings.loading} minHeight={90} />
