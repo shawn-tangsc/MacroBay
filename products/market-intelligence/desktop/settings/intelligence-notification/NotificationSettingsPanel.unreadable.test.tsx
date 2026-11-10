@@ -36,7 +36,7 @@ function install(calendarFails: boolean): void {
     if (String(method).includes('getNewsPushOutletState')) return { enabled: true }
     if (String(method).includes('getCalendarReminderSettings')) {
       if (calendarFails) throw new Error('read failed')
-      return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'also-matched' }
+      return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'also-matched', landedCountries: { scope: 'us', codes: [] } }
     }
     return { enabled: false }
   })
@@ -85,6 +85,20 @@ describe('an unreadable calendar settings block is never drawn as off', () => {
     // 条件区块跟着消失（条件属于那一刻读到的值，读不到就不画）。
     expect(container.querySelector('.intelligence-notification-drawer')?.textContent)
       .not.toContain(text['pages.intelligence.notification.calendarSection'])
+  })
+
+  it('renders the real controls of both condition blocks when their switches are on', async () => {
+    install(false)
+    const container = await render()
+    const sections = container.querySelectorAll('.intelligence-notification-drawer > .settings-section')
+    expect(sections).toHaveLength(3)
+    // 舆情条件：三档分段（role=group，按钮带 aria-pressed），不是一句话也不是灰控件。
+    expect(sections[1]?.querySelector('[role="group"]')).not.toBeNull()
+    // 日历提醒：下拉 + 复选 + 两颗测试按钮都在控件列里。
+    expect(sections[2]?.querySelectorAll('.ant-select').length).toBeGreaterThanOrEqual(1)
+    expect(sections[2]?.querySelectorAll('[role="group"]').length).toBeGreaterThanOrEqual(2)
+    expect(sections[2]?.querySelectorAll('input[type="checkbox"]').length).toBeGreaterThanOrEqual(1)
+    expect(sections[2]?.querySelectorAll('[data-test-notification]').length).toBe(2)
   })
 
   it('keeps the row explanation in the ⓘ, not in the row body', async () => {

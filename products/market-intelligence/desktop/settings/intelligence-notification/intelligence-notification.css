@@ -266,9 +266,12 @@
    提示按内容高、两栏吃掉剩余高度并各自滚。少了这一条，split 的 100% 会和提示叠在一起。 */
 .intelligence-notification-panel {
   display: flex;
+  width: 100%;
   height: 100%;
   min-height: 0;
   flex-direction: column;
+  /* 在 `display:grid` 的 pane 里按内容收缩过：明确拉满，单列屏跟着 pane 变宽。 */
+  align-self: stretch;
 }
 
 .intelligence-notification-panel > .intelligence-notification-panel__notice,
@@ -285,6 +288,7 @@
 /* 抽屉面：单列区块（推送提醒 / 舆情条件 / 日历提醒），整列自己滚，区块间距 16。 */
 .intelligence-notification-drawer {
   display: flex;
+  width: 100%;
   flex: 1;
   flex-direction: column;
   gap: 16px;
@@ -294,10 +298,11 @@
 
 /* ── 抽屉面区块：整屏只有「区块」这一层圆角框（行与控件不再各带盒子）── */
 .intelligence-notification-drawer > .settings-section {
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
-  overflow: hidden;
 }
 
 .intelligence-notification-drawer .settings-section__header {
