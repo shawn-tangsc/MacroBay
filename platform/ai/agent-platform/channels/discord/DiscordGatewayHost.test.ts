@@ -141,6 +141,19 @@ describe('discord gateway host', () => {
     expect(harness.runtime.commitIfCurrent).toHaveBeenCalledWith('discord-a', 1, 11)
   })
 
+  it('says out loud when a message arrives with no text and no attachment', async () => {
+    // Message Content intent 没开时就是这个现象：事件到了，正文是空的。审计必须能把人指到那个开关上。
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message('{"op":0,"s":15,"t":"MESSAGE_CREATE","d":{"id":"msg-7","channel_id":"222","guild_id":"333","content":"","author":{"id":"444"}}}')
+    await flush()
+
+    expect(harness.audits()).toContain('discord-message-content-empty')
+    // 仍然投递（空消息也可能是合法的），序号照常推进。
+    expect(harness.inbound.receive).toHaveBeenCalledOnce()
+    expect(harness.runtime.commitIfCurrent).toHaveBeenCalledWith('discord-a', 1, 15)
+  })
+
   it('keys deduplication on the message id, not on its text', async () => {
     const harness = await createHarness()
     harness.sockets[0].message(HELLO)

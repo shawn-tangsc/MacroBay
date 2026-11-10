@@ -175,6 +175,12 @@ export class DiscordGatewayHost {
       this.commitOrStop(frame.sequence)
       return
     }
+    if ((fact.text === undefined || fact.text.trim().length === 0) && (fact.attachments?.length ?? 0) === 0) {
+      // 空壳消息。最常见的原因是开发者后台没给这个 bot 打开 **Message Content** 这个特权 intent：
+      // 连接正常、事件也到了，只有正文不在。不写这一行，读者只会看到「消息进来了但没有内容」，
+      // 分不清是适配器坏了还是后台少点了一个开关。
+      this.audit('discord-message-content-empty')
+    }
 
     /** 管道在**落库之后**才调它；序号提交挂在这里，才真正是「先入管道、再提序号」。 */
     let acknowledged = false
