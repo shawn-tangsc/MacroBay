@@ -57,19 +57,24 @@ export const dashboardRealSourcePolicy = [
   dashboardEconomicCalendarSourcePolicy,
   {
     sourceId: 'fear-greed',
-    sourceStates: dashboardFearGreedPresentationPolicy.sourceStates,
-    actions: ['manage-intelligence-sources']
+    sourceStates: dashboardFearGreedPresentationPolicy.sourceStates
   },
   {
     sourceId: 'binance-futures-positioning',
-    sourceStates: dashboardFearGreedPresentationPolicy.sourceStates,
-    actions: ['manage-intelligence-sources']
+    sourceStates: dashboardFearGreedPresentationPolicy.sourceStates
   }
 ] as const
 
 export type DashboardFearGreedState =
   | { state: 'loading' }
   | { state: 'available'; score: number; bucket: 'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed'; observedAt: string }
+  /**
+   * 读到了，但这个日频读数已经比自己该有的更旧（产品 2026-11-10，决定记录 §15）。
+   *
+   * 新鲜度是**页面规则**、不是源状态：把「有值但过期」并进「读不到」，读者会以为源坏了。
+   * 读数照旧带着——只是行上要写明它截至哪一刻。
+   */
+  | { state: 'stale'; score: number; bucket: 'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed'; observedAt: string }
   | { state: 'empty' }
   | { state: 'unavailable' }
 
@@ -87,8 +92,11 @@ export function projectDashboardFearGreedSnapshot(value: unknown, asOf: string):
       // so it fails closed instead of moving the needle on yesterday's number. One threshold, two
       // consumers — do not invent a second one here.
       const ageMs = Date.parse(asOf) - Date.parse(value.observedAt)
-      if (bucket && value.bucket === bucket && ageMs <= marketPulsePolicy.fearGreedStaleAfterMs) {
-        return { state: 'available', score: value.score, bucket, observedAt: value.observedAt }
+      if (bucket && value.bucket === bucket) {
+        // 读到了就是读到了：新鲜度自己降一档，不再并进「读不到」。
+        return ageMs <= marketPulsePolicy.fearGreedStaleAfterMs
+          ? { state: 'available', score: value.score, bucket, observedAt: value.observedAt }
+          : { state: 'stale', score: value.score, bucket, observedAt: value.observedAt }
       }
     }
     if (isExactRecord(value, ['state', 'asOf']) && value.state === 'empty' && value.asOf === asOf) return { state: 'empty' }
