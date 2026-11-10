@@ -10,9 +10,13 @@
   gap: 16px;
 }
 
-/* 行内右侧控件**左缘对齐**标签列的右边界（`SettingsRow` 的口径），
-   不沿用抽屉旧版把值右对齐的写法。 */
+/* 控件列：**所有控制件都从这一列的左缘起**（标签列 160 的右边界），
+   不许用 `margin-left: auto` / `justify-content: space-between` 把控件顶到行尾——
+   同屏两种对齐就是这次用户指出的问题。行尾动作不在这列里（它们是按钮，靠右）。 */
 .config-drawer-processing .config-drawer__value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-left: 0;
   text-align: left;
 }

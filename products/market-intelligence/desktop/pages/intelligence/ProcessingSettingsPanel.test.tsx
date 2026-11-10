@@ -112,9 +112,10 @@ async function mount(): Promise<HTMLElement> {
 
 const row = (key: string): HTMLElement =>
   host!.querySelector(`[data-drawer-row="${key}"]`) as HTMLElement
-const sentimentRow = (): HTMLElement => row('sentimentModel')
-const sentimentSelect = (): HTMLElement | null => sentimentRow().querySelector('.ant-select') as HTMLElement | null
-const sentimentSwitch = (): HTMLInputElement | null => sentimentRow().querySelector('.ant-switch') as HTMLInputElement | null
+const switchRow = (): HTMLElement => host!.querySelector('[data-drawer-row="sentimentScoring"]') as HTMLElement
+const modelRow = (): HTMLElement | null => host!.querySelector('[data-drawer-row="sentimentModel"]') as HTMLElement | null
+const modelSelect = (): HTMLElement | null => modelRow()?.querySelector('.ant-select') as HTMLElement | null
+const scoringSwitch = (): HTMLInputElement | null => switchRow().querySelector('.ant-switch') as HTMLInputElement | null
 
 describe('ProcessingSettingsPanel · 区块容器的框只由平台组件给', () => {
   it('屏里不再写第二份边框/圆角/底色（两套数必然一处改、另一处不跟）', () => {
@@ -187,26 +188,92 @@ describe('ProcessingSettingsPanel · 一个区块一个圆角容器', () => {
   })
 })
 
-describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
-  it('关着时只写「规则判断」，不画一个灰掉的下拉（假控件一律不许）', async () => {
-    getSettings.mockResolvedValue(RULE_ONLY)
-    await mount()
-
-    expect(sentimentRow().textContent).toContain(copy.values.sentimentRuleOnly)
-    expect(sentimentSelect()).toBeNull()
-    expect(sentimentRow().querySelector('.ant-select-disabled')).toBeNull()
-    expect(sentimentSwitch()).not.toBeNull()
-  })
-
-  it('打开后出下拉：跟随快速模型带名字，其余是各供应商可用的聊天模型', async () => {
+describe('ProcessingSettingsPanel · 控制件一律从控件列左缘起', () => {
+  it('同一屏所有控制件都在控件列里、且是列里第一个元素；只有行尾动作靠右', async () => {
     getSettings.mockResolvedValue(FOLLOW_FAST)
     await mount()
 
-    expect(sentimentRow().textContent).not.toContain(copy.values.sentimentRuleOnly)
-    expect(sentimentSelect()).not.toBeNull()
+    const controls = [...host!.querySelectorAll('.ant-switch, .ant-select, .ant-segmented')]
+    expect(controls.length).toBeGreaterThan(0)
+    for (const control of controls) {
+      // 按容器类判断左缘，不量像素：控制件必须落在控件列里，并且是这一列的第一个元素——
+      // 它前面若有文字，控制件就被顶离左缘，这正是用户看到的「一个靠左、一个到行最右」。
+      const column = control.closest('.config-drawer__value')
+      expect(column).not.toBeNull()
+      expect(column!.firstElementChild).toBe(control)
+    }
+
+    // 行尾动作允许靠右：它不在控件列里，且是所在行的最后一个元素。
+    const action = [...host!.querySelectorAll('button')]
+      .find((button) => button.textContent === labels.queueMissing)
+    expect(action).not.toBeUndefined()
+    expect(action!.closest('.config-drawer__value')).toBeNull()
+    expect(action!.parentElement?.lastElementChild).toBe(action)
+
+    // 行容器上不许再用内联样式把控制件顶开。
+    for (const rowElement of host!.querySelectorAll<HTMLElement>('.config-drawer__row')) {
+      expect(rowElement.style.justifyContent).toBe('')
+    }
+
+    // 同一份 CSS 也不许给控件列或行加「顶到最右」的写法。
+    const css = readFileSync(join(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/ProcessingSettingsPanel.css'), 'utf8')
+    // 注释里提到这两句是**说明**，只在规则里禁：先剥注释再比。
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rules).not.toMatch(/margin-left:\s*auto/)
+    expect(rules).not.toMatch(/justify-content:\s*space-between/)
+  })
+})
+
+describe('ProcessingSettingsPanel · 情绪评分（开关一行、模型一行）', () => {
+  it('是两行、各自有标签：上「用模型判断情绪」，下「用哪个模型」', async () => {
+    getSettings.mockResolvedValue(FOLLOW_FAST)
+    await mount()
+
+    expect(switchRow().textContent).toContain(copy.rows.sentimentModelSwitch)
+    expect(switchRow().querySelector('.ant-switch')).not.toBeNull()
+    expect(modelRow()?.textContent).toContain(copy.rows.sentimentModel)
+    expect(modelSelect()).not.toBeNull()
+    // 两行是两个行元素，不是一行里挤两个标签。
+    expect(switchRow()).not.toBe(modelRow())
+  })
+
+  it('开关关掉时「用哪个模型」这一行**不存在**（不是禁用），值位只说「规则判断」', async () => {
+    getSettings.mockResolvedValue(RULE_ONLY)
+    await mount()
+
+    expect(modelRow()).toBeNull()
+    expect(host!.querySelector('[data-drawer-row="sentimentModel"] .ant-select')).toBeNull()
+    expect(switchRow().textContent).toContain(copy.values.sentimentRuleOnly)
+    // 开关本身仍在：读者要能把它打开。
+    expect(scoringSwitch()).not.toBeNull()
+    // 消掉「关着却还留着灰下拉」的可能：全屏一个 select 都没有（翻译模型那个除外，它在另一块）。
+    expect(host!.querySelector('[data-processing-section="sentiment"] .ant-select')).toBeNull()
+  })
+
+  it('开关是那颗总开关：写的是 modelScoringEnabled，不是把模型行当附属', async () => {
+    getSettings.mockResolvedValue(FOLLOW_FAST)
+    saveSettings.mockResolvedValue(RULE_ONLY)
+    await mount()
 
     await act(async () => {
-      (sentimentRow().querySelector('.ant-select-selector') as HTMLElement)
+      (scoringSwitch() as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {})
+
+    expect(saveSettings).toHaveBeenCalledTimes(1)
+    // 存储键就是「是否用模型判断情绪」，不带 providerId/modelId。
+    expect(saveSettings).toHaveBeenCalledWith({ modelScoringEnabled: false })
+    // 关掉之后模型行当场消失。
+    expect(modelRow()).toBeNull()
+  })
+
+  it('打开后模型行出下拉：跟随快速模型带名字，其余是各供应商可用的聊天模型', async () => {
+    getSettings.mockResolvedValue(FOLLOW_FAST)
+    await mount()
+
+    expect(modelSelect()).not.toBeNull()
+    await act(async () => {
+      (modelRow()!.querySelector('.ant-select-selector') as HTMLElement)
         .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     })
     const options = [...document.querySelectorAll('.ant-select-item-option')].map((node) => node.textContent)
@@ -214,13 +281,13 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
     expect(options).toContain('Provider · Chat')
   })
 
-  it('选中即保存：写口只有 saveSettings，参数是 providerId/modelId', async () => {
+  it('选中即保存：模型行写的是 providerId/modelId', async () => {
     getSettings.mockResolvedValue(FOLLOW_FAST)
     saveSettings.mockResolvedValue(EXPLICIT)
     await mount()
 
     await act(async () => {
-      (sentimentRow().querySelector('.ant-select-selector') as HTMLElement)
+      (modelRow()!.querySelector('.ant-select-selector') as HTMLElement)
         .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     })
     const target = [...document.querySelectorAll('.ant-select-item-option')]
@@ -232,13 +299,13 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
     expect(saveSettings).toHaveBeenCalledWith({ providerId: 'p', modelId: 'chat' })
   })
 
-  it('保存失败当场可见，并且控件回到原值——不许静默当成功', async () => {
+  it('保存失败当场可见（红色提示条），并且控件回到原值——不许静默当成功', async () => {
     getSettings.mockResolvedValue(FOLLOW_FAST)
     saveSettings.mockRejectedValue(new Error('write failed'))
     await mount()
 
     await act(async () => {
-      (sentimentRow().querySelector('.ant-select-selector') as HTMLElement)
+      (modelRow()!.querySelector('.ant-select-selector') as HTMLElement)
         .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     })
     const target = [...document.querySelectorAll('.ant-select-item-option')]
@@ -246,7 +313,6 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
     await act(async () => { target.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     await act(async () => {})
 
-    // 失败是**红色提示条**（不是行内一闪而过的字）：role=alert、带「再试一次」。
     const notice = host!.querySelector('[data-inline-notice="danger"]') as HTMLElement
     expect(notice).not.toBeNull()
     expect(notice.getAttribute('role')).toBe('alert')
@@ -256,10 +322,10 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
     expect(retry).not.toBeUndefined()
 
     // 控件回到原值：没写成就不能显示成写成了。
-    expect(sentimentRow().querySelector('.ant-select-selection-item')?.textContent)
+    expect(modelRow()!.querySelector('.ant-select-selection-item')?.textContent)
       .toBe(settingsText.followFast.replace('{name}', 'Provider · Fast'))
 
-    // 「再试一次」重放的是同一次写，不是让读者再拨一遍开关。
+    // 「再试一次」重放的是同一次写。
     saveSettings.mockResolvedValue(EXPLICIT)
     await act(async () => { retry?.click() })
     await act(async () => {})
@@ -274,18 +340,24 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
     await mount()
 
     await act(async () => {
-      (sentimentSwitch() as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      (scoringSwitch() as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {})
 
     expect(saveSettings).toHaveBeenCalledTimes(1)
-    expect(sentimentRow().querySelector('.ant-switch-disabled')).not.toBeNull()
+    expect(switchRow().querySelector('.ant-switch-disabled')).not.toBeNull()
     await act(async () => { resolveSave(RULE_ONLY) })
   })
 
-  it('读不到时是「未知」+ 原因进 ⓘ，不许落成「规则判断」', async () => {
+  it('读不到时两行都没有控件：开关行「未知」+ 原因进 ⓘ，模型行不存在', async () => {
     getSettings.mockRejectedValue(new Error('read failed'))
     await mount()
+
+    expect(switchRow().textContent).toContain(copy.values.autoUnknown)
+    expect(switchRow().textContent).not.toContain(copy.values.sentimentRuleOnly)
+    expect(switchRow().querySelector('[aria-label], button[aria-label]')).not.toBeNull()
+    expect(scoringSwitch()).toBeNull()
+    expect(modelRow()).toBeNull()
 
     // 读不到是黄灯（不是失败）：短句 + 动作「去模型服务」，原因仍在行的 ⓘ 里。
     const notice = host!.querySelector('[data-inline-notice="caution"]') as HTMLElement
@@ -304,12 +376,5 @@ describe('ProcessingSettingsPanel · 情绪评分用哪个模型', () => {
     expect(navigations).toContainEqual({ navKey: 'settings', settingsPanelKey: 'models' })
     // 同一时刻只出一条提示条。
     expect(host!.querySelectorAll('[data-inline-notice]')).toHaveLength(1)
-
-    expect(sentimentRow().textContent).toContain(copy.values.autoUnknown)
-    expect(sentimentRow().textContent).not.toContain(copy.values.sentimentRuleOnly)
-    expect(sentimentRow().querySelector('[aria-label], button[aria-label]')).not.toBeNull()
-    // 读不到就不给写口：不知道现在是什么，不许盲写。
-    expect(sentimentSwitch()).toBeNull()
-    expect(sentimentSelect()).toBeNull()
   })
 })

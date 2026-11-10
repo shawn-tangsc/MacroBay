@@ -156,9 +156,13 @@ export function ProcessingSettingsPanel(): React.ReactElement {
 
     <div data-processing-section="sentiment">
     <SettingsSection title={copy.groups.sentimentScoring}>
-      <div className="config-drawer__row" data-drawer-row="sentimentModel">
-        <span className="config-drawer__label">
-          {copy.rows.sentimentModel}
+      {/* 两行：开关是「是否用模型判断情绪」的总开关，模型是它打开后才有的第二行。
+          关着时只在开关那一行的值位写「规则判断」，不画灰掉的下拉。 */}
+      <SettingsRow
+        controlWrapperClassName="config-drawer__value"
+        copyClassName="config-drawer__label"
+        label={<>
+          {copy.rows.sentimentModelSwitch}
           {sentiment.state === 'unreadable'
             ? <Popover
               content={<span>{copy.values.sentimentUnknownReason}</span>}
@@ -172,25 +176,39 @@ export function ProcessingSettingsPanel(): React.ReactElement {
                   size="sm" />
               )} />
             : null}
-        </span>
-        {sentiment.state === 'ready' && sentiment.enabled
-          ? <Select
-            aria-label={copy.rows.sentimentModel}
-            disabled={sentiment.saving}
-            onChange={(next) => void sentiment.selectModel(String(next))}
-            options={sentiment.state === 'ready' ? sentimentOptions(sentiment, settingsText) : []}
-            size="small"
-            value={sentiment.modelRef} />
-          : <span className="config-drawer__value">{sentimentValueText(sentiment, copy)}</span>}
+        </>}
+        rowAttributes={{ 'data-drawer-row': 'sentimentScoring' }}
+        rowClassName="config-drawer__row">
+        {sentiment.state === 'unreadable' ? <span>{copy.values.autoUnknown}</span> : null}
         {sentiment.state === 'ready'
           ? <Switch
-            aria-label={settingsText.modelScoring}
+            aria-label={copy.rows.sentimentModelSwitch}
             checked={sentiment.enabled}
             disabled={sentiment.saving}
             onChange={(next) => void sentiment.setEnabled(next)}
             size="small" />
           : null}
-      </div>
+        {/* 关着时的状态词跟在开关后面，不占控件列左缘，也不把开关顶到行尾。 */}
+        {sentiment.state === 'ready' && !sentiment.enabled
+          ? <span>{copy.values.sentimentRuleOnly}</span>
+          : null}
+      </SettingsRow>
+      {sentiment.state === 'ready' && sentiment.enabled
+        ? <SettingsRow
+          controlWrapperClassName="config-drawer__value"
+          copyClassName="config-drawer__label"
+          label={copy.rows.sentimentModel}
+          rowAttributes={{ 'data-drawer-row': 'sentimentModel' }}
+          rowClassName="config-drawer__row">
+          <Select
+            aria-label={copy.rows.sentimentModel}
+            disabled={sentiment.saving}
+            onChange={(next) => void sentiment.selectModel(String(next))}
+            options={sentimentOptions(sentiment, settingsText)}
+            size="small"
+            value={sentiment.modelRef} />
+        </SettingsRow>
+        : null}
       {/* 两条只出一条：保存失败优先（红色），读不到是黄灯——读不到不是失败。 */}
       {sentiment.saveFailed
         ? <InlineNotice
@@ -243,14 +261,6 @@ function Unreadable(props: Readonly<{ reason: string }>): React.ReactElement {
   </>
 }
 
-function sentimentValueText(
-  state: SentimentModelState,
-  copy: Readonly<{ values: Readonly<{ autoUnknown: string; sentimentRuleOnly: string }> }>
-): string {
-  if (state.state === 'unreadable') return copy.values.autoUnknown
-  if (state.state === 'ready' && !state.enabled) return copy.values.sentimentRuleOnly
-  return ''
-}
 
 /** 跟随默认模型那一项的说法：没配 / 供应商列表还没到 / 配了但不可用，各说各的。 */
 function buildFollowDefaultLabel(
