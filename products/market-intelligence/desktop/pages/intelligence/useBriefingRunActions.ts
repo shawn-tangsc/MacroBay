@@ -24,8 +24,17 @@ function withGeneratingRow(
   rows: readonly DailyBriefingEditionSummary[],
   input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US'; periodTime?: string; manual: boolean }>
 ): readonly DailyBriefingEditionSummary[] {
-  const exists = rows.some((row) => row.date === input.date && row.periodId === input.periodId && row.locale === input.locale)
-  if (exists) return rows
+  const index = rows.findIndex((row) => row.date === input.date && row.periodId === input.periodId && row.locale === input.locale)
+  if (index >= 0) {
+    // 这一期已经有一行了（失败那一行最常见，也有"重跑已有正文"）：**不新增一行，也不能原样返回**。
+    // 原样返回时它还是"失败/已发布"，正文按它判，于是失败面板与上一次的步骤一直留在屏幕上，
+    // 跑完才跳（用户 2026-11-10 真机）。把这一门语言标成 generating，页面才认得出"这一期正在跑"。
+    const existing = rows[index]!
+    const otherLanguages = (existing.languages ?? []).filter((language) => language.locale !== input.locale)
+    return rows.map((row, at) => at === index
+      ? { ...existing, languages: [{ locale: input.locale, state: 'generating' as const }, ...otherLanguages] }
+      : row)
+  }
   return [{
     date: input.date,
     periodId: input.periodId,

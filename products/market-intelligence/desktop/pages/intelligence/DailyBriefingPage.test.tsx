@@ -1858,6 +1858,56 @@ it('opens a failed run with that attempt\u2019s steps and its readable reason', 
   expect(dom.textContent).not.toContain(text.history.railNoTitle)
 })
 
+it('leaves the previous failure the moment the reader regenerates a failed issue', async () => {
+  // 用户 2026-11-10 真机：失败那一期点「重新生成」，工具栏已经在转，正文却还是上一次的失败面板
+  // 与上一次的步骤时间戳，跑完才跳。这一条断言的是**跑着的时候**屏幕长什么样。
+  const today = '2026-10-30'
+  const trace = generationTraceFixture('failed', 'selection', 'editorial-timeout')
+  const listed = [{
+    date: today, periodId: 'period_failed', locale: 'en-US' as const, availableLocales: [] as const,
+    state: 'missing' as const, attemptCount: 1,
+    languages: [{ locale: 'en-US' as const, state: 'missing' as const, reason: 'run-failed' as const }]
+  }]
+  let settleRun: (value: unknown) => void = () => undefined
+  // 进度只有在**这次重跑点下去之后**才是 running：不然页面一上来就以为已经有跑在飞。
+  let running = false
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })),
+    get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: trace })),
+    // 这一次重跑不结束：测的是起手那一刻的屏幕。
+    regenerate: vi.fn(() => {
+      running = true
+      return new Promise((resolve) => { settleRun = resolve })
+    }),
+    getProgress: vi.fn(async () => running
+      ? {
+          state: 'running' as const,
+          progress: { attemptId: 'attempt-2', startedAt: `${today}T02:00:00.000Z`, stages: [{ id: 'source', state: 'running' as const, startedAt: `${today}T02:00:01.000Z` }] }
+        }
+      : { state: 'idle' as const })
+  })
+  const dom = await renderPage(client)
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  await act(async () => { row.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+  // 起点：失败面板在（不然这条用例没在验"离开"这件事）。
+  expect(dom.querySelector('[data-daily-brief-failure]')).not.toBeNull()
+
+  const regenBtn = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!
+  await act(async () => { regenBtn.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 1. 正文立刻离开失败面板，换成这一次的步骤；上一次那份步骤表一个字都不留。
+  expect(dom.querySelector('[data-daily-brief-failure]')).toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__content')?.getAttribute('data-body-state')).toBe('generating')
+  const panel = dom.querySelector<HTMLElement>('[data-briefing-stage-panel][data-state="generating"]')!
+  expect(panel).not.toBeNull()
+  expect(panel.querySelector('[data-stage="source"]')).not.toBeNull()
+  // 2. 左侧那一行同时进「生成中」：只修正文、行上还说失败算没修。
+  expect(dom.querySelector('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')?.getAttribute('aria-busy')).toBe('true')
+  settleRun({ state: 'unavailable', failureCode: 'editorial-timeout' })
+})
+
 it('never lets another issue\u2019s document stand in for the selected one', async () => {
   const today = '2026-10-30'
   const listed = [

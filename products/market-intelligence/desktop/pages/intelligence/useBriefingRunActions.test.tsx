@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { briefingRowState, resolveBriefingMode } from './dailyBriefingMode'
 import { useBriefingRunActions } from './useBriefingRunActions'
 
 /**
@@ -60,5 +61,34 @@ describe('every entry point starts a run the same way', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ date: '2026-11-05', periodId: 'default', locale: 'zh-CN', state: 'missing' })
     expect((rows[0]!.languages ?? []).some((language) => language.state === 'generating')).toBe(true)
+  })
+
+  it('turns an existing failed row into "generating" instead of leaving it failed', async () => {
+    // 用户 2026-11-10 真机：对失败那一期点「重新生成」，行**已经存在**，以前 `withGeneratingRow`
+    // 原样返回，于是正文还按旧的失败行判 —— 失败面板和上一次的步骤一直留着，跑完才跳。
+    const updater = await render()
+    const failed: DailyBriefingEditionSummary = {
+      date: '2026-11-05', periodId: 'default', locale: 'zh-CN', availableLocales: [],
+      state: 'missing', attemptCount: 1,
+      languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }]
+    }
+    const other: DailyBriefingEditionSummary = {
+      date: '2026-11-05', periodId: 'default', locale: 'en-US', availableLocales: ['en-US'],
+      state: 'generated', generatedAt: '2026-11-05T00:30:00.000Z', windowEnd: '2026-11-05T00:30:00.000Z',
+      languages: [{ locale: 'en-US', state: 'published' }]
+    }
+
+    const rows = updater([failed, other])
+
+    // 不新增一行：还是那一期那一语言，只是它现在在跑。
+    expect(rows).toHaveLength(2)
+    expect(briefingRowState(rows[0], 'zh-CN')).toBe('running')
+    expect(rows[0]!.languages).toEqual([{ locale: 'zh-CN', state: 'generating' }])
+    // 正文据此离开失败档：这就是"点下去就换屏"的判据，行状态一旦是 running，失败面板不再出现。
+    expect(resolveBriefingMode({
+      rowState: briefingRowState(rows[0], 'zh-CN'), viewStatus: 'unavailable', hasEdition: false, localeAvailable: true
+    })).toBe('generating')
+    // 另一语言那一行一个字不动。
+    expect(rows[1]).toBe(other)
   })
 })
