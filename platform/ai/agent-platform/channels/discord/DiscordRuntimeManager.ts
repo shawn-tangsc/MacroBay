@@ -1,13 +1,136 @@
-import type { ChannelCredentialVault } from '../../../../secrets/channels/channelCredentialContracts'
 import type { PlatformWebSocketConstructor } from '../../../../network/platformWebSocket'
+import type { ChannelCredentialVault } from '../../../../secrets/channels/channelCredentialContracts'
 import type { ChannelInboundService } from '../ChannelInboundService'
+import { DiscordApiClient } from './DiscordApiClient'
 import { DiscordDeliveryTransport } from './DiscordDeliveryTransport'
+import { DiscordGatewayHost } from './DiscordGatewayHost'
 import { DiscordRuntimeRepository } from './DiscordRuntimeRepository'
 
-/** Gateway identify/resume framing is not sufficiently frozen, so blocked Discord never opens a transport. */
+/**
+ * Discord 运行时：一条通道一份生命周期（`AbortController` + 代际 + owner 令牌）。
+ *
+ * 三步准入，任何一步不过就一条连接都不开：
+ * 1. 手上这个 owner 令牌确实属于这一代（`ownsLifecycleOwner`）；
+ * 2. 这一代仍是现役（`isCurrentActive`），且握手期间没被换掉；
+ * 3. 凭据能读出来（读不到当没有，不当成网络故障）。
+ *
+ * 握手用注入的平台 `fetch`：先 `/gateway/bot` 拿接入点，再 `/users/@me` 拿机器人 id——
+ * 后者同时是启用自检要的那一次请求，也决定「这条消息是不是在叫我」。
+ */
 export class DiscordRuntimeManager {
-  constructor(private readonly _deps: { inbound: ChannelInboundService; runtime: DiscordRuntimeRepository; vault: ChannelCredentialVault; getPlatformFetch: () => typeof fetch; createPlatformWebSocket: PlatformWebSocketConstructor; delivery: DiscordDeliveryTransport; getCredential: (channelId: string) => { ref: string; revision: number } | null; ownsLifecycleOwner: (channelId: string, token: string, generation: number) => boolean; isCurrentActive: (channelId: string, generation: number) => boolean }) {}
-  async start(_channelId: string, _generation: number, _ownerToken: string): Promise<boolean> { return false }
-  stop(_channelId: string, _ownerToken?: string): void {}
-  async dispose(): Promise<void> {}
+  private readonly hosts = new Map<string, DiscordGatewayHost>()
+  private readonly lifetimes = new Map<string, { controller: AbortController; ownerToken: string }>()
+
+  constructor(private readonly deps: {
+    inbound: ChannelInboundService
+    runtime: DiscordRuntimeRepository
+    vault: ChannelCredentialVault
+    getPlatformFetch: () => typeof fetch
+    createPlatformWebSocket: PlatformWebSocketConstructor
+    delivery: DiscordDeliveryTransport
+    getCredential: (channelId: string) => { ref: string; revision: number } | null
+    ownsLifecycleOwner: (channelId: string, token: string, generation: number) => boolean
+    isCurrentActive: (channelId: string, generation: number) => boolean
+  }) {}
+
+  async start(channelId: string, generation: number, ownerToken: string): Promise<boolean> {
+    if (!ownerToken || !this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)) return false
+    this.stop(channelId)
+    if (!this.generationIsOurs(channelId, generation, ownerToken)) return false
+
+    const controller = new AbortController()
+    this.lifetimes.set(channelId, { controller, ownerToken })
+    try {
+      const readToken = (): Promise<string | null> => this.token(channelId, controller.signal)
+      const client = new DiscordApiClient({ getPlatformFetch: this.deps.getPlatformFetch, token: readToken })
+      const [gateway, botUser] = await Promise.all([
+        client.gatewayBot(controller.signal),
+        client.currentUser(controller.signal)
+      ])
+      const isCurrent = (): boolean => this.isCurrent(channelId, generation, ownerToken, controller)
+      // 握手期间可能已经被停用/换代：回来再判一次，别拿一个过期的接入点开连接。
+      if (!gateway.ok || !botUser.ok || !isCurrent()) {
+        this.stopOwned(channelId, controller)
+        return false
+      }
+
+      this.deps.delivery.setClient(channelId, client, { isCurrent, signal: controller.signal })
+      const host = new DiscordGatewayHost({
+        channelId,
+        generation,
+        gatewayUrl: gateway.value.url,
+        token: readToken,
+        intents: DISCORD_DEFAULT_INTENTS,
+        inbound: this.deps.inbound,
+        botUserId: botUser.value.id,
+        runtime: this.deps.runtime,
+        createPlatformWebSocket: this.deps.createPlatformWebSocket as never,
+        isCurrent,
+        signal: controller.signal,
+        refreshGatewayUrl: async () => {
+          const refreshed = await client.gatewayBot(controller.signal)
+          return refreshed.ok ? refreshed.value.url : null
+        }
+      })
+      this.hosts.set(channelId, host)
+      await host.start()
+      return true
+    } catch {
+      this.stopOwned(channelId, controller)
+      return false
+    }
+  }
+
+  stop(channelId: string, ownerToken?: string): void {
+    const lifetime = this.lifetimes.get(channelId)
+    // 带 ownerToken 时只停自己那一条：别的代际换过之后不该被我们顺手带走。
+    if (lifetime && (!ownerToken || lifetime.ownerToken === ownerToken)) this.stopOwned(channelId, lifetime.controller)
+  }
+
+  async dispose(): Promise<void> {
+    for (const channelId of [...this.lifetimes.keys()]) this.stop(channelId)
+  }
+
+  stopAllAndFence(fence: () => void): void {
+    for (const channelId of [...this.lifetimes.keys()]) this.stop(channelId)
+    fence()
+  }
+
+  private token(channelId: string, signal: AbortSignal): Promise<string | null> {
+    const credential = this.deps.getCredential(channelId)
+    if (!credential || signal.aborted) return Promise.resolve(null)
+    return this.deps.vault.get(credential.ref).then(
+      (value) => (signal.aborted ? null : value?.bot_token ?? null),
+      // 读不出来当「没有凭据」：这不是网络故障，别让界面把读者指去查代理。
+      () => null
+    )
+  }
+
+  private generationIsOurs(channelId: string, generation: number, ownerToken: string): boolean {
+    return this.deps.isCurrentActive(channelId, generation) && this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)
+  }
+
+  private isCurrent(channelId: string, generation: number, ownerToken: string, controller: AbortController): boolean {
+    return !controller.signal.aborted &&
+      this.lifetimes.get(channelId)?.controller === controller &&
+      this.generationIsOurs(channelId, generation, ownerToken)
+  }
+
+  private stopOwned(channelId: string, controller: AbortController): void {
+    controller.abort()
+    if (this.lifetimes.get(channelId)?.controller !== controller) return
+    this.hosts.get(channelId)?.stop()
+    this.hosts.delete(channelId)
+    this.deps.delivery.removeClient(channelId)
+    this.lifetimes.delete(channelId)
+  }
 }
+
+/**
+ * 默认订阅位（Discord 文档的 Intents 位表）：
+ * `GUILDS`(1<<0) + `GUILD_MESSAGES`(1<<9) + `DIRECT_MESSAGES`(1<<12) + `MESSAGE_CONTENT`(1<<15)。
+ *
+ * `MESSAGE_CONTENT` 是特权 intent：没在开发者后台给这个机器人打开时，连接照样建立、但收不到正文。
+ * 界面上看不出差别，所以启用自检要把这一句提前说出来——这是要用户在后台点开的东西，不是代码能补的。
+ */
+export const DISCORD_DEFAULT_INTENTS = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15)

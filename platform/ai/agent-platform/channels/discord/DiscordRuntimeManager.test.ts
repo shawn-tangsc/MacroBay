@@ -1,0 +1,148 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import { createAgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
+import { DiscordDeliveryTransport } from './DiscordDeliveryTransport'
+import { DiscordRuntimeManager } from './DiscordRuntimeManager'
+import { DiscordRuntimeRepository } from './DiscordRuntimeRepository'
+
+/**
+ * Discord 运行时管理器的判据：**没有许可就不开连接**，开了之后生命周期归这条通道自己。
+ *
+ * 三次准入（owner 令牌 / 现役代际 / 凭据可读）全部用假 fetch + 假 socket 驱动：
+ * 这里要证的是「谁有资格连、连了之后归谁停」，不是「能连上 Discord」。
+ */
+
+const TOKEN = 'discord-bot-token-secret'
+
+describe('discord runtime manager', () => {
+  it('opens nothing without an owned lifecycle permit', async () => {
+    const harness = createHarness()
+    await expect(harness.manager.start('discord-a', 1, 'wrong-owner')).resolves.toBe(false)
+    expect(harness.fetch).not.toHaveBeenCalled()
+    expect(harness.sockets).toHaveLength(0)
+  })
+
+  it('never tears down a live connection just because another owner asked to start', async () => {
+    const harness = createHarness()
+    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toBe(true)
+    const fetchCallsBefore = harness.fetch.mock.calls.length
+
+    // 别的 owner 令牌来抢：拒掉它，但**不许**顺手把正在跑的那条关掉。
+    await expect(harness.manager.start('discord-a', 1, 'other-owner')).resolves.toBe(false)
+    expect(harness.sockets).toHaveLength(1)
+    expect(harness.sockets[0]?.closed).toBe(false)
+    expect(harness.fetch.mock.calls.length).toBe(fetchCallsBefore)
+  })
+
+  it('hands the gateway and the bot identity to one connection, then stops only its own', async () => {
+    const harness = createHarness()
+    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toBe(true)
+
+    expect(harness.fetch.mock.calls.map(([url]) => String(url))).toEqual(expect.arrayContaining([
+      'https://discord.com/api/v10/gateway/bot',
+      'https://discord.com/api/v10/users/@me'
+    ]))
+    expect(harness.sockets).toHaveLength(1)
+    expect(harness.socketUrls).toEqual(['wss://gateway.discord.gg'])
+
+    // 别的 owner 令牌停不掉我；自己的令牌才行。
+    harness.manager.stop('discord-a', 'other-owner')
+    expect(harness.sockets[0]?.closed).toBe(false)
+    harness.manager.stop('discord-a', 'owner-a')
+    expect(harness.sockets[0]?.closed).toBe(true)
+  })
+
+  it('refuses a gateway url that is not wss and leaves no socket behind', async () => {
+    const harness = createHarness({ gatewayUrl: 'http://gateway.example.test' })
+    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toBe(false)
+    expect(harness.sockets).toHaveLength(0)
+  })
+
+  it('drops the handshake when the generation goes stale while it is in flight', async () => {
+    let active = true
+    const harness = createHarness({
+      onFetch: () => { active = false },
+      isCurrentActive: () => active
+    })
+    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toBe(false)
+    expect(harness.sockets).toHaveLength(0)
+  })
+
+  it('registers the delivery client only for as long as the channel runs', async () => {
+    const harness = createHarness()
+    await harness.manager.start('discord-a', 1, 'owner-a')
+
+    await expect(harness.delivery.send({
+      channelId: 'discord-a',
+      providerConversationKey: 'discord:conversation:guild:222',
+      text: 'hello',
+      idempotencyKey: 'opaque'
+    })).resolves.toEqual({ kind: 'delivered' })
+
+    harness.manager.stop('discord-a', 'owner-a')
+    // 停掉之后不再有客户端：投递必须报「宿主不可用」，而不是找一个已经关掉的通道发。
+    await expect(harness.delivery.send({
+      channelId: 'discord-a',
+      providerConversationKey: 'discord:conversation:guild:222',
+      text: 'hello',
+      idempotencyKey: 'opaque-2'
+    })).resolves.toEqual({ kind: 'failed', code: 'delivery-host-unavailable' })
+  })
+})
+
+function createHarness(options: {
+  gatewayUrl?: string
+  isCurrentActive?: () => boolean
+  onFetch?: () => void
+} = {}) {
+  const sockets: FakeSocket[] = []
+  const socketUrls: string[] = []
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    options.onFetch?.()
+    if (url.endsWith('/gateway/bot')) return json({ url: options.gatewayUrl ?? 'wss://gateway.discord.gg', shards: 1 })
+    if (url.endsWith('/users/@me')) return json({ id: '999', username: 'macrobay-bot' })
+    if (url.includes('/channels/')) return json({ id: 'sent' })
+    return json({})
+  })
+  const fetch = fetchMock as unknown as typeof globalThis.fetch
+
+  const delivery = new DiscordDeliveryTransport()
+  const manager = new DiscordRuntimeManager({
+    inbound: {} as never,
+    runtime: new DiscordRuntimeRepository(createAgentPlatformDatabase(':memory:')),
+    vault: { get: async () => ({ bot_token: TOKEN }) } as never,
+    getPlatformFetch: () => fetch,
+    createPlatformWebSocket: class {
+      constructor(url: string) {
+        const socket = new FakeSocket()
+        sockets.push(socket)
+        socketUrls.push(url)
+        return socket as never
+      }
+    } as never,
+    delivery,
+    getCredential: () => ({ ref: 'known-ref', revision: 1 }),
+    ownsLifecycleOwner: (channelId, token, generation) => channelId === 'discord-a' && token === 'owner-a' && generation === 1,
+    isCurrentActive: options.isCurrentActive ?? ((channelId, generation) => channelId === 'discord-a' && generation === 1)
+  })
+  return { manager, delivery, fetch: fetchMock, sockets, socketUrls }
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+}
+
+class FakeSocket {
+  closed = false
+  onclose: ((event: unknown) => void) | null = null
+  onerror: ((event: unknown) => void) | null = null
+  onmessage: ((event: { data: unknown }) => void) | null = null
+
+  close(): void {
+    this.closed = true
+    this.onclose?.({})
+  }
+
+  send(_value: string): void {}
+}
