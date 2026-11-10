@@ -523,7 +523,8 @@ describe('config settings drawer (static layout)', () => {
       const doc = mountWith(menu, { [prop]: <div data-fake-screen="true" /> })
       const card = doc.querySelector('[data-drawer-card="true"]')
       expect(card, `${menu} 必须有内容卡`).not.toBeNull()
-      expect(doc.querySelector('.config-drawer__card-title')?.textContent?.trim().length ?? 0).toBeGreaterThan(0)
+      // 卡头页名已删（用户否掉）：菜单已经高亮当前屏，卡里不再重复一遍。
+      expect(doc.querySelector('.config-drawer__card-title')).toBeNull()
       // 卡体不画边框：卡内唯一的分隔线来自屏内两栏。
       const body = doc.querySelector<HTMLElement>('.config-drawer__card-body')!
       expect(body.className).toContain('config-drawer__card-body')

@@ -450,15 +450,7 @@
   overflow: hidden;
 }
 
-.config-drawer__card-head { padding: 16px 16px 12px; }
 
-.config-drawer__card-title {
-  margin: 0;
-  color: var(--text-strong);
-  font-size: 16px;
-  line-height: 1.35;
-  font-weight: 650;
-}
 
 .config-drawer__card-body {
   min-height: 0;
