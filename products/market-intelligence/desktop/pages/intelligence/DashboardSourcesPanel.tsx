@@ -7,10 +7,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { productText } from '../../shared/i18n/productText'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
-import { Segmented } from '@platform/ui/components/segmented'
-
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import { BusinessSettingsView, type BusinessKey } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { SourcesSettingsPane } from '../../settings/intelligence-sources/SourcesSettingsPane'
 import { useIntelligenceSourcesSettings } from '../../settings/intelligence-sources/useIntelligenceSourcesSettings'
 
@@ -48,7 +45,6 @@ export function DashboardSourcesPanel(props: {
    * 「业务设置」那一屏自己的三项（看板 / 日历 / 舆情）。
    * 它只在 `sourceFilter === 'dashboard'`（业务设置页签）时生效；切到别的页签就回到那面的树。
    */
-  const [business, setBusiness] = useState<BusinessKey>('dashboard')
   /**
    * 抽屉这条筛选页签：**五块、值不变**。业务设置那一屏也要常显这一条（它是上层，三项列表是下层），
    * 所以这份清单提到函数里，两处共用一份。
@@ -105,31 +101,6 @@ export function DashboardSourcesPanel(props: {
     return <div className="config-drawer__sources-state" data-sources-state="empty">
       <StateView reasonCode="not-yet" size="md" state="empty" />
     </div>
-  }
-
-  if (sourceFilter === 'dashboard') {
-    /* 业务设置：内容区**只有卡片 / 源名**，没有源详情头。点一行才切到「情报源」并选中那个源。 */
-    const providerOf = (sourceId: string): string | undefined =>
-      settingsView?.groups.flatMap((group) => group.providers)
-        .find((provider) => provider.sources.some((source) => source.sourceId === sourceId))?.providerId
-    return <BusinessSettingsView
-      tabs={<div className="intelligence-catalog-filters">
-        <Segmented
-          ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
-          items={treeFilters}
-          onChange={(value) => setSourceFilter(value as SourceFilter)}
-          resolveText={resolveProductText}
-          value={sourceFilter} />
-      </div>}
-      business={business}
-      onBusinessChange={setBusiness}
-      onSelectSource={(sourceId) => {
-        const providerId = providerOf(sourceId)
-        if (providerId !== undefined) setSelectedProviderId(providerId)
-        setSourceFilter('all')
-      }}
-      resolveText={resolveProductText}
-      sourceNames={t.sourceNames} />
   }
 
   return <SourcesSettingsPane

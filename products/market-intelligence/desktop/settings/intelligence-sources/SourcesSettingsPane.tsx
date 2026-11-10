@@ -1,4 +1,9 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
+
+import { Segmented } from '@platform/ui/components/segmented'
+
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import { BusinessSettingsView, type BusinessKey } from './BusinessSettingsView'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
@@ -36,11 +41,48 @@ export type SourcesSettingsPaneProps = {
   treeFilters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>
 }
 
+/** 设置页与抽屉共用的六块 / 五块筛选（业务设置那一屏也要这一条）。 */
+const DEFAULT_FILTERS = [
+  { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
+  { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
+  { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
+  { value: 'sentiment', labelKey: 'settings.intelligenceSources.sourceFilters.sentiment' },
+  { value: 'pending', labelKey: 'settings.intelligenceSources.sourceFilters.pending' },
+  { value: 'advanced', labelKey: 'settings.intelligenceSources.sourceFilters.advanced' }
+] as const
+
 export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactElement {
+  const resolveText = useProductTextKey()
+  /** 「业务设置」这一屏自己的三项；只在 filter === 'dashboard' 时生效。 */
+  const [business, setBusiness] = useState<BusinessKey>('dashboard')
   const provider = props.view?.groups
     .flatMap((group) => group.providers)
     .find((entry) => entry.providerId === props.selectedProviderId)
   const { providerId: _selected, ...surface } = props.surface
+
+  if (props.filter === 'dashboard') {
+    /* **业务设置不是情报源那套**：第二栏只列三项，内容区只有卡片 / 平铺源名，没有任何源级详情。
+       分支放在这里，设置页与配置抽屉两个宿主都走同一处（用户 2026-11-11 在设置页撞到的那次）。 */
+    const providerOf = (sourceId: string): string | undefined => props.view?.groups
+      .flatMap((group) => group.providers)
+      .find((entry) => entry.sources.some((source) => source.sourceId === sourceId))?.providerId
+    return <BusinessSettingsView
+      business={business}
+      onBusinessChange={setBusiness}
+      onSelectSource={(sourceId) => {
+        const providerId = providerOf(sourceId)
+        if (providerId !== undefined) props.onSelectProvider(providerId)
+        props.onFilterChange('all')
+      }}
+      resolveText={resolveText}
+      sourceNames={(props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}}
+      tabs={<div className="intelligence-catalog-filters"><Segmented
+        ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
+        items={props.treeFilters ?? DEFAULT_FILTERS}
+        onChange={(value) => props.onFilterChange(value as SourceFilter)}
+        resolveText={resolveText}
+        value={props.filter} /></div>} />
+  }
 
   return <>
     <SettingsSourceTree
