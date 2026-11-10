@@ -310,6 +310,7 @@ mi: miText['zh-CN'],
             /** 临时入口：打开静态配置抽屉（0.4.3 预览版）。 */
             configureSettings: '配置',
             configDrawer: {
+              title: '设置',
               sourceUnavailable: '取不到（原因见详情）',
               unreadable: '读不到',
               values: {
@@ -1781,6 +1782,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             configureSources: 'Configure intelligence sources',
             configureSettings: 'Settings',
             configDrawer: {
+              title: 'Settings',
               sourceUnavailable: 'Not available (see details)',
               unreadable: 'Could not read',
               values: {

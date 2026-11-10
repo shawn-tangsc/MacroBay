@@ -9,6 +9,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { SourcesStaticScreen } from './SourcesStaticScreen'
@@ -91,7 +92,9 @@ export function ConfigSettingsDrawer({
   onOpenPlatformSettings,
   resolveText: resolveTextProp
 }: ConfigSettingsDrawerProps): React.ReactElement {
-  const copy = productText[useShellLanguage()].pages.intelligence.portal.dashboard.configDrawer
+  const language = useShellLanguage()
+  const copy = productText[language].pages.intelligence.portal.dashboard.configDrawer
+  const resolveProductText = useProductTextKey()
   const [menu, setMenu] = useState<ConfigDrawerMenu>(initialMenu)
   const navRef = useRef<HTMLElement>(null)
   const screen = DRAWER_PREVIEW_SCREENS.find((candidate) => candidate.menu === menu)
@@ -106,7 +109,23 @@ export function ConfigSettingsDrawer({
     const name = titleKey.split('.').at(-1) ?? titleKey
     return (copy.groups as Record<string, string>)[name] ?? titleKey
   }
-  const resolveText = (key: string): string => key === 'configDrawer.title' ? 'Settings' : key === 'ui.drawer.close' ? 'Close' : ''
+  /**
+   * 文案解析：宿主给了就用宿主的，没给就用产品文案表的解析器。
+   *
+   * 以前这里是个空壳（只认两个键、其余返回空串），于是平台/分析这些屏把**键名**直接印在屏幕上
+   * （`configDrawer.rows.timeZone`）——静态阶段最扎眼的一类错。文案表是静态文本，抽屉目录允许
+   * import（守卫放行的前缀里就有 `../../shared/i18n/`），所以这一层自己解析，不依赖宿主。
+   */
+  /**
+   * 抽屉里用的是短键（`configDrawer.rows.timeZone`），文案表里是完整路径；先用产品文案表补前缀查，
+   * 查不到再问宿主，**两者都查不到就返回空串**——宁可空着，也绝不把键名印到屏幕上。
+   */
+  const resolveText = (key: string): string => {
+    const own = resolveProductText(`pages.intelligence.portal.dashboard.${key}`) || resolveProductText(key)
+    if (own !== '') return own
+    const fromHost = resolveTextProp?.(key) ?? ''
+    return fromHost === key ? '' : fromHost
+  }
 
   // 上下键在导航内移动；Home/End 跳首尾。焦点跟着走，读屏才跟得上。
   const move = (delta: number): void => {
@@ -157,24 +176,24 @@ export function ConfigSettingsDrawer({
           ? processingPanel
           : null}
         {menu === 'analysis' && analysisView !== undefined
-          ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={analysisView} />)
+          ? (<NotificationsScreen resolveText={resolveText} view={analysisView} />)
           : null}
         {menu === 'briefing' && briefingPanel !== undefined
           ? briefingPanel
           : null}
         {menu === 'briefing' && briefingPanel === undefined && briefingView !== undefined
-          ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={briefingView} />)
+          ? (<NotificationsScreen resolveText={resolveText} view={briefingView} />)
           : null}
         {menu === 'notifications' && notificationsPanel !== undefined
           ? notificationsPanel
           : null}
         {menu === 'notifications' && notificationsPanel === undefined && notificationsView !== undefined
-          ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={notificationsView} />)
+          ? (<NotificationsScreen resolveText={resolveText} view={notificationsView} />)
           : null}
         {menu === 'platform' && platformValues !== undefined
           ? (<PlatformScreen
             onOpen={onOpenPlatformSettings}
-            resolveText={resolveTextProp ?? ((key: string) => key)}
+            resolveText={resolveText}
             values={platformValues} />)
           : null}
         {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'

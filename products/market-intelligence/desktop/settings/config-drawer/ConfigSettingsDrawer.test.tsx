@@ -208,7 +208,9 @@ describe('config settings drawer (static layout)', () => {
     expect(rows).toHaveLength(5)
     for (const row of rows.slice(1)) {
       const cell = row.querySelector('.config-drawer__value')?.textContent ?? ''
-      expect(cell).toBe('configDrawer.unreadable')
+      // 文案由抽屉自己解析（短键 → 产品文案表）；**绝不能把键名印在屏幕上**。
+      expect(cell).toBe('读不到')
+      expect(cell).not.toContain('configDrawer.')
       expect(cell.trim()).not.toBe('')
     }
   })
