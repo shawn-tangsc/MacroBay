@@ -9,7 +9,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { productText } from '../../shared/i18n/productText'
-import { ProviderDetail } from './ProviderDetail'
+import { SourceConfigSurface } from './SourceConfigSurface'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
 import { SourceSpecificSection } from './SourceSpecificSection'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
@@ -111,17 +111,16 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         </div> : null}
         {selectedProviderId ? (() => {
           const provider = settingsView?.groups.flatMap((group) => group.providers).find((entry) => entry.providerId === selectedProviderId)
-          return provider ? <div className="intelligence-detail-scroll"><ProviderDetail
-            labels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, panelNames: t.panelNames, badges: { pending: t.sourceBadges.pending, advanced: t.sourceBadges.advanced, calendar: t.sourceBadges.calendar, proxy: t.sourceBadges.proxy }, status: t.status, capabilities: t.providerSummary, toggleSource: t.toggleSource, credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote, testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey, unavailableReasonCode: t.unavailableReasonCode, unavailableReasonCodeAria: t.unavailableReasonCodeAria, collectionPolicyStopped: t.collectionPolicyStopped, automaticSyncStopped: t.automaticSyncStopped, lastSuccessfulSync: t.lastSuccessfulSync, health: t.health }}
+          return provider ? <div className="intelligence-detail-scroll"><SourceConfigSurface
+            text={t}
             provider={provider}
             policy={{ labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById }}
-            showSourceDetails
             supportsRunNowById={supportsRunNowById}
             onRunNow={runSourceNow}
             onToggleSource={toggleSourceEnabled}
             onDraftChange={setDraftDirty}
-            sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
+            showSourceDetails
           /></div> : null
         })() : null}
       </div>
