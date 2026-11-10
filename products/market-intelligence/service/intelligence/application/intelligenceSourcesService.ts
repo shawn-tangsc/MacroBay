@@ -9,6 +9,9 @@ import { allSources, type AgentId, type PanelId } from './providerRegistry'
 import { projectJobRegistration } from './sourceJobRegistration'
 import { getIntelligenceAdapter } from '../adapters/adapterRegistry'
 import type { IntelligencePipeline } from './intelligencePipeline'
+import { readHealth, type SourceHealthView } from './sourceHealthReader'
+import { canonicalRuntimeFingerprint, sourceRuntimeEligibilityParityPolicy } from './runtimeFingerprint'
+import { isCollectionPresetValue, isExactProfile, isOptionalString, isOptionalStringArray } from './sourceProfileGuards'
 import {
   blocksProductionCollection,
   createDefaultSourceProfile,
@@ -19,8 +22,6 @@ import {
 } from './sourceRuntimeConfig'
 import {
   sourceSupportsCredentials,
-  type IntelligenceRuntimeValidationIssue,
-  type IntelligenceSourceConfig,
   type IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
 import { createSourceProfileStore, type SourceProfileStore } from './sourceProfileStore'
@@ -45,23 +46,13 @@ import type {
   SafeIntelligenceSourceHealthView,
   SaveIntelligenceSourceProfileInput
 } from '../schema/intelligenceSourcesContracts'
-import { resolveConnectivityStatus, sanitizeSafeView, toSafeHealthView } from '../schema/intelligenceSourcesContracts'
+import { sanitizeSafeView } from '../schema/intelligenceSourcesContracts'
 import {
   createInMemoryIntelligenceCredentialStorage,
   createIntelligenceCredentialStore,
   defaultIntelligenceCredentialRef,
   type IntelligenceCredentialStore
 } from '../store/intelligenceCredentialStore'
-
-const dashboardScheduleProfilePolicy = {
-  requiredFields: [
-    'profileId', 'sourceId', 'enabled', 'collectionPreset', 'includeInSentiment', 'scopePolicy',
-    'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade', 'updatedAt'
-  ],
-  optionalFields: ['credentialRef', 'monitoredSymbols', 'sourceSpecificConfigJson'],
-  scopePolicies: ['all', 'watchlist-priority', 'active-position-priority'],
-  retentionModes: ['compact', 'balanced', 'extended']
-} as const
 
 const intelligenceSourceStartupRecoveryPolicy = {
   distinctSourceIds(profiles: readonly IntelligenceSourceProfile[]): string[] {
@@ -77,19 +68,6 @@ const startupRecoveryFailureIsolationPolicy = {
       // One source cannot block its neighbors or expose its failure details.
     }
   }
-} as const
-
-const sourceRuntimeEligibilityParityPolicy = {
-  normalizeCredentialReference(value?: string): string {
-    return value?.trim() ?? ''
-  },
-  isEligible(config: IntelligenceSourceConfig, issues: readonly IntelligenceRuntimeValidationIssue[]): boolean {
-    return config.enabled && issues.length === 0
-  }
-} as const
-
-const sourceRuntimeReconcileIdempotencyPolicy = {
-  issueFieldFallback: ''
 } as const
 
 const intelligenceSourcesSafeRequestBudgetPolicy = {
@@ -122,6 +100,12 @@ export function createIntelligenceSourcesService(deps: {
     workerRuntime: deps.workerRuntime
   })
   const credentialStore = deps.credentialStore ?? createIntelligenceCredentialStore(createInMemoryIntelligenceCredentialStorage())
+
+  /** 健康读数的依赖面：只给它真正用到的两样（流水线健康 + 资金条件投影）。 */
+  const healthDeps = {
+    pipeline: deps.pipeline,
+    ...(deps.capitalConditions ? { capitalConditions: deps.capitalConditions } : {})
+  }
   const validateCredential = deps.validateCredential ?? validateIntelligenceCredential
   // Every credentialed provider that owns a real probe registers here; the service keeps only the
   // store/profile/apply steps they share.
@@ -213,18 +197,6 @@ export function createIntelligenceSourcesService(deps: {
     return projectJobRegistration(allSources(), scheduled)
   }
 
-  /** 健康读数：一处读、两处用（事实表与详情）。传进来的 profile 由调用方读好，避免重复读盘。 */
-  async function readHealth(sourceId: string, profile: IntelligenceSourceProfile) {
-    if (sourceId === 'defillama-stablecoins') {
-      const health = await deps.capitalConditions?.getHealth(profile.enabled)
-      if (health) {
-        return toCapitalConditionsSafeHealthView(sourceId, health, profile.enabled)
-      }
-    }
-    const pipelineHealth = deps.pipeline.getHealth(sourceId)
-    return toSafeHealthView(sourceId, pipelineHealth, profile.enabled)
-  }
-
   /**
    * C4-S0：**一份事实的唯一计算点**。
    *
@@ -256,13 +228,13 @@ export function createIntelligenceSourcesService(deps: {
     }
 
     // 健康读数**只对能读的源读**（目录源），不因为上面扩大了 profile 覆盖面就跟着扩。
-    const healthViewById: Record<string, Awaited<ReturnType<typeof readHealth>>> = {}
+    const healthViewById: Record<string, SourceHealthView> = {}
     const healthById: Record<string, Readonly<{ runtimeStatus: 'healthy' | 'degraded' | 'failed' | 'paused'; consecutiveFailures: number }>> = {}
     const credentialStatusById: Record<string, Readonly<{ hasCredential: boolean; maskedPreview?: string; lastValidatedAt?: string }>> = {}
     for (const definition of catalogDefinitions) {
       const profile = profileById[definition.sourceId]
       if (profile === undefined) continue
-      const health = await readHealth(definition.sourceId, profile)
+      const health = await readHealth(healthDeps, definition.sourceId, profile)
       healthViewById[definition.sourceId] = health
       healthById[definition.sourceId] = {
         runtimeStatus: health.runtimeStatus,
@@ -291,7 +263,7 @@ export function createIntelligenceSourcesService(deps: {
   /** 详情 = 同一份事实 + 运行时配置 / 计划规则 / 预算 / worker 状态；健康读数用外面读好的那一份。 */
   function buildDetailFromFact(
     fact: SourceConfigFact,
-    health: Awaited<ReturnType<typeof readHealth>>
+    health: SourceHealthView
   ): SafeIntelligenceSourceDetailView {
     const definition = requireDefinition(fact.sourceId)
     const runtimeConfig = resolveRuntimeConfig({
@@ -601,67 +573,9 @@ export function createIntelligenceSourcesService(deps: {
 
     async getHealth(input: { sourceId: string }) {
       const profile = await deps.profileStore.resolveProfile(input.sourceId)
-      return readHealth(input.sourceId, profile)
+      return readHealth(healthDeps, input.sourceId, profile)
     }
   }
-}
-
-function canonicalRuntimeFingerprint(input: {
-  sourceId: string
-  profile: IntelligenceSourceProfile
-  config: IntelligenceSourceConfig
-  issues: readonly IntelligenceRuntimeValidationIssue[]
-}): string {
-  return stableJson({
-    sourceId: input.sourceId,
-    profileRevision: input.profile.updatedAt,
-    enabled: input.config.enabled,
-    desiredRuntimeState: input.config.desiredRuntimeState,
-    collectionPreset: input.config.collectionPreset,
-    pollingIntervalSec: input.config.pollingIntervalSec,
-    credentialRef: sourceRuntimeEligibilityParityPolicy.normalizeCredentialReference(input.profile.credentialRef),
-    adapterConfig: input.config.adapterConfig,
-    issues: input.issues.map(({ code, field }) => ({
-      code,
-      field: field ?? sourceRuntimeReconcileIdempotencyPolicy.issueFieldFallback
-    }))
-  })
-}
-
-function stableJson(value: unknown): string {
-  return JSON.stringify(sortCanonicalValue(value))
-}
-
-function sortCanonicalValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortCanonicalValue)
-  if (!value || typeof value !== 'object') return value
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => [key, sortCanonicalValue(entry)])
-  )
-}
-
-function toCapitalConditionsSafeHealthView(
-  sourceId: string,
-  health: Readonly<{
-    runtimeStatus: 'healthy' | 'degraded' | 'paused'
-    lastSuccessAt?: string
-    consecutiveFailures: number
-  }>,
-  enabled: boolean
-): SafeIntelligenceSourceHealthView {
-  const normalized = {
-    sourceId,
-    runtimeStatus: enabled ? health.runtimeStatus : ('paused' as const),
-    ...(health.lastSuccessAt ? { lastSuccessAt: health.lastSuccessAt } : {}),
-    consecutiveFailures: health.consecutiveFailures
-  }
-
-  return sanitizeSafeView({
-    ...normalized,
-    connectivityStatus: resolveConnectivityStatus(normalized, enabled)
-  })
 }
 
 function safeScheduleRuleInput(sourceId: string, profile: unknown): { sourceId: string; collectionPreset: unknown } | undefined {
@@ -678,63 +592,6 @@ function safeScheduleRuleInput(sourceId: string, profile: unknown): { sourceId: 
 function toSafeDefinition(definition: NonNullable<ReturnType<typeof getIntelligenceSourceDefinition>>): SafeIntelligenceSourceDefinition {
   const { requestGovernance: _requestGovernance, ...safeDefinition } = definition
   return safeDefinition
-}
-
-function isExactProfile(value: unknown): value is Record<string, unknown> {
-  try {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) return false
-    const names = Object.getOwnPropertyNames(value)
-    const allowedFields = [...dashboardScheduleProfilePolicy.requiredFields, ...dashboardScheduleProfilePolicy.optionalFields]
-    if (!dashboardScheduleProfilePolicy.requiredFields.every((field) => names.includes(field)) ||
-      !names.every((name) => allowedFields.includes(name as never)) || Object.getOwnPropertySymbols(value).length !== 0) return false
-    const values = new Map<string, unknown>()
-    for (const name of names) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, name)
-      if (!descriptor || !('value' in descriptor)) return false
-      values.set(name, descriptor.value)
-    }
-    structuredClone(value)
-    return typeof values.get('profileId') === 'string' &&
-      typeof values.get('sourceId') === 'string' &&
-      typeof values.get('enabled') === 'boolean' &&
-      isCollectionPresetValue(values.get('collectionPreset')) &&
-      typeof values.get('includeInSentiment') === 'boolean' &&
-      dashboardScheduleProfilePolicy.scopePolicies.includes(values.get('scopePolicy') as never) &&
-      typeof values.get('rawArchiveEnabled') === 'boolean' &&
-      dashboardScheduleProfilePolicy.retentionModes.includes(values.get('retentionMode') as never) &&
-      typeof values.get('autoReplayAfterParserUpgrade') === 'boolean' &&
-      typeof values.get('updatedAt') === 'string' &&
-      isOptionalString(values.get('credentialRef')) &&
-      isOptionalString(values.get('sourceSpecificConfigJson')) &&
-      isOptionalStringArray(values.get('monitoredSymbols'))
-  } catch {
-    return false
-  }
-}
-
-function isCollectionPresetValue(value: unknown): value is 'manual' | 'balanced' | 'frequent' {
-  return value === 'manual' || value === 'balanced' || value === 'frequent'
-}
-
-function isOptionalString(value: unknown): value is string | undefined {
-  return value === undefined || typeof value === 'string'
-}
-
-function isOptionalStringArray(value: unknown): value is string[] | undefined {
-  if (value === undefined) return true
-  if (!Array.isArray(value) || Object.getOwnPropertySymbols(value).length !== 0) return false
-  const names = Object.getOwnPropertyNames(value)
-  if (!names.filter((name) => name !== 'length').every((name) => /^\d+$/.test(name))) return false
-  if (!names.filter((name) => name !== 'length').every((name) => {
-    const descriptor = Object.getOwnPropertyDescriptor(value, name)
-    return Boolean(descriptor && 'value' in descriptor && typeof descriptor.value === 'string')
-  })) return false
-  try {
-    structuredClone(value)
-    return true
-  } catch {
-    return false
-  }
 }
 
 function requireDefinition(sourceId: string) {
