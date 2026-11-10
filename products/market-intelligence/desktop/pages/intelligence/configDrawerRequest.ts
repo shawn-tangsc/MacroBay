@@ -11,7 +11,8 @@ import type { BusinessFocus } from '../../settings/intelligence-sources/Business
 export type ConfigDrawerFocus =
   | { menu: 'sources'; providerId?: string; sourceId?: string }
   | { menu: 'sourcesData'; business?: 'dashboard' | 'calendar' | 'sentiment'; moduleKey?: string; cellId?: string }
-  | { menu: 'processing'; section?: 'translation' | 'scoring' }
+  // 两个值就是 DOM 上那两个锚点（`data-processing-section`）：契约与页面共用一套词，不再翻译一次。
+  | { menu: 'processing'; section?: 'translation' | 'sentiment' }
   | { menu: 'briefing'; section?: 'generation' | 'ai' | 'model' | 'webSearch' }
   | { menu: 'notifications'; section?: 'events' | 'channels' | 'quietHours' }
   | { menu: 'analysis' }
@@ -32,6 +33,19 @@ export function normalizeConfigDrawerRequest(
   // `focus` 与菜单不匹配 → 丢弃定位（仍然打开菜单默认位置，不白屏）。
   if (input.focus !== undefined && input.focus.menu !== input.menu) return { menu: input.menu }
   return input
+}
+
+/**
+ * 请求 → 「哪一屏的哪一块」。三屏（内容处理 / 日报 / 通知）共用这一条：
+ * 分区只在自己那屏上成立，菜单对不上就不交出来（否则那一屏会去找一个不存在的锚点）。
+ */
+export function drawerSectionFromRequest(
+  request: OpenConfigDrawerRequest
+): Readonly<{ menu: ConfigDrawerMenu; section: string }> | undefined {
+  const focus = request.focus
+  if (focus === undefined || focus.menu !== request.menu) return undefined
+  if (!('section' in focus) || focus.section === undefined) return undefined
+  return { menu: request.menu, section: focus.section }
 }
 
 /**

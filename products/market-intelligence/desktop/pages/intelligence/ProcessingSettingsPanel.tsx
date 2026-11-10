@@ -38,7 +38,15 @@ import './ProcessingSettingsPanel.css'
  * - 读不到是「未知 / 读不到」+ 原因进 ⓘ，**不落成「规则判断」**；读不到时不给写口；
  * - 行内右侧控件**左缘对齐标签列右边界**（`SettingsRow` 的口径），不是右对齐。
  */
-export function ProcessingSettingsPanel(): React.ReactElement {
+/**
+ * 屏内定位（`focus.processing.section`）：挂载时把那一块带进视野一次。
+ *
+ * 锚点本来就在这一屏的 DOM 上（`data-processing-section`），所以定位放在这一层：
+ * 谁画的谁知道自己有几块，抽屉壳不必认识每一屏的分区。
+ */
+export type ProcessingSection = 'translation' | 'sentiment'
+
+export function ProcessingSettingsPanel({ initialSection }: { initialSection?: ProcessingSection } = {}): React.ReactElement {
   const language = useShellLanguage()
   const sourcesText = productText[language].settings.intelligenceSources
   const copy = productText[language].pages.intelligence.portal.dashboard.configDrawer
@@ -46,6 +54,15 @@ export function ProcessingSettingsPanel(): React.ReactElement {
   const dataText = productText[language].pages.intelligence.portal.data
   const settingsText = productText[language].pages.intelligence.portal.newsSentiment.settingsModal
   const labels = sourcesText.translationPreferences
+  // 只作初值、只跑一次：读者切到别的块之后，这里不再把他拽回去。
+  useEffect(() => {
+    if (initialSection === undefined) return undefined
+    const anchor = document.querySelector<HTMLElement>(`[data-processing-section="${initialSection}"]`)
+    if (anchor === null) return undefined
+    anchor.scrollIntoView?.({ block: 'nearest' })
+    anchor.setAttribute('data-focused', 'true')
+    return () => { anchor.removeAttribute('data-focused') }
+  }, [initialSection])
   const translation = useIntelligenceTranslationSettings(labels)
   const sentiment = useSentimentModelSettings()
 

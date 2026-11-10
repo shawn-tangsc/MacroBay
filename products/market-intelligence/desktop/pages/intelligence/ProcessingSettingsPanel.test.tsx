@@ -101,11 +101,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-async function mount(): Promise<HTMLElement> {
+async function mount(initialSection?: 'translation' | 'sentiment'): Promise<HTMLElement> {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => { root?.render(<ProcessingSettingsPanel />) })
+  await act(async () => { root?.render(<ProcessingSettingsPanel {...(initialSection === undefined ? {} : { initialSection })} />) })
   await act(async () => {})
   return host
 }
@@ -380,5 +380,34 @@ describe('ProcessingSettingsPanel · 情绪评分（开关一行、模型一行�
     expect(navigations).toContainEqual({ navKey: 'settings', settingsPanelKey: 'models' })
     // 同一时刻只出一条提示条。
     expect(host!.querySelectorAll('[data-inline-notice]')).toHaveLength(1)
+  })
+})
+
+describe('ProcessingSettingsPanel · focus.processing.section', () => {
+  it('brings the named section into view once and marks it', async () => {
+    const scroll = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scroll })
+    try {
+      const container = await mount('sentiment')
+      expect(scroll).toHaveBeenCalledTimes(1)
+      const marked = [...container.querySelectorAll<HTMLElement>('[data-focused="true"]')]
+      expect(marked).toHaveLength(1)
+      // 锚点就是这一屏自己的分区名（`data-processing-section`），契约与 DOM 用同一个词。
+      expect(marked[0]?.getAttribute('data-processing-section')).toBe('sentiment')
+    } finally {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    }
+  })
+
+  it('leaves the reader alone when no section was asked for', async () => {
+    const scroll = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scroll })
+    try {
+      const container = await mount()
+      expect(scroll).not.toHaveBeenCalled()
+      expect(container.querySelector('[data-focused]')).toBeNull()
+    } finally {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    }
   })
 })

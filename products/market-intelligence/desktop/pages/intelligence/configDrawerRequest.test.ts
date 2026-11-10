@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, sourcesDataRequestFor } from './configDrawerRequest'
+import { businessFocusFromRequest, drawerSectionFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, sourcesDataRequestFor } from './configDrawerRequest'
 
 /**
  * 「永远打开、永不白屏」的判据：非法输入一律**退到该菜单的默认位置**，而不是拒绝打开或停在空白屏。
@@ -79,5 +79,23 @@ describe('sourcesDataRequestFor', () => {
   it('asks for the screen alone when there is no position', () => {
     expect(sourcesDataRequestFor()).toEqual({ menu: 'sourcesData' })
     expect(sourcesDataRequestFor()).not.toHaveProperty('focus')
+  })
+})
+
+describe('drawerSectionFromRequest', () => {
+  it('hands the section to the screen it belongs to', () => {
+    expect(drawerSectionFromRequest({ menu: 'processing', focus: { menu: 'processing', section: 'sentiment' } }))
+      .toEqual({ menu: 'processing', section: 'sentiment' })
+  })
+
+  it('returns nothing for a screen that has no sections', () => {
+    expect(drawerSectionFromRequest({ menu: 'analysis', focus: { menu: 'analysis' } })).toBeUndefined()
+    expect(drawerSectionFromRequest({ menu: 'runLog' })).toBeUndefined()
+  })
+
+  it('returns nothing when the section belongs to another screen', () => {
+    // 归一化已经会丢掉不匹配的 focus；这里再挡一次，因为这条函数也会被别的入口调用。
+    expect(drawerSectionFromRequest({ menu: 'briefing', focus: { menu: 'processing', section: 'translation' } as never }))
+      .toBeUndefined()
   })
 })
