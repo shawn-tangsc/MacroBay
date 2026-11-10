@@ -91,23 +91,29 @@
 
 .config-drawer__group {
   display: grid;
-  gap: 6px;
+  gap: 0;
 }
 
 .config-drawer__group-title {
+  margin-bottom: 8px;
   color: var(--muted-strong);
   font-size: var(--font-section);
   font-weight: 600;
   line-height: var(--line-section);
 }
 
+/* 设置行的形状：左标签、右值/控件、行尾动作；行与行只用发丝线分隔，不画卡片。 */
 .config-drawer__row {
   display: flex;
   align-items: center;
   gap: 12px;
   min-height: 44px;
-  padding: 10px 0;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.config-drawer__row:last-child {
+  border-bottom: 0;
 }
 
 .config-drawer__label {
@@ -115,15 +121,41 @@
   color: var(--text);
   font-size: var(--font-body);
   line-height: var(--line-body);
+  font-weight: 400;
 }
 
 .config-drawer__value {
   flex: 1 1 auto;
   min-width: 0;
+  margin-left: 8px;
+  /* 值靠右、与行尾动作相邻：读者一眼看到「这一项现在是什么」。 */
+  text-align: right;
   color: var(--muted);
   font-size: var(--font-body);
   line-height: var(--line-body);
   font-variant-numeric: tabular-nums;
+}
+
+/* 行尾动作：文字按钮，不用 antd 的 link 边距，保持与值对齐。 */
+.config-drawer__row-action {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  cursor: pointer;
+}
+
+.config-drawer__row-action:hover {
+  text-decoration: underline;
+}
+
+.config-drawer__row-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .config-drawer__switch {
