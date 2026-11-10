@@ -241,7 +241,6 @@ mi: miText['zh-CN'],
             labels: { bullish: '偏多', bearish: '偏空', neutral: '中性', mixed: '分歧' },
             engine: { model: '模型', rules: '规则' },
             neutralFilter: { label: '中性', all: '带中性', exclude: '不带中性' },
-            openAll: '查看舆情列表',
             // 仅用于「整行即动作」那两处的可访问名（`aria-label`），不显示在界面上。
             openItem: '打开这条舆情：{title}',
             // 与「数据已过期 · 最后更新 {time}」同一个字段（latestKnownItemAt）、同一个格式化器，
@@ -262,9 +261,14 @@ mi: miText['zh-CN'],
               settings: '设置'
             },
             availability: {
+              missing: '还没有配置来源',
               disabled: '来源没有启用',
               unreadable: '暂时读不到',
+              actionConfigure: '去配置',
+              actionEnable: '去启用',
+              actionRetry: '再试一次',
               reasonAria: '为什么这样显示',
+              reasonMissing: '四个新闻源都不在已配置的来源里。',
               reasonDisabled: '四个新闻源都没有启用；启用之后这里才有内容。',
               reasonFailed: '四个新闻源都启用着，但这次采集失败。',
               reasonNeverRan: '四个新闻源都启用着，但还没有跑过一次。'
@@ -1747,7 +1751,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             labels: { bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral', mixed: 'Mixed' },
             engine: { model: 'Model', rules: 'Rules' },
             neutralFilter: { label: 'Neutral', all: 'With neutral', exclude: 'Without neutral' },
-            openAll: 'Open sentiment list',
             // Accessible name only (aria-label) for the two whole-row actions; it never appears on screen.
             openItem: 'Open this story: {title}',
             updatedAt: 'Updated {time}',
@@ -1767,9 +1770,14 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               settings: 'Settings'
             },
             availability: {
+              missing: 'No sources configured yet',
               disabled: 'Sources are off',
               unreadable: 'Temporarily unavailable',
+              actionConfigure: 'Configure',
+              actionEnable: 'Enable',
+              actionRetry: 'Try again',
               reasonAria: 'Why this is shown',
+              reasonMissing: 'None of the four news sources is configured.',
               reasonDisabled: 'All four news sources are switched off; turn one on to see items here.',
               reasonFailed: 'All four news sources are on, but this collection failed.',
               reasonNeverRan: 'All four news sources are on, but none has run yet.'

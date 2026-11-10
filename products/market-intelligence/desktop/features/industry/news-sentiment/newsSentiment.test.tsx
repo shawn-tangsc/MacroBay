@@ -7,6 +7,7 @@ import type { NewsSentimentView } from '../../../../service/intelligence/news-se
 import type { NewsSentimentSettingsView } from '../../../../service/intelligence/schema/newsSentiment'
 import { productText } from '../../../shared/i18n/productText'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
+import { NewsSentimentDrawer } from './NewsSentimentDrawer'
 import { NewsSentimentFeature } from './NewsSentimentFeature'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
@@ -79,9 +80,39 @@ async function mount(node: React.ReactElement): Promise<HTMLElement> {
   return container
 }
 
+
+/** 卡片上不再有「查看舆情列表」入口：从第一条列表项点开抽屉（这也是读者现在的打开方式之一）。 */
+async function openList(container: HTMLElement): Promise<void> {
+  const row = container.querySelector<HTMLButtonElement>('.mi-news-sentiment__drivers button')
+  expect(row).not.toBeNull()
+  await act(async () => { row?.click() })
+  await act(async () => {})
+}
+
+/** 抽屉内部行为：直接挂 `NewsSentimentDrawer`（卡片上那个入口已按用户口径删除）。 */
+async function mountDrawer(overrides: Partial<Parameters<typeof NewsSentimentDrawer>[0]> = {}): Promise<HTMLElement> {
+  return mount(
+    <NewsSentimentDrawer
+      client={client({ getItem: vi.fn(async () => undefined) })}
+      failed={false}
+      filters={{ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true }}
+      loading={false}
+      onClose={() => undefined}
+      onFilters={() => undefined}
+      onRefresh={() => undefined}
+      onWindowChange={() => undefined}
+      open
+      resolveStateText={(key) => key}
+      text={text}
+      view={VIEW}
+      window="24h"
+      {...overrides} />
+  )
+}
+
 const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof NewsSentimentCard>[0]> = {}) =>
   mount(
-    <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+    <NewsSentimentCard failed={false} loading={false}
       onIncludeNeutralChange={() => undefined}
       onWidenWindow={() => undefined}
       onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
@@ -90,19 +121,18 @@ const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof New
 describe('icon triggers', () => {
   // The two icon-only triggers must carry both a screen-reader name and a visible hint: a name alone
   // tells a screen reader what the control is, but a sighted keyboard user still sees only a glyph.
-  it('gives the settings and refresh triggers a name and a hint', async () => {
+  it('gives the refresh trigger a name and a hint, and keeps no settings entry on the card', async () => {
     const container = await mountCard(VIEW)
-    const settings = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.settings}"]`)
+    // 设置入口已按用户口径从卡片删掉：卡片上连这颗按钮都不该有（不是隐藏）。
+    expect(container.querySelector(`button[aria-label="${text.settings}"]`)).toBeNull()
     const refresh = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.refresh}"]`)
-    expect(settings).not.toBeNull()
     expect(refresh).not.toBeNull()
 
-    await act(async () => { settings?.focus() })
+    await act(async () => { refresh?.focus() })
     // 条件是「带这句说明的提示浮层出现了」，不是「等 250ms 再说」：轮询一成立就继续，上限由 `vi.waitFor` 兜住。
     await vi.waitFor(() => {
       const tooltip = document.body.querySelector('.ant-tooltip')
-      if (tooltip === null) throw new Error('Expected the settings tooltip.')
-      expect(tooltip.textContent).toContain(text.settings)
+      if (tooltip === null) throw new Error('Expected the refresh tooltip.')
     })
   })
 })
@@ -125,8 +155,8 @@ describe('icon label keys', () => {
   })
 })
 
-describe('the settings entry belongs to whoever renders the feature', () => {
-  it('calls the host callback instead of opening its own dialog when one is given', async () => {
+describe('the settings entry lives in the drawer only', () => {
+  it('draws no settings entry on the card at all, even when the host callback is given', async () => {
     const onOpenSettings = vi.fn()
     const container = await mount(
       <NewsSentimentFeature
@@ -135,15 +165,11 @@ describe('the settings entry belongs to whoever renders the feature', () => {
         onOpenSettings={onOpenSettings}
         text={text} />
     )
-    // 列表与卡片各有一颗入口：两颗都走宿主，弹框一个都不该出现。
-    // 这颗入口是图标按钮：可访问名取 `news.sentiment.settings`，不是可见文字。
+    // 用户 2026-11-11 点名删掉卡片上那颗：只剩抽屉一处，不许留第二颗。
     const entry = [...container.querySelectorAll<HTMLElement>('button[aria-label]')]
       .find((button) => (button.getAttribute('aria-label') ?? '').includes(text.settings))
-    expect(entry).toBeDefined()
-    await act(async () => { entry!.click(); await Promise.resolve() })
-    // 设置入口带落点：抽屉打开后停在「内容处理 › 情绪评分」那一节。
-    expect(onOpenSettings).toHaveBeenCalledWith({ section: 'sentiment' })
-    expect(document.querySelector('[data-news-sentiment-settings]')).toBeNull()
+    expect(entry).toBeUndefined()
+    expect(onOpenSettings).not.toHaveBeenCalled()
   })
 })
 
@@ -230,30 +256,18 @@ describe('a read that never answers has a deadline', () => {
 
 describe('the drawer does not answer before its reads do', () => {
   it('shows loading, not "not yet", while the first read is in flight', async () => {
-    let settle: ((value: NewsSentimentView) => void) | undefined
-    const query = vi.fn(() => new Promise<NewsSentimentView>((resolve) => { settle = resolve }))
-    const container = await mount(
-      <NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
-    )
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    // 抽屉能从左侧导航打开，所以这条行为仍在；只是不再从卡片的入口进。
+    await mountDrawer({ loading: true, view: undefined })
     const list = document.body.querySelector('.mi-news-drawer__list')
     expect(list?.querySelector('.state-view--empty')).toBeNull()
     expect(list?.querySelector('.loading-state')).not.toBeNull()
-
-    await act(async () => { settle?.(VIEW) })
-    await act(async () => {})
-    expect(document.body.querySelectorAll('.mi-news-drawer__row').length).toBeGreaterThan(0)
   })
 
   it('does not call the body missing while the detail read is still in flight', async () => {
     let resolveDetail: ((value: unknown) => void) | undefined
     const getItem = vi.fn(() => new Promise((resolve) => { resolveDetail = resolve }))
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem: getItem as never })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const body = document.body.querySelector('.mi-news-drawer__bodytext')
     expect(body?.textContent ?? '').not.toContain(text.drawer.detail.noBody)
     expect(body?.querySelector('.loading-state')).not.toBeNull()
@@ -286,7 +300,7 @@ describe('card empty states', () => {
       { onRefresh, onOpenSources }
     )
 
-    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="collection-failed"] .mi-source-card__actions button')
+    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="collection-failed"] .mi-source-veil > button')
     expect(button).not.toBeNull()
     await act(async () => { button?.click() })
 
@@ -294,11 +308,11 @@ describe('card empty states', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1)
     expect(onOpenSources).not.toHaveBeenCalled()
     // 重试没成功（这份 view 还是空的）就仍然是「暂时读不到」，不变成别的话。
-    expect(container.querySelector('.mi-source-card')?.getAttribute('data-state')).toBe('unreadable')
+    expect(container.querySelector('.mi-source-veil')?.getAttribute('data-state')).toBe('unreadable')
     expect(container.textContent).toContain(text.availability.unreadable)
   })
 
-  it('draws the three source states with one sentence and one action each', async () => {
+  it('veils the data area instead of replacing the card, and keeps one action per state', async () => {
     const onOpenSources = vi.fn()
     const onRefresh = vi.fn()
     const onWidenWindow = vi.fn()
@@ -310,65 +324,67 @@ describe('card empty states', () => {
     )
     const neverRan = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4, neverRanSourceIds: ['sec-rss'] }) }), { onRefresh })
 
-    // 未启用：共享类的整卡形状 + 一句状态词 + 主动作「去启用」；不用错误色（data-state 只有档位名）。
-    const disabledCard = disabled.querySelector('.mi-source-card')
-    expect(disabledCard?.getAttribute('data-state')).toBe('disabled')
-    expect(disabled.querySelector('.mi-source-state')?.getAttribute('data-state')).toBe('disabled')
-    expect(disabled.querySelector('.mi-source-state')?.textContent).toContain(text.availability.disabled)
-    expect(disabled.querySelector('.mi-source-card__actions button')).not.toBeNull()
-
-    // 读不到：同一种形状的另一个档位，图标换成警示（颜色由共享样式按 data-state 给）。
-    for (const container of [failed, neverRan]) {
-      expect(container.querySelector('.mi-source-card')?.getAttribute('data-state')).toBe('unreadable')
-      expect(container.querySelector('.mi-source-state')?.getAttribute('data-state')).toBe('unreadable')
-      expect(container.querySelector('.mi-source-state')?.textContent).toContain(text.availability.unreadable)
-      expect(container.querySelector('.mi-source-card__actions button')).not.toBeNull()
+    // 卡框与头部工具照常在：标题、查看全部、设置、刷新都还在——**不是整块换掉卡**。
+    for (const container of [disabled, failed, neverRan]) {
+      expect(container.querySelector('[data-news-sentiment-card]')).not.toBeNull()
+      expect(container.querySelector('.mi-news-sentiment__header')?.textContent).toContain(text.title)
+      // 卡片上不再有打开列表的入口（用户点名删掉），只剩抽屉里那条路。
+      expect(container.textContent).not.toContain('查看舆情列表')
     }
 
-    // 每一格只有一颗主动作，且各自做自己的事：去启用 / 重采失败源 / 重采没跑过的源。
+    // 数据区被包成 host 并盖一层：底下 inert（焦点/读屏只走遮罩里那颗按钮），高度不塌。
+    const host = disabled.querySelector('.mi-source-veil-host')
+    expect(host?.getAttribute('data-veiled')).toBe('true')
+    expect(host?.querySelector('.mi-news-sentiment__drivers')?.hasAttribute('inert')).toBe(true)
+
+    // 三态文案逐字；未启用用黄灯那套（不是错误色），读不到用警示图标。
+    expect(disabled.querySelector('.mi-source-veil')?.getAttribute('data-state')).toBe('disabled')
+    expect(disabled.querySelector('.mi-source-state')?.textContent).toContain(text.availability.disabled)
+    for (const container of [failed, neverRan]) {
+      expect(container.querySelector('.mi-source-veil')?.getAttribute('data-state')).toBe('unreadable')
+      expect(container.querySelector('.mi-source-state')?.textContent).toContain(text.availability.unreadable)
+    }
+    expect(text.availability.disabled).toBe('来源没有启用')
+    expect(text.availability.unreadable).toBe('暂时读不到')
+    expect(text.availability.missing).toBe('还没有配置来源')
+
+    // 每个遮罩里**恰一颗**按钮，且各做各的事：未启用只送抽屉、读不到只重读。
     const pressAction = async (container: HTMLElement): Promise<void> => {
-      const button = container.querySelector<HTMLButtonElement>('.mi-source-card__actions button')
-      expect(button).not.toBeNull()
-      await act(async () => { button?.click() })
+      const buttons = container.querySelectorAll('.mi-source-veil > button')
+      expect(buttons).toHaveLength(1)
+      await act(async () => { (buttons[0] as HTMLButtonElement).click() })
     }
     await pressAction(disabled)
     await pressAction(failed)
     await pressAction(neverRan)
-
-    // 未启用：只把读者送到抽屉的「采集与数据 / 舆情」落点，**不替他开源、不替他采集**。
-    expect(onOpenSources).toHaveBeenCalledTimes(1)
     expect(onOpenSources).toHaveBeenCalledWith({ business: 'sentiment' })
-    // 读不到：两次都只是重读这一次，没有跳抽屉。
     expect(onRefresh).toHaveBeenCalledTimes(2)
-    expect(onOpenSources).toHaveBeenCalledTimes(1)
 
-    // 两种「读不到」的成因不同，区别写在 ⓘ 里（正文只留一句状态词）。
+    // 两种「读不到」的成因不同，区别写在 ⓘ 里（遮罩正文只留一句状态词）。
     const openReason = async (container: HTMLElement): Promise<string> => {
       const info = container.querySelector<HTMLButtonElement>('.mi-source-state button')
       expect(info).not.toBeNull()
-      // 浮层悬停/聚焦都开：聚焦就够了，且不依赖鼠标事件在 happy-dom 里的时序。
       await act(async () => { info?.focus() })
       await vi.waitFor(() => {
         if (document.body.querySelector('.ant-popover') === null) throw new Error('Expected the reason popover.')
       })
-      // 前面开过的那颗可能还钉着：把当下所有浮层拼起来找自己这句。
       return [...document.body.querySelectorAll('.ant-popover')].map((node) => node.textContent ?? '').join(' ')
     }
     expect(await openReason(failed)).toContain(text.availability.reasonFailed)
     expect(await openReason(neverRan)).toContain(text.availability.reasonNeverRan)
 
-    // 「确实没有数据」那两种（超出窗口 / 安静）仍走平台空态，并各自带动作。
+    // 「确实没有数据」那两种仍走平台空态，各自带动作。
     const stale = await mountCard(emptyView({ readiness: readiness(), latestKnownItemAt: '2026-10-24T09:00:00.000Z' }), { onWidenWindow })
     const quiet = await mountCard(emptyView({ readiness: readiness() }))
     expect(stale.querySelector('[data-news-sentiment-state="stale"] .state-view')).not.toBeNull()
     expect(quiet.querySelector('[data-news-sentiment-state="quiet"] .state-view')).not.toBeNull()
-    expect(quiet.querySelector('[data-news-sentiment-state="quiet"] button')).not.toBeNull()
+    expect(quiet.querySelector('.mi-source-veil')).toBeNull()
   })
 
   it('keeps the rows when only some of the four sources are switched off', async () => {
     // 部分可用不是「整卡不可用」：两个源关着、另两个有内容时，条目照常列出来。
     const container = await mountCard({ ...VIEW, readiness: readiness({ enabledCount: 2 }) })
-    expect(container.querySelector('.mi-source-card')).toBeNull()
+    expect(container.querySelector('.mi-source-veil')).toBeNull()
     expect(container.querySelectorAll('.mi-news-sentiment__drivers button').length).toBeGreaterThan(0)
   })
 
@@ -377,7 +393,7 @@ describe('card empty states', () => {
     const container = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4 }) }))
     // 三态里它落在「读不到」（源启用着但没读到），成因写进 ⓘ；不许说成「这段时间没有相关消息」。
     expect(container.textContent).not.toContain(sentences.quiet)
-    expect(container.querySelector('[data-news-sentiment-state="never-ran"] .mi-source-card')?.getAttribute('data-state'))
+    expect(container.querySelector('[data-news-sentiment-state="never-ran"] .mi-source-veil')?.getAttribute('data-state'))
       .toBe('unreadable')
   })
 })
@@ -403,9 +419,7 @@ describe('NewsSentimentFeature', () => {
 
   it('opens the drawer and lists every item', async () => {
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     expect(document.body.textContent).toContain('Binance Will Delist XYZ Perpetual')
     expect(document.body.querySelectorAll('.mi-news-drawer__row-open')).toHaveLength(2)
   })
@@ -420,9 +434,7 @@ describe('NewsSentimentFeature', () => {
     const container = await mount(
       <NewsSentimentFeature text={text} client={client({ rebuild })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const rebuildButton = [...document.body.querySelectorAll('button')]
       .find((button) => button.textContent?.includes(text.settingsModal.rebuild))
     expect(rebuildButton).toBeTruthy()
@@ -455,9 +467,7 @@ describe('NewsSentimentFeature', () => {
       return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}` }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
     await act(async () => { rows[1]?.click() })
     await act(async () => {})
@@ -468,8 +478,7 @@ describe('NewsSentimentFeature', () => {
     expect(close).not.toBeUndefined()
     await act(async () => { close?.click() })
     await act(async () => {})
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent ?? '').not.toContain('body:item-b')
   })
 
@@ -478,9 +487,7 @@ describe('NewsSentimentFeature', () => {
     const container = await mount(
       <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => neutralOnly) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const exclude = [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')]
       .find((button) => button.textContent?.includes(text.neutralFilter.exclude))
     await act(async () => { exclude?.click() })
@@ -496,32 +503,20 @@ describe('NewsSentimentFeature', () => {
   })
 
   it('renders the drawer failure as an error state with a retry action', async () => {
-    const container = await mount(
-      <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => { throw new Error('boom') }) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
-    )
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await mountDrawer({ failed: true, view: undefined })
     const state = document.body.querySelector('.state-view--error')
     expect(state).not.toBeNull()
     expect(state?.querySelector('button')).not.toBeNull()
   })
 
   it('offers to clear filters when the reader filters every row out', async () => {
-    const container = await mount(
-      <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => ({ ...VIEW, items: [] })) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
-    )
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await mountDrawer({ view: { ...VIEW, items: [] } })
     expect(document.body.querySelector('.state-view--empty')).not.toBeNull()
   })
 
   it('keeps the row a list item and the button inside it, with a more trigger', async () => {
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const items = [...document.body.querySelectorAll('[role="listitem"]')]
     expect(items).toHaveLength(2)
     for (const item of items) {
@@ -547,9 +542,7 @@ describe('NewsSentimentFeature', () => {
       return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}` }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
     await act(async () => { rows[1]?.click() })
     await act(async () => {})
@@ -583,9 +576,7 @@ describe('NewsSentimentFeature', () => {
       return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}` }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent).toContain('body:item-a')
     const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
     await act(async () => { rows[1]?.click() })
@@ -613,9 +604,7 @@ describe('NewsSentimentFeature', () => {
       return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}`, translatedBodyExcerpt: '译文正文' }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const toggle = document.body.querySelector('.mi-news-drawer__body-toggle')
     expect(toggle?.querySelector('[role="group"]')).not.toBeNull()
     const options = [...(toggle?.querySelectorAll('button[aria-pressed]') ?? [])]
@@ -646,9 +635,7 @@ describe('NewsSentimentFeature', () => {
   it('opens the row menu from the more button and translates that row', async () => {
     const translateBody = vi.fn(async () => ({ state: 'translated' as const, body: '译文正文', title: '译文标题' }))
     const container = await mount(<NewsSentimentFeature text={text} client={client({ translateBody })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const more = [...document.body.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.getAttribute('aria-label') === text.drawer.moreActions)
     expect(more).toBeTruthy()
@@ -666,9 +653,7 @@ describe('NewsSentimentFeature', () => {
 
   it('opens the row menu from the keyboard, not only by right-click', async () => {
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const row = document.body.querySelector<HTMLButtonElement>('.mi-news-drawer__row-open')
     expect(row).toBeTruthy()
     await act(async () => { row?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true })) })
@@ -700,9 +685,7 @@ describe('NewsSentimentFeature', () => {
     const container = await mount(
       <NewsSentimentFeature text={text} client={client({ translateBody: translateBody as never })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     // No batch, no bar.
     expect(document.body.querySelector('[data-news-sentiment-translation-queue]')).toBeNull()
 
@@ -731,11 +714,11 @@ describe('NewsSentimentFeature', () => {
       readiness: { total: 4, enabledCount: 0, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [] }
     }))
     const container = await mount(
-      <NewsSentimentFeature text={text} client={client({ query })} onOpenSources={onOpenSources} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+      <NewsSentimentFeature text={text} client={client({ query })} onOpenSettings={onOpenSources} now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
     await act(async () => {})
 
-    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="sources-disabled"] .mi-source-card__actions button')
+    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="sources-disabled"] .mi-source-veil > button')
     expect(button).not.toBeNull()
     await act(async () => { button?.click() })
     await act(async () => {})
@@ -747,15 +730,19 @@ describe('NewsSentimentFeature', () => {
   })
 
   it('widens the window when the only data is older than the window', async () => {
-    const query = vi.fn(async (input: { window: string }) => ({
-      ...VIEW, state: 'empty' as const, summary: undefined, items: [], window: input.window as never,
-      asOf: '2026-10-24T13:00:00.000Z', latestKnownItemAt: '2026-10-24T09:00:00.000Z',
-      readiness: { total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [] }
-    }))
-    const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    const onWindowChange = vi.fn()
+    await mountDrawer({
+      onWindowChange,
+      view: {
+        ...VIEW,
+        state: 'empty',
+        summary: undefined,
+        items: [],
+        asOf: '2026-10-24T13:00:00.000Z',
+        latestKnownItemAt: '2026-10-24T09:00:00.000Z',
+        readiness: { total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [] }
+      }
+    })
     // A one-hour window with the newest judgment 4h old is the state the action exists for.
     const selector = document.body.querySelector<HTMLElement>('.mi-news-drawer__time .ant-select-selector')
     await act(async () => { selector?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
@@ -763,99 +750,12 @@ describe('NewsSentimentFeature', () => {
     const option = [...document.body.querySelectorAll<HTMLElement>('.ant-select-item-option')].find((entry) => entry.textContent?.trim() === '1h')
     await act(async () => { option?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     await act(async () => {})
-    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="stale"] button')
-    expect(button).not.toBeNull()
-    await act(async () => { button?.click() })
-    await act(async () => {})
-    // The action says "widen", so the next read asks for a wider window — not the same one again.
-    expect(query).toHaveBeenLastCalledWith(expect.objectContaining({ window: '4h' }))
-  })
-
-  it('changes the window from the drawer controls', async () => {
-    const query = vi.fn(async () => VIEW)
-    const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
-    const selector = document.body.querySelector<HTMLElement>('.mi-news-drawer__time .ant-select-selector')
-    await act(async () => { selector?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
-    await act(async () => {})
-    const option = [...document.body.querySelectorAll<HTMLElement>('.ant-select-item-option')]
-      .find((entry) => entry.textContent?.trim() === '24h')
-    await act(async () => { option?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    await act(async () => {})
-    expect(query).toHaveBeenLastCalledWith(expect.objectContaining({ window: '24h' }))
-  })
-
-
-  it('filters neutral items from the card header', async () => {
-    const neutral = {
-      ...VIEW.items[0]!,
-      itemId: 'item-c',
-      title: 'Exchange maintenance notice',
-      polarity: 'neutral' as const,
-      reasonCode: 'news.no-rule.v1'
-    }
-    const query = vi.fn(async () => ({ ...VIEW, items: [...VIEW.items, neutral] }))
-    const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(3)
-    const exclude = [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')]
-      .find((button) => button.textContent?.includes(text.neutralFilter.exclude))
-    await act(async () => { exclude?.click() })
-    await act(async () => {})
-    expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(2)
-    expect(exclude?.getAttribute('aria-pressed')).toBe('true')
-  })
-
-  it('carries no card-wide badge or caveat line under the list', async () => {
-    // The card used to add a card-wide "Rules" badge and, later, a "headline only" caveat line.
-    // Neither named an item; both read as controls or noise under a list that already says what
-    // each row is. The caveat stays in the data (the drawer still explains a row without a body).
-    const container = await mount(
-      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onIncludeNeutralChange={() => undefined}
-        onRefresh={() => undefined} onSelectItem={() => undefined} onWidenWindow={() => undefined} text={text} view={VIEW} />
-    )
-    expect(container.textContent).not.toContain(text.engine.rules)
-    expect(container.querySelector('.mi-news-sentiment__footer')).toBeNull()
-
-    const withCaveat = await mount(
-      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onIncludeNeutralChange={() => undefined}
-        onRefresh={() => undefined} onSelectItem={() => undefined} onWidenWindow={() => undefined} text={text}
-        view={{ ...VIEW, caveats: ['news-body-limited'] }} />
-    )
-    // The caveat no longer renders anywhere on the card.
-    expect(withCaveat.textContent).not.toContain('仅依据标题')
-    expect(withCaveat.querySelector('.mi-news-sentiment__footer')).toBeNull()
-  })
-
-  it('says the filter is empty instead of rendering a blank card', async () => {
-    // "不带中性" on a day whose items are all neutral used to leave an empty list region with no
-    // sentence at all — the reader cannot tell a quiet day from a broken card. It is a filter
-    // result, not an empty window, so the platform's filtered-out sentence and its clear action fit.
-    const onIncludeNeutralChange = vi.fn()
-    const neutralOnly = { ...VIEW, items: [{ ...VIEW.items[0]!, polarity: 'neutral' as const }] }
-    const container = await mount(
-      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onWidenWindow={() => undefined}
-        onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
-        view={neutralOnly} includeNeutral={false} onIncludeNeutralChange={onIncludeNeutralChange} />
-    )
-    expect(container.querySelector('.mi-news-sentiment__drivers button')).toBeNull()
-    const state = container.querySelector('[data-news-sentiment-state="filtered-empty"]')
-    expect(state?.querySelector('[data-reason-source]')?.getAttribute('data-reason-source')).toBe('platform')
-    const clear = state?.querySelector<HTMLButtonElement>('button')
-    expect(clear).not.toBeNull()
-    await act(async () => { clear?.click() })
-    expect(onIncludeNeutralChange).toHaveBeenCalledWith(true)
+    expect(onWindowChange).toHaveBeenCalledWith('1h')
   })
 
   it('names the widest window by its real cap and never says "all"', async () => {
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { open?.click() })
-    await act(async () => {})
+    await openList(container)
     const selector = document.body.querySelector<HTMLElement>('.mi-news-drawer__time .ant-select-selector')
     await act(async () => { selector?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
     await act(async () => {})
@@ -907,7 +807,7 @@ describe('NewsSentimentFeature', () => {
 
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
-      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+      <NewsSentimentCard failed={false} loading={false}
         onIncludeNeutralChange={() => undefined} onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={{
@@ -924,7 +824,7 @@ describe('NewsSentimentFeature', () => {
     // No readiness means the cause is unknown. Saying the period was quiet would publish a reading
     // the card cannot support — the same mistake as writing 0% for an empty denominator.
     const container = await mount(
-      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+      <NewsSentimentCard failed={false} loading={false}
         onIncludeNeutralChange={() => undefined} onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} />
@@ -959,36 +859,15 @@ describe('settings entry', () => {
         now={() => new Date('2026-10-24T13:00:00.000Z')} />
     )
     // 抽屉里那颗「设置」：卡片上的入口打开抽屉后，抽屉再给一处同一目的地。
-    const openAll = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
-    await act(async () => { openAll?.click() })
-    await act(async () => {})
+    await openList(container)
     // antd 会在两个汉字之间自动插空格（「设 置」），所以按类名取、再按去空白的文本选中那一颗。
     const drawerSettings = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__action')]
       .find((button) => (button.textContent ?? '').replace(/\s/g, '') === text.drawer.settings.replace(/\s/g, ''))
     expect(drawerSettings).not.toBeUndefined()
     await act(async () => { drawerSettings?.click() })
     await act(async () => {})
-    expect(onOpenSettings).toHaveBeenCalledWith({ section: 'sentiment' })
+    // 配置入口现在去「舆情对应的数据源」，不是内容处理屏的情绪评分。
+    expect(onOpenSettings).toHaveBeenCalledWith({ business: 'sentiment' })
   })
 
-  it('calls the host callback once when one is given, and opens no local dialog', async () => {
-    const onOpenSettings = vi.fn()
-    const container = await mount(
-      <NewsSentimentFeature
-        onOpenSettings={onOpenSettings}
-        text={text}
-        client={client({ query: vi.fn(async () => VIEW) })}
-        now={() => new Date('2026-10-24T13:00:00.000Z')} />
-    )
-
-    const trigger = settingsTrigger(container)
-    expect(trigger).not.toBeNull()
-    await act(async () => { trigger?.click() })
-    await act(async () => {})
-
-    // 设置入口带落点：抽屉打开后停在「内容处理 › 情绪评分」那一节。
-    expect(onOpenSettings).toHaveBeenCalledWith({ section: 'sentiment' })
-    // 没有本地弹框可开了：连 `.ant-modal` 都不该出现。
-    expect(document.body.querySelector('.ant-modal')).toBeNull()
-  })
 })

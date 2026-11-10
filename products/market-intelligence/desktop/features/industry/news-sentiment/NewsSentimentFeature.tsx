@@ -27,12 +27,12 @@ export function NewsSentimentFeature(props: {
    * 宿主给「打开设置」的去处时调它（现在指：打开配置抽屉并停在内容处理屏）。
    * **不传就退回本地弹框**——判空与回落写在同一处，别在外面再包一层 if。
    */
-  onOpenSettings?: (focus: Readonly<{ section: 'sentiment' }>) => void
   /**
-   * 「来源没有启用」的去处：**只打开配置抽屉，不替读者开源**。
-   * 唯一编辑入口是「采集与数据」那一屏，这里最多把落点讲清楚（`business: 'sentiment'`）。
+   * 「配置」的去处：**舆情对应的数据源**（`{ business: 'sentiment' }`，宿主演成
+   * `openConfigDrawer({ menu: 'sourcesData', focus })`）。服务两处：抽屉里那颗设置，
+   * 以及「来源没有启用」那颗动作。卡片上不再有自己的设置入口。
    */
-  onOpenSources?: (focus: Readonly<{ business: 'sentiment' }>) => void
+  onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   /** Publish the clicked item so the agent can start from that story. */
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
@@ -67,9 +67,7 @@ export function NewsSentimentFeature(props: {
       <NewsSentimentCard
         failed={state.failed}
         loading={state.loading}
-        onOpenAll={() => setDrawerOpen(true)}
-        onOpenSettings={props.onOpenSettings === undefined ? undefined : () => props.onOpenSettings!({ section: 'sentiment' })}
-        onOpenSources={props.onOpenSources}
+        onOpenSources={props.onOpenSettings}
         onRefresh={state.refresh}
         onWidenWindow={widenWindow}
         includeNeutral={state.filters.includeNeutral}
@@ -87,7 +85,7 @@ export function NewsSentimentFeature(props: {
         loading={state.loading}
         onClose={() => setDrawerOpen(false)}
         onFilters={state.setFilters}
-        onOpenSettings={props.onOpenSettings === undefined ? undefined : () => props.onOpenSettings!({ section: 'sentiment' })}
+        onOpenSettings={props.onOpenSettings === undefined ? undefined : () => props.onOpenSettings!({ business: 'sentiment' })}
         onRefresh={state.refresh}
         onWindowChange={state.setWindow}
         open={drawerOpen}
