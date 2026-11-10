@@ -52,7 +52,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
  * 白白记了一笔欠账。块注释与行注释都要剥（`//` 与 `/* … *\/`），否则以后任何一句
  * 「不要手写 <该属性>」的说明都会变成违规。
  */
-function stripComments(source: string): string {
+export function stripComments(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//gu, '')
     .split('\n')
@@ -64,6 +64,13 @@ function stripComments(source: string): string {
     .join('\n')
 }
 
+/** 纯函数：给定源码文本，返回命中的行号（1 起）。用例直接喂字符串，不依赖仓库里恰好有哪个文件。 */
+export function roleSwitchLines(source: string): number[] {
+  return stripComments(source)
+    .split('\n')
+    .flatMap((line, index) => (line.includes('role="switch"') ? [index + 1] : []))
+}
+
 const hits: string[] = []
 for (const root of SCANNED_ROOTS) {
   let files: string[] = []
@@ -72,14 +79,16 @@ for (const root of SCANNED_ROOTS) {
     const relativePath = relative(ROOT, file).split('\\').join('/')
     if (PLATFORM_SWITCH_FILES.has(relativePath)) continue
     if (ALLOWED[relativePath] !== undefined) continue
-    const source = stripComments(readFileSync(file, 'utf8'))
-    source.split('\n').forEach((line, index) => {
-      if (line.includes('role="switch"')) hits.push(`${relativePath}:${index + 1}`)
+    roleSwitchLines(readFileSync(file, 'utf8')).forEach((line) => {
+      hits.push(`${relativePath}:${line}`)
     })
   }
 }
 
-if (hits.length > 0) {
+const invokedDirectly = process.argv[1]?.endsWith('check-role-switch.mts') === true
+if (!invokedDirectly) {
+  // 被用例 import：只导出纯函数，不跑仓库扫描。
+} else if (hits.length > 0) {
   console.log('role="switch" 门禁未通过：手写开关只许出现在平台组件或已登记的存量里。')
   for (const hit of hits) console.log(`  ${hit}`)
   console.log('处理方式：换成平台 `Switch`；确需保留就先在 `docs/ui-rules.md` 登记理由与「换它会怎样」。')
