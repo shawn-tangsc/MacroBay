@@ -10,8 +10,11 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 
 import { productText } from '../../shared/i18n/productText'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import { Button } from 'antd'
+
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
+import { PlatformScreen } from './PlatformScreen'
 import { SourcesStaticScreen } from './SourcesStaticScreen'
 import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
 import type { DrawerPlatformTarget, DrawerPlatformValues, DrawerRowView, DrawerScreenView } from './drawerScreenView'
@@ -79,8 +82,13 @@ export type ConfigSettingsDrawerProps = {
   briefingPanel?: React.ReactNode
   /** 平台与模型那一屏的当前值：**宿主读好再传**，缺键就是「读不到」。 */
   platformValues?: DrawerPlatformValues
-  /** 行尾「去平台设置」跳转：走宿主给的导航入口，抽屉不拼路由。 */
+  /** 区块标题右侧「去平台设置」跳转：走宿主给的导航入口，抽屉不拼路由。 */
   onOpenPlatformSettings?: (target: DrawerPlatformTarget) => void
+  /**
+   * 平台与模型那一屏的「重新读取」：**读，不是保存**。宿主没给就不画按钮（不留假控件），
+   * 缺值行仍显示状态词 + ⓘ。
+   */
+  onRetryPlatformValues?: () => void
   /** 行键与平台键的解析入口（文案）。 */
   resolveText?: (key: string) => string
   /**
@@ -145,6 +153,7 @@ export function ConfigSettingsDrawer({
   sourcesPanel,
   platformValues,
   onOpenPlatformSettings,
+  onRetryPlatformValues,
   resolveText: resolveTextProp,
   isScreenDirty,
   screenDirty,
@@ -293,6 +302,7 @@ export function ConfigSettingsDrawer({
         {menu === 'platform' && platformValues !== undefined
           ? (<PlatformScreen
             onOpen={onOpenPlatformSettings}
+            onRetry={onRetryPlatformValues}
             resolveText={resolveText}
             values={platformValues} />)
           : null}
@@ -362,46 +372,6 @@ function NotificationsScreen({ view, resolveText }: {
           )}
         </div>
       ))}
-    </div>
-  )
-}
-
-/**
- * 平台与模型：**只读 + 跳转**，一个字都不写。
- *
- * 这一屏最容易把「没读到」画成「没设置」：所以值缺失时显示「读不到」，不是空白。
- * 跳转走宿主给的入口（平台基本设置 / 模型服务页），抽屉不拼路由。
- */
-const PLATFORM_ROWS: readonly { key: string; value: keyof DrawerPlatformValues; target: DrawerPlatformTarget }[] = [
-  { key: 'configDrawer.rows.timeZone', value: 'timeZone', target: 'preferences' },
-  { key: 'configDrawer.rows.language', value: 'language', target: 'preferences' },
-  { key: 'configDrawer.rows.theme', value: 'theme', target: 'preferences' },
-  { key: 'configDrawer.rows.proxy', value: 'proxy', target: 'preferences' },
-  { key: 'configDrawer.rows.modelService', value: 'modelService', target: 'models' }
-]
-
-function PlatformScreen({ values, onOpen, resolveText }: {
-  values: DrawerPlatformValues
-  onOpen?: (target: DrawerPlatformTarget) => void
-  resolveText: (key: string) => string
-}): React.ReactElement {
-  return (
-    <div data-drawer-screen="ready">
-      {PLATFORM_ROWS.map((row) => {
-        const value = values[row.value]
-        return (
-          <div className="config-drawer__row" data-drawer-row={row.value} key={row.value}>
-            <span className="config-drawer__label">{resolveText(row.key)}</span>
-            {/* 缺值 = 读不到，不是「没设置」；空白会把两件事画成一件。 */}
-            <span className="config-drawer__value">{value ?? resolveText('configDrawer.unreadable')}</span>
-            {onOpen === undefined ? null : (
-              <button className="config-drawer__row-action" onClick={() => onOpen(row.target)} type="button">
-                {resolveText('configDrawer.openPlatformSettings')}
-              </button>
-            )}
-          </div>
-        )
-      })}
     </div>
   )
 }

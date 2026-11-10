@@ -104,6 +104,33 @@
   line-height: 1.4;
 }
 
+/* 平台与模型：单列屏内容区 720 居中（分栏屏吃满宽度，所以约束挂在屏根、不改共用 pane）。 */
+.config-drawer__platform {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+/* 局部读不到：一行状态词 + 一次「重新读取」；读不到不是脏，跟保存无关。 */
+.config-drawer__platform-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+}
+
+/* 值位里带 ⓘ：状态词与图标同一行，间距 4（图标自带 22，不另写字号/尺寸）。 */
+.config-drawer__value--with-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* 设置行的形状：左标签、右值/控件、行尾动作；行与行只用发丝线分隔，不画卡片。 */
 .config-drawer__row {
   display: flex;

@@ -340,6 +340,7 @@ mi: miText['zh-CN'],
                 modelService: '模型服务'
               },
               unreadableReason: '这次没从平台设置读到',
+              unreadableReasonAria: '为什么读不到',
               retry: '重新读取',
               openPlatformSettings: '去平台设置',
               menus: {
@@ -1824,6 +1825,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 modelService: 'Model service'
               },
               unreadableReason: 'Could not read it from the platform settings this time',
+              unreadableReasonAria: 'Why it could not be read',
               retry: 'Read again',
               openPlatformSettings: 'Open platform settings',
               menus: {
