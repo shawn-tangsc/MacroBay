@@ -17,6 +17,7 @@ import { marketIntelligenceAgents } from './agentPortalModel'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellInstant, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 import { projectDashboardPositioning, projectPositioningSourceRow } from './dashboardOpenInterestModel'
+import { dashboardCellId } from './dashboardCellEnabled'
 
 const page = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/index.tsx'), 'utf8')
 const portal = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'), 'utf8')
@@ -348,6 +349,34 @@ describe('crypto intelligence dashboard', () => {
     expect(card.textContent).not.toMatch(/5\.8|\$42M|\$18M|\$330M|liquidation|open interest|crowded|https?:|sourceUrl|evidence|profile|health|credential|error/i)
   })
 
+
+  it('keeps the positioning card on screen and says the source is off when both cells are disabled', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    // 两格都关掉：以前整张卡被跳过（读者看到一块空白），现在卡片留下来说一句「来源没有启用」。
+    const cellEnabledIo = {
+      read: async () => ({
+        [dashboardCellId('positioning', 'oi')]: false,
+        [dashboardCellId('positioning', 'funding')]: false
+      })
+    }
+
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard, cellEnabledIo
+    })))
+    await flush()
+
+    const card = container.querySelector('.mi-positioning-panel')!
+    expect(card).not.toBeNull()
+    expect(card.querySelector('[data-positioning-source-card]')).not.toBeNull()
+    expect(card.textContent).toContain(text.dashboard.positioning.sourceDisabled.replace('{source}', text.dashboard.positioning.sourceName))
+    expect(card.textContent).toContain(text.dashboard.positioning.actionEnable)
+    // 不是空态、也没有图表框架：三态与「确实没有数据」形状不同。
+    expect(card.textContent).not.toContain(text.dashboard.positioning.empty)
+    expect(card.querySelector('.mi-positioning-panel__chart')).toBeNull()
+  })
 
   it('sends Fear & Greed and Binance Futures Positioning management to their local drawer entries', async () => {
     const container = document.createElement('div')

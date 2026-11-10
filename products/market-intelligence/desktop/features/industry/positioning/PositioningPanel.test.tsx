@@ -231,6 +231,36 @@ describe('positioning panel', () => {
     expect(failed).not.toContain(text.contractMismatch)
   })
 
+  it('says 还没有配置来源 for the whole card when neither cell has a source', () => {
+    const markup = render({ cells: { oi: 'missing', funding: 'missing', reasons: {} }, onOpenSources: () => undefined })
+    expect(markup).toContain(text.sourceMissing)
+    expect(markup).toContain(text.actionConfigure)
+    // 三态不是空态：谁把它换成 StateView 的空态，这一条就红。
+    expect(markup).not.toContain('data-state="empty"')
+    expect(markup).not.toContain('mi-positioning-panel__chart')
+  })
+
+  it('says 来源没有启用 and names the source, keeping the other cell rendering', () => {
+    const markup = render({ cells: { oi: 'available', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })
+    expect(markup).toContain(text.sourceDisabled.replace('{source}', text.sourceName))
+    expect(markup).toContain(text.actionEnable)
+    // 持仓那半照旧：名义额与图都在，整卡没有降级。
+    expect(markup).toContain('$8.87B')
+    expect(markup).toContain('mi-positioning-panel__chart')
+    // 费率那半不画数字，也不留破折号。
+    expect(markup).not.toContain('+0.0062%')
+  })
+
+  it('says 暂时读不到 with a retry when the read failed, and never 未启用', () => {
+    const retry = vi.fn()
+    const markup = render({ cells: { oi: 'available', funding: 'unreadable', reasons: { funding: 'query-failed' } }, onReloadFunding: retry })
+    expect(markup).toContain(text.sourceUnreadable)
+    expect(markup).toContain(text.actionRetry)
+    // 三态互不冒充：读不到不许写成未启用。
+    expect(markup).not.toContain(text.sourceDisabled.replace('{source}', text.sourceName))
+    expect(markup).not.toContain(text.sourceMissing)
+  })
+
   it('tells a failed read from an empty one', () => {
     // Nothing collected is `empty`; a read that could not answer is `error`. Mixing them is how
     // "we have nothing" and "we could not look" start reading alike.

@@ -34,9 +34,10 @@ import { dashboardRealSourcePolicy, FearGreedGaugePresentationPolicy, type Dashb
 import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
 import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
 import { projectPositioningSourceRow, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
+import { projectPositioningCells } from './dashboardPositioningSourceState'
 import { FeedStatusStrip } from './DashboardFeedStatusStrip'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { filterFeedRowsByCells, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
+import { cellSourceChoices, dashboardCellId, filterFeedRowsByCells, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -145,7 +146,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const readsReady = cellState.ready
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readGates.fearGreed, now })
-  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, disabled: !readsReady || !readGates.positioning, now })
+  // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
+  const [fundingReloadKey, setFundingReloadKey] = useState(0)
+  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, disabled: !readsReady || !readGates.positioning, now, reloadKey: fundingReloadKey })
   // Positioning is read per window rather than reshaped in the browser: the fold and
   // the liquidation lookback belong to the query, so switching windows is one more read.
   const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
@@ -167,6 +170,19 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const [sourcesDraftDirty, setSourcesDraftDirty] = useState(false)
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !readsReady || !readGates.positioning, now, window: positioningWindow })
+  // 两格各自的源可用性：判定按「未配置 → 未启用 → 读不到」的顺序，来自源注册表与格级启用表，
+  // 页面不自己判。两格同源，但启用是逐格的——只关一格时另一格照旧显示。
+  const positioningCells = readsReady
+    ? projectPositioningCells({
+        configured: cellSourceChoices('positioning', 'oi').length > 0 && cellSourceChoices('positioning', 'funding').length > 0,
+        enabled: {
+          oi: isCellEnabled(cellState.cells, dashboardCellId('positioning', 'oi')),
+          funding: isCellEnabled(cellState.cells, dashboardCellId('positioning', 'funding'))
+        },
+        positioning: positioningState,
+        funding: fundingRateState
+      })
+    : undefined
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
   // shows the reader the state they are already looking at.
@@ -331,8 +347,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} /> : null}
       </div>
       <div className="mi-crypto-dashboard__positioning-row">
-        {readsReady && readGates.positioning ? <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
-          onWindowChange={setPositioningWindow} text={text.positioning} /> : null}
+        {readsReady ? <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
+          onWindowChange={setPositioningWindow} text={text.positioning}
+          {...(positioningCells ? { cells: positioningCells } : {})}
+          onOpenSources={() => onManageSource()}
+          onReloadFunding={() => setFundingReloadKey(key => key + 1)} /> : null}
         {/* A conclusion about the card above it, not another section: the reader asks "so what do
             these two legs mean together" while looking at the chart, and a band of its own read
             as an unrelated module. */}

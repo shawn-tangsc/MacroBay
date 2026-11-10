@@ -22,6 +22,23 @@ export type PositioningPanelText = Readonly<{
   settledAt: string
   legendLine: string
   legendBar: string
+  /** 这张卡的源名：未启用时要点名（规范 §五之二）。 */
+  sourceName: string
+  /**
+   * 三态各一句（规范 2026-11-11）：未配置 → 未启用 → 读不到，互不冒充。
+   * 未启用那句带 `{source}`，由调用点填源名。
+   */
+  sourceMissing: string
+  sourceDisabled: string
+  sourceUnreadable: string
+  /** 每格一颗主动作。 */
+  actionConfigure: string
+  actionEnable: string
+  actionRetry: string
+  /** 读不到时 ⓘ 里的原因；形状/版本不符复用 `contractMismatch`。 */
+  sourceReasonClock: string
+  sourceReasonQuery: string
+  sourceReasonLabel: string
   /** 一条资金费率历史读不到时的整句：`{asset}` 与 `{reason}` 由调用点填。 */
   fundingMissingLeg: string
   /** 缺的原因各一句；两句不许混成一句，读者据此决定要不要再等。 */
