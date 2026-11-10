@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -19,13 +19,27 @@ import { useIntelligenceSourcesSettings } from '../../settings/intelligence-sour
  *
  * 这个组件只在抽屉打开、且停在「来源与采集」时才挂载，所以那几个 hook 的读也只在这时发生。
  */
-export function DashboardSourcesPanel(): React.ReactElement {
+export function DashboardSourcesPanel(props: {
+  /**
+   * 这一屏有草稿时上报给宿主——抽屉壳据此在关闭/切屏时问一句「丢掉改动 / 继续编辑」。
+   *
+   * **为什么不用「保存栏」**：来源屏的草稿多半是凭据框这类输入，不该被一次「保存」代劳；
+   * 所以它只参与**关闭确认**，不进保存栏（保存栏只覆盖自己上报了的屏）。
+   */
+  onDraftChange?: (dirty: boolean) => void
+} = {}): React.ReactElement {
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const settings = useIntelligenceSourcesSettings(t)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings
+  // 草稿既喂 hook 里的 C8 标志（同屏保存/重读用），也上报宿主（关闭确认用）——两个消费者，一个事实。
+  const reportDraftDirty = useCallback((dirty: boolean) => {
+    setDraftDirty(dirty)
+    props.onDraftChange?.(dirty)
+  }, [props.onDraftChange, setDraftDirty])
+
   // 采集策略：每源一份 profile；是否支持情绪分析由源定义决定（同一个事实只读一处）。
   const policyProfiles: Readonly<Record<string, IntelligenceSourceProfile>> = Object.fromEntries(
     profiles.map((profile) => [profile.sourceId, profile])
@@ -76,7 +90,7 @@ export function DashboardSourcesPanel(): React.ReactElement {
       supportsRunNowById,
       onRunNow: runSourceNow,
       onToggleSource: toggleSourceEnabled,
-      onDraftChange: setDraftDirty,
+      onDraftChange: reportDraftDirty,
       showSourceDetails: true,
       surface: 'settings'
     }}

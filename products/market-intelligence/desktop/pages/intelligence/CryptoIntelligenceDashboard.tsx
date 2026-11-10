@@ -149,6 +149,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 有底部保存栏的屏都按同一份契约上报（脏 / 保存中 / 失败句 / 保存动作）。同一时刻只有一屏挂载，
   // 所以两者写同一份宿主状态：切屏时离开的那一屏先报 dirty=false，进入的那一屏再报自己。
   const [drawerScreen, setDrawerScreen] = useState<BriefingScreenState>({ dirty: false, saving: false, save: () => undefined })
+  // 来源屏的草稿（多半是凭据框）：只参与**关闭确认**，不喂保存栏——凭据不该被一次「保存」代劳。
+  const [sourcesDraftDirty, setSourcesDraftDirty] = useState(false)
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
@@ -250,7 +252,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           /* 计数变化就重新挂载：每次都落到请求的那一屏（连点同一个入口也算一次）。 */
           key={`settings-drawer-${openSettingsRequest ?? 0}`}
           initialMenu={initialSettingsMenu}
-          isScreenDirty={() => drawerScreen.dirty}
+          isScreenDirty={() => drawerScreen.dirty || sourcesDraftDirty}
           onClose={() => setSettingsDrawerOpen(false)}
           onOpenPlatformSettings={(target) => {
             // 只转达目标，不拼路由（页面对应关系在导航层）。
@@ -268,7 +270,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           processingPanel={<ProcessingSettingsPanel />}
           runLogPanel={<RunLogDrawerPanel />}
           notificationsPanel={<NotificationSettingsPanel />}
-              sourcesPanel={<DashboardSourcesPanel />} />}
+              sourcesPanel={<DashboardSourcesPanel onDraftChange={setSourcesDraftDirty} />} />}
           </DrawerDiscardConfirm>
         </ConfirmProvider>
       </ErrorBoundary>
