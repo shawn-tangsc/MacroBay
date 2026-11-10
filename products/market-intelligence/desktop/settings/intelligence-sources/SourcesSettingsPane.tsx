@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { Segmented } from '@platform/ui/components/segmented'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import { BusinessSettingsContent, BusinessSettingsView, type BusinessKey } from './BusinessSettingsView'
+import { BusinessSettingsContent, BusinessSettingsView, type BusinessFocus, type BusinessKey } from './BusinessSettingsView'
 import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
@@ -49,6 +49,11 @@ export type SourcesSettingsPaneProps = {
   /** 采集与数据里「源没开启」的项点击后跳配置页；宿主实现切屏与选中。 */
   onOpenSourceConfig?: (sourceId: string) => void
   /**
+   * 抽屉的屏内定位（只作初值）：先切到那个业务，再把那张模块卡/那一格带进视野一次。
+   * 找不到就什么都不做——读者不会被拽走，也不会看到空白。
+   */
+  initialBusinessPosition?: BusinessFocus
+  /**
    * 格级启停的读写（宿主注入；真实来源是 main 侧 `createCellEnabledStore`，走 IPC 或直接传函数）。
    * 读失败一律按「启用」显示——不把开关画成关闭（那会假装读者关过它）。
    */
@@ -72,8 +77,28 @@ const DEFAULT_FILTERS = [
 
 export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactElement {
   const resolveText = useProductTextKey()
-  /** 「业务设置」这一屏自己的三项；只在 filter === 'dashboard' 时生效。 */
-  const [business, setBusiness] = useState<BusinessKey>('dashboard')
+  /**
+   * 「业务设置」这一屏自己的三项；只在 filter === 'dashboard' 时生效。
+   * 初值可以由入口指定（`focus.sourcesData.business`），之后归读者。
+   */
+  const [business, setBusiness] = useState<BusinessKey>(props.initialBusinessPosition?.business ?? 'dashboard')
+  /*
+    定位只在挂载时用一次，且只认两个锚点：给了 `cellId` 就落到那一格，否则落到那张模块卡。
+    依赖写成两个字符串，不写整个对象——调用点每次渲染都会给新对象，写成对象就是每次渲染都重新滚一遍。
+  */
+  const focusCellId = props.initialBusinessPosition?.cellId
+  const focusModuleKey = props.initialBusinessPosition?.moduleKey
+  useEffect(() => {
+    if (focusCellId === undefined && focusModuleKey === undefined) return undefined
+    const selector = focusCellId === undefined
+      ? `[data-business-card="${focusModuleKey}"]`
+      : `[data-cell-id="${focusCellId}"]`
+    const anchor = document.querySelector<HTMLElement>(selector)
+    if (anchor === null) return undefined
+    anchor.scrollIntoView?.({ block: 'nearest' })
+    anchor.setAttribute('data-focused', 'true')
+    return () => { anchor.removeAttribute('data-focused') }
+  }, [focusCellId, focusModuleKey])
   const provider = props.view?.groups
     .flatMap((group) => group.providers)
     .find((entry) => entry.providerId === props.selectedProviderId)

@@ -5,6 +5,7 @@ import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { LoadingState } from '@platform/ui/components/loading'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { ConfigDrawerPanel } from './ConfigDrawerPanel'
+import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
@@ -108,7 +109,7 @@ type CryptoDashboardText = {
 
 type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, openSettingsRequest, cellEnabledIo }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, openSettingsRequest, cellEnabledIo }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -133,6 +134,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   initialSettingsMenu?: ConfigDrawerMenu
   /** 「来源与采集」那一屏挂载时的初值过滤器；不传就是看板默认（只作初值，不进受控状态）。 */
   initialSourceId?: string
+  /** 「采集与数据」那一屏的屏内定位（只作初值）：业务 / 模块卡 / 格。 */
+  initialBusinessPosition?: BusinessFocus
   initialSourceFilter?: SourceFilter
   openSettingsRequest?: number
 }): React.ReactElement {
@@ -330,7 +333,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           runLogPanel={<ConfigDrawerPanel screen="run-log"><RunLogDrawerPanel /></ConfigDrawerPanel>}
           notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel /></ConfigDrawerPanel>}
               sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel pane="sources" initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
-              sourcesDataPanel={<ConfigDrawerPanel screen="sourcesData"><DashboardSourcesPanel pane="business" onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
+              sourcesDataPanel={<ConfigDrawerPanel screen="sourcesData"><DashboardSourcesPanel
+                pane="business"
+                {...(initialBusinessPosition === undefined ? {} : { initialBusinessPosition })}
+                onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
           </DrawerDiscardConfirm>
         </ConfirmProvider>
       </ErrorBoundary>

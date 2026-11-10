@@ -8,6 +8,7 @@ import type { IntelligenceSourceProfile } from '../../../service/intelligence/sc
 import { productText } from '../../shared/i18n/productText'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { SourcesSettingsPane } from '../../settings/intelligence-sources/SourcesSettingsPane'
 import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { useIntelligenceSourcesSettings } from '../../settings/intelligence-sources/useIntelligenceSourcesSettings'
@@ -33,6 +34,8 @@ export function DashboardSourcesPanel(props: {
   pane?: 'sources' | 'business'
   /** 抽屉的定位：只作初值，把该源那一行带进视野一次。 */
   initialSourceId?: string
+  /** 「采集与数据」那屏的定位（只作初值）：业务 / 模块卡 / 格。 */
+  initialBusinessPosition?: BusinessFocus
   /**
    * 打开抽屉时落哪一块筛选（前端可以在「打开配置」的请求里指定）。
    * **只当初始值**，不是受控 prop：读者点了别的 tab 就归读者，外部不许一直压着。不传仍是「看板」。
@@ -103,6 +106,7 @@ export function DashboardSourcesPanel(props: {
 
   return <SourcesSettingsPane
     {...(props.pane === undefined ? {} : { pane: props.pane })}
+    {...(props.initialBusinessPosition === undefined ? {} : { initialBusinessPosition: props.initialBusinessPosition })}
     /* 格级开关的读写：与看板读取链**同一个客户端实例**（同一份存储，不各建一份）。 */
     cellEnabledIo={{ read: () => cellEnabledClient.read(), write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled) }}
     filter={sourceFilter}

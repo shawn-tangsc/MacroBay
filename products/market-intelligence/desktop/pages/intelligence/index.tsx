@@ -14,7 +14,8 @@ import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
 import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
-import { menuFromSettingsDrawer, normalizeConfigDrawerRequest, type OpenConfigDrawerRequest } from './configDrawerRequest'
+import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, type OpenConfigDrawerRequest } from './configDrawerRequest'
+import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
@@ -74,6 +75,14 @@ function IntelligencePageBody(): React.ReactElement {
   /** 屏内定位（只随请求生效一次；读者自己点别的菜单/源后不再回拽）。 */
   const [configDrawerSourceId, setConfigDrawerSourceId] = useState<string | undefined>(undefined)
   /**
+   * 「采集与数据」那屏的屏内定位（业务 / 模块卡 / 格）。
+   *
+   * 为什么单独一个状态：它描述的是**另一屏**里落到哪一项。原先只有「过滤器」这一个口头，
+   * 于是日历/舆情的入口把 `'calendar'` 当筛选传下来，而抽屉那屏根本不看筛选——四个入口全停在
+   * 「看板」第一屏。定位归 `focus`，单开一个口，跟 `configDrawerSourceId` 同一条规矩：只随请求生效一次。
+   */
+  const [configDrawerBusinessFocus, setConfigDrawerBusinessFocus] = useState<BusinessFocus>()
+  /**
    * 「来源与采集」这一屏挂载时的初值过滤器（只作初值，之后的筛选由那一屏自己管）。
    * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
    */
@@ -82,6 +91,7 @@ function IntelligencePageBody(): React.ReactElement {
     const request = normalizeConfigDrawerRequest(input)
     const menu = request.menu
     setConfigDrawerSourceId(menu === 'sources' && request.focus?.menu === 'sources' ? request.focus.sourceId : undefined)
+    setConfigDrawerBusinessFocus(businessFocusFromRequest(request))
     setConfigDrawerMenu(menu)
     setInitialSourceFilter(filter)
     setConfigDrawerRequest((value) => value + 1)
@@ -198,7 +208,7 @@ function IntelligencePageBody(): React.ReactElement {
           onBack={() => setActiveView('dashboard')}
           openTarget={calendarTarget}
           text={text.calendar}
-          onOpenSettings={() => openConfigDrawer('sourcesData', 'calendar')}
+          onOpenSettings={() => openConfigDrawer({ menu: 'sourcesData', focus: { menu: 'sourcesData', business: 'calendar' } })}
         />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
@@ -250,6 +260,7 @@ function IntelligencePageBody(): React.ReactElement {
           onManageSource={() => openConfigDrawer('sourcesData', 'dashboard')}
           initialSettingsMenu={configDrawerMenu}
           {...(configDrawerSourceId === undefined ? {} : { initialSourceId: configDrawerSourceId })}
+          {...(configDrawerBusinessFocus === undefined ? {} : { initialBusinessPosition: configDrawerBusinessFocus })}
           initialSourceFilter={initialSourceFilter}
           openSettingsRequest={configDrawerRequest}
           onOpenCalendar={() => setActiveView('calendar')}

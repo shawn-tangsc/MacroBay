@@ -1,4 +1,5 @@
 import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
+import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 
 /**
  * 「打开配置抽屉」的**唯一入参形状**：菜单 + 屏内定位。
@@ -31,6 +32,24 @@ export function normalizeConfigDrawerRequest(
   // `focus` 与菜单不匹配 → 丢弃定位（仍然打开菜单默认位置，不白屏）。
   if (input.focus !== undefined && input.focus.menu !== input.menu) return { menu: input.menu }
   return input
+}
+
+/**
+ * 请求 → 「采集与数据」那屏的定位。
+ *
+ * 只在菜单对得上时交出来：停在别的屏却带着这一屏的坐标，读起来像是「定位失效」，
+ * 而真相是这条请求根本没打算落在那一屏。三个字段都空也算没有定位——别把空对象传下去，
+ * 那会让组件以为「有定位但什么都没说」。
+ */
+export function businessFocusFromRequest(request: OpenConfigDrawerRequest): BusinessFocus | undefined {
+  if (request.menu !== 'sourcesData' || request.focus?.menu !== 'sourcesData') return undefined
+  const { business, moduleKey, cellId } = request.focus
+  if (business === undefined && moduleKey === undefined && cellId === undefined) return undefined
+  return {
+    ...(business === undefined ? {} : { business }),
+    ...(moduleKey === undefined ? {} : { moduleKey }),
+    ...(cellId === undefined ? {} : { cellId })
+  }
 }
 
 /**

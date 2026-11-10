@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { menuFromSettingsDrawer, normalizeConfigDrawerRequest } from './configDrawerRequest'
+import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest } from './configDrawerRequest'
 
 /**
  * 「永远打开、永不白屏」的判据：非法输入一律**退到该菜单的默认位置**，而不是拒绝打开或停在空白屏。
@@ -42,5 +42,28 @@ describe('the shell jump maps to a menu only when it is ours and known', () => {
   it('ignores a menu it does not know, instead of guessing a default', () => {
     expect(menuFromSettingsDrawer({ productId: 'market-intelligence', menuId: 'nope' })).toBeUndefined()
     expect(menuFromSettingsDrawer(undefined)).toBeUndefined()
+  })
+})
+
+describe('businessFocusFromRequest', () => {
+  it('hands the business / module / cell over to the screen that can use them', () => {
+    expect(businessFocusFromRequest({
+      menu: 'sourcesData',
+      focus: { menu: 'sourcesData', business: 'calendar', moduleKey: 'macro', cellId: 'macro:cpi' }
+    })).toEqual({ business: 'calendar', moduleKey: 'macro', cellId: 'macro:cpi' })
+  })
+
+  it('returns nothing when the request is for another screen', () => {
+    // 停在别的屏却带着这一屏的坐标，读者会以为「定位失效」；真相是这条请求没打算落在那屏。
+    expect(businessFocusFromRequest({
+      menu: 'sources',
+      focus: { menu: 'sourcesData', business: 'calendar' } as never
+    })).toBeUndefined()
+  })
+
+  it('treats an empty position as no position at all', () => {
+    // 空对象传下去，组件会以为「有定位但什么都没说」——那是两种不同的意图。
+    expect(businessFocusFromRequest({ menu: 'sourcesData', focus: { menu: 'sourcesData' } })).toBeUndefined()
+    expect(businessFocusFromRequest({ menu: 'sourcesData' })).toBeUndefined()
   })
 })

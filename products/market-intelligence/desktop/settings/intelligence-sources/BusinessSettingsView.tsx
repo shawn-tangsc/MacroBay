@@ -29,6 +29,12 @@ import {
  */
 export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment'
 
+/**
+ * 屏内定位（`focus.sourcesData`）：切到哪个业务、滚到哪张模块卡、标出哪一格。
+ * **只作初值**：挂载时用一次，读者自己点走之后不再回拽。
+ */
+export type BusinessFocus = Readonly<{ business?: BusinessKey; moduleKey?: string; cellId?: string }>
+
 const BUSINESS_KEYS: readonly BusinessKey[] = ['dashboard', 'calendar', 'sentiment']
 
 /** 同一格的多个候选源：键去掉 `-fallback` 后缀、标题去掉「（备用）」。 */
