@@ -16,7 +16,7 @@
 | 状态词 | `StatusPill`（闭集 tone） | 手写药丸、字着色 | `statusPillKeyGuard` |
 | 加载 | `LoadingState` / `LoadingSpinner` | 本地转圈、CSS 旋转、antd `Spin`、`加载中…` | `loadingStandard` |
 | 可折叠分组头行 | 平台 `CollapsibleGroup`：**壳持有行与箭头，内容归作者** | 自绘箭头、自接整行点击、头行里放可聚焦元素 | `CollapsibleGroup` 头行守卫（使用处） |
-| 标签页 | 平台 `Tabs`；工作区 Tab 条为唯一登记例外 | 第三份自绘 Tab | **人看** |
+| 标签页 | 平台 `Tabs`；工作区 Tab 条为**当前唯一**登记例外 | 第三份自绘 Tab | `check-tab-role` |
 | 分段 / 单选 | `Segmented` / `Select`（闭集） | 一行混两种控件 | **人看** |
 | 开关 | antd `Switch` | 手写 `role="switch"` | **人看** |
 | 抽屉 / 弹窗头动作 | 头的 `actions` 槽（距关闭键 12，一头一个） | 用产品 CSS 撑开标题行 | **人看**（有组件用例，无全仓守卫） |
@@ -88,7 +88,7 @@
 - 使用非档位字重（620 / 680 / 700 / 750）。
 - 硬写 px 字号代替字号档。
 - 手写 `role="switch"`。
-- 自绘 `role="tab"`（除已登记的工作区 Tab 条）。
+- 自绘 `role="tab"`（除已登记的工作区 Tab 条——**这是当前唯一的例外**，登记在 `scripts/check-tab-role.mts`；`ModelServiceModelDrawer` 不是第二个：它那笔 `role="switch"` 欠账已随源码合规删除，页签从来没有它的事）。
 - 手拼 `YYYY/M/D` 时间。
 - 同一行重复同一事实（典型：标题与行尾各印一次时间）。
 - 在正文里写说明性文字（范围解释、实现细节、安慰性说明——「只影响…」「不会影响…」都算）。

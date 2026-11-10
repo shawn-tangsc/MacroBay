@@ -16,7 +16,7 @@
 | Status word | `StatusPill` (closed tone set) | hand-written pill; colour on the word | `statusPillKeyGuard` |
 | Waiting region | `LoadingState` / `LoadingSpinner` | local spinner, CSS rotation, antd `Spin`, `loading…` | `loadingStandard` |
 | Collapsible group header | platform `CollapsibleGroup`: **the shell owns the row and the arrow, the author owns the content** | a hand-drawn arrow, a second row click handler, any focusable element in the header | `CollapsibleGroup` header guard (at the call site) |
-| Tabs | platform `Tabs`; the workspace tab strip is the one registered exception | a third hand-drawn tab strip | **human review** |
+| Tabs | platform `Tabs`; the workspace tab strip is the **one** registered exception | a third hand-drawn tab strip | `check-tab-role` |
 | Single choice | `Segmented` / `Select` (closed set) | two control types in one row | **human review** |
 | On / off | antd `Switch` | hand-written `role="switch"` | **human review** |
 | Drawer / modal header action | the header's `actions` slot (12px from close, one action) | stretching the title row with product CSS | **human review** (component test only) |
@@ -88,7 +88,7 @@ So **wrong-colour-for-meaning and non-foreground danger have no gate**; keep bot
 - Use a non-tier weight (620 / 680 / 700 / 750).
 - Hard-code a px font size instead of the size tier.
 - Hand-write `role="switch"`.
-- Hand-draw `role="tab"` (except the registered workspace tab strip).
+- Hand-draw `role="tab"` (except the registered workspace tab strip — **the only exception today**, registered in `scripts/check-tab-role.mts`; `ModelServiceModelDrawer` is not a second one: its `role="switch"` debt was removed with the source, and tabs were never its business).
 - Hand-format `YYYY/M/D`.
 - Print the same fact twice on one row.
 - Put explanatory prose in the body — scope notes, implementation detail, reassurance ("only affects…", "will not affect…").
