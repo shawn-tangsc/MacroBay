@@ -153,6 +153,19 @@ describe('sourceRuntimeConfig', () => {
     expect(config.pollingIntervalSec).toBeUndefined()
   })
 
+  it('never schedules a source the generic runtime does not collect, whatever its readiness', () => {
+    // `twelve-data-market` 从 planned 改成 live 之后暴露的真问题：collection: 'none' 的语义是
+    // 「不是通用适配器采」，与 readiness 无关；它由产品侧供数，通用运行时不该排期。
+    const definition = requireDefinition('twelve-data-market')
+    expect(definition.readiness).toBe('live')
+    const config = resolveRuntimeConfig({
+      definition,
+      profile: { ...createDefaultSourceProfile(definition), enabled: true, credentialRef: 'cred-twelve' },
+      hasCredential: true
+    })
+    expect(config.enabled).toBe(false)
+  })
+
   it('blocks enabling planned sources at validation time', () => {
     const definition = requireDefinition('bea-economic-series')
     const { config, issues } = resolveAndValidateRuntimeConfig({

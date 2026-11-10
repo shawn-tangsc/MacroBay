@@ -7,6 +7,7 @@ import type {
   IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
 import { sourceRequiresCredential } from '../schema/intelligenceSource'
+import { getSource } from './providerRegistry'
 import { isMacroSourceId } from './macroSourceCatalogMetadata'
 import { isDefillamaStablecoinRetiredPath } from './sourceCatalog'
 import { isZeroXRouterSource, zeroXRouterEtfRefreshSchedulePolicy } from './zeroXRouterSourcePolicy'
@@ -85,6 +86,16 @@ export function hasProductOwnedCollection(definition: IntelligenceSourceDefiniti
   return definition.collectionOwner === 'product'
 }
 
+/**
+ * 通用运行时**采不采**这个源：`collection: 'none'` 的语义就是「不是通用适配器采」，与
+ * `readiness` 无关——`twelve-data-market` 这类源改成 live 之后由产品侧供数，通用运行时仍不该排期。
+ * `collectionOwner: 'product'` 是同一件事的另一种写法，两条都判。
+ */
+export function genericRuntimeCollects(definition: IntelligenceSourceDefinition): boolean {
+  if (hasProductOwnedCollection(definition)) return false
+  return getSource(definition.sourceId)?.collection !== 'none'
+}
+
 export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): IntelligenceSourceConfig {
   const profile = input.profile ?? createDefaultSourceProfile(input.definition)
   const hasCredential = input.hasCredential ?? Boolean(profile.credentialRef)
@@ -93,7 +104,10 @@ export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): Intellig
     ? zeroXRouterEtfRefreshSchedulePolicy.collectionPreset
     : profile.collectionPreset ?? input.definition.defaultCollectionPreset
   const includeInSentiment = input.definition.supportsSentiment ? profile.includeInSentiment : false
-  const enabled = blocksProductionCollection(input.definition) ? false : profile.enabled
+  // 通用运行时只采「不是 none、也不是产品自有」的源；ready 与否另有一条（`blocksProductionCollection`）。
+  const enabled = blocksProductionCollection(input.definition) || !genericRuntimeCollects(input.definition)
+    ? false
+    : profile.enabled
   const isStream = input.definition.executionMode === 'websocket'
   const isCapitalConditionsCollector = isDefillamaStablecoinRetiredPath(input.definition.sourceId)
 
