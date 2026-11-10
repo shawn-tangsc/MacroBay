@@ -86,7 +86,9 @@ lifecycle question — whether the content exists is unaffected by it.
 - **`inline` stays out of the focus model.** Opening it **moves no focus** (the reader is working on
   the page; pulling them into the panel loses their place), it locks nothing and draws no mask, and
   while it is open Esc is listened for on the document so it closes even when focus is elsewhere.
-  Closing leaves focus where it was. These are fixed per mode, not call-site switches.
+  Closing leaves focus where it was. These are fixed per mode, not call-site switches. It also
+  **omits `aria-modal`**: with no mask, claiming the rest of the page is unavailable is false; the
+  modal branch keeps `aria-modal="true"`.
 - **No footer means no footer row** — not an empty wrapper kept for spacing.
 - **Two header states only.** `header="none"` still requires `ariaLabelKey`: an unnamed dialog is
   announced as "dialog".
@@ -98,5 +100,6 @@ lifecycle question — whether the content exists is unaffected by it.
 2. **Close**: the top-right control is keyboard reachable and its announced name is
    "关闭抽屉" / "Close drawer" — not a key, not empty.
 3. **Mode**: a `modal` drawer darkens the page and closes on Esc; an `inline` drawer has no mask and
-   does not trap focus.
+   does not trap focus. In the DOM the panel carries `aria-modal="true"` for `modal` and no
+   `aria-modal` at all for `inline`.
 4. **Footer**: a drawer with no footer shows no empty strip at the bottom.
