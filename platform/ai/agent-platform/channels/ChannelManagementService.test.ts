@@ -1612,22 +1612,35 @@ describe('in-app smoke on enable (unsupported adapter)', () => {
     ).all(id)).toEqual([{ code: 'telegram-conflict' }])
   })
 
-  it('never leaves the failure reason empty: throws, timeouts and blank codes are normalised', async () => {
-    const cases: Array<[() => Promise<{ ok: true } | { ok: false; code: string }>, string]> = [
-      [async () => { throw new Error('AbortError: timeout') }, 'telegram-network-unavailable'],
-      [async () => ({ ok: false, code: '' }), 'telegram-network-unavailable'],
-      [async () => ({ ok: false, code: 'something-new' }), 'telegram-network-unavailable']
+  it('never leaves the failure reason empty, and names the adapter that actually failed', async () => {
+    const cases: Array<[() => Promise<{ ok: true } | { ok: false; code: string }>, string, 'slack' | 'telegram']> = [
+      [async () => { throw new Error('AbortError: timeout') }, 'telegram-network-unavailable', 'telegram'],
+      [async () => ({ ok: false, code: '' }), 'telegram-network-unavailable', 'telegram'],
+      // 同一个未知码按适配器归各自的「网络不可用」：把 Slack 说成「适配器未支持」，
+      // 用户就会去查一个根本不存在的开关；只有真没实现自检的那几家才该说未支持。
+      [async () => ({ ok: false, code: 'something-new' }), 'slack-network-unavailable', 'slack']
     ]
-    for (const [smoke, expected] of cases) {
+    for (const [smoke, expected, type] of cases) {
       const { database, service } = harnessWithSmoke(smoke as never)
-      // 用 telegram：未知/异常码归一成「网络不可用」，非 telegram 会归成「适配器未支持」——那是另一条语义。
-      const id = configuredSlack(database, service, 'telegram')
+      const id = configuredSlack(database, service, type)
       const result = await service.requestEnable({ id, actorId: 'user-a' })
       expect(result).toMatchObject({ ok: false, code: 'channel-smoke-failed', reason: expected })
       // 审计行必须能看出「因为什么没开」：与返回的 reason 同一个码。
       expect(database.connection.prepare(
         "select code from channel_management_audits where channel_id = ? and action = 'request-enable'"
       ).all(id)).toEqual([{ code: expected }])
+    }
+  })
+
+  it('keeps "stored but unreadable" apart from "nothing stored"', async () => {
+    for (const code of ['channel-credential-unavailable', 'channel-credential-missing']) {
+      const { database, service } = harnessWithSmoke(async () => ({ ok: false, code }))
+      const id = configuredSlack(database, service, 'slack')
+      await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({
+        ok: false,
+        code: 'channel-smoke-failed',
+        reason: code
+      })
     }
   })
 

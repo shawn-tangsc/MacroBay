@@ -34,18 +34,40 @@ export const CHANNEL_SMOKE_REASONS = [
   'telegram-network-unavailable',
   'telegram-proxy-unavailable',
   'telegram-rate-limited',
-  // 凭据根本没存：与上面四个同属「用户能自己修」的原因，必须留在闭集里。
+  // Slack 自检（两把凭据各证一件事）：被拒 / 连不通 / 限流分得开，别都退回「未支持」。
+  'slack-provider-rejected',
+  'slack-network-unavailable',
+  'slack-rate-limited',
+  // 凭据根本没存 / 存过但读不出来：两种处境，两种说法，不许合成一个。
   'channel-credential-missing',
-  // 这个适配器还没实现自检（非 telegram）：保留原码，别伪造成网络问题。
+  'channel-credential-unavailable',
+  // 这个适配器还没实现自检（飞书、QQ、Discord、微信）：保留原码，别伪造成网络问题。
   'adapter-not-supported'
 ] as const
 
 export type ChannelSmokeReason = (typeof CHANNEL_SMOKE_REASONS)[number]
 
+/** 一家适配器的自检。没有实现的那种由路由返回 `adapter-not-supported`，绝不假装通过。 */
+export type ChannelSmoke = (channel: { id: string; type: AgentChannelType }) => Promise<ChannelSmokeResult>
+
+/**
+ * 按频道类型挑自检。**加出来的第二家曾经是「只接了一条线」的坑**：路由只有 telegram 时，
+ * 别家点启用会走到「未支持」，而代码看上去一切正常。所以这里默认是「没实现」，挂上谁由显式表决定。
+ */
+export function createChannelSmokeRouter(smokes: Partial<Record<AgentChannelType, ChannelSmoke>>): ChannelSmoke {
+  return async (channel) => {
+    const smoke = smokes[channel.type]
+    if (!smoke) return { ok: false, code: 'adapter-not-supported' }
+    return smoke(channel)
+  }
+}
+
 function normalizeReason(code: string | undefined, adapterType: string): ChannelSmokeReason {
   if (code && (CHANNEL_SMOKE_REASONS as readonly string[]).includes(code)) return code as ChannelSmokeReason
-  // 超时/异常/空码都属于「这一次没连上」：给网络不可用；非 telegram 归到未支持。
-  return adapterType === 'telegram' ? 'telegram-network-unavailable' : 'adapter-not-supported'
+  // 超时/异常/空码都属于「这一次没连上」：按适配器给各自那条网络不可用；没实现的才归到未支持。
+  if (adapterType === 'telegram') return 'telegram-network-unavailable'
+  if (adapterType === 'slack') return 'slack-network-unavailable'
+  return 'adapter-not-supported'
 }
 
 export type ChannelSmokeEnableDeps = {
