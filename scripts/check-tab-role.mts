@@ -16,6 +16,12 @@
  * 与页签无关，别把它当第二个例外。
  *
  * 扫描只证明「写法还在」，**不能证明渲染正确**——台账只写「结构守住了」。
+ *
+ * **它不在 `pnpm verify` 里单列一步**：`scripts/check-tab-role.test.mts` 的仓扫用例
+ * （`finds no hand-written tab outside the registered exception`）每次 `pnpm test` 都会跑一遍，
+ * 而 `test` 本来就在 verify 链里。再加一步等于同一件事跑两遍，还要多同步三处
+ * （`package.json` / `scripts/verify-sample.ts` / `AGENTS.md` 的步骤表与守卫）。
+ * 这个 CLI 是给**人**用的：改动前后想立刻知道「现在几处登记、有没有新命中」时跑它。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
