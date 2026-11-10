@@ -27,6 +27,7 @@ import {
   WechatRuntimeManager,
   createChannelInboundContentGuard
 } from '../../../ai/agent-platform/channels'
+import { resolveActiveProxy } from '../../../network/activeProxyState'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { pruneChannelRuntimeAudits } from '../../../ai/agent-platform/channels/channelRuntimeAuditPrune'
@@ -340,7 +341,8 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     runtime: larkRuntimeRepository,
     vault: channelCredentialVault,
     getPlatformFetch,
-    createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
+    // 长连接由官方 SDK 建，socket 工厂在这里用不上；代理只从应用网络设置解析。
+    resolveProxy: resolveActiveProxy,
     delivery: larkDeliveryTransport,
     getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
     keyedHash: (channelId, value) => channelCredentialVault.payloadCipher.keyedHash(channelId, value),

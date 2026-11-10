@@ -22,3 +22,26 @@ export async function describeActiveProxy(url: string): Promise<string> {
     return 'unknown'
   }
 }
+
+/** 代理解析的三种答案：显式直连、走某条代理、解析不出来（调用方必须把最后一种当成「不连」）。 */
+export type ActiveProxyDecision = { kind: 'direct' } | { kind: 'proxy'; url: string }
+
+/**
+ * 长连接那类「连不上就静默失败」的传输，需要先问清代理再动手：
+ * Chromium 说 DIRECT 就是直连；给了某条代理就带上它；**解析不出来的返回 `null`**，
+ * 由调用方拒绝连接——落回默认直连会把「代理没配」伪装成「适配器坏了」。
+ */
+export async function resolveActiveProxy(targetUrl: string): Promise<ActiveProxyDecision | null> {
+  try {
+    const resolved = await session.defaultSession.resolveProxy(targetUrl)
+    if (/^\s*DIRECT/i.test(resolved)) return { kind: 'direct' }
+    const match = /^(PROXY|SOCKS4|SOCKS5|HTTPS?)\s+([^\s;,]+)/i.exec(resolved.trim())
+    if (!match) return null
+    const scheme = match[1].toUpperCase().startsWith('SOCKS')
+      ? 'socks5'
+      : match[1].toLowerCase() === 'https' ? 'https' : 'http'
+    return { kind: 'proxy', url: `${scheme}://${match[2]}` }
+  } catch {
+    return null
+  }
+}

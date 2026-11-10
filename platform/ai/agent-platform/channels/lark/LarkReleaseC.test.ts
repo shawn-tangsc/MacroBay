@@ -152,18 +152,19 @@ describe('Lark Release C contracts', () => {
     expect(database.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id=?').get('legacy-feishu')).toEqual({ count: 0 })
   })
 
-  it('does not construct HTTP or WebSocket runtime dependencies while Lark remains blocked', async () => {
+  it('opens nothing when the credential cannot be read', async () => {
     const fetch = vi.fn() as unknown as typeof globalThis.fetch
-    const webSocket = vi.fn() as never
+    const resolveProxy = vi.fn(async () => ({ kind: 'direct' as const }))
     const manager = new LarkRuntimeManager({
       inbound: {} as never, runtime: new LarkRuntimeRepository(createAgentPlatformDatabase(':memory:')),
-      vault: {} as never, getPlatformFetch: () => fetch, createPlatformWebSocket: webSocket,
+      vault: { get: async () => null } as never, getPlatformFetch: () => fetch,
       delivery: new LarkDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }), keyedHash: async () => 'opaque',
-      ownsLifecycleOwner: () => true, isCurrentActive: () => true
+      ownsLifecycleOwner: () => true, isCurrentActive: () => true, resolveProxy
     })
+    // 凭据读不出来：一个请求、一次代理解析、一条连接都不该发生。
     await expect(manager.start('lark-a', 1, 'owner-a')).resolves.toBe(false)
     expect(fetch).not.toHaveBeenCalled()
-    expect(webSocket).not.toHaveBeenCalled()
+    expect(resolveProxy).not.toHaveBeenCalled()
   })
 
   it('does not route an isolated Feishu storage row to Telegram or Lark delivery', async () => {

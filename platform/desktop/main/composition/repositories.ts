@@ -12,11 +12,12 @@ import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createChannelSmokeRouter } from '../../../ai/agent-platform/channels/channelSmokeEnable'
 import { createDiscordChannelSmoke } from '../../../ai/agent-platform/channels/discord/discordChannelSmoke'
+import { createLarkChannelSmoke } from '../../../ai/agent-platform/channels/lark/larkChannelSmoke'
 import { createQqChannelSmoke } from '../../../ai/agent-platform/channels/qq/qqChannelSmoke'
 import { createSlackChannelSmoke } from '../../../ai/agent-platform/channels/slack/slackChannelSmoke'
 import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
 import { reconcileSingleEnabledChannel } from '../../../ai/agent-platform/channels/singleEnabledChannel'
-import { describeActiveProxy } from '../../../network/activeProxyState'
+import { describeActiveProxy, resolveActiveProxy } from '../../../network/activeProxyState'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createAgentPlatformRepositories } from '../../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../../ai/agent-platform/store/agentSqliteStore'
@@ -121,6 +122,15 @@ const channelManagementService = new ChannelManagementService({
       credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
       readSecret: (ref) => channelCredentialVault.get(ref),
       getPlatformFetch,
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net'
+    }),
+    // 飞书两步：鉴权 + 长连接。代理只从应用网络设置解析，解析不出来就判失败、不建连接。
+    feishu: createLarkChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      resolveProxy: resolveActiveProxy,
       describeProxy: describeActiveProxy,
       fetchKind: 'net'
     })

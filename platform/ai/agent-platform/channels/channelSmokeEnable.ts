@@ -46,6 +46,12 @@ export const CHANNEL_SMOKE_REASONS = [
   'qq-provider-rejected',
   'qq-network-unavailable',
   'qq-rate-limited',
+  // 飞书自检：鉴权 + 长连接两步；代理/连接失败也各有码。
+  'lark-provider-rejected',
+  'lark-network-unavailable',
+  'lark-rate-limited',
+  'lark-proxy-unresolved',
+  'lark-connect-failed',
   // 凭据根本没存 / 存过但读不出来：两种处境，两种说法，不许合成一个。
   'channel-credential-missing',
   'channel-credential-unavailable',
@@ -77,6 +83,7 @@ function normalizeReason(code: string | undefined, adapterType: string): Channel
   if (adapterType === 'slack') return 'slack-network-unavailable'
   if (adapterType === 'discord') return 'discord-network-unavailable'
   if (adapterType === 'qq') return 'qq-network-unavailable'
+  if (adapterType === 'feishu') return 'lark-network-unavailable'
   return 'adapter-not-supported'
 }
 

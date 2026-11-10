@@ -16,8 +16,9 @@ const catalogEntries = [
   { type: 'slack', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token', 'app_token'] },
   { type: 'discord', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token'] },
   { type: 'qq', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['app_id', 'client_secret'] },
+  { type: 'feishu', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['app_id', 'app_secret'] },
   // 没实现的平台目录里仍有一行，但**列表里不出现**：列表回答的是「我现在能用哪个」。
-  { type: 'feishu', status: 'blocked', reason: 'adapter-blocked', implemented: false, credentialFields: [] }
+  { type: 'wechat', status: 'blocked', reason: 'adapter-blocked', implemented: false, credentialFields: [] }
 ]
 
 const channel = {
@@ -540,9 +541,9 @@ describe('the platform list follows the approved layout', () => {
     const order = [...container.querySelectorAll('.channel-platform-item')].map((node) =>
       node.querySelectorAll('span')[1]?.textContent?.trim()
     )
-    // 判据来自目录的 `implemented`：接上了才出现；飞书没实现，所以不在列表里。
-    expect(order).toEqual(['Telegram', 'Slack', 'Discord', 'QQ'])
-    expect(container.textContent).not.toContain('飞书')
+    // 判据来自目录的 `implemented`：接上了才出现；微信没实现，所以不在列表里。
+    expect(order).toEqual(['Telegram', 'Slack', 'Discord', 'QQ', '飞书'])
+    expect(container.textContent).not.toContain('WeChat')
   })
 
   it('never shows another platform sentence once the selection changes', async () => {
@@ -562,9 +563,9 @@ describe('the platform list follows the approved layout', () => {
     installPlatform()
     const container = await mount()
 
-    // 飞书目录里有行、但 implemented=false：列表里一个位置都不占，也不留空块或按不动的项。
-    expect(container.textContent).not.toContain('飞书')
-    expect([...container.querySelectorAll('.channel-platform-item')]).toHaveLength(4)
+    // 微信目录里有行、但 implemented=false：列表里一个位置都不占，也不留空块或按不动的项。
+    expect(container.textContent).not.toContain('WeChat')
+    expect([...container.querySelectorAll('.channel-platform-item')]).toHaveLength(5)
     expect(container.querySelector('[data-state="empty"]')).toBeNull()
   })
 
@@ -573,8 +574,8 @@ describe('the platform list follows the approved layout', () => {
     const container = await mount()
 
     // 每个列出来的平台都有自己的图形；Discord 接上之后也在。
-    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(4)
-    for (const platform of ['telegram', 'slack', 'discord', 'qq']) {
+    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(5)
+    for (const platform of ['telegram', 'slack', 'discord', 'qq', 'feishu']) {
       expect(container.querySelector(`.channel-platform-logo[data-platform-logo="${platform}"]`)).not.toBeNull()
     }
   })
