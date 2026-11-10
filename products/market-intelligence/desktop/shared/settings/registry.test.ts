@@ -280,7 +280,12 @@ describe('settings registry self-checks', () => {
     expect(scope?.copy?.helpKey).toBeUndefined()
 
     const surfaces = flat.find((row) => row.key === 'setting:notifications.surfaces')
-    expect(surfaces?.copy?.helpKeys).toEqual(['pages.intelligence.notification.calendar.surfacesNote'])
+    // 「中心无论如何都会记一条」**排第一句**：读者就是因为「列表里没有通知中心」才点开这颗 ⓘ，
+    // 第一眼要看到这个答案；说明送达面含义的那句排在后面（界面设计 2026-11-10 定）。
+    expect(surfaces?.copy?.helpKeys).toEqual([
+      'pages.intelligence.notification.calendar.surfacesCenterNote',
+      'pages.intelligence.notification.calendar.surfacesNote'
+    ])
     expect(surfaces?.copy?.helpAriaKey).toBe('pages.intelligence.notification.calendar.aboutAria')
   })
 

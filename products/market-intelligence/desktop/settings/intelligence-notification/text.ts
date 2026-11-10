@@ -24,6 +24,9 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.calendar.surfaces': '发到哪些地方',
   'pages.intelligence.notification.calendar.surfaceRow': '通知方式',
   'pages.intelligence.notification.calendar.surfacesNote': '这一处管两条通知：开始前提醒与发生后通知。',
+  // 触达面那颗 ⓘ 的**第一句**（界面设计 2026-11-10 定）：读者就是因为「列表里没有通知中心」才点开它。
+  // 陈述事实，不写成承诺；「中心恒收」的出处仍在平台写入侧（`SELECTABLE_SURFACES` 不含 center）。
+  'pages.intelligence.notification.calendar.surfacesCenterNote': '不管这里勾了几个，都会记录到通知中心。',
   'pages.intelligence.notification.calendar.before': '开始前',
   'pages.intelligence.notification.calendar.beforeRow': '提前提醒',
   'pages.intelligence.notification.calendar.beforeNote': '提醒的是重要经济指标、央行活动、财经事件；提前量按事件本身的时间算，时区只影响显示。',
@@ -132,6 +135,7 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.calendar.surfaces': 'Where it goes',
   'pages.intelligence.notification.calendar.surfaceRow': 'Notice type',
   'pages.intelligence.notification.calendar.surfacesNote': 'One choice governs both notices: the reminder before the event and the notice after it.',
+  'pages.intelligence.notification.calendar.surfacesCenterNote': 'Whatever is ticked here, notifications are still recorded in the notification centre.',
   'pages.intelligence.notification.calendar.before': 'Before it starts',
   'pages.intelligence.notification.calendar.beforeRow': 'Remind me beforehand',
   'pages.intelligence.notification.calendar.beforeNote': "Major economic indicators, central-bank activity and financial events; the lead time counts from the event's own time, your time zone only changes how it is shown.",

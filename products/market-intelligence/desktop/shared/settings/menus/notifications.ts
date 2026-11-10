@@ -270,7 +270,12 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     },
     copy: {
       labelKey: 'pages.intelligence.notification.calendar.surfaceRow',
-      helpKeys: ['pages.intelligence.notification.calendar.surfacesNote'],
+      // 两条并进**同一颗** ⓘ：先说「不管勾几个都会记到通知中心」（读者点开就是为这个答案），
+      // 再说这处管哪两条通知——顺序是界面设计 2026-11-10 定的。
+      helpKeys: [
+        'pages.intelligence.notification.calendar.surfacesCenterNote',
+        'pages.intelligence.notification.calendar.surfacesNote'
+      ],
       helpAriaKey: 'pages.intelligence.notification.calendar.aboutAria'
     },
     availability: 'live'
