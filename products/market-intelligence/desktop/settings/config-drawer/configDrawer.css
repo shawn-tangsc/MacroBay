@@ -230,3 +230,35 @@
   width: auto;
   margin-bottom: 0;
 }
+
+/* 详情区（规格 §2）：分组标题上 16 下 8；行 44/60、左右 12；标签列 160；控件与值间距 8；块间 16。 */
+.config-drawer__detail .config-drawer__group-title {
+  margin: 16px 0 8px;
+  font-size: var(--font-section);
+  font-weight: 600;
+  line-height: var(--line-section);
+  color: var(--muted-strong);
+}
+
+.config-drawer__detail .config-drawer__group { gap: 16px; }
+
+.config-drawer__detail .config-drawer__row {
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+/* 两行内容的行：60（44 + 一行正文行高）。 */
+.config-drawer__detail .config-drawer__row--two-line { min-height: 60px; }
+
+.config-drawer__detail .config-drawer__label {
+  flex: 0 0 160px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.config-drawer__detail .config-drawer__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+}
