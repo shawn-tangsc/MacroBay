@@ -94,8 +94,9 @@ function IntelligencePageBody(): React.ReactElement {
   const openCryptoPrimary = (): void => {
     setActiveView('dashboard')
   }
+  /** 门户/看板「配置来源」：**新抽屉**，预设看板筛选（旧看板抽屉入口一并收口）。 */
   const openCryptoSources = (): void => {
-    setSourceDrawerOpen(true)
+    openConfigDrawer('sources', 'dashboard')
   }
   const toggleSample = async (): Promise<void> => {
     if (sample.state.active) {
@@ -150,7 +151,7 @@ function IntelligencePageBody(): React.ReactElement {
       {sample.state.active && activeView === 'dashboard' ? (
         <SampleModeBanner
           busy={sample.busy}
-          onConnect={() => { void sample.exit().then(() => setSourceDrawerOpen(true)) }}
+          onConnect={() => { void sample.exit().then(() => openConfigDrawer('sources', 'dashboard')) }}
           onExit={() => { void sample.exit() }}
           scenarioNow={sample.state.scenarioNow}
           text={sampleText.banner as SampleModeBannerText}
@@ -162,7 +163,7 @@ function IntelligencePageBody(): React.ReactElement {
           text={text.dashboard.dailyBriefing}
           eventTitles={text.analysisWorkspace.readableNames.eventName}
           onBack={() => setActiveView('dashboard')}
-          onConfigureSources={() => setSourceDrawerOpen(true)}
+          onConfigureSources={() => openConfigDrawer('sources', 'dashboard')}
           onConfigureWebSearch={openWebSearchSettings}
           onOpenSettings={() => openConfigDrawer('briefing')}
         />
@@ -173,6 +174,7 @@ function IntelligencePageBody(): React.ReactElement {
           onBack={() => setActiveView('dashboard')}
           openTarget={calendarTarget}
           text={text.calendar}
+          onOpenSettings={() => openConfigDrawer('sources', 'calendar')}
         />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
@@ -216,8 +218,8 @@ function IntelligencePageBody(): React.ReactElement {
           macroRatesClient={macroRatesClient}
           dashboardFeedStatusClient={dashboardFeedStatusClient}
           now={sampleNow}
-          onConfigureSources={() => setSourceDrawerOpen(true)}
-          onManageSource={() => setSourceDrawerOpen(true)}
+          onConfigureSources={() => openConfigDrawer('sources', 'dashboard')}
+          onManageSource={() => openConfigDrawer('sources', 'dashboard')}
           initialSettingsMenu={configDrawerMenu}
           initialSourceFilter={initialSourceFilter}
           openSettingsRequest={configDrawerRequest}

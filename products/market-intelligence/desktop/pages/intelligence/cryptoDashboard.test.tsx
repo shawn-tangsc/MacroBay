@@ -58,6 +58,25 @@ function cssBlock(source: string, marker: string): string {
   return ''
 }
 
+describe('the old source drawer has no entry left', () => {
+  it('sends every entry to the new drawer, with the filter each one means', () => {
+    // 入口只指向一个函数：四处（门户/看板配置来源、样例「连数据」、行尾管理来源、日报页配置来源）
+    // 与日历「日历设置」，都走 openConfigDrawer，且筛选预设写死在这里。
+    expect(page).not.toContain('setSourceDrawerOpen(true)')
+    expect(page).toContain("openConfigDrawer('sources', 'dashboard')")
+    expect(page).toContain("openConfigDrawer('sources', 'calendar')")
+    expect(page.match(/openConfigDrawer\('sources', 'dashboard'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+    // 日历那一颗必须显式传：不传就退回旧行为（打开旧抽屉）。
+    expect(page).toContain('onOpenSettings={() => openConfigDrawer')
+  })
+
+  it('leaves exactly one rendering reference to the old drawer, and no other use', () => {
+    // 旧抽屉此时**没有任何入口可达**：只剩「渲染它」这一处，交给前端整块删。
+    expect(page.match(/<DashboardPanelDrawer/g)?.length).toBe(1)
+    expect(page).not.toContain('setSourceDrawerOpen(true)')
+  })
+})
+
 describe('crypto intelligence dashboard', () => {
   const text = productText['zh-CN'].pages.intelligence.portal
 
