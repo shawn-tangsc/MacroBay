@@ -25,6 +25,8 @@ export type CalendarCardCategory = 'economic-indicator' | 'financial-event' | 'c
 /** The subset of an official or provider event view the card needs. */
 export type CalendarCardEvent = Readonly<{
   eventKey: string
+  /** 这条事件来自哪些日历来源（`sourceId`）：卡片按「来源当前启用」过滤时只读它。 */
+  sourceIds?: readonly string[]
   titleKey: string
   /** The 0xRouter route's country for this event, already localised; absent on the official route. */
   countryName?: string

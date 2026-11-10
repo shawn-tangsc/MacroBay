@@ -225,6 +225,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         card={<MarketCalendarCard
           projection={cardData.projection}
           state={cardData.state}
+          sourcesState={cardData.sourcesState}
           stale={cardData.stale}
           text={{
             ...text.calendarCard,

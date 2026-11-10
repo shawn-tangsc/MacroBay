@@ -43,6 +43,37 @@ async function render(node: React.ReactElement, language: 'zh-CN' | 'en-US' = 'z
   return host
 }
 
+it('says "sources are not enabled" as one whole-card line with one action, not an empty list', async () => {
+  // 三态之二（共享类）：没启用不是「确实没有」。整卡一句 + 一颗动作，正文不出现空列表/「暂无」。
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
+    sourcesState="disabled" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  const card = host.querySelector('.mi-source-card')
+  expect(card?.getAttribute('data-state')).toBe('disabled')
+  const sentence = host.querySelector('.mi-source-state')
+  expect(sentence?.getAttribute('data-state')).toBe('disabled')
+  expect(sentence?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.data.sourcesNotEnabled)
+  // 一颗动作：去启用（共享文案键，不写字面量）。
+  const actions = card?.querySelectorAll('button') ?? []
+  expect(actions).toHaveLength(1)
+  expect(actions[0]?.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.data.enableSources)
+  // 不画列表、不摆「本月没有」。
+  expect(host.querySelector('.mi-calendar-card__list')).toBeNull()
+  expect(host.textContent).not.toContain(text.empty)
+})
+
+it('says "no source configured" with the configure action, still one line and one action', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'empty' }}
+    sourcesState="missing" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  const sentence = host.querySelector('.mi-source-state')
+  expect(sentence?.getAttribute('data-state')).toBe('missing')
+  expect(sentence?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.data.sourcesNotConfigured)
+  const actions = host.querySelector('.mi-source-card')?.querySelectorAll('button') ?? []
+  expect(actions).toHaveLength(1)
+  expect(actions[0]?.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.data.configureSources)
+  // 未配置不用错误色：图标只在读不到那一态用 danger（类名约定，样式在共享表里）。
+  expect(host.querySelector('.mi-source-state')?.getAttribute('data-state')).not.toBe('unreadable')
+})
+
 it('puts the provider country next to the kind chip, so two same-named events stay apart', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: '9月未季调消费者物价指数(年率)', countryName: '美国' }), row({ eventKey: 'other', titleKey: '9月未季调消费者物价指数(年率)', countryName: '日本' })], state: 'available' }}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
