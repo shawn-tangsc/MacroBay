@@ -55,6 +55,12 @@ export type SettingFieldProps = Readonly<{
   helpAriaLabelKey?: string
   /** 行名字自身的类名（各屏现状不同，由调用方给，保 A1 的 DOM 逐字不变）。 */
   labelTextClassName?: string
+  /** 补充信息槽（与标签同一行、标签之后）：状态药丸、归属标签行这类**非交互**内容。 */
+  meta?: ReactNode
+  /** 复制列元素，默认 `span`；只给复用「列表行」形状的调用点。 */
+  copyAs?: 'span' | 'div'
+  /** 标签元素，默认 `span`；给了就不再套标签 span。 */
+  labelAs?: 'span' | 'strong'
   /** `multiSelect` 每一项的类名（各屏现状不同，由调用方给）。 */
   checkboxClassName?: string
   /** `select`（antd）的样式；旧屏给过 `minWidth` 的由调用方传，保 DOM 不变。 */
@@ -85,10 +91,12 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
   const row = (children: ReactNode): ReactElement => <SettingsRow
     copyClassName={props.copyClassName}
     headClassName={props.headClassName}
-    label={<>
-      <span className={props.labelTextClassName}>{label}</span>
-      {info}
-    </>}
+    label={props.labelAs !== undefined && info === null
+      ? label
+      : <><span className={props.labelTextClassName}>{label}</span>{info}</>}
+    {...(props.labelAs === undefined ? {} : { labelAs: props.labelAs })}
+    {...(props.copyAs === undefined ? {} : { copyAs: props.copyAs })}
+    {...(props.meta === undefined ? {} : { meta: props.meta })}
     rowAttributes={{ 'data-setting-key': props.instanceKey ?? descriptor.key }}
     rowClassName={props.rowClassName}
     {...(props.controlWrapperClassName === undefined ? {} : { controlWrapperClassName: props.controlWrapperClassName })}

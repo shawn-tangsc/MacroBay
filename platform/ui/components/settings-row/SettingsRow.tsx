@@ -25,6 +25,16 @@ export type SettingsRowProps = {
   /** 标签内容（含 ⓘ）。 */
   label: ReactNode
   /**
+   * 补充信息槽：与标签**同一行**、在标签之后、控件之前（状态药丸、归属标签行这类
+   * **非交互**内容）。不传时 DOM 与原来逐字节相同——它是给「设置行里本来就有状态词」的
+   * 屏幕用的，不是第二个控件位。
+   */
+  meta?: ReactNode
+  /** 复制列的元素：默认 `span`；源行现状是 `div`，由调用方指定以保持 DOM 不变。 */
+  copyAs?: 'span' | 'div'
+  /** 标签元素：默认 `span`；源行现状是 `strong`。给了就不再套那层标签 span。 */
+  labelAs?: 'span' | 'strong'
+  /**
    * 右侧**控件容器**的类名。
    *
    * - **给了**：控件包一层带这个类名的容器；
@@ -52,15 +62,25 @@ export function SettingsRow({
   copyClassName,
   headClassName,
   label,
+  meta,
+  copyAs,
+  labelAs,
   controlWrapperClassName,
   controlAttributes,
   rowAttributes,
   children
 }: SettingsRowProps): React.ReactElement {
+  const Copy = copyAs ?? 'span'
+  const Label = labelAs ?? 'span'
+  const labelled = headClassName !== undefined
+    ? <span className={headClassName}>{label}</span>
+    // 只有显式给了 labelAs 或带了 meta 才套标签元素；默认路径与今天逐字节相同。
+    : (labelAs === undefined && meta === undefined) ? label : <Label>{label}</Label>
   return <div className={rowClassName} {...rowAttributes}>
-    <span className={copyClassName}>
-      {headClassName === undefined ? label : <span className={headClassName}>{label}</span>}
-    </span>
+    <Copy className={copyClassName}>
+      {labelled}
+      {meta}
+    </Copy>
     {controlWrapperClassName === undefined
       ? children
       : <div className={controlWrapperClassName} {...controlAttributes}>{children}</div>}
