@@ -322,6 +322,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                 {/* 三样都要：名字、一句用途、以及「为什么现在不能用」——缺用途那版只剩一句原因，
                     读者不知道这个平台是干什么的。 */}
                 <p className="channel-detail-purpose">{labels.channelPlatformPurpose[selectedType]}</p>
+                {/*
+                 * **兜底，不是活代码**：中列只列 `implemented` 的平台（`ChannelPlatformList` 的过滤），
+                 * 所以今天走不到这两句。留着是为了将来放宽入口时仍有一句实话可出；
+                 * 改文案前先看这个前提——别把兜底当成正在展示的句子去调措辞。
+                 */}
                 {supported ? null : (
                   <p className="channel-detail-reason">
                     {planned ? labels.channelNeedsEvidence : labels.channelUnsupportedPane}
