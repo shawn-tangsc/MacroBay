@@ -70,33 +70,31 @@ async function selectCalendar(container: HTMLElement): Promise<void> {
 }
 
 describe('an unreadable calendar settings block is never drawn as off', () => {
-  it('says unreadable in the list and offers a real retry in the detail', async () => {
+  it('says unreadable on its own row and offers a real retry, not an off switch', async () => {
     install(true)
     const container = await render()
 
-    const calendarRow = [...container.querySelectorAll('.intelligence-provider-row')]
-      .find((button) => button.textContent?.includes(text['pages.intelligence.notification.rows.calendar.title']))
-    expect(calendarRow?.textContent).toContain(text['pages.intelligence.notification.status.unreadable'])
-    expect(calendarRow?.textContent).not.toContain(text['pages.intelligence.notification.status.off'])
+    const row = container.querySelector('[data-setting-key="setting:notifications.calendar.enabled"]')
+    expect(row?.textContent).toContain(text['pages.intelligence.notification.status.unreadable'])
+    expect(row?.textContent).not.toContain(text['pages.intelligence.notification.status.off'])
+    // 读不到时**不画开关**：一颗灰开关会被读成「关着」。
+    expect(row?.querySelector('button[role="switch"]')).toBeNull()
+    // 真重试：可点的按钮，不是一句话。
+    expect([...(row?.querySelectorAll('button') ?? [])].length).toBeGreaterThan(0)
 
-    await selectCalendar(container)
-    const detail = container.querySelector('.settings-detail-pane')
-    // 详情是错误态（平台 `StateView`，句子由平台给），不是「关着」也不是空白。
-    expect(detail?.querySelector('.state-view--error')).not.toBeNull()
-    expect(detail?.textContent).not.toContain(text['pages.intelligence.notification.status.off'])
-    // 真重试：错误态给一颗可再读的按钮，不是一句话。
-    const retry = [...(detail?.querySelectorAll('button') ?? [])]
-    expect(retry.length).toBeGreaterThan(0)
+    // 条件区块跟着消失（条件属于那一刻读到的值，读不到就不画）。
+    expect(container.querySelector('.intelligence-notification-drawer')?.textContent)
+      .not.toContain(text['pages.intelligence.notification.calendarSection'])
   })
 
   it('keeps the row explanation in the ⓘ, not in the row body', async () => {
     install(false)
     const container = await render()
     const row = container.querySelector('.intelligence-notification-form-row')
-    const bodyText = row?.textContent ?? ''
-    expect(bodyText).not.toContain(text['pages.intelligence.notification.rows.signalTriggered.info'])
+    const info = text['pages.intelligence.notification.rows.signalTriggered.info'] ?? ''
+    expect(row?.textContent ?? '').not.toContain(info)
     const trigger = [...(row?.querySelectorAll('button') ?? [])]
-      .find((button) => button.getAttribute('aria-label') === text['pages.intelligence.notification.rows.signalTriggered.info'])
+      .find((button) => button.getAttribute('aria-label') === info)
     expect(trigger).toBeDefined()
   })
 })

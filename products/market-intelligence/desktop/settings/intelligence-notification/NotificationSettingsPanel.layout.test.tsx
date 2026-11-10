@@ -83,18 +83,21 @@ async function renderPanel(variant: 'page' | 'drawer', width?: number): Promise<
 }
 
 describe('the notification settings panel layout', () => {
-  it('splits the drawer into the catalog and the detail pane at any container width', async () => {
-    // 分栏屏吃满宽度、任何窗口宽度都不切下拉（860 只属设置页）。左列表是目录行，不是下拉。
+  it('keeps the drawer to one column of blocks at any container width', async () => {
+    // 单列区块，不是左列表 + 右详情：只有一个开关的分类在分栏里右边全是空白。
+    // 任何窗口宽度都不切下拉（860 只属设置页）。
     const previous = window.innerWidth
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 })
     try {
       const container = await renderPanel('drawer')
-      const split = container.querySelector('.config-drawer__split.intelligence-notification-split')
-      expect(split).not.toBeNull()
-      expect([...(split?.children ?? [])]).toHaveLength(2)
-      expect(split?.children[0]?.className).toContain('intelligence-catalog-pane')
-      expect(split?.children[1]?.className).toContain('settings-detail-pane')
-      expect(container.querySelectorAll('.intelligence-catalog-pane .intelligence-provider-row')).toHaveLength(4)
+      expect(container.querySelector('.config-drawer__split')).toBeNull()
+      expect(container.querySelector('.intelligence-catalog-pane')).toBeNull()
+      const column = container.querySelector('.intelligence-notification-drawer')
+      expect(column).not.toBeNull()
+      // 第一块「推送提醒」四行开关；标题只在区块头出现一次，不再有列表里的第二份。
+      const first = column?.querySelector('.settings-section')
+      expect(first).not.toBeNull()
+      expect(first?.querySelectorAll('.intelligence-notification-form-row')).toHaveLength(4)
       expect(container.querySelector('select')).toBeNull()
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: previous })
@@ -127,18 +130,18 @@ describe('the notification settings panel layout', () => {
     expect(page.querySelector('.intelligence-notification-title')?.textContent).toBe(groupTitle)
   })
 
-  it('keeps the explanation attached to the notice it explains, above the two columns', async () => {
-    // 「为什么勾了还不响」不许单独悬空：抽屉里它挂在通道提示这一条上，提示在两栏上方；
-    // 行自己的说明由该行声明里的 helpKey 给（`showHelp`），不在组件里另写句子。
+  it('keeps the notice above the blocks, and the explanation on the block title it explains', async () => {
+    // 「为什么勾了还不响」挂在「推送提醒」区块标题旁（间距 4，平台 header 的 info 槽），不单独悬空。
     const infoAria = text['pages.intelligence.notification.infoAria']
     const drawer = await renderPanel('drawer')
     const notice = drawer.querySelector('.intelligence-notification-panel__notice')
     expect(notice).not.toBeNull()
-    // 提示在上、两栏在下：读者先知道不通，再看内容。
-    expect(notice?.nextElementSibling?.className).toContain('intelligence-notification-split')
-    const trigger = [...(notice?.querySelectorAll('button') ?? [])]
+    const column = drawer.querySelector('.intelligence-notification-drawer')
+    expect(notice?.nextElementSibling).toBe(column)
+    const section = column?.querySelector('.settings-section')
+    const trigger = [...(section?.querySelectorAll('button') ?? [])]
       .find((button) => button.getAttribute('aria-label') === infoAria)
-    expect(trigger, '提示旁必须有那颗 ⓘ').toBeDefined()
+    expect(trigger, '区块标题旁必须有那颗 ⓘ').toBeDefined()
 
     await act(async () => {
       trigger?.focus()
@@ -146,17 +149,8 @@ describe('the notification settings panel layout', () => {
       await Promise.resolve()
     })
     expect(document.querySelector('[data-popover-line="0"]')?.textContent).toBe(
-      text['pages.intelligence.notification.channelNotReady']
+      text['pages.intelligence.notification.groupInfo.2']
     )
-
-    await act(async () => root?.unmount())
-    root = undefined
-    document.body.replaceChildren()
-
-    // 设置页那一面：页标题在详情列里；通道提示与它那颗 ⓘ 同样在内容上方。
-    const page = await renderPanel('page')
-    expect(page.querySelector('.settings-detail-pane .intelligence-notification-title')).not.toBeNull()
-    expect([...page.querySelectorAll('.intelligence-notification-panel__notice button')]
-      .some((button) => button.getAttribute('aria-label') === infoAria)).toBe(true)
   })
+
 })

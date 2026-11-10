@@ -281,3 +281,13 @@
   min-height: 0;
   height: auto;
 }
+
+/* 抽屉面：单列区块（推送提醒 / 舆情条件 / 日历提醒），整列自己滚，区块间距 16。 */
+.intelligence-notification-drawer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+}
