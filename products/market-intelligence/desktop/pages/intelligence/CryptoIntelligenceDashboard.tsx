@@ -61,7 +61,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
 
-import { PolicyPathCard } from './PolicyPathCard'
+import { PolicyPathCard, PolicyPathUnavailable } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
 
@@ -207,7 +207,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const feedView = useDashboardFeedStatus({ client: readsReady ? dashboardFeedStatusClient : undefined, crossAssetClient: readsReady && readGates.crossAsset ? crossAssetClient : undefined })
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
-  const policyPath = usePolicyPathReading(readsReady && readGates.policyPath)
+  const policyPathRead = usePolicyPathReading(readsReady && readGates.policyPath)
+  const policyPath = policyPathRead.result
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
@@ -329,13 +330,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         text={crossAssetText} /> : null}
-      {readsReady && readGates.policyPath && policyPath?.state === 'available' ? (() => {
+      {readsReady && readGates.policyPath && (policyPath?.state === 'available' ? (() => {
         const card = <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
           month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
         // The rail is the layout's, not this page's: portal into its slot when it exists so the card
         // sits above the calendar, and fall back to the page flow when rendered on its own.
         return policySlot ? createPortal(card, policySlot) : card
-      })() : null}
+      })() : <PolicyPathUnavailable text={text.policyPath} onRetry={policyPathRead.reload} />)}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not

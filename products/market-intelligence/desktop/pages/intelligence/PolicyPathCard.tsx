@@ -1,6 +1,8 @@
 import { Button } from 'antd'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { policyPathDay } from './policyPathMonth'
@@ -90,6 +92,21 @@ const STALENESS_KEY = {
   unavailable: 'pages.intelligence.portal.dashboard.policyPath.unavailable'
 } as const
 
+/**
+ * 整卡「读不到」：这条读数没读出来时替换整张卡（**不许留白**）。
+ *
+ * 用平台 `StateView`（settled 错误态，Chief/界面设计 2026-11-11 裁定），唯一动作是「再试一次」。
+ * 「未配置 / 未启用」不是错误，走共享可用性卡，不在这一处。
+ */
+export function PolicyPathUnavailable({ text, onRetry }: Readonly<{ text: PolicyPathCardText; onRetry?: () => void }>): React.ReactElement {
+  return <section className="mi-policy-card" aria-label={text.title} data-staleness="unavailable">
+    <header className="mi-policy-card__head"><h2>{text.title}</h2></header>
+    <StateView state="error" reasonCode="unreadable" size="md"
+      productReason={{ key: 'pages.intelligence.portal.dashboard.policyPath.unavailable', resolve: () => text.unavailable }}
+      action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => onRetry?.() }} />
+  </section>
+}
+
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   reading: PolicyPathReading
   text: PolicyPathCardText
@@ -148,6 +165,11 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   const judged = judgedView(settlement, text)
   // 会议日与 SEP 观测日都是**日历日**：交给同一个格式化（语言决定写法），不自己切字符串。
   const locale = useShellLanguage()
+  /**
+   * 「读不到」不是 `staleness === 'unavailable'`：那个字段说的是**市场隐含概率**这一路读数的新鲜度，
+   * 结算期卡片本来就没有报价（合法地 unavailable），而官方事实（目标区间/票型/会议日）仍然在。
+   * 所以整卡错误态只给「这条读数本身没读出来」（`state !== 'available'`），由宿主渲染。
+   */
   const meetingValue = (date: string, days: number) => <>
     {policyPathDay(date, locale)}<span className="mi-policy-card__muted"> · {text.daysAway.replace('{days}', String(days))}</span>
   </>

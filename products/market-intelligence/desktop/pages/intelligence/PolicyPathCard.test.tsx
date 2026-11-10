@@ -8,7 +8,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { PolicyPathCard, type PolicyPathCardText } from './PolicyPathCard'
+import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathDay } from './policyPathMonth'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
@@ -44,6 +44,27 @@ const render = async (candidate: PolicyPathReading, cardText: PolicyPathCardText
   })))
   return host
 }
+
+it('replaces a reading that could not be read with the settled error state, not a blank slot', async () => {
+  // 2026-11-11 裁定：读不到 = settled 错误态（平台 StateView）；未配置/未启用才是共享可用性卡。
+  // 注意：`staleness === 'unavailable'` 是**市场报价**的新鲜度（结算期卡片合法地没有报价），
+  // 不是整卡读不到，所以那张错误态由宿主在「读数本身没出来」时渲染。
+  let retried = 0
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => root!.render(createElement(ShellLanguageProvider, {
+    language: 'zh-CN',
+    children: createElement(PolicyPathUnavailable, { text, onRetry: () => { retried += 1 } })
+  })))
+  expect(host.querySelector('.state-view--error')).not.toBeNull()
+  // 读者看到的是卡片自己那句，不是平台兜底句。
+  expect(host.textContent).toContain(text.unavailable)
+  const buttons = [...host.querySelectorAll('button')]
+  expect(buttons).toHaveLength(1)
+  await act(async () => buttons[0]!.click())
+  expect(retried).toBe(1)
+})
 
 it('explains the odds in the drawer instead of a hand-drawn bubble on the card', async () => {
   const rendered = await render(reading)
@@ -105,14 +126,6 @@ describe('policy path card', () => {
     // Only the readable transcription of "10–2" belongs here; guidance a sighted reader cannot see
     // must stay out of the accessible name and live in the drawer instead.
     expect(hinted?.getAttribute('aria-label')).not.toContain(text.dissentNote)
-  })
-
-  it('keeps one skeleton: a missing reading becomes a dash, not a shorter card', async () => {
-    const rendered = await render({ ...reading, probability: undefined, targetRange: undefined, lastDecision: undefined, staleness: 'unavailable' })
-    const rows = rendered.querySelectorAll('.mi-policy-card__facts > div')
-    expect(rows).toHaveLength(4)
-    expect(rendered.textContent?.match(/—/g)?.length).toBeGreaterThanOrEqual(3)
-    expect(rendered.textContent).toContain(text.unavailable)
   })
 
   it('marks a stale quote with its own colour state', async () => {
