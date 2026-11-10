@@ -24,6 +24,12 @@ function harness(options: { channel?: unknown; outcome?: string; suppressed?: { 
 }
 
 describe('sendTestNotice (link only)', () => {
+  it('says the submit was rejected instead of pretending the sample could not be read', async () => {
+    // 被拒（门禁/批准表）与「读不到样例」是两种病：同一个码盖两种病，读者会去查数据而不是查开关。
+    const { surface } = harness({ outcome: 'rejected' })
+    await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'rejected' })
+  })
+
   it('uses a new dedupe key per click, so two clicks are two records', async () => {
     const first = harness()
     const second = harness()

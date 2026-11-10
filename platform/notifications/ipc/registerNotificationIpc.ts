@@ -49,7 +49,6 @@ export function configureNotificationRuntime(deps: {
   diagnostics: NotificationDiagnosticsSink
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
-  /** 三枚测试按钮的只读取数端口（产品侧实现，组合根注入）；不传＝诚实的 `read-failed`。 */
   /** 目标通道的唯一派生（技术方案 §1）。 */
   resolvePushChannel?: () => Promise<PushChannelResolution>
   push?: DeliveryHooks['push']

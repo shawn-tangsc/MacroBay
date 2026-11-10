@@ -19,7 +19,12 @@ export type TestNoticeReceipt =
      * 就不许回「已发到 X」。三条各自报，别默认落进 sent。
      * `suppressed` = 这一档**根本没被尝试**（免打扰或开关关着）：回执说「没测」，不说「没到」。
      */
-    reasonCode: 'push-unavailable' | 'read-failed' | 'collapsed' | 'merged' | 'delegated' | 'suppressed'
+    reasonCode: 'push-unavailable' | 'read-failed' | 'collapsed' | 'merged' | 'delegated' | 'suppressed' | 'rejected'
+    /**
+     * `rejected` 与 `read-failed` 是两件事：前者是**提交被门禁/批准表拒了**（有样例、没让发），
+     * 后者是**读不到样例**（没有可发的内容）。以前把两者合成 `read-failed`，于是同一个码盖两种病，
+     * 读者看到「读失败」去查数据，真正的问题是这条事件没被批准（2026-11-10）。
+     */
     /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（0 或 ≥2）。 */
     enabledChannelCount?: number
   }
