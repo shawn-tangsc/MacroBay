@@ -281,6 +281,10 @@ export const dailyBriefingText = {
       // "Not recorded" is for a finished run that left no row; a run in flight has not started that step yet.
       states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录', notStarted: '未开始', notNeeded: '无需修正', notRun: '未执行' },
       stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', 'repair-3': '修正 3', store: '落库/发布' },
+      // 数据版：写作没写出正文、但这一版照常落库。名字只说存的是哪一版，
+      // 定义放在这一行自己的说明里——「数据版」只在这里定义一次。
+      dataEditionStore: '保存数据版',
+      dataEditionStoreHelp: '数据版：这一版有数据、没有 AI 编辑写的正文。这一步把它存进本地。',
       stageHelpLabel: '查看{stage}的阶段说明',
       // 每个阶段固定的一行逻辑说明，只在问号 tooltip 里出现：时间线本身不铺长文。
       stageHelp: {
@@ -672,6 +676,8 @@ export const dailyBriefingText = {
       // stage name tells the reader nothing about what the step does. The full sentence stays in the
       // question mark's explanation (stageHelp), which is where a reader goes for detail.
       stages: { source: 'Collect', candidates: 'Candidates', selection: 'AI pick', 'field-backfill': 'Backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', 'repair-3': 'Repair 3', store: 'Publish' },
+      dataEditionStore: 'Save the data edition',
+      dataEditionStoreHelp: 'Data edition: this edition has the data but no AI-written text. This step saves it locally.',
       stageHelpLabel: 'About the {stage} stage',
       // One fixed line per stage, shown only in the question-mark tooltip.
       stageHelp: {
