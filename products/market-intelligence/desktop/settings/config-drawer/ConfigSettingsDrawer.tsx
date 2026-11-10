@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 
 import { Drawer } from '@platform/ui/components/drawer'
+import { Popover } from '@platform/ui/components/popover'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Info } from 'lucide-react'
 
@@ -171,7 +172,17 @@ function NotificationsScreen({ view, resolveText }: {
     <div data-drawer-screen="ready">
       {view.rows.map((row) => (
         <div className={row.disabled === true ? 'config-drawer__row is-disabled' : 'config-drawer__row'} data-drawer-row={row.key} key={row.key}>
-          <span className="config-drawer__label">{resolveText(row.key)}</span>
+          <span className="config-drawer__label">
+            {resolveText(row.key)}
+            {/* 原因只进 ⓘ：正文只留状态词。 */}
+            {row.reason === undefined ? null : (
+              <Popover
+                content={<span>{row.reason}</span>}
+                trigger={(triggerProps) => (
+                  <IconButton {...triggerProps} ariaLabelKey="configDrawer.rowReason" icon={Info} onSelect={() => undefined} resolveText={(key: string) => (key === 'configDrawer.rowReason' ? row.reason ?? '' : '')} size="sm" />
+                )} />
+            )}
+          </span>
           {/* 值列三选一：真值 / 状态词（拿不到 + 原因）/ 单个 `—`（确实没有）。
               留有值的空位是不允许的——「留白」只属演示态，会随数据接上收敛掉。 */}
           <span className="config-drawer__value">{row.value ?? row.emptyLabel ?? '—'}</span>

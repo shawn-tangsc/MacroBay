@@ -79,7 +79,7 @@ function openSources(view: DrawerSourcesView, onSelect: (sourceId: string) => vo
 
 
 /** 行屏挂载助手：用通知屏这条共用渲染路径验占位规则（通知/日报/处理同一条）。 */
-function openRows(rows: ReadonlyArray<{ key: string; value?: string; emptyLabel?: string }>): HTMLElement {
+function openRows(rows: ReadonlyArray<{ key: string; value?: string; emptyLabel?: string; reason?: string }>): HTMLElement {
   document.body.replaceChildren()
   root?.unmount()
   root = undefined
@@ -314,5 +314,16 @@ describe('config settings drawer (static layout)', () => {
     // 状态类空值给状态词，不许给 `—`。
     expect(cells[0]).toBe('没启用')
     expect(cells[2]).toBe('未知：排期投影读不到')
+  })
+
+  it('keeps the reason out of the value and behind an ⓘ', () => {
+    // 界面设计判据：正文只留「未知」，原因进该行 ⓘ 一颗。
+    const container = openRows([{ key: 'configDrawer.rows.autoGeneration', emptyLabel: '未知', reason: '排期投影读不到' }])
+    const row = container.querySelector<HTMLElement>('[data-drawer-row]')!
+    const value = row.querySelector('.config-drawer__value')?.textContent
+    expect(value).toBe('未知')
+    expect(value).not.toContain('排期投影读不到')
+    // 原因通道有对应元素（ⓘ 按钮），点在行内标签旁。
+    expect(row.querySelectorAll('.config-drawer__label button')).toHaveLength(1)
   })
 })
