@@ -162,9 +162,15 @@ export function BusinessSettingsContent(props: {
                 className="business-cell"
                 data-business-cell-card={group.key}
                 data-cell-thin={group.cells.every((cell) => (props.isCellEnabled?.(cellIdOf(module.id, cell)) ?? cell.fallback !== true) === false) ? 'true' : 'false'}
+                /* 自适应排布（用户 2026-11-11）：一个格占「源项个数」列，最多 3 列。
+                   所以 1 个源的数据卡片占 1/3、2 个源占 2/3——纳指（1 个）能和美元（2 个）并进同一行；
+                   放不下时网格自己换行，不做强行合并。 */
+                style={{ ['--cell-span' as string]: Math.min(group.cells.length, 3) }}
                 key={group.key}>
                 <div className="business-cell__title">{group.label}</div>
-                <div className="business-cell__items">
+                <div
+                  className="business-cell__items"
+                  style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
                   {group.cells.map((cell) => renderCell(
                     module.id,
                     cell,

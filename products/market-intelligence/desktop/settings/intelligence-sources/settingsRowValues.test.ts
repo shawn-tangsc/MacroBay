@@ -138,13 +138,15 @@ describe('business cards keep their padding', () => {
     expect(row.some((body) => /padding\s*:\s*0\s+12px/u.test(body))).toBe(true)
     // 两列：源名（1fr）+ 行尾开关（auto）。少了 `auto` 那列，开关就掉到第二行（那次事故的判据）。
     expect(row.some((body) => /grid-template-columns\s*:[^;]*minmax\(0,\s*1fr\)[^;]*auto/u.test(body))).toBe(true)
-    // 两层卡片：第二层「数据卡片」里的源项一行 3 个（用户 2026-11-11），只有 1 个也占 1/3 宽。
-    const items = rulesFor(css, 'business-cell__items').join('\n')
-    expect(items).toMatch(/grid-template-columns\s*:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/u)
-    // 第二层卡片本身整行一张，不再按 3 张并排。
+    // 两层卡片 + 自适应（用户 2026-11-11）：三列基准，一张数据卡片按自己的源项个数占列，
+    // 所以 1 个源的卡占 1/3、2 个源占 2/3，能并进同一行；放不下就换行。
     const cellGrid = rulesFor(css, 'business-cell-grid').join('\n')
-    expect(cellGrid).toContain('minmax(0, 1fr)')
-    expect(cellGrid).not.toContain('repeat(3')
+    expect(cellGrid).toMatch(/grid-template-columns\s*:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/u)
+    const cell = rulesFor(css, 'business-cell').join('\n')
+    expect(cell).toContain('grid-column: span var(--cell-span')
+    const items = rulesFor(css, 'business-cell__items').join('\n')
+    expect(items).toContain('repeat(var(--cell-items')
+    // 每张数据卡片占几列 = 它有几个源项（最多 3）；这条在视图侧断言，见 BusinessSettingsView.test.tsx。
     // 一行是**圆角描边的整行容器**（照源行那套）：把描边/圆角删掉变成通栏行就红。
     expect(row.some((body) => /border\s*:\s*1px solid/u.test(body))).toBe(true)
     expect(row.some((body) => /border-radius\s*:\s*8px/u.test(body))).toBe(true)
