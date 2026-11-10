@@ -63,14 +63,14 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-async function renderPanel(initialFilter?: 'dashboard' | 'calendar'): Promise<HTMLElement> {
+async function renderPanel(pane?: 'sources' | 'business'): Promise<HTMLElement> {
   const { DashboardSourcesPanel } = await import('./DashboardSourcesPanel')
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
     root?.render(<ShellLanguageProvider language="zh-CN">
-      <DashboardSourcesPanel {...(initialFilter === undefined ? {} : { initialFilter })} />
+      <DashboardSourcesPanel {...(pane === undefined ? {} : { pane })} />
     </ShellLanguageProvider>)
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
@@ -78,22 +78,20 @@ async function renderPanel(initialFilter?: 'dashboard' | 'calendar'): Promise<HT
 }
 
 describe('the drawer sources panel filter', () => {
-  it('starts on 「情报源」 when no value is passed, showing every source', async () => {
-    // 抽屉没有上下文时落在「全部」（用户 2026-11-10）；带上下文的入口仍预选对应分类。
-    const container = await renderPanel()
+  it('renders the source tree when the host asks for pane="sources"', async () => {
+    // `数据源` 那一屏：树 + 详情，没有页签条、也没有业务三项。
+    const container = await renderPanel('sources')
     const text = container.querySelector('.intelligence-catalog-pane')?.textContent ?? ''
     expect(text).toContain('看板源')
-    expect(text).toContain('日历源')
-    // `Segmented` 的选中项是 `aria-pressed="true"`（一组互斥取值，不是页签）。
-    const selected = container.querySelector('.intelligence-catalog-filters [aria-pressed="true"]')
-    expect(selected?.textContent).toContain('情报源')
+    expect(container.querySelectorAll('.intelligence-catalog-filters')).toHaveLength(0)
+    expect(container.querySelectorAll('.business-settings__nav .intelligence-provider-row')).toHaveLength(0)
   })
 
-  it('uses the passed value only as the mount value', async () => {
-    // 抽屉只剩两块：带上下文进来的入口传 `dashboard`（业务设置），挂载即落在那一块。
-    const container = await renderPanel('dashboard')
-    const selected = container.querySelector('.intelligence-catalog-filters [aria-pressed="true"]')
-    expect(selected?.textContent).toContain('业务设置')
+  it('renders the business pane the host asks for', async () => {
+    const container = await renderPanel('business')
+    // 带上下文入口（业务设置）落的是业务视图：第二栏三项都在。
+    expect(container.textContent).toContain('看板')
+    expect(container.textContent).toContain('日历')
   })
 })
 
@@ -101,7 +99,7 @@ describe('业务设置：只有卡片，没有源详情头', () => {
   const text = productText['zh-CN'].settings.intelligenceSources
 
   it('shows module cards and no source-level detail at all', async () => {
-    const container = await renderPanel('dashboard')
+    const container = await renderPanel('business')
     expect(container.querySelector('.business-settings__content')).not.toBeNull()
     // 卡片在：市场状态（原来的行情卡 + 跨资产合并）。
     // 跨资产并进「市场状态」（原来两张卡的纳指/美元/黄金各列一遍）：不再有单独的跨资产卡。
@@ -125,13 +123,11 @@ describe('业务设置：只有卡片，没有源详情头', () => {
 })
 
 describe('筛选页签在业务设置下常显', () => {
-  it('keeps all five filter tabs above the three business rows', async () => {
+  it('no longer draws a tab bar above the three business rows', async () => {
     // 用户 2026-11-11：左列换成三项之后，那条页签不许不见——页签在上、三项在下，各自占位。
-    const container = await renderPanel('dashboard')
-    const tabs = [...container.querySelectorAll('.intelligence-catalog-filters [role="group"] button')]
-    // 抽屉只留两块（日历 / 舆情 / 其他 已由业务设置覆盖）：恒为 2 个、顺序固定。
-    expect(tabs).toHaveLength(2)
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['情报源', '业务设置'])
+    const container = await renderPanel('business')
+    // 抽屉按菜单项分屏之后**没有页签条**：视图由 `pane` 决定。
+    expect(container.querySelectorAll('.intelligence-catalog-filters')).toHaveLength(0)
     // 三项列表在看板卡上方、与页签是两层。
     expect(container.querySelectorAll('.business-settings__nav .intelligence-provider-row')).toHaveLength(3)
   })
@@ -139,7 +135,7 @@ describe('筛选页签在业务设置下常显', () => {
 
 describe('业务设置 › 看板：每行都有格级开关', () => {
   it('renders one switch per card row (not zero)', async () => {
-    const container = await renderPanel('dashboard')
+    const container = await renderPanel('business')
     const rows = container.querySelectorAll('[data-cell-id]')
     const switches = container.querySelectorAll('[data-cell-id] [role="switch"]')
     expect(rows.length).toBeGreaterThan(0)

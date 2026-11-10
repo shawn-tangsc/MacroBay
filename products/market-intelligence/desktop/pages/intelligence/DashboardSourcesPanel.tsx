@@ -52,12 +52,6 @@ export function DashboardSourcesPanel(props: {
    * 抽屉这条筛选页签：**五块、值不变**。业务设置那一屏也要常显这一条（它是上层，三项列表是下层），
    * 所以这份清单提到函数里，两处共用一份。
    */
-  /* 抽屉只留两块（用户 2026-11-11）：`情报源` 与 `业务设置`。
-     日历 / 舆情 / 其他 的内容已经由业务设置里那两块覆盖，不再各占一个页签。设置页那一面仍是六项。 */
-  const treeFilters = [
-    { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
-    { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' }
-  ] as const
   const settings = useIntelligenceSourcesSettings(t)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings
   // 草稿既喂 hook 里的 C8 标志（同屏保存/重读用），也上报宿主（关闭确认用）——两个消费者，一个事实。
@@ -112,7 +106,6 @@ export function DashboardSourcesPanel(props: {
     filter={sourceFilter}
     /* 抽屉五块：全部 / 看板 / 日历 / 舆情 / 其他（第四块是兜底）（用户 2026-11-10：先砍掉「全部」「高级」，
        随后要求把「全部」恢复到 tab 最前；「高级」仍不要）。默认筛选仍是**看板**。设置页仍是原来的六项。 */
-    treeFilters={treeFilters}
     onFilterChange={setSourceFilter}
     onSelectProvider={(providerId) => setSelectedProviderId(providerId)}
     selectedProviderId={selectedProviderId}
