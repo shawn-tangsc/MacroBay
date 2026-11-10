@@ -244,13 +244,11 @@ export function ConfigSettingsDrawer({
     titleKey="configDrawer.title">
     <div
       className="config-drawer"
-      /* 保存栏是固定栏：它出现时给滚动容器留出等高的底部安全区，最后一格获得焦点也不会被压住。
-         不出现时安全区为 0（不留白）。 */
-      onFocus={(event) => {
-        // `nearest` 而不是 `center`：只为「看得见」，不把整屏猛地拽一下。
-        const target = event.target as HTMLElement | null
-        target?.scrollIntoView?.({ block: 'nearest' })
-      }}
+      /* 保存栏是固定栏：它出现时给滚动容器留出等高的底部安全区，最后一格获得焦点也不会被压住；
+         不出现时安全区为 0（不留白）。
+         **靠原生聚焦滚动 + 这条安全区**，不自绘焦点跟随逻辑：浏览器的「聚焦元素滚进可视区」
+         本来就遵守 `scroll-padding-*`，自己再写一遍只会多一段没法被用例证明的代码。
+         若真机发现原生不跟随，再补——补的时候必须能被用例驱动，别用 spy 假装断言。 */
       style={{ scrollPaddingBottom: screenDirty === true ? '56px' : '0px' }}>
       <nav
         aria-label={menuLabel(menu)}
