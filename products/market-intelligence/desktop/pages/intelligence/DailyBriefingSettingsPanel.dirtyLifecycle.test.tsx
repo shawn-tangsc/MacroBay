@@ -29,6 +29,7 @@ type BridgeOptions = Readonly<{
   saveFails?: boolean
   periods?: readonly { id: string; generationTime: string; windowHours: number; language: string }[]
   schedules?: 'missing' | 'registered' | 'none' | 'orphan'
+  webSearchSupported?: boolean
 }>
 
 const aiView = {
@@ -43,14 +44,17 @@ const aiView = {
 
 function stubBridge(options: BridgeOptions = {}): void {
   const periods = options.periods ?? [{ id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }]
+  const view = options.webSearchSupported === false
+    ? { ...aiView, webSearchSupported: false }
+    : aiView
   const invoke = vi.fn(async (_product: string, method: string) => {
     if (method === 'intelligence.dailyBriefing.getSettings') {
       if (options.settingsFails) throw new Error('settings-unreadable')
-      return aiView
+      return view
     }
     if (method === 'intelligence.dailyBriefing.saveSettings') {
       if (options.saveFails) return { state: 'unavailable', failureCode: 'failed' }
-      return aiView
+      return view
     }
     if (method === 'intelligence.dailyBriefing.listPeriods') return periods
     return undefined
@@ -380,5 +384,15 @@ describe('the period list’s criteria, moved from the retired block', () => {
     const rowB = host.querySelector<HTMLElement>('[data-period-id="period-b"]')?.textContent ?? ''
     expect(rowB).toContain('09:00')
     expect(rowB).toContain('48')
+  })
+})
+
+describe('the AI block’s explanations live behind the row, not in the body', () => {
+  it('turns the unsupported-search sentence into a 补查方式 row with its own ⓘ', async () => {
+    const { host } = await mount({ webSearchSupported: false })
+    expect(host.textContent).toContain('补查方式')
+    expect(host.textContent).toContain('平台 Web Search')
+    // 整句解释不在正文里（进 ⓘ 的浮层），正文只留行名与值。
+    expect(host.textContent).not.toContain('当前模型不支持 Anthropic 内置搜索')
   })
 })

@@ -324,7 +324,6 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
       title={text.settingsDrawer.sections.ai}
     >
         {ai.webSearchBlocked ? <p className="briefing-settings-notice" role="status">{text.aiSettings.webSearchNeedsSetup}</p> : null}
-        {ai.webSearchSupported ? null : <p className="briefing-settings-notice" role="status">{text.aiSettings.webSearchUnsupported}</p>}
         {ai.state === 'load-failed'
           ? <p className="briefing-settings-error" role="alert">{text.aiSettings.loadFailed}</p>
           : ai.state === 'loading' || ai.draft === null
@@ -357,6 +356,28 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                   }}
                 />
               </SettingsRow>
+              {ai.webSearchSupported ? null : <SettingsRow
+                copyClassName="config-drawer__label"
+                headClassName="config-drawer__label-head"
+                controlWrapperClassName="config-drawer__control"
+                label={<>
+                  <strong>{text.aiSettings.researchMode}</strong>
+                  <Popover
+                    labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchUnsupported"
+                    resolveText={resolveText}
+                    trigger={(triggerProps) => <IconButton
+                      {...triggerProps}
+                      ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchUnsupported"
+                      icon={CircleHelp}
+                      resolveText={resolveText}
+                      size="sm"
+                      variant="plain"
+                    />}
+                  />
+                </>}
+                rowClassName="config-drawer__row">
+                <span className="briefing-settings-row__value">{text.aiSettings.researchModePlatform}</span>
+              </SettingsRow>}
               {ai.draft.editorialEnabled ? <SettingsRow
                 copyClassName="config-drawer__label"
                 controlWrapperClassName="config-drawer__control"

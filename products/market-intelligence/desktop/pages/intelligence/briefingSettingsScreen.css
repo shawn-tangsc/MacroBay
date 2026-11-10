@@ -5,7 +5,7 @@
 .briefing-settings-row__value { color: var(--mi-dashboard-text); }
 .briefing-settings-row__actions { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; }
 
-.briefing-settings-empty { display: flex; align-items: center; gap: 4px; padding: 8px 0; color: var(--mi-dashboard-muted); }
+.briefing-settings-empty { display: flex; align-items: center; gap: 4px; padding: 8px 12px; color: var(--mi-dashboard-muted); }
 
-.briefing-settings-error { display: flex; align-items: center; gap: 12px; padding: 8px 0; color: var(--mi-dashboard-caution); }
-.briefing-settings-notice { margin: 0 0 8px; color: var(--mi-dashboard-muted); }
+.briefing-settings-error { display: flex; align-items: center; gap: 12px; padding: 8px 12px; color: var(--mi-dashboard-caution); }
+.briefing-settings-notice { margin: 0 0 8px; padding: 0 12px; color: var(--mi-dashboard-muted); }
