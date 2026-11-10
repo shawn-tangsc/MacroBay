@@ -2,6 +2,7 @@ import { createJsonFileStorage } from '@platform/storage/jsonFileStorage'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
+import { runBriefingPeriodDataMigration, type LegacySavedPeriod } from './dailyBriefingPeriodDataMigration'
 import { createBriefingPeriodStore } from './dailyBriefingPeriodStore'
 
 /**
@@ -11,6 +12,12 @@ import { createBriefingPeriodStore } from './dailyBriefingPeriodStore'
  * one default period in the reader's language, which is the same schedule the old settings produced
  * when the reader never changed them. The one thing it writes is a period's missing `language`,
  * filled in once, into that row and no other.
+ *
+ * It also runs the one-time move of the old generation settings' periods into this file, on the
+ * first read and never again in this process. That is the last moment that can be trusted to be
+ * before anything acts on periods: the job registration below reads this list during module start,
+ * and — unlike a call at construction time — the first read happens after the services this move
+ * reads have been assembled.
  *
  * The store is created here rather than shared with the IPC seam because both sides build one over
  * the same file: one creates periods when the reader asks, this one answers "what is configured
@@ -25,14 +32,43 @@ export function createBriefingPeriodsSource(input: Readonly<{
    * before today, as periodId → the languages those editions were written in.
    */
   editionLocales?: () => Promise<ReadonlyMap<string, ReadonlySet<DailyBriefingLocale>>>
+  /**
+   * The old generation settings, read only by the one-time move. Absent where periods are not the
+   * runtime's source (tests, or a build that has not switched yet).
+   */
+  legacyPeriodsMigration?: Readonly<{
+    readLegacyPeriods: () => Promise<readonly LegacySavedPeriod[]>
+    additionalLanguages: () => Promise<readonly DailyBriefingLocale[]>
+  }>
 }>): Readonly<{ getPeriods: () => Promise<readonly BriefingPeriod[]> }> {
+  const storage = createJsonFileStorage<unknown>(input.filePath, undefined)
   const store = createBriefingPeriodStore({
-    storage: createJsonFileStorage<unknown>(input.filePath, undefined),
+    storage,
     // Only reached when the caller passes no language; every call below passes the reader's own.
     defaultLanguage: () => 'zh-CN',
     ...(input.editionLocales ? { editionLocales: input.editionLocales } : {})
   })
+  // Started once, on the first read, and awaited by every read: two readers arriving together must
+  // not both decide the file is empty and both migrate. A failed move is a result, not an error —
+  // the old settings stay the source, and the next start retries.
+  let prepared: Promise<unknown> | undefined
+  const prepare = (): Promise<unknown> => {
+    if (prepared === undefined) {
+      prepared = input.legacyPeriodsMigration
+        ? runBriefingPeriodDataMigration({
+          storage,
+          language: input.locale,
+          now: () => new Date().toISOString(),
+          ...input.legacyPeriodsMigration
+        }).then(() => undefined, () => undefined)
+        : Promise.resolve()
+    }
+    return prepared
+  }
   return Object.freeze({
-    getPeriods: async () => store.list(await input.locale())
+    getPeriods: async () => {
+      await prepare()
+      return store.list(await input.locale())
+    }
   })
 }

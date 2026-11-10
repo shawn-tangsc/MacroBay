@@ -782,6 +782,13 @@ export function getIntelligenceModule(
     const briefingPeriodsSource = createBriefingPeriodsSource({
       filePath: join(dataDir, 'daily-briefing-periods.json'),
       locale: getAppLanguage,
+      // The one-time move of the old settings' periods into this file. Lazy closures on purpose:
+      // the two services are assembled further down, and the move runs on the first read, which is
+      // the job registration below — after both exist.
+      legacyPeriodsMigration: {
+        readLegacyPeriods: () => dailyBriefingGenerationSettings.getPeriods(),
+        additionalLanguages: async () => (await dailyBriefingLanguageSettings.getSettings()).additional
+      },
       // Asked only when a stored period predates "language belongs to a period": one read of the
       // links before today, then periodId → the languages its editions were actually written in.
       editionLocales: async () => {
