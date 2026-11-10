@@ -64,6 +64,9 @@ function installIpc(): { reads: () => number } {
       return { definitions: [], sourceHealthById: {} }
     }
     if (method === 'intelligenceSources.listProfiles') return []
+    // 写入现在**返回结果对象**（需要钥匙的源会被拒绝）：双份必须回真实形状，回 `undefined`
+    // 等于违约，开关路由会当场失败、后面的重读根本不会发生（这条用例红的就是它）。
+    if (method === 'intelligenceSources.setEnabled') return { state: 'saved', detail: {} }
     if (method === 'intelligenceSources.getSettingsView') return { groups: [], counts: { total: 0, enabled: 0, pending: 0, failed: 0 } }
     return undefined
   })
