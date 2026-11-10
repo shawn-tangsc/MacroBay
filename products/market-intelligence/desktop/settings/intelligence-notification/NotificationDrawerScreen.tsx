@@ -6,12 +6,14 @@ import { InlineNotice } from '@platform/ui/components/inline-notice'
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { Switch } from 'antd'
 
 import type { SettingDescriptor } from '../../shared/settings/descriptorTypes'
 import { settingRegistry } from '../../shared/settings/registry'
 import { SettingField } from '../../shared/settings/SettingField'
+import { formatShellCompactInstant } from '@platform/ui/time/shellTimeFormat'
 import { openChannelSettings } from '../../shared/navigation/productShellNavigation'
 import { CalendarLandedCountriesRow } from './calendarLandedCountriesRow'
 import { NewsPushThresholdRow } from './newsPushThresholdRow'
@@ -70,9 +72,10 @@ function descriptorOf(key: string): SettingDescriptor {
 
 export function NotificationDrawerScreen(): ReactElement {
   const language = useShellLanguage()
+  const timeZone = useShellTimeZone()
   const text = intelligenceNotificationText[language]
   const resolveText = (key: string): string => text[key] ?? ''
-  const { status, values, savingEventId, failedEventIds, channelReady, reload, toggle } = useChannelEventSettings()
+  const { status, values, savingEventId, failedEventIds, channelReady, lastDelivery, reload, toggle } = useChannelEventSettings()
   const outlet = useNewsPushOutletSwitch()
   const threshold = useNewsPushThreshold()
   const reminder = useCalendarReminderSettings()
@@ -137,6 +140,23 @@ export function NotificationDrawerScreen(): ReactElement {
 
   const reminderValue = reminder.value
   const calendarOn = reminderValue?.enabled === true
+
+  /**
+   * 「最近一次投递」是通道侧的**事实**，与「通道未就绪」两种口径分开说：
+   * 一次都没投过（`null`）≠ 通路没配好；还没读到（`undefined`）什么都不说，别抢在数据前面表态。
+   */
+  const deliveryLine = ((): string | undefined => {
+    if (lastDelivery === undefined) return undefined
+    if (lastDelivery === null) return text['pages.intelligence.notification.delivery.none'] ?? ''
+    const at = formatShellCompactInstant(lastDelivery.at, { timeZone, locale: language })
+    const conversation = lastDelivery.conversationLabel?.trim() || (text['pages.intelligence.notification.delivery.unknownConversation'] ?? '')
+    const template = lastDelivery.status === 'delivered'
+      ? text['pages.intelligence.notification.delivery.delivered']
+      : lastDelivery.status === 'failed'
+        ? text['pages.intelligence.notification.delivery.failed']
+        : text['pages.intelligence.notification.delivery.unknown']
+    return (template ?? '').replace('{conversation}', conversation).replace('{time}', at)
+  })()
   /** 日历那一行：读不到就不是「关」——给状态词与真重试，不画一颗会被读成「关着」的开关。 */
   const calendarRow = (): ReactElement => {
     if (reminder.status === 'error') {
@@ -203,6 +223,9 @@ export function NotificationDrawerScreen(): ReactElement {
     >
       {text['pages.intelligence.notification.channelNotReadyState']}
     </InlineNotice>}
+
+    {/* 落点在横幅附近、不新开一块：一条事实句，说明这条通道最近一次投递的结局。 */}
+    {deliveryLine === undefined ? null : <p className="intelligence-notification-delivery-line">{deliveryLine}</p>}
 
     <div className="intelligence-notification-drawer">
       <Section

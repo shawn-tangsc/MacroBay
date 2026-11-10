@@ -54,14 +54,31 @@ export type ChannelEventSettingsState = {
   failedEventIds: ReadonlySet<string>
   /** 频道是否可用（可用 = 推送端口装配好且至少一个可投递目标）。不可用不禁用开关。 */
   channelReady: boolean
+  /** 最近一次**真实**投递（通道侧尝试）。`null` = 一条都没投过——与「未就绪」是两件事。 */
+  lastDelivery: LastDelivery | null | undefined
   reload: () => void
   toggle: (eventId: string, enabled: boolean) => void
+}
+
+type LastDelivery = {
+  status: 'delivered' | 'failed' | 'unknown-after-send'
+  at: string
+  conversationLabel: string | null
 }
 
 type NotificationApi = {
   getChannelEvents: () => Promise<Readonly<Record<string, boolean>>>
   setChannelEvent: (eventId: string, enabled: boolean) => Promise<unknown>
-  getDeliverySettings: () => Promise<{ pushWired: boolean; channels: readonly unknown[] }>
+  getDeliverySettings: () => Promise<{
+    pushWired: boolean
+    channels: readonly unknown[]
+    lastDelivery?: LastDelivery | null
+  }>
+  /**
+   * 通道状态变化广播（平台层）：通道启用/就绪一变就重读一次投递设置。
+   * 现在还没有这个方法（频道线在补），缺了就不订阅——**绝不改成轮询**。
+   */
+  onChannelStateChanged?: (callback: () => void) => (() => void)
 }
 
 function notificationApi(): NotificationApi {
@@ -86,6 +103,8 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
   const [savingEventId, setSavingEventId] = useState<string | null>(null)
   const [failedIds, setFailedIds] = useState<readonly string[]>(() => failedWriteIds())
   const [channelReady, setChannelReady] = useState(true)
+  /** `undefined` = 还没读到；`null` = 一次都没投过。两者不能共用一句话。 */
+  const [lastDelivery, setLastDelivery] = useState<LastDelivery | null | undefined>(undefined)
   // 卸载后不再 setState：这一屏会被设置页挂载/卸载，慢响应回来时组件可能已经走了。
   const mounted = useRef(true)
   useEffect(() => {
@@ -113,6 +132,7 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
       setFailedIds(failedWriteIds())
       setValues(next)
       setChannelReady(isChannelReady(delivery))
+      setLastDelivery(delivery.lastDelivery ?? null)
       setStatus('ready')
     } catch {
       if (!mounted.current) return
@@ -123,6 +143,27 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
   useEffect(() => {
     void load()
   }, [load])
+
+  /**
+   * 通道状态变化时**只重读投递设置**（通道是否可用、最近一次投递），不重读事件开关：
+   * 一次广播一次读，不是轮询；没有广播方法就不订阅。
+   */
+  useEffect(() => {
+    const api = window.platform?.notifications as NotificationApi | undefined
+    if (api?.onChannelStateChanged === undefined) return
+    let active = true
+    const unsubscribe = api.onChannelStateChanged(() => {
+      void api.getDeliverySettings().then(
+        (delivery) => {
+          if (!active || !mounted.current) return
+          setChannelReady(isChannelReady(delivery))
+          setLastDelivery(delivery.lastDelivery ?? null)
+        },
+        () => { /* 读不到就保持现状：一次广播失败不该把已显示的横幅抹掉 */ }
+      )
+    })
+    return () => { active = false; unsubscribe() }
+  }, [])
 
   const toggle = useCallback((eventId: string, enabled: boolean) => {
     // 读者刚选的值先留下；写失败也**不回退**（G8）：本行给「这次没存上，请重试」，
@@ -153,9 +194,10 @@ export function useChannelEventSettings(): ChannelEventSettingsState {
       savingEventId,
       failedEventIds: new Set(failedIds),
       channelReady,
+      lastDelivery,
       reload: () => void load(),
       toggle
     }),
-    [status, values, savingEventId, failedIds, channelReady, load, toggle]
+    [status, values, savingEventId, failedIds, channelReady, lastDelivery, load, toggle]
   )
 }
