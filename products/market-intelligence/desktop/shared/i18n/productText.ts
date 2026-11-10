@@ -914,46 +914,7 @@ mi: miText['zh-CN'],
             },
             // 来源状态 one row per feed. The synthetic/proxy words are filled with the panel's own tags
             // (`crossAsset.syntheticTag`/`proxyTag`), so a row can never label the same reading two ways.
-            feedStatus: {
-              rowNames: {
-                dollar: '美元指数（DXY）',
-                gold: '黄金（XAU/USD · Twelve Data）',
-                rates: '美债利率（10Y / 实际利率 · FRED 日频）',
-                index: '跨资产指数（纳斯达克 100）'
-              },
-              sourceNames: {
-                'realmarketapi-market': 'RealMarketAPI',
-                'twelve-data-market': 'Twelve Data',
-                'fred-rates-liquidity': 'FRED 日频',
-                'binance-futures-positioning': 'Binance 跨资产行情'
-              },
-              states: {
-                loading: '加载中', ok: '采集正常', unconfigured: '未配置', 'configured-disabled': '已配置未启用',
-                failed: '采集失败', 'stale-fallback': '数据过期，沿用上一交易日', proxy: '代理在役',
-                'awaiting-collection': '等待首次采集', unavailable: '不可用'
-              },
-              detail: {
-                recent: '最近 {time}',
-                asOf: '截至 {date}',
-                indexReal: '真实指数 {name}',
-                unconfigured: '未配置 {source}，{usage}',
-                disabled: '{source} 已配置但未启用，{usage}',
-                failed: '{source} 采集失败（{code}），{usage}',
-                failedNoCode: '{source} 采集失败，{usage}',
-                staleFallback: '真实 DXY 超过 {minutes} 分钟未更新，{usage}',
-                staleFallbackNoPoint: '真实 DXY 暂无数据点，{usage}',
-                proxyInUse: '{usage} QQQUSDT（非标准指数）',
-                awaiting: '已配置，等待首次采集',
-                unavailable: '来源状态不可读'
-              },
-              usage: { synthetic: '当前使用{tag}值', proxy: '当前使用{tag}值', none: '当前无数据' },
-              relative: { justNow: '刚刚', minutes: '{count} 分钟前', hours: '{count} 小时前', days: '{count} 天前' },
-              // 异常优先：健康的源合并成一行，只有需要留意的源各自占一行，链接文字因此不再重复源名。
-              summary: '✓ {count} 源正常（{names}）',
-              manage: '管理 ›',
-              manageSources: '管理来源 ›'
-            },
-            context: { sourceStatus: { title: '来源状态' } },
+context: { sourceStatus: { title: '来源状态' } },
             dailyBriefing: dailyBriefingText['zh-CN']
           },
           calendar: {
@@ -2380,47 +2341,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sourceUnknown: 'Status is temporarily unavailable'
             },
             // One row per feed in Source status. `{tag}` is the panel's own synthetic/proxy label.
-            feedStatus: {
-              rowNames: {
-                dollar: 'US dollar index (DXY)',
-                gold: 'Gold (XAU/USD · Twelve Data)',
-                rates: 'Treasury yields (10Y / real · FRED daily)',
-                index: 'Cross-asset index (Nasdaq 100)'
-              },
-              sourceNames: {
-                'realmarketapi-market': 'RealMarketAPI',
-                'twelve-data-market': 'Twelve Data',
-                'fred-rates-liquidity': 'FRED daily',
-                'binance-futures-positioning': 'Binance cross-market data'
-              },
-              states: {
-                loading: 'Loading', ok: 'Collecting normally', unconfigured: 'Not configured',
-                'configured-disabled': 'Configured but disabled', failed: 'Collection failed',
-                'stale-fallback': 'Stale — using the previous session', proxy: 'Proxy in use',
-                'awaiting-collection': 'Waiting for the first collection', unavailable: 'Unavailable'
-              },
-              detail: {
-                recent: 'last {time}',
-                asOf: 'as of {date}',
-                indexReal: 'real index {name}',
-                unconfigured: 'Not configured {source}; {usage}',
-                disabled: '{source} is configured but disabled; {usage}',
-                failed: '{source} collection failed ({code}); {usage}',
-                failedNoCode: '{source} collection failed; {usage}',
-                staleFallback: 'the real DXY has not updated for {minutes} min; {usage}',
-                staleFallbackNoPoint: 'the real DXY has no data point; {usage}',
-                proxyInUse: '{usage} QQQUSDT (not the standard index)',
-                awaiting: 'Configured; waiting for the first collection',
-                unavailable: 'source status is unreadable'
-              },
-              usage: { synthetic: 'falling back to the {tag} value', proxy: 'using the {tag} value', none: 'no data yet' },
-              relative: { justNow: 'just now', minutes: '{count} min ago', hours: '{count} h ago', days: '{count} d ago' },
-              // Anomaly first: healthy feeds share one line, so the link text no longer repeats a feed name.
-              summary: '✓ {count} feeds collecting normally ({names})',
-              manage: 'Manage ›',
-              manageSources: 'Manage sources ›'
-            },
-            context: { sourceStatus: { title: 'Source status' } },
+context: { sourceStatus: { title: 'Source status' } },
             dailyBriefing: dailyBriefingText['en-US']
           },
           calendar: {
