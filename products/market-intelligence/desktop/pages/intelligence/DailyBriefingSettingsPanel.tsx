@@ -1,5 +1,5 @@
 import { Button } from 'antd'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
@@ -27,7 +27,13 @@ export function DailyBriefingSettingsPanel({ onDirtyChange }: Readonly<{
   const text = productText[language].pages.intelligence.portal.dashboard.dailyBriefing
   const blocks = useDailyBriefingSettingsBlocks({ client: dailyBriefingClient, open: true })
   // 脏判据直接用块自己的那份（它今天就在决定关窗要不要问），这里不新造第二个脏状态。
-  useEffect(() => { onDirtyChange?.(blocks.dirty) }, [blocks.dirty, onDirtyChange])
+  // 回调放 ref：宿主传内联箭头时，依赖它会让上报每次都重跑；卸载清理也不该被新身份打断。
+  const reportDirty = useRef(onDirtyChange)
+  useEffect(() => { reportDirty.current = onDirtyChange })
+  useEffect(() => { reportDirty.current?.(blocks.dirty) }, [blocks.dirty])
+  // 卸载 = 这一屏不再存在：必须把脏清掉。不报 false 的话，宿主会一直以为这里还有未保存的草稿，
+  // 之后在别的屏关抽屉还会被拦一次（误拦），而那份草稿其实已经随卸载没了。
+  useEffect(() => () => reportDirty.current?.(false), [])
 
   return <div className="mi-briefing-settings-panel" data-briefing-settings-panel="true">
     <DailyBriefingSettingsBlocks
