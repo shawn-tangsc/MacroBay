@@ -293,9 +293,13 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                   />
                 </span>
               </SettingsRow>)}
-        {periodWriteFailed === undefined ? null : <p className="briefing-settings-error" role="alert">
-          {periodWriteFailed === 'remove' ? copy.removeFailed : copy.saveFailed}
-        </p>}
+        {/* 区块级失败：一句话点名哪一期没写进去，跟这一段走。
+            壳在动作栏上方也有一条（AI 编辑未保存）：两条同时在时只留壳那条，同一件事不说两遍。 */}
+        {periodWriteFailed === undefined || failure !== undefined
+          ? null
+          : <InlineNotice tone="danger">
+            {periodWriteFailed === 'remove' ? copy.removeFailed : copy.saveFailed}
+          </InlineNotice>}
         {showScheduleRow ? <SettingsRow
           copyClassName="config-drawer__label"
           controlWrapperClassName="config-drawer__control"

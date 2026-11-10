@@ -36,6 +36,7 @@ type BridgeOptions = Readonly<{
   periods?: readonly { id: string; generationTime: string; windowHours: number; language: string }[]
   schedules?: 'missing' | 'registered' | 'none' | 'orphan'
   webSearchSupported?: boolean
+  periodWriteRejects?: boolean
 }>
 
 const aiView = {
@@ -63,6 +64,9 @@ function stubBridge(options: BridgeOptions = {}): void {
       return view
     }
     if (method === 'intelligence.dailyBriefing.listPeriods') return periods
+    if (method === 'intelligence.dailyBriefing.updatePeriod' && options.periodWriteRejects) {
+      return { state: 'rejected', code: 'daily-briefing-period-invalid', issue: 'window-hours' }
+    }
     return undefined
   })
   const schedules = options.schedules ?? 'registered'
@@ -457,5 +461,44 @@ describe('the AI block’s warnings are one banner each, with a real jump', () =
     expect(danger?.getAttribute('role')).toBe('alert')
     const retry = danger?.querySelector<HTMLButtonElement>('.inline-notice__action')
     expect(retry?.textContent).toBe('再读一次')
+  })
+})
+
+describe('a period that did not save names itself on a danger notice', () => {
+  /** 打开某期的编辑弹框并按保存，让一次期写入真的发生（失败由桥决定）。 */
+  async function failOnePeriodWrite(host: HTMLElement): Promise<void> {
+    await act(async () => host.querySelector<HTMLElement>('[data-period-edit="default"]')!.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const save = [...document.querySelectorAll<HTMLButtonElement>('.ant-modal button')]
+      .find((button) => (button.textContent ?? '').replace(/\s+/gu, '') === '保存')
+    expect(save).not.toBeUndefined()
+    await act(async () => save!.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  }
+
+  it('renders the failure as the shared danger notice, with the sentence naming the period', async () => {
+    const { host } = await mount({ periodWriteRejects: true })
+    await failOnePeriodWrite(host)
+
+    const notices = [...host.querySelectorAll<HTMLElement>('[data-inline-notice="danger"]')]
+    expect(notices).toHaveLength(1)
+    expect(notices[0]?.getAttribute('role')).toBe('alert')
+    expect(notices[0]?.textContent).toContain('这一期没存上，再试一次。')
+    // 没有裸 <p role="alert"> 兜底：警示一律走提示条（颜色由档位给，不是自己画的）。
+    expect(host.querySelectorAll('p[role="alert"]')).toHaveLength(0)
+  })
+
+  it('leaves the single sentence to the drawer when both would speak at once', async () => {
+    const { host, last } = await mount({ periodWriteRejects: true, saveFails: true })
+    await failOnePeriodWrite(host)
+    expect(host.textContent).toContain('这一期没存上，再试一次。')
+
+    // 再让 AI 编辑这一次保存也失败：壳在动作栏上方有一条更全局的句子，区块级的那条让位。
+    await act(async () => switches(host)[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => { last()?.save() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    expect(last()?.failure).toContain('AI 编辑未保存')
+    expect(host.textContent).not.toContain('这一期没存上，再试一次。')
   })
 })
