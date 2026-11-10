@@ -41,6 +41,16 @@ describe('sendTestNotice (link only)', () => {
     expect(key(first)?.date).toEqual(key(second)?.date)
   })
 
+  it('rides a neutral platform event, never a product event', async () => {
+    // 这条曾经借过产品事件当载体：通知中心里那条就会显示成「简报已生成」——读者点的是通道自检，
+    // 看到的却是别人的事。事件 id 必须中性、不带产品名；改回借用 → 这例当场红。
+    const { surface, submitted } = harness()
+    await surface.sendTestNotice()
+    const eventTypeId = submitted[0]?.eventTypeId ?? ''
+    expect(eventTypeId).toBe('platform.notification.self-test')
+    expect(eventTypeId).not.toMatch(/market-intelligence|briefing\.ready/)
+  })
+
   it('sends the fixed sample through the same submit in the test namespace and names the channel', async () => {
     const { surface, submitted } = harness()
     await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'sent', channelId: 'channel-a', channelName: 'Telegram · test' })
