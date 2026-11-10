@@ -193,6 +193,30 @@ describe('crypto intelligence dashboard', () => {
   
   
 
+  it('paints only a loading state on the frame before the enable map settles', async () => {
+    // 用户真机两次白屏都发生在这帧：启用表/源状态还没回来时，组件只许画加载态——
+    // 不画任何终态（未启用/读不到/空），也不留白。应用里这两个读口永远被注入；测试不注入就走不到这里。
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const pendingRead = () => new Promise<Record<string, boolean>>(() => undefined)
+    const pendingSelection = () => new Promise<Record<string, string>>(() => undefined)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      cellEnabledIo: { read: pendingRead, readSelection: pendingSelection },
+      dashboardFeedStatusClient: allSourcesEnabled,
+      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
+      text: text.dashboard
+    })))
+    await flush()
+
+    expect(container.querySelector('[data-loading-state]')).not.toBeNull()
+    expect(container.querySelector('[data-source-state]')).toBeNull()
+    expect(container.querySelector('[data-state="disabled"], [data-state="error"]')).toBeNull()
+    expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row')).not.toBeNull()
+  })
+
   it.each([
     ['empty', { state: 'empty' as const, asOf }, 'empty'],
     ['unavailable', { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const }, 'unreadable']
