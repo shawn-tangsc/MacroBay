@@ -165,7 +165,9 @@ describe('ProviderDetail health detail (B4)', () => {
 
     expect(container.querySelector('.state-view')).toBeNull()
     expect(container.querySelectorAll('[data-health-cell]')).toHaveLength(4)
-    expect(container.textContent).toContain(settingsText.health.todayReadingYes.replace('{time}', '12:00'))
+    // 不判「今天的读数」：那格跟读者时区的「今天」走，跨零点就会变（本用例只证明重试又读了一次）。
+    // 判「最近成功」——它是有名的绝对时刻，与钟点无关。
+    expect(container.textContent).toContain('11-10 12:00 GMT+8')
     expect(pageStateRequests(invoke).filter((sourceId) => sourceId === 's1')).toHaveLength(2)
   })
 

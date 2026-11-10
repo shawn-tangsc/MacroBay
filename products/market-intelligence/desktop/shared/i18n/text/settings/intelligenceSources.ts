@@ -448,6 +448,19 @@ export const intelligenceSourcesText = {
   keepEditing: '继续编辑',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
+  /* 看板页签的分组名：能复用既有标题键的都用既有键（各模块在 dashboardSourceModules 里指过去），
+     这里只放**没有现成标题键**的那几个。 */
+  dashboardModuleTitles: {
+    policyPath: '政策路径',
+    divergence: '背离卡',
+    quotes: '行情卡',
+    aiAnalysis: 'AI 分析用'
+  },
+  /* 「AI 分析用」组头旁那颗 ⓘ：说明不进正文。 */
+  aiAnalysisNote: '这些源没有看板位，数据只给 AI 分析读。',
+  aiAnalysisNoteAria: 'AI 分析用的说明',
+  /** 源详情里那行：这个源被哪些模块用（0 个模块时整行不显示）。 */
+  usedInModules: '用在哪些模块',
   /* 「日历」筛选下的两个组名：判据是 calendarFeedRegistry 的 owner，不是手抄表（用户 2026-11-10）。 */
   calendarGroups: {
     official: '官方源',
@@ -978,6 +991,15 @@ export const intelligenceSourcesText = {
     official: 'Official sources',
     aggregate: 'Aggregators'
   },
+  dashboardModuleTitles: {
+    policyPath: 'Policy path',
+    divergence: 'Divergence',
+    quotes: 'Quote cards',
+    aiAnalysis: 'Used by AI analysis'
+  },
+  aiAnalysisNote: 'These sources have no dashboard slot; only AI analysis reads them.',
+  aiAnalysisNoteAria: 'About sources used by AI analysis',
+  usedInModules: 'Used in modules',
   detailsBlockTitle: 'Health and collection policy',
   health: {
     title: 'Source Health',

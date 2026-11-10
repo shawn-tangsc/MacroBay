@@ -139,3 +139,82 @@ describe('the calendar filter groups by feed owner', () => {
     expect(groupTitles(dashboard)).toEqual([])
   })
 })
+
+/**
+ * 看板页签按**模块**分组（清单：`dashboard-modules-by-panel-2026-11-10.md`）。
+ * 判据：看板页签的源集合 = 各模块挂的源 ∪ 「AI 分析用」那 4 个；维护备用 / 未接入一个都不许出现。
+ */
+describe('the dashboard filter groups by module', () => {
+  const MODULE_SOURCES = ['binance-futures-positioning', 'realmarketapi-market', 'twelve-data-market', 'policy-path-market',
+    'alternative-fear-greed', 'defillama-stablecoins', '0xrouter-aggregate-provider', 'macro-calendar-fed',
+    'macro-calendar-bea', 'macro-calendar-bls', 'macro-calendar-0xrouter-economic-data',
+    'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities',
+    'fred-rates-liquidity', 'sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']
+  const ANALYSIS_ONLY = ['binance-spot-market', 'okx-api-announcements', 'coingecko-market', 'defillama-tvl']
+  const MAINTENANCE = ['federal-reserve-rss', 'cftc-rss', 'github-releases']
+
+  function viewWith(ids: readonly string[]) {
+    return {
+      groups: [{
+        category: 'macro',
+        providers: ids.map((id) => ({
+          providerId: `p-${id}`,
+          displayName: id,
+          category: 'macro',
+          credential: 'none',
+          healthMarker: 'none',
+          sources: [{
+            sourceId: id, displayName: id, providerId: `p-${id}`, panels: ['dashboard'], visibility: 'visible',
+            kind: 'feed', enabled: true, healthState: 'healthy', healthMarker: 'none'
+          }]
+        }))
+      }],
+      counts: { total: ids.length, enabled: ids.length, pending: 0, failed: 0 }
+    }
+  }
+
+  async function renderDashboard(ids: readonly string[]): Promise<HTMLElement> {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(SettingsSourceTree, {
+      filter: 'dashboard',
+      labels: {
+        title: 'Sources',
+        categories: { macro: '宏观' } as never,
+        providerNames: {},
+        providerSummary: '{total}/{enabled}',
+        unavailableCountOne: '含 {count} 个不可用的源',
+        unavailableCountOther: '含 {count} 个不可用的源'
+      },
+      onFilterChange: vi.fn(),
+      onSelectProvider: vi.fn(),
+      selectedProviderId: undefined,
+      view: viewWith(ids) as never
+    })))
+    await act(async () => { await Promise.resolve() })
+    return host
+  }
+
+  it('shows the module groups plus a trailing 「AI 分析用」 group, and nothing else', async () => {
+    const host = await renderDashboard([...MODULE_SOURCES, ...ANALYSIS_ONLY, ...MAINTENANCE])
+    const titles = groupTitles(host)
+    expect(titles).toContain('AI 分析用')
+    expect(titles).not.toContain('宏观')
+    // 维护备用源一个都不许出现在看板页签里。
+    const shown = [...host.querySelectorAll<HTMLElement>('.intelligence-provider-row strong')].map((node) => node.textContent ?? '')
+    for (const id of MAINTENANCE) expect(shown).not.toContain(id)
+    // 「AI 分析用」那一组恰好那 4 个。
+    expect(providerIdsIn(host, 'AI 分析用').sort()).toEqual([...ANALYSIS_ONLY].sort())
+    // 共用源按模块重复出现：`binance-futures-positioning` 在 4 个模块下各一次。
+    expect(shown.filter((name) => name === 'binance-futures-positioning')).toHaveLength(4)
+  })
+
+  it('drops a source from the module group when the mapping no longer lists it', async () => {
+    // 反向：模块的源清单是数据，不是写死的渲染顺序——把一个源从清单里去掉，它就不在那个组下。
+    const host = await renderDashboard(['unmapped-source'])
+    const titles = groupTitles(host)
+    // 没有模块用到它 → 看板页签里没有它的组（也不会按「其他」兜底塞进来）。
+    expect(providerIdsIn(host, titles[0] ?? '')).not.toContain('unmapped-source')
+  })
+})

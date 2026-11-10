@@ -3,6 +3,7 @@ import type { IntelligenceSourceProfile } from '../../../service/intelligence/sc
 import { CollectionPolicySection, type CollectionPolicyLabels, type CollectionPolicyNotConfigurable } from './CollectionPolicySection'
 import { SourceHealthDetail, type SourceDetailRead, type SourceHealthLabels } from './SourceHealthDetail'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
+import { modulesUsingSource } from './dashboardSourceModules'
 
 /**
  * 一个源展开后的那张**表单**：健康四行 + 采集策略两行，**没有二级标题、没有四格卡片、没有嵌套框**
@@ -11,6 +12,8 @@ import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
  * 入口不在这里：源那一行行尾（开关左侧）有一颗「高级」文字按钮，`aria-expanded` / `aria-controls`
  * 挂在它上面、指向这里的容器 id。收起时这一块整体不渲染（`hidden` 由调用方给，id 始终存在）。
  */
+const USED_IN_MODULES_KEY = 'settings.intelligenceSources.usedInModules'
+
 export function SourceDetailsBlock(props: {
   /** `aria-controls` 指过来的那个 id：容器必须在收起时也存在于 DOM 里。 */
   id: string
@@ -35,7 +38,18 @@ export function SourceDetailsBlock(props: {
   resolveText: (key: string) => string
   timeZone: string
 }): React.ReactElement {
+  /* 「用在哪些模块」与看板分组读**同一份**映射（`dashboardSourceModules` 的反查）：
+     一个源被多个模块共用就都列出来；一个模块都没有就**整行不显示**（不写「无模块使用」，那是内部账）。 */
+  const modules = modulesUsingSource(props.source.sourceId)
   return <div className="source-provider-detail__form" hidden={props.hidden} id={props.id}>
+    {modules.length === 0
+      ? null
+      : <div className="source-provider-detail__form-row" data-used-modules={props.source.sourceId}>
+        <span className="source-provider-detail__form-label">{props.resolveText(USED_IN_MODULES_KEY)}</span>
+        <span className="source-provider-detail__form-value">
+          {modules.map((module) => props.resolveText(module.labelKey)).join('、')}
+        </span>
+      </div>}
     <SourceHealthDetail
       automaticSyncStopped={props.automaticSyncStopped}
       labels={props.healthLabels}

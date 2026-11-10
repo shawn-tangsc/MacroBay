@@ -5,6 +5,8 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
+import { DASHBOARD_TAB_MODULES } from './dashboardSourceModules'
+import { SettingsInfo } from '../settingsInfo'
 import { catalogMarkerClass } from './sourceHealthTone'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
@@ -110,7 +112,12 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
       sources: provider.sources.filter((source) => isOfficialCalendarSource(source.sourceId) === official)
     }))
     .filter((provider) => provider.sources.length > 0)
-  const sections: ReadonlyArray<{ key: string; title?: string; providers: typeof matchingProviders }> = filter === 'calendar'
+  const sections: ReadonlyArray<{
+    key: string
+    title?: string
+    providers: typeof matchingProviders
+    info?: Readonly<{ ariaLabelKey: string; noteKey: string }>
+  }> = filter === 'calendar'
     ? [
       { key: 'official', title: resolveText(CALENDAR_GROUP_KEYS.official), providers: byCalendarOwner(true) },
       { key: 'aggregate', title: resolveText(CALENDAR_GROUP_KEYS.aggregate), providers: byCalendarOwner(false) }
@@ -123,7 +130,21 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
           .map((provider) => ({ ...provider, sources: provider.sources.filter((source) => matchesFilter(source, filter)) }))
           .filter((provider) => provider.sources.length > 0)
       }))
-      : [{ key: 'flat', providers: matchingProviders }]
+      : filter === 'dashboard'
+        /* 看板：按**模块**分组（顺序照清单），一个源被多个模块共用就在每个模块下各出现一次；
+           末尾一只是「AI 分析用」。不属于任何模块的源（维护备用 / 未接入）在看板页签里不出现。 */
+        ? DASHBOARD_TAB_MODULES.map((module) => ({
+          key: module.id,
+          title: resolveText(module.labelKey),
+          providers: matchingProviders
+            .map((provider) => ({
+              ...provider,
+              sources: provider.sources.filter((source) => module.sourceIds.includes(source.sourceId))
+            }))
+            .filter((provider) => provider.sources.length > 0),
+          ...(module.id === 'ai-analysis' ? { info: { ariaLabelKey: 'settings.intelligenceSources.aiAnalysisNoteAria', noteKey: 'settings.intelligenceSources.aiAnalysisNote' } } : {})
+        }))
+        : [{ key: 'flat', providers: matchingProviders }]
   return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
     <div className="intelligence-catalog-filters">
       {/* One Tab reaches the group; the arrow keys move focus and Enter/Space picks, so a reader can
@@ -163,7 +184,17 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
         if (providers.length === 0) return null
         return <div className="intelligence-catalog-group" key={section.key}>
           {/* 空组不显示标题；平铺那一面（看板 / 舆情 / 待接入 / 其他）干脆没有标题。 */}
-          {section.title === undefined ? null : <div className="intelligence-catalog-group-title">{section.title}</div>}
+          {section.title === undefined
+            ? null
+            : <div className="intelligence-catalog-group-title">
+              {section.title}
+              {section.info === undefined
+                ? null
+                : <SettingsInfo
+                  ariaLabelKey={section.info.ariaLabelKey}
+                  labelKeys={[section.info.noteKey]}
+                  resolveText={resolveText} />}
+            </div>}
           {providers.map((provider) => {
             const enabled = provider.sources.filter((source) => source.enabled).length
             const summary = labels.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))

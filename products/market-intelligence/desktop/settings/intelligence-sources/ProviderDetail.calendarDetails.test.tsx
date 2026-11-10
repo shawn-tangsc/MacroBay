@@ -241,6 +241,61 @@ describe('ProviderDetail source details', () => {
     expect(container.textContent).toContain(settingsText.jobNotRegistered)
   })
 
+  it('lists every module that uses the source, from the dashboard grouping mapping', async () => {
+    // 判据：共用源必须列全——`binance-futures-positioning` 供 4 个模块（跨资产 / 永续 / 背离卡 / 行情卡），
+    // 只列一个即红；一个模块都不用的源整行不显示（那是内部账，不写「无模块使用」）。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          ...fedProvider(),
+          sources: [source({ sourceId: 'binance-futures-positioning', displayName: 'Binance Futures Positioning' })]
+        }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    await act(async () => { container.querySelector<HTMLButtonElement>('.source-provider-detail__advanced')?.click() })
+    await flush()
+    const row = container.querySelector('[data-used-modules="binance-futures-positioning"]')
+    expect(row).not.toBeNull()
+    const text = row?.textContent ?? ''
+    for (const moduleName of ['跨资产', '行情卡', '永续持仓与资金费率', '背离卡']) {
+      expect(text).toContain(moduleName)
+    }
+    expect(text.split('、')).toHaveLength(4)
+  })
+
+  it('draws no module row for a source that no module uses', async () => {
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: {
+          ...fedProvider(),
+          sources: [source({ sourceId: 'federal-reserve-rss', displayName: 'Fed RSS' })]
+        }
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    await act(async () => { container.querySelector<HTMLButtonElement>('.source-provider-detail__advanced')?.click() })
+    await flush()
+    expect(container.querySelector('[data-used-modules]')).toBeNull()
+    expect(container.textContent).not.toContain(settingsText.usedInModules)
+  })
+
   it('keeps the source name and its inline actions in one unbroken row', async () => {
     // 用户 2026-11-10 第四次定位：名字 + 官网 + 测试连接 + 注册/获取 Key **同一行**，间距 8，
     // 一颗都不许掉到第二行；几颗按钮长得一样（同一种小号描边按钮，没有 link / primary 变体）。
