@@ -77,6 +77,11 @@ export function ConfigSettingsDrawer({
     const name = labelKey.split('.').at(-1) ?? labelKey
     return (copy.rows as Record<string, string>)[name] ?? labelKey
   }
+  /** 分组标题：与行一样，清单里存完整路径，这里取最后一段查文案——**不许把键名印到屏幕上**。 */
+  const groupLabel = (titleKey: string): string => {
+    const name = titleKey.split('.').at(-1) ?? titleKey
+    return (copy.groups as Record<string, string>)[name] ?? titleKey
+  }
   const resolveText = (key: string): string => key === 'configDrawer.title' ? 'Settings' : key === 'ui.drawer.close' ? 'Close' : ''
 
   // 上下键在导航内移动；Home/End 跳首尾。焦点跟着走，读屏才跟得上。
@@ -142,7 +147,7 @@ export function ConfigSettingsDrawer({
         {(menu === 'briefing' && briefingView !== undefined) || (menu === 'notifications' && notificationsView !== undefined) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || (menu === 'sources' && sourcesView !== undefined)
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
-          {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{group.titleKey}</div>}
+          {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{groupLabel(group.titleKey)}</div>}
           {group.rows.map((row) => <div className="config-drawer__row" key={row.key}>
             <span className="config-drawer__label">{rowLabel(row.labelKey)}</span>
             <span className="config-drawer__value">{EMPTY_VALUE}</span>

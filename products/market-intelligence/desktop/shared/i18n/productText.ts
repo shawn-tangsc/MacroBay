@@ -326,6 +326,11 @@ mi: miText['zh-CN'],
                 sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
                 briefing: '日报', notifications: '通知', platform: '平台与模型'
               },
+              groups: {
+                thisSource: '这一条源',
+                status: '状态',
+                policy: '采集策略'
+              },
               rows: {
                 enabled: '启用',
                 capabilities: '能力与凭据',
@@ -1788,6 +1793,11 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               menus: {
                 sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',
                 briefing: 'Daily briefing', notifications: 'Notifications', platform: 'Platform and models'
+              },
+              groups: {
+                thisSource: 'This source',
+                status: 'Status',
+                policy: 'Collection policy'
               },
               rows: {
                 enabled: 'Enable',
