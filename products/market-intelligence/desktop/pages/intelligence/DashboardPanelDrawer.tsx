@@ -65,10 +65,10 @@ export function DashboardPanelDrawer({
    * `writeOrigin` 是这次写入的来源标记：宿主用它区分「自己写的」和「别处写的」，
    * 订阅 `settingsRevision` 时按它忽略自己那一次，避免自己写触发自己重读。
    */
-  onWriteSourceEnabled?: (source: SourceView, enabled: boolean, origin: SourceWriteOrigin) => Promise<void>
-  onRunSource?: (sourceId: string) => Promise<void>
-  onTestSource?: (sourceId: string) => Promise<void>
-  writeOrigin?: SourceWriteOrigin
+  onWriteSourceEnabled: (source: SourceView, enabled: boolean, origin: SourceWriteOrigin) => Promise<void>
+  onRunSource: (sourceId: string) => Promise<void>
+  onTestSource: (sourceId: string) => Promise<void>
+  writeOrigin: SourceWriteOrigin
 }): React.ReactElement {
   const language = useShellLanguage()
   const resolveKey = useProductTextKey()
@@ -124,7 +124,10 @@ export function DashboardPanelDrawer({
   async function toggle(sourceId: string, enabled: boolean): Promise<void> {
     setBusy(sourceId)
     try {
-      await intelligenceSourcesClient.setEnabled(sourceId, enabled)
+      // 写只走宿主注入的这一条：抽屉不自己调数据层（「只有一条写路径」）。
+      const source = view?.providers.flatMap((provider) => provider.sources).find((candidate) => candidate.sourceId === sourceId)
+      if (source === undefined) return
+      await onWriteSourceEnabled(source, enabled, writeOrigin)
       applyRead(await readPanel())
     } finally {
       setBusy(undefined)
@@ -133,12 +136,12 @@ export function DashboardPanelDrawer({
 
   async function run(sourceId: string): Promise<void> {
     setBusy(sourceId)
-    try { await intelligenceSourcesClient.runNow(sourceId) } finally { setBusy(undefined) }
+    try { await onRunSource(sourceId) } finally { setBusy(undefined) }
   }
 
   async function test(sourceId: string): Promise<void> {
     setBusy(sourceId)
-    try { await intelligenceSourcesClient.testConnection(sourceId) } finally { setBusy(undefined) }
+    try { await onTestSource(sourceId) } finally { setBusy(undefined) }
   }
 
   return <Drawer className="mi-dashboard-source-drawer" mode="modal" open={open} onClose={onClose} resolveText={resolveKey} size="wide"

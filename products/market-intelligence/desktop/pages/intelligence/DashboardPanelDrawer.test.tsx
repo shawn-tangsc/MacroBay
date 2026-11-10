@@ -203,10 +203,15 @@ async function openDrawer(sampleActive: boolean): Promise<void> {
   document.body.append(container)
   const localRoot = createRoot(container)
   root = localRoot
+  // 写回调由宿主注入（props 已改必填）；读失败用例不写任何东西，所以给空实现。
   await act(async () => localRoot.render(createElement(DashboardPanelDrawer, {
     open: true,
     onClose: () => undefined,
-    sampleActive
+    onRunSource: async () => undefined,
+    onTestSource: async () => undefined,
+    onWriteSourceEnabled: async () => undefined,
+    sampleActive,
+    writeOrigin: 'dashboard-drawer' as const
   })))
   await flush()
 }
