@@ -87,9 +87,10 @@ export function DashboardSourcesPanel(props: {
 
   return <SourcesSettingsPane
     filter={sourceFilter}
-    /* 抽屉只留四块：看板 / 日历 / 舆情 / 其他（第四块是兜底）（用户 2026-11-10 砍掉「全部」「高级」）。
-       第一个 tab 与默认筛选都是**看板**，读起来一致。设置页仍是原来的六项。 */
+    /* 抽屉五块：全部 / 看板 / 日历 / 舆情 / 其他（第四块是兜底）（用户 2026-11-10：先砍掉「全部」「高级」，
+       随后要求把「全部」恢复到 tab 最前；「高级」仍不要）。默认筛选仍是**看板**。设置页仍是原来的六项。 */
     treeFilters={[
+      { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
       { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
       { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
       { value: 'sentiment', labelKey: 'settings.intelligenceSources.sourceFilters.sentiment' },

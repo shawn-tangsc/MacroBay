@@ -4,6 +4,10 @@ import type { SettingsView } from '../../../service/intelligence/application/sou
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
 import { SourceConfigSurface, type SourceConfigSurfaceProps } from './SourceConfigSurface'
 
+// 样式跟着组件走，不跟着页面入口走：配置抽屉直接渲染本组件、不经过 settings 的 index.tsx，
+// 只在那里 import 会让抽屉里的来源屏完全没有样式（2026-11-10 用户实机撞到）。
+import './intelligence-sources.css'
+
 /**
  * 「来源与采集」的两栏：**左侧源树 + 右侧单源配置**。
  *
