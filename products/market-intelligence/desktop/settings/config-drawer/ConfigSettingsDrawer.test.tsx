@@ -655,6 +655,15 @@ describe('config drawer close guard', () => {
   })
 })
 
+describe('the inner cards keep a single 16 to the content card', () => {
+  it('does not double the padding of the business view', () => {
+    // 采集与数据屏的内层 `.business-settings__content` 自带 16：卡体也有 16，叠起来就是 32 的厚边。
+    // 只归零这一处（内层卡本身保留），数据源屏没有外层内距，天然就是 16。
+    const css = readFileSync(join(__dirname, 'configDrawer.css'), 'utf8')
+    expect(css).toContain('.config-drawer__card .business-settings__content { padding: 0; }')
+  })
+})
+
 describe('the card sits 16 from the menu', () => {
   it('gives the pane 16 of left padding and the card no negative margin', () => {
     // 「菜单 ──16── 卡边」钉成数字：pane 左内距 16 + 卡不得用负外边距抵消它。

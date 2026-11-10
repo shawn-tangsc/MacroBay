@@ -483,3 +483,11 @@
 @media (max-width: 560px) {
   .config-drawer__card .settings-section + .settings-section { margin-inline: -12px; padding-inline: 12px; }
 }
+
+/*
+ * 这两屏的内层卡是**内容**（用户：数据源与采集与数据里面本来就有卡片，要留着），所以不压平，
+ * 只把「内容卡内缘 → 内层卡外缘」统一成 16：
+ * - 数据源屏的树/详情本身没有外层内距，进卡后天然就是 16；
+ * - 采集与数据屏的 `.business-settings__content` 自己还有 16，与卡体 16 叠成 32，这里归零。
+ */
+.config-drawer__card .business-settings__content { padding: 0; }
