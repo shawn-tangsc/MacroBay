@@ -14,7 +14,7 @@ import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
 import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
-import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, sourcesDataRequestFor, type OpenConfigDrawerRequest } from './configDrawerRequest'
+import { businessFocusFromRequest, drawerSectionFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, sourcesDataRequestFor, type OpenConfigDrawerRequest } from './configDrawerRequest'
 import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
@@ -82,6 +82,8 @@ function IntelligencePageBody(): React.ReactElement {
    * 「看板」第一屏。定位归 `focus`，单开一个口，跟 `configDrawerSourceId` 同一条规矩：只随请求生效一次。
    */
   const [configDrawerBusinessFocus, setConfigDrawerBusinessFocus] = useState<BusinessFocus>()
+  /** 三屏的屏内分区（`focus.<menu>.section`）：只作初值，跟上面两条同一个规矩。 */
+  const [configDrawerSection, setConfigDrawerSection] = useState<Readonly<{ menu: ConfigDrawerMenu; section: string }>>()
   /**
    * 「来源与采集」这一屏挂载时的初值过滤器（只作初值，之后的筛选由那一屏自己管）。
    * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
@@ -92,6 +94,7 @@ function IntelligencePageBody(): React.ReactElement {
     const menu = request.menu
     setConfigDrawerSourceId(menu === 'sources' && request.focus?.menu === 'sources' ? request.focus.sourceId : undefined)
     setConfigDrawerBusinessFocus(businessFocusFromRequest(request))
+    setConfigDrawerSection(drawerSectionFromRequest(request))
     setConfigDrawerMenu(menu)
     setInitialSourceFilter(filter)
     setConfigDrawerRequest((value) => value + 1)
@@ -261,6 +264,7 @@ function IntelligencePageBody(): React.ReactElement {
           initialSettingsMenu={configDrawerMenu}
           {...(configDrawerSourceId === undefined ? {} : { initialSourceId: configDrawerSourceId })}
           {...(configDrawerBusinessFocus === undefined ? {} : { initialBusinessPosition: configDrawerBusinessFocus })}
+          {...(configDrawerSection === undefined ? {} : { initialDrawerSection: configDrawerSection })}
           initialSourceFilter={initialSourceFilter}
           openSettingsRequest={configDrawerRequest}
           onOpenCalendar={() => setActiveView('calendar')}
