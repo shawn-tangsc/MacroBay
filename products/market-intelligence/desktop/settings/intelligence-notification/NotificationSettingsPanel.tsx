@@ -93,7 +93,7 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
   /** 从通知中心点「去设置」进来时落到哪一项（只有设置页会传）。 */
   focusEntityId?: string | null
   variant?: 'page' | 'drawer'
-}> = {}): ReactElement {
+}>): ReactElement {
   const language = useShellLanguage()
   const text = intelligenceNotificationText[language]
   const resolveText = (key: string): string => text[key] ?? ''
@@ -136,10 +136,19 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
     state: itemState(key)
   }))
 
+  /**
+   * 宽窄两种形态只属于**设置页**：那一页挂在外壳的三列里，窗口 1280 时它可能只剩 600，所以要量
+   * 它自己的宽度，低于 860 换控件。
+   *
+   * 配置抽屉**固定宽版**：抽屉宽度由壳层决定（恒 `full` = 1040，扣掉菜单 208 与内边距 32 后约 800），
+   * 不随读者窗口变——在那里量宽会导致「永远 < 860、永远只有下拉」，读者再也看不到列表。
+   */
+  const narrow = variant === 'page' && layout.mode === 'dropdown'
+
   /** 两个面的外壳：设置页保留自己的 section（页面要标题、断点量这一块宽），抽屉只给内容。 */
   const shell = (children: ReactNode, busy = false): ReactElement => variant === 'page'
     ? <section aria-busy={busy ? 'true' : undefined} className="settings-workspace intelligence-notification-workspace" ref={setSectionRef}>{children}</section>
-    : <div className="intelligence-notification-panel" data-notification-panel="true" ref={setSectionRef}>{children}</div>
+    : <div className="intelligence-notification-panel" data-notification-panel="true">{children}</div>
 
   if (status === 'loading') {
     return shell(<LoadingState ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''} />, true)
@@ -173,7 +182,7 @@ export function NotificationSettingsPanel({ focusEntityId, variant = 'drawer' }:
       <NotificationList
         ariaLabel={text['pages.intelligence.notification.groupTitle'] ?? ''}
         items={items}
-        narrow={layout.mode === 'dropdown'}
+        narrow={narrow}
         onSelect={(key) => setSelected(key as ItemKey)}
         selected={selected}
       />
