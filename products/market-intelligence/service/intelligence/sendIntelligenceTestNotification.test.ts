@@ -10,8 +10,9 @@ import {
   DEFAULT_CALENDAR_REMINDER_SETTINGS,
   type CalendarReminderSettings
 } from '../../contracts/calendarEventReminder'
-import { parseIntelligenceTestRequest } from '../../contracts/intelligenceNotificationTest'
+import { INTELLIGENCE_TEST_KINDS, parseIntelligenceTestRequest } from '../../contracts/intelligenceNotificationTest'
 import type { IntelligenceModule } from './intelligenceModule'
+import { buildIntelligenceTestRequest, type TestNotificationPayload } from './notificationTestRequests'
 import { sendIntelligenceTestNotification, type IntelligenceTestDeps } from './sendIntelligenceTestNotification'
 
 /**
@@ -179,6 +180,8 @@ describe('sendIntelligenceTestNotification — 真的发出去了', () => {
     expect(rendered['zh-CN']?.title).toBe('【测试】美国 CPI')
     expect(rendered['zh-CN']?.body).toContain('这是测试消息，不是真实提醒。')
     expect(rendered['en-US']?.title.startsWith('[Test] ')).toBe(true)
+    // 投递面：中心 + 手机，不进桌面（也不闪应用内提示）——三条消息同一条规则。
+    expect(request.narrowedDisruptionLevels).toEqual(['center', 'channel'])
   })
 
   it('a rejected submit is not a success — it comes back as read-failed', async () => {
@@ -204,5 +207,24 @@ describe('sendIntelligenceTestNotification — 真的发出去了', () => {
     }))
     expect(result).toEqual({ state: 'unavailable', reasonCode: 'read-failed' })
     expect(submit).not.toHaveBeenCalled()
+  })
+})
+
+describe('the three test messages share one delivery surface rule', () => {
+  it('goes to the centre and the phone channel only, for every kind', () => {
+    // 测试消息不是业务事实：读者在设置页点一下，不该在桌面上弹一条。
+    const payload: TestNotificationPayload = {
+      namespace: 'test',
+      dedupeVars: { builder: 'template', vars: { key: 'value' } },
+      rendered: {
+        'zh-CN': { title: '【测试】x', body: 'y', reason: 'y' },
+        'en-US': { title: '[Test] x', body: 'y', reason: 'y' }
+      },
+      actions: [],
+      occurredAt: NOW
+    }
+    for (const kind of INTELLIGENCE_TEST_KINDS) {
+      expect(buildIntelligenceTestRequest(kind, payload).narrowedDisruptionLevels).toEqual(['center', 'channel'])
+    }
   })
 })

@@ -107,5 +107,9 @@ export function buildIntelligenceTestRequest(
     : kind === 'calendar-upcoming'
       ? 'market-intelligence.calendar.event-upcoming'
       : 'market-intelligence.macro.event-landed'
-  return { ...payload, eventTypeId }
+  /**
+   * 投递面写死成「中心 + 手机」：测试消息不是业务事件，不该在读者桌面上弹一条。
+   * 只收窄、不放大——`center` 平台必达；三条消息在这里共用同一条规则（B2：三处一致）。
+   */
+  return { ...payload, eventTypeId, narrowedDisruptionLevels: ['center', 'channel'] }
 }
