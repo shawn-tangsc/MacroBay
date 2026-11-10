@@ -73,15 +73,45 @@ const baseline: Record<string, number> = existsSync(BASELINE_PATH)
   ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8')).entries ?? {}
   : {}
 
+/**
+ * `--write-baseline` **只增不减**（2026-11-10 事故：它整份重写，把别人刚登记的三条覆盖掉了）。
+ *
+ * 规则：拿「现有基线 ∪ 本次命中」的**并集**写回去——已有条目一个都不删、计数只升不降
+ * （命中比基线多才写，少了一律保持原值）。想删条目必须显式用 `--remove '<文件> :: <键>'`，
+ * 一次一条，删的理由写进提交说明。
+ */
 if (process.argv.includes('--write-baseline')) {
-  const entries: Record<string, number> = {}
-  for (const id of [...counts.keys()].sort()) entries[id] = counts.get(id)!
+  const merged: Record<string, number> = { ...baseline }
+  const added: string[] = []
+  for (const [id, count] of counts) {
+    const previous = merged[id]
+    if (previous === undefined) added.push(id)
+    merged[id] = Math.max(previous ?? 0, count)
+  }
   writeFileSync(BASELINE_PATH, `${JSON.stringify({
     note: '正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts',
-    total: [...counts.values()].reduce((sum, value) => sum + value, 0),
-    entries
+    total: Object.values(merged).reduce((sum, value) => sum + value, 0),
+    entries: merged
   }, null, 2)}\n`)
-  console.log(`已写入基线：${counts.size} 个位置，合计 ${[...counts.values()].reduce((s, v) => s + v, 0)} 处`)
+  console.log(`基线已合并（只增不减）：新增 ${added.length} 条，合计 ${Object.keys(merged).length} 个位置 / ${Object.values(merged).reduce((s, v) => s + v, 0)} 处`)
+  console.log('要删条目请用 --remove \'<文件> :: <键>\'，一次一条，理由写进提交说明。')
+  process.exit(0)
+}
+
+const removed = process.argv.findIndex((arg) => arg === '--remove')
+if (removed !== -1) {
+  const target = process.argv[removed + 1]
+  if (target === undefined || baseline[target] === undefined) {
+    console.log(`--remove 没找到这一条：${target ?? '（没给）'}`)
+    process.exit(1)
+  }
+  const { [target]: _gone, ...rest } = baseline
+  writeFileSync(BASELINE_PATH, `${JSON.stringify({
+    note: '正文里出现的 *Hint / *Note 说明句，只允许出现在 ⓘ 入口（helpTrigger / Popover content / aria-* / title=）。**只降不升**：清掉一处就把这里的数字改小，否则报过期。复算：pnpm exec tsx scripts/check-body-prose.mts',
+    total: Object.values(rest).reduce((sum, value) => sum + value, 0),
+    entries: rest
+  }, null, 2)}\n`)
+  console.log(`已删一条基线：${target}（其余条目原样保留）`)
   process.exit(0)
 }
 
