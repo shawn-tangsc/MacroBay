@@ -104,14 +104,6 @@
   line-height: 1.4;
 }
 
-/* 单列屏内容区 840 居中（分栏屏与表格屏吃满宽度，所以约束挂在屏根、不改共用 pane）。 */
-.config-drawer__platform {
-  display: grid;
-  gap: 16px;
-  width: 100%;
-  max-width: 840px;
-  margin-inline: auto;
-}
 
 /* 局部读不到：一行状态词 + 一次「重新读取」；读不到不是脏，跟保存无关。 */
 .config-drawer__platform-notice {
@@ -447,3 +439,8 @@
 }
 
 .config-drawer__save:disabled { opacity: 0.6; cursor: default; }
+
+/* 单列屏内容层：**骨架唯一一处宽度上限**（840 居中）。屏一律不写 max-width；
+   分栏屏与表格屏吃满，不套这一层。别把这条挂到 `.config-drawer__pane` 上——
+   pane 里还有页名 h2，挂上去标题会被一起压成 840，左缘和左边导航对不齐。 */
+.config-drawer__single { width: 100%; max-width: 840px; margin-inline: auto; }

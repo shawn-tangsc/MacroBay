@@ -291,16 +291,16 @@ export function ConfigSettingsDrawer({
             : (<div className="config-drawer__split">{sourcesPanel}</div>)
           : null}
         {menu === 'processing' && processingPanel !== undefined
-          ? processingPanel
+          ? <div className="config-drawer__single">{processingPanel}</div>
           : null}
         {menu === 'runLog' && runLogPanel !== undefined
           ? runLogPanel
           : null}
         {menu === 'analysis' && analysisPanel !== undefined
-          ? analysisPanel
+          ? <div className="config-drawer__single">{analysisPanel}</div>
           : null}
         {menu === 'briefing' && briefingPanel !== undefined
-          ? briefingPanel
+          ? <div className="config-drawer__single">{briefingPanel}</div>
           : null}
         {menu === 'briefing' && briefingPanel === undefined && briefingView !== undefined
           ? (<NotificationsScreen resolveText={resolveText} view={briefingView} />)
