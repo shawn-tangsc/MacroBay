@@ -32,6 +32,9 @@ export const INTELLIGENCE_IPC_METHODS = Object.freeze({
   /** 格级启用：缺键 = 启用（由调用方解释）；写只动那一个格子。 */
   readCellEnabled: 'intelligence.readCellEnabled',
   setCellEnabled: 'intelligence.setCellEnabled',
+  /** 同一份文档里的「这一格选了哪个源」：缺键 = 未选。 */
+  readCellSelection: 'intelligence.readCellSelection',
+  setCellSelection: 'intelligence.setCellSelection',
   ingestEvent: 'intelligence.ingestEvent',
   getWorkspaceState: 'intelligence.getWorkspaceState',
   getWorkspaceTimeline: 'intelligence.getWorkspaceTimeline',

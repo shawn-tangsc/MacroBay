@@ -60,6 +60,26 @@ describe('the cell-enabled IPC bridge', () => {
       .rejects.toThrow('cell-enabled: unreadable')
   })
 
+  it('round-trips a source choice and removes it when null is written', async () => {
+    const handlers = capture(createCellEnabledStore(tempFile()))
+
+    await handlers.get(INTELLIGENCE_IPC_METHODS.setCellSelection)!({ cellId: 'quotes:usd', sourceId: 'realmarketapi-market' })
+    const read = await handlers.get(INTELLIGENCE_IPC_METHODS.readCellSelection)!(undefined) as Record<string, string>
+    expect(read).toEqual({ 'quotes:usd': 'realmarketapi-market' })
+
+    await handlers.get(INTELLIGENCE_IPC_METHODS.setCellSelection)!({ cellId: 'quotes:usd', sourceId: null })
+    expect(await handlers.get(INTELLIGENCE_IPC_METHODS.readCellSelection)!(undefined)).toEqual({})
+  })
+
+  it('rejects a malformed selection instead of guessing a source', async () => {
+    const handlers = capture(createCellEnabledStore(tempFile()))
+
+    await expect(Promise.resolve(handlers.get(INTELLIGENCE_IPC_METHODS.setCellSelection)!({ cellId: 'quotes:usd', sourceId: '' })))
+      .rejects.toThrow('sourceId must be a non-empty string or null')
+    await expect(Promise.resolve(handlers.get(INTELLIGENCE_IPC_METHODS.setCellSelection)!({ cellId: '', sourceId: null })))
+      .rejects.toThrow('cellId must be a non-empty string')
+  })
+
   it('rejects a malformed write instead of guessing a cell id', async () => {
     const handlers = capture(createCellEnabledStore(tempFile()))
 

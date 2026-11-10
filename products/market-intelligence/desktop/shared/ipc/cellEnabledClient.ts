@@ -23,5 +23,11 @@ export const cellEnabledClient: CellEnabledClient = {
   },
   async write(cellId, enabled) {
     await invoke<void>(INTELLIGENCE_IPC_METHODS.setCellEnabled, { cellId, enabled })
+  },
+  async readSelection() {
+    return await invoke<Record<string, string>>(INTELLIGENCE_IPC_METHODS.readCellSelection)
+  },
+  async writeSelection(cellId, sourceId) {
+    await invoke<void>(INTELLIGENCE_IPC_METHODS.setCellSelection, { cellId, sourceId })
   }
 }
