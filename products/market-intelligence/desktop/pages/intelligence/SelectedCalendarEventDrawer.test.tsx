@@ -77,11 +77,11 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     const host = await render(clientWith({ state: 'available', asOf, event: detail }))
 
     expect(host.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
-    // The calendar's own panel, not a lookalike: left, unmasked, and the one way out is the shared
-    // close control (a platform `IconButton`), not a hand-drawn corner button.
-    expect(host.querySelector('.side-panel')).not.toBeNull()
+    // 与日历页同一只抽屉（R38）：`inline`、无遮罩，出口是平台抽屉自己那颗关闭键。
+    expect(host.querySelector('.mi-calendar-detail')).not.toBeNull()
+    expect(host.querySelector('.ant-drawer')?.classList.contains('drawer--inline')).toBe(true)
     expect(host.querySelector('.ant-drawer-mask')).toBeNull()
-    expect(host.querySelector('.side-panel button[aria-label]')).not.toBeNull()
+    expect(host.querySelector('.ant-drawer-header button[aria-label]')).not.toBeNull()
     const body = host.querySelector('[data-calendar-detail-container]')!
     // 同一个发布，竖线与抽屉同名：抽屉读的是分析侧那份词表（设计 145 §8 D）。
     expect(body.textContent).toContain(portal.analysisWorkspace.readableNames.eventName['core-cpi'])
@@ -103,7 +103,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
   it('carries the drawer\'s one visible way out', async () => {
     const onClose = vi.fn()
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), onClose)
-    await act(async () => host.querySelector<HTMLButtonElement>('.side-panel button[aria-label]')!.click())
+    await act(async () => host.querySelector<HTMLButtonElement>('.ant-drawer-header button[aria-label]')!.click())
     expect(onClose).toHaveBeenCalledOnce()
   })
 
