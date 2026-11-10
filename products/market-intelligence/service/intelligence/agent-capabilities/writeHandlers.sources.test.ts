@@ -206,9 +206,9 @@ describe('source configuration write handlers', () => {
     // C10：这四项（`scopePolicy` / `rawArchiveEnabled` / `retentionMode` / `autoReplayAfterParserUpgrade`）
     // 已从智能体写入口撤掉——值是既有事实，冻结，不迁不删。把它们加回 capability schema 或 action
     // 字段表，这条就会红：这正是「撤干净」的反向证据。
-    for (const field of ['scopePolicy', 'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade']) {
+    for (const field of ['scopePolicy', 'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade', 'sourceSpecificConfigJson']) {
       const error = await handler('configure-intelligence-source')(
-        { action: 'save-profile', sourceId: 'coingecko-trending', [field]: field === 'scopePolicy' ? 'all' : true },
+        { action: 'save-profile', sourceId: 'coingecko-trending', [field]: field === 'scopePolicy' ? 'all' : field === 'sourceSpecificConfigJson' ? '{}' : true },
         context
       ).catch((thrown: unknown) => thrown)
       expect(error, `${field} must be refused`).toBeInstanceOf(Error)

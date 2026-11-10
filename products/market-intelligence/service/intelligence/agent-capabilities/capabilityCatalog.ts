@@ -400,7 +400,7 @@ export const intelligenceAgentCapabilities = [
     kind: 'write',
     title: { 'zh-CN': '修改情报源配置', 'en-US': 'Configure intelligence source' },
     description:
-      '修改一个情报源的配置，每次调用都会先请用户确认。action=save-profile 只改采集预设、是否计入情绪、范围策略、原始归档、保留策略、解析器升级后自动重放与监控标的——不能改启用状态、凭据或自由配置；action=set-enabled 启用或停用一个源。返回 changed（逐字段 before/after）与改动前后的配置修订号。限制：凭据只通过 request_source_credential 交接，绝不经过本工具；未知 sourceId 会失败且不做任何修改；sourceSpecificConfigJson 与 credentialRef 一律不被接受。',
+      '修改一个情报源的配置，每次调用都会先请用户确认。action=save-profile 只改采集预设、是否计入情绪与监控标的——不能改启用状态、凭据或自由配置；action=set-enabled 启用或停用一个源。返回 changed（逐字段 before/after）与改动前后的配置修订号。限制：凭据只通过 request_source_credential 交接，绝不经过本工具；未知 sourceId 会失败且不做任何修改；sourceSpecificConfigJson 与 credentialRef 一律不被接受。说明：有几个界面没有读取者的 profile 字段已从写入口冻结——字段与既有值保留，重新接线时把写入口加回来。',
     inputSchema: configureIntelligenceSourceInputSchema,
     outputSchema: configureIntelligenceSourceOutputSchema,
     handlerId: 'market-intelligence.configure-intelligence-source',

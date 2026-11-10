@@ -99,7 +99,7 @@ function modelToolName(tool: string): string {
 }
 
 describe('the frozen profile fields are absent from the model-facing write surface', () => {
-  const FROZEN = ['scopePolicy', 'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade'] as const
+  const FROZEN = ['scopePolicy', 'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade', 'sourceSpecificConfigJson'] as const
 
   it('keeps them off the write schema, the action field list, and the approval card', () => {
     // C10：这四项从智能体写入口撤掉（值是既有事实，冻结）。三处任一加回来，这条就红。
