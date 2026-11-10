@@ -54,4 +54,16 @@ describe('settings section', () => {
     // 动作槽与标题是同一行的两个端：动作不在标题元素里面。
     expect(titleWithInfo.querySelector('.settings-section__action')).toBeNull()
   })
+
+  it('defaults to the card container and marks the flat variant, which a caller can pick without CSS', async () => {
+    const card = await mount(<SettingsSection title="分析设置"><p>row</p></SettingsSection>)
+    // 默认就是卡（设置页那边区块自己就是容器）；调用点不传 variant 不应该得到别的形状。
+    expect(card.querySelector('.settings-section')?.getAttribute('data-variant')).toBe('card')
+
+    const flat = await mount(<SettingsSection title="分析设置" variant="flat"><p>row</p></SettingsSection>)
+    const block = flat.querySelector('.settings-section')
+    // flat 由组件给形态，调用点不许自己写「把区块压平」的 CSS —— 这里只钉「组件确实换了标记」。
+    expect(block?.getAttribute('data-variant')).toBe('flat')
+    expect(block?.getAttribute('data-settings-section-block')).toBe('true')
+  })
 })

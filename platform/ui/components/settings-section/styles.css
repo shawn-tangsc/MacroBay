@@ -1,6 +1,45 @@
-/* 设置区块：值照设置页现状（区块标题 13/650、标题与内容 8、区块之间 16）。只走 token。 */
-.settings-section { display: grid; gap: 8px; }
+/*
+ * 设置区块：值照设置页现状（区块标题 13/650、标题与内容 8、区块之间 16）。只走 token。
+ *
+ * **这是唯一的区块容器样式**（边框 / 圆角 / surface 底 / 内边距）：数值取设置页现有卡片那套
+ * （`web-search-settings-card`：1px `--border`、圆角 8、`--surface` 底、卡头 10/14 内距），
+ * 屏的 CSS 里不许再各写一份——两处各写一份必然一处改、另一处不跟。
+ */
+.settings-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.settings-section > .settings-section__header {
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
 .settings-section + .settings-section { margin-top: 16px; }
+
+/*
+ * `flat`：区块放进「已经是一张卡」的容器里时用——无边框、无圆角、无底色、无内距，卡头无底线。
+ * 只在这里定义形态，调用点不许自己写「把区块压平」的 CSS（两处各写一份必然一处改另一处不跟）。
+ * 卡内的区块间分隔线归那张卡画：区块自己画的线会被卡的内距截住、通不到卡边。
+ */
+.settings-section[data-variant='flat'] {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+}
+
+.settings-section[data-variant='flat'] > .settings-section__header {
+  padding: 0 0 8px;
+  border-bottom: 0;
+}
 
 .settings-section__header {
   display: flex;
@@ -24,3 +63,15 @@
 .settings-section__info { display: inline-flex; }
 .settings-section__action { display: inline-flex; }
 .settings-section__body { display: grid; }
+
+/* flat：放进别人的卡里时用——外层无框/无圆角/无底色/无内距，区块头只留 0 0 8px 且无底线。 */
+.settings-section--flat {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.settings-section--flat > .settings-section__header {
+  padding: 0 0 8px;
+  border-bottom: 0;
+}

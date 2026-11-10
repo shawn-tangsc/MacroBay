@@ -11,16 +11,24 @@ import type { ReactNode } from 'react'
  * （结构件、类名由调用方给），抽屉直接用那个，把 class 传成 `config-drawer__*`。
  * 所以这里只提供**区块**与**卡头**两件，避免同一概念出现两个 `SettingsRow`。
  */
-export function SettingsSection({ title, children, action, info }: Readonly<{
+export function SettingsSection({ title, children, action, info, variant = 'card' }: Readonly<{
   /** 区块名（读者可见文案，由调用方解析好再传）。 */
   title: string
+  /**
+   * 容器形态：`'card'`（默认，设置页那套：边框 + 圆角 + surface 底 + 卡头内距）；
+   * `'flat'`（放进别处已经提供的那张卡里时用：无边框、无圆角、无底色、无内距、卡头无底线）。
+   *
+   * 为什么要有两档：设置页里区块自己就是容器，不画框就没有边界；而配置抽屉的正文**本身就是一张卡**
+   * （`ConfigDrawerContentCard`），区块再画框就是双框 + 双重内距（左缩进 30）。
+   */
+  variant?: 'card' | 'flat'
   /** 标题右侧的动作槽（可选）：一颗按钮或一条跳转。 */
   action?: ReactNode
   /** 标题旁的 ⓘ 槽（可选）：说明句进浮层，正文只留标题。 */
   info?: ReactNode
   children: ReactNode
 }>): React.ReactElement {
-  return <section className="settings-section" data-settings-section-block="true">
+  return <section className="settings-section" data-settings-section-block="true" data-variant={variant}>
     <SettingsSectionHeader action={action} info={info} title={title} />
     <div className="settings-section__body">{children}</div>
   </section>
