@@ -1,0 +1,26 @@
+/* 三档提示条：颜色只走 token；不是浮层、不可关闭。 */
+.inline-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text-strong);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+}
+
+.inline-notice__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-notice--info { border-left-color: var(--muted-strong); }
+.inline-notice--caution { border-left-color: var(--caution); background: color-mix(in srgb, var(--caution) 12%, var(--surface)); }
+.inline-notice--danger { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--surface)); }
