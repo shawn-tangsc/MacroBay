@@ -327,4 +327,22 @@ describe('config settings drawer (static layout)', () => {
     // 原因通道有对应元素（ⓘ 按钮），点在行内标签旁。
     expect(row.querySelectorAll('.config-drawer__label button')).toHaveLength(1)
   })
+
+  it('never prints an internal key name on any static screen', () => {
+    // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
+    for (const screen of DRAWER_PREVIEW_SCREENS) {
+      document.body.replaceChildren()
+      root?.unmount()
+      root = undefined
+      host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      act(() => root?.render(
+        <ConfigSettingsDrawer initialMenu={screen.menu} onClose={() => undefined} open resolveText={(key) => key} />
+      ))
+      const text = document.body.textContent ?? ''
+      expect(text).not.toMatch(/configDrawer\./u)
+      expect(text).not.toMatch(/^[a-z]+\.[a-z]/iu)
+    }
+  })
 })
