@@ -25,15 +25,13 @@
  */
 .mi-source-veil-host { position: relative; }
 /*
- * 不可用时：高度不塌（与卡内容区同档的 120），并且**锁住宿主自己**。
+ * 不可用时高度不塌：与卡内容区同档的 120，靠 `data-veiled` 打开，正常态不受影响。
  *
- * - `overflow: hidden`：宿主不再让内容溢出到卡外，滚动条与半截内容都留在遮罩后面；
- * - `max-height: 100%`：宿主待在滚动容器里时（右栏日历卡的 `.mi-calendar-card__body`
- *   就是 `overflow: auto`），被裁到容器可视高度——否则遮罩长得和整段内容一样高，
- *   读者一滚，遮罩跟着内容走，句子跑出视野，滚动条还留在遮罩上。父级高度不定时这条
- *   自动失效，不会误伤普通卡。
+ * **这里只管这一条视觉尺寸，不管 `height` / `overflow`**：宿主取多高、由谁锁滚动，
+ * 取决于每张卡自己的容器结构（谁才是真正的滚动容器），写进共享类会让别的卡误以为
+ * 依赖它。判据见规范 §二之1「宿主高度取可见窗口」。
  */
-.mi-source-veil-host[data-veiled='true'] { min-height: 120px; overflow: hidden; max-height: 100%; }
+.mi-source-veil-host[data-veiled='true'] { min-height: 120px; }
 
 .mi-source-veil {
   position: absolute; inset: 0; z-index: 1;
