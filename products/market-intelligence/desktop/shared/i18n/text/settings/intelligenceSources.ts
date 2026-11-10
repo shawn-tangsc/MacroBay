@@ -165,10 +165,6 @@ export const intelligenceSourcesText = {
 
   sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
   /** 来源列表的条件行（C5）：胶囊说「值 · 还剩 N」，清空按钮一个词。 */
-  filter: {
-    chip: '{value} · 还剩 {remaining}',
-    clear: '清空筛选'
-  },
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
     '0xrouter-aggregate-provider': 'BTC、ETH 现货 ETF 的净流入',
@@ -687,10 +683,6 @@ export const intelligenceSourcesText = {
 
   sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },
   /** Source-list conditions (C5): the chip says "value · N left"; the clear button is one word. */
-  filter: {
-    chip: '{value} · {remaining} left',
-    clear: 'Clear filters'
-  },
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
     '0xrouter-aggregate-provider': 'Net flows into BTC and ETH spot ETFs',
