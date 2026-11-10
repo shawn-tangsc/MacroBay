@@ -167,28 +167,56 @@ export function formatShellClock(
   const parsed = Date.parse(instant)
   if (!Number.isFinite(parsed)) return null
   const now = options.now ?? new Date()
-  const partsOf = (at: Date): Intl.DateTimeFormatPart[] =>
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: options.timeZone,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-    }).formatToParts(at)
-  const read = (parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string =>
-    parts.find((part) => part.type === type)?.value ?? ''
-
   let parts: Intl.DateTimeFormatPart[]
   try {
-    parts = partsOf(new Date(parsed))
+    parts = wallClockParts(new Date(parsed), options.timeZone)
   } catch {
     return null
   }
-  const time = `${read(parts, 'hour')}:${read(parts, 'minute')}`
-  const today = partsOf(now)
+  const time = clockOf(parts)
+  const today = wallClockParts(now, options.timeZone)
   const sameDay =
-    read(parts, 'year') === read(today, 'year') &&
-    read(parts, 'month') === read(today, 'month') &&
-    read(parts, 'day') === read(today, 'day')
-  return sameDay ? time : `${read(parts, 'month')}-${read(parts, 'day')} ${time}`
+    readPart(parts, 'year') === readPart(today, 'year') &&
+    readPart(parts, 'month') === readPart(today, 'month') &&
+    readPart(parts, 'day') === readPart(today, 'day')
+  return sameDay ? time : `${readPart(parts, 'month')}-${readPart(parts, 'day')} ${time}`
+}
+
+/**
+ * **只有墙钟时刻**（`HH:mm`），不带日期：给「分组标题已经写了日期」的列表行用。
+ *
+ * 行在一个按天分组的列表里，日期由组头表达；行尾再带一次 `MM-DD`，就是把同一天说两遍，
+ * 而且会让「名字里已经带了这个时刻就不再重复」的判定失效（名字里是 `2026/11/9 20:45`，
+ * 带日期的串永远匹配不上）。需要日期的位置用 `formatShellClock`。
+ */
+export function formatShellTimeOfDay(
+  instant: string,
+  options: Readonly<{ timeZone: string }>
+): string | null {
+  const parsed = Date.parse(instant)
+  if (!Number.isFinite(parsed)) return null
+  try {
+    return clockOf(wallClockParts(new Date(parsed), options.timeZone))
+  } catch {
+    return null
+  }
+}
+
+/** 显示口径的墙钟分量：一份 `Intl` 配置，时区与 `hourCycle` 只在这里定。 */
+function wallClockParts(at: Date, timeZone: string): Intl.DateTimeFormatPart[] {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(at)
+}
+
+function readPart(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string {
+  return parts.find((part) => part.type === type)?.value ?? ''
+}
+
+function clockOf(parts: Intl.DateTimeFormatPart[]): string {
+  return `${readPart(parts, 'hour')}:${readPart(parts, 'minute')}`
 }
 
 /** 时区在界面上的短名称（`GMT+8` / `UTC`），用于设置项与时间标签。 */

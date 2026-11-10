@@ -4,7 +4,7 @@ import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/ses
 import { displaySessionName } from '@platform/ai/agent-platform/schemas/sessionDisplayName'
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellClock, formatShellDay } from '@platform/ui/time/shellTimeFormat'
+import { formatShellDay, formatShellTimeOfDay } from '@platform/ui/time/shellTimeFormat'
 
 import { useAgentText } from '../agentTextProvider'
 import './automationSessions.css'
@@ -30,9 +30,15 @@ type AutomationSessionsProps = {
  *
  * 计数只说一次：块头给总计（「共 41 条」），日分组标题**只写日期**，不再重复「今天 21」。
  */
-/** 行尾该显示的时刻；名字里已经有这个时刻时返回 `null`（同一行不许出现两次时间）。 */
+/**
+ * 行尾该显示的时刻；名字里已经有这个时刻时返回 `null`（同一行不许出现两次时间）。
+ *
+ * 只用**墙钟时刻**、不带日期：日期由日分组标题表达（今天 / 昨天 / MM-DD），行内再带一次
+ * 就是同一天说两遍；而且带日期的串（`11-09 20:45`）永远匹配不上名字里的写法（`2026/11/9 20:45`），
+ * 「名字已带时刻就不再重复」的判定会失效。
+ */
 function rowClock(session: AgentSessionEntity, timeZone: string): string | null {
-  const clock = formatShellClock(session.createdAt, { timeZone })
+  const clock = formatShellTimeOfDay(session.createdAt, { timeZone })
   if (clock === null) return null
   return session.name.includes(clock) ? null : clock
 }
