@@ -601,6 +601,24 @@ describe('intelligence notification settings', () => {
       .toBe(text['pages.intelligence.notification.threshold.medium'])
   })
 
+  it('words the two conditional rows as conditions, not as bare states', async () => {
+    // 界面设计 2026-11-10：「最低强度」的值要写清推的是哪几档，「通知条件」的值要写条件本身，
+    // 不能只写「中」或把开关状态复述一遍。
+    expect(text['pages.intelligence.notification.threshold.medium']).toBe('中（只推中、高）')
+    expect(text['pages.intelligence.notification.threshold.high']).toBe('高（只推高）')
+    expect(text['pages.intelligence.notification.threshold.low']).toBe('低（三档都推）')
+    expect(text['pages.intelligence.notification.landed.surprise-only']).toBe('只在超出预期时报')
+
+    await render()
+    await selectItem(2)
+    const group = [...(container?.querySelectorAll('[role="group"]') ?? [])]
+      .find((node) => node.getAttribute('aria-label') === text['pages.intelligence.notification.threshold.row'])
+    expect(group?.querySelector('[aria-pressed="true"]')?.textContent).toBe('中（只推中、高）')
+
+    await selectItem(3)
+    expect(container?.textContent).toContain('只在超出预期时报')
+  })
+
   it('saves the chosen tier and shows what the service read back', async () => {
     const invoke = vi.fn(async (_productId: string, method: string, payload?: unknown) => {
       if (String(method).includes('saveNewsPushThreshold')) {
