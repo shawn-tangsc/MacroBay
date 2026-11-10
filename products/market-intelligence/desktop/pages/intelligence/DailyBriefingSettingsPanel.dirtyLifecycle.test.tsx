@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act, createElement, useState, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ConfirmProvider } from '@platform/ui/components/confirm'
+import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
+import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
 
 /**
@@ -143,5 +144,76 @@ describe('the briefing settings panel’s unsaved flag', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
     expect(reported.at(-1)).toBe(false)
+  })
+})
+
+/**
+ * 「继续编辑」真的把草稿留下：这一步只有把面板和抽屉守卫放在一起才判得出来。
+ * （守卫自己的三条在 `ConfigSettingsDrawer.test.tsx`；这里判的是「取消之后屏还在、值还在」。）
+ */
+describe('the drawer guard keeps the draft when the reader keeps editing', () => {
+  function Probe({ onClose }: Readonly<{ onClose: () => void }>): ReactElement {
+    const confirm = useConfirm()
+    const [dirty, setDirty] = useState(false)
+    return <ConfigSettingsDrawer
+      briefingPanel={<DailyBriefingSettingsPanel onDirtyChange={setDirty} />}
+      confirmDiscard={(input) => confirm({
+        title: input.title,
+        description: input.body,
+        confirmLabel: input.confirmLabel,
+        cancelLabel: input.cancelLabel,
+        tone: 'danger',
+        onConfirm: input.onDiscard
+      })}
+      initialMenu="briefing"
+      isScreenDirty={(menu) => menu === 'briefing' && dirty}
+      onClose={onClose}
+      open />
+  }
+
+  const confirmButton = (label: string): HTMLButtonElement | undefined =>
+    [...document.body.querySelectorAll<HTMLButtonElement>('.ant-modal-confirm-btns button')]
+      .find((button) => (button.textContent ?? '').replace(/\s+/gu, '') === label)
+
+  it('keeps the panel and the reader’s value when they answer 继续编辑, and closes only on 丢掉改动', async () => {
+    stubBridge()
+    const onClose = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(
+      <ShellLanguageProvider language="zh-CN">
+        <ConfirmProvider><Probe onClose={onClose} /></ConfirmProvider>
+      </ShellLanguageProvider>
+    ))
+    // antd 的 Drawer 走 portal：内容挂在 document 上，不在我给的容器里。
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const body = document.body
+
+    const toggle = switches(body)[0]
+    expect(toggle).not.toBeUndefined()
+    await act(async () => toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(switches(body)[0]?.getAttribute('aria-checked')).toBe('false')
+
+    const close = body.querySelector<HTMLElement>('.drawer__header-actions button')
+    expect(close).not.toBeNull()
+
+    // 第一次关：问一句；选「继续编辑」→ 抽屉还在、值还在。
+    await act(async () => close!.click())
+    await act(async () => { await Promise.resolve() })
+    expect(confirmButton('继续编辑')).not.toBeUndefined()
+    await act(async () => confirmButton('继续编辑')!.click())
+    await act(async () => { await Promise.resolve() })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(body.querySelector('[data-briefing-settings-panel="true"]')).not.toBeNull()
+    expect(switches(body)[0]?.getAttribute('aria-checked')).toBe('false')
+
+    // 第二次关：选「丢掉改动」→ 关一次，草稿随卸载走。
+    await act(async () => close!.click())
+    await act(async () => { await Promise.resolve() })
+    await act(async () => confirmButton('丢掉改动')!.click())
+    await act(async () => { await Promise.resolve() })
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
