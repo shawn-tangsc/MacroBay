@@ -912,9 +912,6 @@ mi: miText['zh-CN'],
               notEnabled: '数据未被启用',
               sourceUnknown: '暂时读不到'
             },
-            // 来源状态 one row per feed. The synthetic/proxy words are filled with the panel's own tags
-            // (`crossAsset.syntheticTag`/`proxyTag`), so a row can never label the same reading two ways.
-context: { sourceStatus: { title: '来源状态' } },
             dailyBriefing: dailyBriefingText['zh-CN']
           },
           calendar: {
@@ -2341,7 +2338,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sourceUnknown: 'Status is temporarily unavailable'
             },
             // One row per feed in Source status. `{tag}` is the panel's own synthetic/proxy label.
-context: { sourceStatus: { title: 'Source status' } },
             dailyBriefing: dailyBriefingText['en-US']
           },
           calendar: {
