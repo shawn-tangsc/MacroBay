@@ -34,7 +34,9 @@ export function useDrawerSourcesView(
           name: source.displayName,
           // 正文只给人话：原因码走映射表，表里没有就兜底，**绝不把码漏出来**。
           statusLabel: source.unavailable
-            ? sourceUnavailableSentence(source.unavailable.reasonCode, unavailableFallback)
+            ? // 第三个参数是 kind：官方日历 / 市场日历 / 其它各说各的话，
+            // 不传会退到「这个来源…」，BLS 在抽屉里就和详情不是同一句。
+            sourceUnavailableSentence(source.unavailable.reasonCode, unavailableFallback, source.kind)
             : undefined,
           enabled: source.enabled
         }))))
