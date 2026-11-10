@@ -440,7 +440,3 @@
 
 .config-drawer__save:disabled { opacity: 0.6; cursor: default; }
 
-/* 单列屏内容层：**骨架唯一一处宽度上限**（840 居中）。屏一律不写 max-width；
-   分栏屏与表格屏吃满，不套这一层。别把这条挂到 `.config-drawer__pane` 上——
-   pane 里还有页名 h2，挂上去标题会被一起压成 840，左缘和左边导航对不齐。 */
-.config-drawer__single { width: 100%; max-width: 840px; margin-inline: auto; }

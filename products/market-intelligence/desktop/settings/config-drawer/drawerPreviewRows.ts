@@ -45,6 +45,7 @@ export type PreviewScreen = {
 export const DRAWER_MENUS = ['sources', 'processing', 'analysis', 'briefing', 'notifications', 'runLog'] as const
 export type ConfigDrawerMenu = (typeof DRAWER_MENUS)[number]
 
+
 /** 已经确认存在的文案键（写在这里 = 我核过它今天就在文案表里）。 */
 export const EXISTING_LABEL_KEYS = {
   collectionPreset: 'settings.intelligenceSources.collectionPolicy.collectionPreset',

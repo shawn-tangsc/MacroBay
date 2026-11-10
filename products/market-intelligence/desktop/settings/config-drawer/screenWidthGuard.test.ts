@@ -4,11 +4,12 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * 宽度只由骨架定义一次，屏一律不写。双向判据：
- * 1. **屏的 CSS 里不许出现 `max-width`**（单列、分栏、表格都一样：前两类吃满、单列由骨架那条给）；
- * 2. **骨架里 `max-width: 840px` 只允许出现一次**——删掉它也是错（「没有任何上限」同样不对）。
+ * 用户定：**所有屏吃满可用宽度，不设内容区上限**。
  *
- * 反向用例都写在下面：塞一条屏内 max-width 必须红；骨架那条删了也必须红。
+ * 双向判据：
+ * 1. **屏的 CSS 里不许出现 `max-width`**（谁都不许自己收窄）；
+ * 2. **骨架里也不许再出现内容区上限**（原来的「840 恰好一处」改成「**0 处**」）——
+ *    谁把上限加回来就红，避免「有人觉得太宽」再收一次。
  */
 const DRAWER = 'products/market-intelligence/desktop/settings/config-drawer'
 const SCREEN_CSS = [
@@ -30,8 +31,8 @@ describe('one width rule, in the skeleton only', () => {
     expect(screenWidthOffenders('.x { max-width: 720px; }', 'screens/briefing.css')).toEqual(['screens/briefing.css:1 max-width'])
   })
 
-  it('counts the skeleton limit, and fails when it is gone', () => {
-    expect(skeletonLimitCount('.config-drawer__single { max-width: 840px; }')).toBe(1)
+  it('counts the skeleton limit, so a re-added cap is visible', () => {
+    expect(skeletonLimitCount('.config-drawer__single { max-width: 840px; }')).toBe(1)  // 夹具：只要出现就计数
     expect(skeletonLimitCount('.config-drawer__single { width: 100%; }')).toBe(0)
   })
 
@@ -42,8 +43,9 @@ describe('one width rule, in the skeleton only', () => {
     expect(offenders).toEqual([])
   })
 
-  it('keeps exactly one 840 limit in the skeleton', () => {
-    expect(skeletonLimitCount(readFileSync(join(process.cwd(), SKELETON), 'utf8'))).toBe(1)
+  it('keeps no content-width limit in the skeleton at all', () => {
+    // 0 处：所有屏吃满。谁加回上限，这条红。
+    expect(skeletonLimitCount(readFileSync(join(process.cwd(), SKELETON), 'utf8'))).toBe(0)
   })
 
   it('does not let the drawer css pick up a second screen file', () => {
