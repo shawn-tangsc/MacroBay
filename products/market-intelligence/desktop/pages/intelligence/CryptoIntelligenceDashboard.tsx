@@ -1,4 +1,5 @@
 import { Button } from 'antd'
+import { hostScreenDirty } from './drawerScreenDirty'
 
 import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
@@ -252,7 +253,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           /* 计数变化就重新挂载：每次都落到请求的那一屏（连点同一个入口也算一次）。 */
           key={`settings-drawer-${openSettingsRequest ?? 0}`}
           initialMenu={initialSettingsMenu}
-          isScreenDirty={() => drawerScreen.dirty || sourcesDraftDirty}
+          isScreenDirty={() => hostScreenDirty(drawerScreen.dirty, sourcesDraftDirty)}
           onClose={() => setSettingsDrawerOpen(false)}
           onOpenPlatformSettings={(target) => {
             // 只转达目标，不拼路由（页面对应关系在导航层）。
