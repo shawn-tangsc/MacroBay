@@ -106,6 +106,22 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
     ]
   },
   {
+    menu: 'briefing',
+    groups: [
+      {
+        rows: [
+          { key: 'publishAt', labelKey: 'configDrawer.rows.publishAt', control: 'readonly' },
+          { key: 'window', labelKey: 'configDrawer.rows.window', control: 'readonly' },
+          { key: 'editions', labelKey: 'configDrawer.rows.editions', control: 'readonly' },
+          { key: 'generationLanguage', labelKey: 'configDrawer.rows.generationLanguage', control: 'readonly' },
+          { key: 'aiEditing', labelKey: 'configDrawer.rows.aiEditing', control: 'readonly' },
+          { key: 'aiBackfill', labelKey: 'configDrawer.rows.aiBackfill', control: 'readonly' },
+          { key: 'briefingModel', labelKey: 'configDrawer.rows.briefingModel', control: 'readonly' }
+        ]
+      }
+    ]
+  },
+  {
     menu: 'notifications',
     groups: [
       {
@@ -153,6 +169,7 @@ export const DRAWER_PREVIEW_ROW_COUNTS: Readonly<Partial<Record<ConfigDrawerMenu
   sources: 12,
   processing: 5,
   analysis: 2,
+  briefing: 7,
   notifications: 10,
   platform: 6
 }
