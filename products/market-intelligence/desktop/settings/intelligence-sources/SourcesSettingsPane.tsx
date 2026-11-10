@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
 
@@ -39,6 +39,14 @@ export type SourcesSettingsPaneProps = {
   surface: Omit<SourceConfigSurfaceProps, 'provider'> & { providerId?: string }
   /** 这一面显示哪几块筛选（抽屉传四块，设置页默认六项）。 */
   treeFilters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>
+  /**
+   * 格级启停的读写（宿主注入；真实来源是 main 侧 `createCellEnabledStore`，走 IPC 或直接传函数）。
+   * 读失败一律按「启用」显示——不把开关画成关闭（那会假装读者关过它）。
+   */
+  cellEnabledIo?: Readonly<{
+    read: () => Promise<Record<string, boolean>>
+    write: (cellId: string, enabled: boolean) => Promise<void>
+  }>
 }
 
 /** 设置页与抽屉共用的六块 / 五块筛选（业务设置那一屏也要这一条）。 */
@@ -62,6 +70,28 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
 
   const isBusiness = props.filter === 'dashboard'
   const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
+  /**
+   * 格级启停：缺键 = 启用；读失败也按启用显示。**只在这里存一份读回来的显式值**，
+   * 存储层之外不再造第二份默认值表。
+   */
+  const [cellEnabled, setCellEnabled] = useState<Readonly<Record<string, boolean>>>({})
+  useEffect(() => {
+    let cancelled = false
+    if (props.cellEnabledIo === undefined) return
+    void props.cellEnabledIo.read()
+      .then((saved) => { if (!cancelled) setCellEnabled(saved) })
+      // 读失败不是「全关」：保持空表 → 所有格按启用显示。
+      .catch(() => { if (!cancelled) setCellEnabled({}) })
+    return () => { cancelled = true }
+  }, [props.cellEnabledIo])
+  const isCellEnabled = (cellId: string): boolean => cellEnabled[cellId] ?? true
+  const onCellToggle = props.cellEnabledIo === undefined
+    ? undefined
+    : (cellId: string, enabled: boolean): void => {
+      // 同值重复写由存储层短路，这里不再「先读再比」。
+      setCellEnabled((current) => ({ ...current, [cellId]: enabled }))
+      void props.cellEnabledIo?.write(cellId, enabled).catch(() => undefined)
+    }
 
   /* **一个骨架**：页签条只在这一处渲染一次；两个分类只换「列表」与「内容」。
      切换 tab 时页签条的 DOM 节点不重挂载（用户 2026-11-11：「tab 一切你整个重做了」）。 */
@@ -94,6 +124,8 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
       {isBusiness
         ? <BusinessSettingsContent
           business={business}
+          {...(onCellToggle === undefined ? {} : { onCellToggle })}
+          isCellEnabled={isCellEnabled}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <>
