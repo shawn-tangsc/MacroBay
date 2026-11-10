@@ -820,18 +820,30 @@ describe('“running” is only the row that says so (2026-11-06)', () => {
 })
 
 describe('the session action on a language row (E9)', () => {
-  it('says the session is gone instead of navigating when the platform selects nothing', async () => {
+  it('says it did not open — and never claims the session is gone — and lets the reader try again', async () => {
     // 架构师抓的真缺陷：`selectSession` 对不存在的 id 返回原状态、不抛，读者会被送进一个
     // 没选中任何会话的页面。动作必须按返回的 state 判断，不是按有没有抛。
+    //
+    // 而「返回读不出」是**拿不到**、不是**没有**（产品 2026-11-11 裁）：一句「这条会话已经不在了」
+    // 会让读者以为自己的编辑记录被删了，而那可能只是一次读失败。所以只说「这次没有打开」，动作留着。
     const dispatch = vi.spyOn(window, 'dispatchEvent')
-    vi.stubGlobal('platform', { agents: { selectSession: async () => ({ activeSessionId: null }) } })
+    const select = vi.fn(async () => ({ activeSessionId: null }))
+    vi.stubGlobal('platform', { agents: { selectSession: select } })
     try {
       render({ editions: [edition({ sessionId: 'session-gone' })] })
       await act(async () => { host.querySelector<HTMLButtonElement>('[data-open-session]')!.click() })
       await flush()
-      expect(host.querySelector('[data-session-gone]')?.textContent).toBe(text.history.sessionMissing)
+      expect(host.querySelector('[data-session-not-opened]')?.textContent).toBe(text.history.sessionNotOpened)
+      expect(host.textContent).not.toMatch(/不在了|不存在|no longer|not exist/iu)
       const navigations = dispatch.mock.calls.filter(([event]) => (event as CustomEvent).type === 'app-shell:navigate')
       expect(navigations).toHaveLength(0)
+
+      // 动作没有被换掉：再点一次会再读一次，而不是变成一颗死控件。
+      const again = host.querySelector<HTMLButtonElement>('[data-open-session]')
+      expect(again).not.toBeNull()
+      await act(async () => again!.click())
+      await flush()
+      expect(select).toHaveBeenCalledTimes(2)
     } finally {
       dispatch.mockRestore()
       vi.unstubAllGlobals()
@@ -848,7 +860,7 @@ describe('the session action on a language row (E9)', () => {
       const navigations = dispatch.mock.calls.filter(([event]) => (event as CustomEvent).type === 'app-shell:navigate')
       expect(navigations).toHaveLength(1)
       expect((navigations[0]![0] as CustomEvent).detail).toMatchObject({ navKey: 'agents' })
-      expect(host.querySelector('[data-session-gone]')).toBeNull()
+      expect(host.querySelector('[data-session-not-opened]')).toBeNull()
     } finally {
       dispatch.mockRestore()
       vi.unstubAllGlobals()
@@ -888,8 +900,8 @@ describe('the session action on a language row (E9)', () => {
     await act(async () => { host.querySelector<HTMLButtonElement>('[data-open-session]')!.click() })
     await flush()
     expect(declined).toHaveBeenCalledTimes(1)
-    // 会话已经不在了：就地一句，不跳转、动作位也不再留着点。
-    expect(host.querySelector('[data-session-gone]')?.textContent).toBe(text.history.sessionMissing)
-    expect(host.querySelector('[data-open-session]')).toBeNull()
+    // 没打开：就地一句中性的话，不跳转；动作留着，读者可以再点。
+    expect(host.querySelector('[data-session-not-opened]')?.textContent).toBe(text.history.sessionNotOpened)
+    expect(host.querySelector('[data-open-session]')).not.toBeNull()
   })
 })

@@ -147,8 +147,14 @@ export function DailyBriefingHistoryRail({
   // 右键指向的是**你点中的那一行**，身份是 `(日期, 期号, 语言)` 三元组。少了语言，同一天的中英两行
   // 会找到同一行：右键点英文那行、删掉的却是中文那行。这不是"删错了"，是行身份写错。
   const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; anchor: MenuAnchor }> | null>(null)
-  /** 点了「打开会话」但那条会话已经不在了：只对那一行说一句，别处不动。 */
-  const [goneSessionKey, setGoneSessionKey] = useState<string | null>(null)
+  /**
+   * 点了「打开会话」但没有打开：只对那一行说一句，别处不动。
+   *
+   * 说「这次没有打开」，**不说「已经不在了」**（产品 2026-11-11 裁）：选不中会话有两种结局——
+   * 真的没了，和这次读不到——而界面分不出是哪一种。断言「记录没了」可能是一句假话，
+   * 而读者没法核实；中性句 + 动作留着再点一次，是这里唯一不会骗人的做法。
+   */
+  const [notOpenedKey, setNotOpenedKey] = useState<string | null>(null)
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
   const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor): void =>
     setMenu({ date: edition.date, periodId: edition.periodId, locale: edition.locale, anchor })
@@ -396,15 +402,20 @@ export function DailyBriefingHistoryRail({
               {/* 行尾动作：**兄弟**，不在行按钮子树里（嵌套可聚焦元素会让键盘卡住）。
                   只在有会话时渲染；没有就整格不出现，不留禁用占位（那等于承诺"本来该有"）。 */}
               {sessionId !== undefined
-                ? goneSessionKey === key
-                  ? <span className="mi-daily-briefing__rail-session-gone" data-session-gone="true">{text.history.sessionMissing}</span>
-                  : <button type="button" className="text-action mi-daily-briefing__rail-open-session" data-open-session="true"
+                ? <>
+                  {notOpenedKey === key
+                    ? <span className="mi-daily-briefing__rail-session-not-opened" data-session-not-opened="true" role="status">{text.history.sessionNotOpened}</span>
+                    : null}
+                  <button type="button" className="text-action mi-daily-briefing__rail-open-session" data-open-session="true"
                       aria-label={text.history.openSessionAria.replace('{when}', sessionWhen(edition, locale, timeZone))}
                       onClick={() => {
+                        // 再点一次是真的再读一次：先收起上一次那句话，别让旧结论跟着这一次。
+                        setNotOpenedKey((current) => (current === key ? null : current))
                         void (onOpenSession ?? openSessionWithShell)({ sessionId, date: edition.date, periodId: edition.periodId, locale: edition.locale })
-                          .then((opened) => { if (!opened) setGoneSessionKey(key) })
-                          .catch(() => setGoneSessionKey(key))
+                          .then((opened) => { if (!opened) setNotOpenedKey(key) })
+                          .catch(() => setNotOpenedKey(key))
                       }}>{text.history.openSession}</button>
+                </>
                 : null}
             </div>
           })}

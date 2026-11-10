@@ -27,7 +27,7 @@
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
 .mi-daily-briefing__rail-date { font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mi-daily-briefing__rail-open-session { flex: none; }
-.mi-daily-briefing__rail-session-gone { flex: none; color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-session-not-opened { flex: none; color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-row i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-row i[data-direction="bullish"] { background: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-row i[data-direction="bearish"] { background: var(--mi-dashboard-negative); }
