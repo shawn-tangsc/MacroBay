@@ -140,8 +140,12 @@ describe('business cards keep their padding', () => {
     expect(row.some((body) => /grid-template-columns\s*:[^;]*minmax\(0,\s*1fr\)[^;]*auto/u.test(body))).toBe(true)
     // 两层卡片 + 自适应（用户 2026-11-11）：三列基准，一张数据卡片按自己的源项个数占列，
     // 所以 1 个源的卡占 1/3、2 个源占 2/3，能并进同一行；放不下就换行。
+    // 第一层模块卡也自适应：三列基准，模块按内部源项数占列（上限 3）。
+    const moduleGrid = rulesFor(css, 'business-module-grid').join('\n')
+    expect(moduleGrid).toMatch(/grid-template-columns\s*:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/u)
+    expect(css).toMatch(/grid-column:\s*span var\(--module-span/u)
     const cellGrid = rulesFor(css, 'business-cell-grid').join('\n')
-    expect(cellGrid).toMatch(/grid-template-columns\s*:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/u)
+    expect(cellGrid).toContain('repeat(var(--module-span')
     const cell = rulesFor(css, 'business-cell').join('\n')
     expect(cell).toContain('grid-column: span var(--cell-span')
     const items = rulesFor(css, 'business-cell__items').join('\n')

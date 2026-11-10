@@ -166,12 +166,22 @@ export function BusinessSettingsContent(props: {
       {/* 内容区页头：只写当前业务名，不写副标题、不写「共 N 个」这类统计（用户 2026-11-11）。 */}
       <h3 className="intelligence-section-title">{props.resolveText(titleKey)}</h3>
       {props.business === 'dashboard'
-        ? modulesForBusiness('dashboard').map((module) => <section
-          className="business-card"
-          data-business-card={module.id}
-          key={module.id}>
-          <div className="business-card__title">{props.resolveText(module.labelKey)}</div>
-          <div className="business-cell-grid">
+        ? <div className="business-module-grid">
+          {modulesForBusiness('dashboard').map((module) => {
+            /* 模块卡也自适应（用户 2026-11-11）：占几列 = 卡里各数据卡片占列之和（上限 3）。
+               所以「政策路径」「恐惧与贪婪」这种只有一个源的模块并排成一行，
+               内部有 3 个（或更多）源的模块独占一整行。 */
+            const span = Math.min(
+              cellGroupsOf(module.cells).reduce((sum, group) => sum + Math.min(group.cells.length, 3), 0),
+              3
+            )
+            return <section
+              className="business-card"
+              data-business-card={module.id}
+              key={module.id}
+              style={{ ['--module-span' as string]: span }}>
+              <div className="business-card__title">{props.resolveText(module.labelKey)}</div>
+              <div className="business-cell-grid">
               {/* 两层卡片（用户 2026-11-11）：第一层是模块卡（上面那个 `business-card`），
                   第二层是「数据卡片」——一个格一张卡（`美元`、`纳指`…），卡里放有开关的源项。
                   第二层卡片并排，一行至少 3 张（`grid-template-columns: repeat(3, …)`）。 */}
@@ -182,12 +192,12 @@ export function BusinessSettingsContent(props: {
                 /* 自适应排布（用户 2026-11-11）：一个格占「源项个数」列，最多 3 列。
                    所以 1 个源的数据卡片占 1/3、2 个源占 2/3——纳指（1 个）能和美元（2 个）并进同一行；
                    放不下时网格自己换行，不做强行合并。 */
-                style={{ ['--cell-span' as string]: Math.min(group.cells.length, 3) }}
+                style={{ ['--cell-span' as string]: Math.min(group.cells.length, span) }}
                 key={group.key}>
                 <div className="business-cell__title">{group.label}</div>
                 <div
                   className="business-cell__items"
-                  style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
+                  style={{ ['--cell-items' as string]: Math.min(group.cells.length, span) }}>
                   {group.cells.map((cell) => renderCell(
                     module.id,
                     cell,
@@ -195,8 +205,10 @@ export function BusinessSettingsContent(props: {
                   ))}
                 </div>
               </div>)}
-          </div>
-        </section>)
+              </div>
+            </section>
+          })}
+        </div>
         : null}
       {props.business === 'dashboard'
         ? null

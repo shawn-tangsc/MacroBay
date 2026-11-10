@@ -1707,13 +1707,24 @@
 /* 两层卡片（用户 2026-11-11）：外层是模块卡 `.business-card`，里层是「数据卡片」——
    一个格一张卡（美元 / 纳指 …），**整行一张**，卡头是格名，卡里放这个格的源项（源名 + 开关）。
    卡里的源项并排，**一行 3 个**；只有一个源时那一项也只占 1/3 宽，不拉满整行。 */
+/* 第一层模块卡也自适应（用户 2026-11-11）：三列基准，模块卡占几列 = 卡里各数据卡片占列之和
+   （上限 3）。所以「政策路径」「恐惧与贪婪」这种只有一个源的模块能并排成一行。 */
+.business-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  align-items: start;
+}
+
+.business-card[data-business-card] {
+  grid-column: span var(--module-span, 3);
+}
+
 .business-cell-grid {
   display: grid;
-  /* 三列基准（用户 2026-11-11）：一个源项 = 1/3 宽。
-     每张数据卡片按「源项个数」占列（`--cell-span`，最多 3），
-     所以 1 个源的卡占 1/3、2 个源占 2/3——纳指能与美元并排进同一行；
-     剩余宽度不够时网格自动换行，不做强行合并。 */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 卡里的列数跟模块自己占的列数走：模块只占 1 列时，里面的数据卡片就整张铺满这一列。 */
+  grid-template-columns: repeat(var(--module-span, 3), minmax(0, 1fr));
   gap: 12px;
   min-width: 0;
 }
