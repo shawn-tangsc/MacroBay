@@ -74,9 +74,18 @@ describe('能力行状态读格开关', () => {
     expect(rowSwitch(on, 'binance-futures-positioning')?.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('always shows a source with no cell switch as off, even when its own enabled is true', async () => {
-    // 日历 feed 这类在「采集与数据」里没有对应格：恒显示关，不退回 `enabled`。
-    const host = await render([source('macro-calendar-fed', 'official-calendar')] as never, {})
-    expect(rowSwitch(host, 'macro-calendar-fed')?.getAttribute('aria-checked')).toBe('false')
+  it('shows a no-cell source that is listed in 采集与数据 as on', async () => {
+    // 舆情 / 日历那几条没有自己的格开关，但确实在采集与数据里列着 —— 视为开。
+    const host = await render([source('binance-announcements', 'feed')] as never, {})
+    expect(rowSwitch(host, 'binance-announcements')?.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('shows maintenance and un-wired sources with no place in 采集与数据 as off', async () => {
+    const host = await render(
+      [source('binance-api-updates'), source('binance-asset-page', 'adapter')] as never,
+      {}
+    )
+    expect(rowSwitch(host, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('false')
+    expect(rowSwitch(host, 'binance-asset-page')?.getAttribute('aria-checked')).toBe('false')
   })
 })

@@ -14,7 +14,7 @@ import { SettingsInfo } from '../settingsInfo'
 import { SourceEnabledRow, needsJob } from './SourceRows'
 import { SourceDetailsBlock } from './SourceDetailsBlock'
 import type { SourceHealthLabels } from './SourceHealthDetail'
-import { DASHBOARD_TAB_MODULES, cellIdOf } from './dashboardSourceModules'
+import { BUSINESS_MODULE_IDS, DASHBOARD_SOURCE_MODULES, cellIdOf } from './dashboardSourceModules'
 import { useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
@@ -351,11 +351,25 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
   /* 待接入 > 缺凭据 > 可操作：**整组一个可操作能力都没有**时才锁死并提示「还没接入」。 */
   const providerPending = operableSources.length === 0 && sources.length > 0
-  /** 这个源被看板哪些格用到（同一份映射，反查）；没有格 → 恒关。 */
+  /**
+   * 能力行的只读状态 = 这个源**有没有出现在「采集与数据」里**（用户 2026-11-11 的最终口径）：
+   * 1. 看板各格用到的源 → 任一相关格开着 = 开；全关 = 关；
+   * 2. **无格但在采集与数据里列着**（日历 feed 六条、新闻四条，在「日历 / 舆情」里是平铺项）→ 视为**开**
+   *    ——它们没有自己的格开关，但确实在用（把它们在用也刷成关就错了）；
+   * 3. 采集与数据里根本没有它的（维护备用 / 只供分析 / 未接入）→ 关。
+   */
   const rowEnabledOf = (sourceId: string): boolean => {
-    const cells = DASHBOARD_TAB_MODULES.flatMap((module) => module.cells.filter((cell) => cell.sourceId === sourceId)
+    const dashboardModules = DASHBOARD_SOURCE_MODULES.filter((module) => (BUSINESS_MODULE_IDS.dashboard as readonly string[]).includes(module.id))
+    const cells = dashboardModules.flatMap((module) => module.cells
+      .filter((cell) => cell.sourceId === sourceId)
       .map((cell) => cellIdOf(module.id, cell)))
-    return cells.length > 0 && cells.some((cellId) => cellEnabled?.[cellId] === true)
+    if (cells.length > 0) return cells.some((cellId) => cellEnabled?.[cellId] === true)
+    /* 无格但在采集与数据里以平铺项出现（日历六条 / 新闻四条）：读**这些源自己的 `enabled`**；
+       完全没出现在采集与数据里的（维护备用 / 只供分析 / 未接入）→ 一律关，不看自己的 `enabled`。 */
+    const listedElsewhere = [...BUSINESS_MODULE_IDS.calendar, ...BUSINESS_MODULE_IDS.sentiment]
+      .some((moduleId) => DASHBOARD_SOURCE_MODULES.find((module) => module.id === moduleId)?.sourceIds.includes(sourceId) === true)
+    if (!listedElsewhere) return false
+    return sources.find((entry) => entry.sourceId === sourceId)?.enabled === true
   }
 
   const toggleProvider = async (next: boolean): Promise<void> => {

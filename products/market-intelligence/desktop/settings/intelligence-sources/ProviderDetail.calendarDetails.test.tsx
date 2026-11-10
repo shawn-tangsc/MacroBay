@@ -264,7 +264,8 @@ describe('ProviderDetail source details', () => {
     await flush()
 
     expect(container.querySelector('.source-provider-detail__advanced')).toBeNull()
-    const toggle = container.querySelector<HTMLElement>('.source-provider-detail__row > [role="switch"]')
+    // 启停的可编辑入口是页头那颗**组开关**（能力行只读展示使用情况）。
+    const toggle = container.querySelector<HTMLElement>('.source-provider-detail__group-toggle [role="switch"]')
     expect(toggle).not.toBeNull()
     await act(async () => { toggle?.click() })
     await flush()
@@ -272,7 +273,7 @@ describe('ProviderDetail source details', () => {
   })
 
   it('lists every module that uses the source, from the dashboard grouping mapping', async () => {
-    // 判据：共用源必须列全——`binance-futures-positioning` 供 4 个模块（跨资产 / 永续 / 背离卡 / 行情卡），
+    // 判据：共用源必须列全——`binance-futures-positioning` 现在供 2 个模块（市场状态 / 永续持仓；
     // 只列一个即红；一个模块都不用的源整行不显示（那是内部账，不写「无模块使用」）。
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
@@ -296,11 +297,11 @@ describe('ProviderDetail source details', () => {
     const row = container.querySelector('[data-used-modules="binance-futures-positioning"]')
     expect(row).not.toBeNull()
     const text = row?.textContent ?? ''
-    for (const moduleName of ['市场状态', '永续持仓与资金费率', '背离卡']) {
+    for (const moduleName of ['市场状态', '永续持仓与资金费率']) {
       expect(text).toContain(moduleName)
     }
-    // 跨资产并进「市场状态」后，这个源被 3 个模块用（市场状态 / 永续持仓 / 背离卡）。
-    expect(text.split('、')).toHaveLength(3)
+    // 背离卡已从采集与数据删除（它用别人的数据、没有自己的源），所以现在只剩 2 个模块。
+    expect(text.split('、')).toHaveLength(2)
   })
 
   it('draws no module row for a source that no module uses', async () => {
