@@ -237,7 +237,7 @@ describe('ProviderDetail health detail (B4)', () => {
     expect(reads).toBe(2)
   })
 
-  it('does not paint a calendar feed as "never collected": it says the record is unknown, and never asks the generic service', async () => {
+  it('does not paint a calendar feed as "never collected": the record is unknown, with the reason only in the ⓘ', async () => {
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
 
@@ -255,10 +255,19 @@ describe('ProviderDetail health detail (B4)', () => {
 
     expect(container.querySelectorAll('[data-health-cell]')).toHaveLength(4)
     expect(container.textContent).toContain(settingsText.health.unknown)
-    expect(container.textContent).toContain(settingsText.health.unknownReason)
+    // 原因句不进正文（用户 2026-11-10）：它在那一格标签旁的 ⓘ 里，点开才读到。
+    expect(container.textContent).not.toContain(settingsText.health.unknownReason)
+    expect(document.body.textContent).not.toContain(settingsText.health.unknownReason)
     expect(container.textContent).not.toContain(settingsText.health.reasons['never-ran'])
     expect(container.querySelector('.state-view')).toBeNull()
     expect(pageStateRequests(invoke)).not.toContain('macro-calendar-fed')
+    const info = container.querySelector<HTMLButtonElement>(
+      `[data-health-cell="today"] button[aria-label="${settingsText.health.unknownReasonAria}"]`)
+    expect(info).not.toBeNull()
+    await act(async () => { info?.click() })
+    await act(async () => { await Promise.resolve() })
+    // 浮层走 portal，内容在 document.body 里。
+    expect(document.body.textContent).toContain(settingsText.health.unknownReason)
   })
 
   it('keeps the old readings and says so when the background refresh fails', async () => {

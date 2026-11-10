@@ -225,7 +225,14 @@ describe('ProviderDetail source details', () => {
     const reasonTrigger = container.querySelector<HTMLElement>('[aria-label="原因码"]')
     expect(reasonTrigger).not.toBeNull()
     expect(container.querySelectorAll('[aria-label="原因码"]')).toHaveLength(1)
-    expect(container.textContent).toContain('自动同步已停止')
+    // 「自动同步已停止」是说明句，不进正文：它在「为什么没在采」那格标签旁的 ⓘ 里（用户 2026-11-10）。
+    expect(container.textContent).not.toContain('自动同步已停止')
+    const stoppedTrigger = container.querySelector<HTMLButtonElement>('[aria-label="自动同步已停止的说明"]')
+    expect(stoppedTrigger).not.toBeNull()
+    await act(async () => { stoppedTrigger?.click() })
+    await act(async () => { await Promise.resolve() })
+    // 浮层走 portal，内容在 document.body 里。
+    expect(document.body.textContent).toContain('自动同步已停止')
     // 四格里的「上次成功」走统一格式化：07:29Z 在东八区是 10-22 15:29。
     expect(container.textContent).toContain('10-22 15:29 GMT+8')
     expect(container.querySelector('.status-pill--ok')).toBeNull()

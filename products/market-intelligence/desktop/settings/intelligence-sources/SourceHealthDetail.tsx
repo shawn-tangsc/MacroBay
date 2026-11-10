@@ -17,11 +17,18 @@ import {
 } from './sourceHealthCells'
 
 /**
+ * 标签旁那颗 ⓘ 的读屏名。是**名字**、不继承字段名：读屏会念两遍同一个词（同 `settingsInfo` 那条规矩）。
+ * 句子走 `resolveText`，这里只留键。
+ */
+const UNKNOWN_REASON_ARIA_KEY = 'settings.intelligenceSources.health.unknownReasonAria'
+const AUTOMATIC_SYNC_STOPPED_ARIA_KEY = 'settings.intelligenceSources.health.automaticSyncStoppedAria'
+
+/**
  * 一个源的详情读取状态。
  *
  * `skipped` 是**日历 feed**：它只在日历的注册表里，通用源服务没有它的详情——问一次只会得到
  * 「未知来源」。所以这里不读、也不把它画成「读失败」或「没有数据」，四格里读不到的那两格写
- * 「未知」并说明原因（「没有」与「拿不到」是两件事）。
+ * 「未知」，**原因句进那一格标签旁的 ⓘ**（「没有」与「拿不到」是两件事，但都留在格子里说）。
  */
 export type SourceDetailRead =
   | Readonly<{ state: 'loading' }>
@@ -102,21 +109,36 @@ export function SourceHealthDetail(props: {
     ? view.lastSuccess.text
     : view.lastSuccess.kind === 'none' ? labels.noSuccess : labels.unknown
 
-  const unknownReading = view.today.kind === 'unknown' || view.lastSuccess.kind === 'unknown'
   /**
-   * 格下说明：一整行宽度。这里放两件「跟在后面」的事实，而不是塞进半宽的原因格——
-   * 界面设计 2026-11-10：格子里的句子最多两行，超出要缩文案、不许截断。
+   * 说明句只在标签旁的 ⓘ 里（用户 2026-11-10：声明性文字不要直接显示在界面上）。
+   * 值本身仍是状态词（「未知」/ 不可用那句读者说法），原因句跟着**它自己那一格**，不攒成一行。
    */
-  const notes = [
-    view.idleReason === 'unavailable' ? props.automaticSyncStopped : '',
-    unknownReading ? labels.unknownReason : ''
-  ].filter((note) => note !== '')
+  const unknownInfo = <HealthInfo
+    ariaLabelKey={UNKNOWN_REASON_ARIA_KEY}
+    resolveText={props.resolveText}
+    sentence={labels.unknownReason} />
 
   return <div className="source-provider-detail__health" data-source-health={source.sourceId} data-health-read={read.state}>
     <div className="intelligence-health-list">
-      <HealthCell cell="today" label={labels.todayReading} unknown={view.today.kind === 'unknown'}>{todayValue}</HealthCell>
-      <HealthCell cell="last-success" label={labels.lastSuccessAt} unknown={view.lastSuccess.kind === 'unknown'}>{lastSuccessValue}</HealthCell>
-      <HealthCell cell="idle-reason" label={labels.whyNotCollecting}>
+      <HealthCell
+        cell="today"
+        info={view.today.kind === 'unknown' ? unknownInfo : undefined}
+        label={labels.todayReading}
+        unknown={view.today.kind === 'unknown'}>{todayValue}</HealthCell>
+      <HealthCell
+        cell="last-success"
+        info={view.lastSuccess.kind === 'unknown' ? unknownInfo : undefined}
+        label={labels.lastSuccessAt}
+        unknown={view.lastSuccess.kind === 'unknown'}>{lastSuccessValue}</HealthCell>
+      <HealthCell
+        cell="idle-reason"
+        info={view.idleReason === 'unavailable'
+          ? <HealthInfo
+            ariaLabelKey={AUTOMATIC_SYNC_STOPPED_ARIA_KEY}
+            resolveText={props.resolveText}
+            sentence={props.automaticSyncStopped} />
+          : undefined}
+        label={labels.whyNotCollecting}>
         {view.idleReason === 'unavailable'
           ? <UnavailableReason
             kind={source.kind}
@@ -134,14 +156,31 @@ export function SourceHealthDetail(props: {
           : labels.runNow[view.runNow]}
       </HealthCell>
     </div>
-    {/* 「拿不到」不是「没有」：读不到逐次记录时把原因写在下面，读者不会把「未知」读成「从没采过」。
-        不可用的「自动同步已停止」也放这里：原因格只留那句读者说法，避免挤成三行。 */}
-    {notes.length > 0 ? <p className="intelligence-source-note intelligence-source-note--health">{notes.join(' · ')}</p> : null}
-    {/* 跑完但读数没刷新：四格还是旧的，必须说出来——否则「跑完了」会把旧读数读成刚采到的。 */}
+    {/* 跑完但读数没刷新：四格还是旧的，必须说出来——否则「跑完了」会把旧读数读成刚采到的。
+        这句是**状态**（`role="status"`，读屏唯一的通知通道），不是解释，所以留在正文。 */}
     {props.refreshStale === true
       ? <p className="intelligence-source-note intelligence-source-note--health" role="status">{labels.refreshStale}</p>
       : null}
   </div>
+}
+
+/** 标签旁那颗 ⓘ：说明句住在这里，正文只留字段名与状态词（同这一屏既有的两颗）。 */
+function HealthInfo(props: {
+  ariaLabelKey: string
+  sentence: string
+  resolveText: (key: string) => string
+}): React.ReactElement {
+  return <Popover
+    content={<span>{props.sentence}</span>}
+    trigger={(triggerProps) => (
+      <IconButton
+        {...triggerProps}
+        ariaLabelKey={props.ariaLabelKey}
+        icon={Info}
+        resolveText={props.resolveText}
+        size="sm"
+        variant="plain" />
+    )} />
 }
 
 function HealthCell(props: {
@@ -150,11 +189,16 @@ function HealthCell(props: {
   unknown?: boolean
   /** 值里放控件（立即运行那颗按钮）时不能用 `<strong>` 包一个可交互元素。 */
   interactive?: boolean
+  /** 标签旁的 ⓘ（可选）：有它才加 `--with-info` 那档排布，没有的字宽不变。 */
+  info?: React.ReactNode
   children: React.ReactNode
 }): React.ReactElement {
   const valueProps = { className: 'intelligence-health-value', ...(props.unknown === true ? { 'data-unknown': 'true' } : {}) }
   return <div className="intelligence-health-item" data-health-cell={props.cell}>
-    <span className="intelligence-health-label">{props.label}</span>
+    <span className={props.info === undefined ? 'intelligence-health-label' : 'intelligence-health-label intelligence-health-label--with-info'}>
+      {props.label}
+      {props.info}
+    </span>
     {props.interactive === true ? <div {...valueProps}>{props.children}</div> : <strong {...valueProps}>{props.children}</strong>}
   </div>
 }

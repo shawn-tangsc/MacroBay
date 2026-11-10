@@ -56,9 +56,13 @@ async function render(read: SourceDetailRead, extra: { source?: SourceView; supp
         ? '原因码'
         : key === 'settings.intelligenceSources.health.runAction.infoAria'
           ? text.health.runAction.runningInfoAria
-          : key === SOURCE_UNAVAILABLE_FALLBACK_KEY
-            ? productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
-            : (text as unknown as Record<string, string>)[key] ?? '',
+          : key === 'settings.intelligenceSources.health.unknownReasonAria'
+            ? text.health.unknownReasonAria
+            : key === 'settings.intelligenceSources.health.automaticSyncStoppedAria'
+              ? text.health.automaticSyncStoppedAria
+              : key === SOURCE_UNAVAILABLE_FALLBACK_KEY
+                ? productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
+                : (text as unknown as Record<string, string>)[key] ?? '',
       source: extra.source ?? source(),
       ...(extra.supportsRunNow === undefined ? {} : { supportsRunNow: extra.supportsRunNow }),
       timeZone: 'Asia/Shanghai'
@@ -86,13 +90,22 @@ describe('source health detail (B4)', () => {
     expect(container.textContent).toContain(text.health.runNow.yes)
   })
 
-  it('falls back to "unknown" and says why, instead of painting a calendar feed as never collected', async () => {
+  it('falls back to "unknown" with the reason in that cell\'s ⓘ, instead of painting a calendar feed as never collected', async () => {
     // 日历 feed 不读通用详情：`skipped` 不是失败，也不是「没有」。
     const container = await render({ state: 'skipped' })
     expect(container.textContent).toContain(text.health.unknown)
-    expect(container.textContent).toContain(text.health.unknownReason)
+    // 声明性原因句不进正文（用户 2026-11-10 截图点的那句）；它在「未知」那格标签旁的 ⓘ 里。
+    expect(container.textContent).not.toContain(text.health.unknownReason)
+    expect(document.body.textContent).not.toContain(text.health.unknownReason)
     expect(container.querySelectorAll('[data-health-cell]')).toHaveLength(4)
     expect(container.querySelector('.state-view')).toBeNull()
+    // 两格都判「未知」，各带一颗自己的 ⓘ——不是一处说明、两格共享。
+    const infos = container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text.health.unknownReasonAria}"]`)
+    expect(infos).toHaveLength(2)
+    await act(async () => { infos[0]?.click() })
+    await act(async () => { await Promise.resolve() })
+    // 浮层走 portal，内容在 document.body 里。
+    expect(document.body.textContent).toContain(text.health.unknownReason)
   })
 
   it('puts the unavailable reason and the last success in the cells, with the reason code only in the ⓘ', async () => {
@@ -104,15 +117,20 @@ describe('source health detail (B4)', () => {
       })
     })
     expect(container.textContent).toContain('官方源暂时不可用（403）')
-    // 界面设计 2026-11-10 的两行预算：原因格只放这一句（半宽格），
-    //「自动同步已停止」放到格下整行说明里——两句挤在一格会变成三行，超出预算就得截断。
+    // 原因格只留读者说法这一句；「自动同步已停止」进同一格标签旁的 ⓘ。
     const whyCell = container.querySelector('[data-health-cell="idle-reason"]')
     expect(whyCell?.textContent).toBe(`${text.health.whyNotCollecting}官方源暂时不可用（403）`)
-    expect(whyCell?.textContent).not.toContain(text.automaticSyncStopped)
-    expect(container.querySelector('.intelligence-source-note--health')?.textContent).toContain(text.automaticSyncStopped)
+    // 格下整行说明这种位置没有了：那两句都不在正文里。
+    expect(container.textContent).not.toContain(text.automaticSyncStopped)
+    expect(container.querySelector('.intelligence-source-note--health')).toBeNull()
     expect(container.textContent).toContain('10-22 15:29 GMT+8')
     expect(container.textContent).not.toContain('official-endpoint-returned-403')
     expect(container.querySelectorAll('[aria-label="原因码"]')).toHaveLength(1)
+    const info = whyCell?.querySelector<HTMLButtonElement>(`button[aria-label="${text.health.automaticSyncStoppedAria}"]`)
+    expect(info).not.toBeNull()
+    await act(async () => { info?.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(document.body.textContent).toContain(text.automaticSyncStopped)
   })
 
   it('says a missing credential blocks both collecting and running now', async () => {
@@ -158,9 +176,13 @@ describe('run now (B5)', () => {
           ? '原因码'
           : key === 'settings.intelligenceSources.health.runAction.infoAria'
             ? text.health.runAction.runningInfoAria
-            : key === SOURCE_UNAVAILABLE_FALLBACK_KEY
-              ? productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
-              : (text as unknown as Record<string, string>)[key] ?? '',
+            : key === 'settings.intelligenceSources.health.unknownReasonAria'
+              ? text.health.unknownReasonAria
+              : key === 'settings.intelligenceSources.health.automaticSyncStoppedAria'
+                ? text.health.automaticSyncStoppedAria
+                : key === SOURCE_UNAVAILABLE_FALLBACK_KEY
+                  ? productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
+                  : (text as unknown as Record<string, string>)[key] ?? '',
         source: extra.source ?? source(),
         supportsRunNow: extra.supportsRunNow ?? true,
         timeZone: 'Asia/Shanghai'

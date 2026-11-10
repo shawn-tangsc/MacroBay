@@ -459,6 +459,9 @@ export const intelligenceSourcesText = {
     noSuccess: '没有成功记录',
     unknown: '未知',
     unknownReason: '这类来源只按提供方汇总运行，没有逐次记录',
+    /* 这两句只进标签旁的 ⓘ：正文只留状态词（用户 2026-11-10）。 */
+    unknownReasonAria: '未知原因的说明',
+    automaticSyncStoppedAria: '自动同步已停止的说明',
     whyNotCollecting: '为什么没在采',
     runNowAnswer: '能不能立刻采',
     refreshStale: '刚跑完，读数还没刷新',
@@ -969,6 +972,8 @@ export const intelligenceSourcesText = {
     noSuccess: 'No successful run yet',
     unknown: 'Unknown',
     unknownReason: 'This kind of source is summarised per provider; there is no run-by-run record',
+    unknownReasonAria: 'About unknown readings',
+    automaticSyncStoppedAria: 'About automatic sync stopping',
     whyNotCollecting: 'Why it is not collecting',
     runNowAnswer: 'Can it run now',
     refreshStale: 'Just ran; the readings have not refreshed yet',

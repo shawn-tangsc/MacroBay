@@ -421,7 +421,8 @@
 }
 
 /* 字段名 + 它自己的 ⓘ：同一行、4 与 4 对齐，说明不占正文。 */
-.intelligence-setting-label--with-info {
+.intelligence-setting-label--with-info,
+.intelligence-health-label--with-info {
   display: inline-flex;
   align-items: center;
   gap: 4px;
