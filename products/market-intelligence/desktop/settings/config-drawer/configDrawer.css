@@ -104,12 +104,12 @@
   line-height: 1.4;
 }
 
-/* 平台与模型：单列屏内容区 720 居中（分栏屏吃满宽度，所以约束挂在屏根、不改共用 pane）。 */
+/* 单列屏内容区 840 居中（分栏屏与表格屏吃满宽度，所以约束挂在屏根、不改共用 pane）。 */
 .config-drawer__platform {
   display: grid;
   gap: 16px;
   width: 100%;
-  max-width: 720px;
+  max-width: 840px;
   margin-inline: auto;
 }
 
@@ -303,22 +303,15 @@
 
 /* 来源与采集：两栏（来源树 + 详情），间距 12。
    用户 2026-11-10：抽屉加宽是为了让**来源树这一栏**更宽——196 会把长名字截成「美国商品期货交易委…」。
-   所以这一栏给到 300–400，其余宽度全给详情；**只改抽屉这条**，设置页那套（`.intelligence-overview-grid`
+   所以这一栏给到 300–340（用户 2026-11-10 二次拍：400 太宽），其余宽度全给详情；**只改抽屉这条**，设置页那套（`.intelligence-overview-grid`
    的 260–340）是另一个面，不动。 */
 .config-drawer__split {
   display: grid;
-  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  /* 固定 280：用户按截图量过——顶部五个筛合约 240 + 内距 24 ≈ 264，最长名字约 270，280 两样都放得下。
+     不用 minmax(280,340)：那会在名字长时继续长，用户要的是「正好放下 tab」。 */
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-}
-
-/* 抽屉吃的是 `min(1040px, 92vw)`：窄屏时若还占 400，右详情里那张两列网格
-   （`minmax(112px,180px) + minmax(360px,520px)`）会被压到 360 以下，出现横向挤压。
-   这时把来源树收回 340 上限，先保证详情那一列有位置。 */
-@media (max-width: 1180px) {
-  .config-drawer__split {
-    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  }
 }
 
 .config-drawer__detail {

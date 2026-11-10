@@ -908,9 +908,11 @@
 /* Final overrides: underline filters and two-line rows with room to breathe. */
 .intelligence-catalog-filters {
   display: flex;
-  flex-wrap: nowrap;
+  /* 四个筛选块（全部 / 日历 / 看板 / 待接入）**允许换行**：一行放得下就一行，
+     放不下换第二行。判据是「四个都能完整看到」，不是「塞进一行」——所以不裁切、不横向滚动、
+     也不 `ellipsis`（用户 2026-11-10：抽屉再大一点，保障这排 tab 都显示出来）。 */
+  flex-wrap: wrap;
   gap: 16px;
-  overflow-x: auto;
   padding: 10px 12px 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
 }
