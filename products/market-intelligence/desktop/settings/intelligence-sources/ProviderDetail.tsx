@@ -92,7 +92,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -107,6 +107,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    * 没给（尚未迁移的第二宿主，例如看板抽屉）时退回旧行为，S2 收口时删除这条退路。
    */
   onToggleSource?: (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean) => Promise<boolean>
+  /** 本页有没有未保存的输入（凭据框）：另一处保存时，有草稿就只提示、不覆盖。 */
+  onDraftChange?: (dirty: boolean) => void
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -233,6 +235,15 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     }).catch(() => undefined)
     return () => { active = false }
   }, [provider.providerId, credentialSourceId])
+
+  /**
+   * 草稿 = 凭据框被改过且非空。只回报「有没有草稿」，内容不外传：
+   * 另一处保存时，本页据此决定「静默换新值」还是「提示不覆盖」。
+   */
+  useEffect(() => {
+    onDraftChange?.(!credentialPristine && credentialDraft.trim() !== '')
+  }, [credentialDraft, credentialPristine, onDraftChange])
+  useEffect(() => () => onDraftChange?.(false), [onDraftChange])
 
   async function toggleReveal(): Promise<void> {
     if (revealed) { setRevealed(false); return }

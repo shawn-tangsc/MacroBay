@@ -218,6 +218,28 @@ describe('sources settings page states', () => {
     expect(rows[0]?.textContent).toContain('P1')
   })
 
+  it('shows the other-place notice with two actions when this page has a draft', async () => {
+    const reloadOtherSide = vi.fn()
+    const dismissOtherSide = vi.fn()
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({
+        loading: false,
+        settingsView: settingsViewOneProvider(),
+        otherSideChanged: true,
+        reloadFromOtherSide: reloadOtherSide,
+        dismissOtherSideChanged: dismissOtherSide,
+        setDraftDirty: vi.fn()
+      }) as never
+    )
+    const dom = await render()
+
+    expect(dom.textContent).toContain(zhText.otherSideChanged)
+    await act(async () => { button(dom, zhText.reloadOtherSide).click() })
+    expect(reloadOtherSide).toHaveBeenCalledTimes(1)
+    await act(async () => { button(dom, zhText.keepEditing).click() })
+    expect(dismissOtherSide).toHaveBeenCalledTimes(1)
+  })
+
   it('draws the page once the read is done', async () => {
     // 详情是另一条读（每源一次）：读成了才画健康四格。这里给一条最小详情，
     // 否则页面会如实落「详情读不到」的错误态——那是另一条用例的事。

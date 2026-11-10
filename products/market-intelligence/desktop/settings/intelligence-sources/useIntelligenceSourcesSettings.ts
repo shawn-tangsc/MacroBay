@@ -8,6 +8,7 @@ import type { SafeIntelligenceSourceDetailView } from '../../../service/intellig
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
+import { notifySettingsRevision, subscribeSettingsRevision } from '../../shared/events/settingsRevision'
 import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, runOutcomeOf, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout, type SourceRunOutcome } from './intelligenceSourceProfileEditor'
 
 export { isSuccessfulCredentialOperation }
@@ -27,6 +28,8 @@ type HookState = {
   replaying: boolean
   errorCode: string | null
   notice: string | null
+  /** 另一处保存了这一域的设置，而本页有未保存的草稿：只提示，不覆盖。 */
+  otherSideChanged: boolean
 }
 
 export function useIntelligenceSourcesSettings(labels: {
@@ -52,10 +55,15 @@ export function useIntelligenceSourcesSettings(labels: {
     testingCredentials: false,
     replaying: false,
     errorCode: null,
-    notice: null
+    notice: null,
+    otherSideChanged: false
   })
   const saveQueueRef = useRef(Promise.resolve())
   const pendingSaveCountRef = useRef(0)
+  /** 本页写出的变更带着这个 origin 发出去，订阅时忽略自己那一次。 */
+  const revisionOriginRef = useRef(`sources-${Math.random().toString(36).slice(2)}`)
+  /** 本页有没有未保存的输入（凭据框）。由详情组件回报。 */
+  const draftDirtyRef = useRef(false)
 
   const load = useCallback(async (sourceId?: string) => {
     const [pageState, profiles, settingsView] = await Promise.all([
@@ -93,6 +101,35 @@ export function useIntelligenceSourcesSettings(labels: {
     reload()
   }, [reload])
 
+  /**
+   * C8：另一处保存了「来源」域 → 本页**重读**。
+   * 有未保存草稿时**不覆盖**，只立起「另一处已修改」，由读者决定重载还是继续编辑。
+   */
+  useEffect(() => subscribeSettingsRevision('sources', (detail) => {
+    if (detail.origin === revisionOriginRef.current) return
+    if (draftDirtyRef.current) {
+      setState((current) => ({ ...current, otherSideChanged: true }))
+      return
+    }
+    reload()
+  }), [reload])
+
+  const setDraftDirty = useCallback((dirty: boolean) => {
+    draftDirtyRef.current = dirty
+  }, [])
+
+  /** 「重新载入」：丢掉草稿、按另一处的值重读。 */
+  const reloadFromOtherSide = useCallback(() => {
+    setState((current) => ({ ...current, otherSideChanged: false }))
+    draftDirtyRef.current = false
+    reload()
+  }, [reload])
+
+  /** 「继续编辑」：只收起提示，草稿原样保留。 */
+  const dismissOtherSideChanged = useCallback(() => {
+    setState((current) => ({ ...current, otherSideChanged: false }))
+  }, [])
+
   const selectSource = useCallback(async (sourceId: string) => {
     setState((current) => ({ ...current, loading: true, errorCode: null }))
     try {
@@ -124,6 +161,7 @@ export function useIntelligenceSourcesSettings(labels: {
       try {
         await setSourceEnabled(source, enabled)
         notifyIntelligenceSourcesChanged()
+        notifySettingsRevision('sources', revisionOriginRef.current)
         // 写完重读：两个宿主看到的是同一份投影，不是两套乐观值。
         await load(state.selectedSourceId)
         return true
@@ -185,6 +223,7 @@ export function useIntelligenceSourcesSettings(labels: {
               : {})
           }))
           notifyIntelligenceSourcesChanged()
+          notifySettingsRevision('sources', revisionOriginRef.current)
         })
         .catch(() => {
           setState((current) => ({
@@ -300,6 +339,9 @@ export function useIntelligenceSourcesSettings(labels: {
     testCredentials,
     replayWindow,
     refreshHealth,
-    runSourceNow
+    runSourceNow,
+    setDraftDirty,
+    reloadFromOtherSide,
+    dismissOtherSideChanged
   }
 }

@@ -444,6 +444,10 @@ export const intelligenceSourcesText = {
   unavailableReasonCodeAria: '原因码',
   /** 不可用源的策略组整组停用：**通用结构**，任何不可用源都同一句，不针对某个源。 */
   collectionPolicyStopped: '同步已停止，恢复后才生效',
+  /* C8：另一处保存了同一域，而本页有未保存的草稿。只提示，不覆盖。 */
+  otherSideChanged: '另一处已修改了这里的设置，你正在填的内容没有动。',
+  reloadOtherSide: '重新载入',
+  keepEditing: '继续编辑',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
   health: {
@@ -959,6 +963,9 @@ export const intelligenceSourcesText = {
   unavailableReasonCode: 'Reason code: {code}',
   unavailableReasonCodeAria: 'Reason code',
   collectionPolicyStopped: 'Sync has stopped; this applies again once it resumes',
+  otherSideChanged: 'Something changed here in another place. What you are typing was left alone.',
+  reloadOtherSide: 'Reload',
+  keepEditing: 'Keep editing',
   automaticSyncStopped: 'Automatic sync stopped',
   lastSuccessfulSync: 'Last successful sync: {date}',
   health: {

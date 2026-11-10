@@ -1051,6 +1051,25 @@
   margin-top: 6px;
 }
 
+/* C8：另一处已修改。只在有草稿时出现；一行说明 + 两个动作，不弹窗、不覆盖。 */
+.intelligence-sources-other-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
+.intelligence-sources-other-side > span {
+  min-width: 0;
+}
+
 /* B5 立即运行：按钮 + 一行状态（跑完自动恢复 / 成功摘要 / 失败原因）。 */
 .source-provider-detail__run {
   display: flex;

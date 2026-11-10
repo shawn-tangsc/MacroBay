@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { Button } from 'antd'
+
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
@@ -41,6 +43,10 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     replayWindow,
     refreshHealth,
     runSourceNow,
+    otherSideChanged,
+    setDraftDirty,
+    reloadFromOtherSide,
+    dismissOtherSideChanged,
     profiles,
     definitions,
     updateSourceProfile
@@ -97,6 +103,12 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         onSelectProvider={(providerId) => setSelectedProviderId(providerId)}
       />
       <div className="settings-detail-pane intelligence-detail-pane">
+        {/* C8：另一处保存了同一域、而本页有草稿——只提示，不覆盖；两个动作由读者选。 */}
+        {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">
+          <span>{t.otherSideChanged}</span>
+          <Button onClick={reloadFromOtherSide} type="link">{t.reloadOtherSide}</Button>
+          <Button onClick={dismissOtherSideChanged} type="link">{t.keepEditing}</Button>
+        </div> : null}
         {selectedProviderId ? (() => {
           const provider = settingsView?.groups.flatMap((group) => group.providers).find((entry) => entry.providerId === selectedProviderId)
           return provider ? <div className="intelligence-detail-scroll"><ProviderDetail
@@ -107,6 +119,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
             supportsRunNowById={supportsRunNowById}
             onRunNow={runSourceNow}
             onToggleSource={toggleSourceEnabled}
+            onDraftChange={setDraftDirty}
             sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
           /></div> : null
