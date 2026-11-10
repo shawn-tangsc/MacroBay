@@ -156,3 +156,15 @@ describe('business cards keep their padding', () => {
     expect(row.some((body) => /border-radius\s*:\s*8px/u.test(body))).toBe(true)
   })
 })
+
+describe('provider row state colours the avatar only', () => {
+  it('never colours the name or the subtitle by state', () => {
+    // 用户 2026-11-11：只有头像按状态变色，源名与副标题保持正文色/次要色。
+    // 判据：任何按 `data-provider-state` 的规则只许命中 `.intelligence-source-avatar`。
+    const stateRules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/gu)]
+      .filter((match) => match[1]!.includes("data-provider-state"))
+      .map((match) => match[1]!.trim())
+    expect(stateRules.length).toBeGreaterThan(0)
+    for (const selector of stateRules) expect(selector).toContain('.intelligence-source-avatar')
+  })
+})

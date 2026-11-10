@@ -199,6 +199,11 @@ export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChan
                   键盘可达（原生按钮）、选中态用 `aria-current`。 */}
               <button
                 aria-current={provider.providerId === selectedProviderId ? 'true' : undefined}
+                /* 行状态只给**头像**上色：待接入（优先）→ 灰、全关 → 红、至少一项启用 → 绿。
+                   源名与副标题的文字色不跟状态走（用户 2026-11-11）。 */
+                data-provider-state={provider.sources.every((source) => source.visibility === 'pending')
+                  ? 'pending'
+                  : provider.sources.some((source) => source.enabled) ? 'enabled' : 'disabled'}
                 className={`intelligence-provider-row${provider.providerId === selectedProviderId ? ' selected' : ''}`}
                 type="button"
                 onClick={() => onSelectProvider(provider.providerId)}
