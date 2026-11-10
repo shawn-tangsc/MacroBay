@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act, createElement, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -142,4 +142,49 @@ it('turns a crash inside the detail into an error state with a retry, instead of
   expect(container.querySelector('.state-view')).not.toBeNull()
   errors.mockRestore()
 })
+
+  it('resets when the reader switches provider, so one crash does not stick to the next one', async () => {
+    // 在 A 上崩一次后切到 B：边界必须随 provider 重建，不能停在错误态等读者点「再试一次」。
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const invoke = vi.fn(async (_productId: string, method: string, payload?: unknown) => {
+      if (method !== 'intelligenceSources.getPageState') return undefined
+      const sourceId = (payload as { sourceId?: string } | undefined)?.sourceId
+      // A 的详情读数一读就抛（模拟今天那种「旧实例字段缺失」），B 的正常。
+      const health = sourceId === 'broken'
+        ? { get lastSuccessAt(): string { throw new Error('boom') } }
+        : { sourceId: 'fine', runtimeStatus: 'healthy', connectivityStatus: 'connected', consecutiveFailures: 0 }
+      return { detail: { health } }
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    function providerOf(which: 'broken' | 'fine'): ProviderView {
+      return {
+        providerId: which, displayName: which, category: 'macro', credential: 'none', healthMarker: 'none',
+        sources: [source({ providerId: which, sourceId: which, displayName: which, kind: 'feed', panels: ['dashboard'] })]
+      }
+    }
+
+    function Host(): React.ReactElement {
+      const [which, setWhich] = useState<'broken' | 'fine'>('broken')
+      return <div>
+        <button onClick={() => setWhich('fine')} type="button">switch</button>
+        <ProviderDetail labels={labels()} provider={providerOf(which)} showSourceDetails />
+      </div>
+    }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => { root?.render(createElement(Host)); await Promise.resolve() })
+    await flush()
+
+    expect(container.querySelector('.state-view')).not.toBeNull()
+    const switchButton = [...container.querySelectorAll('button')].find((button) => button.textContent === 'switch')
+    await act(async () => { switchButton?.click() })
+    await flush()
+
+    expect(container.querySelector('.state-view')).toBeNull()
+    expect(container.textContent).toContain('fine')
+    errors.mockRestore()
+  })
 })

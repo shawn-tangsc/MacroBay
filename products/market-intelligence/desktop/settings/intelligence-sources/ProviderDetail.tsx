@@ -125,7 +125,17 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   translation?: Parameters<typeof TranslationPreferencesSection>[0]
   onChanged?: () => void
 }): React.ReactElement {
-  const [sources, setSources] = useState(provider.sources)
+  /**
+   * 派生出的源列表：**以这次收到的 `provider.sources` 为底**，只把刚拨过、还没被服务端确认的
+   * 开关值叠上去。以前用 `useState(provider.sources)`，切供应商的那一帧还在渲染上一个供应商的源
+   * （旧详情可能已经坏了），崩溃就会在切走之后又把新的一帧炸掉。
+   */
+  const [optimisticEnabled, setOptimisticEnabled] = useState<Readonly<Record<string, boolean>>>({})
+  const sources = provider.sources.map((source) =>
+    optimisticEnabled[source.sourceId] === undefined
+      ? source
+      : { ...source, enabled: optimisticEnabled[source.sourceId]! })
+  useEffect(() => { setOptimisticEnabled({}) }, [provider.providerId])
   const [credentialDraft, setCredentialDraft] = useState('')
   const [credentialPristine, setCredentialPristine] = useState(true)
   const [rawKey, setRawKey] = useState<string>()
@@ -153,7 +163,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** Set only by a transport-level refusal, so a rejected key never points at the proxy setting. */
   const [networkFailure, setNetworkFailure] = useState(false)
 
-  useEffect(() => { setSources(provider.sources) }, [provider])
 
   /**
    * 每个源的详情：**读取失败是一种状态，不是「没有数据」**（读者要能重试）。
@@ -322,9 +331,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   }
 
   async function toggle(source: SourceView, enabled: boolean): Promise<void> {
-    setSources((current) => current.map((item) => item.sourceId === source.sourceId ? { ...item, enabled } : item))
+    setOptimisticEnabled((current) => ({ ...current, [source.sourceId]: enabled }))
     const rollback = (): void => {
-      setSources((current) => current.map((item) => item.sourceId === source.sourceId ? { ...item, enabled: !enabled } : item))
+      setOptimisticEnabled((current) => {
+        const next = { ...current }
+        delete next[source.sourceId]
+        return next
+      })
     }
     if (onToggleSource !== undefined) {
       if (!(await onToggleSource(source, enabled))) rollback()
@@ -337,7 +350,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const providerName = labels.providerNames[provider.providerId] ?? provider.displayName
   const hasProxySource = provider.sources.some((source) => source.requiresProxy)
 
-  return <ErrorBoundary scope="source-detail"><section className="source-provider-detail">
+  return <ErrorBoundary key={provider.providerId} scope="source-detail"><section className="source-provider-detail">
     {/* 分工（2026-11-10 界面设计定）：**横幅只管「配了没通」**，未配代理由行尾那颗「需要代理」
         药丸承担——同一件事不许两处说，未配时代理只需要一个入口。所以这里是 `proxyConfigured`
         **且** `networkFailure`，不再是「未配或失败」。 */}
