@@ -442,6 +442,7 @@ export const intelligenceSourcesText = {
   unavailableReasonCode: '原因码：{code}',
   /** 只给 ⓘ 的可访问名用：它是名字，不是句子（句子那个带 `{code}`）。 */
   unavailableReasonCodeAria: '原因码',
+  'health.runAction.infoAria': '立即运行的说明',
   /** 不可用源的策略组整组停用：**通用结构**，任何不可用源都同一句，不针对某个源。 */
   collectionPolicyStopped: '同步已停止，恢复后才生效',
   /* C8：另一处保存了同一域，而本页有未保存的草稿。只提示，不覆盖。 */
@@ -487,7 +488,9 @@ export const intelligenceSourcesText = {
     runAction: {
       run: '立即运行',
       running: '正在运行',
-      runningHint: '正在运行，跑完会自动恢复'
+      runningInfo: '正在运行，跑完会自动恢复',
+      runningInfoAria: '立即运行的说明',
+      failedToStart: '没有发出请求，请重试。'
     },
     runNow: {
       yes: '可以',
@@ -962,6 +965,7 @@ export const intelligenceSourcesText = {
   unavailableShort: 'The official source is temporarily unavailable',
   unavailableReasonCode: 'Reason code: {code}',
   unavailableReasonCodeAria: 'Reason code',
+  'health.runAction.infoAria': 'About Run now',
   collectionPolicyStopped: 'Sync has stopped; this applies again once it resumes',
   otherSideChanged: 'Something changed here in another place. What you are typing was left alone.',
   reloadOtherSide: 'Reload',
@@ -1001,7 +1005,9 @@ export const intelligenceSourcesText = {
     runAction: {
       run: 'Run now',
       running: 'Running',
-      runningHint: 'Running; the button comes back when it finishes'
+      runningInfo: 'Running; the button comes back when it finishes',
+      runningInfoAria: 'About Run now',
+      failedToStart: 'The request was not sent. Try again.'
     },
     runNow: {
       yes: 'Yes',

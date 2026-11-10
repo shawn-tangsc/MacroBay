@@ -43,7 +43,7 @@ export type SourceHealthLabels = Readonly<{
   reasons: Readonly<Record<SourceHealthIdleReason, string>>
   runNow: Readonly<Record<SourceRunNowAnswer, string>>
   /** B5 立即运行的三态文案（可运行 / 正在运行 / 跑完自动恢复）。 */
-  runAction: Readonly<{ run: string; running: string; runningHint: string }>
+  runAction: Readonly<{ run: string; running: string; runningInfo: string; runningInfoAria: string; failedToStart: string }>
 }>
 
 /**
@@ -126,6 +126,7 @@ export function SourceHealthDetail(props: {
           ? <RunNowControl
             labels={labels.runAction}
             onRun={() => props.onRunNow!(source.sourceId)}
+            resolveText={props.resolveText}
             sourceId={source.sourceId} />
           : labels.runNow[view.runNow]}
       </HealthCell>
@@ -185,8 +186,9 @@ function UnavailableReason(props: {
  * 跑完（成功带摘要、没成带原因）。禁用按钮不进 Tab、读屏也读不到，所以那句状态必须有。
  */
 function RunNowControl(props: {
-  labels: Readonly<{ run: string; running: string; runningHint: string }>
+  labels: SourceHealthLabels['runAction']
   onRun: () => Promise<SourceRunOutcome>
+  resolveText: (key: string) => string
   sourceId: string
 }): React.ReactElement {
   const [running, setRunning] = useState(false)
@@ -199,7 +201,7 @@ function RunNowControl(props: {
       setOutcome(await props.onRun())
     } catch {
       // 运行入口自己会把握手失败翻成人话；万一它抛了，也只能说「没成」，不许静默。
-      setOutcome({ kind: 'failed', notice: props.labels.runningHint })
+      setOutcome({ kind: 'failed', notice: props.labels.failedToStart })
     } finally {
       setRunning(false)
     }
@@ -209,8 +211,20 @@ function RunNowControl(props: {
     <Button disabled={running} loading={running} onClick={() => void run()} size="small">
       {running ? props.labels.running : props.labels.run}
     </Button>
+    {/* 正文只留状态词；「跑完会自动恢复」是说明，进旁边的 ⓘ（禁用按钮不进 Tab，读屏靠这条 status）。 */}
+    <Popover
+      content={<span>{props.labels.runningInfo}</span>}
+      trigger={(triggerProps) => (
+        <IconButton
+          {...triggerProps}
+          ariaLabelKey="settings.intelligenceSources.health.runAction.infoAria"
+          icon={Info}
+          resolveText={props.resolveText}
+          size="sm"
+          variant="plain" />
+      )} />
     <span className="source-provider-detail__run-status" role="status">
-      {running ? props.labels.runningHint : outcome?.notice ?? ''}
+      {running ? props.labels.running : outcome?.notice ?? ''}
     </span>
   </div>
 }

@@ -53,7 +53,9 @@ async function render(read: SourceDetailRead, extra: { source?: SourceView; supp
       read,
       resolveText: (key: string) => key === 'settings.intelligenceSources.unavailableReasonCodeAria'
         ? '原因码'
-        : (text as unknown as Record<string, string>)[key] ?? '',
+        : key === 'settings.intelligenceSources.health.runAction.infoAria'
+          ? text.health.runAction.runningInfoAria
+          : (text as unknown as Record<string, string>)[key] ?? '',
       source: extra.source ?? source(),
       ...(extra.supportsRunNow === undefined ? {} : { supportsRunNow: extra.supportsRunNow }),
       timeZone: 'Asia/Shanghai'
@@ -150,7 +152,9 @@ describe('run now (B5)', () => {
         read: ready({ lastSuccessAt: '2026-11-09T04:00:00.000Z' }),
         resolveText: (key: string) => key === 'settings.intelligenceSources.unavailableReasonCodeAria'
           ? '原因码'
-          : (text as unknown as Record<string, string>)[key] ?? '',
+          : key === 'settings.intelligenceSources.health.runAction.infoAria'
+            ? text.health.runAction.runningInfoAria
+            : (text as unknown as Record<string, string>)[key] ?? '',
         source: extra.source ?? source(),
         supportsRunNow: extra.supportsRunNow ?? true,
         timeZone: 'Asia/Shanghai'
@@ -181,7 +185,14 @@ describe('run now (B5)', () => {
 
     // 正在跑：按钮被禁用、文案变成「正在运行」，同一行 role=status 说明会自己恢复。
     expect(container.textContent).toContain(text.health.runAction.running)
-    expect(container.querySelector('[role="status"]')?.textContent).toContain(text.health.runAction.runningHint)
+    // 正文只留状态词；「跑完会自动恢复」是说明，在 ⓘ 里（不是不说了）。
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(text.health.runAction.running)
+    const info = container.querySelector<HTMLButtonElement>('[aria-label="立即运行的说明"]')
+    expect(info).not.toBeNull()
+    await act(async () => { info?.click() })
+    await act(async () => { await Promise.resolve() })
+    // 浮层走 portal，内容在 document.body 里。
+    expect(document.body.textContent).toContain(text.health.runAction.runningInfo)
     const runningButton = [...container.querySelectorAll('button')].find((button) => button.textContent === text.health.runAction.running)
     expect(runningButton?.disabled).toBe(true)
 
