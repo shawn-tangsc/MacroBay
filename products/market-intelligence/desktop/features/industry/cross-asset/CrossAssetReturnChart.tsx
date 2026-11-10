@@ -4,6 +4,22 @@ import type { CrossAssetId, CrossAssetMacroProxyId, CrossAssetSnapshot } from '.
 import type { CrossAssetEventLine } from './crossAssetEventLines'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
+/**
+ * 图上能画的线。行 id 与线 id 在这五条上同名，是刻意的：一格关掉，那一行与那条线一起消失。
+ *
+ * **合成线的口径**：美元 / 黄金一行背后是主源 + 备用源两个格（`quotes:usd` + `quotes:usd-fallback`），
+ * 只有两个格都关掉时这一行才进 `hideStatusRows`，也才把这条线交给 `hiddenLines`——主源关、
+ * 备用源还开着时线照旧画，因为它读的仍是一份开着的格。
+ */
+export const crossAssetChartLines = ['index', 'btc', 'eth', 'dxy', 'gold'] as const
+
+export type CrossAssetChartLineId = (typeof crossAssetChartLines)[number]
+
+/** 按「哪些行被关掉」给出去掉哪些线；行 id 与线 id 同名，映射只此一处。 */
+export function chartLinesHiddenBy(hiddenRows: readonly string[]): readonly CrossAssetChartLineId[] {
+  return crossAssetChartLines.filter((line) => hiddenRows.includes(line))
+}
+
 export const crossAssetChartPolicy = Object.freeze({ width: 1000, height: 200, inset: 8, tooltipWidth: 210, tooltipHeight: 128, offset: 12,
   tickSlots: 3,
   assets: ['index', 'btc', 'eth'] as const,
@@ -24,8 +40,13 @@ type Text = {
 }
 const percent = (value: number) => `${value < 0 ? '−' : value > 0 ? '+' : ''}${Math.abs(value) > 0 && Math.abs(value) < .01 ? '<0.01' : Math.abs(value).toFixed(2)}%`
 
-export function CrossAssetReturnChart({ curves, macroCurves, forming, events, eventsCollapsed, onSelectEvent, text }: {
+export function CrossAssetReturnChart({ curves, macroCurves, forming, events, eventsCollapsed, onSelectEvent, text, hiddenLines }: {
   curves: CrossAssetSnapshot['curves']; macroCurves?: CrossAssetSnapshot['macroCurves']
+  /**
+   * 读者在设置里关掉的格：这些线连同图例一起不画（不是画 0、不是灰掉）。
+   * 与图内那颗「点图例隐藏」是两件事：那个是读者临时看图，这个是这一格根本不读。
+   */
+  hiddenLines?: readonly CrossAssetChartLineId[]
   forming?: CrossAssetSnapshot['forming']; text: Text
   /** The window's high-importance calendar events, already reduced to one line per minute. */
   events?: readonly CrossAssetEventLine[]
@@ -48,6 +69,7 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   const tooltipRef = useRef<HTMLDivElement>(null)
   /** Macro lines are drawn only when the wire carried them, and only when they have a curve at all. */
   const listed: readonly LineId[] = [...policy.assets, ...policy.macroProxies.filter(proxy => (macroCurves?.[proxy]?.length ?? 0) > 0)]
+    .filter(id => hiddenLines?.includes(id as CrossAssetChartLineId) !== true)
   const visible = listed.filter(id => !hidden.includes(id))
   const pointsOf = (id: LineId): readonly { at: string; returnPercent: number | null }[] =>
     id in curves ? curves[id as CrossAssetId] : macroCurves?.[id as CrossAssetMacroProxyId] ?? []

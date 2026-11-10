@@ -47,6 +47,8 @@ const ScopedPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): R
 async function render(input: Readonly<{
   nowMs: number; bySymbol: Record<string, readonly unknown[]>; feed: CrossAssetIndexFeedState
   liveState?: CrossAssetLiveState; range?: '1h' | '24h'
+  /** 读者在设置里关掉的格（行 id）；不给就是全都没关。 */
+  hideStatusRows?: readonly ('index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate')[]
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -71,7 +73,10 @@ async function render(input: Readonly<{
     acquire: async () => ({ state: 'active', leaseId: 'test-lease', expiresAt: Date.now() + 30_000 }),
     query: async () => snapshot, release: vi.fn(async () => ({ state: 'released' }))
   }
-  await act(async () => root.render(createElement(ScopedPanel, { client: client as never, text })))
+  await act(async () => root.render(createElement(ScopedPanel, {
+    client: client as never, text,
+    ...(input.hideStatusRows === undefined ? {} : { hideStatusRows: input.hideStatusRows })
+  })))
   return { host, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
 }
 
@@ -79,6 +84,21 @@ const row = (host: HTMLElement) => host.querySelector<HTMLTableRowElement>('[dat
 const cell = (host: HTMLElement, window: string) => host.querySelector(`[data-asset-return="index:${window}"]`)!
 
 describe('cross-asset Nasdaq 100 row, as rendered', () => {
+  it('drops the 纳指 curve and its legend entry with the cell that produced it', async () => {
+    // 格关掉 = 这一格的数据不再交给卡片：表里那行、图上那条线、图例里那个名字一起消失。
+    // 同源的 BTC / ETH 两格还开着，所以这两条线照旧。
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), hideStatusRows: ['index'] })
+    try {
+      expect(page.host.querySelector('[data-status-row="index"]')).toBeNull()
+      expect(page.host.querySelector('[data-asset-line="index"]')).toBeNull()
+      expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
+        .toEqual(['BTC', 'ETH'])
+      expect(page.host.querySelector('[data-asset-line="btc"]')).not.toBeNull()
+    } finally {
+      await page.unmount()
+    }
+  })
+
   it('shows the tokenised perpetual by default, labelled as a proxy, at an hour the cash market is shut', async () => {
     const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
     try {

@@ -20,7 +20,7 @@ import { useCrossAssetObservation } from './useCrossAssetObservation'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
-import { CrossAssetReturnChart } from './CrossAssetReturnChart'
+import { chartLinesHiddenBy, CrossAssetReturnChart } from './CrossAssetReturnChart'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
@@ -360,6 +360,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
             per figure, so a legend reading 「纳斯达克 100」 can never sit above `QQQUSDT`'s curve. */}
         {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}
         {snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
+          hiddenLines={chartLinesHiddenBy(hideStatusRows ?? [])}
           events={eventLines.lines} eventsCollapsed={eventLines.collapsed} onSelectEvent={selectEvent}
           text={{ ...text, assets: { ...text.assets, index: indexRowName(snapshot, text) },
             // The macro lines carry the very names the 市场状态 rows beside them carry: one instrument,
