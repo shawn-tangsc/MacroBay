@@ -45,8 +45,11 @@ type Props = {
   selectedEventKey?: string
   selectedEventMonth?: string
   onClearSelectedContext?: () => void
-  /** 透传给舆情 feature：打开配置抽屉的内容处理屏；未传时它走本地弹框。 */
-  onOpenSettings?: () => void
+  /**
+   * 透传给舆情 feature：打开配置抽屉并落到「采集与数据」的舆情组。
+   * **必须收 focus**：feature 知道自己要的是哪一组，中间层把参数丢掉，读者就会停在第一屏。
+   */
+  onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   floatingText: AgentFloatingControlText
 }
 

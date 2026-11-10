@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest } from './configDrawerRequest'
+import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, sourcesDataRequestFor } from './configDrawerRequest'
 
 /**
  * 「永远打开、永不白屏」的判据：非法输入一律**退到该菜单的默认位置**，而不是拒绝打开或停在空白屏。
@@ -65,5 +65,19 @@ describe('businessFocusFromRequest', () => {
     // 空对象传下去，组件会以为「有定位但什么都没说」——那是两种不同的意图。
     expect(businessFocusFromRequest({ menu: 'sourcesData', focus: { menu: 'sourcesData' } })).toBeUndefined()
     expect(businessFocusFromRequest({ menu: 'sourcesData' })).toBeUndefined()
+  })
+})
+
+describe('sourcesDataRequestFor', () => {
+  it('carries the position through, and keeps the focus menu matching', () => {
+    // 归一化会丢弃「focus.menu 与菜单不一致」的定位——所以 `focus.menu` 由这个函数补，不由入口记。
+    const request = sourcesDataRequestFor({ business: 'calendar', moduleKey: 'macro', cellId: 'macro:cpi' })
+    expect(request.focus?.menu).toBe('sourcesData')
+    expect(normalizeConfigDrawerRequest(request)).toEqual(request)
+  })
+
+  it('asks for the screen alone when there is no position', () => {
+    expect(sourcesDataRequestFor()).toEqual({ menu: 'sourcesData' })
+    expect(sourcesDataRequestFor()).not.toHaveProperty('focus')
   })
 })

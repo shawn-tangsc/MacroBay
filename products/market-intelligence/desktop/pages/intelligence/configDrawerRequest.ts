@@ -35,6 +35,18 @@ export function normalizeConfigDrawerRequest(
 }
 
 /**
+ * 卡片/按钮手里的位置 → 「打开采集与数据并落到这里」的请求。
+ *
+ * 入口不自己拼 `{ menu, focus: { menu, ... } }`：那三层几乎一样，拼错一处就是「点了没落在那一项」
+ * （漏 `focus.menu` 会让归一化把它当不匹配丢掉）。没有位置时返回不带 `focus` 的请求，不是空对象。
+ */
+export function sourcesDataRequestFor(focus?: BusinessFocus): OpenConfigDrawerRequest {
+  return focus === undefined
+    ? { menu: 'sourcesData' }
+    : { menu: 'sourcesData', focus: { menu: 'sourcesData', ...focus } }
+}
+
+/**
  * 请求 → 「采集与数据」那屏的定位。
  *
  * 只在菜单对得上时交出来：停在别的屏却带着这一屏的坐标，读起来像是「定位失效」，

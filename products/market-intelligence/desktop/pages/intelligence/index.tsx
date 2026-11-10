@@ -14,7 +14,7 @@ import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
 import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
-import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, type OpenConfigDrawerRequest } from './configDrawerRequest'
+import { businessFocusFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, sourcesDataRequestFor, type OpenConfigDrawerRequest } from './configDrawerRequest'
 import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
@@ -214,7 +214,7 @@ function IntelligencePageBody(): React.ReactElement {
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
           onOpenAnalysisSettings={() => openConfigDrawer({ menu: 'analysis' })}
-          onOpenSettings={() => openConfigDrawer('processing')}
+          onOpenSettings={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
           onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
           text={text}
           locale={language}
@@ -257,7 +257,7 @@ function IntelligencePageBody(): React.ReactElement {
           dashboardFeedStatusClient={dashboardFeedStatusClient}
           now={sampleNow}
           onConfigureSources={() => openConfigDrawer('sourcesData', 'dashboard')}
-          onManageSource={() => openConfigDrawer('sourcesData', 'dashboard')}
+          onManageSource={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
           initialSettingsMenu={configDrawerMenu}
           {...(configDrawerSourceId === undefined ? {} : { initialSourceId: configDrawerSourceId })}
           {...(configDrawerBusinessFocus === undefined ? {} : { initialBusinessPosition: configDrawerBusinessFocus })}

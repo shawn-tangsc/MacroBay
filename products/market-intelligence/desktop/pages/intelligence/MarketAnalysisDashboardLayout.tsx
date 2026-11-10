@@ -71,8 +71,8 @@ const workspaceSwitchKeys = Object.freeze({
 })
 
 export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
-  /** 舆情那颗设置入口：打开配置抽屉、落在「内容处理」屏（未传时舆情仍用本地弹框）。 */
-  onOpenSettings?: () => void
+  /** 舆情那颗设置入口：打开配置抽屉、落在「采集与数据」的**舆情组**（未传时舆情仍用本地弹框）。 */
+  onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   /**
    * The calendar's own title vocabulary, read from the product registry by the page entry.
    *
