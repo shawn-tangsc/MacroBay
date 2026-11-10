@@ -49,7 +49,7 @@ export type ConfigDrawerMenu = (typeof DRAWER_MENUS)[number]
 export const EXISTING_LABEL_KEYS = {
   collectionPreset: 'settings.intelligenceSources.collectionPolicy.collectionPreset',
   includeInSentiment: 'settings.intelligenceSources.collectionPolicy.includeInSentiment',
-  translation: 'settings.intelligenceSources.translationPreferences.translation'
+  translation: 'settings.intelligenceSources.translationPreferences.title'
 } as const
 
 export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
@@ -94,8 +94,8 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
     groups: [
       {
         rows: [
-          { key: 'analysisSwitch', labelKey: 'configDrawer.rows.switch', control: 'switch' },
-          { key: 'analysisModel', labelKey: 'configDrawer.rows.model', control: 'select' }
+          { key: 'analysisSwitch', labelKey: 'configDrawer.rows.analysisSwitch', control: 'switch' },
+          { key: 'analysisModel', labelKey: 'configDrawer.rows.analysisModel', control: 'select' }
         ]
       }
     ]
@@ -108,7 +108,7 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
           { key: 'publishAt', labelKey: 'configDrawer.rows.publishAt', control: 'readonly' },
           { key: 'window', labelKey: 'configDrawer.rows.window', control: 'readonly' },
           { key: 'editions', labelKey: 'configDrawer.rows.editions', control: 'readonly' },
-          { key: 'model', labelKey: 'configDrawer.rows.model', control: 'readonly' }
+          { key: 'model', labelKey: 'configDrawer.rows.briefingModel', control: 'readonly' }
         ]
       }
     ]
