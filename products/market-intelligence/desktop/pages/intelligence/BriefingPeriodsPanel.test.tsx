@@ -202,3 +202,22 @@ describe('the period list says which action failed', () => {
     expect(rowA).toContain('08:30')
   })
 })
+
+describe('the period list tells「确实没有一期」apart from「读不到」', () => {
+  it('shows the empty state only when the store really has no periods', async () => {
+    // 「读不到」那条已经在上面钉过（错误句 + 再读一次）。这条钉另一头：存储确实为空才是空态，
+    // 而且空态里不该出现错误文案，也不该有「再读一次」。
+    await render(fakeClient({ list: vi.fn(async () => []) }))
+    const empty = host.querySelector<HTMLElement>('[data-briefing-periods-empty="true"]')
+    expect(empty).not.toBeNull()
+    expect(empty?.textContent).toContain(copy.empty)
+    expect(empty?.textContent).toContain(copy.emptyHint)
+    expect(host.querySelector('[data-briefing-periods-retry-load="true"]')).toBeNull()
+    expect(host.textContent).not.toContain(copy.loadFailed)
+
+    // 有一期就不再是空态：列表有行、空态标记不在。
+    await render(fakeClient({ list: vi.fn(async () => [period]) }))
+    expect(host.querySelector('[data-briefing-periods-empty="true"]')).toBeNull()
+    expect(host.querySelector('[data-period-id="period-a"]')).not.toBeNull()
+  })
+})
