@@ -38,6 +38,13 @@ export type ConfigSettingsDrawerProps = {
   notificationsView?: DrawerScreenView<DrawerRowView>
   /** 来源与采集：源列表由宿主读好（现成 `getPanelView`），抽屉只渲染。 */
   sourcesView?: DrawerSourcesView
+  /**
+   * 来源与采集：**宿主渲染好的「左树 + 右详情」整块**。
+   *
+   * 抽屉目录不许 import 数据层（有守卫），所以这块由宿主用设置页同一套组件渲染好再交进来；
+   * 抽屉只负责把它放进两栏。传了它就不再用下面的静态版或扁平列表。
+   */
+  sourcesPanel?: React.ReactNode
   /** 选中一条源（右侧详情区等 S1 落地再接）。 */
   onSelectSource?: (sourceId: string) => void
   /** 分析屏视图（简报线给的 `useDrawerAnalysisView`）：两行值已是成句文案，原样渲染。 */
@@ -63,6 +70,7 @@ export function ConfigSettingsDrawer({
   analysisView,
   briefingView,
   sourcesView,
+  sourcesPanel,
   onSelectSource,
   platformValues,
   onOpenPlatformSettings,
@@ -122,7 +130,10 @@ export function ConfigSettingsDrawer({
       </nav>
       <section aria-label={menuLabel(menu)} className="config-drawer__pane">
         <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
-        {menu === 'sources' && sourcesView === undefined
+        {menu === 'sources' && sourcesPanel !== undefined
+          ? (<div className="config-drawer__split">{sourcesPanel}</div>)
+          : null}
+        {menu === 'sources' && sourcesPanel === undefined && sourcesView === undefined
           ? (<SourcesStaticScreen />)
           : null}
         {menu === 'sources' && sourcesView !== undefined

@@ -4,6 +4,7 @@ import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import { useDrawerSourcesView } from '../../settings/config-drawer/useDrawerSourcesView'
+import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useMemo, useState, type ReactNode } from 'react'
 
@@ -208,6 +209,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           }}
           open={settingsDrawerOpen}
           platformValues={platformDrawerValues}
+          sourcesPanel={<DashboardSourcesPanel />}
           sourcesView={drawerSourcesView} />
       </ErrorBoundary>
 
