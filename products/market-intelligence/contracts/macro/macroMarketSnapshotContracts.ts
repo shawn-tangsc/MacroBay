@@ -38,6 +38,16 @@ export const macroMarketSnapshotPublicPolicy = Object.freeze({
   /** The series the product computes rather than licenses, so the label travels with the level. */
   syntheticSeriesId: macroMarketSeries.dollarIndex,
   /**
+   * 美元格按「读者选的源」取哪条序列：一个源一条，**同一格不许同时读两条**。
+   *
+   * 缺键（没选过）仍走今天那条规则（真实那条有点就取真实、合成只在更新时兜底）；选了源就只取那一条，
+   * 该源没有读数就是没有，不偷偷换成另一个源。
+   */
+  dollarIndexSeriesBySource: Object.freeze({
+    'realmarketapi-market': macroMarketSeries.dollarIndexReal,
+    'twelve-data-market': macroMarketSeries.dollarIndex
+  } as const),
+  /**
    * The dollar row's candidates, best first: the provider's own index, then this product's synthesis.
    * Nothing else may fill the row, and the second entry is only reached when the first has no fresh
    * reading — so the computed level is never shown beside a licensed one.
@@ -100,11 +110,22 @@ export type MacroMarketSnapshotView =
   | Readonly<{ state: 'available' | 'empty'; asOf: string; source: MacroMarketSourceView; readings: readonly MacroMarketSnapshotReading[]; caveats: readonly MacroMarketCaveat[] }>
   | Readonly<{ state: 'unavailable' }>
 
-/** The one admitted request shape: no arguments at all — the snapshot is product-wide. */
-export function isMacroMarketSnapshotQuery(value: unknown): value is Record<string, never> {
+/**
+ * The admitted request shape: no arguments at all (product-wide snapshot), or exactly one optional
+ * `dollarSourceId` telling the query which source the reader chose for the dollar cell.
+ *
+ * 可选字段不升版本：这是同进程 IPC 的活载荷，不落盘、不进冻结快照，没有「旧构建读新文件」的读者。
+ */
+export type MacroMarketSnapshotQuery = Readonly<{ dollarSourceId?: string }>
+
+export function isMacroMarketSnapshotQuery(value: unknown): value is MacroMarketSnapshotQuery {
   try {
     if (!plainRecord(value)) return false
-    return Reflect.ownKeys(value).length === 0
+    const keys = Reflect.ownKeys(value)
+    if (keys.length === 0) return true
+    if (keys.length !== 1 || keys[0] !== 'dollarSourceId') return false
+    const source = value.dollarSourceId
+    return typeof source === 'string' && source.length > 0 && source.length <= 64
   } catch { return false }
 }
 

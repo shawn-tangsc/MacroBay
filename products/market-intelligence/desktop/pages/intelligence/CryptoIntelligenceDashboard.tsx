@@ -36,7 +36,7 @@ import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
 import { projectPositioningSourceRow, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { FeedStatusStrip } from './DashboardFeedStatusStrip'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { filterFeedRowsByCells, hiddenDivergenceLegs, resolveDashboardReadGates, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
+import { filterFeedRowsByCells, hiddenDivergenceLegs, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -176,7 +176,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !readsReady || !readGates.capital, now, reloadKey: capitalReloadKey })
   // One macro read feeds two readers: the 市场状态 table inside the panel and the 来源状态 strip
   // below, so the strip cannot disagree with the figures it is describing.
-  const macroView = useMacroMarketSnapshot({ client: macroMarketClient, disabled: !readsReady || !readGates.macroMarket })
+  // 美元格选了源就按选的那条读；没选过（缺键）与今天一样，走默认主源。
+  const dollarSourceId = selectedDollarSourceId(cellState.selections)
+  const macroView = useMacroMarketSnapshot({
+    client: macroMarketClient,
+    disabled: !readsReady || !readGates.macroMarket,
+    ...(dollarSourceId === undefined ? {} : { dollarSourceId })
+  })
   // The two rate rows read FRED's official daily closes through their own door: a daily reading cannot
   // ride the fifteen-minute macro snapshot without being repainted as if it were intraday.
   const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !readsReady || !readGates.macroRates })

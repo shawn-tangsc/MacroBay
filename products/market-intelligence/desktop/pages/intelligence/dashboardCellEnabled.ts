@@ -19,6 +19,8 @@ import { DASHBOARD_SOURCE_MODULES, cellIdOf } from '../../settings/intelligence-
 
 export type CellEnabledIo = Readonly<{
   read: () => Promise<Record<string, boolean>>
+  /** 每格选了哪个源；缺键 = 没选过（用默认主源）。 */
+  readSelection?: () => Promise<Record<string, string>>
 }>
 
 /** 看板格 id：`(moduleId, cellKey)` 经唯一那张表换算，别处不许再拼。 */
@@ -45,6 +47,41 @@ export const QUOTES_STATUS_ROW_CELLS: Readonly<Record<CrossAssetStatusId, readon
   us10y: [dashboardCellId('quotes', 'ust10y')],
   realRate: [dashboardCellId('quotes', 'ust10y')]
 })
+
+/**
+ * 一格可以选哪些源：这一格的主源 + 紧跟其后的备用行（`fallback: true`）。
+ * 源名仍从那一处表取，不在这里另列；配对靠表里的行结构，不靠格名里的「（备用）」后缀。
+ */
+export function cellSourceChoices(moduleId: string, cellKey: string): readonly string[] {
+  const module = DASHBOARD_SOURCE_MODULES.find((candidate) => candidate.id === moduleId)
+  const index = module?.cells.findIndex((candidate) => candidate.cellKey === cellKey) ?? -1
+  const cell = index >= 0 ? module?.cells[index] : undefined
+  if (module === undefined || cell === undefined) return []
+  // 备用行紧跟在主行后面（`fallback: true`），这是表里的结构，不靠格名去猜「（备用）」。
+  const sources = [cell.sourceId]
+  for (const next of module.cells.slice(index + 1)) {
+    if (next.fallback !== true) break
+    sources.push(next.sourceId)
+  }
+  return sources
+}
+
+/**
+ * 美元格选了哪个源（没选 / 选了不在这格范围内的源 → undefined，走默认规则）。
+ *
+ * 格 id 随卡片合并不是固定的：`490231e` 把「跨资产」并入「行情卡」之后，美元格只剩
+ * `quotes:usd`（旧的 `cross-asset:usd` 已不存在）。所以这里仍经 `dashboardCellId` 查表，
+ * 别处不会拿着一个已经消失的键去读。
+ */
+export function selectedDollarSourceId(
+  selections: Readonly<Record<string, string>>
+): string | undefined {
+  const cellId = dashboardCellId('quotes', 'usd')
+  const chosen = selections[cellId]
+  if (chosen === undefined) return undefined
+  const allowed = new Set(cellSourceChoices('quotes', 'usd'))
+  return allowed.has(chosen) ? chosen : undefined
+}
 
 export function isCellEnabled(cells: Readonly<Record<string, boolean>>, cellId: string): boolean {
   return cells[cellId] ?? true
@@ -126,27 +163,34 @@ export type DashboardCellEnabledState = Readonly<{
   /** 启用表读完了没有。没读完之前一处都不读——否则「关掉的格」在首帧仍会发一次请求。 */
   ready: boolean
   cells: Readonly<Record<string, boolean>>
+  /** 每格选的源；缺键 = 没选过。 */
+  selections: Readonly<Record<string, string>>
 }>
 
 export function useDashboardCellEnabled(input: { io?: CellEnabledIo }): DashboardCellEnabledState {
-  const [state, setState] = useState<DashboardCellEnabledState>({ ready: input.io === undefined, cells: {} })
+  const [state, setState] = useState<DashboardCellEnabledState>({ ready: input.io === undefined, cells: {}, selections: {} })
   const lastKnown = useRef<Readonly<Record<string, boolean>>>({})
+  const lastSelection = useRef<Readonly<Record<string, string>>>({})
   useEffect(() => {
     const io = input.io
     if (io === undefined) {
       // 没有读口 = 全都启用，并且立刻可以开始读。
-      setState({ ready: true, cells: lastKnown.current })
+      setState({ ready: true, cells: lastKnown.current, selections: lastSelection.current })
       return
     }
     let active = true
-    void io.read().then((saved) => {
+    // 启用与选源是同一份文档的两块：一起读，一起就绪；任一读失败沿用上一次（第一次失败 = 全启用 + 全默认源）。
+    void Promise.all([
+      io.read(),
+      io.readSelection === undefined ? Promise.resolve(lastSelection.current) : io.readSelection()
+    ]).then(([saved, selections]) => {
       if (!active) return
       lastKnown.current = saved
-      setState({ ready: true, cells: saved })
+      lastSelection.current = selections
+      setState({ ready: true, cells: saved, selections })
     }).catch(() => {
       if (!active) return
-      // 读失败沿用上一次（第一次失败就是「全都启用」）：一次读盘失败不许把整屏关掉。
-      setState({ ready: true, cells: lastKnown.current })
+      setState({ ready: true, cells: lastKnown.current, selections: lastSelection.current })
     })
     return () => { active = false }
   }, [input.io])

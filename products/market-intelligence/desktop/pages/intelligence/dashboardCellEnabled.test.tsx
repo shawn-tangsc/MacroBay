@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
-import { dashboardCellId, QUOTES_STATUS_ROW_CELLS } from './dashboardCellEnabled'
+import { dashboardCellId, QUOTES_STATUS_ROW_CELLS, type CellEnabledIo } from './dashboardCellEnabled'
 
 const asOf = '2026-08-05T00:00:00.000Z'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard
@@ -24,6 +24,7 @@ function clients() {
   const crossAssetQuery = vi.fn(async () => ({ state: 'unavailable' as const, cause: 'query' as const }))
   const fearGreedQuery = vi.fn(async () => ({ state: 'empty' as const, asOf }))
   // 一条可判的配对（杠杆腿那一组）：关掉「价格腿」不影响它，正好用来看卡片是否还在。
+  const macroQuery = vi.fn(async (_input?: { dollarSourceId?: string }) => ({ state: 'unavailable' as const }))
   const divergenceQuery = vi.fn(async () => ({
     state: 'available' as const, asOf, escalated: false, withheld: [],
     rows: [{
@@ -39,6 +40,7 @@ function clients() {
     crossAssetQuery,
     fearGreedQuery,
     divergenceQuery,
+    macroQuery,
     crossAssetClient: {
       acquire: vi.fn(async () => ({ state: 'active' as const, leaseId: 'lease-1' })),
       renew: vi.fn(async () => ({ state: 'active' as const })),
@@ -47,11 +49,12 @@ function clients() {
       query: crossAssetQuery
     },
     fearGreedClient: { querySnapshot: fearGreedQuery },
-    divergenceClient: { query: divergenceQuery }
+    divergenceClient: { query: divergenceQuery },
+    macroMarketClient: { query: macroQuery }
   }
 }
 
-async function render(cellEnabledIo: { read: () => Promise<Record<string, boolean>> } | undefined) {
+async function render(cellEnabledIo: CellEnabledIo | undefined) {
   vi.useFakeTimers()
   const built = clients()
   const host = document.createElement('div')
@@ -68,6 +71,7 @@ async function render(cellEnabledIo: { read: () => Promise<Record<string, boolea
           openInterestClient: { query: async () => ({ state: 'empty' as const, asOf, window: '7d' as const }) },
           crossAssetClient: built.crossAssetClient as never,
           divergenceClient: built.divergenceClient as never,
+          macroMarketClient: built.macroMarketClient as never,
           now: () => new Date(asOf),
           onConfigureSources: () => undefined,
           onManageSource: () => undefined,
@@ -142,6 +146,22 @@ describe('dashboard cells read only when the reader left them on', () => {
     // 价格腿关掉，稳定币腿那一组还判得出来：这一路照样读，卡也还在（用到价格腿的配对由面板滤掉）。
     expect(partial.divergenceQuery).toHaveBeenCalled()
     expect(partial.container.querySelector('.mi-divergence')).not.toBeNull()
+  })
+
+  it('asks the dollar reading for the source the reader chose, and only that one', async () => {
+    const chosen = await render({
+      read: async () => ({}),
+      readSelection: async () => ({ [dashboardCellId('quotes', 'usd')]: 'twelve-data-market' })
+    })
+    expect(chosen.macroQuery).toHaveBeenCalledWith({ dollarSourceId: 'twelve-data-market' })
+    // 同一格不许同时读两个源：请求里只出现选中的那个，没有第二个源的字段。
+    const payloads = chosen.macroQuery.mock.calls.map((call) => Object.keys(call[0] ?? {}))
+    expect(payloads.every((keys) => keys.length <= 1)).toBe(true)
+  })
+
+  it('keeps reading the default primary source when no choice was made', async () => {
+    const defaulted = await render({ read: async () => ({}) })
+    expect(defaulted.macroQuery).toHaveBeenCalledWith({})
   })
 
   it('reads everything when the enable map cannot be read (缺省 = 启用)', async () => {
