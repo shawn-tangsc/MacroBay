@@ -2,7 +2,7 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productSettingsEntries } from '@products/generated/shellRegistry'
 
@@ -13,6 +13,27 @@ import { AppShell } from '../AppShell'
 import { resolveLocalizedTitle } from './shellIconRegistry'
 import { openConversation } from './openConversation'
 import { findProductSettingsPanelByIntent, openProductSettingsPanelByIntent } from './openProductSettingsPanel'
+
+/**
+ * 落点由**夹具注册表**自证，不依赖「这一版装了哪个产品、产品声明了哪个意图」。
+ * 产品撤掉 `settingsSections` 注册之后，这条仍要证明「意图 → 真面板 → 正文挂载 → 焦点交接」整条链。
+ */
+vi.mock('@products/generated/shellRegistry', () => ({
+  productMenuEntries: [],
+  productPanelEntries: [],
+  productApprovalFieldLabels: {},
+  productSettingsEntries: [{
+    id: 'sample-product.source-settings',
+    productId: 'sample-product',
+    productName: { 'zh-CN': '示例产品', 'en-US': 'Sample Product' },
+    title: { 'zh-CN': '来源设置', 'en-US': 'Source settings' },
+    icon: 'database',
+    order: 10,
+    navIntent: 'resource-sources',
+    load: async () => ({ default: () => null })
+  }]
+}))
+
 
 
 /**
