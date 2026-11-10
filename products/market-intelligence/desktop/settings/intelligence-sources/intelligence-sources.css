@@ -390,9 +390,15 @@
   min-width: 0;
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 68%, transparent);
+  /* 行不再各自带框：整屏只有「区块容器」那一层框，行与行之间只用发丝线。 */
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.intelligence-setting-row:first-child {
+  border-top: 0;
 }
 
 .intelligence-setting-row-wide {

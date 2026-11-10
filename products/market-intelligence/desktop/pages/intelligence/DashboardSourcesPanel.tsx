@@ -27,11 +27,16 @@ export function DashboardSourcesPanel(props: {
    * 所以它只参与**关闭确认**，不进保存栏（保存栏只覆盖自己上报了的屏）。
    */
   onDraftChange?: (dirty: boolean) => void
+  /**
+   * 打开抽屉时落哪一块筛选（前端可以在「打开配置」的请求里指定）。
+   * **只当初始值**，不是受控 prop：读者点了别的 tab 就归读者，外部不许一直压着。不传仍是「看板」。
+   */
+  initialFilter?: SourceFilter
 } = {}): React.ReactElement {
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
   // 抽屉落「看板」：打开就省一步。**设置页仍默认「全部」**（那是完整管理面），两边不一致是有意的。
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('dashboard')
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(props.initialFilter ?? 'dashboard')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const settings = useIntelligenceSourcesSettings(t)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings

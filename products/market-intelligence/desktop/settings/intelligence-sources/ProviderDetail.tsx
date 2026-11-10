@@ -417,6 +417,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
                   labels={policy.labels}
                   onChange={(patch) => policy.onChange(source.sourceId, patch)}
                   resolveText={resolveText}
+                  /* 标题由外层区块画：这一屏「采集策略」只出现一次。 */
+                  showTitle={false}
                   supportsSentiment={policy.supportsSentimentById[source.sourceId] === true}
                 />
               </div>

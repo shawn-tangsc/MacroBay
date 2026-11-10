@@ -33,6 +33,8 @@ export function CollectionPolicySection(props: {
   enabledConfigurable?: boolean
   labels: CollectionPolicyLabels
   resolveText: (key: string) => string
+  /** 外层区块已经画了标题时传 false：同一屏里「采集策略」只出现一次。 */
+  showTitle?: boolean
   onChange: (patch: Partial<IntelligenceSourceProfile>) => void
 }): React.ReactElement {
   const configurable = props.configurable ?? true
@@ -41,8 +43,8 @@ export function CollectionPolicySection(props: {
   // 不占正文（正文只允许字段名、当前值、控件）。pending 那句是**状态**，留在正文。
   const productOwned = enabledConfigurable && !configurable
   return (
-    <section className="intelligence-section">
-      <div className="intelligence-section-title">{props.labels.title}</div>
+    <div className="intelligence-policy-rows">
+      {props.showTitle === false ? null : <div className="intelligence-section-title">{props.labels.title}</div>}
       {!enabledConfigurable && props.labels.plannedNotConfigurable ? (
         <p className="intelligence-source-note">{props.labels.plannedNotConfigurable}</p>
       ) : null}
@@ -66,6 +68,6 @@ export function CollectionPolicySection(props: {
           supportsSentiment={props.supportsSentiment}
         />
       </div>
-    </section>
+    </div>
   )
 }
