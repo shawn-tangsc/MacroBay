@@ -40,6 +40,7 @@
     "release:preflight": "tsx scripts/preflight-release.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "discord:smoke": "tsx scripts/discord-gateway-smoke.mts",
+    "slack:smoke": "tsx scripts/slack-gateway-smoke.mts",
     "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
     "typecheck:products": "tsc --noEmit -p tsconfig.products.json",
     "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts",
