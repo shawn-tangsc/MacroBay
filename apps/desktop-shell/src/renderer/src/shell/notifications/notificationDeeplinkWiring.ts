@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { isBuiltInSettingsPanelId } from '../navigation/builtInNavEntries'
+import { openProductSettingsDrawer } from './notificationCenterSettingsEntry'
 
 import { createNotificationDeeplinkHandler } from './notificationDeeplinkHandler'
 import type { ProductMenuEntry } from './notificationDeeplink'
@@ -35,6 +36,7 @@ export function createNotificationNavigation(ports: {
     // 严格版：只在目标真的存在时才导航；「给了目标但不认识」由 handler 整条丢掉，不回落 models。
     isSettingsPanelAvailable: (key) =>
       isBuiltInSettingsPanelId(key) || ports.productSettingsEntries.some((entry) => entry.id === key),
+    openProductSettingsDrawer,
     setNotificationCenterOpen: ports.setNotificationCenterOpen,
     setFocusEntityId: ports.setFocusEntityId
   })

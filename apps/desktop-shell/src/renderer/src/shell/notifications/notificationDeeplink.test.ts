@@ -62,6 +62,27 @@ describe('resolveNotificationNavigation', () => {
     ).toEqual({ navKey: 'settings', settingsPanelKey: 'intelligence-sources' })
   })
 
+  it('carries a product settings-drawer destination through, and refuses an unregistered product', () => {
+    // 产品给的落点：平台只按注册表找那条唯一产品页，然后原样带着 `{ productId, menuId }` 往前送。
+    expect(
+      resolveNotificationNavigation(
+        { productId: 'market-intelligence', settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' } },
+        products
+      )
+    ).toEqual({
+      navKey: '/market-intelligence/intelligence',
+      settingsDrawer: { productId: 'market-intelligence', menuId: 'sources', routePath: '/market-intelligence/intelligence' }
+    })
+
+    // 产品没在这一版注册（没有唯一产品页）→ 不导航，也不回落到任何面板。
+    expect(
+      resolveNotificationNavigation(
+        { settingsDrawer: { productId: 'retired-product', menuId: 'sources' } },
+        products
+      )
+    ).toBeNull()
+  })
+
   it('sends an open-briefing action to the route path the registry actually publishes', () => {
     // 产品页的 navKey 是注册表的 routePath，不是 manifest 里的 pageId。
     expect(

@@ -7,16 +7,21 @@
  * （同一份输入永远落到同一屏），不必启动整个壳去验。
  */
 
-/** 通知里携带的跳转意图。字段来源是主进程的通知载荷，这里只读。 */
-export type NotificationDeeplink = Readonly<{
-  settingsSectionId?: string
-  pageId?: string
-  productId?: string
-  /** 实体类型：例如任务失败的 `job-definition`。没有它就定位不到那一行。 */
-  entityType?: string
-  /** 实体 id：任务定义 id。 */
-  entityId?: string
-}>
+/**
+ * 通知里携带的跳转意图：**直接复用平台契约的类型**，不在壳里复述一遍。
+ * 复述过一次的代价很大：契约新增字段（`settingsDrawer`）而副本没加，消费者写了也到不了。
+ */
+import type { NotificationDeeplink } from '@platform/notifications/contracts/notificationContracts'
+export type { NotificationDeeplink }
+
+/**
+ * resolver 只读这几个字段：用 `Pick` 从平台契约取，**不复制字段形状**。
+ * 契约新增一个落点字段时这里加一个名字即可，不会出现「契约有、壳里副本没有」的漂移。
+ */
+export type NotificationDeeplinkNavigationFields = Pick<
+  NotificationDeeplink,
+  'settingsSectionId' | 'pageId' | 'productId' | 'entityType' | 'entityId' | 'settingsDrawer'
+>
 
 /**
  * 产品 id 到一级菜单路由的映射来源。
@@ -32,6 +37,8 @@ export type NotificationNavigationTarget = Readonly<{
   settingsPanelKey?: string
   /** 落进去之后要定位的那一行（任务定义 id）。 */
   focusEntityId?: string
+  /** 产品设置抽屉的落点：`navKey` 是产品页，产品页按 `productId` 过滤后打开对应菜单。 */
+  settingsDrawer?: Readonly<{ productId: string; menuId: string; routePath: string }>
 }>
 
 /**
@@ -61,7 +68,7 @@ const ENTITY_SETTINGS_PANEL: Readonly<Record<string, string>> = {
  * 所以映射必须来自**注册表本身**，不能来自手写表。
  */
 function routePathOfProduct(
-  deeplink: NotificationDeeplink,
+  deeplink: NotificationDeeplinkNavigationFields,
   productMenuEntries: readonly ProductMenuEntry[]
 ): string | null {
   if (deeplink.productId === undefined) return null
@@ -82,9 +89,16 @@ function routePathOfProduct(
  * （例如产品来源）仍然按分区走，所以既有行为不变。
  */
 export function resolveNotificationNavigation(
-  deeplink: NotificationDeeplink,
+  deeplink: NotificationDeeplinkNavigationFields,
   productMenuEntries: readonly ProductMenuEntry[]
 ): NotificationNavigationTarget | null {
+  // 产品自己给的抽屉落点最具体：先认它。产品没在这一版注册（没有唯一产品页可落）就不导航——
+  // 不猜、也不回落到默认面板。
+  if (deeplink.settingsDrawer !== undefined) {
+    const routePath = routePathOfProduct({ productId: deeplink.settingsDrawer.productId }, productMenuEntries)
+    if (routePath === null) return null
+    return { navKey: routePath, settingsDrawer: { ...deeplink.settingsDrawer, routePath } }
+  }
   // 能精确定位到某一行的实体：它自己知道自己该落在哪个面板。
   const panelFromEntity =
     deeplink.entityType === undefined ? undefined : ENTITY_SETTINGS_PANEL[deeplink.entityType]
@@ -107,7 +121,7 @@ export function resolveNotificationNavigation(
 }
 
 /** 只有「知道自己要去哪一行」的实体才带定位，避免所有通知都被当成行级跳转。 */
-function focusEntityOf(deeplink: NotificationDeeplink): string | undefined {
+function focusEntityOf(deeplink: NotificationDeeplinkNavigationFields): string | undefined {
   if (deeplink.entityId === undefined || deeplink.entityType === undefined) return undefined
   return ENTITY_SETTINGS_PANEL[deeplink.entityType] === undefined ? undefined : deeplink.entityId
 }

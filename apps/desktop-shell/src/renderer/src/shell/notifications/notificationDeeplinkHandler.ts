@@ -1,6 +1,7 @@
 import type { NotificationDeeplink } from '@platform/notifications/contracts/notificationContracts'
 
 import { resolveNotificationNavigation, type ProductMenuEntry } from './notificationDeeplink'
+import type { NotificationCenterSettingsEntry } from './notificationCenterSettingsEntry'
 
 /**
  * 把「通知动作要跳到哪一屏」变成外壳里的一行。
@@ -23,6 +24,8 @@ export function createNotificationDeeplinkHandler(deps: {
   setNotificationCenterOpen: (open: boolean) => void
   /** 设置面板里要定位的那一行；面板自己负责滚过去并高亮。 */
   setFocusEntityId?: (id: string | null) => void
+  /** 产品设置抽屉的落点：与通知中心那颗「去设置」共用同一个 dispatch。 */
+  openProductSettingsDrawer?: (entry: NotificationCenterSettingsEntry) => void
   /**
    * 严格判据：目标设置面板在本构建里真的存在吗。
    *
@@ -35,6 +38,12 @@ export function createNotificationDeeplinkHandler(deps: {
     deps.setNotificationCenterOpen(false)
     const target = resolveNotificationNavigation(deeplink, deps.productMenuEntries)
     if (target === null) return
+    if (target.settingsDrawer !== undefined) {
+      // 产品给的落点：产品页自己打开抽屉；平台不碰 `settingsPanelKey`，也就不存在回落。
+      deps.openProductSettingsDrawer?.(target.settingsDrawer)
+      deps.setFocusEntityId?.(target.focusEntityId ?? null)
+      return
+    }
     if (
       target.settingsPanelKey !== undefined &&
       deps.isSettingsPanelAvailable !== undefined &&

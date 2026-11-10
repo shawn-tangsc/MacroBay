@@ -32,6 +32,11 @@ export type NotificationDeeplink = {
   productId?: string
   pageId?: string
   settingsSectionId?: string
+  /**
+   * 产品的设置抽屉落点（只放 id，不放文案）：产品页自己消费这条；平台不写产品面板 id。
+   * 与 `settingsSectionId` 同一条严格规则——产品没注册、或这版没有它，就不导航。
+   */
+  settingsDrawer?: { productId: string; menuId: string }
   entityType?: string
   entityId?: string
   params?: Record<string, string>

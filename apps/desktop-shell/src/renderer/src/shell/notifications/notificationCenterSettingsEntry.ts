@@ -36,10 +36,16 @@ export function resolveNotificationCenterSettingsEntry(
  * 发导航：走既有 `app-shell:navigate`，detail 里带 `settingsDrawer`（产品页按自己的 productId 过滤）。
  * 先切到该产品页，否则监听者根本没挂载——按钮点了也不会有人接。
  */
-export function openNotificationCenterSettings(entry: NotificationCenterSettingsEntry): void {
+export function openProductSettingsDrawer(entry: NotificationCenterSettingsEntry): void {
+  // 先切到产品页，否则监听者根本没挂载；`settingsDrawer` 由产品页按自己的 productId 消费。
   window.dispatchEvent(
     new CustomEvent(APP_NAVIGATE_EVENT, {
       detail: { navKey: entry.routePath, settingsDrawer: { productId: entry.productId, menuId: entry.menuId } }
     })
   )
+}
+
+/** 通知中心那颗按钮的动作；与深链落点共用同一个 dispatch（一处实现）。 */
+export function openNotificationCenterSettings(entry: NotificationCenterSettingsEntry): void {
+  openProductSettingsDrawer(entry)
 }

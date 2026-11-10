@@ -42,6 +42,26 @@ describe('notification deeplink handler', () => {
     expect(calls).toEqual(['center:false'])
   })
 
+  it('hands a product settings-drawer destination to the drawer opener, with no panel fallback', () => {
+    const calls: string[] = []
+    const opened: Array<Record<string, string>> = []
+    const handler = createNotificationDeeplinkHandler({
+      productMenuEntries: [{ productId: 'market-intelligence', routePath: '/market-intelligence/intelligence' }],
+      navigate: (key) => calls.push(`navigate:${key}`),
+      setSettingsPanelKey: (key) => calls.push(`panel:${key}`),
+      setNotificationCenterOpen: (open) => calls.push(`center:${open}`),
+      openProductSettingsDrawer: (entry) => opened.push(entry as unknown as Record<string, string>)
+    })
+
+    handler({ scope: 'product', settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' } })
+
+    // 只关抽屉 + 交给产品页；设置面板那一套（panel / navigate）一次都不碰。
+    expect(calls).toEqual(['center:false'])
+    expect(opened).toEqual([
+      { productId: 'market-intelligence', menuId: 'sources', routePath: '/market-intelligence/intelligence' }
+    ])
+  })
+
   it('does not navigate at all when the named panel is not in this build', () => {
     // 「给了目标但不认识」（产品卸载 / 注册被撤）不是「没给目标」：后者才允许回落默认面板。
     const calls: string[] = []
