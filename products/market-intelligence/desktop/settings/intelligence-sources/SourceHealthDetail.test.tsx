@@ -98,7 +98,12 @@ describe('source health detail (B4)', () => {
       })
     })
     expect(container.textContent).toContain('官方源暂时不可用（403）')
-    expect(container.textContent).toContain(text.automaticSyncStopped)
+    // 界面设计 2026-11-10 的两行预算：原因格只放这一句（半宽格），
+    //「自动同步已停止」放到格下整行说明里——两句挤在一格会变成三行，超出预算就得截断。
+    const whyCell = container.querySelector('[data-health-cell="idle-reason"]')
+    expect(whyCell?.textContent).toBe(`${text.health.whyNotCollecting}官方源暂时不可用（403）`)
+    expect(whyCell?.textContent).not.toContain(text.automaticSyncStopped)
+    expect(container.querySelector('.intelligence-source-note--health')?.textContent).toContain(text.automaticSyncStopped)
     expect(container.textContent).toContain('10-22 15:29 GMT+8')
     expect(container.textContent).not.toContain('official-endpoint-returned-403')
     expect(container.querySelectorAll('[aria-label="原因码"]')).toHaveLength(1)

@@ -1041,10 +1041,10 @@
   overflow-wrap: anywhere;
 }
 
-/* 「未知」不是「没有」：降成一档，别让它读起来像一个结论。 */
+/* 「未知」不是「没有」：只靠颜色降一档，字重保持 400——用 500 等于「强调地拿不到」。 */
 .source-provider-detail__health .intelligence-health-value[data-unknown='true'] {
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .intelligence-source-note--health {

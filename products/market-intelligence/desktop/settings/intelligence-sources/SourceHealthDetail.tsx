@@ -100,6 +100,14 @@ export function SourceHealthDetail(props: {
     : view.lastSuccess.kind === 'none' ? labels.noSuccess : labels.unknown
 
   const unknownReading = view.today.kind === 'unknown' || view.lastSuccess.kind === 'unknown'
+  /**
+   * 格下说明：一整行宽度。这里放两件「跟在后面」的事实，而不是塞进半宽的原因格——
+   * 界面设计 2026-11-10：格子里的句子最多两行，超出要缩文案、不许截断。
+   */
+  const notes = [
+    view.idleReason === 'unavailable' ? props.automaticSyncStopped : '',
+    unknownReading ? labels.unknownReason : ''
+  ].filter((note) => note !== '')
 
   return <div className="source-provider-detail__health" data-source-health={source.sourceId} data-health-read={read.state}>
     <div className="intelligence-health-list">
@@ -108,7 +116,6 @@ export function SourceHealthDetail(props: {
       <HealthCell cell="idle-reason" label={labels.whyNotCollecting}>
         {view.idleReason === 'unavailable'
           ? <UnavailableReason
-            automaticSyncStopped={props.automaticSyncStopped}
             reasonCode={view.unavailableReasonCode}
             labels={labels}
             resolveText={props.resolveText} />
@@ -123,8 +130,9 @@ export function SourceHealthDetail(props: {
           : labels.runNow[view.runNow]}
       </HealthCell>
     </div>
-    {/* 「拿不到」不是「没有」：读不到逐次记录时把原因写在下面，读者不会把「未知」读成「从没采过」。 */}
-    {unknownReading ? <p className="intelligence-source-note intelligence-source-note--health">{labels.unknownReason}</p> : null}
+    {/* 「拿不到」不是「没有」：读不到逐次记录时把原因写在下面，读者不会把「未知」读成「从没采过」。
+        不可用的「自动同步已停止」也放这里：原因格只留那句读者说法，避免挤成三行。 */}
+    {notes.length > 0 ? <p className="intelligence-source-note intelligence-source-note--health">{notes.join(' · ')}</p> : null}
   </div>
 }
 
@@ -143,9 +151,8 @@ function HealthCell(props: {
   </div>
 }
 
-/** 不可用原因：正文一句人话（与「自动同步已停止」串起来），码只进 ⓘ、恰一处。 */
+/** 不可用原因：格内只放读者说法这一句（不超过两行），码只进 ⓘ、恰一处。 */
 function UnavailableReason(props: {
-  automaticSyncStopped: string
   labels: SourceHealthLabels
   reasonCode?: string
   resolveText: (key: string) => string
@@ -155,7 +162,7 @@ function UnavailableReason(props: {
   const sentence = props.labels.unavailableReasons[reasonCode]
     ?? props.resolveText('settings.intelligenceSources.unavailableShort')
   return <>
-    <span>{[sentence, props.automaticSyncStopped].join(' · ')}</span>
+    <span>{sentence}</span>
     <Popover
       content={<code className="source-provider-detail__reason-code">{reasonCode}</code>}
       trigger={(triggerProps) => (
