@@ -122,7 +122,7 @@ export function DashboardSourcesPanel(props: {
       surface: 'settings',
       ...(props.initialSourceId === undefined ? {} : { initialSourceId: props.initialSourceId })
     }}
-    treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
+    treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
     view={settingsView} />
 }
 
