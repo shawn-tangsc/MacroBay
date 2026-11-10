@@ -690,10 +690,13 @@ describe('the inner cards keep a single 16 to the content card', () => {
 describe('the card sits 16 from the menu', () => {
   it('gives the pane 16 of left padding and the card no negative margin', () => {
     // 「菜单 ──16── 卡边」钉成数字：pane 左内距 16 + 卡不得用负外边距抵消它。
-    const css = readFileSync(join(__dirname, 'configDrawer.css'), 'utf8')
+    // **先剥注释再匹配**：用户把 `padding: 16px` 注释掉了，不剥的话注释行会让断言假绿。
+    const css = readFileSync(join(__dirname, 'configDrawer.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '')
     const pane = /\.config-drawer__pane\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
-    expect(pane).toContain('padding: 16px')
+    expect(pane).not.toContain('padding: 16px')
+    // 间距改由卡的外边距承担：16（与其它屏一致，满足用户「至少 10」）。
     const card = /\.config-drawer__card\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(card).toContain('margin: 16px')
     expect(card).not.toMatch(/margin(?:-left)?:\s*-/u)
   })
 })

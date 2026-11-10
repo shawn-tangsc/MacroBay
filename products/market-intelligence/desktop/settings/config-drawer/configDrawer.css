@@ -58,7 +58,7 @@
   display: grid;
   align-content: start;
   gap: 16px;
-  padding: 16px;
+  /*padding: 16px;*/
   /* 其余屏只有一列内容：整块自己滚。 */
   overflow-y: auto;
   min-height: 0;
@@ -444,7 +444,12 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  height: 100%;
+  /*
+   * 与菜单的 16 间距**落在卡上**：用户 2026-11-11 亲手把 `.config-drawer__pane` 的 `padding: 16px`
+   * 注释掉（他的改动，不许改回去），所以间距由卡的 margin 承担；高度扣掉上下 32，避免溢出卡体。
+   */
+  height: calc(100% - 32px);
+  margin: 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
