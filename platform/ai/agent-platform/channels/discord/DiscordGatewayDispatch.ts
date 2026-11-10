@@ -11,9 +11,18 @@
  * - 机器人写的消息（`author.bot === true`，包含我们自己）不进来——否则机器人会回自己的话；
  * - 只留白名单字段，附件只留 id / mime / 名字 / 大小，URL 一律丢掉（协议依据：Resources › Message）。
  */
-/** 读到一条消息 / 该忽略（机器人自己发的）/ 读不懂。三者对序号的处置不同，必须分开。 */
+/**
+ * 读到一条消息 / 自己发的回显 / 别的机器人 / 读不懂。四者对序号的处置一样（都算消费），
+ * 但对**交付与证据**不一样：
+ * - `message`：进管道，投递给助手；
+ * - `self-echo`：**不投递**（否则机器人会回自己的话），但它是「出站真的到了 Discord」的现场证据，
+ *   验收时要与别人发的那条分开计；
+ * - `ignored`：别的机器人发的，不回；
+ * - `invalid`：读不懂，记审计。
+ */
 export type DiscordMessageRead =
   | { kind: 'message'; seam: DiscordMessageSeam }
+  | { kind: 'self-echo'; messageId: string; channelId: string }
   | { kind: 'ignored' }
   | { kind: 'invalid' }
 
@@ -31,11 +40,15 @@ export function readDiscordMessageCreate(value: unknown, botUserId: string | nul
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { kind: 'invalid' }
   const message = value as Record<string, unknown>
   const author = message.author as { id?: unknown; bot?: unknown } | undefined
-  // 机器人写的消息（包括我们自己发出去又被回显的那条）不算入站：要忽略，不要记成坏帧。
-  if (author?.bot === true) return { kind: 'ignored' }
-  const id = identifier(message.id)
   const authorId = identifier(author?.id)
+  const id = identifier(message.id)
   const channelId = identifier(message.channel_id)
+  // 自己发出去又被网关回显的那条：**先认出来**，它与「别的机器人」对证据的意义完全不同。
+  if (authorId !== null && botUserId !== null && authorId === botUserId) {
+    return id && channelId ? { kind: 'self-echo', messageId: id, channelId } : { kind: 'invalid' }
+  }
+  // 其余机器人写的消息：不回，也不算坏帧。
+  if (author?.bot === true) return { kind: 'ignored' }
   if (!id || !authorId || !channelId) return { kind: 'invalid' }
 
   // 有 guild 就是频道消息（线程也走 channel_id，那是线程自己的频道）；没有 guild 只能是私信。

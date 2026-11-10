@@ -35,6 +35,8 @@ export class DiscordGatewayHost {
   private reconnectTimer: unknown = null
   private attempt = 0
   private stopped = false
+  /** 「自己的回显到了」只记一次：它是出站通路的证据，不是每条消息一行日志。 */
+  private selfEchoObserved = false
 
   constructor(private readonly deps: {
     channelId: string
@@ -158,8 +160,18 @@ export class DiscordGatewayHost {
       return
     }
     const read = readDiscordMessageCreate(frame.data, this.deps.botUserId)
+    if (read.kind === 'self-echo') {
+      // 我们自己发出去、又被回显的那条：**不投递**（否则机器人回自己的话），但要留一条痕迹——
+      // 这是「出站真的到了 Discord」的现场证据。每条连接只记第一次，避免每发一条消息一行日志。
+      if (!this.selfEchoObserved) {
+        this.selfEchoObserved = true
+        this.audit('discord-self-echo-observed')
+      }
+      this.commitOrStop(frame.sequence)
+      return
+    }
     if (read.kind === 'ignored') {
-      // 我们自己发出去、又被回显的那条：消费掉，但不记审计（否则每发一条消息都多一行噪声）。
+      // 别的机器人发的：消费掉，不投递、不审计。
       this.commitOrStop(frame.sequence)
       return
     }

@@ -71,9 +71,11 @@ describe('discord message_create mapping', () => {
     expect(JSON.stringify(fact)).not.toContain('https://')
   })
 
-  it('ignores messages a bot wrote, including our own echo', () => {
-    // 「忽略」与「读不懂」必须分开：前者是正常事（我们自己发出去的那条也会被回显），不记坏帧。
-    expect(readDiscordMessageCreate({ id: '111', channel_id: '222', author: { id: '444', bot: true } }, '444').kind).toBe('ignored')
+  it('tells its own echo apart from another bot', () => {
+    // 自己发出去又被回显的那条：不投递，但它是出站通路的证据，必须与「别的机器人」分开。
+    expect(readDiscordMessageCreate({ id: '111', channel_id: '222', author: { id: '999', bot: true } }, '999'))
+      .toEqual({ kind: 'self-echo', messageId: '111', channelId: '222' })
+    expect(readDiscordMessageCreate({ id: '112', channel_id: '222', author: { id: '444', bot: true } }, '999').kind).toBe('ignored')
   })
 
   it('refuses a payload without a usable message id or author', () => {

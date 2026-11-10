@@ -129,16 +129,19 @@ describe('discord gateway host', () => {
     expect(harness.audits()).toContain('discord-inbound-failed')
   })
 
-  it('consumes its own echoed message without delivering or auditing it', async () => {
+  it('consumes its own echo, proves the outbound path once, and never delivers it', async () => {
     const harness = await createHarness()
     harness.sockets[0].message(HELLO)
-    harness.sockets[0].message('{"op":0,"s":11,"t":"MESSAGE_CREATE","d":{"id":"msg-4","channel_id":"222","guild_id":"333","content":"my reply","author":{"id":"999","bot":true}}}')
+    for (const sequence of [11, 12]) {
+      harness.sockets[0].message(`{"op":0,"s":${sequence},"t":"MESSAGE_CREATE","d":{"id":"msg-${sequence}","channel_id":"222","guild_id":"333","content":"my reply","author":{"id":"999","bot":true}}}`)
+    }
     await flush()
 
     expect(harness.inbound.receive).not.toHaveBeenCalled()
-    expect(harness.audits()).toEqual([])
-    // 已消费：序号照常推进，否则它自己发的每条消息都会把游标卡住。
+    // 回显是「出站真的到了 Discord」的证据，但每条连接只记一次——不是每条消息一行日志。
+    expect(harness.audits()).toEqual(['discord-self-echo-observed'])
     expect(harness.runtime.commitIfCurrent).toHaveBeenCalledWith('discord-a', 1, 11)
+    expect(harness.runtime.commitIfCurrent).toHaveBeenCalledWith('discord-a', 1, 12)
   })
 
   it('says out loud when a message arrives with no text and no attachment', async () => {
