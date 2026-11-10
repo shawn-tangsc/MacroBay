@@ -245,6 +245,8 @@ export const intelligenceSourcesText = {
      **值 `'all'` / `'dashboard'` 不动**——默认筛选、入口传参、用例都靠它们。 */
   sourceFilters: { all: '情报源', calendar: '日历', dashboard: '业务设置', sentiment: '舆情', pending: '待接入', advanced: '高级', other: '其他' },
   sourceFilterLabel: '来源筛选',
+  /* C5 列表形态：看板那一档自动平铺，这两句给读屏播报用。 */
+  sourceListModes: { grouped: '分组', tiles: '平铺' },
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
   proxyNotice: {
     title: '这个来源要走本地代理才能连',
@@ -808,6 +810,7 @@ export const intelligenceSourcesText = {
 
   sourceFilters: { all: 'Intelligence sources', calendar: 'Calendar', dashboard: 'Business settings', sentiment: 'Sentiment', pending: 'Pending', advanced: 'Advanced', other: 'Other' },
   sourceFilterLabel: 'Filter sources',
+  sourceListModes: { grouped: 'Grouped', tiles: 'Tiles' },
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
   proxyNotice: {
     title: 'This source needs a local proxy to connect',

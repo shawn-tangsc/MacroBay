@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-import { Segmented } from '@platform/ui/components/segmented'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -8,6 +8,7 @@ import { calendarFeedRegistry } from '../../../service/intelligence/macro-calend
 import { DASHBOARD_TAB_MODULES, modulesUsingSource } from './dashboardSourceModules'
 import { SettingsInfo } from '../settingsInfo'
 import { catalogMarkerClass } from './sourceHealthTone'
+import { SourceFilterTabs } from './filter/SourceFilterTabs'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import type { SourceCategory } from '../../../service/intelligence/application/providerRegistry'
@@ -120,6 +121,13 @@ export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilt
   const resolveText = useProductTextKey()
   const visibleFilters = filters ?? FILTERS
   /**
+   * 列表形态（C5）：默认分组；**看板那一档自动平铺**（原型：全部 / 日历按 provider 分组，
+   * 看板 / 舆情 / 待接入 / 进阶一律平铺）。状态留住是为了将来给读者一个显式开关时不必改结构，
+   * 现在它只由 `filter` 驱动。
+   */
+  const [mode, setMode] = useState<'grouped' | 'tiles'>('grouped')
+  useEffect(() => { setMode(filter === 'dashboard' ? 'tiles' : 'grouped') }, [filter])
+  /**
    * 这一面怎么分组，只看**当前这个筛选**：
    * - `全部` → 按注册表的 provider 分类（宏观 / 加密市场 / 聚合数据供应商）；
    * - `日历` → 按 `calendarFeedRegistry` 的 `owner`：官方源 / 聚合源；
@@ -167,8 +175,9 @@ export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilt
             .filter((provider) => provider.sources.length > 0)
         }))
         : [{ key: 'flat', providers: matchingProviders }]
-  void visibleFilters
-  const list = <div className="intelligence-catalog-list">
+  const list = <div
+    className={`intelligence-catalog-list${mode === 'tiles' ? ' intelligence-catalog-list--tiles' : ''}`}
+    data-list-mode={mode}>
       {/* A filter that hides every provider must say so and offer the way back, not render blank.
           **未结算不是「被筛掉了」**：`view` 还没到时不能画这个空态——空数组的 `every` 恒真，
           任何新调用点提前渲染都会立刻误导成「筛选后没有来源」。 */}
@@ -247,12 +256,13 @@ export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilt
   if (bare === true) return list
   return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
     <div className="intelligence-catalog-filters">
-      <Segmented
-        ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
-        items={visibleFilters}
-        onChange={(value) => onFilterChange(value as SourceFilter)}
-        resolveText={resolveText}
-        value={filter}
+      <SourceFilterTabs
+        labels={{
+          group: resolveText('settings.intelligenceSources.sourceFilterLabel'),
+          items: visibleFilters.map((entry) => ({ value: entry.value, label: resolveText(entry.labelKey) }))
+        }}
+        onTab={(value) => onFilterChange(value as SourceFilter)}
+        tab={filter}
       />
     </div>
     {list}

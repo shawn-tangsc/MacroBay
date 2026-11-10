@@ -233,4 +233,54 @@ describe('SettingsSourceTree', () => {
     const two = await renderEnglish(['a', 'b'])
     expect(two.querySelector('.intelligence-provider-row')?.textContent).toContain('2 unavailable sources')
   })
+  it('renders six controlled filter chips and tiles the list only for the dashboard filter', async () => {
+    const onFilterChange = vi.fn()
+    const source = {
+      sourceId: 'demo-source', displayName: 'Demo', providerId: 'demo', panels: ['dashboard'],
+      visibility: 'visible', kind: 'adapter', enabled: true, healthState: 'healthy', healthMarker: 'none'
+    }
+    const view = {
+      groups: [{ category: 'macro', providers: [{ providerId: 'demo', displayName: 'Demo', category: 'macro', credential: 'none', healthMarker: 'none', sources: [source] }] }],
+      counts: { total: 1, enabled: 1, pending: 0, failed: 0 }
+    }
+    const mount = async (filter: string): Promise<HTMLElement> => {
+      const host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      await act(async () => root!.render(createElement(SettingsSourceTree, {
+        filter: filter as never,
+        labels: { title: 'Sources', categories: {} as never, providerNames: {}, unavailableCountOne: '含 {count} 个不可用的源', unavailableCountOther: '含 {count} 个不可用的源' },
+        onFilterChange,
+        onSelectProvider: vi.fn(),
+        selectedProviderId: undefined,
+        view: view as never
+      })))
+      await act(async () => { await Promise.resolve() })
+      return host
+    }
+
+    // 六项、同一时刻只有一项 aria-pressed；不再是平台的 Segmented 分组。
+    const host = await mount('all')
+    const group = host.querySelector<HTMLElement>('.intelligence-catalog-filters [role="group"]')
+    expect(group).not.toBeNull()
+    const chips = [...(group?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+    expect(chips).toHaveLength(6)
+    expect(chips.filter((chip) => chip.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
+    // 「全部」不套平铺，行照旧（行 DOM 不动）。
+    expect(host.querySelector('.intelligence-catalog-list--tiles')).toBeNull()
+    expect(host.querySelectorAll('.intelligence-provider-row')).toHaveLength(1)
+    await act(async () => { chips[2]?.click() })
+    expect(onFilterChange).toHaveBeenCalledWith('dashboard')
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    // 看板那一档自动平铺：容器换成网格，行 DOM 不变（行还在、还是同一个 class）。
+    const tiled = await mount('dashboard')
+    const list = tiled.querySelector<HTMLElement>('.intelligence-catalog-list')
+    expect(list?.getAttribute('data-list-mode')).toBe('tiles')
+    expect(list?.className).toContain('intelligence-catalog-list--tiles')
+  })
+
 })

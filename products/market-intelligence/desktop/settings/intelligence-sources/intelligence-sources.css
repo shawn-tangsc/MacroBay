@@ -1909,3 +1909,25 @@
   outline-offset: -2px;
   border-radius: 6px;
 }
+
+/* C5：六筛选 chip（受控组件 `SourceFilterTabs`）——24 高、主档间距，选中用 aria-pressed。 */
+.intelligence-filter-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.intelligence-filter-tabs__chip {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  cursor: pointer;
+}
+.intelligence-filter-tabs__chip[aria-pressed='true'] { color: var(--text); border-color: var(--border-strong); }
+
+/* C5 平铺（看板那一档自动切）：同一批行，只换容器排布；行 DOM 不动。 */
+.intelligence-catalog-list--tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
