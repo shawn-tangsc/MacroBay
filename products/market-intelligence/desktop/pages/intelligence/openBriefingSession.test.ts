@@ -9,7 +9,7 @@ import { openBriefingSession } from './openBriefingSession'
  */
 describe('opening a briefing edition session', () => {
   it('selects the session, then moves to the agent page', async () => {
-    const selectSession = vi.fn(async () => ({}))
+    const selectSession = vi.fn(async () => ({ activeSessionId: 'session-1' }))
     const navigate = vi.fn()
 
     await expect(openBriefingSession({ sessionId: 'session-1', selectSession, navigate })).resolves.toBe(true)
@@ -17,7 +17,24 @@ describe('opening a briefing edition session', () => {
     expect(navigate).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a session that is gone, and does not navigate', async () => {
+  it('treats "selected nothing" as gone, not as success — the store returns the old state instead of throwing', async () => {
+    // 真路径：`selectSession` 对不存在的 id **返回原状态、不抛**（agentStore.ts:152-154）。
+    // 只看有没有抛，就会把读者导航进一个没选中任何会话的页面。
+    const selectSession = vi.fn(async () => ({ activeSessionId: 'some-other-session' }))
+    const navigate = vi.fn()
+    await expect(openBriefingSession({ sessionId: 'session-gone', selectSession, navigate })).resolves.toBe(false)
+    expect(navigate).not.toHaveBeenCalled()
+
+    // 状态都没有（空/null/读不出形状）：也算没打开，不许导航。
+    for (const returned of [undefined, null, {}, { activeSessionId: null }]) {
+      const again = vi.fn(async () => returned)
+      const navigateAgain = vi.fn()
+      await expect(openBriefingSession({ sessionId: 'session-gone', selectSession: again, navigate: navigateAgain })).resolves.toBe(false)
+      expect(navigateAgain).not.toHaveBeenCalled()
+    }
+  })
+
+  it('reports a session that is gone when the call itself fails', async () => {
     const selectSession = vi.fn(async () => { throw new Error('session-not-found') })
     const navigate = vi.fn()
 

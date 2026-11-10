@@ -820,6 +820,42 @@ describe('“running” is only the row that says so (2026-11-06)', () => {
 })
 
 describe('the session action on a language row (E9)', () => {
+  it('says the session is gone instead of navigating when the platform selects nothing', async () => {
+    // 架构师抓的真缺陷：`selectSession` 对不存在的 id 返回原状态、不抛，读者会被送进一个
+    // 没选中任何会话的页面。动作必须按返回的 state 判断，不是按有没有抛。
+    const dispatch = vi.spyOn(window, 'dispatchEvent')
+    vi.stubGlobal('platform', { agents: { selectSession: async () => ({ activeSessionId: null }) } })
+    try {
+      render({ editions: [edition({ sessionId: 'session-gone' })] })
+      await act(async () => { host.querySelector<HTMLButtonElement>('[data-open-session]')!.click() })
+      await flush()
+      expect(host.querySelector('[data-session-gone]')?.textContent).toBe(text.history.sessionMissing)
+      const navigations = dispatch.mock.calls.filter(([event]) => (event as CustomEvent).type === 'app-shell:navigate')
+      expect(navigations).toHaveLength(0)
+    } finally {
+      dispatch.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('navigates when the platform reports that session as selected', async () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent')
+    vi.stubGlobal('platform', { agents: { selectSession: async () => ({ activeSessionId: 'session-1' }) } })
+    try {
+      render({ editions: [edition({ sessionId: 'session-1' })] })
+      await act(async () => { host.querySelector<HTMLButtonElement>('[data-open-session]')!.click() })
+      await flush()
+      const navigations = dispatch.mock.calls.filter(([event]) => (event as CustomEvent).type === 'app-shell:navigate')
+      expect(navigations).toHaveLength(1)
+      expect((navigations[0]![0] as CustomEvent).detail).toMatchObject({ navKey: 'agents' })
+      expect(host.querySelector('[data-session-gone]')).toBeNull()
+    } finally {
+      dispatch.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
+
   it('puts one text action at the row end, only when the edition names a session', () => {
     render({ editions: [edition({ sessionId: 'session-1', periodTime: '2026-11-02T00:00:00.000Z' })], onOpenSession: async () => true })
     const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!

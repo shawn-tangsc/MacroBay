@@ -10,11 +10,20 @@ export async function openBriefingSession(input: Readonly<{
   selectSession: (sessionId: string) => Promise<unknown>
   navigate: () => void
 }>): Promise<boolean> {
+  let selected: unknown
   try {
-    await input.selectSession(input.sessionId)
+    selected = await input.selectSession(input.sessionId)
   } catch {
     return false
   }
+  // **按返回值判断，不按有没有抛**：选中一个不存在的 id 时，存储返回的是原状态（没有任何异常），
+  // 只 catch 异常就会把读者导航进一个没选中任何会话的页面。`activeSessionId` 就是那条会话才算成功；
+  // 返回形状读不出（空、null、没有这个字段）一律当没打开——宁可说"会话不在了"，也不把人送进空页。
+  if (!isRecord(selected) || selected.activeSessionId !== input.sessionId) return false
   input.navigate()
   return true
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
