@@ -486,6 +486,32 @@ describe('config settings drawer (static layout)', () => {
     expect(document.body.querySelector('.config-drawer__pane-title')?.textContent).not.toBe(before)
   })
 
+  it('trusts the host when it says the screen is dirty, even if no panel reported it', () => {
+    // 来源屏的草稿由宿主合并进 `isScreenDirty`（`drawerScreen.dirty || sourcesDraftDirty`）。
+    // 这条钉「壳只认 isScreenDirty 这一处输入」：壳自己不去问任何一屏。
+    const onClose = vi.fn()
+    const asked: Array<{ onDiscard: () => void }> = []
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        confirmDiscard={((input: { onDiscard: () => void }) => { asked.push(input) }) as never}
+        initialMenu="sources"
+        isScreenDirty={(menu) => menu === 'sources'}
+        onClose={onClose}
+        open />
+    ))
+    // 没有任何面板传 screenDirty —— 只有宿主那一处输入说脏。
+    expect(document.body.querySelector('[data-drawer-savebar]')).toBeNull()
+    act(() => { document.body.querySelector<HTMLElement>('.drawer__header-actions button')!.click() })
+    expect(asked).toHaveLength(1)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {
