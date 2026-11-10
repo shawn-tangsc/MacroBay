@@ -15,11 +15,23 @@ import type { DashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedSt
  */
 export const dashboardFeedStatusViewPolicy = Object.freeze({ refreshMs: 60_000, indexRange: '24h' as const })
 
+/**
+ * `feedState` 是**源级启用表**自己的结算状态：`ready` 才是可判的，`failed` 是「读不到」——
+ * 调用方据此决定「暂时读不到」，不许把它当成「全都启用」。`reload` 给三态里的「再试一次」用。
+ */
 export function useDashboardFeedStatus({ client, crossAssetClient }: {
   client?: DashboardFeedStatusClient
   crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>
-}): Readonly<{ feed?: DashboardFeedStatusView; index?: CrossAssetSnapshot; indexState: 'loading' | 'ready' | 'unavailable' }> {
+}): Readonly<{
+  feed?: DashboardFeedStatusView
+  feedState: 'loading' | 'ready' | 'failed'
+  index?: CrossAssetSnapshot
+  indexState: 'loading' | 'ready' | 'unavailable'
+  reload: () => void
+}> {
   const [feed, setFeed] = useState<DashboardFeedStatusView>()
+  const [feedState, setFeedState] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [attempt, setAttempt] = useState(0)
   const [index, setIndex] = useState<CrossAssetSnapshot>()
   const [indexState, setIndexState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
   useEffect(() => {
@@ -32,7 +44,12 @@ export function useDashboardFeedStatus({ client, crossAssetClient }: {
         crossAssetClient ? crossAssetClient.query({ range: dashboardFeedStatusViewPolicy.indexRange }) : Promise.resolve(undefined)
       ])
       if (!active) return
-      if (nextFeed) setFeed(nextFeed)
+      if (nextFeed) {
+        setFeed(nextFeed)
+        setFeedState(nextFeed.state === 'available' ? 'ready' : 'failed')
+      } else if (client) {
+        setFeedState('failed')
+      }
       if (!crossAssetClient) setIndexState('unavailable')
       else if (nextIndex && 'schemaVersion' in nextIndex) { setIndex(nextIndex); setIndexState('ready') }
       else setIndexState('unavailable')
@@ -40,6 +57,6 @@ export function useDashboardFeedStatus({ client, crossAssetClient }: {
     }
     void read()
     return () => { active = false; clearTimeout(timer) }
-  }, [client, crossAssetClient])
-  return { feed, ...(index ? { index } : {}), indexState }
+  }, [client, crossAssetClient, attempt])
+  return { feed, feedState, ...(index ? { index } : {}), indexState, reload: () => setAttempt(value => value + 1) }
 }
