@@ -29,7 +29,6 @@ function sourcesState(overrides: Record<string, unknown>) {
     selectedSourceId: undefined,
     detail: undefined,
     draftProfile: undefined,
-    sourceEnabledById: {},
     needsManualRunPrompt: false,
     loading: true,
     saving: false,

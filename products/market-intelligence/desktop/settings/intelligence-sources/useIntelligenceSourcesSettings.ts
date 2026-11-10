@@ -6,11 +6,11 @@ import type {
 } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
+import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
 import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, runOutcomeOf, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout, type SourceRunOutcome } from './intelligenceSourceProfileEditor'
 
 export { isSuccessfulCredentialOperation }
-import { buildSourceEnabledById } from './intelligenceSourceCatalogView'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 
 type HookState = {
@@ -102,154 +102,45 @@ export function useIntelligenceSourcesSettings(labels: {
     }
   }, [labels.loadFailed, load])
 
-  const setEnabled = useCallback(
-    (enabled: boolean) => {
-      let previousProfile: IntelligenceSourceProfile | undefined
-      let sourceId: string | undefined
-      let blocked = false
-
-      setState((current) => {
-        if (!current.draftProfile) return current
-        const definition = current.definitions.find((item) => item.sourceId === current.draftProfile?.sourceId)
-        if (
-          definition &&
-          (definition.readiness === 'planned' || definition.readiness === 'fixture-ready') &&
-          definition.collectionOwner !== 'product' &&
-          enabled
-        ) {
-          blocked = true
-          return current
-        }
-        previousProfile = current.draftProfile
-        sourceId = current.draftProfile.sourceId
-        return {
+  /**
+   * 源行/详情的那颗启用开关——**页面上唯一的启用写入点**。
+   *
+   * 日历源与通用源走不同的服务命令（`setSourceEnabled` 一处路由），写完**重读**：开关的值以
+   * 投影为准，不靠组件各自记一份乐观值。失败回滚并把原因留在页面上。
+   */
+  const toggleSourceEnabled = useCallback(
+    async (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean): Promise<boolean> => {
+      const previous = state.profiles.find((profile) => profile.sourceId === source.sourceId)
+        ?? (state.draftProfile?.sourceId === source.sourceId ? state.draftProfile : undefined)
+      setState((current) => ({
+        ...current,
+        ...(previous === undefined ? {} : { profiles: upsertProfile(current.profiles, { ...previous, enabled }) }),
+        draftProfile: current.draftProfile?.sourceId === source.sourceId
+          ? { ...current.draftProfile, enabled }
+          : current.draftProfile,
+        saving: true,
+        errorCode: null
+      }))
+      try {
+        await setSourceEnabled(source, enabled)
+        notifyIntelligenceSourcesChanged()
+        // 写完重读：两个宿主看到的是同一份投影，不是两套乐观值。
+        await load(state.selectedSourceId)
+        return true
+      } catch {
+        setState((current) => ({
           ...current,
-          draftProfile: { ...current.draftProfile, enabled },
-          saving: true,
-          errorCode: null
-        }
-      })
-
-      if (blocked || !previousProfile || !sourceId) return
-
-      pendingSaveCountRef.current += 1
-      saveQueueRef.current = saveQueueRef.current
-        .then(async () => {
-          const detail = await withTimeout(
-            intelligenceSourcesClient.saveProfile({ sourceId: sourceId!, enabled }),
-            15_000
-          )
-          setState((current) => {
-            const nextState = {
-              ...current,
-              profiles: upsertProfile(current.profiles, detail.profile),
-              errorCode: null
-            }
-            if (current.selectedSourceId !== detail.profile.sourceId) {
-              return nextState
-            }
-            return {
-              ...nextState,
-              detail,
-              draftProfile: detail.profile,
-              notice: resolveEnabledNotice(detail.profile, enabled, labels)
-            }
-          })
-          notifyIntelligenceSourcesChanged()
-
-          if (enabled && detail.profile.collectionPreset !== 'manual') {
-            void waitForRunHealth(sourceId!)
-              .then((health) => {
-                setState((current) => {
-                  if (current.selectedSourceId !== sourceId) return current
-                  return {
-                    ...current,
-                    detail: current.detail ? { ...current.detail, health } : current.detail,
-                    notice: resolveRunNotice(health, labels)
-                  }
-                })
-              })
-              .catch(() => undefined)
-          }
-        })
-        .catch(() => {
-          setState((current) => ({
-            ...current,
-            draftProfile:
-              current.selectedSourceId === previousProfile?.sourceId ? previousProfile : current.draftProfile,
-            errorCode: labels.saveFailed
-          }))
-        })
-        .finally(() => {
-          pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1)
-          if (pendingSaveCountRef.current === 0) {
-            setState((current) => ({ ...current, saving: false }))
-          }
-        })
+          profiles: previous === undefined ? current.profiles : upsertProfile(current.profiles, previous),
+          draftProfile: current.draftProfile?.sourceId === source.sourceId && previous !== undefined
+            ? previous
+            : current.draftProfile,
+          saving: false,
+          errorCode: labels.saveFailed
+        }))
+        return false
+      }
     },
-    [labels.disabledSaved, labels.enabledAutoCollectQueued, labels.enabledManualHint, labels.runFailed, labels.runQueued, labels.runSucceeded, labels.saveFailed]
-  )
-
-  const updateProfile = useCallback(
-    (patch: Partial<IntelligenceSourceProfile>) => {
-      let previousProfile: IntelligenceSourceProfile | undefined
-      let nextProfile: IntelligenceSourceProfile | undefined
-
-      setState((current) => {
-        if (!current.draftProfile) return current
-        previousProfile = current.draftProfile
-        nextProfile = { ...current.draftProfile, ...patch }
-        return {
-          ...current,
-          draftProfile: nextProfile,
-          saving: true,
-          errorCode: null
-        }
-      })
-
-      if (!previousProfile || !nextProfile) return
-
-      pendingSaveCountRef.current += 1
-      saveQueueRef.current = saveQueueRef.current
-        .then(async () => {
-          const detail = await withTimeout(
-            intelligenceSourcesClient.saveProfile(toSaveProfileInput(nextProfile!)),
-            15_000
-          )
-          setState((current) => {
-            const nextState = {
-              ...current,
-              profiles: upsertProfile(current.profiles, detail.profile),
-              errorCode: null
-            }
-            if (current.selectedSourceId !== detail.profile.sourceId) {
-              return nextState
-            }
-            return {
-              ...nextState,
-              detail,
-              draftProfile: detail.profile,
-              notice: labels.saved
-            }
-          })
-          notifyIntelligenceSourcesChanged()
-        })
-        .catch(() => {
-          setState((current) => ({
-            ...current,
-            draftProfile:
-              current.selectedSourceId === previousProfile?.sourceId ? previousProfile : current.draftProfile,
-            errorCode: labels.saveFailed
-          }))
-        })
-        .finally(() => {
-          pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1)
-          if (pendingSaveCountRef.current === 0) {
-            setState((current) => ({ ...current, saving: false }))
-          }
-        })
-    },
-    [labels.saved, labels.saveFailed]
+    [labels.saveFailed, load, state.draftProfile, state.profiles, state.selectedSourceId]
   )
 
   /**
@@ -392,15 +283,6 @@ export function useIntelligenceSourcesSettings(labels: {
     }))
   }, [state.detail, state.selectedSourceId])
 
-  const sourceEnabledById = useMemo(
-    () =>
-      buildSourceEnabledById(
-        state.definitions.map((definition) => definition.sourceId),
-        state.profiles,
-        state.draftProfile
-      ),
-    [state.definitions, state.draftProfile, state.profiles]
-  )
   const needsManualRunPrompt = useMemo(() => {
     if (!state.draftProfile?.enabled || state.draftProfile.collectionPreset !== 'manual') return false
     const health = state.detail?.health
@@ -409,12 +291,10 @@ export function useIntelligenceSourcesSettings(labels: {
 
   return {
     ...state,
-    sourceEnabledById,
     needsManualRunPrompt,
     reload,
     selectSource,
-    setEnabled,
-    updateProfile,
+    toggleSourceEnabled,
     updateSourceProfile,
     runNow,
     testCredentials,

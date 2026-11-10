@@ -92,7 +92,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -102,6 +102,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    * （例如只读嵌入）时，四格只回答「能不能」，不画按钮。
    */
   onRunNow?: (sourceId: string) => Promise<SourceRunOutcome>
+  /**
+   * 启用开关的唯一写入点（页面 hook）。返回 false = 没存上，组件回滚并把值留在原处。
+   * 没给（尚未迁移的第二宿主，例如看板抽屉）时退回旧行为，S2 收口时删除这条退路。
+   */
+  onToggleSource?: (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean) => Promise<boolean>
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -283,9 +288,15 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
 
   async function toggle(source: SourceView, enabled: boolean): Promise<void> {
     setSources((current) => current.map((item) => item.sourceId === source.sourceId ? { ...item, enabled } : item))
-    await setSourceEnabled(source, enabled).then(() => onChanged?.()).catch(() => {
+    const rollback = (): void => {
       setSources((current) => current.map((item) => item.sourceId === source.sourceId ? { ...item, enabled: !enabled } : item))
-    })
+    }
+    if (onToggleSource !== undefined) {
+      if (!(await onToggleSource(source, enabled))) rollback()
+      return
+    }
+    // 尚未迁移的宿主（看板抽屉，S2 收口）：旧路径，写完由宿主自己重读。
+    await setSourceEnabled(source, enabled).then(() => onChanged?.()).catch(rollback)
   }
 
   const providerName = labels.providerNames[provider.providerId] ?? provider.displayName

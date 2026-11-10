@@ -25,7 +25,6 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     selectedSourceId,
     detail,
     draftProfile,
-    sourceEnabledById,
     needsManualRunPrompt,
     loading,
     saving,
@@ -36,8 +35,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     notice,
     reload,
     selectSource,
-    setEnabled,
-    updateProfile,
+    toggleSourceEnabled,
     runNow,
     testCredentials,
     replayWindow,
@@ -108,6 +106,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
             showSourceDetails
             supportsRunNowById={supportsRunNowById}
             onRunNow={runSourceNow}
+            onToggleSource={toggleSourceEnabled}
             sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
           /></div> : null
