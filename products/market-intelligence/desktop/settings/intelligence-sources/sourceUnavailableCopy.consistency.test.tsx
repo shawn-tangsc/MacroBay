@@ -15,6 +15,12 @@ import type { ProviderView, SourceView } from '../../../service/intelligence/app
  * 判据：同一个码，**抽屉与详情给出同一句话**。抽屉那边同样调用这个函数；这里渲染详情，
  * 把它的句子与「用同一份表 + 同一个兜底句」算出来的句子逐字对比——
  * 详情若自己留一张表、或换了兜底句，未知码这一档当场红。
+ *
+ * **接手记录**：`sourceUnavailableCopy.crossSurface.test.tsx`（`94ce806` 新增，拿抽屉那条
+ * 独立的数据链去比详情）随「抽屉与设置页改成同一块组件」在 `e6d406b` 删除——它的前提
+ * （抽屉自己拼行状态）已经不存在。同一判据由本文件的
+ * `the same code says different things to different kinds`（官方日历 vs 市场日历两句不同、
+ * 且详情各说各的那句）接管。按哈希翻 `crossSurface` 那一刻的人，请从这里往下看。
  */
 const settingsText = productText['zh-CN'].settings.intelligenceSources
 const drawerCopy = productText['zh-CN'].pages.intelligence.portal.dashboard.configDrawer
