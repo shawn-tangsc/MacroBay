@@ -18,21 +18,51 @@ import {
  * 用户 2026-11-10/11 的定稿：
  * - 左列三项用**和来源树同一套行样式**：圆角方形头像位、主文字、下面一行小字副标题、右侧 chevron；
  *   副标题写有用的事实——看板「N 个模块」、日历/舆情「N 个源」，数字从数据层算，不写死。
- * - **看板** = 模块卡片（卡头模块名，卡里一行「格名 → 源名」；末尾「AI 分析用」卡只列源名，卡头带 ⓘ）。
+ * - **看板** = 模块卡片；卡里**一行一个源，行标签是源名**（不再写格名）。
+ *   一个格有多个候选源（`美元` 有主源 + 备用源）时，外面再包一层**子卡片**（标题 = 格名），
+ *   子卡片里是**互斥**的：一个格同一时刻只用一个源，全关 = 这一格不用。
  * - **日历 / 舆情** = 平铺的源名列表（不分组、不做卡片）。
  * - 任何一项都**不出现源级详情**：没有源名 `<h2>`、测试连接、注册/获取 Key、API Key、健康、高级、
- *   状态词与按钮；点一行才切到「情报源」页签选中那个源（跳转由宿主做）。
+ *   状态词与按钮。
+ *
+ * 互斥用**每格自己的启停**表达（`cells[cellId]`）：开 B 时同组其它源写 false，不开第二个存储。
+ * `selection` 那层留给「选源模型」，这里不写 null——null 在存储里是删键 = 回落默认主源。
  */
 export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment'
 
 const BUSINESS_KEYS: readonly BusinessKey[] = ['dashboard', 'calendar', 'sentiment']
+
+/** 同一格的多个候选源：键去掉 `-fallback` 后缀、标题去掉「（备用）」。 */
+export type CellGroup = Readonly<{
+  key: string
+  label: string
+  cells: readonly DashboardCell[]
+}>
+
+const FALLBACK_SUFFIX = '-fallback'
+
+export function cellGroupsOf(cells: readonly DashboardCell[]): readonly CellGroup[] {
+  const groups: CellGroup[] = []
+  for (const cell of cells) {
+    const baseKey = cell.cellKey.endsWith(FALLBACK_SUFFIX)
+      ? cell.cellKey.slice(0, -FALLBACK_SUFFIX.length)
+      : cell.cellKey
+    const label = cell.label.replace(/（备用）$/, '')
+    const found = groups.findIndex((group) => group.key === baseKey)
+    if (found === -1) {
+      groups.push({ key: baseKey, label, cells: [cell] })
+    } else {
+      groups[found] = { ...groups[found], cells: [...groups[found].cells, cell] }
+    }
+  }
+  return groups
+}
 
 export function BusinessSettingsView(props: {
   /** 顶部那条筛选页签（由宿主给）：业务设置下**常显**在左列最上面，和三项列表是上下两层。 */
   tabs?: React.ReactNode
   business: BusinessKey
   onBusinessChange: (business: BusinessKey) => void
-  /** 点某一行 → 切到「情报源」并选中这个源（宿主负责切页签）。 */
   /** 源 id → 读者看到的名字（来自产品文案，不在组件里写源名）。 */
   sourceNames: Readonly<Record<string, string>>
   resolveText: (key: string) => string
@@ -78,12 +108,32 @@ export function BusinessSettingsContent(props: {
   business: BusinessKey
   sourceNames: Readonly<Record<string, string>>
   resolveText: (key: string) => string
-  /** 格级启停：**注入接口**，真实存储在存储线那边；缺键 = 启用。 */
-  isCellEnabled?: (cellId: string) => boolean
+  /**
+   * 格级启停：**注入接口**，真实存储在存储线那边。只回显式写过的格；
+   * 缺键的默认值由这一层按行语义定——主源默认开、备用行默认关（用户 2026-11-11：
+   * 同一格同一时刻只有一个源在用，所以备用源不该默认为开）。
+   */
+  isCellEnabled?: (cellId: string) => boolean | undefined
   onCellToggle?: (cellId: string, enabled: boolean) => void
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
+  const renderCell = (
+    moduleId: string,
+    cell: DashboardCell,
+    siblings: readonly string[]
+  ): React.ReactElement => {
+    const cellId = cellIdOf(moduleId, cell)
+    return cellRow({
+      cellId,
+      enabled: props.isCellEnabled?.(cellId) ?? cell.fallback !== true,
+      label: nameOf(cell.sourceId),
+      resolveText: props.resolveText,
+      siblings,
+      sourceId: cell.sourceId,
+      ...(props.onCellToggle === undefined ? {} : { onCellToggle: props.onCellToggle })
+    })
+  }
   return <div className="intelligence-detail-scroll">
     <div className="business-settings__content" data-business-content={props.business}>
       {/* 内容区页头：只写当前业务名，不写副标题、不写「共 N 个」这类统计（用户 2026-11-11）。 */}
@@ -102,7 +152,27 @@ export function BusinessSettingsContent(props: {
                 resolveText={props.resolveText} />
               : null}
           </div>
-          {module.cells.map((cell) => cellRow(module, cell, nameOf, props))}
+          {module.id === 'ai-analysis'
+            ? module.cells.map((cell) => renderCell(module.id, cell, []))
+            : <div className="business-cell-grid">
+              {/* 两层卡片（用户 2026-11-11）：第一层是模块卡（上面那个 `business-card`），
+                  第二层是「数据卡片」——一个格一张卡（`美元`、`纳指`…），卡里放有开关的源项。
+                  第二层卡片并排，一行至少 3 张（`grid-template-columns: repeat(3, …)`）。 */}
+              {cellGroupsOf(module.cells).map((group) => <div
+                className="business-cell"
+                data-business-cell-card={group.key}
+                data-cell-thin={group.cells.every((cell) => (props.isCellEnabled?.(cellIdOf(module.id, cell)) ?? cell.fallback !== true) === false) ? 'true' : 'false'}
+                key={group.key}>
+                <div className="business-cell__title">{group.label}</div>
+                <div className="business-cell__items">
+                  {group.cells.map((cell) => renderCell(
+                    module.id,
+                    cell,
+                    group.cells.filter((other) => other !== cell).map((other) => cellIdOf(module.id, other))
+                  ))}
+                </div>
+              </div>)}
+            </div>}
         </section>)
         : null}
       {props.business === 'dashboard'
@@ -110,50 +180,58 @@ export function BusinessSettingsContent(props: {
         : <section className="business-card" data-business-card={props.business}>
           {/* 日历 / 舆情：平铺源名（不写格名、没有组头）。 */}
           {modulesForBusiness(props.business)
-            .flatMap((module) => module.cells)
-            .map((cell) => cellRow(undefined, cell, nameOf, props))}
+            .flatMap((module) => module.cells.map((cell) => renderCell(module.id, cell, [])))}
         </section>}
     </div>
   </div>
 }
 
 /**
- * 卡片里的一行：格名（可空）→ 源名 + 行尾的**格级开关**。
+ * 卡片里的一行：**行标签是源名** + 行尾的格级开关。
  *
  * 这一行是**纯行**：没有 `onClick`、不是 `<button>`、没有 `role`/`tabIndex`（用户 2026-11-11 取消点击跳转）。
- * 开关管的是「这一格在模块里读不读」，与源自己的采集开关无关；关掉时整行次要化（不隐藏）。
- * 可访问名带格名，否则读屏只听到一个没有对象的「开关」。
+ * 开关管的是「这一格的这个源用不用」，与源自己的采集开关无关；关掉时整行次要化（不隐藏）。
+ *
+ * **互斥**：同组（同一格）里开一个、其余自动关——一次事件内把同组其它源写 false，
+ * 不在界面留「两个源同时开着」的中间态。全关 = 这一格不用。
  */
-function cellRow(
-  module: DashboardSourceModule | undefined,
-  cell: DashboardCell,
-  nameOf: (sourceId: string) => string,
-  props: {
-    isCellEnabled?: (cellId: string) => boolean
-    onCellToggle?: (cellId: string, enabled: boolean) => void
-    resolveText: (key: string) => string
+function cellRow(args: {
+  cellId: string
+  enabled: boolean
+  label: string
+  sourceId: string
+  siblings: readonly string[]
+  onCellToggle?: (cellId: string, enabled: boolean) => void
+  resolveText: (key: string) => string
+}): React.ReactElement {
+  const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
+  const toggleKey = enabled
+    ? 'settings.intelligenceSources.cellEnabled.disable'
+    : 'settings.intelligenceSources.cellEnabled.enable'
+  const onSelect = (next: boolean): void => {
+    if (onCellToggle === undefined) return
+    if (next) {
+      // 同一格只留一个源：先关同组其它源，再开这一个（顺序固定，避免出现同时开着的中间态）。
+      for (const sibling of siblings) onCellToggle(sibling, false)
+      onCellToggle(cellId, true)
+      return
+    }
+    onCellToggle(cellId, false)
   }
-): React.ReactElement {
-  const cellId = cellIdOf(module?.id ?? 'list', cell)
-  const enabled = props.isCellEnabled?.(cellId) ?? true
-  const label = cell.label === '' ? nameOf(cell.sourceId) : cell.label
-  const toggleKey = enabled ? 'settings.intelligenceSources.cellEnabled.disable' : 'settings.intelligenceSources.cellEnabled.enable'
   return <div
     className="business-card__row"
-    data-business-row={cell.sourceId}
+    data-business-row={sourceId}
     data-cell-enabled={enabled ? 'true' : 'false'}
     data-cell-id={cellId}
     key={cellId}>
-    {/* 「AI 分析用」卡与日历/舆情列表是**无格名**的：源名放左列、右列留空，行样式与别的行一致。 */}
     <span className="business-card__label">{label}</span>
-    <span className="business-card__value">{cell.label === '' ? null : nameOf(cell.sourceId)}</span>
-    {props.onCellToggle === undefined
+    {onCellToggle === undefined
       ? null
       : <span className="business-card__toggle">
         <Switch
-          aria-label={props.resolveText(toggleKey).replace('{cell}', label)}
+          aria-label={args.resolveText(toggleKey).replace('{cell}', label)}
           checked={enabled}
-          onChange={(next) => props.onCellToggle?.(cellId, next)}
+          onChange={onSelect}
           size="small" />
       </span>}
   </div>

@@ -200,7 +200,7 @@ describe('格级开关接存储（注入 IO）', () => {
     expect(writes).toContainEqual(['quotes:ndx', true])
   })
 
-  it('shows every cell as enabled when the read fails', async () => {
+  it('falls back to the row defaults when the read fails', async () => {
     const io = { read: async (): Promise<Record<string, boolean>> => { throw new Error('unreadable') }, write: async () => undefined }
     const { host } = hostWith(io)
     await act(async () => { root!.render(createElement(function Real(): React.ReactElement {
@@ -215,8 +215,77 @@ describe('格级开关接存储（注入 IO）', () => {
       }) })
     })) })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    // 读失败 = 不知道读者存过什么：按行默认——主源开、备用行关（不是「全关」，也不是「全开」）。
     const rows = [...host.querySelectorAll<HTMLElement>('[data-cell-id]')]
     expect(rows.length).toBeGreaterThan(0)
-    for (const row of rows) expect(row.getAttribute('data-cell-enabled')).toBe('true')
+    for (const row of rows) {
+      const fallback = row.getAttribute('data-cell-id')?.endsWith('-fallback') === true
+      expect(row.getAttribute('data-cell-enabled')).toBe(fallback ? 'false' : 'true')
+    }
+  })
+})
+
+describe('卡片行：源名做标签 / 同一格的候选源互斥', () => {
+  async function renderDashboard(io: {
+    read: () => Promise<Record<string, boolean>>
+    write: (cellId: string, enabled: boolean) => Promise<void>
+  }): Promise<HTMLElement> {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(createElement(ShellLanguageProvider, {
+        language: 'zh-CN',
+        children: createElement(SourcesSettingsPane, {
+          cellEnabledIo: io,
+          filter: 'dashboard',
+          onFilterChange: vi.fn(),
+          onSelectProvider: vi.fn(),
+          surface: { text: t, onDraftChange: vi.fn(), onRunNow: async () => undefined, onToggleSource: async () => true, policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} }, showSourceDetails: true } as never,
+          treeLabels: { title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther } as never,
+          view
+        })
+      }))
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    return host
+  }
+
+  it('labels a row with the source name and wraps candidates of one cell into a sub-card', async () => {
+    const host = await renderDashboard({ read: async () => ({}), write: async () => undefined })
+    // 行标签是**源名**（用户 2026-11-11），不再是格名。
+    const usd = host.querySelector<HTMLElement>('[data-cell-id="quotes:usd"]')
+    expect(usd?.textContent).toBe(t.sourceNames['realmarketapi-market'])
+    // 两层卡片：第一层模块卡，第二层「数据卡片」——一个格一张，卡头是格名。
+    const group = host.querySelector<HTMLElement>('[data-business-cell-card="usd"]')
+    expect(group).not.toBeNull()
+    expect(group!.querySelectorAll('[data-cell-id]')).toHaveLength(2)
+    expect(group!.querySelector('.business-cell__title')?.textContent).toBe('美元')
+    // 单候选的格也是一张数据卡片（卡头是格名），只是里面只有一行。
+    const single = host.querySelector<HTMLElement>('[data-business-cell-card="ndx"]')
+    expect(single).not.toBeNull()
+    expect(single!.querySelectorAll('[data-cell-id]')).toHaveLength(1)
+    expect(single!.querySelector('.business-cell__title')?.textContent).toBe('纳指')
+  })
+
+  it('keeps one source per cell: enabling the fallback turns the primary off in the same event', async () => {
+    const writes: Array<[string, boolean]> = []
+    const host = await renderDashboard({ read: async () => ({}), write: async (cellId, enabled) => { writes.push([cellId, enabled]) } })
+    const fallback = host.querySelector<HTMLElement>('[data-cell-id="quotes:usd-fallback"] [role="switch"]')
+    expect(fallback).not.toBeNull()
+    await act(async () => { fallback!.click() })
+    // 互斥：先关同组其它源，再开这一个；顺序固定，不留同时开着的中间态。
+    expect(writes).toEqual([['quotes:usd', false], ['quotes:usd-fallback', true]])
+  })
+
+  it('lets both sources of one cell be off without writing a selection', async () => {
+    const writes: Array<[string, boolean]> = []
+    const host = await renderDashboard({ read: async () => ({}), write: async (cellId, enabled) => { writes.push([cellId, enabled]) } })
+    await act(async () => { host.querySelector<HTMLElement>('[data-cell-id="quotes:usd-fallback"] [role="switch"]')!.click() })
+    writes.length = 0
+    await act(async () => { host.querySelector<HTMLElement>('[data-cell-id="quotes:usd-fallback"] [role="switch"]')!.click() })
+    // 全关 = 两个都 false；这一轮不写 selection（null 在存储里是删键 = 回落默认主源）。
+    expect(writes).toEqual([['quotes:usd-fallback', false]])
+    expect(host.querySelector('[data-business-cell-card="usd"]')?.getAttribute('data-cell-thin')).toBe('true')
   })
 })

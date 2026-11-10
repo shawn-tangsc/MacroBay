@@ -121,7 +121,7 @@ describe('内容区页头与卡片项的行结构', () => {
     expect(host.textContent).not.toContain('共')
   })
 
-  it('renders each item as a labeled row: 格名 left, 源名 right', async () => {
+  it('renders each item as a row labeled with the source name', async () => {
     const host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
@@ -131,9 +131,24 @@ describe('内容区页头与卡片项的行结构', () => {
       sourceNames: t.sourceNames
     })))
     const row = host.querySelector('.business-card__row')
-    // 日历那面的格名就是各条 feed 的读者名，右列是源名。
+    // 行标签是**源名**（用户 2026-11-11）；「格名 / 源名」两列那版已经删掉，只剩一列标签。
     expect(row?.querySelector('.business-card__label')?.textContent).toBeTruthy()
-    expect(row?.querySelector('.business-card__value')?.textContent).toBeTruthy()
+    expect(row?.querySelector('.business-card__value')).toBeNull()
+  })
+
+  it('renders the dashboard as two card layers: module card, then one card per cell', async () => {
+    const { host } = await renderContent('dashboard')
+    // 第一层：模块卡；第二层：数据卡片（一个格一张），卡头是格名。
+    const module = host.querySelector('[data-business-card="quotes"]')
+    expect(module).not.toBeNull()
+    const cells = [...module!.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
+    expect(cells.length).toBeGreaterThan(1)
+    const usd = module!.querySelector<HTMLElement>('[data-business-cell-card="usd"]')
+    expect(usd?.querySelector('.business-cell__title')?.textContent).toBe('美元')
+    // 一个格的候选源都放进同一张数据卡片里。
+    expect(usd?.querySelectorAll('[data-cell-id]')).toHaveLength(2)
+    // 第二层卡片都在模块卡的网格里（整行一张；源项一行 3 个的排版由 CSS 守卫断）。
+    expect(module!.querySelectorAll('.business-cell-grid > [data-business-cell-card]').length).toBe(cells.length)
   })
 })
 

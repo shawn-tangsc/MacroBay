@@ -84,7 +84,9 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
       .catch(() => { if (!cancelled) setCellEnabled({}) })
     return () => { cancelled = true }
   }, [props.cellEnabledIo])
-  const isCellEnabled = (cellId: string): boolean => cellEnabled[cellId] ?? true
+  /* 只回**显式写过**的格；缺键交给调用方按「主源默认开、备用行默认关」解释，
+     否则界面上主备两个源会同时显示为开（用户 2026-11-11：同一格只有一个源在用）。 */
+  const isCellEnabled = (cellId: string): boolean | undefined => cellEnabled[cellId]
   const onCellToggle = props.cellEnabledIo === undefined
     ? undefined
     : (cellId: string, enabled: boolean): void => {
