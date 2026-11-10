@@ -190,7 +190,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
           </div>
           <div className="storage-cache-page-actions">
             <label className="storage-cache-dry-run">
-              <Switch size="small" checked={dryRun} onChange={setDryRun} />
+              <Switch checked={dryRun} onChange={setDryRun} />
               <span>{labels.dryRun}</span>
             </label>
             {dryRun ? <span className="storage-cache-dry-run-hint">{labels.dryRunHint}</span> : null}
@@ -211,7 +211,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
         {state.status === 'ready' && state.stale === true ? (
           <div className="storage-cache-error" role="status">
             <span>{labels.staleDataNotice}</span>
-            <Button size="small" onClick={() => void reload()}>{labels.refresh}</Button>
+            <Button onClick={() => void reload()}>{labels.refresh}</Button>
           </div>
         ) : null}
 
