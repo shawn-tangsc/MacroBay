@@ -22,7 +22,7 @@ import { productText } from '../../shared/i18n/productText'
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { BriefingPeriodDialog } from './BriefingPeriodDialog'
 import './briefingSettingsScreen.css'
-import { useDailyBriefingAiSettings } from './DailyBriefingAiSettingsSection'
+import { useDailyBriefingAiSettings } from './useDailyBriefingAiSettings'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 /** 一期一条排期：定义 id = 产品基 id + 期 id；按 productId 与前缀两重认。 */

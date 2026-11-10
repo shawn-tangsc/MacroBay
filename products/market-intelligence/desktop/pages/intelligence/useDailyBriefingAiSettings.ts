@@ -1,23 +1,17 @@
-import { Switch } from 'antd'
-import { CircleHelp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { parseConfiguredModelRef, resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
-import { supportsAnthropicServerWebSearch } from '@platform/ai/providers/providerServerTools'
+
+import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
-import { IconButton } from '@platform/ui/components/icon-button'
-import { LoadingState } from '@platform/ui/components/loading'
-import { Popover } from '@platform/ui/components/popover'
-import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
-import { platformText } from '@renderer/i18n/platformText'
-import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
-import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
+import type { ModelPickerCandidate } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
-import './dailyBriefingSettingsForm.css'
-import type { DailyBriefingText } from './dailyBriefingText'
 
-const MODEL_CONSTRAINTS: ModelPickerConstraints = { requireCapabilities: ['chat'] }
+/**
+ * 日报「AI 编辑」那一段的**读写**：读者可改的三样（使用 AI 编辑 / 允许补查 / 模型）与它们的状态。
+ *
+ * 从屏幕组件里拆出来，是因为抽屉屏只借这段数据、不再渲染旧组件；脏判据也由它一处给出：
+ * `dirty = 草稿 ≠ 已存值`，保存成功把基线前进，读失败没有草稿（不脏）。
+ */
 
 type AiDraft = Readonly<{
   editorialEnabled: boolean
@@ -148,116 +142,6 @@ export function useDailyBriefingAiSettings(input: Readonly<{
   }
 }
 
-/**
- * A field title whose explanation lives in a question **before** it.
- *
- * The sentence is never printed twice: a reader sees the title, and the question's accessible name
- * is the whole explanation, so opening it (or hearing it read out) gives the same words.
- */
-function ExplainedTitle({ label, labelKey, text }: Readonly<{ label: string; labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.enabledHint' | 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchHint' | 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.modelUnavailable'; text: string }>): React.ReactElement {
-  const resolveProductText = useProductTextKey()
-  return <span className="mi-daily-briefing__field-label">
-    <Popover
-      labelKey={labelKey}
-      resolveText={resolveProductText}
-      trigger={(triggerProps) => <IconButton
-        ariaLabelKey={labelKey}
-        variant="plain"
-        icon={CircleHelp}
-        resolveText={resolveProductText}
-        size="sm"
-        {...triggerProps}
-      />}
-    />
-    <strong>{label}</strong>
-  </span>
-}
-
-/** The AI editing block's content. Content only — the host supplies the cancel/save pair. */
-export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
-  text: DailyBriefingText
-}> & Omit<DailyBriefingAiSettingsState, 'saving' | 'save' | 'reload'>): React.ReactElement {
-  const language = useShellLanguage()
-  const { draft, defaultModel, providers, candidates, webSearchSupported, webSearchBlocked, update } = state
-
-  if (state.state === 'load-failed') {
-    // 读不到 ≠ 存不上：两条各说各的。把「拿不到」写成「保存失败」，读者会去改一个本来就没问题的东西。
-    return <p className="mi-daily-briefing__settings-error" role="alert">{text.aiSettings.loadFailed}</p>
-  }
-  if (state.state === 'loading' || !draft) {
-    return <LoadingState label={text.aiSettings.loading} minHeight={90} />
-  }
-
-  const followsDefault = Boolean(defaultModel && draft.providerId === defaultModel.providerId && draft.modelId === defaultModel.modelId)
-  const pickerValue = draft.providerId && draft.modelId && !followsDefault ? `${draft.providerId}:${draft.modelId}` : null
-  const followLabel = defaultModel
-    ? `${text.aiSettings.followDefault} · ${defaultModel.providerName} / ${defaultModel.modelName}`
-    : text.aiSettings.followDefault
-
-  // Every form control in this block belongs to the brief's own settings; the drawer's
-  // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
-  return <div className="mi-briefing-settings-form" data-setting-scope="brief">
-    <div className="mi-daily-briefing__settings-row">
-      <ExplainedTitle
-        label={text.aiSettings.enabled}
-        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.enabledHint"
-        text={text.aiSettings.enabledHint}
-      />
-      <Switch checked={draft.editorialEnabled} onChange={(editorialEnabled) => update({ editorialEnabled })} />
-    </div>
-    <div className="mi-daily-briefing__settings-row">
-      <ExplainedTitle
-        label={text.aiSettings.webSearch}
-        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchHint"
-        text={text.aiSettings.webSearchHint}
-      />
-      <div className="mi-daily-briefing-ai__websearch">
-        <Switch checked={draft.webSearchEnabled} onChange={(checked) => {
-          state.clearWebSearchBlocked()
-          update({
-            webSearchEnabled: checked,
-            ...(checked && !draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: new Date().toISOString() } : {})
-          })
-        }} />
-        {/* Unavailability is a state, not an explanation: it stays visible, as its own node, so a
-            reader cannot think everything is fine while the switch would do nothing. */}
-        {webSearchBlocked
-          ? null
-          : null}
-      </div>
-    </div>
-    {draft.editorialEnabled ? <div className="mi-daily-briefing__settings-row">
-      <ExplainedTitle
-        label={text.aiSettings.model}
-        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.modelUnavailable"
-        text={text.aiSettings.modelUnavailable}
-      />
-      <ModelPicker
-        pickerId="daily-briefing-ai-settings"
-        value={pickerValue}
-        onChange={(value: string | null) => {
-          const ref = parseConfiguredModelRef(value)
-          update({ providerId: ref?.providerId ?? '', modelId: ref?.modelId ?? '' })
-        }}
-        models={[...candidates]}
-        providers={[...providers]}
-        labels={platformText[language].models}
-        constraints={MODEL_CONSTRAINTS}
-        placeholder={followLabel}
-        allowClear
-        onClear={() => update({ providerId: '', modelId: '' })}
-        placement="bottomRight"
-      />
-    </div> : null}
-    {webSearchBlocked
-      ? <small className="mi-daily-briefing-ai__error mi-briefing-settings-form__state" data-state="warning" role="status">{text.aiSettings.webSearchNeedsSetup}</small>
-      : !webSearchSupported
-        ? <small className="mi-briefing-settings-form__state" data-state="warning" role="status">{text.aiSettings.webSearchUnsupported}</small>
-        : null}
-    {state.state === 'save-failed' ? <p className="mi-daily-briefing__settings-error mi-briefing-settings-form__state" role="alert">{text.aiSettings.failed}</p> : null}
-  </div>
-}
-
 async function readDefaultModel(providers: readonly SafeModelProvider[]): Promise<{ providerId: string; modelId: string; providerName: string; modelName: string } | null> {
   try {
     const settings = await window.platform?.settings?.get() as { modelDefaults?: { agentModelId?: unknown } } | undefined
@@ -287,3 +171,4 @@ async function webSearchReady(): Promise<boolean> {
     return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
   } catch { return false }
 }
+
