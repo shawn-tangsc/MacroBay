@@ -276,6 +276,24 @@ describe('daily brief agent turn copy', () => {
     expect(writing).toContain('"focus": true')
   })
 
+  it('names the edition language in the language repair, not just "this edition\'s language"', async () => {
+    // `MI-2-R85` 口径：命中语言之后的那次修复重写，提示里要带**命中路径与本期语言**。
+    // 只说「本期语言」时，刚用错语言的模型最容易把它读成「我刚写的那种」——这一条钉住它必须说出来。
+    const selection = { stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [] }
+    const { continues, runner } = scriptedRunner(selection, editorial(
+      'US.FOMC',
+      '为什么这件事重要：它会改变利率预期'
+    ))
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    const repair = continues[1] ?? ''
+    expect(repair).toContain('LOCALE: en-US')
+    expect(repair).toContain('English')
+    expect(repair).toContain('next.focus.why')
+    expect(result.state).toBe('failed')
+  })
+
   it('falls back to the relevance leader when the chosen focus has no BTC/ETH transmission', async () => {
     const selection = {
       stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],

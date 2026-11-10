@@ -211,7 +211,8 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     maximumRounds: maximumRepairRounds,
     toolInvocations,
     stage,
-    repairPrompt: (code, detail, failures) => repairPromptFor(code, detail, failures),
+    // 语言这一档要**说出本期语言**：`MI-2-R85` 要求修复提示带命中路径与本期语言。
+    repairPrompt: (code, detail, failures) => repairPromptFor(code, detail, failures, input.locale),
     validate: (parsed) => validateEditorialForPeriod(selectedDocument, parsed, input.locale, toolInvocations, priorConclusions, input.periodFacts),
     apply: (value) => applyDailyBriefingEditorial(selectedDocument, value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions),
     // 语言按**渲染结果**判：命中先重写一次（`invalid-output-language`），仍命中就整版失败。
