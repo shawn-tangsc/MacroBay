@@ -57,7 +57,11 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
   }>): Promise<string | undefined> {
     // 只有窄查这一条路。没有它就不建会话——**不退回「读全量列表去重」**：过渡路径一旦成为默认，
     // 2000 条会话时每次分析就要读 2000 行，而且没人记得它只是过渡。
-    if (!deps.findAgentSessionByAutomationRef || !deps.createAgentSession) return undefined
+    if (!deps.findAgentSessionByAutomationRef || !deps.createAgentSession) {
+      // 端口没接时以前一声不响：运行照跑、会话一条没有、日志干净，事后无从查起。
+      logAnalysisSessionAppendFailure('ensure', input.runId, 'session-port-missing')
+      return undefined
+    }
     // 一条 SQL，与库里有多少条会话无关；标题改了也不影响身份（身份是 originRef）。
     const found = await deps.findAgentSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
     if (found) return found.id
@@ -118,9 +122,16 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
  */
 export function appendAnalysisRunSummary(deps: AnalysisRunSessionDependencies) {
   return async function appendRunSummary(input: Readonly<{ runId: string; summary: string }>): Promise<void> {
-    if (!deps.appendAgentSessionMessages || !deps.findAgentSessionByAutomationRef) return
+    if (!deps.appendAgentSessionMessages || !deps.findAgentSessionByAutomationRef) {
+      logAnalysisSessionAppendFailure('ensure', input.runId, 'session-port-missing')
+      return
+    }
     const session = await deps.findAgentSessionByAutomationRef(analysisRunSessionPolicy.agentId, input.runId)
-    if (!session) return
+    if (!session) {
+      // 查不到会话就静默返回，读者打开只剩卡片，而日志里没有任何一条说这件事。
+      logAnalysisSessionAppendFailure('session-missing', input.runId, 'no-session-for-run')
+      return
+    }
     await deps.appendAgentSessionMessages({
       sessionId: session.id,
       messages: [{ role: 'assistant', data: { parts: [{ type: 'text', text: input.summary }] } }]

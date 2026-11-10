@@ -66,6 +66,45 @@ describe('the analysis run session', () => {
     expect(last.messages).toEqual([{ role: 'assistant', data: { parts: [{ type: 'text', text: 'BTC 持仓骤降，量放大 3.4 倍' }] } }])
   })
 
+  it('leaves a marker when the published summary has no conversation to go to', async () => {
+    // F1 / 架构师条件：发布时窄查不到会话，以前**静默返回**——读者打开只剩一张卡片，事后无从查起。
+    const marker = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const appendAgentSessionMessages = vi.fn(async () => undefined)
+    const appendRunSummary = appendAnalysisRunSummary({
+      findAgentSessionByAutomationRef: async () => null,
+      appendAgentSessionMessages
+    })
+
+    await appendRunSummary({ runId: 'mi-ar-missing', summary: '摘要' })
+
+    const printed = marker.mock.calls.map(([line]) => String(line)).find((line) => line.includes('MI_ANALYSIS_RUN_SESSION_APPEND_FAILED'))
+    expect(printed).toBeDefined()
+    expect(JSON.parse(printed!)).toMatchObject({
+      marker: 'MI_ANALYSIS_RUN_SESSION_APPEND_FAILED',
+      stage: 'session-missing',
+      runId: 'mi-ar-missing'
+    })
+    expect(appendAgentSessionMessages).not.toHaveBeenCalled()
+    marker.mockRestore()
+  })
+
+  it('leaves a marker when a session port is not wired, instead of returning silently', async () => {
+    // 端口没接时以前 `return undefined` / `return` 都不吭声：运行照样跑完，会话一条没有，日志干净。
+    const marker = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const ensure = createAnalysisRunSession({})
+    const appendRunSummary = appendAnalysisRunSummary({})
+
+    expect(await ensure({ runId: 'mi-ar-noport' })).toBeUndefined()
+    await appendRunSummary({ runId: 'mi-ar-noport', summary: '摘要' })
+
+    const markers = marker.mock.calls
+      .map(([line]) => JSON.parse(String(line)))
+      .filter((entry) => entry.marker === 'MI_ANALYSIS_RUN_SESSION_APPEND_FAILED')
+    expect(markers.map((entry) => entry.stage)).toEqual(['ensure', 'ensure'])
+    expect(markers.every((entry) => entry.runId === 'mi-ar-noport')).toBe(true)
+    marker.mockRestore()
+  })
+
   it('titles the conversation with the module alone, never the moment or the run id', async () => {
     const { ensure, createAgentSession } = harness()
     const titled = createAnalysisRunSession({

@@ -10,7 +10,7 @@ import {
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
-import { logAnalysisSessionAppendFailure } from './analysisSessionAppendFailure'
+import { ensureAnalysisRunSession, appendAnalysisRunSessionSummary } from './analysisRunSessionEnsure'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
@@ -218,9 +218,12 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     if (!runRecord || !deps.repository.claimRun(runRecord.id, deps.now())) return { status: 'failed', errorCode: 'analysis-run-not-available' }
     // 会话在「认领成功、还没调模型」之间建：失败那次也要有会话，否则最需要查原文的那种恰好没有。
     // 建会话失败不影响这次分析——它是记录的附加物，不是分析的前提。
-    if (deps.ensureRunSession) {
-      try { await deps.ensureRunSession({ runId: runRecord.id, queuedAt: runRecord.queuedAt }) } catch { /* 会话是附加物 */ }
-    }
+    // 建不出来不许静默（F1 / 架构师条件）：端口缺失、窄查抛错、create 失败都留一条 marker。
+    await ensureAnalysisRunSession({
+      runId: runRecord.id,
+      queuedAt: runRecord.queuedAt,
+      ...(deps.ensureRunSession ? { ensure: deps.ensureRunSession } : {})
+    })
     if (input.signal?.aborted) return cancel(runRecord.id)
     const signal = input.signal ?? new AbortController().signal
 
@@ -386,18 +389,13 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
     if (retried) deps.repository.retry?.record(runRecord.id, 'succeeded')
-    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。
-    if (deps.appendRunSummary) {
-      const summaryText = summary.conclusion?.summary ?? summary.eventAssessment ?? ''
-      if (summaryText) {
-        try {
-          await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText })
-        } catch (error) {
-          // 摘要没进会话时，读者打开那条 run 会话只会看到一张卡片。失败不阻断发布，但要留痕。
-          logAnalysisSessionAppendFailure('summary', runRecord.id, error)
-        }
-      }
-    }
+    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。失败不阻断发布，
+    // 留痕在 helper 里（读者打开只剩卡片时，事后只有那条 marker 能查得到）。
+    await appendAnalysisRunSessionSummary({
+      runId: runRecord.id,
+      summary: summary.conclusion?.summary ?? summary.eventAssessment ?? '',
+      ...(deps.appendRunSummary ? { append: deps.appendRunSummary } : {})
+    })
     // N12：**达到门槛**的那次、写入记录之后，提交一次结论推送。判据是原因码，不是触发键——
     // 键记的是阶段，消息面达门槛的运行也长着宏观的样子（`analysisConclusionPushEligible` 一处判）。
     const triggerReasonCode = deps.repository.triggerReasonOf?.(runRecord.id)

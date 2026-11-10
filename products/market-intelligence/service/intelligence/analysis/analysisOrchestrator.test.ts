@@ -16,6 +16,33 @@ describe('analysisOrchestrator', () => {
     expect(invoke).not.toHaveBeenCalled()
   })
 
+  it('leaves a marker when the run conversation cannot be created', async () => {
+    // 架构师 F1 条件之一：建会话那个 catch 以前是空的。窄查抛错（同 ref 命中两条按设计会抛）
+    // 或 create 失败时，这次运行一条会话都没有，日志里也得有这一条。
+    const marker = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository(),
+        structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 1 } })) } as never,
+        now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+        ensureRunSession: vi.fn(async () => { throw new Error('duplicate origin ref: daily-brief:x:default:zh-CN') })
+      })
+
+      await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+      const printed = marker.mock.calls.map(([line]) => String(line)).find((line) => line.includes('MI_ANALYSIS_RUN_SESSION_APPEND_FAILED'))
+      expect(printed).toBeDefined()
+      expect(JSON.parse(printed!)).toMatchObject({
+        marker: 'MI_ANALYSIS_RUN_SESSION_APPEND_FAILED',
+        stage: 'ensure',
+        runId: 'mi-ar-1',
+        reason: 'duplicate origin ref: daily-brief:x:default:zh-CN'
+      })
+    } finally {
+      marker.mockRestore()
+    }
+  })
+
   it('supplies the exact output structure and only evidence-backed facts to the model', async () => {
     const invoke = vi.fn(async (request: { messages: readonly { role: string; content: string }[] }) => {
       const system = request.messages.find(message => message.role === 'system')!.content
