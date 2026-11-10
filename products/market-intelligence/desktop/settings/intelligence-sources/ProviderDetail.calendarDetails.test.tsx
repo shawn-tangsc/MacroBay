@@ -241,6 +241,27 @@ describe('ProviderDetail source details', () => {
     expect(container.textContent).toContain(settingsText.jobNotRegistered)
   })
 
+  it('does not print a capability-count line in the header', async () => {
+    // 用户 2026-11-10：「2 项能力 · 已启用 1」是废话——下面一行行自己数得出来。
+    // 这一行整行删掉，不留占位；把它加回来这条就红。
+    const invoke = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ProviderDetail, {
+        labels: labels(),
+        provider: fedProvider()
+      }))
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.textContent).not.toContain('项能力')
+    expect(container.textContent).not.toContain(settingsText.providerSummary.replace('{total}', '').replace('{enabled}', '').trim())
+  })
+
   it('falls back to the sentence without a number when the reason code is unknown', async () => {
     // 码名一改（或加了个没登记的新码）就该落到这一支：**不从码里截数字，也不许抛错**。
     // 没有这条，「表里没有的码」永远没人跑过——`?? fallback` 写成抛错也照样全绿。
@@ -400,7 +421,7 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    // 状态串与标签行现在是两行（页头的「1 项能力 · 已启用 1」是另一件事）。
+    // 状态串与标签行现在是两行；页头那行「N 项能力 · 已启用 N」已经整行删掉（用户 2026-11-10）。
     const rowStatus = container.querySelector('.source-provider-detail__status')?.textContent ?? ''
     const rowHealth = container.querySelector('.source-provider-detail__health')?.textContent ?? ''
     const rowTags = container.querySelector('.source-provider-detail__tags-line')?.textContent ?? ''

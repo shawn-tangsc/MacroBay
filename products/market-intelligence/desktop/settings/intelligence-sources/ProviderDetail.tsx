@@ -65,9 +65,14 @@ export type ProviderDetailLabels = {
   health: SourceHealthLabels
 }
 
-/** The one rule for the probe button, so a test can hold it without rendering the pane. */
+/**
+ * The one rule for the probe button, so a test can hold it without rendering the pane.
+ *
+ * 凭据是不是 API Key 不再影响它：那颗按钮已经移到**源名旁**、全屏只有这一颗
+ * （用户 2026-11-10：行内动作跟着源名走），凭据块里只剩「保存并验证连接」。
+ */
 export function offersConnectionTest(provider: { credential: string; sources: ReadonlyArray<{ capabilities?: { testConnection?: boolean } }> }): boolean {
-  return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
+  return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
 export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
@@ -318,12 +323,42 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       onOpenProxySettings={openProxySettings}
     /> : null}
     <header className="source-provider-detail__header">
-      <h2>{providerName}</h2>
-      <p>{labels.capabilities.replace('{total}', String(sources.length)).replace('{enabled}', String(sources.filter((source) => source.enabled).length))}</p>
+      {/* 源名同一行：名字 + 「官网」+「测试连接」，三样一行、都是小号文字按钮（用户 2026-11-10）。
+          它们属于「这是哪个源、它通不通」，不是页头的一排实心大按钮——所以整屏不再有
+          「只装按钮的独立行」，provider 级测试连接也只有这一颗。 */}
+      <div className="source-provider-detail__title-row">
+        <h2>{providerName}</h2>
+        {/* 这一屏所有**行内动作**都跟着源名走，不跟着字段标签走：官网 → 测试连接 → 注册 / 获取 Key，
+            同一行 inline、间距 8、与名字基线对齐，全是小号文字按钮。
+            一行放不下时整组换到名字下方、左缘仍与名字对齐（flex-wrap 就是这个行为）。 */}
+        <span className="source-provider-detail__name-actions">
+          {provider.website && !hideWebsite
+            ? <Button
+              className="source-provider-detail__name-action"
+              onClick={() => window.open(provider.website!, '_blank', 'noopener,noreferrer')}
+              size="small">{labels.website}</Button>
+            : null}
+          {offersConnectionTest(provider)
+            ? <Button
+              className="source-provider-detail__name-action"
+              disabled={testingConnection}
+              loading={testingConnection}
+              onClick={() => void testConnection()}
+              size="small">{labels.testConnection}</Button>
+            : null}
+          {provider.signupUrl
+            ? <Button
+              className="source-provider-detail__name-action"
+              onClick={() => window.open(provider.signupUrl!, '_blank', 'noopener,noreferrer')}
+              size="small">{labels.signup}</Button>
+            : null}
+        </span>
+      </div>
       {provider.credential === 'api-key' ? <>
         <small>{labels.credentials}</small>
         <div className="source-provider-detail__credential">
           <label>
+            {/* 标签行只放字段名：按钮跟着源名走，不跟着字段标签走（用户 2026-11-10）。 */}
             <span>{labels.apiKey.label}</span>
             <Input
               aria-label={labels.apiKey.label}
@@ -339,28 +374,21 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               />}
               onChange={(event) => { setCredentialPristine(false); setRevealed(false); setRevealFailed(false); setCredentialDraft(event.target.value) }}
             />
+            {/* 「保存并验证连接」自己就验证；provider 级的「测试连接」只有源名旁那一颗。 */}
             <Button disabled={credentialPristine || !credentialDraft.trim() || savingCredential} loading={savingCredential} onClick={() => void saveCredential()}>{labels.apiKey.save}</Button>
-            <Button disabled={testingConnection} loading={testingConnection} onClick={() => void testConnection()}>{labels.testConnection}</Button>
           </label>
           {revealFailed ? <small>{labels.apiKey.revealFailed}</small> : null}
           {credentialFeedback ? <Alert message={credentialFeedback === 'saved' ? labels.apiKey.savedHint : labels.credentials} showIcon type={credentialFeedback === 'saved' ? 'success' : 'error'} /> : null}
         </div>
       </> : null}
       {inviteProvider && provider.signupUrl ? <p className="source-provider-detail__invite">{labels.inviteNote}</p> : null}
-      <div className="source-provider-detail__actions">
-        {provider.website && !hideWebsite ? <Button onClick={() => window.open(provider.website, '_blank', 'noopener,noreferrer')}>{labels.website}</Button> : null}
-        {provider.signupUrl ? <Button onClick={() => window.open(provider.signupUrl, '_blank', 'noopener,noreferrer')}>{labels.signup}</Button> : null}
-        {/* A provider whose sources declare no probe has nothing to test; offering the button
-            only produces a red error for an action that was never supported. */}
-        {offersConnectionTest(provider)
-          ? <Button disabled={testingConnection} loading={testingConnection} onClick={() => void testConnection()}>{labels.testConnection}</Button>
-          : null}
-        {connectionFeedback ? <Alert
-          message={connectionFeedback === 'succeeded' ? labels.connectionSucceeded : connectionFeedback === 'unsupported' ? labels.connectionUnsupported : labels.connectionFailed}
-          showIcon
-          type={connectionFeedback === 'succeeded' ? 'success' : connectionFeedback === 'unsupported' ? 'warning' : 'error'}
-        /> : null}
-      </div>
+      {/* 「官网 / 测试连接」那一排动作整行去掉：两颗都上到源名旁边（同一屏一个动作只有一处）。
+          连接反馈仍要留在页头，它是这次点击的结果。 */}
+      {connectionFeedback ? <Alert
+        message={connectionFeedback === 'succeeded' ? labels.connectionSucceeded : connectionFeedback === 'unsupported' ? labels.connectionUnsupported : labels.connectionFailed}
+        showIcon
+        type={connectionFeedback === 'succeeded' ? 'success' : connectionFeedback === 'unsupported' ? 'warning' : 'error'}
+      /> : null}
     </header>
     <div className="source-provider-detail__list">
       {sources.map((source) => {

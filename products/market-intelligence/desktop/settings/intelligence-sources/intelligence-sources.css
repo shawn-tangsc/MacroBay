@@ -1242,6 +1242,26 @@
   margin-top: 12px;
 }
 
+.source-provider-detail__credential-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 标签行里那颗「注册 / 获取 Key」：小号文字按钮，不撑高这一行，窄宽度随标签行一起换行。 */
+/* 整屏的动作统一成小号文字按钮：源名旁的「官网 / 测试连接」、标签行里的「注册 / 获取 Key」、
+   行尾的「高级」。页面里不再出现占一整行的实心大按钮。 */
+.source-provider-detail__signup-inline.ant-btn,
+.source-provider-detail__name-action.ant-btn {
+  height: auto;
+  padding: 0;
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  white-space: normal;
+  text-align: left;
+}
+
 .source-provider-detail__credential {
   display: grid;
   gap: 6px;
