@@ -6,9 +6,9 @@ import type {
 } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
-import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
 import { notifySettingsRevision, subscribeSettingsRevision } from '../../shared/events/settingsRevision'
+import { createSettingsOrigin, writeSourceEnabled } from './sourceWrites'
 import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, runOutcomeOf, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout, type SourceRunOutcome } from './intelligenceSourceProfileEditor'
 
 export { isSuccessfulCredentialOperation }
@@ -61,7 +61,7 @@ export function useIntelligenceSourcesSettings(labels: {
   const saveQueueRef = useRef(Promise.resolve())
   const pendingSaveCountRef = useRef(0)
   /** 本页写出的变更带着这个 origin 发出去，订阅时忽略自己那一次。 */
-  const revisionOriginRef = useRef(`sources-${Math.random().toString(36).slice(2)}`)
+  const revisionOriginRef = useRef(createSettingsOrigin('sources'))
   /** 本页有没有未保存的输入（凭据框）。由详情组件回报。 */
   const draftDirtyRef = useRef(false)
 
@@ -159,9 +159,7 @@ export function useIntelligenceSourcesSettings(labels: {
         errorCode: null
       }))
       try {
-        await setSourceEnabled(source, enabled)
-        notifyIntelligenceSourcesChanged()
-        notifySettingsRevision('sources', revisionOriginRef.current)
+        await writeSourceEnabled(source, enabled, revisionOriginRef.current)
         // 写完重读：两个宿主看到的是同一份投影，不是两套乐观值。
         await load(state.selectedSourceId)
         return true
