@@ -38,6 +38,8 @@ export type ConfigSettingsDrawerProps = {
   sourcesView?: DrawerSourcesView
   /** 选中一条源（右侧详情区等 S1 落地再接）。 */
   onSelectSource?: (sourceId: string) => void
+  /** 分析屏视图（简报线给的 `useDrawerAnalysisView`）：两行值已是成句文案，原样渲染。 */
+  analysisView?: DrawerScreenView<DrawerRowView>
   /** 平台与模型那一屏的当前值：**宿主读好再传**，缺键就是「读不到」。 */
   platformValues?: DrawerPlatformValues
   /** 行尾「去平台设置」跳转：走宿主给的导航入口，抽屉不拼路由。 */
@@ -54,6 +56,7 @@ export function ConfigSettingsDrawer({
   onClose,
   initialMenu = 'sources',
   notificationsView,
+  analysisView,
   sourcesView,
   onSelectSource,
   platformValues,
@@ -111,6 +114,9 @@ export function ConfigSettingsDrawer({
         {menu === 'sources' && sourcesView !== undefined
           ? (<SourcesScreen onSelect={onSelectSource} resolveText={resolveTextProp ?? ((key: string) => key)} view={sourcesView} />)
           : null}
+        {menu === 'analysis' && analysisView !== undefined
+          ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={analysisView} />)
+          : null}
         {menu === 'notifications' && notificationsView !== undefined
           ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={notificationsView} />)
           : null}
@@ -120,7 +126,7 @@ export function ConfigSettingsDrawer({
             resolveText={resolveTextProp ?? ((key: string) => key)}
             values={platformValues} />)
           : null}
-        {(menu === 'notifications' && notificationsView !== undefined) || (menu === 'platform' && platformValues !== undefined) || (menu === 'sources' && sourcesView !== undefined)
+        {(menu === 'notifications' && notificationsView !== undefined) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || (menu === 'sources' && sourcesView !== undefined)
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{group.titleKey}</div>}
@@ -166,8 +172,9 @@ function NotificationsScreen({ view, resolveText }: {
       {view.rows.map((row) => (
         <div className={row.disabled === true ? 'config-drawer__row is-disabled' : 'config-drawer__row'} data-drawer-row={row.key} key={row.key}>
           <span className="config-drawer__label">{resolveText(row.key)}</span>
-          {/* 值列只有一个位置表达「没有」：状态类空值给状态词，其余留白，不铺 `—`。 */}
-          <span className="config-drawer__value">{row.value ?? row.emptyLabel ?? ''}</span>
+          {/* 值列三选一：真值 / 状态词（拿不到 + 原因）/ 单个 `—`（确实没有）。
+              留有值的空位是不允许的——「留白」只属演示态，会随数据接上收敛掉。 */}
+          <span className="config-drawer__value">{row.value ?? row.emptyLabel ?? '—'}</span>
           {row.action === undefined ? null : (
             <button className="config-drawer__row-action" disabled={row.action.disabled === true} onClick={row.action.onSelect} type="button">
               {resolveText(row.action.labelKey)}
