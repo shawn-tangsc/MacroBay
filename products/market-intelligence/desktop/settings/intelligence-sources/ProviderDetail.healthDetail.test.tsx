@@ -170,6 +170,45 @@ describe('ProviderDetail health detail (B4)', () => {
     expect(pageStateRequests(invoke).filter((sourceId) => sourceId === 's1')).toHaveLength(2)
   })
 
+  it('offers run now only where the platform declares it, and hands that source id to the runner', async () => {
+    const invoke = vi.fn(async (_productId: string, method: string) =>
+      method === 'intelligenceSources.getPageState' ? { detail: detail('2026-11-10T04:00:00.000Z') } : undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const onRunNow = vi.fn(async () => ({ kind: 'succeeded' as const, notice: '采集成功。' }))
+
+    const container = await render(createElement(ProviderDetail, {
+      labels: labels(),
+      onRunNow,
+      provider: provider([source({ sourceId: 's1', displayName: 'S1' })]),
+      showSourceDetails: true,
+      supportsRunNowById: { s1: true }
+    }))
+
+    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === settingsText.health.runAction.run)
+    expect(runButton).toBeDefined()
+    await act(async () => { runButton?.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(onRunNow).toHaveBeenCalledWith('s1')
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('采集成功。')
+  })
+
+  it('does not paint a run button for a source the platform does not declare runnable', async () => {
+    const invoke = vi.fn(async (_productId: string, method: string) =>
+      method === 'intelligenceSources.getPageState' ? { detail: detail('2026-11-10T04:00:00.000Z') } : undefined)
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    const onRunNow = vi.fn(async () => ({ kind: 'succeeded' as const, notice: '' }))
+
+    const container = await render(createElement(ProviderDetail, {
+      labels: labels(),
+      onRunNow,
+      provider: provider([source({ sourceId: 's1', displayName: 'S1' })]),
+      showSourceDetails: true
+    }))
+
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent === settingsText.health.runAction.run)).toBe(false)
+    expect(container.textContent).toContain(settingsText.health.runNow.unsupported)
+  })
+
   it('does not paint a calendar feed as "never collected": it says the record is unknown, and never asks the generic service', async () => {
     const invoke = vi.fn(async () => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }

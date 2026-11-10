@@ -42,6 +42,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     testCredentials,
     replayWindow,
     refreshHealth,
+    runSourceNow,
     profiles,
     definitions,
     updateSourceProfile
@@ -106,6 +107,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
             policy={{ labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById }}
             showSourceDetails
             supportsRunNowById={supportsRunNowById}
+            onRunNow={runSourceNow}
             sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
             translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
           /></div> : null

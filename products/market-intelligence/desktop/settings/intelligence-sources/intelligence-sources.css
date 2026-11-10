@@ -1051,6 +1051,24 @@
   margin-top: 6px;
 }
 
+/* B5 立即运行：按钮 + 一行状态（跑完自动恢复 / 成功摘要 / 失败原因）。 */
+.source-provider-detail__run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.source-provider-detail__run-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  font-weight: 400;
+  line-height: var(--line-meta);
+  overflow-wrap: anywhere;
+}
+
 /* 第二行：归属与任务状态，纯文本 ` · ` 串起。 */
 .source-provider-detail__tags-line {
   display: block;

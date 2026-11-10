@@ -7,7 +7,7 @@ import type {
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
-import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout } from './intelligenceSourceProfileEditor'
+import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, runOutcomeOf, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout, type SourceRunOutcome } from './intelligenceSourceProfileEditor'
 
 export { isSuccessfulCredentialOperation }
 import { buildSourceEnabledById } from './intelligenceSourceCatalogView'
@@ -313,34 +313,39 @@ export function useIntelligenceSourcesSettings(labels: {
     [labels.saved, labels.saveFailed]
   )
 
-  const runNow = useCallback(async () => {
-    if (!state.selectedSourceId) return
-    const definition = state.definitions.find((item) => item.sourceId === state.selectedSourceId)
-    if (
-      definition?.readiness === 'planned' ||
-      definition?.readiness === 'fixture-ready' ||
-      definition?.supportsRunNow === false
-    ) {
-      return
-    }
+  /**
+   * 运行一个源（B5）。**按源传参**：设置页的详情里每个源各有一颗按钮，不再只认「选中的那个」。
+   * 返回这一次的结果给按钮那一行显示（成功带摘要 / 没成带原因 / 提交了还没结果）。
+   */
+  const runSourceNow = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
+    // 「能不能跑」只在 `sourceHealthCells.runNowAnswerOf` 判一次（按钮与四格读同一个答案）；
+    // 这里不再自己判一遍 readiness / supportsRunNow——两处判同一件事，迟早一处说能、一处说不能。
     setState((current) => ({ ...current, running: true, errorCode: null, notice: null }))
     try {
-      await intelligenceSourcesClient.runNow(state.selectedSourceId)
-      const health = await waitForRunHealth(state.selectedSourceId)
+      await intelligenceSourcesClient.runNow(sourceId)
+      const health = await waitForRunHealth(sourceId)
+      const outcome = runOutcomeOf(health, labels)
       setState((current) => ({
         ...current,
         running: false,
-        detail: current.detail ? { ...current.detail, health } : current.detail,
-        notice: resolveRunNotice(health, labels),
-        errorCode:
-          health.lastFailureAt && (!health.lastSuccessAt || health.lastFailureAt >= health.lastSuccessAt)
-            ? labels.runFailed
-            : null
+        detail: current.detail?.profile.sourceId === sourceId
+          ? { ...current.detail, health }
+          : current.detail,
+        notice: outcome.notice,
+        errorCode: outcome.kind === 'failed' ? labels.runFailed : null
       }))
+      return outcome
     } catch {
       setState((current) => ({ ...current, running: false, errorCode: labels.runFailed }))
+      return { kind: 'failed', notice: labels.runFailed }
     }
-  }, [labels, state.definitions, state.selectedSourceId])
+  }, [labels])
+
+  /** 旧入口：跑「当前选中的那一个」，行为与改前一致。 */
+  const runNow = useCallback(async () => {
+    if (!state.selectedSourceId) return
+    await runSourceNow(state.selectedSourceId)
+  }, [runSourceNow, state.selectedSourceId])
 
   const testCredentials = useCallback(
     async (credentialDraft?: string) => {
@@ -414,6 +419,7 @@ export function useIntelligenceSourcesSettings(labels: {
     runNow,
     testCredentials,
     replayWindow,
-    refreshHealth
+    refreshHealth,
+    runSourceNow
   }
 }

@@ -478,6 +478,13 @@ export const intelligenceSourcesText = {
       collecting: '按计划采集中',
       unknown: '未知'
     },
+    /* B5 立即运行：三态（可运行 / 正在运行 / 结果）。禁用时按钮文案就是原因，
+       这一行再用 role=status 说一句「跑完会自动恢复」——禁用按钮不进 Tab、读屏也读不到。 */
+    runAction: {
+      run: '立即运行',
+      running: '正在运行',
+      runningHint: '正在运行，跑完会自动恢复'
+    },
     runNow: {
       yes: '可以',
       unsupported: '这个来源不能在这里运行',
@@ -983,6 +990,11 @@ export const intelligenceSourcesText = {
       'product-owned': "Collected by the product's own job",
       collecting: 'Collecting on schedule',
       unknown: 'Unknown'
+    },
+    runAction: {
+      run: 'Run now',
+      running: 'Running',
+      runningHint: 'Running; the button comes back when it finishes'
     },
     runNow: {
       yes: 'Yes',

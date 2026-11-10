@@ -11,6 +11,7 @@ import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesC
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
 import { SourceHealthDetail, type SourceDetailRead, type SourceHealthLabels } from './SourceHealthDetail'
+import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { healthStateBadge } from './sourceHealthTone'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -91,11 +92,16 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
   supportsRunNowById?: Readonly<Record<string, boolean>>
+  /**
+   * B5 立即运行：按源跑一次并回这一次的结果（成功带摘要 / 没成带原因）。没有这个入口
+   * （例如只读嵌入）时，四格只回答「能不能」，不画按钮。
+   */
+  onRunNow?: (sourceId: string) => Promise<SourceRunOutcome>
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -393,6 +399,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             automaticSyncStopped={labels.automaticSyncStopped}
             labels={labels.health}
             onRetry={() => retryDetail(source.sourceId)}
+            {...(onRunNow === undefined ? {} : { onRunNow })}
             read={details[source.sourceId] ?? { state: 'loading' }}
             resolveText={resolveText}
             source={source}

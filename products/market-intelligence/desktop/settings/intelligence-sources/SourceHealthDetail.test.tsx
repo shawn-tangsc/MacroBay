@@ -127,3 +127,71 @@ describe('source health detail (B4)', () => {
     expect(container.innerHTML).toBe('')
   })
 })
+
+describe('run now (B5)', () => {
+  async function renderWithRun(
+    runNow: () => Promise<{ kind: 'succeeded' | 'failed' | 'unknown'; notice: string }>,
+    extra: { source?: SourceView; supportsRunNow?: boolean } = {}
+  ): Promise<HTMLElement> {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(SourceHealthDetail, {
+        automaticSyncStopped: text.automaticSyncStopped,
+        labels: labels(),
+        onRetry: () => {},
+        onRunNow: runNow,
+        read: ready({ lastSuccessAt: '2026-11-09T04:00:00.000Z' }),
+        resolveText: (key: string) => key === 'settings.intelligenceSources.unavailableReasonCodeAria'
+          ? '原因码'
+          : (text as unknown as Record<string, string>)[key] ?? '',
+        source: extra.source ?? source(),
+        supportsRunNow: extra.supportsRunNow ?? true,
+        timeZone: 'Asia/Shanghai'
+      }))
+    })
+    return container
+  }
+
+  it('offers the button only when the run-now answer is yes', async () => {
+    const withButton = await renderWithRun(async () => ({ kind: 'succeeded', notice: '' }))
+    expect([...withButton.querySelectorAll('button')].some((button) => button.textContent === text.health.runAction.run)).toBe(true)
+
+    // 不可用源：答案不是「可以」，就没有按钮，只有原因。
+    const withoutButton = await renderWithRun(async () => ({ kind: 'succeeded', notice: '' }), {
+      source: source({ unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', decidedAt: '2026-11-08' } })
+    })
+    expect([...withoutButton.querySelectorAll('button')].some((button) => button.textContent === text.health.runAction.run)).toBe(false)
+    expect(withoutButton.textContent).toContain(text.health.runNow.unavailable)
+  })
+
+  it('shows "running" while it runs, then the result: summary on success, the reason on failure', async () => {
+    let resolveRun: (value: { kind: 'succeeded' | 'failed'; notice: string }) => void = () => {}
+    const pending = new Promise<{ kind: 'succeeded' | 'failed'; notice: string }>((resolve) => { resolveRun = resolve })
+    const container = await renderWithRun(() => pending)
+
+    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === text.health.runAction.run)!
+    await act(async () => { runButton.click() })
+
+    // 正在跑：按钮被禁用、文案变成「正在运行」，同一行 role=status 说明会自己恢复。
+    expect(container.textContent).toContain(text.health.runAction.running)
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(text.health.runAction.runningHint)
+    const runningButton = [...container.querySelectorAll('button')].find((button) => button.textContent === text.health.runAction.running)
+    expect(runningButton?.disabled).toBe(true)
+
+    resolveRun({ kind: 'succeeded', notice: '采集成功。' })
+    await act(async () => { await pending })
+    await act(async () => { await Promise.resolve() })
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('采集成功。')
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent === text.health.runAction.run)).toBe(true)
+  })
+
+  it('keeps the failure reason on the row instead of only flashing a toast', async () => {
+    const container = await renderWithRun(async () => ({ kind: 'failed', notice: '立即运行失败，请重试。限流' }))
+    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === text.health.runAction.run)!
+    await act(async () => { runButton.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('立即运行失败，请重试。限流')
+  })
+})

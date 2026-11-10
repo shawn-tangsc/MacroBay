@@ -1,4 +1,6 @@
+import { Button } from 'antd'
 import { Info } from 'lucide-react'
+import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
@@ -6,6 +8,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
+import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import {
   computeSourceHealthDetail,
   type SourceHealthIdleReason,
@@ -39,6 +42,8 @@ export type SourceHealthLabels = Readonly<{
   unavailableReasons: Readonly<Record<string, string>>
   reasons: Readonly<Record<SourceHealthIdleReason, string>>
   runNow: Readonly<Record<SourceRunNowAnswer, string>>
+  /** B5 立即运行的三态文案（可运行 / 正在运行 / 跑完自动恢复）。 */
+  runAction: Readonly<{ run: string; running: string; runningHint: string }>
 }>
 
 /**
@@ -55,6 +60,8 @@ export function SourceHealthDetail(props: {
   /** 目录声明的「平台允许立即运行」；日历 feed 没有目录声明就是 `undefined`。 */
   supportsRunNow?: boolean
   onRetry: () => void
+  /** 只有「能立刻采」的源会拿到这颗按钮；没有这个监听（例如只读嵌入）就不画按钮，只给答案。 */
+  onRunNow?: (sourceId: string) => Promise<SourceRunOutcome>
   resolveText: (key: string) => string
   /** 不可用源的整组说明里那一句（「自动同步已停止」）；与原因句串在同一格。 */
   automaticSyncStopped: string
@@ -107,7 +114,14 @@ export function SourceHealthDetail(props: {
             resolveText={props.resolveText} />
           : labels.reasons[view.idleReason]}
       </HealthCell>
-      <HealthCell cell="run-now" label={labels.runNowAnswer}>{labels.runNow[view.runNow]}</HealthCell>
+      <HealthCell cell="run-now" interactive label={labels.runNowAnswer}>
+        {view.runNow === 'yes' && props.onRunNow !== undefined
+          ? <RunNowControl
+            labels={labels.runAction}
+            onRun={() => props.onRunNow!(source.sourceId)}
+            sourceId={source.sourceId} />
+          : labels.runNow[view.runNow]}
+      </HealthCell>
     </div>
     {/* 「拿不到」不是「没有」：读不到逐次记录时把原因写在下面，读者不会把「未知」读成「从没采过」。 */}
     {unknownReading ? <p className="intelligence-source-note intelligence-source-note--health">{labels.unknownReason}</p> : null}
@@ -118,13 +132,14 @@ function HealthCell(props: {
   cell: 'today' | 'last-success' | 'idle-reason' | 'run-now'
   label: string
   unknown?: boolean
+  /** 值里放控件（立即运行那颗按钮）时不能用 `<strong>` 包一个可交互元素。 */
+  interactive?: boolean
   children: React.ReactNode
 }): React.ReactElement {
+  const valueProps = { className: 'intelligence-health-value', ...(props.unknown === true ? { 'data-unknown': 'true' } : {}) }
   return <div className="intelligence-health-item" data-health-cell={props.cell}>
     <span className="intelligence-health-label">{props.label}</span>
-    <strong className="intelligence-health-value" {...(props.unknown === true ? { 'data-unknown': 'true' } : {})}>
-      {props.children}
-    </strong>
+    {props.interactive === true ? <div {...valueProps}>{props.children}</div> : <strong {...valueProps}>{props.children}</strong>}
   </div>
 }
 
@@ -153,4 +168,42 @@ function UnavailableReason(props: {
           variant="plain" />
       )} />
   </>
+}
+
+/**
+ * B5：设置页的「立即运行」。只在**平台声明可运行、且这个源当前可用**时出现（那条判据在
+ * `sourceHealthCells` 一处算，四格的第四格与这颗按钮读同一个答案）。
+ *
+ * 三态按 2026-11-06 的原型：可运行 / 正在运行（禁用，同一行 `role="status"` 说「跑完会自动恢复」）/
+ * 跑完（成功带摘要、没成带原因）。禁用按钮不进 Tab、读屏也读不到，所以那句状态必须有。
+ */
+function RunNowControl(props: {
+  labels: Readonly<{ run: string; running: string; runningHint: string }>
+  onRun: () => Promise<SourceRunOutcome>
+  sourceId: string
+}): React.ReactElement {
+  const [running, setRunning] = useState(false)
+  const [outcome, setOutcome] = useState<SourceRunOutcome>()
+
+  async function run(): Promise<void> {
+    setRunning(true)
+    setOutcome(undefined)
+    try {
+      setOutcome(await props.onRun())
+    } catch {
+      // 运行入口自己会把握手失败翻成人话；万一它抛了，也只能说「没成」，不许静默。
+      setOutcome({ kind: 'failed', notice: props.labels.runningHint })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return <div className="source-provider-detail__run" data-run-source={props.sourceId} data-run-state={running ? 'running' : outcome?.kind ?? 'idle'}>
+    <Button disabled={running} loading={running} onClick={() => void run()} size="small">
+      {running ? props.labels.running : props.labels.run}
+    </Button>
+    <span className="source-provider-detail__run-status" role="status">
+      {running ? props.labels.runningHint : outcome?.notice ?? ''}
+    </span>
+  </div>
 }
