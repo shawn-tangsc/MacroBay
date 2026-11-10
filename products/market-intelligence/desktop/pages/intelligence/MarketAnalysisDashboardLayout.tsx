@@ -45,6 +45,11 @@ export type MarketAnalysisDashboardInjection = Readonly<{
   readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
+  /**
+   * 打开「AI 分析设置」对话框。配置抽屉里「AI 分析」那一屏只读 + 跳转，它要改就去原对话框改——
+   * 抽屉不造第二套草稿与保存。对话框在这里，所以入口也由这里给。
+   */
+  onOpenAnalysisSettings?: () => void
 }>
 
 /**
@@ -187,6 +192,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           conclusionSlot,
           policySlot: policyHost,
           onSelectChartEvent: selectChartEvent,
+          onOpenAnalysisSettings: () => setAnalysisSettingsOpen(true),
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readMarketEvents ? { readMarketEvents } : {})
         })}

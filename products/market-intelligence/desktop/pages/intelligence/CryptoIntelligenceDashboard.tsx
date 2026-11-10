@@ -6,6 +6,7 @@ import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSetting
 import { useDrawerSourcesView } from '../../settings/config-drawer/useDrawerSourcesView'
 import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
+import { useDashboardAnalysisDrawer } from './useDashboardAnalysisDrawer'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useMemo, useState, type ReactNode } from 'react'
 
@@ -83,7 +84,7 @@ type CryptoDashboardText = {
 
 type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; divergenceClient?: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, onOpenAnalysisSettings }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -94,6 +95,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
+  /** 打开「AI 分析设置」对话框（抽屉里那一屏只读 + 跳转，写入口仍是原对话框）。 */
+  onOpenAnalysisSettings?: () => void
 }): React.ReactElement {
   const resolveProductKey = useProductTextKey()
   const calendarState = useDashboardEconomicCalendar({ client, now })
@@ -109,6 +112,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const drawerSourcesView = useDrawerSourcesView(
     settingsDrawerOpen,
     productText[useShellLanguage()].pages.intelligence.portal.dashboard.configDrawer.sourceUnavailable
+  )
+  // 「AI 分析」那一屏：只读 + 跳转。没有给打开对话框的入口就不接这一屏（不画一个点了没反应的按钮）。
+  const drawerAnalysisView = useDashboardAnalysisDrawer(
+    settingsDrawerOpen && onOpenAnalysisSettings !== undefined,
+    (target) => { if (target === 'analysis') onOpenAnalysisSettings?.() }
   )
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
@@ -210,6 +218,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           }}
           open={settingsDrawerOpen}
           platformValues={platformDrawerValues}
+          analysisView={onOpenAnalysisSettings === undefined ? undefined : drawerAnalysisView}
           notificationsPanel={<NotificationSettingsPanel />}
           sourcesPanel={<DashboardSourcesPanel />}
           sourcesView={drawerSourcesView} />
