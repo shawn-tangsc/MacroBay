@@ -31,6 +31,11 @@ export function NewsSentimentFeature(props: {
     runNow: (sourceId: string) => Promise<unknown>
     setEnabled?: (sourceId: string, enabled: boolean) => Promise<unknown>
   }
+  /**
+   * 宿主给「打开设置」的去处时调它（现在指：打开配置抽屉并停在内容处理屏）。
+   * **不传就退回本地弹框**——判空与回落写在同一处，别在外面再包一层 if。
+   */
+  onOpenSettings?: () => void
   /** Publish the clicked item so the agent can start from that story. */
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
@@ -81,7 +86,7 @@ export function NewsSentimentFeature(props: {
         failed={state.failed}
         loading={state.loading}
         onOpenAll={() => setDrawerOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => (props.onOpenSettings === undefined ? setSettingsOpen(true) : props.onOpenSettings())}
         onEnableSources={enableSources}
         onRefresh={state.refresh}
         onRunSources={runSources}
@@ -101,7 +106,7 @@ export function NewsSentimentFeature(props: {
         loading={state.loading}
         onClose={() => setDrawerOpen(false)}
         onFilters={state.setFilters}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => (props.onOpenSettings === undefined ? setSettingsOpen(true) : props.onOpenSettings())}
         onRefresh={state.refresh}
         onWindowChange={state.setWindow}
         open={drawerOpen}

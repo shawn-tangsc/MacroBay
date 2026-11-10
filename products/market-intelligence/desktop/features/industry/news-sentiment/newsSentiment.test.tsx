@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import type { NewsSentimentSettingsView } from '../../../../service/intelligence/schema/newsSentiment'
@@ -890,5 +890,51 @@ describe('NewsSentimentFeature', () => {
     expect(container.textContent).toContain(text.unavailable)
     expect(container.textContent).not.toContain(productText['zh-CN'].mi.newsSentiment.quiet)
     expect(container.querySelector('[data-news-sentiment-state="unavailable"] [data-reason-source]')?.getAttribute('data-reason-source')).toBe('product')
+  })
+})
+
+describe('settings entry', () => {
+  // 宿主给了回调（= 打开配置抽屉并停在内容处理屏）就调它、不开本地弹框；没给就退回本地弹框。
+  // 两条成对写：只测一边的话，「传了却还开弹框」或「没传就什么都不开」都能溜过去。
+  const settledClient = (): NewsSentimentClient => client({ query: vi.fn(async () => VIEW) })
+  // 弹框里那块翻译面自己接 IPC：这里只判「哪个入口被打开」，把桥桩成读不到，
+  // 免得一次未处理的 rejection 把用例判红（那与入口无关）。
+  beforeEach(() => {
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke: vi.fn(async () => undefined) } }
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'platform')
+  })
+
+  const openSettingsEntry = async (container: HTMLElement): Promise<void> => {
+    const settings = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.settings}"]`)
+    expect(settings).not.toBeNull()
+    await act(async () => { settings?.click() })
+    await act(async () => {})
+  }
+
+  it('opens the local modal when the host passes no callback', async () => {
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={settledClient()} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    await openSettingsEntry(container)
+
+    const modal = document.body.querySelector('.ant-modal')
+    expect(modal?.textContent).toContain(text.settingsModal.title)
+  })
+
+  it('calls the host callback once and does not open the local modal when one is given', async () => {
+    const onOpenSettings = vi.fn()
+    const container = await mount(
+      <NewsSentimentFeature
+        onOpenSettings={onOpenSettings}
+        text={text}
+        client={settledClient()}
+        now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    await openSettingsEntry(container)
+
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('.ant-modal')).toBeNull()
   })
 })
