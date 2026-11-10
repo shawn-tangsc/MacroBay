@@ -19,6 +19,7 @@ import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendar
 import { dashboardRealSourcePolicy, FearGreedGaugePresentationPolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
 import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
 import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
+import { projectPositioningSourceRow, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { FeedStatusStrip } from './DashboardFeedStatusStrip'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
@@ -237,7 +238,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         <DivergencePanel state={divergence.state} text={text.divergence} onRetry={divergence.reload} />
       </div>
 
-      <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
+      {/* 持仓那一格**转述卡片算出来的判定**（`positioningState`），不自己判新鲜度：
+              阈值只在 `dashboardPositioningPresentationPolicy` 里存在一次，行与卡不可能各判一套。 */}
+      <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} positioning={positioningState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
       </div>
     </main>
   )
@@ -248,7 +251,8 @@ function SentimentPanel({ fearGreedState, text, onRetry }: { fearGreedState: Das
   return <>
     <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.sentiment.title}</h2>
       <div className="mi-crypto-dashboard__sentiment-gauge" data-sentiment-gauge>
-      {fearGreedState.state === 'available' ? <>
+      {/* 读到但偏旧也是读数：显示分数与它真实的观测时间，不当成「读不到」——那是把源说坏了。 */}
+      {fearGreedState.state === 'available' || fearGreedState.state === 'stale' ? <>
         {/* The readout disc sits on the pivot and is painted after the needle, so the score can
             own the centre again: the needle starts underneath the disc instead of crossing it. */}
         <span className="mi-crypto-dashboard__sentiment-dial">
@@ -281,13 +285,32 @@ function SentimentPanel({ fearGreedState, text, onRetry }: { fearGreedState: Das
  * the 市场状态 / 跨市场 table are printed by `FeedStatusStrip` below them — 异常优先, so a fallback is
  * stated where the figure it explains is described without making a healthy board cost a line per feed.
  */
-function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, feedRows, nowMs, text, onManageSource, onOpenCalendar }: { calendarState: DashboardEconomicCalendarState; fearGreedState: DashboardFearGreedState; fundingRateState: DashboardFundingRateHistoryState; feedRows: ReturnType<typeof projectDashboardFeedRows>; nowMs: number; text: CryptoDashboardText; onManageSource: () => void; onOpenCalendar: () => void }): React.ReactElement {
+function DashboardSidebar({ calendarState, fearGreedState, positioning, fundingRateState, feedRows, nowMs, text, onManageSource, onOpenCalendar }: { calendarState: DashboardEconomicCalendarState; fearGreedState: DashboardFearGreedState; positioning: DashboardPositioningViewState; fundingRateState: DashboardFundingRateHistoryState; feedRows: ReturnType<typeof projectDashboardFeedRows>; nowMs: number; text: CryptoDashboardText; onManageSource: () => void; onOpenCalendar: () => void }): React.ReactElement {
   const tags = { synthetic: text.crossAsset.syntheticTag, proxy: text.crossAsset.proxyTag, realIndex: text.crossAsset.indexNames.real }
+  const formatTime = useShellTimeFormat()
+  /**
+   * 三行的词根只有一个：**读到 / 偏旧 · 截至 {时刻} / 读不到**（产品 2026-11-10，决定记录 §15）。
+   * 「偏旧」永远是读到但过期——不并进「读不到」；日历那行没有新鲜度规则，所以不出现偏旧。
+   */
+  const positioningRow = projectPositioningSourceRow(positioning, fundingRateState)
+  const positioningRowText = positioningRow.kind === 'stale'
+    ? text.positioning.sourceStates.stale.replace('{time}', formatTime(positioningRow.since))
+    : positioningRow.kind === 'read'
+      ? positioningRow.fundingPartial ? text.positioning.sourceStates.partial : text.positioning.sourceStates.available
+      : positioningRow.kind === 'unreadable'
+        ? text.positioning.sourceStates.unavailable
+        : positioningRow.kind === 'empty' ? text.positioning.sourceStates.empty : text.positioning.sourceStates.loading
+  const positionedState = positioningRow.kind === 'read' ? (positioningRow.fundingPartial ? 'partial' : 'available')
+    : positioningRow.kind === 'stale' ? 'stale'
+      : positioningRow.kind === 'unreadable' ? 'unavailable' : positioningRow.kind
+  const fearGreedRowText = fearGreedState.state === 'stale'
+    ? text.fearGreed.sourceStates.stale.replace('{time}', formatTime(fearGreedState.observedAt))
+    : text.fearGreed.sourceStates[fearGreedState.state]
   return <section className="mi-crypto-dashboard__source-region"><header><h2>{text.context.sourceStatus.title}</h2></header>{dashboardRealSourcePolicy.map((source) => source.sourceId === 'economic-calendar'
     ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={calendarState.state} key={source.sourceId}><i /><span>{text.macroReleaseDynamics.sourceName}</span><small>{text.macroReleaseDynamics.sourceStates[calendarState.state]}</small><div><Button onClick={onOpenCalendar} size="small" type="text">{text.macroReleaseDynamics.calendarAction}</Button><Button onClick={() => onManageSource()} size="small" type="text">{text.macroReleaseDynamics.manageSettings}</Button></div></div>
     : source.sourceId === 'fear-greed'
-      ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fearGreedState.state} key={source.sourceId}><i /><span>{text.fearGreed.sourceName}</span><small>{text.fearGreed.sourceStates[fearGreedState.state]}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.fearGreed.manageSettings}</Button></div></div>
-      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fundingRateState.state} key={source.sourceId}><i /><span>{text.positioning.sourceName}</span><small>{text.positioning.sourceStates[fundingRateState.state]}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.positioning.manageSettings}</Button></div></div>)}
+      ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fearGreedState.state} key={source.sourceId}><i /><span>{text.fearGreed.sourceName}</span><small>{fearGreedRowText}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.fearGreed.manageSettings}</Button></div></div>
+      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={positionedState} key={source.sourceId}><i /><span>{text.positioning.sourceName}</span><small>{positioningRowText}</small><div><Button onClick={() => onManageSource()} size="small" type="text">{text.positioning.manageSettings}</Button></div></div>)}
     <FeedStatusStrip rows={feedRows} text={text.feedStatus} tags={tags} nowMs={nowMs} onManageSource={onManageSource} />
   </section>
 }

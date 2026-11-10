@@ -13,15 +13,26 @@ export const dashboardEconomicCalendarPolicy = Object.freeze({
 
 export const dashboardEconomicCalendarSourcePolicy = {
   sourceId: 'economic-calendar',
-  sourceStates: ['loading', 'available', 'empty', 'unavailable'],
-  actions: ['open-calendar', 'manage-macro-calendar-settings']
+  sourceStates: ['loading', 'available', 'empty', 'unavailable']
 } as const
 
-export type DashboardEconomicCalendarMonthState = 'available' | 'empty' | 'unavailable'
+/**
+ * 三句话，不是四个词（产品 2026-11-10，决定记录 §15）：**拿不到 ≠ 没有 ≠ 旧**。
+ *
+ * - `available`：读到了，这个月有安排；
+ * - `empty`：读到了，这个月确实没有——是**空**，不是「不可用」；
+ * - `unavailable`：读不到。`cause` 只在内部区分两种来路，**读者永远只看到一句「日程读不到」**：
+ *   「月份参数非法 / asOf 非规范」是我们自己的程序错误（要写日志），而载荷形状不符、查询自报不可用
+ *   是这一格没读成。给读者造第四个词只会让他以为是自己弄坏了什么。
+ */
+export type DashboardEconomicCalendarMonthState =
+  | Readonly<{ state: 'available' }>
+  | Readonly<{ state: 'empty' }>
+  | Readonly<{ state: 'unavailable'; cause: 'input-invalid' | 'query-unavailable' }>
 
 export type DashboardEconomicCalendarState =
   | { state: 'loading' }
-  | { state: DashboardEconomicCalendarMonthState }
+  | DashboardEconomicCalendarMonthState
 
 /**
  * Whether the month query was readable.
@@ -35,12 +46,14 @@ export function selectDashboardEconomicCalendarMonth(
   query: Readonly<{ month: string; asOf: string }>
 ): DashboardEconomicCalendarMonthState {
   const { month, asOf } = query
-  if (!dashboardEconomicCalendarPolicy.monthPattern.test(month)) return 'unavailable'
-  if (!isCanonicalUtcMillis(asOf)) return 'unavailable'
-  if (!isPlainDataRecord(input)) return 'unavailable'
-  if (input.state === 'unavailable') return 'unavailable'
-  if (input.state !== 'available' || input.asOf !== asOf || !Array.isArray(input.events)) return 'unavailable'
-  return input.events.length > 0 ? 'available' : 'empty'
+  // 这两条是**我们自己的程序错误**：参数是我们拼的、时钟是我们读的。归进「读不到」并让调用方记日志。
+  if (!dashboardEconomicCalendarPolicy.monthPattern.test(month)) return { state: 'unavailable', cause: 'input-invalid' }
+  if (!isCanonicalUtcMillis(asOf)) return { state: 'unavailable', cause: 'input-invalid' }
+  // 从这里往下都是「这一格没读成」：形状不符也是读不到，不是我们的输入错误。
+  if (!isPlainDataRecord(input)) return { state: 'unavailable', cause: 'query-unavailable' }
+  if (input.state === 'unavailable') return { state: 'unavailable', cause: 'query-unavailable' }
+  if (input.state !== 'available' || input.asOf !== asOf || !Array.isArray(input.events)) return { state: 'unavailable', cause: 'query-unavailable' }
+  return input.events.length > 0 ? { state: 'available' } : { state: 'empty' }
 }
 
 function isCanonicalUtcMillis(value: string): boolean {

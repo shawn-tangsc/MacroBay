@@ -14,8 +14,10 @@ describe('projectDashboardFearGreedSnapshot', () => {
     expect(JSON.stringify(result)).not.toMatch(/asOf|source|metric|https?:|credential|profile|health|error/i)
   })
 
-  it('refuses a daily reading past the one-publication tolerance', () => {
-    // 36h keeps one missed publication; past that the score is a stopped source, not today's mood.
+  it('keeps a reading past the one-publication tolerance, and calls it 偏旧 — not 读不到', () => {
+    // 36h keeps one missed publication; past that this is a stopped macro source. 但它仍然是**读到的读数**：
+    // 产品 2026-11-10（决定记录 §15）把它单独一档「指数偏旧 · 截至 {时刻}」，并进「读不到」会让读者
+    // 以为源坏了。分数与观测时刻一起带出去，行上要写清它截至哪一刻。
     const fresh = projectDashboardFearGreedSnapshot({
       state: 'available', asOf, score: 30, bucket: 'fear', observedAt: '2026-08-05T00:00:00.000Z'
     }, asOf)
@@ -24,7 +26,7 @@ describe('projectDashboardFearGreedSnapshot', () => {
     }, asOf)
 
     expect(fresh).toEqual({ state: 'available', score: 30, bucket: 'fear', observedAt: '2026-08-05T00:00:00.000Z' })
-    expect(stale).toEqual({ state: 'unavailable' })
+    expect(stale).toEqual({ state: 'stale', score: 30, bucket: 'fear', observedAt: '2026-08-04T23:59:59.000Z' })
   })
 
   it.each([

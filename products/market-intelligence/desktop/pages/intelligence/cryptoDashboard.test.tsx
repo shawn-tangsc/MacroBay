@@ -15,6 +15,8 @@ import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import type { DashboardFeedRowState } from './dashboardFeedStatusModel'
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellInstant, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
+import { projectDashboardPositioning, projectPositioningSourceRow } from './dashboardOpenInterestModel'
 
 const page = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/index.tsx'), 'utf8')
 const portal = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'), 'utf8')
@@ -788,6 +790,78 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).toContain("[data-gauge-bucket='extreme-greed']")
     expect(styles).toContain("[data-gauge-bucket-text='extreme-fear']")
     expect(styles).toContain("[data-gauge-bucket-text='extreme-greed']")
+  })
+
+  it('says 本月无日程 and 日程读不到 with two different words', async () => {
+    // 产品 2026-11-10（决定记录 §15）：拿不到 ≠ 没有。这两种今天以前长得一模一样，所以各断言一条。
+    const rowText = async (client: ReturnType<typeof dashboardClient>) => {
+      const container = document.createElement('div')
+      document.body.append(container)
+      const host = createRoot(container)
+      try {
+        await act(async () => host.render(createElement(CryptoIntelligenceDashboard, {
+          client, fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+          now: () => new Date(asOf), onConfigureSources: () => undefined,
+          onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+        })))
+        await flush()
+        return container.querySelector('[data-source-id="economic-calendar"] small')?.textContent ?? ''
+      } finally { await act(async () => host.unmount()); container.remove() }
+    }
+
+    expect(await rowText(dashboardClient([]))).toBe(text.dashboard.macroReleaseDynamics.sourceStates.empty)
+    expect(await rowText({ queryMonth: async () => ({ state: 'unavailable' as const, failureCode: 'calendar-query-unavailable' as const }) }))
+      .toBe(text.dashboard.macroReleaseDynamics.sourceStates.unavailable)
+    // 两句话必须是两句：一条是「读到但没有」，一条是「读不到」。
+    expect(text.dashboard.macroReleaseDynamics.sourceStates.empty)
+      .not.toBe(text.dashboard.macroReleaseDynamics.sourceStates.unavailable)
+  })
+
+  it('prints the 截至 instant on the 指数偏旧 row, and keeps the score on the gauge', async () => {
+    // 读到但过期：行上写明截至哪一刻（同一个统一时间格式化），表盘上仍然显示这个读数。
+    const container = document.createElement('div')
+    document.body.append(container)
+    const host = createRoot(container)
+    // 37 小时 > 36 小时那一档：正好 36 小时算新鲜（边界相等不降档）。
+    const observedAt = '2026-08-03T11:00:00.000Z'
+    try {
+      await act(async () => host.render(createElement(CryptoIntelligenceDashboard, {
+        client: dashboardClient(), fearGreedClient: fearGreedClient({ state: 'available', asOf, score: 22, bucket: 'extreme-fear', observedAt }),
+        fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
+        onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+      })))
+      await flush()
+      const row = container.querySelector('[data-source-id="fear-greed"] small')?.textContent ?? ''
+      // 同一个统一时间格式化（这里没有 TimeZoneProvider，读的就是进程时区）。
+      expect(row).toBe(text.dashboard.fearGreed.sourceStates.stale.replace('{time}', formatShellInstant(observedAt, { timeZone: resolveSystemTimeZone(), locale: 'zh-CN' })))
+      expect(container.querySelector('[data-sentiment-gauge]')?.textContent).toContain('22')
+    } finally { await act(async () => host.unmount()); container.remove() }
+  })
+
+  it('relays the card’s own staleness verdict into the 持仓 row, same instant and no second threshold', async () => {
+    // 行不许自己判新鲜度：它只转述卡片算出的 `staleSince`。同一份视图 → 行与卡必须同时是「偏旧」，
+    // 且写的是**同一个时刻**（同一个统一格式化）。改 policy 时两者一起翻，只翻一处就该红。
+    const view = projectDashboardPositioning({
+      state: 'available', asOf, window: '7d',
+      btc: [{ observedAt: '2026-08-04T22:00:00.000Z', notionalUsd: 7_269_000_000 }],
+      eth: [{ observedAt: '2026-08-04T22:00:00.000Z', notionalUsd: 3_190_000_000 }],
+      liquidationHintsState: 'available'
+    }, asOf, '7d')
+    if (view.state !== 'available') throw new Error('expected available')
+    const row = projectPositioningSourceRow(view, { state: 'available' })
+    expect(row).toEqual({ kind: 'stale', since: view.staleSince })
+    expect(view.staleSince).toBe('2026-08-04T22:00:00.000Z')
+
+    // 反方向：卡片判不旧（读数就在 asOf 前一刻）→ 行也必须是「读到」，不许自己再判一次。
+    const fresh = projectDashboardPositioning({
+      state: 'available', asOf, window: '7d',
+      btc: [{ observedAt: '2026-08-04T23:45:00.000Z', notionalUsd: 7_269_000_000 }],
+      eth: [{ observedAt: '2026-08-04T23:45:00.000Z', notionalUsd: 3_190_000_000 }],
+      liquidationHintsState: 'available'
+    }, asOf, '7d')
+    if (fresh.state !== 'available') throw new Error('expected available')
+    expect(fresh.staleSince).toBeUndefined()
+    expect(projectPositioningSourceRow(fresh, { state: 'available' })).toEqual({ kind: 'read', fundingPartial: false })
   })
 
   it('keeps no hand-written button elements in the dashboard', () => {

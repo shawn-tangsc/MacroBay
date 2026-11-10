@@ -125,6 +125,34 @@ export const dashboardPositioningPresentationPolicy = Object.freeze({
   chart: Object.freeze({ minimumNotionalSpan: 1, minimumVisibleHeightPercent: 4, maximumHeightPercent: 100 })
 })
 
+/**
+ * 来源状态条里「持仓」那一格要说的那一句（产品 2026-11-10，决定记录 §15）。
+ *
+ * **它不判新鲜度**：不读 `staleAfterMs`、不写任何秒数，只转述卡片算出来的 `staleSince`。
+ * 阈值只在 `dashboardPositioningPresentationPolicy` 里存在一次；行与卡因此不可能各判一套
+ * （「改 policy → 行和卡一起变」这条用例就是为了钉住这件事）。
+ *
+ * 词根与另两行统一：读到了 / 偏旧 · 截至 {时刻} / 读不到。
+ */
+export type PositioningSourceRowState =
+  | Readonly<{ kind: 'loading' }>
+  | Readonly<{ kind: 'read'; fundingPartial: boolean }>
+  | Readonly<{ kind: 'stale'; since: string }>
+  | Readonly<{ kind: 'empty' }>
+  | Readonly<{ kind: 'unreadable' }>
+
+export function projectPositioningSourceRow(
+  positioning: DashboardPositioningViewState,
+  funding: { state: string }
+): PositioningSourceRowState {
+  if (positioning.state === 'loading') return { kind: 'loading' }
+  if (positioning.state === 'unavailable') return { kind: 'unreadable' }
+  if (positioning.state === 'empty') return { kind: 'empty' }
+  // 偏旧压过「费率只有一支」：行上先说的是这一格的数据新不新。
+  if (positioning.staleSince) return { kind: 'stale', since: positioning.staleSince }
+  return { kind: 'read', fundingPartial: funding.state === 'partial' }
+}
+
 export function projectDashboardPositioning(value: unknown, asOf: string, window: OpenInterestWindow, onReload: () => void = () => undefined): DashboardPositioningViewState {
   try {
     if (!isCanonicalOpenInterestTime(asOf)) return { state: 'unavailable', cause: 'invalid-clock', onReload }

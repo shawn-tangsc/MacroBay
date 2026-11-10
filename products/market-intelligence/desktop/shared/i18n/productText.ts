@@ -310,6 +310,8 @@ mi: miText['zh-CN'],
             /** 临时入口：打开静态配置抽屉（0.4.3 预览版）。 */
             configureSettings: '配置',
             configDrawer: {
+              unreadable: '读不到',
+              openPlatformSettings: '去平台设置',
               menus: {
                 sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
                 briefing: '日报', notifications: '通知', platform: '平台与模型'
@@ -493,7 +495,7 @@ mi: miText['zh-CN'],
             macroReleaseDynamics: {
               calendarAction: '打开日历',
               sourceName: '经济日历',
-              sourceStates: { loading: '加载中', available: '日程可用', empty: '暂无官方日程', unavailable: '日程不可用' },
+              sourceStates: { loading: '加载中', available: '日程读到', empty: '本月无日程', unavailable: '日程读不到' },
               manageSettings: '管理宏观日历设置'
             },
             fearGreed: {
@@ -503,7 +505,7 @@ mi: miText['zh-CN'],
               score: '指数得分',
               observedAt: '观测时间',
               sourceName: '恐惧与贪婪指数',
-              sourceStates: { loading: '加载中', available: '指数可用', empty: '暂无观测值', unavailable: '指数不可用' },
+              sourceStates: { loading: '加载中', available: '指数读到', stale: '指数偏旧 · 截至 {time}', empty: '暂无观测值', unavailable: '指数读不到' },
               manageSettings: '管理恐惧与贪婪设置',
               buckets: { 'extreme-fear': '极度恐惧', fear: '恐惧', neutral: '中性', greed: '贪婪', 'extreme-greed': '极度贪婪' }
             },
@@ -588,7 +590,7 @@ mi: miText['zh-CN'],
 
               noRate: '该时段无费率',
               sourceName: 'Binance Futures Positioning',
-              sourceStates: { loading: '加载中', available: '持仓与费率可用', partial: '持仓可用，资金费率历史只有一支', empty: '暂无观测值', unavailable: '持仓数据不可用' },
+              sourceStates: { loading: '加载中', available: '持仓读到了', stale: '持仓偏旧 · 截至 {time}', partial: '持仓读到，费率历史只有一支', empty: '暂无观测值', unavailable: '持仓读不到' },
               manageSettings: '管理 Binance Futures Positioning 设置',
               assets: { btc: 'BTC', eth: 'ETH' },
               paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' },
@@ -1725,6 +1727,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             configureSources: 'Configure intelligence sources',
             configureSettings: 'Settings',
             configDrawer: {
+              unreadable: 'Could not read',
+              openPlatformSettings: 'Open platform settings',
               menus: {
                 sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',
                 briefing: 'Daily briefing', notifications: 'Notifications', platform: 'Platform and models'
@@ -1895,7 +1899,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             macroReleaseDynamics: {
               calendarAction: 'Open calendar',
               sourceName: 'Economic Calendar',
-              sourceStates: { loading: 'Loading', available: 'Schedule available', empty: 'No official schedule', unavailable: 'Schedule unavailable' },
+              sourceStates: { loading: 'Loading', available: 'Schedule read', empty: 'No schedule this month', unavailable: 'Schedule could not be read' },
               manageSettings: 'Manage macro calendar settings'
             },
             fearGreed: {
@@ -1905,7 +1909,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               score: 'Index score',
               observedAt: 'Observed at',
               sourceName: 'Fear & Greed Index',
-              sourceStates: { loading: 'Loading', available: 'Index available', empty: 'No observation', unavailable: 'Index unavailable' },
+              sourceStates: { loading: 'Loading', available: 'Index read', stale: 'Index is old · as of {time}', empty: 'No observation', unavailable: 'Index could not be read' },
               manageSettings: 'Manage Fear & Greed settings',
               buckets: { 'extreme-fear': 'Extreme fear', fear: 'Fear', neutral: 'Neutral', greed: 'Greed', 'extreme-greed': 'Extreme greed' }
             },
@@ -1986,7 +1990,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
 
               noRate: 'No funding rate in this window',
               sourceName: 'Binance Futures Positioning',
-              sourceStates: { loading: 'Loading', available: 'Positioning and funding available', partial: 'Positioning available; funding history has one leg', empty: 'No observation', unavailable: 'Positioning unavailable' },
+              sourceStates: { loading: 'Loading', available: 'Positioning read', stale: 'Positioning is old · as of {time}', partial: 'Positioning read; funding history has one leg', empty: 'No observation', unavailable: 'Positioning could not be read' },
               manageSettings: 'Manage Binance Futures Positioning settings',
               assets: { btc: 'BTC', eth: 'ETH' },
               paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' },

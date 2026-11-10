@@ -26,7 +26,9 @@ export function useDashboardEconomicCalendar({ client, now }: Input): DashboardE
     let active = true
     const asOf = readCanonicalClock(mountInput.now)
     if (!asOf) {
-      setState({ state: 'unavailable' })
+      // 我们自己的时钟坏了：读者看到的仍是「日程读不到」，日志里留一行给排查（不带任何数据）。
+      console.error('[dashboard] economic calendar row: the clock is not a canonical instant')
+      setState({ state: 'unavailable', cause: 'input-invalid' })
       return () => { active = false }
     }
 
@@ -35,10 +37,15 @@ export function useDashboardEconomicCalendar({ client, now }: Input): DashboardE
       .then(() => mountInput.client.queryMonth({ month, asOf }))
       .then(reply => {
         if (!active) return
-        setState({ state: selectDashboardEconomicCalendarMonth(reply, { month, asOf }) })
+        const next = selectDashboardEconomicCalendarMonth(reply, { month, asOf })
+        // 只记「我们自己的程序错误」那一种：参数/时钟是我们拼的，坏了要留痕。
+        if (next.state === 'unavailable' && next.cause === 'input-invalid') {
+          console.error('[dashboard] economic calendar row: the month or the clock is invalid')
+        }
+        setState(next)
       })
       .catch(() => {
-        if (active) setState({ state: 'unavailable' })
+        if (active) setState({ state: 'unavailable', cause: 'query-unavailable' })
       })
 
     return () => { active = false }
