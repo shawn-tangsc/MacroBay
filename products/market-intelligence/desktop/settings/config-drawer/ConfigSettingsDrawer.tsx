@@ -280,11 +280,11 @@ export function ConfigSettingsDrawer({
         </section>)}
       </nav>
       <section
+        data-drawer-pane="true"
         aria-label={menuLabel(menu)}
         /* 有「左树 + 右详情」这一屏时，滚动交给两栏各自（菜单那一栏也自己滚），整块不滚。 */
         /* 只有真正的分栏屏（来源：左树 + 右详情）才吃两栏；通知屏是单列，套 split 会让卡片按内容宽度塌缩。 */
         className={`config-drawer__pane${menu === 'sources' && sourcesPanel !== undefined ? ' config-drawer__pane--split' : ''}`}>
-        <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
         {menu === 'sources'
           ? sourcesPanel === undefined
             ? (<SourcesStaticScreen />)

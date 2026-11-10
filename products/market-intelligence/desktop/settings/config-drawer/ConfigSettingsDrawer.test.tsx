@@ -365,15 +365,15 @@ describe('config settings drawer (static layout)', () => {
         open />
     ))
     const items = [...document.body.querySelectorAll<HTMLElement>('.settings-nav-item')]
-    const before = document.body.querySelector('.config-drawer__pane-title')?.textContent
+    const before = document.body.querySelector('[data-drawer-pane]')?.getAttribute('aria-label')
 
     act(() => { items[0]!.click() })
     expect(asked).toHaveLength(1)
     // 没有确认之前不换屏。
-    expect(document.body.querySelector('.config-drawer__pane-title')?.textContent).toBe(before)
+    expect(document.body.querySelector('[data-drawer-pane]')?.getAttribute('aria-label')).toBe(before)
 
     act(() => { asked[0]!.onDiscard() })
-    expect(document.body.querySelector('.config-drawer__pane-title')?.textContent).not.toBe(before)
+    expect(document.body.querySelector('[data-drawer-pane]')?.getAttribute('aria-label')).not.toBe(before)
   })
 
   it('trusts the host when it says the screen is dirty, even if no panel reported it', () => {
@@ -418,6 +418,16 @@ describe('config settings drawer (static layout)', () => {
     }
     expect(open('sources', { sourcesPanel: <div /> })).toContain('config-drawer__pane--split')
     expect(open('notifications', { notificationsPanel: <div data-notification-screen="true" /> })).not.toContain('config-drawer__pane--split')
+  })
+
+  it('drops the visible page title but keeps the screen named for screen readers', () => {
+    // 用户：抽屉顶部那个页名与左列菜单重复，去掉。但读屏不能因此失去「这是哪一屏」：
+    // 内容区用 aria-label 取当前菜单项的文案（不可见语义）。
+    const body = mount('processing')
+    expect(body.querySelector('.config-drawer__pane-title')).toBeNull()
+    const pane = body.querySelector('[data-drawer-pane="true"]')!
+    const current = body.querySelector('.settings-nav-item[aria-current="page"]')!.textContent
+    expect(pane.getAttribute('aria-label')).toBe(current)
   })
 
   it('never prints an internal key name on any static screen', () => {

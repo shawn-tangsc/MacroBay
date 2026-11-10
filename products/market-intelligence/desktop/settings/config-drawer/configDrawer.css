@@ -81,15 +81,6 @@
   min-height: 0;
 }
 
-.config-drawer__pane-title {
-  margin: 0;
-  color: var(--text-strong);
-  /* 页面主名：16 / 1.35 / 650（界面设计 2026-11-10 定档）。 */
-  font-size: 16px;
-  font-weight: 650;
-  line-height: 1.35;
-}
-
 .config-drawer__group {
   display: grid;
   gap: 0;
