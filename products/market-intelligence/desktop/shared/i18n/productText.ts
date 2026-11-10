@@ -333,7 +333,6 @@ mi: miText['zh-CN'],
                 sentimentFollowsFastModel: '跟随快速模型',
                 sentimentUnknownReason: '评分模型设置读不到'
               },
-              openPlatformSettings: '去平台设置',
               openModelService: '去模型服务',
               menus: {
                 sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
@@ -1810,7 +1809,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 sentimentFollowsFastModel: 'Follows the fast model',
                 sentimentUnknownReason: 'The scoring model settings could not be read'
               },
-              openPlatformSettings: 'Open platform settings',
               openModelService: 'Open model service',
               menus: {
                 sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',
