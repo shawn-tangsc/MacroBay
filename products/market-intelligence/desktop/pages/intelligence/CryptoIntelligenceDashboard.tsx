@@ -2,6 +2,7 @@ import { Button } from 'antd'
 import { hostScreenDirty } from './drawerScreenDirty'
 
 import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
+import { LoadingState } from '@platform/ui/components/loading'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { ConfigDrawerPanel } from './ConfigDrawerPanel'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
@@ -174,6 +175,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     ...(capitalCellOff('stablecoin') === undefined ? {} : { stablecoin: capitalCellOff('stablecoin') }),
     ...(capitalCellOff('etf') === undefined ? {} : { etf: capitalCellOff('etf') })
   }
+  // 情绪卡那一格被关掉：卡仍在，卡内遮罩说「来源没有启用」。
+  const fearGreedCellOff = isCellEnabled(cellState.cells, dashboardCellId('fear-greed', 'index'))
+    ? undefined
+    : { sourceLabel: cellLabel('fear-greed', 'index') ?? '', onOpenSources: () => onManageSource() }
   // 市场状态表每一行：读不到 / 未启用就画状态行（不是删行）。
   const QUOTES_ROW_CELL_KEYS = {
     index: 'ndx', btc: 'btc', eth: 'eth', dxy: 'usd', gold: 'gold', us10y: 'ust10y', realRate: 'ust10y'
@@ -185,7 +190,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     return [[row, decision.kind === 'source-unknown' ? 'unreadable' : 'disabled']]
   }))
   const calendarState = useDashboardEconomicCalendar({ client, now })
-  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readGates.fearGreed, now })
+  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
   const [fundingReloadKey, setFundingReloadKey] = useState(0)
   const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, disabled: !readsReady || !readGates.positioning, now, reloadKey: fundingReloadKey })
@@ -366,7 +371,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         text={crossAssetText} /> : null}
-      {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源都没启用」+ 去启用；
+      {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源没有启用」+ 去启用；
           读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
       {readsReady ? (() => {
         // 三支（读到 / 读不到 / 没启用）**同一个落点**：右栏日历卡上方那块 `policySlot`。
@@ -385,20 +390,23 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">
-        {readsReady && readGates.fearGreed ? <SentimentPanel fearGreedState={fearGreedState} text={text} onRetry={reloadFearGreed} /> : null}
+        {readsReady
+          ? <SentimentPanel fearGreedState={fearGreedState} text={text} onRetry={reloadFearGreed}
+              {...(fearGreedCellOff === undefined ? {} : { cellOff: fearGreedCellOff })} />
+          : <LoadingState label={text.fearGreed.loading} minHeight={120} />}
         {/* 资金面卡自己逐格标「没配置 / 没启用」（`ef952ba`），宿主只把两格的状态传进去，
             不再用「两格都能读」决定画不画卡——那正是用户骂的整卡隐藏。 */}
-        {readsReady ? <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
+        <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
           onRefresh={() => void refreshCapitalConditions()}
           refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed}
-          cellAvailability={capitalCellAvailability} /> : null}
+          cellAvailability={capitalCellAvailability} />
       </div>
       <div className="mi-crypto-dashboard__positioning-row">
-        {readsReady ? <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
+        <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
           onWindowChange={setPositioningWindow} text={text.positioning}
           {...(positioningCells ? { cells: positioningCells } : {})}
           onOpenSources={() => onManageSource()}
-          onReloadFunding={() => setFundingReloadKey(key => key + 1)} /> : null}
+          onReloadFunding={() => setFundingReloadKey(key => key + 1)} />
         {/* A conclusion about the card above it, not another section: the reader asks "so what do
             these two legs mean together" while looking at the chart, and a band of its own read
             as an unrelated module. */}
