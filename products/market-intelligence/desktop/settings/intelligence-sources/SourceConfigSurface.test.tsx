@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,15 +7,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { SourceConfigSurface, type SourceConfigSurfaceProps } from './SourceConfigSurface'
-import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { SourcesSettingsPane, type SourcesSettingsPaneProps } from './SourcesSettingsPane'
+import type { ProviderView, SettingsView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 
 /**
- * C4：设置页与日历面板是**同一份配置面**。
+ * C4：设置页与配置抽屉渲染的是**同一个 `SourcesSettingsPane`**。
  *
- * 两个宿主交同一份事实（同一个源），渲染出的字段与状态必须**逐项相同**：
- * 行、药丸、四格、采集策略、立即运行、行尾动作，顺序也相同。
- * 这里把「设置页形态」与「日历形态」各渲染一次，按 DOM 顺序取签名对比——
- * 少了 `policy` 或改了顺序，这条当场红。
+ * 判据不是「两条 props 生成路径长得像」，而是：同一个源、同一份选中状态，两个宿主各自交出的
+ * props 渲染出来的**字段与状态逐项相同**（行、药丸、四格、采集策略、立即运行、行尾动作，顺序也同）。
+ * 少交 `policy` 当场红——那正是以前「日历那侧连 policy 都没有」的缺口。
  */
 const settingsText = productText['zh-CN'].settings.intelligenceSources
 
@@ -43,8 +44,12 @@ function provider(view: SourceView): ProviderView {
   return { providerId: 'bls', displayName: 'Bureau of Labor Statistics (BLS)', category: 'macro', credential: 'none', healthMarker: 'none', sources: [view] }
 }
 
-function baseProps(view: SourceView): SourceConfigSurfaceProps {
-  const profiles = {
+function view(view: SourceView): SettingsView {
+  return { groups: [{ category: 'macro', providers: [provider(view)] }], counts: { total: 1, enabled: 1, pending: 0, failed: 0 } }
+}
+
+function profiles(view: SourceView): Record<string, unknown> {
+  return {
     [view.sourceId]: {
       profileId: `profile-${view.sourceId}`, sourceId: view.sourceId, enabled: view.enabled,
       collectionPreset: 'balanced' as const, includeInSentiment: false, scopePolicy: 'all' as const,
@@ -52,81 +57,160 @@ function baseProps(view: SourceView): SourceConfigSurfaceProps {
       updatedAt: '2026-11-01T00:00:00.000Z'
     }
   }
+}
+
+const TREE_LABELS: SourcesSettingsPaneProps['treeLabels'] = {
+  title: settingsText.title,
+  categories: settingsText.sourceCategories,
+  providerNames: settingsText.providerNames,
+  providerSummary: settingsText.providerSummary,
+  unavailableCountOne: settingsText.unavailableCountOne,
+  unavailableCountOther: settingsText.unavailableCountOther
+}
+
+/**
+ * 两个宿主各自的 props 形状（照抄调用点）：
+ * - 设置页：`index.tsx`，带页面级 `notice`；
+ * - 抽屉：`DashboardSourcesPanel.tsx`，无 `notice`。
+ * 其余每一项都必须相同——这道用例就是拿它来比的。
+ */
+function settingsHost(sourceView: SourceView): SourcesSettingsPaneProps {
+  return {
+    filter: 'all',
+    onFilterChange: () => undefined,
+    onSelectProvider: () => undefined,
+    selectedProviderId: 'bls',
+    notice: <></>,
+    treeLabels: TREE_LABELS,
+    surface: surfaceOf(sourceView),
+    view: view(sourceView)
+  }
+}
+
+function drawerHost(sourceView: SourceView): SourcesSettingsPaneProps {
+  return {
+    filter: 'all',
+    onFilterChange: () => undefined,
+    onSelectProvider: () => undefined,
+    selectedProviderId: 'bls',
+    treeLabels: TREE_LABELS,
+    surface: surfaceOf(sourceView),
+    view: view(sourceView)
+  }
+}
+
+function surfaceOf(sourceView: SourceView): SourcesSettingsPaneProps['surface'] {
   return {
     text: settingsText,
-    provider: provider(view),
-    policy: { labels: settingsText.collectionPolicy, onChange: () => {}, profiles, supportsSentimentById: {} },
-    supportsRunNowById: { [view.sourceId]: true },
+    policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: {} },
+    supportsRunNowById: { [sourceView.sourceId]: true },
     onToggleSource: async () => true,
     onRunNow: async () => ({ kind: 'succeeded' as const, notice: '采集成功。' }),
-    showSourceDetails: true
+    onDraftChange: () => undefined,
+    showSourceDetails: true,
+    surface: 'settings'
   }
 }
 
-/** 宿主差异只在「谁提供回调/翻译」，事实与文案完全相同。 */
-function settingsHost(view: SourceView): SourceConfigSurfaceProps {
-  return { ...baseProps(view), onDraftChange: () => {}, onChanged: () => {} }
+/** happy-dom 每次挂载的 `useId` 都不同；把纯挂载标识归一化掉，比的是内容。 */
+function normalize(html: string): string {
+  return html
+    .replace(/ id="[^"]*"/g, '')
+    .replace(/ aria-describedby="[^"]*"/g, '')
+    .replace(/ aria-controls="[^"]*"/g, '')
 }
 
-function calendarHost(view: SourceView): SourceConfigSurfaceProps {
-  return {
-    ...baseProps(view),
-    // 日历宿主没有草稿回调和 onChanged，但**字段一个不少**：这是 C4 的判据。
-    onToggleSource: async () => true
-  }
-}
-
-async function signature(props: SourceConfigSurfaceProps): Promise<string[]> {
+async function renderPane(props: SourcesSettingsPaneProps): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children: createElement(SourceConfigSurface, props) }))
+    root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai', children: createElement(SourcesSettingsPane, props) }))
     await Promise.resolve()
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-  const rows = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__row, .intelligence-health-item, .collapsible-group')]
-  return rows.map((node) => node.textContent ?? '')
+  return container
 }
 
-describe('the settings page and the calendar panel render the same configuration', () => {
+async function signature(props: SourcesSettingsPaneProps): Promise<{ tree: string; detail: string }> {
+  const container = await renderPane(props)
+  const tree = container.querySelector('.intelligence-catalog-pane')?.textContent ?? ''
+  const detail = normalize(container.querySelector('.settings-detail-pane')?.innerHTML ?? '')
+  await act(async () => root?.unmount()); root = null
+  document.body.replaceChildren()
+  return { tree, detail }
+}
+
+describe('the settings page and the config drawer render the same sources pane (C4)', () => {
   it('matches field for field and state for state on an unavailable source', async () => {
-    const view = source({
+    const sourceView = source({
       unavailable: { reasonCode: 'official-endpoint-returned-403', automaticSync: 'stopped', lastSuccessfulSyncAt: '2026-10-22T07:29:41.000Z', decidedAt: '2026-11-08' }
     })
-    const fromSettings = await signature(settingsHost(view))
-    await act(async () => root?.unmount()); root = null
-    const fromCalendar = await signature(calendarHost(view))
-    expect(fromCalendar).toEqual(fromSettings)
-    // 两处都必须有策略组、四格与运行入口——「逐项一致」不是「两边都少同一项」。
-    expect(fromSettings.join('\n')).toContain(settingsText.collectionPolicy.title)
-    expect(fromSettings.join('\n')).toContain(settingsText.health.todayReading)
-    // 不可用源没有「立即运行」按钮，但第四格必须给出原因——不是两边都少同一项。
-    expect(fromSettings.join('\n')).toContain(settingsText.health.runNow.unavailable)
+    const fromSettings = await signature(settingsHost(sourceView))
+    const fromDrawer = await signature(drawerHost(sourceView))
+
+    expect(fromDrawer).toEqual(fromSettings)
+    // 「逐项一致」不是「两边都少同一项」：策略组、四格、运行入口都得在。
+    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.title)
+    expect(fromSettings.detail).toContain(settingsText.health.todayReading)
+    expect(fromSettings.detail).toContain(settingsText.health.runNow.unavailable)
+    // 目录一侧同样逐项一致（含那颗「不可用源」数量标记）。
+    expect(fromSettings.tree).toContain(settingsText.unavailableCountOne.replace('{count}', '1'))
   })
 
   it('matches field for field and state for state on a healthy source', async () => {
-    const view = source()
-    const fromSettings = await signature(settingsHost(view))
-    await act(async () => root?.unmount()); root = null
-    const fromCalendar = await signature(calendarHost(view))
-    expect(fromCalendar).toEqual(fromSettings)
-    expect(fromSettings.join('\n')).toContain(settingsText.collectionPolicy.title)
-    expect(fromSettings.join('\n')).toContain(settingsText.health.runAction.run)
+    const sourceView = source()
+    const fromSettings = await signature(settingsHost(sourceView))
+    const fromDrawer = await signature(drawerHost(sourceView))
+    expect(fromDrawer).toEqual(fromSettings)
+    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.title)
+    expect(fromSettings.detail).toContain(settingsText.health.runAction.run)
   })
 
-  it('turns the host write callbacks into the one switch/run path, with the host origin', async () => {
-    // 看板/日历宿主只有那三个回调：surface 负责把它们接到组件的「开关 / 立即运行」上。
+  it('is sensitive to a host that forgets the policy group', async () => {
+    // 这条钉住上面两条「真的会红」：抽屉那侧少交 policy，签名必须不同。
+    const sourceView = source()
+    const withPolicy = await signature(drawerHost(sourceView))
+    const withoutPolicy = await signature({ ...drawerHost(sourceView), surface: { ...surfaceOf(sourceView), policy: undefined } })
+    expect(withoutPolicy.detail).not.toEqual(withPolicy.detail)
+  })
+
+  it('both hosts hand the pane the same facts and callbacks, and declare the settings surface', () => {
+    const settingsBlock = surfaceBlock('./index.tsx')
+    const drawerBlock = surfaceBlock('../../pages/intelligence/DashboardSourcesPanel.tsx')
+    const required = ['text:', 'policy:', 'supportsRunNowById', 'onRunNow:', 'onToggleSource:', 'onDraftChange:', "surface: 'settings'"]
+    for (const block of [settingsBlock, drawerBlock]) {
+      for (const key of required) expect(block).toContain(key)
+    }
+  })
+})
+
+/** 取宿主文件里 `surface={{ … }}` 那一段（到声明的面为止），守卫只看这一段。 */
+function surfaceBlock(relativePath: string): string {
+  const marker = "surface: 'settings'"
+  const file = new URL(relativePath, import.meta.url)
+  const source = readFileSync(file, 'utf8')
+  const start = source.indexOf('surface={{')
+  const end = source.indexOf(marker, start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  return source.slice(start, end + marker.length)
+}
+
+describe('the config surface adapts a host that only has the three write callbacks', () => {
+  it('turns them into the one switch/run path, with the host origin', async () => {
     const write = vi.fn(async () => {})
     const run = vi.fn(async () => {})
-    const view = source()
+    const sourceView = source()
     const props: SourceConfigSurfaceProps = {
-      ...baseProps(view),
-      onToggleSource: undefined,
-      onRunNow: undefined,
+      text: settingsText,
+      provider: provider(sourceView),
+      policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: {} },
+      supportsRunNowById: { [sourceView.sourceId]: true },
       onWriteSourceEnabled: write,
       writeOrigin: 'calendar-drawer',
-      onRunSource: run
+      onRunSource: run,
+      showSourceDetails: true
     }
     const container = document.createElement('div')
     document.body.append(container)
@@ -137,16 +221,15 @@ describe('the settings page and the calendar panel render the same configuration
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    // 先跑一次；此时源还是启用态，运行入口在场。
     const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === settingsText.health.runAction.run)
     expect(runButton).not.toBeUndefined()
     await act(async () => { runButton?.click() })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect(run).toHaveBeenCalledWith(view.sourceId)
+    expect(run).toHaveBeenCalledWith(sourceView.sourceId)
 
     const toggle = container.querySelector<HTMLButtonElement>('button[role="switch"]')!
     await act(async () => { toggle.click() })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect(write).toHaveBeenCalledWith(expect.objectContaining({ sourceId: view.sourceId }), false, 'calendar-drawer')
+    expect(write).toHaveBeenCalledWith(expect.objectContaining({ sourceId: sourceView.sourceId }), false, 'calendar-drawer')
   })
 })
