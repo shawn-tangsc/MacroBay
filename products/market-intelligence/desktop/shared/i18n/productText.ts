@@ -311,6 +311,10 @@ mi: miText['zh-CN'],
             configureSettings: '配置',
             configDrawer: {
               unreadable: '读不到',
+              values: {
+                modelServiceConfigured: '已配置',
+                modelServiceUnconfigured: '未配置'
+              },
               openPlatformSettings: '去平台设置',
               menus: {
                 sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
@@ -1728,6 +1732,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             configureSettings: 'Settings',
             configDrawer: {
               unreadable: 'Could not read',
+              values: {
+                modelServiceConfigured: 'Configured',
+                modelServiceUnconfigured: 'Not configured'
+              },
               openPlatformSettings: 'Open platform settings',
               menus: {
                 sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',

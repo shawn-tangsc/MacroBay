@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
 
+import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { isModelServiceConfigured } from '@platform/ai/providers/modelServiceReadiness'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
+import { productText } from '../../shared/i18n/productText'
 import type { DrawerPlatformValues } from './drawerScreenView'
 
 /**
@@ -11,25 +16,51 @@ import type { DrawerPlatformValues } from './drawerScreenView'
  * 不放在抽屉目录里：抽屉不许 import 数据层（那条守卫还在），这里由**宿主**用它、再传进去。
  */
 export function usePlatformDrawerValues(): DrawerPlatformValues {
+  const language = useShellLanguage()
   const [values, setValues] = useState<DrawerPlatformValues>({})
 
   useEffect(() => {
     let active = true
     void (async () => {
-      try {
-        const raw = (await window.platform?.settings?.get()) as Record<string, unknown> | undefined
-        if (!active || raw === undefined) return
-        setValues(readPlatformValues(raw))
-      } catch {
-        // 读失败：留空 → 抽屉显示「读不到」。不写「未设置」。
-      }
+      // 两份读数各自成败：设置读不到仍可给「模型服务」那一档，反之亦然；
+      // 哪一份没读到，就把那一档留空（抽屉画「读不到」，不画「未设置」）。
+      const [settingsResult, providersResult] = await Promise.allSettled([
+        window.platform?.settings?.get(),
+        window.platform?.modelProviders?.list()
+      ])
+      if (!active) return
+      const raw = settingsResult.status === 'fulfilled'
+        ? (settingsResult.value as Record<string, unknown> | undefined)
+        : undefined
+      const providers = providersResult.status === 'fulfilled'
+        ? (providersResult.value as readonly SafeModelProvider[] | undefined)
+        : undefined
+      setValues({
+        ...(raw === undefined ? {} : readPlatformValues(raw)),
+        ...(providers === undefined ? {} : { modelService: modelServiceValue(providers, language) })
+      })
     })()
     return () => {
       active = false
     }
-  }, [])
+  }, [language])
 
   return values
+}
+
+/**
+ * 「模型服务」那一行只给一档事实：**已配置 / 未配置**。
+ *
+ * 判据是 `isModelServiceConfigured`（供应商三件齐，与 `resolveChatModel` 同一函数），
+ * 这里只负责把它翻成读者语言；不显示是哪个供应商、也不显示任何 key。
+ * 供应商列表读不到时**不调用**本函数——那种情况是「读不到」，不是「未配置」。
+ */
+export function modelServiceValue(
+  providers: readonly SafeModelProvider[],
+  language: 'zh-CN' | 'en-US'
+): string {
+  const text = productText[language].pages.intelligence.portal.dashboard.configDrawer.values
+  return isModelServiceConfigured(providers) ? text.modelServiceConfigured : text.modelServiceUnconfigured
 }
 
 const text = (value: unknown): string | undefined =>
@@ -44,8 +75,7 @@ function readPlatformValues(raw: Record<string, unknown>): DrawerPlatformValues 
     language: text(preferences.language),
     theme: text(preferences.displayStyle) ?? text(preferences.theme),
     proxy: text(proxy.mode),
-    // 模型服务页的「是否配置」还没有在渲染层暴露成单一视图：留空 → 显示「读不到」，
-    // 不编一个模型名。
-    modelService: undefined
+    // 「模型服务」不在这一份设置快照里：由 `modelServiceValue` 从供应商读数单独算
+    // （见上面的 hook），这里不编一个值。
   }
 }
