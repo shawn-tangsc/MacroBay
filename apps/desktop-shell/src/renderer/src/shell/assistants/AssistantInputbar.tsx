@@ -16,6 +16,8 @@ import {
 import { IconButton } from '@platform/ui/components/icon-button'
 import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 import { useToast } from '@platform/ui/components/toast'
+import type { ChatSettings } from '@platform/settings/schema/appSettings'
+import { isSendShortcut } from '../chat/chatSendShortcut'
 import type { PlatformText } from '../../i18n/platformText'
 import { resolveAssistantsText, type AssistantsTextPath } from '../../i18n/assistantsTextKey'
 import {
@@ -39,6 +41,8 @@ type AssistantInputbarProps = {
   assistantSelected?: boolean
   composerEnabled?: boolean
   topicSelected: boolean
+  /** 与智能体输入栏同一份 `settings.chat.sendShortcut`，判定走 `chatSendShortcut`。 */
+  sendShortcut: ChatSettings['sendShortcut']
   /** 话题还没选时，把读者送到话题选择器去（页面层给回调；输入条不自己找 DOM）。 */
   onRequireTopic: () => void
   /** 提及选择器不可用时，把读者送到顶部模型选择器（同样由页面层做焦点交接）。 */
@@ -92,6 +96,7 @@ export function AssistantInputbar({
   assistantSelected = true,
   composerEnabled,
   topicSelected,
+  sendShortcut,
   onRequireTopic,
   onRequireModel,
   statusMessage,
@@ -130,7 +135,7 @@ export function AssistantInputbar({
         disabled={!canCompose}
         onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey) {
+          if (isSendShortcut(event, sendShortcut)) {
             event.preventDefault()
             onSend()
           }

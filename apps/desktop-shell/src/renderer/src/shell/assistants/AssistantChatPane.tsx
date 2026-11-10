@@ -32,7 +32,7 @@ type AssistantChatPaneProps = {
   modelReady: boolean
   statusMessage: string | null
   confirmDeleteMessage: boolean
-  chatSettings: Pick<ChatSettings, 'fontSize' | 'messageStyle' | 'narrowMode'> | null
+  chatSettings: Pick<ChatSettings, 'fontSize' | 'messageStyle' | 'narrowMode' | 'sendShortcut'> | null
   onDraftChange: (value: string) => void
   onSend: () => void
   onStop: () => void
@@ -188,6 +188,7 @@ export function AssistantChatPane({
         assistantSelected={assistantSelected}
         composerEnabled={composerEnabled}
         topicSelected={Boolean(topic)}
+        sendShortcut={chatSettings?.sendShortcut ?? 'enter'}
         onRequireTopic={onRequireTopic}
         onRequireModel={onRequireModel}
         statusMessage={statusMessage}
