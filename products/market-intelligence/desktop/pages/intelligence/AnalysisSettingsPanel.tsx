@@ -105,10 +105,7 @@ export function AnalysisSettingsPanel({ onState }: Readonly<{
       <SettingsRow
         copyClassName="config-drawer__label"
         headClassName="config-drawer__label-head"
-        label={<>
-          <strong>{text.analysisEnabled}</strong>
-          <small className="config-drawer__row-hint">{text.analysisEnabledHint}</small>
-        </>}
+        label={<strong>{text.analysisEnabled}</strong>}
         rowClassName="config-drawer__row"
         controlWrapperClassName="config-drawer__control">
         <Switch

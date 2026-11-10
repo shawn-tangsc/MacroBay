@@ -369,7 +369,7 @@
   background: transparent;
 }
 
-.config-drawer__source-dot--warn { background: var(--warn); }
+.config-drawer__source-dot--warn { background: var(--caution); }
 
 .config-drawer__source-dot--bad { background: var(--danger); }
 
@@ -435,7 +435,7 @@
   border: 1px solid var(--accent);
   border-radius: 6px;
   background: var(--accent);
-  color: var(--on-accent, #fff);
+  color: var(--accent-contrast);
   font: inherit;
   font-size: var(--font-body);
   cursor: pointer;
