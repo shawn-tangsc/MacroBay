@@ -46,15 +46,6 @@
 /* 卡内那句状态词比行里大一档（12 对 11），词与图标仍复用 `.mi-source-state` 这一套。 */
 .mi-source-veil .mi-source-state { font-size: var(--font-body); line-height: var(--line-body); }
 
-/* 退役中：整卡级改走 `.mi-source-veil-*`，等调用点迁完这一组即可删除。 */
-.mi-source-card {
-  display: grid; gap: 8px; padding: 16px; min-height: 120px; align-content: center;
-}
-.mi-source-card__title {
-  margin: 0; font-size: 13px; font-weight: 650; line-height: 1.4; color: var(--text-strong);
-}
-.mi-source-card__actions { display: flex; gap: 8px; }
-
 .mi-source-row {
   display: flex; align-items: center; gap: 8px;
   min-height: 44px; padding: 0 12px; color: var(--muted); cursor: pointer;
