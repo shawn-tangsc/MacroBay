@@ -363,13 +363,23 @@ describe('intelligence notification settings', () => {
     await render()
     const keys = (): string[] =>
       [...(container?.querySelectorAll('[data-setting-key]') ?? [])].map((node) => node.getAttribute('data-setting-key') ?? '')
+    /**
+     * 四个 tab 状态里**实际渲染出来**的键取并集。反向判据（清单 → 页面）就靠它：
+     * 往清单里加一条、页面任何状态都不画，并集就少一条，这条会红。
+     */
+    const rendered = new Set<string>()
+    const take = (): string[] => {
+      const current = keys()
+      for (const key of current) rendered.add(key)
+      return current
+    }
 
     // 默认选第一项（模块信号触发）。
-    expect(keys()).toEqual(['setting:notifications.channel-event.signal-triggered'])
+    expect(take()).toEqual(['setting:notifications.channel-event.signal-triggered'])
     await selectItem(1)
-    expect(keys()).toEqual(['setting:notifications.channel-event.briefing-ready'])
+    expect(take()).toEqual(['setting:notifications.channel-event.briefing-ready'])
     await selectItem(2)
-    expect(keys()).toEqual([
+    expect(take()).toEqual([
       'setting:notifications.push-outlet',
       'setting:notifications.push-threshold'
     ])
@@ -386,7 +396,7 @@ describe('intelligence notification settings', () => {
     })
     await render()
     await selectItem(3)
-    expect(keys()).toEqual([
+    expect(take()).toEqual([
       'setting:notifications.surfaces',
       'setting:notifications.calendar.enabled',
       'setting:notifications.calendar.lead',
@@ -408,7 +418,7 @@ describe('intelligence notification settings', () => {
     })
     await render()
     await selectItem(3)
-    expect(keys()).toEqual([
+    expect(take()).toEqual([
       'setting:notifications.surfaces',
       'setting:notifications.calendar.enabled',
       'setting:notifications.calendar.lead',
@@ -418,9 +428,14 @@ describe('intelligence notification settings', () => {
       'setting:notifications.calendar.landed-countries.codes'
     ])
 
-    // 页面 → 注册表：渲染出的每个键都必须在已迁移清单里，且是 settings 面上的真实声明。
-    for (const key of keys()) {
-      expect(MIGRATED_SETTING_KEYS).toContain(key)
+    // 清单 → 页面（反向，架构师 2026-11-10 要求的那一半）：四个状态并集必须与清单**集合相等**。
+    // 只做「渲染出的键 ∈ 清单」时，往清单里加一条而页面不画不会红——那正是混合渲染的漏点。
+    // 这里不按 tab 手写第二份键→tab 表（行还带条件、分在三个组件里），并集来自真实渲染，
+    // 清单多一条就少一个渲染证据，清单少一条并集就多一条，两边都红。
+    expect([...rendered].sort()).toEqual([...MIGRATED_SETTING_KEYS].sort())
+
+    // 页面 → 注册表：清单里每一条都必须是 settings 面上的真实声明。
+    for (const key of MIGRATED_SETTING_KEYS) {
       const declared = settingRegistry.notifications.find((row) => row.key === key)
       expect(declared?.surfaces).toEqual(['settings'])
     }
