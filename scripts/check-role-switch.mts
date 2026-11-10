@@ -25,12 +25,18 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'out', 'build', 'coverage', '
 /** 平台组件的唯一实现文件。 */
 const PLATFORM_SWITCH_FILES = new Set<string>()
 
-/** 存量白名单：只减不增。每条：路径 → 为什么现在还是手写、换平台开关会发生什么。 */
+/**
+ * **待清欠账**（不是「已批准例外」）：只减不增，清掉一处就删一行。
+ *
+ * 这两条的理由是「换组件要同步改行高」——那是**工作量**，不是能力边界，所以它们不被批准为长期例外；
+ * 台账各有一行，判据是「改成平台 `Switch` + 行高与现状一致（或界面设计重新签）」。
+ * 写在这里只是为了让门禁能跑，不是给历史遗留发通行证。
+ */
 const ALLOWED: Readonly<Record<string, string>> = {
   'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelDrawer.tsx':
-    '待迁 antd Switch：轨道尺寸与抽屉里的行高绑定，换组件要同步改行高',
+    '欠账：换平台 Switch 要同步改抽屉行高；清掉后删这一行',
   'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx':
-    '待迁 antd Switch：卡片密度决定轨道尺寸，换组件要一起改卡片行高'
+    '欠账：换平台 Switch 要同步改卡片行高；清掉后删这一行'
 }
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
