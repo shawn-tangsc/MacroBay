@@ -127,8 +127,14 @@ export const DRAWER_PREVIEW_SCREENS: readonly PreviewScreen[] = [
       {
         titleKey: 'configDrawer.groups.status',
         rows: [
-          { key: 'notifyEvents', labelKey: 'configDrawer.rows.notifyEvents', control: 'readonly' },
-          { key: 'notifyChannels', labelKey: 'configDrawer.rows.channels', control: 'switch' },
+          // 四条频道事件拆开：并成一行只读，等于把读者今天能拨的事画成「这里改不了」。
+          // 本版只读 + 跳转，**写路径 0.4.4 开**。
+          { key: 'notifyEventSignal', labelKey: 'configDrawer.rows.notifyEventSignal', control: 'readonly' },
+          { key: 'notifyEventBriefing', labelKey: 'configDrawer.rows.notifyEventBriefing', control: 'readonly' },
+          { key: 'notifyEventSentiment', labelKey: 'configDrawer.rows.notifyEventSentiment', control: 'readonly' },
+          { key: 'notifyEventCalendar', labelKey: 'configDrawer.rows.notifyEventCalendar', control: 'readonly' },
+          // 触达面是「多个可勾选项」，不是开关：值是列出已勾选的方式，本轮只读、不画可勾控件。
+          { key: 'notifyChannels', labelKey: 'configDrawer.rows.channels', control: 'readonly' },
           { key: 'notifyStrength', labelKey: 'configDrawer.rows.pushStrength', control: 'select' },
           { key: 'notifyCalendar', labelKey: 'configDrawer.rows.calendar', control: 'switch' },
           { key: 'notifyLead', labelKey: 'configDrawer.rows.leadTime', control: 'select' },
