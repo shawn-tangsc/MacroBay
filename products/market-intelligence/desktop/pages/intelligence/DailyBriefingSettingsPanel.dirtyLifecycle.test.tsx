@@ -8,7 +8,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
-import { DailyBriefingSettingsPanel, type BriefingScreenState } from './DailyBriefingSettingsPanel'
+import { DailyBriefingSettingsPanel, type BriefingSection, type BriefingScreenState } from './DailyBriefingSettingsPanel'
 
 vi.mock('../../shared/navigation/productShellNavigation', () => ({
   openModelSettings: vi.fn(),
@@ -93,7 +93,10 @@ function stubBridge(options: BridgeOptions = {}): void {
   })
 }
 
-async function mount(options: BridgeOptions = {}): Promise<Readonly<{ host: HTMLElement; last: () => BriefingScreenState | undefined }>> {
+async function mount(
+  options: BridgeOptions = {},
+  initialSection?: BriefingSection
+): Promise<Readonly<{ host: HTMLElement; last: () => BriefingScreenState | undefined }>> {
   stubBridge(options)
   const host = document.createElement('div')
   document.body.append(host)
@@ -103,7 +106,9 @@ async function mount(options: BridgeOptions = {}): Promise<Readonly<{ host: HTML
     const [state, setState] = useState<BriefingScreenState>({ dirty: false, saving: false, save: () => undefined })
     return <>
       <button data-probe-save="true" onClick={state.save} type="button">probe-save</button>
-      <DailyBriefingSettingsPanel onState={(next) => { latest = next; setState(next) }} />
+      <DailyBriefingSettingsPanel
+        onState={(next) => { latest = next; setState(next) }}
+        {...(initialSection === undefined ? {} : { initialSection })} />
     </>
   }
   await act(async () => root!.render(
@@ -557,5 +562,34 @@ describe('a period that did not save names itself on a danger notice', () => {
 
     expect(last()?.failure).toContain('AI 编辑未保存')
     expect(host.textContent).not.toContain('这一期没存上，再试一次。')
+  })
+})
+
+describe('focus.briefing.section', () => {
+  it('brings the named block into view once, even though it arrives after the first paint', async () => {
+    // AI 那一块要读到草稿才画得出来：只在挂载时试一次的话，锚点那时还不存在，会一声不响地不定位。
+    const scroll = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scroll })
+    try {
+      const { host } = await mount({}, 'ai')
+      expect(scroll).toHaveBeenCalledTimes(1)
+      const marked = [...host.querySelectorAll<HTMLElement>('[data-focused="true"]')]
+      expect(marked).toHaveLength(1)
+      expect(marked[0]?.getAttribute('data-briefing-section')).toBe('ai')
+    } finally {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    }
+  })
+
+  it('leaves the reader alone when no section was asked for', async () => {
+    const scroll = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scroll })
+    try {
+      const { host } = await mount()
+      expect(scroll).not.toHaveBeenCalled()
+      expect(host.querySelector('[data-focused]')).toBeNull()
+    } finally {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    }
   })
 })

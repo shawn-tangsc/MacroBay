@@ -69,9 +69,17 @@ type ScheduleRead =
  * `useDailyBriefingAiSettings`（**脏只认它的 `dirty` 一处**）。排期注册状态只从
  * `platform.jobs.listSchedules()` 的投影按期比对，不从启用开关推断、不拿「有期」当代理。
  */
-export function DailyBriefingSettingsPanel({ onState }: Readonly<{
+/**
+ * 屏内定位（`focus.briefing.section`）。四个值都能落地：前两个是区块，后两个是 AI 区块里的
+ * 那两行（模型、联网搜索）——入口说「去改模型」时该落到那一行，不是落到区块顶。
+ */
+export type BriefingSection = 'generation' | 'ai' | 'model' | 'webSearch'
+
+export function DailyBriefingSettingsPanel({ onState, initialSection }: Readonly<{
   /** 把「有没有改动 / 保存中 / 失败句 / 保存动作」报给抽屉壳。 */
   onState: (state: BriefingScreenState) => void
+  /** 屏内定位（只作初值、只成功滚一次）。 */
+  initialSection?: BriefingSection
 }>): React.ReactElement {
   const language = useShellLanguage()
   const text = productText[language].pages.intelligence.portal.dashboard.dailyBriefing
@@ -211,9 +219,29 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
     ? text.aiSettings.followDefault
     : `${text.aiSettings.followDefault} · ${ai.defaultModel.providerName} / ${ai.defaultModel.modelName}`
 
+  /*
+    定位：锚点就在这一屏自己画的节点上（区块或区块里的那一行），所以定位也放在这一层。
+    依赖里带 `ai.state`：AI 那一块要先读到草稿才画得出来，首帧锚点还不存在——不然「去改模型」
+    会落在原地。`focusedRef` 保证只成功滚一次，后续保存回执不再动读者的位置。
+  */
+  const focusedRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (initialSection === undefined || focusedRef.current !== null) return
+    const anchor = document.querySelector<HTMLElement>(`[data-briefing-section="${initialSection}"]`)
+    if (anchor === null) return
+    focusedRef.current = anchor
+    anchor.scrollIntoView?.({ block: 'nearest' })
+    anchor.setAttribute('data-focused', 'true')
+  }, [initialSection, ai.state])
+  useEffect(() => () => {
+    focusedRef.current?.removeAttribute('data-focused')
+    focusedRef.current = null
+  }, [])
+
   return <div className="briefing-settings-screen" data-briefing-settings-panel="true">
     {/* 两块都传 `flat`：抽屉正文**本身就是一张卡**（`ConfigDrawerContentCard`），区块再画框就是
         双框 + 双重内距（左缩进 30）。形态只由 `SettingsSection` 定义，调用点不自己写压平的 CSS。 */}
+    <div data-briefing-section="generation">
     <SettingsSection
       title={text.settingsDrawer.sections.generation}
       variant="flat"
@@ -336,12 +364,16 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
           </> : null}
         </SettingsRow> : null}
     </SettingsSection>
+    </div>
 
+    <div data-briefing-section="ai">
     <SettingsSection
       title={text.settingsDrawer.sections.ai}
       variant="flat"
     >
-        {ai.webSearchBlocked || !ai.webSearchSupported ? <InlineNotice
+        {/* 锚点只在那一行真画出来时存在：空 div 也能被 querySelector 命中，但滚到一个零高度节点
+            等于「定位了却没落到那一行」。 */}
+        {ai.webSearchBlocked || !ai.webSearchSupported ? <div data-briefing-section="webSearch"><InlineNotice
           action={{
             labelKey: ai.webSearchBlocked ? WEB_SEARCH_CONFIGURE_KEY : WEB_SEARCH_PROVIDERS_KEY,
             onSelect: openWebSearchSettings
@@ -365,7 +397,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
               variant="plain"
             />}
           />
-        </InlineNotice> : null}
+        </InlineNotice></div> : null}
         {ai.state === 'load-failed'
           ? <InlineNotice tone="danger">{text.aiSettings.loadFailed}</InlineNotice>
           : ai.state === 'loading' || ai.draft === null
@@ -452,6 +484,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                     />}
                   />
                 </>}
+                rowAttributes={{ 'data-briefing-section': 'model' }}
                 rowClassName="config-drawer__row">
                 <ModelPicker
                   allowClear
@@ -479,6 +512,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
               </SettingsRow> : null}
             </>}
     </SettingsSection>
+    </div>
 
     <BriefingPeriodDialog
       key={editing?.id ?? 'new'}

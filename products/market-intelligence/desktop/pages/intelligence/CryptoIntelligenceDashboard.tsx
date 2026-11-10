@@ -7,6 +7,8 @@ import { ErrorBoundary } from '@platform/ui/components/error-boundary'
 import { ConfigDrawerPanel } from './ConfigDrawerPanel'
 import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import type { ProcessingSection } from './ProcessingSettingsPanel'
+import type { BriefingSection } from './DailyBriefingSettingsPanel'
+import type { NotificationSection } from '../../settings/intelligence-notification/NotificationDrawerScreen'
 import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
 import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
@@ -341,13 +343,20 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           onScreenSave={drawerScreen.save}
           screenSaving={drawerScreen.saving}
           {...(drawerScreen.failure === undefined ? {} : { screenSaveFailure: drawerScreen.failure })}
-          briefingPanel={<ConfigDrawerPanel screen="briefing"><DailyBriefingSettingsPanel onState={setDrawerScreen} /></ConfigDrawerPanel>}
+          briefingPanel={<ConfigDrawerPanel screen="briefing"><DailyBriefingSettingsPanel
+              {...(initialDrawerSection?.menu === 'briefing'
+                ? { initialSection: initialDrawerSection.section as BriefingSection }
+                : {})}
+              onState={setDrawerScreen} /></ConfigDrawerPanel>}
           processingPanel={<ConfigDrawerPanel screen="processing"><ProcessingSettingsPanel
               {...(initialDrawerSection?.menu === 'processing'
                 ? { initialSection: initialDrawerSection.section as ProcessingSection }
                 : {})} /></ConfigDrawerPanel>}
           runLogPanel={<ConfigDrawerPanel screen="run-log"><RunLogDrawerPanel /></ConfigDrawerPanel>}
-          notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel /></ConfigDrawerPanel>}
+          notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel
+              {...(initialDrawerSection?.menu === 'notifications'
+                ? { initialSection: initialDrawerSection.section as NotificationSection }
+                : {})} /></ConfigDrawerPanel>}
               sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel pane="sources" initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
               sourcesDataPanel={<ConfigDrawerPanel screen="sourcesData"><DashboardSourcesPanel
                 pane="business"
