@@ -31,7 +31,7 @@ import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalC
 import type { DashboardCapitalCellAvailability, DashboardCapitalCellOff } from '../../features/industry/capital-conditions/CapitalConditionsPanel'
 
 import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
-import { dashboardRealSourcePolicy, FearGreedGaugePresentationPolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
+import { dashboardRealSourcePolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
 import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
 import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
 import { projectPositioningSourceRow, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
@@ -54,16 +54,15 @@ import type { DashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedSt
 import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
 import { productText } from '../../shared/i18n/productText'
-import { LoadingState } from '@platform/ui/components/loading'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
-import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
 
 import { PolicyPathCard, PolicyPathUnavailable } from './PolicyPathCard'
+import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
 
@@ -415,40 +414,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       </div>
     </main>
   )
-}
-
-function SentimentPanel({ fearGreedState, text, onRetry }: { fearGreedState: DashboardFearGreedState; text: CryptoDashboardText; onRetry: () => void }): React.ReactElement {
-  const formatTime = useShellTimeFormat()
-  return <>
-    <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.sentiment.title}</h2>
-      <div className="mi-crypto-dashboard__sentiment-gauge" data-sentiment-gauge>
-      {/* 读到但偏旧也是读数：显示分数与它真实的观测时间，不当成「读不到」——那是把源说坏了。 */}
-      {fearGreedState.state === 'available' || fearGreedState.state === 'stale' ? <>
-        {/* The readout disc sits on the pivot and is painted after the needle, so the score can
-            own the centre again: the needle starts underneath the disc instead of crossing it. */}
-        <span className="mi-crypto-dashboard__sentiment-dial">
-          <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}{FearGreedGaugePresentationPolicy.ticks.map((tick) => <path key={tick.score} className="mi-crypto-dashboard__gauge-tick" d={tick.path} />)}<g transform={`rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)} ${FearGreedGaugePresentationPolicy.needleOrigin})`}>
-            <path className="mi-crypto-dashboard__gauge-needle"
-              data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}
-              d={FearGreedGaugePresentationPolicy.needlePath} />
-          </g>
-          <circle className="mi-crypto-dashboard__gauge-readout"
-            data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}
-            cx={FearGreedGaugePresentationPolicy.readout.cx} cy={FearGreedGaugePresentationPolicy.readout.cy}
-            r={FearGreedGaugePresentationPolicy.readout.radius} />
-          </svg>
-          <strong>{fearGreedState.score}</strong>
-        </span>
-        <span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
-      </> : fearGreedState.state === 'loading'
-        ? <LoadingState label={text.fearGreed.loading} minHeight={120} />
-        : fearGreedState.state === 'empty'
-          ? <StateView state="empty" reasonCode="not-yet" />
-          : <StateView state="error" reasonCode="unavailable"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} />}
-      </div>
-    </section>
-  </>
 }
 
 /**
