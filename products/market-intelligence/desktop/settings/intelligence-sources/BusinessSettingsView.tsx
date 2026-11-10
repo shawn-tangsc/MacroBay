@@ -223,19 +223,30 @@ export function BusinessSettingsContent(props: {
               key={group.key}
               style={{ ['--cell-span' as string]: Math.min(group.cells.length, 3) }}>
               {group.label === '' ? null : <div className="business-cell__title">{group.label}</div>}
-              <div
-                className="business-cell__items"
-                style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
-                {group.cells.map((cell) => {
-                  const coverage = group.key === 'official' ? OFFICIAL_COVERAGE[cell.sourceId] : undefined
-                  return renderCell(
+              {group.key === 'official'
+                /* 官方源那张卡下面还有一层「管什么」的卡：`CPI / 就业`、`利率决议`、`GDP / PCE`，
+                   每一张里面才是源名 + 开关（用户 2026-11-11）。 */
+                ? <div className="business-topic-grid">
+                  {group.cells.map((cell) => <div
+                    className="business-topic"
+                    /* 主题卡按自己的名字认，不用 cellId：同一主题下以后可能不止一个源。 */
+                    data-business-topic-card={OFFICIAL_COVERAGE[cell.sourceId] ?? cell.sourceId}
+                    key={cell.cellKey}>
+                    <div className="business-topic__title">{OFFICIAL_COVERAGE[cell.sourceId] ?? nameOf(cell.sourceId)}</div>
+                    <div className="business-cell__items">
+                      {renderCell(modulesForBusiness(props.business)[0]?.id ?? props.business, cell, [])}
+                    </div>
+                  </div>)}
+                </div>
+                : <div
+                  className="business-cell__items"
+                  style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
+                  {group.cells.map((cell) => renderCell(
                     modulesForBusiness(props.business)[0]?.id ?? props.business,
                     cell,
-                    [],
-                    coverage === undefined ? undefined : `${coverage} · ${nameOf(cell.sourceId)}`
-                  )
-                })}
-              </div>
+                    []
+                  ))}
+                </div>}
             </div>)}
           </div>
         </section>}

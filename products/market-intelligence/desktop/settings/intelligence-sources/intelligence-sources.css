@@ -1736,6 +1736,39 @@
   font-weight: 600;
 }
 
+/* 官方源那张卡里的第三层：「管什么」的主题卡（CPI / 就业、利率决议、GDP / PCE）。
+   主题卡一行 3 个；每张里面才是源名 + 开关。 */
+.business-topic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.business-topic {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.business-topic__title {
+  color: var(--text-strong);
+  font-size: var(--font-meta);
+  font-weight: 600;
+}
+
+@media (max-width: 1180px) {
+  .business-topic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 820px) {
+  .business-topic-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 .business-cell__items {
   display: grid;
   /* 卡里的源项数 = 卡占的列数（`--cell-items`，最多 3）：一个源就占满自己那张卡，不拉伸到整行。 */
