@@ -85,11 +85,27 @@ vi.mock('../../settings/intelligence-sources/useIntelligenceSourcesSettings', ()
   })
 }))
 
-vi.mock('../../shared/ipc/newsSentimentClient', () => ({
-  newsSentimentClient: {
-    getSentimentModelFact: async () => ({ state: 'rule' })
+/**
+ * mock 必须与真实调用面一致，否则测的是失败路径。
+ *
+ * 内容处理屏的评分模型格调的是 `newsSentimentClient.getSettings()` / `saveSettings(patch)`
+ * （`ProcessingSettingsPanel.tsx:312/328`）；早先这里给的是 `getSentimentModelFact`——名字对不上，
+ * 于是每次渲染都走 catch 落到「读不到」，用例只判翻译区块在不在所以没暴露。以后谁加一条跟评分有关的
+ * 断言就会踩进去，所以按真实方法名给。
+ */
+vi.mock('../../shared/ipc/newsSentimentClient', () => {
+  const view = {
+    settings: { modelScoringEnabled: false },
+    resolution: { source: 'rule' },
+    defaultFastModel: undefined
   }
-}))
+  return {
+    newsSentimentClient: {
+      getSettings: async () => view,
+      saveSettings: async () => view
+    }
+  }
+})
 
 let root: Root | null = null
 afterEach(async () => {
