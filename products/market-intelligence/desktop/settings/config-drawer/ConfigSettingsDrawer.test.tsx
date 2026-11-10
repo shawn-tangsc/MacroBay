@@ -1,3 +1,8 @@
+// 抽屉目录的「不接数据」守卫（文件头先说规则，再说为什么）：
+//
+// **文案不是数据。** 允许 `../../shared/i18n/` 这一个前缀，是因为接 i18n 只是读静态文本，
+// 不会让抽屉开始读视图或 IPC；IPC / 视图 / service 仍然**一律红**。
+// 允许名单只放这一个前缀，别再随手加第二条——加一条就等于给「顺手接个数据」开了口子。
 // @vitest-environment happy-dom
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
