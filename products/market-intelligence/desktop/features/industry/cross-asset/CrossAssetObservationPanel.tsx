@@ -241,7 +241,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         : text.assetLabels[row.id]
       return <CellStateRow id={row.id} name={name} kind={state}
         label={state === 'unreadable' ? cellStateLabels!.unreadable : cellStateLabels!.disabled}
-        colSpan={2 + crossAssetWindows.length} />
+        colSpan={2 + crossAssetWindows.length}
+        {...(state === 'unreadable' ? { onRetry: () => void view.refresh() } : {})} />
     }
     return row.state === 'loading'
     ? <LoadingStatusRow key={row.id} id={row.id} text={text} />
@@ -380,9 +381,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
           // 至少一条线可用就照画；一条都没有才降级成那一句。宿主没给文案时保持旧行为。
           if (cellStateLabels !== undefined && lineStates.every(state => state !== undefined)) {
             // 一条能用的线都没有：整图不画，只留那一句（未启用 / 暂时读不到）。
-            return <CellStateCard title={text.chart}
+            return <CellStateCard
               kind={lineStates.includes('unreadable') ? 'unreadable' : 'disabled'}
-              label={lineStates.includes('unreadable') ? cellStateLabels.unreadable : cellStateLabels.disabled} />
+              label={lineStates.includes('unreadable') ? cellStateLabels.unreadable : cellStateLabels.disabled}
+              onSelect={() => { if (lineStates.includes('unreadable')) void view.refresh() }} />
           }
           return snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
           hiddenLines={chartLinesHiddenBy([...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {})])}

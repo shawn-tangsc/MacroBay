@@ -1,3 +1,4 @@
+import { dashboardFeedStatusPublicPolicy } from '../../../contracts/macro/dashboardFeedStatusContracts'
 import { describe, expect, it } from 'vitest'
 
 import { createDashboardFeedStatusQuery } from './dashboardFeedStatusQuery'
@@ -27,7 +28,9 @@ const keyed = (sourceId: string, enabled = true) => ({ [sourceId]: { enabled, cr
 describe('dashboard feed status query', () => {
   it('reports one entry per admitted source, in the strip\'s reading order', async () => {
     const status = await query().status()
-    expect(status.map(source => source.sourceId)).toEqual(['realmarketapi-market', 'twelve-data-market', 'fred-rates-liquidity'])
+    // 契约里每个源都在输出里有位置（扩源漏一条会在这里红），顺序就是契约的顺序。
+    expect(status.map(source => source.sourceId)).toEqual([...dashboardFeedStatusPublicPolicy.sourceIds])
+    expect(status).toHaveLength(dashboardFeedStatusPublicPolicy.sourceIds.length)
   })
 
   it('separates unconfigured from configured-but-disabled', async () => {

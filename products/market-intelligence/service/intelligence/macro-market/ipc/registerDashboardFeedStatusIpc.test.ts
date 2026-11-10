@@ -34,7 +34,7 @@ describe('dashboard feed status IPC', () => {
 
   it('collapses a failing read, and a source the boundary does not admit, to unavailable', async () => {
     expect(await registered(async () => { throw new Error('store-unavailable') })({})).toEqual({ state: 'unavailable' })
-    expect(await registered(async () => [{ ...entries[0], sourceId: 'binance-futures-positioning' } as never])({})).toEqual({ state: 'unavailable' })
+    expect(await registered(async () => [{ ...entries[0], sourceId: 'not-a-dashboard-source' } as never])({})).toEqual({ state: 'unavailable' })
     // The re-parse is the second guard: a code outside the admitted list never reaches the renderer.
     expect(await registered(async () => [{ sourceId: 'realmarketapi-market', enabled: true, hasCredential: true, failureCode: 'apikey=SECRET0123456789' } as never])({}))
       .toEqual({ state: 'unavailable' })

@@ -1,6 +1,7 @@
-import { Button } from 'antd'
 import { CircleSlash, TriangleAlert } from 'lucide-react'
 import type { ReactElement } from 'react'
+
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import '../../shared/styles/sourceAvailability.css'
 
@@ -22,39 +23,48 @@ function CellStateSentence({ kind, label }: { kind: CellStateKind; label: string
   )
 }
 
-/** 表格里的一格：整行仍以字段名开头，右侧是状态词（规范 §2.2）。 */
-export function CellStateRow({ id, name, kind, label, colSpan }: {
+/** 行级：未配置/未启用不可点（`aria-disabled`）；**读不到可点重试**（真按钮，整句就是它的名字）。 */
+export function CellStateRow({ id, name, kind, label, colSpan, onRetry }: {
   id: string
   name: string
   kind: CellStateKind
   label: string
   colSpan: number
+  onRetry?: () => void
 }): ReactElement {
+  const Icon = kind === 'unreadable' ? TriangleAlert : CircleSlash
+  const state = (
+    <>
+      <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
+      {label}
+    </>
+  )
   return (
-    <tr aria-disabled="true" data-source-state={kind} data-status-row={id}>
+    <tr aria-disabled={kind === 'unreadable' ? undefined : 'true'} data-source-state={kind} data-status-row={id}>
       <th scope="row"><span>{name}</span></th>
-      <td colSpan={colSpan}><CellStateSentence kind={kind} label={label} /></td>
+      <td colSpan={colSpan}>
+        {kind === 'unreadable' && onRetry !== undefined
+          ? <button className="mi-source-state" data-state={kind} onClick={onRetry} type="button">{state}</button>
+          : <span className="mi-source-state" data-state={kind}>{state}</span>}
+      </td>
     </tr>
   )
 }
 
-/** 整卡：标题 + 一句状态 + 一颗主动作（规范 §2.1）。 */
-export function CellStateCard({ title, kind, label, action, onSelect }: {
-  title: string
+/**
+ * 整卡级按规范用 `StateView`（不是共享卡）：不画自己的标题与外壳，状态面、图标、动作都归平台。
+ * 一句话走 `productReason`，动作各一颗：没启用 → 去启用；读不到 → 再试一次。
+ */
+export function CellStateCard({ kind, label, onSelect }: {
   kind: CellStateKind
   label: string
-  action?: string
-  onSelect?: () => void
+  onSelect: () => void
 }): ReactElement {
-  return (
-    <section className="mi-source-card" data-source-state={kind}>
-      <h3 className="mi-source-card__title">{title}</h3>
-      <CellStateSentence kind={kind} label={label} />
-      {action === undefined || onSelect === undefined
-        ? null
-        : <div className="mi-source-card__actions">
-          <Button onClick={onSelect} size="small" type="default">{action}</Button>
-        </div>}
-    </section>
-  )
+  return kind === 'unreadable'
+    ? <StateView state="error" reasonCode="unreadable" size="md"
+        productReason={{ key: 'mi.dashboard.cellSourceUnreadable', resolve: () => label }}
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect }} />
+    : <StateView state="disabled" reasonCode="target-disabled" size="md"
+        productReason={{ key: 'mi.dashboard.cellNotEnabled', resolve: () => label }}
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.enable, onSelect }} />
 }
