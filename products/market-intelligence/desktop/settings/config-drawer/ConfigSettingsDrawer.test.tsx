@@ -92,10 +92,12 @@ function openRows(rows: ReadonlyArray<{ key: string; value?: string; emptyLabel?
 }
 
 describe('config settings drawer (static layout)', () => {
-  it('shows the six menus, with the current one marked once', () => {
+  it('shows every registered menu, with the current one marked once', () => {
+    // 七屏：来源 / 内容处理 / AI 分析 / 日报 / 通知 / 运行日志 / 平台与模型。
     const body = mount('sources')
     const items = [...body.querySelectorAll<HTMLElement>('.settings-nav-item')]
-    expect(items).toHaveLength(6)
+    expect(items).toHaveLength(DRAWER_MENUS.length)
+    expect(items).toHaveLength(7)
     // 选中态是 `aria-current="page"`（设置页那套导航），编号格已经不在了。
     expect(items.filter((item) => item.getAttribute('aria-current') === 'page')).toHaveLength(1)
     expect(items.filter((item) => item.classList.contains('active'))).toHaveLength(1)

@@ -42,7 +42,7 @@ export type PreviewScreen = {
 }
 
 /** 六个菜单（顺序即左栏顺序）。 */
-export const DRAWER_MENUS = ['sources', 'processing', 'analysis', 'briefing', 'notifications', 'platform'] as const
+export const DRAWER_MENUS = ['sources', 'processing', 'analysis', 'briefing', 'notifications', 'runLog', 'platform'] as const
 export type ConfigDrawerMenu = (typeof DRAWER_MENUS)[number]
 
 /** 已经确认存在的文案键（写在这里 = 我核过它今天就在文案表里）。 */
@@ -171,5 +171,6 @@ export const DRAWER_PREVIEW_ROW_COUNTS: Readonly<Partial<Record<ConfigDrawerMenu
   analysis: 2,
   briefing: 7,
   notifications: 10,
+  runLog: 0,
   platform: 6
 }

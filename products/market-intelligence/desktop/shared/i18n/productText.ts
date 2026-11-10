@@ -344,7 +344,7 @@ mi: miText['zh-CN'],
               openPlatformSettings: '去平台设置',
               menus: {
                 sources: '来源与采集', processing: '内容处理', analysis: 'AI 分析',
-                briefing: '日报', notifications: '通知', platform: '平台与模型'
+                briefing: '日报', notifications: '通知', runLog: '运行日志', platform: '平台与模型'
               },
               groups: {
                 thisSource: '这一条源',
@@ -1828,7 +1828,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               openPlatformSettings: 'Open platform settings',
               menus: {
                 sources: 'Sources and collection', processing: 'Content processing', analysis: 'AI analysis',
-                briefing: 'Daily briefing', notifications: 'Notifications', platform: 'Platform and models'
+                briefing: 'Daily briefing', notifications: 'Notifications', runLog: 'Run log', platform: 'Platform and models'
               },
               groups: {
                 thisSource: 'This source',

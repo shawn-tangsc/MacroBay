@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { Drawer } from '@platform/ui/components/drawer'
 import { Popover } from '@platform/ui/components/popover'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { Bell, Info, ListTree, MonitorCog, Newspaper, ScanText, Sparkles } from 'lucide-react'
+import { Bell, Info, ListTree, MonitorCog, Newspaper, ScanText, ScrollText, Sparkles } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -56,6 +56,12 @@ export type ConfigSettingsDrawerProps = {
    * 抽屉只负责把它放进两栏。传了它就不再用下面的静态版或扁平列表。
    */
   sourcesPanel?: React.ReactNode
+  /**
+   * 运行日志：**只读表格**，直接用设置页那一份实现（同一块，不复制）。
+   *
+   * 与来源屏同一条：内容与读取都在宿主那边，抽屉只把它放进这一屏；宽度例外由 `.config-drawer__pane--wide` 给。
+   */
+  runLogPanel?: React.ReactNode
   /**
    * AI 分析：**宿主渲染好的整块**——就是「AI 分析设置」对话框的内容本体（`variant="inline"`）。
    *
@@ -111,7 +117,7 @@ const EMPTY_VALUE = '—'
 const DRAWER_NAV_GROUPS: ReadonlyArray<{ id: string; menus: readonly ConfigDrawerMenu[] }> = [
   { id: 'collect', menus: ['sources', 'processing'] },
   { id: 'output', menus: ['analysis', 'briefing', 'notifications'] },
-  { id: 'platform', menus: ['platform'] }
+  { id: 'record', menus: ['runLog', 'platform'] }
 ]
 
 /** 六屏各一颗图标（不再用 1–6 编号）。 */
@@ -121,6 +127,7 @@ const DRAWER_MENU_ICONS: Readonly<Record<ConfigDrawerMenu, typeof Info>> = {
   analysis: Sparkles,
   briefing: Newspaper,
   notifications: Bell,
+  runLog: ScrollText,
   platform: MonitorCog
 }
 
@@ -131,6 +138,7 @@ export function ConfigSettingsDrawer({
   processingPanel,
   notificationsView,
   notificationsPanel,
+  runLogPanel,
   analysisPanel,
   briefingView,
   briefingPanel,
@@ -264,6 +272,9 @@ export function ConfigSettingsDrawer({
         {menu === 'processing' && processingPanel !== undefined
           ? processingPanel
           : null}
+        {menu === 'runLog' && runLogPanel !== undefined
+          ? runLogPanel
+          : null}
         {menu === 'analysis' && analysisPanel !== undefined
           ? analysisPanel
           : null}
@@ -285,7 +296,7 @@ export function ConfigSettingsDrawer({
             resolveText={resolveText}
             values={platformValues} />)
           : null}
-        {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisPanel !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
+        {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisPanel !== undefined) || (menu === 'runLog' && runLogPanel !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{groupLabel(group.titleKey)}</div>}
