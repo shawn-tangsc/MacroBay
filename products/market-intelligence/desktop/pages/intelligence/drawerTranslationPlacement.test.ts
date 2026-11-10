@@ -25,9 +25,13 @@ describe('the drawer keeps translation in one screen only', () => {
   })
 
   it('keeps translation on the drawer content screen', () => {
+    // 内容处理屏现在**自己一份实现**（用户 2026-11-10：一个区块一个圆角容器，不再借设置页那张
+    // 每字段一个框的卡），所以钉的不是那个组件的名字，而是这一屏自己的稳定标记：
+    // 翻译区块、读同一份设置、举报表里那颗「翻译当前筛选结果」。
     const source = read('products/market-intelligence/desktop/pages/intelligence/ProcessingSettingsPanel.tsx')
-    expect(source).toContain('TranslationPreferencesSection')
     expect(source).toContain('useIntelligenceTranslationSettings')
+    expect(source).toContain('data-processing-section="translation"')
+    expect(source).toContain('labels.queueMissing')
   })
 
   it('keeps translation on the settings page, where the queue is per source', () => {

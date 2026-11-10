@@ -1,0 +1,47 @@
+/*
+ * 内容处理屏：**一个区块一个圆角容器**，容器里的行不再各自带边框/底色，只用发丝线分隔
+ * （用户 2026-11-10：「所有内容，不能有个统一的圆角背景吗？」）。
+ *
+ * 值全部取自设置页现状：圆角 10、1px `--border`、`--surface` 底；区块标题 13/650、行 44、
+ * 左右内距 12。**不新造骨架 class**，只在 `settings-section`（平台的区块件）上补这层容器，
+ * 因为平台那份只给结构、不含底色与圆角。
+ */
+.config-drawer-processing {
+  display: grid;
+  gap: 16px;
+}
+
+.config-drawer-processing .settings-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.config-drawer-processing .settings-section__header {
+  padding: 12px 12px 0;
+}
+
+.config-drawer-processing .settings-section__body {
+  padding: 4px 0 4px;
+}
+
+/* 行内右侧控件**左缘对齐**标签列的右边界（`SettingsRow` 的口径），
+   不沿用抽屉旧版把值右对齐的写法。 */
+.config-drawer-processing .config-drawer__value {
+  margin-left: 0;
+  text-align: left;
+}
+
+.config-drawer-processing .config-drawer__value--with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 区块内的一行小字（保存失败/已保存）：不再画一个盒子。 */
+.config-drawer-processing__note {
+  margin: 0;
+  padding: 4px 12px 8px;
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}

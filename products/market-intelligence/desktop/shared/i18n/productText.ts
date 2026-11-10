@@ -350,7 +350,8 @@ mi: miText['zh-CN'],
               groups: {
                 thisSource: '这一条源',
                 status: '状态',
-                policy: '采集策略'
+                policy: '采集策略',
+                sentimentScoring: '情绪评分'
               },
               rows: {
                 enabled: '启用',
@@ -1835,7 +1836,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               groups: {
                 thisSource: 'This source',
                 status: 'Status',
-                policy: 'Collection policy'
+                policy: 'Collection policy',
+                sentimentScoring: 'Sentiment scoring'
               },
               rows: {
                 enabled: 'Enable',

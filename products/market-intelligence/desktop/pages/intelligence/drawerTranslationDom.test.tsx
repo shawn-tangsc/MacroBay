@@ -114,11 +114,12 @@ describe('translation lives on the content screen only', () => {
   it('does not draw the translation block on the drawer sources screen', async () => {
     const host = await render(<DashboardSourcesPanel />)
     // 行为证明：界面上没有这块，不是 `hidden` / `display:none`。
-    expect(host.querySelector('.intelligence-translation-preferences')).toBeNull()
+    expect(host.querySelector('[data-processing-section="translation"]')).toBeNull()
   })
 
   it('still draws it on the drawer content screen', async () => {
     const host = await render(<ProcessingSettingsPanel />)
-    expect(host.querySelector('.intelligence-translation-preferences')).not.toBeNull()
+    // 内容处理屏自己一份实现（不再借设置页那张卡），所以钉的是新屏的稳定钩子：区块容器在。
+    expect(host.querySelector('[data-processing-section="translation"]')).not.toBeNull()
   })
 })

@@ -1,118 +1,281 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
+import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
+import { SettingsRow } from '@platform/ui/components/settings-row'
+import { SettingsSection } from '@platform/ui/components/settings-section'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { Info } from 'lucide-react'
-import { Select, Switch, Typography } from 'antd'
+import { Button, Select, Switch, Typography } from 'antd'
 
-import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { NewsSentimentSettingsView } from '../../../service/intelligence/schema/newsSentiment'
+import type { SafeIntelligenceTranslationSettings } from '../../../service/intelligence/schema/intelligenceTranslation'
 import { newsSentimentClient } from '../../shared/ipc/newsSentimentClient'
 import { productText } from '../../shared/i18n/productText'
-import { TranslationPreferencesSection } from '../../settings/intelligence-sources/TranslationPreferencesSection'
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
+import './ProcessingSettingsPanel.css'
 
 /**
- * 配置抽屉「内容处理」那一屏：翻译偏好搬设置页的同一份实现，评分模型这一行**可以在这里改**
- * （用户 2026-11-10：抽屉要做散落配置的唯一集中入口，原来那个弹框的活搬到这里）。
+ * 配置抽屉「内容处理」那一屏：**一个区块一个圆角容器**，容器里的行不再各自带边框/底色，
+ * 只用发丝线分隔（用户 2026-11-10：「所有内容，不能有个统一的圆角背景吗？」）。
  *
- * 评分模型这一行的四条口径：
- * - **关着只写「规则判断」，不画灰掉的下拉**——灰掉的下拉是假控件，读者会以为点不动是坏了；
- * - **选中即保存**（这一屏没有保存按钮），写口只有 `newsSentiment.saveSettings` 一条：
- *   保存失败当场说、控件留在原值，保存中禁用，不许连点发第二次写；
- * - **读不到是「未知」+ 原因进 ⓘ**，不许落成「规则判断」——那是设置明说的另一件事；
- * - 读不到时**不给写口**：不知道现在是什么，就不许盲写。
+ * 两个区块：
+ * - **翻译偏好**：一行一个字段（自动翻译 / 目标语言 / 翻译模型 / 翻译标题 / 翻译摘要 / 翻译证据摘录），
+ *   末行是统计与动作合成的一行（待处理 · 失败 · 已翻译 +「翻译当前筛选结果」）；
+ * - **情绪评分**：一行「情绪评分用哪个模型」——开关 + 模型下拉。
  *
- * 翻译偏好用的是设置页那张卡（`TranslationPreferencesSection` + `useIntelligenceTranslationSettings`），
- * 一个字段都没有新画。
+ * 这一屏**自己一份实现**，不再借用设置页那张卡（那张卡每个字段一个边框盒子，和抽屉其它屏不像一套）；
+ * 设置页那份原样留着，两边互不牵连。数据仍读同一份设置（翻译偏好的 hook、舆情的设置命令）。
  *
- * 这一屏不画标题：标题归抽屉（不做嵌套标题）。
+ * 四条口径：
+ * - 关着只写「规则判断」，**不画灰掉的下拉**——假控件一律不许；
+ * - 两处都是**即时保存**（没有草稿态、没有保存按钮），失败当场说、控件留在原值；
+ * - 读不到是「未知 / 读不到」+ 原因进 ⓘ，**不落成「规则判断」**；读不到时不给写口；
+ * - 行内右侧控件**左缘对齐标签列右边界**（`SettingsRow` 的口径），不是右对齐。
  */
 export function ProcessingSettingsPanel(): React.ReactElement {
   const language = useShellLanguage()
   const sourcesText = productText[language].settings.intelligenceSources
   const copy = productText[language].pages.intelligence.portal.dashboard.configDrawer
   const settingsText = productText[language].pages.intelligence.portal.newsSentiment.settingsModal
-  const translation = useIntelligenceTranslationSettings(sourcesText.translationPreferences)
+  const labels = sourcesText.translationPreferences
+  const translation = useIntelligenceTranslationSettings(labels)
   const sentiment = useSentimentModelSettings()
 
-  const options = useMemo(() => {
-    if (sentiment.state !== 'ready') return []
-    const models = sentiment.providers.flatMap((provider) =>
+  const settings = translation.settings
+  const counts = translation.moduleStatus
+  const modelOptions = useMemo(() => {
+    const providers = translation.modelProviders ?? []
+    const models = providers.flatMap((provider) =>
       provider.models
         .filter((model) => model.capabilities.chat)
         .map((model) => ({ value: `${provider.id}:${model.id}`, label: `${provider.name} · ${model.name}` }))
     )
-    const follow = sentiment.defaultFastName === undefined
-      ? settingsText.fastUnset
-      : settingsText.followFast.replace('{name}', sentiment.defaultFastName)
-    return [{ value: '', label: follow }, ...models]
-  }, [sentiment, settingsText.fastUnset, settingsText.followFast])
-
-  const valueText = sentiment.state === 'unreadable'
-    ? copy.values.autoUnknown
-    : sentiment.state === 'ready' && !sentiment.enabled
-      ? copy.values.sentimentRuleOnly
-      : ''
+    return [{ value: '', label: buildFollowDefaultLabel(settings, providers, labels) }, ...models]
+  }, [labels, settings, translation.modelProviders])
 
   return <div className="config-drawer-processing" data-processing-panel="true">
-    {/* 设置页那张翻译卡：`sourceIds` 不传 = 全局口径（这一屏不针对某个源）。 */}
-    {language !== 'en-US' ? <TranslationPreferencesSection
-      errorMessage={translation.errorMessage}
-      labels={sourcesText.translationPreferences}
-      loading={translation.loading}
-      modelProviders={translation.modelProviders}
-      moduleStatus={translation.moduleStatus}
-      notice={translation.notice}
-      onChange={(patch) => void translation.updateSettings(patch)}
-      onQueueMissing={() => void translation.queueMissing([])}
-      queuing={translation.queuing}
-      savedThisSession={translation.savedThisSession}
-      saving={translation.saving}
-      settings={translation.settings}
-    /> : null}
-    <div className="config-drawer__row" data-drawer-row="sentimentModel">
-      <span className="config-drawer__label">
-        {copy.rows.sentimentModel}
-        {/* 原因只进 ⓘ：正文只留「未知」两个字（与日报那一行同一条判据）。 */}
-        {sentiment.state === 'unreadable'
-          ? <Popover
-            content={<span>{copy.values.sentimentUnknownReason}</span>}
-            trigger={(triggerProps) => (
-              <IconButton
-                {...triggerProps}
-                ariaLabelKey="configDrawer.rowReason"
-                icon={Info}
-                onSelect={() => undefined}
-                resolveText={(key: string) => (key === 'configDrawer.rowReason' ? copy.values.sentimentUnknownReason : '')}
-                size="sm" />
-            )} />
-          : null}
-      </span>
-      {sentiment.state === 'ready' && sentiment.enabled
-        ? <Select
-          aria-label={copy.rows.sentimentModel}
-          disabled={sentiment.saving}
-          onChange={(next) => void sentiment.selectModel(String(next))}
-          options={options}
-          size="small"
-          value={sentiment.modelRef} />
-        : <span className="config-drawer__value">{valueText}</span>}
-      {sentiment.state === 'ready'
-        ? <Switch
-          aria-label={settingsText.modelScoring}
-          checked={sentiment.enabled}
-          disabled={sentiment.saving}
-          onChange={(next) => void sentiment.setEnabled(next)}
-          size="small" />
+    <div data-processing-section="translation">
+    <SettingsSection title={labels.title}>
+      {translation.loading ? <LoadingState label={labels.loading} minHeight={60} /> : null}
+      {!translation.loading && settings === undefined
+        ? <SettingsRow
+          controlWrapperClassName="config-drawer__value config-drawer__value--with-info"
+          copyClassName="config-drawer__label"
+          label={labels.moduleStatus}
+          rowClassName="config-drawer__row">
+          <Unreadable reason={translation.errorMessage ?? labels.loadFailed} />
+        </SettingsRow>
         : null}
-      {sentiment.saveFailed ? <Text role="status" type="danger">{settingsText.failed}</Text> : null}
+      {settings === undefined ? null : <>
+        <FieldRow label={labels.autoTranslateEnabled} rowKey="autoTranslateEnabled">
+          <Switch
+            aria-label={labels.autoTranslateEnabled}
+            checked={settings.autoTranslateEnabled}
+            disabled={translation.saving}
+            onChange={(autoTranslateEnabled) => void translation.updateSettings({ autoTranslateEnabled })}
+            size="small" />
+        </FieldRow>
+        <FieldRow label={labels.targetLocale} rowKey="targetLocale">
+          <Select
+            aria-label={labels.targetLocale}
+            disabled={translation.saving}
+            onChange={(targetLocale) => void translation.updateSettings({
+              targetLocale: targetLocale as SafeIntelligenceTranslationSettings['targetLocale']
+            })}
+            options={Object.entries(labels.targetLocales).map(([value, label]) => ({ value, label }))}
+            size="small"
+            value={settings.targetLocale} />
+        </FieldRow>
+        <FieldRow label={labels.translationModel} rowKey="translationModel">
+          <Select
+            aria-label={labels.translationModel}
+            disabled={translation.saving}
+            onChange={(ref) => {
+              const [providerId = '', modelId = ''] = String(ref).split(':')
+              void translation.updateSettings({ providerId, modelId })
+            }}
+            options={modelOptions}
+            size="small"
+            value={settings.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : ''} />
+        </FieldRow>
+        <FieldRow label={labels.translateTitle} rowKey="translateTitle">
+          <Switch
+            aria-label={labels.translateTitle}
+            checked={settings.translateTitle}
+            disabled={translation.saving}
+            onChange={(translateTitle) => void translation.updateSettings({ translateTitle })}
+            size="small" />
+        </FieldRow>
+        <FieldRow label={labels.translateSummary} rowKey="translateSummary">
+          <Switch
+            aria-label={labels.translateSummary}
+            checked={settings.translateSummary}
+            disabled={translation.saving}
+            onChange={(translateSummary) => void translation.updateSettings({ translateSummary })}
+            size="small" />
+        </FieldRow>
+        <FieldRow label={labels.translateEvidenceExcerpt} rowKey="translateEvidenceExcerpt">
+          <Switch
+            aria-label={labels.translateEvidenceExcerpt}
+            checked={settings.translateEvidenceExcerpt}
+            disabled={translation.saving}
+            onChange={(translateEvidenceExcerpt) => void translation.updateSettings({ translateEvidenceExcerpt })}
+            size="small" />
+        </FieldRow>
+        {/* 统计与动作合成一行：不再三个独立小盒，行尾一颗动作。 */}
+        <div className="config-drawer__row" data-drawer-row="translationStats">
+          <span className="config-drawer__label">{labels.moduleStatus}</span>
+          <span className="config-drawer__value">
+            {counts === undefined
+              ? <Unreadable reason={translation.errorMessage ?? labels.loadFailed} />
+              : `${labels.pendingCount} ${counts.pendingCount}${labels.joiner}${labels.failedCount} ${counts.failedCount}${labels.joiner}${labels.translatedCount} ${counts.translatedCount}`}
+          </span>
+          <Button
+            className="text-action"
+            disabled={translation.queuing}
+            loading={translation.queuing}
+            onClick={() => void translation.queueMissing([])}
+            size="small">
+            {labels.queueMissing}
+          </Button>
+        </div>
+        {translation.errorMessage === null || translation.errorMessage === undefined
+          ? null
+          : <Text className="config-drawer-processing__note" role="alert" type="danger">{translation.errorMessage}</Text>}
+      </>}
+    </SettingsSection>
+    </div>
+
+    <div data-processing-section="sentiment">
+    <SettingsSection title={copy.groups.sentimentScoring}>
+      <div className="config-drawer__row" data-drawer-row="sentimentModel">
+        <span className="config-drawer__label">
+          {copy.rows.sentimentModel}
+          {sentiment.state === 'unreadable'
+            ? <Popover
+              content={<span>{copy.values.sentimentUnknownReason}</span>}
+              trigger={(triggerProps) => (
+                <IconButton
+                  {...triggerProps}
+                  ariaLabelKey="configDrawer.rowReason"
+                  icon={Info}
+                  onSelect={() => undefined}
+                  resolveText={(key: string) => (key === 'configDrawer.rowReason' ? copy.values.sentimentUnknownReason : '')}
+                  size="sm" />
+              )} />
+            : null}
+        </span>
+        {sentiment.state === 'ready' && sentiment.enabled
+          ? <Select
+            aria-label={copy.rows.sentimentModel}
+            disabled={sentiment.saving}
+            onChange={(next) => void sentiment.selectModel(String(next))}
+            options={sentiment.state === 'ready' ? sentimentOptions(sentiment, settingsText) : []}
+            size="small"
+            value={sentiment.modelRef} />
+          : <span className="config-drawer__value">{sentimentValueText(sentiment, copy)}</span>}
+        {sentiment.state === 'ready'
+          ? <Switch
+            aria-label={settingsText.modelScoring}
+            checked={sentiment.enabled}
+            disabled={sentiment.saving}
+            onChange={(next) => void sentiment.setEnabled(next)}
+            size="small" />
+          : null}
+        {sentiment.saveFailed ? <Text role="status" type="danger">{settingsText.failed}</Text> : null}
+      </div>
+    </SettingsSection>
     </div>
   </div>
 }
 
 const { Text } = Typography
+
+/** 一行一个字段：标签左、控件右，行间一条发丝线（行本身不再带边框/底色）。 */
+function FieldRow(props: Readonly<{ label: string; rowKey: string; children: React.ReactNode }>): React.ReactElement {
+  return <SettingsRow
+    controlWrapperClassName="config-drawer__value"
+    copyClassName="config-drawer__label"
+    label={props.label}
+    rowAttributes={{ 'data-drawer-row': props.rowKey }}
+    rowClassName="config-drawer__row">
+    {props.children}
+  </SettingsRow>
+}
+
+/** 读不到：正文只留状态词，原因进 ⓘ（不画 0、不落成「规则判断」）。 */
+function Unreadable(props: Readonly<{ reason: string }>): React.ReactElement {
+  return <>
+    <span>读不到</span>
+    <Popover
+      content={<span>{props.reason}</span>}
+      trigger={(triggerProps) => (
+        <IconButton
+          {...triggerProps}
+          ariaLabelKey="configDrawer.rowReason"
+          icon={Info}
+          onSelect={() => undefined}
+          resolveText={(key: string) => (key === 'configDrawer.rowReason' ? props.reason : '')}
+          size="sm" />
+      )} />
+  </>
+}
+
+function sentimentValueText(
+  state: SentimentModelState,
+  copy: Readonly<{ values: Readonly<{ autoUnknown: string; sentimentRuleOnly: string }> }>
+): string {
+  if (state.state === 'unreadable') return copy.values.autoUnknown
+  if (state.state === 'ready' && !state.enabled) return copy.values.sentimentRuleOnly
+  return ''
+}
+
+/** 跟随默认模型那一项的说法：没配 / 供应商列表还没到 / 配了但不可用，各说各的。 */
+function buildFollowDefaultLabel(
+  settings: SafeIntelligenceTranslationSettings | undefined,
+  providers: readonly SafeModelProvider[],
+  labels: Readonly<{
+    followModelServiceDefault: string
+    parenOpen: string
+    parenClose: string
+    defaultModelNotConfigured: string
+    defaultModelUnavailable: string
+    joiner: string
+    modelPathSep: string
+  }>
+): string {
+  if (settings === undefined || providers.length === 0) return labels.followModelServiceDefault
+  if (!settings.defaultModelId.trim()) {
+    return `${labels.followModelServiceDefault}${labels.parenOpen}${labels.defaultModelNotConfigured}${labels.parenClose}`
+  }
+  const resolved = resolveConfiguredModel({
+    value: settings.defaultModelId,
+    providers,
+    isModelAcceptable: (_provider, model) => model.capabilities.chat === true
+  })
+  return resolved.ok
+    ? `${labels.followModelServiceDefault}${labels.joiner}${resolved.providerName}${labels.modelPathSep}${resolved.modelName}`
+    : `${labels.followModelServiceDefault}${labels.parenOpen}${labels.defaultModelUnavailable}${labels.parenClose}`
+}
+
+function sentimentOptions(
+  state: Extract<SentimentModelState, { state: 'ready' }>,
+  settingsText: Readonly<{ fastUnset: string; followFast: string }>
+): { value: string; label: string }[] {
+  const models = state.providers.flatMap((provider) =>
+    provider.models
+      .filter((model) => model.capabilities.chat)
+      .map((model) => ({ value: `${provider.id}:${model.id}`, label: `${provider.name} · ${model.name}` }))
+  )
+  const follow = state.defaultFastName === undefined
+    ? settingsText.fastUnset
+    : settingsText.followFast.replace('{name}', state.defaultFastName)
+  return [{ value: '', label: follow }, ...models]
+}
 
 type SentimentModelState =
   | Readonly<{ state: 'loading' }>
@@ -136,9 +299,6 @@ type SentimentModelActions = {
 /**
  * 评分模型那一格：读设置 + 两个写动作（开关、下拉）。**写失败不落成成功**——只有服务返回的
  * `NewsSentimentSettingsView` 说了算，失败就留在原值并当场提示。
- *
- * `resolution.source` 的三种情况照旧：`platform-fast` 是跟随快速模型（有名字就带上），
- * `explicit` 要把 `providerId/modelId` 翻成名字，翻不出来就是「读不到」，不是「跟随」。
  */
 function useSentimentModelSettings(): SentimentModelState & SentimentModelActions {
   const [state, setState] = useState<SentimentModelState>({ state: 'loading' })
