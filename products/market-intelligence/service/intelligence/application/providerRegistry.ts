@@ -116,9 +116,18 @@ export type PanelDefinition = {
 }
 
 /** `src()` 的输入：`purposes` 必填（注册表作者不许漏），其余字段可省略走默认。 */
-type SourceInput = Omit<SourceDefinition, 'providerId' | 'purposes'> & { purposes: SourcePurpose[] }
+/**
+ * `src()` 的输入：`purposes` 必填，`panels` **不许传**（它由 `purposes` 派生，传进来只会被静默覆盖）。
+ *
+ * `panels` 从类型上 `Omit` 掉，所以「顺手写一个 panels」是**编译错误**，不是运行期被悄悄改写——
+ * 面板归属只有一个声明处（`purposes`），这条让第二份声明连写都写不出来。
+ */
+type SourceInput = Omit<SourceDefinition, 'providerId' | 'purposes' | 'panels'> & { purposes: SourcePurpose[] }
 
-function src(input: Partial<Omit<SourceInput, 'purposes'>> & Pick<SourceInput, 'sourceId' | 'displayName' | 'purposes'>): SourceInput {
+/** `src()` 的输出：派生出 `panels`，`providerId` 由 `provider()` 补上。 */
+type SourceSeed = Omit<SourceInput, 'providerId'> & Pick<SourceDefinition, 'panels'>
+
+function src(input: Partial<Omit<SourceInput, 'purposes'>> & Pick<SourceInput, 'sourceId' | 'displayName' | 'purposes'>): SourceSeed {
   return {
     agents: ['crypto'],
     visibility: 'visible',
@@ -137,7 +146,7 @@ function provider(input: {
   displayName: string
   category: SourceCategory
   credential: 'none' | 'api-key'
-  sources: SourceInput[]
+  sources: SourceSeed[]
 }): ProviderDefinition {
   return {
     ...input,
