@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from 'react'
 
-import { STATE_VIEW_ACTION_KEYS, StateView } from '../state'
+import { STATE_VIEW_ACTION_KEYS, StateView, type ErrorReasonCode } from '../state'
 
 /**
  * 面板级错误边界：**一块崩了只换这一块**，不要整页白。
@@ -24,12 +24,14 @@ export type ErrorBoundaryProps = {
   /**
    * 错误面的原因码与产品句，**透传给 `StateView`**。
    *
-   * 为什么需要：默认的 `error · operation-failed` 说的是「读者刚才那个操作失败了」——对
-   * 「这一块渲染崩了」是错的（读者没做任何动作，也没有任何读取失败）。调用点用
-   * 一句产品原因句把这件事说清楚；`reasonCode` 仍须是 `StateView` 的闭集之一（新增码要先改
-   * `StateView` 的文案表与用例，那是另一笔）。
+   * 默认 `render-failed`：这一块是**画的时候崩的**——读者没点任何东西，也没有任何读取失败，
+   * 说「读取失败」或「你这步操作没成功」都是把错按在读者身上。
+   *
+   * 调用点只在「这一块的崩法另有说法」时才覆盖（例如需要重启才恢复的本地接口缺失），
+   * 所以类型直接收 `ErrorReasonCode`：码表是闭集，新码在 `platform/contracts/queryOutcome.ts` 一处加，
+   * 文案、动作白名单与两份公开文档同笔跟。
    */
-  reasonCode?: 'unavailable' | 'unreadable' | 'operation-failed' | 'needs-restart' | 'page-load-failed' | 'notification-unknown'
+  reasonCode?: ErrorReasonCode
   children: ReactNode
 }
 
@@ -58,7 +60,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: this.retry }}
       // 详情里只给范围名：这是读者唯一能报给我们、又不含业务数据的定位信息。
       details={{ bodyText: this.props.scope }}
-      reasonCode={this.props.reasonCode ?? 'operation-failed'}
+      reasonCode={this.props.reasonCode ?? 'render-failed'}
       state="error"
     />
   }
