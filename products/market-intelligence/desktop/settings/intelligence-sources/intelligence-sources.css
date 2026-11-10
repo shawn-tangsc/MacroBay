@@ -1346,13 +1346,6 @@
   flex: none;
 }
 
-.source-provider-detail__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-
 .source-provider-detail__job {
   padding: 1px 6px;
   border: 1px solid var(--border-subtle);
