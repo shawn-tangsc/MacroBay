@@ -1,4 +1,7 @@
 import { Button } from 'antd'
+
+import { ErrorBoundary } from '@platform/ui/components/error-boundary'
+import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Info } from 'lucide-react'
 
@@ -50,6 +53,8 @@ type CryptoDashboardText = {
   title: string
   description: string
   configureSources: string
+  /** TODO(0.4.3-settings-drawer): 静态配置抽屉的入口标签；数据接入后连同入口一起删。 */
+  configureSettings: string
   crossAsset: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
   macroReleaseDynamics: {
     calendarAction: string
@@ -89,6 +94,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // Positioning is read per window rather than reshaped in the browser: the fold and
   // the liquidation lookback belong to the query, so switching windows is one more read.
   const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
+  // TODO(0.4.3-settings-drawer): 数据接入后删除——静态版配置抽屉的临时开关。
+  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
@@ -172,8 +179,18 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
               原来还有第三颗「返回 Agent」，用户 2026-11-09 定：那个说法已经不存在，按钮整个去掉。 */}
           {briefingEnabled ? <Button className="mi-crypto-dashboard__briefing" onClick={onOpenBriefing} type="default">{text.dailyBriefing.entry}</Button> : null}
           <Button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="default">{text.configureSources}</Button>
+          {/* TODO(0.4.3-settings-drawer): 数据接入后删除——静态版式的配置抽屉入口。 */}
+          <Button autoInsertSpace={false} className="mi-crypto-dashboard__settings" onClick={() => setSettingsDrawerOpen(true)} type="default">{text.configureSettings}</Button>
         </div>
       </header>
+
+      {/* TODO(0.4.3-settings-drawer): 数据接入后删除。静态版式抽屉，只画结构；内容区包一层边界——
+          抽屉崩了不许影响背后这一页。 */}
+      <ErrorBoundary scope="drawer">
+        <ConfigSettingsDrawer
+          onClose={() => setSettingsDrawerOpen(false)}
+          open={settingsDrawerOpen} />
+      </ErrorBoundary>
 
       {/* Named mount point: the analysis workspace portals its latest-conclusion
           card in here, directly under the macro release strip, so the card reads

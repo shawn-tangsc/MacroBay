@@ -307,6 +307,8 @@ mi: miText['zh-CN'],
             /** 标题旁那颗 ⓘ 的读屏名：句子本身是 `description`，这里只给它一个短名字。 */
             descriptionLabel: '这张看板怎么读',
             configureSources: '配置情报源',
+            /** 临时入口：打开静态配置抽屉（0.4.3 预览版）。 */
+            configureSettings: '配置',
             /** One sentence per failure code, shared by every card that reads module signals. */
             signalRead: {
               'query-failed': '这条信号有没有被分析过，这次没查到。上面的数字不受影响。',
@@ -1690,6 +1692,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             /** The ⓘ beside the title: the sentence is `description`, this is only its short name. */
             descriptionLabel: 'How to read this board',
             configureSources: 'Configure intelligence sources',
+            configureSettings: 'Settings',
             signalRead: {
               'query-failed': 'We could not check whether this signal has been analysed. The numbers above are unaffected.',
               'invalid-as-of': 'We could not check, at this instant, whether this signal has been analysed. The numbers above are unaffected.',
