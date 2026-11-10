@@ -59,7 +59,7 @@
   overflow: hidden;
   color: var(--text-strong);
   font-size: 13px;
-  font-weight: 680;
+  font-weight: 650;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -160,7 +160,7 @@
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   color: var(--accent);
   font-size: 14px;
-  font-weight: 780;
+  font-weight: 650;
   line-height: 1;
 }
 
@@ -358,7 +358,7 @@
   align-items: center;
   color: var(--text-strong);
   font-size: 13px;
-  font-weight: 680;
+  font-weight: 650;
 }
 
 .intelligence-section-status {
