@@ -189,6 +189,30 @@ describe('settings registry self-checks', () => {
     expect(enabled.labelText?.({})).toBe('')
   })
 
+  it('gives every menu 1 row a name source, and every static label key exists in both locales', () => {
+    /**
+     * 缺 `labelKey` 的后果是**运行时静默少一块**：行名解析成空串、读屏也没有名字，谁都不会发现。
+     * 所以在这里炸（CI 红），不靠人看。两种名字来源互斥：按实例化的行用视图数据（`labelText`），
+     * 静态行用文案键（`copy.labelKey`），既不能都没有，也不能都有。
+     */
+    const resolve = (locale: 'zh-CN' | 'en-US', key: string): unknown =>
+      key.split('.').reduce<unknown>(
+        (node, part) => (node as Record<string, unknown> | undefined)?.[part],
+        productText[locale]
+      )
+    for (const row of settingRegistry.sources) {
+      const labelKey = row.copy?.labelKey
+      expect(row.labelText !== undefined && labelKey !== undefined, `${row.key} 同时给了两种行名`).toBe(false)
+      if (row.labelText !== undefined) continue
+      expect(labelKey, `${row.key} 缺 labelKey：行名会在运行时静默变成空`).toBeTruthy()
+      for (const locale of ['zh-CN', 'en-US'] as const) {
+        const value = resolve(locale, labelKey!)
+        expect(typeof value, `${row.key} 的 ${labelKey} 在 ${locale} 缺句`).toBe('string')
+        expect((value as string).trim(), `${row.key} 的 ${labelKey} 在 ${locale} 是空句`).not.toBe('')
+      }
+    }
+  })
+
   it('a template must match its instance dimension', () => {
     const wrongTemplate = { ...PUSH_THRESHOLD, key: 'setting:sources.foo@<feedId>', keyedBy: 'sourceId' as const }
     expect(validateSettingRegistry(withRow(wrongTemplate))).toContain('template-key-mismatch')
