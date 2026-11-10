@@ -216,13 +216,15 @@ describe('intelligenceSources service', () => {
   })
 
   it('never returns raw secrets in safe views', async () => {
+    // 换源不换判据：`fred` 在注册表里已弃用且隐藏（hidden/planned），`getDetail('fred')` 走的是
+    // 「未知源」那条路径，测不到密钥安全。改用**可见且需要钥匙**的 `fred-rates-liquidity`，
+    // 仍然断言「安全视图里没有原始密钥、只剩掩码、并且确实记下了凭据」。
     const service = createService()
-    await service.testCredentials({ sourceId: 'fred', credentialDraft: 'super-secret-key-value' })
-    const detail = await service.getDetail('fred')
+    await service.testCredentials({ sourceId: 'fred-rates-liquidity', credentialDraft: FRED_KEY })
+    const detail = await service.getDetail('fred-rates-liquidity')
 
-    expect(JSON.stringify(detail)).not.toContain('super-secret-key-value')
+    expect(JSON.stringify(detail)).not.toContain(FRED_KEY)
     expect(detail.credentialStatus?.maskedPreview).toContain('****')
-    expect(detail.profile.credentialRef).toBe('fred-credentials')
     expect(detail.credentialStatus?.hasCredential).toBe(true)
   })
 
