@@ -44,6 +44,7 @@ const WEB_SEARCH_BOTH_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.a
 const EMPTY_HINT_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.emptyHint'
 const GENERATION_NOTE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note'
 const GENERATION_NOTE_LABEL_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel'
+const MODEL_SERVICE_NOTE_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.modelServiceNote'
 
 /** 宿主把屏上报的四样交给抽屉的底部保存栏（壳不读数据、不知道保存的是什么）。 */
 export type BriefingScreenState = Readonly<{
@@ -75,7 +76,6 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
   const language = useShellLanguage()
   const text = productText[language].pages.intelligence.portal.dashboard.dailyBriefing
   const copy = text.settings.periods
-  const drawerCopy = productText[language].pages.intelligence.portal.dashboard.configDrawer
   const resolveText = (key: string): string => resolveProductKey(language, key)
   const ai = useDailyBriefingAiSettings({ client: dailyBriefingClient, enabled: true })
   const confirm = useConfirm()
@@ -396,7 +396,7 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
               {ai.webSearchSupported ? null : <SettingsRow
                 copyClassName="config-drawer__label"
                 headClassName="config-drawer__label-head"
-                controlWrapperClassName="config-drawer__control"
+                controlWrapperClassName="config-drawer__control briefing-settings-row__control"
                 label={<>
                   <strong>{text.aiSettings.researchMode}</strong>
                   <Popover
@@ -414,12 +414,36 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                 </>}
                 rowClassName="config-drawer__row">
                 <span className="briefing-settings-row__value">{text.aiSettings.researchModePlatform}</span>
+                {/* 平台那一半随被说明的项走：跳转让读者去配搜索供应商，不再是屏里单独的「平台设置」块。 */}
+                <button
+                  className="config-drawer__row-action briefing-settings-jump"
+                  data-global-link="web-search"
+                  onClick={openWebSearchSettings}
+                  type="button">
+                  {text.aiSettings.goWebSearchProviders}
+                </button>
               </SettingsRow>}
 
               {ai.draft.editorialEnabled ? <SettingsRow
                 copyClassName="config-drawer__label"
-                controlWrapperClassName="config-drawer__control"
-                label={<strong>{text.aiSettings.model}</strong>}
+                headClassName="config-drawer__label-head"
+                controlWrapperClassName="config-drawer__control briefing-settings-row__control"
+                label={<>
+                  <strong>{text.aiSettings.model}</strong>
+                  {/* 这一项属于平台设置：说明进 ⓘ，跳转贴在同一行的行尾。 */}
+                  <Popover
+                    labelKey={MODEL_SERVICE_NOTE_KEY}
+                    resolveText={resolveText}
+                    trigger={(triggerProps) => <IconButton
+                      {...triggerProps}
+                      ariaLabelKey={MODEL_SERVICE_NOTE_KEY}
+                      icon={CircleHelp}
+                      resolveText={resolveText}
+                      size="sm"
+                      variant="plain"
+                    />}
+                  />
+                </>}
                 rowClassName="config-drawer__row">
                 <ModelPicker
                   allowClear
@@ -437,27 +461,15 @@ export function DailyBriefingSettingsPanel({ onState }: Readonly<{
                   providers={[...ai.providers]}
                   value={ai.draft.providerId && ai.draft.modelId && !followsDefault ? `${ai.draft.providerId}:${ai.draft.modelId}` : null}
                 />
+                <button
+                  className="config-drawer__row-action briefing-settings-jump"
+                  data-global-link="model-service"
+                  onClick={openModelSettings}
+                  type="button">
+                  {text.aiSettings.goModelService}
+                </button>
               </SettingsRow> : null}
             </>}
-    </SettingsSection>
-
-    <SettingsSection
-      title={text.settingsDrawer.platformTitle}
-    >
-        <SettingsRow
-          copyClassName="config-drawer__label"
-          controlWrapperClassName="config-drawer__control"
-          label={<strong>{text.settingsDrawer.openModelService}</strong>}
-          rowClassName="config-drawer__row">
-          <Button data-global-link="model-service" onClick={openModelSettings} type="link">{drawerCopy.openPlatformSettings}</Button>
-        </SettingsRow>
-        <SettingsRow
-          copyClassName="config-drawer__label"
-          controlWrapperClassName="config-drawer__control"
-          label={<strong>{text.settingsDrawer.openWebSearch}</strong>}
-          rowClassName="config-drawer__row">
-          <Button data-global-link="web-search" onClick={openWebSearchSettings} type="link">{drawerCopy.openPlatformSettings}</Button>
-        </SettingsRow>
     </SettingsSection>
 
     <BriefingPeriodDialog

@@ -115,6 +115,15 @@ async function mount(options: BridgeOptions = {}): Promise<Readonly<{ host: HTML
 
 const switches = (host: HTMLElement): HTMLElement[] => [...host.querySelectorAll<HTMLElement>('.ant-switch')]
 
+/** 说明浮层的内容：AntD 关掉后仍留在 DOM 里（带 hidden 类），所以只读「显示中」的那几个。 */
+function visiblePopoverText(): string {
+  return [...document.querySelectorAll('.ant-popover')]
+    .filter((element) => !element.classList.contains('ant-popover-hidden')
+      && !/ant-zoom-.*-(leave|leave-active)/.test(element.className))
+    .map((element) => element.querySelector('.platform-popover__content')?.textContent ?? '')
+    .join(' ')
+}
+
 describe('the briefing settings screen’s unsaved flag', () => {
   it('clears the unsaved flag when the screen is unmounted', async () => {
     const { host, last } = await mount()
@@ -162,10 +171,12 @@ describe('the briefing settings screen’s unsaved flag', () => {
   })
 })
 
-describe('the briefing settings screen’s three sections', () => {
-  it('draws generation, AI editing and platform as settings blocks, with the period as a settings row', async () => {
+describe('the briefing settings screen’s two sections', () => {
+  it('draws generation and AI editing as settings blocks, with the period as a settings row', async () => {
     const { host } = await mount()
-    expect(host.querySelectorAll('[data-settings-section-block="true"]')).toHaveLength(3)
+    expect(host.querySelectorAll('[data-settings-section-block="true"]')).toHaveLength(2)
+    // 平台那一段已经不在屏上：两个跳转跟着被说明的项走（见下一条）。
+    expect(host.textContent).not.toContain('平台设置')
     const row = host.querySelector<HTMLElement>('[data-period-id="default"]')!
     expect(row.classList.contains('config-drawer__row')).toBe(true)
     expect(row.querySelector('.config-drawer__label')?.textContent).toBe('第 1 期')
@@ -210,12 +221,50 @@ describe('the briefing settings screen’s three sections', () => {
     expect(empty.host.querySelector('[data-briefing-auto]')).toBeNull()
   })
 
-  it('gives the platform block exactly two jumps, one per row', async () => {
-    const { host } = await mount()
-    const jumps = [...host.querySelectorAll<HTMLElement>('[data-global-link]')]
-    expect(jumps).toHaveLength(2)
-    expect(jumps.map((jump) => jump.getAttribute('data-global-link'))).toEqual(['model-service', 'web-search'])
-    expect(jumps.every((jump) => (jump.textContent ?? '').includes('去平台设置'))).toBe(true)
+  it('puts each platform jump at the end of the row it explains, and nowhere else', async () => {
+    const { host } = await mount({ webSearchSupported: false })
+    expect(host.querySelectorAll('[data-global-link]')).toHaveLength(2)
+    const jump = (link: string): HTMLElement | null | undefined =>
+      host.querySelector<HTMLElement>(`[data-global-link="${link}"]`)
+
+    // 模型服务 → 「模型」那一行，行尾最右
+    const modelJump = jump('model-service')
+    const modelRow = modelJump?.closest<HTMLElement>('.config-drawer__row')
+    expect(modelRow?.querySelector('.config-drawer__label')?.textContent).toContain('模型')
+    // 控件列撑满行内剩余宽度，跳转是这一列的最后一项（行尾最右）。
+    expect(modelRow?.querySelector('.config-drawer__control')?.lastElementChild).toBe(modelJump)
+    expect(modelJump?.textContent).toBe('去模型服务')
+
+    // 搜索供应商 → 「补查方式」那一行，行尾最右
+    const searchJump = jump('web-search')
+    const searchRow = searchJump?.closest<HTMLElement>('.config-drawer__row')
+    expect(searchRow?.querySelector('.config-drawer__label')?.textContent).toContain('补查方式')
+    expect(searchRow?.querySelector('.config-drawer__control')?.lastElementChild).toBe(searchJump)
+    expect(searchJump?.textContent).toBe('去搜索供应商')
+
+    // 全屏不再出现第三颗「去平台设置」
+    expect(host.textContent).not.toContain('去平台设置')
+  })
+
+  it('keeps the platform sentences in the ⓘ of the rows they explain', async () => {
+    const { host } = await mount({ webSearchSupported: false })
+    const trigger = (fragment: string): HTMLButtonElement | undefined =>
+      [...host.querySelectorAll<HTMLButtonElement>('button[aria-label]')]
+        .find((button) => (button.getAttribute('aria-label') ?? '').includes(fragment))
+
+    // 模型那一行的 ⓘ 说明「模型在平台设置里改」。
+    const modelInfo = trigger('模型服务属于平台设置')
+    expect(modelInfo).not.toBeUndefined()
+    await act(async () => modelInfo!.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(visiblePopoverText()).toContain('模型服务属于平台设置')
+
+    // 补查方式那一行的 ⓘ 说明「搜索供应商在平台设置里改」。
+    const providerInfo = trigger('网页搜索供应商属于平台设置')
+    expect(providerInfo).not.toBeUndefined()
+    await act(async () => providerInfo!.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(visiblePopoverText()).toContain('网页搜索供应商属于平台设置')
   })
 })
 

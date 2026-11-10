@@ -7,5 +7,11 @@
 .briefing-settings-row__value { color: var(--mi-dashboard-text); }
 .briefing-settings-row__actions { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; }
 
+/* 行尾跳转：值/控件在左缘（标签列右边界起排），跳转贴行右缘。
+   形状用抽屉的行尾文字按钮（`.config-drawer__row-action`），这里只负责「推到最右」：
+   控件列自己撑满行内剩余宽度，跳转再靠 auto 外边距落到行尾。 */
+.briefing-settings-row__control { display: flex; flex: 1 1 auto; align-items: center; gap: 12px; min-width: 0; }
+.briefing-settings-jump { margin-left: auto; }
+
 .briefing-settings-empty { display: flex; align-items: center; gap: 4px; padding: 8px 12px; color: var(--mi-dashboard-muted); }
 
