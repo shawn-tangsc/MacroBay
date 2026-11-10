@@ -34,6 +34,12 @@ export type ConfigSettingsDrawerProps = {
   open: boolean
   onClose: () => void
   initialMenu?: ConfigDrawerMenu
+  /**
+   * 内容处理：**宿主渲染好的整块**（设置页「翻译偏好」那张卡 + 评分模型只读）。
+   *
+   * 与 `sourcesPanel` 同一条边界：内容与读写都在宿主那边，抽屉只把它放进这一屏。
+   */
+  processingPanel?: React.ReactNode
   /** 通知屏视图：**宿主读好再传**，抽屉不自己取数；不传则保留静态版式。 */
   notificationsView?: DrawerScreenView<DrawerRowView>
   /**
@@ -78,6 +84,7 @@ export function ConfigSettingsDrawer({
   open,
   onClose,
   initialMenu = 'sources',
+  processingPanel,
   notificationsView,
   notificationsPanel,
   analysisView,
@@ -161,6 +168,9 @@ export function ConfigSettingsDrawer({
             values={{ on: copy.values.autoOn, off: copy.values.autoOff }}
             view={sourcesView} />)
           : null}
+        {menu === 'processing' && processingPanel !== undefined
+          ? processingPanel
+          : null}
         {menu === 'analysis' && analysisView !== undefined
           ? (<NotificationsScreen resolveText={resolveTextProp ?? ((key: string) => key)} view={analysisView} />)
           : null}
@@ -182,7 +192,7 @@ export function ConfigSettingsDrawer({
             resolveText={resolveTextProp ?? ((key: string) => key)}
             values={platformValues} />)
           : null}
-        {(menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
+        {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisView !== undefined) || (menu === 'platform' && platformValues !== undefined) || menu === 'sources'
           ? null
           : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
           {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{groupLabel(group.titleKey)}</div>}

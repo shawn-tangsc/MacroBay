@@ -319,7 +319,10 @@ mi: miText['zh-CN'],
                 modelServiceConfigured: '已配置',
                 modelServiceUnconfigured: '未配置',
                 autoOn: '开',
-                autoOff: '关'
+                autoOff: '关',
+                sentimentRuleOnly: '规则判断',
+                sentimentFollowsFastModel: '跟随快速模型',
+                sentimentUnknownReason: '评分模型设置读不到'
               },
               openPlatformSettings: '去平台设置',
               menus: {
@@ -1787,7 +1790,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 modelServiceConfigured: 'Configured',
                 modelServiceUnconfigured: 'Not configured',
                 autoOn: 'On',
-                autoOff: 'Off'
+                autoOff: 'Off',
+                sentimentRuleOnly: 'Rules only',
+                sentimentFollowsFastModel: 'Follows the fast model',
+                sentimentUnknownReason: 'The scoring model settings could not be read'
               },
               openPlatformSettings: 'Open platform settings',
               menus: {

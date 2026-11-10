@@ -360,6 +360,25 @@ describe('config settings drawer (static layout)', () => {
     expect(document.body.querySelectorAll('[data-drawer-row]')).toHaveLength(0)
   })
 
+  it('renders the host-provided processing panel instead of the static rows', () => {
+    // 内容处理搬的是设置页那张翻译卡：宿主传了节点就只渲染它。
+    document.body.replaceChildren()
+    root?.unmount()
+    root = undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        initialMenu="processing"
+        onClose={() => undefined}
+        open
+        processingPanel={<div data-panel="processing">the translation card, moved in</div>} />
+    ))
+    expect(document.body.querySelector('[data-panel="processing"]')).not.toBeNull()
+    expect(document.body.querySelectorAll('[data-drawer-row]')).toHaveLength(0)
+  })
+
   it('never prints an internal key name on any static screen', () => {
     // 自查一条：屏幕上不许出现 `configDrawer.*` 这类内部键名——键名进 DOM 等于把实现细节给读者看。
     for (const screen of DRAWER_PREVIEW_SCREENS) {
