@@ -7,7 +7,7 @@ import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 
 import { BusinessSettingsContent, BusinessSettingsView, type BusinessKey } from './BusinessSettingsView'
-import { duplicateCellIds, modulesForBusiness } from './dashboardSourceModules'
+import { duplicateCardCells, duplicateCellIds, modulesForBusiness } from './dashboardSourceModules'
 
 const t = productText['zh-CN'].settings.intelligenceSources
 const resolveText = (key: string): string => resolveProductTextKey('zh-CN', key)
@@ -141,5 +141,7 @@ describe('格键唯一', () => {
   it('has no duplicate cellId inside any module', () => {
     // 背离卡的「资金腿」撞过一次键，`divergence:*` 因此接不上。这条守全表（跨模块同名允许）。
     expect(duplicateCellIds()).toEqual([])
+    // 同一 sourceId + 同一格不许在两张卡里重复（跨资产并进市场状态之后留下的那条）。
+    expect(duplicateCardCells()).toEqual([])
   })
 })

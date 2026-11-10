@@ -82,14 +82,6 @@ function moduleOf(
 
 export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
   /* 「最新 AI 结论」与「来源状态条」在文档里明说不挂源，所以不在这里出现（也不出卡）。 */
-  moduleOf('cross-asset', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.cross-asset', [
-    ['纳指', 'binance-futures-positioning'],
-    ['美元', 'realmarketapi-market'],
-    ['美元（备用）', 'twelve-data-market', true],
-    ['黄金', 'realmarketapi-market'],
-    ['黄金（备用）', 'twelve-data-market', true]
-  ]),
-  // 既有文案里只有错误句（「政策路径数据不可用」），没有标题键 → 新建这一个。
   moduleOf('policy-path', `${TITLES}.policyPath`, [['政策路径概率', 'policy-path-market']]),
   moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.fearGreed.title', [['恐惧与贪婪', 'alternative-fear-greed']]),
   moduleOf('capital', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.capital', [
@@ -115,7 +107,7 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     ['0xRouter 财经事件', 'macro-calendar-0xrouter-financial-events'],
     ['0xRouter 央行活动', 'macro-calendar-0xrouter-central-bank-activities']
   ]),
-  moduleOf('quotes', `${TITLES}.quotes`, [
+  moduleOf('quotes', `${TITLES}.marketState`, [
     ['BTC', 'binance-futures-positioning'],
     ['ETH', 'binance-futures-positioning'],
     ['纳指', 'binance-futures-positioning'],
@@ -149,7 +141,11 @@ export const AI_ANALYSIS_MODULE: DashboardSourceModule = moduleOf('ai-analysis',
   ['', 'defillama-tvl']
 ])
 
-/** 看板业务里出现的卡：各模块 + 末尾「AI 分析用」。 */
+/**
+ * 看板业务里出现的卡：只有各模块。**没有「AI 分析用」这张卡**——AI 分析读的就是各模块的数据，
+ * 不该有自己的一摊源（用户 2026-11-11）。那 4 个只进分析的源照旧采集、仍在「情报源」页签可见。
+ */
+/** 看板业务里出现的卡：各模块 + 末尾「AI 分析用」（**暂时保留**：等用户查清 AI 分析为什么用这 4 个源）。 */
 export const DASHBOARD_TAB_MODULES: readonly DashboardSourceModule[] = [...DASHBOARD_SOURCE_MODULES, AI_ANALYSIS_MODULE]
 
 /** 反查：这个源被哪些模块用（详情那行「用在哪些模块」读它，顺序与卡片一致）。 */
@@ -165,7 +161,7 @@ export function modulesUsingSource(sourceId: string): readonly DashboardSourceMo
  * 副标题里的数字从这里算，不写死。
  */
 export const BUSINESS_MODULE_IDS = {
-  dashboard: ['cross-asset', 'policy-path', 'fear-greed', 'capital', 'positioning', 'divergence', 'quotes'],
+  dashboard: ['policy-path', 'fear-greed', 'capital', 'positioning', 'divergence', 'quotes'],
   calendar: ['macro-calendar'],
   sentiment: ['news']
 } as const
@@ -198,6 +194,24 @@ export function duplicateCellIds(): readonly string[] {
       const id = cellIdOf(module.id, cell)
       if (seen.has(id)) dupes.add(id)
       seen.add(id)
+    }
+  }
+  return [...dupes]
+}
+
+/**
+ * 守卫：同一个 `sourceId + cellKey` 不许在两张卡里各出现一次。
+ * 「跨资产」与「行情卡」曾经是两张卡，纳指/美元/黄金在两边各列一遍——用户看到的就是大量重复。
+ * 同一个源供给多个格是允许的（BTC/ETH/纳指 都是 `binance-futures-positioning`），重复指的是**同一个格**。
+ */
+export function duplicateCardCells(): readonly string[] {
+  const seen = new Set<string>()
+  const dupes = new Set<string>()
+  for (const module of DASHBOARD_TAB_MODULES) {
+    for (const cell of module.cells) {
+      const key = `${cell.sourceId}::${cell.cellKey}`
+      if (seen.has(key)) dupes.add(key)
+      seen.add(key)
     }
   }
   return [...dupes]

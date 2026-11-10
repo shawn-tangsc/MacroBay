@@ -296,10 +296,11 @@ describe('ProviderDetail source details', () => {
     const row = container.querySelector('[data-used-modules="binance-futures-positioning"]')
     expect(row).not.toBeNull()
     const text = row?.textContent ?? ''
-    for (const moduleName of ['跨资产', '行情卡', '永续持仓与资金费率', '背离卡']) {
+    for (const moduleName of ['市场状态', '永续持仓与资金费率', '背离卡']) {
       expect(text).toContain(moduleName)
     }
-    expect(text.split('、')).toHaveLength(4)
+    // 跨资产并进「市场状态」后，这个源被 3 个模块用（市场状态 / 永续持仓 / 背离卡）。
+    expect(text.split('、')).toHaveLength(3)
   })
 
   it('draws no module row for a source that no module uses', async () => {

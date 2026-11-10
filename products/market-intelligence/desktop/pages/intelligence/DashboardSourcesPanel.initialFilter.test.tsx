@@ -104,7 +104,8 @@ describe('业务设置：只有卡片，没有源详情头', () => {
     const container = await renderPanel('dashboard')
     expect(container.querySelector('.business-settings__content')).not.toBeNull()
     // 卡片在：跨资产、行情卡、AI 分析用（末卡带 ⓘ）。
-    expect(container.querySelector('[data-business-card="cross-asset"]')).not.toBeNull()
+    // 跨资产并进「市场状态」（原来两张卡的纳指/美元/黄金各列一遍）：不再有单独的跨资产卡。
+    expect(container.querySelector('[data-business-card="cross-asset"]')).toBeNull()
     expect(container.querySelector('[data-business-card="quotes"]')).not.toBeNull()
     expect(container.querySelector('[data-business-card="ai-analysis"]')).not.toBeNull()
     // **不出现任何源级详情**：没有源名 <h2>、没有那几颗按钮与那两行标签。
@@ -130,5 +131,15 @@ describe('筛选页签在业务设置下常显', () => {
     expect(tabs.map((tab) => tab.textContent)).toEqual(['情报源', '业务设置', '日历', '舆情', '其他'])
     // 三项列表在看板卡上方、与页签是两层。
     expect(container.querySelectorAll('.business-settings__nav .intelligence-provider-row')).toHaveLength(3)
+  })
+})
+
+describe('业务设置 › 看板：每行都有格级开关', () => {
+  it('renders one switch per card row (not zero)', async () => {
+    const container = await renderPanel('dashboard')
+    const rows = container.querySelectorAll('.business-card__row')
+    const switches = container.querySelectorAll('.business-card__row [role="switch"]')
+    expect(rows.length).toBeGreaterThan(0)
+    expect(switches.length).toBe(rows.length)
   })
 })

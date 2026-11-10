@@ -206,8 +206,8 @@ describe('the dashboard filter groups by module', () => {
     for (const id of MAINTENANCE) expect(shown).not.toContain(id)
     // 「AI 分析用」那一组恰好那 4 个。
     expect(providerIdsIn(host, 'AI 分析用').sort()).toEqual([...ANALYSIS_ONLY].sort())
-    // 共用源按模块重复出现：`binance-futures-positioning` 在 4 个模块下各一次。
-    expect(shown.filter((name) => name === 'binance-futures-positioning')).toHaveLength(4)
+    // 共用源按模块重复出现：合并「跨资产」后，`binance-futures-positioning` 在 3 个模块下各一次。
+    expect(shown.filter((name) => name === 'binance-futures-positioning')).toHaveLength(3)
   })
 
   it('drops a source from the module group when the mapping no longer lists it', async () => {

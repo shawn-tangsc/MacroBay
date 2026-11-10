@@ -460,7 +460,7 @@ export const intelligenceSourcesText = {
   dashboardModuleTitles: {
     policyPath: '政策路径',
     divergence: '背离卡',
-    quotes: '行情卡',
+    marketState: '市场状态',
     aiAnalysis: 'AI 分析用'
   },
   /* 「AI 分析用」组头旁那颗 ⓘ：说明不进正文。 */
@@ -1008,7 +1008,7 @@ export const intelligenceSourcesText = {
   dashboardModuleTitles: {
     policyPath: 'Policy path',
     divergence: 'Divergence',
-    quotes: 'Quote cards',
+    marketState: 'Market state',
     aiAnalysis: 'Used by AI analysis'
   },
   aiAnalysisNote: 'These sources have no dashboard slot; only AI analysis reads them.',
