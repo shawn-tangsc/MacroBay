@@ -177,6 +177,7 @@ function IntelligencePageBody(): React.ReactElement {
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
+          onOpenSettings={() => openConfigDrawer('processing')}
           onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
           text={text}
           locale={language}

@@ -45,6 +45,8 @@ type Props = {
   selectedEventKey?: string
   selectedEventMonth?: string
   onClearSelectedContext?: () => void
+  /** 透传给舆情 feature：打开配置抽屉的内容处理屏；未传时它走本地弹框。 */
+  onOpenSettings?: () => void
   floatingText: AgentFloatingControlText
 }
 
@@ -56,7 +58,7 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
@@ -206,6 +208,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
       onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
     />
     <NewsSentimentFeature
+      {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
       language={language}
       text={text.newsSentiment}
       onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}

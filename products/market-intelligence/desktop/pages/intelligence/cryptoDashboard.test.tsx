@@ -70,10 +70,11 @@ describe('the old source drawer has no entry left', () => {
     expect(page).toContain('onOpenSettings={() => openConfigDrawer')
   })
 
-  it('leaves exactly one rendering reference to the old drawer, and no other use', () => {
-    // 旧抽屉此时**没有任何入口可达**：只剩「渲染它」这一处，交给前端整块删。
-    expect(page.match(/<DashboardPanelDrawer/g)?.length).toBe(1)
-    expect(page).not.toContain('setSourceDrawerOpen(true)')
+  it('no longer references the old drawer at all', () => {
+    // 旧抽屉已经整块删掉（`24a0b4f`）：页面里连渲染语句都不该再有。这条从「恰好剩一处渲染」
+    // 改成「0 处」——旧判据是删除完成前的过渡态，现在收紧。
+    expect(page).not.toContain('DashboardPanelDrawer')
+    expect(page).not.toContain('setSourceDrawerOpen')
   })
 })
 
