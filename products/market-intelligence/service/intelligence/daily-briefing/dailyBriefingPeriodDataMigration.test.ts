@@ -139,4 +139,21 @@ describe('legacy period data migration', () => {
     expect(result.state).toBe('failed')
     expect(memory.value()).toBeUndefined()
   })
+
+  it('reports one diagnostic carrying the reason when the move fails', async () => {
+    const memory = memoryStorage()
+    const storage: BriefingPeriodStorage = {
+      read: memory.storage.read,
+      write: async () => { throw new Error('disk full') }
+    }
+    const log = vi.fn()
+    const result = await runBriefingPeriodDataMigration(deps(storage, {
+      readLegacyPeriods: async () => TWO_PERIODS,
+      log
+    }))
+
+    expect(result.state).toBe('failed')
+    expect(log).toHaveBeenCalledTimes(1)
+    expect(log).toHaveBeenCalledWith('error', 'briefing-period-migration-failed', { reason: 'disk full' })
+  })
 })

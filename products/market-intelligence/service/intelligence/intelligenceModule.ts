@@ -787,7 +787,8 @@ export function getIntelligenceModule(
       // the job registration below — after both exist.
       legacyPeriodsMigration: {
         readLegacyPeriods: () => dailyBriefingGenerationSettings.getPeriods(),
-        additionalLanguages: async () => (await dailyBriefingLanguageSettings.getSettings()).additional
+        additionalLanguages: async () => (await dailyBriefingLanguageSettings.getSettings()).additional,
+        ...(hooks?.log ? { log: hooks.log } : {})
       },
       // Asked only when a stored period predates "language belongs to a period": one read of the
       // links before today, then periodId → the languages its editions were actually written in.

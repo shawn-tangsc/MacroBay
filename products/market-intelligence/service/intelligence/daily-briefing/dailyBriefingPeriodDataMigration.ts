@@ -100,6 +100,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * current build cannot show. No backup is taken because none is needed — the old settings file is
  * only ever read here, never written, never renamed, so a failed move leaves it as the recovery
  * source and the next start retries.
+ *
+ * A `periods` value that is not an array is read as "no rows yet", so the move overwrites it with
+ * the planned rows. That is deliberate and safe: the shape is unusable as periods either way, and
+ * the old settings file — which this never writes — still holds the reader's values, so nothing is
+ * lost that could have been read. What must not happen is the opposite: treating rows this build
+ * cannot read as "empty" and replacing them.
+ *
+ * A failure is a result, not an exception, but it is never silent: the run reports `failed` with a
+ * reason and emits one diagnostic, because a quiet fallback to the default hour is exactly the kind
+ * of downgrade nobody notices until the morning edition arrives late.
  */
 export async function runBriefingPeriodDataMigration(deps: Readonly<{
   storage: BriefingPeriodStorage
@@ -110,6 +120,8 @@ export async function runBriefingPeriodDataMigration(deps: Readonly<{
   /** The old "also generate an English edition" preference. */
   additionalLanguages: () => Promise<readonly DailyBriefingLocale[]>
   now: () => string
+  /** Platform log. The reason only — never the old rows, never a path. */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
 }>): Promise<BriefingPeriodDataMigrationResult> {
   let raw: unknown
   try {
@@ -138,6 +150,7 @@ export async function runBriefingPeriodDataMigration(deps: Readonly<{
     return Object.freeze({ state: 'migrated', periods: planned })
   } catch (error) {
     const reason = error instanceof Error ? error.message.slice(0, 200) : 'unknown'
+    deps.log?.('error', 'briefing-period-migration-failed', { reason })
     return Object.freeze({ state: 'failed', reason })
   }
 }

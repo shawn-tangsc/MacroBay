@@ -39,6 +39,8 @@ export function createBriefingPeriodsSource(input: Readonly<{
   legacyPeriodsMigration?: Readonly<{
     readLegacyPeriods: () => Promise<readonly LegacySavedPeriod[]>
     additionalLanguages: () => Promise<readonly DailyBriefingLocale[]>
+    /** Platform log: the move's failures are reported there, never swallowed. */
+    log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   }>
 }>): Readonly<{ getPeriods: () => Promise<readonly BriefingPeriod[]> }> {
   const storage = createJsonFileStorage<unknown>(input.filePath, undefined)
@@ -50,7 +52,8 @@ export function createBriefingPeriodsSource(input: Readonly<{
   })
   // Started once, on the first read, and awaited by every read: two readers arriving together must
   // not both decide the file is empty and both migrate. A failed move is a result, not an error —
-  // the old settings stay the source, and the next start retries.
+  // it is reported on the platform log with its reason, the old settings stay the source, and the
+  // next start retries.
   let prepared: Promise<unknown> | undefined
   const prepare = (): Promise<unknown> => {
     if (prepared === undefined) {
