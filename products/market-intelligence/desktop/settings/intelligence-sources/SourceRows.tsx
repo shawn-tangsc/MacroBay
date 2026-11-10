@@ -60,6 +60,8 @@ export type SourceEnabledRowProps = Readonly<{
    * `aria-disabled` 让读屏能读出「不可操作」；仍读每项自己的 `enabled`，所以组开关的混合态就是这里不全开。
    */
   readOnlyEnabled?: boolean
+  /** 只读状态下显示的值：能力行读**格开关**（无格 = 关），页头组开关读源自己的 `enabled`。 */
+  enabledOverride?: boolean
   source: SourceView
   /** 已解析好的来源名（`sourceNames` 有的用文案，没有的用投影里的名字）。 */
   name: string
@@ -84,7 +86,7 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
   const row = sourceRowView(SOURCE_ROW_TEMPLATES.enabled, view)
   if (!row.visible) return null
   const label = row.descriptor.labelText?.(view) || props.name
-  const enabled = row.value === true
+  const enabled = props.enabledOverride ?? (row.value === true)
   const metaParts = [
     ...new Set(props.tags),
     ...(source.requiresProxy && !props.proxyConfigured ? [labels.badges.proxy] : []),

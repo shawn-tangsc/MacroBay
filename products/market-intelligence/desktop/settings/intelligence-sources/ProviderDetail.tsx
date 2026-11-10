@@ -14,6 +14,7 @@ import { SettingsInfo } from '../settingsInfo'
 import { SourceEnabledRow, needsJob } from './SourceRows'
 import { SourceDetailsBlock } from './SourceDetailsBlock'
 import type { SourceHealthLabels } from './SourceHealthDetail'
+import { DASHBOARD_TAB_MODULES, cellIdOf } from './dashboardSourceModules'
 import { useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
@@ -79,7 +80,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, readOnlyToggles, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, readOnlyToggles, cellEnabled, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -109,6 +110,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    * 凭据（API Key）、测试连接、高级都要留着——把这屏的钥匙入口删掉，凭据门禁就成了死路。
    */
   readOnlyToggles?: boolean
+  /**
+   * 格级开关快照（`采集与数据` 里那些项）。**能力行的只读状态读它**：任一相关格开着 = 开，全关 = 关；
+   * **采集与数据里没有对应格的源（日历 feed / 新闻 / 维护备用）= 恒显示关**，不退回 `enabled`。
+   * 页头那颗组开关管的是**源自己的采集**（`enabled`）——两件事，别混。
+   */
+  cellEnabled?: Readonly<Record<string, boolean>>
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
   /**
@@ -344,6 +351,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
   /* 待接入 > 缺凭据 > 可操作：**整组一个可操作能力都没有**时才锁死并提示「还没接入」。 */
   const providerPending = operableSources.length === 0 && sources.length > 0
+  /** 这个源被看板哪些格用到（同一份映射，反查）；没有格 → 恒关。 */
+  const rowEnabledOf = (sourceId: string): boolean => {
+    const cells = DASHBOARD_TAB_MODULES.flatMap((module) => module.cells.filter((cell) => cell.sourceId === sourceId)
+      .map((cell) => cellIdOf(module.id, cell)))
+    return cells.length > 0 && cells.some((cellId) => cellEnabled?.[cellId] === true)
+  }
+
   const toggleProvider = async (next: boolean): Promise<void> => {
     if (providerCredentialMissing || providerPending) return
     // 只写**已接入**的能力；待接入的项不写、不会被打开、状态不变。
@@ -487,7 +501,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             /* 需要 API Key 的源，Key 没配好之前开关灰着（判据在服务层：`hasCredential`）。
                界面只画，不自己造默认值——投影给什么 `enabled` 就画什么。 */
             /* 组开关（页头最右那颗）是**唯一可编辑入口**：能力行的开关只读展示状态，点了不发写请求。 */
-            readOnlyEnabled={readOnlyToggles === true}
+            enabledOverride={rowEnabledOf(source.sourceId)}
+            readOnlyEnabled
             {...(provider.credential === 'api-key' && credentialStatus?.hasCredential === false
               ? { credentialMissing: true }
               : {})}

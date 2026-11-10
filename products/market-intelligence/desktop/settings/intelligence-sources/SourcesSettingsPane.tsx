@@ -146,7 +146,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {props.notice}
           {provider === undefined
             ? null
-            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} readOnlyToggles={readOnlyToggles} /></div>}
+            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} cellEnabled={cellEnabled} readOnlyToggles={readOnlyToggles} /></div>}
         </>}
     </div>
   </>

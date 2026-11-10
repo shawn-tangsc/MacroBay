@@ -49,6 +49,8 @@ export type SourceConfigPolicy = NonNullable<Parameters<typeof ProviderDetail>[0
 export type SourceConfigSurfaceProps = {
   /** 起停只读（「数据源」那一屏）：只显示状态，不给编辑。 */
   readOnlyToggles?: boolean
+  /** 格级开关快照：能力行的只读状态读它（无格 = 关）。 */
+  cellEnabled?: Readonly<Record<string, boolean>>
   /** 设置页那一份文案；两个宿主传同一个来源。 */
   text: SourceConfigText
   provider: ProviderView
@@ -127,6 +129,7 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
   }
   return <ProviderDetail
     {...(props.readOnlyToggles === undefined ? {} : { readOnlyToggles: props.readOnlyToggles })}
+    {...(props.cellEnabled === undefined ? {} : { cellEnabled: props.cellEnabled })}
     labels={labels}
     provider={props.provider}
     {...(props.policy === undefined ? {} : { policy: props.policy })}
