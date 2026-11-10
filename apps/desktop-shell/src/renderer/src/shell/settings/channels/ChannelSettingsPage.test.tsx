@@ -453,7 +453,8 @@ describe('the allowed chat IDs field', () => {
     await openEdit(container)
     await act(async () => {})
 
-    const field = document.body.querySelector('textarea[aria-label="允许的会话 ID"]') as HTMLTextAreaElement
+    // 用文案键取，不写死一句话：字段名换成读者的话时，这条用例不该跟着改。
+    const field = document.body.querySelector(`textarea[aria-label="${labels.channelFieldAllowedChats}"]`) as HTMLTextAreaElement
     await act(async () => {
       // React 会拦截直接赋值：走原型上的 setter，它才认这次变更。
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
