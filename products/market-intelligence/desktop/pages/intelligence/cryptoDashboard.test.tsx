@@ -1047,8 +1047,10 @@ describe('crypto intelligence dashboard', () => {
     const tools = container.querySelector<HTMLElement>('.mi-crypto-dashboard__tools')!
     // 页头命令：日报入口 + 配置情报源 + 静态配置抽屉入口（0.4.3 预览版）。
     // 多一颗、少一颗都红——新增入口必须同时改这条断言，别用「包含」把它放水。
+    // 用户 2026-11-11：页头只留两颗（日报入口 + 配置情报源）；那颗只写「配置」的静态抽屉入口退役。
     expect([...tools.querySelectorAll<HTMLButtonElement>('.ant-btn')].map(button => button.textContent))
-      .toEqual([text.dashboard.dailyBriefing.entry, text.dashboard.configureSources, text.dashboard.configureSettings])
+      .toEqual([text.dashboard.dailyBriefing.entry, text.dashboard.configureSources])
+    expect(tools.querySelector('.mi-crypto-dashboard__settings')).toBeNull()
   })
 })
 

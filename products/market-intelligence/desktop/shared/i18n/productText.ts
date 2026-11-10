@@ -320,7 +320,6 @@ mi: miText['zh-CN'],
             descriptionLabel: '这张看板怎么读',
             configureSources: '配置情报源',
             /** 临时入口：打开静态配置抽屉（0.4.3 预览版）。 */
-            configureSettings: '配置',
             configDrawer: {
               title: '设置',
               /** 抽屉某屏渲染崩了：这一块没能显示（不是「读取失败」，读者没做任何动作）。 */
@@ -1828,7 +1827,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             /** The ⓘ beside the title: the sentence is `description`, this is only its short name. */
             descriptionLabel: 'How to read this board',
             configureSources: 'Configure intelligence sources',
-            configureSettings: 'Settings',
             configDrawer: {
               title: 'Settings',
               /** 抽屉某屏渲染崩了：这一块没能显示（不是「读取失败」，读者没做任何动作）。 */

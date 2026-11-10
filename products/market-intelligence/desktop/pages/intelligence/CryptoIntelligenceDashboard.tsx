@@ -91,7 +91,6 @@ type CryptoDashboardText = {
   description: string
   configureSources: string
   /** TODO(0.4.3-settings-drawer): 静态配置抽屉的入口标签；数据接入后连同入口一起删。 */
-  configureSettings: string
   crossAsset: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
   macroReleaseDynamics: {
     calendarAction: string
@@ -311,8 +310,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
               原来还有第三颗「返回 Agent」，用户 2026-11-09 定：那个说法已经不存在，按钮整个去掉。 */}
           {briefingEnabled ? <Button className="mi-crypto-dashboard__briefing" onClick={onOpenBriefing} type="default">{text.dailyBriefing.entry}</Button> : null}
           <Button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="default">{text.configureSources}</Button>
-          {/* TODO(0.4.3-settings-drawer): 数据接入后删除——静态版式的配置抽屉入口。 */}
-          <Button autoInsertSpace={false} className="mi-crypto-dashboard__settings" onClick={() => setSettingsDrawerOpen(true)} type="default">{text.configureSettings}</Button>
         </div>
       </header>
 
