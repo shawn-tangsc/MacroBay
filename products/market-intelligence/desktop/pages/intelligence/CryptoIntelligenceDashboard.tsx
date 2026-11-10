@@ -6,6 +6,7 @@ import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSetting
 import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
 import { useDashboardAnalysisDrawer } from './useDashboardAnalysisDrawer'
+import { DailyBriefingSettingsPanel } from './DailyBriefingSettingsPanel'
 import { usePlatformDrawerValues } from '../../settings/config-drawer/usePlatformDrawerValues'
 import { useMemo, useState, type ReactNode } from 'react'
 
@@ -213,6 +214,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           open={settingsDrawerOpen}
           platformValues={platformDrawerValues}
           analysisView={onOpenAnalysisSettings === undefined ? undefined : drawerAnalysisView}
+          briefingPanel={<DailyBriefingSettingsPanel />}
           notificationsPanel={<NotificationSettingsPanel />}
           sourcesPanel={<DashboardSourcesPanel />} />
       </ErrorBoundary>
