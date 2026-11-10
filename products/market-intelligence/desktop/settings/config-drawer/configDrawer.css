@@ -13,7 +13,8 @@
   display: grid;
   align-content: start;
   gap: 2px;
-  padding: 8px 6px;
+  /* 顶部与内容区同一条 16：左列第一项与右侧第一个区块顶沿对齐（原来 8 会高 8px）。 */
+  padding: 16px 6px 8px;
   border-right: 1px solid var(--border);
   background: var(--surface-soft);
 }
