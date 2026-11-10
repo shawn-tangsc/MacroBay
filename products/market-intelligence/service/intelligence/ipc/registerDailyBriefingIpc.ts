@@ -2,6 +2,7 @@ import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegist
 
 import { isDailyBriefingEditionDate, isDailyBriefingLocale, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingService } from '../daily-briefing/dailyBriefingService'
+import type { DailyBriefingWindowHours } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPeriodDeletion } from '../daily-briefing/dailyBriefingPeriodDeletion'
 import type { DailyBriefingSettingsPatch, DailyBriefingSettingsService } from '../daily-briefing/dailyBriefingSettingsService'
 import { withRunDeadline } from '../daily-briefing/dailyBriefingRunDeadline'
@@ -36,7 +37,7 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
   // produce a file without the move's marker.
   if (periods) registerDailyBriefingPeriodIpc(register, periods)
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getToday, async (payload) =>
-    service.getToday(readQuery(payload)))
+    service.getToday(await readQueryForPeriod(payload, periods)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.list, async (payload) =>
     service.list(readQuery(payload)))
   // A run is the one long call here: it waits for the market and then for the model. Every part has
@@ -155,8 +156,45 @@ function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; time
   if (typeof timeZone !== 'string' || timeZone.length === 0 || timeZone.length > 64) {
     throw new Error('daily-briefing-invalid-time-zone')
   }
+  // **哪一期**也是这次读取的一部分。以前这里只回 locale/timeZone/generate，期号在半路被丢掉：
+  // 多期读者看到的是 `default` 期、窗口按期配置第一项算，而排期跑的是他选的那一期。
+  const periodId = payload.periodId
+  if (periodId !== undefined && (typeof periodId !== 'string' || periodId.length === 0 || periodId.length > 64)) {
+    throw new Error('daily-briefing-invalid-request')
+  }
   // Only `false` is meaningful: a read-the-stored-edition open. Anything else keeps the old shape.
-  return payload.generate === false ? { locale, timeZone, generate: false } : { locale, timeZone }
+  return {
+    locale, timeZone,
+    ...(payload.generate === false ? { generate: false as const } : {}),
+    ...(typeof periodId === 'string' ? { periodId } : {})
+  }
+}
+
+/**
+ * 「读这一期」：期号之外，还要带上**那一期自己**的时刻与窗口。
+ *
+ * 只带期号不够：服务端的窗口在没有 `generation` 时按期配置**第一项**算，于是同一个「今天」会有
+ * 两套截止时刻——排期用 20:00，页面按 08:00 算。期号读不懂、或配置里已经没有这一期，一律拒绝，
+ * 不静默退回 `default`：那正是这次事故的形态（读者选的期消失，而界面照常回答）。
+ */
+async function readQueryForPeriod(
+  payload: unknown,
+  periods: BriefingPeriodsEditor | undefined
+): Promise<Readonly<{
+  locale: 'zh-CN' | 'en-US'
+  timeZone: string
+  generate?: boolean
+  periodId?: string
+  generation?: Readonly<{ generationTime: string; windowHours: DailyBriefingWindowHours }>
+}>> {
+  const base = readQuery(payload)
+  if (base.periodId === undefined || periods === undefined) return base
+  const configured = (await periods.list()).find((period) => period.id === base.periodId)
+  if (configured === undefined) throw new Error('daily-briefing-period-unknown')
+  return {
+    ...base,
+    generation: { generationTime: configured.generationTime, windowHours: configured.windowHours }
+  }
 }
 
 /**
