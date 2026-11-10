@@ -63,12 +63,18 @@ describe('openConversation', () => {
   })
 })
 
+/** 生成物的空数组是 `readonly []`；显式元素类型，别让 `.id` 被收成 `never`。 */
+const registeredEntries: readonly {
+  id: string
+  title: { 'zh-CN': string; 'en-US': string }
+}[] = productSettingsEntries
+
 describe('openProductSettingsPanel', () => {
   it('every registered product panel resolves to itself — no silent fallback to the default pane', () => {
     // `resolveAvailableSettingsPanelKey` 不认识就回落到 models：那才是「落到别的页」。
     // 直接遍历注册表，所以「这一版任务没有产品设置条目」也不会让这条变成假绿或假红。
-    for (const entry of productSettingsEntries) {
-      expect(resolveAvailableSettingsPanelKey(entry.id, productSettingsEntries)).toBe(entry.id)
+    for (const entry of registeredEntries) {
+      expect(resolveAvailableSettingsPanelKey(entry.id, registeredEntries)).toBe(entry.id)
     }
   })
 
@@ -98,7 +104,7 @@ describe('openProductSettingsPanel', () => {
       return
     }
 
-    expect(productSettingsEntries.some((entry) => entry.id === panelKey)).toBe(true)
+    expect(registeredEntries.some((entry) => entry.id === panelKey)).toBe(true)
     expect(opened).toBe(true)
     expect(details).toEqual([{ navKey: 'settings', settingsPanelKey: panelKey }])
   })

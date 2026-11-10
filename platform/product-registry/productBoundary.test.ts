@@ -25,7 +25,10 @@ const ALLOWED_IMPORT_PREFIX = '@products/generated/'
 /** 产品在平台侧的全部合法称呼：id、注册面板 id、面板 id 的产品内短名。 */
 export function productTokens(): string[] {
   const tokens = new Set<string>(productIds)
-  for (const entry of productSettingsEntries) {
+  // 生成物里的设置条目今天可能是空数组（产品撤了注册），类型会被推成 `readonly []`；
+  // 这里显式写元素类型，只影响类型，不改运行时数据。
+  const entries: readonly { id: string; productId: string }[] = productSettingsEntries
+  for (const entry of entries) {
     tokens.add(entry.id)
     if (entry.id.startsWith(`${entry.productId}.`)) tokens.add(entry.id.slice(entry.productId.length + 1))
   }
