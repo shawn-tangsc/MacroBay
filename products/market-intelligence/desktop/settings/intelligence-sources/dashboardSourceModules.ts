@@ -119,3 +119,27 @@ export const DASHBOARD_TAB_MODULES: readonly DashboardSourceModule[] = [...DASHB
 export function modulesUsingSource(sourceId: string): readonly DashboardSourceModule[] {
   return DASHBOARD_TAB_MODULES.filter((module) => module.sourceIds.includes(sourceId))
 }
+
+/**
+ * 三张业务各自挂哪些模块（用户 2026-11-11）：
+ * - 看板 = 主列那 7 个模块（+ 末尾 `AI 分析用` 卡，在视图里追加）；
+ * - 日历 = 经济日历那个模块（六个日历源，平铺列源名）；
+ * - 舆情 = 新闻／舆情那个模块（四个源，平铺列源名）。
+ * 副标题里的数字从这里算，不写死。
+ */
+export const BUSINESS_MODULE_IDS = {
+  dashboard: ['cross-asset', 'policy-path', 'fear-greed', 'capital', 'positioning', 'divergence', 'quotes'],
+  calendar: ['macro-calendar'],
+  sentiment: ['news']
+} as const
+
+export function modulesForBusiness(business: keyof typeof BUSINESS_MODULE_IDS): readonly DashboardSourceModule[] {
+  return BUSINESS_MODULE_IDS[business].map(
+    (id) => DASHBOARD_SOURCE_MODULES.find((module) => module.id === id)!
+  )
+}
+
+/** 这张业务用到多少个源（去重；副标题「N 个源」读它）。按 cells 现算——卡片少一行，这里的数就变。 */
+export function sourceCountForBusiness(business: keyof typeof BUSINESS_MODULE_IDS): number {
+  return new Set(modulesForBusiness(business).flatMap((module) => module.cells.map((cell) => cell.sourceId))).size
+}

@@ -1616,8 +1616,15 @@
 }
 
 .business-settings__nav {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* 业务设置下顶部那条页签：常显、与三项列表上下两层，不挤掉也不隐藏。 */
+.business-settings__nav .intelligence-catalog-filters {
+  padding: 0 0 4px;
 }
 
 .business-settings__content {
@@ -1627,13 +1634,17 @@
   align-content: start;
 }
 
+/* 每个模块一张卡：卡片背景/描边/圆角/内距全走主题 token；卡片宽度吃满内容区，
+   卡片之间 12（主档），右缘与内容区右缘对齐。 */
 .business-card {
   display: grid;
   min-width: 0;
   padding: 4px 0;
-  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface) 82%, var(--bg));
+  background: var(--surface);
+  /* 源名不换行：长名字宁可让这张卡自己横向滚动，也不切字、不逐字折行。 */
+  overflow-x: auto;
 }
 
 .business-card__title {
@@ -1649,7 +1660,9 @@
 
 .business-card__row {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
+  /* 格名列可以窄到 96（最长格名「永续持仓名义额」放不下时按 160 上限给），
+     **源名列必须吃到剩余宽度**——写成固定宽或 0 会让源名逐字竖排（真机第一次渲染就撞到了）。 */
+  grid-template-columns: minmax(96px, 160px) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   min-height: 44px;
@@ -1679,5 +1692,7 @@
   color: var(--text-strong);
   font-size: var(--font-meta);
   font-weight: 500;
+  /* 源名不换行：名字长就让这一列变宽，不许逐字折行。 */
+  white-space: nowrap;
 }
 

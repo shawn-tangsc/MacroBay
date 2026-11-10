@@ -130,3 +130,15 @@ describe('业务设置：只有卡片，没有源详情头', () => {
     expect(container.querySelector('.intelligence-catalog-pane')).not.toBeNull()
   })
 })
+
+describe('筛选页签在业务设置下常显', () => {
+  it('keeps all five filter tabs above the three business rows', async () => {
+    // 用户 2026-11-11：左列换成三项之后，那条页签不许不见——页签在上、三项在下，各自占位。
+    const container = await renderPanel('dashboard')
+    const tabs = [...container.querySelectorAll('.business-settings__nav .intelligence-catalog-filters [role="group"] button')]
+    expect(tabs).toHaveLength(5)
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['情报源', '业务设置', '日历', '舆情', '其他'])
+    // 三项列表在看板卡上方、与页签是两层。
+    expect(container.querySelectorAll('.business-settings__nav .intelligence-provider-row')).toHaveLength(3)
+  })
+})

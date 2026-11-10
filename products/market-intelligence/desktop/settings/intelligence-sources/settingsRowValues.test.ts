@@ -111,3 +111,18 @@ describe('the source-filter row wraps instead of scrolling', () => {
     for (const body of rules) expect(body).not.toContain('overflow-x: auto')
   })
 })
+
+describe('business cards: the source column keeps a usable width', () => {
+  it('gives the source column the remaining width and forbids wrapping it', () => {
+    // 真机第一次渲染就把源名压成 0 宽（逐字竖排）。判据落在规则本体（happy-dom 量不到计算宽度）：
+    // 行是「格名列（96–160）/ 源名列（1fr）」，源名列不换行；把源名列写成 0 宽或去掉 nowrap 就红。
+    const row = rulesFor(css, 'business-card__row').join('\n')
+    expect(row).toContain('minmax(0, 1fr)')
+    expect(row).toContain('minmax(96px, 160px)')
+    const value = rulesFor(css, 'business-card__value').join('\n')
+    expect(value).toContain('white-space: nowrap')
+    expect(value).toContain('min-width: 0')
+    // 只禁裸 `width: 0`（`min-width: 0` 是另一件事，它正是让这一列能被压缩到容器宽度的写法）。
+    expect(value).not.toMatch(/(?:^|[;{\s])width\s*:\s*0/u)
+  })
+})

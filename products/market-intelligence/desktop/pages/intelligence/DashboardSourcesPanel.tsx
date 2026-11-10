@@ -7,6 +7,8 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { productText } from '../../shared/i18n/productText'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
+import { Segmented } from '@platform/ui/components/segmented'
+
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { BusinessSettingsView, type BusinessKey } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { SourcesSettingsPane } from '../../settings/intelligence-sources/SourcesSettingsPane'
@@ -47,6 +49,17 @@ export function DashboardSourcesPanel(props: {
    * 它只在 `sourceFilter === 'dashboard'`（业务设置页签）时生效；切到别的页签就回到那面的树。
    */
   const [business, setBusiness] = useState<BusinessKey>('dashboard')
+  /**
+   * 抽屉这条筛选页签：**五块、值不变**。业务设置那一屏也要常显这一条（它是上层，三项列表是下层），
+   * 所以这份清单提到函数里，两处共用一份。
+   */
+  const treeFilters = [
+    { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
+    { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
+    { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
+    { value: 'sentiment', labelKey: 'settings.intelligenceSources.sourceFilters.sentiment' },
+    { value: 'other', labelKey: 'settings.intelligenceSources.sourceFilters.other' }
+  ] as const
   const settings = useIntelligenceSourcesSettings(t)
   const { settingsView, runSourceNow, toggleSourceEnabled, setDraftDirty, profiles, definitions, updateSourceProfile } = settings
   // 草稿既喂 hook 里的 C8 标志（同屏保存/重读用），也上报宿主（关闭确认用）——两个消费者，一个事实。
@@ -100,6 +113,14 @@ export function DashboardSourcesPanel(props: {
       settingsView?.groups.flatMap((group) => group.providers)
         .find((provider) => provider.sources.some((source) => source.sourceId === sourceId))?.providerId
     return <BusinessSettingsView
+      tabs={<div className="intelligence-catalog-filters">
+        <Segmented
+          ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
+          items={treeFilters}
+          onChange={(value) => setSourceFilter(value as SourceFilter)}
+          resolveText={resolveProductText}
+          value={sourceFilter} />
+      </div>}
       business={business}
       onBusinessChange={setBusiness}
       onSelectSource={(sourceId) => {
@@ -115,13 +136,7 @@ export function DashboardSourcesPanel(props: {
     filter={sourceFilter}
     /* 抽屉五块：全部 / 看板 / 日历 / 舆情 / 其他（第四块是兜底）（用户 2026-11-10：先砍掉「全部」「高级」，
        随后要求把「全部」恢复到 tab 最前；「高级」仍不要）。默认筛选仍是**看板**。设置页仍是原来的六项。 */
-    treeFilters={[
-      { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
-      { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
-      { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
-      { value: 'sentiment', labelKey: 'settings.intelligenceSources.sourceFilters.sentiment' },
-      { value: 'other', labelKey: 'settings.intelligenceSources.sourceFilters.other' }
-    ]}
+    treeFilters={treeFilters}
     onFilterChange={setSourceFilter}
     onSelectProvider={(providerId) => setSelectedProviderId(providerId)}
     selectedProviderId={selectedProviderId}
