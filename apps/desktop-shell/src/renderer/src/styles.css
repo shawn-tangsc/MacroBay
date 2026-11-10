@@ -10873,36 +10873,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   max-width: 250px;
 }
 
-/* 展开/收起第二行：行尾小按钮，箭头随 `aria-expanded` 翻转。 */
-.model-service-default-toggle {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  height: var(--control-h);
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  white-space: nowrap;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.model-service-default-toggle:hover {
-  background: var(--surface-strong);
-  color: var(--text);
-}
-
-.model-service-default-toggle-chevron {
-  transition: transform 0.15s ease;
-}
-
-.model-service-default-toggle[aria-expanded='true'] .model-service-default-toggle-chevron {
-  transform: rotate(180deg);
-}
-
 @media (max-width: 900px) {
   .model-service-default-chip .model-picker-trigger {
     min-width: 180px;

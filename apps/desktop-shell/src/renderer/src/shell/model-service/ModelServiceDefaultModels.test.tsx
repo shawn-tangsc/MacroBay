@@ -5,10 +5,10 @@ import { resolve } from 'node:path'
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
-import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
+import { normalizeAppSettings, type ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 
 import { platformText } from '../../i18n/platformText'
 import { ModelServiceDefaultModelsSection } from './ModelServiceDefaultModelsSection'
@@ -137,8 +137,8 @@ function fieldsInGroup(container: HTMLElement, group: string): Array<string | nu
 }
 
 describe('PLAT-80 default models section', () => {
-  it('shows the four text defaults first and keeps the image row collapsed by default', async () => {
-    const container = await mountSection()
+  it('renders only the four text defaults; the image default has no control', async () => {
+    const container = await mountSection({ values: { ...emptyValues, imageModelId: 'silicon:flux-image' } })
 
     expect(container.querySelector('[data-model-service-default-models]')).not.toBeNull()
     expect(rowFields(container)).toEqual([
@@ -153,42 +153,27 @@ describe('PLAT-80 default models section', () => {
       'fastModelId',
       'translationModelId'
     ])
+    // 绘画模型（`imageModelId`）不再有控件：行、选择器、分组、「更多」按钮都不该出现。
+    expect(container.querySelector('[data-default-model-row="imageModelId"]')).toBeNull()
+    expect(container.querySelector('[data-default-model-select="imageModelId"]')).toBeNull()
+    expect(container.querySelector('[data-default-model-row-group="more"]')).toBeNull()
+    expect(container.querySelector('[data-default-models-toggle]')).toBeNull()
     expect(container.querySelectorAll('[data-model-picker-trigger]').length).toBe(4)
     expect(container.textContent).toContain(labels.pickerSelectModel)
-
-    const toggle = container.querySelector<HTMLElement>('[data-default-models-toggle]')
-    expect(toggle).not.toBeNull()
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-    expect(container.querySelector('[data-default-model-row-group="more"]')).toBeNull()
   })
 
-  it('moves the image model to its own row and toggles that row from the bar', async () => {
-    const container = await mountSection({ values: { ...emptyValues, imageModelId: 'silicon:flux-image' } })
-    const toggle = container.querySelector<HTMLElement>('[data-default-models-toggle]')
+  it('keeps a saved image default in the settings while rendering no control for it', async () => {
+    const values: ModelDefaultsSettings = { ...emptyValues, imageModelId: 'silicon:flux-image' }
+    const onChange = vi.fn()
+    const container = await mountSection({ values, onChange })
 
-    await act(async () => {
-      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
+    expect(document.body.querySelector('[data-default-model-select="imageModelId"]')).toBeNull()
+    expect(onChange).not.toHaveBeenCalled()
 
-    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
-    expect(fieldsInGroup(container, 'more')).toEqual(['imageModelId'])
-    expect(rowFields(container)).toEqual([
-      'assistantModelId',
-      'agentModelId',
-      'fastModelId',
-      'translationModelId',
-      'imageModelId'
-    ])
-    expect(container.querySelectorAll('[data-model-picker-trigger]').length).toBe(5)
-    // 展开后绘画模型的选择器回显已保存的值。
-    expect(container.querySelector('[data-default-model-row="imageModelId"]')?.textContent).toContain('FLUX Image')
-
-    await act(async () => {
-      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
-    expect(container.querySelector('[data-default-model-row="imageModelId"]')).toBeNull()
+    // 字段与值仍在设置里（读得到）：归一不会因为「没有控件」而把它清掉或改写。
+    expect(normalizeAppSettings({ modelDefaults: values }).modelDefaults.imageModelId).toBe('silicon:flux-image')
+    // 换别的字段也只写那一个字段，不会顺手把绘画值回写成空。
+    expect(container.querySelectorAll('[data-default-model-row]').length).toBe(4)
   })
 
   it('keeps a saved value that is no longer offered visible instead of clearing it', async () => {
@@ -298,15 +283,12 @@ describe('PLAT-80 default models bar', () => {
     expect(scroll).toMatch(/min-width:\s*0/)
   })
 
-  it('keeps the expand toggle outside the scrolling row so it stays visible', async () => {
-    const toggle = rule('.model-service-default-toggle')
-    expect(toggle).toMatch(/flex:\s*none/)
-    expect(toggle).toMatch(/white-space:\s*nowrap/)
-
+  it('renders no expand toggle now that the more row is gone (C10)', async () => {
     const container = await mountSection()
-    const toggleElement = container.querySelector('[data-default-models-toggle]')
-    expect(toggleElement?.closest('.model-service-default-row-scroll')).toBeNull()
-    expect(toggleElement?.parentElement?.className).toBe('model-service-default-row')
+    // 第二行（绘画模型）已撤，展开按钮没有东西可展开：DOM 与样式表里都不该再有它。
+    expect(container.querySelector('[data-default-models-toggle]')).toBeNull()
+    // 样式表里也一起清掉了（本地 `rule()` 对缺失选择器会抛，所以直接查文本）。
+    expect(css).not.toContain('.model-service-default-toggle')
   })
 
   it('does not paint a second border around the picker', () => {
@@ -328,7 +310,7 @@ describe('PLAT-80 default models bar', () => {
     expect(media.slice(0, 400)).toMatch(/\.model-service-default-chip \.model-picker-trigger \{[^}]*min-width/)
   })
 
-  it('renders four pickers in the default row and five once expanded', async () => {
+  it('renders exactly four pickers, and never a fifth', async () => {
     const container = await mountSection()
     const bar = container.querySelector('[data-model-service-default-models]')
     const primary = container.querySelector('[data-default-model-row-group="primary"]')
@@ -340,14 +322,14 @@ describe('PLAT-80 default models bar', () => {
     }
     expect(primary?.querySelectorAll('[data-default-model-select]').length).toBe(4)
 
+    // 没有展开按钮可点：绘画模型不会再作为第五个选择器出现。
     await act(async () => {
       container.querySelector<HTMLElement>('[data-default-models-toggle]')?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
     })
-
-    expect(bar?.querySelectorAll('.model-service-default-chip').length).toBe(5)
-    expect(bar?.querySelectorAll('[data-default-model-select]').length).toBe(5)
+    expect(bar?.querySelectorAll('.model-service-default-chip').length).toBe(4)
+    expect(bar?.querySelectorAll('[data-default-model-select]').length).toBe(4)
     expect(container.querySelector('[data-default-models-card]')).toBeNull()
   })
 })
@@ -430,11 +412,7 @@ describe('BUG visibility guards', () => {
     expect(lastRule('.model-service-models .model-service-model-name')).toMatch(/white-space:\s*nowrap/)
   })
 
-  it('keeps the default-models toggle on one line and shows model names in rows', async () => {
-    const toggle = lastRule('.model-service-default-toggle')
-    expect(toggle).toMatch(/white-space:\s*nowrap/)
-    expect(toggle).toMatch(/flex:\s*none/)
-
+  it('shows model names in rows', async () => {
     const page = await renderModelServiceSettings({ language: 'en-US' })
     const rows = [...page.container.querySelectorAll('[data-model-row]')]
     expect(rows.length).toBeGreaterThan(0)

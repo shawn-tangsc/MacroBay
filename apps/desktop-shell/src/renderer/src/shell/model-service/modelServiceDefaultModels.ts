@@ -24,10 +24,11 @@ export const defaultModelFields: readonly DefaultModelField[] = [
 ]
 
 /**
- * 顶部「默认模型」条的分组（布局单一事实）：
- *  - primary：常用的 4 个文本入口，始终显示在第一行；
- *  - more：绘画模型，收进第二行，默认收起，点「更多默认模型设置」才展开。
- * 两组必须覆盖 `defaultModelFields` 的全部字段（组件按 `Record` 取标签，漏字段会编译失败）。
+ * 顶部「默认模型」条**渲染**的字段（布局单一事实）：4 个常用的文本入口。
+ *
+ * `imageModelId`（绘画模型）**故意不在这里**（C10，2026-11-10）：它从未接进生成路径，
+ * 唯一读它的是「在用模型巡检」，留着控件就是假可用。字段与读者已设的值**保留、不迁不删**；
+ * 将来要么接进生成路径，要么连字段一起退（台账另列一行）。
  */
 export const primaryDefaultModelFields: readonly DefaultModelField[] = [
   'assistantModelId',
@@ -35,8 +36,6 @@ export const primaryDefaultModelFields: readonly DefaultModelField[] = [
   'fastModelId',
   'translationModelId'
 ]
-
-export const moreDefaultModelFields: readonly DefaultModelField[] = ['imageModelId']
 
 const DEFAULT_MODEL_CONSTRAINTS: Record<DefaultModelField, ModelPickerConstraints> = {
   assistantModelId: { requireCapabilities: ['chat'] },

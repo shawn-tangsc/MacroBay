@@ -1,7 +1,3 @@
-import { Button } from 'antd'
-import { ChevronDown } from 'lucide-react'
-import { useState } from 'react'
-
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 
@@ -10,7 +6,6 @@ import { ModelPicker } from '../components/ModelPicker/ModelPicker'
 import {
   buildDefaultModelCandidates,
   defaultModelConstraints,
-  moreDefaultModelFields,
   primaryDefaultModelFields,
   type DefaultModelField
 } from './modelServiceDefaultModels'
@@ -93,8 +88,7 @@ export function ModelServiceDefaultModelsSection({
   values,
   onChange
 }: ModelServiceDefaultModelsSectionProps): React.ReactElement {
-  const [expanded, setExpanded] = useState(false)
-
+  // `imageModelId`（绘画模型）不在渲染列表里：字段与值保留，只是没有控件（C10）。
   const labelOf: Record<DefaultModelField, string> = {
     assistantModelId: labels.defaultModelAssistant,
     agentModelId: labels.defaultModelAgent,
@@ -121,21 +115,7 @@ export function ModelServiceDefaultModelsSection({
     <section className="model-service-default-models" data-model-service-default-models>
       <div className="model-service-default-row" data-default-model-row-group="primary">
         <div className="model-service-default-row-scroll">{primaryDefaultModelFields.map(renderRow)}</div>
-        {/* 展开/收起是命令型动作 → antd `Button`（类名与 `aria-expanded` 原样保留）。 */}
-        <Button
-          className="model-service-default-toggle"
-          data-default-models-toggle
-          aria-expanded={expanded}
-          onClick={() => setExpanded((current) => !current)}>
-          <span>{expanded ? labels.defaultModelsCollapse : labels.defaultModelsShowMore}</span>
-          <ChevronDown className="model-service-default-toggle-chevron" size={13} aria-hidden="true" />
-        </Button>
       </div>
-      {expanded ? (
-        <div className="model-service-default-row" data-default-model-row-group="more">
-          <div className="model-service-default-row-scroll">{moreDefaultModelFields.map(renderRow)}</div>
-        </div>
-      ) : null}
     </section>
   )
 }

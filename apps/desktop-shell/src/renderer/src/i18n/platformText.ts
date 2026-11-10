@@ -837,8 +837,6 @@ export type PlatformText = {
     defaultModelImage: string
     defaultModelImageHint: string
     /** 默认模型条：第二行（绘画模型）默认收起，用「更多默认模型设置」展开。 */
-    defaultModelsShowMore: string
-    defaultModelsCollapse: string
     /** 默认模型条底部：说清哪些默认值由平台入口直接用、哪些只供产品功能读取。 */
     defaultModelsConsumerHint: string
     copyModelId: string
@@ -2282,8 +2280,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelTranslationHint: '供产品功能读取（翻译任务），平台自身不调用',
       defaultModelImage: '绘画模型',
       defaultModelImageHint: '图片生成使用',
-      defaultModelsShowMore: '更多默认模型设置',
-      defaultModelsCollapse: '收起',
       defaultModelsConsumerHint:
         '助手、智能体、绘画由对应入口直接使用；快速与翻译模型只作为共用默认值被产品功能读取。没有产品用到时，选了也不会有可见效果。',
       copyModelId: '复制',
@@ -3654,8 +3650,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelTranslationHint: 'Read by product features (translation); the platform itself does not call it',
       defaultModelImage: 'Image model',
       defaultModelImageHint: 'Used for image generation',
-      defaultModelsShowMore: 'More default model settings',
-      defaultModelsCollapse: 'Collapse',
       defaultModelsConsumerHint:
         'Assistant, agent, and image defaults are used directly by their own entry points. The fast and translation defaults are shared values read by product features only, so they have no visible effect until a product uses them.',
       copyModelId: 'Copy',

@@ -73,6 +73,24 @@ describe('PLAT-75 in-use model patrol targets', () => {
     })).toEqual([])
   })
 
+  it('counts a saved image default as an in-use model (C10 keeps the field and its value)', () => {
+    // 绘画模型控件已按 C10 撤掉，但字段与读者已设的值保留：`configuredDefaultModelIds`
+    // 读的是 modelDefaults 的**全部**值（repositories.ts），所以它仍要参与在用巡检。
+    const targets = collectInUseModelTargets({
+      providers: [{
+        id: 'silicon',
+        enabled: true,
+        apiKeyRef: 'provider:silicon',
+        models: [{ id: 'flux-image', name: 'FLUX Image' }]
+      }],
+      configuredDefaultModelIds: ['silicon:flux-image']
+    })
+
+    expect(targets).toEqual([
+      { providerId: 'silicon', modelId: 'flux-image', modelName: 'FLUX Image', source: 'configured' }
+    ])
+  })
+
   it('splits unique model ids on the first colon only', () => {
     expect(splitUniqueModelId('openai:gpt-5')).toEqual({ providerId: 'openai', modelId: 'gpt-5' })
     expect(splitUniqueModelId('google:models/gemini:2.5')).toEqual({ providerId: 'google', modelId: 'models/gemini:2.5' })
