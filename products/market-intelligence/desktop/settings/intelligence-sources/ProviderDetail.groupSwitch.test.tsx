@@ -78,24 +78,22 @@ function groupSwitch(host: HTMLElement): HTMLElement | null {
 }
 
 describe('页头整组启停', () => {
-  it('shows on when every capability is on, and turns them all off in one click', async () => {
+  it('shows on when every capability is on, and stays read-only', async () => {
+    // 编辑状态只在「采集与数据」（用户 2026-11-12）：这一屏组开关只显示状态。
     const { host, onToggleSource } = await render([true, true])
     const control = groupSwitch(host)
     expect(control?.getAttribute('aria-checked')).toBe('true')
+    expect(control?.getAttribute('aria-disabled')).toBe('true')
     await act(async () => { control?.click() })
-    const written = onToggleSource.mock.calls.map((call) => (call as unknown as [{ sourceId: string }, boolean])[1])
-    expect(written).toEqual([false, false])
+    expect(onToggleSource).not.toHaveBeenCalled()
   })
 
-  it('shows off for a mixed group, and one click turns everything on', async () => {
-    // 混合态按 off 显示（点击后全开）——否则读者看不出到底开没开。
+  it('shows off for a mixed group, still read-only', async () => {
     const { host, onToggleSource } = await render([true, false])
     const control = groupSwitch(host)
     expect(control?.getAttribute('aria-checked')).toBe('false')
     await act(async () => { control?.click() })
-    const written = onToggleSource.mock.calls.map((call) => (call as unknown as [{ sourceId: string }, boolean])[1])
-    // 已经开着的那一项不再重复写。
-    expect(written).toEqual([true])
+    expect(onToggleSource).not.toHaveBeenCalled()
   })
 
   it('disables the group switch while a required key is missing, and writes nothing', async () => {
@@ -109,32 +107,28 @@ describe('页头整组启停', () => {
 })
 
 describe('「数据源」屏：页头可编辑、能力行只读', () => {
-  it('keeps the header group switch editable even on the read-only pane', async () => {
-    // 用户 2026-11-11：源的启用禁用要可操作——只读的是能力行，页头那颗仍能整组开/关。
+  it('keeps the header group switch read-only on every pane', async () => {
     const { host, onToggleSource } = await render([true, true], { readOnlyToggles: true })
     const control = groupSwitch(host)
-    expect(control?.getAttribute('aria-disabled')).toBeNull()
+    expect(control?.getAttribute('aria-disabled')).toBe('true')
     await act(async () => { control?.click() })
-    expect(onToggleSource).toHaveBeenCalledTimes(2)
+    expect(onToggleSource).not.toHaveBeenCalled()
   })
 })
 
 describe('组开关按能力算，不被单独一项待接入锁死', () => {
-  it('stays usable when only some capabilities are pending, and writes only the wired ones', async () => {
-    // BEA 那种：一项已接入 + 一项待接入 → 开关可用；点击只写已接入那项，待接入项零写入。
-    const { host, onToggleSource } = await render([true, false], { pendingIndex: 1 })
+  it('counts only the wired capabilities for its displayed state', async () => {
+    // BEA 那种：一项已接入（开）+ 一项待接入 → 组开关显示开（待接入项不参与），但本屏只读。
+    const { host } = await render([true, false], { pendingIndex: 1 })
     const control = groupSwitch(host)
-    expect(control?.getAttribute('aria-disabled')).toBeNull()
-    await act(async () => { control?.click() })
-    expect(onToggleSource.mock.calls.map((call) => (call as unknown as [{ sourceId: string }, boolean])[1])).toEqual([false])
+    expect(control?.getAttribute('aria-checked')).toBe('true')
+    expect(control?.getAttribute('aria-disabled')).toBe('true')
   })
 
-  it('is disabled with the pending hint when every capability is pending', async () => {
-    const { host, onToggleSource } = await render([false, false], { pendingIndex: 0 })
-    // 两项都设成 pending：把第二项也变成 pending。
-    const control = host.querySelector<HTMLElement>('.source-provider-detail__group-toggle [role="switch"]')
-    expect(control).not.toBeNull()
-    expect(onToggleSource).not.toHaveBeenCalled()
+  it('does not show the credential hint when some capability is pending (hint is for all-pending)', async () => {
+    const { host } = await render([false, true], { pendingIndex: 0 })
+    // 一项待接入、一项已接入 → 不挂「还没接入」那句（那句只在整组都不可操作时出现）。
+    expect(host.querySelector(`[aria-label="${t.providerPendingAria}"]`)).toBeNull()
   })
 })
 

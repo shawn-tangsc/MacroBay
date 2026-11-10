@@ -439,15 +439,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               resolveText={resolveText} />
             : null}
           <Switch
-            aria-disabled={providerCredentialMissing || providerPending ? true : undefined}
+            /* 编辑状态只在「采集与数据」里（用户 2026-11-12）：这一屏的组开关**只读**，只显示状态。 */
+            aria-disabled
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
             checked={providerGroupEnabled}
-            disabled={providerCredentialMissing || providerPending}
-            onChange={(next) => {
-              if (providerCredentialMissing || providerPending) return
-              void toggleProvider(next)
-            }}
+            disabled
+            onChange={() => undefined}
             size="small" />
         </span>
       </div>

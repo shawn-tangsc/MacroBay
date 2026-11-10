@@ -4,6 +4,7 @@ import { Segmented } from '@platform/ui/components/segmented'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { BusinessSettingsContent, BusinessSettingsView, type BusinessKey } from './BusinessSettingsView'
+import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
@@ -54,6 +55,8 @@ export type SourcesSettingsPaneProps = {
   cellEnabledIo?: Readonly<{
     read: () => Promise<Record<string, boolean>>
     write: (cellId: string, enabled: boolean) => Promise<void>
+    /** 这一格选了哪个源（互斥/选中）。宿主不传就不写选中，只写启停。 */
+    writeSelection?: (cellId: string, sourceId: string | null) => Promise<void>
   }>
 }
 
@@ -103,12 +106,35 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
   /* 只回**显式写过**的格；缺键交给调用方按「主源默认开、备用行默认关」解释，
      否则界面上主备两个源会同时显示为开（用户 2026-11-11：同一格只有一个源在用）。 */
   const isCellEnabled = (cellId: string): boolean | undefined => cellEnabled[cellId]
+  /**
+   * 卡片项那颗开关同时表示两件事（用户 2026-11-12）：**这一格用哪个源** 与 **这个源要不要开**。
+   * - 打开：写格 true（+ 选中该源）+ 把源本身设为启用（`onToggleSource(sourceId, true)`）；
+   * - 关闭：写格 false；**只有这个源再没有任何开着的格在用**时才把源停用
+   *   （停了它才会注销采集 job）。别的格还在用 → 不动源开关。
+   */
+  const cellSourceOf = new Map<string, string>()
+  for (const module of modulesForBusiness('dashboard')) {
+    for (const cell of module.cells) cellSourceOf.set(cellIdOf(module.id, cell), cell.sourceId)
+  }
   const onCellToggle = props.cellEnabledIo === undefined
     ? undefined
     : (cellId: string, enabled: boolean): void => {
-      // 同值重复写由存储层短路，这里不再「先读再比」。
-      setCellEnabled((current) => ({ ...current, [cellId]: enabled }))
+      const next = { ...cellEnabled, [cellId]: enabled }
+      setCellEnabled(next)
       void props.cellEnabledIo?.write(cellId, enabled).catch(() => undefined)
+      const sourceId = cellSourceOf.get(cellId)
+      if (sourceId === undefined) return
+      const toggleSource = props.surface.onToggleSource
+      if (enabled) {
+        props.cellEnabledIo?.writeSelection?.(cellId, sourceId)
+        if (toggleSource !== undefined) void toggleSource({ sourceId, kind: '' }, true)
+        return
+      }
+      // 这个源还有别的开着的格在用？有就不动源开关。
+      const stillUsed = [...cellSourceOf.entries()].some(([otherCellId, otherSourceId]) => otherSourceId === sourceId
+        && otherCellId !== cellId
+        && next[otherCellId] !== false)
+      if (!stillUsed && toggleSource !== undefined) void toggleSource({ sourceId, kind: '' }, false)
     }
 
   /* **一个骨架**：页签条只在这一处渲染一次；两个分类只换「列表」与「内容」。
