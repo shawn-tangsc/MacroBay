@@ -164,6 +164,11 @@ export const intelligenceSourcesText = {
   },
 
   sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
+  /** 来源列表的条件行（C5）：胶囊说「值 · 还剩 N」，清空按钮一个词。 */
+  filter: {
+    chip: '{value} · 还剩 {remaining}',
+    clear: '清空筛选'
+  },
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
     '0xrouter-aggregate-provider': 'BTC、ETH 现货 ETF 的净流入',
@@ -459,10 +464,6 @@ export const intelligenceSourcesText = {
     consecutiveFailures: '连续失败',
     lastRunSummary: '最近运行摘要',
     empty: '暂无',
-    /* 不可用原因的读者说法：码只进 ⓘ，正文用这里映射好的那句话（英文界面也走这一份）。 */
-    unavailableReasons: {
-      'official-endpoint-returned-403': '官方源暂时不可用（403）'
-    },
     /* B4 来源健康四格：今天有没有读数 / 上次成功 / 为什么没在采 / 能不能立刻采。 */
     todayReading: '今天的读数',
     todayReadingYes: '有 · {time}',
@@ -695,6 +696,11 @@ export const intelligenceSourcesText = {
   },
 
   sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },
+  /** Source-list conditions (C5): the chip says "value · N left"; the clear button is one word. */
+  filter: {
+    chip: '{value} · {remaining} left',
+    clear: 'Clear filters'
+  },
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
     '0xrouter-aggregate-provider': 'Net flows into BTC and ETH spot ETFs',
@@ -980,9 +986,6 @@ export const intelligenceSourcesText = {
     consecutiveFailures: 'Consecutive Failures',
     lastRunSummary: 'Last Run Summary',
     empty: 'None',
-    unavailableReasons: {
-      'official-endpoint-returned-403': 'The official source is temporarily unavailable (403)'
-    },
     todayReading: "Today's reading",
     todayReadingYes: 'Yes · {time}',
     todayReadingNo: 'Nothing yet today',

@@ -29,6 +29,11 @@ export type SourceFilterBarProps = Readonly<{
   onClear: () => void
   /** 点一颗胶囊：只松这一格。 */
   onDrop: (chip: SourceFilterChip) => void
+  /**
+   * 「平铺 / 列表」切换（宿主给的节点：两种布局只是排版不同，条件与清空由这里画）。
+   * **空态时不给渲染**——空结果里切布局没有意义，多一颗控件只是多一个 Tab 停靠点。
+   */
+  modeSwitch?: React.ReactNode
   resolveText: (key: string) => string
 }>
 
@@ -68,13 +73,14 @@ export function SourceFilterBar(props: SourceFilterBarProps): React.ReactElement
   }
 
   return <div className="intelligence-source-filter" data-source-filter="active">
-    {/* 判据 2 的另一半：有结果时清空按钮常驻在左，位置与空态里的那个入口一致（都在条件行前）。 */}
+    {/* 三样同位置：清空 → 模式切换 → 条件（两种布局只换条件的排法，不换这三样的位置）。 */}
     <button
       className="intelligence-source-filter__clear"
       data-source-filter-clear="true"
       onClick={props.onClear}
       type="button"
     >{props.resolveText('settings.intelligenceSources.filter.clear')}</button>
+    {props.modeSwitch === undefined ? null : <div className="intelligence-source-filter__mode">{props.modeSwitch}</div>}
     {chips}
   </div>
 }

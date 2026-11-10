@@ -51,6 +51,28 @@ describe('SourceFilterBar', () => {
     for (const chip of chips) expect(chip.textContent?.trim()).not.toMatch(/^\d+$/u)
   })
 
+  it('never draws the layout switch on an empty result, but keeps the three things in one order when it does', async () => {
+    // 空态里画「平铺 / 列表」只是多一个 Tab 停靠点：空结果没有「怎么排」这件事。
+    const modeSwitch = <button data-mode-switch="true" type="button">平铺</button>
+    const empty = await render({ chips: CHIPS, empty: true, modeSwitch, onClear: () => undefined, onDrop: () => undefined, resolveText })
+    expect(empty.querySelectorAll('[data-mode-switch]')).toHaveLength(0)
+
+    act(() => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    const active = await render({ chips: CHIPS, empty: false, modeSwitch, onClear: () => undefined, onDrop: () => undefined, resolveText })
+    expect(active.querySelectorAll('[data-mode-switch]')).toHaveLength(1)
+    // 三样同位置：清空在最前、模式切换第二、条件第三；条件与命中数逐字不变。
+    const order = [...active.querySelectorAll<HTMLElement>('.intelligence-source-filter > *')]
+      .map((node) => node.matches('[data-source-filter-clear]') ? 'clear'
+        : node.matches('.intelligence-source-filter__mode') ? 'mode'
+          : node.matches('.intelligence-source-filter__chips') ? 'chips' : 'other')
+    expect(order).toEqual(['clear', 'mode', 'chips'])
+    expect([...active.querySelectorAll('.intelligence-source-filter__chip')].map((chip) => chip.textContent))
+      .toEqual(['看板 · 还剩 3', '高重要性 · 还剩 3'])
+  })
+
   it('keeps one clear entry in the active state, and the empty state offers it only through StateView', async () => {
     const onClear = vi.fn()
     const active = await render({ chips: CHIPS, empty: false, onClear, onDrop: () => undefined, resolveText })
