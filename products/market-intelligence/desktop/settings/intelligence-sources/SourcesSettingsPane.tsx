@@ -60,60 +60,58 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     .find((entry) => entry.providerId === props.selectedProviderId)
   const { providerId: _selected, ...surface } = props.surface
 
-  if (props.filter === 'dashboard') {
-    /* **业务设置不是情报源那套**：第二栏只列三项，内容区只有卡片 / 平铺源名，没有任何源级详情。
-       页签条由这一屏统一画（与情报源那一面同一个位置），业务视图只交列表与内容。 */
-    const providerOf = (sourceId: string): string | undefined => props.view?.groups
-      .flatMap((group) => group.providers)
-      .find((entry) => entry.sources.some((source) => source.sourceId === sourceId))?.providerId
-    const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
-    const onSelectSource = (sourceId: string): void => {
-      const providerId = providerOf(sourceId)
-      if (providerId !== undefined) props.onSelectProvider(providerId)
-      props.onFilterChange('all')
-    }
-    return <>
-      <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
-        <div className="intelligence-catalog-filters">
-          <Segmented
-            ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
-            items={props.treeFilters ?? DEFAULT_FILTERS}
-            onChange={(value) => props.onFilterChange(value as SourceFilter)}
-            resolveText={resolveText}
-            value={props.filter} />
-        </div>
-        <BusinessSettingsView
+  const isBusiness = props.filter === 'dashboard'
+  const providerOf = (sourceId: string): string | undefined => props.view?.groups
+    .flatMap((group) => group.providers)
+    .find((entry) => entry.sources.some((source) => source.sourceId === sourceId))?.providerId
+  const onSelectSource = (sourceId: string): void => {
+    const providerId = providerOf(sourceId)
+    if (providerId !== undefined) props.onSelectProvider(providerId)
+    props.onFilterChange('all')
+  }
+  const sourceNames = (props.surface.text as unknown as { sourceNames: Record<string, string> }).sourceNames ?? {}
+
+  /* **一个骨架**：页签条只在这一处渲染一次；两个分类只换「列表」与「内容」。
+     切换 tab 时页签条的 DOM 节点不重挂载（用户 2026-11-11：「tab 一切你整个重做了」）。 */
+  return <>
+    <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
+      <div className="intelligence-catalog-filters">
+        <Segmented
+          ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
+          items={props.treeFilters ?? DEFAULT_FILTERS}
+          onChange={(value) => props.onFilterChange(value as SourceFilter)}
+          resolveText={resolveText}
+          value={props.filter} />
+      </div>
+      {isBusiness
+        ? <BusinessSettingsView
           business={business}
           onBusinessChange={setBusiness}
           onSelectSource={onSelectSource}
           resolveText={resolveText}
           sourceNames={sourceNames} />
-      </aside>
-      <div className="settings-detail-pane intelligence-detail-pane">
-        <BusinessSettingsContent
+        : <SettingsSourceTree
+          bare
+          filter={props.filter}
+          labels={props.treeLabels}
+          onFilterChange={props.onFilterChange}
+          onSelectProvider={props.onSelectProvider}
+          selectedProviderId={props.selectedProviderId}
+          view={props.view} />}
+    </aside>
+    <div className="settings-detail-pane intelligence-detail-pane">
+      {isBusiness
+        ? <BusinessSettingsContent
           business={business}
           onSelectSource={onSelectSource}
           resolveText={resolveText}
           sourceNames={sourceNames} />
-      </div>
-    </>
-  }
-
-  return <>
-    <SettingsSourceTree
-      filter={props.filter}
-      {...(props.treeFilters === undefined ? {} : { filters: props.treeFilters })}
-      labels={props.treeLabels}
-      selectedProviderId={props.selectedProviderId}
-      view={props.view}
-      onFilterChange={props.onFilterChange}
-      onSelectProvider={props.onSelectProvider}
-    />
-    <div className="settings-detail-pane intelligence-detail-pane">
-      {props.notice}
-      {provider === undefined
-        ? null
-        : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} /></div>}
+        : <>
+          {props.notice}
+          {provider === undefined
+            ? null
+            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} /></div>}
+        </>}
     </div>
   </>
 }

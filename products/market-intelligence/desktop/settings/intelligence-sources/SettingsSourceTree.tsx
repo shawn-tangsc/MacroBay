@@ -84,7 +84,9 @@ function isOfficialCalendarSource(sourceId: string): boolean {
 }
 
 /** One flat row per provider; capabilities live in the detail pane. */
-export function SettingsSourceTree({ filter, filters, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
+export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
+  /** 只交**列表本体**（不画外层栏与页签）：页签条由 `SourcesSettingsPane` 统一画，切 tab 才不重挂载。 */
+  bare?: boolean
   filter: SourceFilter
   /** 这一面显示哪几块筛选：设置页默认六项；抽屉只传四块（日历 / 看板 / 舆情 / 待接入）。 */
   filters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>
@@ -145,20 +147,8 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
           ...(module.id === 'ai-analysis' ? { info: { ariaLabelKey: 'settings.intelligenceSources.aiAnalysisNoteAria', noteKey: 'settings.intelligenceSources.aiAnalysisNote' } } : {})
         }))
         : [{ key: 'flat', providers: matchingProviders }]
-  return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
-    <div className="intelligence-catalog-filters">
-      {/* One Tab reaches the group; the arrow keys move focus and Enter/Space picks, so a reader can
-          look through the filters before committing. Every label and the group's own name are keys,
-          so this file holds no sentences. */}
-      <Segmented
-        ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
-        items={visibleFilters}
-        onChange={(value) => onFilterChange(value as SourceFilter)}
-        resolveText={resolveText}
-        value={filter}
-      />
-    </div>
-    <div className="intelligence-catalog-list">
+  void visibleFilters
+  const list = <div className="intelligence-catalog-list">
       {/* A filter that hides every provider must say so and offer the way back, not render blank.
           **未结算不是「被筛掉了」**：`view` 还没到时不能画这个空态——空数组的 `every` 恒真，
           任何新调用点提前渲染都会立刻误导成「筛选后没有来源」。 */}
@@ -233,6 +223,18 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
           })}
         </div>
       })}
+  </div>
+  if (bare === true) return list
+  return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
+    <div className="intelligence-catalog-filters">
+      <Segmented
+        ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
+        items={visibleFilters}
+        onChange={(value) => onFilterChange(value as SourceFilter)}
+        resolveText={resolveText}
+        value={filter}
+      />
     </div>
+    {list}
   </aside>
 }

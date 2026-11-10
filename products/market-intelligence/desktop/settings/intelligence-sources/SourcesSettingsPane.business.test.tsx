@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act, createElement, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -83,5 +83,55 @@ describe('SourcesSettingsPane：业务设置不是情报源那套', () => {
   it('keeps the sources tree + detail on the 情报源 tab', async () => {
     const host = await render('all')
     expect(host.querySelector('aside.intelligence-catalog-pane')).not.toBeNull()
+  })
+})
+
+describe('骨架：页签条只渲染一次', () => {
+  it('keeps the same tablist node across a tab switch', async () => {
+    // 用户 2026-11-11：「tab 一切你整个重做了」。判据是**同一 DOM 节点**：抓引用 → 切一次 → 断言仍在文档且引用相等。
+    function Host(): React.ReactElement {
+      const [filter, setFilter] = useState<'all' | 'dashboard'>('all')
+      return createElement(ShellLanguageProvider, { language: 'zh-CN', children: createElement(SourcesSettingsPane, {
+        filter,
+        onFilterChange: (next) => setFilter(next === 'dashboard' ? 'dashboard' : 'all'),
+        onSelectProvider: vi.fn(),
+        surface: {
+          text: t,
+          onDraftChange: vi.fn(),
+          onRunNow: async () => undefined,
+          onToggleSource: async () => true,
+          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} },
+          showSourceDetails: true
+        } as never,
+        treeLabels: {
+          title: t.title,
+          categories: t.sourceCategories,
+          providerNames: t.providerNames,
+          providerSummary: t.providerSummary,
+          unavailableCountOne: t.unavailableCountOne,
+          unavailableCountOther: t.unavailableCountOther
+        } as never,
+        view
+      }) })
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(Host)))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    const tablist = host.querySelector<HTMLElement>('.intelligence-catalog-filters [role="group"]')
+    expect(tablist).not.toBeNull()
+    const businessTab = [...host.querySelectorAll<HTMLButtonElement>('.intelligence-catalog-filters button')]
+      .find((button) => button.textContent === t.businessTabs.dashboard || button.textContent === t.sourceFilters.dashboard)
+    expect(businessTab).not.toBeUndefined()
+    await act(async () => { businessTab!.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    // 同一个节点：仍在文档里、引用相等（重挂载会换成新节点）。
+    const after = host.querySelector<HTMLElement>('.intelligence-catalog-filters [role="group"]')
+    expect(after).not.toBeNull()
+    expect(after).toBe(tablist)
+    expect(tablist!.isConnected).toBe(true)
   })
 })
