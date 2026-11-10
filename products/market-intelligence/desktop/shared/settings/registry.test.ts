@@ -218,6 +218,30 @@ describe('settings registry self-checks', () => {
     for (const row of conditional) expect(row.visibleWhen?.length).toBe(1)
   })
 
+  it('names the control primitive where a select is not an antd Select, so the DOM does not change', () => {
+    // 设置页现状：推送强度 / 日历提前量 / 落地筛选用平台 `Segmented`，国家范围用 antd `Select`。
+    // 同一个 `select` 值形状要能说出「用哪个原语」，否则按注册表渲染就会换掉控件外形（A1 要求逐字不变）。
+    const byKey = new Map(Object.values(settingRegistry).flat().map((row) => [row.key, row]))
+    const segmented = [
+      'setting:notifications.push-threshold',
+      'setting:notifications.calendar.lead',
+      'setting:notifications.calendar.landed-filter'
+    ]
+    for (const key of segmented) {
+      const row = byKey.get(key)
+      expect(row?.field.kind).toBe('select')
+      expect(row?.field.kind === 'select' ? row.field.presentation : undefined).toBe('segmented')
+    }
+    // 国家范围今天就是 antd Select：不声明，走默认。
+    const scope = byKey.get('setting:notifications.calendar.landed-countries.scope')
+    expect(scope?.field.kind === 'select' ? scope.field.presentation : undefined).toBeUndefined()
+  })
+
+  it('rejects a presentation on a control that has no choice of primitive', () => {
+    expect(validateSettingRegistry(withRow({ ...PUSH_THRESHOLD, field: { kind: 'switch', presentation: 'segmented' } as never })))
+      .toContain('presentation-on-non-select')
+  })
+
   it('declares 触达面 as one multiSelect row and sends only the changed surface', () => {
     const surfaces = settingRegistry.notifications.find(
       (row) => row.key === 'setting:notifications.surfaces'

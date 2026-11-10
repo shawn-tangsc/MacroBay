@@ -60,10 +60,23 @@ export type SettingOptionsSource =
   | 'collection-presets'
   | 'notification-surfaces'
 
+/**
+ * `select` 用哪个原语。**这是「怎么长」，不是「值是什么形状」**——契约 §1.1 的原话是
+ * 「类型为值的形状服务，不为长得像服务」，所以不拆成两种 kind：单选就是 `select`，
+ * 至于画 `Segmented` 还是 antd `Select`，由这一格说。换原语不改值、不改选项集合。
+ */
+export const SETTING_SELECT_PRESENTATIONS = ['select', 'segmented'] as const
+export type SettingSelectPresentation = (typeof SETTING_SELECT_PRESENTATIONS)[number]
+
 /** 本版五种控件；文本输入与动作按钮不进注册表（契约 §1.1）。 */
 export type SettingField =
   | { readonly kind: 'switch' }
-  | { readonly kind: 'select'; readonly optionsFrom: SettingOptionsSource }
+  | {
+      readonly kind: 'select'
+      readonly optionsFrom: SettingOptionsSource
+      /** 不声明 = antd `Select`（默认）；`segmented` 用平台 `Segmented`。 */
+      readonly presentation?: SettingSelectPresentation
+    }
   | { readonly kind: 'multiSelect'; readonly optionsFrom: SettingOptionsSource }
   | { readonly kind: 'number'; readonly min?: number; readonly max?: number; readonly step?: number; readonly unitKey?: string }
   | { readonly kind: 'readonly' }

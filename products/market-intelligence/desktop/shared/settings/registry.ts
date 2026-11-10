@@ -16,6 +16,7 @@ import {
   PLATFORM_COMMANDS,
   SERVER_DEFAULTS,
   SETTING_MENUS,
+  SETTING_SELECT_PRESENTATIONS,
   SETTING_SURFACES,
   type ServerDefaultKey,
   type SettingDescriptor,
@@ -55,6 +56,8 @@ export type SettingRegistryIssue =
   | 'missing-label'
   | 'label-text-on-static-row'
   | 'template-key-mismatch'
+  | 'presentation-on-non-select'
+  | 'unknown-presentation'
 
 /**
  * 声明自检，纯函数：注册表自身不自洽时返回问题码，由单测调用。
@@ -106,6 +109,13 @@ export function validateSettingRegistry(
       if (descriptor.labelText === undefined && !hasLabelKey) issues.push('missing-label')
       if (descriptor.labelText !== undefined && descriptor.keyedBy === undefined) {
         issues.push('label-text-on-static-row')
+      }
+
+      // 原语只在有「怎么长」这件事的控件上出现：单选能选 Segmented / antd Select，别的控件没有这一格。
+      const presentation = (descriptor.field as { presentation?: unknown }).presentation
+      if (presentation !== undefined) {
+        if (descriptor.field.kind !== 'select') issues.push('presentation-on-non-select')
+        else if (!(SETTING_SELECT_PRESENTATIONS as readonly unknown[]).includes(presentation)) issues.push('unknown-presentation')
       }
 
       // 模板必须按实例化的维度取键：源行不许写 feed 模板，feed 行也不许写源模板。

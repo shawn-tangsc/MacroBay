@@ -100,7 +100,7 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     menu: 'notifications',
     surfaces: ['settings'],
     level: 'product',
-    field: { kind: 'select', optionsFrom: 'news-push-thresholds' },
+    field: { kind: 'select', optionsFrom: 'news-push-thresholds', presentation: 'segmented' },
     read: { command: 'intelligence.getNewsPushThreshold', select: (view) => readViewField(view, 'pushThreshold') },
     write: {
       kind: 'value',
@@ -119,7 +119,7 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     menu: 'notifications',
     surfaces: ['settings'],
     level: 'product',
-    field: { kind: 'select', optionsFrom: 'calendar-reminder-leads' },
+    field: { kind: 'select', optionsFrom: 'calendar-reminder-leads', presentation: 'segmented' },
     read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'leadMinutes') },
     write: {
       kind: 'value',
@@ -160,7 +160,7 @@ export const NOTIFICATION_ROWS: readonly SettingDescriptor[] = Object.freeze([
     menu: 'notifications',
     surfaces: ['settings'],
     level: 'product',
-    field: { kind: 'select', optionsFrom: 'calendar-landed-filter' },
+    field: { kind: 'select', optionsFrom: 'calendar-landed-filter', presentation: 'segmented' },
     read: { command: 'intelligence.getCalendarReminderSettings', select: (view) => readViewField(view, 'landedFilter') },
     write: {
       kind: 'value',
