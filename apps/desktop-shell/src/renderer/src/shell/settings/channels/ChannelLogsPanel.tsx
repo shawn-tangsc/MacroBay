@@ -19,6 +19,7 @@ import {
 } from './channelLogs'
 
 const COPY_KEY = 'settings.channels.logs.copy'
+const COPIED_KEY = 'settings.channels.logs.copied'
 
 /**
  * 频道日志面板：只读三类记录（操作 / 运行异常 / 最近一次发送失败）。
@@ -165,12 +166,16 @@ export function ChannelLogsPanel(props: {
       {state.status === 'ready' && state.rows.length > 0 ? (
         <div className="channel-log-toolbar">
           <IconButton
-            ariaLabelKey={COPY_KEY}
+            // 复制成功要看得见：读屏名与悬停提示一起换成「已复制」，1.5 秒后回「复制」。
+            // 之前这里两个分支写的是同一句，等于没有回执。
+            ariaLabelKey={copied ? COPIED_KEY : COPY_KEY}
             icon={Copy}
             onSelect={() => void copyAll()}
-            resolveText={(key) => (key === COPY_KEY ? (copied ? labels.channelLogsCopy : labels.channelLogsCopy) : '')}
+            resolveText={(key) =>
+              key === COPY_KEY ? labels.channelLogsCopy : key === COPIED_KEY ? labels.channelLogsCopied : ''
+            }
             size="md"
-            tooltipKey={COPY_KEY}
+            tooltipKey={copied ? COPIED_KEY : COPY_KEY}
           />
         </div>
       ) : null}

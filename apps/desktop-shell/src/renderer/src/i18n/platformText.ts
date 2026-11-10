@@ -311,6 +311,7 @@ export type PlatformText = {
     /** 日志面板：一条记录的三种类别，正文必须带前缀，读者一眼能分。 */
     channelLogsTitle: string
     channelLogsCopy: string
+    channelLogsCopied: string
     channelLogsRetry: string
     channelLogsEmptyTitle: string
     channelLogsEmptyHint: string
@@ -1762,7 +1763,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsNavGroupNotify: '通知与频道',
       settingsNavGroupOther: '其他',
       channelLogsTitle: '{name} — 日志',
-      channelLogsCopy: '复制',
+      channelLogsCopy: '复制', channelLogsCopied: '已复制',
       channelLogsRetry: '重试',
       channelLogsEmptyTitle: '这个频道还没有记录。',
       channelLogsEmptyHint: '开启、改动、发送失败都会记在这里。',
@@ -3135,7 +3136,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsNavGroupNotify: 'Notifications and channels',
       settingsNavGroupOther: 'Other',
       channelLogsTitle: '{name} — Logs',
-      channelLogsCopy: 'Copy',
+      channelLogsCopy: 'Copy', channelLogsCopied: 'Copied',
       channelLogsRetry: 'Retry',
       channelLogsEmptyTitle: 'This channel has no records yet.',
       channelLogsEmptyHint: 'Enabling, changes and failed sends are recorded here.',

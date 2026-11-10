@@ -56,6 +56,23 @@ const ok = {
 }
 
 describe('the channel log panel', () => {
+
+  it('shows that the copy happened, and copies exactly what the rows say', async () => {
+    const writeText = vi.fn(async (_text: string) => undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+
+    const container = await mount(ok)
+    const copy = container.querySelector<HTMLButtonElement>(`button[aria-label="${labels.channelLogsCopy}"]`)
+    expect(copy).not.toBeNull()
+
+    await act(async () => copy?.click())
+    await act(async () => {})
+
+    // 回执不是「点了没反应」：读屏名换成「已复制」，复制内容与屏幕逐行一致（含级别词）。
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0]?.[0]).toContain('[ERROR]')
+    expect(container.querySelector(`button[aria-label="${labels.channelLogsCopied}"]`)).not.toBeNull()
+  })
   it('merges the three sources, prefixes each row and keeps the level words', async () => {
     const container = await mount(ok)
 
