@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react'
 
+import './intelligence-notification.css'
+
 import { NotificationDrawerScreen } from './NotificationDrawerScreen'
 import { NotificationPageScreen } from './NotificationPageScreen'
 

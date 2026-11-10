@@ -46,10 +46,11 @@ const SWITCH_DESCRIPTOR: Readonly<Record<Exclude<ItemKey, 'calendar'>, string>> 
   sentiment: 'setting:notifications.push-outlet'
 }
 
-const ROW_CLASS = 'intelligence-notification-form-row'
-const LABEL_CLASS = 'intelligence-notification-form-label'
-const LABEL_TEXT_CLASS = 'intelligence-notification-form-label-text'
-const CONTROL_CLASS = 'intelligence-notification-form-control'
+/* 行与标签用抽屉骨架那一套（标签 160 左列、控件从标签右边界起排、44 高、发丝线）。 */
+const ROW_CLASS = 'config-drawer__row'
+const LABEL_CLASS = 'config-drawer__label'
+const LABEL_TEXT_CLASS = 'config-drawer__label'
+const CONTROL_CLASS = 'config-drawer__value'
 
 /** 区块：与平台 `SettingsSection` 同 DOM（标题 13/650 + ⓘ + body），只是多一个 ⓘ 槽。 */
 function Section({ title, info, children }: Readonly<{ title: string; info?: ReactNode; children: ReactNode }>): ReactElement {
@@ -114,10 +115,6 @@ export function NotificationDrawerScreen(): ReactElement {
       rowAttributes={{ 'data-setting-key': descriptor.key }}
       rowClassName={ROW_CLASS}
     >
-      {action ?? null}
-      {failed
-        ? <span className="intelligence-notification-form-note" role="status">{text['pages.intelligence.notification.saveFailed'] ?? ''}</span>
-        : null}
       <Switch
         aria-label={itemName(key)}
         checked={enabled}
@@ -129,6 +126,10 @@ export function NotificationDrawerScreen(): ReactElement {
         }}
         size="small"
       />
+      {action ?? null}
+      {failed
+        ? <span className="intelligence-notification-form-note" role="status">{text['pages.intelligence.notification.saveFailed'] ?? ''}</span>
+        : null}
     </SettingsRow>
   }
 

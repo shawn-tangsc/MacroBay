@@ -97,7 +97,7 @@ describe('the notification settings panel layout', () => {
       // 第一块「推送提醒」四行开关；标题只在区块头出现一次，不再有列表里的第二份。
       const first = column?.querySelector('.settings-section')
       expect(first).not.toBeNull()
-      expect(first?.querySelectorAll('.intelligence-notification-form-row')).toHaveLength(4)
+      expect(first?.querySelectorAll('.config-drawer__row')).toHaveLength(4)
       expect(container.querySelector('select')).toBeNull()
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: previous })

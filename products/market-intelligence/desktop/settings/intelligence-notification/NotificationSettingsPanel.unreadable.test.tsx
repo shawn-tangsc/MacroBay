@@ -90,7 +90,7 @@ describe('an unreadable calendar settings block is never drawn as off', () => {
   it('keeps the row explanation in the ⓘ, not in the row body', async () => {
     install(false)
     const container = await render()
-    const row = container.querySelector('.intelligence-notification-form-row')
+    const row = container.querySelector('.config-drawer__row')
     const info = text['pages.intelligence.notification.rows.signalTriggered.info'] ?? ''
     expect(row?.textContent ?? '').not.toContain(info)
     const trigger = [...(row?.querySelectorAll('button') ?? [])]

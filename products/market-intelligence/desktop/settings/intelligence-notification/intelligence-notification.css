@@ -291,3 +291,19 @@
   min-height: 0;
   overflow-y: auto;
 }
+
+/* ── 抽屉面区块：整屏只有「区块」这一层圆角框（行与控件不再各带盒子）── */
+.intelligence-notification-drawer > .settings-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.intelligence-notification-drawer .settings-section__header {
+  padding: 12px 14px 6px;
+}
+
+.intelligence-notification-drawer .settings-section__body {
+  display: grid;
+}
