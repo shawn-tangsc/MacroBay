@@ -448,6 +448,11 @@ export const intelligenceSourcesText = {
   keepEditing: '继续编辑',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
+  /* 「日历」筛选下的两个组名：判据是 calendarFeedRegistry 的 owner，不是手抄表（用户 2026-11-10）。 */
+  calendarGroups: {
+    official: '官方源',
+    aggregate: '聚合源'
+  },
   /* 右详情那一个折叠块的头：健康四格 + 采集策略都住在它里面（用户 2026-11-10）。 */
   detailsBlockTitle: '健康与采集策略',
   health: {
@@ -969,6 +974,10 @@ export const intelligenceSourcesText = {
   keepEditing: 'Keep editing',
   automaticSyncStopped: 'Automatic sync stopped',
   lastSuccessfulSync: 'Last successful sync: {date}',
+  calendarGroups: {
+    official: 'Official sources',
+    aggregate: 'Aggregators'
+  },
   detailsBlockTitle: 'Health and collection policy',
   health: {
     title: 'Source Health',

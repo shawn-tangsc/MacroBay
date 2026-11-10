@@ -4,6 +4,7 @@ import { Segmented } from '@platform/ui/components/segmented'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import { catalogMarkerClass } from './sourceHealthTone'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
@@ -63,6 +64,23 @@ export function sourceMatchesFilter(
 
 const matchesFilter = sourceMatchesFilter
 
+/**
+ * 「日历」那一屏的组别：**官方源 / 聚合源**，判据是 `calendarFeedRegistry` 的 `owner`，
+ * 不在组件里写源 id、源名或一张手抄表（用户 2026-11-10）。
+ *
+ * - 官方源 = `owner: 'official'`（Fed / BEA / BLS）；
+ * - 聚合源 = 其余日历源：0xRouter 三条是 `market`，CoinMarketCal 是 `pending`——**它只是还没接入，
+ *   仍是聚合商**，不许因为 pending 单独开一组或藏起来。
+ */
+const CALENDAR_GROUP_KEYS = {
+  official: 'settings.intelligenceSources.calendarGroups.official',
+  aggregate: 'settings.intelligenceSources.calendarGroups.aggregate'
+} as const
+
+function isOfficialCalendarSource(sourceId: string): boolean {
+  return (calendarFeedRegistry as Readonly<Record<string, { owner?: string }>>)[sourceId]?.owner === 'official'
+}
+
 /** One flat row per provider; capabilities live in the detail pane. */
 export function SettingsSourceTree({ filter, filters, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
   filter: SourceFilter
@@ -76,6 +94,36 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
 }): React.ReactElement {
   const resolveText = useProductTextKey()
   const visibleFilters = filters ?? FILTERS
+  /**
+   * 这一面怎么分组，只看**当前这个筛选**：
+   * - `全部` → 按注册表的 provider 分类（宏观 / 加密市场 / 聚合数据供应商）；
+   * - `日历` → 按 `calendarFeedRegistry` 的 `owner`：官方源 / 聚合源；
+   * - 看板 / 舆情 / 待接入 / 其他 → **平铺**，不套那三分组、也不自造新组（用户 2026-11-10）。
+   */
+  const matchingProviders = (view?.groups ?? [])
+    .flatMap((group) => group.providers)
+    .map((provider) => ({ ...provider, sources: provider.sources.filter((source) => matchesFilter(source, filter)) }))
+    .filter((provider) => provider.sources.length > 0)
+  const byCalendarOwner = (official: boolean) => matchingProviders
+    .map((provider) => ({
+      ...provider,
+      sources: provider.sources.filter((source) => isOfficialCalendarSource(source.sourceId) === official)
+    }))
+    .filter((provider) => provider.sources.length > 0)
+  const sections: ReadonlyArray<{ key: string; title?: string; providers: typeof matchingProviders }> = filter === 'calendar'
+    ? [
+      { key: 'official', title: resolveText(CALENDAR_GROUP_KEYS.official), providers: byCalendarOwner(true) },
+      { key: 'aggregate', title: resolveText(CALENDAR_GROUP_KEYS.aggregate), providers: byCalendarOwner(false) }
+    ]
+    : filter === 'all'
+      ? (view?.groups ?? []).map((group) => ({
+        key: group.category,
+        title: labels.categories[group.category],
+        providers: group.providers
+          .map((provider) => ({ ...provider, sources: provider.sources.filter((source) => matchesFilter(source, filter)) }))
+          .filter((provider) => provider.sources.length > 0)
+      }))
+      : [{ key: 'flat', providers: matchingProviders }]
   return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
     <div className="intelligence-catalog-filters">
       {/* One Tab reaches the group; the arrow keys move focus and Enter/Space picks, so a reader can
@@ -106,17 +154,16 @@ export function SettingsSourceTree({ filter, filters, labels, onFilterChange, on
           state="empty"
         />
         : null}
-      {(view?.groups ?? []).map((group) => {
-        const providers = group.providers
-          .map((provider) => ({ ...provider, sources: provider.sources.filter((source) => matchesFilter(source, filter)) }))
-          /* 这里按**源**筛掉空行：供应商行只在它旗下至少有一个匹配源时才出现。
-             一条容易误会的推论是「我在待接入里看到过它」——待接入显示的是**供应商行**
-             （供应商旗下有一个 pending 源，整行就会出现），不等于那个源本身在待接入里。
-             判断某个源在哪一块可见，要按它的 `visibility` / `panels` / `purposes` 算，不要按供应商名。 */
-          .filter((provider) => provider.sources.length > 0)
+      {sections.map((section) => {
+        /* 这里按**源**筛掉空行：供应商行只在它旗下至少有一个匹配源时才出现。
+           一条容易误会的推论是「我在待接入里看到过它」——待接入显示的是**供应商行**
+           （供应商旗下有一个 pending 源，整行就会出现），不等于那个源本身在待接入里。
+           判断某个源在哪一块可见，要按它的 `visibility` / `panels` / `purposes` 算，不要按供应商名。 */
+        const providers = section.providers
         if (providers.length === 0) return null
-        return <div className="intelligence-catalog-group" key={group.category}>
-          <div className="intelligence-catalog-group-title">{labels.categories[group.category]}</div>
+        return <div className="intelligence-catalog-group" key={section.key}>
+          {/* 空组不显示标题；平铺那一面（看板 / 舆情 / 待接入 / 其他）干脆没有标题。 */}
+          {section.title === undefined ? null : <div className="intelligence-catalog-group-title">{section.title}</div>}
           {providers.map((provider) => {
             const enabled = provider.sources.filter((source) => source.enabled).length
             const summary = labels.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
