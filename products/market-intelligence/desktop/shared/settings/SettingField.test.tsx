@@ -17,7 +17,7 @@ const SURFACES_ROW = row('setting:notifications.surfaces')
 const CONDITIONAL_ROW = row('setting:notifications.calendar.lead')
 
 const resolveText = (key: string): string => `t:${key}`
-const resolveOptionLabel = (source: SettingOptionsSource, value: string | number): string => `${source}:${String(value)}`
+const resolveOptionLabel = (value: string | number, source?: SettingOptionsSource): string => `${source ?? 'view'}:${String(value)}`
 
 let root: Root | undefined
 afterEach(() => {
@@ -111,12 +111,60 @@ describe('SettingField', () => {
     expect(shown.querySelector('[data-setting-key="setting:notifications.calendar.lead"]')).not.toBeNull()
   })
 
-  it('renders a select with option values from the registry and labels from the caller', async () => {
-    const container = await mount(renderField(SELECT_ROW, { value: 'medium' }))
-    const control = container.querySelector('[data-setting-key="setting:notifications.push-threshold"]')
+  it('draws a declared segmented select with the platform Segmented', async () => {
+    const onChange = vi.fn()
+    const container = await mount(renderField(SELECT_ROW, { value: 'medium', onChange }))
+    const group = container.querySelector('.segmented')
+    expect(group).not.toBeNull()
+    expect(group?.getAttribute('role')).toBe('group')
+    const high = [...(group?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === 'news-push-thresholds:high')
+    await act(async () => { high?.click() })
+    expect(onChange).toHaveBeenCalledWith('high')
+  })
+
+  it('takes multiSelect options from the view when the declaration says so', async () => {
+    const onChange = vi.fn()
+    const descriptor: SettingDescriptor = {
+      ...SURFACES_ROW,
+      key: 'setting:test.view-options',
+      field: { kind: 'multiSelect', optionsFrom: { kind: 'view', field: 'available' } }
+    }
+    const container = await mount(renderField(descriptor, {
+      value: ['channel'],
+      onChange,
+      view: { available: ['channel', 'toast'] }
+    }))
+    const boxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    // 只有视图给的两项；静态集合的四项（含 center）不许冒出来。
+    expect(boxes).toHaveLength(2)
+    const toast = boxes.find((box) => box.closest('label')?.textContent?.includes('view:toast'))
+    await act(async () => { toast?.click() })
+    expect(onChange).toHaveBeenCalledWith(['channel', 'toast'])
+  })
+
+  it('renders every help line of a declaration into the same ⓘ trigger', async () => {
+    const descriptor: SettingDescriptor = {
+      ...SWITCH_ROW,
+      key: 'setting:test.multi-help',
+      copy: { helpKeys: ['help.one', 'help.two'], helpAriaKey: 'help.aria' }
+    }
+    const container = await mount(renderField(descriptor, { value: true }))
+    const trigger = [...(container.querySelectorAll('button[aria-label]') ?? [])]
+      .find((button) => button.getAttribute('aria-label') === 't:help.aria')
+    expect(trigger).toBeTruthy()
+  })
+
+  it('renders an undeclared select as antd Select, with labels from the caller', async () => {
+    // 国家范围这一行没声明 presentation，默认就是 antd Select（与现状一致）。
+    const scope = settingRegistry.notifications.find(
+      (row) => row.key === 'setting:notifications.calendar.landed-countries.scope'
+    ) as SettingDescriptor
+    const container = await mount(renderField(scope, { value: 'us' }))
+    const control = container.querySelector('[data-setting-key="setting:notifications.calendar.landed-countries.scope"]')
     expect(control).not.toBeNull()
     expect(control?.querySelector('.ant-select')).not.toBeNull()
-    expect(control?.textContent).toContain('news-push-thresholds:medium')
+    expect(control?.textContent).toContain('calendar-landed-scopes:us')
   })
 
   it('multiSelect keeps a locked option checked, disabled and present in the emitted value', async () => {
