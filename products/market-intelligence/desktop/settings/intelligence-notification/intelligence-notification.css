@@ -260,3 +260,24 @@
   font-size: var(--font-body);
   white-space: nowrap;
 }
+
+/* ── 抽屉面外壳：notice + 两栏两段式 ──
+   抽屉壳给 pane 加了 `--split`（两行：标题 / 内容）；本屏在内容那格里再分「提示 / 两栏」：
+   提示按内容高、两栏吃掉剩余高度并各自滚。少了这一条，split 的 100% 会和提示叠在一起。 */
+.intelligence-notification-panel {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.intelligence-notification-panel > .intelligence-notification-panel__notice,
+.intelligence-notification-panel > .intelligence-notification-narrow {
+  flex: none;
+}
+
+.intelligence-notification-panel > .config-drawer__split {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
