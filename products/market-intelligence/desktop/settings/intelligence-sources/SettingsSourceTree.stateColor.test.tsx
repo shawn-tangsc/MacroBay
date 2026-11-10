@@ -26,7 +26,7 @@ function src(sourceId: string, overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function renderRow(sources: ReadonlyArray<Record<string, unknown>>): Promise<HTMLElement> {
+async function renderRow(sources: ReadonlyArray<Record<string, unknown>>, providers?: ReadonlyArray<ReadonlyArray<Record<string, unknown>>>): Promise<HTMLElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -42,10 +42,10 @@ async function renderRow(sources: ReadonlyArray<Record<string, unknown>>): Promi
     view: {
       groups: [{
         category: 'macro',
-        providers: [{
-          providerId: 'p', displayName: 'P', category: 'macro', credential: 'none', healthMarker: 'none',
-          sources: sources.map((item, index) => src(String(item.sourceId ?? `s${index}`), item))
-        }]
+        providers: (providers ?? [sources]).map((group, groupIndex) => ({
+          providerId: `p${groupIndex}`, displayName: `P${groupIndex}`, category: 'macro', credential: 'none', healthMarker: 'none',
+          sources: group.map((item, index) => src(String(item.sourceId ?? `s${index}`), item))
+        }))
       }],
       counts: { total: sources.length, enabled: 0, pending: 0, failed: 0 }
     } as never
@@ -75,5 +75,18 @@ describe('来源行状态属性（只给头像上色）', () => {
     const host = await renderRow([{ sourceId: 'coindesk-rss', enabled: false }, { sourceId: 'sec-rss', enabled: true }])
     expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('enabled')
     expect(host.textContent).toContain('2/1')
+  })
+})
+
+describe('组内按状态排序', () => {
+  it('orders enabled, then disabled, then unused, and keeps same-state order stable', async () => {
+    // 三个供应商：一个全关（红）、一个有一项开（绿）、一个 0 模块（灰）。渲染顺序必须是 绿 → 红 → 灰。
+    const host = await renderRow([], [
+      [{ sourceId: 'coindesk-rss', enabled: false }],
+      [{ sourceId: 'sec-rss', enabled: true }],
+      [{ sourceId: 'ethereum-foundation-blog', enabled: true }]
+    ])
+    const states = [...host.querySelectorAll('.intelligence-provider-row')].map((row) => row.getAttribute('data-provider-state'))
+    expect(states).toEqual(['enabled', 'disabled', 'pending'])
   })
 })

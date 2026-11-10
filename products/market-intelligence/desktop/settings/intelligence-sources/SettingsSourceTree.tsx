@@ -66,6 +66,23 @@ export function sourceMatchesFilter(
 
 const matchesFilter = sourceMatchesFilter
 
+/** 行状态：`enabled`（有模块用且至少一项开）/ `disabled`（有模块用但全关）/ `unused`（0 模块或待接入）。 */
+export function providerRowState(provider: { sources: ReadonlyArray<{ sourceId: string; enabled: boolean; visibility: string }> }): 'enabled' | 'disabled' | 'unused' {
+  const used = provider.sources.some((source) => modulesUsingSource(source.sourceId).length > 0)
+  if (!used || provider.sources.every((source) => source.visibility === 'pending')) return 'unused'
+  return provider.sources.some((source) => source.enabled) ? 'enabled' : 'disabled'
+}
+
+/**
+ * 组内排序（用户 2026-11-11）：enabled → disabled → unused；**同级保持原顺序**（稳定的数组排序，
+ * 不每次渲染抖）。只排组内，不跨组。
+ */
+const STATE_ORDER: Record<ReturnType<typeof providerRowState>, number> = { enabled: 0, disabled: 1, unused: 2 }
+
+function sortByState<T extends { sources: ReadonlyArray<{ sourceId: string; enabled: boolean; visibility: string }> }>(providers: readonly T[]): T[] {
+  return [...providers].sort((left, right) => STATE_ORDER[providerRowState(left)] - STATE_ORDER[providerRowState(right)])
+}
+
 /**
  * 「日历」那一屏的组别：**官方源 / 聚合源**，判据是 `calendarFeedRegistry` 的 `owner`，
  * 不在组件里写源 id、源名或一张手抄表（用户 2026-11-10）。
@@ -184,7 +201,7 @@ export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChan
                   labelKeys={[section.info.noteKey]}
                   resolveText={resolveText} />}
             </div>}
-          {providers.map((provider) => {
+          {sortByState(providers).map((provider) => {
             const enabled = provider.sources.filter((source) => source.enabled).length
             const summary = labels.providerSummary.replace('{total}', String(provider.sources.length)).replace('{enabled}', String(enabled))
             // 标记档由投影给出，与抽屉读同一份（组件不看 enabled/unavailable）。
@@ -201,11 +218,7 @@ export function SettingsSourceTree({ bare, filter, filters, labels, onFilterChan
                 aria-current={provider.providerId === selectedProviderId ? 'true' : undefined}
                 /* 行状态只给**头像**上色：待接入（优先）→ 灰、全关 → 红、至少一项启用 → 绿。
                    源名与副标题的文字色不跟状态走（用户 2026-11-11）。 */
-                data-provider-state={(provider.sources.every((source) => source.visibility === 'pending')
-                  /* 待接入，或**没有任何看板模块用到**（维护备用 / 只进分析 / 未接入）→ 灰：它们是「还没用起来」那一档。 */
-                  || !provider.sources.some((source) => modulesUsingSource(source.sourceId).length > 0))
-                  ? 'pending'
-                  : provider.sources.some((source) => source.enabled) ? 'enabled' : 'disabled'}
+                data-provider-state={providerRowState(provider) === 'unused' ? 'pending' : providerRowState(provider)}
                 className={`intelligence-provider-row${provider.providerId === selectedProviderId ? ' selected' : ''}`}
                 type="button"
                 onClick={() => onSelectProvider(provider.providerId)}
