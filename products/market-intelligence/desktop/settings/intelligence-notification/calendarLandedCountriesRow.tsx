@@ -96,34 +96,24 @@ export function CalendarLandedCountriesRow(props: Readonly<{
       view={{ landedCountries: draft }}
     />
     {draft.scope === 'custom'
-      ? <SettingsRow
-        info={{
-          ariaLabelKey: 'pages.intelligence.notification.countries.customInfoAria',
-          labelKeys: [
-            'pages.intelligence.notification.countries.customCost',
-            'pages.intelligence.notification.countries.emptyHint'
-          ],
-          resolveText: props.resolveText
+      ? <SettingField
+        busy={saving}
+        checkboxClassName="intelligence-notification-form-check"
+        controlWrapperClassName={CONTROL_CLASS}
+        copyClassName={LABEL_CLASS}
+        descriptor={countryDescriptor('setting:notifications.calendar.landed-countries.codes')}
+        labelTextClassName={LABEL_TEXT_CLASS}
+        onChange={(next) => {
+          const codes = Array.isArray(next) ? next.map(String) as CalendarLandedCountryCode[] : []
+          choose({ scope: 'custom', codes })
         }}
-        label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}
+        resolveOptionLabel={(option) =>
+          text[`pages.intelligence.notification.countries.name.${String(option)}`] ?? String(option)}
+        resolveText={props.resolveText}
+        rowClassName={ROW_CLASS}
+        value={draft.codes}
+        view={{ landedCountries: draft }}
       >
-        <div
-          aria-label={text['pages.intelligence.notification.countries.customTitle'] ?? ''}
-          className="intelligence-notification-form-checks"
-          role="group"
-        >
-          {CALENDAR_LANDED_COUNTRY_CODES.map((code) => {
-            const checked = draft.codes.includes(code)
-            return <Checkbox
-              checked={checked}
-              disabled={saving || (full && !checked)}
-              key={code}
-              onChange={(event) => toggleCode(code, event.target.checked)}
-            >
-              {text[`pages.intelligence.notification.countries.name.${code}`] ?? code}
-            </Checkbox>
-          })}
-        </div>
         <span
           className={`intelligence-notification-form-note${full ? ' is-caution' : ''}`}
           data-count={`${count}/${MAX_CALENDAR_LANDED_COUNTRIES}`}
@@ -143,7 +133,7 @@ export function CalendarLandedCountriesRow(props: Readonly<{
             {text['pages.intelligence.notification.countries.fullHint']}
           </span>
           : null}
-      </SettingsRow>
+      </SettingField>
       : null}
     {saveFailedField === 'landedCountries'
       ? <SettingsRow label="" last={props.last}>

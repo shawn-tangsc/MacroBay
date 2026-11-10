@@ -392,6 +392,29 @@ describe('intelligence notification settings', () => {
       'setting:notifications.calendar.landed-countries.scope'
     ])
 
+    // 同一份夹具翻父值（范围 us → custom）：行数必须随条件行变化，删掉国家码这一行就红。
+    act(() => root?.unmount())
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'custom', codes: ['US'] } }
+        }
+        if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+        return { enabled: true }
+      })
+    })
+    await render()
+    await selectItem(3)
+    expect(keys()).toEqual([
+      'setting:notifications.surfaces',
+      'setting:notifications.calendar.enabled',
+      'setting:notifications.calendar.lead',
+      'setting:notifications.calendar.importance',
+      'setting:notifications.calendar.landed-filter',
+      'setting:notifications.calendar.landed-countries.scope',
+      'setting:notifications.calendar.landed-countries.codes'
+    ])
+
     // 页面 → 注册表：渲染出的每个键都必须在已迁移清单里，且是 settings 面上的真实声明。
     for (const key of keys()) {
       expect(MIGRATED_SETTING_KEYS).toContain(key)
