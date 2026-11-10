@@ -2,10 +2,14 @@
 .config-drawer {
   display: grid;
   grid-template-columns: 208px minmax(0, 1fr);
-  min-height: 100%;
+  /* 抽屉高度就是可视区：三栏各自滚动，整块不滚。 */
+  height: 100%;
+  min-height: 0;
 }
 
 .config-drawer__nav {
+  overflow-y: auto;
+  min-height: 0;
   display: grid;
   align-content: start;
   gap: 2px;
@@ -54,6 +58,27 @@
   align-content: start;
   gap: 16px;
   padding: 16px;
+  /* 其余屏只有一列内容：整块自己滚。 */
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* 「左树 + 右详情」那一屏：标题固定，两栏各自滚。 */
+.config-drawer__pane--split {
+  align-content: stretch;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.config-drawer__pane--split .config-drawer__split {
+  height: 100%;
+  min-height: 0;
+}
+
+.config-drawer__split > .intelligence-catalog-pane,
+.config-drawer__split > .settings-detail-pane {
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .config-drawer__pane-title {

@@ -135,7 +135,10 @@ export function ConfigSettingsDrawer({
           {menuLabel(key)}
         </button>)}
       </nav>
-      <section aria-label={menuLabel(menu)} className="config-drawer__pane">
+      <section
+        aria-label={menuLabel(menu)}
+        /* 有「左树 + 右详情」这一屏时，滚动交给两栏各自（菜单那一栏也自己滚），整块不滚。 */
+        className={`config-drawer__pane${menu === 'sources' && sourcesPanel !== undefined ? ' config-drawer__pane--split' : ''}`}>
         <h2 className="config-drawer__pane-title">{menuLabel(menu)}</h2>
         {menu === 'sources' && sourcesPanel !== undefined
           ? (<div className="config-drawer__split">{sourcesPanel}</div>)
