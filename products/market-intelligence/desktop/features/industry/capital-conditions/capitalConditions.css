@@ -1,0 +1,19 @@
+/*
+ * 资金面卡自己的两条布局规则（其余的 `.mi-capital-conditions*` 仍在页面样式表里）。
+ *
+ * 为什么单独一份：这条「整卡读不到」的改法与页面上另外几张卡同时在动同一个页面样式表，
+ * 三处 hunk 挤在一个文件里谁都拆不开；卡片自己的新规则放这里，提交就是一笔对一笔。
+ */
+
+/* 卡宽跟卡片内容区，不由内容宽决定：**空态与有数据态必须同宽**（用户 2026-11-11：
+   「空表」不是「缩水表」）。`min-width: 0` 让它在窄栏里还能继续缩，`width: 100%` 让它吃满。
+   不用 `fit-content` / `inline-grid`：那两种写法会让空态自己缩成一条。 */
+.mi-capital-conditions { width: 100%; min-width: 0; }
+
+/* 整卡读不到时，表头下面那一行：状态句 + 一颗动作，占满数据列。
+   底色比卡面浅一档（`--surface-soft`）；`td` 仍是表格单元（不用 flex 顶掉 `colSpan`），
+   内容交给内层这一行排。行高与数据行同档（上下各 8），空态不会把表撑高或压扁。 */
+.mi-capital-conditions__status-row > td { padding: 8px 0; background: var(--surface-soft); text-align: left; }
+.mi-capital-conditions__status-inline {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0;
+}

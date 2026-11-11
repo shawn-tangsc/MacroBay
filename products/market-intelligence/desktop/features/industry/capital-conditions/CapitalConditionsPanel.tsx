@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from 'antd'
-import { CircleSlash, Info, RefreshCw } from 'lucide-react'
+import { CircleSlash, Info, RefreshCw, TriangleAlert } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -9,7 +9,7 @@ import { Popover } from '@platform/ui/components/popover'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { InlineNotice } from '@platform/ui/components/inline-notice'
-import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CapitalFlowChart } from './CapitalFlowChart'
 import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
@@ -22,11 +22,14 @@ import type { SourceCellOff } from '../shared/sourceCellOff'
 import {
   isCapitalConditionsRetryable,
   type DashboardCapitalConditionsState,
+  type DashboardCapitalConditionsUnavailableReason,
   type DashboardEtfFlowAsset,
   type DashboardEtfMissingReason,
   type DashboardEtfReading
 } from './capitalConditionsModel'
 import { EtfOutflowChip, EtfSignalDetailDialog, type EtfSignalText } from './EtfOutflowSignal'
+import { SkeletonEtfRow, unavailableNotice, type UnavailableNotice } from './capitalUnavailable'
+import './capitalConditions.css'
 
 type Text = {
   title: string
@@ -126,6 +129,8 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const dataText = useProductTextKey() as (key: string) => string
+  // 「重启应用」这颗按钮的文字取平台闭集里那一句（与 `StateView` 的 needs-restart 同一个词），不另造。
+  const restartLabel = useStateViewText()(STATE_VIEW_ACTION_KEYS.restart_app)
   // 状态与信号并列：牌子上是「有没有这条信号」，这一句回答「这次分析到哪一步」。
   const analysisSentence = useSignalAnalysisSentence(state.state === 'available' ? state.etfSignalAnalysis : undefined)
   const alertChip = state.state === 'available' && state.etfSignal?.state === 'alert' ? state.etfSignal : undefined
@@ -151,40 +156,41 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     </div>
   </section>
 
-  if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
+  if (state.state === 'loading') return <section className="mi-capital-conditions" data-state="loading" aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
-      {state.state === 'loading'
-        ? <LoadingState label={text.loading} minHeight={140} />
-        : state.state === 'empty'
-          ? <StateView state="empty" reasonCode="not-yet"
-              productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.empty', resolve: () => text.empty }} />
-          : state.reason === 'contract-mismatch'
-            // 版本/形状不符：重试读的是同一份契约，多少次都一样；唯一出口是重启应用。
-            // `needs-restart` 这个名字就是为它准备的，动作走平台那条窗口通道（`app.relaunch()`）。
-            ? <StateView state="error" reasonCode="needs-restart"
-                productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.contractMismatch', resolve: () => text.contractMismatch }}
-                action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void window.platform.app.relaunch() } }} />
-            : isCapitalConditionsRetryable(state.reason)
-              // 「读了但没读成」才给重试：`unreadable` 的码表只允许这一颗动作，规格上的「再试一次」。
-              // 句子取产品那句「暂时读不到」——它就是这一态的名字，平台句换成同义的旁白只会多一套词。
-              ? <StateView state="error" reasonCode="unreadable"
-                  productReason={{ key: 'pages.intelligence.portal.data.temporarilyUnavailable', resolve: (key: string) => dataText(key) }}
-                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />
-              // 其余（时钟不合法、客户端没接上、数字无法显示）都是接线或数据问题：读者能做的是再读一次，
-              // 所以给的是 refresh 而不是一个必然失败的 retry。
-              : <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.refresh, onSelect: onRefresh }} />}
-      {/* 重读/重采集那颗只在**没有状态面可给动作**的两态出现（等待中、确实空）：
-          错误态的三颗动作已经在 `StateView` 里，这里再放一颗就是同一个 `onRefresh` 的两颗按钮。 */}
-      {state.state === 'loading' || state.state === 'empty' ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
-        icon={<RefreshCw aria-hidden="true" size={13} />} loading={refreshing} onClick={onRefresh} size="small" type="link">{text.refresh}</Button> : null}
-      {/* 面板级「重新采集失败」：走平台提示条（danger 自带 `role="alert"`）。**只报事、不带动作**：
-          上面那颗状态面的动作就是同一个 `onRefresh`，同一张卡里放两颗做同一件事的按钮，正是
-          这次要收掉的形状。正文只留一句；这条文案没有第二句细节，所以没有可挪进 ⓘ 的部分。 */}
-      {refreshFailed ? <InlineNotice tone="danger">{text.refreshFailed}</InlineNotice> : null}
+      <LoadingState label={text.loading} minHeight={140} />
+      <Button className="mi-capital-conditions__refresh" disabled
+        icon={<RefreshCw aria-hidden="true" size={13} />} loading onClick={onRefresh} size="small" type="link">{text.refresh}</Button>
     </div>
   </section>
 
+  if (state.state === 'empty') return <section className="mi-capital-conditions" data-state="empty" aria-label={text.title}>
+    <div className="mi-capital-conditions__summary">
+      <h2>{text.title}</h2>
+      <StateView state="empty" reasonCode="not-yet"
+        productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.empty', resolve: () => text.empty }} />
+      <Button className="mi-capital-conditions__refresh" disabled={refreshing}
+        icon={<RefreshCw aria-hidden="true" size={13} />} loading={refreshing} onClick={onRefresh} size="small" type="link">{text.refresh}</Button>
+    </div>
+  </section>
+
+  // 整卡读不到：**结构全留**（用户 2026-11-11：「右边的图表可以继续显示，就是显示没数据的空表而已」）。
+  // 卡框、表头、列名、行名照常渲染，数据格留空（不写 `—`、不逐格写「暂时读不到」），
+  // 一句状态 + 一颗动作放在表头下面的第一行、跨全部数据列。换成一块 `StateView` 会把整张表拿掉，
+  // 读者看到的是「这一块没做完」，不是「这次没读到」。
+  if (state.state === 'unavailable') return <section className="mi-capital-conditions" data-state="unavailable" aria-label={text.title}>
+    <div className="mi-capital-conditions__content-row">
+      <div className="mi-capital-conditions__summary">
+        <div className="mi-capital-conditions__header-band"><h2>{text.title}</h2></div>
+        <StablecoinTable text={text} notice={unavailableNotice(state.reason, text, dataText, restartLabel, onRefresh)} />
+        <EtfTable text={text} skeleton />
+      </div>
+      <EtfFlow text={text} skeleton />
+    </div>
+    {/* 面板级「重新采集失败」：提示条只报事、不带动作——上面那一行里的那颗就是同一个 `onRefresh`。 */}
+    {refreshFailed ? <InlineNotice tone="danger">{text.refreshFailed}</InlineNotice> : null}
+  </section>
   return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
@@ -227,8 +233,27 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   </section>
 }
 
-/** Stock and flow share one compact table language: supply plus its 1D / 7D / 30D changes. */
-function StablecoinTable({ state, text }: { state: AvailableState; text: Text }): React.ReactElement {
+/**
+ * 稳定币那张表。`state` 缺省 = 整卡读不到：**表头、列名、行名照常**，数据格留空，
+ * 状态句与动作占据表头下面的第一行、跨全部数据列（带底色，读者一眼看到「这一块在等」）。
+ *
+ * 数据格**不写 `—`、也不逐格写状态词**：`—` 的意思是「确实没有」，这里只是「这次没读到」；
+ * 每格铺一个词就变成一堵状态词墙，比空着更难读。
+ *
+ * Stock and flow share one compact table language: supply plus its 1D / 7D / 30D changes.
+ */
+function StablecoinTable({ state, text, notice }: Readonly<{
+  state?: AvailableState
+  text: Text
+  notice?: UnavailableNotice
+}>): React.ReactElement {
+  const column = (flow: 'change1dUsd' | 'change7dUsd' | 'change30dUsd', percent: 'change1dPercent' | 'change7dPercent' | 'change30dPercent'): React.ReactElement =>
+    state === undefined
+      ? <td />
+      : <td data-flow-direction={flowDirection(state[flow])}>{state[flow]}</td>
+  // state-ternary: reviewed — 只决定要不要给百分号小格子挂方向属性；五列表头两种状态下都在。
+  const head = (label: string, flow: 'change1dUsd' | 'change7dUsd' | 'change30dUsd', percent: 'change1dPercent' | 'change7dPercent' | 'change30dPercent'): React.ReactElement =>
+    <th scope="col">{label}<span className="mi-capital-conditions__pct" {...(state === undefined ? {} : { 'data-flow-direction': flowDirection(state[flow]) })}>{state === undefined ? '' : `(${state[percent]})`}</span></th>
   return <table className="mi-capital-conditions__etf-table mi-capital-conditions__stable-table">
     <colgroup>
       <col className="mi-capital-conditions__etf-col-asset" />
@@ -237,21 +262,37 @@ function StablecoinTable({ state, text }: { state: AvailableState; text: Text })
     </colgroup>
     <thead><tr>
       <th scope="col">{text.asset}</th>
-      <th scope="col">{text.change1d}<span className="mi-capital-conditions__pct" data-flow-direction={flowDirection(state.change1dUsd)}>({state.change1dPercent})</span></th>
-      <th scope="col">{text.change7d}<span className="mi-capital-conditions__pct" data-flow-direction={flowDirection(state.change7dUsd)}>({state.change7dPercent})</span></th>
-      <th scope="col">{text.change30d}<span className="mi-capital-conditions__pct" data-flow-direction={flowDirection(state.change30dUsd)}>({state.change30dPercent})</span></th>
+      {head(text.change1d, 'change1dUsd', 'change1dPercent')}
+      {head(text.change7d, 'change7dUsd', 'change7dPercent')}
+      {head(text.change30d, 'change30dUsd', 'change30dPercent')}
       <th scope="col">{text.totalSupply}</th>
     </tr></thead>
-    <tbody><tr>
-      <th scope="row">
-        <span className="mi-capital-conditions__asset-name">{text.stablecoin}</span>
-        <span className="mi-capital-conditions__asset-scope">{text.stablecoinScope}</span>
-      </th>
-      <td data-flow-direction={flowDirection(state.change1dUsd)}>{state.change1dUsd}</td>
-      <td data-flow-direction={flowDirection(state.change7dUsd)}>{state.change7dUsd}</td>
-      <td data-flow-direction={flowDirection(state.change30dUsd)}>{state.change30dUsd}</td>
-      <td className="mi-capital-conditions__stable-supply">{state.currentUsd}</td>
-    </tr></tbody>
+    <tbody>
+      {/* 状态行：表头下面的第一行、跨全部数据列。行名与表头一个字不改。 */}
+      {notice
+        ? <tr className="mi-capital-conditions__status-row" data-status-row="unavailable">
+          <td colSpan={5}>
+            <div className="mi-capital-conditions__status-inline">
+              <span className="mi-source-state" data-state="unreadable">
+                <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
+                <span>{notice.sentence}</span>
+              </span>
+              <Button onClick={notice.onAction} size="small">{notice.action}</Button>
+            </div>
+          </td>
+        </tr>
+        : null}
+      <tr>
+        <th scope="row">
+          <span className="mi-capital-conditions__asset-name">{text.stablecoin}</span>
+          <span className="mi-capital-conditions__asset-scope">{text.stablecoinScope}</span>
+        </th>
+        {column('change1dUsd', 'change1dPercent')}
+        {column('change7dUsd', 'change7dPercent')}
+        {column('change30dUsd', 'change30dPercent')}
+        <td className="mi-capital-conditions__stable-supply">{state === undefined ? null : state.currentUsd}</td>
+      </tr>
+    </tbody>
   </table>
 }
 
@@ -281,7 +322,13 @@ function CellSourceState({ availability, dataText }: Readonly<{
   </p>
 }
 
-function EtfTable({ reading, text, onRetry }: { reading?: DashboardEtfReading; text: Text; onRetry: () => void }): React.ReactElement {
+function EtfTable({ reading, text, onRetry, skeleton = false }: {
+  reading?: DashboardEtfReading
+  text: Text
+  onRetry?: () => void
+  /** 整卡读不到：表头、列名、行名照常，数据格留空（不写「未知」、不铺状态词）。 */
+  skeleton?: boolean
+}): React.ReactElement {
   const unreadable = reading === undefined || reading.state === 'unreadable'
   const coverage = unreadable ? undefined : reading.coverage
   const span = 2 + etfFlowPolicy.cumulativeWindows.length
@@ -307,12 +354,17 @@ function EtfTable({ reading, text, onRetry }: { reading?: DashboardEtfReading; t
       <th scope="col">{text.streakColumn}</th>
     </tr></thead>
     <tbody>
-      {unreadable
-        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={span}><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} /></td></tr>
-        : <>
-            <EtfRow asset={reading.btc} label={text.btc} missing={reading.missing?.btc} text={text} />
-            <EtfRow asset={reading.eth} label={text.eth} missing={reading.missing?.eth} text={text} />
-          </>}
+      {skeleton
+        ? <>
+            <SkeletonEtfRow label={text.btc} series="btc" span={span} />
+            <SkeletonEtfRow label={text.eth} series="eth" span={span} />
+          </>
+        : unreadable
+          ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={span}><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => onRetry?.() }} /></td></tr>
+          : <>
+              <EtfRow asset={reading.btc} label={text.btc} missing={reading.missing?.btc} text={text} />
+              <EtfRow asset={reading.eth} label={text.eth} missing={reading.missing?.eth} text={text} />
+            </>}
     </tbody>
   </table>
   {/* 对比列单独说：不可比，且只在有 `laggingDays` 时念出落后几个交易日。 */}
@@ -377,19 +429,28 @@ function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflo
  * model — and the table's trigger sits in the title row while its panel hangs off this section's
  * bottom edge, so opening it moves nothing in the card.
  */
-function EtfFlow({ reading, flowHistory, text, onRetry }: {
+function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false }: {
   reading?: DashboardEtfReading
   flowHistory?: AvailableState['flowHistory']
   text: Text
-  onRetry: () => void
+  onRetry?: () => void
+  /** 整卡读不到：**标题、图例留外面，图里没有数据**（不画假曲线、不画 0 值柱）。 */
+  skeleton?: boolean
 }): React.ReactElement {
   const [dialogOpen, setDialogOpen] = useState(false)
   const resolveText = useProductTextKey()
+  if (skeleton) {
+    return <section className="mi-capital-conditions__etf-flow" data-etf-flow="skeleton">
+      <header><div className="mi-capital-conditions__etf-flow-title"><h3>{text.etfFlow}</h3></div></header>
+      <CapitalFlowLegend text={text} />
+      <CapitalFlowChart rows={[]} text={text} />
+    </section>
+  }
   // "The sources did not answer" stays an error with a retry; "they answered with too few days"
   // is a not-yet with the count, so the two never share a sentence.
   if (reading === undefined || reading.state === 'unreadable' || !flowHistory) {
     return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3>
-      <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} />
+      <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => onRetry?.() }} />
     </section>
   }
   if (flowHistory.state === 'not-yet') {

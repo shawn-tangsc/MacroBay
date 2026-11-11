@@ -319,16 +319,19 @@ describe('CapitalConditionsPanel', () => {
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy|error/i)
   })
 
-  it('tells a failed read apart from an empty one, through the platform error state', () => {
+  it('tells a failed read apart from an empty one, without tearing the tables down', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' } }))
+    const empty = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'empty' } }))
 
     // "Could not read" is an error, never an empty: a panel that says "nothing here" when the
     // query failed tells the reader the opposite of what happened.
-    // 整卡级的「读不到」走平台错误面（`error` + 产品原因句），不是一个空块、也不是共享行卡。
-    expect(markup).toContain('state-view--error')
-    expect(markup).toContain('data-state-icon="error"')
-    expect(markup).not.toContain('data-state="empty"')
+    // 而且「读不到」不把表拆掉：表头与行名留着、数据格空着，一句状态 + 一颗动作在表头下面那一行。
+    expect(markup).toContain(productText['en-US'].pages.intelligence.portal.data.temporarilyUnavailable)
+    expect(markup).toContain('data-status-row="unavailable"')
+    expect(markup).toContain('mi-capital-conditions__stable-table')
+    expect(empty).toContain('state-view--empty')
+    expect(empty).not.toContain('data-status-row=')
     expect(markup).not.toContain('mi-source-card')
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
   })
@@ -640,7 +643,7 @@ describe('CapitalConditionsPanel', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
-    const action = container.querySelector<HTMLButtonElement>('.state-view__action')!
+    const action = container.querySelector<HTMLButtonElement>('[data-status-row="unavailable"] button')!
     expect(action).not.toBeNull()
     await act(async () => action.click())
     expect(onRefresh).toHaveBeenCalledTimes(1)
@@ -670,11 +673,11 @@ describe('CapitalConditionsPanel', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable', reason: 'query-failed' }, onRefresh })))
-    // 整卡三态的按钮文字取平台闭集（`ui.state.action.*`），调用点不硬写「再试一次 / 重新采集来源」——
-    // 同一个动作两张嘴，读者会以为是两件事。
+    // 状态行里恰一颗动作，文字取产品那句「再试一次」（用户 2026-11-11 定的三句之一）；
+    // 同一张卡里不许再出现第二颗做同一件事的按钮。
     const actions = [...container.querySelectorAll<HTMLButtonElement>('button')]
     expect(actions).toHaveLength(1)
-    expect(actions[0]?.textContent).toBe(resolveStateViewText(locale, 'ui.state.action.retry'))
+    expect(actions[0]?.textContent).toBe(productText[locale].pages.intelligence.portal.data.retry)
     await act(async () => actions[0]!.click())
     expect(onRefresh).toHaveBeenCalledOnce()
     expect(container.textContent).not.toContain(text.refreshFailed)
