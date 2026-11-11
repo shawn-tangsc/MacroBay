@@ -6,7 +6,6 @@ import type {
 } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
-import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
 import { notifySettingsRevision, subscribeSettingsRevision } from '../../shared/events/settingsRevision'
 import { createSettingsOrigin, writeSourceEnabled } from './sourceWrites'
 import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, runOutcomeOf, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout, type SourceRunOutcome } from './intelligenceSourceProfileEditor'
@@ -220,7 +219,6 @@ export function useIntelligenceSourcesSettings(labels: {
               ? { detail, draftProfile: detail.profile, notice: labels.saved }
               : {})
           }))
-          notifyIntelligenceSourcesChanged()
           notifySettingsRevision('sources', revisionOriginRef.current)
         })
         .catch(() => {
