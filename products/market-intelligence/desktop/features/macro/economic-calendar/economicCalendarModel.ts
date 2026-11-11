@@ -28,8 +28,17 @@ export type EconomicCalendarDayView = {
 export type EconomicCalendarProjection = {
   month: string
   asOf: string
+  /** 主列表：不含标题型空壳。 */
   events: EconomicCalendarEventView[]
   days: EconomicCalendarDayView[]
+  /**
+   * 标题型空壳：给「官方日程」视图与页头「受影响 N 条」用（`MI-1-R39` §4）。
+   *
+   * 判据只有一处：`isTitleOnlyCalendarEvent`。**主列表暂时仍在画它们**——见该函数的注释：
+   * 按 §4 的字面判据，没有时刻的 FOMC 会议（官方只给日期）也会被算成空壳，而那是不该藏的。
+   * 剔除要等「哪些事件算发布型」这一条定下来，别在这里先斩。
+   */
+  shells: EconomicCalendarEventView[]
 }
 
 export const economicCalendarPresentationPolicy = {
@@ -98,21 +107,45 @@ export function selectEconomicCalendarMonth(candidate: string | undefined, selec
   return candidate && monthBounds(candidate) ? candidate : selectedMonth
 }
 
+/**
+ * 标题型空壳（`MI-1-R39` §4）：**没有官方时刻**（缺失，或只有惯例推算值）**且**实际 / 预期 / 前值全空。
+ *
+ * 唯一一份判据：主列表剔除、官方日程视图、页头「受影响 N 条」三处都读这一个函数——
+ * 三处各写一套就会漂，「主列表里没有了、受影响列表里也没了」是最难发现的那种漏。
+ *
+ * 对照组别误伤：有官方时刻、只是还没出数值的，是合法的「待公布」，**留在主列表**。
+ */
+export function isTitleOnlyCalendarEvent(event: Readonly<{
+  scheduledAt?: string | undefined
+  releaseTimeSource?: EconomicCalendarEventView['releaseTimeSource'] | undefined
+  actual?: unknown
+  previous?: unknown
+  consensus?: unknown
+}>): boolean {
+  const hasOfficialTime = event.scheduledAt !== undefined && event.releaseTimeSource !== 'convention-default'
+  // 数值字段在这个视图里是解析后的值对象，不是字符串：判「有没有」只看空不空。
+  const hasValue = event.actual !== undefined || event.previous !== undefined
+    || (event.consensus !== undefined && event.consensus !== null)
+  return !hasOfficialTime && !hasValue
+}
+
 export function createEconomicCalendarProjection(input: {
   month: string
   asOf: string
   events: readonly EconomicCalendarPublicEvent[]
 }): EconomicCalendarProjection {
   const bounds = monthBounds(input.month)
-  if (!bounds) return { month: input.month, asOf: input.asOf, events: [], days: [] }
-  const events = input.events
+  if (!bounds) return { month: input.month, asOf: input.asOf, events: [], days: [], shells: [] }
+  const views = input.events
     .filter((event) => event.detectedAt <= input.asOf && event.scheduledDate >= bounds.start && event.scheduledDate < bounds.end)
     .map(toEventView)
     .filter((event): event is EconomicCalendarEventView => Boolean(event))
     .sort(compareEvents)
+  const shells = views.filter(isTitleOnlyCalendarEvent)
+  const events = views
   const byDate = new Map<string, EconomicCalendarEventView[]>()
   for (const event of events) byDate.set(event.scheduledDate, [...(byDate.get(event.scheduledDate) ?? []), event])
-  return { month: input.month, asOf: input.asOf, events, days: monthGrid(bounds.start, input.month, byDate) }
+  return { month: input.month, asOf: input.asOf, events, days: monthGrid(bounds.start, input.month, byDate), shells }
 }
 
 /**

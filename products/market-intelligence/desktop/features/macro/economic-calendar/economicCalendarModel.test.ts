@@ -27,6 +27,38 @@ describe('macro economic calendar query projection', () => {
     expect(economicCalendarPresentationPolicy.dayEventLimit).toBe(6)
   })
 
+  /**
+   * `MI-1-R39` §4：标题型空壳（没有官方时刻、且数值全空）不进主列表，但**留在投影的 `shells` 里**——
+   * 官方日程视图与页头「受影响 N 条」都读同一份判据。对照组（有官方时刻、数值仍空）是合法「待公布」。
+   */
+  it.each([
+    ['no instant at all', { eventKey: 'US.CPI.RELEASE.shell-1', scheduledAt: undefined, releaseTimeSource: 'date-only' as const }],
+    ['only a convention instant', { eventKey: 'US.CPI.RELEASE.shell-2', releaseTimeSource: 'convention-default' as const }]
+  ])('keeps a title-only shell (%s) out of the main list and in the shell list', (_name, shell) => {
+    const projection = createEconomicCalendarProjection({
+      month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', events: [event(shell)]
+    })
+    // 判据先只负责「认出来」：主列表剔除要等「哪些算发布型」定下来（见模型里的注释）。
+    expect(projection.shells.map(item => item.eventKey)).toEqual([shell.eventKey])
+    expect(projection.events.map(item => item.eventKey)).toEqual([shell.eventKey])
+  })
+
+  it('keeps an official-time event without values in the main list, because it is a legitimate "not released yet"', () => {
+    const projection = createEconomicCalendarProjection({
+      month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', events: [event({ eventKey: 'US.CPI.RELEASE.pending-1' })]
+    })
+    expect(projection.shells).toHaveLength(0)
+  })
+
+  it('keeps a shell out of the main list even when it carries a value, and never treats an official instant as a shell', () => {
+    // 有值就不是空壳，哪怕没有时刻（数值说明它是一场真发布）。
+    const valued = createEconomicCalendarProjection({
+      month: '2026-08', asOf: '2026-08-05T00:00:00.000Z',
+      events: [event({ eventKey: 'US.CPI.RELEASE.valued-1', scheduledAt: undefined, releaseTimeSource: 'date-only', actual: { displayValue: '0.3%' } })]
+    })
+    expect(valued.shells).toHaveLength(0)
+  })
+
   it('uses the official schedule date for month placement while preserving an optional official release instant', () => {
     const projection = createEconomicCalendarProjection({
       month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', events: [
