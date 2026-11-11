@@ -246,6 +246,13 @@
 .mi-agent-context-card__copy span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 10px; }
 .mi-agent-context-card.is-analysis .mi-agent-context-card__icon { color: var(--accent); }
 
+/* 自动会话的「这次运行」：失败运行没有正文，这张卡片就是那一刻读者能看到的全部事实。 */
+.mi-agent-run-card { display: flex; flex-direction: column; gap: 4px; width: fit-content; max-width: min(100%, 420px); margin: 0 0 7px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.mi-agent-run-card__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mi-agent-run-card__times { color: var(--muted); font-size: var(--font-meta); }
+.mi-agent-run-card__fact { color: var(--text); font-size: var(--font-body); }
+.mi-agent-run-card__reason { color: var(--muted-strong); font-size: var(--font-meta); }
+
 /* Off state: the one action is centred, because the card has no other content to align to. */
 .mi-analysis-conclusion-card__state--center {
   display: flex;

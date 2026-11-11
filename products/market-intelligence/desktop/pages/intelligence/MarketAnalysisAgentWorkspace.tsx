@@ -17,6 +17,7 @@ import { analysisWorkspaceLayoutPolicy as layout } from './analysisWorkspaceLayo
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { createMarketAnalysisContextRenderers } from './MarketAnalysisContextCard'
+import { marketAnalysisRunSessionText } from './marketAnalysisRunSessionText'
 import { useMarketAnalysisChat } from './useMarketAnalysisChat'
 import { AgentFloatingControl, type AgentFloatingControlText } from './AgentFloatingControl'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
@@ -65,8 +66,13 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
   const t = text.analysisWorkspace
   const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
-    () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
-    [t.contextAnalysis, t.selectedEvent]
+    () => createMarketAnalysisContextRenderers({
+      analysis: t.contextAnalysis,
+      event: t.selectedEvent,
+      runSession: marketAnalysisRunSessionText[language],
+      failureReasons: text.analysisTimeline.failureReasons
+    }),
+    [t.contextAnalysis, t.selectedEvent, language, text.analysisTimeline.failureReasons]
   )
   const [ownBinding, setOwnBinding] = useState<AnalysisWorkspaceBinding>()
   const [ownSelectionState, setOwnSelectionState] = useState<AnalysisSelectionState>('none')

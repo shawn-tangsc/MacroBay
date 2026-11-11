@@ -3,6 +3,9 @@ import { BarChart3, CalendarDays } from 'lucide-react'
 import type { AgentContextMessagePart } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { AgentContextRendererRegistry } from '@renderer/shell/agents/agentContextRenderers'
 
+import { MarketAnalysisRunSessionCard } from './MarketAnalysisRunSessionCard'
+import type { MarketAnalysisRunSessionText } from './marketAnalysisRunSessionText'
+
 /**
  * Product-owned card styles for the two market contexts. The platform only transports the
  * context; a future module registers its own kind and keeps its own visual language.
@@ -31,11 +34,31 @@ function MarketAnalysisContextCard({
   )
 }
 
+/** 运行卡片只认 payload 里的 runId；没有就是「没有留下记录」，不去猜。 */
+function runIdOf(part: AgentContextMessagePart): string | null {
+  const value = part.payload?.runId
+  return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
 export function createMarketAnalysisContextRenderers(
-  labels: Readonly<{ analysis: string; event: string }>
+  labels: Readonly<{
+    analysis: string
+    event: string
+    runSession: MarketAnalysisRunSessionText
+    /** 运行失败码 → 读者说法；复用时间轴那一张，不另抄。 */
+    failureReasons: Readonly<Record<string, string>>
+  }>
 ): AgentContextRendererRegistry {
   return {
     'market-analysis-node': ({ part }) => <MarketAnalysisContextCard part={part} labels={labels} />,
-    'market-calendar-event': ({ part }) => <MarketAnalysisContextCard part={part} labels={labels} />
+    'market-calendar-event': ({ part }) => <MarketAnalysisContextCard part={part} labels={labels} />,
+    // 自动会话的卡片：会话里没有正文时，这里写清那次运行的结果。
+    'market-analysis-run': ({ part }) => (
+      <MarketAnalysisRunSessionCard
+        failureReasons={labels.failureReasons}
+        runId={runIdOf(part)}
+        text={labels.runSession}
+      />
+    )
   }
 }
