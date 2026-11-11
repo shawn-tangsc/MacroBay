@@ -1,5 +1,5 @@
 import { Button, Switch } from 'antd'
-import { CircleHelp, Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { CircleHelp, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { parseConfiguredModelRef, type ConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
@@ -23,6 +23,7 @@ import { productText } from '../../shared/i18n/productText'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { BriefingPeriodDialog } from './BriefingPeriodDialog'
+import { BriefingPeriodList } from './BriefingPeriodList'
 import './briefingSettingsScreen.css'
 import { useDailyBriefingAiSettings } from './useDailyBriefingAiSettings'
 
@@ -262,69 +263,16 @@ export function DailyBriefingSettingsPanel({ onState, initialSection }: Readonly
         : <Button data-briefing-period-add="true" onClick={() => setAdding(true)} type="link">{copy.add}</Button>}
 
     >
-        {periodsFailed
-          ? <InlineNotice
-            action={{ labelKey: PERIOD_RETRY_KEY, onSelect: loadPeriods }}
-            resolveText={resolveText}
-            tone="danger">
-            {copy.loadFailed}
-          </InlineNotice>
-          : periods === null
-            ? <LoadingState label={copy.loading} minHeight={90} />
-            : periods.length === 0
-              ? <div className="briefing-settings-empty" data-briefing-periods-empty="true">
-                <p>{copy.empty}</p>
-                {/* 说明句进 ⓘ：正文只留「没有一期」这个事实，不铺解释。 */}
-                <Popover
-                  labelKey={EMPTY_HINT_KEY}
-                  resolveText={resolveText}
-                  trigger={(triggerProps) => <IconButton
-                    {...triggerProps}
-                    ariaLabelKey={EMPTY_HINT_KEY}
-                    icon={CircleHelp}
-                    resolveText={resolveText}
-                    size="sm"
-                    variant="plain"
-                  />}
-                />
-              </div>
-              : periods.map((period, index) => <SettingsRow
-                copyClassName="config-drawer__label"
-                controlWrapperClassName="config-drawer__control"
-                key={period.id}
-                label={<strong>{copy.label.replace('{index}', String(index + 1))}</strong>}
-                rowAttributes={{ 'data-period-id': period.id }}
-                rowClassName="config-drawer__row">
-                <span className="briefing-settings-row__value">
-                  {copy.timeValue.replace('{time}', period.generationTime)}
-                  {' · '}
-                  {copy.windowValue.replace('{hours}', String(period.windowHours))}
-                  {' · '}
-                  {languageName(period.language)}
-                </span>
-                <span className="briefing-settings-row__actions">
-                  <IconButton
-                    ariaLabelKey={EDIT_KEY}
-                    ariaLabelParams={{ index: String(index + 1) }}
-                    dataAttributes={{ 'data-period-edit': period.id }}
-                    icon={Pencil}
-                    onSelect={() => { setEditing(period); setPeriodWriteFailed(undefined) }}
-                    resolveText={(key) => key === EDIT_KEY ? copy.editRow.replace('{index}', String(index + 1)) : ''}
-                    size="sm"
-                    variant="plain"
-                  />
-                  <IconButton
-                    ariaLabelKey={DELETE_KEY}
-                    ariaLabelParams={{ index: String(index + 1) }}
-                    dataAttributes={{ 'data-period-delete': period.id }}
-                    icon={Trash2}
-                    onSelect={() => remove(period, index)}
-                    resolveText={(key) => key === DELETE_KEY ? copy.deleteRow.replace('{index}', String(index + 1)) : ''}
-                    size="sm"
-                    variant="plain"
-                  />
-                </span>
-              </SettingsRow>)}
+        <BriefingPeriodList
+          copy={copy}
+          languageName={languageName}
+          onEdit={(period) => { setEditing(period); setPeriodWriteFailed(undefined) }}
+          onRemove={remove}
+          onRetry={loadPeriods}
+          periods={periods}
+          periodsFailed={periodsFailed}
+          resolveText={resolveText}
+        />
         {/* 区块级失败：一句话点名哪一期没写进去，跟这一段走。
             壳在动作栏上方也有一条（AI 编辑未保存）：两条同时在时只留壳那条，同一件事不说两遍。 */}
         {periodWriteFailed === undefined || failure !== undefined
