@@ -82,27 +82,6 @@ describe('SettingField', () => {
     expect(node?.textContent).not.toContain('setting:sources.enabled')
   })
 
-  it('takes the capability fact from the view: the row disappears when the fact is absent', async () => {
-    // 能力事实进视图，`visibleWhen(view)` 只读视图；缺这条事实 ⇒ 整行不渲染，
-    // 不许默认 true，也不许由渲染层另传一份上下文。
-    const include = settingRegistry.sources.find(
-      (row) => row.key === 'setting:sources.include-in-sentiment@<sourceId>'
-    ) as SettingDescriptor
-    const view = (supportsSentiment?: boolean) => ({
-      sourceId: 'coindesk-rss',
-      profile: { includeInSentiment: true },
-      ...(supportsSentiment === undefined ? {} : { supportsSentiment })
-    })
-    const hidden = await mount(renderField(include, { view: view(false) }))
-    expect(hidden.querySelector('[data-setting-key]')).toBeNull()
-    act(() => root?.unmount())
-    const missing = await mount(renderField(include, { view: view() }))
-    expect(missing.querySelector('[data-setting-key]')).toBeNull()
-    act(() => root?.unmount())
-    const shown = await mount(renderField(include, { view: view(true) }))
-    expect(shown.querySelector('[data-setting-key]')).not.toBeNull()
-  })
-
   it('does not render at all when visibleWhen is false (no disabled row)', async () => {
     const hidden = await mount(renderField(CONDITIONAL_ROW, { view: { enabled: false } }))
     expect(hidden.querySelector('[data-setting-key]')).toBeNull()

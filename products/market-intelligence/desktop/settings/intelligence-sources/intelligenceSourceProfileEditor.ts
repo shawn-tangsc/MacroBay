@@ -104,7 +104,6 @@ export function toSaveProfileInput(profile: IntelligenceSourceProfile) {
   return {
     sourceId: profile.sourceId,
     collectionPreset: profile.collectionPreset,
-    includeInSentiment: profile.includeInSentiment,
     scopePolicy: profile.scopePolicy,
     rawArchiveEnabled: profile.rawArchiveEnabled,
     retentionMode: profile.retentionMode,

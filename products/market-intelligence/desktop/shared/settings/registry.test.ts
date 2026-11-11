@@ -125,8 +125,7 @@ describe('settings registry self-checks', () => {
     // 模板数量固定；实例数量由视图里的源列表决定，注册表里不许出现源清单。
     expect(settingRegistry.sources.map((row) => row.key).sort()).toEqual([
       'setting:sources.collection-preset@<sourceId>',
-      'setting:sources.enabled@<sourceId>',
-      'setting:sources.include-in-sentiment@<sourceId>'
+      'setting:sources.enabled@<sourceId>'
     ])
     expect(settingRegistry.sources.every((row) => row.keyedBy === 'sourceId')).toBe(true)
     const row = settingRegistry.sources.find((entry) => entry.key === 'setting:sources.collection-preset@<sourceId>') as SettingDescriptor
@@ -218,20 +217,6 @@ describe('settings registry self-checks', () => {
     expect(validateSettingRegistry(withRow(wrongTemplate))).toContain('template-key-mismatch')
     const feedTemplate = { ...PUSH_THRESHOLD, key: 'setting:calendar-feeds.enabled@<feedId>', keyedBy: 'feedId' as const }
     expect(validateSettingRegistry(withRow(feedTemplate))).not.toContain('template-key-mismatch')
-  })
-
-  it('reads the capability fact from the view, and hides the row when the fact is missing', () => {
-    // 能力事实只从视图来（契约 §1 ⑧/G10）：页面算视图时把 `supportsSentiment` 一并给出。
-    // 视图里没有这条事实 ⇒ **整行不渲染**，不许默认 true，也不许由渲染层另传一份上下文。
-    const row = settingRegistry.sources.find((entry) => entry.key === 'setting:sources.include-in-sentiment@<sourceId>') as SettingDescriptor
-    const view = (supportsSentiment?: boolean) => ({
-      sourceId: 'coindesk-rss',
-      profile: { includeInSentiment: true },
-      ...(supportsSentiment === undefined ? {} : { supportsSentiment })
-    })
-    expect(row.visibleWhen?.(view(true))).toBe(true)
-    expect(row.visibleWhen?.(view(false))).toBe(false)
-    expect(row.visibleWhen?.(view())).toBe(false)
   })
 
   it('gives visibleWhen one argument, so nobody can smuggle a second judgement basis', () => {

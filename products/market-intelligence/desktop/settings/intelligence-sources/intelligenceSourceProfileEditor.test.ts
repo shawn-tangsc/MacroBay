@@ -15,7 +15,6 @@ describe('toSaveProfileInput', () => {
     expect(input).toMatchObject({
       sourceId: 'twelve-data-market',
       collectionPreset: 'frequent',
-      includeInSentiment: true,
       scopePolicy: 'all'
     })
   })

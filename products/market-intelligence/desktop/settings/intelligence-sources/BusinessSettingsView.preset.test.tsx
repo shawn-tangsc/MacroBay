@@ -32,10 +32,8 @@ async function render(input: Readonly<{
   sourceEnabled?: boolean
   preset?: string
   productCadence?: boolean
-  sentiment?: boolean
-}> = {}): Promise<{ host: HTMLElement; onPresetChange: (sourceId: string, preset: string) => void; onSentimentChange: (sourceId: string, include: boolean) => void }> {
+}> = {}): Promise<{ host: HTMLElement; onPresetChange: (sourceId: string, preset: string) => void }> {
   const onPresetChange = vi.fn<(sourceId: string, preset: string) => void>()
-  const onSentimentChange = vi.fn<(sourceId: string, include: boolean) => void>()
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -51,7 +49,6 @@ async function render(input: Readonly<{
         onPresetChange,
         ...(input.preset === undefined ? {} : { presets: { 'policy-path-market': input.preset } }),
         ...(input.productCadence === true ? { productCadence: new Set(['policy-path-market']) } : {}),
-        ...(input.sentiment === undefined ? {} : { sentiments: { 'policy-path-market': input.sentiment }, onSentimentChange }),
         resolveText: (key: string) => {
           const local = key.startsWith('settings.intelligenceSources.') ? key.slice('settings.intelligenceSources.'.length) : key
           const value = local
@@ -64,7 +61,7 @@ async function render(input: Readonly<{
     }))
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-  return { host, onPresetChange, onSentimentChange }
+  return { host, onPresetChange }
 }
 
 describe('每源第二行：频率', () => {
@@ -110,17 +107,4 @@ describe('每源第二行：频率', () => {
     const row = host.querySelector<HTMLElement>(`${ROW} [data-preset-row="policy-path-market"]`)!
     expect(row.querySelectorAll('button[aria-label]').length).toBeLessThanOrEqual(1)
   })
-  it('carries 「纳入情绪分析」 in the same second line and writes it per source', async () => {
-    // 详情里的入口已删；这一行是它唯一的界面入口（用户 2026-11-12）。
-    const { host, onSentimentChange } = await render({ preset: 'manual', sentiment: true })
-    const row = host.querySelector<HTMLElement>(`${ROW} [data-preset-row="policy-path-market"]`)!
-    const toggle = row.querySelector<HTMLElement>('[role="switch"]')
-    expect(toggle).not.toBeNull()
-    expect(row.textContent).toContain(t.collectionPolicy.includeInSentiment)
-    // 同一个模板属性：声明行仍有人画（守卫按模板反查）。
-    expect(row.querySelector('[data-setting-template="setting:sources.include-in-sentiment@<sourceId>"]')).not.toBeNull()
-    await act(async () => { toggle!.click() })
-    expect(onSentimentChange).toHaveBeenCalledWith('policy-path-market', false)
-  })
-
 })

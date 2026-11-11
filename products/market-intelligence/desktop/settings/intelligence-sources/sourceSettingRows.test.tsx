@@ -69,9 +69,9 @@ function provider(): ProviderView {
 const SUPPORTS_SENTIMENT: Readonly<Record<string, boolean>> = { s1: true, s2: false }
 
 /** 页面把它交给两行策略行的同一份 profile（值从声明读，但视图必须给到）。 */
-const PROFILES: Readonly<Record<string, { collectionPreset?: string; includeInSentiment?: boolean }>> = {
-  s1: { collectionPreset: 'balanced', includeInSentiment: true },
-  s2: { collectionPreset: 'manual', includeInSentiment: false }
+const PROFILES: Readonly<Record<string, { collectionPreset?: string }>> = {
+  s1: { collectionPreset: 'balanced' },
+  s2: { collectionPreset: 'manual' }
 }
 
 function policy(): NonNullable<Parameters<typeof ProviderDetail>[0]['policy']> {
@@ -80,7 +80,7 @@ function policy(): NonNullable<Parameters<typeof ProviderDetail>[0]['policy']> {
     profiles: PROFILES as never,
     supportsSentimentById: SUPPORTS_SENTIMENT,
     labels: {
-      title: 'p', collectionPreset: 'c', manualPresetNote: 'm', includeInSentiment: 'i',
+      title: 'p', collectionPreset: 'c', manualPresetNote: 'm',
       presets: { manual: '手动', balanced: '均衡', frequent: '频繁' }
     }
   }
@@ -132,8 +132,6 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
 
     // ① 顺序取自声明（先启用、再预设、再情绪），不是页面自己排的；② 不可见的行不出现。
     expect(renderedKeys(container)).toEqual(expected)
-    // 「纳入情绪分析」也已挪到「采集与数据」第二行（用户 2026-11-12），详情不再画它。
-    expect(expected.filter((key) => key.startsWith('setting:sources.include-in-sentiment'))).toEqual([])
   })
 
   it('renders nothing that is not a menu 1 declaration for the settings surface', async () => {

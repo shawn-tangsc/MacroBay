@@ -9,8 +9,7 @@ import { settingRegistry } from '../../shared/settings/registry'
  */
 export const SOURCE_ROW_TEMPLATES = Object.freeze({
   enabled: 'setting:sources.enabled@<sourceId>',
-  collectionPreset: 'setting:sources.collection-preset@<sourceId>',
-  includeInSentiment: 'setting:sources.include-in-sentiment@<sourceId>'
+  collectionPreset: 'setting:sources.collection-preset@<sourceId>'
 } as const)
 
 export type SourceRowTemplate = (typeof SOURCE_ROW_TEMPLATES)[keyof typeof SOURCE_ROW_TEMPLATES]

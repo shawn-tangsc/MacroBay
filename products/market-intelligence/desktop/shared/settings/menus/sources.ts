@@ -59,30 +59,5 @@ export const SOURCE_ROWS: readonly SettingDescriptor[] = Object.freeze([
       readViewField(view, 'profile') !== undefined,
     copy: { labelKey: 'settings.intelligenceSources.collectionPolicy.collectionPreset' },
     availability: 'live'
-  },
-  {
-    // 纳入情绪分析：可见性由**视图里的能力事实**决定（`view.supportsSentiment`，页面算视图时一并给）。
-    // 缺这条事实 ⇒ 整行不渲染（不是默认 true）；不接受渲染层另传上下文。
-    key: 'setting:sources.include-in-sentiment@<sourceId>',
-    keyedBy: 'sourceId',
-    menu: 'sources',
-    surfaces: ['settings'],
-    level: 'product',
-    field: { kind: 'switch' },
-    read: {
-      command: 'intelligenceSources.getPageState',
-      select: (view) => readViewField(readViewField(view, 'profile'), 'includeInSentiment')
-    },
-    write: {
-      kind: 'value',
-      command: 'intelligenceSources.saveProfile',
-      toPayload: (value, view) => ({
-        sourceId: readViewField(view, 'sourceId'),
-        includeInSentiment: value === true
-      })
-    },
-    visibleWhen: (view) => readViewField(view, 'supportsSentiment') === true,
-    copy: { labelKey: 'settings.intelligenceSources.collectionPolicy.includeInSentiment' },
-    availability: 'live'
   }
 ])

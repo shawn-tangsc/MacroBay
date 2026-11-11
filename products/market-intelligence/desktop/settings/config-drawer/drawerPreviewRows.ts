@@ -49,7 +49,6 @@ export type ConfigDrawerMenu = (typeof DRAWER_MENUS)[number]
 /** 已经确认存在的文案键（写在这里 = 我核过它今天就在文案表里）。 */
 export const EXISTING_LABEL_KEYS = {
   collectionPreset: 'settings.intelligenceSources.collectionPolicy.collectionPreset',
-  includeInSentiment: 'settings.intelligenceSources.collectionPolicy.includeInSentiment',
   translation: 'settings.intelligenceSources.translationPreferences.title'
 } as const
 

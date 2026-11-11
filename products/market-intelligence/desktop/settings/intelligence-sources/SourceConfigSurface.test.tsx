@@ -155,7 +155,6 @@ describe('the settings page and the config drawer render the same sources pane (
     expect(fromSettings.detail).toContain('source-provider-detail__row')
     expect(fromSettings.detail).not.toContain('source-provider-detail__advanced')
     expect(fromSettings.detail).not.toContain(settingsText.collectionPolicy.collectionPreset)
-    expect(fromSettings.detail).not.toContain(settingsText.collectionPolicy.includeInSentiment)
     // 目录一侧同样逐项一致（含那颗「不可用源」数量标记）。
     expect(fromSettings.tree).toContain(settingsText.unavailableCountOne.replace('{count}', '1'))
   })

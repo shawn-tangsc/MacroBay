@@ -169,9 +169,6 @@ export function BusinessSettingsContent(props: {
    * 画成禁用控件就是假控件（用户 2026-11-12）。数值不在组件里写死。
    */
   productCadence?: ReadonlySet<string>
-  /** 每源「纳入情绪分析」的当前值（只给支持情绪、且已启用可配置的源）。 */
-  sentiments?: Readonly<Record<string, boolean>>
-  onSentimentChange?: (sourceId: string, include: boolean) => void
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
@@ -199,12 +196,6 @@ export function BusinessSettingsContent(props: {
           onPresetChange: (next: string) => props.onPresetChange!(cell.sourceId, next)
         }),
       ...(props.productCadence?.has(cell.sourceId) === true ? { productCadence: true } : {}),
-      ...(props.sentiments?.[cell.sourceId] === undefined || props.onSentimentChange === undefined
-        ? {}
-        : {
-          sentiment: props.sentiments[cell.sourceId],
-          onSentimentChange: (next: boolean) => props.onSentimentChange!(cell.sourceId, next)
-        })
     })
   }
   return <div className="intelligence-detail-scroll">
@@ -309,28 +300,6 @@ export function BusinessSettingsContent(props: {
  * **互斥**：同组（同一格）里开一个、其余自动关——一次事件内把同组其它源写 false，
  * 不在界面留「两个源同时开着」的中间态。全关 = 这一格不用。
  */
-/**
- * 「纳入情绪分析」那颗小开关：和频率同一行（用户 2026-11-12 把入口从详情挪到这里）。
- * 只对支持情绪的源出现；不支持情绪的源连这半行都没有。
- */
-function sentimentControl(args: {
-  sourceId: string
-  sentiment?: boolean
-  onSentimentChange?: (next: boolean) => void
-  resolveText: (key: string) => string
-}): React.ReactElement | null {
-  if (args.sentiment === undefined) return null
-  const label = args.resolveText('settings.intelligenceSources.collectionPolicy.includeInSentiment')
-  return <span className="business-card__sentiment" {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.includeInSentiment, args.sourceId)}>
-    <span className="business-card__preset-label">{label}</span>
-    <Switch
-      aria-label={label}
-      checked={args.sentiment}
-      onChange={(next) => args.onSentimentChange?.(next)}
-      size="small" />
-  </span>
-}
-
 function cellRow(args: {
   cellId: string
   enabled: boolean
@@ -346,9 +315,6 @@ function cellRow(args: {
   onPresetChange?: (next: string) => void
   /** 产品自有采集：第二行只写「固定节奏」文字，不画下拉。 */
   productCadence?: boolean
-  /** 「纳入情绪分析」的当前值（只有支持情绪的源才有）。 */
-  sentiment?: boolean
-  onSentimentChange?: (next: boolean) => void
   resolveText: (key: string) => string
 }): React.ReactElement {
   const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
@@ -422,19 +388,13 @@ function cellRow(args: {
         不是「没值所以禁用」（禁用等于承诺以后能开）。 */}
     {sourceOff
       ? null
-      : args.sentiment !== undefined && args.onSentimentChange !== undefined
-        && args.productCadence !== true && args.preset === undefined
-        ? <div className="business-card__preset" data-preset-row={sourceId}>
-          {sentimentControl({ ...args, sourceId })}
-        </div>
-        : args.productCadence === true
+      : args.productCadence === true
         ? <div className="business-card__preset" data-preset-row={sourceId} data-preset-fixed="true" {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId)}>
           <span className="business-card__preset-label-group">
             <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
           </span>
           {/* 产品自有作业的节奏：只写事实，不画点不动的控件。具体数字由产品排期决定，组件不写死。 */}
           <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.fixedCadence')}</span>
-          {sentimentControl({ ...args, sourceId })}
         </div>
         : args.preset === undefined || args.onPresetChange === undefined
       ? null
@@ -458,7 +418,6 @@ function cellRow(args: {
           }))}
           size="small"
           value={args.preset} />
-        {sentimentControl({ ...args, sourceId })}
       </div>}
   </div>
 }
