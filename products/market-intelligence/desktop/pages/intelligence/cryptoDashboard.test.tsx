@@ -1067,6 +1067,68 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(card.textContent).not.toContain(dashboardText.positioning.loading)
   })
 
+  /** 政策路径：两条硬依赖，逐支点名（2026-11-12 架构师批的双格形状）。 */
+  const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-policy-card')!
+  const policySentence = (container: HTMLElement): string =>
+    policyCard(container).querySelector('.mi-source-state')?.textContent?.trim() ?? ''
+  const policyAction = (container: HTMLElement): HTMLButtonElement =>
+    policyCard(container).querySelector<HTMLButtonElement>('.mi-source-veil button')!
+
+  /** 两格的源都启用：这样「另一格」的判定才是 read，单格关掉才看得出点名。 */
+  const policySourcesOn = { query: async () => ({ state: 'available' as const, sources: [
+    { sourceId: 'policy-path-market' as const, enabled: true, hasCredential: true },
+    { sourceId: 'macro-calendar-fed' as const, enabled: true, hasCredential: true },
+    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+  ] }) }
+
+  it('policy path: only the probability cell off names that cell, not the calendar', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'policy-path:probability': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    expect(policySentence(container)).toBe(dashboardText.policyPath.probabilityCellOff)
+    expect(policySentence(container)).not.toContain(dashboardText.policyPath.fedCellOff)
+    await act(async () => policyAction(container).click())
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'policy-path', cellId: 'policy-path:probability' })
+  })
+
+  it('policy path: only the Fed calendar off names the calendar, and never blames the odds', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'policy-path:fed': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    expect(policySentence(container)).toBe(dashboardText.policyPath.fedCellOff)
+    expect(policySentence(container)).not.toContain(dashboardText.policyPath.probabilityCellOff)
+    await act(async () => policyAction(container).click())
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'policy-path', cellId: 'policy-path:fed' })
+  })
+
+  it('policy path: both cells off is one sentence naming both, with one configure action', async () => {
+    const onConfigureSources = vi.fn()
+    const container = await renderCells({ 'policy-path:probability': false, 'policy-path:fed': false }, { onConfigureSources, dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    expect(policySentence(container)).toBe(dashboardText.policyPath.bothCellsOff)
+    // 不许拆成两条缺项
+    expect(policyCard(container).querySelectorAll('.mi-source-state')).toHaveLength(1)
+    await act(async () => policyAction(container).click())
+    expect(onConfigureSources).toHaveBeenCalledTimes(1)
+  })
+
+  it('policy path: a cell whose SOURCE is switched off names the source, not "this cell is off"', async () => {
+    const container = await renderCells({}, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'policy-path-market' as const, enabled: false, hasCredential: true },
+        { sourceId: 'macro-calendar-fed' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-policy-card')
+    const sentence = policySentence(container)
+    // 指向源（FOMC 决议市场），不是「这一格没启用」。
+    expect(sentence).toContain('FOMC 决议市场')
+    expect(sentence).not.toBe(dashboardText.policyPath.probabilityCellOff)
+    expect(sentence).not.toBe(dashboardText.policyPath.fedCellOff)
+    expect(policyAction(container)).not.toBeNull()
+  })
+
   it('cell off: the sentiment card keeps its figure, drops the needle, and offers one enable action', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'fear-greed:index': false }, {

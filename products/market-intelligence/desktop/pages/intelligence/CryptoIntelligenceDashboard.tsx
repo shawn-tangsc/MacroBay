@@ -63,7 +63,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
 
-import { PolicyPathCard, PolicyPathUnavailable } from './PolicyPathCard'
+import { PolicyPathSlot } from './PolicyPathSlot'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
@@ -298,7 +298,14 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !anyReadable(['quotes', 'ust10y']) })
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
-  const policyPathRead = usePolicyPathReading(readsReady && readGates.policyPath, dataRevision)
+  /**
+   * 政策路径有**两条硬依赖**（会议日 ← 美联储日程，赔率 ← Polymarket），同模块两格。
+   * 任一格没去读，这一格就打不开——所以逐格判定，缺哪格说哪格（2026-11-12 用户与架构师口径）。
+   */
+  const policyProbability = decide('policy-path', 'probability')
+  const policyFed = decide('policy-path', 'fed')
+  const policyCellsRead = policyProbability.kind === 'read' && policyFed.kind === 'read'
+  const policyPathRead = usePolicyPathReading(readsReady && policyCellsRead, dataRevision)
   const policyPath = policyPathRead.result
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
@@ -441,12 +448,15 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {readsReady ? (() => {
         // 三支（读到 / 读不到 / 没启用）**同一个落点**：右栏日历卡上方那块 `policySlot`。
         // 只有读到那支走 portal 会让另外两支落进主栏——用户 2026-11-11 截图报的正是这个。
-        const card = readGates.policyPath
-          ? (policyPath?.state === 'available'
-            ? <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
-                month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
-            : <PolicyPathUnavailable state="unreadable" text={text.policyPath} onRetry={policyPathRead.reload} />)
-          : <PolicyPathUnavailable state="disabled" text={text.policyPath} onConfigure={onConfigureSources} />
+        const card = <PolicyPathSlot
+          text={text.policyPath}
+          locale={locale}
+          decisions={{ probability: policyProbability, fed: policyFed }}
+          read={policyPathRead}
+          onConfigureSources={onConfigureSources}
+          onFocusCell={(cellKey) => onManageSource({ business: 'dashboard', moduleKey: 'policy-path', cellId: dashboardCellId('policy-path', cellKey) })}
+          onOpenDetail={() => setPolicyDrawerOpen(true)}
+          resolveKey={resolveProductKey} />
         // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
         return policySlot ? createPortal(card, policySlot) : card
       })() : null}

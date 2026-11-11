@@ -108,13 +108,20 @@ const STALENESS_KEY = {
  * 这一支底下**没有**「压着的数据」：读数本身就不在（宿主里只有遮罩，没有可 `inert` 的内容）。
  * 遮罩高度由共享表的 `min-height` 撑住，卡不塌；颜色走主题 token，调用点不写颜色。
  */
-export function PolicyPathUnavailable({ text, state, onConfigure, onRetry }: Readonly<{
+export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sentence, action }: Readonly<{
   text: PolicyPathCardText
   state: 'missing' | 'disabled' | 'unreadable'
-  /** 去配置 / 去启用：落到配置抽屉的来源那一屏（具体到本模块由宿主接线）。 */
+  /**
+   * 去配置 / 去启用：落到配置抽屉的来源那一屏（具体到本模块由宿主接线）。
+   *
+   * `sentence` / `action` 是给「这一格有两条依赖」用的：缺哪一格、缺哪个源由宿主点名，
+   * 组件只负责画（图标与 `data-state` 仍按三态走，不自造第四种）。
+   */
   onConfigure?: () => void
   /** 再试一次：只重读，不跳转。 */
   onRetry?: () => void
+  sentence?: string
+  action?: Readonly<{ label: string; run: () => void }>
 }>): React.ReactElement {
   const resolveKey = useProductTextKey()
   const sentenceKey = state === 'missing'
@@ -134,10 +141,10 @@ export function PolicyPathUnavailable({ text, state, onConfigure, onRetry }: Rea
       <div className="mi-source-veil" data-state={state}>
         <p className="mi-source-state" data-state={state}>
           <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
-          {resolveKey(sentenceKey)}
+          {sentence ?? resolveKey(sentenceKey)}
         </p>
         {/* 遮罩里恰一颗按钮：没配置/没启用 → 去配置，读不到 → 再试一次。 */}
-        <Button onClick={select} size="small">{resolveKey(actionKey)}</Button>
+        <Button onClick={action?.run ?? select} size="small">{action?.label ?? resolveKey(actionKey)}</Button>
       </div>
     </div>
   </section>

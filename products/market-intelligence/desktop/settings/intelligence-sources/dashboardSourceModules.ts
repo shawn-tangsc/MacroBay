@@ -53,6 +53,7 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   ETH: 'eth',
   '美债 10 年期': 'ust10y',
   政策路径概率: 'probability',
+  美联储日程: 'fed',
   恐惧与贪婪: 'index',
   稳定币: 'stablecoin',
   ETF: 'etf',
@@ -79,7 +80,12 @@ function moduleOf(
 
 export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
   /* 「最新 AI 结论」与「来源状态条」在文档里明说不挂源，所以不在这里出现（也不出卡）。 */
-  moduleOf('policy-path', `${TITLES}.policyPath`, [['政策路径概率', 'policy-path-market']]),
+  /* 政策路径这一格有**两条硬依赖**：会议日来自美联储日历、赔率来自 Polymarket。同模块两个格，
+     各自可开关、各自报状态（架构师 2026-11-12 定：一格多依赖不做，照 capital/positioning 的双格）。 */
+  moduleOf('policy-path', `${TITLES}.policyPath`, [
+    ['政策路径概率', 'policy-path-market'],
+    ['美联储日程', 'macro-calendar-fed']
+  ]),
   moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.fearGreed.title', [['恐惧与贪婪', 'alternative-fear-greed']]),
   moduleOf('capital', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.capital', [
     ['稳定币', 'defillama-stablecoins'],
