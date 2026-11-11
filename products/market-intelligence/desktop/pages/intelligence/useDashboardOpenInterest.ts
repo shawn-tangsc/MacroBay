@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { isCanonicalOpenInterestTime, type OpenInterestHistoryResult, type OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import type { ModuleSignalAnalysisRead } from '../../../service/intelligence/analysis/signalAnalysisRead'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { chipAnalysisOf, projectDashboardPositioning, projectModuleSignalChip, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { moduleSignalClient } from '../../shared/ipc/moduleSignalClient'
+import { trackQuietRevision } from './useDataChangeRevision'
 
 /**
  * One read per window. Switching 7d/24h is a new query rather than a client-side reshape: the
@@ -19,22 +20,27 @@ export function useDashboardOpenInterest(input: Readonly<{
   signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }
   /** 读者把持仓那两格关掉了：不读、停在等待态；卡片由上层整张跳过。 */
   disabled?: boolean
+  /** 「采集写了库」的计数：变了就是后台重读（保留旧读数、失败沿用上一次）。 */
+  revision?: number
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const revisionRef = useRef<number | undefined>(input.revision)
   const reload = () => setAttempt(value => value + 1)
   const [mountInput] = useState(() => input)
   const { window } = input
 
   useEffect(() => {
     let active = true
+    const quiet = trackQuietRevision(revisionRef, input.revision)
     if (input.disabled === true) { setState({ state: 'loading' }); return () => { active = false } }
     const asOf = readClock(mountInput.now)
     if (!asOf || typeof mountInput.client?.query !== 'function') {
       setState({ state: 'unavailable', cause: 'query-failed', onReload: reload })
       return () => { active = false }
     }
-    setState({ state: 'loading' })
+    // 读者的重试与首读先回到加载态；后台重读保留旧读数，不闪。
+    if (!quiet) setState({ state: 'loading' })
     // The chip comes from the module's rule, not from the series: the two reads answer different
     // questions and either may fail alone. A missing signal is no chip, never a made-up one.
     // 牌子固定按 24 小时判（用户 2026-11-08 10:4x 定）：切页签不改「现在怎么样」。
@@ -52,10 +58,13 @@ export function useDashboardOpenInterest(input: Readonly<{
           ? { ...projected, signal: chip, ...(analysis ? { signalAnalysis: analysis } : {}) }
           : projected)
       })
-      .catch(() => { if (active) setState({ state: 'unavailable', cause: 'query-failed', onReload: reload }) })
+      .catch(() => {
+        // 后台重读失败沿用上一次；屏上只有「加载中」时才说读不到。
+        if (active) setState(current => quiet && current.state !== 'loading' ? current : { state: 'unavailable', cause: 'query-failed', onReload: reload })
+      })
     return () => { active = false }
     // `mountInput` is captured once on purpose: the clock must not re-read on every render.
-  }, [mountInput, window, attempt, input.disabled])
+  }, [mountInput, window, attempt, input.disabled, input.revision])
 
   return state
 }

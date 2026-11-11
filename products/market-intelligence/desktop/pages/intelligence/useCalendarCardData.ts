@@ -7,6 +7,7 @@ import { readMarketCalendarMonth } from './readMarketCalendarMonth'
 import { toCardEventFromOfficial, toCardEventFromProvider } from './calendarCardEventProjection'
 import { attachReactions, reactionAnchors, type CalendarCardReaction } from './calendarCardReaction'
 import { projectUpcomingCalendarCard, type CalendarCardEvent, type CalendarCardProjection } from './projectUpcomingCalendarCard'
+import { useDataChangeRevision } from './useDataChangeRevision'
 
 /**
  * Feeds the card from the calendar the page already has, read-only.
@@ -114,6 +115,8 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
   const [state, setState] = useState<CalendarCardLoadState>('loading')
   const [sourcesState, setSourcesState] = useState<CalendarCardSourcesState>('available')
   const [attempt, setAttempt] = useState(reloadKey)
+  // 日历来源采集写库 → 重读这一窗；读数不会因此清空（下面那条已有：有行就留着，失败标 stale）。
+  const revision = useDataChangeRevision({ panel: 'economic-calendar' })
   useEffect(() => {
     let live = true
     // With rows on screen a re-read does not blank them: they stay until the new answer arrives
@@ -180,7 +183,7 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
       setState(current => current === 'ready' ? 'ready' : 'error')
     })
     return () => { live = false }
-  }, [asOf, locale, attempt, readReaction])
+  }, [asOf, locale, attempt, readReaction, revision])
   return {
     projection: snapshot?.projection ?? emptyProjection,
     state,

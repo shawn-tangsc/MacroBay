@@ -67,6 +67,7 @@ import { PolicyPathCard, PolicyPathUnavailable } from './PolicyPathCard'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
+import { useDataChangeRevision } from './useDataChangeRevision'
 
 /**
  * 把平台 `useConfirm` 变成抽屉要的 `confirmDiscard`：必须在 provider 之内取，所以单独一层。
@@ -157,6 +158,12 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const formatTime = useShellTimeFormat()
   // 格级启用：先算出「哪些格读、哪些格不读」，再决定要不要调各 client（关掉的格一次请求都不发）。
   const cellState = useDashboardCellEnabled({ io: cellEnabledIo })
+  /**
+   * 「采集写了库」在这一页的**唯一**订阅：命中 `dashboard` 面板才 +1，各读口按它重读自己那份读数
+   * （保留旧值、不置 loading、失败沿用上一次）。卡片不订阅，也不写「我依赖哪些源」的映射——
+   * 那层换算在发射端按来源注册表做。
+   */
+  const dataRevision = useDataChangeRevision({ panel: 'dashboard' })
   const readGates = resolveDashboardReadGates(cellState.cells)
   /** 启用表读完之前一处都不读：否则关掉的格在首帧仍会发一次请求。 */
   const readsReady = cellState.ready
@@ -210,10 +217,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     return [[row, decision.kind === 'source-unknown' ? 'unreadable' : 'disabled']]
   }))
   const calendarState = useDashboardEconomicCalendar({ client, now })
-  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now })
+  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now, revision: dataRevision })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
   const [fundingReloadKey, setFundingReloadKey] = useState(0)
-  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, disabled: !readsReady || !readGates.positioning, now, reloadKey: fundingReloadKey })
+  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, disabled: !readsReady || !readGates.positioning, now, reloadKey: fundingReloadKey, revision: dataRevision })
   // Positioning is read per window rather than reshaped in the browser: the fold and
   // the liquidation lookback belong to the query, so switching windows is one more read.
   const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
@@ -234,7 +241,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 来源屏的草稿（多半是凭据框）：只参与**关闭确认**，不喂保存栏——凭据不该被一次「保存」代劳。
   const [sourcesDraftDirty, setSourcesDraftDirty] = useState(false)
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
-  const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !anyReadable(['positioning', 'oi'], ['positioning', 'funding']), now, window: positioningWindow })
+  const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !anyReadable(['positioning', 'oi'], ['positioning', 'funding']), now, window: positioningWindow, revision: dataRevision })
   // 两格各自的源可用性：判定按「未配置 → 未启用 → 读不到」的顺序，来自源注册表与格级启用表，
   // 页面不自己判。两格同源，但启用是逐格的——只关一格时另一格照旧显示。
   const positioningCells = readsReady
@@ -248,13 +255,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         funding: fundingRateState
       })
     : undefined
-  const divergence = useDashboardDivergence({ client: divergenceClient, now })
+  const divergence = useDashboardDivergence({ client: divergenceClient, now, revision: dataRevision })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
   // shows the reader the state they are already looking at.
   const [capitalReloadKey, setCapitalReloadKey] = useState(0)
   const [capitalRefreshing, setCapitalRefreshing] = useState(false)
   const [capitalRefreshFailed, setCapitalRefreshFailed] = useState(false)
-  const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !anyReadable(['capital', 'stablecoin'], ['capital', 'etf']), now, reloadKey: capitalReloadKey })
+  const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, disabled: !anyReadable(['capital', 'stablecoin'], ['capital', 'etf']), now, reloadKey: capitalReloadKey, revision: dataRevision })
   // One macro read feeds two readers: the 市场状态 table inside the panel and the 来源状态 strip
   // below, so the strip cannot disagree with the figures it is describing.
   // 美元格选了源就按选的那条读；没选过（缺键）与今天一样，走默认主源。
@@ -269,7 +276,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient, disabled: !anyReadable(['quotes', 'ust10y']) })
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
-  const policyPathRead = usePolicyPathReading(readsReady && readGates.policyPath)
+  const policyPathRead = usePolicyPathReading(readsReady && readGates.policyPath, dataRevision)
   const policyPath = policyPathRead.result
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
