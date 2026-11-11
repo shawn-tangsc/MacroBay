@@ -75,7 +75,13 @@ export function planPublish({ distDir, tag }: { distDir: string; tag: string }):
 
 /** 要执行的 gh 命令。拆成 argv 数组，调用方自己决定是执行还是只打印。 */
 export function releaseCommands(plan: PublishPlan, { exists }: { exists: boolean }): string[][] {
-  if (exists) return [['gh', 'release', 'upload', plan.tag, '--clobber', ...plan.assets]]
+  /* `plan.assets` 是 `collectAssets` 报出来的**文件名**，而发布作业的工作目录是仓库根、
+     产物在 `--dist` 里（CI 上是 `dist/`）。0.4.3 第一次真标签就红在这：命令里只有
+     `latest-mac.yml` 这种裸名，`gh` 在仓库根找不到文件、`exit 1`；而计划校验与单测全绿，
+     因为它们只看「名字在不在列表里」，没人检查那个名字能否被打开。
+     所以这里必须带上目录——参数一律指向真实存在的路径。 */
+  const assets = plan.assets.map((name) => join(plan.distDir, name))
+  if (exists) return [['gh', 'release', 'upload', plan.tag, '--clobber', ...assets]]
   return [
     [
       'gh',
@@ -87,7 +93,7 @@ export function releaseCommands(plan: PublishPlan, { exists }: { exists: boolean
       '--notes-file',
       '/dev/null',
       '--verify-tag',
-      ...plan.assets
+      ...assets
     ]
   ]
 }
