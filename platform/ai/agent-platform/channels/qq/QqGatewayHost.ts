@@ -51,13 +51,14 @@ export class QqGatewayHost {
     refreshGatewayUrl?: () => Promise<string | null>
   }) {}
 
-  async start(): Promise<void> {
-    if (this.stopped || this.session !== null || !this.currentGeneration()) return
+  /** 返回「这条连接真的被发起了」：凭据读不到、代际已过期都算没起来（调用方据此回滚启用）。 */
+  async start(): Promise<boolean> {
+    if (this.stopped || this.session !== null || !this.currentGeneration()) return false
     const token = await this.deps.token()
-    if (this.stopped || !this.currentGeneration()) return
+    if (this.stopped || !this.currentGeneration()) return false
     if (!token) {
       this.audit('qq-credential-missing')
-      return
+      return false
     }
     this.session = new QqGatewaySession({
       token,
@@ -66,6 +67,7 @@ export class QqGatewayHost {
       onEnd: (end) => { this.onEnd(end) }
     })
     this.open(this.deps.gatewayUrl)
+    return this.socket !== null
   }
 
   stop(): void {

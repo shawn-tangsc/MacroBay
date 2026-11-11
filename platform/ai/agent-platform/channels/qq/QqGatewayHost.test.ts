@@ -133,6 +133,8 @@ describe('qq gateway host', () => {
     const harness = await createHarness({ token: null })
     expect(harness.sockets).toHaveLength(0)
     expect(harness.audits()).toEqual(['qq-credential-missing'])
+    // 必须把「没起来」交回调用方：否则启用会被记成成功，界面显示已启用而实际一条连接都没有。
+    expect(harness.started).toBe(false)
   })
 })
 
@@ -249,10 +251,11 @@ async function createHarness(options: {
     signal: new AbortController().signal,
     timers: { setTimeout: clock.setTimeout as unknown as typeof setTimeout, clearTimeout: clock.clearTimeout as unknown as typeof clearTimeout }
   })
-  await host.start()
+  const started = await host.start()
   await flush()
   return {
     host,
+    started,
     clock,
     sockets,
     runtime,

@@ -37,15 +37,25 @@ export class QqRuntimeManager {
   }) {}
 
   async start(channelId: string, generation: number, ownerToken: string): Promise<boolean> {
-    if (!ownerToken || !this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)) return false
+    // 入口先留痕（带 generation）：启用点了没反应时，第一步就能确认「到底进没进 start」。
+    // 用诊断专用写入（不过授权闸门）：启动失败时代际/启用状态往往已经对不上，正常审计会一条都不留。
+    this.deps.runtime.auditDiagnostic(channelId, `qq-start:g${generation}`)
+    if (!ownerToken || !this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)) {
+      this.deps.runtime.auditDiagnostic(channelId, `qq-start-rejected:owner:g${generation}`)
+      return false
+    }
     this.stop(channelId)
-    if (!this.generationIsOurs(channelId, generation, ownerToken)) return false
+    if (!this.generationIsOurs(channelId, generation, ownerToken)) {
+      this.deps.runtime.auditDiagnostic(channelId, `qq-start-rejected:generation:g${generation}`)
+      return false
+    }
 
     const controller = new AbortController()
     this.lifetimes.set(channelId, { controller, ownerToken })
     try {
       const accessToken = await this.accessToken(channelId, controller.signal)
       if (!accessToken) {
+        this.deps.runtime.auditDiagnostic(channelId, 'qq-start-rejected:token')
         this.stopOwned(channelId, controller)
         return false
       }
@@ -53,6 +63,7 @@ export class QqRuntimeManager {
       const isCurrent = (): boolean => this.isCurrent(channelId, generation, ownerToken, controller)
       // 握手期间可能已经被停用/换代：回来再判一次。
       if (!gateway.ok || !isCurrent()) {
+        this.deps.runtime.auditDiagnostic(channelId, gateway.ok ? 'qq-start-rejected:generation' : 'qq-start-rejected:gateway')
         this.stopOwned(channelId, controller)
         return false
       }
@@ -85,9 +96,16 @@ export class QqRuntimeManager {
         }
       })
       this.hosts.set(channelId, host)
-      await host.start()
+      // 宿主自己也会早退（凭据读不到等）：把它真的起没起带回来，别把「建了个对象」当成「起来了」。
+      const started = await host.start()
+      if (!started) {
+        this.deps.runtime.auditDiagnostic(channelId, 'qq-start-rejected:host')
+        this.stopOwned(channelId, controller)
+        return false
+      }
       return true
     } catch {
+      this.deps.runtime.auditDiagnostic(channelId, 'qq-start-rejected:exception')
       this.stopOwned(channelId, controller)
       return false
     }

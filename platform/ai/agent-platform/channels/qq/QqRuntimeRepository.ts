@@ -37,6 +37,19 @@ export class QqRuntimeRepository {
     })
   }
 
+  /**
+   * 诊断专用：**不过授权闸门**写一行运行审计。
+   *
+   * `auditIfCurrent` 要求「现役代际 + enabled + requested_enabled=1」才写得进去——启动失败时这仨
+   * 恰恰可能已经不成立，于是最需要证据的那一刻一条都留不下（QQ 这次就是这样：0 行）。
+   * 只给启动诊断用，码里不含凭据、不含 URL。
+   */
+  auditDiagnostic(channelId: string, code: string, now = new Date()): void {
+    this.database.connection.prepare(
+      'insert into channel_qq_runtime_audits(id,channel_id,code,created_at) values(?,?,?,?)'
+    ).run(randomUUID(), channelId, code, now.toISOString())
+  }
+
   auditIfCurrent(channelId: string, generation: number, code: string, now = new Date()): boolean {
     return this.database.connection.prepare(
       `insert into channel_qq_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?

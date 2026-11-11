@@ -58,6 +58,24 @@ describe('qq runtime manager', () => {
     })).resolves.toEqual({ kind: 'failed', code: 'delivery-host-unavailable' })
   })
 
+  it('records that start was entered, and which branch rejected it', async () => {
+    // 用户现场：点了启用、库里 0 行审计，查不出是没进 start 还是早退。入口那行必须先有。
+    const ok = createHarness()
+    await expect(ok.manager.start('qq-a', 1, 'owner-a')).resolves.toBe(true)
+    expect(ok.audits).toContain('qq-start:g1')
+
+    // owner 令牌不匹配：最外层早退，也要说得出是哪一支。
+    const wrongOwner = createHarness()
+    await expect(wrongOwner.manager.start('qq-a', 1, 'other-owner')).resolves.toBe(false)
+    expect(wrongOwner.audits).toContain('qq-start:g1')
+    expect(wrongOwner.audits).toContain('qq-start-rejected:owner:g1')
+
+    // 凭据读不出来：换 token 那一步拒掉。
+    const noToken = createHarness({ noToken: true })
+    await expect(noToken.manager.start('qq-a', 1, 'owner-a')).resolves.toBe(false)
+    expect(noToken.audits).toContain('qq-start-rejected:token')
+  })
+
   it('reuses the access token until it is close to expiry', async () => {
     let clock = 0
     const harness = createHarness({ now: () => clock })
@@ -102,8 +120,11 @@ function createHarness(options: {
   isCurrentActive?: () => boolean
   onFetch?: () => void
   now?: () => number
+  /** 凭据读不出来（诊断分支用）。 */
+  noToken?: boolean
 } = {}) {
   const sockets: FakeSocket[] = []
+  const audits: string[] = []
   const socketUrls: string[] = []
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
@@ -115,8 +136,13 @@ function createHarness(options: {
   const delivery = new QqDeliveryTransport()
   const manager = new QqRuntimeManager({
     inbound: {} as never,
-    runtime: { commitIfCurrent: () => true, auditIfCurrent: () => true } as unknown as QqRuntimeRepository,
-    vault: { get: async () => ({ app_id: APP_ID, client_secret: SECRET }) } as never,
+    runtime: {
+      commitIfCurrent: () => true,
+      auditIfCurrent: (_channelId: string, _generation: number, code: string) => { audits.push(code); return true },
+      // 诊断专用写入：启动失败时正常审计会被授权闸门滤掉，这里收集的就是那几行。
+      auditDiagnostic: (_channelId: string, code: string) => { audits.push(code) }
+    } as unknown as QqRuntimeRepository,
+    vault: { get: async () => (options.noToken ? { app_id: APP_ID } : { app_id: APP_ID, client_secret: SECRET }) } as never,
     getPlatformFetch: () => fetchMock as unknown as typeof globalThis.fetch,
     createPlatformWebSocket: class {
       constructor(url: string) {
@@ -138,6 +164,7 @@ function createHarness(options: {
     fetch: fetchMock,
     sockets,
     socketUrls,
+    audits,
     urls: (): string[] => fetchMock.mock.calls.map(([input]) => String(input))
   }
 }
