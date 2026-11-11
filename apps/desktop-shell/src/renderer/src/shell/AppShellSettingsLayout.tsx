@@ -95,11 +95,6 @@ export function AppShellSettingsLayout(props: AppShellSettingsLayoutProps): Reac
                     onClick={() => setSettingsPanelKey(panel.key)}>
                     <Icon size={17} />
                     <span>{panel.label}</span>
-                    {/* 页名后的小标签：整页功能要连外网。它是**提示**不是状态，所以不进 StatusPill，
-                        也不改可访问名——读屏念出来仍是「页名 + VPN」，含义由基础设置页的代理说明承担。 */}
-                    {panel.requiresProxy === true ? (
-                      <span className="settings-nav-tag">{t.settings.proxyRequiredTag}</span>
-                    ) : null}
                   </button>
                 )
               })}

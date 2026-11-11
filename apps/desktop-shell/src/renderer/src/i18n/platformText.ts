@@ -153,8 +153,6 @@ export type PlatformText = {
     storageAndCache: string
     taskAutomation: string
     basicSettings: string
-    /** 左侧设置导航里跟在页名后的小标签：这一页的功能要连外网，通常得经代理才通。 */
-    proxyRequiredTag: string
     /** 启动时设置文件读不到：主句（只说事实，不说"已恢复"）。 */
     settingsFileUnreadable: string
     /** 横幅上的动作：再读一次设置文件。 */
@@ -1656,7 +1654,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: '存储与缓存',
       taskAutomation: '任务自动化',
       basicSettings: '基础设置',
-      proxyRequiredTag: 'VPN',
       settingsFileUnreadable: '设置文件读不到，已按默认设置启动。',
       settingsFileRetry: '重试读取',
       settingsFileCopyKept: (path) => `坏文件已保留副本：${path}`,
@@ -3046,7 +3043,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: 'Storage and Cache',
       taskAutomation: 'Task Automation',
       basicSettings: 'Basic Settings',
-      proxyRequiredTag: 'VPN',
       settingsFileUnreadable: 'Your settings file could not be read, so the app started with default settings.',
       settingsFileRetry: 'Try reading it again',
       settingsFileCopyKept: (path) => `The damaged file was kept as a copy: ${path}`,
