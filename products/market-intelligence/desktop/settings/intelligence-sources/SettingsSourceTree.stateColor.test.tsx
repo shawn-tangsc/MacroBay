@@ -26,11 +26,12 @@ function src(sourceId: string, overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function renderRow(sources: ReadonlyArray<Record<string, unknown>>, providers?: ReadonlyArray<ReadonlyArray<Record<string, unknown>>>): Promise<HTMLElement> {
+async function renderRow(sources: ReadonlyArray<Record<string, unknown>>, providers?: ReadonlyArray<ReadonlyArray<Record<string, unknown>>>, cellEnabled?: Readonly<Record<string, boolean>>): Promise<HTMLElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(SettingsSourceTree, {
+    ...(cellEnabled === undefined ? {} : { cellEnabled }),
     filter: 'all',
     labels: {
       title: 'Sources', categories: { macro: '宏观' } as never, providerNames: {}, unavailableCountOne: '{count} 个不可用', unavailableCountOther: '{count} 个不可用'
@@ -87,4 +88,46 @@ describe('组内按状态排序', () => {
     const states = [...host.querySelectorAll('.intelligence-provider-row')].map((row) => row.getAttribute('data-provider-state'))
     expect(states).toEqual(['enabled', 'disabled', 'pending'])
   })
+describe('数据源的启用状态与「采集与数据」一致（用户 2026-11-12）', () => {
+  it('shows a source as disabled when the source is on but every one of its cells is off', async () => {
+    // 用户截图：采集与数据里「政策路径概率」关掉，数据源里 Polymarket 仍显绿。
+    // 同一个事实的两处显示必须一致：格全关 → 这一行就是「关闭」。
+    const host = await renderRow(
+      [{ sourceId: 'policy-path-market', enabled: true }],
+      undefined,
+      { 'policy-path:probability': false }
+    )
+    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('disabled')
+  })
+
+  it('goes back to enabled as soon as the cell is on again', async () => {
+    const host = await renderRow(
+      [{ sourceId: 'policy-path-market', enabled: true }],
+      undefined,
+      { 'policy-path:probability': true }
+    )
+    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('enabled')
+  })
+
+  it('still treats a pending source as pending, never as disabled', async () => {
+    // 真待接入不是「格关了」：即使它的格全关，也留在灰档。
+    const host = await renderRow(
+      [{ sourceId: 'policy-path-market', visibility: 'pending', enabled: false }],
+      undefined,
+      { 'policy-path:probability': false }
+    )
+    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('pending')
+  })
+
+  it('stays disabled when the source itself is off, whatever the cells say', async () => {
+    // 两条路都收敛到「关闭」：源自己关，或它的格全关。
+    const host = await renderRow(
+      [{ sourceId: 'policy-path-market', enabled: false }],
+      undefined,
+      { 'policy-path:probability': true }
+    )
+    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('disabled')
+  })
+})
+
 })

@@ -4,6 +4,7 @@ import { Switch } from 'antd'
 
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import {
+  cellEnabledOrDefault,
   cellIdOf,
   modulesForBusiness,
   sourceCountForBusiness,
@@ -163,7 +164,7 @@ export function BusinessSettingsContent(props: {
     const cellId = cellIdOf(moduleId, cell)
     return cellRow({
       cellId,
-      enabled: props.isCellEnabled?.(cellId) ?? cell.fallback !== true,
+      enabled: cellEnabledOrDefault(props.isCellEnabled?.(cellId), cell.fallback === true),
       label: labelOverride ?? nameOf(cell.sourceId),
       resolveText: props.resolveText,
       siblings,

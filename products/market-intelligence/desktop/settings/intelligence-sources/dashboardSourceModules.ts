@@ -136,6 +136,28 @@ export function modulesUsingSource(sourceId: string): readonly DashboardSourceMo
 }
 
 /**
+ * 反查：这个源在**采集与数据**里有哪些格（`cellId` + 是否备用行）。
+ *
+ * 「数据源」那一行的启用状态要和「采集与数据」的开关一致（用户 2026-11-12），
+ * 所以两处必须从同一张表取格：这里只做反查，不另存一份格清单。
+ */
+export function cellsUsingSource(sourceId: string): readonly { cellId: string; fallback: boolean }[] {
+  return DASHBOARD_SOURCE_MODULES.flatMap((module) => module.cells
+    .filter((cell) => cell.sourceId === sourceId)
+    .map((cell) => ({ cellId: cellIdOf(module.id, cell), fallback: cell.fallback === true })))
+}
+
+/**
+ * 一格在界面上的启用值：**缺键按卡片默认**（主格开、备用行关）。
+ *
+ * 「采集与数据」的卡片与「数据源」的行状态读同一个函数——第二个表达式（`?? cell.fallback !== true`）
+ * 就是两套口径的开始，所以只留这一处。
+ */
+export function cellEnabledOrDefault(value: boolean | undefined, fallback: boolean): boolean {
+  return value ?? !fallback
+}
+
+/**
  * 三张业务各自挂哪些模块（用户 2026-11-11）：
  * - 看板 = 主列那 6 个模块（不挂源的「最新 AI 结论」与「来源状态条」不在清单里）；
  * - 日历 = 经济日历那个模块（六个日历源，平铺列源名）；
