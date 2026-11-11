@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import type { PlatformText } from '../../../i18n/platformText'
 
 import { ChannelFields, parseAllowedChatIds, type ChannelFieldValues, type ChannelPolicyPresence } from './ChannelFields'
+import { credentialPayload } from './credentialFieldsModel'
 import type { Agent, Channel } from './channelSettingsPresentation'
 
 /**
@@ -24,19 +25,22 @@ export function ChannelEditDialog(props: {
   saveError?: string | null
   saving: boolean
   onCancel: () => void
+  /** 这个平台的凭据字段（来自描述符）：弹层按它逐项渲染，不按平台写 if。 */
+  credentialFields: readonly string[]
   onSave: (input: {
     name: string
     agentId: string
     allowedChatIds: readonly string[]
-    /** 空串＝保持原 Token；非空＝整串替换。 */
-    token: string
+    /** **只含填了的字段**：留空＝保持原值（旧值不可读，界面不能拿掩码回填）。 */
+    credentials: Record<string, string>
   }) => void
 }): React.ReactElement {
   const { labels, channel } = props
   const fromChannel = (target: Channel): ChannelFieldValues => ({
     name: target.name,
     agentId: target.agentId,
-    token: '',
+    // 旧值不可读：每个字段都从空开始，留空＝不改。
+    credentials: {},
     allowedChatIdsText: (target.allowedChatIds ?? []).join('\n')
   })
   const [values, setValues] = useState<ChannelFieldValues>(fromChannel(channel))
@@ -66,7 +70,8 @@ export function ChannelEditDialog(props: {
                 name: values.name.trim(),
                 agentId: values.agentId,
                 allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText),
-                token: values.token
+                // 编辑允许只填其中一项：提交的载荷里只有填了的那些键。
+                credentials: credentialPayload(props.credentialFields, values.credentials, 'edit').payload
               })
             }
             type="primary">
@@ -75,23 +80,29 @@ export function ChannelEditDialog(props: {
         </>
       }
     >
-      <p className="channel-edit-current" data-current-token>
-        {/* 只显示头尾掩码（主进程算好送来的），不显示「最近更新」：安全视图里没有凭据时间戳，
-            拿频道记录的 updated_at 冒充它，就是另一种说假话。改没改成功，看这串变没变。
-            **没有凭据时不许写「当前已存：********」**：那句话会让人以为自己早就存过。 */}
-        {channel.credential.status === 'configured'
-          ? labels.channelTokenCurrent.replace(
-              '{mask}',
-              channel.credential.maskedFields?.bot_token ?? labels.channelTokenMask
+      <div className="channel-edit-current" data-current-token>
+        {/* 每个字段各显示自己的掩码（主进程算好送来的），不显示「最近更新」：安全视图里没有凭据时间戳，
+            拿频道记录的 updated_at 冒充它，就是另一种说假话。**没有凭据时不许写「已存：********」**。 */}
+        {channel.credential.status === 'configured' ? (
+          props.credentialFields.map((field) => {
+            const label = (labels.channelCredentialField as Readonly<Record<string, string>>)[field] ?? field
+            const mask = channel.credential.maskedFields?.[field] ?? labels.channelTokenMask
+            return (
+              <p key={field}>
+                {label}
+                {' · '}
+                {labels.channelTokenCurrent.replace('{mask}', mask)}
+              </p>
             )
-          : channel.credential.status === 'unavailable'
-            ? labels.channelTokenUnavailable
-            : labels.channelTokenCurrentNone}
+          })
+        ) : (
+          <p>{channel.credential.status === 'unavailable' ? labels.channelTokenUnavailable : labels.channelTokenCurrentNone}</p>
+        )}
         {/* 「改没改成功」的第二条凭据：保存次数。不是时间——没有凭据时间戳，写时间就是假话。 */}
         {channel.credential.status === 'configured' && typeof channel.credential.revision === 'number'
           ? ` · ${labels.channelTokenRevision.replace('{count}', String(channel.credential.revision))}`
           : ''}
-      </p>
+      </div>
       {props.saveError ? (
         <p className="channel-inline-error" data-channel-save-error role="alert">
           {props.saveError}
@@ -99,7 +110,9 @@ export function ChannelEditDialog(props: {
       ) : null}
       <ChannelFields
         agents={props.agents}
+        credentialFields={props.credentialFields}
         labels={labels}
+        maskedFields={channel.credential.maskedFields}
         mode="edit"
         policyPresence={props.policyPresence}
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}

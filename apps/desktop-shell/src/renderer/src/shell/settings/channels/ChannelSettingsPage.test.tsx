@@ -1292,3 +1292,100 @@ describe('opening the conversation a channel is bound to', () => {
     window.removeEventListener('app-shell:navigate', onNavigate)
   })
 })
+
+/**
+ * 多字段凭据：字段清单来自适配器描述符，弹层按它逐项渲染。
+ *
+ * 曾经的故障：Slack / QQ / 飞书各需要两组凭据，而弹层只有一个写死的 `bot_token` 输入框——
+ * 读者能建频道，却根本填不了凭据。
+ */
+describe('multi-field credentials', () => {
+  const platformName = (type: string): string =>
+    CHANNEL_DISPLAY_NAME[type as keyof typeof CHANNEL_DISPLAY_NAME]['zh-CN']
+
+  async function selectPlatform(type: string): Promise<void> {
+    const item = [...document.querySelectorAll('.channel-platform-item')].find(
+      (node) => node.textContent?.trim() === platformName(type)
+    )
+    await act(async () => (item as HTMLButtonElement | undefined)?.click())
+    await act(async () => {})
+  }
+
+  async function chooseAgent(): Promise<void> {
+    const select = document.body.querySelector('.ant-select') as HTMLElement
+    const trigger = select.querySelector('.ant-select-selector') ?? select
+    await act(async () => trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+    await act(async () => {})
+    const option = [...document.querySelectorAll('.ant-select-item-option')].find(
+      (node) => node.textContent?.trim() === '助手一'
+    )
+    await act(async () => (option as HTMLElement | undefined)?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => {})
+  }
+
+  function typeInto(field: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(field, value)
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  async function openCreateFor(type: string): Promise<HTMLElement> {
+    const container = await mount()
+    await selectPlatform(type)
+    await openCreate(container)
+    return container
+  }
+
+  it('renders one input per descriptor field, so all five platforms are fillable', async () => {
+    installPlatform()
+    const expected: Array<[string, string[]]> = [
+      ['telegram', ['Bot Token']],
+      ['slack', ['Bot Token', 'App Token']],
+      ['discord', ['Bot Token']],
+      ['qq', ['App ID', 'Client Secret']],
+      ['feishu', ['App ID', 'App Secret']]
+    ]
+    for (const [type, fieldLabels] of expected) {
+      const container = await openCreateFor(type)
+      const shown = [...document.body.querySelectorAll('.channel-fields input[aria-label]')]
+        .map((node) => node.getAttribute('aria-label'))
+        .filter((label): label is string => label !== null && fieldLabels.includes(label))
+      expect(new Set(shown), `${type} fields`).toEqual(new Set(fieldLabels))
+
+      // 关掉弹层再换下一个平台：同一个页面实例上继续点平台即可。
+      const cancel = [...document.body.querySelectorAll('button')].find(
+        (node) => node.textContent?.trim() === labels.channelCancel
+      )
+      await act(async () => cancel?.click())
+      await act(async () => {})
+      await act(async () => root?.unmount())
+      root = undefined
+      document.body.replaceChildren()
+      void container
+    }
+  })
+
+  it('refuses a half-filled Slack credential and points at the field that is missing', async () => {
+    const channels = installPlatform()
+    await openCreateFor('slack')
+
+    const name = document.body.querySelector(`input[aria-label="${labels.channelName}"]`) as HTMLInputElement
+    await act(async () => typeInto(name, 'Slack 测试'))
+    await chooseAgent()
+    const botToken = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => typeInto(botToken, 'xoxb-1234567890'))
+
+    const create = [...document.body.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === labels.channelCreate
+    )
+    await act(async () => create?.click())
+    await act(async () => {})
+
+    // 少一个字段就不许建：错误挂在缺的那一行，不是弹层底部一句「保存失败」。
+    expect(channels.create).not.toHaveBeenCalled()
+    const error = document.body.querySelector('[data-field-error="app_token"]')
+    expect(error).not.toBeNull()
+    expect(error?.textContent).toContain('App Token')
+    expect(document.body.querySelector('[data-field-error="bot_token"]')).toBeNull()
+  })
+})

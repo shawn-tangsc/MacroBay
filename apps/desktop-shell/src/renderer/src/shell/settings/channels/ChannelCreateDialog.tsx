@@ -7,10 +7,11 @@ import type { ChannelManagementResult } from '@platform/ai/agent-platform/channe
 import type { PlatformText } from '../../../i18n/platformText'
 
 import { ChannelFields, parseAllowedChatIds, type ChannelFieldValues } from './ChannelFields'
+import { credentialPayload } from './credentialFieldsModel'
 import type { Agent } from './channelSettingsPresentation'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
-const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '', allowedChatIdsText: '' }
+const EMPTY: ChannelFieldValues = { name: '', agentId: '', credentials: {}, allowedChatIdsText: '' }
 
 /**
  * 「＋ 添加」的弹层：与编辑弹层共用同一套字段（需求 v7 要求新建和编辑统一）。
@@ -25,19 +26,43 @@ export function ChannelCreateDialog(props: {
   saveError?: string | null
   saving: boolean
   onCancel: () => void
+  /** 这个平台的凭据字段（来自描述符）：弹层按它逐项渲染，不按平台写 if。 */
+  credentialFields: readonly string[]
   onCreate: (input: {
     name: string
     agentId: string
-    token: string
+    credentials: Record<string, string>
     allowedChatIds: readonly string[]
   }) => void
 }): React.ReactElement {
   const { labels } = props
   const [values, setValues] = useState<ChannelFieldValues>(EMPTY)
+  /** 逐字段的必填错误：挂在该字段下面，不是弹层底部一句笼统的话。 */
+  const [credentialErrors, setCredentialErrors] = useState<Record<string, string>>({})
 
   useEffect(() => () => clearSensitiveDraft(() => setValues(EMPTY)), [])
 
-  const ready = values.name.trim().length > 0 && values.agentId.length > 0 && values.token.trim().length > 0
+  const fieldLabel = (field: string): string =>
+    (labels.channelCredentialField as Readonly<Record<string, string>>)[field] ?? field
+  const ready = values.name.trim().length > 0 && values.agentId.length > 0
+  const submit = (): void => {
+    const { payload, missing } = credentialPayload(props.credentialFields, values.credentials, 'create')
+    if (missing.length > 0) {
+      // 缺哪个字段就在哪一行说，别只说一句「保存失败」——读者不知道是哪一格没填。
+      setCredentialErrors(Object.fromEntries(missing.map((field) => [
+        field,
+        labels.channelCredentialFieldRequired.replace('{field}', fieldLabel(field))
+      ])))
+      return
+    }
+    setCredentialErrors({})
+    props.onCreate({
+      name: values.name.trim(),
+      agentId: values.agentId,
+      credentials: payload,
+      allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText)
+    })
+  }
 
   return (
     <Modal
@@ -55,14 +80,7 @@ export function ChannelCreateDialog(props: {
             disabled={!ready}
             key="create"
             loading={props.saving}
-            onClick={() =>
-              props.onCreate({
-                name: values.name.trim(),
-                agentId: values.agentId,
-                token: values.token,
-                allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText)
-              })
-            }
+            onClick={submit}
             type="primary">
             {labels.channelCreate}
           </Button>
@@ -76,6 +94,8 @@ export function ChannelCreateDialog(props: {
       ) : null}
       <ChannelFields
         agents={props.agents}
+        credentialErrors={credentialErrors}
+        credentialFields={props.credentialFields}
         labels={labels}
         mode="create"
         policyPresence="none"
@@ -94,14 +114,14 @@ export function ChannelCreateDialog(props: {
  */
 export async function submitNewChannelCredential(
   channelId: string,
-  token: string
+  credentials: Readonly<Record<string, string>>
 ): Promise<ChannelManagementResult> {
   const begin = await window.platform.channels.beginCredential({ channelId })
   const handoff = await encryptChannelHandoff(
     begin as Parameters<typeof encryptChannelHandoff>[0],
     channelId,
     'credential',
-    { bot_token: token }
+    { ...credentials }
   )
   return window.platform.channels.submitCredential({ channelId, actorId: 'settings-user', handoff })
 }

@@ -153,7 +153,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const createChannel = async (input: {
     name: string
     agentId: string
-    token: string
+    /** 描述符里的每个字段都必须有值（校验在弹层里按字段做）。 */
+    credentials: Record<string, string>
     allowedChatIds: readonly string[]
   }): Promise<void> => {
     setSavingEdit(true)
@@ -177,7 +178,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         return
       }
       createdId = createdIdValue
-      const submitted = await submitNewChannelCredential(createdIdValue, input.token)
+      const submitted = await submitNewChannelCredential(createdIdValue, input.credentials)
       // 返回 `ok: false` 也是失败（它不抛错），一样不许当成存好了。
       const stored = submitted?.ok === false ? false : await readCredentialConfigured(createdIdValue)
       // 建好了也要回读：频道的存在不等于凭据落库。两种结局分开说，且都关掉弹层——
@@ -211,13 +212,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     name: string
     agentId: string
     allowedChatIds: readonly string[]
-    token: string
+    /** 只含填了的字段：留空＝保持原值。 */
+    credentials: Record<string, string>
   }): Promise<void> => {
     if (editor === null || editor.mode !== 'edit') return
     setSavingEdit(true)
     setError(null)
     setSaveError(null)
-    const tokenProvided = input.token.trim().length > 0
+    const tokenProvided = Object.values(input.credentials).some((value) => value.trim().length > 0)
     try {
       const updated = await window.platform.channels.update({
         id: editor.channel.id,
@@ -240,7 +242,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           begin as Parameters<typeof encryptChannelHandoff>[0],
           editor.channel.id,
           'credential',
-          { bot_token: input.token }
+          // 只交填了的字段：服务端会与已有凭据合并，没填的保持原值。
+          { ...input.credentials }
         )
         tokenWrite = await window.platform.channels.rotateCredential({
           channelId: editor.channel.id,
@@ -406,6 +409,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       {editor !== null && editor.mode === 'create' ? (
         <ChannelCreateDialog
           agents={agents}
+          credentialFields={platform?.credentialFields ?? []}
           labels={labels}
           onCancel={() => setEditor(null)}
           onCreate={(input) => void createChannel(input)}
@@ -418,6 +422,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         <ChannelEditDialog
           agents={agents}
           channel={editor.channel}
+          credentialFields={platform?.credentialFields ?? []}
           labels={labels}
           policyPresence={policyPresence}
           onCancel={() => setEditor(null)}

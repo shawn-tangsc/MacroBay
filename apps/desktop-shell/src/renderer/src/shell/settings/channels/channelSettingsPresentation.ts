@@ -44,7 +44,14 @@ export type RuntimeStatus = { channelId: string; generation: number; lifecycle: 
 export type Candidate = { id: string; kind: 'direct' | 'group' | 'channel'; displayLabel: string | null; firstSeenAt: string; lastSeenAt: string; hitCount: number; status: 'pending' | 'allowed' | 'ignored' }
 export type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKind: string | null }
 export type Agent = { id: string; name: string }
-export type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string; implemented: boolean }
+export type Catalog = {
+  type: string
+  status: 'planned' | 'blocked' | 'supported'
+  reason: string
+  implemented: boolean
+  /** 凭据字段（来自适配器描述符）：弹层按它逐项渲染输入框，界面不写死平台名。 */
+  credentialFields: readonly string[]
+}
 
 /** 目录状态 → 档位：按数据值查表，穷举闭集；多一个取值就编译不过，没有兜底档。 */
 export const catalogTone: Record<Catalog['status'], StatusPillTone> = {
@@ -179,7 +186,8 @@ export function toCatalog(entry: ChannelManagementCatalogEntry): Catalog {
     type: entry.type,
     status: entry.status,
     reason: entry.reason,
-    implemented: entry.implemented
+    implemented: entry.implemented,
+    credentialFields: entry.credentialFields
   }
 }
 

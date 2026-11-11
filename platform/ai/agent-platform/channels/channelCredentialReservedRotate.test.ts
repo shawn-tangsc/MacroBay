@@ -184,6 +184,10 @@ function createHarness(options: { withRuntime?: boolean } = {}) {
 }
 
 async function handoffOf(service: ChannelManagementService, id: string, token: string) {
+  return handoffFor(service, id, { bot_token: token })
+}
+
+async function handoffFor(service: ChannelManagementService, id: string, value: Record<string, string>) {
   const begin = await service.beginCredential({ id, senderId: 7 })
   const { webcrypto } = await import('node:crypto')
   const pair = await webcrypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
@@ -195,7 +199,7 @@ async function handoffOf(service: ChannelManagementService, id: string, token: s
   const ciphertext = new Uint8Array(await webcrypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: aad },
     key,
-    new TextEncoder().encode(JSON.stringify({ bot_token: token }))
+    new TextEncoder().encode(JSON.stringify(value))
   ))
   return { sessionId: begin.sessionId, rendererPublicJwk: await webcrypto.subtle.exportKey('jwk', pair.publicKey), iv, ciphertext }
 }
@@ -236,6 +240,28 @@ describe('credential writes settle the reserved record', () => {
     expect(again).toMatchObject({ ok: true })
     expect(pendingStates(database, id)).toBe(0)
     expect(vault.reservedRefs()).toEqual([])
+  })
+
+  it('keeps the other token when only one credential field is rotated', async () => {
+    // 多字段凭据（Slack/QQ/飞书）的编辑语义：留空＝保持原值。界面拿不到旧值，所以合并必须在这里做。
+    const { database, service, vault } = createHarness()
+    const created = service.create({ type: 'slack', name: 'Slack', agentId: 'agent-a', actorId: 'user-a' })
+    if (created.ok !== true) throw new Error(`create failed: ${JSON.stringify(created)}`)
+    const id = created.channel!.id
+    const provisioned = await Promise.resolve(service.provision({
+      id, actorId: 'user-a', senderId: 7, purpose: 'credential',
+      handoff: await handoffFor(service, id, { bot_token: 'xoxb-1234567890', app_token: 'xapp-1234567890' })
+    } as never))
+    expect(provisioned).toMatchObject({ ok: true })
+    // debug
+    const ref = (database.connection.prepare('select credential_ref from agent_channels where id = ?').get(id) as { credential_ref: string }).credential_ref
+
+    // 只填 App Token：Bot Token 必须保持原值，而不是被清空、也不是整次失败。
+    await expect(Promise.resolve(service.rotate({
+      id, actorId: 'user-a', senderId: 7,
+      handoff: await handoffFor(service, id, { app_token: 'xapp-0987654321' })
+    }))).resolves.toMatchObject({ ok: true })
+    await expect(vault.get(ref)).resolves.toEqual({ bot_token: 'xoxb-1234567890', app_token: 'xapp-0987654321' })
   })
 
   it('no longer reports a settled credential as unavailable when enabling', async () => {

@@ -13,7 +13,8 @@ import type { Agent } from './channelSettingsPresentation'
 export type ChannelFieldValues = {
   name: string
   agentId: string
-  token: string
+  /** 凭据字段 → 输入值。字段清单来自适配器描述符（`credentialFields`），不在界面里写死平台名。 */
+  credentials: Record<string, string>
   /** 逗号或换行分隔的原始文本：保存时才解析成列表。 */
   allowedChatIdsText: string
 }
@@ -50,6 +51,12 @@ export function ChannelFields(props: {
   agents: readonly Agent[]
   labels: PlatformText['settings']
   policyPresence: ChannelPolicyPresence
+  /** 这个平台的凭据字段（来自描述符）：每一项一个输入框，顺序即描述符顺序。 */
+  credentialFields: readonly string[]
+  /** 主进程算好的旧值掩码：编辑时按字段显示「当前已存」，界面从不回填明文。 */
+  maskedFields?: Readonly<Record<string, string>>
+  /** 逐字段的校验错误：挂在**对应那一行**，不是弹层底部一句笼统的「保存失败」。 */
+  credentialErrors?: Readonly<Record<string, string>>
   /**
    * 编辑时库里凭据的真实档位：决定输入框下面那句提示。
    * `configured` → 留空＝不改；`missing` → 填一个，留空什么都不会存；`unavailable` → 填新的换掉它。
@@ -58,8 +65,11 @@ export function ChannelFields(props: {
   onChange: (patch: Partial<ChannelFieldValues>) => void
 }): React.ReactElement {
   const { labels, values } = props
-  // 输入中的新 Token 临时可见；旧值永远不经过这个开关（接口里就没有旧值）。
-  const [tokenVisible, setTokenVisible] = useState(false)
+  // 每个字段一个「临时可见」开关：只让**正在输入的新值**可以被看一眼，旧值没有回显路径。
+  const [visibleFields, setVisibleFields] = useState<Readonly<Record<string, boolean>>>({})
+
+  const fieldLabel = (field: string): string =>
+    (labels.channelCredentialField as Readonly<Record<string, string>>)[field] ?? field
 
   return (
     <div className="channel-fields">
@@ -79,55 +89,62 @@ export function ChannelFields(props: {
         value={values.agentId.length === 0 ? undefined : values.agentId}
       />
 
-      <FieldShell
-        info={
-          <SettingInfoPopover
-            hintKeys={[props.tokenState === 'missing' ? 'channelTokenEnterHint' : props.tokenState === 'unavailable' ? 'channelTokenUnavailableHint' : 'channelTokenReadOnly', ...(tokenVisible ? ['channelTokenVisibleHint'] : [])]}
-            infoLabelKey="settings.channels.tokenInfo"
-            resolveText={(key: string) =>
-              key === 'settings.channels.tokenInfo'
-                ? labels.channelTokenInfoAria
-                : (labels as unknown as Record<string, string>)[key] ?? ''
+      {props.credentialFields.map((field) => {
+        const label = fieldLabel(field)
+        const visible = visibleFields[field] === true
+        const error = props.credentialErrors?.[field]
+        const masked = props.maskedFields?.[field]
+        return (
+          <FieldShell
+            info={
+              <SettingInfoPopover
+                hintKeys={[props.tokenState === 'missing' ? 'channelTokenEnterHint' : props.tokenState === 'unavailable' ? 'channelTokenUnavailableHint' : 'channelTokenReadOnly', ...(visible ? ['channelTokenVisibleHint'] : [])]}
+                infoLabelKey="settings.channels.tokenInfo"
+                resolveText={(key: string) =>
+                  key === 'settings.channels.tokenInfo'
+                    ? labels.channelTokenInfoAria
+                    : (labels as unknown as Record<string, string>)[key] ?? ''
+                }
+              />
             }
-          />
-        }
-        label={labels.channelCredential}>
-        {props.mode === 'create' ? (
-          <Input.Password
-            aria-label={labels.channelCredential}
-            autoComplete="off"
-            onChange={(event) => props.onChange({ token: event.target.value })}
-            placeholder={labels.channelCredential}
-            value={values.token}
-          />
-        ) : (
-          // 编辑时**可以替换**，但旧值不可读：输入框永远空着，留空＝不改。
-          // 不用 Input.Password（它带「眼睛」＝查看入口），也不回显、不复制旧值。
-          <>
+            key={field}
+            label={label}>
             <div className="channel-field-with-toggle">
               <Input
-                aria-label={labels.channelCredential}
+                aria-label={label}
                 autoComplete="off"
-                onChange={(event) => props.onChange({ token: event.target.value })}
-                placeholder={labels.channelTokenReplaceHint}
-                type={tokenVisible ? 'text' : 'password'}
-                value={values.token}
+                onChange={(event) =>
+                  props.onChange({ credentials: { ...values.credentials, [field]: event.target.value } })}
+                placeholder={
+                  props.mode === 'edit'
+                    ? masked
+                      ? labels.channelTokenCurrent.replace('{mask}', masked)
+                      : labels.channelTokenReplaceHint
+                    : label
+                }
+                type={props.mode === 'create' || visible ? 'text' : 'password'}
+                value={values.credentials[field] ?? ''}
               />
-              {/* 只让**正在输入的新值**可以被看一眼：旧值没有回显路径，也没有复制入口。
-                  读屏名保持恒定（`pressed` 表达状态），否则读屏会听到「隐藏…，已按下」。 */}
-              <IconButton
-                ariaLabelKey="settings.channels.tokenVisibility"
-                icon={tokenVisible ? EyeOff : Eye}
-                onSelect={() => setTokenVisible((current) => !current)}
-                pressed={tokenVisible}
-                resolveText={(key) => (key === 'settings.channels.tokenVisibility' ? labels.channelTokenVisibility : '')}
-                size="sm"
-                tooltipKey="settings.channels.tokenVisibility"
-              />
+              {props.mode === 'edit' ? (
+                <IconButton
+                  ariaLabelKey="settings.channels.tokenVisibility"
+                  icon={visible ? EyeOff : Eye}
+                  onSelect={() => setVisibleFields((current) => ({ ...current, [field]: !visible }))}
+                  pressed={visible}
+                  resolveText={(key) => (key === 'settings.channels.tokenVisibility' ? labels.channelTokenVisibility : '')}
+                  size="sm"
+                  tooltipKey="settings.channels.tokenVisibility"
+                />
+              ) : null}
             </div>
-          </>
-        )}
-      </FieldShell>
+            {error ? (
+              <p className="channel-inline-error" data-field-error={field} role="alert">
+                {error}
+              </p>
+            ) : null}
+          </FieldShell>
+        )
+      })}
 
       <FieldShell
         info={
