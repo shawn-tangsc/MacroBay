@@ -17,12 +17,15 @@ import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
 export const analysisConclusionPushPolicy = Object.freeze({
   version: 'analysisConclusionPush.v1',
   /**
-   * 去重键：**同一桶（原因码 + 事件）+ 同一截止时刻**一条；**不用 runId**（同一份证据重跑会换）。
+   * 去重键：**同一触发键 + 同一截止时刻**一条；**不用 runId**（同一份证据重跑会换）。
    *
-   * 桶按事件算，不按触发键：初次运行的键全都叫 `macro.actual.first-confirmed`，按键会让一天
-   * 只有第一条达门槛的能到手机（2026-11-09）。同一条事件重复触发仍是同一个桶，照样被去重。
+   * 变量名必须与事件声明逐字一致（`product.manifest.ts` 的 `dedupeKeyTemplate`）：两处各叫一个名字时，
+   * 占位符展不开，整条提交会被平台判成 `missing-dedupe-key` 拒收——2026-11-11 手动与自动两条路
+   * 一起哑掉就是这个（当时这里写 `{bucket}`、声明写 `{triggerKey}`）。
+   *
+   * 键里有**截止时刻**：同一条触发键在不同快照上仍是不同的结论，按天并成一条会漏掉当天的第二件事。
    */
-  dedupeKeyTemplate: 'analysis:{bucket}:{cutoff}',
+  dedupeKeyTemplate: 'analysis:{triggerKey}:{cutoff}',
   /** 同一个桶（原因码 + 事件）每天 1 条；模块每天 4 条；超出只进中心。 */
   perBucketDailyLimit: 1,
   moduleDailyLimit: 4,
@@ -206,8 +209,8 @@ export function analysisConclusionPushesPhone(input: Readonly<{
 export function buildAnalysisConclusionRequest(input: Readonly<{
   summary: string
   citedCount: number
-  /** 去重桶：原因码 + 事件（手动发送是它自己的桶）。 */
-  bucket: string
+  /** 去重键的第一分量：这一跑的触发键（手动发送是 `manual:<事件组>`）。 */
+  triggerKey: string
   /** 去重键 `analysis:{triggerKey}:{cutoff}` 的第二个分量；手动发送是 `${截止时刻}:${点击时刻}`。 */
   cutoff: string
   occurredAt: string
@@ -220,7 +223,7 @@ export function buildAnalysisConclusionRequest(input: Readonly<{
     withContext: !input.centerOnly
   })
   return {
-    dedupeVars: { builder: 'template', vars: { bucket: input.bucket, cutoff: input.cutoff } },
+    dedupeVars: { builder: 'template', vars: { triggerKey: input.triggerKey, cutoff: input.cutoff } },
     ...(input.centerOnly ? { narrowedDisruptionLevels: ['center'] as const } : {}),
     rendered: {
       'zh-CN': { ...analysisConclusionPushPolicy.renderedCopy['zh-CN'], body: body.text },

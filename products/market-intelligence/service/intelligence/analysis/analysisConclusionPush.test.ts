@@ -74,7 +74,7 @@ describe('the dedupe key ignores the run id', () => {
   it('is built from the bucket and the cutoff, and the template names no run', () => {
     // 桶 = 原因码 + 事件：不同事件各算一次，同一条事件重复触发仍被合并。
     // 同一份证据重跑会得到新 runId；键里带它就等于给读者发两条同样的结论。
-    expect(analysisConclusionPushPolicy.dedupeKeyTemplate).toBe('analysis:{bucket}:{cutoff}')
+    expect(analysisConclusionPushPolicy.dedupeKeyTemplate).toBe('analysis:{triggerKey}:{cutoff}')
     expect(analysisConclusionPushPolicy.dedupeKeyTemplate).not.toContain('run')
     expect(analysisConclusionPushPolicy.perBucketDailyLimit).toBe(1)
     expect(analysisConclusionPushPolicy.moduleDailyLimit).toBe(4)

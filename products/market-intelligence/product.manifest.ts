@@ -392,8 +392,12 @@ export const marketIntelligenceProductManifest = {
     }),
     // N12：信号唤起的那次分析给出结论。只在这一条路径发，手动与日报都不发。
     // 去重键只用触发键与截止时刻——同一份证据重跑会换 runId，带上它读者会收到两条同样的结论。
-    // 手机那一档要等平台加上按次收窄的字段（architect 已判，排在频道线之后单独一笔）：同向收窄到
-    // 只进中心，反向或新信息不传、按批准表全档。在那之前这里只声明、不投递。
+    // 手机那一档按次收窄：同向收窄到只进中心，反向或新信息不传、按批准表全档（字段
+    // `narrowedDisruptionLevels` 已由平台提供）。**这条已经在投递**：宿主给了提交入口时，
+    // `analysisReleaseNoticeWiring` 会用 `createAnalysisConclusionNotifier` 把它交出去；
+    // 自动（信号唤起的那次分析）与手动（读者点「发送到手机」）两条路共用同一个构造器。
+    // 去重变量必须与下面模板**逐字同名**（`triggerKey`）：两边各叫一个名字，占位符展不开，
+    // 平台会按 `missing-dedupe-key` 拒收整条——2026-11-11 两条路一起哑掉就是这个。
     notificationEvent('market-intelligence.analysis.conclusion', {
       category: 'completed',
       body: true,

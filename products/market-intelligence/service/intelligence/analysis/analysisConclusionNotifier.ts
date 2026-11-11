@@ -90,7 +90,8 @@ export function createAnalysisConclusionNotifier(deps: AnalysisConclusionNotifie
         ...buildAnalysisConclusionRequest({
           summary: notice.summary,
           citedCount: notice.citedCount,
-          bucket: notice.bucket,
+          // 真实触发键：与事件声明里的 `{triggerKey}` 同名，去重键才展得开。
+          triggerKey: notice.triggerKey,
           cutoff: notice.cutoff,
           occurredAt: notice.occurredAt,
           // 同向：收窄到中心，手机不响。`center` 平台必达，所以这里传的就是「只剩中心」。
