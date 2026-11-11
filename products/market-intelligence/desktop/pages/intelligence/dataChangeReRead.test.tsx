@@ -71,7 +71,7 @@ type Counts = {
 async function render() {
   vi.useFakeTimers()
   installProductEventChannel()
-  policyPathRead.mockResolvedValue({ state: 'unavailable', reason: 'query-failed' })
+  policyPathRead.mockResolvedValue({ state: 'unavailable', failureCode: 'query-failed' })
 
   const query = {
     fearGreed: vi.fn(async () => ({ state: 'empty' as const, asOf })),
@@ -225,7 +225,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
   it('leaves the last reading on screen while the re-read is in flight', async () => {
     vi.useFakeTimers()
     installProductEventChannel()
-    policyPathRead.mockResolvedValue({ state: 'unavailable', reason: 'query-failed' })
+    policyPathRead.mockResolvedValue({ state: 'unavailable', failureCode: 'query-failed' })
     let resolveFunding: ((value: unknown) => void) | undefined
     let resolveFearGreed: ((value: unknown) => void) | undefined
     const funding = vi.fn()

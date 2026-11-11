@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createPolicyPathQueryService } from './policyPathQueryService'
+import { createPolicyPathQueryService, policyPathReadingOf } from './policyPathQueryService'
 import type { PolicyPathObservation } from '../../../contracts/policyPath'
 
 const values = (hike: number): PolicyPathObservation['values'] => ({
@@ -12,7 +12,7 @@ const CUT_VALUES: PolicyPathObservation['values'] = {
   'no-change': 0.2, 'hike-25': 0.01, 'hike-50-plus': 0.01, 'cut-25': 0.77, 'cut-50-plus': 0.01
 }
 
-const service = (input: {
+type ServiceInput = {
   meeting?: { eventKey: string; scheduledDate: string } | null
   facts?: Record<string, unknown> | null
   /** The decision before `facts`; the settlement strip asks for the day before the meeting. */
@@ -23,7 +23,12 @@ const service = (input: {
   /** Observations per meeting, when the decided meeting and the next one differ. */
   observations?: Record<string, PolicyPathObservation[]>
   readTargetRange?: () => { lowerPercent: number; upperPercent: number } | undefined
-}) => createPolicyPathQueryService({
+  /** 日历自己的失败码；缺省是「没有会议日」。 */
+  failureCode?: 'meeting-not-found' | 'calendar-query-unavailable' | 'query-input-invalid'
+}
+
+/** 原样服务：失败码也要能看到的那几条用例用。 */
+const rawService = (input: ServiceInput) => createPolicyPathQueryService({
   calendar: {
     nextFomcMeeting: (query: unknown) => {
       const meetingDate = typeof (input.facts as { meetingDate?: unknown } | null | undefined)?.meetingDate === 'string'
@@ -32,7 +37,7 @@ const service = (input: {
       const queriedAt = String((query as { asOf?: string } | undefined)?.asOf ?? '').slice(0, 10)
       if (input.nextAfter && meetingDate && queriedAt > meetingDate) return { state: 'available', meeting: input.nextAfter } as const
       return input.meeting === null
-        ? { state: 'unavailable', failureCode: 'meeting-not-found' } as const
+        ? { state: 'unavailable', failureCode: input.failureCode ?? 'meeting-not-found' } as const
         : { state: 'available', meeting: input.meeting! } as const
     }
   },
@@ -50,6 +55,12 @@ const service = (input: {
   observations: { list: (meetingDate: string) => input.observations?.[meetingDate] ?? input.series ?? [] },
   ...(input.readTargetRange ? { readTargetRange: input.readTargetRange } : {})
 })
+
+/** 这组用例只看读数本身；失败码由下面单独两条覆盖。 */
+const service = (input: ServiceInput) => {
+  const created = rawService(input)
+  return { read: (query: { asOf: string }) => policyPathReadingOf(created.read(query)) }
+}
 
 describe('policy path query service', () => {
   it('joins the calendar date, the official facts and the odds', () => {
@@ -81,6 +92,14 @@ describe('policy path query service', () => {
 
   it('reports no reading when the calendar has no next meeting', () => {
     expect(service({ meeting: null }).read({ asOf: '2026-10-30T02:10:00.000Z' })).toBeUndefined()
+  })
+
+  it('carries the calendar failure code instead of collapsing it', () => {
+    // 卡片要靠这个码分开「没有会议 / 查不到 / 请求不合法」；压成一句 unavailable 就只能猜。
+    for (const failureCode of ['meeting-not-found', 'calendar-query-unavailable', 'query-input-invalid'] as const) {
+      expect(rawService({ meeting: null, failureCode }).read({ asOf: '2026-10-30T02:10:00.000Z' }))
+        .toEqual({ state: 'unavailable', failureCode })
+    }
   })
 
   it('still answers with the official facts when the odds are missing', () => {

@@ -85,7 +85,7 @@ import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgent
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import { createEtfHistoryAsOf } from './public-query/etfHistoryAsOf'
 import { createStablecoinHistoryAsOf } from './public-query/stablecoinHistoryAsOf'
-import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
+import { policyPathReadingOf, type PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createEditionLanguageSettingsService, createEditionLanguageSettingsJsonStorage } from './daily-briefing/dailyBriefingLanguageSettingsService'
 import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
@@ -928,7 +928,7 @@ export function getIntelligenceModule(
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
         publicQuery: publicQueryService,
-        policyPathQuery: { read: (input) => briefingPolicyPathQuery?.read(input) },
+        policyPathQuery: { read: (input) => policyPathReadingOf(briefingPolicyPathQuery?.read(input)) },
         // 只读取历史版次：早报把窗口内更早的简报结论与分析结论一起综合，不复制其中任何一份。
         briefEditions: dailyBriefingStore,
         news: {
@@ -1039,7 +1039,7 @@ export function getIntelligenceModule(
             try {
               const profile = await profileStore.resolveProfile('policy-path-market')
               if (!profile.enabled) return { state: 'disabled' as const }
-              const reading = query.read({ asOf })
+              const reading = policyPathReadingOf(query.read({ asOf }))
               return reading ? { state: 'available' as const, reading } : { state: 'unavailable' as const }
             } catch {
               return { state: 'unavailable' as const }

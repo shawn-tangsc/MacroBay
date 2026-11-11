@@ -8,7 +8,10 @@ import { decideCellRead, dashboardCellId } from './dashboardCellEnabled'
  */
 describe('decideCellRead', () => {
   const usd = { moduleId: 'quotes', cellKey: 'usd' }
-  const enabledSources = { 'realmarketapi-market': true, 'twelve-data-market': true }
+  const enabledSources = {
+    'realmarketapi-market': { enabled: true, hasCredential: true, requiresCredential: true },
+    'twelve-data-market': { enabled: true, hasCredential: true, requiresCredential: true }
+  }
 
   it('does not read a cell the reader switched off', () => {
     const decision = decideCellRead({
@@ -40,9 +43,31 @@ describe('decideCellRead', () => {
       ...usd,
       cells: {},
       selections: { [dashboardCellId('quotes', 'usd')]: 'twelve-data-market' },
-      sources: { 'realmarketapi-market': true, 'twelve-data-market': false }
+      sources: {
+        'realmarketapi-market': { enabled: true, hasCredential: true, requiresCredential: true },
+        'twelve-data-market': { enabled: false, hasCredential: true, requiresCredential: true }
+      }
     })
-    expect(decision).toEqual({ kind: 'source-disabled', sourceId: 'twelve-data-market' })
+    expect(decision).toEqual({
+      kind: 'source-disabled', sourceId: 'twelve-data-market', hasCredential: true, requiresCredential: true
+    })
+  })
+
+  it('keeps “turned off” and “never configured” apart through hasCredential', () => {
+    // 读者关掉的源与从没配过 Key 的源，卡片的句子和动作不同；决策层把凭据事实一起带出去，
+    // 渲染层不必再读一次源表，也不会把两者压成一句。
+    const decision = decideCellRead({
+      ...usd,
+      cells: {},
+      selections: {},
+      sources: {
+        'realmarketapi-market': { enabled: false, hasCredential: false, requiresCredential: true },
+        'twelve-data-market': { enabled: true, hasCredential: true, requiresCredential: true }
+      }
+    })
+    expect(decision).toEqual({
+      kind: 'source-disabled', sourceId: 'realmarketapi-market', hasCredential: false, requiresCredential: true
+    })
   })
 
   it('treats an unreadable source table as unknown instead of assuming enabled', () => {

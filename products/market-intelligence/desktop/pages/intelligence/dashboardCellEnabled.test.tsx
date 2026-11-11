@@ -165,9 +165,10 @@ describe('policy path keeps one placement in every state', () => {
       { read: async () => ({ [dashboardCellId('policy-path', 'probability')]: false }) },
       { policySlot: slot }
     )
-    // 三支都进同一个落点：没启用这一支也在右栏（句子由 `PolicyPathUnavailable` 自己给）。
-    expect(slot.textContent).toContain('来源没有启用')
-    expect(container.textContent).not.toContain('来源没有启用')
+    // 六支都进同一个落点：格关掉这一支也在右栏，且句子说的是格、不是源（`PolicyPathSlot`）。
+    expect(slot.textContent).toContain('数据未被启用（政策路径概率）')
+    expect(slot.textContent).not.toContain('来源没有启用')
+    expect(container.textContent).not.toContain('数据未被启用（政策路径概率）')
     slot.remove()
   })
 })

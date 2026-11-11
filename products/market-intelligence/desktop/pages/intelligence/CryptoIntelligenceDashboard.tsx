@@ -33,7 +33,6 @@ import { useDashboardOpenInterest } from './useDashboardOpenInterest'
 import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
-import type { DashboardCapitalCellAvailability, DashboardCapitalCellOff } from '../../features/industry/capital-conditions/CapitalConditionsPanel'
 
 import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
 import { dashboardRealSourcePolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
@@ -41,7 +40,8 @@ import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHis
 import type { DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { projectPositioningCells } from './dashboardPositioningSourceState'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { cellLabel, cellSourceChoices, dashboardCellId, decideCellRead, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo, type CellReadDecision, type SourceEnabledMap } from './dashboardCellEnabled'
+import { cellLabel, cellSourceChoices, dashboardCellId, decideCellRead, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo, type CellReadDecision, type SourceStatusMap } from './dashboardCellEnabled'
+import { resolveCapitalCellAvailability } from './dashboardCapitalCells'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -61,11 +61,12 @@ import { Popover } from '@platform/ui/components/popover'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
-import { createPortal } from 'react-dom'
 
-import { PolicyPathCard, PolicyPathUnavailable } from './PolicyPathCard'
+import { PolicyPathSlot } from './PolicyPathSlot'
+import { resolvePolicyPathRender } from './dashboardPolicyPathBlock'
+import { cellIdForSource } from '../../settings/intelligence-sources/dashboardSourceModules'
+import { runSourceNowOnce } from '../../settings/intelligence-sources/sourceWrites'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
-import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
 import { useDataChangeRevision } from './useDataChangeRevision'
 
@@ -175,33 +176,34 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   })
   // 失败但有上一次成功的表：继续用它判（不把七行打成「暂时读不到」），并给表格一个「上次读数」标记；
   // 只有**从未成功过**（没有 last-good）才让整表走 StateView。
-  const sourceEnabled: SourceEnabledMap | undefined =
+  const sourceStatus: SourceStatusMap | undefined =
     feedView.feed?.state === 'available'
-      ? Object.fromEntries(feedView.feed.sources.map(source => [source.sourceId, source.enabled]))
+      ? Object.fromEntries(feedView.feed.sources.map(source => [source.sourceId, {
+          enabled: source.enabled,
+          hasCredential: source.hasCredential,
+          requiresCredential: source.requiresCredential
+        }]))
       : undefined
   const decisionsUsable = feedView.feedState !== 'loading'
   const decide = (moduleId: string, cellKey: string): CellReadDecision =>
-    decideCellRead({ moduleId, cellKey, cells: cellState.cells, selections: cellState.selections, sources: sourceEnabled })
+    decideCellRead({ moduleId, cellKey, cells: cellState.cells, selections: cellState.selections, sources: sourceStatus })
   const readable = (moduleId: string, cellKey: string): boolean => decisionsUsable && decide(moduleId, cellKey).kind === 'read'
   const anyReadable = (...cells: ReadonlyArray<readonly [string, string]>): boolean =>
     cells.some(([moduleId, cellKey]) => readable(moduleId, cellKey))
   const cellStateLabels = { disabled: text.cellState.notEnabled, unreadable: text.cellState.sourceUnknown }
   /**
-   * 资金面两格各一颗「去启用」：**两个独立闭包**，读者点哪一格就落到哪一格。
-   * 落点目前只到设置抽屉的默认位置（`focus` 通道前端线还没落），等它落地后把 cellId 填进 focus。
+   * 资金面两格各自的原因与动作：判定走 `decideCellRead`，标签与落点由这一层给
+   * （见 `dashboardCapitalCells.ts`）。两格是两个独立闭包，读者点哪一格就落到哪一格
+   * （cellId 就是这一格的键，不共用卡级回跳）。
    */
-  const capitalCellOff = (cellKey: string): DashboardCapitalCellOff | undefined =>
-    isCellEnabled(cellState.cells, dashboardCellId('capital', cellKey))
-      ? undefined
-      : {
-          sourceLabel: cellLabel('capital', cellKey) ?? '',
-          // 两颗「去启用」各指各的格：cellId 就是这一格的键，别共用卡级回跳。
-          onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: 'capital', cellId: `capital:${cellKey}` })
-        }
-  const capitalCellAvailability: DashboardCapitalCellAvailability = {
-    ...(capitalCellOff('stablecoin') === undefined ? {} : { stablecoin: capitalCellOff('stablecoin') }),
-    ...(capitalCellOff('etf') === undefined ? {} : { etf: capitalCellOff('etf') })
-  }
+  const capitalCellAvailability = resolveCapitalCellAvailability({
+    cells: cellState.cells,
+    selections: cellState.selections,
+    sources: sourceStatus,
+    sourceLabelOf: sourceId => resolveProductKey(`settings.intelligenceSources.sourceNames.${sourceId}`),
+    openCell: cellKey => () => onManageSource({ business: 'dashboard', moduleKey: 'capital', cellId: dashboardCellId('capital', cellKey) }),
+    retrySources: feedView.reload
+  })
   // 情绪卡那一格被关掉：卡仍在，卡内遮罩说「来源没有启用」。
   const fearGreedCellOff = isCellEnabled(cellState.cells, dashboardCellId('fear-greed', 'index'))
     ? undefined
@@ -283,6 +285,19 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // history are joined in the main process, so this dashboard never builds a second opinion.
   const policyPathRead = usePolicyPathReading(readsReady && readGates.policyPath, dataRevision)
   const policyPath = policyPathRead.result
+  // 利率路径是两源合成：会议日来自日历里的美联储官方日程，赔率来自 Polymarket。
+  // 源级状态从同一张 `dashboardFeedStatus` 表读（与资金面同一个来源），不另开读口；
+  // `undefined` 表示这张表还没读到，那一支不猜成「没启用」。
+  const fedScheduleEnabled = feedView.feed?.state === 'available'
+    ? feedView.feed.sources.find(source => source.sourceId === 'macro-calendar-fed')?.enabled
+    : undefined
+  const fedScheduleCellId = cellIdForSource('macro-calendar', 'macro-calendar-fed')
+  const policyPathRender = resolvePolicyPathRender({
+    cellEnabled: readGates.policyPath,
+    scheduleEnabled: fedScheduleEnabled,
+    settled: policyPathRead.settled,
+    ...(policyPath === undefined ? {} : { result: policyPath })
+  })
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
@@ -419,20 +434,31 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           onEnableData: () => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', firstDisabledQuotesCell[1]) })
         })}
         text={crossAssetText} /> : null}
-      {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源没有启用」+ 去启用；
-          读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
-      {readsReady ? (() => {
-        // 三支（读到 / 读不到 / 没启用）**同一个落点**：右栏日历卡上方那块 `policySlot`。
-        // 只有读到那支走 portal 会让另外两支落进主栏——用户 2026-11-11 截图报的正是这个。
-        const card = readGates.policyPath
-          ? (policyPath?.state === 'available'
-            ? <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
-                month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
-            : <PolicyPathUnavailable state="unreadable" text={text.policyPath} onRetry={policyPathRead.reload} />)
-          : <PolicyPathUnavailable state="disabled" text={text.policyPath} onConfigure={onConfigureSources} />
-        // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
-        return policySlot ? createPortal(card, policySlot) : card
-      })() : null}
+      {/* 没配置源的模块**不藏**（用户 2026-11-11）：格关 / 源停 / 没配凭据 / 日历还没读到 / 读失败
+          各说各的，只有真的读完才画读数。六态全在 `PolicyPathSlot`，判定在 `dashboardPolicyPathBlock.ts`；
+          无论哪一支都落在同一个 `policySlot`（右栏），不再有「读到才进右栏」的分叉。 */}
+      {readsReady ? <PolicyPathSlot
+        text={text.policyPath}
+        render={policyPathRender}
+        {...(policyPath?.state === 'available' ? { reading: policyPath.reading } : {})}
+        slot={policySlot}
+        locale={locale}
+        cellLabel={cellLabel('policy-path', 'probability') ?? ''}
+        scheduleLabel={resolveProductKey('settings.intelligenceSources.sourceNames.macro-calendar-fed')}
+        onOpen={() => setPolicyDrawerOpen(true)}
+        onEnableCell={() => onManageSource({ business: 'dashboard', moduleKey: 'policy-path', cellId: dashboardCellId('policy-path', 'probability') })}
+        onEnableSchedule={() => onManageSource({
+          business: 'calendar',
+          moduleKey: 'macro-calendar',
+          ...(fedScheduleCellId === undefined ? {} : { cellId: fedScheduleCellId })
+        })}
+        onRunSchedule={() => {
+          void runSourceNowOnce('macro-calendar-fed')
+            .then(() => { policyPathRead.reload(); feedView.reload() })
+            .catch(() => undefined)
+        }}
+        onRetry={policyPathRead.reload}
+      /> : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not

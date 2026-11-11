@@ -20,8 +20,11 @@ export function registerPolicyPathIpc(
 ): void {
   register(productId, POLICY_PATH_IPC_METHODS.read, async (payload) => {
     const asOf = canonicalAsOf(payload) ?? now()
-    const reading = service.read({ asOf })
-    return reading ? { state: 'available' as const, asOf, reading } : { state: 'unavailable' as const, failureCode: 'no-meeting' as const }
+    const result = service.read({ asOf })
+    // 失败码是日历那一条读的原始结论，不在这里写死：卡片要靠它分「没有会议 / 查不到 / 请求不合法」。
+    return result.state === 'available'
+      ? { state: 'available' as const, asOf, reading: result.reading }
+      : { state: 'unavailable' as const, failureCode: result.failureCode }
   })
 }
 

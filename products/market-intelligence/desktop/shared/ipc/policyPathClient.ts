@@ -8,36 +8,74 @@ import { POLICY_PATH_IPC_METHODS } from '../../../service/intelligence/policy-pa
 
 const productId = 'market-intelligence'
 
+/**
+ * 为什么这张卡没有读数。**四类不许压成一个词**：
+ *
+ * - `capability-not-wired`：没有 bridge（这份构建没接上读口）；读者做不了什么，不给按钮；
+ * - `malformed`：这份构建读不懂这份数据（形状/版本不符）；重试一万次还是同一份，不给按钮；
+ * - `meeting-not-found`：日历里没有下一场 FOMC 行；卡片要说「美联储日程还没有读到」并给一次真采集；
+ * - `calendar-query-unavailable` / `query-input-invalid` / `query-failed`：这次读失败；前者与
+ *   `query-failed` 是瞬时失败，给重试；`query-input-invalid` 是请求本身不合法，重试也没用。
+ *
+ * 「没有赔率」不是失败码：读数仍可用（会议日、区间、SEP、上次决议都在），只是 `reading.probability`
+ * 缺席——`readReading` 允许它缺席，卡片照常画 `—`，别把它当 `malformed`。
+ */
+export const policyPathFailureCodes = [
+  'capability-not-wired',
+  'malformed',
+  'meeting-not-found',
+  'calendar-query-unavailable',
+  'query-input-invalid',
+  'query-failed'
+] as const
+
+export type PolicyPathFailureCode = typeof policyPathFailureCodes[number]
+
 export type PolicyPathReadResult =
   | Readonly<{ state: 'available'; asOf: string; reading: PolicyPathReading }>
-  | Readonly<{ state: 'unavailable'; failureCode: string }>
+  | Readonly<{ state: 'unavailable'; failureCode: PolicyPathFailureCode }>
 
 export const policyPathClient = {
   async read(asOf: string): Promise<PolicyPathReadResult> {
-    const value = await invoke(POLICY_PATH_IPC_METHODS.read, { asOf })
-    return sanitize(value)
+    const invoked = await invoke(POLICY_PATH_IPC_METHODS.read, { asOf })
+    if (invoked.kind === 'unwired') return unavailable('capability-not-wired')
+    if (invoked.kind === 'failed') return unavailable('query-failed')
+    return sanitize(invoked.value)
   }
 }
 
-async function invoke(method: string, payload: unknown): Promise<unknown> {
+type Invoked =
+  | Readonly<{ kind: 'ok'; value: unknown }>
+  /** 没有 bridge：这份构建没接上读口，不是读者的错。 */
+  | Readonly<{ kind: 'unwired' }>
+  /** bridge 在、调用抛了：这次没读成，可以重试。 */
+  | Readonly<{ kind: 'failed' }>
+
+async function invoke(method: string, payload: unknown): Promise<Invoked> {
   try {
-    if (!window.platform?.products?.invoke) return undefined
-    return await window.platform.products.invoke(productId, method, payload)
+    if (!window.platform?.products?.invoke) return { kind: 'unwired' }
+    return { kind: 'ok', value: await window.platform.products.invoke(productId, method, payload) }
   } catch {
-    return undefined
+    return { kind: 'failed' }
   }
 }
 
 /**
- * The renderer keeps only what it can render: a reading whose meeting date and probability shape
- * survive validation. Anything else becomes `unavailable`, never a half-filled block.
+ * The renderer keeps only what it can render: a reading whose meeting date survives validation.
+ * The four failure kinds stay apart; only an unknown code degrades to `malformed`.
  */
 export function sanitize(value: unknown): PolicyPathReadResult {
   if (!isObject(value)) return unavailable('malformed')
-  if (value.state === 'unavailable') return unavailable('unavailable')
+  if (value.state === 'unavailable') {
+    return isPolicyPathFailureCode(value.failureCode) ? unavailable(value.failureCode) : unavailable('malformed')
+  }
   if (value.state !== 'available' || typeof value.asOf !== 'string') return unavailable('malformed')
   const reading = readReading(value.reading)
   return reading ? { state: 'available', asOf: value.asOf, reading } : unavailable('malformed')
+}
+
+export function isPolicyPathFailureCode(value: unknown): value is PolicyPathFailureCode {
+  return typeof value === 'string' && (policyPathFailureCodes as readonly string[]).includes(value)
 }
 
 function readReading(value: unknown): PolicyPathReading | undefined {
@@ -224,6 +262,6 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function unavailable(failureCode: string): PolicyPathReadResult {
+function unavailable(failureCode: PolicyPathFailureCode): PolicyPathReadResult {
   return { state: 'unavailable', failureCode }
 }

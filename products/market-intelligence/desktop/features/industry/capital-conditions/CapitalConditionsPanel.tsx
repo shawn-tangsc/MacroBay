@@ -18,7 +18,7 @@ import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import '../../../shared/styles/sourceAvailability.css'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
-import type { SourceCellOff } from '../shared/sourceCellOff'
+import { capitalCellBlockActionLabel, capitalCellBlockText, type DashboardCapitalCellAvailability, type DashboardCapitalCellBlock } from './capitalCellBlock'
 import {
   isCapitalConditionsRetryable,
   type DashboardCapitalConditionsState,
@@ -95,26 +95,13 @@ type Text = {
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 
 /**
- * 一格（稳定币 / ETF）**没启用**。就这一种，不给它编第二种。
+ * 一格为什么没读数：格关 / 源停 / 源没配凭据 / 源状态读不到，四种各一句、各一颗动作。
  *
- * 为什么不收「没配置」：这两格的源写死在 `DASHBOARD_SOURCE_MODULES`（`稳定币 → defillama-stablecoins`、
- * `ETF → 0xrouter-aggregate-provider`），读者没有任何动作能让一格「没有源」——
- * `cellSourceChoices(...).length === 0` 在真机上恒不成立，`decideCellRead` 的四种结局里也没有这一支。
- * 画一个永远到不了的状态，读者迟早会看到一句解释不了自己的话（「没配置」那张卡上的同一个错法）。
- *
- * 「读不到」也不在这里：它由读数自己说（`EtfTable` / `EtfFlow` 的行内重试）。
- *
- * 动作跟状态放在一起，不另设一个可选的 `onOpenSources`：说得出这一态，就必须说得出读者该去哪。
  * 这张卡是**多行多值卡**：两格能分别判断，所以逐格标（共享行内状态 `mi-source-state`），
  * **不叠整卡状态面**——同一张卡只许一种形态（界面设计 2026-11-11 §二）。
+ * 句子与动作只在 `capitalCellBlock.ts` 写一次，三处（表、图、标题行）读同一份。
  */
-export type DashboardCapitalCellOff = SourceCellOff
-
-/** 两格各一份；缺键 = 这一格没问题，照旧画读数。 */
-export type DashboardCapitalCellAvailability = Readonly<{
-  stablecoin?: DashboardCapitalCellOff
-  etf?: DashboardCapitalCellOff
-}>
+export type { DashboardCapitalCellAvailability, DashboardCapitalCellBlock } from './capitalCellBlock'
 
 export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false, cellAvailability }: Readonly<{
   state: DashboardCapitalConditionsState
@@ -130,6 +117,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const dataText = useProductTextKey() as (key: string) => string
+  const blockText = capitalCellBlockText(dataText)
   // 「重启应用」这颗按钮的文字取平台闭集里那一句（与 `StateView` 的 needs-restart 同一个词），不另造。
   const restartLabel = useStateViewText()(STATE_VIEW_ACTION_KEYS.restart_app)
   // 状态与信号并列：牌子上是「有没有这条信号」，这一句回答「这次分析到哪一步」。
@@ -144,33 +132,55 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   }
   // 命中消失时把弹层一起关掉：故事已经不成立，留着一段讲它的文字就是旧真相。
   useEffect(() => { if (!alertChip) setDetailOpen(false) }, [alertChip])
-  // 两格各自判断：没启用逐格标在行内（见 `CellSourceState`），「读不到」由读数自己说
-  // （`EtfTable` / `EtfFlow` 的行内重试）——两种说法互不冒充，也不叠整卡状态面。
+  // 两格各自判断：格关 / 源停 / 源没配凭据 / 源状态读不到，逐格标在行内；「读到了但没读成」由读数
+  // 自己说（`EtfTable` / `EtfFlow` 的行内词）——几种说法互不冒充，也不叠整卡状态面。
   //
-  // 两格都没启用时**这一次根本不去读**（宿主把读口关了），所以卡片不许停在「正在加载」：
+  // 两格都不可读时**这一次根本不去读**（宿主把读口关了），所以卡片不许停在「正在加载」：
   // 它照旧渲染，两行各自说自己那一态。这也是「关掉来源不等于这张卡消失」的判据。
-  // 第一支：**这块没有任何可用的源**（两格都没启用）→ 内容区盖共享遮罩、居中一颗「启用数据」。
+  // 第一支：两格都是**读者关掉的格** → 内容区盖共享遮罩、居中一颗「启用数据」。
+  // 混合原因（一格关、一格源停）不盖遮罩：那是两件事，逐格说；否则遮罩上那句话会对其中一格说谎。
   //
   // 不画表头骨架：骨架说的是「有表、只是这次没数」，而这一支连源都没开，画出来就是在暗示数据在。
-  // 标题行**不给动作**——遮罩里那颗就是这张卡唯一的入口（同一个动作两颗按钮是上一轮收掉的形状）。
-  //
-  // 「源从未配置过」这一事实在这条链上判不出来（源是 `dashboardSourceModules.ts` 的固定条目，
-  // 读者不能删源；`decideCellRead` 把「没配」并进了 `not-enabled`），所以这一支的判据是
-  // 「两格都未启用」，不是「一个都没配」——要做真的那一支，得先有数据层事实。
-  if (cellAvailability?.stablecoin && cellAvailability.etf) return <section className="mi-capital-conditions" aria-label={text.title}>
+  const bothCellOff = cellAvailability?.stablecoin?.kind === 'cell-off' && cellAvailability?.etf?.kind === 'cell-off'
+  if (bothCellOff) return <section className="mi-capital-conditions" aria-label={text.title}>
     <div className="mi-capital-conditions__header-band"><h2>{text.title}</h2></div>
     <div className="mi-source-veil-host" data-veiled="true">
       <div className="mi-source-veil" data-state="disabled">
         <p className="mi-source-state" data-state="disabled">
           <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
-          <span>{dataText('pages.intelligence.portal.data.sourcesNotEnabled')}</span>
+          <span>{blockText.cellNotEnabled}</span>
         </p>
-        <Button onClick={cellAvailability.stablecoin.onOpenSources} size="small">
-          {dataText('pages.intelligence.portal.dashboard.crossAsset.enableData')}
+        <Button onClick={cellAvailability.stablecoin.onAction} size="small">
+          {blockText.enableData}
         </Button>
       </div>
     </div>
   </section>
+
+  // 两格都不可读、但原因不全是「格关」：宿主把读口关了，读数停在 loading。
+  // 这里不画加载圈——那是「在等数据」，而这两格已经有结论了（源停/没配/状态读不到）。
+  const firstUnreadableCell = cellAvailability?.stablecoin ?? cellAvailability?.etf
+  const blockedCells = cellAvailability?.stablecoin !== undefined && cellAvailability.etf !== undefined
+    ? { stablecoin: cellAvailability.stablecoin, etf: cellAvailability.etf }
+    : undefined
+  if (blockedCells !== undefined && state.state === 'loading') {
+    const first = blockedCells.stablecoin
+    return <section className="mi-capital-conditions" data-state="blocked" aria-label={text.title}>
+      <div className="mi-capital-conditions__content-row">
+        <div className="mi-capital-conditions__summary">
+          <div className="mi-capital-conditions__header-band">
+            <h2>{text.title}</h2>
+            <Button className="mi-capital-conditions__title-action" onClick={first.onAction} size="small" type="link">
+              {capitalCellBlockActionLabel(first, blockText)}
+            </Button>
+          </div>
+          <StablecoinTable text={text} cellOff={blockedCells.stablecoin} />
+          <EtfTable text={text} cellOff={blockedCells.etf} />
+        </div>
+        <EtfFlow text={text} cellOff={blockedCells.etf} />
+      </div>
+    </section>
+  }
 
   if (state.state === 'loading') return <section className="mi-capital-conditions" data-state="loading" aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
@@ -178,6 +188,24 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
       <LoadingState label={text.loading} minHeight={140} />
       <Button className="mi-capital-conditions__refresh" disabled
         icon={<RefreshCw aria-hidden="true" size={13} />} loading onClick={onRefresh} size="small" type="link">{text.refresh}</Button>
+    </div>
+  </section>
+
+  // 源答了「空的」、但有格自己另有原因（源停 / 没配凭据 / 格关）：逐格说。
+  // 整卡一句「暂时没有可用的资金面数据」会把「这一格压根没开」盖掉，读者看不出该去做什么。
+  if (state.state === 'empty' && firstUnreadableCell !== undefined) return <section className="mi-capital-conditions" data-state="empty" aria-label={text.title}>
+    <div className="mi-capital-conditions__content-row">
+      <div className="mi-capital-conditions__summary">
+        <div className="mi-capital-conditions__header-band">
+          <h2>{text.title}</h2>
+          <Button className="mi-capital-conditions__title-action" onClick={firstUnreadableCell.onAction} size="small" type="link">
+            {capitalCellBlockActionLabel(firstUnreadableCell, blockText)}
+          </Button>
+        </div>
+        <StablecoinTable text={text} {...(cellAvailability?.stablecoin ? { cellOff: cellAvailability.stablecoin } : {})} />
+        <EtfTable text={text} {...(cellAvailability?.etf ? { cellOff: cellAvailability.etf } : {})} />
+      </div>
+      <EtfFlow text={text} {...(cellAvailability?.etf ? { cellOff: cellAvailability.etf } : {})} />
     </div>
   </section>
 
@@ -199,21 +227,23 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
         <div className="mi-capital-conditions__header-band"><h2>{text.title}</h2></div>
-        <StablecoinTable text={text} notice={unavailableNotice(state.reason, text, dataText, restartLabel, onRefresh)} />
-        <EtfTable text={text} skeleton />
+        <StablecoinTable text={text} {...(cellAvailability?.stablecoin
+          ? { cellOff: cellAvailability.stablecoin }
+          : { notice: unavailableNotice(state.reason, text, dataText, restartLabel, onRefresh) })} />
+        <EtfTable text={text} {...(cellAvailability?.etf ? { cellOff: cellAvailability.etf } : { skeleton: true })} />
       </div>
-      <EtfFlow text={text} skeleton />
+      <EtfFlow text={text} skeleton={cellAvailability?.etf === undefined} {...(cellAvailability?.etf ? { cellOff: cellAvailability.etf } : {})} />
     </div>
     {/* 面板级「重新采集失败」：提示条只报事、不带动作——上面那一行里的那颗就是同一个 `onRefresh`。 */}
     {refreshFailed ? <InlineNotice tone="danger">{text.refreshFailed}</InlineNotice> : null}
   </section>
-  // 有格没启用 →「启用数据」（走那一格的宿主回跳）；都启用但 ETF 那块读不到 →「再试一次」。
-  const firstCellOff = cellAvailability?.stablecoin ?? cellAvailability?.etf
-  const titleAction = firstCellOff
-    ? { label: dataText('pages.intelligence.portal.dashboard.crossAsset.enableData'), run: firstCellOff.onOpenSources }
-    : state.etfReading.state === 'unreadable'
-      ? { label: dataText('pages.intelligence.portal.data.retry'), run: onRefresh }
-      : undefined
+  // 有格不可读 → 那一格的句子与动作（格关 / 源停 / 没配凭据 / 源状态读不到各不同）。
+  // 源配好、只是这次没读到 → 只留「暂时读不到」，**不给按钮**：ETF 半边没有真的重采入口
+  // （`capitalConditionsCollection.ts` 只 runNow 稳定币），给一颗按了也不会变的按钮更坏。
+  const firstBlock = firstUnreadableCell
+  const titleAction = firstBlock
+    ? { label: capitalCellBlockActionLabel(firstBlock, blockText), run: firstBlock.onAction }
+    : undefined
 
   return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__content-row">
@@ -228,8 +258,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
                 onToggle={() => setDetailOpen(true)} triggerRef={chipTrigger} />
             : null}
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
-          {/* 这张卡唯一的「补数据」入口（用户 2026-11-11：卡内不带按钮，收到标题行右侧）。
-              有格没启用 →「启用数据」；都启用但有块读不到 →「再试一次」；都读到 → 整颗不出现。 */}
+          {/* 这张卡唯一的动作入口（用户 2026-11-11：卡内不带按钮，收到标题行右侧）。
+              四种「没读数」各给各的动作（见 `capitalCellBlock.ts`）；源配好只是没读到时**不给**按钮，
+              因为 ETF 那半没有真重采入口。都读到 → 整颗不出现。 */}
           {titleAction
             ? <Button className="mi-capital-conditions__title-action" onClick={titleAction.run} size="small" type="link">{titleAction.label}</Button>
             : null}
@@ -274,7 +305,7 @@ function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false, cellOf
   text: Text
   onRetry?: () => void
   /** 这一格没启用：标题留着，里面一句行内状态词。 */
-  cellOff?: DashboardCapitalCellOff
+  cellOff?: DashboardCapitalCellBlock
   /** 整卡读不到：**标题、图例留外面，图里没有数据**（不画假曲线、不画 0 值柱）。 */
   skeleton?: boolean
 }): React.ReactElement {
@@ -295,7 +326,7 @@ function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false, cellOf
     // 也不在这里挂按钮——这张卡的动作在标题行右侧。
     return <section className="mi-capital-conditions__etf-flow" data-etf-flow={cellOff === undefined ? 'unavailable' : 'cell-off'}><h3>{text.etfFlow}</h3>
       {cellOff
-        ? <CellSourceWord availability={cellOff} />
+        ? <CellSourceWord block={cellOff} />
         : <span className="mi-source-state" data-state="unreadable">
             <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
             <span>{inlineText('pages.intelligence.portal.data.temporarilyUnavailable')}</span>

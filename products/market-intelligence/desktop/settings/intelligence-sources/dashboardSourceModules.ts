@@ -187,6 +187,19 @@ export function cellIdOf(moduleId: string, cell: DashboardCell): string {
 }
 
 /**
+ * 反查：这个源在某个模块里对应哪一格（`cellId`）。
+ *
+ * 供「点卡片上的源名落到那一格」用：`cellId` 只从这张表算，调用点不手拼（日历那几格的
+ * `cellKey` 是中文格名，手拼一次就是把第二份名字写在别处）。找不到返回 `undefined`，
+ * 由调用方退回「只按模块卡定位」——那是真的没有这一格，不是猜一个 id。
+ */
+export function cellIdForSource(moduleId: string, sourceId: string): string | undefined {
+  const module = DASHBOARD_SOURCE_MODULES.find((candidate) => candidate.id === moduleId)
+  const cell = module?.cells.find((candidate) => candidate.sourceId === sourceId)
+  return cell === undefined ? undefined : cellIdOf(moduleId, cell)
+}
+
+/**
  * 守卫：**同一模块内 `cellId` 不得重复**（`quotes:*` 与 `cross-asset:*` 里都有「美元」是允许的，
  * 那是不同模块）。同一个模块里**格名重复必须有显式唯一键**，否则 cellId 撞车——这条守卫就是它。
  */

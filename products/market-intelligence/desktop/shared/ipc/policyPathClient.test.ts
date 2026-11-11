@@ -59,4 +59,22 @@ describe('policy path client sanitizer', () => {
     }))
     expect(result.state === 'available' ? result.reading.lastDecision?.dissents : undefined).toEqual([{ name: 'Lisa D. Cook', preferred: 'raise' }])
   })
+
+  it('keeps a reading with no odds available, not malformed', () => {
+    // 「没有赔率」不是失败：会议日、区间、SEP、上次决议都还在，卡片照常画，只是盘口那格是 —。
+    const result = sanitize(reading({ probability: undefined }))
+    expect(result.state).toBe('available')
+    expect(result.state === 'available' ? result.reading.probability : 'kept').toBeUndefined()
+  })
+
+  it('carries the calendar failure code through and maps an unknown one to malformed', () => {
+    // 四种失败不许都压成 malformed：卡片要靠码分开「没有会议 / 查不到 / 请求不合法」。
+    expect(sanitize({ state: 'unavailable', failureCode: 'meeting-not-found' }))
+      .toEqual({ state: 'unavailable', failureCode: 'meeting-not-found' })
+    expect(sanitize({ state: 'unavailable', failureCode: 'calendar-query-unavailable' }))
+      .toEqual({ state: 'unavailable', failureCode: 'calendar-query-unavailable' })
+    // 旧构建写死的 `no-meeting` 不在闭集里：读不懂就落 malformed，不猜近义词。
+    expect(sanitize({ state: 'unavailable', failureCode: 'no-meeting' }))
+      .toEqual({ state: 'unavailable', failureCode: 'malformed' })
+  })
 })

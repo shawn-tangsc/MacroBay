@@ -135,8 +135,10 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain('data-etf-flow="unavailable"')
     const flow = /data-etf-flow="unavailable"([\s\S]*?)<\/section>/.exec(markup)![1]!
     expect(flow).toContain('mi-source-state')
-    // 这张卡的动作只有一处：标题行右侧那颗「再试一次」。
-    expect(markup).toContain('mi-capital-conditions__title-action')
+    // 源配好、只是这次没读到：只留「暂时读不到」，**不给按钮**——
+    // ETF 半边没有真重采入口（只 runNow 稳定币），一颗按了也不会变的按钮更坏。
+    expect(markup).not.toContain('mi-capital-conditions__title-action')
+    expect(markup).not.toContain(productText[locale].pages.intelligence.portal.data.retry)
   })
 
   it('renders one shared zero-axis chart with exactly three series per day', () => {
@@ -653,7 +655,7 @@ describe('CapitalConditionsPanel', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps one retry for the whole card, in the title row, when the ETF half cannot read', async () => {
+  it('gives no button when the ETF half simply could not be read', async () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const onRefresh = vi.fn()
     const container = document.createElement('div')
@@ -662,12 +664,94 @@ describe('CapitalConditionsPanel', () => {
 
     const state = { ...fullState(), etfReading: unreadableReading() }
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh })))
-    // 卡内两块各说各的（行内状态词），**动作只有一处**：标题行右侧那颗。
+    // 源配好、这次没读到：ETF 半边没有真重采入口（只 runNow 稳定币），
+    // 给一颗按了也不会变的按钮比没有按钮更坏。
+    expect(container.querySelectorAll('button')).toHaveLength(0)
+  })
+
+  // 四种「这一格没读数」各说各的：句子与动作都来自现成的词（`capitalCellBlock.ts` 一处映射）。
+  const block = (kind: 'cell-off' | 'source-disabled' | 'source-unconfigured' | 'source-unknown', label: string) =>
+    ({ kind, label, onAction: () => undefined })
+
+  it('says a switched-off ETF cell is the cell, not the source', () => {
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
+    const shared = productText['zh-CN'].pages.intelligence.portal.data
+    const cell = productText['zh-CN'].pages.intelligence.portal.dashboard.cellState
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
+      text, state: fullState(), cellAvailability: { etf: block('cell-off', 'ETF') }
+    }))
+
+    expect(markup).toContain(`${cell.notEnabled}（ETF）`)
+    expect(markup).not.toContain(`${shared.sourcesNotEnabled}（ETF）`)
+    // 两行都是横杠（确实没有），不是留空 + 读不到。
+    expect(markup).toContain('data-cell-dash="true"')
+    expect(markup).not.toContain('data-etf-unavailable')
+    expect(markup).toContain(productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset.enableData)
+    expect(markup).not.toContain(shared.retry)
+  })
+
+  it('says the source is off and offers 去启用', () => {
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
+    const shared = productText['zh-CN'].pages.intelligence.portal.data
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
+      text, state: fullState(), cellAvailability: { etf: block('source-disabled', '0xRouter 聚合行情') }
+    }))
+
+    expect(markup).toContain(`${shared.sourcesNotEnabled}（0xRouter 聚合行情）`)
+    expect(markup).toContain(shared.enableSources)
+    expect(markup).not.toContain(shared.retry)
+  })
+
+  it('says the source has no API key and offers 去设置配置', () => {
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
+    const shared = productText['zh-CN'].pages.intelligence.portal.data
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
+      text, state: fullState(), cellAvailability: { etf: block('source-unconfigured', '0xRouter 聚合行情') }
+    }))
+
+    expect(markup).toContain(shared.sourceMissingApiKey.replace('{source}', '0xRouter 聚合行情'))
+    expect(markup).toContain(shared.configureSources)
+    // 不许拿「还没有配置来源」顶「缺 Key」：那是另一件事（源是固定条目，读者加不了源）。
+    expect(markup).not.toContain(shared.sourcesNotConfigured)
+  })
+
+  it('says the source state itself is unreadable and offers one retry', async () => {
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
+    const shared = productText['zh-CN'].pages.intelligence.portal.data
+    const onAction = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, {
+      text, state: fullState(),
+      cellAvailability: { etf: { kind: 'source-unknown', label: '0xRouter 聚合行情', onAction } }
+    })))
+    expect(container.textContent).toContain(shared.temporarilyUnavailable)
     const actions = [...container.querySelectorAll<HTMLButtonElement>('button')]
     expect(actions).toHaveLength(1)
-    expect(actions[0]!.closest('.mi-capital-conditions__header-band')).not.toBeNull()
+    expect(actions[0]!.textContent).toBe(shared.retry)
     await act(async () => actions[0]!.click())
-    expect(onRefresh).toHaveBeenCalledTimes(1)
+    expect(onAction).toHaveBeenCalledOnce()
+  })
+
+  it('renders both blocked cells instead of an eternal spinner', () => {
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
+    const shared = productText['zh-CN'].pages.intelligence.portal.data
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
+      text,
+      // 宿主在两格都不可读时把读口关了，读数停在 loading；卡片必须照旧说两格。
+      state: { state: 'loading' },
+      cellAvailability: {
+        stablecoin: block('source-disabled', 'DeFiLlama 稳定币'),
+        etf: block('source-unconfigured', '0xRouter 聚合行情')
+      }
+    }))
+
+    expect(markup).toContain('data-state="blocked"')
+    expect(markup).not.toContain('loading-state')
+    expect(markup).toContain(`${shared.sourcesNotEnabled}（DeFiLlama 稳定币）`)
+    expect(markup).toContain(shared.sourceMissingApiKey.replace('{source}', '0xRouter 聚合行情'))
   })
 
   it.each(['zh-CN', 'en-US'] as const)('gives %s readers exactly one action on the read-failure state', async (locale) => {

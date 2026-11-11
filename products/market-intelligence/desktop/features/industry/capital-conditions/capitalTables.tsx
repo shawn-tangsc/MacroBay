@@ -5,18 +5,17 @@ import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { DASH_CELLS, DashEtfRow, SkeletonEtfRow, type UnavailableNotice } from './capitalUnavailable'
 import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset, DashboardEtfMissingReason, DashboardEtfReading } from './capitalConditionsModel'
-import type { SourceCellOff } from '../shared/sourceCellOff'
-
-type DashboardCapitalCellOff = SourceCellOff
+import { capitalCellBlockSentence, capitalCellBlockText, type DashboardCapitalCellBlock } from './capitalCellBlock'
 
 /**
  * 资金面卡的两张表（稳定币 / ETF），以及它们在三种缺失下的画法。
  *
  * 抽出来是因为 `CapitalConditionsPanel.tsx` 贴 500 行门禁：卡片本体管判定与布局，表格的画法归这里。
  *
- * 三种缺失**三种表示，不许混**（用户 2026-11-11）：
- * - 源未启用（读者自己关的，确实没有）→ **每一格横杠 `—`**，一个旧读数都不留；
- * - 读不到（拿不到）→ **留空** + 表头下第一行一句状态词；
+ * 四种「这一格没读数」**四种表示，不许混**（用户 2026-11-11 / 口径 2026-11-12）：
+ * - 格被读者关掉（确实没有）→ **每一格横杠 `—`**，一个旧读数都不留；
+ * - 源停用 / 没配凭据 / 源状态读不到 → **留空** + 一句行内词（句子见 `capitalCellBlock.ts`）；
+ * - 源配好、这次没读到 → **留空** + 行内「暂时读不到」，**不给按钮**（ETF 没有真重采入口）；
  * - 空（源答了、答案就是零）→ 不在表里冒充，走卡片的空态。
  */
 
@@ -59,8 +58,8 @@ export function StablecoinTable({ state, text, notice, cellOff }: Readonly<{
   state?: AvailableState
   text: CapitalTableText
   notice?: UnavailableNotice
-  /** 这一格没启用：表留着，词写在这一行的数据列里（行内状态词，不整表换块）。 */
-  cellOff?: DashboardCapitalCellOff
+  /** 这一格没读数：表留着，词写在这一行的数据列里（行内状态词，不整表换块）。 */
+  cellOff?: DashboardCapitalCellBlock
 }>): React.ReactElement {
   const column = (flow: 'change1dUsd' | 'change7dUsd' | 'change30dUsd', percent: 'change1dPercent' | 'change7dPercent' | 'change30dPercent'): React.ReactElement =>
     state === undefined
@@ -102,15 +101,19 @@ export function StablecoinTable({ state, text, notice, cellOff }: Readonly<{
           <span className="mi-capital-conditions__asset-name">{text.stablecoin}</span>
           <span className="mi-capital-conditions__asset-scope">{text.stablecoinScope}</span>
         </th>
-        {cellOff
-          // 源未启用 = **确实没有**（读者自己关的）→ 每一格画横杠；旧读数一个都不许留。
+        {cellOff?.kind === 'cell-off'
+          // 格被读者关掉 = **确实没有** → 每一格画横杠；旧读数一个都不许留。
           ? DASH_CELLS.map((key) => <td key={key} data-cell-dash="true">—</td>)
-          : <>
-              {column('change1dUsd', 'change1dPercent')}
-              {column('change7dUsd', 'change7dPercent')}
-              {column('change30dUsd', 'change30dPercent')}
-              <td className="mi-capital-conditions__stable-supply">{state === undefined ? null : state.currentUsd}</td>
-            </>}
+          : cellOff
+            // 源停 / 没配 / 状态读不到：这一格没有可信读数，留空 + 一句行内词（不画横杠——那是
+            // 「确实没有」，而这里只是「这半张表这次没有数」）。
+            ? <td colSpan={4}><CellSourceWord block={cellOff} /></td>
+            : <>
+                {column('change1dUsd', 'change1dPercent')}
+                {column('change7dUsd', 'change7dPercent')}
+                {column('change30dUsd', 'change30dPercent')}
+                <td className="mi-capital-conditions__stable-supply">{state === undefined ? null : state.currentUsd}</td>
+              </>}
       </tr>
     </tbody>
   </table>
@@ -124,16 +127,18 @@ export function StablecoinTable({ state, text, notice, cellOff }: Readonly<{
  * 窗口不等长只让**对比列**不可比，不把两份数字一起撤掉（「ETH 晚一天整份作废」就是这么来的）。
  */
 /**
- * 一格的「没启用」：**行内一句 + 一颗动作**，用共享类 `mi-source-state`
+ * 一格的「没读数」：**行内一句**，用共享类 `mi-source-state`
  * （规范 `2026-11-11-source-availability-styles.md`；行级/格级就长这样）。
  *
- * 不用错误色——它不是故障，是读者要动手的事；读不到不在这一支（由读数自己说）。
+ * 句子按原因取（格关 / 源停 / 没配凭据 / 源状态读不到，见 `capitalCellBlock.ts`）；
+ * 不用错误色——它不是故障，是读者要动手的事；「读到了但没读成」不在这一支（由读数自己说）。
  */
-export function CellSourceWord({ availability }: Readonly<{ availability: DashboardCapitalCellOff }>): React.ReactElement {
-  const dataText = useProductTextKey() as (key: string) => string
-  return <span className="mi-source-state" data-state="disabled">
-    <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
-    <span>{`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${availability.sourceLabel}）`}</span>
+export function CellSourceWord({ block }: Readonly<{ block: DashboardCapitalCellBlock }>): React.ReactElement {
+  const resolveText = useProductTextKey() as (key: string) => string
+  const Icon = block.kind === 'source-unknown' ? TriangleAlert : CircleSlash
+  return <span className="mi-source-state" data-state={block.kind === 'source-unknown' ? 'unreadable' : 'disabled'}>
+    <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
+    <span>{capitalCellBlockSentence(block, capitalCellBlockText(resolveText))}</span>
   </span>
 }
 
@@ -143,8 +148,8 @@ export function EtfTable({ reading, text, onRetry, skeleton = false, cellOff }: 
   onRetry?: () => void
   /** 整卡读不到：表头、列名、行名照常，数据格留空（不写「未知」、不铺状态词）。 */
   skeleton?: boolean
-  /** 这一格没启用：表留着，词写在表里那一行（与读不到同一摆法）。 */
-  cellOff?: DashboardCapitalCellOff
+  /** 这一格没读数：表留着，词写在表里那一行（与读不到同一摆法）。 */
+  cellOff?: DashboardCapitalCellBlock
 }): React.ReactElement {
   const unreadable = reading === undefined || reading.state === 'unreadable'
   const coverage = unreadable ? undefined : reading.coverage
@@ -178,13 +183,18 @@ export function EtfTable({ reading, text, onRetry, skeleton = false, cellOff }: 
             <SkeletonEtfRow label={text.btc} series="btc" span={span} />
             <SkeletonEtfRow label={text.eth} series="eth" span={span} />
           </>
-        : cellOff
-          // 源未启用：这一格的两行**都画横杠**，旧读数一个都不许留（关掉的源不许继续报数）。
+        : cellOff?.kind === 'cell-off'
+          // 格被读者关掉：这一格的两行**都画横杠**，旧读数一个都不许留（关掉的源不许继续报数）。
           ? <>
               <DashEtfRow label={text.btc} series="btc" span={span} />
               <DashEtfRow label={text.eth} series="eth" span={span} />
             </>
-          : unreadable
+          : cellOff
+            // 源停 / 没配 / 状态读不到：拿不到可信读数，留空 + 一句行内词（不画横杠——那是「确实没有」）。
+            ? <tr data-etf-unavailable={cellOff.kind}><td className="mi-capital-conditions__etf-unavailable" colSpan={span}>
+                <CellSourceWord block={cellOff} />
+              </td></tr>
+            : unreadable
             // 读不到 = **拿不到**：留空 + 一句行内状态词（不画横杠——那是「确实没有」）。
             ? <tr data-etf-unavailable="true"><td className="mi-capital-conditions__etf-unavailable" colSpan={span}>
                 <span className="mi-source-state" data-state="unreadable">

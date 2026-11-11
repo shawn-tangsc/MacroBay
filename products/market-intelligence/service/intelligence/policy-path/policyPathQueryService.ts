@@ -69,9 +69,26 @@ export type PolicyPathReading = Readonly<{
   staleness: PolicyPathStaleness
 }>
 
+/**
+ * 为什么没有下一场会议：日历自己的三种失败，原样带出去。
+ *
+ * 只有「取不到会议日」这一种会把整条读数变成不可用；区间 / SEP / 盘口都可缺（卡片各自画 `—`）。
+ * 这三个码是 IPC 与卡片的唯一因果来源——不许在这里压成一句 `unavailable`。
+ */
+export type PolicyPathMeetingFailureCode = 'meeting-not-found' | 'calendar-query-unavailable' | 'query-input-invalid'
+
+export type PolicyPathQueryResult =
+  | Readonly<{ state: 'available'; reading: PolicyPathReading }>
+  | Readonly<{ state: 'unavailable'; failureCode: PolicyPathMeetingFailureCode }>
+
 export type PolicyPathQueryService = Readonly<{
-  read: (input: { asOf: string }) => PolicyPathReading | undefined
+  read: (input: { asOf: string }) => PolicyPathQueryResult
 }>
+
+/** 内部消费方（agent 工具、日报）只要读数：失败原因由 IPC 与卡片负责。 */
+export function policyPathReadingOf(result: PolicyPathQueryResult | undefined): PolicyPathReading | undefined {
+  return result?.state === 'available' ? result.reading : undefined
+}
 
 /**
  * The analysis-facing answer: whether the reader enabled the source, and the reading if it has one.
@@ -109,7 +126,8 @@ export function createPolicyPathQueryService(deps: {
   return Object.freeze({
     read({ asOf }) {
       const next = deps.calendar.nextFomcMeeting({ asOf })
-      if (next.state !== 'available') return undefined
+      // 取不到会议日就没有可用读数（区间、SEP、盘口都挂在这场会议上）；原因原样交出去。
+      if (next.state !== 'available') return { state: 'unavailable', failureCode: next.failureCode }
       const meetingDate = next.meeting.scheduledDate
       const facts = deps.facts.read(meetingDate)
       // The range, the vote and the latest SEP belong to the last meeting that has already decided;
@@ -167,7 +185,7 @@ export function createPolicyPathQueryService(deps: {
         : nextPhase.kind === 'normal' || nextPhase.kind === 'pre-meeting'
           ? nextPhase
           : { kind: 'normal' }
-      return {
+      const reading: PolicyPathReading = {
         meetingDate,
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
@@ -189,6 +207,7 @@ export function createPolicyPathQueryService(deps: {
         ...(series.length ? { probability: probabilityOf(series, asOf, deps.marketLinks?.read(meetingDate)?.url) } : {}),
         staleness: series.length ? stalenessOf(series[series.length - 1]!.at, asOf) : 'unavailable'
       }
+      return { state: 'available', reading }
     }
   })
 }

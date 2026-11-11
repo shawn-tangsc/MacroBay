@@ -19,6 +19,8 @@ function query(fakes: Fakes = {}) {
       return fakes.profiles?.[sourceId] ?? { enabled: false, credentialRef: null }
     },
     hasCredential: async credentialRef => fakes.credentials?.[credentialRef] === true,
+    // 这些用例的源都按「要不要钥匙」的默认口径处理；需要区分的那条另有专门用例。
+    requiresCredential: () => true,
     readNote: key => {
       if (fakes.throwOnNote === key) throw new Error('notes-unavailable')
       return fakes.notes?.[key]

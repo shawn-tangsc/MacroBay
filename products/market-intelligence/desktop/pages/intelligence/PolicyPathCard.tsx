@@ -1,5 +1,6 @@
 import { Button } from 'antd'
 import { CircleDashed, CircleSlash, TriangleAlert } from 'lucide-react'
+import { LoadingState } from '@platform/ui/components/loading'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -59,6 +60,8 @@ export type PolicyPathCardText = Readonly<{
   judgedLabel: string; judgedPriced: string; judgedHawkish: string; judgedDovish: string
   newTargetRange: string; voteTally: string
   settledMinutes: string; settledHours: string
+  /** 源开着、日历里还没有下一场 FOMC 行：这句只说「还没读到」，不冒充「没有会议」。 */
+  scheduleNotRead: string
   /** The last decision's direction, for the "last" row when the settlement knows it. */
   decisionHike: string; decisionCut: string
 }>
@@ -96,50 +99,73 @@ const STALENESS_KEY = {
 } as const
 
 /**
- * 缺源时的整卡：**卡框与标题保留**，卡内数据区盖一层共享遮罩（`.mi-source-veil-*`），
- * 遮罩里居中一句话 + 一颗按钮。与日历卡、资金面卡同一形态，不再用退役中的 `.mi-source-card`。
+ * 没有读数时的整卡：**卡框与标题保留**，卡内数据区盖一层共享遮罩（`.mi-source-veil-*`），
+ * 遮罩里居中一句话 + **至多一颗**按钮。
  *
  * 为什么不是「整卡不渲染」：用户 2026-11-11 明确「没配置源的模块不能藏」——藏起来读者会以为
- * 这一块被删了。三态各有各的话与动作（共享文案键）：
- * - `missing`（还没配置来源）→「去配置」；
- * - `disabled`（来源没有启用）→「去启用」；
- * - `unreadable`（暂时读不到）→「再试一次」，不跳转。
+ * 这一块被删了。五态各说各的，按「点了会不会有不同结果」决定给不给按钮：
+ * - `cell-off`：读者关掉了这一格 →「数据未被启用（政策路径概率）」+「启用数据」；
+ * - `source-disabled`：源被停用 →「来源没有启用（美联储官方日程）」+「去启用」；
+ * - `schedule-not-read`：源开着、日历里还没有下一场 FOMC 行 →「美联储日程还没有读到」+「立即运行」；
+ * - `read-failed`：这次读失败（可重读）→「暂时读不到」+「再试一次」；
+ * - `unavailable`：客户端没接上 / 形状不符 →「暂时读不到」，**不给按钮**（按平台契约这是
+ *   `disabled · capability-not-wired`，重试不会有不同结果）。
  *
  * 这一支底下**没有**「压着的数据」：读数本身就不在（宿主里只有遮罩，没有可 `inert` 的内容）。
  * 遮罩高度由共享表的 `min-height` 撑住，卡不塌；颜色走主题 token，调用点不写颜色。
  */
-export function PolicyPathUnavailable({ text, state, onConfigure, onRetry }: Readonly<{
+export type PolicyPathBlock =
+  | Readonly<{ kind: 'cell-off' | 'source-disabled'; label: string; onAction: () => void }>
+  | Readonly<{ kind: 'schedule-not-read' | 'read-failed'; onAction: () => void }>
+  | Readonly<{ kind: 'unavailable' }>
+
+export function PolicyPathBlocked({ text, block }: Readonly<{
   text: PolicyPathCardText
-  state: 'missing' | 'disabled' | 'unreadable'
-  /** 去配置 / 去启用：落到配置抽屉的来源那一屏（具体到本模块由宿主接线）。 */
-  onConfigure?: () => void
-  /** 再试一次：只重读，不跳转。 */
-  onRetry?: () => void
+  block: PolicyPathBlock
 }>): React.ReactElement {
   const resolveKey = useProductTextKey()
-  const sentenceKey = state === 'missing'
-    ? 'pages.intelligence.portal.data.sourcesNotConfigured'
-    : state === 'disabled' ? 'pages.intelligence.portal.data.sourcesNotEnabled' : 'pages.intelligence.portal.data.temporarilyUnavailable'
-  const actionKey = state === 'missing'
-    ? 'pages.intelligence.portal.data.configureSources'
-    : state === 'disabled' ? 'pages.intelligence.portal.data.enableSources' : 'pages.intelligence.portal.data.retry'
-  const select = state === 'unreadable' ? () => onRetry?.() : () => onConfigure?.()
-  // 三态的图标与日历卡同一套：没配置是空心圈，没启用是斜线，读不到是警告。
-  const Icon = state === 'missing' ? CircleDashed : state === 'disabled' ? CircleSlash : TriangleAlert
+  const dataState = block.kind === 'cell-off' || block.kind === 'source-disabled' ? 'disabled' : 'unreadable'
+  const sentence = block.kind === 'cell-off'
+    ? `${resolveKey('pages.intelligence.portal.dashboard.cellState.notEnabled')}（${block.label}）`
+    : block.kind === 'source-disabled'
+      ? `${resolveKey('pages.intelligence.portal.data.sourcesNotEnabled')}（${block.label}）`
+      : block.kind === 'schedule-not-read'
+        ? text.scheduleNotRead
+        : resolveKey('pages.intelligence.portal.data.temporarilyUnavailable')
+  const action = block.kind === 'cell-off'
+    ? { label: resolveKey('pages.intelligence.portal.dashboard.crossAsset.enableData'), run: block.onAction }
+    : block.kind === 'source-disabled'
+      ? { label: resolveKey('pages.intelligence.portal.data.enableSources'), run: block.onAction }
+      : block.kind === 'schedule-not-read'
+        ? { label: resolveKey('settings.intelligenceSources.header.runNow'), run: block.onAction }
+        : block.kind === 'read-failed'
+          ? { label: resolveKey('pages.intelligence.portal.data.retry'), run: block.onAction }
+          : undefined
+  // 五态的图标与日历卡同一套：格关/源停是斜线，未读到是空心圈，读失败/不可用是警告。
+  const Icon = block.kind === 'cell-off' || block.kind === 'source-disabled'
+    ? CircleSlash
+    : block.kind === 'schedule-not-read' ? CircleDashed : TriangleAlert
   // 卡上不带 `data-staleness`：那个属性说的是「读到了」的卡有多新（live/delayed/stale），
-  // 这三态不是新鲜度；状态只在遮罩与状态句上用 `data-state` 说一次。
+  // 这几态不是新鲜度；状态只在遮罩与状态句上用 `data-state` 说一次。
   return <section className="mi-policy-card" aria-label={text.title}>
     <header className="mi-policy-card__head"><h2>{text.title}</h2></header>
     <div className="mi-source-veil-host" data-veiled="true">
-      <div className="mi-source-veil" data-state={state}>
-        <p className="mi-source-state" data-state={state}>
+      <div className="mi-source-veil" data-state={dataState}>
+        <p className="mi-source-state" data-state={dataState}>
           <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
-          {resolveKey(sentenceKey)}
+          {sentence}
         </p>
-        {/* 遮罩里恰一颗按钮：没配置/没启用 → 去配置，读不到 → 再试一次。 */}
-        <Button onClick={select} size="small">{resolveKey(actionKey)}</Button>
+        {action === undefined ? null : <Button onClick={action.run} size="small">{action.label}</Button>}
       </div>
     </div>
+  </section>
+}
+
+/** 首读还没回来：卡框在、标题在，数据区是平台加载。不许画成失败。 */
+export function PolicyPathLoading({ text }: Readonly<{ text: PolicyPathCardText }>): React.ReactElement {
+  return <section className="mi-policy-card" aria-label={text.title}>
+    <header className="mi-policy-card__head"><h2>{text.title}</h2></header>
+    <LoadingState ariaLabel={text.title} minHeight={120} />
   </section>
 }
 

@@ -48,7 +48,7 @@ import type {
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
 import { landedFilterReader, registerCalendarEventReminder } from './intelligence/macro-calendar/registerCalendarEventReminder'
 import { createCalendarReminderSettingsStore } from './intelligence/macro-calendar/calendarEventReminderSettingsStore'
-import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
+import { createPolicyPathQueryService, policyPathReadingOf } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
 import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
@@ -614,6 +614,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     getAppLanguage: deps.getAppLanguage,
     macroCalendarOps,
     crossAssetOps,
-    policyPath: { read: (input: { asOf: string }) => policyPathQueryService.read(input) }
+    policyPath: { read: (input: { asOf: string }) => policyPathReadingOf(policyPathQueryService.read(input)) }
   })
 }

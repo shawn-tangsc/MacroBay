@@ -88,20 +88,28 @@ export function selectedDollarSourceId(
   return allowed.has(chosen) ? chosen : undefined
 }
 
-/** 源级启用表：`sourceId → enabled`；整表读不到时是 undefined（未知），不许当成「全都启用」。 */
-export type SourceEnabledMap = Readonly<Record<string, boolean>>
+/**
+ * 源级状态：主进程的启用开关 + 有没有存过凭据。
+ *
+ * `hasCredential` 是「源没配」与「读者把源关了」唯一的区分依据（`dashboardFeedStatusContracts.ts`），
+ * 卡片据此说「还没有配置 API Key」还是「来源没有启用」；这两句的动作落点不同，不能合并。
+ */
+export type SourceStatus = Readonly<{ enabled: boolean; hasCredential: boolean; requiresCredential: boolean }>
+/** 源级状态表：`sourceId → 状态`；整表读不到时是 undefined（未知），不许当成「全都启用」。 */
+export type SourceStatusMap = Readonly<Record<string, SourceStatus>>
 
 /**
  * 一处读点的决定，只有四种。三种显示句子与它一一对应，不许混：
  * - `read`：这一格选中的源启用了，去读（`sourceId` 就是读哪一个；`explicit` 表示读者显式选过）；
  * - `not-enabled`：这一格没选中（`cells === false`）或没有可选的源 → **数据未被启用**；
- * - `source-disabled`：选中的源被停用 → **数据未被启用**；
+ * - `source-disabled`：选中的源被停用 → **数据未被启用**；带 `hasCredential`，
+ *   卡片据此分开说「来源没有启用」与「还没有配置 API Key」；
  * - `source-unknown`：源状态读不到 → **暂时读不到**（不许默认成启用）。
  */
 export type CellReadDecision =
   | Readonly<{ kind: 'read'; sourceId: string; explicit: boolean }>
   | Readonly<{ kind: 'not-enabled' }>
-  | Readonly<{ kind: 'source-disabled'; sourceId: string }>
+  | Readonly<{ kind: 'source-disabled'; sourceId: string; hasCredential: boolean; requiresCredential: boolean }>
   | Readonly<{ kind: 'source-unknown'; sourceId: string }>
 
 export function decideCellRead(input: Readonly<{
@@ -109,8 +117,8 @@ export function decideCellRead(input: Readonly<{
   cellKey: string
   cells: Readonly<Record<string, boolean>>
   selections: Readonly<Record<string, string>>
-  /** 源级启用表；`undefined` = 这一份还没读到/读不到 → 未知。 */
-  sources: SourceEnabledMap | undefined
+  /** 源级状态表；`undefined` = 这一份还没读到/读不到 → 未知。 */
+  sources: SourceStatusMap | undefined
 }>): CellReadDecision {
   const cellId = dashboardCellId(input.moduleId, input.cellKey)
   if (!isCellEnabled(input.cells, cellId)) return { kind: 'not-enabled' }
@@ -119,11 +127,11 @@ export function decideCellRead(input: Readonly<{
   const chosen = explicit !== undefined && choices.includes(explicit) ? explicit : choices[0]
   if (chosen === undefined) return { kind: 'not-enabled' }
   if (input.sources === undefined) return { kind: 'source-unknown', sourceId: chosen }
-  const enabled = input.sources[chosen]
-  if (enabled === undefined) return { kind: 'source-unknown', sourceId: chosen }
-  return enabled
+  const status = input.sources[chosen]
+  if (status === undefined) return { kind: 'source-unknown', sourceId: chosen }
+  return status.enabled
     ? { kind: 'read', sourceId: chosen, explicit: explicit !== undefined && explicit === chosen }
-    : { kind: 'source-disabled', sourceId: chosen }
+    : { kind: 'source-disabled', sourceId: chosen, hasCredential: status.hasCredential, requiresCredential: status.requiresCredential }
 }
 
 export function isCellEnabled(cells: Readonly<Record<string, boolean>>, cellId: string): boolean {

@@ -8,7 +8,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
+import { PolicyPathBlocked, PolicyPathCard, PolicyPathLoading, type PolicyPathBlock, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathDay } from './policyPathMonth'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
@@ -45,43 +45,98 @@ const render = async (candidate: PolicyPathReading, cardText: PolicyPathCardText
   return host
 }
 
-it.each([
-  ['missing', 'sourcesNotConfigured', 'configureSources'],
-  ['disabled', 'sourcesNotEnabled', 'enableSources'],
-  ['unreadable', 'temporarilyUnavailable', 'retry']
-] as const)('keeps the card frame and covers the data area with the %s veil', async (state, sentenceKey, actionKey) => {
-  // 用户 2026-11-11：没配置源的模块不能藏——卡框与标题保留，卡内数据区盖半透明遮罩，
-  // 遮罩里居中一句 + 一颗按钮；三态各自的句子与动作不同。
-  const shared = productText['zh-CN'].pages.intelligence.portal.data
-  let configured = 0
-  let retried = 0
+const shared = productText['zh-CN'].pages.intelligence.portal.data
+const dashboard = productText['zh-CN'].pages.intelligence.portal.dashboard
+
+/** 五态共用同一层壳：卡框与标题保留，数据区盖共享遮罩。 */
+async function renderBlock(block: PolicyPathBlock): Promise<HTMLDivElement> {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(ShellLanguageProvider, {
     language: 'zh-CN',
-    children: createElement(PolicyPathUnavailable, {
-      text, state, onConfigure: () => { configured += 1 }, onRetry: () => { retried += 1 }
-    })
+    children: createElement(PolicyPathBlocked, { text, block })
   })))
-  // 卡还在：标题仍在，且遮罩盖的是数据区、不盖标题。
-  expect(host.querySelector('.mi-policy-card')).not.toBeNull()
-  expect(host.querySelector('.mi-policy-card__head')?.textContent).toBe(text.title)
-  const veilHost = host.querySelector('.mi-policy-card > header + .mi-source-veil-host[data-veiled="true"]')
-  expect(veilHost, 'the veil host sits under the header, in the data area').not.toBeNull()
-  const veil = veilHost!.querySelector('.mi-source-veil')
-  expect(veil?.getAttribute('data-state')).toBe(state)
-  expect(veil?.textContent).toContain(shared[sentenceKey])
-  // 旧那组（自画的整卡遮罩块）不许回来：它的类名在共享表里已经标退役。
-  expect(host.querySelector('.mi-source-card')).toBeNull()
-  // 遮罩里恰一颗按钮（整张卡也只有它可聚焦），点了做对应动作（读不到只重读、不跳转）。
-  const buttons = [...host.querySelectorAll<HTMLButtonElement>('button')]
+  return host
+}
+
+const singleButton = (rendered: HTMLDivElement): HTMLButtonElement => {
+  const buttons = [...rendered.querySelectorAll<HTMLButtonElement>('button')]
   expect(buttons).toHaveLength(1)
-  expect(veil!.contains(buttons[0]!)).toBe(true)
-  expect(buttons[0]?.textContent).toBe(shared[actionKey])
-  await act(async () => buttons[0]!.click())
-  expect(state === 'unreadable' ? retried : configured).toBe(1)
-  expect(state === 'unreadable' ? configured : retried).toBe(0)
+  return buttons[0]!
+}
+
+it('says a switched-off cell is the cell, not the source, and offers 启用数据', async () => {
+  let ran = 0
+  const rendered = await renderBlock({ kind: 'cell-off', label: '政策路径概率', onAction: () => { ran += 1 } })
+  const veil = rendered.querySelector('.mi-source-veil')!
+  // 卡还在：标题仍在，且遮罩盖的是数据区、不盖标题。
+  expect(rendered.querySelector('.mi-policy-card')).not.toBeNull()
+  expect(rendered.querySelector('.mi-policy-card__head')?.textContent).toBe(text.title)
+  expect(rendered.querySelector('.mi-policy-card > header + .mi-source-veil-host[data-veiled="true"]')).not.toBeNull()
+  expect(veil.getAttribute('data-state')).toBe('disabled')
+  // 真因是格，不是源：句子用格级词 + 格名，不能再写「来源没有启用」。
+  expect(veil.textContent).toContain(`${dashboard.cellState.notEnabled}（政策路径概率）`)
+  expect(veil.textContent).not.toContain(shared.sourcesNotEnabled)
+  expect(rendered.querySelector('.mi-source-card')).toBeNull()
+  const button = singleButton(rendered)
+  expect(button.textContent).toBe(dashboard.crossAsset.enableData)
+  await act(async () => button.click())
+  expect(ran).toBe(1)
+})
+
+it('names the disabled source and offers 去启用, with no retry', async () => {
+  const rendered = await renderBlock({ kind: 'source-disabled', label: '美联储官方日程', onAction: () => undefined })
+  const veil = rendered.querySelector('.mi-source-veil')!
+  expect(veil.textContent).toContain(`${shared.sourcesNotEnabled}（美联储官方日程）`)
+  expect(singleButton(rendered).textContent).toBe(shared.enableSources)
+  expect(veil.textContent).not.toContain(shared.retry)
+})
+
+it('says the Fed schedule has not been read yet and offers one real run', async () => {
+  let ran = 0
+  const rendered = await renderBlock({ kind: 'schedule-not-read', onAction: () => { ran += 1 } })
+  const veil = rendered.querySelector('.mi-source-veil')!
+  expect(veil.textContent).toContain(text.scheduleNotRead)
+  // 词沿用设置页那一个，不再造第二个「跑一次」的名字。
+  const button = singleButton(rendered)
+  expect(button.textContent).toBe(productText['zh-CN'].settings.intelligenceSources.header.runNow)
+  await act(async () => button.click())
+  expect(ran).toBe(1)
+})
+
+it('offers a retry only for a transient read failure', async () => {
+  let retried = 0
+  const rendered = await renderBlock({ kind: 'read-failed', onAction: () => { retried += 1 } })
+  const veil = rendered.querySelector('.mi-source-veil')!
+  expect(veil.textContent).toContain(shared.temporarilyUnavailable)
+  const button = singleButton(rendered)
+  expect(button.textContent).toBe(shared.retry)
+  await act(async () => button.click())
+  expect(retried).toBe(1)
+})
+
+it('gives malformed or unwired reads no button at all', async () => {
+  const rendered = await renderBlock({ kind: 'unavailable' })
+  const veil = rendered.querySelector('.mi-source-veil')!
+  expect(veil.textContent).toContain(shared.temporarilyUnavailable)
+  // 一份读不懂的数据，重试还是同一份：不给按钮。
+  expect(rendered.querySelectorAll('button')).toHaveLength(0)
+  expect(veil.textContent).not.toContain(shared.retry)
+})
+
+it('draws the platform loading surface for the first read, never the failure sentence', async () => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => root!.render(createElement(ShellLanguageProvider, {
+    language: 'zh-CN',
+    children: createElement(PolicyPathLoading, { text })
+  })))
+  expect(host.querySelector('.mi-policy-card__head')?.textContent).toBe(text.title)
+  expect(host.querySelector('[data-loading-state]')).not.toBeNull()
+  expect(host.textContent).not.toContain(shared.temporarilyUnavailable)
+  expect(host.querySelectorAll('button')).toHaveLength(0)
 })
 
 /**

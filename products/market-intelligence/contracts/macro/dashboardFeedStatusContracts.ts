@@ -74,6 +74,11 @@ export type DashboardFeedSourceStatus = Readonly<{
   sourceId: DashboardFeedSourceId
   enabled: boolean
   hasCredential: boolean
+  /**
+   * 这条源本身要不要钥匙（注册表 `authMode` 的投影）。`hasCredential === false` 只在它为真时才等于
+   * 「读者还没配」；免钥匙的源没有 Key 可配，缺键不是缺配置。
+   */
+  requiresCredential: boolean
   lastSuccessAtMs?: number
   failureCode?: DashboardFeedFailureCode
 }>
@@ -129,16 +134,17 @@ export function parseDashboardFeedStatus(value: unknown): DashboardFeedStatusVie
 }
 
 function parseSource(value: unknown): DashboardFeedSourceStatus | undefined {
-  if (!exactFields(value, ['sourceId', 'enabled', 'hasCredential'], ['lastSuccessAtMs', 'failureCode'])) return undefined
+  if (!exactFields(value, ['sourceId', 'enabled', 'hasCredential', 'requiresCredential'], ['lastSuccessAtMs', 'failureCode'])) return undefined
   const sourceId = value.sourceId
   if (typeof sourceId !== 'string' || !(dashboardFeedSourceIds as readonly string[]).includes(sourceId)) return undefined
-  if (typeof value.enabled !== 'boolean' || typeof value.hasCredential !== 'boolean') return undefined
+  if (typeof value.enabled !== 'boolean' || typeof value.hasCredential !== 'boolean' || typeof value.requiresCredential !== 'boolean') return undefined
   if (Object.hasOwn(value, 'lastSuccessAtMs') && !(Number.isSafeInteger(value.lastSuccessAtMs) && (value.lastSuccessAtMs as number) >= 0)) return undefined
   if (Object.hasOwn(value, 'failureCode') && !isFailureCode(value.failureCode)) return undefined
   return Object.freeze({
     sourceId: sourceId as DashboardFeedSourceId,
     enabled: value.enabled,
     hasCredential: value.hasCredential,
+    requiresCredential: value.requiresCredential,
     ...(value.lastSuccessAtMs === undefined ? {} : { lastSuccessAtMs: value.lastSuccessAtMs as number }),
     ...(value.failureCode === undefined ? {} : { failureCode: value.failureCode as DashboardFeedFailureCode })
   })

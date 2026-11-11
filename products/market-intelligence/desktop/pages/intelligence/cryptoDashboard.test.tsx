@@ -18,7 +18,7 @@ import { dashboardFeedStatusPublicPolicy } from '../../../contracts/macro/dashbo
 const allSourcesEnabled = {
   query: async () => ({
     state: 'available' as const,
-    sources: dashboardFeedStatusPublicPolicy.sourceIds.map(sourceId => ({ sourceId, enabled: true, hasCredential: true }))
+    sources: dashboardFeedStatusPublicPolicy.sourceIds.map(sourceId => ({ sourceId, enabled: true, hasCredential: true, requiresCredential: true }))
   })
 }
 const CryptoIntelligenceDashboard = (props: Parameters<typeof RawCryptoIntelligenceDashboard>[0]): React.ReactElement =>
@@ -1081,7 +1081,18 @@ describe('host wiring: capital cells, one row at a time', () => {
     }
   }
 
-  async function renderCapital(cells: Record<string, boolean>, query: ReturnType<typeof vi.fn> = vi.fn(async () => capitalSnapshot), onManageSource = vi.fn()) {
+  const sourceNames = productText['zh-CN'].settings.intelligenceSources.sourceNames
+  const defaultSources = [
+    { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+  ]
+  async function renderCapital(
+    cells: Record<string, boolean>,
+    query: ReturnType<typeof vi.fn> = vi.fn(async () => capitalSnapshot),
+    onManageSource = vi.fn(),
+    sources: typeof defaultSources = defaultSources
+  ) {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -1089,11 +1100,7 @@ describe('host wiring: capital cells, one row at a time', () => {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(),
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
-      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
-        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
-        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
-      ] }) },
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources }) },
       onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
       text: dashboardText, cellEnabledIo: { read: async () => cells }
     } as never)))
@@ -1124,7 +1131,8 @@ describe('host wiring: capital cells, one row at a time', () => {
     // 源关掉：这一块给一句状态词，两行数据格画横杠（两种表示并存，不是二选一）。
     const stateWords = [...card.querySelectorAll('.mi-source-state')]
     expect(stateWords.map(word => word.getAttribute('data-state'))).toEqual(['disabled'])
-    expect(stateWords[0]!.textContent).toContain(`${dataText.sourcesNotEnabled}（ETF）`)
+    // 真因是格，不是源：句子用格级词 + 格名。
+    expect(stateWords[0]!.textContent).toContain(`${dashboardText.cellState.notEnabled}（ETF）`)
     // 另一格照旧出数。
     expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
     // 关掉那一格：两行行名在，数据格全是横杠，且一个数字都不许留（旧读数必须消失）。
@@ -1149,11 +1157,11 @@ describe('host wiring: capital cells, one row at a time', () => {
     // 不画表头骨架。
     expect(card.querySelector('thead')).toBeNull()
     expect(card.querySelector('.mi-capital-conditions__stable-table')).toBeNull()
-    // 遮罩里：一句「来源没有启用」+ 恰一颗「启用数据」。
+    // 遮罩里：一句「数据未被启用」+ 恰一颗「启用数据」。
     const veil = card.querySelector('.mi-source-veil')!
     expect(veil).not.toBeNull()
     expect(veil.querySelector('.mi-source-state')!.getAttribute('data-state')).toBe('disabled')
-    expect(veil.textContent).toContain(dataText.sourcesNotEnabled)
+    expect(veil.textContent).toContain(dashboardText.cellState.notEnabled)
     expect([...veil.querySelectorAll('button')]).toHaveLength(1)
     expect(veil.querySelector('button')!.textContent).toBe(dashboardText.crossAsset.enableData)
     // 卡内可聚焦元素恰 1 个（就是遮罩里那颗），标题行没有任何动作。
@@ -1177,7 +1185,7 @@ describe('host wiring: capital cells, one row at a time', () => {
     // 资金流那块自己的读数不在本条的判据里（它走另一路查询），这里只钉「这一格读到 = 无动作」。
   })
 
-  it('nothing off but the ETF half unreadable: a state word in that row, one retry in the title', async () => {
+  it('nothing off but the ETF half unreadable: a state word in that row, and no button at all', async () => {
     // 夹具里 ETF 是 `unavailable`（读不到，不是「没有」）：表留着，那一行一句状态词。
     const { container } = await renderCapital({})
     const card = container.querySelector('.mi-capital-conditions')!
@@ -1186,18 +1194,55 @@ describe('host wiring: capital cells, one row at a time', () => {
     expect(unavailableRow).not.toBeNull()
     expect(unavailableRow.querySelector('.mi-source-state')!.getAttribute('data-state')).toBe('unreadable')
     expect(unavailableRow.textContent).toContain(dataText.temporarilyUnavailable)
-    // 读不到不画横杠（横杠留给「确实没有」），整张卡一处动作：标题行「再试一次」。
+    // 读不到不画横杠（横杠留给「确实没有」）。源配好、只是没读到：ETF 没有真重采入口，
+    // 所以整张卡**一颗按钮都不给**——按了也不会有不同结果。
     expect(card.textContent).not.toContain('—')
-    const action = card.querySelector('.mi-capital-conditions__title-action')!
+    expect([...card.querySelectorAll('button')].filter(button => button.textContent === dataText.retry || button.textContent === dashboardText.crossAsset.enableData)).toHaveLength(0)
+  })
+
+  it('source off, cell on: names the source and offers 去启用, never the retry', async () => {
+    const { container } = await renderCapital({}, undefined, vi.fn(), [
+      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+      { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: true },
+      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+    ])
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.textContent).toContain(`${dataText.sourcesNotEnabled}（${sourceNames['0xrouter-aggregate-provider']}）`)
+    const actions = [...card.querySelectorAll('.mi-capital-conditions__title-action')]
+    expect(actions).toHaveLength(1)
+    expect(actions[0]!.textContent).toBe(dataText.enableSources)
+    expect(card.textContent).not.toContain(dataText.retry)
+  })
+
+  it('source never configured: says the API key is missing and lands on the cell', async () => {
+    const onManageSource = vi.fn()
+    const { container } = await renderCapital({}, undefined, onManageSource, [
+      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+      { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: false },
+      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+    ])
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.textContent).toContain(dataText.sourceMissingApiKey.replace('{source}', sourceNames['0xrouter-aggregate-provider']))
+    const action = card.querySelector<HTMLButtonElement>('.mi-capital-conditions__title-action')!
+    expect(action.textContent).toBe(dataText.configureSources)
+    await act(async () => action.click())
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:etf' })
+  })
+
+  it('source state unreadable: says temporarily unavailable and retries the source table', async () => {
+    const { container } = await renderCapital({}, undefined, vi.fn(), [
+      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+    ])
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.textContent).toContain(dataText.temporarilyUnavailable)
+    const action = card.querySelector<HTMLButtonElement>('.mi-capital-conditions__title-action')!
     expect(action.textContent).toBe(dataText.retry)
-    expect([...card.querySelectorAll('button')].filter(button => button.textContent === dataText.retry || button.textContent === dashboardText.crossAsset.enableData)).toHaveLength(1)
   })
 })
 
 
 describe('host wiring: each capital cell focuses its own cell', () => {
-  // TODO(focus): 宿主闭包现在仍是 `() => onManageSource()`（focus 通道未到），所以这里只证「点了有反应」。
-  // 通道落地后补 `toHaveBeenLastCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:stablecoin' })`（只关 ETF 时是 `capital:etf`）。
   it('one cell off → the title action carries that cell', async () => {
     const onManageSource = vi.fn()
     const container = document.createElement('div')
@@ -1232,7 +1277,7 @@ describe('host wiring: each capital cell focuses its own cell', () => {
     expect(action).not.toBeNull()
     expect(action!.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset.enableData)
     await act(async () => action!.click())
-    // 只证「点了有反应」；落点是哪个 cellId 见上面的 TODO(focus)。
-    expect(onManageSource).toHaveBeenCalledTimes(1)
+    // 落点就是这一格的键：读者点下去抽屉直接定位到它，而不是只停在看板组。
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:stablecoin' })
   })
 })

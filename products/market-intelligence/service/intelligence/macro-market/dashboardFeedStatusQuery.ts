@@ -2,6 +2,8 @@ import {
   dashboardFeedStatusPublicPolicy, isFailureCode,
   type DashboardFeedFailureCode, type DashboardFeedSourceId, type DashboardFeedSourceStatus
 } from '../../../contracts/macro/dashboardFeedStatusContracts'
+import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
+import { sourceRequiresCredential } from '../schema/intelligenceSource'
 
 /**
  * Reads, per source, the four facts the dashboard's 来源状态 strip may not invent: the switch, the
@@ -19,6 +21,8 @@ export function createDashboardFeedStatusQuery(deps: Readonly<{
   resolveProfile: (sourceId: DashboardFeedSourceId) => Promise<Readonly<{ enabled?: boolean; credentialRef?: string | null }>>
   /** Whether the credential behind a reference is stored. The value, not the key, is what we keep. */
   hasCredential: (credentialRef: string) => Promise<boolean>
+  /** 这条源的注册表口径要不要钥匙；免钥匙的源没有 Key 可配，缺键不是缺配置。 */
+  requiresCredential?: (sourceId: DashboardFeedSourceId) => boolean
   readNote: (key: string) => string | undefined
   /** The generic collector's own health, for a source that keeps no outcome notes (FRED). */
   readHealth?: (sourceId: DashboardFeedSourceId) => Readonly<{ lastSuccessAt?: string; lastFailureAt?: string }> | undefined
@@ -48,10 +52,15 @@ export function createDashboardFeedStatusQuery(deps: Readonly<{
       lastSuccessAtMs = undefined
     }
     return Object.freeze({
-      sourceId, enabled, hasCredential,
+      sourceId, enabled, hasCredential, requiresCredential: requiresCredentialOf(sourceId),
       ...(lastSuccessAtMs === undefined ? {} : { lastSuccessAtMs }),
       ...(failureCode === undefined ? {} : { failureCode })
     })
+  }
+
+  /** 注册表口径：这条源要不要钥匙。读不到定义就按「不要」，宁可少说一句「还没配」。 */
+  function requiresCredentialOf(sourceId: DashboardFeedSourceId): boolean {
+    try { return (deps.requiresCredential ?? registryRequiresCredential)(sourceId) === true } catch { return false }
   }
 
   /** The last tick's own verdict. Only `unavailable:<code>` names a failure; anything else is a success. */
@@ -94,6 +103,17 @@ export function createDashboardFeedStatusQuery(deps: Readonly<{
 
 function admitted(value: string | undefined): DashboardFeedFailureCode | undefined {
   return value !== undefined && isFailureCode(value) ? value : undefined
+}
+
+/**
+ * 默认口径：注册表说这条源要不要钥匙。
+ *
+ * 放在这里而不是注入点，是因为 `intelligenceModule.ts` 已经 1071 行、体积门禁只许变小；
+ * 这条投影只有一处用法，跟着它自己的调用方走。
+ */
+function registryRequiresCredential(sourceId: DashboardFeedSourceId): boolean {
+  const definition = getIntelligenceSourceDefinition(sourceId)
+  return definition === undefined ? false : sourceRequiresCredential(definition.authMode)
 }
 
 export type DashboardFeedStatusQuery = ReturnType<typeof createDashboardFeedStatusQuery>

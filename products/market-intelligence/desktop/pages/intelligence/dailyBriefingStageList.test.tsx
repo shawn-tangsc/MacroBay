@@ -27,12 +27,12 @@ const containing = (needle: string): string[] => files.filter((file) => readFile
 
 describe('stage rows have one renderer', () => {
   it('keeps the row anchor in one file', () => {
-    expect(containing('data-briefing-stage-row').map((file) => file.split('/').pop())).toEqual(['DailyBriefingStageList.tsx'])
+    expect(containing('data-briefing-stage-row').map((file) => file.split(/[\\/]/).pop())).toEqual(['DailyBriefingStageList.tsx'])
   })
 
   it('has both stage surfaces import that renderer', () => {
     for (const name of ['DailyBriefingLiveSteps.tsx', 'DailyBriefingGenerationTimeline.tsx']) {
-      const file = files.find((candidate) => candidate.endsWith(`/${name}`))
+      const file = files.find((candidate) => candidate.split(/[\\/]/).pop() === name)
       expect(file, name).toBeDefined()
       expect(readFileSync(file!, 'utf8'), name).toContain('DailyBriefingStageSteps')
     }
@@ -41,7 +41,7 @@ describe('stage rows have one renderer', () => {
   it('draws the stage list in one stepper, in every state', () => {
     // Both surfaces render the same container: a second list implementation would let the two
     // states drift apart again in indent, row pitch or connector position.
-    expect(containing('<Steps').map((file) => file.split('/').pop())).toEqual(['DailyBriefingStageList.tsx'])
+    expect(containing('<Steps').map((file) => file.split(/[\\/]/).pop())).toEqual(['DailyBriefingStageList.tsx'])
   })
 })
 

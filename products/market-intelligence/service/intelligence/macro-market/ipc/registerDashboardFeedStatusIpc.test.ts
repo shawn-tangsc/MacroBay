@@ -5,9 +5,9 @@ import { dashboardFeedStatusPublicPolicy, type DashboardFeedSourceStatus } from 
 import { registerDashboardFeedStatusIpc } from './registerMacroMarketIpc'
 
 const entries: readonly DashboardFeedSourceStatus[] = [
-  { sourceId: 'realmarketapi-market', enabled: true, hasCredential: false },
-  { sourceId: 'twelve-data-market', enabled: true, hasCredential: true, lastSuccessAtMs: 1_700_000_000_000 },
-  { sourceId: 'fred-rates-liquidity', enabled: false, hasCredential: true, failureCode: 'credential-rejected' }
+  { sourceId: 'realmarketapi-market', enabled: true, hasCredential: false, requiresCredential: true },
+  { sourceId: 'twelve-data-market', enabled: true, hasCredential: true, requiresCredential: true, lastSuccessAtMs: 1_700_000_000_000 },
+  { sourceId: 'fred-rates-liquidity', enabled: false, hasCredential: true, requiresCredential: true, failureCode: 'credential-rejected' }
 ]
 
 function registered(status: () => Promise<readonly DashboardFeedSourceStatus[]>) {
