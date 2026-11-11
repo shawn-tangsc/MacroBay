@@ -260,18 +260,25 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
           `data-veiled` 同时打在**滚动容器**上：这一窗比内容矮时，遮罩要钉在窗里，不能跟着内容滚走。 */}
       <div className="mi-source-veil-host" {...(veil === undefined ? {} : { 'data-veiled': 'true' })}>
         <div {...(veil === undefined ? {} : { inert: true })}>
+          {/* state-ternary: reviewed — 加载面板本身就是这一阶段唯一的呈现，没有第二个内容容器被状态位藏起 */}
           {veil === undefined && state === 'loading' ? <LoadingState label={text.loading} /> : null}
+          {/* state-ternary: reviewed — 错误态用 StateView 呈现，此时没有可显示的行，不存在“藏内容” */}
           {veil === undefined && state === 'error' ? <StateView state="error" reasonCode="unreadable" size="md"
             action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
+          {/* state-ternary: reviewed — 这是一行 stale 提示，不决定任何内容容器画不画 */}
           {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
+          {/* state-ternary: reviewed — 空态就是读数区的内容；由投影的 empty 判定，不是用状态位藏表格 */}
           {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
+          {/* state-ternary: reviewed — 无发布事件时给说明；有行时走下面按长度的分支，内容不会被状态位藏掉 */}
           {state === 'ready' && projection.state === 'available' && projection.today.length === 0
             ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
             : null}
+          {/* state-ternary: reviewed — 按数据长度渲染（length > 0），state 只表示读取阶段，未就绪时上面已有 loading/error 分支 */}
           {state === 'ready' && projection.today.length > 0 ? <>
             <p className="mi-calendar-card__section">{text.todaySection}</p>
             <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
           </> : null}
+          {/* state-ternary: reviewed — 按数据长度渲染（upcoming.length > 0），state 只表示读取阶段，未就绪时上面已有 loading/error 分支 */}
           {state === 'ready' && projection.upcoming.length > 0 ? <>
             <p className="mi-calendar-card__section">{text.upcomingSection}</p>
             <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>

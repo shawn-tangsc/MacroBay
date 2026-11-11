@@ -14,7 +14,6 @@
 }
 .mi-source-state__icon { flex: none; }
 .mi-source-state[data-state='unreadable'] { color: var(--text); }
-.mi-source-state[data-state='unreadable'] .mi-source-state__icon { color: var(--danger); }
 
 /*
  * 卡内不可用：卡框与标题照常渲染，只在「数据区」上盖一层。
