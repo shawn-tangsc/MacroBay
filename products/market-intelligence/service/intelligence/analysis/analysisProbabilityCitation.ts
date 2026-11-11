@@ -30,7 +30,14 @@ export const analysisProbabilityDefects = Object.freeze({
    */
   absent: 'policy-probability-absent',
   missingInstant: 'policy-probability-missing-instant',
-  notFrozen: 'policy-probability-not-frozen',
+  /**
+   * A percentage in the prose that the frozen snapshot does not carry.
+   *
+   * 旧名是 `policy-probability-not-frozen`（2026-11-11 改名）：它把「正文里有个数找不到出处」
+   * 读成了「概率没冻结」，而真正的原因常常只是**负号在读取时被吃掉**。历史运行行里仍是旧码，
+   * 那是事实记录、不改写；新写入一律用这个名字。
+   */
+  notInSnapshot: 'policy-probability-not-in-snapshot',
 
 })
 
@@ -61,14 +68,17 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
   const mentioned = percentagesIn(prose)
   const allowed = snapshotNumbers(snapshot)
   for (const value of mentioned) {
-    if (!tracedToSnapshot(value, allowed)) return analysisProbabilityDefects.notFrozen
+    // 概率可以写**它的整数约数**（76.65 → 76 / 77），所以这一轮也要用它那份判定；其余数只认等值。
+    if (!tracedToSnapshot(value, allowed) && !tracedToProbability(value, probabilities.map(fact => Number(fact.value)))) {
+      return analysisProbabilityDefects.notInSnapshot
+    }
   }
   const probabilityValues = probabilities.map(fact => Number(fact.value))
   // 整段没有一处提到快照里的概率 → 与原来的「回避」同一个缺陷（事实判据，不靠关键词）。
-  if (!mentioned.some(value => tracedToSnapshot(value, probabilityValues))) return analysisProbabilityDefects.absent
+  if (!mentioned.some(value => tracedToProbability(value, probabilityValues))) return analysisProbabilityDefects.absent
   for (const fact of probabilities) {
     const value = Number(fact.value)
-    if (mentioned.some(candidate => tracedToSnapshot(candidate, [value])) && !mentionsInstant(prose, fact.observedAt!)) {
+    if (mentioned.some(candidate => tracedToProbability(candidate, [value])) && !mentionsInstant(prose, fact.observedAt!)) {
       return analysisProbabilityDefects.missingInstant
     }
   }
@@ -83,8 +93,12 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
  * **这个数在快照里存在吗**。
  */
 function percentagesIn(text: string): number[] {
-  return [...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:%|\uFF05)/gu)]
-    .map(match => Number(match[1]))
+  // **负号是数字的一部分**（2026-11-11 的真事故）：正文写「3 天 -2.75%」、快照是 -2.74955757589076，
+  // 旧读法把负号吃掉、拿 2.75 去比，于是每次都被判「快照里没有这个数」。
+  // 但 `3.75%-4.00%` 里的短横是**范围连接符**，不是负号——所以只有当它前面不是数字、不是百分号、
+  // 也不是另一个破折号时才算负号。全角减号 `−` 一并认。
+  return [...text.matchAll(/(?<![\d%\uFF05\u2013\u2014])([-\u2212])?(\d+(?:\.\d+)?)\s*(?:%|\uFF05)/gu)]
+    .map(match => Number(`${match[1] === undefined ? '' : '-'}${match[2]}`))
     .filter(value => Number.isFinite(value))
 }
 
@@ -101,6 +115,21 @@ function snapshotNumbers(snapshot: ProbabilityEvidence): readonly number[] {
 /** 某个数在快照里有没有出处：等值，或等于它的整百分点（正文写约数是允许的）。 */
 function tracedToSnapshot(value: number, allowed: readonly number[]): boolean {
   return allowed.some(candidate => Math.abs(candidate - value) < 0.05 || Math.abs(Math.round(candidate) - value) < 0.05)
+}
+
+/**
+ * 概率的整数约数：**同一个数相邻的那两个整数**，不是「差得不多」。
+ *
+ * 76.65 写 76（舍）或 77（入）都是合规写法（用户 2026-11-08：正文每个数都要有出处，约数是写法
+ * 不是编数）；75 离它一格半，仍是编造。边界写死在「floor / ceil 之一且候选是整数」，不做容差——
+ * 一旦改成容差，编出来的数就会顺着容差溜进来。
+ */
+function tracedToProbability(value: number, probabilities: readonly number[]): boolean {
+  return probabilities.some(candidate =>
+    Math.abs(candidate - value) < 0.05 ||
+    Math.abs(Math.round(candidate) - value) < 0.05 ||
+    (Number.isInteger(value) && !Number.isInteger(candidate) &&
+      (value === Math.floor(candidate) || value === Math.ceil(candidate))))
 }
 
 /** `observedAt` is UTC; accept the ISO form, `YYYY-MM-DD HH:mm`, or `MM-DD HH:mm`. */
