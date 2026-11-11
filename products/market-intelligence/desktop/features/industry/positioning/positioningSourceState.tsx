@@ -4,7 +4,6 @@ import type { ReactElement } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
-import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import type { PositioningCellReason, PositioningCellState } from '../../../pages/intelligence/dashboardPositioningSourceState'
 import type { PositioningPanelText } from './positioningText'
@@ -13,10 +12,10 @@ import type { PositioningPanelText } from './positioningText'
 import '../../../shared/styles/sourceAvailability.css'
 
 /**
- * 持仓卡两格的源可用性怎么画（三态：未配置 / 未启用 / 读不到）。
+ * 持仓卡两格的源可用性怎么画（三态：未配置 / 未启用 / 读不到，外加「没有数据」）。
  *
- * 归属**按形态**定（用户 2026-11-11）：格级、行级 → 共享可用性卡（`.mi-source-*`）；
- * 整卡级（两格一个可用都没有）→ 平台 `StateView`。判定不在这里——它来自
+ * 形态（用户 2026-11-11）：**卡片骨架不消失**——有数据时的行位、车道与基准线，没数据时照样在，
+ * 状态句与动作落在这条结构行上，不把整块换成一整片空白加一句话。判定不在这里——它来自
  * `dashboardPositioningSourceState.ts` 的投影，这个文件只负责画。
  */
 
@@ -72,60 +71,58 @@ function SourceReason({ reason, resolveText }: Readonly<{ reason: PositioningCel
 }
 
 /**
- * 整卡三态（两格一个可用都没有）：落平台六态。
+ * 一格状态的那一行（未配置 / 未启用 / 读不到 / 没有数据）：落在结构里，不整块替换卡片。
  *
- * - 没配置 → `empty · none-installed`，产品句「还没有配置来源」，动作「打开设置」；
- * - 没启用 → `disabled · target-disabled`，产品句点名是哪个源，动作「去启用」；
- * - 读不到 → `error · unreadable`，产品句「暂时读不到」，一颗「重试」，原因进 `details`（默认折叠）。
- *
- * 动作标签是平台键表的闭集（`ui.state.action.*`），所以这里是「打开设置 / 去启用 / 重试」——
- * 格级那句「去配置」不进整卡：两套词会把同一个入口说成两件事。
+ * 用户 2026-11-11：不可用时不要「一大片空白只飘一句话」——有数据时那块长什么样（行位、车道、
+ * 基准线），没数据时骨架还得在；状态句与动作就落在这条结构行上。三态与「没有数据」共用这一条。
  */
-export function WholeCardStateView({ state, text, reason, onOpenSources, retry, resolveText }: Readonly<{
-  state: 'missing' | 'disabled' | 'unreadable'
-  text: PositioningPanelText
+export type SourceStateLineView = Readonly<{
+  state: PositioningCellState | 'empty'
   reason?: PositioningCellReason
-  onOpenSources: () => void
-  retry: () => void
-  resolveText: (key: string) => string
-}>): ReactElement {
-  if (state === 'missing') {
-    return <StateView state="empty" reasonCode="none-installed" size="md"
-      action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: onOpenSources }}
-      productReason={{ key: 'mi.positioning.card-no-source', resolve: () => text.sourceMissing }} />
-  }
-  if (state === 'disabled') {
-    return <StateView state="disabled" reasonCode="target-disabled" size="md"
-      action={{ labelKey: STATE_VIEW_ACTION_KEYS.enable, onSelect: onOpenSources }}
-      productReason={{
-        key: 'mi.positioning.card-not-enabled',
-        resolve: () => text.sourceDisabled.replace('{source}', text.sourceName)
-      }} />
-  }
-  return <StateView state="error" reasonCode="unreadable" size="md"
-    action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
-    productReason={{ key: 'mi.positioning.card-unreadable', resolve: () => text.sourceUnreadable }}
-    {...(reason ? { details: { bodyText: resolveText(positioningSourceReasonKeys[reason]) } } : {})} />
+  /** 这一行说的是哪一格（持仓名义额 / 资金费率）；整卡都不用时省略：同源，一句就够。 */
+  label?: string
+  /** 覆盖默认状态句：形状不符时说那句「完全退出重开」，不是「暂时读不到」。 */
+  sentence?: string
+  action?: SourceAction
+}>
+
+/** 一格一颗主动作；没有出口时宁可不给按钮，也不给一颗点了没反应的按钮。 */
+export function cellStateAction(input: Readonly<{
+  state: PositioningCellState | 'empty'
+  reason?: PositioningCellReason
+  text: PositioningPanelText
+  openSources?: () => void
+  retry?: () => void
+  /** 形状/版本不符的唯一出口：完全退出后重开（重试必然再失败）。 */
+  restart?: SourceAction
+}>): SourceAction | undefined {
+  if (input.state === 'empty') return undefined
+  if (input.state === 'unreadable' && input.reason === 'contract-mismatch') return input.restart
+  return sourceActionFor(input.state, input.text, {
+    ...(input.openSources ? { openSources: input.openSources } : {}),
+    ...(input.retry ? { retry: input.retry } : {})
+  })
 }
 
-/** 单格：另半照常显示，这一格用一行说清，配一颗主动作（不是灰按钮）。 */
-export function SourceCellLine({ label, state, reason, text, action, resolveText }: Readonly<{
-  label: string
-  state: PositioningCellState
-  reason?: PositioningCellReason
+export function SourceStateLine({ view, text, resolveText }: Readonly<{
+  view: SourceStateLineView
   text: PositioningPanelText
-  action?: SourceAction
   resolveText: (key: string) => string
 }>): ReactElement {
+  // 没有数据不是三态之一：句子走产品自己那句「确实没有」，图标与「没配置」同一条 muted 线。
+  const sentence = view.sentence ?? (view.state === 'empty' ? text.empty : sourceSentence(view.state, text))
+  const tone: PositioningCellState = view.state === 'empty' ? 'missing' : view.state
   return (
-    <div className="mi-source-row" data-state={state} data-positioning-source-cell={state} aria-disabled="true">
-      <span className="mi-positioning-panel__source-label">{label}</span>
-      <span className="mi-source-state" data-state={state}>
-        <SourceStateIcon state={state} />
-        {sourceSentence(state, text)}
-        {state === 'unreadable' && reason ? <SourceReason reason={reason} resolveText={resolveText} /> : null}
+    <div className="mi-positioning-panel__source-note" data-positioning-source-cell={view.state}>
+      {view.label ? <span className="mi-positioning-panel__label">{view.label}</span> : null}
+      <span className="mi-source-state" data-state={tone}>
+        <SourceStateIcon state={tone} />
+        {sentence}
+        {view.state === 'unreadable' && view.reason && view.sentence === undefined
+          ? <SourceReason reason={view.reason} resolveText={resolveText} />
+          : null}
       </span>
-      {action ? <Button type="link" size="small" onClick={action.onSelect}>{action.label}</Button> : null}
+      {view.action ? <Button type="link" size="small" onClick={view.action.onSelect}>{view.action.label}</Button> : null}
     </div>
   )
 }

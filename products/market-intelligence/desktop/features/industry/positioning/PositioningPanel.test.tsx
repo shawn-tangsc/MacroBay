@@ -208,71 +208,80 @@ describe('positioning panel', () => {
   })
 
 
-  it('keeps the funding half when the positioning half is missing, and marks which half failed', () => {
+  it('keeps the card frame when nothing has been collected yet', () => {
     const markup = render({ positioning: { state: 'empty', onReload: () => undefined } })
-    expect(markup).toContain('data-state="empty"')
-    // An empty card is a state, and the shared StateView owns its sentence and shape now.
-    expect(markup).toContain('class="state-view')
-    expect(markup).toContain('data-state="empty"')
+    // 骨架还在：两行资产位与图表框都在，不是一块空状态。
+    expect(markup).toContain('data-asset="btc"')
+    expect(markup).toContain('data-asset="eth"')
+    expect(markup).toContain('data-chart-skeleton="true"')
+    expect(markup).toContain(text.empty)
+    // 另一格（费率）照常给数：没有数据的是持仓那一半。
     expect(markup).toContain('+0.0062%')
-    expect(markup).toContain('—')
+    expect(markup).not.toContain('class="state-view')
   })
 
   it('offers no retry when the shape cannot be read, and says what actually works', () => {
     // 形状/版本不符：点了必然再失败。卡片不给假出路，改说读者唯一能做的动作。
     const mismatch = render({ positioning: { state: 'unavailable', cause: 'contract-mismatch', onReload: () => undefined } })
     expect(mismatch).toContain(text.contractMismatch)
-    // 动作是「重启应用」而不是「重试」：版本不符重试多少次都一样。
+    // 动作是「重启应用」而不是「再试一次」：版本不符重试多少次都一样。
     expect(mismatch).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.restart_app))
-    expect(mismatch).not.toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
+    expect(mismatch).not.toContain(text.actionRetry)
     // 「这次没读成」照旧给重试：读者点一下可能真的不一样。
     const failed = render({ positioning: { state: 'unavailable', cause: 'query-failed', onReload: () => undefined } })
-    expect(failed).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
+    expect(failed).toContain(text.actionRetry)
     expect(failed).not.toContain(text.contractMismatch)
   })
 
-  it('falls the whole card back to the platform empty view when neither cell has a source', () => {
-    // 整卡级归平台六态（用户 2026-11-11 按形态定的归属）：共享可用性卡只服务格级；
-    // 两格一个可用都没有时整卡换 `StateView`，产品那句走 `productReason`。
-    const markup = render({ cells: { oi: 'missing', funding: 'missing', reasons: {} }, onOpenSources: () => undefined })
-    expect(markup).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
-    expect(markup).toContain(text.sourceMissing)
-    expect(markup).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.open_settings))
-    // 共享卡与整卡级 StateView 不许同时出现在这一格位置上。
-    expect(markup).not.toContain('mi-source-card')
-    expect(markup).not.toContain('mi-positioning-panel__chart')
+  it('keeps the chart in the second column for all four cell combinations', () => {
+    // 布局根因（Chief 2026-11-11）：`__body` 是两列网格，四个直接子元素自动排布时，多一行状态句
+    // 就把图表挤进 264px 的左列、右列空着。网格里只许有两样：左列容器、右列图表容器。
+    const combos = [
+      { oi: 'available', funding: 'available' },
+      { oi: 'available', funding: 'disabled' },
+      { oi: 'disabled', funding: 'available' },
+      { oi: 'disabled', funding: 'disabled' }
+    ] as const
+    for (const combo of combos) {
+      const doc = new DOMParser().parseFromString(render({
+        cells: { ...combo, reasons: {} }, onOpenSources: () => undefined
+      }), 'text/html')
+      const body = doc.querySelector('.mi-positioning-panel__body')!
+      expect([...body.children].map(child => child.className.split(' ')[0]), JSON.stringify(combo)).toEqual([
+        'mi-positioning-panel__summary', 'mi-positioning-panel__chart-wrap'
+      ])
+      expect(doc.querySelector('.mi-positioning-panel__chart-wrap')!.parentElement?.className, JSON.stringify(combo))
+        .toContain('mi-positioning-panel__body')
+    }
   })
 
-  it('falls the whole card back to the platform disabled view when both cells are off', () => {
-    const markup = render({ cells: { oi: 'disabled', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })
-    expect(markup).toMatch(/class="state-view[^"]*"[^>]*data-state="disabled"/)
-    expect(markup).toContain(text.sourceDisabled.replace('{source}', text.sourceName))
-    expect(markup).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.enable))
-    expect(markup).not.toContain('mi-source-card')
+  it('keeps the card frame in all three unavailable states, without one big status block', () => {
+    const cases = [
+      { cells: { oi: 'missing', funding: 'missing', reasons: {} }, sentence: text.sourceMissing },
+      { cells: { oi: 'disabled', funding: 'disabled', reasons: {} }, sentence: text.sourceDisabled.replace('{source}', text.sourceName) },
+      { cells: { oi: 'unreadable', funding: 'unreadable', reasons: { oi: 'query-failed', funding: 'query-failed' } }, sentence: text.sourceUnreadable }
+    ] as const
+    for (const item of cases) {
+      const markup = render({ cells: item.cells, onOpenSources: () => undefined })
+      expect(markup, item.sentence).toContain('data-asset="btc"')
+      expect(markup, item.sentence).toContain('data-asset="eth"')
+      expect(markup, item.sentence).toContain('data-chart-skeleton="true"')
+      expect(markup, item.sentence).toContain(item.sentence)
+      // 整块换成状态视图就是这段空白 + 一句话的由来。
+      expect(markup, item.sentence).not.toContain('class="state-view')
+    }
   })
 
-  it('falls the whole card back to the platform error view with one retry when both reads fail', () => {
-    const markup = render({
-      positioning: { state: 'unavailable', cause: 'invalid-clock', onReload: () => undefined },
-      cells: { oi: 'unreadable', funding: 'unreadable', reasons: { oi: 'invalid-clock', funding: 'query-failed' } }
-    })
-    expect(markup).toMatch(/class="state-view[^"]*"[^>]*data-state="error"/)
-    expect(markup).toContain(text.sourceUnreadable)
-    expect(markup).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
-    // 原因不丢：进 `StateView` 的折叠区，不铺在正文。
-    expect(markup).toContain(text.sourceReasonClock)
-    expect(markup).not.toContain('mi-source-card')
-  })
-
-  it('says 来源没有启用 and names the source, keeping the other cell rendering', () => {
+  it('says 来源没有启用 and names the source on the row, keeping the other cell and the chart', () => {
     const markup = render({ cells: { oi: 'available', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })
     expect(markup).toContain(text.sourceDisabled.replace('{source}', text.sourceName))
     expect(markup).toContain(text.actionEnable)
     // 持仓那半照旧：名义额与图都在，整卡没有降级。
     expect(markup).toContain('$8.87B')
     expect(markup).toContain('mi-positioning-panel__chart')
-    // 费率那半不画数字，也不留破折号。
+    // 费率那半不留数字，但那一行还在（骨架），不是整行消失。
     expect(markup).not.toContain('+0.0062%')
+    expect(markup).toContain('data-positioning-source-cell="disabled"')
   })
 
   it('says 暂时读不到 with a retry when the read failed, and never 未启用', () => {
@@ -286,10 +295,14 @@ describe('positioning panel', () => {
   })
 
   it('tells a failed read from an empty one', () => {
-    // Nothing collected is `empty`; a read that could not answer is `error`. Mixing them is how
-    // "we have nothing" and "we could not look" start reading alike.
-    expect(render({ positioning: { state: 'unavailable', cause: 'query-failed', onReload: () => undefined } })).toContain('data-state="error"')
-    expect(render({ positioning: { state: 'empty', onReload: () => undefined } })).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
+    // Nothing collected is `empty`; a read that could not answer is `unreadable`. Mixing them is
+    // how "we have nothing" and "we could not look" start reading alike.
+    const failed = render({ positioning: { state: 'unavailable', cause: 'query-failed', onReload: () => undefined } })
+    expect(failed).toContain('data-positioning-source-cell="unreadable"')
+    expect(failed).toContain(text.sourceUnreadable)
+    const empty = render({ positioning: { state: 'empty', onReload: () => undefined } })
+    expect(empty).toContain('data-positioning-source-cell="empty"')
+    expect(empty).toContain(text.empty)
   })
 
   it('waits without drawing a failure or an empty card before the first read returns', () => {

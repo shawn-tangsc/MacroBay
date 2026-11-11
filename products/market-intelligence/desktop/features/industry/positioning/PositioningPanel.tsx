@@ -8,7 +8,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
 import { Popover } from '@platform/ui/components/popover'
 import { Tooltip } from '@platform/ui/components/tooltip'
-import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, useStateViewText } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -31,7 +31,7 @@ import {
 
 import { SignalDetail } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
-import { PositioningChart, formatRate } from './PositioningChart'
+import { PositioningChart, PositioningChartSkeleton, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
 import {
   projectPositioningCardState,
@@ -40,8 +40,8 @@ import {
   type PositioningCellState
 } from '../../../pages/intelligence/dashboardPositioningSourceState'
 import { positioningNoteKeys, resolvePositioningNote } from './positioningNotes'
-// 三态怎么画在独立模块里：格级用共享可用性卡、整卡级用平台 `StateView`（归属按形态定）。
-import { SourceCellLine, WholeCardStateView, sourceActionFor } from './positioningSourceState'
+// 三态怎么画在独立模块里：句式落在结构行上，卡片骨架不动（用户 2026-11-11 定的形态）。
+import { SourceStateLine, cellStateAction, type SourceStateLineView } from './positioningSourceState'
 
 import './PositioningPanel.css'
 
@@ -121,7 +121,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
    * 规则那次没读到；`insufficient` = 读到了但成交量腿不齐。第三种以前只给一枚「数据不齐」的
    * 状态牌、第二种只给一个 16px 感叹号——两者都说不清「是没命中，还是没读到」。
    *
-   * 整卡本身不可用时（空 / 读失败 / 加载中）这行不出现：那是平台 `StateView` 的地盘。
+   * 整卡本身不可用时（空 / 读失败 / 加载中）这行不出现：骨架与状态行已经在说同一件事。
    */
   // 判据直接读投影里的牌子状态（不从上面那个只为「显示哪些牌子」过滤过的 `chip` 取：
   // `hidden` 恰恰是被过滤掉的那一种，而「没命中」正是它）。
@@ -197,33 +197,61 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const cardSourceReason: PositioningCellReason | undefined = cells?.reasons.oi ?? cells?.reasons.funding
   // 整卡「再试一次」把两格一起重读：两格都不可用时读者要的是「再读一次这张卡」。
   const cardRetry = (): void => { positioningRetry?.(); onReloadFunding?.() }
-  // 整卡的动作不设成「有时没有」：`StateView` 的 required 码不给按钮就是把读者丢在没有出路的页面里。
-  // 宿主没接线时落到共享导航（同一个目的地：设置 → 情报源），所以这里永远有一颗真按钮。
+  // 未配置 / 未启用的动作永远有一颗真按钮：宿主没接线时落到共享导航（同一个目的地：设置 → 情报源）。
   const cardOpenSources = onOpenSources ?? openIntelligenceSourcesSettings
   // 两个时刻都来自投影（同源）：曲线末点与折叠前的最新读数。这里不再 `at(-1)` 现取——
   // 各算一处，窗口切换时就会出现「写着 01:00 · 01:45，但曲线末点其实不是 01:00」。
   const pointAt = available ? positioning.pointAt : undefined
   const newestReadingAt = available ? positioning.newestReadingAt ?? positioning.pointAt : undefined
-  // Two different facts, two different states: nothing collected yet is empty, a failed read is an
-  // error. The platform owns both sentences and the shape; the card only says which happened.
-  const status = (positioning.state === 'loading' || funding.state === 'loading')
-    ? <LoadingState label={text.loading} minHeight={140} />
-    : positioning.state === 'empty'
-      ? <StateView state="empty" reasonCode="not-yet" size="md" />
-      : positioning.state === 'unavailable' && positioning.cause === 'contract-mismatch'
-        // A shape from another app version fails the same way every time: a retry button would be a
-        // false way out. The platform's `needs-restart` code + its relaunch action is the one path
-        // that actually changes the outcome; the sentence says why (and that reloading is not enough).
-        ? <>
-            <StateView state="error" reasonCode="needs-restart" size="md"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void globalThis.window.platform.app.relaunch() } }} />
-            <p className="mi-positioning-panel__contract" role="status">{text.contractMismatch}</p>
-          </>
-        : positioning.state === 'unavailable'
-          ? <StateView state="error" reasonCode="unavailable" size="md"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: positioning.onReload }} />
-          // `available` never reaches this slot (the chart is rendered instead).
-          : null
+  // 形状/版本不符的唯一出口：完全退出后重开（重试必然再失败）。
+  const restartAction = { label: stateText(STATE_VIEW_ACTION_KEYS.restart_app), onSelect: () => { void globalThis.window.platform.app.relaunch() } }
+  /**
+   * 每一格的一句状态，落在图表上方那一行里——卡片骨架不动，只换这一行（用户 2026-11-11）。
+   *
+   * 两格都不用时同源、说一句；只有一格不可用时点名是哪一格。顺序与判定顺序一致：
+   * 未配置 → 未启用 → 读不到；「没有数据」不是这三态之一，用产品自己那句。
+   */
+  const sourceNotes: SourceStateLineView[] = cardSourceState
+    ? [{
+        state: cardSourceState,
+        ...(cardSourceReason ? { reason: cardSourceReason } : {}),
+        action: cellStateAction({
+          state: cardSourceState, text, openSources: cardOpenSources, retry: cardRetry, restart: restartAction,
+          ...(cardSourceReason ? { reason: cardSourceReason } : {})
+        })
+      }]
+    : [
+        ...(oiReady ? [] : [{
+          label: text.notional, state: oiState,
+          ...(cells?.reasons.oi ? { reason: cells.reasons.oi } : {}),
+          action: cellStateAction({
+            state: oiState, text, openSources: cardOpenSources, restart: restartAction,
+            ...(cells?.reasons.oi ? { reason: cells.reasons.oi } : {}),
+            ...(positioningRetry ? { retry: positioningRetry } : {})
+          })
+        } as SourceStateLineView]),
+        ...(fundingReady ? [] : [{
+          label: text.rateLabel, state: fundingCellState,
+          ...(cells?.reasons.funding ? { reason: cells.reasons.funding } : {}),
+          action: cellStateAction({
+            state: fundingCellState, text, openSources: cardOpenSources, restart: restartAction,
+            ...(cells?.reasons.funding ? { reason: cells.reasons.funding } : {}),
+            ...(onReloadFunding ?? positioningRetry ? { retry: onReloadFunding ?? positioningRetry! } : {})
+          })
+        } as SourceStateLineView]),
+        ...(positioning.state === 'empty' && oiReady ? [{ state: 'empty' as const }] : []),
+        ...(positioning.state === 'unavailable' && oiReady
+          ? [{
+              state: 'unreadable' as const,
+              ...(positioning.cause === 'contract-mismatch' ? { sentence: text.contractMismatch } : {}),
+              action: cellStateAction({
+                state: 'unreadable' as const, text, openSources: cardOpenSources,
+                retry: positioning.onReload, restart: restartAction,
+                ...(positioning.cause ? { reason: positioning.cause } : {})
+              })
+            }]
+          : [])
+      ]
 
   return (
     <section className="mi-positioning-panel" data-state={positioning.state} data-funding-state={funding.state} data-window={window}
@@ -287,61 +315,47 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           </div>
         </Modal>
       ) : null}
-      <div className="mi-positioning-panel__body">
-        {cardSourceState ? (
-          // 两格一个可用都没有：整卡换平台 `StateView`（归属按形态定，用户 2026-11-11）。
-          // 共享可用性卡只服务格/行级；整卡级用平台六态，产品那句走 `productReason`。
-          <WholeCardStateView state={cardSourceState} text={text} reason={cardSourceReason}
-            onOpenSources={cardOpenSources} retry={cardRetry} resolveText={resolveProductKey} />
-        ) : <>
+      <div className="mi-positioning-panel__body" data-card-state={cardSourceState ?? 'available'}>
+        {/* 左列：两行资产位始终在。不可用的格给占位（`—`），不是整行消失。 */}
         <div className="mi-positioning-panel__summary">
           <Asset asset="btc" text={text} rate={fundingReady ? btcRate.at(-1) : undefined} rateAgo={fundingReady ? btcRate.at(-4) : undefined}
-            hideRate={!fundingReady} hideNotional={!oiReady}
             change={available && oiReady ? positioning.changeBtc : undefined}
             notional={available && oiReady ? positioning.btc.at(-1) : undefined}
             state={available && oiReady ? positioningStateFor(positioning, btcRate, positioning.changeBtc) : undefined} />
           <Asset asset="eth" text={text} rate={fundingReady ? ethRate.at(-1) : undefined} rateAgo={fundingReady ? ethRate.at(-4) : undefined}
-            hideRate={!fundingReady} hideNotional={!oiReady}
             change={available && oiReady ? positioning.changeEth : undefined}
             notional={available && oiReady ? positioning.eth.at(-1) : undefined}
             state={available && oiReady ? positioningStateFor(positioning, ethRate, positioning.changeEth) : undefined} />
         </div>
-        {/* 一格不可用时逐格说：另一格照旧显示，整卡不降级。每格一句、一颗主动作。 */}
-        {oiReady ? null : <SourceCellLine label={text.notional} state={oiState} reason={cells?.reasons.oi} text={text}
-          resolveText={resolveProductKey}
-          action={sourceActionFor(oiState, text, {
-            ...(positioningRetry ? { retry: positioningRetry } : {}),
-            ...(onOpenSources ? { openSources: onOpenSources } : {})
-          })} />}
-        {fundingReady ? null : <SourceCellLine label={text.rateLabel} state={fundingCellState} reason={cells?.reasons.funding} text={text}
-          resolveText={resolveProductKey}
-          action={sourceActionFor(fundingCellState, text, {
-            ...(onReloadFunding ?? positioningRetry ? { retry: onReloadFunding ?? positioningRetry! } : {}),
-            ...(onOpenSources ? { openSources: onOpenSources } : {})
-          })} />}
+        {/* 右列：显式第 2 列。状态行与骨架都不许把图挪走（Chief 2026-11-11 的布局根因）。 */}
         <div className="mi-positioning-panel__chart-wrap">
-          {available && oiReady
-            ? <>
-                {/* 费率那一格不可用时只画持仓线，不画半张柱子图；缺的那格由上面那行说明。 */}
-                <PositioningChart positioning={positioning} funding={fundingReady ? funding : { state: 'unavailable' }} text={text} />
-                {/* 一条腿读不到时的说明：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
-                {fundingReady && fundingMissingNote ? (
-                  <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingMissingNote}</p>
-                ) : null}
-                {/*
-                  截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
-                  一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
-                  只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
-                */}
-                {positioning.hiddenHits > 0 ? (
-                  <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
-                    {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
-                  </p>
-                ) : null}
-              </>
-            : oiReady ? status : null}
+          {sourceNotes.map((note, index) => (
+            <SourceStateLine key={`${note.state}-${note.label ?? 'card'}-${index}`} view={note} text={text} resolveText={resolveProductKey} />
+          ))}
+          {/* 只有「这一格已启用、正在读」才算等待：被关掉/没配置的格不会自己变出数据，等它就是在骗人。 */}
+          {oiReady && positioning.state === 'loading' || fundingReady && funding.state === 'loading'
+            ? <LoadingState label={text.loading} minHeight={140} />
+            : available && oiReady
+              ? <>
+                  {/* 费率那一格不可用时只画持仓线，不画半张柱子图；缺的那格由上面那行说明。 */}
+                  <PositioningChart positioning={positioning} funding={fundingReady ? funding : { state: 'unavailable' }} text={text} />
+                  {/* 一条腿读不到时的说明：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
+                  {fundingReady && fundingMissingNote ? (
+                    <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingMissingNote}</p>
+                  ) : null}
+                  {/*
+                    截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
+                    一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
+                    只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
+                  */}
+                  {positioning.hiddenHits > 0 ? (
+                    <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
+                      {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
+                    </p>
+                  ) : null}
+                </>
+              : <PositioningChartSkeleton text={text} />}
         </div>
-        </>}
       </div>
       {liquidationNoteText ? (
         // 一行，muted，不是警报色：它说的是判定的结论，不是「我们出错了」。
@@ -397,7 +411,7 @@ function WindowTabs({ window, onWindowChange, text }: Readonly<{ window: OpenInt
  * name rather than under the numbers: it answers "what am I looking at" before the reader has
  * read a single figure.
  */
-function Asset({ asset, text, rate, rateAgo, change, notional, state, hideRate = false, hideNotional = false }: Readonly<{
+function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly<{
   asset: 'btc' | 'eth'
   text: PositioningPanelText
   rate?: Rate
@@ -433,18 +447,18 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state, hideRate =
           </Tooltip>
         ) : null}
       </div>
-      {hideRate ? null : <div className="mi-positioning-panel__quote">
+      <div className="mi-positioning-panel__quote">
         {rate
           ? <>
               <span className="mi-positioning-panel__rate" data-direction={rate.paymentDirection}>{formatRate(rate.ratePercent)}</span>
               <span className="mi-positioning-panel__pay">{text.paymentDirections[rate.paymentDirection]}</span>
             </>
           : <span className="mi-positioning-panel__rate">{text.missingValue}</span>}
-      </div>}
-      {hideNotional ? null : <div className="mi-positioning-panel__row" data-layout="level">
+      </div>
+      <div className="mi-positioning-panel__row" data-layout="level">
         <span className="mi-positioning-panel__label">{text.notional}</span>
         <b className="mi-positioning-panel__value">{notional ? formatDashboardNotional(notional.notionalUsd) : text.missingValue}</b>
-      </div>}
+      </div>
       <div className="mi-positioning-panel__row" data-layout="pair">
         <span className="mi-positioning-panel__pair">
           <i className="mi-positioning-panel__label">{text.change1h}</i>
