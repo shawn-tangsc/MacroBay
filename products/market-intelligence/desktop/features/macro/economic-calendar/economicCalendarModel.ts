@@ -108,31 +108,64 @@ export function selectEconomicCalendarMonth(candidate: string | undefined, selec
 }
 
 /**
- * 标题型空壳（`MI-1-R39` §4）：**没有官方时刻**（缺失，或只有惯例推算值）**且**实际 / 预期 / 前值全空。
+ * **会发布数值的事件族**（`MI-1-R39` §4 第 1 条）：只有这些族适用空壳规则。
  *
- * 唯一一份判据：主列表剔除、官方日程视图、页头「受影响 N 条」三处都读这一个函数——
- * 三处各写一套就会漂，「主列表里没有了、受影响列表里也没了」是最难发现的那种漏。
+ * 为什么必须有它：FOMC 壳与 BLS 壳在「日期 / 时刻 / 数值」三个字段上长得一模一样——官方只给会议
+ * 日期、不给时刻、当然也没有数值。靠字段分不开，只能靠族。数据一处，别处不许再散列名字。
  *
- * 对照组别误伤：有官方时刻、只是还没出数值的，是合法的「待公布」，**留在主列表**。
+ * 取值与官方源注册表里的 `eventFamilies` 同源（非 `fomc` 那几族：CPI / 就业 / PCE / GDP）。
+ */
+export const valuePublishingCalendarEventFamilies: readonly string[] = Object.freeze([
+  'cpi', 'core-cpi', 'consumer-price-index', 'employment-situation', 'pce', 'core-pce', 'gdp'
+])
+
+/**
+ * 标题型空壳（`MI-1-R39` §4，架构师四条件**同时**成立）：
+ *
+ * 1. `eventFamily` 在 `valuePublishingCalendarEventFamilies` 里（FOMC 这类日期型事件**永不**判空壳，
+ *    与源健不健康无关）；
+ * 2. `scheduledDate` **严格早于**读者显示时区的今天——否则未来的 CPI 会被当成「空壳」藏掉，
+ *    而它只是还没到日子（待公布）；
+ * 3. 没有官方时刻：`scheduledAt` 缺失，或来源只有 `convention-default` / `date-only`；
+ * 4. 实际 / 预期 / 前值全空；
+ * 5. 这一行是**官方自动抓取**产生的：`caveats` 含 `manual-ics-import`（手动 ICS）或
+ *    `bls-python-schedule`（python 那条腿）的行**永不判空壳**——它们是读者可见的真实日程，
+ *    缺字段不等于该藏。判据只看**行内**字段（provenance / caveats），不读尝试记录、不读源健康。
+ *
+ * 五条一条都不许省：少 1 → 藏掉 FOMC；少 2 → 藏掉未来的发布；少 3 或 4 → 把正常事件算成空壳。
+ * 也**不许**按源健康状态判，不许「没有数值就一刀切」。
+ *
+ * 唯一一份判据：主列表剔除、官方日程视图、页头「受影响 N 条」三处都读这一个函数。
  */
 export function isTitleOnlyCalendarEvent(event: Readonly<{
+  eventFamily?: string | undefined
+  scheduledDate?: string | undefined
   scheduledAt?: string | undefined
   releaseTimeSource?: EconomicCalendarEventView['releaseTimeSource'] | undefined
   actual?: unknown
   previous?: unknown
   consensus?: unknown
-}>): boolean {
-  const hasOfficialTime = event.scheduledAt !== undefined && event.releaseTimeSource !== 'convention-default'
+  caveats?: readonly string[] | undefined
+}>, today: string): boolean {
+  if (event.eventFamily === undefined || !valuePublishingCalendarEventFamilies.includes(event.eventFamily)) return false
+  if (event.scheduledDate === undefined || event.scheduledDate >= today) return false
+  const hasOfficialTime = event.scheduledAt !== undefined
+    && event.releaseTimeSource !== 'convention-default' && event.releaseTimeSource !== 'date-only'
+  if (hasOfficialTime) return false
+  // 第 5 条：手动导入与 python 那条腿的行是读者可见的真实日程，永不判空壳。
+  const caveats = event.caveats ?? []
+  if (caveats.includes('manual-ics-import') || caveats.includes('bls-python-schedule')) return false
   // 数值字段在这个视图里是解析后的值对象，不是字符串：判「有没有」只看空不空。
-  const hasValue = event.actual !== undefined || event.previous !== undefined
-    || (event.consensus !== undefined && event.consensus !== null)
-  return !hasOfficialTime && !hasValue
+  return event.actual === undefined && event.previous === undefined
+    && (event.consensus === undefined || event.consensus === null)
 }
 
 export function createEconomicCalendarProjection(input: {
   month: string
   asOf: string
   events: readonly EconomicCalendarPublicEvent[]
+  /** 读者显示时区的今天（`YYYY-MM-DD`）；不传＝不判空壳（保守：宁可不剔，也不误藏）。 */
+  today?: string
 }): EconomicCalendarProjection {
   const bounds = monthBounds(input.month)
   if (!bounds) return { month: input.month, asOf: input.asOf, events: [], days: [], shells: [] }
@@ -141,8 +174,9 @@ export function createEconomicCalendarProjection(input: {
     .map(toEventView)
     .filter((event): event is EconomicCalendarEventView => Boolean(event))
     .sort(compareEvents)
-  const shells = views.filter(isTitleOnlyCalendarEvent)
-  const events = views
+  const today = input.today
+  const shells = today === undefined ? [] : views.filter((event) => isTitleOnlyCalendarEvent(event, today))
+  const events = today === undefined ? views : views.filter((event) => !isTitleOnlyCalendarEvent(event, today))
   const byDate = new Map<string, EconomicCalendarEventView[]>()
   for (const event of events) byDate.set(event.scheduledDate, [...(byDate.get(event.scheduledDate) ?? []), event])
   return { month: input.month, asOf: input.asOf, events, days: monthGrid(bounds.start, input.month, byDate), shells }

@@ -23,7 +23,7 @@ export type EconomicCalendarMonthRead =
  * wrong shape, or a failure code outside the vocabulary all mean "this month could not be read",
  * never "draw what we got".
  */
-export function toMonthState(result: unknown, query: { month: string; asOf: string }): EconomicCalendarMonthRead {
+export function toMonthState(result: unknown, query: { month: string; asOf: string; today?: string }): EconomicCalendarMonthRead {
   try {
     if (isExactRecord(result, ['state', 'failureCode']) && result.state === 'unavailable' && isMonthFailureCode(result.failureCode)) {
       return { state: 'unavailable', failureCode: result.failureCode }
@@ -31,7 +31,8 @@ export function toMonthState(result: unknown, query: { month: string; asOf: stri
     if (!isExactRecord(result, ['state', 'asOf', 'events']) || result.state !== 'available' || result.asOf !== query.asOf || !isExactEventArray(result.events, query.asOf)) {
       return { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
     }
-    return { state: 'available', projection: createEconomicCalendarProjection({ month: query.month, asOf: query.asOf, events: result.events }) }
+    return { state: 'available', projection: createEconomicCalendarProjection({ month: query.month, asOf: query.asOf, events: result.events,
+        ...(query.today === undefined ? {} : { today: query.today }) }) }
   } catch {
     return { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
   }

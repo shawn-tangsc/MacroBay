@@ -28,35 +28,62 @@ describe('macro economic calendar query projection', () => {
   })
 
   /**
-   * `MI-1-R39` §4：标题型空壳（没有官方时刻、且数值全空）不进主列表，但**留在投影的 `shells` 里**——
-   * 官方日程视图与页头「受影响 N 条」都读同一份判据。对照组（有官方时刻、数值仍空）是合法「待公布」。
+   * `MI-1-R39` §4 五条件**同时**成立才算空壳：发布族 + 日期严格早于今天 + 无官方时刻 + 数值全空
+   * + 官方自动抓取的行。每条都用一条反例钉住——少一条就会藏掉不该藏的事件。
    */
+  const TODAY = '2026-08-20'
+  const past = '2026-08-12'
+  const future = '2026-08-28'
+
+  it('#1 an auto-collected past release with no time and no values is a shell: main list 0, shells 1', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      // 官方自动抓取那一路（夹具默认是手动 ICS，会命中第 5 条的豁免，所以这里显式换成自动的 caveat）。
+      events: [event({ eventKey: 'US.CPI.RELEASE.shell-1', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only',
+        caveats: ['official-time-not-published'] })] })
+    expect(projection.events).toHaveLength(0)
+    expect(projection.shells.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.shell-1'])
+    expect(projection.days.flatMap(day => day.events)).toHaveLength(0)
+  })
+
+  // #2 手动 ICS 与 python 那条腿的同形行永不判空壳（这五行在库里是读者可见的真实日程）。
   it.each([
-    ['no instant at all', { eventKey: 'US.CPI.RELEASE.shell-1', scheduledAt: undefined, releaseTimeSource: 'date-only' as const }],
-    ['only a convention instant', { eventKey: 'US.CPI.RELEASE.shell-2', releaseTimeSource: 'convention-default' as const }]
-  ])('keeps a title-only shell (%s) out of the main list and in the shell list', (_name, shell) => {
-    const projection = createEconomicCalendarProjection({
-      month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', events: [event(shell)]
-    })
-    // 判据先只负责「认出来」：主列表剔除要等「哪些算发布型」定下来（见模型里的注释）。
-    expect(projection.shells.map(item => item.eventKey)).toEqual([shell.eventKey])
-    expect(projection.events.map(item => item.eventKey)).toEqual([shell.eventKey])
-  })
-
-  it('keeps an official-time event without values in the main list, because it is a legitimate "not released yet"', () => {
-    const projection = createEconomicCalendarProjection({
-      month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', events: [event({ eventKey: 'US.CPI.RELEASE.pending-1' })]
-    })
+    ['manual ICS import', ['official-period-not-published-in-ics', 'manual-ics-import']],
+    ['the python leg', ['official-time-not-published', 'bls-python-schedule']]
+  ])('#2 a same-shaped %s row stays in the main list', (_name, caveats) => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.manual-1', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only', caveats })] })
     expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.manual-1'])
   })
 
-  it('keeps a shell out of the main list even when it carries a value, and never treats an official instant as a shell', () => {
-    // 有值就不是空壳，哪怕没有时刻（数值说明它是一场真发布）。
-    const valued = createEconomicCalendarProjection({
-      month: '2026-08', asOf: '2026-08-05T00:00:00.000Z',
-      events: [event({ eventKey: 'US.CPI.RELEASE.valued-1', scheduledAt: undefined, releaseTimeSource: 'date-only', actual: { displayValue: '0.3%' } })]
-    })
-    expect(valued.shells).toHaveLength(0)
+  it('#3 a future release without values is "not released yet": it stays in the main list', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.future-1', scheduledDate: future, scheduledAt: undefined, releaseTimeSource: 'date-only' })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.future-1'])
+  })
+
+  it('#4 a past FOMC meeting without values is never a shell: that family publishes no values at all', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.FOMC.2026-08-12', eventFamily: 'fomc', titleKey: 'fomc', scheduledDate: past, scheduledAt: undefined,
+        releaseTimeSource: 'date-only', caveats: ['official-time-not-published'] })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.FOMC.2026-08-12'])
+  })
+
+  it('#5 an official-time event without values stays: it is a legitimate "not released yet"', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.pending-1', scheduledDate: past })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.pending-1'])
+  })
+
+  it('never filters without a today from the reader time zone (conservative: do not hide)', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z',
+      events: [event({ eventKey: 'US.CPI.RELEASE.shell-2', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only',
+        caveats: ['official-time-not-published'] })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events).toHaveLength(1)
   })
 
   it('uses the official schedule date for month placement while preserving an optional official release instant', () => {

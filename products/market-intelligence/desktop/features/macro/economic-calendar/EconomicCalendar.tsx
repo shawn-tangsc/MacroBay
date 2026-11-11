@@ -97,7 +97,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
   const [selectedLinkedMarket, setSelectedLinkedMarket] = useState<MarketCalendarEvent>()
   useEffect(() => { setSelectedMarket(undefined); setSelectedLinkedMarket(undefined) }, [selectedMonth, text.market.locale])
   const [asOf, setAsOf] = useState(initialQuery.asOf)
-  const { monthState, loadMonth } = useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef })
+  const { monthState, loadMonth } = useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef, today })
   const [selectedEventKey, setSelectedEventKey] = useState<string>()
   // The reader's own selection survives a re-read; nothing is picked or dropped on their behalf.
   useEffect(() => {

@@ -93,7 +93,7 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
    */
   const officialNote = surface === 'note' ? officialUnavailable : undefined
   const officialRow = officialNote === undefined ? null : <p className="mi-economic-calendar__comparison-rule" data-calendar-official-unavailable role="note">{officialNote}{officialUnavailableDetail === undefined ? null : <> {helpTrigger({ text: officialUnavailableDetail })}</>}</p>
-  const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
+  const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [], today })
   return <div className="mi-calendar-month-scroll">{notes.map(note => <p className="mi-economic-calendar__comparison-rule" key={note} role="note">{note}</p>)}{officialRow}{state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={text.status.loading} /> : null}{surface === 'no-locale' ? <p className="mi-economic-calendar__comparison-rule" data-calendar-no-locale role="note">{text.noLocaleRowsNote}</p> : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} showEmpty={surface === 'empty'} /></div>
 }
 
