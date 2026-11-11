@@ -72,5 +72,6 @@ export function registerDashboardFeedStatusIpc(
 }
 
 function feedStatusUnavailable() {
-  return Object.freeze({ state: 'unavailable' as const })
+  // 走到这里的 throw 来自查询内部（目前只剩 notes 读取这条路径），码只给诊断用。
+  return Object.freeze({ state: 'unavailable' as const, reason: 'notes-unreadable' as const })
 }

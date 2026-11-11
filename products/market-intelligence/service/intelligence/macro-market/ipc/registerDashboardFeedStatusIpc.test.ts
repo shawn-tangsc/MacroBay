@@ -28,15 +28,15 @@ describe('dashboard feed status IPC', () => {
     'rejects the non-empty request %o without reading anything', async payload => {
       let read = false
       const answer = await registered(async () => { read = true; return entries })(payload)
-      expect(answer).toEqual({ state: 'unavailable' })
+      expect(answer).toEqual({ state: 'unavailable', reason: 'notes-unreadable' })
       expect(read).toBe(false)
     })
 
   it('collapses a failing read, and a source the boundary does not admit, to unavailable', async () => {
-    expect(await registered(async () => { throw new Error('store-unavailable') })({})).toEqual({ state: 'unavailable' })
-    expect(await registered(async () => [{ ...entries[0], sourceId: 'not-a-dashboard-source' } as never])({})).toEqual({ state: 'unavailable' })
+    expect(await registered(async () => { throw new Error('store-unavailable') })({})).toEqual({ state: 'unavailable', reason: 'notes-unreadable' })
+    expect(await registered(async () => [{ ...entries[0], sourceId: 'not-a-dashboard-source' } as never])({})).toEqual({ state: 'unavailable', reason: 'notes-unreadable' })
     // The re-parse is the second guard: a code outside the admitted list never reaches the renderer.
     expect(await registered(async () => [{ sourceId: 'realmarketapi-market', enabled: true, hasCredential: true, failureCode: 'apikey=SECRET0123456789' } as never])({}))
-      .toEqual({ state: 'unavailable' })
+      .toEqual({ state: 'unavailable', reason: 'notes-unreadable' })
   })
 })
