@@ -238,7 +238,11 @@ function metric(value: unknown, correlation = false): boolean {
   const extras = correlation ? ['sampleCount', 'expectedCount'] : []
   if (correlation && (!Number.isSafeInteger(value.sampleCount) || (value.sampleCount as number) < 0 ||
     (value.sampleCount as number) > crossAssetContractPolicy.expectedPairs || value.expectedCount !== crossAssetContractPolicy.expectedPairs)) return false
-  return value.state === 'available' ? exact(value, ['state', 'value', 'atMs', ...extras]) && typeof value.value === 'number' && Number.isFinite(value.value) &&
+  // `atMs` 是**可选**的：只有 `closedReturns` 那几格带它，`relativeReturns` 与可用的相关性都不带。
+  // `exact()` 数属性个数，所以字段表要按有没有这个键分别给——写成固定字段就把它变成了必填
+  // （2026-11-11 事故：服务真产出的快照被自己拒在 `keys`）。
+  const metricFields = value.atMs === undefined ? ['state', 'value', ...extras] : ['state', 'value', 'atMs', ...extras]
+  return value.state === 'available' ? exact(value, metricFields) && typeof value.value === 'number' && Number.isFinite(value.value) &&
     (value.atMs === undefined || (typeof value.atMs === 'string' && crossAssetContractPolicy.canonicalUtcPattern.test(value.atMs) && Number.isFinite(Date.parse(value.atMs)))) &&
     (!correlation || (Math.abs(value.value) <= 1 && (value.sampleCount as number) >= crossAssetContractPolicy.minimumPairs)) : value.state === 'unavailable' && exact(value, ['state', 'reason', ...extras]) &&
       typeof value.reason === 'string' && crossAssetContractPolicy.reasons.includes(value.reason)

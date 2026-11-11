@@ -20,8 +20,18 @@ describe('cross-asset renderer product client', () => {
     // reader would retry forever. The outcome says which side is out of step.
     const invoke = vi.fn(async () => ({ state: 'unavailable', observationKey: { indexBtc: 'up', ethBtc: 'flat' } }))
     const client = createCrossAssetObservationClient(invoke)
-    expect(await client.query({ range: '24h' })).toEqual({ state: 'unavailable', cause: 'contract' })
+    const outcome = await client.query({ range: '24h' })
+    expect('cause' in outcome && outcome.cause).toBe('contract')
+    // 拒在哪一字段要带出来（这次的洞里，服务真产出被拒在 `keys`）。
+    expect('cause' in outcome ? outcome.field : undefined).toBeDefined()
     expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a plain unavailable answer as a failed read, not as a version mismatch', async () => {
+    // 主进程回的就是 `{state:'unavailable'}`（读失败 / 无效请求）：界面只能说「行情暂不可用 + 再试一次」，
+    // 不许说「版本不一致，重启应用」——那是同一版代码，重启治不了它。
+    const client = createCrossAssetObservationClient(vi.fn(async () => ({ state: 'unavailable' })))
+    expect(await client.query({ range: '24h' })).toEqual({ state: 'unavailable', cause: 'query' })
   })
 
   it('does not forward extended command objects, raw errors or unknown states', async () => {
