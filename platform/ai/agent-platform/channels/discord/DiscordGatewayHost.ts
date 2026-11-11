@@ -16,6 +16,18 @@ type Socket = {
 type Factory = new (url: string) => Socket
 
 /**
+ * 启用这一跳的结论：READY 到了算起来；**致命关闭**（4014 intent 没授权 / 4003、4004 Token 被拒）当场判失败，
+ * 并把关闭码带上去——界面要能说「去后台打开 Message Content」，而不是一句「连接没能起来」。
+ */
+export type DiscordGatewayStartOutcome =
+  | { ok: true }
+  | {
+    ok: false
+    reason: 'discord-credential-missing' | 'discord-intents-disallowed' | 'discord-credential-rejected'
+    closeCode: number | null
+  }
+
+/**
  * Discord 网关宿主：把 socket 接到状态机（`DiscordGatewaySession`）上，并负责「断了以后怎么回来」。
  *
  * 这一层负责三件事——开/关 socket、把结束原因写成审计、按退避排下一次连接；外加一条最要紧的顺序：
@@ -37,6 +49,10 @@ export class DiscordGatewayHost {
   private stopped = false
   /** 「自己的回显到了」只记一次：它是出站通路的证据，不是每条消息一行日志。 */
   private selfEchoObserved = false
+  /** 启用这一跳的结论（只算第一次：READY / 致命关闭 / 窗口到点）。 */
+  private outcome: DiscordGatewayStartOutcome | null = null
+  private settleOutcome: ((value: DiscordGatewayStartOutcome) => void) | null = null
+  private outcomeTimer: unknown = null
 
   constructor(private readonly deps: {
     channelId: string
@@ -57,6 +73,11 @@ export class DiscordGatewayHost {
     jitter?: () => number
     /** 重连时重新取接入点（`/gateway/bot`）；取不到就沿用上一个。 */
     refreshGatewayUrl?: () => Promise<string | null>
+    /**
+     * 等结论的窗口：窗口内没等到 READY 就按「还没证伪」放行（旧行为是立刻放行），
+     * 只把「早期致命关闭」这一种变成启用失败。默认 8 秒。
+     */
+    startWindowMs?: number
   }) {}
 
   async start(): Promise<void> {
@@ -66,6 +87,7 @@ export class DiscordGatewayHost {
     if (this.stopped || !this.currentGeneration()) return
     if (!token) {
       this.audit('discord-credential-missing')
+      this.settle({ ok: false, reason: 'discord-credential-missing', closeCode: null })
       return
     }
     this.session = new DiscordGatewaySession({
@@ -76,11 +98,23 @@ export class DiscordGatewayHost {
       onEnd: (end) => { this.onEnd(end) }
     })
     this.open(this.deps.gatewayUrl)
+    this.armOutcomeWindow()
+  }
+
+  /**
+   * 启用那一跳等结论。已决过就直接给（READY 可能比调用方更早到）。
+   * 只有三种会判失败：没凭据、4014 intent 没授权、4003/4004 Token 被拒。
+   */
+  waitForOutcome(): Promise<DiscordGatewayStartOutcome> {
+    if (this.outcome) return Promise.resolve(this.outcome)
+    return new Promise((resolve) => { this.settleOutcome = resolve })
   }
 
   /** 人停的：不再重连，会话材料一起丢掉。 */
   stop(): void {
     if (this.stopped) return
+    // 等结论的人不能被一个停用卡住：按「还没证伪」放行，启用那一步另判代际。
+    this.settle({ ok: true })
     this.stopped = true
     this.clearReconnect()
     this.session?.stop()
@@ -90,6 +124,7 @@ export class DiscordGatewayHost {
 
   /** 传输侧关闭（换代/停用）：不当成一次失败，也不排重连。 */
   close(): void {
+    this.settle({ ok: true })
     this.stopped = true
     this.clearReconnect()
     this.closeSocket()
@@ -139,8 +174,9 @@ export class DiscordGatewayHost {
     }
     const lifecycle = this.lifecycleDispatch(frame)
     if (lifecycle) {
-      // 连上了：退避计数从头算。
+      // 连上了：退避计数从头算；启用那一跳从这里得到「真的起来了」。
       this.attempt = 0
+      this.settle({ ok: true })
       this.commitOrStop(lifecycle.sequence)
       this.session?.receive(frame)
       return
@@ -257,6 +293,12 @@ export class DiscordGatewayHost {
     // 有两类结束，重连多少次都不会变好：intent 没被授权、凭据被拒。停下并留一句人话，
     // 别让它每 30 秒撞一次墙、把真正的线索埋在一串「重连中」里。
     if (end.reason === 'intents-disallowed' || end.reason === 'credential-rejected') {
+      // 这是启用失败的真原因，交回给服务与界面；关闭码一并带上（4014 / 4003 / 4004）。
+      this.settle({
+        ok: false,
+        reason: end.reason === 'intents-disallowed' ? 'discord-intents-disallowed' : 'discord-credential-rejected',
+        closeCode: end.closeCode
+      })
       this.close()
       return
     }
@@ -303,6 +345,29 @@ export class DiscordGatewayHost {
 
   private currentGeneration(): boolean {
     return !this.deps.signal.aborted && this.deps.isCurrent()
+  }
+
+  /** 只算第一次结论：之后的重连结果不再改写启用那一刻的判断。 */
+  private settle(value: DiscordGatewayStartOutcome): void {
+    if (this.outcome) return
+    this.outcome = value
+    if (this.outcomeTimer !== null) {
+      const timers = this.deps.timers ?? { setTimeout, clearTimeout }
+      timers.clearTimeout(this.outcomeTimer as Parameters<typeof clearTimeout>[0])
+      this.outcomeTimer = null
+    }
+    const resolve = this.settleOutcome
+    this.settleOutcome = null
+    resolve?.(value)
+  }
+
+  /** 窗口到了还没有 READY：不把「暂时没连上」当失败，按旧行为放行并继续重连。 */
+  private armOutcomeWindow(): void {
+    const timers = this.deps.timers ?? { setTimeout, clearTimeout }
+    this.outcomeTimer = timers.setTimeout(() => {
+      this.outcomeTimer = null
+      this.settle({ ok: true })
+    }, this.deps.startWindowMs ?? 8_000)
   }
 
   private current(socket: Socket): boolean {

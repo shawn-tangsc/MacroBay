@@ -5,8 +5,10 @@ import { ChannelAdapterAcceptanceRegistry } from './ChannelAdapterAcceptanceRegi
 import {
   assertIdentifier,
   assertBoundedInteger,
+  isChannelFailureCode,
   type ChannelDeliveryTargetView,
   type ChannelManagementCatalogEntry,
+  type ChannelManagementCode,
   type ChannelManagementResult,
   type SecureHandoffSubmit
 } from './ChannelManagementContracts'
@@ -51,7 +53,11 @@ type ManagementDependencies = {
      * 以前这里只收布尔，于是 telegram 的启动失败被硬编码成 `telegram-network-unavailable`，
      * 用户被指去看代理与网络，而真实原因可能是凭据、占用或状态。
      */
-    start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean | { ok: boolean; reason?: string }>
+    start: (
+      channelId: string,
+      generation: number,
+      ownerToken: string
+    ) => Promise<boolean | { ok: boolean; reason?: string; closeCode?: number | null }>
     stop: (channelId: string, ownerToken?: string) => void
   }
   now?: () => Date
@@ -224,22 +230,27 @@ export class ChannelManagementService {
       )
     }
     this.deps.runtime?.stop(id)
-    let started: boolean | { ok: boolean; reason?: string } = false
+    let started: boolean | { ok: boolean; reason?: string; closeCode?: number | null } = false
     try { started = this.deps.runtime ? await this.deps.runtime.start(id, activeOwner.generation, owner.token) : false } catch {}
     const startOk = typeof started === 'boolean' ? started : started.ok === true
     if (!startOk || !this.deps.repository.ownsLifecycleOwner(id, activeOwner)) {
       this.deps.runtime?.stop(id, owner.token)
       this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
-      // 启动失败的真实原因由运行时给（`telegram-proxy-unavailable` / `telegram-conflict` 等），
+      // 启动失败的真实原因由运行时给（`telegram-proxy-unavailable` / `discord-intents-disallowed` 等），
       // 这里**不再替它编一个**：编出来的原因会把用户指到完全无关的方向。
       const startReason = typeof started === 'object' && started !== null && started.ok === false ? started.reason : undefined
-      const rejected = this.enableRejected(
-        id,
-        actorId,
-        channel,
-        'adapter-runtime-start-failed',
-        startReason ? { runtimeReason: startReason } : undefined
-      )
+      const closeCode = typeof started === 'object' && started !== null && started.ok === false ? started.closeCode : undefined
+      // 能落到闭集里的细码就直接当**审计码**用：日志与界面读同一个码，不再各自对一次总桶。
+      // `CHANNEL_FAILURE_CODES` 是读者可见的失败码全集（比结果码宽）：运行时给的原因只要落在这里，
+      // 就原样当结果码/审计码用；收窄成结果码是安全的——两边共有的那批正是运行时真的会回的那些。
+      const code: ChannelManagementCode = startReason && isChannelFailureCode(startReason)
+        ? (startReason as ChannelManagementCode)
+        : 'adapter-runtime-start-failed'
+      const summary: Record<string, string> = {
+        ...(startReason ? { runtimeReason: startReason } : {}),
+        ...(closeCode === null || closeCode === undefined ? {} : { closeCode: String(closeCode) })
+      }
+      const rejected = this.enableRejected(id, actorId, channel, code, Object.keys(summary).length > 0 ? summary : undefined)
       return startReason ? { ...rejected, reason: startReason } : rejected
     }
     this.deps.repository.audit(id, assertIdentifier(actorId), restart ? 'restart' : 'request-enable', null, this.now())

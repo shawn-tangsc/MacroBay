@@ -31,9 +31,22 @@ export class DiscordRuntimeManager {
     getCredential: (channelId: string) => { ref: string; revision: number } | null
     ownsLifecycleOwner: (channelId: string, token: string, generation: number) => boolean
     isCurrentActive: (channelId: string, generation: number) => boolean
+    /**
+     * 启动结论的等待窗口（毫秒）：窗口内等到 READY 或 4014/4003/4004 就当场定论，
+     * 等不到就按旧行为放行（继续重连）。默认 8 秒；用例传 0 走「不等」。
+     */
+    startWindowMs?: number
   }) {}
 
-  async start(channelId: string, generation: number, ownerToken: string): Promise<boolean> {
+  /**
+   * 启动结果带**真原因**：这一步以前只回布尔，于是 4014（Message Content 没开）在界面上只剩
+   * 一句「连接没能起来」——用户唯一能做的就是把 Token 换一遍，而换一百次也没用。
+   */
+  async start(
+    channelId: string,
+    generation: number,
+    ownerToken: string
+  ): Promise<boolean | { ok: false; reason: string; closeCode?: number | null }> {
     if (!ownerToken || !this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)) return false
     this.stop(channelId)
     if (!this.generationIsOurs(channelId, generation, ownerToken)) return false
@@ -51,7 +64,9 @@ export class DiscordRuntimeManager {
       // 握手期间可能已经被停用/换代：回来再判一次，别拿一个过期的接入点开连接。
       if (!gateway.ok || !botUser.ok || !isCurrent()) {
         this.stopOwned(channelId, controller)
-        return false
+        // REST 这一跳已经能分清「Token 错」与「网络/代理不通」，别把两种处境并成一个 false。
+        const rest = gateway.ok ? botUser : gateway
+        return rest.ok ? false : { ok: false, reason: rest.code }
       }
 
       this.deps.delivery.setClient(channelId, client, { isCurrent, signal: controller.signal })
@@ -67,6 +82,7 @@ export class DiscordRuntimeManager {
         createPlatformWebSocket: this.deps.createPlatformWebSocket as never,
         isCurrent,
         signal: controller.signal,
+        ...(this.deps.startWindowMs === undefined ? {} : { startWindowMs: this.deps.startWindowMs }),
         refreshGatewayUrl: async () => {
           const refreshed = await client.gatewayBot(controller.signal)
           return refreshed.ok ? refreshed.value.url : null
@@ -74,6 +90,12 @@ export class DiscordRuntimeManager {
       })
       this.hosts.set(channelId, host)
       await host.start()
+      // 等一句结论：READY 到了才算起来；4014/4003/4004 在这一个窗口内会当场判失败。
+      const outcome = await host.waitForOutcome()
+      if (!outcome.ok) {
+        this.stopOwned(channelId, controller)
+        return { ok: false, reason: outcome.reason, closeCode: outcome.closeCode }
+      }
       return true
     } catch {
       this.stopOwned(channelId, controller)

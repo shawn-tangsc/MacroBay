@@ -54,7 +54,11 @@ describe('discord runtime manager', () => {
 
   it('refuses a gateway url that is not wss and leaves no socket behind', async () => {
     const harness = createHarness({ gatewayUrl: 'http://gateway.example.test' })
-    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toBe(false)
+    // REST 这一跳已经能分清原因，别再回一个光秃秃的 false。
+    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toEqual({
+      ok: false,
+      reason: 'discord-provider-rejected'
+    })
     expect(harness.sockets).toHaveLength(0)
   })
 
@@ -66,6 +70,15 @@ describe('discord runtime manager', () => {
     })
     await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toBe(false)
     expect(harness.sockets).toHaveLength(0)
+  })
+
+  it('returns the 4014 close code as the start reason, not a bare false', async () => {
+    const harness = createHarness({ startWindowMs: 2_000, dropOnOpen: 4_014 })
+    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toEqual({
+      ok: false,
+      reason: 'discord-intents-disallowed',
+      closeCode: 4_014
+    })
   })
 
   it('registers the delivery client only for as long as the channel runs', async () => {
@@ -104,6 +117,10 @@ function createHarness(options: {
   gatewayUrl?: string
   isCurrentActive?: () => boolean
   onFetch?: () => void
+  /** 默认 0：用例不等那 8 秒窗口；要验「早期的致命结论」时传一个窗口并让假 socket 主动关。 */
+  startWindowMs?: number
+  /** 假 socket 一建好就用这个关闭码掉线（模拟 4014 这类早期致命关闭）。 */
+  dropOnOpen?: number
 } = {}) {
   const sockets: FakeSocket[] = []
   const socketUrls: string[] = []
@@ -128,13 +145,18 @@ function createHarness(options: {
         const socket = new FakeSocket()
         sockets.push(socket)
         socketUrls.push(url)
+        if (options.dropOnOpen !== undefined) {
+          const code = options.dropOnOpen
+          setTimeout(() => { socket.closeWith(code) }, 0)
+        }
         return socket as never
       }
     } as never,
     delivery,
     getCredential: () => ({ ref: 'known-ref', revision: 1 }),
     ownsLifecycleOwner: (channelId, token, generation) => channelId === 'discord-a' && token === 'owner-a' && generation === 1,
-    isCurrentActive: options.isCurrentActive ?? ((channelId, generation) => channelId === 'discord-a' && generation === 1)
+    isCurrentActive: options.isCurrentActive ?? ((channelId, generation) => channelId === 'discord-a' && generation === 1),
+    startWindowMs: options.startWindowMs ?? 0
   })
   return { manager, delivery, fetch: fetchMock, sockets, socketUrls }
 }
@@ -152,6 +174,12 @@ class FakeSocket {
   close(): void {
     this.closed = true
     this.onclose?.({})
+  }
+
+  /** 对端关闭：真实 socket 带关闭码，这里照同形状交出来。 */
+  closeWith(code: number): void {
+    this.closed = true
+    this.onclose?.({ code })
   }
 
   send(_value: string): void {}

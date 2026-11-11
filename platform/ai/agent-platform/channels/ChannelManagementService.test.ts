@@ -115,6 +115,36 @@ describe('ChannelManagementService', () => {
     expect(database.connection.prepare('select lifecycle_state from channel_runtime_generations where channel_id=?').get(id)).toEqual({ lifecycle_state: 'inactive' })
   })
 
+  it('records the runtime failure reason as the code and keeps its close code in the audit', async () => {
+    // 服务与适配器无关：这里验证的是「运行时给原因 → 结果码 → 审计」这条链。
+    // 以前 Discord 的 4014 只会落成 `adapter-runtime-start-failed` + 空 summary，日志里查不出原因。
+    const { database, repository, vault, cipher } = harness()
+    const id = repository.query.list()[0]?.id ?? 'channel-discord-failure'
+    if (!repository.query.get(id)) expect(repository.create({ id, name: 'Discord', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
+    database.connection.prepare("update agent_channels set credential_ref='channel-migration:channel-discord-failure:ref',credential_revision=1,credential_health='configured',lifecycle_state='ready' where id=?").run(id)
+    const service = new ChannelManagementService({
+      repository, vault, cipher, registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]), handoff: new ChannelSecureHandoff(),
+      runtime: {
+        start: async () => ({ ok: false, reason: 'discord-intents-disallowed', closeCode: 4_014 }),
+        stop: () => {}
+      },
+      now: () => new Date('2026-07-19T00:00:00.000Z')
+    })
+
+    await expect(Promise.resolve(service.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
+      ok: false,
+      code: 'discord-intents-disallowed',
+      reason: 'discord-intents-disallowed'
+    })
+    const audit = database.connection.prepare(
+      'select action,code,summary_json from channel_management_audits where channel_id=? order by created_at desc, id desc limit 1'
+    ).get(id) as { action: string; code: string; summary_json: string }
+    expect(audit.action).toBe('request-enable')
+    // 审计码就是细码：查日志的人不必再猜那个总桶背后是什么。
+    expect(audit.code).toBe('discord-intents-disallowed')
+    expect(JSON.parse(audit.summary_json)).toEqual({ runtimeReason: 'discord-intents-disallowed', closeCode: '4014' })
+  })
+
   it('fences all runtime-ready Telegram channels during bounded application shutdown', () => {
     const { database, repository } = harness()
     const id = repository.query.list()[0]?.id ?? 'channel-shutdown'

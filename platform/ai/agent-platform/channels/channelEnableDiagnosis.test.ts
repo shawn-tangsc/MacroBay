@@ -217,12 +217,14 @@ describe('enabling a channel that has no seven-item evidence', () => {
 
     const result = await Promise.resolve(service.requestEnable({ id: CHANNEL_ID, actorId: 'user-a' }))
 
-    expect(result).toMatchObject({ ok: false, code: 'adapter-runtime-start-failed' })
+    // 原因直接当结果码：界面读这个码说人话，日志查这个码定位，不再各自对一次总桶。
+    expect(result).toMatchObject({ ok: false, code: 'channel-runtime-generation-stale' })
     expect(result.reason).toBe('channel-runtime-generation-stale')
     // 审计里也留一份真实原因，下一次排查不用猜。
     const audit = database.connection.prepare(
-      "select summary_json from channel_management_audits where channel_id = ? and action = 'request-enable' order by created_at desc limit 1"
-    ).get(CHANNEL_ID) as { summary_json: string }
+      "select code, summary_json from channel_management_audits where channel_id = ? and action = 'request-enable' order by created_at desc limit 1"
+    ).get(CHANNEL_ID) as { code: string; summary_json: string }
+    expect(audit.code).toBe('channel-runtime-generation-stale')
     expect(JSON.parse(audit.summary_json)).toEqual({ runtimeReason: 'channel-runtime-generation-stale' })
   })
 

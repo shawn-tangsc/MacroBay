@@ -168,6 +168,13 @@ export type ChannelManagementCode =
   | 'channel-credential-unavailable'
   /** 用户点启用时现场自检没通过：凭据/网络/限流/被别人占用，`reason` 给具体码。 */
   | 'channel-smoke-failed'
+  /**
+   * Discord 启动失败的三条**细码**：它们各自对应一个不同的修法，不许再并进
+   * `adapter-runtime-start-failed`（那个总桶只说明「没起来」，读者据此只能一遍遍换 Token）。
+   */
+  | 'discord-credential-missing'
+  | 'discord-credential-rejected'
+  | 'discord-intents-disallowed'
   | 'channel-delete-pending'
   | 'channel-management-metadata-failed'
   | 'channel-not-found'
@@ -306,6 +313,9 @@ export const CHANNEL_FAILURE_CODES = [
   'conversation-session-missing',
   'session-selection-unavailable',
   'channel-smoke-failed',
+  'discord-credential-missing',
+  'discord-credential-rejected',
+  'discord-intents-disallowed',
   'discord-network-unavailable',
   'lark-connect-failed',
   'lark-network-unavailable',
@@ -330,6 +340,11 @@ export const CHANNEL_FAILURE_CODES = [
 ] as const
 
 export type ChannelFailureCode = (typeof CHANNEL_FAILURE_CODES)[number]
+
+/** 运行时给的原因是不是本仓认识的失败码：认识才允许它直接当审计码，别把拼错的字符串写进库。 */
+export function isChannelFailureCode(value: string): value is ChannelFailureCode {
+  return (CHANNEL_FAILURE_CODES as readonly string[]).includes(value)
+}
 
 /** 成功码：它们不进「失败原因」表，界面也不该把它们当失败说。 */
 export const CHANNEL_SUCCESS_CODES = [

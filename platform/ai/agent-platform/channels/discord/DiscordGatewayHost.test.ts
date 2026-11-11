@@ -215,6 +215,46 @@ describe('discord gateway host', () => {
     expect(harness.sockets).toHaveLength(1)
   })
 
+  it('hands a fatal 4014 back to the caller, with the close code, instead of only auditing it', async () => {
+    // 这一条是「启用失败时界面能不能说出真原因」的唯一判据：4014 意味着 Message Content 没开，
+    // 重连与换 Token 都不会变好，所以它必须作为启动结果交回去，而不是只落一条审计。
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    const outcome = harness.host.waitForOutcome()
+    harness.sockets[0].drop(4_014)
+
+    await expect(outcome).resolves.toEqual({
+      ok: false,
+      reason: 'discord-intents-disallowed',
+      closeCode: 4_014
+    })
+  })
+
+  it('separates a rejected token from a missing intent', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    const outcome = harness.host.waitForOutcome()
+    harness.sockets[0].drop(4_003)
+
+    await expect(outcome).resolves.toEqual({
+      ok: false,
+      reason: 'discord-credential-rejected',
+      closeCode: 4_003
+    })
+  })
+
+  it('reports success only once READY has actually arrived', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    let settled: unknown = null
+    const outcome = harness.host.waitForOutcome().then((value) => { settled = value; return value })
+    await flush()
+    expect(settled).toBeNull()
+
+    harness.sockets[0].message(READY)
+    await expect(outcome).resolves.toEqual({ ok: true })
+  })
+
   it('still reconnects after an ordinary transport drop', async () => {
     const harness = await createHarness()
     harness.sockets[0].message(HELLO)
