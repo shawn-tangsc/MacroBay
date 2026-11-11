@@ -176,7 +176,9 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           timeline={timeline}
           onOpenDetail={entry => { setOpenEntry(entry); timeline.ensureDetail(entry) }}
           onOpenTimeline={() => setTimelineOpen(true)}
-          onOpenAnalysisSettings={() => setAnalysisSettingsOpen(true)}
+          /* 与时间轴同一形状：宿主给了入口就用宿主的（`index.tsx` 传的是打开配置抽屉「AI 分析」屏），
+             只有单挂组件、没有宿主时才退回本地弹窗。 */
+          onOpenAnalysisSettings={onOpenAnalysisSettings ?? (() => setAnalysisSettingsOpen(true))}
           openTimelineLabel={text.analysisDrawer.open}
           enableAnalysisLabel={text.analysisTimeline.enableAnalysis}
           analysisOffHint={text.analysisTimeline.analysisOffHint}
@@ -192,11 +194,13 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readMarketEvents ? { readMarketEvents } : {})
         })}
-        <MarketAnalysisSettingsDialog
-          onClose={() => setAnalysisSettingsOpen(false)}
-          open={analysisSettingsOpen}
-          text={text.analysisTimeline}
-        />
+        {onOpenAnalysisSettings === undefined
+          ? <MarketAnalysisSettingsDialog
+            onClose={() => setAnalysisSettingsOpen(false)}
+            open={analysisSettingsOpen}
+            text={text.analysisTimeline}
+          />
+          : null}
         <AnalysisTimelineDrawer
           onOpenSettings={onOpenAnalysisSettings ?? (() => setAnalysisSettingsOpen(true))}
           onClose={() => setTimelineOpen(false)}
