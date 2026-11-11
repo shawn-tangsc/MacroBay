@@ -152,6 +152,7 @@ export function DashboardSourcesPanel(props: {
       onDraftChange: reportDraftDirty,
       showSourceDetails: true,
       surface: 'settings',
+      revisionOrigin: settings.revisionOrigin,
       ...(focusSourceId === undefined ? {} : { initialSourceId: focusSourceId })
     }}
     treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}

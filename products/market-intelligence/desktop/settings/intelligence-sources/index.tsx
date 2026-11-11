@@ -50,7 +50,8 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     dismissOtherSideChanged,
     profiles,
     definitions,
-    updateSourceProfile
+    updateSourceProfile,
+    revisionOrigin
   } = useIntelligenceSourcesSettings(t)
   const translation = useIntelligenceTranslationSettings(t.translationPreferences)
   // 采集策略：每源一份 profile，读 `profiles`；是否支持情绪分析由源定义决定（同一个事实只读一处）。
@@ -115,7 +116,8 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
           onDraftChange: setDraftDirty,
           translation: language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined,
           showSourceDetails: true,
-          surface: 'settings'
+          surface: 'settings',
+          revisionOrigin: revisionOrigin
         }}
         treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
         view={settingsView} />

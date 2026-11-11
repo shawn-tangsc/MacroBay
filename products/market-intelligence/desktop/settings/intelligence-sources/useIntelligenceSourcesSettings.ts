@@ -340,6 +340,8 @@ export function useIntelligenceSourcesSettings(labels: {
     runSourceNow,
     setDraftDirty,
     reloadFromOtherSide,
-    dismissOtherSideChanged
+    dismissOtherSideChanged,
+    /** 本界面实例的域信号 origin：格级写入也用它，别处据此忽略自己那一次。 */
+    revisionOrigin: revisionOriginRef.current
   }
 }

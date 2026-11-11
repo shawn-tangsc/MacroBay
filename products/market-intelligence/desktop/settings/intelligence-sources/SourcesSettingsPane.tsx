@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
 
+import { notifySettingsRevision } from '../../shared/events/settingsRevision'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { BusinessSettingsContent, BusinessSettingsView, type BusinessFocus, type BusinessKey } from './BusinessSettingsView'
 import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
@@ -171,13 +172,22 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
   for (const module of modulesForBusiness('dashboard')) {
     for (const cell of module.cells) cellSourceOf.set(cellIdOf(module.id, cell), cell.sourceId)
   }
+  const cellRevisionOrigin = props.surface.revisionOrigin ?? 'sources-cell'
   const onCellToggle = props.cellEnabledIo === undefined
     ? undefined
     : (cellId: string, enabled: boolean): void => {
+      const io = props.cellEnabledIo!
       setCellEnabled((current) => ({ ...current, [cellId]: enabled }))
-      void props.cellEnabledIo?.write(cellId, enabled).catch(() => undefined)
       const sourceId = cellSourceOf.get(cellId)
-      if (enabled && sourceId !== undefined) props.cellEnabledIo?.writeSelection?.(cellId, sourceId)
+      /* 开一格 = 写格 true + 选中该源，两次写**合并成一次**域信号（发两条会让另一边重读两遍）。
+         写失败：**不发信号**，现有失败处理（静默、开关按读回值显示）不变——不能把失败画成已生效。 */
+      const writes: Array<Promise<void>> = [io.write(cellId, enabled)]
+      if (enabled && sourceId !== undefined && io.writeSelection !== undefined) {
+        writes.push(io.writeSelection(cellId, sourceId))
+      }
+      void Promise.all(writes)
+        .then(() => { notifySettingsRevision('sources', cellRevisionOrigin) })
+        .catch(() => undefined)
     }
 
   /* **一个骨架**：页签条只在这一处渲染一次；两个分类只换「列表」与「内容」。

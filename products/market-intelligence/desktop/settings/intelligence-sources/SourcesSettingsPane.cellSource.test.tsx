@@ -5,6 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
+import {
+  SETTINGS_REVISION_EVENT,
+  type SettingsRevisionDetail
+} from '../../shared/events/settingsRevision'
 import { productText } from '../../shared/i18n/productText'
 import { SourcesSettingsPane } from './SourcesSettingsPane'
 
@@ -33,10 +37,25 @@ function source(sourceId: string) {
   }
 }
 
-async function render(initial: Readonly<Record<string, boolean>> = {}) {
+async function render(
+  initial: Readonly<Record<string, boolean>> = {},
+  options: Readonly<{ failWrite?: boolean; origin?: string }> = {}
+): Promise<{
+  host: HTMLElement
+  onToggleSource: ReturnType<typeof vi.fn>
+  writes: Array<[string, boolean]>
+  selections: Array<[string, string | null]>
+  events: SettingsRevisionDetail[]
+}> {
   const onToggleSource = vi.fn(async () => true)
   const writes: Array<[string, boolean]> = []
   const selections: Array<[string, string | null]> = []
+  const events: SettingsRevisionDetail[] = []
+  const onRevision = (event: Event): void => {
+    const detail = (event as CustomEvent<SettingsRevisionDetail>).detail
+    if (detail?.domain === 'sources') events.push(detail)
+  }
+  window.addEventListener(SETTINGS_REVISION_EVENT, onRevision)
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -46,7 +65,10 @@ async function render(initial: Readonly<Record<string, boolean>> = {}) {
       children: createElement(SourcesSettingsPane, {
         cellEnabledIo: {
           read: async () => initial,
-          write: async (cellId: string, enabled: boolean) => { writes.push([cellId, enabled]) },
+          write: async (cellId: string, enabled: boolean) => {
+            writes.push([cellId, enabled])
+            if (options.failWrite === true) throw new Error('write failed')
+          },
           writeSelection: async (cellId: string, sourceId: string | null) => { selections.push([cellId, sourceId]) }
         },
         filter: 'all',
@@ -59,7 +81,8 @@ async function render(initial: Readonly<Record<string, boolean>> = {}) {
           onRunNow: async () => undefined,
           onToggleSource,
           policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
-          showSourceDetails: true
+          showSourceDetails: true,
+          ...(options.origin === undefined ? {} : { revisionOrigin: options.origin })
         } as never,
         treeLabels: {
           title: t.title, categories: t.sourceCategories, providerNames: t.providerNames,
@@ -74,7 +97,14 @@ async function render(initial: Readonly<Record<string, boolean>> = {}) {
     }))
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-  return { host, onToggleSource, writes, selections }
+  return {
+    host,
+    onToggleSource,
+    writes,
+    selections,
+    events,
+    dispose: () => window.removeEventListener(SETTINGS_REVISION_EVENT, onRevision)
+  } as never
 }
 
 describe('卡片项开关只写格，不碰源启停', () => {
@@ -96,5 +126,52 @@ describe('卡片项开关只写格，不碰源启停', () => {
     await act(async () => { control?.click() })
     expect(writes).toContainEqual(['quotes:ndx', false])
     expect(onToggleSource).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 格级写入要发**一次**域信号（用户 2026-11-12 真机：在看板打开 FOMC 那格，回看板仍显示
+ * 「来源没有启用」，必须重开界面才变）。开一格是两次写（写格 + 选源），信号只许发一条。
+ */
+describe('卡片项开关写完发一次来源域信号', () => {
+  it('emits exactly one sources event for one click, with the host banner origin', async () => {
+    const { host, events, dispose } = await render({ 'quotes:btc': false }, { origin: 'drawer-instance' }) as never as {
+      host: HTMLElement
+      events: SettingsRevisionDetail[]
+      dispose: () => void
+    }
+    const control = host.querySelector<HTMLElement>('[data-cell-id="quotes:btc"] [role="switch"]')
+    await act(async () => { control?.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    dispose()
+    // 两次写（写格 true + 写选源）合并成**一条**信号。
+    expect(events).toHaveLength(1)
+    expect(events[0]).toEqual({ domain: 'sources', origin: 'drawer-instance' })
+  })
+
+  it('emits one event when switching the cell off too', async () => {
+    const { host, events, dispose } = await render({ 'quotes:ndx': true }, { origin: 'drawer-instance' }) as never as {
+      host: HTMLElement
+      events: SettingsRevisionDetail[]
+      dispose: () => void
+    }
+    const control = host.querySelector<HTMLElement>('[data-cell-id="quotes:ndx"] [role="switch"]')
+    await act(async () => { control?.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    dispose()
+    expect(events).toHaveLength(1)
+  })
+
+  it('emits nothing when the write fails (a failed write must not look applied)', async () => {
+    const { host, events, dispose } = await render({ 'quotes:btc': false }, { origin: 'drawer-instance', failWrite: true }) as never as {
+      host: HTMLElement
+      events: SettingsRevisionDetail[]
+      dispose: () => void
+    }
+    const control = host.querySelector<HTMLElement>('[data-cell-id="quotes:btc"] [role="switch"]')
+    await act(async () => { control?.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    dispose()
+    expect(events).toHaveLength(0)
   })
 })

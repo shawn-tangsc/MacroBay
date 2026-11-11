@@ -59,6 +59,11 @@ export type SourceConfigSurfaceProps = {
   /** 立即运行，返回这一次的结果给行内显示。 */
   onRunNow?: (sourceId: string) => Promise<SourceRunOutcome>
   /* ── 宿主契约（看板/日历抽屉用的那三个）：启用必须走带 origin 的写回调，另两个动作不发域信号。 */
+  /**
+   * 这一界面实例的域信号 origin（设置域变更信号）。格级开关写成功后发一次 `sources` 域事件，
+   * 带的就是它——发出方自己的订阅据此忽略自己那一次，不引出一轮多余重读。
+   */
+  revisionOrigin?: string
   /** 启用开关的宿主写入口；给了就优先于 `onToggleSource`，由本组件补 origin。 */
   onWriteSourceEnabled?: (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean, origin: string) => Promise<void> | void
   writeOrigin?: string
