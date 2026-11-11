@@ -22,6 +22,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CalendarDetailSurface, type CalendarDetailState } from './CalendarDetailSurface'
+import { calendarRowFor } from './calendarRowFocus'
 import { useBlsAvailability, useBlsYearSync } from './useBlsAvailability'
 import type { BlsScheduleFeedback } from './blsAvailability'
 import { type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
@@ -315,16 +316,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
     setSelectedLinkedMarket(undefined)
     setDetailState({ state: 'idle' })
   }
-  /**
-   * 关闭详情时焦点回到**被点的那一行**：`inline` 抽屉不抢焦点，但读者 Tab 进抽屉后按 Esc，
-   * 焦点会落到 body。锚点用本页自己的行标记给——抽屉不猜（看板那边的行是另一种元素）。
-   */
-  const returnFocusTo = (eventKey: string): HTMLElement | null => {
-    const matches = [...document.querySelectorAll<HTMLElement>('button[data-calendar-row]')]
-      .filter(row => row.dataset.eventKey === eventKey || row.dataset.marketEvent === eventKey)
-    // 当日列表里那一行优先：读者是从那里点开的；月格里同名的一格是另一条路（它自己也有一条行）。
-    return matches.find(row => row.closest('[data-calendar-day-list]') !== null) ?? matches[0] ?? null
-  }
   /** Picking the same event again is how the reader puts the drawer away. */
   const selectItem = (item: CalendarDayItem) => {
     const alreadyOpen = item.source === 'market'
@@ -439,7 +430,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
         marketSources={market.sources}
         now={now}
         onClose={clearDetail}
-        returnFocusTo={returnFocusTo}
+        returnFocusTo={calendarRowFor}
         onRefresh={async (operation, eventKey) => {
           if (refreshState?.pending) return
           setRefreshState({ eventKey, operation, pending: true })
