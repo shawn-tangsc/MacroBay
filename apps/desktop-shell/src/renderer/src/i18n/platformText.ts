@@ -1678,6 +1678,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSelfCheckHint: '点启用会用已存凭据现场检查一次连接，通过就打开。',
       channelFailureReason: Object.freeze({
       'adapter-not-supported': '这个平台还没接上，这一版启用不了',
+        'channel-adapter-unverified': '这个平台已经实现，但这一版还没有接现场自检，暂时不能从这里启用',
       'adapter-runtime-start-failed': '连接没能起来，可以再试一次；反复失败就看一眼日志',
       'channel-agent-missing': '这条频道绑的助手不在了，刷新之后重选一个',
       'channel-credential-invalid': '这个平台不接受这种凭据，检查一下再填',
@@ -3065,6 +3066,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSelfCheckHint: 'Enabling checks the connection once with the stored credential, then turns on.',
       channelFailureReason: Object.freeze({
       'adapter-not-supported': 'this platform is not connected yet, so it cannot be enabled in this version',
+        'channel-adapter-unverified': 'this platform is implemented, but this version has no on-the-spot self-check yet, so it cannot be enabled from here',
       'adapter-runtime-start-failed': 'the connection did not come up; retry, and check the logs if it keeps failing',
       'channel-agent-missing': 'the assistant this channel was bound to is gone; refresh and pick another',
       'channel-credential-invalid': 'this platform does not accept that credential; check it and enter it again',

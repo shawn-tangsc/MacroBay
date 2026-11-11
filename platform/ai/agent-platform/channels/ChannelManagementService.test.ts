@@ -16,7 +16,7 @@ describe('ChannelManagementService', () => {
     const { service, database } = harness()
     const created = service.create({ type: 'feishu', name: 'Lark', agentId: 'agent-a', actorId: 'user-a' })
     expect(created).toMatchObject({ ok: true, channel: { type: 'feishu', requestedEnabled: false, state: 'credential-missing' } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select adapter_key,public_config_json,requested_enabled,lifecycle_state from agent_channels where id=?').get(created.channel!.id)).toEqual({
       adapter_key: 'lark', public_config_json: '{"domain":"lark"}', requested_enabled: 0, lifecycle_state: 'credential-missing'
     })
@@ -64,7 +64,7 @@ describe('ChannelManagementService', () => {
     expect(created).toMatchObject({ ok: true, code: 'configuration-ready', channel: {
       type: 'slack', requestedEnabled: false, state: 'credential-missing', credential: { hasCredential: false }
     } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select adapter_key,requested_enabled,lifecycle_state from agent_channels where id=?').get(created.channel!.id)).toEqual({
       adapter_key: 'slack', requested_enabled: 0, lifecycle_state: 'credential-missing'
     })
@@ -81,7 +81,7 @@ describe('ChannelManagementService', () => {
     const created = service.create({ name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' })
 
     expect(created).toMatchObject({ ok: true, code: 'configuration-ready', channel: { requestedEnabled: false, state: 'credential-missing' } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(service.restart({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
     expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get(created.channel!.id)).toEqual({
       requested_enabled: 0,
@@ -1569,7 +1569,7 @@ describe('Slack enable chain (evidence -> canEnable -> in-app enable)', () => {
 
     await expect(Promise.resolve(guarded.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
       ok: false,
-      code: 'adapter-not-supported'
+      code: 'channel-adapter-unverified'
     })
     expect(started).toEqual([])
     expect(service.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'blocked' })

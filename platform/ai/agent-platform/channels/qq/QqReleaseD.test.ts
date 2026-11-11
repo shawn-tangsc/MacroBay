@@ -21,7 +21,7 @@ describe('QQ Release D contracts', () => {
     const service = new ChannelManagementService({ repository: new ChannelManagementRepository(database), vault: {} as never, cipher: {} as never, registry: new ChannelAdapterAcceptanceRegistry(), handoff: new ChannelSecureHandoff() })
     const created = service.create({ type: 'qq', name: 'QQ', agentId: 'agent-a', actorId: 'user-a' })
     expect(created).toMatchObject({ ok: true, channel: { type: 'qq', requestedEnabled: false, credential: { hasCredential: false } } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select public_config_json,requested_enabled from agent_channels where id=?').get(created.channel!.id)).toEqual({ public_config_json: '{}', requested_enabled: 0 })
     expect(() => assertQqSecret({ app_id: 'app_12345678', client_secret: 'a'.repeat(20) })).not.toThrow()
     expect(() => assertQqSecret({ app_id: 'short', client_secret: 'a'.repeat(20) })).toThrow('channel-input-invalid')

@@ -29,7 +29,7 @@ import { seedChannelAdapterSupport } from './channelTestSupport'
 const CHANNEL_ID = 'e3087f1f-1122-4b46-95f9-cc77129c1fc5'
 const AGENT_ID = 'daily-brief-editor'
 
-function harness(options: { smokeOk?: boolean } = {}) {
+function harness(options: { smokeOk?: boolean; smokeMissing?: boolean } = {}) {
   const database = createAgentPlatformDatabase(':memory:')
   // 七项真机证据一项都没有：适配器保持 blocked，只有进程内的自检放行能让它开起来。
   seedChannelAdapterSupport(database, [])
@@ -52,9 +52,13 @@ function harness(options: { smokeOk?: boolean } = {}) {
     registry: new ChannelAdapterAcceptanceRegistry(),
     handoff: new ChannelSecureHandoff(),
     runtime,
-    smoke: async () => (options.smokeOk === false
-      ? { ok: false, code: 'telegram-proxy-unavailable', transportError: 'ERR_PROXY_CONNECTION_FAILED', proxy: 'DIRECT', fetch: 'net' }
-      : { ok: true }),
+    ...(options.smokeMissing === true
+      ? {}
+      : {
+        smoke: async () => (options.smokeOk === false
+          ? { ok: false, code: 'telegram-proxy-unavailable', transportError: 'ERR_PROXY_CONNECTION_FAILED', proxy: 'DIRECT', fetch: 'net' }
+          : { ok: true })
+      }),
     now: () => new Date('2026-11-04T07:50:00.000Z')
   })
   return { database, service, runtime }
@@ -63,6 +67,16 @@ function harness(options: { smokeOk?: boolean } = {}) {
 afterEach(() => {
   // 放行是进程内状态：用例之间必须还原，否则后面所有用例都「悄悄支持了 telegram」。
   setChannelAcceptanceOverride(null)
+})
+
+describe('enabling when this build has no on-the-spot self-check', () => {
+  it('tells an implemented adapter that this version has no self-check, not that the platform is unconnected', async () => {
+    const { service } = harness({ smokeMissing: true })
+    const result = await Promise.resolve(service.requestEnable({ id: CHANNEL_ID, actorId: 'user-a' }))
+    // telegram 是 implemented：说「平台还没接上」是假话；这句只允许给没实现的适配器。
+    expect(result.code).toBe('channel-adapter-unverified')
+    expect(result.code).not.toBe('adapter-not-supported')
+  })
 })
 
 describe('enabling a channel that has no seven-item evidence', () => {

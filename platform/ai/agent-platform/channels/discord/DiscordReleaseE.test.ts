@@ -22,7 +22,7 @@ describe('Discord Release E contracts', () => {
     const service = new ChannelManagementService({ repository: new ChannelManagementRepository(database), vault: {} as never, cipher: {} as never, registry: new ChannelAdapterAcceptanceRegistry(), handoff: new ChannelSecureHandoff() })
     const created = service.create({ type: 'discord', name: 'Discord', agentId: 'agent-a', actorId: 'user-a' })
     expect(created).toMatchObject({ ok: true, channel: { type: 'discord', requestedEnabled: false, credential: { hasCredential: false } } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select public_config_json,requested_enabled from agent_channels where id=?').get(created.channel!.id)).toEqual({ public_config_json: '{}', requested_enabled: 0 })
     expect(() => assertDiscordSecret({ bot_token: 'a'.repeat(24) })).not.toThrow()
     expect(() => assertDiscordSecret({ bot_token: 'short' })).toThrow('channel-input-invalid')

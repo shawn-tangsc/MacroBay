@@ -164,7 +164,17 @@ export class ChannelManagementService {
       // 平台整体还没「对外声明支持」不等于这位用户不能用：用他刚填的凭据现场自检一次，
       // 过了就只在这条通道上启用（进程内、不写库、不翻 supported），没过就把原因说清楚。
       const smoke = this.deps.smoke
-      if (!smoke) return this.enableRejected(id, input.actorId, channel)
+      if (!smoke) {
+        // 已实现的适配器不能被告知「平台还没接上」——那是把「这一版缺放行路径」说成「代码没写」。
+        return this.enableRejected(
+          id,
+          input.actorId,
+          channel,
+          channelAdapterDescriptor(channelAdapterKeyForType(channel.type)).implemented
+            ? 'channel-adapter-unverified'
+            : 'adapter-not-supported'
+        )
+      }
       return requestSmokeEnabledChannel(
         {
           smoke,

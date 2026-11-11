@@ -157,6 +157,11 @@ export type ChannelManagementResult = {
 
 export type ChannelManagementCode =
   | 'adapter-not-supported'
+  /**
+   * 适配器**已实现**、但这一版没有接现场自检：不能说「平台还没接上」（那是假话）。
+   * 只用于 `implemented === true` 的适配器；没实现的仍回 `adapter-not-supported`。
+   */
+  | 'channel-adapter-unverified'
   | 'adapter-runtime-start-failed'
   | 'channel-agent-missing'
   /** 启用最后一跳没落成：owner/代际/状态被别处改动抢走，与「助手不在了」是两件事。 */
@@ -294,6 +299,7 @@ function isSlackToken(value: string, prefix: string): boolean {
  */
 export const CHANNEL_FAILURE_CODES = [
   'adapter-not-supported',
+  'channel-adapter-unverified',
   'adapter-runtime-start-failed',
   'channel-agent-missing',
   'channel-credential-invalid',
