@@ -540,10 +540,11 @@
   border: 0;
   border-radius: 0;
   background: none;
+  border-top: 1px solid var(--border);
 }
 
 .config-drawer__card .business-card + .business-card {
-  padding-top: 16px;
+  /*padding-top: 16px;*/
   border-top: 1px solid var(--border);
 }
 
