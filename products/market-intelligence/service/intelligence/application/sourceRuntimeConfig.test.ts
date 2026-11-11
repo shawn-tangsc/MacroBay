@@ -148,12 +148,21 @@ describe('sourceRuntimeConfig', () => {
     expect(config.enabled).toBe(false)
   })
 
-  it('defaults every keyless, live source to enabled and leaves the other two groups off', () => {
-    // 免钥匙 + live → 默认开，无论有没有看板模块读它（用户 2026-11-12 的口径）。
+  it('defaults keyless live sources with a reader-visible output to enabled, and leaves three other groups off', () => {
+    // 免钥匙 + live + 有产出（看板 / 简报 / 舆情 / 仅分析）→ 默认开。
     expect(createDefaultSourceProfile(requireDefinition('coindesk-rss')).enabled).toBe(true)
-    // 免钥匙 + live、但没有任何看板模块读它 → 也默认开（状态页、公告流、分析用那批）。
+    // 只供 AI 分析用、没有任何看板模块读它 → 也默认开（读者 2026-11-12：「还没用上的」不包括它们）。
     expect(createDefaultSourceProfile(requireDefinition('defillama-tvl')).enabled).toBe(true)
     expect(createDefaultSourceProfile(requireDefinition('binance-spot-market')).enabled).toBe(true)
+    // 维护备用（`maintenanceOnly`，今天没有任何读者可见产出）→ 默认关。读者点名的那几条：
+    // 系统与状态那组、以太坊基金会、CFTC，另外还有美联储新闻稿、Binance API updates。
+    for (const sourceId of ['coinbase-status', 'kraken-status', 'solana-status', 'github-releases',
+      'ethereum-foundation-blog', 'cftc-rss', 'federal-reserve-rss', 'binance-api-updates']) {
+      const definition = requireDefinition(sourceId)
+      // 免钥匙（`none` 或 `optional-api-key`）且已就绪，只因「今天没有读者可见产出」而默认关。
+      expect(definition.readiness, sourceId).toBe('live')
+      expect(createDefaultSourceProfile(definition).enabled, sourceId).toBe(false)
+    }
     // 需要钥匙 → 默认关。
     expect(createDefaultSourceProfile(requireDefinition('twelve-data-market')).enabled).toBe(false)
     // 免钥匙但还没接进来（readiness 不是 live）→ 默认关。

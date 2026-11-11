@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import { createSourceProfileStore, createInMemoryProfileStorage } from './sourceProfileStore'
-import { KEYLESS_SOURCES_ENABLED_MARKER, migrateKeylessSourceDefaults } from './keylessSourceDefaultsMigration'
+import {
+  KEYLESS_MAINTENANCE_SOURCES_DISABLED_MARKER,
+  KEYLESS_SOURCES_ENABLED_MARKER,
+  disableMaintenanceOnlyKeylessSources,
+  migrateKeylessSourceDefaults
+} from './keylessSourceDefaultsMigration'
 
 /**
  * 「免钥匙 + live」的老 profile 改成开，只做一次。
@@ -43,9 +48,9 @@ describe('keyless source defaults migration', () => {
   it('opens keyless live sources that old defaults left off, and leaves the others alone', async () => {
     const markerPath = tempMarker()
     const { store } = await setup([
-      profile('federal-reserve-rss', false),      // 免钥匙 + live → 打开
+      profile('federal-reserve-rss', false),      // 键盘免钥匙 + live，但**维护备用**（没有任何读者可见产出）→ 不动
       profile('coindesk-rss', false),             // 免钥匙 + live → 打开
-      // 免钥匙 + live、但没有任何看板模块读它：2026-11-11 那版会跳过，现在照样打开。
+      // 免钥匙 + live、没有任何看板模块读它、但有 purposes（仅分析）→ 仍然打开。
       profile('defillama-tvl', false),
       profile('binance-spot-market', false),
       profile('twelve-data-market', false),       // 需要钥匙 → 不动
@@ -54,10 +59,11 @@ describe('keyless source defaults migration', () => {
 
     const result = await migrateKeylessSourceDefaults({ store, markerPath })
     expect([...result.opened].sort()).toEqual([
-      'binance-spot-market', 'coindesk-rss', 'defillama-tvl', 'federal-reserve-rss'
+      'binance-spot-market', 'coindesk-rss', 'defillama-tvl'
     ])
     expect((await store.getProfile('coindesk-rss'))?.enabled).toBe(true)
     expect((await store.getProfile('defillama-tvl'))?.enabled).toBe(true)
+    expect((await store.getProfile('federal-reserve-rss'))?.enabled).toBe(false)
     expect((await store.getProfile('twelve-data-market'))?.enabled).toBe(false)
     expect((await store.getProfile('bea-economic-series'))?.enabled).toBe(false)
   })
@@ -90,6 +96,46 @@ describe('keyless source defaults migration', () => {
     }
     const second = await migrateKeylessSourceDefaults({ store: spiedStore, markerPath })
     expect(second.opened).toEqual([])
+    expect(saves).toEqual([])
+  })
+
+  it('closes maintenance-only keyless sources the first pass opened, and leaves used ones alone', async () => {
+    const markerPath = tempMarker()
+    const { store } = await setup([
+      profile('coinbase-status', true),            // 维护备用 → 关
+      profile('github-releases', true),            // 维护备用 → 关
+      profile('ethereum-foundation-blog', true),   // 维护备用 → 关
+      profile('coindesk-rss', true),               // 有产出 → 不动
+      profile('binance-spot-market', true),        // 仅分析用途 → 不动
+      profile('twelve-data-market', true)          // 需要钥匙 → 不动（偏好照存）
+    ], markerPath)
+
+    const result = await disableMaintenanceOnlyKeylessSources({ store, markerPath })
+    expect([...result.closed].sort()).toEqual(['coinbase-status', 'ethereum-foundation-blog', 'github-releases'])
+    expect((await store.getProfile('coinbase-status'))?.enabled).toBe(false)
+    expect((await store.getProfile('coindesk-rss'))?.enabled).toBe(true)
+    expect((await store.getProfile('binance-spot-market'))?.enabled).toBe(true)
+    expect((await store.getProfile('twelve-data-market'))?.enabled).toBe(true)
+  })
+
+  it('merges both markers instead of overwriting, so neither pass runs twice', async () => {
+    const markerPath = tempMarker()
+    const { store } = await setup([profile('coinbase-status', true)], markerPath)
+    await migrateKeylessSourceDefaults({ store, markerPath })
+    await disableMaintenanceOnlyKeylessSources({ store, markerPath })
+
+    const markers = JSON.parse(readFileSync(markerPath, 'utf8')) as { markers: Record<string, unknown> }
+    expect(markers.markers[KEYLESS_SOURCES_ENABLED_MARKER]).toBeDefined()
+    expect(markers.markers[KEYLESS_MAINTENANCE_SOURCES_DISABLED_MARKER]).toBeDefined()
+
+    // 读者之后手动打开一条维护备用源：两趟都跑过，不许再关。
+    await store.saveProfile({ sourceId: 'coinbase-status', enabled: true })
+    const saves: string[] = []
+    const second = await disableMaintenanceOnlyKeylessSources({
+      store: { listProfiles: () => store.listProfiles(), saveProfile: async (input) => { saves.push(input.sourceId) } },
+      markerPath
+    })
+    expect(second.closed).toEqual([])
     expect(saves).toEqual([])
   })
 })

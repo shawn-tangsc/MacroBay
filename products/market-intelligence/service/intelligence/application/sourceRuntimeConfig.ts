@@ -44,16 +44,22 @@ const MACRO_POLLING_INTERVAL_SEC: Record<IntelligenceCollectionPreset, number | 
 }
 
 /**
- * 默认启用 = 免钥匙 **且** 已就绪（live）。
+ * 默认启用 = 免钥匙 **且** 已就绪（live）**且** 不是「维护备用」（今天没有读者可见产出）。
  *
- * 用户 2026-11-12 定的口径：除了「要 API Key 的」和「还没接进来的（readiness 不是 live）」，
- * 其余源首次运行即启用——包括没有看板模块读它们的那批（状态页、公告流、分析用那批）。
- * 2026-11-11 曾收窄成「还要被模块用到」，结果读者打开设置看到一片「数据未被启用」，
- * 得逐项手开；开关本来就在设置里，默认关反而是更贵的状态。源清单仍只来自注册表，没有 id 白名单。
+ * 用户 2026-11-12 分两句话定的口径：先说「除了要 API Key 的、还没接的，其余默认开」，
+ * 看到「系统与状态」那一组（Coinbase / Kraken / Solana / GitHub）、以太坊基金会、CFTC 之后补了
+ * 「这几个还没用上的，默认不启动」。判据不另造清单：`purposes` 为空且 `maintenanceOnly` 的源，
+ * 注册表已经声明了它们今天没有任何读者可见产出；只供 AI 分析用的源（`binance-spot-market`、
+ * `coingecko-market`、`defillama-tvl`）有 `purposes`，仍然默认开。
+ *
+ * 2026-11-11 那版要求「还要被看板模块用到」，会把上面这类分析用源也关掉（读者反馈「数据未被启用」）；
+ * 现在这条只排除真正没产出的源。源清单仍只来自注册表，没有 id 白名单。
  */
 export function isDefaultEnabledDefinition(definition: IntelligenceSourceDefinition): boolean {
   if (sourceRequiresCredential(definition.authMode)) return false
-  return (definition.readiness ?? 'live') === 'live'
+  if ((definition.readiness ?? 'live') !== 'live') return false
+  // `maintenanceOnly` 只声明在 `providerRegistry`（catalog 没有这个字段），按 id 反查一次。
+  return getSource(definition.sourceId)?.maintenanceOnly !== true
 }
 
 export function createDefaultSourceProfile(

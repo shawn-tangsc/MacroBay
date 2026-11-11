@@ -4,26 +4,26 @@ import { writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 import { sourceRequiresCredential } from '../schema/intelligenceSource'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
+import { getSource } from './providerRegistry'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 
 /**
- * 一次性迁移：把「免钥匙 + 已就绪（live）」的源的**旧默认关**打开。
+ * 两次一次性迁移，一开一关，判据是同一条：**免钥匙 + 已就绪（live）**的源里，
+ * 有读者可见产出的默认开、没有的（`maintenanceOnly`）默认关。
  *
- * 为什么需要迁移：新安装的默认值改成了「免钥匙即启用」，但老安装里这些源早有一条
- * `enabled: false` 的 profile（那是旧默认写下的），按「已有 profile 以存量为准」的规矩不会被
- * 默认值覆盖，于是一直显示 0。
+ * 读者 2026-11-12 分两句话定的口径：先说「除了要 API Key 的、还没接的，其余默认开」，
+ * 看到「系统与状态」那一组（Coinbase / Kraken / Solana / GitHub）、以太坊基金会、CFTC 之后补了
+ * 「这几个还没用上的，默认不启动」。判据不另造清单：注册表已有的 `maintenanceOnly` 就是
+ * 「今天没有任何读者可见产出」的正式声明；只供 AI 分析用的源（`binance-spot-market`、
+ * `coingecko-market`、`defillama-tvl`）有 `purposes`，仍然默认开。
  *
- * 用户 2026-11-12 的口径：**除了要 API Key 的、还没接进来的，其余全部默认启用**；
- * 2026-11-11 那版还要求「被看板模块用到」，把状态页、公告流、分析用那批挡在门外，
- * 所以这次的标记换了新键，让跑过旧迁移的安装也按新口径再走一遍。
- *
- * **无法区分「旧默认关」与「读者显式关」**，所以这次把我方默认关掉的一并打开；读者若真要关，
- * 迁移之后再关即可——迁移只做一次，标记写在 `markers` 里。
- *
- * 不迁移：需要 API Key 的源（等配钥匙）、`readiness` 不是 live 的源（还没接进来）、
- * 迁移之后读者手动关掉的（标记已在，不会再跑）。
+ * 两个标记各管各的，**写标记是合并而不是覆盖**：后一条迁移不能把前一条的痕迹抹掉，
+ * 否则下次启动会把读者手动关掉的源再打开一遍。
  */
 export const KEYLESS_SOURCES_ENABLED_MARKER = 'keyless-sources-enabled-all-2026-11-12'
+
+/** 反向那一趟：把「维护备用」的免钥匙源关回去（前一条把它们一起打开了）。 */
+export const KEYLESS_MAINTENANCE_SOURCES_DISABLED_MARKER = 'keyless-maintenance-sources-disabled-2026-11-12'
 
 export type KeylessDefaultsStore = Readonly<{
   listProfiles: () => Promise<readonly IntelligenceSourceProfile[]>
@@ -35,21 +35,30 @@ export type KeylessDefaultsMigrationResult = Readonly<{
   opened: readonly string[]
 }>
 
+export type MaintenanceDefaultsMigrationResult = Readonly<{ closed: readonly string[] }>
+
 type MarkerDocument = { markers?: Record<string, unknown> }
 
-async function hasMarker(markerPath: string, key: string): Promise<boolean> {
+async function readMarkers(markerPath: string): Promise<Record<string, unknown>> {
   try {
     const parsed = JSON.parse(await readFile(markerPath, 'utf8')) as MarkerDocument
     const markers = parsed.markers
-    return typeof markers === 'object' && markers !== null && markerKeyPresent(markers, key)
+    return typeof markers === 'object' && markers !== null ? { ...markers } : {}
   } catch {
     // 没读写过、或读到坏文件：当作没跑过；跑完会原子写一次标记。
-    return false
+    return {}
   }
 }
 
-function markerKeyPresent(markers: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(markers, key)
+async function writeMarker(markerPath: string, key: string, at: string): Promise<void> {
+  const markers = await readMarkers(markerPath)
+  markers[key] = { at }
+  await writeJsonFileAtomically(markerPath, { markers })
+}
+
+/** 这个源今天有没有读者可见产出：catalog 不带这个字段，按 id 回注册表查。 */
+function isMaintenanceOnly(sourceId: string): boolean {
+  return getSource(sourceId)?.maintenanceOnly === true
 }
 
 export async function migrateKeylessSourceDefaults(input: Readonly<{
@@ -58,7 +67,7 @@ export async function migrateKeylessSourceDefaults(input: Readonly<{
   markerPath: string
   now?: () => string
 }>): Promise<KeylessDefaultsMigrationResult> {
-  if (await hasMarker(input.markerPath, KEYLESS_SOURCES_ENABLED_MARKER)) return { opened: [] }
+  if (Object.hasOwn(await readMarkers(input.markerPath), KEYLESS_SOURCES_ENABLED_MARKER)) return { opened: [] }
 
   const now = (input.now ?? (() => new Date().toISOString()))()
   const opened: string[] = []
@@ -69,13 +78,44 @@ export async function migrateKeylessSourceDefaults(input: Readonly<{
     // 需要钥匙的源保持关（等配钥匙）；还没接入（readiness 不是 live）的也不动。
     if (sourceRequiresCredential(definition.authMode)) continue
     if ((definition.readiness ?? 'live') !== 'live') continue
+    // 维护备用（还没用上）的源同样不动：读者 2026-11-12 明确要它们默认不启动。
+    if (isMaintenanceOnly(profile.sourceId)) continue
     await input.store.saveProfile({ sourceId: profile.sourceId, enabled: true })
     opened.push(profile.sourceId)
   }
 
   // 标记**无论有没有打开过都写一次**：第二次跑不再扫、也不再写。
-  await writeJsonFileAtomically(input.markerPath, {
-    markers: { [KEYLESS_SOURCES_ENABLED_MARKER]: { at: now } }
-  })
+  await writeMarker(input.markerPath, KEYLESS_SOURCES_ENABLED_MARKER, now)
   return { opened }
+}
+
+/**
+ * 反向那一趟：**维护备用**（`maintenanceOnly`）的免钥匙 live 源，若还开着就关掉。
+ *
+ * 上面那条迁移第一版把「免钥匙 + live」全打开了，其中「系统与状态」那组、以太坊基金会、
+ * CFTC、Binance API updates、美联储新闻稿都没有任何读者可见产出——读者看到后要求默认不启动。
+ * 只跑一次，标记合并写入；读者之后手动打开不会被再关掉。
+ */
+export async function disableMaintenanceOnlyKeylessSources(input: Readonly<{
+  store: KeylessDefaultsStore
+  markerPath: string
+  now?: () => string
+}>): Promise<MaintenanceDefaultsMigrationResult> {
+  if (Object.hasOwn(await readMarkers(input.markerPath), KEYLESS_MAINTENANCE_SOURCES_DISABLED_MARKER)) return { closed: [] }
+
+  const now = (input.now ?? (() => new Date().toISOString()))()
+  const closed: string[] = []
+  for (const profile of await input.store.listProfiles()) {
+    if (profile.enabled !== true) continue
+    const definition = getIntelligenceSourceDefinition(profile.sourceId)
+    if (definition === undefined) continue
+    if (sourceRequiresCredential(definition.authMode)) continue
+    if ((definition.readiness ?? 'live') !== 'live') continue
+    if (!isMaintenanceOnly(profile.sourceId)) continue
+    await input.store.saveProfile({ sourceId: profile.sourceId, enabled: false })
+    closed.push(profile.sourceId)
+  }
+
+  await writeMarker(input.markerPath, KEYLESS_MAINTENANCE_SOURCES_DISABLED_MARKER, now)
+  return { closed }
 }

@@ -48,14 +48,14 @@ describe('enabling a source needs its credential first', () => {
 })
 
 describe('defaults for a source with no profile row', () => {
-  it('starts keyless live sources on, whatever reads them, and keys-required ones off', async () => {
+  it('starts keyless live sources that have an output on, and keys-required or maintenance-only ones off', async () => {
     const service = createService()
-    // 用户 2026-11-12 的默认启用规则：**免钥匙 + live** 就默认开，不再要求「被看板模块用到」。
+    // 用户 2026-11-12 的默认启用规则：免钥匙 + live + **有读者可见产出** 默认开。
     // `alternative-fear-greed` 被「恐惧与贪婪」格用到 → 开；`twelve-data-market` 需要钥匙 → 关；
-    // `federal-reserve-rss` 没有模块用到（模块表 0 条）→ 也默认开。
+    // `federal-reserve-rss` 是维护备用（今天没有任何读者可见产出）→ 关。
     expect((await service.getPageState({ sourceId: 'alternative-fear-greed' })).detail!.profile.enabled).toBe(true)
     expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(false)
-    expect((await service.getPageState({ sourceId: 'federal-reserve-rss' })).detail!.profile.enabled).toBe(true)
+    expect((await service.getPageState({ sourceId: 'federal-reserve-rss' })).detail!.profile.enabled).toBe(false)
   })
 
   it('keeps an explicit off for a keyless source that defaults on', async () => {
