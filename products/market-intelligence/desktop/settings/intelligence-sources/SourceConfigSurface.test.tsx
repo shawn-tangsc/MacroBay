@@ -220,12 +220,16 @@ describe('the config surface adapts a host that only has the three write callbac
     // 「立即运行」随展开区一起删除（用户 2026-11-12）：这里不再有那颗按钮。
     expect([...container.querySelectorAll('button')].some((button) => button.textContent === settingsText.health.runAction.run)).toBe(false)
 
-    // 启停的编辑入口是页头那颗组开关（用户 2026-11-12）；能力行行尾是文字状态，
-    // 一颗控件都不留（用户 2026-11-12：点不动的开关是假控件）。
+    // 启停的编辑入口是页头那颗组开关（用户 2026-11-12）；能力行行尾是文字状态。
     // 只看能力行（启用）那几行：策略表单里还有「纳入情绪分析」开关，它不是启停入口。
     expect(container.querySelectorAll('[data-setting-key^="setting:sources.enabled"] button[role="switch"]')).toHaveLength(0)
     for (const row of container.querySelectorAll('[data-setting-key^="setting:sources.enabled"]')) {
-      expect(row.querySelectorAll('button, select, input')).toHaveLength(0)
+      // 行上唯一的控件是这颗源自己的「测试」（读者 2026-11-12：每个已接入的源都要能测连通性）；
+      // 启停仍是页头组开关——行上不许出现开关、下拉或输入框。
+      expect(row.querySelectorAll('select, input')).toHaveLength(0)
+      for (const button of row.querySelectorAll('button')) {
+        expect(button.classList.contains('source-provider-detail__row-test'), button.textContent ?? '').toBe(true)
+      }
       expect(row.querySelector('.source-provider-detail__row-state')?.textContent).not.toBe('')
     }
     expect(write).not.toHaveBeenCalled()

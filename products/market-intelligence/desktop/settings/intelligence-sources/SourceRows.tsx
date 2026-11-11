@@ -52,10 +52,15 @@ export type SourceEnabledRowProps = Readonly<{
   tags: readonly string[]
   /** 「这个源现在取不到」：药丸换 `unavailableShort`，与行尾那颗标同词。 */
   unavailable: boolean
-  labels: Pick<ProviderDetailLabels, 'badges' | 'jobRegistered' | 'jobNotRegistered' | 'status'>
+  labels: Pick<ProviderDetailLabels, 'badges' | 'jobRegistered' | 'jobNotRegistered' | 'status'
+    | 'rowTest' | 'rowTesting' | 'rowTestOk' | 'rowTestFailed' | 'rowTestUnsupported'>
   resolveText: (key: string) => string
   /** 读者配过自定义代理时不再提示「需要代理」。 */
   proxyConfigured: boolean
+  /** 这一行那颗「测试」按钮：没有可测探针的源不传，行上就不出现按钮。 */
+  onTest?: () => void
+  /** 最近一次行内测试的结果；没有测过就不传（不画空壳）。 */
+  testState?: 'testing' | 'ok' | 'failed' | 'unsupported'
 }>
 
 /**
@@ -114,12 +119,33 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
     {/* 行尾是**文字状态**，不是开关（用户 2026-11-12）：这一屏的启停唯一编辑入口是页头那颗
         组开关，行上再画一颗点不动的开关就是假控件——「假控件比没有更坏」。
         文字不带交互语义、读屏按正文读出；只说这个源开没开，不写解释（解释进 ⓘ，这里不需要）。
-        **颜色也不走这里**：要颜色就用药丸，别给这一行染色（守卫在 `settingsRowValues.test.ts`）。 */}
-    <span
-      className="source-provider-detail__row-state"
-      data-source-enabled={enabled ? 'true' : 'false'}
-    >
-      {enabled ? labels.status.applied : labels.status.notApplied}
+        **颜色也不走这里**：要颜色就用药丸，别给这一行染色（守卫在 `settingsRowValues.test.ts`）。
+        行上唯一的动作是这颗源自己的「测试」（读者 2026-11-12：每个已接入的源都要能测），
+        它排在状态文字左边，测完只追加一个短词，不顶掉「已应用 / 未应用」。 */}
+    <span className="source-provider-detail__row-tail">
+      {props.onTest === undefined || labels.rowTest === undefined ? null : <button
+        className="source-provider-detail__row-test"
+        disabled={props.testState === 'testing'}
+        onClick={props.onTest}
+        type="button">
+        {props.testState === 'testing' ? labels.rowTesting ?? '' : labels.rowTest}
+      </button>}
+      {props.testState === 'ok' || props.testState === 'failed' || props.testState === 'unsupported'
+        ? <StatusPill
+          labelKey={props.testState === 'ok'
+            ? 'settings.intelligenceSources.rowTestOk'
+            : props.testState === 'unsupported'
+              ? 'settings.intelligenceSources.rowTestUnsupported'
+              : 'settings.intelligenceSources.rowTestFailed'}
+          resolveText={resolveText}
+          tone={props.testState === 'ok' ? 'ok' : props.testState === 'unsupported' ? 'muted' : 'bad'} />
+        : null}
+      <span
+        className="source-provider-detail__row-state"
+        data-source-enabled={enabled ? 'true' : 'false'}
+      >
+        {enabled ? labels.status.applied : labels.status.notApplied}
+      </span>
     </span>
   </div>
 }

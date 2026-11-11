@@ -27,6 +27,12 @@ export type SourceConfigText = {
   website: ProviderDetailLabels['website']
   signup: ProviderDetailLabels['signup']
   testConnection: ProviderDetailLabels['testConnection']
+  /** 行内测试的四个短词（可选：老调用点只给 `testConnection` 也能编译）。 */
+  rowTest: NonNullable<ProviderDetailLabels['rowTest']>
+  rowTesting: NonNullable<ProviderDetailLabels['rowTesting']>
+  rowTestOk: NonNullable<ProviderDetailLabels['rowTestOk']>
+  rowTestFailed: NonNullable<ProviderDetailLabels['rowTestFailed']>
+  rowTestUnsupported: NonNullable<ProviderDetailLabels['rowTestUnsupported']>
   jobRegistered: ProviderDetailLabels['jobRegistered']
   jobNotRegistered: ProviderDetailLabels['jobNotRegistered']
   connectionSucceeded: ProviderDetailLabels['connectionSucceeded']
@@ -108,6 +114,11 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
     website: props.text.website,
     signup: props.text.signup,
     testConnection: props.text.testConnection,
+    rowTest: props.text.rowTest,
+    rowTesting: props.text.rowTesting,
+    rowTestOk: props.text.rowTestOk,
+    rowTestFailed: props.text.rowTestFailed,
+    rowTestUnsupported: props.text.rowTestUnsupported,
     jobRegistered: props.text.jobRegistered,
     jobNotRegistered: props.text.jobNotRegistered,
     connectionSucceeded: props.text.connectionSucceeded,

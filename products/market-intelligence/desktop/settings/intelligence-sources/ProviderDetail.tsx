@@ -13,6 +13,7 @@ import type { CollectionPolicyLabels } from './collectionPolicyLabels'
 import { SettingsInfo } from '../settingsInfo'
 import { needsJob } from './SourceRows'
 import { ProviderSourceRow } from './ProviderSourceRow'
+import { useSourceRowTests } from './useSourceRowTests'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -47,6 +48,12 @@ export type ProviderDetailLabels = {
   website: string
   signup: string
   testConnection: string
+  /** 行内连通性测试的三个短词；缺省时退回 `testConnection`（老调用点不受影响）。 */
+  rowTest?: string
+  rowTesting?: string
+  rowTestOk?: string
+  rowTestFailed?: string
+  rowTestUnsupported?: string
   jobRegistered: string
   jobNotRegistered: string
   connectionSucceeded: string
@@ -204,6 +211,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    */
   const credentialTarget = credentialSourceId ? { sourceId: credentialSourceId, kind: 'feed' as const } : undefined
   const testSource = provider.sources.find((source) => source.kind === 'official-calendar') ?? credentialTarget
+
+  /**
+   * 行内连通性测试：每个已经接了的源一颗，结果按源记。
+   * 页头那颗仍是「整组一个入口」，只在有 provider 级探针时出现（官方日历源或带凭据的源）——
+   * 否则点击是空动作，假控件比没有更坏。
+   */
+  const rowTests = useSourceRowTests(provider.providerId)
 
   useEffect(() => {
     setCredentialDraft('')
@@ -371,7 +385,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               onClick={() => window.open(provider.website!, '_blank', 'noopener,noreferrer')}
               size="small">{labels.website}</Button>
             : null}
-          {offersConnectionTest(provider)
+          {offersConnectionTest(provider) && testSource !== undefined
             ? <Button
               className="source-provider-detail__name-action"
               disabled={testingConnection}
@@ -460,9 +474,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         credentialMissing={provider.credential === 'api-key' && credentialStatus?.hasCredential === false}
         key={source.sourceId}
         labels={labels}
+        onTest={source.capabilities?.testConnection === true ? () => void rowTests.run(source) : undefined}
         proxyConfigured={proxyConfigured}
         resolveText={resolveText}
         source={source}
+        {...(rowTests.stateOf(source.sourceId) ? { testState: rowTests.stateOf(source.sourceId) } : {})}
       />)}
     </div>
     {showSourceDetails ? <div className="source-provider-detail__details">

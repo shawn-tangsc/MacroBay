@@ -182,7 +182,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     credential: 'none',
     sources: [
       src({ sourceId: 'macro-calendar-fed', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-fed', displayName: 'Fed official schedule', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'provider', kind: 'official-calendar', capabilities: { runNow: 'provider', testConnection: true } }),
-      src({ purposes: [], maintenanceOnly: true, sourceId: 'federal-reserve-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.federal-reserve-rss', displayName: 'Fed RSS', adapterRef: 'federal-reserve-rss' })
+      src({ purposes: [], maintenanceOnly: true, sourceId: 'federal-reserve-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.federal-reserve-rss', displayName: 'Fed RSS', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'federal-reserve-rss' })
     ]
   }),
   provider({
@@ -259,14 +259,14 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'SEC',
     category: 'macro',
     credential: 'none',
-    sources: [src({ sourceId: 'sec-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.sec-rss', displayName: 'SEC press releases', visibility: 'advanced', purposes: ['dashboard', 'briefing', 'sentiment'], adapterRef: 'sec-rss' })]
+    sources: [src({ sourceId: 'sec-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.sec-rss', displayName: 'SEC press releases', visibility: 'advanced', purposes: ['dashboard', 'briefing', 'sentiment'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'sec-rss' })]
   }),
   provider({
     providerId: 'cftc',
     displayName: 'CFTC',
     category: 'macro',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'cftc-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.cftc-rss', displayName: 'CFTC press releases', visibility: 'advanced', adapterRef: 'cftc-rss' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'cftc-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.cftc-rss', displayName: 'CFTC press releases', visibility: 'advanced', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'cftc-rss' })]
   }),
   provider({
     providerId: 'binance',
@@ -274,9 +274,9 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'binance-announcements', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-announcements', displayName: 'Binance announcements', purposes: ['dashboard', 'briefing', 'sentiment'], requiresProxy: true, adapterRef: 'binance-announcements' }),
-      src({ purposes: [], maintenanceOnly: true, sourceId: 'binance-api-updates', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-api-updates', displayName: 'Binance API updates', requiresProxy: true, adapterRef: 'binance-api-updates' }),
-      src({ purposes: ['analysis'], sourceId: 'binance-spot-market', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-spot-market', displayName: 'Binance spot market', requiresProxy: true, adapterRef: 'binance-spot-market' }),
+      src({ sourceId: 'binance-announcements', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-announcements', displayName: 'Binance announcements', purposes: ['dashboard', 'briefing', 'sentiment'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-announcements' }),
+      src({ purposes: [], maintenanceOnly: true, sourceId: 'binance-api-updates', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-api-updates', displayName: 'Binance API updates', requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-api-updates' }),
+      src({ purposes: ['analysis'], sourceId: 'binance-spot-market', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-spot-market', displayName: 'Binance spot market', requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-spot-market' }),
       src({ sourceId: 'binance-futures-positioning', summaryKey: 'settings.intelligenceSources.sourceSummary.binance-futures-positioning', displayName: 'Binance futures positioning', purposes: ['dashboard', 'briefing'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' })
     ]
   }),
@@ -286,8 +286,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'okx-latest-announcements', summaryKey: 'settings.intelligenceSources.sourceSummary.okx-latest-announcements', displayName: 'OKX latest announcements', purposes: ['dashboard', 'briefing', 'sentiment'], requiresProxy: true, adapterRef: 'okx-latest-announcements' }),
-      src({ purposes: ['analysis'], sourceId: 'okx-api-announcements', summaryKey: 'settings.intelligenceSources.sourceSummary.okx-api-announcements', displayName: 'OKX API announcements', requiresProxy: true, adapterRef: 'okx-api-announcements' })
+      src({ sourceId: 'okx-latest-announcements', summaryKey: 'settings.intelligenceSources.sourceSummary.okx-latest-announcements', displayName: 'OKX latest announcements', purposes: ['dashboard', 'briefing', 'sentiment'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'okx-latest-announcements' }),
+      src({ purposes: ['analysis'], sourceId: 'okx-api-announcements', summaryKey: 'settings.intelligenceSources.sourceSummary.okx-api-announcements', displayName: 'OKX API announcements', requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'okx-api-announcements' })
     ]
   }),
   provider({
@@ -295,7 +295,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'CoinGecko',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ purposes: ['analysis'], sourceId: 'coingecko-market', summaryKey: 'settings.intelligenceSources.sourceSummary.coingecko-market', displayName: 'CoinGecko market', requiresProxy: true, adapterRef: 'coingecko-market' })]
+    sources: [src({ purposes: ['analysis'], sourceId: 'coingecko-market', summaryKey: 'settings.intelligenceSources.sourceSummary.coingecko-market', displayName: 'CoinGecko market', requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'coingecko-market' })]
   }),
   provider({
     providerId: 'defillama',
@@ -303,8 +303,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'defillama-stablecoins', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-stablecoins', displayName: 'DeFiLlama stablecoins', purposes: ['dashboard', 'briefing'], adapterRef: 'defillama-stablecoins' }),
-      src({ purposes: ['analysis'], sourceId: 'defillama-tvl', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-tvl', displayName: 'DeFiLlama TVL', adapterRef: 'defillama-tvl' })
+      src({ sourceId: 'defillama-stablecoins', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-stablecoins', displayName: 'DeFiLlama stablecoins', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'defillama-stablecoins' }),
+      src({ purposes: ['analysis'], sourceId: 'defillama-tvl', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-tvl', displayName: 'DeFiLlama TVL', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'defillama-tvl' })
     ]
   }),
   provider({
@@ -312,21 +312,21 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Alternative.me',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'alternative-fear-greed', summaryKey: 'settings.intelligenceSources.sourceSummary.alternative-fear-greed', displayName: 'Fear & Greed Index', purposes: ['dashboard', 'briefing'], adapterRef: 'alternative-fear-greed' })]
+    sources: [src({ sourceId: 'alternative-fear-greed', summaryKey: 'settings.intelligenceSources.sourceSummary.alternative-fear-greed', displayName: 'Fear & Greed Index', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'alternative-fear-greed' })]
   }),
   provider({
     providerId: 'coindesk',
     displayName: 'CoinDesk',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'coindesk-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', purposes: ['dashboard', 'briefing', 'sentiment'], requiresProxy: true, adapterRef: 'coindesk-rss' })]
+    sources: [src({ sourceId: 'coindesk-rss', summaryKey: 'settings.intelligenceSources.sourceSummary.coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', purposes: ['dashboard', 'briefing', 'sentiment'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'coindesk-rss' })]
   }),
   provider({
     providerId: 'ethereum-foundation',
     displayName: 'Ethereum Foundation',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'ethereum-foundation-blog', summaryKey: 'settings.intelligenceSources.sourceSummary.ethereum-foundation-blog', displayName: 'Ethereum Foundation blog', visibility: 'advanced', requiresProxy: true, adapterRef: 'ethereum-foundation-blog' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'ethereum-foundation-blog', summaryKey: 'settings.intelligenceSources.sourceSummary.ethereum-foundation-blog', displayName: 'Ethereum Foundation blog', visibility: 'advanced', requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'ethereum-foundation-blog' })]
   }),
   provider({
     providerId: 'cryptopanic',
@@ -369,14 +369,14 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Twelve Data',
     category: 'aggregate',
     credential: 'api-key',
-    sources: [src({ sourceId: 'twelve-data-market', summaryKey: 'settings.intelligenceSources.sourceSummary.twelve-data-market', displayName: 'Twelve Data macro market', purposes: ['dashboard'], visibility: 'visible', readiness: 'live', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'twelve-data-market' })]
+    sources: [src({ sourceId: 'twelve-data-market', summaryKey: 'settings.intelligenceSources.sourceSummary.twelve-data-market', displayName: 'Twelve Data macro market', purposes: ['dashboard'], visibility: 'visible', readiness: 'live', collection: 'none', capabilities: { runNow: 'none', testConnection: true }, adapterRef: 'twelve-data-market' })]
   }),
   provider({
     providerId: 'coinbase',
     displayName: 'Coinbase',
     category: 'system',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'coinbase-status', summaryKey: 'settings.intelligenceSources.sourceSummary.coinbase-status', displayName: 'Coinbase status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'coinbase-status' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'coinbase-status', summaryKey: 'settings.intelligenceSources.sourceSummary.coinbase-status', displayName: 'Coinbase status', visibility: 'advanced', requiresProxy: true, kind: 'status', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'coinbase-status' })]
   }),
   provider({
     providerId: 'kraken',
@@ -384,8 +384,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'system',
     credential: 'none',
     sources: [
-      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-status', displayName: 'Kraken status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'kraken-status' }),
-      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-system-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-system-status', displayName: 'Kraken system status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'kraken-system-status' })
+      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-status', displayName: 'Kraken status', visibility: 'advanced', requiresProxy: true, kind: 'status', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'kraken-status' }),
+      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-system-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-system-status', displayName: 'Kraken system status', visibility: 'advanced', requiresProxy: true, kind: 'status', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'kraken-system-status' })
     ]
   }),
   provider({
@@ -393,14 +393,14 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Solana',
     category: 'system',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'solana-status', summaryKey: 'settings.intelligenceSources.sourceSummary.solana-status', displayName: 'Solana status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'solana-status' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'solana-status', summaryKey: 'settings.intelligenceSources.sourceSummary.solana-status', displayName: 'Solana status', visibility: 'advanced', requiresProxy: true, kind: 'status', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'solana-status' })]
   }),
   provider({
     providerId: 'github',
     displayName: 'GitHub',
     category: 'system',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'github-releases', summaryKey: 'settings.intelligenceSources.sourceSummary.github-releases', displayName: 'GitHub releases', visibility: 'advanced', adapterRef: 'github-releases' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'github-releases', summaryKey: 'settings.intelligenceSources.sourceSummary.github-releases', displayName: 'GitHub releases', visibility: 'advanced', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'github-releases' })]
   })
 ]
 

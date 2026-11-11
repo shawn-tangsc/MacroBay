@@ -1038,6 +1038,39 @@
   text-align: right;
 }
 
+/*
+ * 行尾那一格：左边是这一行自己的「测试」按钮（读者 2026-11-12：每个已接入的源都要能测），
+ * 右边仍是「已应用 / 未应用」的文字状态。放同一格里，栅格列数不变，
+ * 状态文字的位置也不会被按钮挤走（原来「已应用」贴右端，现在也是）。
+ */
+.source-provider-detail__row-tail {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+}
+
+.source-provider-detail__row-test {
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.source-provider-detail__row-test:hover:not(:disabled) {
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+
+.source-provider-detail__row-test:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 /* 状态串：状态词 + 人话原因 + 上次成功，一条 ` · ` 串起来。
    行宽已知（栅格第一列吃满、`min-width: 0`），所以 `-webkit-line-clamp: 2` 真的会裁出省略号。 */
 .source-provider-detail__status {
