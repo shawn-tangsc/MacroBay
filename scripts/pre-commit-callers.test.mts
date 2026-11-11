@@ -122,8 +122,50 @@ describe('reverse dependencies', () => {
 })
 
 describe('the B4 incident', () => {
-  /** 事故那一笔真实改过的文件（`3e49d15`，用 git 读，免得清单随重构漂移）。 */
+  /** 事故那一笔（`3e49d15`）。 */
   const incidentCommit = '3e49d15'
+  /**
+   * 事故那一笔真实改过的文件，**逐行照抄** `git show --name-only --format= 3e49d15`。
+   *
+   * 为什么留一份快照：CI 是浅克隆（`fetch-depth: 1`），那笔提交在 CI 里根本不存在，
+   * `git show 3e49d15` 直接 fatal（2026-11-12 的 CI 红就是这一句），守卫便在 CI 里从不生效。
+   * 所以——**本机有那笔提交时**，这里断言「快照与真实 diff 逐行相同」（漂移当场红）；
+   * **没有时**用快照跑，保证这条守卫在 CI 里也真的在跑，而不是被跳过或改成恒绿。
+   * 只在「换锚点」时同步这份快照，不许为了变绿改它。
+   */
+  const incidentFiles = [
+    'products/market-intelligence/desktop/settings/intelligence-sources/ProviderDetail.calendarDetails.test.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/ProviderDetail.healthDetail.test.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/ProviderDetail.proxyBanner.test.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/ProviderDetail.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/SourceHealthDetail.test.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/SourceHealthDetail.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/index.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css',
+    'products/market-intelligence/desktop/settings/intelligence-sources/intelligenceSourcesPageStates.test.tsx',
+    'products/market-intelligence/desktop/settings/intelligence-sources/sourceHealthCells.test.ts',
+    'products/market-intelligence/desktop/settings/intelligence-sources/sourceHealthCells.ts',
+    'products/market-intelligence/desktop/shared/i18n/text/settings/intelligenceSources.ts'
+  ] as const
+
+  /** 事故那一笔改过的文件：能读到真提交就核快照，读不到（浅克隆）就用快照。 */
+  const incidentStagedFiles = (repository: string): string[] => {
+    let fromGit: string[] | undefined
+    try {
+      fromGit = execFileSync('git', ['show', '--name-only', '--format=', incidentCommit], {
+        cwd: repository,
+        encoding: 'utf8'
+      })
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '')
+    } catch {
+      // 浅克隆里没有这笔提交：用快照，不跳过。
+      fromGit = undefined
+    }
+    if (fromGit !== undefined) expect(fromGit).toEqual([...incidentFiles])
+    return fromGit ?? [...incidentFiles]
+  }
 
   /**
    * 锚点为什么换了（2026-11-11）：
@@ -141,13 +183,7 @@ describe('the B4 incident', () => {
   it('finds the host that renders the component it broke', () => {
     const host = 'products/market-intelligence/desktop/settings/intelligence-sources/SourceConfigSurface.tsx'
     const repository = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
-    const staged = execFileSync('git', ['show', '--name-only', '--format=', incidentCommit], {
-      cwd: repository,
-      encoding: 'utf8'
-    })
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line !== '')
+    const staged = incidentStagedFiles(repository)
 
     // 锚点文件必须真实存在：删了/改名了就换一个真实调用方，别让这条守卫无声失效。
     expect(existsSync(join(repository, host)), `锚点调用方不存在了：${host}，请换一个今天真实的调用方`).toBe(true)
