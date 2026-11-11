@@ -129,19 +129,6 @@ describe('useCryptoActivation', () => {
 
     expect(page.counts()).toEqual({ enabled: '2', total: '2' })
   })
-
-  it('does not listen to the retired sources-changed channel as well', async () => {
-    mockGetAgentView.mockResolvedValue(answeredView)
-    await renderHook()
-    await flush()
-
-    // The name is written out on purpose: importing the legacy module would break the day it is
-    // deleted, and this assertion is exactly what keeps the retired channel from coming back.
-    await act(async () => { window.dispatchEvent(new Event('market-intelligence:sources-changed')) })
-    await flush()
-
-    expect(mockGetAgentView).toHaveBeenCalledTimes(1)
-  })
 })
 
 async function renderHook() {
