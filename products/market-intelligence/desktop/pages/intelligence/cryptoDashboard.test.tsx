@@ -1015,6 +1015,58 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'quotes', cellId: 'quotes:usd' })
   })
 
+  /**
+   * 源自己关掉（2026-11-11 03:00 用户现场）：两格都开着、币安那个源是关的。
+   * 以前 `readable()` 把它压成 `false`，hook 落进「加载中」，卡片永远转圈。
+   */
+  it('source off: the positioning card names the source instead of waiting forever', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({}, {
+      onManageSource,
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: false, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-positioning-panel')
+    const card = container.querySelector('.mi-positioning-panel')!
+    // 不许再拿「加载中」冒充：那是永远到不了的等待。
+    expect(card.textContent).not.toContain(dashboardText.positioning.loading)
+    // 说清是**哪个源**没启用（不是一句放之四海皆准的「未启用」）。
+    expect(card.textContent).toContain(
+      dashboardText.positioning.sourceDisabled.replace('{source}', dashboardText.positioning.sourceName)
+    )
+    // 两格都归纳到同一个源：整卡走「未启用」那一支，动作**只此一颗**（遮罩里那颗，标题行不再放第二颗）。
+    const enable = [...card.querySelectorAll<HTMLButtonElement>('button')]
+      .filter(button => button.textContent === dashboardText.positioning.enableData)
+    expect(enable).toHaveLength(1)
+    await act(async () => enable[0]!.click())
+    expect(onManageSource).toHaveBeenCalledTimes(1)
+  })
+
+  /** 格自己关掉：说的是「这一格」，不许与上面那句「源没启用」混成同一句。 */
+  it('cell off: the line is about the cell, not about the source', async () => {
+    const container = await renderCells({ 'positioning:oi': false }, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-positioning-panel')
+    const card = container.querySelector('.mi-positioning-panel')!
+    // 一格关了：那一格自己说，卡不会整张变成「源没有启用（Binance …）」。
+    // 只关一格：卡片骨架照常，那一格自己的行里带**这一格的名字**（「持仓名义额 …」）；
+    // 整卡不会换成那句「来源没有启用（…）」。两句话共用一句文案是面板的设计，区别在层级：
+    // 一格 → 行；两格 + 源关 → 整卡遮罩（下面那条用例）。
+    expect(card.querySelector('.mi-source-veil')).toBeNull()
+    expect(card.textContent).toContain(dashboardText.positioning.notional)
+    expect(card.textContent).not.toContain(dashboardText.positioning.loading)
+  })
+
   it('cell off: the sentiment card keeps its figure, drops the needle, and offers one enable action', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'fear-greed:index': false }, {

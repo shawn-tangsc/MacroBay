@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { projectPositioningCardState, projectPositioningCell, projectPositioningCells } from './dashboardPositioningSourceState'
+import type { CellReadDecision } from './dashboardCellEnabled'
 import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
 import type { DashboardPositioningViewState } from './dashboardOpenInterestModel'
 
@@ -12,6 +13,11 @@ const available: DashboardPositioningViewState = {
   pointAt: '2026-11-11T01:00:00.000Z', newestReadingAt: '2026-11-11T01:00:00.000Z'
 }
 const funding: DashboardFundingRateHistoryState = { state: 'available', btc: [], eth: [] }
+/** 两格都去读（源启用、格开着）。 */
+const bothRead = { oi: { kind: 'read', sourceId: 'binance-futures-positioning', explicit: false } as CellReadDecision, funding: { kind: 'read', sourceId: 'binance-futures-positioning', explicit: false } as CellReadDecision }
+const cellOff = { kind: 'not-enabled' } as CellReadDecision
+const sourceOff = { kind: 'source-disabled', sourceId: 'binance-futures-positioning' } as CellReadDecision
+const sourceUnknown = { kind: 'source-unknown', sourceId: 'binance-futures-positioning' } as CellReadDecision
 
 describe('positioning source availability', () => {
   it('judges in the fixed order: missing, then disabled, then unreadable', () => {
@@ -31,7 +37,7 @@ describe('positioning source availability', () => {
   it('keeps the card usable while one of the two cells is available', () => {
     const oneOff = projectPositioningCells({
       configured: true,
-      enabled: { oi: true, funding: false },
+      decisions: { oi: bothRead.oi, funding: cellOff },
       positioning: available,
       funding
     })
@@ -40,7 +46,7 @@ describe('positioning source availability', () => {
 
     const oneUnreadable = projectPositioningCells({
       configured: true,
-      enabled: { oi: true, funding: true },
+      decisions: bothRead,
       positioning: available,
       funding: { state: 'unavailable' }
     })
@@ -49,22 +55,35 @@ describe('positioning source availability', () => {
   })
 
   it('degrades the whole card only when neither cell is usable, in the same order', () => {
-    const bothDisabled = projectPositioningCells({ configured: true, enabled: { oi: false, funding: false }, positioning: available, funding })
+    const bothDisabled = projectPositioningCells({ configured: true, decisions: { oi: cellOff, funding: cellOff }, positioning: available, funding })
     expect(projectPositioningCardState(bothDisabled)).toBe('disabled')
 
     const mixed = projectPositioningCells({
-      configured: true, enabled: { oi: false, funding: true },
+      configured: true, decisions: { oi: cellOff, funding: bothRead.funding },
       positioning: available, funding: { state: 'unavailable' }
     })
     // 一格没启用、一格读不到：先说的是「来源没有启用」——顺序与判定一致。
     expect(projectPositioningCardState(mixed)).toBe('disabled')
 
     const bothUnreadable = projectPositioningCells({
-      configured: true, enabled: { oi: true, funding: true },
+      configured: true, decisions: bothRead,
       positioning: { state: 'unavailable', cause: 'contract-mismatch', onReload: () => undefined },
       funding: { state: 'unavailable' }
     })
     expect(projectPositioningCardState(bothUnreadable)).toBe('unreadable')
     expect(bothUnreadable.reasons.oi).toBe('contract-mismatch')
+  })
+
+  it('separates "the reader turned the cell off" from "the source itself is switched off"', () => {
+    // 格关了：未启用，但没有「哪个源」可讲（读者关的是这一格）。
+    const off = projectPositioningCells({ configured: true, decisions: { oi: cellOff, funding: cellOff }, positioning: available, funding })
+    expect(off).toMatchObject({ oi: 'disabled', funding: 'disabled', sources: {} })
+    // 源关了（用户 2026-11-11 现场）：一样是「未启用」，但要把**是哪个源**带出来，卡片才能说「Binance 没有启用」。
+    const source = projectPositioningCells({ configured: true, decisions: { oi: sourceOff, funding: sourceOff }, positioning: available, funding })
+    expect(source).toMatchObject({ oi: 'disabled', funding: 'disabled', sources: { oi: 'binance-futures-positioning', funding: 'binance-futures-positioning' } })
+    // 源状态还没读到：那是「读不到」，不是「没启用」。
+    const unknown = projectPositioningCells({ configured: true, decisions: { oi: sourceUnknown, funding: sourceUnknown }, positioning: available, funding })
+    expect(unknown).toMatchObject({ oi: 'unreadable', funding: 'unreadable' })
+    expect(projectPositioningCardState(unknown)).toBe('unreadable')
   })
 })

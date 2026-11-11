@@ -225,7 +225,21 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now, revision: dataRevision })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
   const [fundingReloadKey, setFundingReloadKey] = useState(0)
-  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, disabled: !readsReady || !readGates.positioning, now, reloadKey: fundingReloadKey, revision: dataRevision })
+  /**
+   * 持仓两格各自的判定（**不压成布尔**）：格关了 / 源关了 / 源状态读不到 是三种不同的说法，
+   * 压成 `false` 之后卡片只能一直「读不到」——2026-11-11 用户现场就是两格开着、币安源关着，
+   * 卡永远停在加载。
+   */
+  const positioningDecisions = {
+    oi: decide('positioning', 'oi'),
+    funding: decide('positioning', 'funding')
+  }
+  const fundingRateState = useDashboardFundingRateHistory({
+    client: fundingRateClient,
+    waiting: !readsReady,
+    disabled: decisionsUsable && positioningDecisions.funding.kind !== 'read',
+    now, reloadKey: fundingReloadKey, revision: dataRevision
+  })
   // Positioning is read per window rather than reshaped in the browser: the fold and
   // the liquidation lookback belong to the query, so switching windows is one more read.
   const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
@@ -246,16 +260,19 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 来源屏的草稿（多半是凭据框）：只参与**关闭确认**，不喂保存栏——凭据不该被一次「保存」代劳。
   const [sourcesDraftDirty, setSourcesDraftDirty] = useState(false)
   // 抽屉关窗前的检查：只有日报那一屏报脏（分析屏的「取消」已经能放弃改动，先不接）。
-  const positioningState = useDashboardOpenInterest({ client: openInterestClient, disabled: !anyReadable(['positioning', 'oi'], ['positioning', 'funding']), now, window: positioningWindow, revision: dataRevision })
+  const positioningState = useDashboardOpenInterest({
+    client: openInterestClient,
+    // 还没读完启用表 → 首帧就是加载；读完并决定不读 → 终态（见 hook 里的两条分支）。
+    waiting: !readsReady,
+    disabled: decisionsUsable && positioningDecisions.oi.kind !== 'read' && positioningDecisions.funding.kind !== 'read',
+    now, window: positioningWindow, revision: dataRevision
+  })
   // 两格各自的源可用性：判定按「未配置 → 未启用 → 读不到」的顺序，来自源注册表与格级启用表，
   // 页面不自己判。两格同源，但启用是逐格的——只关一格时另一格照旧显示。
   const positioningCells = readsReady
     ? projectPositioningCells({
         configured: cellSourceChoices('positioning', 'oi').length > 0 && cellSourceChoices('positioning', 'funding').length > 0,
-        enabled: {
-          oi: isCellEnabled(cellState.cells, dashboardCellId('positioning', 'oi')),
-          funding: isCellEnabled(cellState.cells, dashboardCellId('positioning', 'funding'))
-        },
+        decisions: positioningDecisions,
         positioning: positioningState,
         funding: fundingRateState
       })

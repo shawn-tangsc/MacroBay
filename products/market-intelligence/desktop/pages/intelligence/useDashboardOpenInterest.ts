@@ -18,8 +18,14 @@ export function useDashboardOpenInterest(input: Readonly<{
   window: OpenInterestWindow
   /** Defaults to the real bridge; a test hands in its own reader. */
   signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }
-  /** 读者把持仓那两格关掉了：不读、停在等待态；卡片由上层整张跳过。 */
+  /**
+   * 宿主**已经决定这一格不读**（格关了 / 源关了 / 源状态读不到）：给终态，不许写「加载中」——
+   * 「加载中」是永远到不了的等待，界面就永远不告诉读者「没启用」（2026-11-11 用户现场）。
+   * 卡片显示的到底是哪一句，由 `cells` 里的判定 kind 决定，这里只负责不再挂着。
+   */
   disabled?: boolean
+  /** 启用表还没读完（首帧）：这时才轮到「加载中」，身份与上面那条不同。 */
+  waiting?: boolean
   /** 「采集写了库」的计数：变了就是后台重读（保留旧读数、失败沿用上一次）。 */
   revision?: number
 }>): DashboardPositioningViewState {
@@ -33,7 +39,12 @@ export function useDashboardOpenInterest(input: Readonly<{
   useEffect(() => {
     let active = true
     const quiet = trackQuietRevision(revisionRef, input.revision)
-    if (input.disabled === true) { setState({ state: 'loading' }); return () => { active = false } }
+    if (input.waiting === true) { setState({ state: 'loading' }); return () => { active = false } }
+    // 决定不读：终态（不是加载、也不是「失败」——那一格的状态由判定 kind 说，卡里不显示这条）。
+    if (input.disabled === true) {
+      setState({ state: 'unavailable', cause: 'query-failed', onReload: reload })
+      return () => { active = false }
+    }
     const asOf = readClock(mountInput.now)
     if (!asOf || typeof mountInput.client?.query !== 'function') {
       setState({ state: 'unavailable', cause: 'query-failed', onReload: reload })
@@ -64,7 +75,7 @@ export function useDashboardOpenInterest(input: Readonly<{
       })
     return () => { active = false }
     // `mountInput` is captured once on purpose: the clock must not re-read on every render.
-  }, [mountInput, window, attempt, input.disabled, input.revision])
+  }, [mountInput, window, attempt, input.disabled, input.waiting, input.revision])
 
   return state
 }
