@@ -186,6 +186,16 @@ describe('qq gateway host', () => {
     expect(harness.diagnostics).toContain('qq-commit:rejected')
   })
 
+  it('names the field when a message event is refused', async () => {
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message(READY)
+    harness.sockets[0].message('{"op":0,"s":3,"t":"C2C_MESSAGE_CREATE","d":{"id":"msg-1","content":"测试"}}')
+    await flush()
+    // 没有 author：审计要能说出是哪一项，而不是一句「坏了」。
+    expect(harness.audits()).toContain('qq-event-invalid:author')
+  })
+
   it('keeps the connection after READY when the commit is accepted', async () => {
     // 回归钉：READY 之后 commit 成功时，绝不能还按「序号过期」关连接（现场就是每次握手自我关闭）。
     const harness = await createHarness()

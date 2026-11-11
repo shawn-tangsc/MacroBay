@@ -32,9 +32,11 @@ describe('QQ Release D contracts', () => {
     const normalized = normalizeQqEvent({ id: 'event_1', author_id: 'user_1', conversation_id: 'group_1', kind: 'group', content: 'hello', url: 'https://private', attachments: [{ id: 'file_1', kind: 'image', mime_type: 'image/png', url: 'https://private' }] })
     expect(normalized).toMatchObject({ eventKey: 'qq:event:event_1', conversationKey: 'qq:conversation:group:group_1', attachments: [{ stableRef: 'qq:file:file_1' }] })
     expect(JSON.stringify(normalized)).not.toContain('https://private')
-    expect(normalizeQqEvent({ id: 'bad key', author_id: 'user', conversation_id: 'group', kind: 'group' })).toBeNull()
+    // 空格不再是坏 id（不透明值允许）；控制字符与超长仍然拒。
+    expect(normalizeQqEvent({ id: 'bad\u0000key', author_id: 'user', conversation_id: 'group', kind: 'group' })).toBeNull()
+    expect(normalizeQqEvent({ id: 'x'.repeat(257), author_id: 'user', conversation_id: 'group', kind: 'group' })).toBeNull()
     expect(encodeQqConversation({ kind: 'channel', id: 'channel_1' })).toBe('qq:conversation:channel:channel_1')
-    expect(decodeQqConversation('qq:conversation:group:bad key')).toBeNull()
+    expect(decodeQqConversation('qq:conversation:group:bad\u0000key')).toBeNull()
     expect(splitQqText('x'.repeat(8_001)).map((part) => part.length)).toEqual([4_000, 4_000, 1])
 
     const urls: string[] = []; const bodies: unknown[] = []
@@ -42,7 +44,7 @@ describe('QQ Release D contracts', () => {
     const client = new QqApiClient({ getPlatformFetch: () => fetch as typeof globalThis.fetch, token: async () => 'internal-token' })
     const delivery = new QqDeliveryTransport(); delivery.setClient('qq-a', client, { isCurrent: () => true, signal: new AbortController().signal })
     await expect(delivery.send({ channelId: 'qq-a', providerConversationKey: 'qq:conversation:group:group_1', text: 'reply', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'delivered' })
-    await expect(delivery.send({ channelId: 'qq-a', providerConversationKey: 'qq:conversation:group:bad key', text: 'no', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'failed', code: 'delivery-provider-rejected' })
+    await expect(delivery.send({ channelId: 'qq-a', providerConversationKey: 'qq:conversation:group:bad\u0000key', text: 'no', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'failed', code: 'delivery-provider-rejected' })
     expect(urls).toEqual(['https://api.sgroup.qq.com/v2/groups/group_1/messages'])
     expect(bodies).toEqual([{ content: 'reply' }])
     expect(JSON.stringify(bodies)).not.toContain('qq:conversation:')

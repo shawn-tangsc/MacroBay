@@ -13,6 +13,8 @@
  * - 附件只留 mime / 名字 / 大小，**URL 一律丢掉**；QQ 的附件**没有 id**，所以稳定引用用
  *   `消息 id + 序号` 拼——它仍然来自事件本身，不是时间戳。
  */
+import { boundedOpaqueId } from './qqOpaqueId'
+
 export type QqMessageSeam = {
   id: string
   author_id: string
@@ -26,7 +28,8 @@ export type QqMessageSeam = {
 export type QqMessageRead =
   | { kind: 'message'; seam: QqMessageSeam }
   | { kind: 'ignored' }
-  | { kind: 'invalid' }
+  /** 坏帧要说出**是哪一项**读不出来：id / author / conversation 各自对应完全不同的修法。 */
+  | { kind: 'invalid'; field: 'payload' | 'id' | 'author' | 'conversation' }
 
 const MESSAGE_EVENTS = ['GROUP_AT_MESSAGE_CREATE', 'C2C_MESSAGE_CREATE', 'AT_MESSAGE_CREATE'] as const
 
@@ -35,29 +38,32 @@ export function isQqMessageEvent(event: string): boolean {
 }
 
 export function readQqMessageCreate(event: string, value: unknown): QqMessageRead {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return { kind: 'invalid' }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { kind: 'invalid', field: 'payload' }
   const message = value as Record<string, unknown>
   const id = identifier(message.id)
   const author = message.author as { id?: unknown; member_openid?: unknown; user_openid?: unknown; bot?: unknown } | undefined
-  if (!id || !author) return { kind: 'invalid' }
+  if (!id) return { kind: 'invalid', field: 'id' }
+  if (!author) return { kind: 'invalid', field: 'author' }
   // 别的机器人发的：不回，也不算坏帧。
   if (author.bot === true) return { kind: 'ignored' }
 
   if (event === 'GROUP_AT_MESSAGE_CREATE') {
     const groupId = identifier(message.group_openid)
     const authorId = identifier(author.member_openid) ?? identifier(author.id)
-    if (!groupId || !authorId) return { kind: 'invalid' }
+    if (!groupId) return { kind: 'invalid', field: 'conversation' }
+    if (!authorId) return { kind: 'invalid', field: 'author' }
     return { kind: 'message', seam: seamOf(id, authorId, groupId, 'group', message) }
   }
   if (event === 'C2C_MESSAGE_CREATE') {
     const authorId = identifier(author.user_openid) ?? identifier(author.id)
-    if (!authorId) return { kind: 'invalid' }
+    if (!authorId) return { kind: 'invalid', field: 'author' }
     return { kind: 'message', seam: seamOf(id, authorId, authorId, 'direct', message) }
   }
   // AT_MESSAGE_CREATE：频道消息，会话键是 channel_id。
   const channelId = identifier(message.channel_id)
   const authorId = identifier(author.id)
-  if (!channelId || !authorId) return { kind: 'invalid' }
+  if (!channelId) return { kind: 'invalid', field: 'conversation' }
+  if (!authorId) return { kind: 'invalid', field: 'author' }
   return { kind: 'message', seam: seamOf(id, authorId, channelId, 'channel', message) }
 }
 
@@ -107,5 +113,5 @@ function readAttachments(messageId: string, value: unknown): NonNullable<QqMessa
 }
 
 function identifier(value: unknown): string | null {
-  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value) ? value : null
+  return boundedOpaqueId(value)
 }

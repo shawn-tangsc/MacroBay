@@ -1,4 +1,5 @@
 import { encodeQqConversation, type QqInboundFact } from './QqContracts'
+import { boundedOpaqueId } from './qqOpaqueId'
 
 /** A bounded structured gateway seam; raw dispatch payloads never reach C03. */
 export function normalizeQqEvent(value: unknown): QqInboundFact | null {
@@ -11,7 +12,7 @@ export function normalizeQqEvent(value: unknown): QqInboundFact | null {
   const attachments = Array.isArray(event.attachments) ? event.attachments.map(attachment).filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, 8) : []
   return { eventKey: `qq:event:${id}`, conversationKey: conversation, userKey: `qq:user:${user}`, conversationKind: kind, mentionedBot: kind === 'direct' || event.mentioned_bot === true, ...(text === undefined ? {} : { text }), ...(attachments.length ? { attachments } : {}) }
 }
-function key(value: unknown): string | null { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value) ? value : null }
+function key(value: unknown): string | null { return boundedOpaqueId(value) }
 function attachment(value: unknown): { kind: 'image' | 'file'; stableRef: string; mimeType: string; name?: string; sizeBytes?: number } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const item = value as Record<string, unknown>; const id = key(item.id); const mime = typeof item.mime_type === 'string' && item.mime_type.length > 0 && item.mime_type.length <= 255 ? item.mime_type : null

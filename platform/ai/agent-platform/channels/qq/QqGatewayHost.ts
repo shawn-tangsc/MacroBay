@@ -187,13 +187,14 @@ export class QqGatewayHost {
       return
     }
     if (read.kind === 'invalid') {
-      this.audit('qq-event-invalid')
+      // 带字段：下次一看就知道是 id / author / conversation 哪一项读不出来。
+      this.audit(`qq-event-invalid:${read.field}`)
       this.commitOrStop(frame.sequence)
       return
     }
     const fact = normalizeQqEvent(read.seam)
     if (!fact) {
-      this.audit('qq-event-invalid')
+      this.audit('qq-event-invalid:normalize')
       this.commitOrStop(frame.sequence)
       return
     }
