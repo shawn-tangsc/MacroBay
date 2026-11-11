@@ -102,6 +102,48 @@ describe('the copied text reads the same figures as the card', () => {
   })
 })
 
+describe('the copied text says when the release time was not published', () => {
+  it('prints the date and the words, never a made-up time, for a macro event', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      news: {
+        ...base.news,
+        macro: [{
+          ...base.news.macro[0]!,
+          scheduledAt: '2026-10-29T00:00:00.000Z',
+          releaseTimeNotPublished: true,
+          releaseDate: '2026-10-29'
+        }]
+      }
+    }, options)
+    const line = markdown.split('\n').find((entry) => entry.startsWith('- **') && entry.includes('cpi'))!
+    expect(line).toContain('2026-10-29')
+    expect(line).toContain(labels.macro.timeNotPublished)
+    expect(line).not.toContain('00:00')
+  })
+
+  it('does the same in the next section', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      next: {
+        ...base.next,
+        items: [{
+          ...base.next.items[0]!,
+          at: '2026-11-02T00:00:00.000Z',
+          releaseTimeNotPublished: true,
+          releaseDate: '2026-11-02'
+        }]
+      }
+    }, options)
+    const line = markdown.split('\n').find((entry) => entry.startsWith('- ') && entry.includes('fomc'))!
+    expect(line).toContain('2026-11-02')
+    expect(line).toContain(labels.macro.timeNotPublished)
+    expect(line).not.toContain('00:00')
+  })
+})
+
 describe('a web-sourced value says so in the copy too (v2.128)', () => {
   it('prints the same value label the card prints, suffix included', () => {
     const base = document()

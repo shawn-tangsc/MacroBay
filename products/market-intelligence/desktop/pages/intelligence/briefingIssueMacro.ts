@@ -35,24 +35,27 @@ function macroItemIssues(input: BriefingIssueInput, add: AddIssue, item: Briefin
   const { text } = input
   if (isStatementOnly(item)) return
   const name = eventTitle(item, input.eventTitles)
+  // 时刻没公布（`MI-1-R39` §4）就没有事件时刻可印：`scheduledAt` 只是排序位，印到缺口清单里就是
+  // 一个假时刻。这时不传 `at`，缺口读文档的约定兜底（这一版什么时候核的），不说成发布时刻。
+  const at = item.releaseTimeNotPublished ? undefined : item.scheduledAt
   if (!item.consensus) {
     add({
       id: `data:macro:consensus:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-consensus',
-      source: text.limits.sources.calendar, at: item.scheduledAt,
+      source: text.limits.sources.calendar, ...(at === undefined ? {} : { at }),
       title: fillTemplate(text.limits.macro.consensusMissing, { event: name }), advice: text.limits.advice.fillConsensus
     })
   }
   if (!item.actual) {
     add({
       id: `data:macro:actual:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-actual',
-      source: text.limits.sources.calendar, at: item.scheduledAt,
+      source: text.limits.sources.calendar, ...(at === undefined ? {} : { at }),
       title: fillTemplate(text.limits.macro.actualMissing, { event: name }), advice: text.limits.advice.waitCollection
     })
   }
   if (!item.previous) {
     add({
       id: `data:macro:previous:${item.eventKey}`, severity: 'info', category: 'data', template: 'macro-previous',
-      source: text.limits.sources.calendar, at: item.scheduledAt,
+      source: text.limits.sources.calendar, ...(at === undefined ? {} : { at }),
       title: fillTemplate(text.limits.macro.previousMissing, { event: name }), advice: text.limits.advice.waitCollection
     })
   }
@@ -61,17 +64,19 @@ function macroItemIssues(input: BriefingIssueInput, add: AddIssue, item: Briefin
 function nextItemIssues(input: BriefingIssueInput, add: AddIssue, item: BriefingNextItem): void {
   const { text } = input
   const name = eventTitle(item, input.eventTitles)
+  // 与宏观那三行同一条规矩：时刻没公布就没有事件时刻可印，别把排序位当成发布时刻。
+  const at = item.releaseTimeNotPublished ? undefined : item.at
   if (!item.consensus) {
     add({
       id: `data:next:consensus:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-consensus',
-      source: text.limits.sources.calendar, at: item.at,
+      source: text.limits.sources.calendar, ...(at === undefined ? {} : { at }),
       title: fillTemplate(text.limits.macro.consensusMissing, { event: name }), advice: text.limits.advice.fillConsensus
     })
   }
   if (!item.previous) {
     add({
       id: `data:next:previous:${item.eventKey}`, severity: 'info', category: 'data', template: 'macro-previous',
-      source: text.limits.sources.calendar, at: item.at,
+      source: text.limits.sources.calendar, ...(at === undefined ? {} : { at }),
       title: fillTemplate(text.limits.macro.previousMissing, { event: name }), advice: text.limits.advice.waitCollection
     })
   }
