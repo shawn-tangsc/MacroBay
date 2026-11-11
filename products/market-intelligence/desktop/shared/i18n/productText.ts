@@ -351,6 +351,7 @@ mi: miText['zh-CN'],
               /* 「采集与数据 › 舆情」右边那张入口卡：标题用 menus.processing，短标只写「全局」。 */
               scopeGlobal: '全局',
               processingEntryAria: '打开内容处理设置（翻译偏好、情绪评分）',
+              processingEntryHint: '翻译偏好 · 情绪评分',
               menus: {
                 sources: '数据源', sourcesData: '采集与数据', processing: '内容处理', analysis: 'AI 分析',
                 briefing: '日报', notifications: '通知', runLog: '运行日志'
@@ -1829,6 +1830,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               openModelService: 'Open model service',
               scopeGlobal: 'Global',
               processingEntryAria: 'Open content processing settings (translation preferences, sentiment scoring)',
+              processingEntryHint: 'Translation preferences · Sentiment scoring',
               menus: {
                 sources: 'Data sources', sourcesData: 'Collection and data', processing: 'Content processing', analysis: 'AI analysis',
                 briefing: 'Daily briefing', notifications: 'Notifications', runLog: 'Run log'

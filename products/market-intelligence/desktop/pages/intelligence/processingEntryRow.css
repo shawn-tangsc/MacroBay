@@ -1,0 +1,54 @@
+/*
+ * 「采集与数据 › 舆情」卡内部、四个源之后的那一行收尾（用户 2026-11-11 改判；界面设计定形态）。
+ *
+ * 单开一个样式文件的原因：`configDrawer.css` 与 `intelligence-sources.css` 读者本人在改，
+ * 一个字都不动。这里只补这一行自己的四条，其余沿用 `.business-card` 的既有外观。
+ */
+
+/* 一行收尾：高 44、左右内距 12、上缘一条发丝线；**自己不画边框/圆角/底色**（那是卡的事）。 */
+.business-card__processing-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+
+/* 悬停：整行一层淡底（沿用卡里其它行的做法），不加边框/阴影/位移。 */
+.business-card__processing-entry:hover {
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+}
+
+/* 焦点：整行就是唯一目标，环画在行内，用 accent。 */
+.business-card__processing-entry:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* 左：字段名 12/600/正文色。 */
+.business-card__processing-entry-title {
+  flex: none;
+  color: var(--text);
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+
+/* 紧跟的辅助词 11/muted：单行、窄了省略号截断，不换行。 */
+.business-card__processing-entry-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  font-weight: 400;
+  line-height: var(--line-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-card__processing-entry-chevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+}

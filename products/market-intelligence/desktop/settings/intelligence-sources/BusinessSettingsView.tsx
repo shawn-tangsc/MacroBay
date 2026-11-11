@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { Select, Switch } from 'antd'
 
 import { SettingsInfo } from '../settingsInfo'
-import { ProcessingEntryCard } from '../../pages/intelligence/ProcessingEntryCard'
+import { ProcessingEntryRow } from '../../pages/intelligence/ProcessingEntryRow'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes } from './sourceSettingRows'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import {
@@ -256,13 +256,7 @@ export function BusinessSettingsContent(props: {
         : null}
       {props.business === 'dashboard'
         ? null
-        : (() => {
-          const entry = props.business === 'sentiment' && props.onOpenProcessingSettings !== undefined
-          return <div className={entry ? 'business-module-grid' : undefined}>
-            <section
-              className="business-card"
-              data-business-card={props.business}
-              {...(entry ? { style: { ['--module-span' as string]: 3 } } : {})}>
+        : <section className="business-card" data-business-card={props.business}>
           {/* 日历 / 舆情也是两层卡片（用户 2026-11-11）：模块卡里放第二层数据卡片。
               日历按 `calendarFeedRegistry` 的 `owner` 分「官方源 / 聚合源」两张卡；
               舆情只有一张卡（标题留空，卡头已经写了业务名）。 */}
@@ -298,12 +292,13 @@ export function BusinessSettingsContent(props: {
                   ))}
                 </div>}
             </div>)}
-            </div>
-            </section>
-            {/* 舆情模块卡右边那张入口卡（同一层网格，占 1 列）：整卡可点 → 内容处理屏。 */}
-            {entry ? <ProcessingEntryCard onOpen={props.onOpenProcessingSettings!} /> : null}
           </div>
-        })()}
+          {/* 舆情卡内部、四个源之后的一行收尾（用户 2026-11-11 改判：不再是网格里的小卡）：
+              整行可点 → 配置抽屉「内容处理」屏。只在舆情业务、且宿主给了入口时出现。 */}
+          {props.business === 'sentiment' && props.onOpenProcessingSettings !== undefined
+            ? <ProcessingEntryRow onOpen={props.onOpenProcessingSettings} />
+            : null}
+        </section>}
     </div>
   </div>
 }
