@@ -46,7 +46,6 @@
   "products/market-intelligence/desktop/pages/intelligence/intelligence.css :: .mi-calendar-card__row-surprise[data-calendar-surprise='miss']": 1,
   "products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css :: .mi-analysis-timeline__mask-body p[role=\"alert\"]": 1,
   "products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css :: .mi-analysis-timeline__settings-error": 1,
-  "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css :: .intelligence-source-avatar.is-unused": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css :: .intelligence-source-avatar[data-readiness='planned']": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css :: .intelligence-translation-meta small[data-tone='error']": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/sync-run-section.css :: .mi-sync-run__grid--aggregate span[data-has-failures='true']": 1
