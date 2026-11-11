@@ -31,10 +31,12 @@ export type PositioningPanelText = Readonly<{
   sourceMissing: string
   sourceDisabled: string
   sourceUnreadable: string
-  /** 每格一颗主动作。 */
+  /** 每格一颗主动作（文案表里留着；卡面只在标题行给一颗，见下）。 */
   actionConfigure: string
   actionEnable: string
   actionRetry: string
+  /** 标题行那一颗：这张卡要用的源里有没配好的就出现（用户 2026-11-11）。 */
+  enableData: string
   /** 读不到时 ⓘ 里的原因；形状/版本不符复用 `contractMismatch`。 */
   sourceReasonClock: string
   sourceReasonQuery: string
