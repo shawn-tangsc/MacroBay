@@ -1,4 +1,3 @@
-import { Button } from 'antd'
 import { CircleDashed, CircleSlash, Info, TriangleAlert } from 'lucide-react'
 import type { ReactElement } from 'react'
 
@@ -25,22 +24,6 @@ export const positioningSourceReasonKeys: Readonly<Record<PositioningCellReason,
   'invalid-clock': 'pages.intelligence.portal.dashboard.positioning.sourceReasonClock',
   'query-failed': 'pages.intelligence.portal.dashboard.positioning.sourceReasonQuery'
 })
-
-export type SourceAction = Readonly<{ label: string; onSelect: () => void }>
-
-/**
- * 一格一颗主动作。未配置 / 未启用都去「设置 → 情报源」；读不到才是再试一次。
- * 没有对应入口时宁可不给按钮，也不给一颗点了没反应的按钮。
- */
-export function sourceActionFor(
-  state: PositioningCellState,
-  text: PositioningPanelText,
-  handlers: Readonly<{ openSources?: () => void; retry?: () => void }>
-): SourceAction | undefined {
-  if (state === 'missing') return handlers.openSources ? { label: text.actionConfigure, onSelect: handlers.openSources } : undefined
-  if (state === 'disabled') return handlers.openSources ? { label: text.actionEnable, onSelect: handlers.openSources } : undefined
-  return handlers.retry ? { label: text.actionRetry, onSelect: handlers.retry } : undefined
-}
 
 /** 那一句状态词：三态各说各的，谁也不冒充谁。 */
 function sourceSentence(state: PositioningCellState, text: PositioningPanelText): string {
@@ -83,26 +66,7 @@ export type SourceStateLineView = Readonly<{
   label?: string
   /** 覆盖默认状态句：形状不符时说那句「完全退出重开」，不是「暂时读不到」。 */
   sentence?: string
-  action?: SourceAction
 }>
-
-/** 一格一颗主动作；没有出口时宁可不给按钮，也不给一颗点了没反应的按钮。 */
-export function cellStateAction(input: Readonly<{
-  state: PositioningCellState | 'empty'
-  reason?: PositioningCellReason
-  text: PositioningPanelText
-  openSources?: () => void
-  retry?: () => void
-  /** 形状/版本不符的唯一出口：完全退出后重开（重试必然再失败）。 */
-  restart?: SourceAction
-}>): SourceAction | undefined {
-  if (input.state === 'empty') return undefined
-  if (input.state === 'unreadable' && input.reason === 'contract-mismatch') return input.restart
-  return sourceActionFor(input.state, input.text, {
-    ...(input.openSources ? { openSources: input.openSources } : {}),
-    ...(input.retry ? { retry: input.retry } : {})
-  })
-}
 
 export function SourceStateLine({ view, text, resolveText }: Readonly<{
   view: SourceStateLineView
@@ -122,7 +86,6 @@ export function SourceStateLine({ view, text, resolveText }: Readonly<{
           ? <SourceReason reason={view.reason} resolveText={resolveText} />
           : null}
       </span>
-      {view.action ? <Button type="link" size="small" onClick={view.action.onSelect}>{view.action.label}</Button> : null}
     </div>
   )
 }

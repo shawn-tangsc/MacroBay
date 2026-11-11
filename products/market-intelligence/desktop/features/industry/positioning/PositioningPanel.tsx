@@ -1,6 +1,7 @@
-import { ChevronRight, Info } from 'lucide-react'
+import { ChevronRight, CircleSlash, Info } from 'lucide-react'
 import { useState } from 'react'
 
+import { Button } from 'antd'
 import { Segmented } from '@platform/ui/components/segmented'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -41,7 +42,7 @@ import {
 } from '../../../pages/intelligence/dashboardPositioningSourceState'
 import { positioningNoteKeys, resolvePositioningNote } from './positioningNotes'
 // 三态怎么画在独立模块里：句式落在结构行上，卡片骨架不动（用户 2026-11-11 定的形态）。
-import { SourceStateLine, cellStateAction, type SourceStateLineView } from './positioningSourceState'
+import { SourceStateLine, type SourceStateLineView } from './positioningSourceState'
 
 import './PositioningPanel.css'
 
@@ -165,6 +166,8 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           </button>
         </Tooltip>
       ) : null}
+      {/* 标题右边那一颗：这一张卡上唯一的「补数据」入口（用户 2026-11-11）。 */}
+      {titleAction ? <Button data-positioning-title-action="true" size="small" onClick={titleAction.run}>{titleAction.label}</Button> : null}
       {extra}
       {showTabs ? <WindowTabs window={window} onWindowChange={onWindowChange} text={text} /> : null}
     </header>
@@ -204,54 +207,55 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const pointAt = available ? positioning.pointAt : undefined
   const newestReadingAt = available ? positioning.newestReadingAt ?? positioning.pointAt : undefined
   // 形状/版本不符的唯一出口：完全退出后重开（重试必然再失败）。
-  const restartAction = { label: stateText(STATE_VIEW_ACTION_KEYS.restart_app), onSelect: () => { void globalThis.window.platform.app.relaunch() } }
+  const restartAction = { label: stateText(STATE_VIEW_ACTION_KEYS.restart_app), run: () => { void globalThis.window.platform.app.relaunch() } }
   /**
    * 每一格的一句状态，落在图表上方那一行里——卡片骨架不动，只换这一行（用户 2026-11-11）。
    *
-   * 两格都不用时同源、说一句；只有一格不可用时点名是哪一格。顺序与判定顺序一致：
-   * 未配置 → 未启用 → 读不到；「没有数据」不是这三态之一，用产品自己那句。
+   * 句子里**不带动作**：整张卡只有一个动作入口，在标题行（见 `titleAction`）；同一张卡两颗
+   * 「去启用」就是两个入口。顺序与判定顺序一致：未配置 → 未启用 → 读不到；「没有数据」用产品自己那句。
    */
   const sourceNotes: SourceStateLineView[] = cardSourceState
-    ? [{
-        state: cardSourceState,
-        ...(cardSourceReason ? { reason: cardSourceReason } : {}),
-        action: cellStateAction({
-          state: cardSourceState, text, openSources: cardOpenSources, retry: cardRetry, restart: restartAction,
-          ...(cardSourceReason ? { reason: cardSourceReason } : {})
-        })
-      }]
+    ? [{ state: cardSourceState, ...(cardSourceReason ? { reason: cardSourceReason } : {}) }]
     : [
         ...(oiReady ? [] : [{
           label: text.notional, state: oiState,
-          ...(cells?.reasons.oi ? { reason: cells.reasons.oi } : {}),
-          action: cellStateAction({
-            state: oiState, text, openSources: cardOpenSources, restart: restartAction,
-            ...(cells?.reasons.oi ? { reason: cells.reasons.oi } : {}),
-            ...(positioningRetry ? { retry: positioningRetry } : {})
-          })
+          ...(cells?.reasons.oi ? { reason: cells.reasons.oi } : {})
         } as SourceStateLineView]),
         ...(fundingReady ? [] : [{
           label: text.rateLabel, state: fundingCellState,
-          ...(cells?.reasons.funding ? { reason: cells.reasons.funding } : {}),
-          action: cellStateAction({
-            state: fundingCellState, text, openSources: cardOpenSources, restart: restartAction,
-            ...(cells?.reasons.funding ? { reason: cells.reasons.funding } : {}),
-            ...(onReloadFunding ?? positioningRetry ? { retry: onReloadFunding ?? positioningRetry! } : {})
-          })
+          ...(cells?.reasons.funding ? { reason: cells.reasons.funding } : {})
         } as SourceStateLineView]),
         ...(positioning.state === 'empty' && oiReady ? [{ state: 'empty' as const }] : []),
         ...(positioning.state === 'unavailable' && oiReady
           ? [{
               state: 'unreadable' as const,
               ...(positioning.cause === 'contract-mismatch' ? { sentence: text.contractMismatch } : {}),
-              action: cellStateAction({
-                state: 'unreadable' as const, text, openSources: cardOpenSources,
-                retry: positioning.onReload, restart: restartAction,
-                ...(positioning.cause ? { reason: positioning.cause } : {})
-              })
+              ...(positioning.cause ? { reason: positioning.cause } : {})
             }]
           : [])
       ]
+
+  // 用户 2026-11-11 的三条分支：两格都**未启用** → 整块遮罩 + 居中一颗；部分缺 → 骨架 + 标题行一颗；
+  // 全都配好 → 没有任何动作。标题行那颗在遮罩那一支不画——遮罩里那颗才是入口，两个入口就是两个。
+  //
+  // 不判「从没配过」：这张卡的源是注册表里的固定条目，读者删不掉（`dashboardSourceModules.ts`），
+  // 「没配」在链路上被并进 `not-enabled`，判不出来就别造一个看着像的判据（Chief 2026-11-11 事实）。
+  const allCellsDisabled = cells !== undefined && cells.oi === 'disabled' && cells.funding === 'disabled'
+  const anyCellNotEnabled = oiState === 'missing' || fundingCellState === 'missing'
+    || oiState === 'disabled' || fundingCellState === 'disabled'
+  const anyReadFailed = oiState === 'unreadable' || fundingCellState === 'unreadable'
+    || positioning.state === 'unavailable'
+  const shapeMismatch = positioning.state === 'unavailable' && positioning.cause === 'contract-mismatch'
+    || cells?.reasons.oi === 'contract-mismatch' || cells?.reasons.funding === 'contract-mismatch'
+  const titleAction: Readonly<{ label: string; run: () => void }> | undefined = allCellsDisabled
+    ? undefined
+    : anyCellNotEnabled
+      ? { label: text.enableData, run: cardOpenSources }
+      : anyReadFailed
+        ? (shapeMismatch
+            ? restartAction
+            : { label: stateText(STATE_VIEW_ACTION_KEYS.retry), run: cardRetry })
+        : undefined
 
   return (
     <section className="mi-positioning-panel" data-state={positioning.state} data-funding-state={funding.state} data-window={window}
@@ -315,6 +319,20 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           </div>
         </Modal>
       ) : null}
+      {allCellsDisabled ? (
+        /* 两格都没启用：读者这一屏还没有可以读的数。数据区整块盖共享遮罩，居中一颗「启用数据」；
+           标题行保留（读者得知道这是哪张卡），标题行那颗按钮此时不画——遮罩里那颗才是入口，
+           两个入口就是两个。不画骨架：连要不要读都还没开的时候，空图框是假承诺。 */
+        <div className="mi-positioning-panel__body mi-source-veil-host" data-card-state="disabled" data-veiled="true">
+          <div className="mi-source-veil" data-state="disabled">
+            <p className="mi-source-state" data-state="disabled">
+              <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
+              <span>{text.sourceDisabled.replace('{source}', text.sourceName)}</span>
+            </p>
+            <Button size="small" onClick={cardOpenSources}>{text.enableData}</Button>
+          </div>
+        </div>
+      ) : (
       <div className="mi-positioning-panel__body" data-card-state={cardSourceState ?? 'available'}>
         {/* 左列：两行资产位始终在。不可用的格给占位（`—`），不是整行消失。 */}
         <div className="mi-positioning-panel__summary">
@@ -357,6 +375,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
               : <PositioningChartSkeleton text={text} />}
         </div>
       </div>
+      )}
       {liquidationNoteText ? (
         // 一行，muted，不是警报色：它说的是判定的结论，不是「我们出错了」。
         <p className="mi-positioning-panel__liquidation-note" data-liquidation-note={liquidationNote} role="status">

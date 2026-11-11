@@ -229,18 +229,20 @@ describe('positioning panel', () => {
     expect(mismatch).not.toContain(text.actionRetry)
     // 「这次没读成」照旧给重试：读者点一下可能真的不一样。
     const failed = render({ positioning: { state: 'unavailable', cause: 'query-failed', onReload: () => undefined } })
-    expect(failed).toContain(text.actionRetry)
+    // antd 在两个汉字间插空格（「重 试」）：断言动作在，不按原字符断。
+    expect(failed.replace(/\s+/g, '')).toContain(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
     expect(failed).not.toContain(text.contractMismatch)
   })
 
-  it('keeps the chart in the second column for all four cell combinations', () => {
+  it('keeps the chart in the second column wherever the grid still renders', () => {
     // 布局根因（Chief 2026-11-11）：`__body` 是两列网格，四个直接子元素自动排布时，多一行状态句
     // 就把图表挤进 264px 的左列、右列空着。网格里只许有两样：左列容器、右列图表容器。
+    // （两格都关掉那一支不再画网格：整块遮罩，见下一条。）
     const combos = [
       { oi: 'available', funding: 'available' },
       { oi: 'available', funding: 'disabled' },
       { oi: 'disabled', funding: 'available' },
-      { oi: 'disabled', funding: 'disabled' }
+      { oi: 'available', funding: 'unreadable' }
     ] as const
     for (const combo of combos) {
       const doc = new DOMParser().parseFromString(render({
@@ -255,43 +257,85 @@ describe('positioning panel', () => {
     }
   })
 
-  it('keeps the card frame in all three unavailable states, without one big status block', () => {
-    const cases = [
-      { cells: { oi: 'missing', funding: 'missing', reasons: {} }, sentence: text.sourceMissing },
-      { cells: { oi: 'disabled', funding: 'disabled', reasons: {} }, sentence: text.sourceDisabled.replace('{source}', text.sourceName) },
-      { cells: { oi: 'unreadable', funding: 'unreadable', reasons: { oi: 'query-failed', funding: 'query-failed' } }, sentence: text.sourceUnreadable }
-    ] as const
-    for (const item of cases) {
-      const markup = render({ cells: item.cells, onOpenSources: () => undefined })
-      expect(markup, item.sentence).toContain('data-asset="btc"')
-      expect(markup, item.sentence).toContain('data-asset="eth"')
-      expect(markup, item.sentence).toContain('data-chart-skeleton="true"')
-      expect(markup, item.sentence).toContain(item.sentence)
-      // 整块换成状态视图就是这段空白 + 一句话的由来。
-      expect(markup, item.sentence).not.toContain('class="state-view')
+  it('covers the data area with the shared veil when both cells are off, and keeps the title', () => {
+    const markup = render({ cells: { oi: 'disabled', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })
+    const doc = new DOMParser().parseFromString(markup, 'text/html')
+    const host = doc.querySelector('.mi-positioning-panel__body')!
+    // 共享遮罩（不本地造），内容区可聚焦元素恰一个：居中那颗「启用数据」。
+    expect(host.classList.contains('mi-source-veil-host')).toBe(true)
+    expect(host.getAttribute('data-veiled')).toBe('true')
+    expect(host.querySelector('.mi-source-veil')?.getAttribute('data-state')).toBe('disabled')
+    expect(host.querySelectorAll('button, a[href], [tabindex]')).toHaveLength(1)
+    expect(host.querySelector('.mi-source-veil > button')?.textContent).toBe(text.enableData)
+    expect(host.textContent).toContain(text.sourceDisabled.replace('{source}', text.sourceName))
+    // 不画骨架、标题行那颗也不画：两个入口就是两个。
+    expect(markup).not.toContain('data-chart-skeleton')
+    expect(doc.querySelector('[data-positioning-title-action]')).toBeNull()
+    // 标题行保留：读者得知道这是哪张卡。
+    expect(doc.querySelector('header h2')?.textContent).toBe(text.pairTitle)
+  })
+
+  it('keeps the frame and one title action when only some cells are not usable', () => {
+    // 缺的是画图那一格（OI）：骨架在、标题行一颗、卡内一句不带按钮。
+    const markup = render({ cells: { oi: 'disabled', funding: 'available', reasons: {} }, onOpenSources: () => undefined })
+    const doc = new DOMParser().parseFromString(markup, 'text/html')
+    expect(markup).toContain('data-chart-skeleton="true"')
+    expect(doc.querySelector('[data-positioning-title-action]')?.textContent).toBe(text.enableData)
+    const note = doc.querySelector('[data-positioning-source-cell="disabled"]')!
+    expect(note.textContent).toContain(text.sourceDisabled.replace('{source}', text.sourceName))
+    expect(note.querySelectorAll('button')).toHaveLength(0)
+
+    // 缺的只是费率那一格：图照画，不清空成骨架。
+    const onlyRate = render({ cells: { oi: 'available', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })
+    expect(onlyRate).not.toContain('data-chart-skeleton')
+    expect(onlyRate).toContain('$8.87B')
+    expect(onlyRate.replace(/\s+/g, '')).toContain(text.enableData)
+  })
+
+  it('keeps exactly one action on the card: the title one', () => {
+    // antd 会在两个汉字之间插一个空格（「重 试」），比较文案时按无空白比。
+    const flat = (value: string): string => value.replace(/\s+/g, '')
+    const actionLabels = (markup: string): string[] => {
+      const doc = new DOMParser().parseFromString(markup, 'text/html')
+      const known = [
+        text.enableData, text.actionConfigure, text.actionEnable, text.actionRetry,
+        resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry),
+        resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.restart_app)
+      ].map(flat)
+      return [...doc.querySelectorAll('.mi-positioning-panel button')]
+        .map(button => flat(button.textContent ?? ''))
+        .filter(label => known.includes(label))
     }
+    expect(actionLabels(render({ cells: { oi: 'available', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })))
+      .toEqual([flat(text.enableData)])
+    expect(actionLabels(render({ cells: { oi: 'available', funding: 'unreadable', reasons: { funding: 'query-failed' } } })))
+      .toEqual([flat(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))])
+    // 全都配好、都读到了：一个动作都没有。
+    expect(actionLabels(render())).toEqual([])
   })
 
-  it('says 来源没有启用 and names the source on the row, keeping the other cell and the chart', () => {
-    const markup = render({ cells: { oi: 'available', funding: 'disabled', reasons: {} }, onOpenSources: () => undefined })
-    expect(markup).toContain(text.sourceDisabled.replace('{source}', text.sourceName))
-    expect(markup).toContain(text.actionEnable)
-    // 持仓那半照旧：名义额与图都在，整卡没有降级。
-    expect(markup).toContain('$8.87B')
-    expect(markup).toContain('mi-positioning-panel__chart')
-    // 费率那半不留数字，但那一行还在（骨架），不是整行消失。
-    expect(markup).not.toContain('+0.0062%')
-    expect(markup).toContain('data-positioning-source-cell="disabled"')
+  it('routes the title action to the source entry when a cell is off, and to the reload when a read failed', async () => {
+    const openSources = vi.fn()
+    const first = await mountPanel({ cells: { oi: 'available', funding: 'disabled', reasons: {} }, onOpenSources: openSources })
+    const enable = first.host.querySelector<HTMLButtonElement>('[data-positioning-title-action]')!
+    await act(async () => { enable.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(openSources).toHaveBeenCalledTimes(1)
+
+    const onReloadFunding = vi.fn()
+    const second = await mountPanel({ cells: { oi: 'available', funding: 'unreadable', reasons: { funding: 'query-failed' } }, onReloadFunding })
+    const retry = second.host.querySelector<HTMLButtonElement>('[data-positioning-title-action]')!
+    await act(async () => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(onReloadFunding).toHaveBeenCalledTimes(1)
   })
 
-  it('says 暂时读不到 with a retry when the read failed, and never 未启用', () => {
-    const retry = vi.fn()
-    const markup = render({ cells: { oi: 'available', funding: 'unreadable', reasons: { funding: 'query-failed' } }, onReloadFunding: retry })
+  it('keeps the card frame when a read failed on both cells, without one big status block', () => {
+    const markup = render({ cells: { oi: 'unreadable', funding: 'unreadable', reasons: { oi: 'query-failed', funding: 'query-failed' } } })
+    expect(markup).toContain('data-asset="btc"')
+    expect(markup).toContain('data-asset="eth"')
+    expect(markup).toContain('data-chart-skeleton="true"')
     expect(markup).toContain(text.sourceUnreadable)
-    expect(markup).toContain(text.actionRetry)
-    // 三态互不冒充：读不到不许写成未启用。
-    expect(markup).not.toContain(text.sourceDisabled.replace('{source}', text.sourceName))
-    expect(markup).not.toContain(text.sourceMissing)
+    // 整块换成状态视图就是这段空白 + 一句话的由来。
+    expect(markup).not.toContain('class="state-view')
   })
 
   it('tells a failed read from an empty one', () => {
