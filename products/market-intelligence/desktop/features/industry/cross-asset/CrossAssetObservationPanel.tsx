@@ -128,7 +128,7 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>
 }
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
@@ -158,6 +158,11 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   sourceStatusStale?: string
   /** 三行行情（索引 / BTC / ETH）与图表同读一份跨资产快照：三格都关掉时整路不发请求。 */
   crossAssetReadingEnabled?: boolean
+  /**
+   * 「启用数据」的去处（宿主给：它知道这一格该落到哪）。**这一行是唯一的启用入口**——
+   * 表里不再给逐行/表尾的启用或重试按钮，同屏只留标题右边这一颗。
+   */
+  onEnableData?: () => void
   /** The calendar, read by month: it is the only place this panel learns what happened and when. */
   calendar?: Readonly<{ queryMonth: (input: { month: string; asOf: string }) => Promise<unknown> }>
   /**
@@ -274,15 +279,27 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
     ? statusRows
     : statusRows.filter(row => !hideStatusRows.includes(row.id))
   // 跨资产图：三条线都不可用才整图不画（至少一条可用就照画）。
-  // 粒度：七行同一个上游故障 → 整表一行状态；只有部分行坏才逐行标。重试整表只有一颗。
   const rowStateOf = (id: CrossAssetStatusId): CellStateKind | undefined => cellStateLabels === undefined ? undefined : rowStates?.[id]
-  const allRowsUnreadable = statusRows.length > 0 && statusRows.every(row => rowStateOf(row.id) === 'unreadable')
-  const anyRowUnavailable = !allRowsUnreadable && statusRows.some(row => rowStateOf(row.id) !== undefined)
+  /** 有没有源没配好（未配置 / 未启用）：决定标题那颗是「启用数据」还是「再试一次」。 */
+  const anyRowDisabled = statusRows.some(row => rowStateOf(row.id) === 'disabled')
   const chartLineStates = (['index', 'btc', 'eth'] as const).map(id => rowStates?.[id])
   const allChartLinesUnusable = cellStateLabels !== undefined && chartLineStates.every(state => state !== undefined)
   const chartLineUnreadable = chartLineStates.includes('unreadable')
   const intradayRows = visibleRows.filter(row => !dailyRowIds.includes(row.id))
   const dailyRows = visibleRows.filter(row => dailyRowIds.includes(row.id))
+  /**
+   * 标题右边那一颗，**这一张卡上唯一的「补数据」入口**（用户 2026-11-11：状态区里打不开，
+   * 要放到「市场状态」标题右边；只要有用到的源没配好就出现）：
+   * - 有源没配好（未配置/未启用）→「启用数据」，走宿主的来源配置入口（它知道该落哪一格）；
+   * - 都配好了但有行读不到 →「再试一次」，就是原来那颗「更新历史」走的 `view.refresh()`，
+   *   没有再写一套；
+   * - 都读到 → 整颗不出现。
+   */
+  const titleAction = anyRowDisabled && onEnableData !== undefined
+    ? { label: resolveProductText('pages.intelligence.portal.dashboard.crossAsset.enableData'), run: onEnableData }
+    : !anyRowDisabled && statusRows.some(row => rowStateOf(row.id) === 'unreadable')
+      ? { label: resolveProductText('pages.intelligence.portal.data.retry'), run: () => void view.refresh() }
+      : undefined
 
   return <section className="mi-cross-asset" data-cross-asset-workspace aria-label={text.title}>
     <div className="mi-cross-asset__body">
@@ -309,21 +326,21 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
               size="md"
               variant="plain"
             />
-          )} /></div>
+          )} />
+        {/* 标题右边、ⓘ 之后：同屏唯一的那颗「补数据」按钮（见 `titleAction` 的注释）。 */}
+        {titleAction === undefined ? null : <Button size="small" onClick={titleAction.run}>{titleAction.label}</Button>}
+        </div>
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
           <thead><tr><th>{text.statusColumns.asset}{sourceStatusStale === undefined ? null : <small className="mi-cross-asset__stale" data-source-status-stale>{sourceStatusStale}</small>}</th><th>{text.statusColumns.latest}</th>
           {crossAssetWindows.map(window => <th key={window}>{text.statusColumns[window]}</th>)}</tr></thead>
-          {allRowsUnreadable
-            ? <tbody data-status-section="unavailable"><tr><td colSpan={2 + crossAssetWindows.length}>
-                <StateView state="error" reasonCode="unreadable" size="md"
-                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />
-              </td></tr></tbody>
-            : <tbody data-status-section="intraday">{intradayRows.map(renderStatusRow)}</tbody>}
+          {/* 整表读不到也不再换成一整块状态面：行位与列头留着，每行自己说自己的状态
+              （用户 2026-11-11 原话：从状态这里没法打开，把它放到标题右边；一大块提示会吃掉半张卡）。 */}
+          <tbody data-status-section="intraday">{intradayRows.map(renderStatusRow)}</tbody>
           {/* The daily block repeats the asset and latest headings but not the window columns: an
               observation per business day has nothing to say about the last fifteen minutes. */}
-          {allRowsUnreadable ? null : <tbody data-status-section="daily">
+          <tbody data-status-section="daily">
             <tr className="mi-cross-asset__section"><th scope="colgroup" colSpan={2 + crossAssetWindows.length}>
               {/* 标题与 ⓘ 是一个 flex 容器里的两件东西，不是两个块级兄弟：块级流里 icon 会被挤到下一行，
                   还会因为没吃到复位而画出浏览器默认的方框（读者 2026-11-08 截图）。 */}
@@ -353,10 +370,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
                     resolveText={resolveProductText} size="sm" variant="plain" />
                 )} /></span></th></tr>
             {dailyRows.map(renderStatusRow)}
-          </tbody>}
-          {anyRowUnavailable ? <tfoot><tr><td colSpan={2 + crossAssetWindows.length}>
-            <Button onClick={() => void view.refresh()} size="small" type="default">{text.refresh}</Button>
-          </td></tr></tfoot> : null}
+          </tbody>
         </table>
         <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>

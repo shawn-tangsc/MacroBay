@@ -216,6 +216,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     if (decision.kind === 'read') return []
     return [[row, decision.kind === 'source-unknown' ? 'unreadable' : 'disabled']]
   }))
+  /**
+   * 「市场状态」标题右边那颗「启用数据」落到哪一格：**按行序第一行没配好的那一格**。
+   * 落点带 cellId，读者点下去抽屉直接定位到这一格，而不是只停在看板组。
+   */
+  const firstDisabledQuotesCell = Object.entries(QUOTES_ROW_CELL_KEYS).find(([row]) => rowStates[row] === 'disabled')
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now, revision: dataRevision })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
@@ -410,6 +415,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // …and it hands a picked line up rather than opening anything itself: the page owns both the
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
+        {...(firstDisabledQuotesCell === undefined ? {} : {
+          onEnableData: () => onManageSource({ business: 'dashboard', moduleKey: 'quotes', cellId: dashboardCellId('quotes', firstDisabledQuotesCell[1]) })
+        })}
         text={crossAssetText} /> : null}
       {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源没有启用」+ 去启用；
           读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}

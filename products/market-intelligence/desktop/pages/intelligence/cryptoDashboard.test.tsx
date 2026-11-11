@@ -417,16 +417,16 @@ describe('crypto intelligence dashboard', () => {
 
     const card = container.querySelector('.mi-positioning-panel')!
     expect(card).not.toBeNull()
-    // 两格都不可用时骨架还在：图表仍在右列，句式落在结构里，不是整块状态视图。
+    // 两格都没启用：数据区整块盖共享遮罩，居中一颗「启用数据」；标题行那颗不画（两个入口就是两个）。
     expect(card.querySelector('.state-view')).toBeNull()
-    expect(card.querySelector('[data-chart-skeleton="true"]')).not.toBeNull()
-    expect(card.querySelector('.mi-positioning-panel__chart-wrap')!.parentElement?.className)
-      .toContain('mi-positioning-panel__body')
+    expect(card.querySelector('[data-chart-skeleton]')).toBeNull()
+    expect(card.querySelector('.mi-source-veil')).not.toBeNull()
+    expect(card.querySelector('[data-positioning-title-action]')).toBeNull()
     expect(card.textContent).toContain(text.dashboard.positioning.sourceDisabled.replace('{source}', text.dashboard.positioning.sourceName))
-    expect(card.textContent).toContain(text.dashboard.positioning.actionEnable)
-    // 不是空态；图框留着（骨架），只有数据不画——用户 2026-11-11 要的正是「像一张空表」。
+    expect(card.textContent).toContain(text.dashboard.positioning.enableData)
+    // 不是空态；两格都没启用时数据区整块盖遮罩，不画图框（骨架属于「部分缺」那一支）。
     expect(card.textContent).not.toContain(text.dashboard.positioning.empty)
-    expect(card.querySelector('.mi-positioning-panel__chart')).not.toBeNull()
+    expect(card.querySelector('.mi-positioning-panel__chart')).toBeNull()
   })
 
 
@@ -985,6 +985,35 @@ describe('host wiring: cells switched off and sources judged', () => {
     } as never)))
     return container
   }
+
+  it('市场状态卡: one enable entry beside the title, landing on the cell that is off', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'quotes:usd': false }, {
+      onManageSource,
+      crossAssetClient: {
+        acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
+        renew: async () => ({ state: 'active' as const }),
+        release: async () => undefined,
+        refresh: vi.fn(async () => ({ state: 'accepted' as const })),
+        query: async () => ({ state: 'unavailable' as const, cause: 'query' as const })
+      }
+    })
+    await settle(container, '.mi-cross-asset__quote-heading button')
+
+    const card = container.querySelector('.mi-cross-asset')!
+    const titleButton = [...card.querySelectorAll<HTMLButtonElement>('.mi-cross-asset__quote-heading button')]
+      .find(button => button.textContent === '启用数据')
+    expect(titleButton).toBeDefined()
+    // 同屏只得这一颗「补数据」动作：表尾与行内都不再有。
+    const actions = [...card.querySelectorAll('button')]
+      .map(button => button.textContent ?? '')
+      .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
+    expect(actions).toEqual(['启用数据'])
+
+    await act(async () => titleButton!.click())
+    // 落点是对得上的那一格（读者点下去抽屉直接定位到它，而不是只停在看板组）。
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'quotes', cellId: 'quotes:usd' })
+  })
 
   it('cell off: the sentiment card keeps its figure, drops the needle, and offers one enable action', async () => {
     const onManageSource = vi.fn()

@@ -1,4 +1,7 @@
 .mi-cross-asset {
+  /* 卡宽跟卡片内容区：空态与有数据态同宽，不由内容宽决定（与情绪卡同一条判据）。 */
+  width: 100%;
+  min-width: 0;
   /* CrossAssetLayoutPolicy: 123/126; product-owned, protected by panel layout regression.
      The status block now carries six columns (name, level, four windows), so the left column is
      380px/320px instead of 330px/270px. That costs the middle chart column 50px at the wide

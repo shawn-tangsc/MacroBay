@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
@@ -53,6 +55,8 @@ async function render(input: Readonly<{
   rowStates?: Partial<Record<'index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate', 'disabled' | 'unreadable'>>
   /** 源状态表沿用了上一次成功的读数时的短标注。 */
   sourceStatusStale?: string
+  /** 「启用数据」的去处（宿主给）。 */
+  onEnableData?: () => void
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -75,7 +79,10 @@ async function render(input: Readonly<{
   }).query({ range: input.range ?? '24h' })
   const client = {
     acquire: async () => ({ state: 'active', leaseId: 'test-lease', expiresAt: Date.now() + 30_000 }),
-    query: async () => snapshot, release: vi.fn(async () => ({ state: 'released' }))
+    query: async () => snapshot, release: vi.fn(async () => ({ state: 'released' })),
+    // 「再试一次」走的就是 `view.refresh()` → 这里这一条 client 调用（不是第二套实现）。
+    refresh: vi.fn(async () => ({ state: 'accepted' })),
+    renew: vi.fn(async () => ({ state: 'active' }))
   }
   await act(async () => root.render(createElement(ScopedPanel, {
     client: client as never, text,
@@ -84,9 +91,10 @@ async function render(input: Readonly<{
       rowStates: input.rowStates,
       cellStateLabels: { disabled: '数据未被启用', unreadable: '暂时读不到' }
     }),
-    ...(input.sourceStatusStale === undefined ? {} : { sourceStatusStale: input.sourceStatusStale })
+    ...(input.sourceStatusStale === undefined ? {} : { sourceStatusStale: input.sourceStatusStale }),
+    ...(input.onEnableData === undefined ? {} : { onEnableData: input.onEnableData })
   })))
-  return { host, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
+  return { host, client, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
 }
 
 const row = (host: HTMLElement) => host.querySelector<HTMLTableRowElement>('[data-status-row="index"]')!
@@ -243,39 +251,161 @@ describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
     dxy: 'unreadable' as const, gold: 'unreadable' as const, us10y: 'unreadable' as const, realRate: 'unreadable' as const
   }
 
-  it('whole table unreadable: one row, one StateView, exactly one retry', async () => {
+  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold', 'us10y', 'realRate'] as const
+  /** 标题右边那颗「补数据」按钮（同屏只许有一处）。 */
+  const titleAction = (host: HTMLElement): HTMLButtonElement | undefined =>
+    [...host.querySelectorAll<HTMLButtonElement>('.mi-cross-asset__quote-heading button')]
+      .find(button => ['启用数据', '再试一次', '去启用', '更新历史'].includes(button.textContent ?? ''))
+  const allActions = (host: HTMLElement): string[] =>
+    [...host.querySelectorAll('button')]
+      .map(button => button.textContent ?? '')
+      .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
+
+  it('whole table unreadable: the table keeps its rows and headers, one retry in the title, no state block', async () => {
     const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: allUnreadable })
     try {
-      expect(page.host.querySelectorAll('[data-status-section="unavailable"] tr')).toHaveLength(1)
-      const cell = page.host.querySelector('[data-status-section="unavailable"] td')!
-      expect(cell.querySelector('[data-state="error"]')).not.toBeNull()
-      expect(cell.querySelectorAll('button')).toHaveLength(1)
-      // 其他数据行与逐行状态行都不出现。
-      expect(page.host.querySelectorAll('tr[data-status-row]')).toHaveLength(0)
+      // 不再是「一整块提示吃掉半张卡」：七行行位都在，每个行自己说自己的状态。
+      expect(page.host.querySelectorAll('tr[data-status-row]')).toHaveLength(ALL_ROWS.length)
+      for (const id of ALL_ROWS) {
+        expect(page.host.querySelector(`tr[data-status-row="${id}"] .mi-source-state[data-state="unreadable"]`)).not.toBeNull()
+      }
+      // 列头也在。
+      expect(page.host.querySelector('thead th')).not.toBeNull()
+      // 整块状态面与表尾都没了。
+      expect(page.host.querySelector('[data-status-section="unavailable"]')).toBeNull()
+      expect(page.host.querySelector('tfoot')).toBeNull()
+      // 表里不再出现整块状态面（图区那一处失败提示是另一件事，按区域限定）。
+      expect(page.host.querySelector('[data-cross-asset-region="status"] .state-view')).toBeNull()
+      // 动作只剩标题那一颗，而且它调的就是 `view.refresh()` 那条 client 调用。
+      expect(allActions(page.host)).toEqual(['再试一次'])
+      await act(async () => titleAction(page.host)!.click())
+      expect(page.client.refresh).toHaveBeenCalledTimes(1)
+      expect(page.client.refresh).toHaveBeenCalledWith('test-lease')
     } finally { await page.unmount() }
   })
 
-  it('partial: only that row is a state row, no button inside it, one retry in the footer', async () => {
+  it('partial: only that row is a state row, no button inside it, the retry sits in the title', async () => {
     const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: { index: 'unreadable' } })
     try {
       const row = page.host.querySelector<HTMLTableRowElement>('tr[data-status-row="index"]')!
       expect(row.getAttribute('aria-disabled')).toBe('true')
-      const state = row.querySelector('.mi-source-state[data-state="unreadable"]')!
-      expect(state).not.toBeNull()
+      expect(row.querySelector('.mi-source-state[data-state="unreadable"]')).not.toBeNull()
       // 状态词横跨数据列（不占行名列），行内没有按钮。
       const stateCell = row.querySelector<HTMLTableCellElement>('td.mi-cross-asset__state-cell')!
       expect(Number(stateCell.getAttribute('colspan'))).toBeGreaterThan(1)
       expect(row.querySelectorAll('button')).toHaveLength(0)
       // 不许逐列铺「—」。
       expect(row.textContent).not.toContain('—')
-      // 重试只在表尾，一颗。
-      expect(page.host.querySelectorAll('tfoot button')).toHaveLength(1)
+      // 表尾那颗没了；动作只剩标题一颗。
+      expect(page.host.querySelector('tfoot')).toBeNull()
+      expect(allActions(page.host)).toEqual(['再试一次'])
       // 其它行照常是数据行（有窗口单元格）。
       expect(page.host.querySelectorAll('tr[data-status-row="btc"] [data-asset-return]').length).toBeGreaterThan(0)
     } finally { await page.unmount() }
   })
 })
 
+describe('标题右边那颗按钮：这一张卡唯一的「补数据」入口（用户 2026-11-11）', () => {
+  const ALL_ROWS = ['index', 'btc', 'eth', 'dxy', 'gold', 'us10y', 'realRate'] as const
+  const allActions = (host: HTMLElement): string[] =>
+    [...host.querySelectorAll('button')]
+      .map(button => button.textContent ?? '')
+      .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
+
+  it('shows nothing when every source behind the card is configured and reads', async () => {
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
+    try {
+      expect(allActions(page.host)).toHaveLength(0)
+      // 表格照常是数据表。
+      expect(page.host.querySelector('tr[data-status-row="index"] [data-asset-price]')).not.toBeNull()
+    } finally { await page.unmount() }
+  })
+
+  it('offers 「启用数据」 when a source is not configured, and routes to the host’s entry', async () => {
+    const onEnableData = vi.fn()
+    const page = await render({
+      nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs),
+      rowStates: { dxy: 'disabled' }, onEnableData
+    })
+    try {
+      expect(allActions(page.host)).toEqual(['启用数据'])
+      const button = [...page.host.querySelectorAll<HTMLButtonElement>('.mi-cross-asset__quote-heading button')]
+        .find(candidate => candidate.textContent === '启用数据')!
+      await act(async () => button.click())
+      expect(onEnableData).toHaveBeenCalledTimes(1)
+      // 没配好这一支不许同时给出「再试一次」：同屏只留一处入口。
+      expect(page.host.querySelectorAll('tfoot')).toHaveLength(0)
+    } finally { await page.unmount() }
+  })
+
+  it('offers 「再试一次」 when the sources are configured but a row could not be read', async () => {
+    const onEnableData = vi.fn()
+    const page = await render({
+      nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs),
+      rowStates: { gold: 'unreadable' }, onEnableData
+    })
+    try {
+      expect(allActions(page.host)).toEqual(['再试一次'])
+      const button = [...page.host.querySelectorAll<HTMLButtonElement>('.mi-cross-asset__quote-heading button')]
+        .find(candidate => candidate.textContent === '再试一次')!
+      await act(async () => button.click())
+      // 没配好的入口不被误触，走的是 `view.refresh()` 那条。
+      expect(onEnableData).not.toHaveBeenCalled()
+      expect(page.client.refresh).toHaveBeenCalledTimes(1)
+    } finally { await page.unmount() }
+  })
+
+  it('keeps one action when both kinds are present, and 启用数据 wins', async () => {
+    const onEnableData = vi.fn()
+    const page = await render({
+      nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs),
+      rowStates: { dxy: 'disabled', gold: 'unreadable' }, onEnableData
+    })
+    try {
+      expect(allActions(page.host)).toEqual(['启用数据'])
+    } finally { await page.unmount() }
+  })
+})
+
+
+
+describe('空态与有数据态同宽：靠结构，不靠像素', () => {
+  it('renders the same card, table and header containers in both states', async () => {
+    const withData = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
+    const structure = (host: HTMLElement) => ({
+      card: host.querySelector('.mi-cross-asset') !== null,
+      quote: host.querySelector('[data-cross-asset-region="status"]') !== null,
+      table: host.querySelector('.mi-cross-asset__status-table') !== null,
+      head: host.querySelector('.mi-cross-asset__status-table thead') !== null,
+      rows: host.querySelectorAll('tr[data-status-row]').length
+    })
+    const data = structure(withData.host)
+    await withData.unmount()
+
+    const allUnreadable = {
+      index: 'unreadable' as const, btc: 'unreadable' as const, eth: 'unreadable' as const,
+      dxy: 'unreadable' as const, gold: 'unreadable' as const, us10y: 'unreadable' as const, realRate: 'unreadable' as const
+    }
+    const empty = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: allUnreadable })
+    const none = structure(empty.host)
+    await empty.unmount()
+
+    // 容器链一致：没数据时不多包一层、也不换成一块状态面——所以宽度由同一套盒子决定。
+    expect(none.card).toBe(data.card)
+    expect(none.quote).toBe(data.quote)
+    expect(none.table).toBe(data.table)
+    expect(none.head).toBe(data.head)
+    expect(none.rows).toBe(data.rows)
+  })
+
+  it('pins the card width in CSS and never derives it from content', () => {
+    const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
+    const block = css.slice(css.indexOf('.mi-cross-asset {'), css.indexOf('}', css.indexOf('.mi-cross-asset {')))
+    expect(block).toContain('width: 100%')
+    expect(block).toContain('min-width: 0')
+    expect(css).not.toMatch(/fit-content|inline-grid/)
+  })
+})
 
 describe('来源状态表沿用上一次读数时的标注', () => {
   it('shows the short stale label once, and rows keep reading (no per-row unreadable)', async () => {
