@@ -1,5 +1,5 @@
 import { ProviderDetail, type ProviderDetailLabels } from './ProviderDetail'
-import type { CollectionPolicyLabels } from './CollectionPolicySection'
+import type { CollectionPolicyLabels } from './collectionPolicyLabels'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 

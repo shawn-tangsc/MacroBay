@@ -124,9 +124,13 @@ it('turns a crash inside the detail into an error state with a retry, instead of
     method === 'intelligenceSources.getPageState' ? { detail: detail('2026-11-10T04:00:00.000Z') } : undefined)
   ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
 
+  // 四格已删除后没有再抛的文案；用「行内读 displayName 即抛」复现同一类**组件内**崩溃
+  // （必须发生在 ErrorBoundary 包住的那一块，而不是组件函数顶部）。
+  const brokenSource = source({ sourceId: 's1', displayName: 'S1' })
+  Object.defineProperty(brokenSource, 'displayName', { get() { throw new Error('boom') } })
   const container = await render(createElement(ProviderDetail, {
-    labels: { ...labels(), health: undefined as never },
-    provider: provider([source({ sourceId: 's1', displayName: 'S1' })]),
+    labels: labels(),
+    provider: provider([brokenSource]),
     showSourceDetails: true
   }))
 
@@ -143,21 +147,15 @@ it('turns a crash inside the detail into an error state with a retry, instead of
   it('resets when the reader switches provider, so one crash does not stick to the next one', async () => {
     // 在 A 上崩一次后切到 B：边界必须随 provider 重建，不能停在错误态等读者点「再试一次」。
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const invoke = vi.fn(async (_productId: string, method: string, payload?: unknown) => {
-      if (method !== 'intelligenceSources.getPageState') return undefined
-      const sourceId = (payload as { sourceId?: string } | undefined)?.sourceId
-      // A 的详情读数一读就抛（模拟今天那种「旧实例字段缺失」），B 的正常。
-      const health = sourceId === 'broken'
-        ? { get lastSuccessAt(): string { throw new Error('boom') } }
-        : { sourceId: 'fine', runtimeStatus: 'healthy', connectivityStatus: 'connected', consecutiveFailures: 0 }
-      return { detail: { health } }
-    })
-    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke: vi.fn(async () => undefined) } }
 
     function providerOf(which: 'broken' | 'fine'): ProviderView {
+      const entry = source({ providerId: which, sourceId: which, displayName: which, kind: 'feed', panels: ['dashboard'] })
+      // A 的行内读 displayName 就抛；B 正常。都发生在 ErrorBoundary 包住的区域。
+      if (which === 'broken') Object.defineProperty(entry, 'displayName', { get() { throw new Error('boom') } })
       return {
         providerId: which, displayName: which, category: 'macro', credential: 'none', healthMarker: 'none',
-        sources: [source({ providerId: which, sourceId: which, displayName: which, kind: 'feed', panels: ['dashboard'] })]
+        sources: [entry]
       }
     }
 

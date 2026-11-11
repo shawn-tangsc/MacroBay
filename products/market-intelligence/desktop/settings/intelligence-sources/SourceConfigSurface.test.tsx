@@ -149,12 +149,13 @@ describe('the settings page and the config drawer render the same sources pane (
     const fromDrawer = await signature(drawerHost(sourceView))
 
     expect(fromDrawer).toEqual(fromSettings)
-    // 「逐项一致」不是「两边都少同一项」：策略组（现在只剩「纳入情绪分析」）、四格、运行入口都得在。
-    // 采集预设已挪到「采集与数据」（用户 2026-11-12），详情不再出现。
+    // 「逐项一致」不是「两边都少同一项」：源行还在（名字 + 开关 + 药丸）。
+    // 「高级」与整个展开区已按用户 2026-11-12 删除，详情里不再有健康四格 / 采集策略。
+    expect(fromSettings.detail).toContain('BLS 官方日程')
+    expect(fromSettings.detail).toContain('source-provider-detail__row')
+    expect(fromSettings.detail).not.toContain('source-provider-detail__advanced')
     expect(fromSettings.detail).not.toContain(settingsText.collectionPolicy.collectionPreset)
-    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.includeInSentiment)
-    expect(fromSettings.detail).toContain(settingsText.health.todayReading)
-    expect(fromSettings.detail).toContain(settingsText.health.runNow.unavailable)
+    expect(fromSettings.detail).not.toContain(settingsText.collectionPolicy.includeInSentiment)
     // 目录一侧同样逐项一致（含那颗「不可用源」数量标记）。
     expect(fromSettings.tree).toContain(settingsText.unavailableCountOne.replace('{count}', '1'))
   })
@@ -164,18 +165,12 @@ describe('the settings page and the config drawer render the same sources pane (
     const fromSettings = await signature(settingsHost(sourceView))
     const fromDrawer = await signature(drawerHost(sourceView))
     expect(fromDrawer).toEqual(fromSettings)
-    expect(fromSettings.detail).not.toContain(settingsText.collectionPolicy.collectionPreset)
-    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.includeInSentiment)
-    expect(fromSettings.detail).toContain(settingsText.health.runAction.run)
+    expect(fromSettings.detail).toContain('BLS 官方日程')
+    expect(fromSettings.detail).not.toContain('source-provider-detail__advanced')
+    expect(fromSettings.detail).not.toContain(settingsText.health.runAction.run)
   })
 
-  it('is sensitive to a host that forgets the policy group', async () => {
-    // 这条钉住上面两条「真的会红」：抽屉那侧少交 policy，签名必须不同。
-    const sourceView = source()
-    const withPolicy = await signature(drawerHost(sourceView))
-    const withoutPolicy = await signature({ ...drawerHost(sourceView), surface: { ...surfaceOf(sourceView), policy: undefined } })
-    expect(withoutPolicy.detail).not.toEqual(withPolicy.detail)
-  })
+
 
   it('both hosts hand the pane the same facts and callbacks, and declare the settings surface', () => {
     const settingsBlock = surfaceBlock('./index.tsx')
@@ -200,7 +195,7 @@ function surfaceBlock(relativePath: string): string {
 }
 
 describe('the config surface adapts a host that only has the three write callbacks', () => {
-  it('keeps the run path, and writes enabling only through the header group switch', async () => {
+  it('writes enabling only through the header group switch', async () => {
     const write = vi.fn(async (_source: Readonly<{ sourceId: string; kind: string }>, _enabled: boolean, _origin: string) => {})
     const run = vi.fn(async () => {})
     const sourceView = source()
@@ -223,11 +218,8 @@ describe('the config surface adapts a host that only has the three write callbac
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    const runButton = [...container.querySelectorAll('button')].find((button) => button.textContent === settingsText.health.runAction.run)
-    expect(runButton).not.toBeUndefined()
-    await act(async () => { runButton?.click() })
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect(run).toHaveBeenCalledWith(sourceView.sourceId)
+    // 「立即运行」随展开区一起删除（用户 2026-11-12）：这里不再有那颗按钮。
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent === settingsText.health.runAction.run)).toBe(false)
 
     // 启停的编辑入口是页头那颗组开关（用户 2026-11-12）；能力行仍只读，点了不写。
     // 只看能力行（启用）那颗：策略表单里还有「纳入情绪分析」开关，它不是启停入口。

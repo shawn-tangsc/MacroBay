@@ -7,7 +7,6 @@ import { SettingsInfo } from '../settingsInfo'
 import { healthStateBadge } from './sourceHealthTone'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes, sourceRowView } from './sourceSettingRows'
 import type { ProviderDetailLabels } from './ProviderDetail'
-import type { CollectionPolicyLabels } from './CollectionPolicySection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
 
@@ -44,11 +43,6 @@ function SourceHealthPill({ state, resolveText, unavailable }: {
 }
 
 export type SourceEnabledRowProps = Readonly<{
-  /**
-   * 行尾那颗「高级」：展开下面那张表单（健康四行 + 采集策略两行）。**默认收起**，
-   * 按钮自己的 `aria-expanded` / `aria-controls` 指向展开区容器（用户 2026-11-10）。
-   */
-  advanced?: Readonly<{ expanded: boolean; controlsId: string; onToggle: () => void }>
   /**
    * 需要 API Key 但还没配好：开关灰着不可点（`aria-disabled` 可读），旁边一颗 ⓘ 说「先配置 API Key」。
    * 读者配好并验证通过后由上级把这个值变掉，开关自动可用。
@@ -122,15 +116,6 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
           </span>)}
         </span>}
     </div>
-    {props.advanced === undefined
-      ? null
-      : <Button
-        aria-controls={props.advanced.controlsId}
-        aria-expanded={props.advanced.expanded}
-        className="source-provider-detail__advanced"
-        onClick={props.advanced.onToggle}
-        size="small"
-        type="text">{resolveText(ADVANCED_KEY)}</Button>}
     {props.credentialMissing === true
       ? <SettingsInfo
         ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
@@ -157,38 +142,3 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
 
 /** 行尾那颗展开按钮的文案键（「高级」两个字，不是说明）。 */
 const ADVANCED_KEY = 'settings.intelligenceSources.advancedToggle'
-
-export type SourceSentimentRowProps = Readonly<{
-  sourceId: string
-  profile: IntelligenceSourceProfile
-  supportsSentiment: boolean
-  disabled: boolean
-  resolveText: (key: string) => string
-  onChange: (patch: Partial<IntelligenceSourceProfile>) => void
-}>
-
-/**
- * 「纳入情绪分析」一行：静态行名 + 一个小开关。
- * 出现与否由声明的 `visibleWhen`（`view.supportsSentiment`）决定，页面不再另判一次。
- */
-export function SourceSentimentRow(props: SourceSentimentRowProps): React.ReactElement | null {
-  const view = { sourceId: props.sourceId, profile: props.profile, supportsSentiment: props.supportsSentiment }
-  const row = sourceRowView(SOURCE_ROW_TEMPLATES.includeInSentiment, view)
-  if (!row.visible) return null
-  const label = props.resolveText(row.descriptor.copy?.labelKey ?? '')
-  return <SettingsRow
-    controlWrapperClassName="intelligence-setting-control"
-    copyClassName="intelligence-setting-label"
-    label={label}
-    rowAttributes={sourceRowAttributes(SOURCE_ROW_TEMPLATES.includeInSentiment, props.sourceId)}
-    rowClassName="intelligence-setting-row"
-  >
-    <Switch
-      aria-label={label}
-      checked={row.value === true}
-      disabled={props.disabled}
-      onChange={(includeInSentiment) => props.onChange({ includeInSentiment })}
-      size="small"
-    />
-  </SettingsRow>
-}

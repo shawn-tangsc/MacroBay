@@ -118,6 +118,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
    * 不新造通道、也不使用详情那份草稿快照。
    */
   const presetValues: Record<string, string> = {}
+  const sentiments: Record<string, boolean> = {}
   const productCadence = new Set<string>()
   const presetPolicy = props.surface.policy
   for (const group of props.view?.groups ?? []) {
@@ -133,6 +134,10 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
         if (presetPolicy === undefined) continue
         const profile = presetPolicy.profiles[source.sourceId]
         if (profile !== undefined) presetValues[source.sourceId] = profile.collectionPreset
+        // 「纳入情绪分析」的界面入口也搬到了这一行（用户 2026-11-12）：只对支持情绪的源出现。
+        if (profile !== undefined && presetPolicy.supportsSentimentById[source.sourceId] === true) {
+          sentiments[source.sourceId] = profile.includeInSentiment
+        }
       }
     }
   }
@@ -140,6 +145,11 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     ? undefined
     : (sourceId: string, preset: string): void => {
       presetPolicy.onChange(sourceId, { collectionPreset: preset as never })
+    }
+  const onSentimentChange = presetPolicy === undefined
+    ? undefined
+    : (sourceId: string, include: boolean): void => {
+      presetPolicy.onChange(sourceId, { includeInSentiment: include })
     }
   /**
    * 格级启停：缺键 = 启用；读失败也按启用显示。**只在这里存一份读回来的显式值**，
@@ -221,6 +231,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {...(onPresetChange === undefined ? {} : { onPresetChange })}
           presets={presetValues}
           {...(productCadence.size === 0 ? {} : { productCadence })}
+          {...(Object.keys(sentiments).length === 0 ? {} : { sentiments, onSentimentChange })}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <>

@@ -24,7 +24,7 @@ const SCAN_ROOTS = ['apps', 'platform', 'products']
 const SKIP_DIRS = new Set(['node_modules', 'out', 'dist', '.git', 'coverage'])
 
 /** ⓘ 的入口：这些位置出现说明句是**允许**的（默认收起、悬停/聚焦展开）。 */
-const ALLOWED_CONTEXT = /helpTrigger\(|\bPopover\b|content=|lines=|aria-|title=|ariaLabelKey=/u
+const ALLOWED_CONTEXT = /helpTrigger\(|\bPopover\b|content=|lines=|aria-|title=|ariaLabelKey=|labelKeys=/u
 
 type Finding = { file: string; line: number; key: string }
 

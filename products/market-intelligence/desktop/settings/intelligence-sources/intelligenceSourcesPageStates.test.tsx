@@ -173,29 +173,12 @@ describe('sources settings page states', () => {
     )
     const dom = await render()
 
-    // 默认收起：源那一行行尾只有「高级」+ 开关；点开之后才出现那张表单（用户 2026-11-10）。
-    expect(dom.textContent).toContain(zhText.advancedToggle)
-    const advanced = dom.querySelector<HTMLButtonElement>('.source-provider-detail__advanced')
-    expect(advanced).not.toBeNull()
-    expect(advanced?.getAttribute('aria-expanded')).toBe('false')
-    await act(async () => { advanced?.click() })
-    expect(advanced?.getAttribute('aria-expanded')).toBe('true')
-    const section = dom.querySelector('.source-provider-detail__form')
-    // 采集预设已挪到「采集与数据」（用户 2026-11-12）：详情只剩「纳入情绪分析」这一行。
+    // 「高级」与展开区已按用户 2026-11-12 删除：这一屏只剩源行（名字 + 状态 + 开关），
+    // 采集预设与「纳入情绪」都挪到「采集与数据」每源第二行。
+    expect(dom.querySelector('.source-provider-detail__advanced')).toBeNull()
+    expect(dom.querySelector('.source-provider-detail__form')).toBeNull()
     expect(dom.textContent).not.toContain(zhText.collectionPolicy.collectionPreset)
-    expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)
-    expect(section).not.toBeNull()
-    // 范围策略已从界面撤掉：读者改它什么也不会发生（架构师核对：只写不读）。控件不能以禁用态
-    // 留着——禁用等于承诺「以后能开」。预设搬走后，这一块里**一个下拉都不该有**。
-    expect(section!.textContent).not.toContain('范围策略')
-    expect(section!.querySelectorAll('.ant-select')).toHaveLength(0)
 
-    const sentimentRow = [...section!.querySelectorAll<HTMLElement>('.intelligence-setting-row')]
-      .find((row) => row.textContent?.includes(zhText.collectionPolicy.includeInSentiment))!
-    const toggle = sentimentRow.querySelector<HTMLElement>('[role="switch"]')!
-    await act(async () => { toggle.click() })
-
-    expect(updateSourceProfile).toHaveBeenCalledWith('s1', { includeInSentiment: false })
   })
 
   it('marks which provider row is selected for assistive tech', async () => {

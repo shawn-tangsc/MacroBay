@@ -1,6 +1,6 @@
 import { Alert, Button, Input, Switch } from 'antd'
 import { Eye, EyeOff } from 'lucide-react'
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { ErrorBoundary } from '@platform/ui/components/error-boundary'
@@ -9,12 +9,10 @@ import { IconButton } from '@platform/ui/components/icon-button'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
-import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
+import type { CollectionPolicyLabels } from './collectionPolicyLabels'
 import { SettingsInfo } from '../settingsInfo'
 import { needsJob } from './SourceRows'
 import { ProviderSourceRow } from './ProviderSourceRow'
-import type { SourceHealthLabels } from './SourceHealthDetail'
-import { useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
@@ -64,8 +62,10 @@ export type ProviderDetailLabels = {
   unavailableReasonCodeAria: string
   automaticSyncStopped: string
   lastSuccessfulSync: string
-  /** B4 四格：今天有没有读数 / 上次成功 / 为什么没在采 / 能不能立刻采。 */
-  health: SourceHealthLabels
+  /**
+   * 健康四格已按用户 2026-11-12 删除；字段保留只为宿主契约兼容，界面不再读它。
+   */
+  health: unknown
 }
 
 /**
@@ -78,7 +78,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, sourceDetailLabels, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface, initialSourceId }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface, initialSourceId }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -116,7 +116,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     supportsSentimentById: Readonly<Record<string, boolean>>
     onChange: (sourceId: string, patch: Partial<IntelligenceSourceProfile>) => void
   }
-  sourceDetailLabels?: { health: { statuses: Readonly<Record<string, string>> }; [key: string]: unknown }
   translation?: Parameters<typeof TranslationPreferencesSection>[0]
   onChanged?: () => void
 }): React.ReactElement {
@@ -164,23 +163,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const resolveText = useProductTextKey()
   /** 唯一一处「这是哪个面」的判定：注册表渲染只发生在设置页那一侧。 */
   const isSettingsSurface = (surface ?? 'panel') === 'settings'
-  /*
-    「健康」与「采集策略」两块各自的展开集合：**默认收起**，读者点开才记进来（用户 2026-11-10：
-    两块加起来太长）。两块都收起后，右栏那行摘要常显——一眼仍能看到这条源通不通。
-    折叠是**视图状态**，不是读者设置：不进 store、不落盘；换了源（provider）回到默认收起。
-  */
-  const [expandedBlocks, setExpandedBlocks] = useState<ReadonlySet<string>>(() => new Set())
-  /** 展开区容器 id 的前缀：`高级` 那颗按钮的 `aria-controls` 要指向一个**始终存在**的节点。 */
-  const detailsRegionIdBase = useId()
-  const setBlockOpen = useCallback((key: string, open: boolean) => {
-    setExpandedBlocks((current) => {
-      const next = new Set(current)
-      if (open) next.add(key)
-      else next.delete(key)
-      return next
-    })
-  }, [])
-  useEffect(() => { setExpandedBlocks(new Set()) }, [provider.providerId])
   // 读者已经配好自定义代理时，不再把「需要连接 本地代理」当成他还没做的事（MI-11-R196）。
   const proxyConfigured = useProxyConfigured()
   // 「上次成功同步」是读者可见的日期：走统一格式化（跟读者时区），不自己切 ISO 字符串。
@@ -188,8 +170,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** Set only by a transport-level refusal, so a rejected key never points at the proxy setting. */
   const [networkFailure, setNetworkFailure] = useState(false)
 
-
-  const { details, retryDetail, refreshDetail, refreshStaleById, beginRun } = useSourceDetailReads(provider, showSourceDetails)
 
   // `focus.sourceId` 的落点：只在这块详情挂载时定位一次。找不到该行就什么都不做（不抛错、不改选中）。
   useEffect(() => {
@@ -210,13 +190,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     }
   }, [initialSourceId])
 
-  const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
-    // 上一轮留下的「读数还没刷新」在这一轮开始时就该消失：否则它会和「正在运行」同时出声。
-    beginRun(sourceId)
-    const outcome = await onRunNow!(sourceId)
-    await refreshDetail(sourceId)
-    return outcome
-  }, [beginRun, onRunNow, refreshDetail])
 
 
 
@@ -486,23 +459,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         /* 组开关（页头最右那颗）是**唯一可编辑入口**：行开关只读展示这个源自己开没开；
            「某一格用不用它」属于「采集与数据」那面，不在这面出现。 */
         credentialMissing={provider.credential === 'api-key' && credentialStatus?.hasCredential === false}
-        detailsId={`${detailsRegionIdBase}-${source.sourceId}`}
-        expanded={expandedBlocks.has(source.sourceId)}
-        healthLabels={labels.health}
         key={source.sourceId}
         labels={labels}
-        onRetry={() => retryDetail(source.sourceId)}
-        {...(onRunNow === undefined ? {} : { onRunNow: () => runAndRefresh(source.sourceId) })}
         onToggle={(enabled) => void toggle(source, enabled)}
-        onToggleAdvanced={() => setBlockOpen(source.sourceId, !expandedBlocks.has(source.sourceId))}
-        {...(policy === undefined ? {} : { policy })}
         proxyConfigured={proxyConfigured}
-        read={details[source.sourceId] ?? { state: 'loading' }}
-        refreshStale={refreshStaleById[source.sourceId] === true}
         resolveText={resolveText}
         source={source}
-        {...(supportsRunNowById?.[source.sourceId] === undefined ? {} : { supportsRunNow: supportsRunNowById[source.sourceId] })}
-        timeZone={timeZone}
       />)}
     </div>
     {showSourceDetails ? <div className="source-provider-detail__details">

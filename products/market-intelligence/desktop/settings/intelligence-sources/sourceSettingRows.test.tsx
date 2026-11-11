@@ -124,17 +124,16 @@ function renderedKeys(container: HTMLElement): string[] {
 describe('the source screen renders menu 1 from the declarations (C2)', () => {
   it('renders the declared rows, in declaration order, and hides what visibleWhen hides', async () => {
     const container = await mount()
-    // 采集预设已挪到「采集与数据」每个源项下面（用户 2026-11-12，`takeover`）：
-    // 详情只画剩下的声明行（启用 / 纳入情绪），预设那行由 `BusinessSettingsView` 渲染同一个模板。
+    // 详细页只剩「启用」一行：采集预设与「纳入情绪分析」都已按用户 2026-11-12 挪到
+    // 「采集与数据」每个源项下面（接管方见 `BusinessSettingsView.preset.test.tsx`）。
     const expected = provider().sources.flatMap((entry) => visibleSourceRows(viewOf(entry))
-      .filter((row) => row.template !== SOURCE_ROW_TEMPLATES.collectionPreset)
+      .filter((row) => row.template === SOURCE_ROW_TEMPLATES.enabled)
       .map((row) => row.template.replace('<sourceId>', entry.sourceId)))
 
     // ① 顺序取自声明（先启用、再预设、再情绪），不是页面自己排的；② 不可见的行不出现。
     expect(renderedKeys(container)).toEqual(expected)
-    expect(expected.filter((key) => key.startsWith('setting:sources.include-in-sentiment'))).toEqual([
-      'setting:sources.include-in-sentiment@s1'
-    ])
+    // 「纳入情绪分析」也已挪到「采集与数据」第二行（用户 2026-11-12），详情不再画它。
+    expect(expected.filter((key) => key.startsWith('setting:sources.include-in-sentiment'))).toEqual([])
   })
 
   it('renders nothing that is not a menu 1 declaration for the settings surface', async () => {
@@ -166,16 +165,13 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
       [...container.querySelectorAll('[data-setting-key]')]
         .map((node) => node.getAttribute('data-setting-template'))
     )
-    // 预设模板不再由详情渲染（接管方：`BusinessSettingsView` 每源第二行，见
-    // `BusinessSettingsView.preset.test.tsx` 的「同一个模板」断言）；这里只剩详情这两个。
-    expect([...templates].sort()).toEqual([
-      'setting:sources.enabled@<sourceId>',
-      'setting:sources.include-in-sentiment@<sourceId>'
-    ])
+    // 详情只剩启用行；预设与纳入情绪都由「采集与数据」每源第二行接管
+    // （同一模板，见 `BusinessSettingsView.preset.test.tsx`）。
+    expect([...templates].sort()).toEqual(['setting:sources.enabled@<sourceId>'])
   })
 
   it('keeps every key literal out of the screen files (no hand-written per-key ifs)', () => {
-    for (const file of ['ProviderDetail.tsx', 'CollectionPolicySection.tsx']) {
+    for (const file of ['ProviderDetail.tsx', 'SourceRows.tsx']) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8')
       expect(source).not.toContain('setting:sources.')
     }
