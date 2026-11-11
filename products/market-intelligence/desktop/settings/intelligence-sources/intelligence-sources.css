@@ -1249,7 +1249,7 @@
   background: color-mix(in srgb, var(--caution) 12%, transparent);
   color: var(--caution);
   font-size: 0.62em;
-  font-weight: 700;
+  font-weight: 650;
   letter-spacing: 0.04em;
   line-height: 1.4;
   text-transform: uppercase;
