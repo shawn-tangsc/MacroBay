@@ -7,6 +7,7 @@ import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEcono
 import { resolveCalendarConsensus, type CalendarConsensusValue } from '../../../../contracts/macro/calendarConsensus'
 import { useConfirm } from '@platform/ui/components/confirm'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { helpTrigger } from '@platform/ui/components/popover'
 import { Popover } from '@platform/ui/components/popover'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
@@ -77,8 +78,9 @@ const fedFomcRefreshPresentationPolicy = {
  */
 function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalendarText, timeZone: string, timeZoneLabel: string): string {
   if (event.scheduledAt === undefined) return `${event.scheduledDate} ${text.details.scheduledDateOnly}`
+  // 惯例推算的时刻**不是发布时刻**：官方没公布就只给日期，说「发布时间未公布」（MI-1-R39 §4）。
+  if (event.releaseTimeSource === 'convention-default') return `${event.scheduledDate} ${text.details.timeNotPublished}`
   const time = `${calendarDisplayDate(event.scheduledAt, timeZone)} ${formatEconomicCalendarTime(event.scheduledAt, timeZone, timeZoneLabel)}`
-  if (event.releaseTimeSource === 'convention-default') return `${time}（${text.details.conventionTime}）`
   if (event.releaseTimeSource === 'user-edited') return `${time}（${text.details.editedTime}）`
   return time
 }
@@ -313,7 +315,11 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
                 size="sm"
               />
             </span>
-          : <span className="mi-economic-calendar__release-time-value" data-release-time-fixed="true">{shown}</span>}
+          : <span className="mi-economic-calendar__release-time-value" data-release-time-fixed="true">{shown}
+              {event.releaseTimeSource === 'convention-default'
+                ? <> {helpTrigger({ text: text.details.timeNotPublishedReason })}</>
+                : null}
+            </span>}
       {editing
         ? <span className="mi-economic-calendar__release-time-actions">
             <Button aria-label={text.details.editTime.save} disabled={state === 'saving' || draft === null} onClick={() => void save()} size="small" type="primary">{text.details.editTime.save}</Button>
