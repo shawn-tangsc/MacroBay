@@ -107,9 +107,11 @@ describe('行尾状态文字：一条列线、不染色', () => {
     expect(body).toContain('white-space: nowrap')
   })
 
-  it('never takes a colour from the state, and keeps the marker out of every style rule', () => {
+  it('never takes a colour from the state, and keeps the marker out of this screen stylesheet', () => {
     // 状态只写文字：颜色不许上这一行——要颜色就走药丸。`data-source-enabled` 是给用例认状态的标记，
-    // 一旦有样式规则引用它，颜色（或任何视觉）就会挂在「开没开」上，正是这条要挡的形态。
+    // **本页样式表里**一旦有规则引用它，颜色（或任何视觉）就挂在「开没开」上，正是这条要挡的形态。
+    // 范围只到 `intelligence-sources.css`：源列表那颗头像另有 `data-provider-state` 染色（同目录 1935 行），
+    // 那是「颜色只给头像」那条决定，与本行无关，不在这里判。
     expect(css).not.toContain('data-source-enabled')
     for (const body of rulesFor(css, 'source-provider-detail__row-state')) {
       expect(body).not.toMatch(/(^|;|\s)color\s*:/u)
