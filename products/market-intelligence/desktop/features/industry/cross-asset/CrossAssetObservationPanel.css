@@ -209,3 +209,9 @@
 .mi-cross-asset__reading-relative { margin: 0; color: var(--mi-cross-asset-muted); font-size: 11px; }
 /* The correlation closes the line at the right edge: it is the backing, not part of the verdict. */
 .mi-cross-asset__reading-correlation { margin-left: auto; }
+
+/* 不可用行：整行淡底，文字色不动（行名仍 --text）；状态词横跨数据列、左对齐到「最新」列。 */
+.mi-cross-asset__status-table tr[data-source-state] {
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+}
+.mi-cross-asset__state-cell { text-align: left; vertical-align: middle; }

@@ -232,3 +232,43 @@ describe('cross-asset chart with only some lines usable', () => {
     } finally { await page.unmount() }
   })
 })
+
+
+describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
+  const allUnreadable = {
+    index: 'unreadable' as const, btc: 'unreadable' as const, eth: 'unreadable' as const,
+    dxy: 'unreadable' as const, gold: 'unreadable' as const, us10y: 'unreadable' as const, realRate: 'unreadable' as const
+  }
+
+  it('whole table unreadable: one row, one StateView, exactly one retry', async () => {
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: allUnreadable })
+    try {
+      expect(page.host.querySelectorAll('[data-status-section="unavailable"] tr')).toHaveLength(1)
+      const cell = page.host.querySelector('[data-status-section="unavailable"] td')!
+      expect(cell.querySelector('[data-state="error"]')).not.toBeNull()
+      expect(cell.querySelectorAll('button')).toHaveLength(1)
+      // 其他数据行与逐行状态行都不出现。
+      expect(page.host.querySelectorAll('tr[data-status-row]')).toHaveLength(0)
+    } finally { await page.unmount() }
+  })
+
+  it('partial: only that row is a state row, no button inside it, one retry in the footer', async () => {
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), rowStates: { index: 'unreadable' } })
+    try {
+      const row = page.host.querySelector<HTMLTableRowElement>('tr[data-status-row="index"]')!
+      expect(row.getAttribute('aria-disabled')).toBe('true')
+      const state = row.querySelector('.mi-source-state[data-state="unreadable"]')!
+      expect(state).not.toBeNull()
+      // 状态词横跨数据列（不占行名列），行内没有按钮。
+      const stateCell = row.querySelector<HTMLTableCellElement>('td.mi-cross-asset__state-cell')!
+      expect(Number(stateCell.getAttribute('colspan'))).toBeGreaterThan(1)
+      expect(row.querySelectorAll('button')).toHaveLength(0)
+      // 不许逐列铺「—」。
+      expect(row.textContent).not.toContain('—')
+      // 重试只在表尾，一颗。
+      expect(page.host.querySelectorAll('tfoot button')).toHaveLength(1)
+      // 其它行照常是数据行（有窗口单元格）。
+      expect(page.host.querySelectorAll('tr[data-status-row="btc"] [data-asset-return]').length).toBeGreaterThan(0)
+    } finally { await page.unmount() }
+  })
+})

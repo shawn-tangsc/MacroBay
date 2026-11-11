@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { CellStateCard, CellStateRow } from './DashboardCellState'
+import { CellStateCard } from './DashboardCellState'
 
 let root: Root | undefined
 afterEach(() => { act(() => root?.unmount()); root = undefined; document.body.replaceChildren() })
@@ -33,20 +33,4 @@ describe('整卡级与行级的三态', () => {
     expect(errorSurface.querySelectorAll('button')).toHaveLength(1)
   })
 
-  it('makes only the unreadable row retryable; disabled rows stay non-interactive', () => {
-    const onRetry = vi.fn()
-    const unreadable = render(createElement('table', null, createElement('tbody', null,
-      createElement(CellStateRow, { id: 'index', name: '纳指', kind: 'unreadable', label: '暂时读不到', colSpan: 3, onRetry }))))
-    const row = unreadable.querySelector<HTMLTableRowElement>('[data-status-row="index"]')!
-    expect(row.getAttribute('aria-disabled')).toBeNull()
-    const retry = row.querySelector<HTMLButtonElement>('button')!
-    act(() => retry.click())
-    expect(onRetry).toHaveBeenCalledTimes(1)
-
-    const disabled = render(createElement('table', null, createElement('tbody', null,
-      createElement(CellStateRow, { id: 'gold', name: '黄金', kind: 'disabled', label: '数据未被启用', colSpan: 3 }))))
-    const disabledRow = disabled.querySelector<HTMLTableRowElement>('[data-status-row="gold"]')!
-    expect(disabledRow.getAttribute('aria-disabled')).toBe('true')
-    expect(disabledRow.querySelector('button')).toBeNull()
-  })
 })

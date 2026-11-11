@@ -23,34 +23,6 @@ function CellStateSentence({ kind, label }: { kind: CellStateKind; label: string
   )
 }
 
-/** 行级：未配置/未启用不可点（`aria-disabled`）；**读不到可点重试**（真按钮，整句就是它的名字）。 */
-export function CellStateRow({ id, name, kind, label, colSpan, onRetry }: {
-  id: string
-  name: string
-  kind: CellStateKind
-  label: string
-  colSpan: number
-  onRetry?: () => void
-}): ReactElement {
-  const Icon = kind === 'unreadable' ? TriangleAlert : CircleSlash
-  const state = (
-    <>
-      <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
-      {label}
-    </>
-  )
-  return (
-    <tr aria-disabled={kind === 'unreadable' ? undefined : 'true'} data-source-state={kind} data-status-row={id}>
-      <th scope="row"><span>{name}</span></th>
-      <td colSpan={colSpan}>
-        {kind === 'unreadable' && onRetry !== undefined
-          ? <button className="mi-source-state" data-state={kind} onClick={onRetry} type="button">{state}</button>
-          : <span className="mi-source-state" data-state={kind}>{state}</span>}
-      </td>
-    </tr>
-  )
-}
-
 /**
  * 整卡级按规范用 `StateView`（不是共享卡）：不画自己的标题与外壳，状态面、图标、动作都归平台。
  * 一句话走 `productReason`，动作各一颗：没启用 → 去启用；读不到 → 再试一次。

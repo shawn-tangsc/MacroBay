@@ -21,7 +21,9 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
 import { chartLinesHiddenBy, CrossAssetReturnChart } from './CrossAssetReturnChart'
-import { CellStateCard, CellStateRow, type CellStateKind } from '../../../pages/intelligence/DashboardCellState'
+import { CircleSlash, TriangleAlert } from 'lucide-react'
+
+import { CellStateCard, type CellStateKind } from '../../../pages/intelligence/DashboardCellState'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
@@ -239,10 +241,16 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       const name = row.id === 'index' || row.id === 'btc' || row.id === 'eth'
         ? text.assets[row.id]
         : text.assetLabels[row.id]
-      return <CellStateRow id={row.id} name={name} kind={state}
-        label={state === 'unreadable' ? cellStateLabels!.unreadable : cellStateLabels!.disabled}
-        colSpan={2 + crossAssetWindows.length}
-        {...(state === 'unreadable' ? { onRetry: () => void view.refresh() } : {})} />
+      const StateIcon = state === 'unreadable' ? TriangleAlert : CircleSlash
+      return <tr aria-disabled="true" data-source-state={state} data-status-row={row.id}>
+        <th scope="row"><span>{name}</span></th>
+        <td className="mi-cross-asset__state-cell" colSpan={1 + crossAssetWindows.length}>
+          <span className="mi-source-state" data-state={state}>
+            <StateIcon aria-hidden="true" className="mi-source-state__icon" size={14} />
+            {state === 'unreadable' ? cellStateLabels!.unreadable : cellStateLabels!.disabled}
+          </span>
+        </td>
+      </tr>
     }
     return row.state === 'loading'
     ? <LoadingStatusRow key={row.id} id={row.id} text={text} />
@@ -264,6 +272,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
     ? statusRows
     : statusRows.filter(row => !hideStatusRows.includes(row.id))
   // 跨资产图：三条线都不可用才整图不画（至少一条可用就照画）。
+  // 粒度：七行同一个上游故障 → 整表一行状态；只有部分行坏才逐行标。重试整表只有一颗。
+  const rowStateOf = (id: CrossAssetStatusId): CellStateKind | undefined => cellStateLabels === undefined ? undefined : rowStates?.[id]
+  const allRowsUnreadable = statusRows.length > 0 && statusRows.every(row => rowStateOf(row.id) === 'unreadable')
+  const anyRowUnavailable = !allRowsUnreadable && statusRows.some(row => rowStateOf(row.id) !== undefined)
   const chartLineStates = (['index', 'btc', 'eth'] as const).map(id => rowStates?.[id])
   const allChartLinesUnusable = cellStateLabels !== undefined && chartLineStates.every(state => state !== undefined)
   const chartLineUnreadable = chartLineStates.includes('unreadable')
@@ -301,10 +313,15 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
           <thead><tr><th>{text.statusColumns.asset}</th><th>{text.statusColumns.latest}</th>
           {crossAssetWindows.map(window => <th key={window}>{text.statusColumns[window]}</th>)}</tr></thead>
-          <tbody data-status-section="intraday">{intradayRows.map(renderStatusRow)}</tbody>
+          {allRowsUnreadable
+            ? <tbody data-status-section="unavailable"><tr><td colSpan={2 + crossAssetWindows.length}>
+                <StateView state="error" reasonCode="unreadable" size="md"
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />
+              </td></tr></tbody>
+            : <tbody data-status-section="intraday">{intradayRows.map(renderStatusRow)}</tbody>}
           {/* The daily block repeats the asset and latest headings but not the window columns: an
               observation per business day has nothing to say about the last fifteen minutes. */}
-          <tbody data-status-section="daily">
+          {allRowsUnreadable ? null : <tbody data-status-section="daily">
             <tr className="mi-cross-asset__section"><th scope="colgroup" colSpan={2 + crossAssetWindows.length}>
               {/* 标题与 ⓘ 是一个 flex 容器里的两件东西，不是两个块级兄弟：块级流里 icon 会被挤到下一行，
                   还会因为没吃到复位而画出浏览器默认的方框（读者 2026-11-08 截图）。 */}
@@ -334,7 +351,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
                     resolveText={resolveProductText} size="sm" variant="plain" />
                 )} /></span></th></tr>
             {dailyRows.map(renderStatusRow)}
-          </tbody>
+          </tbody>}
+          {anyRowUnavailable ? <tfoot><tr><td colSpan={2 + crossAssetWindows.length}>
+            <Button onClick={() => void view.refresh()} size="small" type="default">{text.refresh}</Button>
+          </td></tr></tfoot> : null}
         </table>
         <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>
