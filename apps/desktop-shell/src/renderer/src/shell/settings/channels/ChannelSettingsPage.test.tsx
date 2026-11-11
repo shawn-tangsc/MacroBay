@@ -84,6 +84,15 @@ function stateOf(container: HTMLElement, state: string): Element | null {
  * 打开「新建」弹层：空态时右上角那颗「添加」不画（原型：一屏一颗动作），入口是 `StateView` 的「创建」；
  * 非空时走右上角。两种都只点**一颗**，用它取即可。
  */
+/** 点开 Bot Token 字段名旁的 ⓘ：说明只在那里，正文不再有提示句。 */
+async function openTokenInfo(): Promise<void> {
+  const info = [...document.body.querySelectorAll('button')].find(
+    (node) => node.getAttribute('aria-label') === labels.channelTokenInfoAria
+  ) as HTMLButtonElement | undefined
+  await act(async () => info?.click())
+  await act(async () => {})
+}
+
 async function openCreate(container: HTMLElement): Promise<void> {
   const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
   const target = add ?? container.querySelector<HTMLElement>('[data-state="empty"] .state-view__action')
@@ -415,7 +424,8 @@ describe('an empty credential is said out loud, never dressed as a mask', () => 
     // 同一屏里不许同时出现相反的结论。
     expect(current?.textContent).not.toContain(labels.channelTokenCurrentNone)
     expect(current?.textContent).not.toContain('当前已存')
-    // 提示也跟着档位走：这一档是「填一把新的换掉它」，不是「留空＝不修改」。
+    // 提示也跟着档位走：这一档是「填一把新的换掉它」，不是「留空＝不修改」。说明在 ⓘ 里。
+    await openTokenInfo()
     expect(document.body.textContent).toContain(labels.channelTokenUnavailableHint)
     expect(document.body.textContent).not.toContain(labels.channelTokenReadOnly)
   })
@@ -437,6 +447,7 @@ describe('an empty credential is said out loud, never dressed as a mask', () => 
     expect(current?.textContent).toContain(labels.channelTokenCurrentNone)
     expect(current?.textContent).not.toContain('当前已存')
     // 「留空＝不修改」在这里是假话：本来就没有可改的值。
+    await openTokenInfo()
     expect(document.body.textContent).toContain(labels.channelTokenEnterHint)
     expect(document.body.textContent).not.toContain(labels.channelTokenReadOnly)
     // 也没有「第 N 次保存」：从没保存过凭据。

@@ -125,14 +125,6 @@ export function ChannelFields(props: {
                 tooltipKey="settings.channels.tokenVisibility"
               />
             </div>
-            <small className="channel-field-hint">
-              {/* 正文最多一行：三档三句里只留**当前状态**那一句；「显示/隐藏」的解释进 ⓘ。 */}
-              {props.tokenState === 'missing'
-                ? labels.channelTokenEnterHint
-                : props.tokenState === 'unavailable'
-                  ? labels.channelTokenUnavailableHint
-                  : labels.channelTokenReadOnly}
-            </small>
           </>
         )}
       </FieldShell>
