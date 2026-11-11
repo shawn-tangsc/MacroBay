@@ -20,3 +20,15 @@ export function percentagesIn(text: string): number[] {
     .map(match => Number(`${match[1] === undefined ? '' : '-'}${match[2]}`))
     .filter(value => Number.isFinite(value))
 }
+
+/**
+ * 字符串里的普通数字（不要求带百分号），同样带符号。
+ *
+ * 变更摘要的**值位**会印出「资金费率 = 0.007999」「73.43 亿美元」这类形状；模型照抄的是这个形状，
+ * 只认百分数就会把这类值全判成「没出处」（架构师 2026-11-11 批：扩到普通数字，但只在值位）。
+ */
+export function numbersIn(text: string): number[] {
+  return [...text.matchAll(/(?<![\d.])([-−])?(\d+(?:\.\d+)?)/gu)]
+    .map(match => Number(`${match[1] === undefined ? '' : '-'}${match[2]}`))
+    .filter(value => Number.isFinite(value))
+}

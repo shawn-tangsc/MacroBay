@@ -301,6 +301,25 @@ describe('analysisOutputValidator', () => {
     })
   })
 
+  it('accepts a plain number printed in a change value, and still refuses sentence numbers', () => {
+    // 值位印的是普通数字（`0.007999` 这种，无百分号）时，正文引用它也算有出处。
+    const base = frozenSnapshot()
+    const snapshot = { ...base, facts: [...base.facts, policyProbabilityFact()], changeValues: [0.007999] }
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；资金费率 0.007999%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+
+    // 摘要里的行文数字（「24 小时」「3 条」）不进集合：正文写「24%」「3%」仍是编数。
+    for (const invented of ['24%', '3%']) {
+      const bad = validOutput()
+      bad.conclusion.macro = `政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；变化 ${invented}。`
+      expect(validateAnalysisModelOutput(JSON.stringify(bad), snapshot), invented).toEqual({
+        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+        rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+      })
+    }
+  })
+
   it('behaves exactly as before when the snapshot carries no change values', () => {
     // 老快照没有变更记录 ⇒ 没有第二个集合 ⇒ 与今天完全一致：同一个数仍被拒。
     const snapshot = frozenSnapshot()

@@ -9,7 +9,7 @@ import { computeSnapshotChange } from './snapshotChange'
  *
  * 三条边界各有一条用例：只从渲染文本取、天然尊重 200 条截断、没有变更记录时什么都不给。
  */
-function fact(index: number): AgentFact {
+function fact(index: number, overrides: Partial<AgentFact> = {}): AgentFact {
   return {
     factId: `f-${String(index).padStart(3, '0')}`,
     domain: 'funding',
@@ -17,6 +17,7 @@ function fact(index: number): AgentFact {
     metric: 'open-interest-change-24h-pct',
     value: 100 + index / 100,
     unit: 'percent',
+    ...overrides,
     sourceId: 'binance-futures-positioning',
     sourceLabel: 'binance',
     observedAt: '2026-11-11T05:00:00.000Z',
@@ -46,15 +47,35 @@ describe('the numbers the change digest printed', () => {
     expect(changeValuesForPrompt(undefined, 'zh-CN')).toBeUndefined()
   })
 
-  it('reads the percentages out of the rendered sentence, per language', () => {
+  it('reads the numbers printed in the value positions, in the same language as the digest', () => {
     const change = computeSnapshotChange({
       current: snapshotOf([fact(0)]) as never,
       previous: snapshotOf([{ ...fact(0), value: 99.24 }]) as never
     })
     const values = changeValuesForPrompt(change, 'zh-CN')
-    // 变更前 99.24%、变更后 100% —— 两句里印出来的那两个数都在集合里。
+    // 变更前 99.24%、变更后 100% —— 值位印出来的那两个数都在集合里。
     expect(values).toEqual(expect.arrayContaining([99.24]))
     expect(changeValuesForPrompt(change, 'en-US')).toEqual(expect.arrayContaining([99.24]))
+  })
+
+  it('takes plain numbers too, but only where a value is printed', () => {
+    // 值位是一条普通数字（无百分号）：`0.007999` 这类。模型照抄它是合规的。
+    const change = computeSnapshotChange({
+      current: snapshotOf([fact(0, { metric: 'funding-rate-percent', value: 0.007999, unit: '%' })]) as never,
+      previous: snapshotOf([]) as never
+    })
+    expect(changeValuesForPrompt(change, 'zh-CN')).toEqual(expect.arrayContaining([0.007999]))
+  })
+
+  it('never takes the numbers that are only in the sentence around the values', () => {
+    // 「持仓 24 小时变化」「新增证据 3 条」——24 与 3 是行文里的数字，值位没有它们。
+    const change = computeSnapshotChange({
+      current: snapshotOf([fact(0)]) as never,
+      previous: snapshotOf([{ ...fact(0), value: 99.24 }]) as never
+    })
+    const values = changeValuesForPrompt(change, 'zh-CN') ?? []
+    expect(values).not.toContain(24)
+    expect(values).not.toContain(3)
   })
 
   it('stops where the digest stops: the 201st change was never printed, so its value is not a source', () => {
