@@ -122,6 +122,14 @@ describe('名字按钮的形态归界面设计（这里只钉 CSS 事实）', ()
     expect(hover).toContain('var(--accent)')
   })
 
+  it('keeps the red row hover inside the danger family (never reads as editable)', () => {
+    const hover = /\.business-card__row\[data-source-disabled='true'\]:hover\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(hover).toContain('--danger')
+    // 不许把悬停写成正常底色/正常文字色——那会被读成「现在可以编辑了」。
+    expect(hover).not.toContain('var(--text)')
+    expect(hover).not.toContain('var(--surface)')
+  })
+
   it('uses an accent focus ring on the whole-row button, not red', () => {
     const focus = /\.business-card__row\[data-source-disabled='true'\]:focus-visible\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
     expect(focus).toContain('var(--accent)')

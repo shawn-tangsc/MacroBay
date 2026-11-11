@@ -125,4 +125,27 @@ describe('focus.sourceId 落到那个源的那一行', () => {
     await render()
     expect(scrollSpy).not.toHaveBeenCalled()
   })
+  it('keeps exactly one marker after two jumps in a row', async () => {
+    // 新跳转先清旧标记（副作用 cleanup），不许累计成两个描边。
+    const host = await render('binance-announcements')
+    const first = host.querySelector<HTMLElement>('[data-source-row="binance-announcements"]')!
+    expect(first.getAttribute('data-focused')).toBe('true')
+
+    await act(async () => {
+      root!.render(createElement(ShellLanguageProvider, { language: 'zh-CN', children: createElement(ProviderDetail, {
+        initialSourceId: 'binance-spot-market',
+        labels,
+        provider: { providerId: 'p', displayName: 'P', category: 'macro', credential: 'none', healthMarker: 'none', sources: SOURCES.map(source) },
+        showSourceDetails: true
+      } as never) }))
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    const marked = [...host.querySelectorAll<HTMLElement>('[data-focused="true"]')]
+    expect(marked).toHaveLength(1)
+    expect(marked[0]?.getAttribute('data-source-row')).toBe('binance-spot-market')
+    expect(document.activeElement).toBe(marked[0])
+    expect(first.getAttribute('data-focused')).toBeNull()
+  })
+
 })
