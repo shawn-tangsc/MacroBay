@@ -18,6 +18,8 @@ function readSource(relativePath: string): string {
 const appSource = readSource('app.ts')
 // 单实例锁的判定搬到了独立模块（app.ts 只留调用点），断言跟着实现走。
 const singleInstanceLockSource = readSource('runtimeSingleInstanceLock.ts')
+// 启动围栏的判定搬到了独立模块（app.ts 只留一次调用），断言跟着实现走。
+const channelBootFenceSource = readSource('channelBootFence.ts')
 // 产品可见的智能体会话面（含 `invokeProductIpc` 的接线）已搬到这个模块，断言跟着实现走。
 const productAgentWiringSource = readSource('productAgentPlatformWiring.ts')
 const webIpcSource = readSource('ipc/webIpc.ts')
@@ -201,8 +203,14 @@ describe('desktop main IPC surface', () => {
     expect(channelsAndJobsSource).toContain('createPlatformWebSocketFactory')
     expect(channelsAndJobsSource).toContain('ChannelDeliveryTransportRouter')
     expect(channelsAndJobsSource).toContain("if (type === 'slack') return slackRuntimeManager.start(channelId, generation, token)")
-    expect(appSource).toContain("else if (type === 'telegram') telegramOffsetRepository.auditBootstrapFenced(channelId, 'telegram-runtime-evidence-missing')")
-    expect(appSource).toContain("// Lark's audit gate is intentionally active-generation-only")
+    // 围栏判定已抽到 `channelBootFence.ts`：app.ts 只留一次调用与审计落点，
+    // 断言跟着实现搬到新文件，别删——删了就没有守卫看着启动围栏这块了。
+    expect(channelBootFenceSource).toContain('export function fenceChannelAtBoot(')
+    expect(channelBootFenceSource).toContain('export async function bootChannelRuntimes(')
+    expect(channelBootFenceSource).toContain('input.fenceKeepingIntent(input.channelId, input.now)')
+    expect(channelBootFenceSource).toContain('input.disableGeneration(input.channelId, input.generation, input.now)')
+    expect(appSource).toContain('await bootChannelRuntimes({')
+    expect(appSource).toContain("else if (type === 'telegram') telegramOffsetRepository.auditBootstrapFenced(channelId, `telegram-runtime-${suffix}`)")
     expect(appSource).not.toContain('agentServices.channels.create')
     expect(appSource).toContain('getDisposeTaskAutomationMaintenance()?.()')
     expect(repositoriesSource).toContain('agent: {\n          taskAutomation: { policyPreset }')

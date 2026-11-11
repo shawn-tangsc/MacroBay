@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 
 import { SettingInfoPopover } from '../SettingInfoPopover'
 
@@ -138,9 +139,10 @@ export function ChannelFields(props: {
               ) : null}
             </div>
             {error ? (
-              <p className="channel-inline-error" data-field-error={field} role="alert">
-                {error}
-              </p>
+              // 平台提示条：danger 档自带 role="alert"，位置与句子不变，不再手写裸 alert。
+              <div data-field-error={field}>
+                <InlineNotice tone="danger">{error}</InlineNotice>
+              </div>
             ) : null}
           </FieldShell>
         )
