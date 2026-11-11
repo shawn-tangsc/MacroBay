@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -26,7 +26,8 @@ function walk(root: string, extensions: readonly string[]): string[] {
 }
 
 function relative(path: string): string {
-  return path.slice(repoRoot.length + 1)
+  // 基线键一律正斜杠：Windows 上切出来是反斜杠，直接和 `platform/ui/...` 比会整片假红。
+  return path.slice(repoRoot.length + 1).split(sep).join('/')
 }
 
 const files = sourceRoots.flatMap((root) => walk(resolve(repoRoot, root), ['.ts', '.tsx', '.css']))

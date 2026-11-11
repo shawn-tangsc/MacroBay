@@ -25,6 +25,9 @@ function makeRepo(files: Record<string, string>): string {
   git(dir, ['init', '-q', '-b', 'main'])
   git(dir, ['config', 'user.email', 'test@example.com'])
   git(dir, ['config', 'user.name', 'Test'])
+  // 临时仓库不继承开发机的全局 eol 设置：`core.autocrlf=true` 时 `checkout-index` 会把 LF 写成 CRLF，
+  // 于是这些断言在 Windows 上量到的是 git 的换行转换，不是落树逻辑。仓库自己的 `.gitattributes` 管不到这里。
+  git(dir, ['config', 'core.autocrlf', 'false'])
   writeFiles(dir, files)
   git(dir, ['add', '.'])
   git(dir, ['commit', '-q', '-m', 'base'])
@@ -55,7 +58,10 @@ function typechecks(treeRoot: string, files: readonly string[]): boolean {
   }))
   const result = (() => {
     try {
-      execFileSync(join(process.cwd(), 'node_modules', '.bin', 'tsc'), ['--noEmit', '-p', config], { encoding: 'utf8' })
+      // `.bin/tsc` 在 Windows 上是 sh 脚本（真正可执行的是 `tsc.cmd`），execFile 不走 PATHEXT，
+      // 直接调用必然 ENOENT——那会被这里读成「类型检查没通过」，于是判据在 Windows 上恒假。
+      // 用 node 跑 tsc 的入口文件，三种平台同一个写法。
+      execFileSync(process.execPath, [join(process.cwd(), 'node_modules', 'typescript', 'bin', 'tsc'), '--noEmit', '-p', config], { encoding: 'utf8' })
       return true
     } catch {
       return false
@@ -125,7 +131,8 @@ describe('提交树落盘', () => {
 export const more = 1\n` })
     git(repo, ['add', 'a.ts'])
 
-    const result = spawnSync(join(process.cwd(), 'node_modules', '.bin', 'tsx'), [join(process.cwd(), 'scripts', 'pre-commit.mts')], {
+    // 同上：`.bin/tsx` 在 Windows 上不是可执行入口，用 node 直接跑它的 cli，才能拿到真实退出码。
+    const result = spawnSync(process.execPath, [join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'), join(process.cwd(), 'scripts', 'pre-commit.mts')], {
       cwd: repo,
       encoding: 'utf8',
       env: { ...process.env, SKIP_PRE_COMMIT: undefined, PRE_COMMIT_BUDGET_MS: '20000' }

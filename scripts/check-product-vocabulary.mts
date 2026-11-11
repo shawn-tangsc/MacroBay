@@ -13,7 +13,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE = resolve(ROOT, 'scripts/product-vocabulary-baseline.json')
@@ -72,6 +72,7 @@ function main(): void {
   process.exit(1)
 }
 
-if (process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '')) {
+// 别拿 file:// URL 和文件路径直接比：Windows 上 argv[1] 是反斜杠路径，永远比不等，门禁会静默跳过。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main()
 }

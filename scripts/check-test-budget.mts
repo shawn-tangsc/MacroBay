@@ -18,6 +18,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { MEASUREMENT_TESTS } from '../tools/test-setup/measurementTests'
 
@@ -241,6 +242,7 @@ function main(argv: readonly string[]): void {
   process.exitCode = 1
 }
 
-if (process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '')) {
+// 别拿 file:// URL 和文件路径直接比：Windows 上 argv[1] 是反斜杠路径，永远比不等，门禁会静默跳过。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2))
 }

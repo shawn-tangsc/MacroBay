@@ -9,7 +9,7 @@
  * 没有解析函数。这份用例把那条路钉死：**键回到渲染层，就先红在这里**。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -40,7 +40,7 @@ describe('渲染层不查文案表、不碰键', () => {
     const allowed = ['i18n/platformText.ts']
     const offenders = sources(renderer)
       .filter((path) => readFileSync(path, 'utf8').includes("from '@platform/i18n/notificationCopy'"))
-      .map((path) => relative(renderer, path))
+      .map((path) => relative(renderer, path).split(sep).join('/'))
     // `platformText.ts` 是外壳文案的唯一聚合点，取的是「为什么没弹到桌面」这类**外壳自有**的句子，
     // 不是拿一条记录去查表。除此之外任何一处出现，都是把键这条路重新打开。
     expect(offenders.sort()).toEqual(allowed)

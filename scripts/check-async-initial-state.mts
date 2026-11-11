@@ -31,7 +31,8 @@
  * 这三类仍归人审。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const ROOT = resolve(process.cwd())
 const SCAN_ROOTS = ['apps/desktop-shell/src', 'platform', 'products']
@@ -138,7 +139,7 @@ export function undefinedAsErrorIn(
 }
 
 function siblingHooks(file: string): string {
-  const dir = file.slice(0, file.lastIndexOf('/'))
+  const dir = dirname(file)
   try {
     return readdirSync(join(ROOT, dir))
       .filter((name) => /^use.*\.tsx?$/.test(name))
@@ -243,6 +244,7 @@ function main(): void {
   process.exit(1)
 }
 
-if (process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '')) {
+// 别拿 file:// URL 和文件路径直接比：Windows 上 argv[1] 是反斜杠路径，永远比不等，门禁会静默跳过。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main()
 }

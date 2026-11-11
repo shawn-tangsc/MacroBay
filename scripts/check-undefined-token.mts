@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 /**
  * 未定义 CSS 变量门禁：`.css` 里写了 `var(--x)`，但全仓 `.css` 里没有任何 `--x:` 定义。
@@ -194,7 +195,8 @@ export function collectCssFiles(root: string, roots: readonly string[]): string[
       if (SKIPPED_DIRECTORIES.has(entry.name) || entry.name.startsWith('.')) continue
       const full = join(directory, entry.name)
       if (entry.isDirectory()) walk(full)
-      else if (entry.name.endsWith('.css')) files.push(relative(root, full))
+      // 报告里的路径一律正斜杠：Windows 的 relative() 给反斜杠，照着平台分隔符输出等于同一处坏点两种写法。
+      else if (entry.name.endsWith('.css')) files.push(relative(root, full).split(sep).join('/'))
     }
   }
   for (const name of roots) {
@@ -232,6 +234,7 @@ function main(): void {
   process.exit(1)
 }
 
-if (process.argv[1] !== undefined && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '')) {
+// 别拿 file:// URL 和文件路径直接比：Windows 上 argv[1] 是反斜杠路径，永远比不等，门禁会静默跳过。
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main()
 }

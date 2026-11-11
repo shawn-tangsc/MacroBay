@@ -1,3 +1,5 @@
+import { normalize } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentEntity } from '../schemas/agentSchemas'
@@ -11,7 +13,7 @@ import { createAgentPlatformServices, type AgentPlatformStateStore } from './age
 const workspace: AgentWorkspaceEntity = {
   id: 'workspace-1',
   name: 'Workspace',
-  path: '/tmp/workspace',
+  path: normalize('/tmp/workspace'),
   type: 'user',
   orderKey: 'workspace-1',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -389,7 +391,7 @@ describe('agent platform services', () => {
     expect(pagedIds).toContain(second.id)
     expect(updated.agentId).toBeNull()
     expect(reboundWorkspace.workspaceId).toBe(workspace.id)
-    expect(pathWorkspace.workspace.path).toBe('/tmp/next-workspace')
+    expect(pathWorkspace.workspace.path).toBe(normalize('/tmp/next-workspace'))
     expect(nextState.sessionPins.map((item) => item.sessionId)).toEqual([second.id])
     expect(nextState.sessions.map((item) => item.id)).toEqual([second.id, session.id])
     expect(deleted.deletedIds).toEqual([first.id])
@@ -623,7 +625,7 @@ describe('agent platform services', () => {
       ...workspace,
       id: 'workspace-repo',
       name: 'Repo Workspace',
-      path: '/tmp/repo-workspace',
+      path: normalize('/tmp/repo-workspace'),
       orderKey: '0000'
     }
     const listCalls: Array<{ includeSystem?: boolean }> = []
@@ -660,7 +662,7 @@ describe('agent platform services', () => {
     expect(result).toEqual({ workspace: repoWorkspace, created: false })
     expect(listCalls).toEqual([{ includeSystem: true }])
     expect(getCalls).toEqual([{ id: repoWorkspace.id, includeSystem: true }])
-    expect(pathCalls).toEqual(['/tmp/repo-workspace'])
+    expect(pathCalls).toEqual([normalize('/tmp/repo-workspace')])
   })
 
   it('keeps the session service workspace cascade aligned with the store by deleting the workspace row too', async () => {

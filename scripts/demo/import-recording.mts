@@ -8,7 +8,7 @@
  * 生成 scenario.json / surfaces.json。不做翻译，也不改任何数值。
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 const RAW = process.argv[2] ?? 'products/market-intelligence/demo/raw/session-2026-10-27T09-41-37-381Z'
 const OUT = process.argv[3] ?? 'products/market-intelligence/demo/scenarios/crypto-sample-2026-10'
@@ -196,7 +196,7 @@ const from = new Date(Date.parse(scenarioNow) - 7 * 24 * 3_600_000).toISOString(
 mkdirSync(OUT, { recursive: true })
 writeFileSync(join(OUT, 'scenario.json'), `${JSON.stringify({
   schemaVersion: 1,
-  id: OUT.split('/').at(-1),
+  id: basename(OUT),
   title: { 'zh-CN': '2026 年 10 月的一周', 'en-US': 'One week in October 2026' },
   scenarioNow,
   window: { from, to: scenarioNow },

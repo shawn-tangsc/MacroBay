@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -56,7 +56,8 @@ const files = scannedFiles()
 function uses(scan: (css: string, file: string) => DangerColorUse[], skipExported: boolean): DangerColorUse[] {
   const found: DangerColorUse[] = []
   for (const file of files) {
-    const path = relative(ROOT, file)
+    // 基线键一律正斜杠：Windows 的 relative() 给反斜杠，直接当键查表会把每条基线都判成失效。
+    const path = relative(ROOT, file).split(sep).join('/')
     if (skipExported && path === EXPORTED_FILE) continue
     found.push(...scan(readFileSync(file, 'utf8'), path))
   }

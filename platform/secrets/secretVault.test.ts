@@ -1,6 +1,6 @@
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
@@ -506,17 +506,19 @@ describe('generic platform secret vault', () => {
       await expect(storage.exists(owner, 'primary-secret')).resolves.toBe(true)
 
       const temporaryOnlyRef = 'temporary-only-secret'
-      const temporaryOnlyPath = finalPath.replace(/[^/]+$/, `${Buffer.from(temporaryOnlyRef).toString('base64url')}.blob.fixture.tmp`)
+      // 同目录下另取一个名字：`replace(/[^/]+$/)` 只认正斜杠，Windows 上会把整条路径换掉，
+      // 于是这些探针文件被写进进程 cwd（仓库根），下一次跑就撞 EEXIST。
+      const temporaryOnlyPath = join(dirname(finalPath), `${Buffer.from(temporaryOnlyRef).toString('base64url')}.blob.fixture.tmp`)
       await writeFile(temporaryOnlyPath, Buffer.from(finalCiphertext).toString('base64'), 'utf8')
       await expect(storage.exists(owner, temporaryOnlyRef)).resolves.toBe(false)
 
       const directoryRef = 'directory-secret'
-      const directoryPath = finalPath.replace(/[^/]+$/, `${Buffer.from(directoryRef).toString('base64url')}.blob`)
+      const directoryPath = join(dirname(finalPath), `${Buffer.from(directoryRef).toString('base64url')}.blob`)
       await mkdir(directoryPath)
       await expect(storage.exists(owner, directoryRef)).resolves.toBe(false)
 
       const symlinkRef = 'symlink-secret'
-      const symlinkPath = finalPath.replace(/[^/]+$/, `${Buffer.from(symlinkRef).toString('base64url')}.blob`)
+      const symlinkPath = join(dirname(finalPath), `${Buffer.from(symlinkRef).toString('base64url')}.blob`)
       await symlink(finalPath, symlinkPath)
       await expect(storage.exists(owner, symlinkRef)).resolves.toBe(false)
     } finally {

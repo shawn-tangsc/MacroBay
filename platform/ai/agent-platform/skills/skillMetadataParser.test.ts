@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join, sep } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -49,7 +49,7 @@ describe('skill metadata parser', () => {
 
     const metadata = await parseSkillMetadata(root)
 
-    expect(metadata.name).toBe(root.split('/').at(-1))
+    expect(metadata.name).toBe(basename(root))
     expect(metadata.skillFilePath.toLowerCase()).toBe(join(root, 'skill.md').toLowerCase())
   })
 
@@ -64,6 +64,7 @@ describe('skill metadata parser', () => {
 
     const directories = await findAllSkillDirectories(root, root, 4)
 
-    expect(directories.map((item) => item.sourcePath).sort()).toEqual(['nested/two', 'one'])
+    // sourcePath 是平台原生分隔符（消费方各自 toPosixPath）；断言前先归一化，否则 Windows 上比到的是 `nested\two`。
+    expect(directories.map((item) => item.sourcePath.split(sep).join('/')).sort()).toEqual(['nested/two', 'one'])
   })
 })
