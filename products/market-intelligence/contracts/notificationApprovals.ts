@@ -3,9 +3,9 @@ import type { NotificationEventPolicyEntry } from '@platform/notifications/contr
 /** 签署人（情报模块产品经理）。改档位只能由签署人改，签名哈希守卫会拦。 */
 export const SIGNED_BY = '情报模块产品经理' as const
 /** 签署日期。 */
-export const SIGNED_AT = '2026-11-08' as const
+export const SIGNED_AT = '2026-11-11' as const
 /** 对 `canonicalApprovalText({ formatVersion: 1, signedBy: SIGNED_BY, signedAt: SIGNED_AT, events })` 的 sha256（UTF-8 字节）。 */
-export const SIGNATURE = 'sha256:039b7272a8c820504b153931b2478b1c202cffbdcd32b1efad2323a860e6a4af' as const
+export const SIGNATURE = 'sha256:dc204543e378a7f8d3285e820d1a9ef1be73e455b56e3dcb91ea521723840c9c' as const
 
 /**
  * 情报模块**签署过的批准值**（与「申请」分开的两份数据之一）。
@@ -27,6 +27,12 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
   'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
   'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
   'market-intelligence.calendar.event-upcoming': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
+  /**
+   * 刷新失败（2026-11-11 用户「失败了，要通知」；同日产品经理签署）：
+   * 只批 `center` + `desktop`——**不批手机**（后台维护事件，读者当场做不了事；持续性失败由
+   * `source.consecutive-failed` 那条负责，一条事件只干一件事），也不批免打扰穿透（凌晨打断没有收益）。
+   */
+  'market-intelligence.calendar.refresh-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },

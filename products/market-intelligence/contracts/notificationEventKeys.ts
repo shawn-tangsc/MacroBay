@@ -83,6 +83,8 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   signalTriggered: 'market-intelligence.signal.triggered',
   macroEventLanded: 'market-intelligence.macro.event-landed',
   calendarEventUpcoming: 'market-intelligence.calendar.event-upcoming',
+  /** 市场日历（0xRouter 那条腿）一次刷新没成功。手动与自动同一条，读者要的是「这次没刷成」。 */
+  calendarRefreshFailed: 'market-intelligence.calendar.refresh-failed',
   sentimentAlert: 'market-intelligence.sentiment.alert',
   /** N12：信号唤起的那次分析出结论了（只在这一条路径发）。 */
   analysisConclusion: 'market-intelligence.analysis.conclusion',

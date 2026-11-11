@@ -77,6 +77,20 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.calendarEventUpcoming)]: '按你设定的提前量提醒：有一条日历事件快开始了。',
     [REASON(IDS.calendarEventUpcoming)]: '你打开了日历事件的开始前提醒。',
 
+    // 刷新失败（2026-11-11 用户：「失败了，要通知」）：**不出现任何内部码**，原因走人话表；
+    // 没有码时不编原因，只用 `no-reason` 那一版。
+    [TITLE(IDS.calendarRefreshFailed)]: '日历刷新失败',
+    // 变体名 = 失败码：句子里**不出现任何内部码**，原因就是这句人话（没有码时不编原因）。
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'input-invalid')]: '{source} 这次没刷新成功：请求没有通过校验。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'credential-not-configured')]: '{source} 这次没刷新成功：还没有配置凭据。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'response-unavailable')]: '{source} 这次没刷新成功：来源没有响应。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'archive-unavailable')]: '{source} 这次没刷新成功：证据归档不可用。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'parse-unavailable')]: '{source} 这次没刷新成功：返回的内容没能解析出来。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-unavailable')]: '{source} 这次没刷新成功：本地存储不可用。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-pressure')]: '{source} 这次没刷新成功：本地存储空间受限。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'no-code')]: '{source} 这次没刷新成功。已有事件还在，不会丢。',
+    [REASON(IDS.calendarRefreshFailed)]: '市场日历的一次刷新没有完成。',
+
     [TITLE(IDS.sentimentAlert)]: zh.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: zh.alert.bodyWithSource,
     [REASON(IDS.sentimentAlert)]: zh.alert.reason,
@@ -158,6 +172,17 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.calendarEventUpcoming)]: 'A calendar event starts soon',
     [BODY(IDS.calendarEventUpcoming)]: 'A reminder at the lead time you set: a calendar event is about to start.',
     [REASON(IDS.calendarEventUpcoming)]: 'You turned on the reminder before calendar events start.',
+
+    [TITLE(IDS.calendarRefreshFailed)]: 'Calendar refresh failed',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'input-invalid')]: '{source} did not refresh this time: the request was rejected as invalid. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'credential-not-configured')]: '{source} did not refresh this time: no credential is configured. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'response-unavailable')]: '{source} did not refresh this time: the source did not respond. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'archive-unavailable')]: '{source} did not refresh this time: the evidence archive is unavailable. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'parse-unavailable')]: '{source} did not refresh this time: the response could not be parsed. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-unavailable')]: '{source} did not refresh this time: local storage is unavailable. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-pressure')]: '{source} did not refresh this time: local storage is short of space. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'no-code')]: '{source} did not refresh this time. The events you already have are still there.',
+    [REASON(IDS.calendarRefreshFailed)]: 'A market-calendar refresh did not finish.',
 
     [TITLE(IDS.sentimentAlert)]: en.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: en.alert.bodyWithSource,

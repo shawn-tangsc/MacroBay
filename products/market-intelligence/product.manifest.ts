@@ -304,6 +304,22 @@ export const marketIntelligenceProductManifest = {
       conditionWindowMs: 86_400_000,
       requestedBypassQuietHours: false
     }),
+    notificationEvent('market-intelligence.calendar.refresh-failed', {
+      category: 'failure',
+      // 有码时正文点出人话原因；没有码就不编原因（只报「这次没刷成」）。
+      // 变体名 = 失败码（白话句子在文案表里，正文因此永远不出现内部码）；没有码时用 `no-code`，
+      // 不编原因。
+      bodyVariants: ['input-invalid', 'credential-not-configured', 'response-unavailable', 'archive-unavailable',
+        'parse-unavailable', 'storage-unavailable', 'storage-pressure', 'no-code'],
+      requiresUserAction: false,
+      // 中心 + 桌面；**不申请手机**（后台维护事件，读者当场做不了事；持续性失败由
+      // `source.consecutive-failed` 那条负责）。也不申请免打扰穿透：凌晨打断没有收益。
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyTemplate: 'calendar-refresh:{providerId}:{date}:{generation}',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.signal.triggered', {
       category: 'reminder',
       // 正文按「规则 × 档位」分变体；标题是 `{asset} {headline}`，资产名开头。
