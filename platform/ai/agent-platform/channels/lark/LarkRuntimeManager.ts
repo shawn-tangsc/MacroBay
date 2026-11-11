@@ -67,6 +67,8 @@ export class LarkRuntimeManager {
         appId,
         appSecret,
         resolveProxy: this.deps.resolveProxy,
+        // 取 wss 地址那一跳也走平台的出网入口：SDK 默认的 axios 不读应用网络设置。
+        getPlatformFetch: this.deps.getPlatformFetch,
         inbound: this.deps.inbound,
         runtime: this.deps.runtime,
         hashEventKey: (eventKey) => this.deps.keyedHash(channelId, new TextEncoder().encode(eventKey)),

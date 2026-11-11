@@ -113,6 +113,7 @@ function createHarness(options: {
     appId: 'cli_12345678',
     appSecret: 'app-secret',
     resolveProxy: async () => ({ kind: 'direct' }),
+    getPlatformFetch: () => (async () => new Response('{}')) as typeof fetch,
     inbound: inbound as never,
     runtime: runtime as unknown as LarkRuntimeRepository,
     hashEventKey: async (eventKey) => {

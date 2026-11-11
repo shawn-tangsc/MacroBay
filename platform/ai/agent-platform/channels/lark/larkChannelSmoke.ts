@@ -72,7 +72,12 @@ export function createLarkChannelSmoke(
     // 第 2 步：长连接。**只鉴权成功不算通过**。
     const connection = deps.createConnection
       ? deps.createConnection({ appId, appSecret, resolveProxy: async () => decision })
-      : createLarkLongConnection({ appId, appSecret, resolveProxy: async () => decision })
+      : createLarkLongConnection({
+        appId,
+        appSecret,
+        resolveProxy: async () => decision,
+        getPlatformFetch: deps.getPlatformFetch
+      })
     try {
       const connected = await connection.connect({ onEvent: (_event: LarkLongConnectionEvent) => {} })
       if (!connected.ok) {

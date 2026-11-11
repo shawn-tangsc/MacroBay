@@ -30,6 +30,8 @@ export class LarkLongConnectionHost {
     appSecret: string
     /** 平台那一侧：读网络设置 + 解析系统代理。返回 `null` = 解析不出来（不是直连）。 */
     resolveProxy: (targetUrl: string) => Promise<LarkProxyDecision | null>
+    /** 平台那一侧：代理感知的 `fetch`。取 wss 地址那一跳走它，与收发同一个出网入口。 */
+    getPlatformFetch: () => typeof fetch
     inbound: ChannelInboundService
     runtime: LarkRuntimeRepository
     hashEventKey: (eventKey: string) => Promise<string>
@@ -47,6 +49,7 @@ export class LarkLongConnectionHost {
         appId: this.deps.appId,
         appSecret: this.deps.appSecret,
         resolveProxy: this.deps.resolveProxy,
+        getPlatformFetch: this.deps.getPlatformFetch,
         ...(this.deps.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: this.deps.handshakeTimeoutMs })
       })
     this.connection = connection
