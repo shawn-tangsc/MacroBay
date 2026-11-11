@@ -1,7 +1,7 @@
 import { EventDispatcher, WSClient as SdkWsClient } from '@larksuiteoapi/node-sdk'
 import { ProxyAgent } from 'proxy-agent'
 
-import { larkOrigin } from './LarkContracts'
+import { larkOrigins, type LarkDomain } from './LarkContracts'
 
 /**
  * 飞书长连接的**包装层**：SDK 只出现在这个文件里，平台拿到的永远是我们自己的形状。
@@ -71,6 +71,8 @@ export type LarkWsClientFactory = (options: {
   handshakeTimeoutMs: number
   /** 取 wss 地址那一跳：由平台 fetch 承担，不落回 SDK 自带的 axios。 */
   httpInstance: LarkHttpInstance
+  /** 租户所属那一站：SDK 的 `domain` 与代理目标都从它取，不许在工厂里再写字面量。 */
+  domain: LarkDomain
 }) => WsClientLike
 
 export type LarkLongConnectionDeps = {
@@ -82,6 +84,8 @@ export type LarkLongConnectionDeps = {
   getPlatformFetch: () => typeof fetch
   /** 只给用例注入；生产用默认的 SDK 工厂。 */
   createWsClient?: LarkWsClientFactory
+  /** 租户所属那一站：缺省是历史默认的国际站；启用自检会按凭据探测后传真实值。 */
+  domain?: LarkDomain
   /** 握手超时：代理挂住时不让它无限等。 */
   handshakeTimeoutMs?: number
 }
@@ -100,7 +104,8 @@ export function createLarkLongConnection(deps: LarkLongConnectionDeps): LarkLong
 
   return {
     async connect(handlers) {
-      const decision = await deps.resolveProxy(larkWsTarget)
+      const target = larkWsTargetFor(deps.domain ?? 'lark')
+      const decision = await deps.resolveProxy(target)
       if (!decision) return { ok: false, code: 'lark-proxy-unresolved' }
 
       const factory = deps.createWsClient ?? defaultWsClientFactory
@@ -111,7 +116,9 @@ export function createLarkLongConnection(deps: LarkLongConnectionDeps): LarkLong
           ...(decision.kind === 'proxy' ? { agent: proxyAgentFor(decision.url) } : {}),
           handshakeTimeoutMs: deps.handshakeTimeoutMs ?? 15_000,
           // 取 wss 地址那一跳也走平台的出网入口：SDK 默认的 axios 不读应用网络设置。
-          httpInstance: createLarkHttpInstance(deps.getPlatformFetch)
+          httpInstance: createLarkHttpInstance(deps.getPlatformFetch),
+          // 域名跟着租户走：中国站租户在国际站会被 1000040351 踢掉。
+          domain: deps.domain ?? 'lark'
         })
         await client.start({ eventDispatcher: createDispatcher(handlers.onEvent) })
         return { ok: true }
@@ -128,8 +135,12 @@ export function createLarkLongConnection(deps: LarkLongConnectionDeps): LarkLong
   }
 }
 
-/** 飞书长连接的接入点：只用于解析代理，从来不直接连它。 */
-export const larkWsTarget = 'https://open.larksuite.com'
+/** 飞书长连接的接入点：只用于解析代理，从来不直接连它。按租户所属那一站取。 */
+export function larkWsTargetFor(domain: LarkDomain): string {
+  return larkOrigins[domain]
+}
+
+export const larkWsTarget = larkWsTargetFor('lark')
 
 function proxyAgentFor(proxyUrl: string): unknown {
   // 与平台 `platformWebSocket` 同一写法：`proxy-agent` 必须用对象形状，传字符串不生效。
@@ -173,7 +184,7 @@ const defaultWsClientFactory: LarkWsClientFactory = (options) => {
     // 收窄是必要的：SDK 声明的是 axios 实例（带 get/post/delete…），我们只实现它实际用到的那一个方法。
     httpInstance: options.httpInstance as unknown as SdkWsClientParams['httpInstance'],
     // 取 wss 地址打哪个 origin 由同一处常量决定：默认它会是 Feishu，与 REST 基址分叉。
-    domain: larkOrigin,
+    domain: larkOrigins[options.domain],
     autoReconnect: false
   }) as unknown as WsClientLike
 }

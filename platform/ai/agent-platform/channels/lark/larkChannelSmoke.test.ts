@@ -16,12 +16,18 @@ function json(body: unknown, status = 200): Response {
 }
 
 function smoke(options: {
-  auth?: Response | Error
+  auth?: Response | Error | (() => Response)
   decision?: { kind: 'direct' } | { kind: 'proxy'; url: string } | null
   connect?: { ok: true } | { ok: false; code: 'lark-proxy-unresolved' | 'lark-connect-failed' }
   secret?: Record<string, string> | null | Error
 }) {
-  const fetched = vi.fn(async () => (options.auth ?? json({ code: 0, tenant_access_token: 't-123' })))
+  // 每次调用给一份新的响应：探测会在两站各打一次，同一个 Response 的 body 只能读一次。
+  const fetched = vi.fn(async () => {
+    const auth = options.auth
+    if (typeof auth === 'function') return auth()
+    if (auth instanceof Error) throw auth
+    return auth ?? json({ code: 0, tenant_access_token: 't-123' })
+  })
   const created: unknown[] = []
   const closed = vi.fn()
   const smokeFn = createLarkChannelSmoke({
@@ -35,8 +41,8 @@ function smoke(options: {
     resolveProxy: async () => (options.decision === undefined ? { kind: 'proxy', url: 'http://127.0.0.1:7888' } : options.decision),
     describeProxy: async () => 'PROXY 127.0.0.1:7888',
     fetchKind: 'net',
-    createConnection: () => {
-      created.push(1)
+    createConnection: (input) => {
+      created.push(input.domain)
       return {
         connect: async () => options.connect ?? { ok: true },
         close: closed
@@ -56,6 +62,13 @@ describe('lark enable self-check', () => {
     expect(closed).toHaveBeenCalledOnce()
   })
 
+  it('builds the long connection for the station the credentials belong to', async () => {
+    // 中国站租户：鉴权只在 open.feishu.cn 成立 → 长连接必须按 feishu 建，否则会被 1000040351 踢掉。
+    const { smokeFn, created } = smoke({})
+    await expect(smokeFn({ id: 'channel-1', type: 'feishu' })).resolves.toEqual({ ok: true })
+    expect(created).toEqual(['feishu'])
+  })
+
   it('fails when the credentials are fine but the long connection cannot be established', async () => {
     const { smokeFn } = smoke({ connect: { ok: false, code: 'lark-connect-failed' } })
     // 这条就是「只鉴权成功」的绊线：凭据换到了 token，但网关连不上，一律判失败。
@@ -73,7 +86,7 @@ describe('lark enable self-check', () => {
   })
 
   it('reports rejected credentials and network failure apart', async () => {
-    await expect(smoke({ auth: json({ code: 10003, msg: 'invalid app_secret' }) }).smokeFn({ id: 'channel-1', type: 'feishu' }))
+    await expect(smoke({ auth: () => json({ code: 10003, msg: 'invalid app_secret' }) }).smokeFn({ id: 'channel-1', type: 'feishu' }))
       .resolves.toMatchObject({ ok: false, code: 'lark-provider-rejected' })
     await expect(smoke({ auth: new TypeError('fetch failed') }).smokeFn({ id: 'channel-1', type: 'feishu' }))
       .resolves.toMatchObject({ ok: false, code: 'lark-network-unavailable' })

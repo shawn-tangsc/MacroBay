@@ -7,6 +7,7 @@ import {
   type LarkProxyDecision
 } from './LarkLongConnectionClient'
 import { LarkRuntimeRepository } from './LarkRuntimeRepository'
+import { resolveLarkTenantAuth } from './larkTenantAuth'
 import { normalizeLarkEvent } from './LarkUpdateNormalizer'
 
 /**
@@ -44,12 +45,27 @@ export class LarkLongConnectionHost {
 
   async start(): Promise<boolean> {
     if (this.stopped || !this.currentGeneration()) return false
+    // 域名跟着租户走：先问凭据属于哪一站，再按那一站建长连接与解析代理。
+    // 判不出来就不建连接——拿错域名连上去会被网关踢，读者只会看到「已启用却收不到消息」。
+    // 注入了 `createConnection` 的只有用例：那条路不发探测请求（用例要的是宿主自己的纪律）。
+    const auth = this.deps.createConnection === undefined
+      ? await resolveLarkTenantAuth({
+        appId: this.deps.appId,
+        appSecret: this.deps.appSecret,
+        getPlatformFetch: this.deps.getPlatformFetch
+      })
+      : null
+    if (auth !== null && !auth.ok) {
+      this.audit(auth.code)
+      return false
+    }
     const connection = this.deps.createConnection?.({ onEvent: (event) => this.handle(event) }) ??
       createLarkLongConnection({
         appId: this.deps.appId,
         appSecret: this.deps.appSecret,
         resolveProxy: this.deps.resolveProxy,
         getPlatformFetch: this.deps.getPlatformFetch,
+        ...(auth === null ? {} : { domain: auth.domain }),
         ...(this.deps.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: this.deps.handshakeTimeoutMs })
       })
     this.connection = connection

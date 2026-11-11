@@ -3,10 +3,13 @@ import type { ChannelSmokeResult } from '../channelSmokeEnable'
 import {
   createLarkLongConnection,
   larkWsTarget,
+  larkWsTargetFor,
   type LarkLongConnection,
   type LarkLongConnectionEvent,
   type LarkProxyDecision
 } from './LarkLongConnectionClient'
+import type { LarkDomain } from './LarkContracts'
+import { resolveLarkTenantAuth } from './larkTenantAuth'
 
 /**
  * 用户点「启用」时对飞书的现场自检：**两步，缺一不可**。
@@ -34,6 +37,8 @@ export type LarkChannelSmokeDeps = {
     appSecret: string
     resolveProxy: (targetUrl: string) => Promise<LarkProxyDecision | null>
     handshakeTimeoutMs?: number
+    /** 租户所属那一站：SDK 的 `domain` 与代理目标都由它决定。 */
+    domain: LarkDomain
   }) => LarkLongConnection
 }
 
@@ -65,18 +70,26 @@ export function createLarkChannelSmoke(
       ...(deps.fetchKind ? { fetch: deps.fetchKind } : {})
     }
 
-    // 第 1 步：鉴权（只打 token 接口，不靠「发送失败」反推）。
-    const fetched = await authToken(deps.getPlatformFetch, appId, appSecret)
-    if (!fetched.ok) return { ok: false, code: fetched.code, ...diagnostics }
+    // 第 1 步：鉴权 + **判出租户属于哪一站**（中国站/国际站两套租户，令牌只在所属站有效）。
+    // 域名由凭据决定，不由产品拍一个：写死国际站会让中国站租户连上继而被 1000040351 踢掉。
+    const auth = await resolveLarkTenantAuth({ appId, appSecret, getPlatformFetch: deps.getPlatformFetch })
+    if (!auth.ok) return { ok: false, code: auth.code, ...diagnostics }
+    const domain = auth.domain
+
+    // 代理目标跟着域名走：两站不是同一个 host，代理判定必须按真正要连的那一个解析。
+    const wsTarget = larkWsTargetFor(domain)
+    const domainDecision = wsTarget === larkWsTarget ? decision : await deps.resolveProxy(wsTarget)
+    if (!domainDecision) return { ok: false, code: 'lark-proxy-unresolved', ...diagnostics }
 
     // 第 2 步：长连接。**只鉴权成功不算通过**。
     const connection = deps.createConnection
-      ? deps.createConnection({ appId, appSecret, resolveProxy: async () => decision })
+      ? deps.createConnection({ appId, appSecret, resolveProxy: async () => domainDecision, domain })
       : createLarkLongConnection({
         appId,
         appSecret,
-        resolveProxy: async () => decision,
-        getPlatformFetch: deps.getPlatformFetch
+        resolveProxy: async () => domainDecision,
+        getPlatformFetch: deps.getPlatformFetch,
+        domain
       })
     try {
       const connected = await connection.connect({ onEvent: (_event: LarkLongConnectionEvent) => {} })
@@ -94,29 +107,3 @@ export function createLarkChannelSmoke(
   }
 }
 
-/** 只做「鉴权」这一件事：换到 `tenant_access_token` 就算通过。 */
-async function authToken(
-  getPlatformFetch: () => typeof fetch,
-  appId: string,
-  appSecret: string
-): Promise<{ ok: true } | { ok: false; code: 'lark-provider-rejected' | 'lark-network-unavailable' | 'lark-rate-limited' }> {
-  try {
-    const response = await getPlatformFetch()('https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal', {
-      method: 'POST',
-      signal: AbortSignal.timeout(10_000),
-      headers: { 'content-type': 'application/json; charset=utf-8' },
-      body: JSON.stringify({ app_id: appId, app_secret: appSecret })
-    })
-    if (response.status === 429) return { ok: false, code: 'lark-rate-limited' }
-    if (response.status >= 400 && response.status < 500) return { ok: false, code: 'lark-provider-rejected' }
-    if (!response.ok) return { ok: false, code: 'lark-network-unavailable' }
-    const body = await response.json() as { code?: unknown; tenant_access_token?: unknown }
-    // 飞书把拒绝放在 200 的 body 里（code !== 0）：这也算凭据被拒，不是网络问题。
-    if (body.code !== 0 || typeof body.tenant_access_token !== 'string' || body.tenant_access_token.length === 0) {
-      return { ok: false, code: 'lark-provider-rejected' }
-    }
-    return { ok: true }
-  } catch {
-    return { ok: false, code: 'lark-network-unavailable' }
-  }
-}

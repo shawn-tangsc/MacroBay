@@ -54,6 +54,8 @@ export const CHANNEL_SMOKE_REASONS = [
   'lark-rate-limited',
   'lark-proxy-unresolved',
   'lark-connect-failed',
+  // 两站都没能确认租户属于哪一站（不是「凭据被拒」，也不是网络不通）：判不出域名。
+  'lark-tenant-domain-unresolved',
   // 凭据根本没存 / 存过但读不出来：两种处境，两种说法，不许合成一个。
   'channel-credential-missing',
   'channel-credential-unavailable',

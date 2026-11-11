@@ -173,4 +173,25 @@ describe('lark long connection wrapper', () => {
     await connection.connect({ onEvent: () => {} })
     expect(resolveProxy).toHaveBeenCalledWith(larkWsTarget)
   })
+  it('gives the SDK the same station as the REST base, never a second hard-coded domain', async () => {
+    const { larkApiBaseFor, larkOrigins } = await import('./LarkContracts')
+    const seen: string[] = []
+    const connection = createLarkLongConnection({
+      appId: 'a',
+      appSecret: 's',
+      resolveProxy: async () => ({ kind: 'direct' }),
+      getPlatformFetch: (() => { throw new Error('not used in this case') }) as unknown as () => typeof fetch,
+      domain: 'feishu',
+      createWsClient: (options) => {
+        seen.push(options.domain)
+        return { start: async () => undefined, close: () => undefined } as never
+      }
+    })
+    await connection.connect({ onEvent: () => undefined })
+    // 唯一出处：SDK 的 domain 与 REST 基址来自同一张表。
+    expect(seen).toEqual(['feishu'])
+    expect(larkOrigins[seen[0]! as 'feishu']).toBe('https://open.feishu.cn')
+    expect(larkApiBaseFor('feishu')).toBe('https://open.feishu.cn/open-apis')
+  })
+
 })
