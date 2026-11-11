@@ -39,6 +39,8 @@ export const CHANNEL_SMOKE_REASONS = [
   'slack-network-unavailable',
   'slack-rate-limited',
   // Discord 自检：被拒 / 连不通 / 限流，同样三种说法。
+  // 401 与「权限/参数不对」分开：前者换 Token，后者不是——这次用户就是被混成一句「Token 无效」。
+  'discord-auth-rejected',
   'discord-provider-rejected',
   'discord-network-unavailable',
   'discord-rate-limited',

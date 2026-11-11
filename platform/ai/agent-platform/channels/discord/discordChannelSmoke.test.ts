@@ -37,7 +37,8 @@ function smokeWith(fetchImpl: typeof fetch, secret: Record<string, string> | nul
     },
     getPlatformFetch: () => fetchImpl,
     describeProxy: async () => 'PROXY 127.0.0.1:7888',
-    fetchKind: 'net'
+    fetchKind: 'net',
+    userAgent: 'MacroBay/test (Discord adapter)'
   })
 }
 
@@ -64,7 +65,8 @@ describe('discord enable self-check', () => {
 
   it('keeps a rejected token, rate limiting and a dead network apart', async () => {
     const rejected = await smokeWith(fakeFetch([json({ message: '401' }, 401)]).fetch)({ id: 'channel-1', type: 'discord' })
-    expect(rejected).toMatchObject({ ok: false, code: 'discord-provider-rejected', proxy: 'PROXY 127.0.0.1:7888', fetch: 'net' })
+    // 401 是「换 Token」的错，与「权限/参数不对」分开说。
+    expect(rejected).toMatchObject({ ok: false, code: 'discord-auth-rejected', proxy: 'PROXY 127.0.0.1:7888', fetch: 'net' })
 
     await expect(smokeWith(fakeFetch([json({ message: '429' }, 429)]).fetch)({ id: 'channel-1', type: 'discord' }))
       .resolves.toMatchObject({ ok: false, code: 'discord-rate-limited' })

@@ -20,6 +20,8 @@ export type DiscordChannelSmokeDeps = {
   getPlatformFetch: () => typeof fetch
   describeProxy?: (url: string) => Promise<string>
   fetchKind?: string
+  /** 产品 UA：Discord 边缘按 UA 拦，浏览器 UA 会被 403（`GET /users/@me` 也会）。 */
+  userAgent: string
 }
 
 export function createDiscordChannelSmoke(
@@ -44,7 +46,11 @@ export function createDiscordChannelSmoke(
       ...(deps.fetchKind ? { fetch: deps.fetchKind } : {})
     }
 
-    const client = new DiscordApiClient({ getPlatformFetch: deps.getPlatformFetch, token: async () => token })
+    const client = new DiscordApiClient({
+      getPlatformFetch: deps.getPlatformFetch,
+      token: async () => token,
+      userAgent: deps.userAgent
+    })
     const identity = await client.currentUser(AbortSignal.timeout(10_000))
     if (!identity.ok) return { ok: false, code: identity.code, ...diagnostics }
     return { ok: true }

@@ -81,6 +81,17 @@ describe('discord runtime manager', () => {
     })
   })
 
+  it('says the gateway address was blocked instead of blaming the token, and opens nothing', async () => {
+    const harness = createHarness({ gatewayStatus: 403 })
+    await expect(harness.manager.start('discord-a', 1, 'owner-a')).resolves.toEqual({
+      ok: false,
+      reason: 'discord-gateway-endpoint-blocked',
+      providerCode: '40333'
+    })
+    // 根因在 UA/边缘，不在连接：没有可用地址就不该硬连一个猜出来的地址。
+    expect(harness.sockets).toHaveLength(0)
+  })
+
   it('registers the delivery client only for as long as the channel runs', async () => {
     const harness = createHarness()
     await harness.manager.start('discord-a', 1, 'owner-a')
@@ -121,14 +132,27 @@ function createHarness(options: {
   startWindowMs?: number
   /** 假 socket 一建好就用这个关闭码掉线（模拟 4014 这类早期致命关闭）。 */
   dropOnOpen?: number
+  /** `/gateway/bot` 的状态码（403 模拟这次用户遇到的「取地址被挡」）。 */
+  gatewayStatus?: number
+  /** `/users/@me` 的状态码（401 模拟 Token 真的不对）。 */
+  botStatus?: number
 } = {}) {
   const sockets: FakeSocket[] = []
   const socketUrls: string[] = []
+  const audits: string[] = []
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     options.onFetch?.()
-    if (url.endsWith('/gateway/bot')) return json({ url: options.gatewayUrl ?? 'wss://gateway.discord.gg', shards: 1 })
-    if (url.endsWith('/users/@me')) return json({ id: '999', username: 'macrobay-bot' })
+    if (url.endsWith('/gateway/bot')) {
+      if (options.gatewayStatus !== undefined) {
+        return json({ message: 'internal network error', code: 40333 }, options.gatewayStatus)
+      }
+      return json({ url: options.gatewayUrl ?? 'wss://gateway.discord.gg', shards: 1 })
+    }
+    if (url.endsWith('/users/@me')) {
+      if (options.botStatus !== undefined) return json({ message: '401: Unauthorized' }, options.botStatus)
+      return json({ id: '999', username: 'macrobay-bot' })
+    }
     if (url.includes('/channels/')) return json({ id: 'sent' })
     return json({})
   })
@@ -137,7 +161,11 @@ function createHarness(options: {
   const delivery = new DiscordDeliveryTransport()
   const manager = new DiscordRuntimeManager({
     inbound: {} as never,
-    runtime: new DiscordRuntimeRepository(createAgentPlatformDatabase(':memory:')),
+    // 记录运行审计（真实仓储要求库里有现役代际，这里只需要「写没写那一行」）。
+    runtime: {
+      auditIfCurrent: (_channelId: string, _generation: number, code: string) => { audits.push(code); return true },
+      commitIfCurrent: () => true
+    } as never,
     vault: { get: async () => ({ bot_token: TOKEN }) } as never,
     getPlatformFetch: () => fetch,
     createPlatformWebSocket: class {
@@ -156,9 +184,10 @@ function createHarness(options: {
     getCredential: () => ({ ref: 'known-ref', revision: 1 }),
     ownsLifecycleOwner: (channelId, token, generation) => channelId === 'discord-a' && token === 'owner-a' && generation === 1,
     isCurrentActive: options.isCurrentActive ?? ((channelId, generation) => channelId === 'discord-a' && generation === 1),
+    userAgent: 'MacroBay/test (Discord adapter)',
     startWindowMs: options.startWindowMs ?? 0
   })
-  return { manager, delivery, fetch: fetchMock, sockets, socketUrls }
+  return { manager, delivery, fetch: fetchMock, sockets, socketUrls, audits }
 }
 
 function json(body: unknown, status = 200): Response {

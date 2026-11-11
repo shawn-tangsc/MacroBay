@@ -12,6 +12,7 @@ import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createChannelSmokeRouter } from '../../../ai/agent-platform/channels/channelSmokeEnable'
 import { createDiscordChannelSmoke } from '../../../ai/agent-platform/channels/discord/discordChannelSmoke'
+import { discordUserAgent } from '../../../ai/agent-platform/channels/discord/discordUserAgent'
 import { createLarkChannelSmoke } from '../../../ai/agent-platform/channels/lark/larkChannelSmoke'
 import { createQqChannelSmoke } from '../../../ai/agent-platform/channels/qq/qqChannelSmoke'
 import { createSlackChannelSmoke } from '../../../ai/agent-platform/channels/slack/slackChannelSmoke'
@@ -115,7 +116,9 @@ const channelManagementService = new ChannelManagementService({
       readSecret: (ref) => channelCredentialVault.get(ref),
       getPlatformFetch,
       describeProxy: describeActiveProxy,
-      fetchKind: 'net'
+      fetchKind: 'net',
+      // 浏览器 UA 打 Discord 会被边缘挡成 403（用户现场就是这一条）；自检与运行时用同一个产品 UA。
+      userAgent: discordUserAgent(app.getVersion())
     }),
     // QQ 两步：换 access token（证凭据活）+ 取网关地址（证 token 能用、出网通）。
     qq: createQqChannelSmoke({

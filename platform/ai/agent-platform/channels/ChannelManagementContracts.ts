@@ -172,8 +172,10 @@ export type ChannelManagementCode =
    * Discord 启动失败的三条**细码**：它们各自对应一个不同的修法，不许再并进
    * `adapter-runtime-start-failed`（那个总桶只说明「没起来」，读者据此只能一遍遍换 Token）。
    */
+  | 'discord-auth-rejected'
   | 'discord-credential-missing'
   | 'discord-credential-rejected'
+  | 'discord-gateway-endpoint-blocked'
   | 'discord-intents-disallowed'
   | 'channel-delete-pending'
   | 'channel-management-metadata-failed'
@@ -313,8 +315,10 @@ export const CHANNEL_FAILURE_CODES = [
   'conversation-session-missing',
   'session-selection-unavailable',
   'channel-smoke-failed',
+  'discord-auth-rejected',
   'discord-credential-missing',
   'discord-credential-rejected',
+  'discord-gateway-endpoint-blocked',
   'discord-intents-disallowed',
   'discord-network-unavailable',
   'lark-connect-failed',

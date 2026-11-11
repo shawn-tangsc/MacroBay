@@ -27,6 +27,7 @@ import {
   WechatRuntimeManager,
   createChannelInboundContentGuard
 } from '../../../ai/agent-platform/channels'
+import { discordUserAgent } from '../../../ai/agent-platform/channels/discord/discordUserAgent'
 import { resolveActiveProxy } from '../../../network/activeProxyState'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
@@ -373,6 +374,8 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
       channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),
+    // Discord 边缘按 UA 拦：浏览器 UA 会被 403。REST 与 ws 用同一个产品 UA。
+    userAgent: discordUserAgent(core.appVersion)
   })
   const wechatRuntimeManager = new WechatRuntimeManager({
     inbound: channelInboundService,

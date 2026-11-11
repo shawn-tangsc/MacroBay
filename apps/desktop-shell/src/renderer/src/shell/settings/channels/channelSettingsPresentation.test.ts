@@ -76,6 +76,18 @@ describe('failure sentences', () => {
     expect(network).not.toContain('Message Content')
   })
 
+  it('never blames the token when Discord blocked the gateway request', () => {
+    // 这次用户被「Token 无效」骗着换了三枚 Token，真原因是边缘把请求挡了（UA/40333）。
+    const blocked = enableFailureSentence({ ok: false, code: 'discord-gateway-endpoint-blocked' }, zh) ?? ''
+    const auth = enableFailureSentence({ ok: false, code: 'discord-auth-rejected' }, zh) ?? ''
+    expect(blocked).not.toBe(auth)
+    expect(blocked).toContain('403')
+    expect(blocked).not.toContain('Token 无效')
+    expect(blocked).not.toContain('无效')
+    // 真正 401 的那句才让人换 Token。
+    expect(auth).toContain('Token')
+  })
+
   it('never calls a mutation successful without an explicit ok', () => {
     // 只有 `ok === true` 才算成功：新建/编辑/删除失败时是正常返回 `{ ok:false, code }`。
     expect(mutationFailureSentence({ ok: true, code: 'configuration-ready' }, zh)).toBeNull()

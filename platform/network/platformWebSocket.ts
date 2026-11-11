@@ -20,7 +20,10 @@ type NodeWebSocketLike = {
   on: (event: 'open' | 'message' | 'error' | 'close', listener: (...args: unknown[]) => void) => void
 }
 
-type NodeWebSocketConstructor = new (url: string, options?: { agent?: unknown }) => NodeWebSocketLike
+type NodeWebSocketConstructor = new (
+  url: string,
+  options?: { agent?: unknown; headers?: Record<string, string> }
+) => NodeWebSocketLike
 
 type ResolveSystemProxy = (url: string) => Promise<string>
 
@@ -31,7 +34,16 @@ export type PlatformWebSocketFactoryOptions = {
   resolveSystemProxy?: ResolveSystemProxy
 }
 
-export type PlatformWebSocketConstructor = new (url: string) => BrowserStyleWebSocket
+/**
+ * 可选握手头：有些服务在 **WebSocket 握手**这一跳也看 `User-Agent`（Discord 的 Cloudflare 就是这样，
+ * 浏览器 UA 或没有 UA 会被 403/云盾挡下）。头只能从这里传，**不许在适配器里另开一条 socket**。
+ */
+export type PlatformWebSocketOpenOptions = { headers?: Record<string, string> }
+
+export type PlatformWebSocketConstructor = new (
+  url: string,
+  options?: PlatformWebSocketOpenOptions
+) => BrowserStyleWebSocket
 
 /**
  * A socket URL fit for a log: any query secret is replaced and any userinfo dropped. Logging the raw
@@ -101,7 +113,10 @@ export function createPlatformWebSocketFactory(options: PlatformWebSocketFactory
     /** The resolved proxy for the diagnostics, with any credentials stripped. */
     private proxyForLog = 'direct'
 
-    constructor(private readonly url: string) {
+    constructor(
+      private readonly url: string,
+      private readonly openOptions: PlatformWebSocketOpenOptions = {}
+    ) {
       void this.open()
     }
 
@@ -133,13 +148,13 @@ export function createPlatformWebSocketFactory(options: PlatformWebSocketFactory
         this.proxyForLog = proxyUrl ? maskProxyCredentials(proxyUrl) : 'direct'
         if (this.closeRequested) return
 
+        const headers = this.openOptions.headers
         const socket = new NodeWebSocketImpl(
           this.url,
-          proxyUrl
-            ? {
-                agent: createProxyAgent(proxyUrl)
-              }
-            : undefined
+          {
+            ...(proxyUrl ? { agent: createProxyAgent(proxyUrl) } : {}),
+            ...(headers === undefined ? {} : { headers })
+          }
         )
         this.socket = socket
         this.bindSocket(socket)

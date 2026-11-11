@@ -13,14 +13,15 @@ type Socket = {
   onerror: ((event: unknown) => void) | null
   onmessage: ((event: { data: unknown }) => void) | null
 }
-type Factory = new (url: string) => Socket
+type Factory = new (url: string, options?: { headers?: Record<string, string> }) => Socket
 
 /**
  * 启用这一跳的结论：READY 到了算起来；**致命关闭**（4014 intent 没授权 / 4003、4004 Token 被拒）当场判失败，
  * 并把关闭码带上去——界面要能说「去后台打开 Message Content」，而不是一句「连接没能起来」。
  */
 export type DiscordGatewayStartOutcome =
-  | { ok: true }
+  /** `ready` 说明 READY 真的到了；`false` = 窗口到了还没证到（按旧行为放行，但调用方可以据此判别的线索）。 */
+  | { ok: true; ready: boolean }
   | {
     ok: false
     reason: 'discord-credential-missing' | 'discord-intents-disallowed' | 'discord-credential-rejected'
@@ -66,6 +67,8 @@ export class DiscordGatewayHost {
     botUserId: string | null
     runtime: DiscordRuntimeRepository
     createPlatformWebSocket: Factory
+    /** 产品 UA：Discord 的 Cloudflare 在 **ws 握手**这一跳也看它（浏览器 UA 会被挡）。 */
+    userAgent: string
     isCurrent: () => boolean
     signal: AbortSignal
     timers?: { setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout }
@@ -114,7 +117,7 @@ export class DiscordGatewayHost {
   stop(): void {
     if (this.stopped) return
     // 等结论的人不能被一个停用卡住：按「还没证伪」放行，启用那一步另判代际。
-    this.settle({ ok: true })
+    this.settle({ ok: true, ready: false })
     this.stopped = true
     this.clearReconnect()
     this.session?.stop()
@@ -124,7 +127,7 @@ export class DiscordGatewayHost {
 
   /** 传输侧关闭（换代/停用）：不当成一次失败，也不排重连。 */
   close(): void {
-    this.settle({ ok: true })
+    this.settle({ ok: true, ready: false })
     this.stopped = true
     this.clearReconnect()
     this.closeSocket()
@@ -144,7 +147,9 @@ export class DiscordGatewayHost {
     const session = this.session
     if (!session) return
     this.closeSocket()
-    const socket = new this.deps.createPlatformWebSocket(socketUrl)
+    const socket = new this.deps.createPlatformWebSocket(socketUrl, {
+      headers: { 'user-agent': this.deps.userAgent }
+    })
     this.socket = socket
     session.attach({
       send: (wire) => socket.send(wire),
@@ -176,7 +181,7 @@ export class DiscordGatewayHost {
     if (lifecycle) {
       // 连上了：退避计数从头算；启用那一跳从这里得到「真的起来了」。
       this.attempt = 0
-      this.settle({ ok: true })
+      this.settle({ ok: true, ready: true })
       this.commitOrStop(lifecycle.sequence)
       this.session?.receive(frame)
       return
@@ -366,7 +371,7 @@ export class DiscordGatewayHost {
     const timers = this.deps.timers ?? { setTimeout, clearTimeout }
     this.outcomeTimer = timers.setTimeout(() => {
       this.outcomeTimer = null
-      this.settle({ ok: true })
+      this.settle({ ok: true, ready: false })
     }, this.deps.startWindowMs ?? 8_000)
   }
 

@@ -40,7 +40,7 @@ describe('Discord Release E contracts', () => {
 
     const urls: string[] = []; const bodies: unknown[] = []
     const fetch = async (url: string, init?: RequestInit) => { urls.push(url); bodies.push(JSON.parse(String(init?.body))); return response() }
-    const client = new DiscordApiClient({ getPlatformFetch: () => fetch as typeof globalThis.fetch, token: async () => 'internal-token' })
+    const client = new DiscordApiClient({ getPlatformFetch: () => fetch as typeof globalThis.fetch, token: async () => 'internal-token', userAgent: 'MacroBay/test (Discord adapter)' })
     const delivery = new DiscordDeliveryTransport(); delivery.setClient('discord-a', client, { isCurrent: () => true, signal: new AbortController().signal })
     await expect(delivery.send({ channelId: 'discord-a', providerConversationKey: 'discord:conversation:guild:guild_1', text: 'reply', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'delivered' })
     await expect(delivery.send({ channelId: 'discord-a', providerConversationKey: 'discord:conversation:guild:bad key', text: 'no', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'failed', code: 'delivery-provider-rejected' })
@@ -51,7 +51,7 @@ describe('Discord Release E contracts', () => {
 
   it.each(['system', 'custom', 'none'])('uses the explicitly injected %s platform fetch path', async (_mode) => {
     const fetch = vi.fn(async () => response()) as unknown as typeof globalThis.fetch
-    const client = new DiscordApiClient({ getPlatformFetch: () => fetch, token: async () => 'internal-token' })
+    const client = new DiscordApiClient({ getPlatformFetch: () => fetch, token: async () => 'internal-token', userAgent: 'MacroBay/test (Discord adapter)' })
     await expect(client.sendText({ kind: 'direct', id: 'user_1' }, 'text')).resolves.toBe('delivered')
     expect(fetch).toHaveBeenCalledWith('https://discord.com/api/v10/channels/user_1/messages', expect.objectContaining({ method: 'POST' }))
   })
@@ -121,7 +121,7 @@ describe('Discord Release E contracts', () => {
 
   it('does not construct injected HTTP or Gateway dependencies while Discord remains blocked', async () => {
     const fetch = vi.fn() as unknown as typeof globalThis.fetch; const webSocket = vi.fn() as never
-    const manager = new DiscordRuntimeManager({ inbound: {} as never, runtime: new DiscordRuntimeRepository(createAgentPlatformDatabase(':memory:')), vault: {} as never, getPlatformFetch: () => fetch, createPlatformWebSocket: webSocket, delivery: new DiscordDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }), ownsLifecycleOwner: () => true, isCurrentActive: () => true })
+    const manager = new DiscordRuntimeManager({ inbound: {} as never, runtime: new DiscordRuntimeRepository(createAgentPlatformDatabase(':memory:')), vault: {} as never, getPlatformFetch: () => fetch, createPlatformWebSocket: webSocket, delivery: new DiscordDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }), ownsLifecycleOwner: () => true, isCurrentActive: () => true, userAgent: 'MacroBay/test (Discord adapter)' })
     await expect(manager.start('discord-a', 1, 'owner-a')).resolves.toBe(false)
     expect(fetch).not.toHaveBeenCalled(); expect(webSocket).not.toHaveBeenCalled()
   })

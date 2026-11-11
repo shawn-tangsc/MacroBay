@@ -31,6 +31,8 @@ export class DiscordRuntimeManager {
     getCredential: (channelId: string) => { ref: string; revision: number } | null
     ownsLifecycleOwner: (channelId: string, token: string, generation: number) => boolean
     isCurrentActive: (channelId: string, generation: number) => boolean
+    /** 产品 UA：Discord 边缘按 UA 拦，REST 与 ws 两端必须是同一个值。 */
+    userAgent: string
     /**
      * 启动结论的等待窗口（毫秒）：窗口内等到 READY 或 4014/4003/4004 就当场定论，
      * 等不到就按旧行为放行（继续重连）。默认 8 秒；用例传 0 走「不等」。
@@ -46,7 +48,7 @@ export class DiscordRuntimeManager {
     channelId: string,
     generation: number,
     ownerToken: string
-  ): Promise<boolean | { ok: false; reason: string; closeCode?: number | null }> {
+  ): Promise<boolean | { ok: false; reason: string; closeCode?: number | null; providerCode?: string }> {
     if (!ownerToken || !this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)) return false
     this.stop(channelId)
     if (!this.generationIsOurs(channelId, generation, ownerToken)) return false
@@ -55,7 +57,11 @@ export class DiscordRuntimeManager {
     this.lifetimes.set(channelId, { controller, ownerToken })
     try {
       const readToken = (): Promise<string | null> => this.token(channelId, controller.signal)
-      const client = new DiscordApiClient({ getPlatformFetch: this.deps.getPlatformFetch, token: readToken })
+      const client = new DiscordApiClient({
+        getPlatformFetch: this.deps.getPlatformFetch,
+        token: readToken,
+        userAgent: this.deps.userAgent
+      })
       const [gateway, botUser] = await Promise.all([
         client.gatewayBot(controller.signal),
         client.currentUser(controller.signal)
@@ -64,9 +70,11 @@ export class DiscordRuntimeManager {
       // 握手期间可能已经被停用/换代：回来再判一次，别拿一个过期的接入点开连接。
       if (!gateway.ok || !botUser.ok || !isCurrent()) {
         this.stopOwned(channelId, controller)
-        // REST 这一跳已经能分清「Token 错」与「网络/代理不通」，别把两种处境并成一个 false。
+        // REST 这一跳已经能分清「Token 错(401)」「取地址被挡(403)」「网络不通」，别再并成一个 false。
         const rest = gateway.ok ? botUser : gateway
-        return rest.ok ? false : { ok: false, reason: rest.code }
+        return rest.ok
+          ? false
+          : { ok: false, reason: rest.code, ...(rest.providerCode ? { providerCode: rest.providerCode } : {}) }
       }
 
       this.deps.delivery.setClient(channelId, client, { isCurrent, signal: controller.signal })
@@ -82,6 +90,7 @@ export class DiscordRuntimeManager {
         createPlatformWebSocket: this.deps.createPlatformWebSocket as never,
         isCurrent,
         signal: controller.signal,
+        userAgent: this.deps.userAgent,
         ...(this.deps.startWindowMs === undefined ? {} : { startWindowMs: this.deps.startWindowMs }),
         refreshGatewayUrl: async () => {
           const refreshed = await client.gatewayBot(controller.signal)
@@ -160,3 +169,4 @@ export class DiscordRuntimeManager {
  * 这不是适配器坏了，是后台少点了一个开关，重连一万次也不会变好。
  */
 export const DISCORD_DEFAULT_INTENTS = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15)
+

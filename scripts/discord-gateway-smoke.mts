@@ -21,6 +21,7 @@
  * `--proxy` 省略时依次看 `DISCORD_SMOKE_PROXY` / `HTTPS_PROXY` / `https_proxy`；都没有就是直连
  * （这台机器会失败，输出里 `proxy: "direct"`——那是「代理没配」，不是「适配器不行」）。
  */
+import { readFileSync } from 'node:fs'
 import { request } from 'node:https'
 
 import { ProxyAgent } from 'proxy-agent'
@@ -50,6 +51,13 @@ function parseArgs(argv: readonly string[]): Args {
     return { mode: 'send', channelId: positional[0], text: positional.slice(1).join(' '), ...(proxy ? { proxy } : {}) }
   }
   throw new Error(USAGE)
+}
+
+/** 产品 UA：版本从 package.json 读，避免脚本里写死一个会过期的数字。 */
+function userAgent(): string {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: unknown }
+  const version = typeof pkg.version === 'string' && pkg.version.trim() !== '' ? pkg.version.trim() : '0.0.0'
+  return `MacroBay/${version} (Discord adapter)`
 }
 
 function resolveProxy(explicit: string | undefined): string | null {
@@ -119,7 +127,11 @@ async function main(): Promise<void> {
   if (!token) throw new Error('DSH_SECRET_DISCORD_BOT_TOKEN is not set')
   const proxy = resolveProxy(args.proxy)
   const transport = nodeFetchThroughProxy(proxy)
-  const client = new DiscordApiClient({ getPlatformFetch: () => transport, token: async () => token })
+  const client = new DiscordApiClient({
+    getPlatformFetch: () => transport,
+    token: async () => token,
+    userAgent: userAgent()
+  })
 
   const identity = await client.currentUser(AbortSignal.timeout(15_000))
   const report: Record<string, unknown> = {
@@ -145,9 +157,11 @@ async function main(): Promise<void> {
 /** 真网关一次识别往返：用随包的状态机跑 HELLO → IDENTIFY → READY，跑完就关。 */
 function awaitReady(input: { token: string; url: string; proxy: string | null }): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
-    const socket = new WebSocket(input.url, input.proxy
-      ? { agent: new ProxyAgent({ getProxyForUrl: async () => input.proxy ?? '' }) }
-      : {})
+    const socket = new WebSocket(input.url, {
+      ...(input.proxy ? { agent: new ProxyAgent({ getProxyForUrl: async () => input.proxy ?? '' }) } : {}),
+      // 与 REST 同一个产品 UA：Discord 边缘在握手这一跳也看它（浏览器 UA 会被 403）。
+      headers: { 'user-agent': userAgent() }
+    })
     let settled = false
     const finish = (value: Record<string, unknown>): void => {
       if (settled) return

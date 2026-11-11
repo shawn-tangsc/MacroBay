@@ -215,6 +215,14 @@ describe('discord gateway host', () => {
     expect(harness.sockets).toHaveLength(1)
   })
 
+  it('puts the product user agent on the websocket handshake, not a browser one', async () => {
+    // Cloudflare 在握手这一跳也看 UA：浏览器 UA 会被 403/1010，连接根本起不来。
+    const harness = await createHarness()
+    const userAgent = harness.socketOptions[0]?.headers?.['user-agent'] ?? ''
+    expect(userAgent).toBe('MacroBay/test (Discord adapter)')
+    expect(userAgent).not.toMatch(/Mozilla|Chrome|Safari|Electron/iu)
+  })
+
   it('hands a fatal 4014 back to the caller, with the close code, instead of only auditing it', async () => {
     // 这一条是「启用失败时界面能不能说出真原因」的唯一判据：4014 意味着 Message Content 没开，
     // 重连与换 Token 都不会变好，所以它必须作为启动结果交回去，而不是只落一条审计。
@@ -252,7 +260,7 @@ describe('discord gateway host', () => {
     expect(settled).toBeNull()
 
     harness.sockets[0].message(READY)
-    await expect(outcome).resolves.toEqual({ ok: true })
+    await expect(outcome).resolves.toEqual({ ok: true, ready: true })
   })
 
   it('still reconnects after an ordinary transport drop', async () => {
@@ -377,6 +385,7 @@ async function createHarness(options: {
 } = {}) {
   const clock = new FakeClock()
   const sockets: FakeSocket[] = []
+  const socketOptions: Array<{ headers?: Record<string, string> } | undefined> = []
   const auditCodes: string[] = []
   /** 调用顺序：管道确认与序号提交的先后是这一笔最要紧的判据。 */
   const order: string[] = []
@@ -410,8 +419,10 @@ async function createHarness(options: {
     inbound: inbound as never,
     botUserId: '999',
     runtime: runtime as unknown as DiscordRuntimeRepository,
+    userAgent: 'MacroBay/test (Discord adapter)',
     createPlatformWebSocket: class {
-      constructor(_url: string) {
+      constructor(_url: string, options?: { headers?: Record<string, string> }) {
+        socketOptions.push(options)
         const socket = new FakeSocket()
         sockets.push(socket)
         return socket as never
@@ -428,6 +439,7 @@ async function createHarness(options: {
     host,
     clock,
     sockets,
+    socketOptions,
     runtime,
     inbound,
     inboundRequests,
