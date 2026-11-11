@@ -48,7 +48,9 @@ export function calendarSourceStatusFragments(
     if (attempt.failureCode) body.push(text.market.attemptFailure[attempt.failureCode])
   } else if (attempt?.state === 'succeeded') {
     detail.push(text.market.refreshOutcome.succeeded)
-  } else {
+  } else if (source.sourceObservedAt === null) {
+    // 「本次尚未刷新」只在**一条观测都没有**时成立：只要来源给过这条（有时间），
+    // 再说「没刷新」就与上面的时间自相矛盾（时间前进 ⟺ 这句不出现）。
     body.push(text.market.refreshOutcome.unattempted)
   }
   // 触发方式是常态信息，只要知道就走 ⓘ（正文从不说"这次是自动跑的"）。
@@ -58,11 +60,12 @@ export function calendarSourceStatusFragments(
   if (source.status === 'success') detail.push(text.market.statuses.success)
   else body.push(text.market.statuses[source.status])
 
-  // 采集时刻：失败时正文写「显示上次数据」+ 时刻（读者要知道自己在看旧数据）；成功路径只进 ⓘ。
+  // 那个时刻是**来源最后一次给出这条的时间**（读 ledger 的最近一次见到），不是「我们采集的时刻」：
+  // 它证明对方还在给，不证明我们跑过。失败时正文写「显示上次数据」+ 时刻，成功路径只进 ⓘ。
   if (source.sourceObservedAt) {
     const observedAt = formatTime(source.sourceObservedAt, 'second')
     if (failed) body.push(`${text.market.retainedData} ${observedAt}`)
-    else detail.push(`${text.market.collectedAt} ${observedAt}`)
+    else detail.push(`${text.market.lastGivenAt} ${observedAt}`)
   }
 
   if (marketCalendarAutomaticRefreshPolicy.automatic) {
