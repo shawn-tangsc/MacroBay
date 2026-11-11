@@ -139,7 +139,7 @@ describe('source projections', () => {
 
   it('marks every proxy-only source as needing a proxy and leaves reachable sources unmarked', () => {
     // 判据是实测（2026-11-12：直连 vs 经本地代理对照），不是名单印象：
-    // 直连 000、经代理 2xx/4xx 的才算「需要代理」。
+    // 直连 000、或只回一张边缘拦截页而拿不到可用响应的，算「需要代理」。
     const blocked = [
       'binance-announcements',
       'binance-api-updates',
@@ -154,7 +154,12 @@ describe('source projections', () => {
       'coinbase-status',
       'kraken-status',
       'kraken-system-status',
-      'solana-status'
+      'solana-status',
+      // 直连回 403 但那是边缘拦截，接口要经代理才通（读者 2026-11-12 确认）。
+      '0xrouter-aggregate-provider',
+      'macro-calendar-0xrouter-economic-data',
+      'macro-calendar-0xrouter-financial-events',
+      'macro-calendar-0xrouter-central-bank-activities'
     ]
     for (const sourceId of blocked) {
       expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBe(true)
@@ -162,11 +167,9 @@ describe('source projections', () => {
     expect(panelView('dashboard')?.providers.find((provider) => provider.providerId === 'binance')?.sources
       .every((source) => source.requiresProxy === true)).toBe(true)
 
-    // 直连就能拿回 HTTP 状态码的（含 401/403：那是缺钥匙/缺 UA，不是连不上）一律不标。
+    // 直连就能拿回可用 HTTP 响应（含 401/403：那是缺钥匙/缺 UA）的一律不标。
     const reachable = [
       'defillama-stablecoins', 'defillama-tvl',
-      '0xrouter-aggregate-provider', 'macro-calendar-0xrouter-economic-data',
-      'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities',
       'fred-rates-liquidity', 'alternative-fear-greed', 'federal-reserve-rss', 'cftc-rss',
       'sec-rss', 'bls-economic-series', 'bea-economic-series', 'treasury-fiscal-data',
       'twelve-data-market', 'realmarketapi-market', 'github-releases'
@@ -175,7 +178,7 @@ describe('source projections', () => {
       expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBeUndefined()
     }
     expect(providerRegistry.filter((provider) => provider.sources.some((source) => source.requiresProxy)).map((provider) => provider.providerId))
-      .toEqual(['policy-path', 'binance', 'okx', 'coingecko', 'coindesk', 'ethereum-foundation', 'coinbase', 'kraken', 'solana'])
+      .toEqual(['policy-path', 'binance', 'okx', 'coingecko', 'coindesk', 'ethereum-foundation', '0xrouter', 'coinbase', 'kraken', 'solana'])
   })
 
   it('names the provider credential source even in a panel that does not list it', () => {

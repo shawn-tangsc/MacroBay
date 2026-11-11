@@ -65,11 +65,13 @@ export type SourceDefinition = {
    * need is derived with `sources.some(...)` rather than stored a second time.
    *
    * **这是实测出来的，不是猜的**（2026-11-12）：对每个源的接口做「直连 vs 经本地代理」对照，
-   * 直连返回 000（DNS/连接失败）而经代理返回 2xx/4xx 的才标记；直连能拿回任何 HTTP 状态码
-   * （含 401/403，那只是缺钥匙或缺 UA）的一律不标。当天结论：
+   * 直连拿到**可用的** 2xx/4xx 视为可达；直连 000（DNS/连接失败）或只回一张边缘拦截页的算需要代理。
+   * 当天结论：
    * binance / okx / coingecko / coindesk / Polymarket / 以太坊基金会博客 / Coinbase·Kraken·Solana
-   * 状态页需要代理；DeFiLlama、0xRouter、美联储、SEC、CFTC、BLS、BEA、财政部、FRED、GitHub、
+   * 状态页需要代理；DeFiLlama、美联储、SEC、CFTC、BLS、BEA、财政部、FRED、GitHub、
    * Alternative.me、realmarketapi、Twelve Data 直连可达。
+   * **0xRouter 例外（读者 2026-11-12 确认）**：直连虽然回了 403，但那是边缘拦截、不是可用响应，
+   * 它的接口实际要经代理才通——按读者口径标 `requiresProxy`，不拿那一张 403 页当「可达」。
    */
   requiresProxy?: boolean
   /**
@@ -351,10 +353,10 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'aggregate',
     credential: 'api-key',
     sources: [
-      src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider' }),
-      src({ sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true } }),
-      src({ sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true } }),
-      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true } })
+      src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
+      src({ sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
+      src({ sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
+      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
     ]
   }),
   provider({
