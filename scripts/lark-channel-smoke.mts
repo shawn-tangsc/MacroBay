@@ -14,13 +14,20 @@
  * 直连，测出来的「连不上」是假的。
  *
  * 凭据只从 `$DSH_SECRET_LARK_APP_ID` / `$DSH_SECRET_LARK_APP_SECRET` 读，绝不落盘、绝不打印；
- * 输出一行脱敏 JSON：`{ ok, mode, proxy, tenantTokenExpiresIn, socket, messageId, step, failure }`。
+ * 输出一行脱敏 JSON：`{ ok, mode, base, socketOrigin, proxy, tenantTokenExpiresIn, socket, messageId, step, failure }`。
  *
  * 用法：
  *   DSH_SECRET_LARK_APP_ID=… DSH_SECRET_LARK_APP_SECRET=… pnpm lark:smoke --probe --proxy http://127.0.0.1:7888
  *   … pnpm lark:smoke --send <chatId> "测试" --proxy http://127.0.0.1:7888
  *
  * `--proxy` 省略时依次看 `LARK_SMOKE_PROXY` / `HTTPS_PROXY` / `https_proxy`；都没有就是直连。
+ *
+ * `--base <url>` 换 REST 基址（默认 `LarkContracts.larkApiBase`，今天指 `open.larksuite.com`）。
+ * 两个域名各跑一次，第 2 步就能回答「这是域名问题还是凭据问题」：
+ *   … pnpm lark:smoke --probe --base https://open.feishu.cn/open-apis --proxy http://127.0.0.1:7888
+ *
+ * **它只管 REST 两步**（换 token / 发消息），长连接那一步的域名归 SDK 决定，输出里用 `socketOrigin`
+ * 写清楚是哪一边——别把一次运行读成「两步打的是同一个域名」。
  *
  * 失败码分三类，`step` 指到断在哪一步：
  *   - 凭据错：`lark-provider-rejected`（`step:"token"` = app_id/secret 不认；`step:"send"` = 消息被拒，
@@ -40,26 +47,83 @@ import {
   type LarkProxyDecision
 } from '../platform/ai/agent-platform/channels/lark/LarkLongConnectionClient'
 
-type Args = { mode: 'probe' | 'send'; chatId?: string; text?: string; proxy?: string }
+type Args = { mode: 'probe' | 'send'; chatId?: string; text?: string; proxy?: string; base?: string }
 
 const USAGE = `Usage:
-  lark-channel-smoke --probe [--proxy <url>]
-  lark-channel-smoke --send <chatId> <text> [--proxy <url>]
+  lark-channel-smoke --probe [--base <url>] [--proxy <url>]
+  lark-channel-smoke --send <chatId> <text> [--base <url>] [--proxy <url>]
 Credentials come from $DSH_SECRET_LARK_APP_ID and $DSH_SECRET_LARK_APP_SECRET.
 Nothing is written to disk and the credentials are never printed.`
 
+/** 取一个带值的旗标；旗标后面没有值（或紧跟另一个旗标）就是用法错误，不默认成空串。 */
+function flagValue(rest: readonly string[], name: string): string | undefined {
+  const index = rest.indexOf(name)
+  if (index < 0) return undefined
+  const value = rest[index + 1]
+  if (!value || value.startsWith('--')) throw new Error(USAGE)
+  return value
+}
+
+function positionalArgs(rest: readonly string[]): string[] {
+  const positional: string[] = []
+  for (let index = 0; index < rest.length; index += 1) {
+    if (rest[index] === '--proxy' || rest[index] === '--base') {
+      index += 1
+      continue
+    }
+    positional.push(rest[index]!)
+  }
+  return positional
+}
+
 function parseArgs(argv: readonly string[]): Args {
   const [mode, ...rest] = argv
-  const proxyIndex = rest.indexOf('--proxy')
-  const proxy = proxyIndex >= 0 ? rest[proxyIndex + 1] : undefined
-  const positional = proxyIndex >= 0 ? rest.slice(0, proxyIndex) : rest
-  if (mode === '--probe') return { mode: 'probe', ...(proxy ? { proxy } : {}) }
+  const proxy = flagValue(rest, '--proxy')
+  const base = flagValue(rest, '--base')
+  const positional = positionalArgs(rest)
+  if (mode === '--probe') return { mode: 'probe', ...(proxy ? { proxy } : {}), ...(base ? { base } : {}) }
   if (mode === '--send') {
     if (!positional[0] || positional.length < 2) throw new Error(USAGE)
-    return { mode: 'send', chatId: positional[0], text: positional.slice(1).join(' '), ...(proxy ? { proxy } : {}) }
+    return {
+      mode: 'send',
+      chatId: positional[0],
+      text: positional.slice(1).join(' '),
+      ...(proxy ? { proxy } : {}),
+      ...(base ? { base } : {})
+    }
   }
   throw new Error(USAGE)
 }
+
+/**
+ * REST 基址：默认用契约里那一个（`larkApiBase`），`--base` 可以换成另一个租户体系的域名。
+ *
+ * 为什么要有这个参数：`open.larksuite.com` 与 `open.feishu.cn` 是两套租户体系，改运行时基址要有依据；
+ * 在拿到依据之前，把「两个域名各试一次」变成一次可选的事实，而不是一次静默的改动。
+ *
+ * 只接受 https，且只认两种写法：完整基址（`…/open-apis`）或只给 origin（脚本补 `/open-apis`）。
+ */
+function resolveBase(explicit: string | undefined): string {
+  const raw = (explicit ?? larkApiBase).trim()
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error(`--base is not a URL: ${raw}`)
+  }
+  if (url.protocol !== 'https:') throw new Error('--base must be https')
+  const path = url.pathname.replace(/\/+$/u, '')
+  url.pathname = path === '' ? '/open-apis' : path
+  url.search = ''
+  url.hash = ''
+  return url.toString().replace(/\/$/u, '')
+}
+
+/**
+ * 长连接那一步走的是 SDK 自己的域名（1.76.0 默认 `Domain.Feishu`），**不受 `--base` 影响**。
+ * 输出里把它写出来，免得读者以为一次运行里两步打的是同一个域名。
+ */
+const SDK_DEFAULT_SOCKET_ORIGIN = 'https://open.feishu.cn'
 
 function resolveProxy(explicit: string | undefined): string | null {
   const value = explicit ?? process.env.LARK_SMOKE_PROXY ?? process.env.HTTPS_PROXY ?? process.env.https_proxy ?? ''
@@ -136,11 +200,12 @@ type ApiRead<T> = { ok: true; value: T } | { ok: false; code: 'lark-provider-rej
 /** 换 tenant_access_token：这一步过了才说明 app_id/app_secret 活着。 */
 async function tenantToken(
   transport: typeof fetch,
+  base: string,
   appId: string,
   appSecret: string
 ): Promise<ApiRead<{ token: string; expiresIn: number }>> {
   try {
-    const response = await transport(`${larkApiBase}/auth/v3/tenant_access_token/internal`, {
+    const response = await transport(`${base}/auth/v3/tenant_access_token/internal`, {
       method: 'POST',
       signal: AbortSignal.timeout(15_000),
       headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -160,12 +225,13 @@ async function tenantToken(
 /** 发一条文本：回上游 `message_id`，它是唯一能把「发到了」与「发到了别处」分开的证据。 */
 async function sendText(
   transport: typeof fetch,
+  base: string,
   token: string,
   chatId: string,
   text: string
 ): Promise<ApiRead<{ messageId: string | null }>> {
   try {
-    const response = await transport(`${larkApiBase}/im/v1/messages?receive_id_type=chat_id`, {
+    const response = await transport(`${base}/im/v1/messages?receive_id_type=chat_id`, {
       method: 'POST',
       signal: AbortSignal.timeout(15_000),
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json; charset=utf-8' },
@@ -190,18 +256,25 @@ async function main(): Promise<void> {
   if (!appSecret) throw new Error('DSH_SECRET_LARK_APP_SECRET is not set')
 
   const proxy = resolveProxy(args.proxy)
-  const report: Record<string, unknown> = { ok: false, mode: args.mode, proxy: maskProxy(proxy) }
+  const base = resolveBase(args.base)
+  const report: Record<string, unknown> = {
+    ok: false,
+    mode: args.mode,
+    base,
+    socketOrigin: SDK_DEFAULT_SOCKET_ORIGIN,
+    proxy: maskProxy(proxy)
+  }
   if (proxy && !(await proxyReachable(proxy))) return print({ ...report, step: 'proxy', failure: 'proxy-unreachable' })
 
   const transport = nodeFetchThroughProxy(proxy)
   const decision: LarkProxyDecision = proxy ? { kind: 'proxy', url: proxy } : { kind: 'direct' }
 
-  const auth = await tenantToken(transport, appId, appSecret)
+  const auth = await tenantToken(transport, base, appId, appSecret)
   if (!auth.ok) return print({ ...report, step: 'token', failure: auth.code })
   report.tenantTokenExpiresIn = auth.value.expiresIn
 
   if (args.mode === 'send') {
-    const sent = await sendText(transport, auth.value.token, args.chatId ?? '', args.text ?? '')
+    const sent = await sendText(transport, base, auth.value.token, args.chatId ?? '', args.text ?? '')
     return print({ ...report, ...(sent.ok ? { ok: true, step: 'send', messageId: sent.value.messageId } : { step: 'send', failure: sent.code }) })
   }
 
