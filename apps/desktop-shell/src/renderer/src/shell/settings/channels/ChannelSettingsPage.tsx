@@ -111,8 +111,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const platform = catalog.find((entry) => entry.type === selectedType)
   const implemented = platform?.implemented === true
-  // 「能接」= 证据完备（supported），不是「代码里有适配器」：`implemented` 只说明收凭据有意义。
-  const supported = platform?.status === 'supported'
+  // 「能接」只看有没有适配器（`implemented`）；「有没有真机验收记录」不再挡用户使用，
+  // 所以这里不再取 `supported`——它只用来决定要不要写一句「这一版还接不了」，而那句话已经删了。
   const planned = platform?.status === 'planned'
   // 「还没接」= 没有适配器，或被挡在验收证据之外：这一类的右侧只留三样（名字、一句用途、一句原因），
   // 不画加号、不画频道行、也不画空态块——空态会被读成「这里本来可以有频道」。
@@ -323,11 +323,15 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                     读者不知道这个平台是干什么的。 */}
                 <p className="channel-detail-purpose">{labels.channelPlatformPurpose[selectedType]}</p>
                 {/*
-                 * **兜底，不是活代码**：中列只列 `implemented` 的平台（`ChannelPlatformList` 的过滤），
-                 * 所以今天走不到这两句。留着是为了将来放宽入口时仍有一句实话可出；
-                 * 改文案前先看这个前提——别把兜底当成正在展示的句子去调措辞。
+                 * 这两句只在**没有适配器**时出现（今天只有微信）：那是事实，说了有用。
+                 *
+                 * 以前这里按 `status === 'supported'` 判，于是「代码已实现、只是还没有真机验收记录」
+                 * 的平台（Discord / Slack / QQ / 飞书）也会被追一句「这一版还接不了，先把 Telegram
+                 * 接上」——可入口早就按 `implemented` 放行了（下面 `notConnectable` 那行），读者
+                 * 面前明明有「创建」，旁边却写着接不了（用户 2026-11-11 报的就是这句废话）。
+                 * 能不能用由**点启用时的现场自检**回答，不由一句预告替它下结论。
                  */}
-                {supported ? null : (
+                {implemented ? null : (
                   <p className="channel-detail-reason">
                     {planned ? labels.channelNeedsEvidence : labels.channelUnsupportedPane}
                   </p>
