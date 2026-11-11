@@ -27,7 +27,6 @@ const LEGACY_ZH: Readonly<Record<string, string>> = {
   action: '动作',
   sourceId: '情报源',
   collectionPreset: '采集节奏',
-  includeInSentiment: '计入情绪',
   monitoredSymbols: '监控标的',
   enabled: '启用',
   itemId: '情报条目',
@@ -55,7 +54,6 @@ const LEGACY_EN: Readonly<Record<string, string>> = {
   action: 'Action',
   sourceId: 'Source',
   collectionPreset: 'Collection preset',
-  includeInSentiment: 'Include in sentiment',
   monitoredSymbols: 'Monitored symbols',
   enabled: 'Enabled',
   itemId: 'Item',
@@ -159,8 +157,7 @@ describe('approval field copy: declared labels match what readers saw before', (
       configure_intelligence_source: [
         'action',
         'sourceId',
-        'collectionPreset',
-        'includeInSentiment'
+        'collectionPreset'
       ],
       operate_intelligence_source: [
         'action',

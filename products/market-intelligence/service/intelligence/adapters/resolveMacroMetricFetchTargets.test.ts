@@ -20,12 +20,10 @@ function macroConfig(sourceId: 'bls-economic-series' | 'bea-economic-series' | '
     desiredRuntimeState: 'polling',
     parserStrategy: `${sourceId}-v1`,
     noisePolicy: 'balanced',
-    includeInSentiment: true,
     scopePolicy: 'all',
     rawArchiveEnabled: true,
     retentionMode: 'balanced',
     autoReplayAfterParserUpgrade: true,
-    sentimentEligible: true,
     adapterConfig
   }
 }

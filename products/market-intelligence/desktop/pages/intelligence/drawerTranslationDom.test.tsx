@@ -69,7 +69,6 @@ vi.mock('../../settings/intelligence-sources/useIntelligenceSourcesSettings', ()
       sourceId: 'coindesk-rss',
       enabled: true,
       collectionPreset: 'balanced',
-      includeInSentiment: false,
       scopePolicy: 'all',
       rawArchiveEnabled: false,
       retentionMode: 'balanced',

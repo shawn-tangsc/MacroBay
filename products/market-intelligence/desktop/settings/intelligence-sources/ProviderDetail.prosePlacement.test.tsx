@@ -92,7 +92,6 @@ function policy(collectionPreset: 'manual' | 'balanced' = 'manual') {
         sourceId: 'coindesk-rss',
         enabled: true,
         collectionPreset,
-        includeInSentiment: false,
         scopePolicy: 'all' as const,
         rawArchiveEnabled: false,
         retentionMode: 'balanced' as const,

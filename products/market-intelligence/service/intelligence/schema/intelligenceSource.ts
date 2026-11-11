@@ -168,7 +168,6 @@ export type IntelligenceSourceProfile = {
   enabled: boolean
   credentialRef?: string
   collectionPreset: IntelligenceCollectionPreset
-  includeInSentiment: boolean
   scopePolicy: IntelligenceScopePolicy
   rawArchiveEnabled: boolean
   retentionMode: IntelligenceRetentionMode
@@ -196,12 +195,10 @@ export type IntelligenceSourceConfig = {
   desiredRuntimeState: IntelligenceDesiredRuntimeState
   parserStrategy: string
   noisePolicy: 'strict' | 'balanced'
-  includeInSentiment: boolean
   scopePolicy: IntelligenceScopePolicy
   rawArchiveEnabled: boolean
   retentionMode: IntelligenceRetentionMode
   autoReplayAfterParserUpgrade: boolean
-  sentimentEligible: boolean
   adapterConfig: Record<string, unknown>
 }
 

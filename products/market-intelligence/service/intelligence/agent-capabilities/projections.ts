@@ -30,7 +30,6 @@ export type ProjectedSourceSummary = {
   domains: SourceDomain[]
   enabled: boolean
   collectionPreset: IntelligenceSourceProfile['collectionPreset']
-  includeInSentiment: boolean
   scopePolicy: IntelligenceSourceProfile['scopePolicy']
   retentionMode: IntelligenceSourceProfile['retentionMode']
   rawArchiveEnabled: boolean
@@ -144,7 +143,6 @@ export function projectSourceSummary(input: {
     domains: sourceDomains(profile.sourceId),
     enabled: profile.enabled === true,
     collectionPreset: profile.collectionPreset,
-    includeInSentiment: profile.includeInSentiment === true,
     scopePolicy: profile.scopePolicy,
     retentionMode: profile.retentionMode,
     rawArchiveEnabled: profile.rawArchiveEnabled === true,

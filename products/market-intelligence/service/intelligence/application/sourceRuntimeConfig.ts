@@ -67,7 +67,6 @@ export function createDefaultSourceProfile(
     // 需要 API Key 的、还没接入的、没人用的源默认关着。读者显式存过的 profile 一律以存量为准。
     enabled: isDefaultEnabledDefinition(definition),
     collectionPreset: definition.defaultCollectionPreset,
-    includeInSentiment: definition.supportsSentiment,
     scopePolicy: definition.defaultScopePolicy,
     rawArchiveEnabled: true,
     retentionMode: definition.defaultRetentionMode,
@@ -119,7 +118,6 @@ export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): Intellig
   const collectionPreset = usesFixedEtfRefreshSchedule
     ? zeroXRouterEtfRefreshSchedulePolicy.collectionPreset
     : profile.collectionPreset ?? input.definition.defaultCollectionPreset
-  const includeInSentiment = input.definition.supportsSentiment ? profile.includeInSentiment : false
   // 通用运行时只采「不是 none、也不是产品自有」的源；ready 与否另有一条（`blocksProductionCollection`）。
   const enabled = blocksProductionCollection(input.definition) || !genericRuntimeCollects(input.definition)
     ? false
@@ -153,12 +151,10 @@ export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): Intellig
     desiredRuntimeState,
     parserStrategy: input.definition.parserStrategy,
     noisePolicy: 'balanced',
-    includeInSentiment,
     scopePolicy: profile.scopePolicy,
     rawArchiveEnabled: isCapitalConditionsCollector ? false : profile.rawArchiveEnabled,
     retentionMode: profile.retentionMode,
     autoReplayAfterParserUpgrade: isCapitalConditionsCollector ? false : profile.autoReplayAfterParserUpgrade,
-    sentimentEligible: includeInSentiment,
     adapterConfig: resolveAdapterConfig(input.definition, profile)
   }
 }
@@ -237,14 +233,6 @@ export function validateRuntimeConfig(
       code: 'missing-credential',
       field: 'credentialRef',
       message: 'An API credential is required before this source can run.'
-    })
-  }
-
-  if (!definition.supportsSentiment && config.includeInSentiment) {
-    issues.push({
-      code: 'unsupported-sentiment',
-      field: 'includeInSentiment',
-      message: 'This source does not support sentiment inclusion.'
     })
   }
 

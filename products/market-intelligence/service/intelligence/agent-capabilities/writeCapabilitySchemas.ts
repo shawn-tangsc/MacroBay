@@ -115,7 +115,6 @@ export const configureIntelligenceSourceInputSchema = {
     action: actionSchema(['save-profile', 'set-enabled']),
     sourceId: { type: 'string', 'x-maxStringLength': 160 },
     collectionPreset: { type: 'string', enum: ['manual', 'balanced', 'frequent'] },
-    includeInSentiment: { type: 'boolean' },
     monitoredSymbols: { type: 'array', maxItems: 200, items: { type: 'string' } },
     enabled: { type: 'boolean' },
     // Declared only so the action guard can name it; no action accepts it.
@@ -252,7 +251,6 @@ export const intelligenceWriteActionRules: Readonly<Record<string, CapabilityAct
       fields: [
         'sourceId',
         'collectionPreset',
-        'includeInSentiment',
         'monitoredSymbols'
       ],
       required: ['sourceId']

@@ -52,7 +52,7 @@ function profiles(view: SourceView): Record<string, unknown> {
   return {
     [view.sourceId]: {
       profileId: `profile-${view.sourceId}`, sourceId: view.sourceId, enabled: view.enabled,
-      collectionPreset: 'balanced' as const, includeInSentiment: false, scopePolicy: 'all' as const,
+      collectionPreset: 'balanced' as const, scopePolicy: 'all' as const,
       rawArchiveEnabled: false, retentionMode: 'balanced' as const, autoReplayAfterParserUpgrade: false,
       updatedAt: '2026-11-01T00:00:00.000Z'
     }

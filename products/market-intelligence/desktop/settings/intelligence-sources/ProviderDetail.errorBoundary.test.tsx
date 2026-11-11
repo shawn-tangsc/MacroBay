@@ -81,7 +81,7 @@ function detail(lastSuccessAt?: string) {
   return {
     definition: { sourceId: 's1', displayName: 'S1', authMode: 'none' },
     profile: {
-      profileId: 'p1', sourceId: 's1', enabled: true, collectionPreset: 'balanced', includeInSentiment: false,
+      profileId: 'p1', sourceId: 's1', enabled: true, collectionPreset: 'balanced',
       scopePolicy: 'all', rawArchiveEnabled: false, retentionMode: 'balanced', autoReplayAfterParserUpgrade: false,
       updatedAt: '2026-11-01T00:00:00.000Z'
     },

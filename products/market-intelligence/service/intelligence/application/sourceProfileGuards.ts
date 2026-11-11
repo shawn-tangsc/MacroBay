@@ -1,6 +1,6 @@
 const dashboardScheduleProfilePolicy = {
   requiredFields: [
-    'profileId', 'sourceId', 'enabled', 'collectionPreset', 'includeInSentiment', 'scopePolicy',
+    'profileId', 'sourceId', 'enabled', 'collectionPreset', 'scopePolicy',
     'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade', 'updatedAt'
   ],
   optionalFields: ['credentialRef', 'monitoredSymbols', 'sourceSpecificConfigJson'],
@@ -26,7 +26,6 @@ export function isExactProfile(value: unknown): value is Record<string, unknown>
       typeof values.get('sourceId') === 'string' &&
       typeof values.get('enabled') === 'boolean' &&
       isCollectionPresetValue(values.get('collectionPreset')) &&
-      typeof values.get('includeInSentiment') === 'boolean' &&
       dashboardScheduleProfilePolicy.scopePolicies.includes(values.get('scopePolicy') as never) &&
       typeof values.get('rawArchiveEnabled') === 'boolean' &&
       dashboardScheduleProfilePolicy.retentionModes.includes(values.get('retentionMode') as never) &&

@@ -18,7 +18,6 @@ type ConfigureSourceInput = {
   action: 'save-profile' | 'set-enabled'
   sourceId?: string
   collectionPreset?: IntelligenceCollectionPreset
-  includeInSentiment?: boolean
   monitoredSymbols?: string[]
   enabled?: boolean
 }
@@ -157,7 +156,6 @@ export async function handleRequestSourceCredential(
 function profilePatch(value: ConfigureSourceInput): Partial<SaveIntelligenceSourceProfileInput> {
   const patch: Partial<SaveIntelligenceSourceProfileInput> = {}
   if (value.collectionPreset !== undefined) patch.collectionPreset = value.collectionPreset
-  if (value.includeInSentiment !== undefined) patch.includeInSentiment = value.includeInSentiment
   if (value.monitoredSymbols !== undefined) patch.monitoredSymbols = [...value.monitoredSymbols]
   return patch
 }

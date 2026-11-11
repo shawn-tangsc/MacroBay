@@ -166,7 +166,6 @@ describe('write capability catalog', () => {
         action: 'save-profile',
         sourceId: 'coingecko-trending',
         collectionPreset: 'frequent',
-        includeInSentiment: false,
         monitoredSymbols: ['BTCUSDT']
       })
     ).toEqual({ ok: true })

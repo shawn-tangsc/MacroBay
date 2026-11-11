@@ -42,7 +42,6 @@ export function sourceConfigValue(
     sourceId: profile.sourceId,
     enabled: profile.enabled === true,
     collectionPreset: profile.collectionPreset,
-    includeInSentiment: profile.includeInSentiment === true,
     scopePolicy: profile.scopePolicy,
     rawArchiveEnabled: profile.rawArchiveEnabled === true,
     retentionMode: profile.retentionMode,

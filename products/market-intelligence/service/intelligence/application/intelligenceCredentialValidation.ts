@@ -81,12 +81,10 @@ function buildValidationRequest(
       desiredRuntimeState: 'polling' as const,
       parserStrategy: definition?.parserStrategy ?? `${sourceId}-v1`,
       noisePolicy: 'balanced' as const,
-      includeInSentiment: true,
       scopePolicy: definition?.defaultScopePolicy ?? 'all',
       rawArchiveEnabled: true,
       retentionMode: definition?.defaultRetentionMode ?? 'balanced',
       autoReplayAfterParserUpgrade: true,
-      sentimentEligible: true,
       adapterConfig: definition?.adapterConfig ?? {}
     }
     const probeTarget = resolveMacroProbeTarget(probeConfig)

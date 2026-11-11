@@ -19,12 +19,10 @@ const config = {
   desiredRuntimeState: 'polling',
   parserStrategy: 'bea-economic-series-v1',
   noisePolicy: 'balanced',
-  includeInSentiment: true,
   scopePolicy: 'all',
   rawArchiveEnabled: true,
   retentionMode: 'balanced',
   autoReplayAfterParserUpgrade: true,
-  sentimentEligible: true,
   adapterConfig: {}
 } as const
 

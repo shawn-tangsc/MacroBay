@@ -14,7 +14,6 @@ const profile: IntelligenceSourceProfile = {
   enabled: true,
   credentialRef: 'credential-internal-ref',
   collectionPreset: 'balanced',
-  includeInSentiment: true,
   scopePolicy: 'watchlist-priority',
   rawArchiveEnabled: true,
   retentionMode: 'balanced',

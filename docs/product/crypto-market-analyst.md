@@ -165,7 +165,6 @@ Each provider has a collection policy:
 
 - **Preset** — Manual, Balanced, or Frequent. Manual means enabling the source does *not* fetch
   anything; you run it yourself.
-- **Include in sentiment analysis** — whether this source can influence the sentiment signal.
 - **Scope policy** — All, Watchlist priority, or Active-position priority, for sources that can be
   narrowed.
 - **Retention and replay** — whether raw payloads are archived, and whether a parser upgrade triggers

@@ -77,9 +77,6 @@ export function createSourceProfileStore(storage: IntelligenceProfileStorage): S
         profileId: current.profileId,
         sourceId: input.sourceId,
         enabled: definition && blocksProductionCollection(definition) && !hasProductOwnedCollection(definition) ? false : (input.enabled ?? current.enabled),
-        includeInSentiment: definition?.supportsSentiment
-          ? (input.includeInSentiment ?? current.includeInSentiment)
-          : false,
         monitoredSymbols: input.monitoredSymbols ?? current.monitoredSymbols,
         updatedAt: new Date().toISOString()
       })
@@ -148,7 +145,6 @@ function normalizeStoredProfile(value: unknown): IntelligenceSourceProfile | nul
     enabled: Boolean(candidate.enabled),
     credentialRef: candidate.credentialRef ? String(candidate.credentialRef) : undefined,
     collectionPreset: candidate.collectionPreset ?? 'balanced',
-    includeInSentiment: Boolean(candidate.includeInSentiment),
     scopePolicy: candidate.scopePolicy ?? 'watchlist-priority',
     rawArchiveEnabled: Boolean(candidate.rawArchiveEnabled),
     retentionMode: candidate.retentionMode ?? 'balanced',
@@ -173,7 +169,6 @@ function createCalendarSourceProfile(sourceId: string): IntelligenceSourceProfil
     sourceId,
     enabled: false,
     collectionPreset: 'manual',
-    includeInSentiment: false,
     scopePolicy: 'all',
     rawArchiveEnabled: false,
     retentionMode: 'balanced',

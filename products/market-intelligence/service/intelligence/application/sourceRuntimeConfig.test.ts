@@ -22,17 +22,15 @@ describe('sourceRuntimeConfig', () => {
     expect(config.scopePolicy).toBe('watchlist-priority')
     expect(config.retentionMode).toBe('balanced')
     expect(config.rawArchiveEnabled).toBe(true)
-    expect(config.includeInSentiment).toBe(true)
     expect(config.pollingIntervalSec).toBe(15 * 60)
   })
 
-  it('applies profile overrides for enabled, preset, sentiment, scope, and retention', () => {
+  it('applies profile overrides for enabled, preset, scope, and retention', () => {
     const definition = requireDefinition('sec-rss')
     const profile = {
       ...createDefaultSourceProfile(definition),
       enabled: true,
       collectionPreset: 'frequent' as const,
-      includeInSentiment: false,
       scopePolicy: 'watchlist-priority' as const,
       retentionMode: 'extended' as const,
       rawArchiveEnabled: false
@@ -42,7 +40,6 @@ describe('sourceRuntimeConfig', () => {
 
     expect(config.enabled).toBe(true)
     expect(config.collectionPreset).toBe('frequent')
-    expect(config.includeInSentiment).toBe(false)
     expect(config.scopePolicy).toBe('watchlist-priority')
     expect(config.retentionMode).toBe('extended')
     expect(config.rawArchiveEnabled).toBe(false)
@@ -85,31 +82,16 @@ describe('sourceRuntimeConfig', () => {
     expect(credentialIncomplete.pollingIntervalSec).toBeUndefined()
   })
 
-  it('forces includeInSentiment false when definition does not support sentiment', () => {
-    const definition = requireDefinition('github-releases')
-    const config = resolveRuntimeConfig({
-      definition,
-      profile: {
-        ...createDefaultSourceProfile(definition),
-        includeInSentiment: true
-      }
-    })
-
-    expect(config.includeInSentiment).toBe(false)
-    expect(config.sentimentEligible).toBe(false)
-  })
-
   it('does not interpret generic raw archive, retention, or replay profile values for the special stablecoin collector', () => {
     const definition = requireDefinition('defillama-stablecoins')
     const config = resolveRuntimeConfig({
       definition,
       profile: {
         ...createDefaultSourceProfile(definition), enabled: true, rawArchiveEnabled: true,
-        retentionMode: 'extended', autoReplayAfterParserUpgrade: true, includeInSentiment: true
+        retentionMode: 'extended', autoReplayAfterParserUpgrade: true
       }
     })
 
-    expect(config.includeInSentiment).toBe(false)
     expect(config.rawArchiveEnabled).toBe(false)
     expect(config.autoReplayAfterParserUpgrade).toBe(false)
   })

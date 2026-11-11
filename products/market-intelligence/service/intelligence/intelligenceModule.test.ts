@@ -91,7 +91,7 @@ describe('intelligence module calendar evidence composition', () => {
     await mkdir(dataDir, { recursive: true })
     await writeFile(join(dataDir, 'intelligence-source-profiles.json'), JSON.stringify([{
       profileId: '0xrouter-profile', sourceId: '0xrouter-aggregate-provider', enabled: true,
-      credentialRef: '0xrouter-aggregate-provider-credentials', collectionPreset: 'balanced', includeInSentiment: false,
+      credentialRef: '0xrouter-aggregate-provider-credentials', collectionPreset: 'balanced',
       scopePolicy: 'all', rawArchiveEnabled: false, retentionMode: 'balanced', autoReplayAfterParserUpgrade: false,
       updatedAt: '2026-08-31T00:00:00.000Z'
     }]), 'utf8')
@@ -144,7 +144,7 @@ describe('intelligence module calendar evidence composition', () => {
     const dataDir = join(testUserData, 'products', 'market-intelligence')
     await writeFile(join(dataDir, 'intelligence-source-profiles.json'), JSON.stringify([{
       profileId: 'alternative-profile', sourceId: 'alternative-fear-greed', enabled: true,
-      collectionPreset: 'balanced', includeInSentiment: false, scopePolicy: 'all', rawArchiveEnabled: false,
+      collectionPreset: 'balanced', scopePolicy: 'all', rawArchiveEnabled: false,
       retentionMode: 'balanced', autoReplayAfterParserUpgrade: false, updatedAt: '2026-08-24T03:20:00.000Z'
     }]), 'utf8')
     const jobRuntime = createJobRuntime()
@@ -182,7 +182,7 @@ describe('intelligence module calendar evidence composition', () => {
     const dataDir = join(testUserData, 'products', 'market-intelligence')
     await writeFile(join(dataDir, 'intelligence-source-profiles.json'), JSON.stringify([{
       profileId: 'alternative-profile', sourceId: 'alternative-fear-greed', enabled: true,
-      collectionPreset: 'balanced', includeInSentiment: false, scopePolicy: 'all', rawArchiveEnabled: false,
+      collectionPreset: 'balanced', scopePolicy: 'all', rawArchiveEnabled: false,
       retentionMode: 'balanced', autoReplayAfterParserUpgrade: false, updatedAt: '2026-08-24T03:20:00.000Z'
     }]), 'utf8')
     vi.useFakeTimers()
@@ -219,7 +219,7 @@ describe('intelligence module calendar evidence composition', () => {
     const dataDir = join(testUserData, 'products', 'market-intelligence')
     await writeFile(join(dataDir, 'intelligence-source-profiles.json'), JSON.stringify([{
       profileId: 'alternative-profile', sourceId: 'alternative-fear-greed', enabled: true,
-      collectionPreset: 'balanced', includeInSentiment: false, scopePolicy: 'all', rawArchiveEnabled: false,
+      collectionPreset: 'balanced', scopePolicy: 'all', rawArchiveEnabled: false,
       retentionMode: 'balanced', autoReplayAfterParserUpgrade: false, updatedAt: '2026-08-24T03:20:00.000Z'
     }]), 'utf8')
     const jobRuntime = createJobRuntime()
@@ -246,7 +246,7 @@ describe('intelligence module calendar evidence composition', () => {
     await mkdir(dataDir, { recursive: true })
     await writeFile(join(dataDir, 'intelligence-source-profiles.json'), JSON.stringify([{
       profileId: 'alternative-profile', sourceId: 'alternative-fear-greed', enabled: true,
-      collectionPreset: 'balanced', includeInSentiment: false, scopePolicy: 'all', rawArchiveEnabled: false,
+      collectionPreset: 'balanced', scopePolicy: 'all', rawArchiveEnabled: false,
       retentionMode: 'balanced', autoReplayAfterParserUpgrade: false, updatedAt: '2026-08-19T00:00:00.000Z'
     }]), 'utf8')
     const jobRuntime = createJobRuntime()
@@ -269,7 +269,7 @@ describe('intelligence module calendar evidence composition', () => {
     await mkdir(dataDir, { recursive: true })
     await writeFile(join(dataDir, 'intelligence-source-profiles.json'), JSON.stringify([{
       profileId: 'defillama-stablecoins-profile', sourceId: 'defillama-stablecoins', enabled: true,
-      collectionPreset: 'balanced', includeInSentiment: false, scopePolicy: 'all', rawArchiveEnabled: false,
+      collectionPreset: 'balanced', scopePolicy: 'all', rawArchiveEnabled: false,
       retentionMode: 'balanced', autoReplayAfterParserUpgrade: false, updatedAt: '2026-08-19T00:00:00.000Z'
     }]), 'utf8')
     const platformFetch = vi.fn(async (endpoint: string) => new Response(JSON.stringify(endpoint.includes('stablecoincharts') ? moduleHistoryPayload() : { peggedAssets: [
@@ -291,7 +291,7 @@ describe('intelligence module calendar evidence composition', () => {
     await mkdir(dataDir, { recursive: true })
     await writeFile(join(dataDir, 'intelligence-source-profiles.json'), JSON.stringify([{
       profileId: 'defillama-stablecoins-profile', sourceId: 'defillama-stablecoins', enabled: true,
-      collectionPreset: 'manual', includeInSentiment: false, scopePolicy: 'all', rawArchiveEnabled: false,
+      collectionPreset: 'manual', scopePolicy: 'all', rawArchiveEnabled: false,
       retentionMode: 'balanced', autoReplayAfterParserUpgrade: false, updatedAt: '2026-08-18T00:00:00.000Z'
     }]), 'utf8')
     const platformFetch = vi.fn(async (endpoint: string) => new Response(JSON.stringify(endpoint.includes('stablecoincharts') ? moduleHistoryPayload() : { peggedAssets: [

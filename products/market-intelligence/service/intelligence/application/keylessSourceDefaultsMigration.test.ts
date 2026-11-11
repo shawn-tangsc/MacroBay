@@ -34,7 +34,7 @@ afterEach(() => {
 function profile(sourceId: string, enabled: boolean): IntelligenceSourceProfile {
   return {
     profileId: `${sourceId}-profile`, sourceId, enabled, collectionPreset: 'balanced',
-    includeInSentiment: false, scopePolicy: 'all', rawArchiveEnabled: true, retentionMode: 'balanced',
+    scopePolicy: 'all', rawArchiveEnabled: true, retentionMode: 'balanced',
     autoReplayAfterParserUpgrade: true, updatedAt: '2026-01-01T00:00:00.000Z'
   }
 }

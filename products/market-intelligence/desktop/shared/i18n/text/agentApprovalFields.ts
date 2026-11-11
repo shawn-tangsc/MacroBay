@@ -13,7 +13,6 @@ export const marketIntelligenceAgentApprovalFieldLabels = {
     action: { 'zh-CN': '动作', 'en-US': 'Action' },
     sourceId: { 'zh-CN': '情报源', 'en-US': 'Source' },
     collectionPreset: { 'zh-CN': '采集节奏', 'en-US': 'Collection preset' },
-    includeInSentiment: { 'zh-CN': '计入情绪', 'en-US': 'Include in sentiment' },
   },
   operate_intelligence_source: {
     action: { 'zh-CN': '动作', 'en-US': 'Action' },

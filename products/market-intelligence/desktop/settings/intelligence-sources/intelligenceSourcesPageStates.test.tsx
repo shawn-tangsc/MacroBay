@@ -159,7 +159,6 @@ describe('sources settings page states', () => {
           autoReplayAfterParserUpgrade: false,
           collectionPreset: 'balanced',
           enabled: true,
-          includeInSentiment: true,
           profileId: 'profile-s1',
           rawArchiveEnabled: false,
           retentionMode: 'balanced',

@@ -376,11 +376,7 @@ function buildFearGreedStatus(
   const health = pipeline.getHealth(FEAR_GREED_SOURCE_ID)
   const runtimeStatus = resolveSourceFreshnessStatus(enabled, health)
   const latestMetric = findLatestFearGreedMetric(pipeline.listMetricEvents())
-  const includedInAggregate = isFearGreedIncludedInAggregate({
-    pipeline,
-    profile,
-    effectiveRows
-  })
+  const includedInAggregate = isFearGreedIncludedInAggregate({ pipeline, effectiveRows })
 
   let state: IntelligenceFearGreedState = 'not-collected'
   if (latestMetric) {
@@ -406,10 +402,9 @@ function buildFearGreedStatus(
 
 function isFearGreedIncludedInAggregate(input: {
   pipeline: IntelligencePipeline
-  profile?: IntelligenceSourceProfile
   effectiveRows: IntelligenceSentimentAggregateRow[]
 }): boolean {
-  if (!input.profile?.includeInSentiment || input.effectiveRows.length === 0) {
+  if (input.effectiveRows.length === 0) {
     return false
   }
 
