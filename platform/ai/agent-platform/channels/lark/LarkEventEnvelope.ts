@@ -33,6 +33,17 @@ export type LarkMessageRead =
 export function readLarkMessageEvent(event: LarkLongConnectionEvent): LarkMessageRead {
   if (event.eventType !== 'im.message.receive_v1') return { kind: 'ignored' }
   const payload = event.payload as {
+    /** SDK 摊平后的真实形状：sender/message 直接在顶层。 */
+    sender?: { sender_type?: unknown; sender_id?: { open_id?: unknown; user_id?: unknown } }
+    message?: {
+      message_id?: unknown
+      chat_id?: unknown
+      chat_type?: unknown
+      message_type?: unknown
+      content?: unknown
+      mentions?: unknown
+      thread_id?: unknown
+    }
     event?: {
       sender?: { sender_type?: unknown; sender_id?: { open_id?: unknown; user_id?: unknown } }
       message?: {
@@ -46,8 +57,9 @@ export function readLarkMessageEvent(event: LarkLongConnectionEvent): LarkMessag
       }
     }
   } | null
-  const message = payload?.event?.message
-  const sender = payload?.event?.sender
+  // 顶层优先（SDK 摊平形状），嵌套兜底（webhook 形态与既有用例）。
+  const message = payload?.message ?? payload?.event?.message
+  const sender = payload?.sender ?? payload?.event?.sender
   // 机器人自己发出去的那条也会被推回来：忽略，且不记成坏帧。
   if (sender?.sender_type === 'app') return { kind: 'ignored' }
   const eventId = identifier(event.eventId)

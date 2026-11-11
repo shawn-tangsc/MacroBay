@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { readLarkMessageEvent, type LarkMessageSeam } from './LarkEventEnvelope'
-import type { LarkLongConnectionEvent } from './LarkLongConnectionClient'
+import { toLongConnectionEvent, type LarkLongConnectionEvent } from './LarkLongConnectionClient'
 
 /**
  * 飞书消息事件 → 有界形状。判据：去重键来自 header.event_id、自己发的不回、
@@ -78,6 +78,42 @@ describe('lark message event mapping', () => {
     expect(seam.text).toBeUndefined()
     expect(seam.attachments).toEqual([{ kind: 'image', file_key: 'img_v2_abc', mime_type: 'image/*' }])
     expect(JSON.stringify(seam)).not.toContain('http')
+  })
+
+  it('reads the flattened schema-2.0 shape the SDK actually delivers', () => {
+    // SDK 的 `RequestHandle.parse()` 把 `header` 与 `event` 摊平再交给 handler：
+    // 真实到达的是 `{schema, event_id, event_type, sender, message}`，没有 header/event 两层。
+    const flattened = {
+      schema: '2.0',
+      event_id: 'evt-flat-1',
+      event_type: 'im.message.receive_v1',
+      create_time: '1760000000000',
+      token: 'v2-token',
+      app_id: 'cli_x',
+      tenant_key: 'tenant_x',
+      sender: { sender_type: 'user', sender_id: { open_id: 'ou_1' } },
+      message: { message_id: 'om_1', chat_id: 'oc_1', chat_type: 'p2p', message_type: 'text', content: '{"text":"你好"}' }
+    }
+    const event = toLongConnectionEvent(flattened)
+    expect(event.eventId).toBe('evt-flat-1')
+    expect(event.eventType).toBe('im.message.receive_v1')
+
+    const read = readLarkMessageEvent(event)
+    expect(read.kind).toBe('message')
+    if (read.kind !== 'message') throw new Error('expected a message seam')
+    expect(read.seam.chat_type).toBe('p2p')
+    expect(read.seam.text).toBe('你好')
+  })
+
+  it('still refuses a flattened shape that has no event id', () => {
+    const event = toLongConnectionEvent({
+      schema: '2.0',
+      event_type: 'im.message.receive_v1',
+      sender: { sender_type: 'user', sender_id: { open_id: 'ou_1' } },
+      message: { message_id: 'om_1', chat_id: 'oc_1', chat_type: 'p2p', message_type: 'text', content: '{"text":"你好"}' }
+    })
+    expect(event.eventId).toBe('')
+    expect(readLarkMessageEvent(event).kind).toBe('invalid')
   })
 
   it('refuses a payload without a usable event id, chat id or sender', () => {

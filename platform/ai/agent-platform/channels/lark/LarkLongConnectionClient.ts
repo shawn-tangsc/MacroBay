@@ -228,12 +228,27 @@ function createDispatcher(onEvent: (event: LarkLongConnectionEvent) => Promise<v
 
 /** SDK 事件体 → 我们自己的形状。读不出来的字段留空，解释在归一化那一层。 */
 export function toLongConnectionEvent(payload: unknown): LarkLongConnectionEvent {
-  const record = (payload ?? {}) as { event?: { event_id?: unknown; type?: unknown }; header?: { event_id?: unknown; event_type?: unknown } }
-  const eventId = typeof record.header?.event_id === 'string'
-    ? record.header.event_id
-    : typeof record.event?.event_id === 'string' ? record.event.event_id : ''
-  const eventType = typeof record.header?.event_type === 'string'
-    ? record.header.event_type
-    : typeof record.event?.type === 'string' ? record.event.type : 'im.message.receive_v1'
+  const record = (payload ?? {}) as {
+    /** SDK 摊平后的真实形状：schema 2.0 的 header 与 event 已被摊到顶层。 */
+    event_id?: unknown
+    event_type?: unknown
+    event?: { event_id?: unknown; type?: unknown }
+    /** webhook / 既有用例的嵌套形状。 */
+    header?: { event_id?: unknown; event_type?: unknown }
+  }
+  // 顶层优先：`RequestHandle.parse()` 对 schema 2.0 做的是
+  // `{...rest, ...header, ...event}`——handler 收到的没有 header/event 两层。
+  const eventId = typeof record.event_id === 'string'
+    ? record.event_id
+    : typeof record.header?.event_id === 'string'
+      ? record.header.event_id
+      : typeof record.event?.event_id === 'string' ? record.event.event_id : ''
+  // eventType 取不到就是空串：以前这里硬编码 `im.message.receive_v1`，诊断行看着「有事件」，
+  // 实际是写死的兜底——宁可显示 unknown，也不许让诊断说假话。
+  const eventType = typeof record.event_type === 'string'
+    ? record.event_type
+    : typeof record.header?.event_type === 'string'
+      ? record.header.event_type
+      : typeof record.event?.type === 'string' ? record.event.type : ''
   return Object.freeze({ eventId, eventType, payload })
 }
