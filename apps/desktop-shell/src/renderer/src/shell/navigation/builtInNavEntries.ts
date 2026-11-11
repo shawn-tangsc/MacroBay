@@ -80,20 +80,28 @@ export interface BuiltInSettingsPanel {
   label: string
   icon: LucideIcon
   group: BuiltInSettingsGroup
+  /**
+   * 这一页的功能要连外网（供应商接口、搜索接口、平台网关）：左导航在页名后挂一个小 `VPN` 标签，
+   * 让「为什么这页连不上」在点进去之前就有一个可查的答案。
+   *
+   * 只标**整页都依赖出网**的三页；通知中心、助手库、存储、任务自动化、基础设置、关于我们都是本地的，
+   * 标上会把标签变成装饰。判定依据是这一页唯一的读者动作要不要出网，不是「有没有网络请求」。
+   */
+  requiresProxy?: true
 }
 
 /** Settings 的**二级**面板：只出现在 Settings 分组内，绝不升级为一级菜单页（技术设计 §3.3）。 */
 export function createBuiltInSettingsPanels(language: AppLanguage): BuiltInSettingsPanel[] {
   const t = platformText[language]
   return [
-    { id: 'models', label: t.settings.modelService, icon: KeyRound, group: 'models' },
+    { id: 'models', label: t.settings.modelService, icon: KeyRound, group: 'models', requiresProxy: true },
     { id: 'assistant-library', label: t.settings.assistantLibrary, icon: Bot, group: 'models' },
-    { id: 'web-search', label: t.settings.webSearch, icon: Globe2, group: 'system' },
+    { id: 'web-search', label: t.settings.webSearch, icon: Globe2, group: 'system', requiresProxy: true },
     { id: 'storage-cache', label: t.settings.storageAndCache, icon: Database, group: 'system' },
     { id: 'task-automation', label: t.settings.taskAutomation, icon: ListChecks, group: 'system' },
     { id: 'preferences', label: t.settings.basicSettings, icon: Languages, group: 'other' },
     { id: 'notifications', label: t.settings.notifications, icon: Bell, group: 'notify' },
-    { id: 'channels', label: t.settings.channels, icon: MessagesSquare, group: 'notify' },
+    { id: 'channels', label: t.settings.channels, icon: MessagesSquare, group: 'notify', requiresProxy: true },
     // 「关于我们」放在最后：它是最不像「设置」的一页，放前面会把配置区切碎。
     { id: 'about', label: t.about.title, icon: Info, group: 'other' }
   ]

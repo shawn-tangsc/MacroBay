@@ -259,11 +259,37 @@ button {
   color: var(--text-strong);
 }
 
-.settings-nav-item span {
+.settings-nav-item > span:not(.settings-nav-tag) {
   min-width: 0;
   overflow: hidden;
   font-size: 12px;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * 「这一页要连外网」的小标签：跟在页名后面、比页名小一档，垂直居中靠父行的 `align-items: center`。
+ *
+ * 三条来自读者 2026-11-12 的原始要求：小一点、紧跟在名字后面、别忘居中；颜色定黄色
+ * （`--caution`，两套主题各一份，浅色下自动换成深一档的同一色相，不另写第二套黄）。
+ * - 字号用 `em` 而不是新的 `px` 字面量（`check:font-size-literals` 只降不升，不开口子）；
+ * - 图标与页名之间是 11px 的 `gap`，标签要贴住名字，所以自己往回收 5px，而不是把整行的 gap 改小；
+ * - `flex: none` + `white-space: nowrap`：页名再长也只会压缩页名（省略号），标签不被压变形。
+ */
+.settings-nav-item .settings-nav-tag {
+  flex: none;
+  align-self: center;
+  margin-left: -5px;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--caution) 46%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--caution) 14%, transparent);
+  color: var(--caution);
+  font-size: 0.75em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 

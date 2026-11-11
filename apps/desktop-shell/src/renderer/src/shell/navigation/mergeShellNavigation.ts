@@ -45,6 +45,8 @@ export interface ShellSettingsPanelItem {
   kind: 'built-in' | 'product'
   productId?: string
   productName?: string
+  /** 整页功能依赖出网时带这个键：左导航在页名后挂一个小 `VPN` 标签。产品页暂不声明。 */
+  requiresProxy?: true
 }
 
 export interface ShellSettingsNavGroup {
@@ -148,7 +150,8 @@ export function groupShellSettingsPanels(
         key: panel.id,
         label: panel.label,
         icon: panel.icon,
-        kind: 'built-in'
+        kind: 'built-in',
+        ...(panel.requiresProxy === true ? { requiresProxy: true as const } : {})
       }))
   })).filter((group) => group.panels.length > 0)
 
