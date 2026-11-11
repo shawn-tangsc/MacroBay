@@ -19,9 +19,17 @@ import { channelAdapterKeys, type ChannelAdapterKey } from './ChannelManagementP
 
 const retained = new Map<ChannelAdapterKey, number>()
 
+/**
+ * 存储类型与适配器键**不是一套词**：飞书的行类型是 `feishu`，而库里 `adapter_key` 是 `lark`
+ * （生成列 `case when type='feishu' then 'lark'`）。放行按**适配器键**记，所以这里必须做这一步映射——
+ * 少这一步，`retainChannelAcceptance('feishu')` 静默返回 `null`，启用最后一跳查不到放行，
+ * 就会对已经通过自检的飞书通道回 `adapter-not-supported`（用户 2026-11-11 报的那条）。
+ */
 function normalize(value: string | null | undefined): ChannelAdapterKey | null {
   const key = value?.trim() ?? ''
-  return (channelAdapterKeys as readonly string[]).includes(key) ? key as ChannelAdapterKey : null
+  if ((channelAdapterKeys as readonly string[]).includes(key)) return key as ChannelAdapterKey
+  if (key === 'feishu') return 'lark'
+  return null
 }
 
 function sqlList(keys: readonly ChannelAdapterKey[]): string {
