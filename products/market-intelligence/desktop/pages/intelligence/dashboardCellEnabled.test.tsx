@@ -204,12 +204,14 @@ describe('格级启用表跟随同窗口的设置变更', () => {
     expect(reads.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('never runs two reads at once (one round in flight, the rest coalesce)', async () => {
+  it('never runs two reads at once (one round in flight, the rest coalesce into one more)', async () => {
     let inFlight = 0
     let maxInFlight = 0
+    let started = 0
     let release: (() => void) | undefined
     const io: CellEnabledIo = {
       read: () => new Promise<Record<string, boolean>>((resolve) => {
+        started += 1
         inFlight += 1
         maxInFlight = Math.max(maxInFlight, inFlight)
         release = () => { inFlight -= 1; resolve({}) }
@@ -222,5 +224,8 @@ describe('格级启用表跟随同窗口的设置变更', () => {
     expect(maxInFlight).toBe(1)
     await act(async () => { release?.(); await Promise.resolve(); await Promise.resolve() })
     expect(maxInFlight).toBe(1)
+    // 两条信号排队后**补读了恰好一轮**（首读 1 + 补读 1）：只断言「没有并发」会被
+    // 「根本不重读」蒙混过去——摘掉订阅那一次它照样绿，那就不叫判据。
+    expect(started).toBe(2)
   })
 })
