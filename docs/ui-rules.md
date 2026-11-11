@@ -27,6 +27,7 @@
 
 **A card-level action lives only on the title row (2026-11-11).** If any source a card depends on is unconfigured or unreadable, the action (enable source / retry) sits on the **right of the card title row**; the body only names the missing cell and never repeats the action. **One action, one entry per screen.**
 Criterion: any source unconfigured → the title row has it; everything configured → no action; count of that action on the screen = 1.
+**Exception:** when **none** of the sources a card depends on is configured, the action moves into the content-area veil, centred; the title row carries no action and the card still holds exactly one entry. Criterion: with nothing configured the card has exactly one focusable element and no title-row action.
 
 ## 2. Type and weight
 
