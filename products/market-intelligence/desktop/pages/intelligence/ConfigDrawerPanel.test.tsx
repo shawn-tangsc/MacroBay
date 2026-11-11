@@ -63,16 +63,34 @@ describe('configuration drawer panels keep their own failure inside the drawer',
 
   it('wraps every screen the drawer receives, one boundary per screen', () => {
     // 一屏一层：少了任何一层，那一屏的崩溃就会落到外层（主列顶端）。
-    const screens: ReadonlyArray<[string, ConfigDrawerScreen]> = [
-      ['analysisPanel', 'analysis'],
-      ['briefingPanel', 'briefing'],
-      ['processingPanel', 'processing'],
-      ['runLogPanel', 'run-log'],
-      ['notificationsPanel', 'notifications'],
-      ['sourcesPanel', 'sources']
+    //
+    // 判据按**今天真实的接线形状**写：2026-11-11 起 `sourcesPanel` / `sourcesDataPanel` 是回调
+    // （`(nav) => …`），因为抽屉内部导航要把定位交给那一屏；其余五屏仍是节点。所以这里用正则
+    // 允许两种形状，仍钉住「这个 prop 的值就是它自己的那层边界」——而不是把断言删掉或放宽成
+    // 「文件里出现过 ConfigDrawerPanel」。
+    /*
+      形状是**逐屏钉住**的，不是「两种都行」：
+      - 来源两屏是回调（`(nav) => …`），抽屉内部导航靠它把定位交下去；谁把它改回节点形状，
+        那条「点源名只在抽屉里换菜单」就断了，所以这里必须红；
+      - 其余五屏是节点。
+      两边都钉住，才既保住「每屏一层边界」又保住「两屏收抽屉给的导航」。
+    */
+    const screens: ReadonlyArray<[string, ConfigDrawerScreen, 'callback' | 'node']> = [
+      ['analysisPanel', 'analysis', 'node'],
+      ['briefingPanel', 'briefing', 'node'],
+      ['processingPanel', 'processing', 'node'],
+      ['runLogPanel', 'run-log', 'node'],
+      ['notificationsPanel', 'notifications', 'node'],
+      ['sourcesPanel', 'sources', 'callback'],
+      ['sourcesDataPanel', 'sourcesData', 'callback']
     ]
-    for (const [prop, screen] of screens) {
-      expect(dashboard, prop).toContain(`${prop}={<ConfigDrawerPanel screen="${screen}">`)
+    for (const [prop, screen, shape] of screens) {
+      const wired = shape === 'callback'
+        ? new RegExp(`${prop}=\\{\\(nav\\) => <ConfigDrawerPanel screen="${screen}">`, 'u')
+        : new RegExp(`${prop}=\\{<ConfigDrawerPanel screen="${screen}">`, 'u')
+      expect(dashboard, prop).toMatch(wired)
     }
+    // 反向：边界不多也不少——每一层都是某个屏自己的。
+    expect(dashboard.match(/ConfigDrawerPanel screen=/gu) ?? []).toHaveLength(screens.length)
   })
 })
