@@ -1,12 +1,12 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { REQUIRED_ASSETS, collectAssets, planPublish } from './publish-release.mts'
+import { REQUIRED_ASSETS, collectAssets, planPublish, releaseCommands } from './publish-release.mts'
 
 /**
  * 发布作业的自测：**不发布**也要能证明「它取的东西都在」。
@@ -118,6 +118,30 @@ describe('publish plan', () => {
     expect(fresh).toContain('gh release create v0.4.3')
     expect(fresh).toContain('--notes-file /dev/null')
     expect(fresh).toContain('--verify-tag')
+  })
+
+  /* 0.4.3 第一次真标签红在 `gh release create ... latest-mac.yml`：命令里只有裸文件名，
+     而这些文件在 `--dist` 目录里，发布作业又从仓库根跑——于是 `no matches found` 退 1。
+     上面那条用例当时是绿的，因为它只比较字符串。这条改成**逐个打开**命令里的每个附件：
+     名字对、但文件打不开，就是红。 */
+  it('points every uploaded file at a path that can actually be opened', () => {
+    const distDir = distWith(REQUIRED_ASSETS)
+    const plan = planPublish({ distDir, tag: 'v0.4.3' })
+
+    for (const exists of [false, true]) {
+      const [command] = releaseCommands(plan, { exists })
+      const files = command.slice(Math.max(command.indexOf('--verify-tag'), command.indexOf('--clobber')) + 1)
+      expect(files, 'every required asset must be passed').toHaveLength(REQUIRED_ASSETS.length)
+      for (const file of files) expect(existsSync(file), `cannot open ${file}`).toBe(true)
+    }
+  })
+
+  /* `--self-test` 是发布作业在 `workflow_dispatch` 里的自检入口，但此前**没有任何地方跑它**：
+     它自己坏了也不会有人知道。这里让每次 `npm test` 都真跑一遍——齐了能计划、缺件报得出名字。 */
+  it('runs its own self-test: a complete dist plans, a missing asset is named', () => {
+    const out = execFileSync(process.execPath, [SCRIPT, '--self-test'], { encoding: 'utf8' })
+    expect(out).toContain('publish self-test OK')
+    expect(out).toContain('a missing asset is reported by name')
   })
 })
 
