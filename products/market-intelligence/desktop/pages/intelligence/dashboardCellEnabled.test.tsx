@@ -98,7 +98,9 @@ describe('dashboard cells read only when the reader left them on', () => {
     // ① 纳指那一行改成「数据未被启用」的状态行（不是删行），同源的 BTC/ETH 两格照旧。
     const indexRow = off.container.querySelector('[data-status-row="index"]')!
     expect(indexRow.getAttribute('data-source-state')).toBe('disabled')
-    expect(indexRow.textContent).toContain('数据未被启用')
+    // 行级也点名了（2026-11-12）：格关了报格名（纳指），不再是笼统的「数据未被启用」。
+    expect(indexRow.textContent).toContain('纳指')
+    expect(indexRow.textContent).not.toContain('数据未被启用')
     expect(off.container.querySelector('[data-status-row="btc"]')).not.toBeNull()
     expect(off.container.querySelector('[data-status-row="eth"]')).not.toBeNull()
     // ② 关掉一格不等于关掉源：跨资产那一路的调用次数与不关时相同（BTC/ETH 仍要它）。

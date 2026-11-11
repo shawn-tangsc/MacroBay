@@ -10,6 +10,16 @@ import type { CellReadDecision } from './dashboardCellEnabled'
  *
  * 返回 `undefined` 表示「这一格不需要说没启用」，落点动作由宿主补（它才知道抽屉怎么开）。
  */
+/** 一格「不能用」时的那句话素材；返回 undefined 表示这一格不需要这句（读到 / 源状态未知）。 */
+export function cellOffFor(input: Readonly<{
+  decision: CellReadDecision
+  cellLabel: string | undefined
+  sourceName: (sourceId: string) => string
+}>): Readonly<{ sourceLabel: string }> | undefined {
+  const label = cellOffLabel(input)
+  return label === undefined ? undefined : { sourceLabel: label }
+}
+
 export function cellOffLabel(input: Readonly<{
   decision: CellReadDecision
   cellLabel: string | undefined

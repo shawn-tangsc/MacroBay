@@ -67,8 +67,8 @@ import { PolicyPathSlot } from './PolicyPathSlot'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
-import { cellOffLabel } from './dashboardCellOff'
-import { QUOTES_ROW_CELL_KEYS, quotesRowStates } from './dashboardQuotesRows'
+import { cellOffFor } from './dashboardCellOff'
+import { QUOTES_ROW_CELL_KEYS, quoteRowPresentation } from './dashboardQuotesRows'
 import { useDataChangeRevision } from './useDataChangeRevision'
 
 /**
@@ -199,16 +199,14 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     moduleId: 'capital' | 'fear-greed',
     cellKey: string
   ): { sourceLabel: string; onOpenSources: () => void } | undefined => {
-    const sourceLabel = cellOffLabel({
+    const off = cellOffFor({
       decision: decide(moduleId, cellKey),
       cellLabel: cellLabel(moduleId, cellKey),
       sourceName: (sourceId) => resolveProductKey(`settings.intelligenceSources.sourceNames.${sourceId}`)
     })
-    if (sourceLabel === undefined) return undefined
-    return {
-      sourceLabel,
-      onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: moduleId, cellId: dashboardCellId(moduleId, cellKey) })
-    }
+    return off === undefined
+      ? undefined
+      : { ...off, onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: moduleId, cellId: dashboardCellId(moduleId, cellKey) }) }
   }
   /** 资金面两格各一颗「去启用」：**两个独立闭包**，读者点哪一格就落到哪一格。 */
   const capitalCellOff = (cellKey: string): DashboardCapitalCellOff | undefined => cellOffOf('capital', cellKey)
@@ -219,7 +217,12 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 情绪卡那一格不能用：卡仍在，遮罩说清是「这一格没启用」还是「这个源没启用」。
   const fearGreedCellOff = cellOffOf('fear-greed', 'index')
   // 市场状态表每一行：读不到 / 未启用就画状态行（不是删行）。
-  const rowStates = quotesRowStates({ decisionsUsable, decide })
+  const { rowStates, rowStateLabels } = quoteRowPresentation({
+    decisionsUsable,
+    decide,
+    cellLabel: (row) => cellLabel('quotes', QUOTES_ROW_CELL_KEYS[row]),
+    sourceName: (sourceId) => resolveProductKey(`settings.intelligenceSources.sourceNames.${sourceId}`)
+  })
   const firstDisabledQuotesCell = Object.entries(QUOTES_ROW_CELL_KEYS).find(([row]) => rowStates[row as keyof typeof QUOTES_ROW_CELL_KEYS] === 'disabled')
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now, revision: dataRevision })
@@ -423,6 +426,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {crossAssetClient ? <CrossAssetObservationPanel
         client={crossAssetClient}
         rowStates={rowStates}
+        rowStateLabels={rowStateLabels}
         sourceStatusStale={feedView.feedStale && feedView.feedLastSuccessAtMs !== undefined
           ? text.cellState.sourceStale.replace('{time}', formatTime(new Date(feedView.feedLastSuccessAtMs).toISOString()))
           : undefined}

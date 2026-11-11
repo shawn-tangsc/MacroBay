@@ -130,7 +130,7 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>
 }
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
@@ -154,6 +154,11 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   hideStatusRows?: readonly CrossAssetStatusId[]
   /** 每行现在的三态：有值就画状态行（不是删行）；没有就画数据行。 */
   rowStates?: Readonly<Partial<Record<CrossAssetStatusId, CellStateKind>>>
+  /**
+   * 状态行里那句「没启用 / 读不到」要点名时用（2026-11-12）：`source-disabled` 报**源名**、
+   * `not-enabled` 报**格名**；缺省仍走 `cellStateLabels` 那两句笼统话。
+   */
+  rowStateLabels?: Readonly<Partial<Record<CrossAssetStatusId, string>>>
   /** 三态那两句由宿主传（跨资产自己的文案表里没有它们，别在这里造第二份）。 */
   cellStateLabels?: Readonly<{ disabled: string; unreadable: string }>
   /** 源状态表是上一次成功的读数（读失败但有 last-good）；只作短状态词，说明不铺正文。 */
@@ -262,7 +267,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         <td className="mi-cross-asset__state-cell" colSpan={1 + crossAssetWindows.length}>
           <span className="mi-source-state" data-state={state}>
             <StateIcon aria-hidden="true" className="mi-source-state__icon" size={14} />
-            {state === 'unreadable' ? cellStateLabels!.unreadable : cellStateLabels!.disabled}
+            {rowStateLabels?.[row.id] ?? (state === 'unreadable' ? cellStateLabels!.unreadable : cellStateLabels!.disabled)}
           </span>
         </td>
       </tr>

@@ -1115,6 +1115,52 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(card.textContent).not.toContain(dashboardText.fearGreed.loading)
   })
 
+  /** 市场状态表逐行也要点名（2026-11-12 第二处残留）：源关了说源，格关了说格。 */
+  it('market status rows name the source when it is off, and the cell when the cell is off', async () => {
+    const sourceOff = await renderCells({}, {
+      crossAssetClient: {
+        acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
+        renew: async () => ({ state: 'active' as const }),
+        release: async () => undefined,
+        refresh: vi.fn(async () => ({ state: 'accepted' as const })),
+        query: async () => ({ state: 'unavailable' as const, cause: 'query' as const })
+      },
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: false, hasCredential: true },
+        { sourceId: 'realmarketapi-market' as const, enabled: true, hasCredential: true },
+        { sourceId: 'fred-rates-liquidity' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(sourceOff, '[data-status-row="btc"] [data-source-state]')
+    const btcRow = sourceOff.querySelector('[data-status-row="btc"]')!
+    // 源关了：这一行报**源名**（Binance 合约持仓），不是笼统的「数据未被启用」。
+    expect(btcRow.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['binance-futures-positioning'])
+    expect(btcRow.textContent).not.toBe(dashboardText.cellState.notEnabled)
+
+    const cellOff = await renderCells({ 'quotes:btc': false }, {
+      crossAssetClient: {
+        acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
+        renew: async () => ({ state: 'active' as const }),
+        release: async () => undefined,
+        refresh: vi.fn(async () => ({ state: 'accepted' as const })),
+        query: async () => ({ state: 'unavailable' as const, cause: 'query' as const })
+      },
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: true, hasCredential: true },
+        { sourceId: 'realmarketapi-market' as const, enabled: true, hasCredential: true },
+        { sourceId: 'fred-rates-liquidity' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    // 格关了：这一行说**这一格**（格名 BTC），不说成源的问题。
+    const offRow = cellOff.querySelector('[data-status-row="btc"]')
+    if (offRow !== null) {
+      expect(offRow.textContent).not.toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['binance-futures-positioning'])
+      expect(offRow.getAttribute('data-source-state')).toBe('disabled')
+    }
+  })
+
   /** 政策路径：两条硬依赖，逐支点名（2026-11-12 架构师批的双格形状）。 */
   const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-policy-card')!
   const policySentence = (container: HTMLElement): string =>
@@ -1128,6 +1174,19 @@ describe('host wiring: cells switched off and sources judged', () => {
     { sourceId: 'macro-calendar-fed' as const, enabled: true, hasCredential: true },
     { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
   ] }) }
+
+  it('policy path: both cells on but the read fails says unreadable with a retry — never "not enabled"', async () => {
+    // 第 1 支：两格都去读。这次没读到（页面用例里 `policyPathClient` 没接）→ 只说「读不到 + 再试一次」，
+    // 不许说成「未启用」——那是把「拿不到」和「没有」混成一句。
+    const container = await renderCells({}, { dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    const sentence = policySentence(container)
+    expect(sentence).not.toBe(dashboardText.policyPath.probabilityCellOff)
+    expect(sentence).not.toBe(dashboardText.policyPath.fedCellOff)
+    expect(sentence).not.toBe(dashboardText.policyPath.bothCellsOff)
+    // 读不到这一支给的是重试，不是「去启用」。
+    expect(policyAction(container).textContent).toBe(productText['zh-CN'].pages.intelligence.portal.data.retry)
+  })
 
   it('policy path: only the probability cell off names that cell, not the calendar', async () => {
     const onManageSource = vi.fn()
@@ -1285,7 +1344,10 @@ describe('host wiring: capital cells, one row at a time', () => {
     const card = container.querySelector('.mi-capital-conditions')!
     // 源关掉：这一块给一句状态词，两行数据格画横杠（两种表示并存，不是二选一）。
     const stateWords = [...card.querySelectorAll('.mi-source-state')]
-    expect(stateWords.map(word => word.getAttribute('data-state'))).toEqual(['disabled'])
+    // 这卡把 ETF 分成两块（表 + 资金流），两块都各说一次同一句 —— 面板自己的形状，不是本笔改的；
+    // 这里钉「说的都是同一句、都是未启用、点名的是这一格」，不重复钉块数。
+    expect(stateWords.map(word => word.getAttribute('data-state'))).toEqual(stateWords.map(() => 'disabled'))
+    expect(new Set(stateWords.map(word => word.textContent)).size).toBe(1)
     expect(stateWords[0]!.textContent).toContain(`${dataText.sourcesNotEnabled}（ETF）`)
     // 另一格照旧出数。
     expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
