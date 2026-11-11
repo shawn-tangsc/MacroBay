@@ -45,6 +45,14 @@ export type CapitalTableText = Readonly<{
   etfComparisonLagging: string
 }>
 
+/**
+ * 表头下面那一行：一句状态 + **可选**一颗动作。
+ *
+ * - 整卡读不到 → 带动作（这一支卡里没有别的动作可给）；
+ * - 某一格没启用 → **不带动作**：这张卡的补数据动作在标题行右侧，同一件事不给第二颗按钮。
+ */
+export type StatusRowNotice = Readonly<{ sentence: string; action?: Readonly<{ label: string; run: () => void }> }>
+
 export type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 
 function flowDirection(value: string): 'inflow' | 'outflow' | 'zero' {
@@ -58,7 +66,7 @@ export function format(template: string, values: Record<string, string | number>
 export function StablecoinTable({ state, text, notice, cellOff }: Readonly<{
   state?: AvailableState
   text: CapitalTableText
-  notice?: UnavailableNotice
+  notice?: StatusRowNotice
   /** 这一格没启用：表留着，词写在这一行的数据列里（行内状态词，不整表换块）。 */
   cellOff?: DashboardCapitalCellOff
 }>): React.ReactElement {
@@ -66,6 +74,12 @@ export function StablecoinTable({ state, text, notice, cellOff }: Readonly<{
     state === undefined
       ? <td />
       : <td data-flow-direction={flowDirection(state[flow])}>{state[flow]}</td>
+  const dataText = useProductTextKey() as (key: string) => string
+  // 状态行只有一处：这一格没启用（**没有动作**，动作在标题行）> 整卡读不到（带动作）。
+  const statusRow: Readonly<{ kind: 'cell-off' | 'unavailable'; tone: 'disabled' | 'unreadable'; sentence: string; action?: Readonly<{ label: string; run: () => void }> }> | undefined =
+    cellOff === undefined
+      ? notice === undefined ? undefined : { kind: 'unavailable', tone: 'unreadable', sentence: notice.sentence, action: notice.action }
+      : { kind: 'cell-off', tone: 'disabled', sentence: `${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）` }
   // state-ternary: reviewed — 只决定要不要给百分号小格子挂方向属性；五列表头两种状态下都在。
   const head = (label: string, flow: 'change1dUsd' | 'change7dUsd' | 'change30dUsd', percent: 'change1dPercent' | 'change7dPercent' | 'change30dPercent'): React.ReactElement =>
     <th scope="col">{label}<span className="mi-capital-conditions__pct" {...(state === undefined ? {} : { 'data-flow-direction': flowDirection(state[flow]) })}>{state === undefined ? '' : `(${state[percent]})`}</span></th>
@@ -83,20 +97,23 @@ export function StablecoinTable({ state, text, notice, cellOff }: Readonly<{
       <th scope="col">{text.totalSupply}</th>
     </tr></thead>
     <tbody>
-      {/* 状态行：表头下面的第一行、跨全部数据列。行名与表头一个字不改。 */}
-      {notice
-        ? <tr className="mi-capital-conditions__status-row" data-status-row="unavailable">
+      {/* 状态行：表头下面的第一行、跨全部数据列。行名与表头一个字不改。
+          句子照实说**是哪一格 / 哪一个源**（`cellOffLabel` 给的素材），别再让读者只看到一根横杠。 */}
+      {statusRow === undefined
+        ? null
+        : <tr className="mi-capital-conditions__status-row" data-status-row={statusRow.kind}>
           <td colSpan={5}>
             <div className="mi-capital-conditions__status-inline">
-              <span className="mi-source-state" data-state="unreadable">
-                <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
-                <span>{notice.sentence}</span>
+              <span className="mi-source-state" data-state={statusRow.tone}>
+                {statusRow.tone === 'unreadable'
+                  ? <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
+                  : <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />}
+                <span>{statusRow.sentence}</span>
               </span>
-              <Button onClick={notice.onAction} size="small">{notice.action}</Button>
+              {statusRow.action ? <Button onClick={statusRow.action.run} size="small">{statusRow.action.label}</Button> : null}
             </div>
           </td>
-        </tr>
-        : null}
+        </tr>}
       <tr data-cell-off={cellOff === undefined ? undefined : 'stablecoin'}>
         <th scope="row">
           <span className="mi-capital-conditions__asset-name">{text.stablecoin}</span>
@@ -173,6 +190,18 @@ export function EtfTable({ reading, text, onRetry, skeleton = false, cellOff }: 
       <th scope="col">{text.streakColumn}</th>
     </tr></thead>
     <tbody>
+      {cellOff === undefined
+        ? null
+        : <tr className="mi-capital-conditions__status-row" data-status-row="cell-off">
+          <td colSpan={span}>
+            <div className="mi-capital-conditions__status-inline">
+              <span className="mi-source-state" data-state="disabled">
+                <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
+                <span>{`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）`}</span>
+              </span>
+            </div>
+          </td>
+        </tr>}
       {skeleton
         ? <>
             <SkeletonEtfRow label={text.btc} series="btc" span={span} />

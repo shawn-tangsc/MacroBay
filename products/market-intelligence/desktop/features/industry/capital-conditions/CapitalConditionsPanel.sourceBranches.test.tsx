@@ -7,6 +7,8 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { productText } from '../../../shared/i18n/productText'
+import { cellOffLabel } from '../../../pages/intelligence/dashboardCellOff'
+import { decideCellRead } from '../../../pages/intelligence/dashboardCellEnabled'
 import { CapitalConditionsPanel, type DashboardCapitalCellAvailability } from './CapitalConditionsPanel'
 import type { DashboardCapitalConditionsState } from './capitalConditionsModel'
 
@@ -111,6 +113,24 @@ describe('the capital card, branch two: part missing or unreadable', () => {
     expect(onlyEtfOff).toContain('$1.2B')
   })
 
+  it('names the off source or cell in the header row, instead of leaving only a dash', () => {
+    // 用户现场（2026-11-12）：「ETF 的项我虽然开着，但是源关掉了，页面也没感知」——
+    // 宿主已经把判定 kind 折成一句话的素材，卡片必须把它打出来：
+    // `source-disabled` 给的是**源显示名**，`not-enabled` 给的是**格名**，这里两种都钉。
+    const sourceOff: CellOff = { sourceLabel: '0xRouter 聚合行情', onOpenSources: openSources }
+    const etfSourceOff = render(withNumbers, { etf: sourceOff })
+    const row = /<tr[^>]*data-status-row="cell-off"[^>]*>([\s\S]*?)<\/tr>/.exec(etfSourceOff)?.[1] ?? ''
+    expect(row).toContain(dataText.sourcesNotEnabled)
+    expect(row).toContain('0xRouter 聚合行情')
+    // 状态行不带按钮：这张卡的补数据动作只在标题行那一颗。
+    expect(row).not.toContain('<button')
+    expect((etfSourceOff.match(/<button\b/g) ?? [])).toHaveLength(1)
+
+    const stablecoinCellOff = render(withNumbers, { stablecoin: stablecoinOff })
+    const stableRow = /<tr[^>]*data-status-row="cell-off"[^>]*>([\s\S]*?)<\/tr>/.exec(stablecoinCellOff)?.[1] ?? ''
+    expect(stableRow).toContain('稳定币')
+  })
+
   it('puts the card\'s only action in the title row', () => {
     const onlyEtfOff = render(withNumbers, { etf: etfOff })
     const buttons = [...onlyEtfOff.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)]
@@ -128,6 +148,32 @@ describe('the capital card, branch two: part missing or unreadable', () => {
     expect(unreadable).toContain(dataText.temporarilyUnavailable)
     expect(unreadable).not.toContain('—')
     expect(unreadable).not.toContain('state-view')
+  })
+})
+
+describe('the label the card prints comes from the decision kind, not from a boolean', () => {
+  // 这一条把宿主那一步（判定 kind → 那句话素材）与卡片那一步（把它打出来）接起来跑：
+  // `source-disabled` 必须落到**源的显示名**，`not-enabled` 落到**格名**。
+  // 谁把「看 kind」压回布尔（例如两种都返回格名），源名就消失，这条红。
+  const sourceNames: Record<string, string> = { '0xrouter-aggregate-provider': '0xRouter 聚合行情' }
+  const labelFor = (cells: Record<string, boolean>, sources: Record<string, boolean>): string | undefined => cellOffLabel({
+    decision: decideCellRead({ moduleId: 'capital', cellKey: 'etf', cells, selections: {}, sources }),
+    cellLabel: 'ETF',
+    sourceName: (sourceId) => sourceNames[sourceId] ?? sourceId
+  })
+
+  it('names the source when the source is off', () => {
+    const label = labelFor({}, { '0xrouter-aggregate-provider': false })
+    const markup = render(withNumbers, { etf: { sourceLabel: label ?? '', onOpenSources: openSources } })
+    expect(markup).toContain('0xRouter 聚合行情')
+  })
+
+  it('names the cell when the cell itself is off', () => {
+    const label = labelFor({ 'capital:etf': false }, { '0xrouter-aggregate-provider': true })
+    const markup = render(withNumbers, { etf: { sourceLabel: label ?? '', onOpenSources: openSources } })
+    const row = /<tr[^>]*data-status-row="cell-off"[^>]*>([\s\S]*?)<\/tr>/.exec(markup)?.[1] ?? ''
+    expect(row).toContain(dataText.sourcesNotEnabled)
+    expect(row).toContain('ETF')
   })
 })
 

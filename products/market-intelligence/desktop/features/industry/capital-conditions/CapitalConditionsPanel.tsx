@@ -29,6 +29,7 @@ import {
 } from './capitalConditionsModel'
 import { EtfOutflowChip, EtfSignalDetailDialog, type EtfSignalText } from './EtfOutflowSignal'
 import { SkeletonEtfRow, unavailableNotice } from './capitalUnavailable'
+import type { StatusRowNotice } from './capitalTables'
 import { CellSourceWord, EtfTable, StablecoinTable, format, type CapitalTableText } from './capitalTables'
 import './capitalConditions.css'
 
@@ -132,6 +133,17 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   const dataText = useProductTextKey() as (key: string) => string
   // 「重启应用」这颗按钮的文字取平台闭集里那一句（与 `StateView` 的 needs-restart 同一个词），不另造。
   const restartLabel = useStateViewText()(STATE_VIEW_ACTION_KEYS.restart_app)
+  // 整卡读不到那一行：句子 + 一颗动作（这一支卡里没有别处给动作）。
+  const noticeOf = (
+    reason: DashboardCapitalConditionsUnavailableReason,
+    t: Text,
+    resolveText: (key: string) => string,
+    restart: string,
+    refresh: () => void
+  ): StatusRowNotice => {
+    const notice = unavailableNotice(reason, t, resolveText, restart, refresh)
+    return { sentence: notice.sentence, action: { label: notice.action, run: notice.onAction } }
+  }
   // 状态与信号并列：牌子上是「有没有这条信号」，这一句回答「这次分析到哪一步」。
   const analysisSentence = useSignalAnalysisSentence(state.state === 'available' ? state.etfSignalAnalysis : undefined)
   const alertChip = state.state === 'available' && state.etfSignal?.state === 'alert' ? state.etfSignal : undefined
@@ -199,7 +211,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
         <div className="mi-capital-conditions__header-band"><h2>{text.title}</h2></div>
-        <StablecoinTable text={text} notice={unavailableNotice(state.reason, text, dataText, restartLabel, onRefresh)} />
+        <StablecoinTable text={text} notice={noticeOf(state.reason, text, dataText, restartLabel, onRefresh)} />
         <EtfTable text={text} skeleton />
       </div>
       <EtfFlow text={text} skeleton />
