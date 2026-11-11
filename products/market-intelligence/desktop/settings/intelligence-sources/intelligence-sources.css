@@ -1410,6 +1410,22 @@
   margin: 0 0 14px;
 }
 
+/* 说明横幅：与代理横幅同一件（antd Alert）。两条都在时说明在上，间距 8；单独出现时给 14。 */
+.mi-source-notice-banner {
+  margin: 0 0 8px;
+}
+
+.mi-source-notice-banner.mi-source-notice-banner--alone {
+  margin: 0 0 14px;
+}
+
+/* 窄窗允许折行，不许截断、不许缩字号：行高 1.6，`white-space` 保持正常换行。 */
+.mi-source-notice-banner .ant-alert-message,
+.mi-source-notice-banner .ant-alert-description {
+  line-height: 1.6;
+  white-space: normal;
+}
+
 .mi-network-proxy-banner .ant-alert-description {
   line-height: 1.6;
 }

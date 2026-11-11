@@ -1,9 +1,10 @@
-import { Alert, Button } from 'antd'
+import { Button } from 'antd'
 import { Settings2 } from 'lucide-react'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from './i18n/productText'
+import { NoticeBanner } from './NoticeBanner'
 
 /**
  * Explains a network-layer requirement for a source whose API host is edge-blocked, and hands the
@@ -32,12 +33,10 @@ export function NetworkProxyBanner({ tone = 'requires', configured = false, onOp
   // 动作跟着状态走：已配好却失败时再给「去设置代理」等于让他重新填一遍。
   const actionLabel = tone === 'failed' && configured ? text.configuredFailedAction : text.action
   return <div className="mi-network-proxy-banner" data-network-proxy-banner data-tone={tone} data-proxy-configured={configured ? 'yes' : 'no'}>
-    <Alert
-      type="warning"
-      showIcon
-      message={tone === 'failed' ? failedTitle : text.title}
-      description={tone === 'failed' ? failedBody : text.body}
+    <NoticeBanner
       action={<Button size="small" icon={<Settings2 size={12} />} onClick={onOpenProxySettings} data-network-proxy-settings>{actionLabel}</Button>}
+      description={tone === 'failed' ? failedBody : text.body}
+      title={tone === 'failed' ? failedTitle : text.title}
     />
   </div>
 }

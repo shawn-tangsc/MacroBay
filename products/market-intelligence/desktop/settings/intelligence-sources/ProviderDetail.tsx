@@ -21,11 +21,20 @@ import type { IntelligenceSourceProfile } from '../../../service/intelligence/sc
 import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/intelligenceSourceTest'
 import { openProxySettings } from '../../shared/navigation/productShellNavigation'
 import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
+import { NoticeBanner } from '../../shared/NoticeBanner'
 import { useProxyConfigured } from '../../shared/useProxyConfigured'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+
+/**
+ * 说明横幅的类别 → 文案键（类别来自注册表 `ProviderDefinition.notice`，组件里不出现源名）。
+ * 新增一种同类源：注册表标一个值 + 两语文案各一条，不动组件逻辑。
+ */
+const PROVIDER_NOTICE_KEYS: Readonly<Record<NonNullable<ProviderView['notice']>, string>> = {
+  'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource'
+}
 
 export type ProviderDetailLabels = {
   sourceNames: Record<string, string>
@@ -352,13 +361,21 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     {/* 分工（2026-11-10 界面设计定）：**横幅只管「配了没通」**，未配代理由行尾那颗「需要代理」
         药丸承担——同一件事不许两处说，未配时代理只需要一个入口。所以这里是 `proxyConfigured`
         **且** `networkFailure`，不再是「未配或失败」。 */}
+    {/* 说明横幅在页头卡上方、代理横幅之前（界面设计 2026-11-12 签字）：无动作、不可关闭；
+        窄窗折行可以，截断不行。类别来自注册表，组件不认识具体源。 */}
+    {provider.notice === undefined ? null : <div
+      className={`mi-source-notice-banner${hasProxySource && proxyConfigured && networkFailure ? '' : ' mi-source-notice-banner--alone'}`}
+      data-source-notice={provider.notice}>
+      <NoticeBanner title={resolveText(PROVIDER_NOTICE_KEYS[provider.notice])} />
+    </div>}
     {hasProxySource && proxyConfigured && networkFailure ? <NetworkProxyBanner
       tone="failed"
       configured
       onOpenProxySettings={openProxySettings}
     /> : null}
-    {/* 卡一 = 页头卡：源名行 + API Key 行 + 邀请句**同一张卡**（用户 2026-11-11：
-        它们属于同一个「这个来源是什么、怎么连上」的事实，不该拆成三块）。 */}
+    {/* 卡一 = 页头卡：源名行 + 注册/获取 Key 按钮 + API Key 行**同一张卡**（用户 2026-11-11：
+        它们属于同一个「这个来源是什么、怎么连上」的事实，不该拆成三块）。
+        邀请推广句已按用户 2026-11-12「这个不显示」整句删除，不补位。 */}
     <header className="source-provider-detail__header source-provider-detail__card">
       {/* 源名同一行：名字 + 「官网」+「测试连接」，三样一行、都是小号文字按钮（用户 2026-11-10）。
           它们属于「这是哪个源、它通不通」，不是页头的一排实心大按钮——所以整屏不再有

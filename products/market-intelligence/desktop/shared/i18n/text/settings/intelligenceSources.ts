@@ -265,6 +265,7 @@ export const intelligenceSourcesText = {
   /* 源那一行行尾那颗展开按钮：两个字，不是说明。 */
   advancedToggle: '高级',
   credentialsRequired: '需要 API Key',
+  providerNotices: { privateDataSource: '私有数据源：注册账号后需向开发者申请 API Key。' },
   website: '官网',
   signup: '注册 / 获取 Key',
   testConnection: '测试连接',
@@ -825,6 +826,7 @@ export const intelligenceSourcesText = {
   toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
   advancedToggle: 'Advanced',
   credentialsRequired: 'API key required',
+  providerNotices: { privateDataSource: 'Private data source: after registering an account, request an API Key from the developer.' },
   website: 'Website',
   signup: 'Sign up / Get key',
   testConnection: 'Test connection',

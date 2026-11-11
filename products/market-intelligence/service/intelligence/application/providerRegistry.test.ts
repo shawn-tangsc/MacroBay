@@ -95,6 +95,9 @@ describe('source projections', () => {
     expect(getProvider('0xrouter')?.signupUrl).toContain('invite=tangscsh')
     expect(getProvider('realmarketapi')?.signupUrl).toContain('via=Macrobay')
     expect(getProvider('fred')?.signupUrl).toContain('fred.stlouisfed.org')
+    // 私有数据源的说明横幅是**注册表数据**（渲染层按类别找文案），组件里不出现源名。
+    expect(getProvider('0xrouter')?.notice).toBe('private-data-source')
+    expect(getProvider('realmarketapi')?.notice).toBeUndefined()
   })
 
   it('keeps every panel a subset of its agent', () => {

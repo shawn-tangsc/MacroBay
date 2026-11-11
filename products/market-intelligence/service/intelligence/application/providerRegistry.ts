@@ -92,8 +92,16 @@ export type ProviderDefinition = {
   signupUrl?: string
   /** True when signupUrl carries the operator's invite code. */
   invite?: boolean
+  /**
+   * 补充说明的**类别**（不是状态、不是句子）：由渲染层映射成两语文案。
+   * 加一个同类源 = 在这里标一个值 + 同批加两条文案，不改组件。
+   */
+  notice?: ProviderNoticeKind
   sources: SourceDefinition[]
 }
+
+/** 源详情页头上方的说明横幅类别；新增一种要同时加两语文案（渲染层映射）。 */
+export type ProviderNoticeKind = 'private-data-source'
 
 export type ActivationGroupDefinition = {
   groupId: string
@@ -446,7 +454,7 @@ export const agentRegistry: readonly AgentDefinition[] = [
  * Provider links. `signupUrl` is the operator's invite/signup entry and is
  * opened in the system browser; keep it in sync with the provider registry.
  */
-const providerLinks: Readonly<Record<string, Pick<ProviderDefinition, 'website' | 'signupUrl' | 'invite'>>> = {
+const providerLinks: Readonly<Record<string, Pick<ProviderDefinition, 'website' | 'signupUrl' | 'invite' | 'notice'>>> = {
   fed: { website: 'https://www.federalreserve.gov/' },
   bea: { website: 'https://www.bea.gov/' },
   bls: { website: 'https://www.bls.gov/' },
@@ -463,7 +471,7 @@ const providerLinks: Readonly<Record<string, Pick<ProviderDefinition, 'website' 
   ethereum: { website: 'https://ethereum.org/' },
   coinmarketcal: { website: 'https://coinmarketcal.com/', signupUrl: 'https://coinmarketcal.com/en/api' },
   cryptopanic: { website: 'https://cryptopanic.com/', signupUrl: 'https://cryptopanic.com/developers/api/' },
-  '0xrouter': { website: 'https://0xrouter.app/', signupUrl: 'https://0xrouter.app/index.html?invite=tangscsh', invite: true },
+  '0xrouter': { website: 'https://0xrouter.app/', signupUrl: 'https://0xrouter.app/index.html?invite=tangscsh', invite: true, notice: 'private-data-source' },
   realmarketapi: { website: 'https://realmarketapi.com/', signupUrl: 'https://realmarketapi.com/?via=Macrobay', invite: true },
   'policy-path': { website: 'https://polymarket.com/zh?tag=fed' },
   twelvedata: { website: 'https://twelvedata.com/', signupUrl: 'https://twelvedata.com/pricing' },

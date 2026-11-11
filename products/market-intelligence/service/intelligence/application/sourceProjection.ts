@@ -156,6 +156,8 @@ export type ProviderView = {
   website?: string
   signupUrl?: string
   invite?: boolean
+  /** 页头说明横幅的类别（见 `ProviderDefinition.notice`）。 */
+  notice?: ProviderDefinition['notice']
   sources: SourceView[]
   /** 目录标记档（provider 级，源里最差的一档）。 */
   healthMarker: SourceHealthMarker
@@ -321,6 +323,7 @@ function groupByProvider(sources: SourceView[]): ProviderView[] {
         ...(provider.website ? { website: provider.website } : {}),
         ...(provider.signupUrl ? { signupUrl: provider.signupUrl } : {}),
         ...(provider.invite ? { invite: true } : {}),
+        ...(provider.notice ? { notice: provider.notice } : {}),
         sources: [source]
       })
     }
