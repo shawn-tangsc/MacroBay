@@ -1867,7 +1867,9 @@
 .intelligence-provider-row[data-provider-state='disabled'] .intelligence-source-avatar {
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 16%, transparent);
-  color: var(--danger);
+  /* 字母**不用 danger 当前景色**：深色主题下它的对比度 3.25–3.94，低于正文 4.5 的门槛
+     （`check:danger-color` 就是守这一条）。状态由底与描边承担，字母留在正常正文色。 */
+  color: var(--text);
 }
 
 .intelligence-provider-row[data-provider-state='enabled'] .intelligence-source-avatar {
