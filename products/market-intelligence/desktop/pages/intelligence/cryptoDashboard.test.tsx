@@ -118,6 +118,13 @@ describe('crypto intelligence dashboard', () => {
     }
   }
 
+  it('keeps no styles for the retired dashboard source catalog', () => {
+    // `.mi-dashboard-source-catalog*` 整组在 TSX/TS 里 **0 个节点**（属性 `data-source-enabled` 还活着，
+    // 但它挂在 `source-provider-detail__row-state` 上，不在这组类里）。样式表里留着它，下一个人
+    // 只会以为还有人在用——删掉，并用这条钉住它不许回来。
+    expect(pageStyles).not.toContain('mi-dashboard-source-catalog')
+  })
+
   it('removes static preview dependencies and leaves only real dashboard regions', () => {
     expect(page).not.toContain('cryptoDashboardPreview')
     expect(dashboard).not.toMatch(/CryptoDashboardPreview|cryptoMarketReadIds|cryptoCheckIds|market-read|judgment|macro-card|check-step|calendar-rule|staticPreview|notAdvice|__as-of|preview/)

@@ -435,29 +435,6 @@
   gap: 8px;
 }
 
-.mi-dashboard-source-catalog__group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.mi-dashboard-source-catalog__group-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 11px;
-  padding: 0;
-}
-
-.mi-dashboard-source-catalog__group-action:hover {
-  color: var(--text-primary);
-}
-
 .mi-dashboard-panel__source {
   display: flex;
   align-items: center;
