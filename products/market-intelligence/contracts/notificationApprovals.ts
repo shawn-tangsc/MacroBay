@@ -28,9 +28,21 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
   'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
   'market-intelligence.calendar.event-upcoming': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false, surfaceGroup: 'calendar-events' },
   /**
-   * 刷新失败（2026-11-11 用户「失败了，要通知」；同日产品经理签署）：
-   * 只批 `center` + `desktop`——**不批手机**（后台维护事件，读者当场做不了事；持续性失败由
+   * 刷新失败（2026-11-11 用户「失败了，要通知」；同日产品经理签署）。
+   *
+   * **档位**：只批 `center` + `desktop`——**不批手机**（后台维护事件，读者当场做不了事；持续性失败由
    * `source.consecutive-failed` 那条负责，一条事件只干一件事），也不批免打扰穿透（凌晨打断没有收益）。
+   *
+   * **去重键与本文一致**：`calendar-refresh:{providerId}:{date}:{generation}`
+   * （声明在 `product.manifest.ts` 的同名事件上；`date` 按读者时区，`generation` 见下）。
+   *
+   * 三条写死在这里，免得后来人把它们当实现细节改掉：
+   *
+   * 1. **`generation` 数的是「这一次故障」**：不是「这天第几次失败」，也不是「第几次成功」；
+   *    **一次成功即换代**。它不重试次数、不涨阈值，只用来把「同一个状况」与「恢复之后的又一次」分开。
+   * 2. **已知边界**：`generation` 是进程内状态，**重启归零**。最坏情况是同一天的第二条被并进第一条，
+   *    **只会少报，不会多报**。这是已知取舍：要修成持久化得动存储，属另一件事——**别当 bug 顺手改**。
+   * 3. **读者能看到的样子**：同一来源同一天的多条失败会合并成一条提醒（同一条提醒里的次数会累加）。
    */
   'market-intelligence.calendar.refresh-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
