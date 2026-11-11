@@ -63,10 +63,17 @@ const stateOf = (host: HTMLElement): string | null | undefined =>
 
 describe('行状态只看源自己的 enabled', () => {
   it('① stays enabled when the source is on, even if every one of its cells is off', async () => {
-    // 改前：这颗源的格全关 → 行被判 disabled（用户截图：采集与数据里关掉「政策路径概率」，
-    // 数据源里 Polymarket 变红）。现在格与行状态无关，源开着就是绿。
-    const host = await renderRow([{ sourceId: 'policy-path-market', enabled: true }])
-    expect(stateOf(host)).toBe('enabled')
+    // 用户截图：采集与数据里关掉「政策路径概率」，数据源里 Polymarket 变红。
+    const landed = await renderRow([{ sourceId: 'policy-path-market', enabled: true }])
+    expect(stateOf(landed)).toBe('enabled')
+    await act(async () => root?.unmount())
+    document.body.replaceChildren()
+
+    // `twelve-data-market` 在看板里**只有备用行**（备用行缺键默认关）：旧实现下它的格全关 → 行被判红。
+    // 这条是 ① 的硬红证——在 `dc0da15` 的实现上跑会红（`expected 'disabled' to be 'enabled'`），
+    // 而主源那条在旧实现上仍绿（主格缺键默认开，本来就看不出这一维）。
+    const fallbackOnly = await renderRow([{ sourceId: 'twelve-data-market', enabled: true }])
+    expect(stateOf(fallbackOnly)).toBe('enabled')
   })
 
   it('② is disabled when the source itself is off, whatever its cells say', async () => {
