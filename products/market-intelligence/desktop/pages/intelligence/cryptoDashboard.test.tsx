@@ -959,9 +959,9 @@ describe('host wiring: cells switched off and sources judged', () => {
   const dataText = productText['zh-CN'].pages.intelligence.portal.data
   const readableSentiment = { state: 'available' as const, asOf, score: 22, bucket: 'extreme-fear' as const, observedAt: '2026-08-04T10:00:00.000Z' }
   const allEnabled = [
-    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
-    { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true, requiresCredential: true },
+    { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true, requiresCredential: true },
+    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true, requiresCredential: true }
   ]
 
   async function settle(container: HTMLElement, selector: string): Promise<void> {
@@ -1083,9 +1083,9 @@ describe('host wiring: capital cells, one row at a time', () => {
 
   const sourceNames = productText['zh-CN'].settings.intelligenceSources.sourceNames
   const defaultSources = [
-    { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
-    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+    { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true, requiresCredential: true },
+    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true, requiresCredential: true },
+    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true, requiresCredential: true }
   ]
   async function renderCapital(
     cells: Record<string, boolean>,
@@ -1202,9 +1202,9 @@ describe('host wiring: capital cells, one row at a time', () => {
 
   it('source off, cell on: names the source and offers 去启用, never the retry', async () => {
     const { container } = await renderCapital({}, undefined, vi.fn(), [
-      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-      { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: true },
-      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true, requiresCredential: true },
+      { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: true, requiresCredential: true },
+      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true, requiresCredential: true }
     ])
     const card = container.querySelector('.mi-capital-conditions')!
     expect(card.textContent).toContain(`${dataText.sourcesNotEnabled}（${sourceNames['0xrouter-aggregate-provider']}）`)
@@ -1217,9 +1217,9 @@ describe('host wiring: capital cells, one row at a time', () => {
   it('source never configured: says the API key is missing and lands on the cell', async () => {
     const onManageSource = vi.fn()
     const { container } = await renderCapital({}, undefined, onManageSource, [
-      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-      { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: false },
-      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true, requiresCredential: true },
+      { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: false, requiresCredential: true },
+      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true, requiresCredential: true }
     ])
     const card = container.querySelector('.mi-capital-conditions')!
     expect(card.textContent).toContain(dataText.sourceMissingApiKey.replace('{source}', sourceNames['0xrouter-aggregate-provider']))
@@ -1231,8 +1231,8 @@ describe('host wiring: capital cells, one row at a time', () => {
 
   it('source state unreadable: says temporarily unavailable and retries the source table', async () => {
     const { container } = await renderCapital({}, undefined, vi.fn(), [
-      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true, requiresCredential: true },
+      { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true, requiresCredential: true }
     ])
     const card = container.querySelector('.mi-capital-conditions')!
     expect(card.textContent).toContain(dataText.temporarilyUnavailable)
@@ -1261,9 +1261,9 @@ describe('host wiring: each capital cell focuses its own cell', () => {
       openInterestClient: openInterestClient(),
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
-        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
-        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true, requiresCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true, requiresCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true, requiresCredential: true }
       ] }) },
       onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
       text: productText['zh-CN'].pages.intelligence.portal.dashboard,

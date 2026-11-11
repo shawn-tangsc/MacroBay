@@ -7,7 +7,7 @@ import {
 } from './dashboardFeedStatusContracts'
 
 const entry = (over: Record<string, unknown> = {}): Record<string, unknown> =>
-  ({ sourceId: 'realmarketapi-market', enabled: true, hasCredential: false, ...over })
+  ({ sourceId: 'realmarketapi-market', enabled: true, hasCredential: false, requiresCredential: true, ...over })
 
 describe('dashboard feed status boundary', () => {
   it('admits the empty request and nothing else', () => {
@@ -25,7 +25,7 @@ describe('dashboard feed status boundary', () => {
     expect(parsed).toEqual({
       state: 'available',
       sources: [{
-        sourceId: 'realmarketapi-market', enabled: true, hasCredential: false,
+        sourceId: 'realmarketapi-market', enabled: true, hasCredential: false, requiresCredential: true,
         lastSuccessAtMs: 1_700_000_000_000, failureCode: 'credential-rejected'
       }]
     })
