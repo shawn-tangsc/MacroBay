@@ -262,7 +262,7 @@ export function BusinessSettingsContent(props: {
             <section
               className="business-card"
               data-business-card={props.business}
-              {...(entry ? { style: { ['--module-span' as string]: 2 } } : {})}>
+              {...(entry ? { style: { ['--module-span' as string]: 3 } } : {})}>
           {/* 日历 / 舆情也是两层卡片（用户 2026-11-11）：模块卡里放第二层数据卡片。
               日历按 `calendarFeedRegistry` 的 `owner` 分「官方源 / 聚合源」两张卡；
               舆情只有一张卡（标题留空，卡头已经写了业务名）。 */}

@@ -78,6 +78,17 @@ describe('采集与数据 · 舆情右边那张「内容处理」入口卡', () 
     expect(calendar.querySelector(CARD)).toBeNull()
   })
 
+  it('①b 版面：舆情卡保持整行（占 3 列），入口卡 1 列落在它下面', async () => {
+    // 宽度判据（界面设计 2026-11-12）：抽屉业务区约 708、三列每列约 228；舆情卡占 2 列时源项每项约 141，
+    // 而「频率」那一行至少要 150 才不挤——1180 这种常见窗宽就已经挤了。所以不能并排：
+    // 舆情卡整行，入口卡占 1 列、换行落在下方（右边空两列是预期形态，不是缺陷）。
+    const host = await render('sentiment', vi.fn())
+    const moduleCard = host.querySelector<HTMLElement>('[data-business-card="sentiment"]')!
+    const entryCard = host.querySelector<HTMLElement>(CARD)!
+    expect(moduleCard.style.getPropertyValue('--module-span')).toBe('3')
+    expect(entryCard.style.getPropertyValue('--module-span')).toBe('1')
+  })
+
   it('② 整卡一个交互目标：卡内可聚焦元素为 0，可访问名完整', async () => {
     const host = await render('sentiment', vi.fn())
     const card = host.querySelector<HTMLElement>(CARD)!
