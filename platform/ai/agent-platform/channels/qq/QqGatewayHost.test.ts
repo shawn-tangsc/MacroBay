@@ -152,6 +152,40 @@ describe('qq gateway host', () => {
     expect(harness.diagnostics).toContain('qq-frame-in:unparsed')
   })
 
+  it('says which branch a READY frame took, and whether its commit was accepted', async () => {
+    // 现场：READY 到了 handle 入口，却没有 ready / invalid / dispatch 任何一条。三条路之外
+    // 只剩「解析成 null 后审计又被闸门拒掉」——这一组把每一步都写出来。
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message(READY)
+    await flush()
+
+    expect(harness.diagnostics).toContain('qq-parse:dispatch:READY')
+    expect(harness.diagnostics).toContain('qq-lifecycle:hit')
+    expect(harness.diagnostics).toContain('qq-commit:ok')
+  })
+
+  it('traces a READY the parser rejects, including the gated audit that used to vanish', async () => {
+    // QQ 的 READY 缺少 `s`（或不是非负整数）时解析返回 null：`qq-gateway-frame-invalid` 走带闸门的
+    // audit，写不进去时以前什么都不留。现在会留 `qq-gated:<code>:rejected`。
+    const harness = await createHarness({ auditAccepted: false })
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message('{"op":0,"t":"READY","d":{"session_id":"s"}}')
+    await flush()
+
+    expect(harness.diagnostics).toContain('qq-parse:invalid')
+    expect(harness.diagnostics).toContain('qq-gated:qq-gateway-frame-invalid:rejected')
+  })
+
+  it('traces a rejected commit instead of stopping silently', async () => {
+    const harness = await createHarness({ commitSequence: () => false })
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message(READY)
+    await flush()
+
+    expect(harness.diagnostics).toContain('qq-commit:rejected')
+  })
+
   it('opens nothing without a token', async () => {
     const harness = await createHarness({ token: null })
     expect(harness.sockets).toHaveLength(0)
@@ -239,6 +273,8 @@ async function createHarness(options: {
   receive?: (request: Record<string, unknown>) => Promise<{ disposition: string }>
   /** 闸门诊断的三位；默认「没被挡」。 */
   gate?: { aborted: boolean; active: boolean; owner: boolean }
+  /** 正常审计写不写得进去（`auditIfCurrent` 的返回）；默认 true。 */
+  auditAccepted?: boolean
 } = {}) {
   const clock = new FakeClock()
   const sockets: FakeSocket[] = []
@@ -262,7 +298,7 @@ async function createHarness(options: {
     }),
     auditIfCurrent: vi.fn((_channelId: string, _generation: number, code: string) => {
       auditCodes.push(code)
-      return true
+      return options.auditAccepted ?? true
     }),
     // 诊断写入：不过授权闸门，测试里照样收集。
     auditDiagnostic: vi.fn((_channelId: string, code: string) => { diagnostics.push(code) })

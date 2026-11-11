@@ -132,22 +132,40 @@ export class QqGatewayHost {
   private async handle(data: unknown, socket: Socket): Promise<void> {
     // 先记「帧到了」，再判闸门：两件事分开，才分得出「根本没到」与「到了被判掉」。
     this.diagnose(`qq-frame-in:${frameEventName(data)}`)
-    if (!this.current(socket)) return
+    // 帧到达这一刻的四位再算一次（onopen 那次只代表打开时），并把 socket 身份单独报：
+    // 「代际没问题、但这条 socket 已被替换/已关闭」是另一类丢失，合成一个布尔就看不出来。
+    const bits = gateBits(this.deps.diagnoseGate?.(), this.socket === socket, this.closed.has(socket))
+    if (!this.current(socket)) {
+      this.diagnose(`qq-handle:dropped:${bits}`)
+      return
+    }
+    this.diagnose(`qq-handle:current:${bits}`)
     if (typeof data !== 'string') return this.close()
     const frame = parseQqGatewayFrame(data)
     if (!frame) {
+      this.diagnose('qq-parse:invalid')
       this.audit('qq-gateway-frame-invalid')
       return
     }
+    this.diagnose(`qq-parse:${frameKindLabel(frame)}`)
+
     const lifecycle = this.lifecycleDispatch(frame)
     if (lifecycle) {
       this.attempt = 0
+      this.diagnose('qq-lifecycle:hit')
       // 鉴权通过、READY/RESUMED 到了：与「socket 打开」分开记，连接建立与否一眼可查。
       this.audit('qq-gateway-ready')
-      this.commitOrStop(lifecycle.sequence)
+      const committed = this.commitSequence(lifecycle.sequence)
+      this.diagnose(`qq-commit:${committed ? 'ok' : 'rejected'}`)
+      if (!committed) {
+        this.audit('qq-sequence-stale')
+        this.close()
+        return
+      }
       this.session?.receive(frame)
       return
     }
+    this.diagnose('qq-lifecycle:miss')
     if (frame.kind === 'dispatch') {
       // 临时诊断：哪一类事件真的到了（只记事件名，不带正文、不带凭据）。
       this.audit(`qq-frame-received:${frame.event}`)
@@ -294,8 +312,14 @@ export class QqGatewayHost {
   }
 
   private audit(code: string): void {
-    if (!this.currentGeneration()) return
-    this.deps.runtime.auditIfCurrent(this.deps.channelId, this.deps.generation, code)
+    // 正常审计要过授权闸门；被拒时留一条不过闸门的痕迹，否则库里只有「什么都没发生」。
+    if (!this.currentGeneration()) {
+      this.diagnose(`qq-gated:${code}:generation`)
+      return
+    }
+    if (!this.deps.runtime.auditIfCurrent(this.deps.channelId, this.deps.generation, code)) {
+      this.diagnose(`qq-gated:${code}:rejected`)
+    }
   }
 }
 
@@ -325,7 +349,8 @@ function backoffMs(attempt: number): number {
 /** 四个 bit 分开拼：aborted / active / owner 各一位，socket 身份单独一位。 */
 function gateBits(
   gate: { aborted: boolean; active: boolean; owner: boolean } | undefined,
-  socketIsCurrent: boolean
+  socketIsCurrent: boolean,
+  socketClosed = false
 ): string {
   const bit = (value: boolean | undefined): string => (value === true ? '1' : '0')
   // gate 缺省（老调用方/用例没注入）时写 `?`，不假装成 0——「不知道」与「不成立」是两件事。
@@ -334,8 +359,17 @@ function gateBits(
     `aborted=${unknown ? '?' : bit(gate.aborted)}`,
     `active=${unknown ? '?' : bit(gate.active)}`,
     `owner=${unknown ? '?' : bit(gate.owner)}`,
-    `socket=${socketIsCurrent ? 'ok' : 'stale'}`
+    `socket=${socketClosed ? 'closed' : socketIsCurrent ? 'ok' : 'stale'}`
   ].join(',')
+}
+
+/** 帧的种类 + 事件名（只读 `t`，不读 `d`）。 */
+function frameKindLabel(frame: NonNullable<ReturnType<typeof parseQqGatewayFrame>>): string {
+  switch (frame.kind) {
+    case 'dispatch': return `dispatch:${frame.event}`
+    case 'unknown': return `unknown:${frame.op}`
+    default: return frame.kind
+  }
 }
 
 /** 只取事件名（`t`）或 op；不读 `d`，所以正文与凭据都不会进审计。 */
