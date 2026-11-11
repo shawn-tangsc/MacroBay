@@ -438,6 +438,32 @@ describe('daily briefing document', () => {
     expect(next).toMatchObject({ releaseTimeNotPublished: true, releaseDate: '2026-10-31' })
   })
 
+  it('keeps a date-only event from yesterday in the past-24h list when its date position sits before the window start', () => {
+    // 反例（Chief 2026-11-11）：UTC 读者 07:00 截止 → 窗口起点是昨天 07:00Z；只公布日期的那一场
+    // 日期位在昨天 00:00Z，**在窗口起点之前**。按瞬间判会被整条丢掉，等于把「有事件」说成「没有事件」。
+    // 归属按日期判：昨天 ∈ [昨天, 今天] → 仍在过去 24 小时（且只有日期，正文画日期 + 一句话）。
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-29T07:00:00.000Z',
+        windowStart: '2026-10-28T07:00:00.000Z',
+        windowEnd: '2026-10-29T07:00:00.000Z',
+        timeZone: 'UTC',
+        calendar: {
+          state: 'available',
+          events: [{
+            eventKey: 'US.CPI', title: 'CPI', scheduledAt: '2026-10-28T00:00:00.000Z',
+            releaseTimeNotPublished: true, releaseDate: '2026-10-28',
+            importance: 'high', lifecycleState: 'released', category: 'economic-indicator',
+            actual: '3.4%', surprise: { direction: 'beat', value: 0.2, unit: 'pp' }
+          }]
+        }
+      }),
+      date: '2026-10-29'
+    })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.CPI'])
+    expect(document.news.macro[0]).toMatchObject({ releaseTimeNotPublished: true, releaseDate: '2026-10-28' })
+  })
+
   it('writes the period identity into the edition at the current schema', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({ asOf: '2026-10-30T00:30:12.345Z', windowEnd: asOf }),

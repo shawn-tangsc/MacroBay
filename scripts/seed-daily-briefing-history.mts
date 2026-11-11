@@ -212,18 +212,34 @@ function trace(date: string, state: 'success' | 'failed'): unknown {
 
 function document(date: string, locale: 'zh-CN' | 'en-US'): unknown {
   return {
-    schemaVersion: 1,
-    policyVersion: 'daily-briefing.v1',
+    // 16 起宏观栏可以带「官方只公布了日期」的那一对（`releaseTimeNotPublished` + `releaseDate`）：
+    // 这一份夹具带一条，否则「只有日期的事件不印时刻」在演示/验收用的这份数据上永远走不到。
+    schemaVersion: 16,
+    policyVersion: 'daily-briefing.v25',
     edition: {
       date, locale, generatedAt: `${date}T00:30:00.000Z`,
-      windowStart: `${date}T00:00:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, timeZone: 'Asia/Shanghai'
+      windowStart: `${date}T00:00:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, timeZone: 'Asia/Shanghai',
+      windowHours: 24, periodId: PERIOD_ID, periodTime: `${date}T00:00:00.000Z`,
+      periodKind: 'scheduled', runTrigger: 'scheduled'
     },
     status: {
       readings: editionRowIds.map((id) => ({ id, state: 'available' })),
       readingsAvailable: editionRowIds.length, readingsTotal: editionRowIds.length
     },
     lede: { source: 'template', text: locale === 'zh-CN' ? '种子数据：用于验收「那一次已清理」。' : 'Seeded data for the cleaned-attempt acceptance shot.', generatedAt: `${date}T00:30:00.000Z` },
-    news: { items: [], macro: [], notes: {} },
+    news: {
+      items: [],
+      macro: [{
+        // 日期位在当天 00:00Z（本地 08:00，早于窗口起点）：按瞬间判会被丢掉，按日期判才留得住。
+        eventKey: 'US.CPI.RELEASE.FIXTURE',
+        title: locale === 'zh-CN' ? '消费者物价指数' : 'Consumer price index',
+        scheduledAt: `${date}T00:00:00.000Z`, releaseTimeNotPublished: true, releaseDate: date,
+        importance: 'high', lifecycleState: 'released', category: 'economic-indicator',
+        actual: '3.4%', consensus: '3.2%', previous: '3.1%',
+        surprise: { direction: 'beat', value: 0.2, unit: 'pp' }
+      }],
+      notes: {}
+    },
     data: { market: [], funds: [], sentiment: { fearGreed: null, news: { state: 'empty' } } },
     conclusion: null,
     next: { items: [] },
