@@ -335,7 +335,8 @@ describe('cross-asset observation workspace', () => {
       // 整块的来源药丸已撤掉（读者 2026-11-03）：曲线是收盘存档，实时流断了照样画，
       // 而药丸整块写「不可用」，读者只会读成「这张图坏了」。逐资产那行仍在，且只说这一只的情况。
       expect(host.querySelector('[data-source-state]')).toBeNull()
-      expect(host.querySelector('[data-quote-asset="btc"]')?.textContent).toBe(`${text.assets.btc} ${text.states.missing}`)
+      // 腿级说法（用户 2026-11-11）：这句只说实时报价这条腿，不说「这个资产没有数据」。
+      expect(host.querySelector('[data-quote-asset="btc"]')?.textContent).toBe(`${text.assets.btc} ${text.quoteLeg.missing}`)
       for (const asset of ['index', 'btc', 'eth']) expect(host.querySelector(`[data-status-row="${asset}"][data-connected="true"]`)).not.toBeNull()
       expect(host.querySelector('.mi-cross-asset > header, .mi-cross-asset > footer')).toBeNull()
       const proxyInfo = host.querySelector<HTMLButtonElement>('.mi-cross-asset__quote button[aria-label]')

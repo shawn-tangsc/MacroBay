@@ -9,6 +9,7 @@ import { productText } from '../../../shared/i18n/productText'
 import { createCrossAssetSnapshotQuery } from '../../../../service/intelligence/cross-asset/crossAssetSnapshotQuery'
 import type { CrossAssetIndexFeedState, CrossAssetLiveState } from '../../../../service/intelligence/cross-asset/crossAssetIndexSource'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 /**
  * What the Nasdaq 100 row shows in each of its four states, read from the rendered table.
@@ -44,7 +45,7 @@ const bothLegs = (nowMs: number) => ({
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 const ScopedPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
+  createElement(ShellLanguageProvider, { language: 'zh-CN', children: createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) }) })
 
 async function render(input: Readonly<{
   nowMs: number; bySymbol: Record<string, readonly unknown[]>; feed: CrossAssetIndexFeedState
@@ -59,13 +60,21 @@ async function render(input: Readonly<{
   onEnableData?: () => void
   /** 这条通道自己读不到：`query` = 查询失败，`contract` = 版本不一致。 */
   queryFailure?: 'query' | 'contract'
+  /** BTC/ETH 实时报价那条腿的状态（默认两者都是 `missing`）。 */
+  quotes?: Partial<Record<'btc' | 'eth', 'live' | 'stale' | 'missing'>>
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
+  const quoteOf = (asset: 'btc' | 'eth') => {
+    const state = input.quotes?.[asset] ?? 'missing'
+    return state === 'live' || state === 'stale'
+      ? { state, price: '118.25', tradedAtMs: input.nowMs, receivedAtMs: input.nowMs }
+      : { state: 'missing' as const }
+  }
   const live = { state: input.liveState ?? 'live' as CrossAssetLiveState, quotes: {
     index: { state: 'live' as const, price: '710.55', tradedAtMs: input.nowMs, receivedAtMs: input.nowMs },
-    btc: { state: 'missing' as const }, eth: { state: 'missing' as const }
+    btc: quoteOf('btc'), eth: quoteOf('eth')
   } }
   const snapshot = createCrossAssetSnapshotQuery({
     now: () => input.nowMs,
@@ -169,8 +178,10 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       expect(indexRow.querySelector('th')?.textContent).toContain(text.indexNames.real)
       // The licensed index is the standard instrument: no proxy label, because it is not a proxy.
       expect(page.host.querySelector('[data-index-proxy="true"]')).toBeNull()
+      // 合法指数这一腿在这个夹具里没有任何可画的点（289 个点全是空），所以图例照样列出、
+      // 名字后面标「未绘制」——不标会让读者以为线被藏了。
       expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
-        .toEqual([text.indexNames.real, 'BTC', 'ETH'])
+        .toEqual([`${text.indexNames.real}${text.lineNotDrawn}`, 'BTC', 'ETH'])
       expect(page.host.querySelector('[data-market-state-tag="closed"]')).toBeNull()
       expect(page.host.querySelector('[data-asset-price="index"]')?.textContent).toBe('25017.00')
       expect(cell(page.host, '15m').textContent).toMatch(/[0-9]/)
@@ -374,6 +385,58 @@ describe('标题右边那颗按钮：这一张卡唯一的「补数据」入口�
 
 
 
+
+
+describe('「无数据」那句按腿说（用户 2026-11-11）', () => {
+  const legOf = (host: HTMLElement, asset: 'btc' | 'eth'): string =>
+    (host.querySelector(`[data-quote-asset="${asset}"]`)?.textContent ?? '').trim()
+
+  it('says the live quote leg is not connected, not that the asset has no data', async () => {
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), quotes: { btc: 'missing', eth: 'missing' } })
+    try {
+      expect(legOf(page.host, 'btc')).toBe(`${text.assets.btc} ${text.quoteLeg.missing}`)
+      // 笼统的「无数据」不许出现在这一行：同一行 24h/7d 明明有数。
+      expect(page.host.querySelector('[data-quote-asset="btc"]')?.textContent).not.toContain(text.states.missing)
+      // 原因进 ⓘ（触发器的可访问名就是那句原因），正文不铺解释句。
+      const trigger = page.host.querySelector(`[data-quote-asset="btc"] button[aria-label]`)
+      expect(trigger?.getAttribute('aria-label')).toBe(text.quoteLegReasons.missing)
+      expect(page.host.querySelector('[data-quote-asset="btc"]')?.textContent?.trim())
+        .not.toContain(text.quoteLegReasons.missing)
+    } finally { await page.unmount() }
+  })
+
+  it('says the live quote is out of date, with its own sentence and reason', async () => {
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), quotes: { btc: 'stale', eth: 'live' } })
+    try {
+      expect(legOf(page.host, 'btc')).toBe(`${text.assets.btc} ${text.quoteLeg.stale}`)
+      // 过期那一句不跟「未连接」混用。
+      expect(legOf(page.host, 'btc')).not.toContain(text.quoteLeg.missing)
+      expect(page.host.querySelector('[data-quote-asset="btc"] button[aria-label]')?.getAttribute('aria-label'))
+        .toBe(text.quoteLegReasons.stale)
+      // 另一条腿是 live：一个字都不说。
+      expect(page.host.querySelector('[data-quote-asset="eth"]')).toBeNull()
+    } finally { await page.unmount() }
+  })
+})
+
+describe('图例里没画出来的线要有标记（用户 2026-11-11）', () => {
+  it('marks a line whose curve has no drawable point, and keeps the reason in the title ⓘ', async () => {
+    // 这个夹具里合法指数那一腿 289 个点全是空：线画不出来，但图例照样列出。
+    const page = await render({ nowMs: at('2026-07-15T15:00:00.000Z'), feed: 'ready', liveState: 'disabled', bySymbol: bothLegs(at('2026-07-15T15:00:00.000Z')) })
+    try {
+      const undrawn = page.host.querySelector('[data-undrawn="index"]')
+      expect(undrawn).not.toBeNull()
+      expect(undrawn?.textContent).toBe(text.lineNotDrawn)
+      // 画得出来的线没有这个标记。
+      expect(page.host.querySelector('[data-undrawn="btc"]')).toBeNull()
+      // 原因在图标题那颗 ⓘ 的浮层里（点开才渲染），图例里不再铺解释。
+      expect(undrawn?.textContent).not.toContain(text.lineNotDrawnReason)
+      const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
+      await act(async () => hint.click())
+      expect(document.body.textContent).toContain(text.lineNotDrawnReason)
+    } finally { await page.unmount() }
+  })
+})
 
 describe('通道不可用时结构要留（用户 2026-11-11）', () => {
   const columnNames = (host: HTMLElement): string[] =>

@@ -14,7 +14,7 @@ const ScopedCrossAssetReturnChart = (props: Parameters<typeof CrossAssetReturnCh
 const points = [0, 1, 2].map(index => ({ at: `2026-09-14T12:${String(index * 5).padStart(2, '0')}:00.000Z`, returnPercent: index }))
 const text = {
   chart: '收益率', assets: { index: '纳斯达克 100', btc: 'BTC', eth: 'ETH' },
-  macroAssets: { dxy: '美元 DXY', gold: '黄金 XAU' }, noData: '无数据', forming: '实时未闭合',
+  macroAssets: { dxy: '美元 DXY', gold: '黄金 XAU' }, noData: '无数据', forming: '实时未闭合', lineNotDrawn: '未绘制',
   eventLine: '事件', eventsCollapsed: '已折叠 {count} 条',
   // 同一分钟里官方与 provider 都在、却没能确认是同一条时的说明（设计 145 §8 B）；原文见 productText。
   eventLineIdentityUnconfirmed: '同一分钟里官方日历也有一条发布，没能确认是同一条，两边的名字都保留'

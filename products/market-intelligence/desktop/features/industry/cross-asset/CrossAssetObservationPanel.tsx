@@ -25,6 +25,8 @@ import { CircleSlash, TriangleAlert } from 'lucide-react'
 
 import { CellStateCard, type CellStateKind } from '../../../pages/intelligence/DashboardCellState'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
+import { CrossAssetStatusHeading } from './CrossAssetStatusHeading'
+import { CrossAssetQuoteLegStatus } from './CrossAssetQuoteLegStatus'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
 import {
@@ -239,6 +241,12 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       }
     ]
   } : { lines: [{ labelKey: crossAssetTextKeys.unavailable }] }
+  /** 图上画不出来的线（本窗内曲线全是空点）：图例标「未绘制」，原因进图标题的 ⓘ。 */
+  const undrawnChartLines = snapshot === undefined ? [] : (['index', 'btc', 'eth'] as const)
+    .filter(asset => (snapshot.curves[asset] ?? []).every(point => point.returnPercent === null))
+  const historyHintLines: readonly HintLine[] = undrawnChartLines.length === 0
+    ? historyHint.lines
+    : [...historyHint.lines, { labelKey: 'pages.intelligence.portal.dashboard.crossAsset.lineNotDrawnReason' }]
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
@@ -316,30 +324,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       {/* The left slot keeps its historical class name; its content is the cross-asset status block:
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
-        <div className="mi-cross-asset__quote-heading"><h3>{text.statusTitle}</h3>
-        {/* 这段是代理说明，一段话而不是一句：走浮层（多行走浮层），点一下钉住。
-            原来它挂在 `Tooltip` 上、`onSelect` 是空的——一段远长于提示上限的话配一颗点了没反应的 ⓘ，
-            两处都不对（界面设计 2026-11-07：补充说明要么有真动作，要么不该长成按钮）。
-            没改成 dialog：dialog 是给成组的多行读数用的（那张表 8 行分三组），一段话说清的事用浮层就够。 */}
-        <FocusPopover labelKey={crossAssetTextKeys.subtitle} resolveText={resolveProductText}
-          trigger={(triggerProps) => (
-            <IconButton
-              ariaLabelKey={crossAssetTextKeys.subtitle}
-              expanded={triggerProps.expanded}
-              icon={Info}
-              onBlur={triggerProps.onBlur}
-              onFocus={triggerProps.onFocus}
-              onMouseEnter={triggerProps.onMouseEnter}
-              onMouseLeave={triggerProps.onMouseLeave}
-              onSelect={triggerProps.onSelect}
-              resolveText={resolveProductText}
-              size="md"
-              variant="plain"
-            />
-          )} />
-        {/* 标题右边、ⓘ 之后：同屏唯一的那颗「补数据」按钮（见 `titleAction` 的注释）。 */}
-        {titleAction === undefined ? null : <Button size="small" onClick={titleAction.run}>{titleAction.label}</Button>}
-        </div>
+        <CrossAssetStatusHeading text={text} resolveProductText={resolveProductText} {...(titleAction === undefined ? {} : { action: titleAction })} />
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
@@ -396,7 +381,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       </div>
       {crossAssetReadingEnabled && !allChartLinesUnusable ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <FocusPopover
-          {...historyHint}
+          lines={historyHintLines}
           resolveText={resolveProductText}
           trigger={(triggerProps) => (
             // The same IconButton as the status block's help: two explanations beside two titles
@@ -424,15 +409,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
             resolveText={(key) => key === crossAssetTextKeys.refresh ? text.refresh : key} /></div></div>
         {/* 整块来源状态那枚药丸已撤掉（读者 2026-11-03）：曲线是已存下来的收盘，实时流断了它照样画，
             而药丸整块写「不可用」，读者只会读成「这张图坏了」。逐资产的读数仍在下一行，那才是读者要的答案。 */}
-        {/* 只有「有需要说明的报价」时才画这一行：两条都实时时这里什么也不说，就不该留一个空容器
-            （界面设计 2026-11-09 对行 26 的边界：删掉药丸后不留空白容器）。 */}
-        {(() => {
-          const explained = snapshot?.quotes
-            ? (['btc', 'eth'] as const).filter(asset => snapshot.quotes![asset].state !== 'live')
-            : []
-          if (explained.length === 0) return null
-          return <div className="mi-cross-asset__status">{explained.map(asset => <small key={asset} data-quote-asset={asset}>{text.assets[asset]} {text.states[snapshot!.quotes![asset].state]}</small>)}</div>
-        })()}
+        {/* 实时报价那条腿没连上/过期：只在需要说明时画一行，句子按腿说、原因进 ⓘ。 */}
+        {snapshot?.quotes === undefined ? null : <CrossAssetQuoteLegStatus quotes={snapshot.quotes} text={text} resolveProductText={resolveProductText} />}
         {/* The legend and the tooltip carry the same name the row does: one panel, one instrument name
             per figure, so a legend reading 「纳斯达克 100」 can never sit above `QQQUSDT`'s curve. */}
         {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}

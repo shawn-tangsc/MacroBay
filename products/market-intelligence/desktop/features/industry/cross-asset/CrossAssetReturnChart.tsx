@@ -33,6 +33,8 @@ type LineId = CrossAssetId | CrossAssetMacroProxyId
 type Text = {
   chart: string; assets: Record<CrossAssetId, string>; macroAssets: Record<CrossAssetMacroProxyId, string>
   noData: string; forming: string
+  /** 图例里那条没画出来的线后面标一句（原因在图标题的 ⓘ 里）。 */
+  lineNotDrawn: string
   /** What a line's tooltip and its accessible name read: the time, then what happened. */
   eventLine: string; eventsCollapsed: string
   /** 同一分钟里官方与 provider 都在、却没能确认是同一条发布时，线上要说明这件事（设计 145 §8 B）。 */
@@ -122,8 +124,15 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
       tooltipTop: Math.max(policy.inset, Math.min(mouseY + policy.offset, box.height - height - policy.inset)) })
   }
   return <div className="mi-cross-asset__chart">
-    <div className="mi-cross-asset__legend">{listed.map(id => <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
-      onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}</Button>)}</div>
+    <div className="mi-cross-asset__legend">{listed.map(id => {
+      // 一条线画不画得出来：本窗内至少一个点有值（或有一根仍在形成的尾巴）。
+      const drawn = pointsOf(id).some(point => point.returnPercent !== null)
+        || (formingOf(id)?.returnPercent ?? null) !== null
+      return <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
+        onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}
+        {/* 没画出来就标一句：否则读者会以为这条线被藏了（用户 2026-11-11）。 */}
+        {drawn ? null : <small className="mi-cross-asset__legend-undrawn" data-undrawn={id}>{text.lineNotDrawn}</small>}
+      </Button>})}</div>
     <div className="mi-cross-asset__chart-frame">
       <div className="mi-cross-asset__y-axis">{(max === min ? [0] : [max, 0, min].filter((value, index, all) => all.indexOf(value) === index)).map(value => <span key={value} style={{ top: `${y(value) / policy.height * 100}%` }}>{percent(value)}</span>)}</div>
       <div ref={plotRef} data-cross-asset-plot className="mi-cross-asset__plot" role="group" aria-label={text.chart} tabIndex={0}
