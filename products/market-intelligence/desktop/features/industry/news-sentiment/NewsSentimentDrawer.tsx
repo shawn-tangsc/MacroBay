@@ -17,6 +17,7 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
+import { NewsSentimentDrawerList } from './NewsSentimentDrawerList'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 import { labelText, sentimentIcon } from './newsSentimentPresentation'
 import type { NewsSentimentFilters } from './useNewsSentiment'
@@ -297,109 +298,23 @@ export function NewsSentimentDrawer(props: {
         </div>
 
         <div className="mi-news-drawer__body">
-          <div className="mi-news-drawer__list" role="list">
-            {props.failed && rows.length === 0 ? (
-              // Nothing was ever read here: error plus the way out.
-              <StateView
-                action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
-                reasonCode="unreadable"
-                resolveText={props.resolveStateText}
-                size="md"
-                state="error"
-              />
-            ) : null}
-            {props.failed && rows.length > 0 ? (
-              // A failed refresh keeps the rows this drawer already had; the note says so instead
-              // of replacing a still-true reading with an error panel.
-              <p className="mi-news-drawer__stale-read" data-news-sentiment-stale-read role="status">
-                <span>{text.staleRead}</span>
-                <button type="button" className="text-action" onClick={props.onRefresh}>{text.retry}</button>
-              </p>
-            ) : null}
-            {!props.failed && props.loading && !props.view ? (
-              // First read in flight: "not yet" would claim the window is empty before we know.
-              <StateView resolveText={props.resolveStateText} size="md" state="loading" />
-            ) : null}
-            {!props.failed && !props.loading && rows.length === 0 ? (
-              filtered
-                ? <StateView
-                    action={{ labelKey: 'ui.state.action.clear-filter', onSelect: () => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true }) }}
-                    reasonCode="filtered-out"
-                    resolveText={props.resolveStateText}
-                    size="md"
-                    state="empty"
-                  />
-                // 成因不可知（抽屉拿不到「从没跑过 / 采集失败」），故不断言窗口内确实为空：
-                // `not-yet` 不承担结论，`nothing-in-window` 会替这个窗口下「确实没有」的判断。
-                : <StateView reasonCode="not-yet" resolveText={props.resolveStateText} size="md" state="empty" />
-            ) : null}
-            {rows.map((row) => {
-              const rowState = translationStates[row.itemId] ?? row.bodyTranslationState ?? 'missing'
-              return (
-              <div
-                className={`mi-news-drawer__row${row.itemId === activeId ? ' is-selected' : ''}`}
-                key={row.itemId}
-                role="listitem"
-              >
-              <button
-                aria-current={row.itemId === activeId}
-                // 整行即动作（ui-spec「可点击行」）：原生 button 保留，antd `Button` 表达不了这种
-                // 多行富内容；可访问名说明点开哪一条，键盘与焦点环由原生 button + 全仓 `:focus-visible` 提供。
-                aria-label={text.openItem.replace('{title}', translatedTitles[row.itemId] ?? row.displayTitle ?? row.title)}
-                className="mi-news-drawer__row-open"
-                onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
-                onContextMenu={translationEnabled ? (event) => { event.preventDefault(); openContextMenu(row.itemId, event.clientX, event.clientY) } : undefined}
-                onKeyDown={translationEnabled ? (event) => {
-                  // A context menu reachable only by right-click is unreachable from the keyboard.
-                  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
-                  event.preventDefault()
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  openContextMenu(row.itemId, rect.left + 8, rect.top + 8)
-                } : undefined}
-                type="button"
-              >
-                <span className="mi-news-drawer__row-top">
-                  <time>{formatTime(row.publishedAt, 'minute')}</time>
-                  <span className={`mi-news-sentiment__pill is-${row.polarity}`}>
-                    {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
-                  </span>
-                  {translationEnabled && rowState === 'waiting' ? (
-                    <span className="mi-news-drawer__row-waiting">
-                      {text.drawer.translationStatus?.waiting}
-                    </span>
-                  ) : null}
-                  {translationEnabled && rowState === 'translating' ? (
-                    <span className="mi-news-drawer__row-loading" role="status" aria-label={text.drawer.translationStatus?.translating}>
-                      <LoadingSpinner size="sm" />
-                    </span>
-                  ) : null}
-                  {translationEnabled && rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed}</span> : null}
-                  <small className="mi-news-drawer__source">{row.sourceName}</small>
-                  <span className="mi-news-drawer__symbols">
-                    {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
-                  </span>
-                </span>
-                <span className="mi-news-drawer__title">{translatedTitles[row.itemId] ?? row.displayTitle ?? row.title}</span>
-              </button>
-              {translationEnabled && hasIconText(text, 'news.sentiment.more') ? (
-                <IconButton
-                  ariaLabelKey="news.sentiment.more"
-                  icon={MoreVertical}
-                  onSelect={() => {
-                    const rect = (document.activeElement as HTMLElement | null)?.getBoundingClientRect()
-                    openContextMenu(row.itemId, rect?.left ?? 0, (rect?.bottom ?? 0) + 4)
-                  }}
-                  resolveText={resolveIconText}
-                  size="sm"
-                  tooltipKey="news.sentiment.more"
-                />
-              ) : null}
-              </div>
-              )
-            })}
-
-          </div>
-
+          <NewsSentimentDrawerList
+            activeId={activeId}
+            failed={props.failed}
+            filtered={filtered}
+            hasView={props.view !== undefined}
+            loading={props.loading}
+            onClearFilters={() => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true })}
+            onOpenRow={(row) => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
+            onRefresh={props.onRefresh}
+            onRowContextMenu={openContextMenu}
+            resolveStateText={props.resolveStateText}
+            rows={rows}
+            text={text}
+            translatedTitles={translatedTitles}
+            translationEnabled={translationEnabled}
+            translationStates={translationStates}
+          />
           <aside className="mi-news-drawer__detail" aria-label={text.drawer.title}>
             {active ? (
               <>
