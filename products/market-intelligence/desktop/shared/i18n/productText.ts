@@ -456,6 +456,8 @@ mi: miText['zh-CN'],
               /* 实时报价那条腿自己的状态词（用户 2026-11-11）：「无数据」会被读成「这个资产没有数据」，
                  而它实际说的只是实时 trade 流这一条腿。原因一律进 ⓘ，正文不铺解释句。 */
               quoteLeg: { missing: '实时报价未连接', stale: '实时报价已过期' },
+              /* 窗口不可用时的那句（与「本次还没落库」分开：后者已由服务端回退到上一根桶，不会到这里）。 */
+              windowNoPair: '库里没有这一窗口的收盘对',
               quoteLegReasons: { missing: '这笔资产在实时 trade 流里一条成交都没收到（流可能没连上）。', stale: '最后一笔成交已超过 15 秒，实时报价按过期处理。' },
               /* 图上没画出来的那条线：图例照样列出，名字后面标一句，否则读者以为线被藏了。 */
               lineNotDrawn: '未绘制',
@@ -1927,6 +1929,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               noData: 'No data', windowNoData: '—', forming: 'Live, unclosed',
               enableData: 'Enable data', refresh: 'Update history', loading: 'Loading market data…', unavailable: 'Market data unavailable',
               quoteLeg: { missing: 'Live quote not connected', stale: 'Live quote out of date' },
+              windowNoPair: 'No close pair for this window in the store',
               quoteLegReasons: { missing: 'No trade for this asset arrived on the live trade stream (the stream may not be connected).', stale: 'The last trade is more than 15 seconds old, so the live quote counts as out of date.' },
               lineNotDrawn: 'not drawn',
               lineNotDrawnReason: 'A line needs five-minute bars at every point in this window; this stretch is not complete, so the line is not drawn.',

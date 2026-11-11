@@ -102,8 +102,16 @@ describe('cross-asset Nasdaq 100 row', () => {
     // The real index has no live tick, so the row must not borrow the perpetual's trade.
     expect(result.quotes?.index).toEqual({ state: 'missing' })
     expect(result.forming?.index).toBeNull()
-    // No bar closed at the analysis instant, so every window is unanswered rather than carried over.
-    expect(Object.values(result.closedReturns.index).every(metric => metric.state === 'unavailable')).toBe(true)
+    // 分析瞬时那一桶没有收盘（现货已收市）时，窗口**回退到库里最近一根已入库的完整桶**，
+    // 而不是整排变成 `—`（Chief 2026-11-11）。`atMs` 就是那一根的时刻，能看出真的换了。
+    for (const window of ['5m', '15m', '1h', '4h'] as const) {
+      const metric = result.closedReturns.index[window]
+      expect(metric.state, window).toBe('available')
+      expect(metric.state === 'available' ? metric.atMs : undefined, window).toBe(new Date(sessionCloseMs).toISOString())
+    }
+    // 这一屏只有一段现货时段的量：24h/7d 的回看端真的没有收盘对 → 仍然不可用（与「还没落库」分开）。
+    expect(result.closedReturns.index['24h']).toEqual({ state: 'unavailable', reason: 'missing' })
+    expect(result.closedReturns.index['7d']).toEqual({ state: 'unavailable', reason: 'missing' })
   })
 
   it('hands the row to the licensed index when no bar is stored for the contract', () => {

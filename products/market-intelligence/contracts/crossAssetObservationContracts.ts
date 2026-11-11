@@ -113,7 +113,8 @@ export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string; know
 export type CrossAssetInput = Record<string, never> | { leaseId: string } | CrossAssetQueryInput
 export type CrossAssetId = typeof crossAssetContractPolicy.assets[number]
 export type CrossAssetMacroProxyId = typeof crossAssetContractPolicy.macroProxies[number]
-export type CrossAssetMetric = { state: 'available'; value: number } | { state: 'unavailable'; reason: 'missing' | 'insufficient' | 'zero-variance' | 'stale' }
+/** `atMs`：这个窗口实际用的那一根收盘时刻（回退到上一根完整的桶时会早于 `analysisEnd`）。 */
+export type CrossAssetMetric = { state: 'available'; value: number; atMs?: string } | { state: 'unavailable'; reason: 'missing' | 'insufficient' | 'zero-variance' | 'stale' }
 export type CrossAssetQuote = { state: 'missing' } | { state: 'live' | 'stale'; price: string; tradedAtMs: number; receivedAtMs: number }
 export type CrossAssetIndexSourceId = typeof crossAssetContractPolicy.indexSources[number]
 export type CrossAssetMarketStateId = typeof crossAssetContractPolicy.marketStates[number]
@@ -237,7 +238,8 @@ function metric(value: unknown, correlation = false): boolean {
   const extras = correlation ? ['sampleCount', 'expectedCount'] : []
   if (correlation && (!Number.isSafeInteger(value.sampleCount) || (value.sampleCount as number) < 0 ||
     (value.sampleCount as number) > crossAssetContractPolicy.expectedPairs || value.expectedCount !== crossAssetContractPolicy.expectedPairs)) return false
-  return value.state === 'available' ? exact(value, ['state', 'value', ...extras]) && typeof value.value === 'number' && Number.isFinite(value.value) &&
+  return value.state === 'available' ? exact(value, ['state', 'value', 'atMs', ...extras]) && typeof value.value === 'number' && Number.isFinite(value.value) &&
+    (value.atMs === undefined || (typeof value.atMs === 'string' && crossAssetContractPolicy.canonicalUtcPattern.test(value.atMs) && Number.isFinite(Date.parse(value.atMs)))) &&
     (!correlation || (Math.abs(value.value) <= 1 && (value.sampleCount as number) >= crossAssetContractPolicy.minimumPairs)) : value.state === 'unavailable' && exact(value, ['state', 'reason', ...extras]) &&
       typeof value.reason === 'string' && crossAssetContractPolicy.reasons.includes(value.reason)
 }

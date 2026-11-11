@@ -225,13 +225,15 @@ describe('cross-asset observation workspace', () => {
       expect(tag?.getAttribute('data-caveat')).toBe('synthetic-dollar-index')
       expect(host.querySelector('[data-status-row="gold"][data-connected="true"]')).not.toBeNull()
       expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('3412.55')
-      // 7d was not in the gold reading: the cell is a dash whose accessible name still says 无数据,
-      // not a zero. It is not a control, so there is no tooltip and no focus stop.
+      // 7d was not in the gold reading: the cell is a dash, not a zero. Its accessible name now says
+      // **why** —「库里没有这一窗口的收盘对」——因为「本次还没落库」那一支已由服务端回退到上一根桶。
+      // It is not a control, so there is no tooltip and no focus stop.
       const missing = host.querySelector('[data-asset-return="gold:7d"]')
       expect(missing?.textContent).toBe(text.windowNoData)
       expect(missing?.getAttribute('title')).toBeNull()
       expect(missing?.getAttribute('tabindex')).toBeNull()
-      expect(missing?.getAttribute('aria-label')).toBe(text.noData)
+      expect(missing?.getAttribute('aria-label')).toBe(text.windowNoPair)
+      expect(missing?.getAttribute('data-window-reason')).toBe('missing')
       expect(missing?.getAttribute('data-unavailable')).toBe('true')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.getAttribute('data-unavailable')).toBeNull()
       expect(host.querySelector('[data-status-row="gold"] [data-synthetic]')).toBeNull()

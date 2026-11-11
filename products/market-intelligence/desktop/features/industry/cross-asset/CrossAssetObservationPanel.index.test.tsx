@@ -201,11 +201,18 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       expect(indexRow.dataset.indexName).toBe(text.indexNames.real)
       expect(page.host.querySelector('[data-market-state-tag="closed"]')?.textContent).toBe(text.marketClosed)
       expect(page.host.querySelector('[data-index-proxy="true"]')).toBeNull()
-      // The last closed bar is still the row's value, and no window pretends to have a new one.
+      // The last closed bar is still the row's value.
       expect(page.host.querySelector('[data-asset-price="index"]')?.textContent).toBe('25077.00')
-      for (const window of ['15m', '1h', '24h', '7d']) {
+      // 收盘后分析瞬时那一桶没有收盘：窗口**回退到库里最近一根完整的桶**，短窗口照常有数；
+      // 只有回看端真的没有收盘对的 24h/7d 仍是 `—`，并且那句说明与「本次还没落库」不同。
+      for (const window of ['15m', '1h'] as const) {
+        expect(cell(page.host, window).textContent, window).toMatch(/[0-9]/)
+      }
+      for (const window of ['24h', '7d'] as const) {
         expect(cell(page.host, window).textContent, window).toBe(text.windowNoData)
-        expect(cell(page.host, window).textContent, window).not.toMatch(/[0-9]/)
+        expect(cell(page.host, window).getAttribute('data-window-reason'), window).toBe('missing')
+        expect(cell(page.host, window).getAttribute('aria-label'), window).toBe(text.windowNoPair)
+        expect(cell(page.host, window).getAttribute('aria-label'), window).not.toBe(text.noData)
       }
     } finally { await page.unmount() }
   })
