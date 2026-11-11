@@ -94,6 +94,30 @@ describe('one horizontal centre line per row', () => {
   })
 })
 
+describe('行尾状态文字：一条列线、不染色', () => {
+  it('keeps 中英 × 开/关 on one column line', () => {
+    // 界面设计 2026-11-12 签：8ch 宽于四种组合里最长的一条（中「已启用 / 未启用」、英 `Enabled / Disabled`），
+    // 右对齐让右缘不随词长跳；`nowrap` 保证窄窗不折。四种组合因此共用一条列线——
+    // 像素宽度要无头浏览器量（那属于人看），这里钉住三条声明，删掉任一条就红。
+    const rules = rulesFor(css, 'source-provider-detail__row-state')
+    expect(rules.length).toBeGreaterThan(0)
+    const body = rules.join('\n')
+    expect(body).toContain('min-width: 8ch')
+    expect(body).toContain('text-align: right')
+    expect(body).toContain('white-space: nowrap')
+  })
+
+  it('never takes a colour from the state, and keeps the marker out of every style rule', () => {
+    // 状态只写文字：颜色不许上这一行——要颜色就走药丸。`data-source-enabled` 是给用例认状态的标记，
+    // 一旦有样式规则引用它，颜色（或任何视觉）就会挂在「开没开」上，正是这条要挡的形态。
+    expect(css).not.toContain('data-source-enabled')
+    for (const body of rulesFor(css, 'source-provider-detail__row-state')) {
+      expect(body).not.toMatch(/(^|;|\s)color\s*:/u)
+      expect(body).not.toContain('background')
+    }
+  })
+})
+
 describe('the source-filter row wraps instead of scrolling', () => {
   it('overrides the segmented row locally so no width shows a horizontal scrollbar', () => {
     // 平台 `Segmented` 默认 `nowrap + overflow-x: auto`；这一行在产品样式里覆写成换行。

@@ -1027,10 +1027,15 @@
 }
 
 /* 行尾状态文字（用户 2026-11-12）：这里是**文字**不是开关——启停唯一编辑入口是页头组开关，
-   行上画一颗点不动的开关就是假控件。正文色、不染状态色；单行不折，长度随文案走。 */
+   行上画一颗点不动的开关就是假控件。正文色、不染状态色（颜色只走药丸，守卫钉在
+   `settingsRowValues.test.ts`）；单行不折，长度随文案走。
+   `min-width: 8ch` 宽于中英四种组合（已启用/未启用、Enabled/Disabled）里最长的一条，
+   右对齐让右缘不随词长跳；`ch` 是字体相对单位，不是新的像素档（界面设计 2026-11-12 签）。 */
 .source-provider-detail__row-state {
+  min-width: 8ch;
   font-size: var(--font-meta);
   white-space: nowrap;
+  text-align: right;
 }
 
 /* 状态串：状态词 + 人话原因 + 上次成功，一条 ` · ` 串起来。

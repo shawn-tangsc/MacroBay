@@ -113,7 +113,8 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
       : null}
     {/* 行尾是**文字状态**，不是开关（用户 2026-11-12）：这一屏的启停唯一编辑入口是页头那颗
         组开关，行上再画一颗点不动的开关就是假控件——「假控件比没有更坏」。
-        文字不带交互语义、读屏按正文读出；只说这个源开没开，不写解释（解释进 ⓘ，这里不需要）。 */}
+        文字不带交互语义、读屏按正文读出；只说这个源开没开，不写解释（解释进 ⓘ，这里不需要）。
+        **颜色也不走这里**：要颜色就用药丸，别给这一行染色（守卫在 `settingsRowValues.test.ts`）。 */}
     <span
       className="source-provider-detail__row-state"
       data-source-enabled={enabled ? 'true' : 'false'}
