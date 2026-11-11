@@ -56,10 +56,19 @@ export type ConfigSettingsDrawerProps = {
    *
    * 抽屉目录不许 import 数据层（有守卫），所以这块由宿主用设置页同一套组件渲染好再交进来；
    * 抽屉只负责把它放进两栏。传了它就不再用下面的静态版或扁平列表。
+   *
+   * 是个**回调**而不是节点：抽屉内部从「采集与数据」点源名跳过来时，得把「落到哪个源」交给这屏
+   * （`focusSourceId`）——定位归抽屉，因为切菜单也归抽屉。节点形态做不到这件事，只能把状态抬回页面，
+   * 而那正是「抽屉被重新打开一次」的来源。
    */
-  sourcesPanel?: React.ReactNode
-  /** 「采集与数据」那一屏（业务设置视图）由宿主渲染好交进来。 */
-  sourcesDataPanel?: React.ReactNode
+  sourcesPanel?: (nav: Readonly<{ focusSourceId?: string }>) => React.ReactNode
+  /**
+   * 「采集与数据」那一屏（业务设置视图）由宿主渲染好交进来。
+   *
+   * `openSource` 是**抽屉内部**的导航：换菜单 + 定位那个源，一次都不重开抽屉。
+   * 不传回调时宿主只能自己接到页面级「打开配置抽屉」，那条路会 bump 请求计数、整只抽屉重建。
+   */
+  sourcesDataPanel?: (nav: Readonly<{ openSource: (sourceId: string) => void }>) => React.ReactNode
   /**
    * 运行日志：**只读表格**，直接用设置页那一份实现（同一块，不复制）。
    *
@@ -165,6 +174,13 @@ export function ConfigSettingsDrawer({
   }, [open])
   const resolveProductText = useProductTextKey()
   const [menu, setMenu] = useState<ConfigDrawerMenu>(initialMenu)
+  /**
+   * 抽屉内部的定位：从「采集与数据」点源名进来时，让「数据源」那屏挂载就落在那个源上。
+   *
+   * 它是**抽屉自己的状态**，不是页面状态：切菜单、定位源都发生在抽屉里，抬到页面就会变成
+   * 「又从外面打开了一次」（用户原话：「都在抽屉里面，就是 tab 切换一下，为啥还要给我重新打开抽屉？」）。
+   */
+  const [focusSourceId, setFocusSourceId] = useState<string>()
   const navRef = useRef<HTMLElement>(null)
   const screen = DRAWER_PREVIEW_SCREENS.find((candidate) => candidate.menu === menu)
   const menuLabel = (key: ConfigDrawerMenu): string => copy.menus[key]
@@ -213,6 +229,18 @@ export function ConfigSettingsDrawer({
       cancelLabel: copy.discard.cancel,
       onDiscard: () => setMenu(next)
     })
+  }
+
+  /**
+   * 「采集与数据」里点源名 / 点红辉光行 → 切到「数据源」并定位那个源。
+   *
+   * **全在抽屉里完成**：只换菜单、只记定位，不碰页面的「打开抽屉」那条路（那条会 bump 请求计数、
+   * 整只抽屉重建——用户看到的就是「tab 切换一下，抽屉又给我重开了一次」）。
+   * 有未保存改动时照样走 `requestMenuChange`：切屏和关抽屉共用同一条确认。
+   */
+  const openSource = (sourceId: string): void => {
+    setFocusSourceId(sourceId)
+    requestMenuChange('sources')
   }
 
   // 上下键在导航内移动；Home/End 跳首尾。焦点跟着走，读屏才跟得上。
@@ -307,12 +335,12 @@ export function ConfigSettingsDrawer({
         className={`config-drawer__pane${splitPane && ' config-drawer__pane--split'}`}>
         <ConfigDrawerContentCard split={splitPane}>
         {menu === 'sourcesData' && sourcesDataPanel !== undefined
-          ? <div className="config-drawer__split">{sourcesDataPanel}</div>
+          ? <div className="config-drawer__split">{sourcesDataPanel({ openSource })}</div>
           : null}
         {menu === 'sources'
           ? sourcesPanel === undefined
             ? (<SourcesStaticScreen />)
-            : (<div className="config-drawer__split">{sourcesPanel}</div>)
+            : (<div className="config-drawer__split">{sourcesPanel({ ...(focusSourceId === undefined ? {} : { focusSourceId }) })}</div>)
           : null}
         {menu === 'processing' && processingPanel !== undefined
           ? processingPanel

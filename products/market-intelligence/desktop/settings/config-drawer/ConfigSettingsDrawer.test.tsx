@@ -45,7 +45,7 @@ function openSourcesPanel(panel: React.ReactNode): HTMLElement {
   document.body.append(host)
   root = createRoot(host)
   act(() => root?.render(
-    <ConfigSettingsDrawer initialMenu="sources" onClose={() => undefined} open sourcesPanel={panel} />
+    <ConfigSettingsDrawer initialMenu="sources" onClose={() => undefined} open sourcesPanel={() => panel} />
   ))
   return document.body
 }
@@ -427,12 +427,12 @@ describe('config settings drawer (static layout)', () => {
   }
 
   it('marks the sources screen as two columns', async () => {
-    expect(await paneClassFor('sources', { sourcesPanel: <div /> })).toContain('config-drawer__pane--split')
+    expect(await paneClassFor('sources', { sourcesPanel: () => <div /> })).toContain('config-drawer__pane--split')
   })
 
   it('marks the collection screen as two columns too', async () => {
     // 少了这条它会横过来铺满整行、内容被压到下面（真机撞到过）。
-    expect(await paneClassFor('sourcesData', { sourcesDataPanel: <div /> })).toContain('config-drawer__pane--split')
+    expect(await paneClassFor('sourcesData', { sourcesDataPanel: () => <div /> })).toContain('config-drawer__pane--split')
   })
 
   it('lets no other screen take the two-column class', () => {
@@ -520,7 +520,7 @@ describe('config settings drawer (static layout)', () => {
       return document
     }
     for (const [menu, prop] of [['sources', 'sourcesPanel'], ['sourcesData', 'sourcesDataPanel']] as const) {
-      const doc = mountWith(menu, { [prop]: <div data-fake-screen="true" /> })
+      const doc = mountWith(menu, { [prop]: () => <div data-fake-screen="true" /> })
       const card = doc.querySelector('[data-drawer-card="true"]')
       expect(card, `${menu} 必须有内容卡`).not.toBeNull()
       // 卡头页名已删（用户否掉）：菜单已经高亮当前屏，卡里不再重复一遍。
@@ -730,5 +730,77 @@ describe('单列屏铺满可视区', () => {
     const child = rule('.config-drawer__card-body:not(.config-drawer__card-body--split) > *')
     expect(child).toContain('width: 100%')
     expect(child).toContain('min-height: 0')
+  })
+})
+
+describe('抽屉内部导航：点源名只在抽屉里换菜单', () => {
+  /*
+    用户 2026-11-11 14:52 真机：在「采集与数据」点源名跳到「数据源」时**整只抽屉被重新打开一次**。
+    根因是那条路接到页面级 `openConfigDrawer`：bump 请求计数 + `setActiveView`，抽屉按「从外面重新打开」
+    处理。用户原话：「都在抽屉里面，就是 tab 切换一下，为啥还要给我重新打开抽屉？」
+  */
+  function mountBusiness(options: Readonly<{
+    isScreenDirty?: () => boolean
+    confirmDiscard?: (input: { title: string; body: string; confirmLabel: string; cancelLabel: string; onDiscard: () => void }) => void
+    onClose?: () => void
+  }> = {}): { body: HTMLElement; focus: () => string | undefined } {
+    let focusSourceId: string | undefined
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => root?.render(
+      <ConfigSettingsDrawer
+        initialMenu="sourcesData"
+        onClose={options.onClose ?? (() => undefined)}
+        open
+        {...(options.isScreenDirty === undefined ? {} : { isScreenDirty: options.isScreenDirty })}
+        {...(options.confirmDiscard === undefined ? {} : { confirmDiscard: options.confirmDiscard })}
+        sourcesDataPanel={(nav) => (
+          <button data-open-source onClick={() => nav.openSource('s1')} type="button">打开 s1</button>
+        )}
+        sourcesPanel={(nav) => {
+          focusSourceId = nav.focusSourceId
+          return <p data-sources-focus={nav.focusSourceId ?? ''}>sources</p>
+        }}
+      />
+    ))
+    return { body: document.body, focus: () => focusSourceId }
+  }
+
+  const currentMenu = (body: HTMLElement): string | null =>
+    body.querySelector('.settings-nav-item[aria-current="page"]')?.textContent ?? null
+
+  it('switches the menu without closing and reopening the drawer', () => {
+    const onClose = vi.fn()
+    const { body, focus } = mountBusiness({ onClose })
+    // 切换前抓住卡的那个节点：抽屉被重建时它会换成另一个元素。
+    const cardBefore = body.querySelector('[data-drawer-card="true"]')
+    expect(cardBefore).not.toBeNull()
+    expect(currentMenu(body)).toBe('采集与数据')
+
+    act(() => body.querySelector<HTMLElement>('[data-open-source]')!.click())
+
+    // ① 抽屉一次都没关：没有走关闭，也没有换一个新的卡节点。
+    expect(onClose).not.toHaveBeenCalled()
+    expect(body.querySelector('[data-drawer-card="true"]')).toBe(cardBefore)
+    // ② 菜单换到「数据源」，并且定位交给了那一屏。
+    expect(currentMenu(body)).toBe('数据源')
+    expect(body.querySelector('[data-sources-focus]')?.getAttribute('data-sources-focus')).toBe('s1')
+    expect(focus()).toBe('s1')
+  })
+
+  it('asks first when the business screen has unsaved edits', () => {
+    const confirmDiscard = vi.fn()
+    const { body } = mountBusiness({ isScreenDirty: () => true, confirmDiscard })
+
+    act(() => body.querySelector<HTMLElement>('[data-open-source]')!.click())
+
+    // ③ 不静默切走：先问；没确认之前还停在「采集与数据」。
+    expect(confirmDiscard).toHaveBeenCalledTimes(1)
+    expect(currentMenu(body)).toBe('采集与数据')
+
+    const { onDiscard } = confirmDiscard.mock.calls[0]![0] as { onDiscard: () => void }
+    act(() => onDiscard())
+    expect(currentMenu(body)).toBe('数据源')
   })
 })

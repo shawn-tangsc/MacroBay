@@ -47,7 +47,7 @@ describe('configuration drawer panels keep their own failure inside the drawer',
           initialMenu="sources"
           onClose={() => undefined}
           open
-          sourcesPanel={<ConfigDrawerPanel screen="sources"><Boom /></ConfigDrawerPanel>}
+          sourcesPanel={() => <ConfigDrawerPanel screen="sources"><Boom /></ConfigDrawerPanel>}
         />
       )
     })

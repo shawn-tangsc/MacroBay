@@ -268,7 +268,6 @@ function IntelligencePageBody(): React.ReactElement {
           initialSourceFilter={initialSourceFilter}
           openSettingsRequest={configDrawerRequest}
           /* 「采集与数据」里点源名/红行：切到「数据源」屏，定位到那个源（滚动/描边/焦点归详情）。 */
-          onOpenSourceConfig={(sourceId) => openConfigDrawer({ menu: 'sources', focus: { menu: 'sources', sourceId } })}
           onOpenCalendar={() => setActiveView('calendar')}
           text={text.dashboard}
         />
