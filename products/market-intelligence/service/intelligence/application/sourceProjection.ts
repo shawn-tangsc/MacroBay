@@ -212,9 +212,17 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     ...(source.unavailable === undefined ? {} : { unavailable: true }),
     ...(health === undefined ? {} : { health })
   })
+  /* 采集节奏归谁：目录里声明了 `collectionOwner: 'product'` 的源归产品；
+     官方日历源（`kind: 'official-calendar'`）**没有目录条目**（它们是 registry-only 的 feed），
+     但节奏同样由产品自己的日历作业决定（`macroCalendarScheduleBackend`），没有任何读取点读
+     profile 的 `collectionPreset`。所以这里按 kind 判成 product——否则界面会画一个「改完不生效」
+     的下拉（用户 2026-11-12 真机：「这个采集频率怎么还动不了」）。 */
+  const catalogOwner = getIntelligenceSourceDefinition(source.sourceId)?.collectionOwner
+  const collectionOwner = catalogOwner
+    ?? (source.kind === 'official-calendar' ? 'product' : undefined)
   return {
     ...source,
-    ...(getIntelligenceSourceDefinition(source.sourceId)?.collectionOwner === 'product' ? { collectionOwner: 'product' as const } : {}),
+    ...(collectionOwner === 'product' ? { collectionOwner: 'product' as const } : {}),
     enabled,
     healthState,
     healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),
