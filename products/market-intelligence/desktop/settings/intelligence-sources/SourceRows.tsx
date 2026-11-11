@@ -1,6 +1,3 @@
-import { Button } from 'antd'
-
-import { SettingsRow } from '@platform/ui/components/settings-row'
 import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { SettingsInfo } from '../settingsInfo'
@@ -125,6 +122,3 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
     </span>
   </div>
 }
-
-/** 行尾那颗展开按钮的文案键（「高级」两个字，不是说明）。 */
-const ADVANCED_KEY = 'settings.intelligenceSources.advancedToggle'

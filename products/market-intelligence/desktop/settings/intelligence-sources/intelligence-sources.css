@@ -1564,20 +1564,6 @@
   border: 0;
 }
 
-/* 源那一行行尾的「高级」：文字按钮，右缘贴住开关左侧，不与开关抢行尾。 */
-.source-provider-detail__advanced.ant-btn {
-  align-self: center;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-soft);
-  box-shadow: none;
-  color: var(--muted-strong);
-  font-size: 12px;
-  line-height: 1;
-}
-
 /* 展开后那张表单：健康两行（一行两组）+ 采集策略两行，**没有二级标题、没有卡片、没有嵌套框**。
    左右内距 12 与上面那一行一致（那一行的细线走 inset 阴影，不占布局），所以左缘正好对齐；
    下留 8，与列表 8 的 gap 合起来是 16（主档），下一行源不会贴死在表单后面。 */

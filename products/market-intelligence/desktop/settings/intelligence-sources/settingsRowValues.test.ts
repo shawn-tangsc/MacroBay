@@ -79,20 +79,18 @@ describe('settings row values stay on their steps', () => {
 })
 
 describe('one horizontal centre line per row', () => {
-  it('centres the row items and keeps the switch and the 高级 button off the edges', () => {
-    // 用户 2026-11-10：名字 / meta / 高级 / 开关「高高低低」。判据落在 CSS 上（计算中线要无头浏览器量，
-    // 那属于人看）：行容器 `align-items: center`，开关不留 margin，两颗行内控件同为 24 高。
+  it('centres the row items and keeps the inline action off the edges', () => {
+    // 用户 2026-11-10：名字 / meta / 行内动作「高高低低」。判据落在 CSS 上（计算中线要无头浏览器量，
+    // 那属于人看）：行容器 `align-items: center`，行内文字动作 24 高。
     // 同一选择器还有「卡二里换发丝线」那类只改边框的规则，所以只要求**基础规则里有**这一条。
     const rowRules = rulesFor(css, 'source-provider-detail__row')
     expect(rowRules.some((body) => body.includes('align-items: center'))).toBe(true)
     for (const body of rowRules) expect(body).not.toContain('align-items: start')
-    for (const body of rulesFor(css, 'ant-switch')) {
-      expect(body).not.toMatch(/margin-top\s*:\s*[1-9]/u)
-    }
-    for (const selector of ['source-provider-detail__advanced', 'source-provider-detail__name-action']) {
-      // 同一选择器还有 :hover 等规则，只要求「基础规则里有一颗 24 高的」。
-      expect(rulesFor(css, selector).some((body) => body.includes('height: 24px'))).toBe(true)
-    }
+    // 行尾「高级」按钮与行尾开关都已按用户 2026-11-12 删除（前者整颗删、后者换成文字状态）。
+    // 这里钉**它们不会回来**，不把它们从检查范围里划掉——划掉等于以后有人加回来也没人发现。
+    expect(rulesFor(css, 'source-provider-detail__advanced')).toHaveLength(0)
+    // 源名旁那颗行内文字动作仍在，仍是 24 高（同一选择器还有 :hover 等规则，只要求基础规则里有一条）。
+    expect(rulesFor(css, 'source-provider-detail__name-action').some((body) => body.includes('height: 24px'))).toBe(true)
   })
 })
 
