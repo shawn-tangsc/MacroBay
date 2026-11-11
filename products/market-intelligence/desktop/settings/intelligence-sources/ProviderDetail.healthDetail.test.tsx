@@ -31,7 +31,6 @@ function labels(): ProviderDetailLabels {
     credentials: settingsText.credentialsRequired,
     website: settingsText.website,
     signup: settingsText.signup,
-    inviteNote: settingsText.inviteNote,
     testConnection: settingsText.testConnection,
     jobRegistered: settingsText.jobRegistered,
     jobNotRegistered: settingsText.jobNotRegistered,

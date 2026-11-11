@@ -36,7 +36,7 @@ function labels() {
     sourceNames: {}, providerNames: {}, panelNames: t.panelNames, badges: t.sourceBadges,
     status: t.status, toggleSource: t.toggleSource,
     toggleProvider: { enable: t.toggleProviderEnable, disable: t.toggleProviderDisable },
-    credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote,
+    credentials: t.credentialsRequired, website: t.website, signup: t.signup, 
     testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered,
     connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed,
     connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey,
@@ -62,7 +62,6 @@ async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-ke
         providerId: 'bls', displayName: 'Bureau of Labor Statistics (BLS)', category: 'macro',
         credential: extra.credential ?? 'none', healthMarker: 'none',
         website: 'https://www.bls.gov',
-        ...(extra.invite === true ? { signupUrl: 'https://example.test/signup?invite=1', invite: true } : {}),
         sources: enabled.map((value, index) => source(`s${index}`, value, extra.pendingIndex === index ? 'pending' : 'visible'))
       },
       showSourceDetails: false
@@ -152,15 +151,12 @@ describe('两张卡的范围', () => {
     const { host } = await render([true], {
       credential: 'api-key',
       hasCredential: true,
-      invite: true
     })
     const cards = [...host.querySelectorAll<HTMLElement>('.source-provider-detail__card')]
     expect(cards).toHaveLength(2)
     const header = cards[0]!
     // API Key 行在页头卡里（不是被拆到卡外）。
     expect(header.querySelector(`[aria-label="${t.apiKey.label}"]`)).not.toBeNull()
-    // 邀请句也在同一张卡里（有才显示）。
-    expect(header.textContent).toContain(t.inviteNote)
     // 能力行在第二张卡里。
     expect(cards[1]!.querySelectorAll('.source-provider-detail__row').length).toBeGreaterThan(0)
     expect(cards[1]!.querySelector(`[aria-label="${t.apiKey.label}"]`)).toBeNull()

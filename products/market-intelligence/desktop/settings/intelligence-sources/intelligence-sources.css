@@ -1467,11 +1467,6 @@
   gap: 8px;
 }
 
-.source-provider-detail__invite {
-  margin: 8px 0 0;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
 
 .source-detail-panel {
   display: grid;

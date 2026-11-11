@@ -26,7 +26,6 @@ export type SourceConfigText = {
   credentialsRequired: ProviderDetailLabels['credentials']
   website: ProviderDetailLabels['website']
   signup: ProviderDetailLabels['signup']
-  inviteNote: ProviderDetailLabels['inviteNote']
   testConnection: ProviderDetailLabels['testConnection']
   jobRegistered: ProviderDetailLabels['jobRegistered']
   jobNotRegistered: ProviderDetailLabels['jobNotRegistered']
@@ -103,7 +102,6 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
     credentials: props.text.credentialsRequired,
     website: props.text.website,
     signup: props.text.signup,
-    inviteNote: props.text.inviteNote,
     testConnection: props.text.testConnection,
     jobRegistered: props.text.jobRegistered,
     jobNotRegistered: props.text.jobNotRegistered,

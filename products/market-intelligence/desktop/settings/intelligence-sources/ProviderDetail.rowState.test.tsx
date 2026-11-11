@@ -28,7 +28,7 @@ const labels = {
   sourceNames: {}, providerNames: {}, panelNames: t.panelNames, badges: t.sourceBadges, status: t.status,
   toggleSource: t.toggleSource,
   toggleProvider: { enable: t.toggleProviderEnable, disable: t.toggleProviderDisable },
-  credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote,
+  credentials: t.credentialsRequired, website: t.website, signup: t.signup, 
   testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered,
   connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed,
   connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey,

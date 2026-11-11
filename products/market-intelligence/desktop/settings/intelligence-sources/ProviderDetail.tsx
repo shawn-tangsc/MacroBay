@@ -39,7 +39,6 @@ export type ProviderDetailLabels = {
   credentials: string
   website: string
   signup: string
-  inviteNote: string
   testConnection: string
   jobRegistered: string
   jobNotRegistered: string
@@ -445,7 +444,6 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
           {credentialFeedback ? <Alert message={credentialFeedback === 'saved' ? labels.apiKey.savedHint : labels.credentials} showIcon type={credentialFeedback === 'saved' ? 'success' : 'error'} /> : null}
         </div>
       </> : null}
-      {inviteProvider && provider.signupUrl ? <p className="source-provider-detail__invite">{labels.inviteNote}</p> : null}
       {/* 「官网 / 测试连接」那一排动作整行去掉：两颗都上到源名旁边（同一屏一个动作只有一处）。
           连接反馈仍要留在页头，它是这次点击的结果。 */}
       {connectionFeedback ? <Alert

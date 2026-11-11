@@ -8,12 +8,10 @@ import { ProviderDetail, type ProviderDetailLabels } from './ProviderDetail'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 
 /**
- * 「搬家搬干净了」的两条证明（`be92217`）。
+ * 「搬家搬干净了」的证明（`be92217`）。
  *
- * 1. `inviteNote` 是**装配层透传**（`SourceConfigSurface` → `ProviderDetail` 渲染），页面上只能出现**一次**。
- *    这条是那条基线豁免的唯一保险：哪天谁把它改成真渲染（两份都画），就会变两次，这里红。
- * 2. `manualPresetNote` 已从正文搬进采集预设行的 ⓘ：**正文不含那句话**，展开 ⓘ 之后才有。
- *    两句都在，才说明是「搬走」而不是「复制一份」。
+ * `manualPresetNote` 已从正文搬进采集预设行的 ⓘ：**正文不含那句话**，展开 ⓘ 之后才有。
+ * （`inviteNote` 那条旧证明随推广句一起删除——用户 2026-11-12「这个不显示」，句子本身不再存在。）
  */
 const settingsText = productText['zh-CN'].settings.intelligenceSources
 
@@ -36,7 +34,6 @@ function labels(): ProviderDetailLabels {
     credentials: settingsText.credentialsRequired,
     website: settingsText.website,
     signup: settingsText.signup,
-    inviteNote: settingsText.inviteNote,
     testConnection: settingsText.testConnection,
     jobRegistered: settingsText.jobRegistered,
     jobNotRegistered: settingsText.jobNotRegistered,
@@ -122,17 +119,6 @@ async function render(
 }
 
 describe('the moved sentences live in exactly one place', () => {
-  it('renders the invite note once, which is what the baseline entry promises', async () => {
-    const host = await render(createElement(ProviderDetail, {
-      labels: labels(),
-      provider: provider(),
-      policy: policy()
-    }))
-
-    const occurrences = (host.textContent ?? '').split(settingsText.inviteNote).length - 1
-    expect(occurrences).toBe(1)
-  })
-
   it('keeps the manual-preset sentence out of the body, and behind the info trigger', async () => {
     const host = await render(createElement(ProviderDetail, {
       labels: labels(),

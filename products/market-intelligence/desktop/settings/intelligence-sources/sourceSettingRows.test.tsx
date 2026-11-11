@@ -36,7 +36,7 @@ function labels(): ProviderDetailLabels {
     sourceNames: {}, providerNames: {}, panelNames: settingsText.panelNames, badges: settingsText.sourceBadges,
     status: settingsText.status, toggleSource: settingsText.toggleSource,
     credentials: settingsText.credentialsRequired, website: settingsText.website, signup: settingsText.signup,
-    inviteNote: settingsText.inviteNote, testConnection: settingsText.testConnection, jobRegistered: settingsText.jobRegistered,
+    testConnection: settingsText.testConnection, jobRegistered: settingsText.jobRegistered,
     jobNotRegistered: settingsText.jobNotRegistered, connectionSucceeded: settingsText.connectionSucceeded,
     connectionFailed: settingsText.connectionFailed, connectionUnsupported: settingsText.connectionUnsupported,
     apiKey: settingsText.apiKey, unavailableReasonCode: settingsText.unavailableReasonCode,
