@@ -373,8 +373,8 @@ export const intelligenceSourcesText = {
     'websocket-stream-consumer': 'WebSocket 流消费'
   },
   status: {
-    enabled: '已启用',
-    disabled: '未启用'
+    applied: '已应用',
+    notApplied: '未应用'
   },
   executionModes: {
     polling: '轮询',
@@ -939,8 +939,8 @@ export const intelligenceSourcesText = {
     'websocket-stream-consumer': 'WebSocket Stream Consumer'
   },
   status: {
-    enabled: 'Enabled',
-    disabled: 'Disabled'
+    applied: 'Applied',
+    notApplied: 'Not applied'
   },
   executionModes: {
     polling: 'Polling',

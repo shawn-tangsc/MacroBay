@@ -66,26 +66,26 @@ function rowState(host: HTMLElement, sourceId: string): string {
 }
 
 describe('能力行状态读源自己的 enabled', () => {
-  it('shows exactly the enabled sources as 已启用, and the disabled ones as 未启用', async () => {
+  it('shows exactly the enabled sources as 已应用, and the disabled ones as 未应用', async () => {
     const host = await render([
       source('binance-announcements', true),
       source('binance-futures-positioning', true),
       source('binance-api-updates', false),
       source('binance-spot-market', false)
     ])
-    expect(rowState(host, 'binance-announcements')).toBe(t.status.enabled)
-    expect(rowState(host, 'binance-futures-positioning')).toBe(t.status.enabled)
-    expect(rowState(host, 'binance-api-updates')).toBe(t.status.disabled)
-    expect(rowState(host, 'binance-spot-market')).toBe(t.status.disabled)
+    expect(rowState(host, 'binance-announcements')).toBe(t.status.applied)
+    expect(rowState(host, 'binance-futures-positioning')).toBe(t.status.applied)
+    expect(rowState(host, 'binance-api-updates')).toBe(t.status.notApplied)
+    expect(rowState(host, 'binance-spot-market')).toBe(t.status.notApplied)
   })
 
   it('keeps working for a source used by no dashboard cell at all', async () => {
     // 维护备用 / 只供分析的源没有格开关：这一行只回答「这个源自己开没开」。
     const on = await render([source('binance-api-updates', true)])
-    expect(rowState(on, 'binance-api-updates')).toBe(t.status.enabled)
+    expect(rowState(on, 'binance-api-updates')).toBe(t.status.applied)
     await act(async () => root?.unmount())
     const off = await render([source('binance-api-updates', false)])
-    expect(rowState(off, 'binance-api-updates')).toBe(t.status.disabled)
+    expect(rowState(off, 'binance-api-updates')).toBe(t.status.notApplied)
   })
 
   it('never renders a control in the row: the header group switch is the only write path', async () => {

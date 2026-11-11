@@ -119,7 +119,7 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
       className="source-provider-detail__row-state"
       data-source-enabled={enabled ? 'true' : 'false'}
     >
-      {enabled ? labels.status.enabled : labels.status.disabled}
+      {enabled ? labels.status.applied : labels.status.notApplied}
     </span>
   </div>
 }

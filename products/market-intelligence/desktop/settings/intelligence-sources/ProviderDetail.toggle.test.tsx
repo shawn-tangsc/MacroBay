@@ -88,7 +88,7 @@ describe('one enable value, one write', () => {
     // 能力行行尾是文字状态、没有开关：写入口只有页头那一颗。
     expect(container.querySelector(ROW_SWITCH)).toBeNull()
     expect(container.querySelector('.source-provider-detail__list .source-provider-detail__row-state')?.textContent)
-      .toBe(settingsText.status.disabled)
+      .toBe(settingsText.status.notApplied)
   })
 
   it('keeps both hosts on the same value: one write, both headers follow', async () => {

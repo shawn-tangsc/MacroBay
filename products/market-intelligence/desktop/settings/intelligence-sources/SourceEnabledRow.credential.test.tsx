@@ -79,17 +79,17 @@ describe('源行只写状态，不画点不动的控件', () => {
     const buttons = [...host.querySelectorAll('button')]
     expect(buttons).toHaveLength(1)
     expect(buttons[0]?.getAttribute('aria-label')).toBe(t.credentialRequiredToEnableAria)
-    expect(stateText(host)).toBe(t.status.disabled)
+    expect(stateText(host)).toBe(t.status.notApplied)
   })
 
   it('reads the state straight from the projection, both ways', async () => {
     const off = await render(false)
-    expect(stateText(off)).toBe(t.status.disabled)
+    expect(stateText(off)).toBe(t.status.notApplied)
     await act(async () => root?.unmount())
     document.body.replaceChildren()
 
     const on = await render(false, true)
-    expect(stateText(on)).toBe(t.status.enabled)
+    expect(stateText(on)).toBe(t.status.applied)
   })
 
   it('keeps the key hint at ⓘ while the key is missing, and drops it once configured', async () => {

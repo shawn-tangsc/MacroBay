@@ -39,7 +39,7 @@ export type ProviderDetailLabels = {
   providerNames: Record<string, string>
   panelNames: Record<string, string>
   badges: { pending: string; advanced: string; calendar: string; proxy: string }
-  status: { enabled: string; disabled: string }
+  status: { applied: string; notApplied: string }
   toggleSource: Readonly<{ enable: string; disable: string }>
   /** 页头那颗**整组**启停的可访问名（带来源名）。缺省时退回源开关那套说法。 */
   toggleProvider?: Readonly<{ enable: string; disable: string }>
