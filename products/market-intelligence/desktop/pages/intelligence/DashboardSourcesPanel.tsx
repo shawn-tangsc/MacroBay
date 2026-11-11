@@ -36,6 +36,8 @@ export function DashboardSourcesPanel(props: {
   initialSourceId?: string
   /** 「采集与数据」里点源名/整行：切到「数据源」屏并定位这个源（宿主实现菜单切换）。 */
   onOpenSourceConfig?: (sourceId: string) => void
+  /** 「采集与数据 › 舆情」右边入口卡 → 抽屉的「内容处理」屏。 */
+  onOpenProcessingSettings?: () => void
   /** 「采集与数据」那屏的定位（只作初值）：业务 / 模块卡 / 格。 */
   initialBusinessPosition?: BusinessFocus
   /**
@@ -131,6 +133,7 @@ export function DashboardSourcesPanel(props: {
   return <SourcesSettingsPane
     {...(props.pane === undefined ? {} : { pane: props.pane })}
     onOpenSourceConfig={openSourceConfig}
+    {...(props.onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings: props.onOpenProcessingSettings })}
     {...(props.initialBusinessPosition === undefined ? {} : { initialBusinessPosition: props.initialBusinessPosition })}
     /* 格级开关的读写：与看板读取链**同一个客户端实例**（同一份存储，不各建一份）。 */
     cellEnabledIo={{ read: () => cellEnabledClient.read(), write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled) }}

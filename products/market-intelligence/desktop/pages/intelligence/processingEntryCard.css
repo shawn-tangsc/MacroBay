@@ -1,0 +1,48 @@
+/*
+ * 「采集与数据 › 舆情」右边那张入口卡的样式（用户 2026-11-12）。
+ *
+ * 单独一个文件的原因：`configDrawer.css` 与 `intelligence-sources.css` 当时正被读者本人改，
+ * 那两层一个字都不动；这张卡只补它自己需要的三条（短标、箭头、两行字段），其余全部复用
+ * `.business-card` / `.business-card__title` 的既有外观。
+ */
+
+/* 整卡可点：悬停一层淡底，不加边框变化/阴影/位移（界面设计 2026-11-12 签字）。 */
+.business-card--entry {
+  cursor: pointer;
+}
+
+.business-card--entry:hover {
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+}
+
+/* 焦点环画在整卡外框上：2px accent、offset 2（卡内没有其它可聚焦元素，环只能是这一层）。 */
+.business-card--entry:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 标题行：标题 + 「全局」短标 + 右端箭头。短标 11/muted，不是药丸、不染状态色。 */
+.business-card__entry-scope {
+  color: var(--muted);
+  font-size: var(--font-meta);
+  font-weight: 400;
+  line-height: var(--line-meta);
+}
+
+.business-card__entry-chevron {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+/* 卡体两行字段名：12/500/正文色（与「这是哪两块设置」同一档，不是注释）。 */
+.business-card__entry-fields {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+.business-card__entry-field {
+  color: var(--text);
+  font-size: var(--font-body);
+  font-weight: 500;
+}

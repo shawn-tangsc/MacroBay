@@ -48,6 +48,8 @@ export type SourcesSettingsPaneProps = {
   pane?: 'sources' | 'business'
   /** 采集与数据里「源没开启」的项点击后跳配置页；宿主实现切屏与选中。 */
   onOpenSourceConfig?: (sourceId: string) => void
+  /** 「舆情」右边那张入口卡 → 配置抽屉的「内容处理」屏（页面层的现成回调）。 */
+  onOpenProcessingSettings?: () => void
   /**
    * 抽屉的屏内定位（只作初值）：先切到那个业务，再把那张模块卡/那一格带进视野一次。
    * 找不到就什么都不做——读者不会被拽走，也不会看到空白。
@@ -217,6 +219,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           isCellEnabled={isCellEnabled}
           isSourceEnabled={isSourceEnabled}
           {...(props.onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig: props.onOpenSourceConfig })}
+          {...(props.onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings: props.onOpenProcessingSettings })}
           {...(onPresetChange === undefined ? {} : { onPresetChange })}
           presets={presetValues}
           {...(builtinCadence.size === 0 ? {} : { builtinCadence })}

@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { Select, Switch } from 'antd'
 
 import { SettingsInfo } from '../settingsInfo'
+import { ProcessingEntryCard } from '../../pages/intelligence/ProcessingEntryCard'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes } from './sourceSettingRows'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import {
@@ -158,6 +159,11 @@ export function BusinessSettingsContent(props: {
   /** 未开启的项点击后跳到那个源的配置页（宿主实现切屏与选中）。 */
   onOpenSourceConfig?: (sourceId: string) => void
   /**
+   * 舆情业务右边那张入口卡：打开配置抽屉的「内容处理」屏（宿主给的现成回调）。
+   * 不给就**不渲染这张卡**——不留一个点了没反应的入口。
+   */
+  onOpenProcessingSettings?: () => void
+  /**
    * 每源当前的采集预设（只含**可配置且已启用**的源）：值来自那份 profile 投影，
    * 与详情读同一处；未启用 / 待接入 / 不可用 / 无采集的源不出现这一行。
    */
@@ -250,7 +256,13 @@ export function BusinessSettingsContent(props: {
         : null}
       {props.business === 'dashboard'
         ? null
-        : <section className="business-card" data-business-card={props.business}>
+        : (() => {
+          const entry = props.business === 'sentiment' && props.onOpenProcessingSettings !== undefined
+          return <div className={entry ? 'business-module-grid' : undefined}>
+            <section
+              className="business-card"
+              data-business-card={props.business}
+              {...(entry ? { style: { ['--module-span' as string]: 2 } } : {})}>
           {/* 日历 / 舆情也是两层卡片（用户 2026-11-11）：模块卡里放第二层数据卡片。
               日历按 `calendarFeedRegistry` 的 `owner` 分「官方源 / 聚合源」两张卡；
               舆情只有一张卡（标题留空，卡头已经写了业务名）。 */}
@@ -286,8 +298,12 @@ export function BusinessSettingsContent(props: {
                   ))}
                 </div>}
             </div>)}
+            </div>
+            </section>
+            {/* 舆情模块卡右边那张入口卡（同一层网格，占 1 列）：整卡可点 → 内容处理屏。 */}
+            {entry ? <ProcessingEntryCard onOpen={props.onOpenProcessingSettings!} /> : null}
           </div>
-        </section>}
+        })()}
     </div>
   </div>
 }
