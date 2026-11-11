@@ -10,6 +10,7 @@ vi.mock('../../shared/ipc/intelligenceSourcesClient', () => ({
 }))
 
 import { useCryptoActivation } from './useCryptoActivation'
+import { notifySettingsRevision } from '../../shared/events/settingsRevision'
 
 let root: Root | undefined
 
@@ -35,6 +36,26 @@ const answeredView = {
       panels: ['dashboard']
     }]
   }]
+}
+
+/** One more provider than `answeredView`, so a re-read shows up as a changed count. */
+const widenedView = {
+  groups: [
+    answeredView.groups[0]!,
+    {
+      groupId: 'derivatives',
+      tier: 'required',
+      sources: [{
+        sourceId: 'binance-futures',
+        providerId: 'binance',
+        displayName: 'Binance',
+        enabled: true,
+        visibility: 'visible',
+        readiness: 'live',
+        panels: ['dashboard']
+      }]
+    }
+  ]
 }
 
 describe('useCryptoActivation', () => {
@@ -74,6 +95,52 @@ describe('useCryptoActivation', () => {
     expect(mockGetAgentView).toHaveBeenCalledTimes(2)
     expect(page.status()).toBe('ready')
     expect(page.counts()).toEqual({ enabled: '1', total: '1' })
+  })
+
+  it('re-reads the agent view when another surface revises the sources domain', async () => {
+    mockGetAgentView.mockResolvedValueOnce(answeredView).mockResolvedValue(widenedView)
+    const page = await renderHook()
+    await flush()
+    expect(page.counts()).toEqual({ enabled: '1', total: '1' })
+
+    await act(async () => { notifySettingsRevision('sources', 'config-drawer') })
+    await flush()
+
+    expect(mockGetAgentView).toHaveBeenCalledTimes(2)
+    expect(page.counts()).toEqual({ enabled: '2', total: '2' })
+  })
+
+  it('keeps the last reading on screen while the re-read is in flight', async () => {
+    const pending: Array<(view: unknown) => void> = []
+    mockGetAgentView
+      .mockResolvedValueOnce(answeredView)
+      .mockImplementationOnce(() => new Promise((resolve) => { pending.push(resolve) }))
+    const page = await renderHook()
+    await flush()
+    expect(page.counts()).toEqual({ enabled: '1', total: '1' })
+
+    await act(async () => { notifySettingsRevision('sources', 'config-drawer') })
+    // A background toggle must not blank the card: the old reading stays until the new one lands.
+    expect(page.status()).toBe('ready')
+    expect(page.counts()).toEqual({ enabled: '1', total: '1' })
+
+    await act(async () => { pending[0]!(widenedView) })
+    await flush()
+
+    expect(page.counts()).toEqual({ enabled: '2', total: '2' })
+  })
+
+  it('does not listen to the retired sources-changed channel as well', async () => {
+    mockGetAgentView.mockResolvedValue(answeredView)
+    await renderHook()
+    await flush()
+
+    // The name is written out on purpose: importing the legacy module would break the day it is
+    // deleted, and this assertion is exactly what keeps the retired channel from coming back.
+    await act(async () => { window.dispatchEvent(new Event('market-intelligence:sources-changed')) })
+    await flush()
+
+    expect(mockGetAgentView).toHaveBeenCalledTimes(1)
   })
 })
 
