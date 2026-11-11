@@ -106,8 +106,9 @@ export async function requestSmokeEnabledChannel(
   try {
     smoke = await deps.smoke({ id: channel.id, type: channel.type })
   } catch {
-    // 超时、解密失败、fetch 抛出：一律归一，绝不让原因空着。
-    smoke = { ok: false, code: 'telegram-network-unavailable' }
+    // 超时、解密失败、fetch 抛出：一律归一，绝不让原因空着，**也不许用别人家的说法**。
+    // 归一按这一条通道的适配器走：飞书抛异常就说「飞书这条连不上」，不许落到 telegram 的码上。
+    smoke = { ok: false, code: normalizeReason(undefined, channel.type) }
   }
   if (!smoke.ok) {
     const reason = normalizeReason(smoke.code, channel.type)
