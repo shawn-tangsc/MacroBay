@@ -382,11 +382,14 @@ describe('cross-asset observation workspace', () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
       expect(host.querySelector('[data-cross-asset-workspace]')).not.toBeNull()
       expect(host.querySelector('section')?.getAttribute('aria-label')).toBe(text.title)
-      // 拿不到行情是「读不到」，由统一状态面说那句话并给出重试，不再自己写一句文案。
-      const failure = host.querySelector<HTMLElement>('.state-view--error')
-      expect(failure, 'a failed query renders the shared state surface').not.toBeNull()
-      expect(failure?.querySelector('.state-view__action'), 'error always offers an action').not.toBeNull()
+      // 拿不到行情**不再整块换提示**（用户 2026-11-11：结构要留）：表头与列名都在，
+      // 状态句在表头下第一行，动作只剩标题行那一颗「再试一次」。
       expect(host.querySelector('[data-cross-asset-region="status"]')).not.toBeNull()
+      expect(host.querySelectorAll('.mi-cross-asset__status-table thead th')).toHaveLength(6)
+      const channelRow = host.querySelector('tbody[data-channel-state="unavailable"] td')
+      expect(channelRow, 'the sentence sits in the table, under its header').not.toBeNull()
+      expect(channelRow?.querySelector('.mi-source-state[data-state="unreadable"]')).not.toBeNull()
+      expect(host.querySelector('[data-cross-asset-region="chart"] .state-view--error')).toBeNull()
       // 跨市场观察 is temporarily unrendered (its data and i18n keys are untouched); this guard is
       // flipped back when the aside returns.
       expect(host.querySelector('[data-cross-asset-region="observations"]')).toBeNull()
@@ -845,7 +848,7 @@ describe('首次进入的状态顺序', () => {
     } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
   })
 
-  it('turns a genuinely failed first read into the error surface with a retry', async () => {
+  it('turns a genuinely failed first read into a kept table with one retry in the title row', async () => {
     // A read that keeps failing is terminal after the ladder — otherwise "not ready yet" would be
     // a spinner that never ends.
     const client = {
@@ -861,9 +864,16 @@ describe('首次进入的状态顺序', () => {
       const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
       await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
-      const failure = host.querySelector('.state-view--error')
-      expect(failure).not.toBeNull()
-      expect(failure?.querySelector('.state-view__action')).not.toBeNull()
+      // 结构留着：表头六列都在，七行行位都在，状态句在表头下第一行。
+      expect(host.querySelectorAll('.mi-cross-asset__status-table thead th')).toHaveLength(6)
+      expect(host.querySelectorAll('tr[data-status-row]')).toHaveLength(7)
+      expect(host.querySelector('tbody[data-channel-state="unavailable"] td .mi-source-state[data-state="unreadable"]')).not.toBeNull()
+      // 重试只有一颗，在标题行；图区不再自己画一块带重试的状态面。
+      const retryLabel = productText['zh-CN'].pages.intelligence.portal.data.retry
+      const actions = [...host.querySelectorAll('button')].map(button => button.textContent).filter(label => label === retryLabel)
+      expect(actions).toHaveLength(1)
+      expect(host.querySelector('.mi-cross-asset__quote-heading')?.textContent).toContain(retryLabel)
+      expect(host.querySelector('[data-cross-asset-region="chart"] .state-view--error')).toBeNull()
     } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
   })
 })

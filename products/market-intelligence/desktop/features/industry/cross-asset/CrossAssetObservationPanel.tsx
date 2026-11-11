@@ -282,6 +282,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   const rowStateOf = (id: CrossAssetStatusId): CellStateKind | undefined => cellStateLabels === undefined ? undefined : rowStates?.[id]
   /** 有没有源没配好（未配置 / 未启用）：决定标题那颗是「启用数据」还是「再试一次」。 */
   const anyRowDisabled = statusRows.some(row => rowStateOf(row.id) === 'disabled')
+  /**
+   * 跨资产这条通道自己没读到（首读失败、没有快照）。**表不换成一整块提示**：表头与列名留着，
+   * 状态句放在表头下第一行（用户 2026-11-11：结构要留）。
+   * 契约不一致（版本不同）走另一支：重试治不了它，唯一的出口是重启应用，那一支的动作留在图上。
+   */
+  const channelUnavailable = snapshot === undefined && view.state !== 'loading' && view.failure !== 'contract'
+  const contractMismatch = snapshot === undefined && view.state !== 'loading' && view.failure === 'contract'
   const chartLineStates = (['index', 'btc', 'eth'] as const).map(id => rowStates?.[id])
   const allChartLinesUnusable = cellStateLabels !== undefined && chartLineStates.every(state => state !== undefined)
   const chartLineUnreadable = chartLineStates.includes('unreadable')
@@ -295,11 +302,14 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    *   没有再写一套；
    * - 都读到 → 整颗不出现。
    */
-  const titleAction = anyRowDisabled && onEnableData !== undefined
-    ? { label: resolveProductText('pages.intelligence.portal.dashboard.crossAsset.enableData'), run: onEnableData }
-    : !anyRowDisabled && statusRows.some(row => rowStateOf(row.id) === 'unreadable')
-      ? { label: resolveProductText('pages.intelligence.portal.data.retry'), run: () => void view.refresh() }
-      : undefined
+  const titleAction = contractMismatch
+    // 版本不一致重试治不了：标题行不给「再试一次」，图区那颗「重启应用」才是唯一出口。
+    ? undefined
+    : anyRowDisabled && onEnableData !== undefined
+      ? { label: resolveProductText('pages.intelligence.portal.dashboard.crossAsset.enableData'), run: onEnableData }
+      : !anyRowDisabled && (channelUnavailable || statusRows.some(row => rowStateOf(row.id) === 'unreadable'))
+        ? { label: resolveProductText('pages.intelligence.portal.data.retry'), run: () => void view.refresh() }
+        : undefined
 
   return <section className="mi-cross-asset" data-cross-asset-workspace aria-label={text.title}>
     <div className="mi-cross-asset__body">
@@ -337,6 +347,16 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
           {crossAssetWindows.map(window => <th key={window}>{text.statusColumns[window]}</th>)}</tr></thead>
           {/* 整表读不到也不再换成一整块状态面：行位与列头留着，每行自己说自己的状态
               （用户 2026-11-11 原话：从状态这里没法打开，把它放到标题右边；一大块提示会吃掉半张卡）。 */}
+          {channelUnavailable || contractMismatch
+            ? <tbody data-channel-state="unavailable"><tr>
+                <td className="mi-cross-asset__state-cell" colSpan={2 + crossAssetWindows.length}>
+                  <span className="mi-source-state" data-state="unreadable">
+                    <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
+                    {contractMismatch ? text.contractMismatch : text.unavailable}
+                  </span>
+                </td>
+              </tr></tbody>
+            : null}
           <tbody data-status-section="intraday">{intradayRows.map(renderStatusRow)}</tbody>
           {/* The daily block repeats the asset and latest headings but not the window columns: an
               observation per business day has nothing to say about the last fifteen minutes. */}
@@ -436,8 +456,9 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
               ? <StateView state="error" reasonCode="needs-restart" size="md"
                   productReason={{ key: 'mi.crossAsset.contractMismatch', resolve: () => text.contractMismatch }}
                   action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void window.platform.app.relaunch() } }} />
-              : <StateView state="error" reasonCode="unreadable" size="md"
-                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />
+              // 查询失败：**这一块不再画整块提示**（那是第二颗「再试一次」）。图区留空，
+              // 状态句在表头下第一行，「再试一次」在标题行——一处入口。
+              : null
         })()}
       </div> : allChartLinesUnusable ? <CellStateCard
         kind={chartLineUnreadable ? 'unreadable' : 'disabled'}

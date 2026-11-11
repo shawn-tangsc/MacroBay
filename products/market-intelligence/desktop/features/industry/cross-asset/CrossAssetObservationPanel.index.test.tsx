@@ -57,6 +57,8 @@ async function render(input: Readonly<{
   sourceStatusStale?: string
   /** 「启用数据」的去处（宿主给）。 */
   onEnableData?: () => void
+  /** 这条通道自己读不到：`query` = 查询失败，`contract` = 版本不一致。 */
+  queryFailure?: 'query' | 'contract'
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -79,7 +81,10 @@ async function render(input: Readonly<{
   }).query({ range: input.range ?? '24h' })
   const client = {
     acquire: async () => ({ state: 'active', leaseId: 'test-lease', expiresAt: Date.now() + 30_000 }),
-    query: async () => snapshot, release: vi.fn(async () => ({ state: 'released' })),
+    query: async () => input.queryFailure === undefined
+      ? snapshot
+      : ({ state: 'unavailable' as const, cause: input.queryFailure }),
+    release: vi.fn(async () => ({ state: 'released' })),
     // 「再试一次」走的就是 `view.refresh()` → 这里这一条 client 调用（不是第二套实现）。
     refresh: vi.fn(async () => ({ state: 'accepted' })),
     renew: vi.fn(async () => ({ state: 'active' }))
@@ -368,6 +373,60 @@ describe('标题右边那颗按钮：这一张卡唯一的「补数据」入口�
 })
 
 
+
+
+describe('通道不可用时结构要留（用户 2026-11-11）', () => {
+  const columnNames = (host: HTMLElement): string[] =>
+    [...host.querySelectorAll('.mi-cross-asset__status-table thead th')].map(cell => (cell.textContent ?? '').trim())
+
+  it('keeps the header and every column name, puts the sentence right under the header, and one action only', async () => {
+    // 首读失败要等退避阶梯走完（1+2+4+8+16s）才落终态，这里用假时钟推完，不 sleep。
+    vi.useFakeTimers()
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), queryFailure: 'query' })
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(32_000) })
+      const table = page.host.querySelector('.mi-cross-asset__status-table')!
+      // 表头与列名逐个在（资产 / 最新 / 15m / 1h / 24h / 7d）。
+      expect(columnNames(page.host)).toEqual(['资产', '最新', '15m', '1h', '24h', '7d'])
+      // 状态行是表头下面的第一行，横跨所有数据列。
+      const firstBodyRow = table.querySelector('tbody tr')!
+      expect(firstBodyRow.getAttribute('data-channel-state')).toBeNull()
+      expect(firstBodyRow.closest('tbody')?.getAttribute('data-channel-state')).toBe('unavailable')
+      const stateCell = firstBodyRow.querySelector<HTMLTableCellElement>('td')!
+      expect(Number(stateCell.getAttribute('colspan'))).toBe(1 + 1 + 4)
+      expect(stateCell.querySelector('.mi-source-state[data-state="unreadable"]')).not.toBeNull()
+      // 行位仍在（每一行都画得出名字）。
+      expect(table.querySelectorAll('tr[data-status-row]')).toHaveLength(7)
+      // 表里不再有**动作**按钮（日频表头那颗 ⓘ 是说明，不算动作）：这一张卡的动作只剩标题行那一颗。
+      const tableActions = [...table.querySelectorAll('button')]
+        .map(button => button.textContent ?? '')
+        .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
+      expect(tableActions).toHaveLength(0)
+      const actions = [...page.host.querySelectorAll('button')]
+        .map(button => button.textContent ?? '')
+        .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
+      expect(actions).toEqual(['再试一次'])
+      // 图区不再整块换成提示（那会是第二颗「再试一次」）。
+      expect(page.host.querySelector('[data-cross-asset-region="chart"] .state-view')).toBeNull()
+    } finally { vi.useRealTimers(); await page.unmount() }
+  })
+
+  it('keeps the restart exit for a version mismatch, and does not add a retry that cannot work', async () => {
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs), queryFailure: 'contract' })
+    try {
+      // 版本不一致：表头照留，状态行说清是版本问题。
+      expect(page.host.querySelectorAll('.mi-cross-asset__status-table thead th')).toHaveLength(6)
+      const stateRow = page.host.querySelector('tbody[data-channel-state="unavailable"] td')!
+      expect(stateRow.textContent).toContain(text.contractMismatch)
+      // 重试治不了它：标题行不给「再试一次」，图区那颗「重启应用」还在。
+      const retries = [...page.host.querySelectorAll('button')]
+        .map(button => button.textContent ?? '')
+        .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
+      expect(retries).toHaveLength(0)
+      expect(page.host.querySelector('[data-cross-asset-region="chart"] .state-view')).not.toBeNull()
+    } finally { await page.unmount() }
+  })
+})
 
 describe('空态与有数据态同宽：靠结构，不靠像素', () => {
   it('renders the same card, table and header containers in both states', async () => {
