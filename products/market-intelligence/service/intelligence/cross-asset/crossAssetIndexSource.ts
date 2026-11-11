@@ -17,8 +17,13 @@ import { crossAssetPolicy } from './crossAssetPolicy'
  *    reported as 休市 beside the last bar that actually closed; it never becomes a reason to change
  *    instrument. A transient Binance stream disconnect (`stale`) does not move the row either: the
  *    stored bars are still the proxy's, and flipping instruments on every reconnect would be worse
- *    than a row that is briefly quiet. Only a *hard* failure — switched off, or unavailable with an
- *    empty history — hands the row to the licensed index.
+ *    than a row that is briefly quiet.
+ * 3. **能不能答只看库里有没有这一腿的收盘**（2026-11-11 用户红线：「没有」和「拿不到」必须分开）：
+ *    实时流的 `unavailable` / `connecting` / `stale` / `limited`，以及真实指数这条腿的
+ *    `feedState === 'unavailable'`，只影响「实时报价未连接 / 休市 / 截至某时」这类状态词，
+ *    **不再决定这一行能不能拿出收盘价**。只有读者明确关掉某一腿（`disabled`）或库里两腿都没有
+ *    收盘时，才轮到下一腿 / 未接入。一次失败的 tick 曾能让这一行在 15 分钟里写「未接入」，
+ *    而库里 289/289 根都在——那是在说假话。
  */
 export type CrossAssetIndexSource = 'real' | 'proxy' | 'unavailable'
 
@@ -37,11 +42,11 @@ export function selectCrossAssetIndexSource(input: Readonly<{
   realAvailable: boolean
   feedState: CrossAssetIndexFeedState
 }>): CrossAssetIndexSource {
-  const proxyUsable = input.proxyAvailable && input.liveState !== 'disabled' && input.liveState !== 'unavailable'
+  // 读者明确关掉的腿不答（那是「确实不要」）；其余运行状态一律只影响状态词，不影响可用性。
+  const proxyUsable = input.proxyAvailable && input.liveState !== 'disabled'
   if (proxyUsable) return 'proxy'
-  // `pending` counts as usable: after a restart the stored real history is still the real index, and
-  // reporting 未接入 for the few seconds before the first tick would hide a reading we already hold.
-  if (input.realAvailable && input.feedState !== 'unavailable') return 'real'
+  // `feedState` 同理只描述「这一轮取数顺不顺」，不决定库里那根收盘能不能答。
+  if (input.realAvailable) return 'real'
   return 'unavailable'
 }
 

@@ -132,12 +132,16 @@ describe('cross-asset Nasdaq 100 row', () => {
     }
   })
 
-  it('follows a source change that happens without a single new bar', () => {
+  it('keeps the row on the stored bars when the runtime turns unavailable (no new bar needed)', () => {
     const bySymbol = bothLegs(overnightMs)
     expect(snapshot({ nowMs: overnightMs, feed: 'ready', bySymbol }).indexSource).toBe('proxy')
-    // Same revision, same instant, same bars: only the proxy leg's own health changed, and the cached
-    // analysis may not keep answering from a leg that stopped answering.
-    expect(snapshot({ nowMs: overnightMs, feed: 'ready', liveState: 'unavailable', bySymbol }).indexSource).toBe('real')
+    // 同 revision、同瞬时、同几根 bar：只有运行状态变成 `unavailable`。库里代理腿的收盘还在，
+    // 所以这一行**仍然由代理腿答**——运行状态只影响状态词（2026-11-11 用户红线）。
+    const degraded = snapshot({ nowMs: overnightMs, feed: 'ready', liveState: 'unavailable', bySymbol })
+    expect(degraded.indexSource).toBe('proxy')
+    expect(degraded.lastClosed?.index?.close).toBe(cryptoBars('QQQUSDT', overnightMs).at(-1)!.close)
+    // 反方向：读者把这一腿关掉（`disabled`）才是「确实不要」，这时才交给真实指数。
+    expect(snapshot({ nowMs: overnightMs, feed: 'ready', liveState: 'disabled', bySymbol }).indexSource).toBe('real')
   })
 
   it('says 未接入 with no reading at all when neither leg can answer', () => {
