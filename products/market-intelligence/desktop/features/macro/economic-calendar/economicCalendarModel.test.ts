@@ -78,6 +78,22 @@ describe('macro economic calendar query projection', () => {
     expect(projection.events.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.pending-1'])
   })
 
+  // #12 反向：同形状但**没有**这两条 caveat 的行（BLS 家族刷新 API 那些）仍要判空壳——
+  // 否则第 5 条把规则架空，绿得没意义。
+  it('#12 the same shape without the provenance caveats is still a shell', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.api-1', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only',
+        caveats: ['official-time-not-published', 'official-timezone-not-published'] })] })
+    expect(projection.events).toHaveLength(0)
+    expect(projection.shells.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.api-1'])
+  })
+
+  // #14 写者的 provenance 必须显式进闭集：两条 caveat 都在准入集合里，不许靠「默认都是官方」兜底。
+  it('#14 both provenance caveats are in the admitted closed set, not a default', () => {
+    expect(macroEconomicCalendarCaveatPolicy.admittedCaveats).toContain('manual-ics-import')
+    expect(macroEconomicCalendarCaveatPolicy.admittedCaveats).toContain('bls-python-schedule')
+  })
+
   it('never filters without a today from the reader time zone (conservative: do not hide)', () => {
     const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z',
       events: [event({ eventKey: 'US.CPI.RELEASE.shell-2', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only',

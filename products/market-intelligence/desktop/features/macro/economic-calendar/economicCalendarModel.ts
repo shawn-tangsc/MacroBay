@@ -128,9 +128,14 @@ export const valuePublishingCalendarEventFamilies: readonly string[] = Object.fr
  *    而它只是还没到日子（待公布）；
  * 3. 没有官方时刻：`scheduledAt` 缺失，或来源只有 `convention-default` / `date-only`；
  * 4. 实际 / 预期 / 前值全空；
- * 5. 这一行是**官方自动抓取**产生的：`caveats` 含 `manual-ics-import`（手动 ICS）或
- *    `bls-python-schedule`（python 那条腿）的行**永不判空壳**——它们是读者可见的真实日程，
- *    缺字段不等于该藏。判据只看**行内**字段（provenance / caveats），不读尝试记录、不读源健康。
+ * 5. `date-only` 是这一行**正常形状**（BLS 年会日程，`bls-python-schedule`）或**读者自带**
+ *    （`manual-ics-import`）的行，永不判空壳。判据只看**行内**字段（caveats），不读尝试记录、
+ *    不读源健康。
+ *
+ *    第 5 条的功能理由很硬：这两条 caveat 恰好是「刷新 BLS 数据」的准入判据
+ *    （`EconomicCalendarEventDetail.tsx` 的刷新键判定），判空壳等于把读者在该行上**唯一的刷新入口
+ *    一起藏掉**。手动 ICS 今天产生不出「无时刻」的行（解析器拒 `VALUE=DATE`、要求美东本地时刻），
+ *    这条对它是**防御性**的：旧库已存在、将来放宽导入形状、或伪造行。
  *
  * 五条一条都不许省：少 1 → 藏掉 FOMC；少 2 → 藏掉未来的发布；少 3 或 4 → 把正常事件算成空壳。
  * 也**不许**按源健康状态判，不许「没有数值就一刀切」。
