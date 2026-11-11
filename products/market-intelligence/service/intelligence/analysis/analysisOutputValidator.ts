@@ -26,6 +26,13 @@ import {
 export type FrozenAnalysisEvidence = Readonly<{
   facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'comparability' | 'freshness' | 'value' | 'observedAt'>[]
   evidenceRefs: readonly Pick<EvidenceClaim, 'evidenceRefId'>[]
+  /**
+   * 变更摘要里**印给模型看过**的百分数（第二个集合，架构师 2026-11-11）。
+   *
+   * 只供「正文里的数字有没有出处」这条规则读：背离配对、触发器焦点、`hasKnownReferences` 都看不到它。
+   * 不并进 `facts`——合成事实会多出不存在的 factId，并让同一个 metric 前后出现两条。
+   */
+  changeValues?: readonly number[]
 }>
 
 /** 背离立场块的形状与判定在 `analysisDivergenceConsistency`（体积门禁要求抽离）；类型从这里照旧导出。 */

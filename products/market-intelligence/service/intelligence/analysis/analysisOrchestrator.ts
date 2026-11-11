@@ -28,7 +28,7 @@ import { buildAnalysisMessages, type AnalysisSessionInput } from './analysisMode
 import { sessionBriefForTriggerKey } from './analysisSessionContext'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
 import type { SignificanceSignal } from './significanceChangeMatcher'
-import { withSnapshotChange } from './snapshotChange'
+import { frozenEvidenceForRun } from './analysisFrozenEvidence'
 
 type Repository = Readonly<{
   getRun: (id: string) => AnalysisRun | undefined
@@ -227,17 +227,14 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     if (input.signal?.aborted) return cancel(runRecord.id)
     const signal = input.signal ?? new AbortController().signal
 
-    const snapshot = deps.repository.getSnapshot?.(runRecord.snapshotId) ?? deps.repository.listSnapshots?.(runRecord.eventGroupId).find(value => value.id === runRecord.snapshotId)
-    if (!snapshot || snapshot.snapshotHash !== runRecord.snapshotHash) return fail(runRecord.id, 'failed', 'analysis-snapshot-changed')
-    // Snapshots frozen before the change record existed derive it from their
-    // immutable predecessor, so the model always receives "what moved".
-    const withChange = withSnapshotChange(snapshot, deps.repository.listSnapshots?.(runRecord.eventGroupId) ?? [])
-    const evidenceIds = new Set(withChange.evidenceRefs.map(ref => ref.evidenceRefId))
-    const facts = withChange.facts.filter(fact => fact.evidenceRefId && evidenceIds.has(fact.evidenceRefId))
-    if (!facts.length) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.missingEvidence)
-    const frozenEvidence: FrozenAnalysisEvidence = { facts, evidenceRefs: withChange.evidenceRefs }
-    // Resolved from the frozen snapshot, so the rule judges the question the run actually held.
-    const triggerFocus: TriggerFocus = resolveTriggerFocus(withChange)
+    // 冻结证据的构造（快照哈希、可用事实、变更摘要里的数、语言）在 `analysisFrozenEvidence` 一处。
+    const frozen = await frozenEvidenceForRun({
+      run: runRecord,
+      repository: deps.repository,
+      ...(deps.getLanguage ? { getLanguage: deps.getLanguage } : {})
+    })
+    if (frozen.state === 'failed') return fail(runRecord.id, 'failed', frozen.failureCode)
+    const { snapshot, withChange, facts, frozenEvidence, triggerFocus, proseLanguage } = frozen
 
     // The run's own trigger key says which open it serves; recovery runs and manual runs keep the
     // prompt they had.
@@ -250,7 +247,6 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const model = runRecord.modelProviderId && runRecord.modelId
       ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
       : {}
-    const proseLanguage = deps.getLanguage ? await deps.getLanguage() : undefined
     let messages = buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
     let invocation: InvocationResult | undefined
     let validated: AnalysisOutputValidationResult | undefined

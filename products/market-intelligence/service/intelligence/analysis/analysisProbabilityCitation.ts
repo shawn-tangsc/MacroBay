@@ -1,4 +1,5 @@
 import type { AgentFact, AnalysisConclusion } from '../../../contracts/marketAnalysisContracts'
+import { percentagesIn } from './analysisPrintedNumbers'
 import { MARKET_ANALYSIS_POLICY_PATH_METRICS } from '../../../contracts/marketAnalysisContracts'
 
 /**
@@ -46,6 +47,8 @@ export type AnalysisProbabilityDefect = (typeof analysisProbabilityDefects)[keyo
 /** The part of a frozen snapshot this reading needs; a full snapshot satisfies it. */
 export type ProbabilityEvidence = Readonly<{
   facts: readonly Pick<AgentFact, 'metric' | 'value' | 'observedAt'>[]
+  /** 变更摘要里印给模型看过的百分数：引用它们不算编数（见 `changeValuesForPrompt`）。 */
+  changeValues?: readonly number[]
 }>
 
 /**
@@ -66,7 +69,9 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
   // **正文里每个百分数逐个查快照出处**：不在快照里的数就是编造——拒的理由是"那个数不存在"，
   // 与句子用了什么词无关。旧做法（`概率/定价` 前后 N 个字）是对措辞的猜测，换个说法就绕过。
   const mentioned = percentagesIn(prose)
-  const allowed = snapshotNumbers(snapshot)
+  // 变更摘要印过的数只进「有没有出处」这一份集合，且仍按**等值/整数取整**判——概率那条整数约数
+  // 语义不沿用它（架构师 2026-11-11）。
+  const allowed = [...snapshotNumbers(snapshot), ...(snapshot.changeValues ?? [])]
   for (const value of mentioned) {
     // 概率可以写**它的整数约数**（76.65 → 76 / 77），所以这一轮也要用它那份判定；其余数只认等值。
     if (!tracedToSnapshot(value, allowed) && !tracedToProbability(value, probabilities.map(fact => Number(fact.value)))) {
@@ -85,22 +90,6 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
   return undefined
 }
 
-/**
- * 正文里的**每一个百分数**，逐个查它在快照里有没有出处。
- *
- * 旧做法是「`概率/定价` 前后 N 个字以内的数字」——那是对措辞的猜测：`概率/定价` 只是其中一种说法，
- * 模型换个说法就绕过去了，而合规的写法（`目标区间 4.00%–4.25%`）反而会被窗口吞掉。现在只问事实：
- * **这个数在快照里存在吗**。
- */
-function percentagesIn(text: string): number[] {
-  // **负号是数字的一部分**（2026-11-11 的真事故）：正文写「3 天 -2.75%」、快照是 -2.74955757589076，
-  // 旧读法把负号吃掉、拿 2.75 去比，于是每次都被判「快照里没有这个数」。
-  // 但 `3.75%-4.00%` 里的短横是**范围连接符**，不是负号——所以只有当它前面不是数字、不是百分号、
-  // 也不是另一个破折号时才算负号。全角减号 `−` 一并认。
-  return [...text.matchAll(/(?<![\d%\uFF05\u2013\u2014])([-\u2212])?(\d+(?:\.\d+)?)\s*(?:%|\uFF05)/gu)]
-    .map(match => Number(`${match[1] === undefined ? '' : '-'}${match[2]}`))
-    .filter(value => Number.isFinite(value))
-}
 
 /** 快照里出现过的所有数字：数字型值直接取，字符串型值把里面的数（如 `4.00%–4.25%`）也取出来。 */
 function snapshotNumbers(snapshot: ProbabilityEvidence): readonly number[] {

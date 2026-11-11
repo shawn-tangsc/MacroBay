@@ -275,6 +275,44 @@ describe('analysisOutputValidator', () => {
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
   })
 
+  it('accepts a number the change digest printed, and still rejects one it never printed', () => {
+    // 2026-11-11 的事故另一半：提示词的变更摘要印着「持仓 24 小时变化：-0.84% → -1.12%」，模型照抄
+    // `-0.84%`，而冻结事实里只有当前值 `-1.12%` —— 被拒的是我们印给它的数。
+    const base = frozenSnapshot()
+    const snapshot = { ...base, facts: [...base.facts, policyProbabilityFact()], changeValues: [-0.84, -1.12] }
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；BTC 持仓 24 小时变化由 -0.84% 到 -1.12%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+
+    // 变更值只进「有没有出处」，**不走概率那条整数约数**：-0.34% 与 -0.84% 相邻但不等，仍是编数。
+    const adjacent = validOutput()
+    adjacent.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；持仓 24 小时变化 -0.34%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(adjacent), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+
+    // 两个集合里都没有的百分数，照样拒。
+    const invented = validOutput()
+    invented.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；ETF 净流出 12.34%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(invented), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+  })
+
+  it('behaves exactly as before when the snapshot carries no change values', () => {
+    // 老快照没有变更记录 ⇒ 没有第二个集合 ⇒ 与今天完全一致：同一个数仍被拒。
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；持仓 24 小时变化 -0.84%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+  })
+
   it('rejects a conclusion that says nothing about a frozen policy probability', () => {
     // The cheapest way to pass "the cited value must equal the snapshot" is to cite no value at all.
     // Without this rule the reader gets a complete-looking analysis with the policy pricing missing.
