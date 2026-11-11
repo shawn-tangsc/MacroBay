@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -125,7 +125,21 @@ describe('the B4 incident', () => {
   /** 事故那一笔真实改过的文件（`3e49d15`，用 git 读，免得清单随重构漂移）。 */
   const incidentCommit = '3e49d15'
 
-  it('finds the dashboard drawer as a caller of the component it broke', () => {
+  /**
+   * 锚点为什么换了（2026-11-11）：
+   *
+   * 原来钉的是 `pages/intelligence/DashboardPanelDrawer.tsx`——事故当时**没被一起改**的那个宿主。
+   * 那个文件后来在「抽屉改造成配置抽屉」那一轮被删了，于是 `findCallers` 永远返回不了它，
+   * 用例恒红。**保护本身没有过期**（下面那条 `staged` 不含调用方的断言、以及「只找一层」
+   * 「注释里的路径不算」几条另有专门用例钉着），过期的是「拿哪一笔真实事故作锚」。
+   *
+   * 现在的锚是 `SourceConfigSurface.tsx`：它是 `ProviderDetail` 今天真实的宿主，且**不在**
+   * `3e49d15` 的清单里——和当年那个宿主的处境完全一样（组件改了、它没改，所以它必须被拉进程序）。
+   * 如果它将来也被删/改名，这条会先在下面那句 `existsSync` 上红，并直接告诉下一个人「换一个真实调用方」，
+   * 而不是给一句「expected [...] to include ...」让人当成 flaky 重跑。
+   */
+  it('finds the host that renders the component it broke', () => {
+    const host = 'products/market-intelligence/desktop/settings/intelligence-sources/SourceConfigSurface.tsx'
     const repository = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
     const staged = execFileSync('git', ['show', '--name-only', '--format=', incidentCommit], {
       cwd: repository,
@@ -135,10 +149,13 @@ describe('the B4 incident', () => {
       .map((line) => line.trim())
       .filter((line) => line !== '')
 
+    // 锚点文件必须真实存在：删了/改名了就换一个真实调用方，别让这条守卫无声失效。
+    expect(existsSync(join(repository, host)), `锚点调用方不存在了：${host}，请换一个今天真实的调用方`).toBe(true)
+
     const { callers } = findCallers({ cwd: repository, staged })
 
-    // 这一条就是当时漏掉的那个宿主：它没进程序，TS2741 才进了链。
-    expect(callers).toContain('products/market-intelligence/desktop/pages/intelligence/DashboardPanelDrawer.tsx')
+    // 这一条就是「组件改了、它没改」的那个宿主：它没进程序，类型错才会进链。
+    expect(callers).toContain(host)
     // 提交里的文件不该被当成调用方（它们是根）。
     expect(callers.filter((path) => staged.includes(path))).toEqual([])
   })
