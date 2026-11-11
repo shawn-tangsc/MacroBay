@@ -9,6 +9,8 @@ import { normalizeQqEvent } from './QqUpdateNormalizer'
 type Socket = {
   close: () => void
   send: (value: string) => void
+  /** 连接真的打开（诊断用）：与 READY 分开，能区分「没连上」与「连上没鉴权通过」。 */
+  onopen?: (() => void) | null
   onclose: ((event: unknown) => void) | null
   onerror: ((event: unknown) => void) | null
   onmessage: ((event: { data: unknown }) => void) | null
@@ -101,6 +103,9 @@ export class QqGatewayHost {
       send: (wire) => socket.send(wire),
       close: () => socket.close()
     })
+    // 临时诊断：连接真的建起来了没有。以前这一层一条审计都没有，
+    // 于是「QQ 启用了、一条消息都没进来」时库里查不出是没连、没收到、还是收到了被丢。
+    socket.onopen = () => { if (this.current(socket)) this.audit('qq-gateway-open') }
     socket.onmessage = (event) => { void this.handle(event.data, socket) }
     socket.onerror = () => { if (this.current(socket)) this.audit('qq-gateway-error') }
     socket.onclose = (event) => {
@@ -123,11 +128,15 @@ export class QqGatewayHost {
     const lifecycle = this.lifecycleDispatch(frame)
     if (lifecycle) {
       this.attempt = 0
+      // 鉴权通过、READY/RESUMED 到了：与「socket 打开」分开记，连接建立与否一眼可查。
+      this.audit('qq-gateway-ready')
       this.commitOrStop(lifecycle.sequence)
       this.session?.receive(frame)
       return
     }
     if (frame.kind === 'dispatch') {
+      // 临时诊断：哪一类事件真的到了（只记事件名，不带正文、不带凭据）。
+      this.audit(`qq-frame-received:${frame.event}`)
       await this.handleDispatch(frame, socket)
       return
     }

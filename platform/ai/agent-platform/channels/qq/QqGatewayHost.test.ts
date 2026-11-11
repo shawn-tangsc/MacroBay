@@ -13,6 +13,19 @@ const ACK = '{"op":11}'
 const READY = '{"op":0,"s":1,"t":"READY","d":{"session_id":"session-1"}}'
 
 describe('qq gateway host', () => {
+  it('records that the gateway became ready and which events actually arrived', async () => {
+    // 临时诊断（用户现场：QQ 启用了、库里一条记录都没有）。这两行让「没连上」「连上没收到」
+    // 「收到了被丢」在库里分得开：open → ready → frame-received:<event>。
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message(READY)
+    expect(harness.audits()).toContain('qq-gateway-ready')
+
+    harness.sockets[0].message('{"op":0,"s":2,"t":"C2C_MESSAGE_CREATE","d":{"id":"msg-1","content":"测试","author":{"user_openid":"user-1"}}}')
+    await flush()
+    expect(harness.audits()).toContain('qq-frame-received:C2C_MESSAGE_CREATE')
+  })
+
   it('identifies on HELLO and only starts heartbeating after READY', async () => {
     const harness = await createHarness()
     expect(harness.sockets).toHaveLength(1)
