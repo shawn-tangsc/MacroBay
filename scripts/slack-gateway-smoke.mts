@@ -19,7 +19,7 @@
  *     pnpm slack:smoke --probe --proxy http://127.0.0.1:7888
  *   … pnpm slack:smoke --send <channelId> "测试" --proxy http://127.0.0.1:7888
  *
- * `--proxy` 省略时依次看 `DISCORD_SMOKE_PROXY` / `HTTPS_PROXY` / `https_proxy`；都没有就是直连。
+ * `--proxy` 省略时依次看 `SLACK_SMOKE_PROXY` / `HTTPS_PROXY` / `https_proxy`；都没有就是直连。
  */
 import { request } from 'node:https'
 
@@ -49,7 +49,8 @@ function parseArgs(argv: readonly string[]): Args {
 }
 
 function resolveProxy(explicit: string | undefined): string | null {
-  const value = explicit ?? process.env.DISCORD_SMOKE_PROXY ?? process.env.HTTPS_PROXY ?? process.env.https_proxy ?? ''
+  // 本脚本自己的变量名在前：复制过来的 `DISCORD_SMOKE_PROXY` 会让配置的人以为配错了地方。
+  const value = explicit ?? process.env.SLACK_SMOKE_PROXY ?? process.env.HTTPS_PROXY ?? process.env.https_proxy ?? ''
   return value.trim().length > 0 ? value.trim() : null
 }
 
