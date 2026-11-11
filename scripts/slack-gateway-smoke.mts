@@ -11,6 +11,9 @@
  * 只验第 1 步的写法更省事，但 Socket Mode 没开时它照样通过：用户会拿着「已启用」的频道收不到任何消息，
  * 那条路上连日志都没有（连接根本没建立）。
  *
+ * 失败时先分「代理这一跳通不通」：连不上就是 `proxy-unreachable`（与另外三条命令同一个说法），
+ * 而不是甩一个 `ECONNREFUSED` 堆栈；其余失败按 `slack-rejected:<error>` / `socket-*` 原样带出。
+ *
  * Token 只从环境变量读，绝不落盘、绝不打印；输出一行脱敏 JSON：
  * `{ ok, mode, proxy, botUserId, teamId, socket, messageId, failure }`。
  *
@@ -21,6 +24,7 @@
  *
  * `--proxy` 省略时依次看 `SLACK_SMOKE_PROXY` / `HTTPS_PROXY` / `https_proxy`；都没有就是直连。
  */
+import { connect } from 'node:net'
 import { request } from 'node:https'
 
 import { ProxyAgent } from 'proxy-agent'
@@ -63,6 +67,33 @@ function maskProxy(proxy: string | null): string {
   } catch {
     return 'configured'
   }
+}
+
+/**
+ * 代理这一跳先单独证一次：`fetch` 层失败时，「代理根本连不上」和「代理通了但目标不可达」
+ * 分得开，用户才知道该去开代理还是该去查网络。3 秒超时，连不上就停在这里。
+ */
+async function proxyReachable(proxy: string): Promise<boolean> {
+  let host = ''
+  let port = 0
+  try {
+    const url = new URL(proxy)
+    host = url.hostname
+    port = Number(url.port || (url.protocol === 'https:' ? 443 : 80))
+  } catch {
+    return false
+  }
+  if (!host || !port) return false
+  return await new Promise<boolean>((resolve) => {
+    const socket = connect({ host, port })
+    const finish = (value: boolean): void => {
+      socket.destroy()
+      resolve(value)
+    }
+    socket.setTimeout(3_000, () => finish(false))
+    socket.on('connect', () => finish(true))
+    socket.on('error', () => finish(false))
+  })
 }
 
 /**
@@ -159,8 +190,12 @@ async function main(): Promise<void> {
   if (!appToken) throw new Error('DSH_SECRET_SLACK_APP_TOKEN is not set')
 
   const proxy = resolveProxy(args.proxy)
-  const transport = nodeFetchThroughProxy(proxy)
   const report: Record<string, unknown> = { ok: false, mode: args.mode, proxy: maskProxy(proxy) }
+  // 与 discord / telegram / qq 三条同一个说法：代理这一跳先单独证一次，失败就是 `proxy-unreachable`，
+  // 不让它变成一个 ECONNREFUSED 堆栈——同一家族的脚本，同一个故障要说同一种话。
+  if (proxy && !(await proxyReachable(proxy))) return print({ ...report, failure: 'proxy-unreachable' })
+
+  const transport = nodeFetchThroughProxy(proxy)
 
   const identity = await slackCall<{ user_id?: unknown; team_id?: unknown }>(transport, botToken, 'auth.test')
   if (!identity.ok) return print({ ...report, failure: identity.code })
