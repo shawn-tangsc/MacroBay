@@ -85,11 +85,26 @@ describe('a month the official source could not be read for', () => {
    * 「官方源」——fed/bea 照常在画，写成复数会让读者以为全部官方数据都没了。日期是参数：那次真实同步
    * 的时刻（`lastSuccessfulSyncAt`），句子里**不许出现写死的日期**。
    */
-  it('names BLS and takes the sync date from the record, in both languages', () => {
-    expect(zh.officialUnavailableNote).toBe('BLS 官方日程：当前网络环境无法自动获取（403），显示 {date} 成功同步的内容')
-    expect(en.officialUnavailableNote).toBe('BLS official schedule: this network cannot read the site (403); showing what was synced on {date}')
+  /**
+   * 两句分工（用户 2026-11-10 的硬口径 + `check:body-prose`）：**正文只有状态词**，
+   * 原因（403）、画的是哪次同步、怎么拿到新的，全部进那颗 ⓘ。日期从同步记录来，不写死。
+   */
+  it('keeps only a status word in the body, and the why plus the sync date in the ⓘ', () => {
+    expect(zh.officialUnavailableShort).toBe('BLS 官方日程无法自动获取')
+    expect(en.officialUnavailableShort).toBe('The BLS official schedule cannot be fetched')
+    // 正文那句里不许出现任何解释词。
+    for (const label of [zh.officialUnavailableShort, en.officialUnavailableShort]) {
+      expect(label).not.toContain('403')
+      expect(label).not.toContain('同步')
+      expect(label).not.toMatch(/\d{4}-\d{2}-\d{2}/u)
+    }
+    // ⓘ 里才是完整说明：原因、那次同步的日期、怎么拿到新的。
+    expect(zh.officialUnavailableNote).toContain('403')
+    expect(zh.officialUnavailableNote).toContain('{date}')
+    expect(zh.officialUnavailableNote).toContain('ICS')
+    expect(en.officialUnavailableNote).toContain('403')
+    expect(en.officialUnavailableNote).toContain('{date}')
     for (const sentence of [zh.officialUnavailableNote, en.officialUnavailableNote]) {
-      expect(sentence).toContain('{date}')
       // 「暂时」当时是错的：这条腿不是暂时不可用，是 403 挡住、自动同步已停。
       expect(sentence).not.toContain('暂时')
       // 不许写死任何日期。

@@ -63,7 +63,14 @@ export function blsUnavailableSentence(text: EconomicCalendarText, unavailable: 
  *
  * 日期取注册表里那次真实同步的时刻（`lastSuccessfulSyncAt`），**不写死**。
  */
-export function blsUnavailableListNote(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
+/** 正文只放这一句状态词：不带原因、不带日期，一句话读者就能判断「这条腿现在没有新的」。 */
+export function blsUnavailableListLabel(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
+  if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
+  return text.officialUnavailableShort
+}
+
+/** 那一句旁边的 ⓘ：为什么（403）、现在画的是哪次同步、要怎么才能拿到新的（导 ICS）。 */
+export function blsUnavailableListDetail(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
   if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
   return fillLabelParams(text.officialUnavailableNote, { date: unavailable.lastSuccessDate ?? '' })
 }

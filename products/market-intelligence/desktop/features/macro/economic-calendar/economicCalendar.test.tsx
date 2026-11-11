@@ -166,16 +166,20 @@ describe('macro economic calendar', () => {
         unavailableSource: { sourceId: 'macro-calendar-bls', reasonCode: 'official-endpoint-returned-403', lastSuccessfulSyncAt: '2026-10-22T07:29:41.159Z' }
       })
       await flush()
-      const notes = [...container.querySelectorAll('[role="note"]')].map(node => node.textContent ?? '')
-      // 说明行是常驻注解，可能同时有别的（这一读的市场腿失败也占一行），按内容找这一条。
-      const note = notes.find(line => line.includes('BLS')) ?? ''
-      expect(note, 'the official leg being blocked explains itself').not.toBe('')
-      expect(note).toContain('BLS 官方日程')
-      expect(note).toContain('403')
-      // 日期来自同步记录，不是写死的常量。
-      expect(note).toContain('2026-10-22')
-      expect(note).not.toContain('官方源暂时不可用')
-      expect(note).not.toContain('{date}')
+      const row = container.querySelector('[data-calendar-official-unavailable]')!
+      // 正文只有状态词：原因（403）、那天同步的日期、「导 ICS」都不许出现在正文里。
+      expect(row.textContent).toContain('BLS 官方日程无法自动获取')
+      expect(row.textContent).not.toContain('403')
+      expect(row.textContent).not.toContain('同步')
+      expect(row.textContent).not.toContain('导入')
+      expect(row.textContent).not.toContain('{date}')
+      // 那颗 ⓘ 里才是完整说明，日期来自同步记录（不是写死的常量）。
+      const help = row.querySelector<HTMLButtonElement>('button[aria-label]')!
+      expect(help, 'the reason lives behind the help trigger').not.toBeNull()
+      await act(async () => help.click())
+      const described = document.body.textContent ?? ''
+      expect(described).toContain('403')
+      expect(described).toContain('2026-10-22')
     } finally { market.mockRestore() }
   })
   it('keeps that note away when the blocked source is not BLS', async () => {
