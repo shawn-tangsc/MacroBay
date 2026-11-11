@@ -48,20 +48,19 @@ describe('enabling a source needs its credential first', () => {
 })
 
 describe('defaults for a source with no profile row', () => {
-  it('starts on only the keyless sources a dashboard module uses, and keys-required ones off', async () => {
+  it('starts keyless live sources on, whatever reads them, and keys-required ones off', async () => {
     const service = createService()
-    // 用户 2026-11-11 的默认启用规则：**免钥匙 + live + 被至少一个看板模块用到** 才默认开。
+    // 用户 2026-11-12 的默认启用规则：**免钥匙 + live** 就默认开，不再要求「被看板模块用到」。
     // `alternative-fear-greed` 被「恐惧与贪婪」格用到 → 开；`twelve-data-market` 需要钥匙 → 关；
-    // `federal-reserve-rss` 没有模块用到（模块表收窄后 0 条）→ 默认关，不再按「免钥匙就开」。
+    // `federal-reserve-rss` 没有模块用到（模块表 0 条）→ 也默认开。
     expect((await service.getPageState({ sourceId: 'alternative-fear-greed' })).detail!.profile.enabled).toBe(true)
     expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(false)
-    expect((await service.getPageState({ sourceId: 'federal-reserve-rss' })).detail!.profile.enabled).toBe(false)
+    expect((await service.getPageState({ sourceId: 'federal-reserve-rss' })).detail!.profile.enabled).toBe(true)
   })
 
   it('keeps an explicit off for a keyless source that defaults on', async () => {
     const service = createService()
-    // 要验的是「读者显式关掉覆盖默认开」，所以必须挑一条默认开的源；`federal-reserve-rss`
-    // 现在默认就是关的，拿它验等于什么都没验。
+    // 要验的是「读者显式关掉覆盖默认开」，所以必须挑一条默认开的源。
     await service.saveProfile({ sourceId: 'alternative-fear-greed', enabled: false })
     expect((await service.getPageState({ sourceId: 'alternative-fear-greed' })).detail!.profile.enabled).toBe(false)
   })

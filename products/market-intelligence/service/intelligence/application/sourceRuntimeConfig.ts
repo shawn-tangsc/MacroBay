@@ -7,7 +7,6 @@ import type {
   IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
 import { sourceRequiresCredential } from '../schema/intelligenceSource'
-import { modulesUsingSource } from '../../../desktop/settings/intelligence-sources/dashboardSourceModules'
 import { getSource } from './providerRegistry'
 import { isMacroSourceId } from './macroSourceCatalogMetadata'
 import { isDefillamaStablecoinRetiredPath } from './sourceCatalog'
@@ -45,15 +44,16 @@ const MACRO_POLLING_INTERVAL_SEC: Record<IntelligenceCollectionPreset, number | 
 }
 
 /**
- * 默认启用 = 免钥匙 **且** 已就绪（live）**且** 至少被一个看板模块用到（`modulesUsingSource` 反查）。
+ * 默认启用 = 免钥匙 **且** 已就绪（live）。
  *
- * 只看「免钥匙」会把没人用的源也打开（DeFiLlama TVL、维护备用那批、分析用那批），它们没有读者，
- * 只产生请求——用户 2026-11-11 收窄成这一条。源清单仍然只从注册表与模块表来，没有 id 白名单。
+ * 用户 2026-11-12 定的口径：除了「要 API Key 的」和「还没接进来的（readiness 不是 live）」，
+ * 其余源首次运行即启用——包括没有看板模块读它们的那批（状态页、公告流、分析用那批）。
+ * 2026-11-11 曾收窄成「还要被模块用到」，结果读者打开设置看到一片「数据未被启用」，
+ * 得逐项手开；开关本来就在设置里，默认关反而是更贵的状态。源清单仍只来自注册表，没有 id 白名单。
  */
 export function isDefaultEnabledDefinition(definition: IntelligenceSourceDefinition): boolean {
   if (sourceRequiresCredential(definition.authMode)) return false
-  if ((definition.readiness ?? 'live') !== 'live') return false
-  return modulesUsingSource(definition.sourceId).length > 0
+  return (definition.readiness ?? 'live') === 'live'
 }
 
 export function createDefaultSourceProfile(
@@ -63,8 +63,8 @@ export function createDefaultSourceProfile(
   return {
     profileId: `${definition.sourceId}-profile`,
     sourceId: definition.sourceId,
-    // 默认值**只在这里定一次**：免钥匙 + 已就绪 + 被模块用到的源首次运行即启用；
-    // 需要 API Key 的、还没接入的、没人用的源默认关着。读者显式存过的 profile 一律以存量为准。
+    // 默认值**只在这里定一次**：免钥匙 + 已就绪的源首次运行即启用；需要 API Key 的、
+    // 还没接入的源默认关着。读者显式存过的 profile 一律以存量为准。
     enabled: isDefaultEnabledDefinition(definition),
     collectionPreset: definition.defaultCollectionPreset,
     scopePolicy: definition.defaultScopePolicy,

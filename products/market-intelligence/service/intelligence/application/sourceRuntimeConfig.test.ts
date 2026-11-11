@@ -148,13 +148,19 @@ describe('sourceRuntimeConfig', () => {
     expect(config.enabled).toBe(false)
   })
 
-  it('defaults only keyless, live, module-backed sources to enabled', () => {
-    // 免钥匙 + live + 被模块用到 → 默认开。
+  it('defaults every keyless, live source to enabled and leaves the other two groups off', () => {
+    // 免钥匙 + live → 默认开，无论有没有看板模块读它（用户 2026-11-12 的口径）。
     expect(createDefaultSourceProfile(requireDefinition('coindesk-rss')).enabled).toBe(true)
-    // 免钥匙但没人用（0 模块）→ 默认关。
-    expect(createDefaultSourceProfile(requireDefinition('defillama-tvl')).enabled).toBe(false)
+    // 免钥匙 + live、但没有任何看板模块读它 → 也默认开（状态页、公告流、分析用那批）。
+    expect(createDefaultSourceProfile(requireDefinition('defillama-tvl')).enabled).toBe(true)
+    expect(createDefaultSourceProfile(requireDefinition('binance-spot-market')).enabled).toBe(true)
     // 需要钥匙 → 默认关。
     expect(createDefaultSourceProfile(requireDefinition('twelve-data-market')).enabled).toBe(false)
+    // 免钥匙但还没接进来（readiness 不是 live）→ 默认关。
+    const planned = requireDefinition('treasury-fiscal-data')
+    expect(planned.authMode).toBe('none')
+    expect(planned.readiness).toBe('planned')
+    expect(createDefaultSourceProfile(planned).enabled).toBe(false)
   })
 
   it('blocks enabling planned sources at validation time', () => {

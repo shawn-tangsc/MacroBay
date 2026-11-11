@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,18 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import { createSourceProfileStore, createInMemoryProfileStorage } from './sourceProfileStore'
-import {
-  KEYLESS_SOURCES_ENABLED_MARKER,
-  UNUSED_KEYLESS_SOURCES_DISABLED_MARKER,
-  disableUnusedKeylessSources,
-  migrateKeylessSourceDefaults
-} from './keylessSourceDefaultsMigration'
+import { KEYLESS_SOURCES_ENABLED_MARKER, migrateKeylessSourceDefaults } from './keylessSourceDefaultsMigration'
 
 /**
  * 「免钥匙 + live」的老 profile 改成开，只做一次。
  *
- * 判据：迁移前关着的免钥匙 live 源 → 开；需要钥匙的、未接入（非 live）的不动；
- * 第二次跑零写入；标记在文档里。
+ * 判据（用户 2026-11-12）：免钥匙 + 已就绪的源默认启用，**不要求**被看板模块用到；
+ * 需要钥匙的、未接入（非 live）的不动；第二次跑零写入；标记在文档里。
  */
 const dirs: string[] = []
 
@@ -50,15 +45,32 @@ describe('keyless source defaults migration', () => {
     const { store } = await setup([
       profile('federal-reserve-rss', false),      // 免钥匙 + live → 打开
       profile('coindesk-rss', false),             // 免钥匙 + live → 打开
+      // 免钥匙 + live、但没有任何看板模块读它：2026-11-11 那版会跳过，现在照样打开。
+      profile('defillama-tvl', false),
+      profile('binance-spot-market', false),
       profile('twelve-data-market', false),       // 需要钥匙 → 不动
       profile('bea-economic-series', false)       // planned → 不动
     ], markerPath)
 
     const result = await migrateKeylessSourceDefaults({ store, markerPath })
-    expect([...result.opened].sort()).toEqual(['coindesk-rss', 'federal-reserve-rss'])
+    expect([...result.opened].sort()).toEqual([
+      'binance-spot-market', 'coindesk-rss', 'defillama-tvl', 'federal-reserve-rss'
+    ])
     expect((await store.getProfile('coindesk-rss'))?.enabled).toBe(true)
+    expect((await store.getProfile('defillama-tvl'))?.enabled).toBe(true)
     expect((await store.getProfile('twelve-data-market'))?.enabled).toBe(false)
     expect((await store.getProfile('bea-economic-series'))?.enabled).toBe(false)
+  })
+
+  it('runs again on an install that only carries the superseded marker key', async () => {
+    const markerPath = tempMarker()
+    // 2026-11-11 那版迁移已经跑过：旧键在文档里，源按旧口径留在关。
+    writeFileSync(markerPath, JSON.stringify({ markers: { 'keyless-sources-enabled-2026-11-11': { at: '2026-11-11T00:00:00.000Z' } } }))
+    const { store } = await setup([profile('defillama-tvl', false)], markerPath)
+
+    const result = await migrateKeylessSourceDefaults({ store, markerPath })
+    expect(result.opened).toEqual(['defillama-tvl'])
+    expect((await store.getProfile('defillama-tvl'))?.enabled).toBe(true)
   })
 
   it('writes the marker once and makes the second run a no-op', async () => {
@@ -78,43 +90,6 @@ describe('keyless source defaults migration', () => {
     }
     const second = await migrateKeylessSourceDefaults({ store: spiedStore, markerPath })
     expect(second.opened).toEqual([])
-    expect(saves).toEqual([])
-  })
-
-  it('closes keyless sources no dashboard module uses, and leaves the used ones alone', async () => {
-    const markerPath = tempMarker()
-    const { store } = await setup([
-      profile('defillama-tvl', true),            // 0 模块 → 关
-      profile('ethereum-foundation-blog', true), // 0 模块 → 关
-      profile('coindesk-rss', true),             // news 模块在用 → 不动
-      profile('twelve-data-market', true)        // 需要钥匙 → 不动（偏好照存）
-    ], markerPath)
-
-    const result = await disableUnusedKeylessSources({ store, markerPath })
-    expect([...result.closed].sort()).toEqual(['defillama-tvl', 'ethereum-foundation-blog'])
-    expect((await store.getProfile('defillama-tvl'))?.enabled).toBe(false)
-    expect((await store.getProfile('coindesk-rss'))?.enabled).toBe(true)
-    expect((await store.getProfile('twelve-data-market'))?.enabled).toBe(true)
-  })
-
-  it('keeps both markers and makes the unused-sources pass a no-op the second time', async () => {
-    const markerPath = tempMarker()
-    const { store } = await setup([profile('defillama-tvl', true)], markerPath)
-    await migrateKeylessSourceDefaults({ store, markerPath })
-    await disableUnusedKeylessSources({ store, markerPath })
-
-    const markers = JSON.parse(readFileSync(markerPath, 'utf8')) as { markers: Record<string, unknown> }
-    expect(markers.markers[KEYLESS_SOURCES_ENABLED_MARKER]).toBeDefined()
-    expect(markers.markers[UNUSED_KEYLESS_SOURCES_DISABLED_MARKER]).toBeDefined()
-
-    // 读者之后手动打开：第二次跑不许再关。
-    await store.saveProfile({ sourceId: 'defillama-tvl', enabled: true })
-    const saves: string[] = []
-    const second = await disableUnusedKeylessSources({
-      store: { listProfiles: () => store.listProfiles(), saveProfile: async (input) => { saves.push(input.sourceId) } },
-      markerPath
-    })
-    expect(second.closed).toEqual([])
     expect(saves).toEqual([])
   })
 })

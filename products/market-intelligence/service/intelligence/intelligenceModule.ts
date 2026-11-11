@@ -30,7 +30,7 @@ import { createMarketAnalysisSettingsService } from './application/marketAnalysi
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
-import { disableUnusedKeylessSources, migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
+import { migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
 import {
   createIntelligenceCredentialJsonStorage,
   createIntelligenceCredentialStore
@@ -735,11 +735,10 @@ export function getIntelligenceModule(
     // that need no credential; a fresh install should not require toggling them on before the cards
     // can do anything. An existing profile wins, so a reader's "off" is never overridden.
     // 一次性迁移：老安装里「免钥匙 + live」的源曾被旧默认写成关，这里打开一次（标记写在
-    // `intelligence-source-migration-markers.json`，之后读者再关就是关）。
+    // `intelligence-source-migration-markers.json`，之后读者再关就是关）。口径见
+    // `isDefaultEnabledDefinition`：免钥匙 + 已就绪即默认启用，不再要求「被看板模块用到」。
     const migrationMarkers = join(dataDir, 'intelligence-source-migration-markers.json')
     const ensureDefaultSources = migrateKeylessSourceDefaults({ markerPath: migrationMarkers, store: profileStore })
-      // 第二条：没人用的免钥匙源关回去（第一条先把它们打开了，顺序不能反）。
-      .then(() => disableUnusedKeylessSources({ markerPath: migrationMarkers, store: profileStore }))
       .catch(() => undefined)
     // 历史日报编辑会话的身份归位：只改身份字段（消息与内容不动），幂等，失败不阻断启动但要留痕。
     const earlierBriefingSessionMigration = ensureDefaultSources
