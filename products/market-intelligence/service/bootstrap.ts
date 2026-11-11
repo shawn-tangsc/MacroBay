@@ -28,12 +28,12 @@ import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossA
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
 import { createNotificationTestWiring } from './intelligence/ipc/notificationTestWiring'
-import { translationRecordsBytes } from './intelligence/application/intelligenceTranslationCache'
 import { createEnabledCalendarFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
+import { registerTranslationRecordsCache } from './wiring/translation'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { ProductAgentPlatformDeps } from '@platform/desktop/main/productAgentPlatformWiring'
@@ -438,113 +438,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     intelligenceModule.marketAnalysisRuntime.dispose()
     syncAudit?.close()
   })
-  deps.registerProductCache('market-intelligence', {
-    cacheId: 'market-intelligence.translation-records',
-    displayName: 'Translation records',
-    displayNameI18n: {
-      'zh-CN': '翻译记录',
-      'en-US': 'Translation records'
-    },
-    description: 'Derived translation records for localized intelligence display text.',
-    descriptionI18n: {
-      'zh-CN': '用于情报展示本地化文本的派生翻译记录。',
-      'en-US': 'Derived translation records for localized intelligence display text.'
-    },
-    category: 'derived-data',
-    cacheKind: 'json-file',
-    durability: 'persisted-derived',
-    sensitivity: 'contains-user-content',
-    clearable: true,
-    compactable: true,
-    backupPolicy: 'exclude',
-    warnings: ['This cache only stores derived translations. Raw source records and intelligence evidence are not cleared here.'],
-    warningsI18n: [
-      {
-        'zh-CN': '这里只保存派生翻译结果，不会清理原始来源记录或情报证据。',
-        'en-US': 'This cache only stores derived translations. Raw source records and intelligence evidence are not cleared here.'
-      }
-    ],
-    provider: {
-      inspect: async () => {
-        const records = await intelligenceModule.translationService.listRecords()
-        const latestTranslatedAt = records
-          .map((record) => (record.translatedAt ? Date.parse(record.translatedAt) : Number.NaN))
-          .filter((value) => Number.isFinite(value))
-          .sort((left, right) => right - left)[0]
-        return {
-          cacheId: 'market-intelligence.translation-records',
-          status: records.length > 0 ? 'ready' : 'empty',
-          recordCount: records.length,
-          sizeBytes: translationRecordsBytes(records),
-          lastUpdatedAt: Number.isFinite(latestTranslatedAt) ? new Date(latestTranslatedAt).toISOString() : undefined,
-          rebuildable: true,
-          message: 'Translation display records can be regenerated from product-owned source items.'
-        }
-      },
-      clear: async ({ dryRun }) => {
-        const records = await intelligenceModule.translationService.listRecords()
-        // A clear removes every record, so the volume before the call is exactly what it removed.
-        const removedBytes = translationRecordsBytes(records)
-        if (dryRun === true) {
-          return {
-            cacheId: 'market-intelligence.translation-records',
-            operation: 'clear',
-            dryRun: true,
-            status: records.length > 0 ? 'skipped' : 'succeeded',
-            removedBytes,
-            removedRecords: records.length,
-            message: records.length > 0 ? 'Dry run only. Translation records would be cleared.' : 'Cache is already empty.'
-          }
-        }
-        await intelligenceModule.translationService.replaceRecords([])
-        return {
-          cacheId: 'market-intelligence.translation-records',
-          operation: 'clear',
-          dryRun: false,
-          status: 'succeeded',
-          removedBytes,
-          removedRecords: records.length,
-          message: records.length > 0 ? 'Translation records cache cleared.' : 'Translation records cache was already empty.'
-        }
-      },
-      compact: async ({ dryRun }) => {
-        // A compaction keeps most of the file, so its `removedBytes` is the difference between the
-        // measurements, not the size of the whole record set. The old code reported the latter: it
-        // said 131 KB for a run that dropped 20 records out of hundreds.
-        const records = await intelligenceModule.translationService.listRecords()
-        const bytesBefore = translationRecordsBytes(records)
-        if (dryRun === true) {
-          const plan = await intelligenceModule.translationService.previewCompaction({ retentionMode: 'balanced' })
-          // A dry run changes nothing; it reports what the same compaction would free, and the audit
-          // record carries `dryRun`, so a preview is never counted as a removal that happened.
-          const removableBytes = Math.max(0, bytesBefore - translationRecordsBytes(plan.next))
-          return {
-            cacheId: 'market-intelligence.translation-records',
-            operation: 'compact',
-            dryRun: true,
-            status: plan.removedCount > 0 ? 'skipped' : 'succeeded',
-            removedRecords: plan.removedCount,
-            removedBytes: removableBytes,
-            message:
-              plan.removedCount > 0
-                ? 'Dry run only. Translation records would be compacted.'
-                : 'No stale translation records need compaction.'
-          }
-        }
-        const result = await intelligenceModule.translationService.compactDerivedRecords({ retentionMode: 'balanced' })
-        const bytesAfter = translationRecordsBytes(await intelligenceModule.translationService.listRecords())
-        return {
-          cacheId: 'market-intelligence.translation-records',
-          operation: 'compact',
-          dryRun: false,
-          status: 'succeeded',
-          removedRecords: result.removedCount,
-          removedBytes: Math.max(0, bytesBefore - bytesAfter),
-          message:
-            result.removedCount > 0 ? 'Translation records compaction finished.' : 'No stale translation records needed compaction.'
-        }
-      }
-    }
+  // 翻译记录缓存的注册细节搬到了 `wiring/translation.ts`（组合根按域拆的第一段）：这个文件每涨一行
+  // 都要有人问「为什么必须在这里」。
+  registerTranslationRecordsCache({
+    registerProductCache: deps.registerProductCache,
+    translation: intelligenceModule.translationService
   })
 
   // Audit the reader's own actions on the IPC seam: one place sees the payload, the duration and
