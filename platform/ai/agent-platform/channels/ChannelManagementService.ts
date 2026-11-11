@@ -29,6 +29,7 @@ import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
 import { channelAdapterDescriptor } from './channelAdapterDescriptors'
 import { channelAdapterKeyForType } from './ChannelManagementPredicates'
+import { validatePolicy } from './channelPolicyValidation'
 
 type ManagementDependencies = {
   repository: ChannelManagementRepository
@@ -486,18 +487,3 @@ export class ChannelManagementService {
   }
 }
 
-function validatePolicy(value: unknown): {
-  subjectType: 'user' | 'conversation'
-  key: string
-  conversationKind: 'direct' | 'group' | 'channel' | null
-} {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('channel-policy-invalid')
-  const policy = value as Record<string, unknown>
-  if (policy.subjectType !== 'user' && policy.subjectType !== 'conversation') throw new Error('channel-policy-invalid')
-  if (typeof policy.key !== 'string' || !policy.key.trim() || policy.key.length > 512) throw new Error('channel-policy-invalid')
-  const conversationKind = policy.conversationKind ?? null
-  if (conversationKind !== null && conversationKind !== 'direct' && conversationKind !== 'group' && conversationKind !== 'channel') {
-    throw new Error('channel-policy-invalid')
-  }
-  return { subjectType: policy.subjectType, key: policy.key.trim(), conversationKind }
-}
