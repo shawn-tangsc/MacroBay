@@ -1187,6 +1187,42 @@
   min-width: 0;
 }
 
+/* 源名与它的小标签同一行：名字可以被压缩（省略号），标签不被压变形。 */
+.intelligence-provider-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.intelligence-provider-title strong {
+  min-width: 0;
+}
+
+/*
+ * 「这一条源在境内要经代理」的黄色小标签（读者 2026-11-12：跟在源名后面、小一点、黄色）。
+ *
+ * - 常显，不由「有没有配代理」决定：它回答的是「哪些源需要 VPN」，不是「你还没配代理」；
+ * - 字号用 `em`：基准是这一行的 13px（跟源名同档），0.62em ≈ 8px；
+ *   不用新的 `px` 字面量，`check:font-size-literals` 只降不升；
+ * - 颜色取 `--caution`（两套主题各一份的黄），描边/底色都由它混出来。
+ */
+.intelligence-proxy-tag {
+  flex: none;
+  align-self: center;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--caution) 45%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--caution) 12%, transparent);
+  color: var(--caution);
+  font-size: 0.62em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .intelligence-provider-main strong {
   overflow: hidden;
   color: var(--text-strong);

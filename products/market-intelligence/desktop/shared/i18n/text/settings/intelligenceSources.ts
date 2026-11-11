@@ -248,6 +248,9 @@ export const intelligenceSourcesText = {
   /* C5 列表形态：看板那一档自动平铺，这两句给读屏播报用。 */
   sourceListModes: { grouped: '分组', tiles: '平铺' },
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
+  /* 数据源列表里跟在源名后的黄色小标签：这一个源的接口在境内要经代理才通。
+     与 `sourceBadges.proxy`（读者没配代理时的提示）不同，它**常显**，回答「哪些源需要 VPN」。 */
+  proxyTag: 'VPN',
   proxyNotice: {
     title: '这个来源要走本地代理才能连',
     failedTitle: '连接失败：请先打开本地代理，再回来重试。',
@@ -817,6 +820,7 @@ export const intelligenceSourcesText = {
   sourceFilterLabel: 'Filter sources',
   sourceListModes: { grouped: 'Grouped', tiles: 'Tiles' },
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
+  proxyTag: 'VPN',
   proxyNotice: {
     title: 'This source needs a local proxy to connect',
     failedTitle: 'Connection failed: turn on your local proxy, then try again.',

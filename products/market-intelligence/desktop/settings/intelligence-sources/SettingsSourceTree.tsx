@@ -246,7 +246,14 @@ export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilt
                   {(labels.providerNames[provider.providerId] ?? provider.displayName).slice(0, 1).toUpperCase()}
                 </span>
                 <span className="intelligence-provider-main">
-                  <strong>{labels.providerNames[provider.providerId] ?? provider.displayName}</strong>
+                  <span className="intelligence-provider-title">
+                    <strong>{labels.providerNames[provider.providerId] ?? provider.displayName}</strong>
+                    {/* 哪些源在境内要经代理：注册表里 `requiresProxy` 已经逐源声明，这里只做投影——
+                        供应商只要旗下有一个这样的源就标。**常显**，不是「没配代理才提示」的那颗药丸。 */}
+                    {provider.sources.some((source) => source.requiresProxy === true)
+                      ? <span className="intelligence-proxy-tag">{resolveText('settings.intelligenceSources.proxyTag')}</span>
+                      : null}
+                  </span>
                 </span>
                 {unavailableCount > 0
                   ? <span className="intelligence-source-sr-only">{unavailableCountText.replace('{count}', String(unavailableCount))}</span>
