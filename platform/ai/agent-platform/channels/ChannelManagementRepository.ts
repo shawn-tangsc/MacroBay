@@ -841,6 +841,27 @@ export class ChannelManagementRepository {
     })
   }
 
+  /**
+   * 启动期围栏：把运行代际作废，**但保留读者的开启意图**（`requested_enabled` 不动，状态回 `ready`）。
+   *
+   * 为什么不能清意图：已实现、只是还没有验收证据的适配器，靠「启用时现场自检通过」放行；
+   * 证据决定的是平台对外声明，不是这位读者能不能用。启动时拿 `canEnable`（= 有证据）把这类频道
+   * 判成「不许跑」还可以，但顺手把 `requested_enabled` 抹掉就等于替他取消启用——
+   * 下次启动连恢复候选都没有，简报只会发到恰好还在启用的那一条（用户今天报的现场）。
+   */
+  fenceRuntimeGenerationKeepingIntent(channelId: string, now: string): boolean {
+    return this.database.transact(() => {
+      const changed = this.database.connection.prepare(
+        `update agent_channels
+           set lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'ready' end,
+               updated_at = ?
+         where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state <> 'deleting' and requested_enabled = 1`
+      ).run(now, channelId).changes
+      this.fence(channelId, now)
+      return changed === 1
+    })
+  }
+
   private invalidateLifecycleOwner(channelId: string): void {
     this.database.connection.prepare(
       `update channel_management_operations set state = case when state = 'external-inflight' then 'revoked-inflight' else 'revoked-cleanup' end,

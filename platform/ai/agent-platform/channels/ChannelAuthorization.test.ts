@@ -59,6 +59,32 @@ describe('channel runtime authorization', () => {
     expect(management.resumableChannelIds()).toEqual(['telegram-a'])
   })
 
+  it('keeps the reader’s enable intent when boot fences a channel that has no acceptance evidence yet', () => {
+    // 用户现场：Telegram/Discord 已实现、凭据可读、上次明明启用着，重启后变成 requested_enabled=0，
+    // 简报只发到剩下的那条。启动围栏只许停运行时，不许替他取消启用。
+    const database = createAgentPlatformDatabase(':memory:')
+    database.connection.exec(`
+      insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at)
+        values('agent-a','custom','Agent','[]','[]','a','2026-11-11','2026-11-11');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at)
+        values('telegram-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','2026-11-11','2026-11-11');
+      insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at)
+        values('telegram-a',1,'active','2026-11-11');
+    `)
+    // 注意：**不** seed 验收证据——这正是「已实现但还没证据」的现场。
+    const management = new ChannelManagementRepository(database)
+
+    expect(management.fenceRuntimeGenerationKeepingIntent('telegram-a', '2026-11-11T13:28:16.564Z')).toBe(true)
+    expect(database.connection.prepare("select requested_enabled,lifecycle_state,credential_health from agent_channels where id='telegram-a'").get()).toEqual({
+      requested_enabled: 1,
+      lifecycle_state: 'ready',
+      credential_health: 'configured'
+    })
+    // 代际作废（运行时不再被认为在跑），但下一次启动仍然认得这份意图。
+    expect(database.connection.prepare("select lifecycle_state from channel_runtime_generations where channel_id='telegram-a'").get()).toEqual({ lifecycle_state: 'inactive' })
+    expect(management.resumableChannelIds()).toEqual(['telegram-a'])
+  })
+
   it('maps the Lark storage carrier to the lark support key', () => {
     const database = createAgentPlatformDatabase(':memory:')
     database.connection.exec(`

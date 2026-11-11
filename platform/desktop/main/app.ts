@@ -113,6 +113,8 @@ import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 import { composeUpdateCheck } from './composition/updateCheck'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
+import { channelAdapterDescriptor } from '../../ai/agent-platform/channels/channelAdapterDescriptors'
+import { channelAdapterKeyForType } from '../../ai/agent-platform/channels/ChannelManagementPredicates'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
 import { registerWindowIpc } from './ipc/windowIpc'
@@ -1126,8 +1128,18 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   await channelManagementService.recover()
   for (const { channelId, generation, token } of channelManagementRepository.activeRuntimeChannels(new Date().toISOString())) {
     const type = channelManagementRepository.channelType(channelId)
-    // A persisted active row never bypasses the registry when another adapter has evidence.
-    if (!type || !channelAdapterRegistry.canEnable(type)) {
+    // 已实现但**还没有验收证据**的适配器：只围栏运行时，**保留读者的开启意图**。
+    // `canEnable`（= 有证据）决定的是平台对外声明，不是这位读者能不能用；这类频道的启用靠现场自检放行。
+    // 以前这里调 `disableRuntimeGeneration`，把 `requested_enabled` 一起清掉——于是重启后
+    // 「上次明明启用着」的两条频道变成从未启用，简报只发到剩下那条（用户今天报的现场）。
+    if (type && !channelAdapterRegistry.canEnable(type) && channelAdapterDescriptor(channelAdapterKeyForType(type)).implemented) {
+      channelManagementRepository.fenceRuntimeGenerationKeepingIntent(channelId, new Date().toISOString())
+      if (type === 'slack') slackRuntimeRepository.auditBootstrapFenced(channelId, 'slack-runtime-evidence-missing')
+      else if (type === 'telegram') telegramOffsetRepository.auditBootstrapFenced(channelId, 'telegram-runtime-evidence-missing')
+      continue
+    }
+    // 未知类型或未实现的适配器（微信）：根本没有运行时可跑，按原规则清掉。
+    if (!type || !channelAdapterDescriptor(channelAdapterKeyForType(type)).implemented) {
       channelManagementRepository.disableRuntimeGeneration(channelId, generation, new Date().toISOString())
       if (type === 'slack') slackRuntimeRepository.auditBootstrapFenced(channelId, 'slack-runtime-evidence-missing')
       // Lark's audit gate is intentionally active-generation-only; after fencing this transition has no runtime audit.
@@ -1146,7 +1158,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               ? await wechatRuntimeManager.start(channelId, generation, token)
             : await telegramRuntimeManager.start(channelId, generation, token)
     if (!started) {
-      channelManagementRepository.disableRuntimeGeneration(channelId, generation, new Date().toISOString())
+      // 启动这一跳失败多半是瞬时的（网络/代理/对方限流）：同样保留意图，交给 `resumeRequested` 再试。
+      channelManagementRepository.fenceRuntimeGenerationKeepingIntent(channelId, new Date().toISOString())
       if (type === 'slack') slackRuntimeRepository.auditBootstrapFenced(channelId, 'slack-runtime-start-failed')
       // The Lark current-generation gate rejects post-fence writes, preserving delete/runtime isolation.
       else if (type === 'feishu') void 0
