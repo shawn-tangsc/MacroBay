@@ -3,105 +3,155 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ConfigProvider } from 'antd'
 import { ConfirmProvider } from '@platform/ui/components/confirm'
-import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
+import { ToastHost } from '@platform/ui/components/toast/ToastHost'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
-import type { DailyBriefingStoredEdition } from '../../../service/intelligence/daily-briefing/dailyBriefingService'
-import { briefingHistorySummaries } from '../../../service/intelligence/daily-briefing/dailyBriefingHistory'
+import type { DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
-import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
+import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
+import { briefingOnScreenSession } from './briefingOnScreenSession'
 
 /**
- * E9 的整条链：历史投影（期 × 语言 → 会话）→ 行尾动作渲染 → 点开落到**同一条**会话。
+ * E9 挪到顶部工具栏之后的两段判据：
  *
- * 分成两截测是不够的：投影带 id、行会渲染、点击会调回调，三处各自绿，中间任何一处把 id
- * 弄丢都不会红。这条用例从头走到尾，任何一个环节丢 id 都断在同一个断言上。
+ * ① **取哪一条会话**：按屏幕上这一版的 `(date, periodId, locale)` 精确命中，历史多版次时不许取第一版；
+ * ② **顶部那颗的行为**：没有会话整颗不渲染；没打开时出一句中性话且再点是**真的再读一次**。
+ *
+ * 行尾那颗已删（`DailyBriefingHistoryRail.test.tsx` 里有一条「行轨 0 个会话按钮」的守卫）。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 
-const storedEdition: DailyBriefingStoredEdition = {
-  date: '2026-11-02',
-  periodId: 'default',
-  locale: 'zh-CN',
-  generatedAt: '2026-11-02T00:00:00.000Z',
-  windowStart: '2026-11-02T00:00:00.000Z',
-  windowEnd: '2026-11-02T00:00:00.000Z',
-  document: {
-    schemaVersion: 1,
-    policyVersion: 'daily-briefing.v1',
-    edition: {
-      date: '2026-11-02', locale: 'zh-CN', generatedAt: '2026-11-02T00:00:00.000Z',
-      windowStart: '2026-11-02T00:00:00.000Z', windowEnd: '2026-11-02T00:00:00.000Z', timeZone: 'Asia/Shanghai'
-    },
-    status: { readings: [], readingsAvailable: 4, readingsTotal: 4 },
-    lede: { source: 'template', text: '', generatedAt: '2026-11-02T00:00:00.000Z' },
-    news: { items: [], macro: [], notes: {} },
-    data: { market: [], funds: [], sentiment: { fearGreed: null, news: { state: 'empty' } } },
-    conclusion: null,
-    next: { items: [] },
-    citations: [],
-    provenance: { summaryId: null, readAt: '2026-11-02T00:00:00.000Z' }
-  }
-}
+const summary = (overrides: Partial<DailyBriefingEditionSummary>): DailyBriefingEditionSummary => ({
+  date: '2026-11-02', periodId: 'default', locale: 'zh-CN',
+  availableLocales: ['zh-CN'], updatedAt: '2026-11-02T00:00:00.000Z',
+  ...overrides
+}) as DailyBriefingEditionSummary
 
-let host: HTMLDivElement
-let root: Root
+const editions: readonly DailyBriefingEditionSummary[] = [
+  summary({ sessionId: 'session-first' }),
+  summary({ periodId: 'noon', sessionId: 'session-noon' }),
+  summary({ periodId: 'evening', sessionId: 'session-evening' }),
+  summary({ periodId: 'evening', locale: 'en-US', sessionId: 'session-evening-en' })
+]
 
-afterEach(() => {
-  act(() => root.unmount())
-  host.remove()
-})
-
-async function render(summary: Parameters<typeof DailyBriefingHistoryRail>[0]['editions'][number], onOpenSession?: (input: Readonly<{ sessionId: string; date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>) => Promise<boolean>) {
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  await act(async () => root.render(
-    <ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider>
-      <DailyBriefingHistoryRail
-        editions={[summary]}
-        todayDate="2026-11-02"
-        locale="zh-CN"
-        text={text}
-        timeZone="Asia/Shanghai"
-        onSelect={() => undefined}
-        {...(onOpenSession === undefined ? {} : { onOpenSession })}
-      />
-    </ConfirmProvider></ConfigProvider>
-  ))
-}
-
-describe('E9: the row opens exactly the session the projection named', () => {
-  it('carries the id from the projection into the row, and the click opens that same session', async () => {
-    const asked: unknown[] = []
-    const [summary] = await briefingHistorySummaries({
-      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [storedEdition], otherRows: [],
-      sessionId: async (date, periodId, locale) => { asked.push({ date, periodId, locale }); return 'session-1' }
+describe('E9 — the session the toolbar opens is the edition on screen', () => {
+  it('matches the on-screen edition exactly, never the first row of the history', () => {
+    const picked = briefingOnScreenSession({
+      editions,
+      edition: { date: '2026-11-02', periodId: 'evening', locale: 'zh-CN' },
+      text, locale: 'zh-CN', timeZone: 'Asia/Shanghai'
     })
-    // 投影按「期 × 语言」问一次，拿到的那条写进这一行。
-    expect(asked).toEqual([{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }])
-    expect(summary?.sessionId).toBe('session-1')
-
-    const onOpenSession = vi.fn(async () => true)
-    await render(summary!, onOpenSession)
-    const action = host.querySelector<HTMLButtonElement>('[data-open-session]')!
-    expect(action).not.toBeNull()
-    await act(async () => { action.click() })
-    await act(async () => { await Promise.resolve() })
-    // 点开的是**同一条**：id 一路从投影带到点击，中间没有第二份查找。
-    expect(onOpenSession).toHaveBeenCalledWith({ sessionId: 'session-1', date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
+    expect(picked?.sessionId).toBe('session-evening')
+    expect(picked?.label).toContain('11/02')
   })
 
-  it('renders no action and leaves no placeholder when the projection names no session', async () => {
-    const [summary] = await briefingHistorySummaries({
-      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [storedEdition], otherRows: []
+  it('answers for the language too: the same period in en-US is another session', () => {
+    const picked = briefingOnScreenSession({
+      editions,
+      edition: { date: '2026-11-02', periodId: 'evening', locale: 'en-US' },
+      text, locale: 'en-US', timeZone: 'Asia/Shanghai'
     })
-    expect(summary?.sessionId).toBeUndefined()
+    expect(picked?.sessionId).toBe('session-evening-en')
+  })
 
-    await render(summary!, async () => true)
-    expect(host.querySelector('[data-open-session]')).toBeNull()
-    // 行本身照旧：没有动作不等于这一行不在了。
-    expect(host.querySelector('.mi-daily-briefing__rail-row')).not.toBeNull()
+  it('gives nothing when that edition has no session or the day has no edition', () => {
+    expect(briefingOnScreenSession({
+      editions: [summary({})],
+      edition: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN' },
+      text, locale: 'zh-CN', timeZone: 'Asia/Shanghai'
+    })).toBeUndefined()
+    expect(briefingOnScreenSession({
+      editions,
+      edition: { date: '2026-11-05', periodId: 'default', locale: 'zh-CN' },
+      text, locale: 'zh-CN', timeZone: 'Asia/Shanghai'
+    })).toBeUndefined()
+  })
+})
+
+let root: Root | undefined
+afterEach(async () => {
+  await act(async () => root?.unmount())
+  root = undefined
+  document.body.replaceChildren()
+  vi.unstubAllGlobals()
+})
+
+async function renderToolbar(
+  openSession?: Readonly<{ sessionId: string; label: string }>,
+  onRegenerate: () => void = () => undefined
+): Promise<HTMLElement> {
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => root!.render(
+    <ShellLanguageProvider language="zh-CN">
+      <ConfirmProvider><ToastHost>
+        <DailyBriefingEditionActions
+          copyState="idle"
+          exportState="idle"
+          exportable
+          generating={false}
+          onCopy={() => undefined}
+          onExport={() => undefined}
+          onRegenerate={onRegenerate}
+          push={{ state: { kind: 'idle' }, onPush: () => undefined, onRetry: () => undefined } as never}
+          pushText={({} as never)}
+          resolveText={(key: string) => key}
+          text={text}
+          {...(openSession === undefined ? {} : { openSession })}
+        />
+      </ToastHost></ConfirmProvider>
+    </ShellLanguageProvider>
+  ))
+  return host
+}
+
+describe('E9 — the toolbar button', () => {
+  it('is not rendered at all when the edition has no session (no disabled placeholder)', async () => {
+    const host = await renderToolbar()
+    expect(host.querySelector('[data-toolbar-action="open-session"]')).toBeNull()
+    expect(host.querySelector('[data-toolbar-action="regenerate-edition"]')).not.toBeNull()
+  })
+
+  it('opens the session on a real click, and names the edition in the accessible name', async () => {
+    const select = vi.fn(async (id: string) => ({ activeSessionId: id }))
+    vi.stubGlobal('platform', { agents: { selectSession: select } })
+    const host = await renderToolbar({ sessionId: 'session-evening', label: '打开 11/02 20:00 这一版的会话' })
+    const button = host.querySelector<HTMLButtonElement>('[data-toolbar-action="open-session"]')!
+    expect(button.textContent).toBe(text.history.openSession)
+    expect(button.getAttribute('aria-label')).toBe('打开 11/02 20:00 这一版的会话')
+    await act(async () => button.click())
+    await act(async () => { await Promise.resolve() })
+    expect(select).toHaveBeenCalledWith('session-evening')
+  })
+
+  it('keeps the two buttons apart: re-generating never opens a session, opening never re-generates', async () => {
+    const select = vi.fn(async (id: string) => ({ activeSessionId: id }))
+    vi.stubGlobal('platform', { agents: { selectSession: select } })
+    const regenerate = vi.fn()
+    const host = await renderToolbar({ sessionId: 'session-evening', label: '打开会话' }, regenerate)
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click())
+    await act(async () => { await Promise.resolve() })
+    expect(regenerate).toHaveBeenCalledTimes(1)
+    expect(select).not.toHaveBeenCalled()
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-toolbar-action="open-session"]')!.click())
+    await act(async () => { await Promise.resolve() })
+    expect(select).toHaveBeenCalledTimes(1)
+    expect(regenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('says it did not open, and the next click really reads again', async () => {
+    const select = vi.fn(async () => ({ activeSessionId: null }))
+    vi.stubGlobal('platform', { agents: { selectSession: select } })
+    const host = await renderToolbar({ sessionId: 'session-gone', label: '打开会话' })
+    const button = host.querySelector<HTMLButtonElement>('[data-toolbar-action="open-session"]')!
+    await act(async () => button.click())
+    await act(async () => { await Promise.resolve() })
+    expect(host.querySelector('[data-session-not-opened]')?.textContent).toBe(text.history.sessionNotOpened)
+    expect(host.textContent).not.toMatch(/不在了|不存在/iu)
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-toolbar-action="open-session"]')!.click())
+    await act(async () => { await Promise.resolve() })
+    expect(select).toHaveBeenCalledTimes(2)
   })
 })

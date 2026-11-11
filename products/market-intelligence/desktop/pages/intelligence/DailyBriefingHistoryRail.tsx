@@ -14,12 +14,10 @@ import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBrief
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { briefingEditionDeleteCopy } from './briefingEditionDeleteConfirm'
 import { formatDuration } from './DailyBriefingGenerationTimeline'
-import { clockOf, formatRailDate, railClock, reasonOf, reasonSuffix, runReasonOf, sessionWhen } from './briefingRailRowText'
+import { clockOf, formatRailDate, railClock, reasonOf, reasonSuffix, runReasonOf } from './briefingRailRowText'
 
 // 两处既有引用（页面、手动生成结果文案）从这里取 `railClock`：搬家不改变导入路径。
 export { railClock, formatRailDate } from './briefingRailRowText'
-import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
-import { openBriefingSession } from './openBriefingSession'
 
 /** Which edition is on screen: one identity, shared by the rail and the page. */
 export type BriefingRailSelection = Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
@@ -81,22 +79,10 @@ function triggerLabelOf(kind: RailTriggerKind | undefined, text: DailyBriefingTe
   return text.history.notRecorded
 }
 
-/**
- * 行尾那颗「打开会话」真正要做的事：选中那一版**最新一次生成**的会话，再切到智能体对话页。
- *
- * 放在这里而不是让页面传进来：历史轨是唯一渲染这一行的地方，而页面文件别的线也在改——
- * 一个入口一个实现，别再让第二个文件也接一遍。
- */
-const openSessionWithShell = (input: Readonly<{ sessionId: string }>): Promise<boolean> => openBriefingSession({
-  sessionId: input.sessionId,
-  selectSession: (sessionId) => window.platform.agents.selectSession(sessionId),
-  navigate: () => navigateTo({ page: 'agents' })
-})
-
 export function DailyBriefingHistoryRail({
   editions, dates, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
   todayDate, locale, text, timeZone, generatingStage, generatingElapsedMs, resolveText, onSelect, onSelectLocale, onDeletePeriod,
-  onOpenSession, runningIdentity
+  runningIdentity
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /**
@@ -133,7 +119,6 @@ export function DailyBriefingHistoryRail({
    * 打开这一版**最新一次生成**用的会话（E9）。返回 `false` 表示会话已经不在了：行上就地一句，
    * 不跳转（产品 §8 第 6 条）。返回 `true` 时页面已经切走，行的选中态不再重要。
    */
-  onOpenSession?: (input: Readonly<{ sessionId: string; date: string; periodId: string; locale: DailyBriefingLocale }>) => Promise<boolean>
   // 行上不放重试：重试只在正文失败面板与工具栏（用户 2026-11-06）。行只陈述事实。
   /**
    * 页面自己发起的那次跑：`(日期, 期号, 语言)` 三元组。
@@ -147,14 +132,6 @@ export function DailyBriefingHistoryRail({
   // 右键指向的是**你点中的那一行**，身份是 `(日期, 期号, 语言)` 三元组。少了语言，同一天的中英两行
   // 会找到同一行：右键点英文那行、删掉的却是中文那行。这不是"删错了"，是行身份写错。
   const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; anchor: MenuAnchor }> | null>(null)
-  /**
-   * 点了「打开会话」但没有打开：只对那一行说一句，别处不动。
-   *
-   * 说「这次没有打开」，**不说「已经不在了」**（产品 2026-11-11 裁）：选不中会话有两种结局——
-   * 真的没了，和这次读不到——而界面分不出是哪一种。断言「记录没了」可能是一句假话，
-   * 而读者没法核实；中性句 + 动作留着再点一次，是这里唯一不会骗人的做法。
-   */
-  const [notOpenedKey, setNotOpenedKey] = useState<string | null>(null)
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
   const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor): void =>
     setMenu({ date: edition.date, periodId: edition.periodId, locale: edition.locale, anchor })
@@ -304,7 +281,6 @@ export function DailyBriefingHistoryRail({
               ?? (running ? (edition.periodKind === 'manual' ? 'manual' as const : 'scheduled' as const) : undefined)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
-            const sessionId = edition.sessionId
             // 行上**只放这一颗**动作（E9"打开会话"）。重试仍然只在正文的失败面板与工具栏——
             // 用户 2026-11-06 否掉的是"每个 item 都挂重试按钮"，不是动作本身。
             const interrupted = runReasonOf(edition) === 'run-interrupted'
@@ -399,24 +375,6 @@ export function DailyBriefingHistoryRail({
                         || (edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.railNoTitle)}
                     </span>}
               </button>
-              {/* 行尾动作：**兄弟**，不在行按钮子树里（嵌套可聚焦元素会让键盘卡住）。
-                  只在有会话时渲染；没有就整格不出现，不留禁用占位（那等于承诺"本来该有"）。 */}
-              {sessionId !== undefined
-                ? <>
-                  {notOpenedKey === key
-                    ? <span className="mi-daily-briefing__rail-session-not-opened" data-session-not-opened="true" role="status">{text.history.sessionNotOpened}</span>
-                    : null}
-                  <button type="button" className="text-action mi-daily-briefing__rail-open-session" data-open-session="true"
-                      aria-label={text.history.openSessionAria.replace('{when}', sessionWhen(edition, locale, timeZone))}
-                      onClick={() => {
-                        // 再点一次是真的再读一次：先收起上一次那句话，别让旧结论跟着这一次。
-                        setNotOpenedKey((current) => (current === key ? null : current))
-                        void (onOpenSession ?? openSessionWithShell)({ sessionId, date: edition.date, periodId: edition.periodId, locale: edition.locale })
-                          .then((opened) => { if (!opened) setNotOpenedKey(key) })
-                          .catch(() => setNotOpenedKey(key))
-                      }}>{text.history.openSession}</button>
-                </>
-                : null}
             </div>
           })}
           {/* 这一天没有任何可显示的行时给**一个**兜底项（`02` v2.86）：它不是版次行（无时刻/窗口/

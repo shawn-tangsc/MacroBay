@@ -1,3 +1,5 @@
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
+
 /**
  * 打开一版日报的编辑会话（E9）：先选中那条会话，再切到智能体对话页。
  *
@@ -6,6 +8,18 @@
  * 「已经不在了」）。选中与切换分开处理：选中失败是"没打开"，而页面切换本身没有可失败的动作，
  * 把它混进同一个 `catch` 会让"页面切换"这种不可能失败的事替"没打开"背锅。
  */
+/**
+ * 默认实现：用壳的会话选择与导航打开一版。**只有这一份**——行尾曾经自己写了一遍，挪到顶部时
+ * 再写一遍就是第二个实现（产品 2026-11-11：逻辑搬过去，不复制第二份）。
+ */
+export function openBriefingSessionWithShell(sessionId: string): Promise<boolean> {
+  return openBriefingSession({
+    sessionId,
+    selectSession: (id) => window.platform.agents.selectSession(id),
+    navigate: () => navigateTo({ page: 'agents' })
+  })
+}
+
 export async function openBriefingSession(input: Readonly<{
   sessionId: string
   selectSession: (sessionId: string) => Promise<unknown>

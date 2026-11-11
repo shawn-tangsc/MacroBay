@@ -41,6 +41,7 @@ import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
 import { briefingEditionSelection, nextEditionAfterDelete } from './briefingEditionSelection'
+import { briefingOnScreenSession } from './briefingOnScreenSession'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
@@ -246,16 +247,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     pickedPeriodId === intent.periodId && effectiveLocale === intent.locale)
   /** 屏幕上这一版的身份：正文里写着的那一期，取不到才退回当前选中/默认期。 */
   const onScreenPeriodId = screenDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
+  /** 屏幕上这一版的会话（E9）；判据与「为空就不渲染」都在 `briefingOnScreenSession` 里。 */
+  const onScreenSession = screenDocument && briefingOnScreenSession({ editions, edition: screenDocument.edition, text, locale, timeZone })
   /**
    * 重跑屏幕上这一版时，截止与窗口取它**自己**的（用户 2026-11-06）。
    *
    * 少了这两样，服务端只能回落到期配置列表第一项（初始化那第 1 期的 07:00），于是"点重新生成，
    * 又变成 7 点"，还会在同一个截止上多插一版。没有正文可读时不给（那是"生成这一期"，不是重跑）。
    */
-  /**
-   * 「重新生成」作用在哪一天：有正文就是这一版那一天；**失败/缺版**的那一天没有正文，
-   * 日期在视图里（`view.date`），不许因为它没正文就没得判断。
-   */
+  /** 「重新生成」作用在哪一天：有正文就是这一版；**失败/缺版**的那天没有正文，日期取视图里的（`view.date`）。 */
   const regenerateDay = screenDocument?.edition.date
     ?? (view.status === 'no-edition' ? view.date : undefined)
   const screenWindowHours = screenDocument?.edition.windowHours
@@ -440,6 +440,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingContent {...{
         // 版次级五颗：吸在正文滚动区顶部，只作用于当前这一版（重新生成 / 发布 / 导出 / 复制 / 删除）。
         editionBar: <DailyBriefingEditionActions
+          // 「打开会话」：**按屏幕上这一版的 (date, periodId, locale) 精确命中**历史里那一条的 sessionId。
+          // 不取第一版、不按「最近一次生成」猜——历史多版次时打开必须是读者正在看的这一版。
+          {...(onScreenSession === undefined ? {} : { openSession: onScreenSession })}
           text={text}
           resolveText={resolveProductText}
           exportable={screenDocument !== undefined && !contentBlocked}
