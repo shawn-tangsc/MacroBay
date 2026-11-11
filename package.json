@@ -40,6 +40,7 @@
     "release:preflight": "tsx scripts/preflight-release.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "discord:smoke": "tsx scripts/discord-gateway-smoke.mts",
+    "lark:smoke": "tsx scripts/lark-channel-smoke.mts",
     "qq:smoke": "tsx scripts/qq-channel-smoke.mts",
     "slack:smoke": "tsx scripts/slack-gateway-smoke.mts",
     "telegram:smoke": "tsx scripts/telegram-channel-smoke.mts",
