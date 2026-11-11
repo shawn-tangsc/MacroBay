@@ -56,7 +56,7 @@ import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushCha
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeSelfTestSurface } from './notificationSelfTestSurface'
 import { reportNarrowingWidened } from './notificationNarrowingTrace'
-import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
+import { composeNotificationRuntimeSurfaces } from './notificationRuntimeSurfaces'
 import { composeNotificationReadSurface } from './notificationRuntimeRead'
 import { decideSeverityUpgrade } from './notificationSeverityUpgrade'
 import { renderPlatformEventCopy } from '../producers/platformEventCopy'
@@ -385,23 +385,12 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */
   const reportProviderCredential = (input: ProviderCredentialSignal) => reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
-  const settingsPorts = {
-    catalog: deps.catalog,
-    getSettings: deps.getSettings,
-    updateSettings: deps.updateSettings,
-    getPushTargets: deps.getPushTargets,
-    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
-    ...(deps.lastDelivery === undefined ? {} : { lastDelivery: deps.lastDelivery }),
-    pushWired: () => deps.deliveryHooks?.push !== undefined
-  }
-  const settingsSurface = composeNotificationSettingsSurface(settingsPorts, { load, exclusive, persistWithDiagnostics, notifyChanged })
-  const delivery = createNotificationDelivery({
-    deliveryHooks: deps.deliveryHooks,
-    clock: deps.clock,
-    getLanguage: deps.getLanguage,
-    copy: deps.copy,
-    diagnostics: deps.diagnostics,
-    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+  // 两个面（设置面 / 投递面）的装配搬到 `notificationRuntimeSurfaces.ts`：这里只留接线一条。
+  const { settingsSurface, delivery } = composeNotificationRuntimeSurfaces(deps, {
+    load,
+    exclusive,
+    persistWithDiagnostics,
+    notifyChanged,
     now: nowIso
   })
 
