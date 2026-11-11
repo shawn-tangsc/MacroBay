@@ -12,12 +12,14 @@ export type CredentialFreeCalendarProvider = typeof credentialFreeCalendarProvid
 /**
  * Automatic provider enrollment policy.
  *
- * Demo mode supplies the first screen, so a fresh install starts with every
- * real collection source disabled. The policy intentionally auto-enables no
- * provider; readers opt in from the source drawer.
+ * 读者 2026-11-12：BEA 与 BLS 的官方日历默认启动（「这两个也要默认启动」）。
+ * Fed 仍是读者自己的选择：它不在自动列表里，存量的开关原样保留。
+ *
+ * 只对**已经装好运行时依赖**的 provider 生效（`readyProviderIds`），所以缺依赖的那次启动
+ * 不会把它写成「开着但从不刷新」；写入只从关到开，读者手动关掉的不会被翻回去。
  */
 export const macroCalendarProviderAutoEnrollmentPolicy = Object.freeze({
-  autoEnabledProviders: [] as readonly CredentialFreeCalendarProvider[],
+  autoEnabledProviders: ['macro-calendar-bea', 'macro-calendar-bls'] as readonly CredentialFreeCalendarProvider[],
   /** The policy is idempotent: it only flips `enabled` from false to true. */
   enableOnlyWhenDisabled: true
 })

@@ -20,35 +20,39 @@ function store(initial: readonly MacroCalendarProviderProfile[]) {
 }
 
 describe('calendar provider auto enrollment', () => {
-  it('does not auto-enable any credential-free provider on a fresh install', async () => {
+  it('enables BEA and BLS on first run when their runtime is ready, and leaves Fed alone', async () => {
     const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
     const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: [...credentialFreeCalendarProviders] })
+    expect([...enabled].sort()).toEqual(['macro-calendar-bea', 'macro-calendar-bls'])
+    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-bea')?.enabled).toBe(true)
+    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-bls')?.enabled).toBe(true)
+    // Fed 不在自动列表里：默认值不是它，读者自己的开关原样保留。
+    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-fed')?.enabled).toBe(false)
+  })
+
+  it('does not enable a provider whose runtime dependency was missing this boot', async () => {
+    const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
+    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-fed'] })
     expect(enabled).toEqual([])
     expect(s.profiles.every(candidate => !candidate.enabled)).toBe(true)
     expect(s.save).not.toHaveBeenCalled()
   })
 
-  it('keeps a provider disabled even when its runtime dependency was composed', async () => {
-    const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
-    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-fed'] })
-    expect(enabled).toEqual([])
-    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-fed')?.enabled).toBe(false)
-  })
-
   it('leaves an already enabled provider untouched, including its timestamp', async () => {
-    const s = store([profile('macro-calendar-fed', true)])
-    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-fed'] })
+    const s = store([profile('macro-calendar-bea', true)])
+    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-bea'] })
     expect(enabled).toEqual([])
     expect(s.save).not.toHaveBeenCalled()
     expect(s.profiles[0]?.updatedAt).toBe('2026-08-01T00:00:00.000Z')
   })
 
-  it('does not write any provider even when a write would fail', async () => {
-    const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false)])
+  it('keeps going for the other provider when one write fails', async () => {
+    const s = store([profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
     s.save.mockImplementationOnce(async () => { throw new Error('disk full') })
-    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-fed', 'macro-calendar-bea'] })
-    expect(enabled).toEqual([])
-    expect(s.save).not.toHaveBeenCalled()
+    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-bea', 'macro-calendar-bls'] })
+    // 第一条写失败不阻断第二条；返回的只有真正写成的那条。
+    expect(enabled).toEqual(['macro-calendar-bls'])
+    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-bls')?.enabled).toBe(true)
   })
 
   it('fails closed when the profile list cannot be read', async () => {
