@@ -515,52 +515,7 @@ button.mi-agent-card__status:focus-visible {
  * 回归：`drawerDragRegion.test.tsx` 断言这两条规则存在，且被声明的元素**包含**关闭按钮。
  */
 
-  container-type: inline-size;
-  min-height: 0;
-  padding: 0;
-}
 
-  display: grid;
-  grid-template-columns: minmax(250px, 31%) minmax(0, 1fr);
-  min-height: 100%;
-}
-
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 16px;
-}
-
-  display: grid;
-  gap: 4px;
-}
-
-
-  color: var(--muted);
-  font-size: 12px;
-}
-
-  display: grid;
-  gap: 12px;
-}
-
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  align-items: center;
-  gap: 12px;
-}
-
-  min-width: 150px;
-}
-
-@container (max-width: 520px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-}
 
 /*
  * `.mi-crypto-dashboard` 的壳、页边距与色板 token 不在这里定义：唯一 owner 是 `cryptoDashboard.css`。
