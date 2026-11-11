@@ -11,8 +11,8 @@ import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesC
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
 import { CollectionPolicySection, type CollectionPolicyLabels } from './CollectionPolicySection'
 import { SettingsInfo } from '../settingsInfo'
-import { SourceEnabledRow, needsJob } from './SourceRows'
-import { SourceDetailsBlock } from './SourceDetailsBlock'
+import { needsJob } from './SourceRows'
+import { ProviderSourceRow } from './ProviderSourceRow'
 import type { SourceHealthLabels } from './SourceHealthDetail'
 import { useSourceDetailReads } from './useSourceDetailReads'
 import type { SourceRunOutcome } from './intelligenceSourceProfileEditor'
@@ -26,14 +26,6 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-
-/**
- * 「这一行为什么不能改」的两句话与那颗 ⓘ 的读屏名（都是键，句子由 `resolveText` 解析）。
- * 取不到的源说第一句、还没接入的源说第二句——同一个位置只挂一颗 ⓘ，正文里没有它们的位置。
- */
-const NOT_CONFIGURABLE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.notConfigurableAria'
-const COLLECTION_POLICY_STOPPED_KEY = 'settings.intelligenceSources.collectionPolicyStopped'
-const PLANNED_NOT_CONFIGURABLE_KEY = 'settings.intelligenceSources.collectionPolicy.plannedNotConfigurable'
 
 export type ProviderDetailLabels = {
   sourceNames: Record<string, string>
@@ -468,87 +460,28 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       {sources.length === 0
         ? <StateView reasonCode="not-yet" size="md" state="empty" />
         : null}
-      {sources.map((source) => {
-        const name = labels.sourceNames[source.sourceId] ?? source.displayName
-        const unused = source.panels.length === 0
-        const unavailable = source.unavailable
-        /* meta 只放**读者要判断的东西**：未接入 / 高级这类可见性，以及后面的运行/代理状态。
-           「看板 / 日历 / 舆情」这种**面板用途**不进 meta（用户 2026-11-10：它只说这个源供哪块用，
-           读者不需要；面板在哪块出现，看板里自己看得见）。 */
-        const tags = [
-          unused || source.visibility === 'pending'
-            ? labels.badges.pending
-            : source.visibility === 'advanced'
-              // 「已启用／已停用」不进标签行：开关就在行尾，词说的是开关位置。
-              ? labels.badges.advanced
-              : null
-        ].filter((tag): tag is string => Boolean(tag))
-        /* 启用行：设置页那一面按菜单 1 的声明渲染，看板/日历那一面仍是旧形状——
-           两条路径在同一组件里，状态药丸与标签行只有一份。 */
-        return <div className="source-provider-detail__block" key={source.sourceId}>
-          <SourceEnabledRow
-            /* 需要 API Key 的源，Key 没配好之前开关灰着（判据在服务层：`hasCredential`）。
-               界面只画，不自己造默认值——投影给什么 `enabled` 就画什么。 */
-            /* 组开关（页头最右那颗）是**唯一可编辑入口**：能力行的开关只读展示这个源自己开没开，
-               点了不发写请求。「某一格用不用它」是「采集与数据」那面的题，不在这面出现——
-               页头、行开关、左上角摘要从此读同一个字段（`source.enabled`），不会再出现
-               「摘要 4、行上 2」这种自相矛盾。 */
-            readOnlyEnabled
-            {...(provider.credential === 'api-key' && credentialStatus?.hasCredential === false
-              ? { credentialMissing: true }
-              : {})}
-            {...(source.enabled
-              ? {
-                advanced: {
-                  controlsId: `${detailsRegionIdBase}-${source.sourceId}`,
-                  expanded: expandedBlocks.has(source.sourceId),
-                  onToggle: () => setBlockOpen(source.sourceId, !expandedBlocks.has(source.sourceId))
-                }
-              }
-              /* 未启用的源不出现「高级」：没有采集在进行，展开看四行没有意义（用户 2026-11-10）。
-                 整颗不渲染——不是禁用、不是灰掉、也不占位。 */
-              : {})}
-            labels={labels}
-            name={name}
-            onToggle={(enabled) => void toggle(source, enabled)}
-            proxyConfigured={proxyConfigured}
-            resolveText={resolveText}
-            source={source}
-            tags={tags}
-            unavailable={Boolean(unavailable)}
-          />
-          {/* 展开后那张表单（健康四行 + 采集策略两行）：默认收起，靠行尾那颗「高级」开。 */}
-          <SourceDetailsBlock
-            automaticSyncStopped={labels.automaticSyncStopped}
-            collectionPolicy={policy && policy.profiles[source.sourceId]
-              ? {
-                configurable: source.collection !== 'none' && source.visibility !== 'pending' && !unavailable,
-                enabledConfigurable: source.visibility !== 'pending' && !unavailable,
-                labels: policy.labels,
-                notConfigurable: unavailable
-                  ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: COLLECTION_POLICY_STOPPED_KEY }
-                  : source.visibility === 'pending'
-                    ? { ariaLabelKey: NOT_CONFIGURABLE_ARIA_KEY, labelKey: PLANNED_NOT_CONFIGURABLE_KEY }
-                    : undefined,
-                onChange: (patch) => policy.onChange(source.sourceId, patch),
-                profile: policy.profiles[source.sourceId]!,
-                supportsSentiment: policy.supportsSentimentById[source.sourceId] === true
-              }
-              : undefined}
-            healthLabels={labels.health}
-            hidden={!expandedBlocks.has(source.sourceId)}
-            id={`${detailsRegionIdBase}-${source.sourceId}`}
-            {...(onRunNow === undefined ? {} : { onRunNow: runAndRefresh })}
-            onRetry={() => retryDetail(source.sourceId)}
-            read={details[source.sourceId] ?? { state: 'loading' }}
-            refreshStale={refreshStaleById[source.sourceId] === true}
-            resolveText={resolveText}
-            source={source}
-            {...(supportsRunNowById?.[source.sourceId] === undefined ? {} : { supportsRunNow: supportsRunNowById[source.sourceId] })}
-            timeZone={timeZone}
-          />
-        </div>
-      })}
+      {sources.map((source) => <ProviderSourceRow
+        /* 组开关（页头最右那颗）是**唯一可编辑入口**：行开关只读展示这个源自己开没开；
+           「某一格用不用它」属于「采集与数据」那面，不在这面出现。 */
+        credentialMissing={provider.credential === 'api-key' && credentialStatus?.hasCredential === false}
+        detailsId={`${detailsRegionIdBase}-${source.sourceId}`}
+        expanded={expandedBlocks.has(source.sourceId)}
+        healthLabels={labels.health}
+        key={source.sourceId}
+        labels={labels}
+        onRetry={() => retryDetail(source.sourceId)}
+        {...(onRunNow === undefined ? {} : { onRunNow: () => runAndRefresh(source.sourceId) })}
+        onToggle={(enabled) => void toggle(source, enabled)}
+        onToggleAdvanced={() => setBlockOpen(source.sourceId, !expandedBlocks.has(source.sourceId))}
+        {...(policy === undefined ? {} : { policy })}
+        proxyConfigured={proxyConfigured}
+        read={details[source.sourceId] ?? { state: 'loading' }}
+        refreshStale={refreshStaleById[source.sourceId] === true}
+        resolveText={resolveText}
+        source={source}
+        {...(supportsRunNowById?.[source.sourceId] === undefined ? {} : { supportsRunNow: supportsRunNowById[source.sourceId] })}
+        timeZone={timeZone}
+      />)}
     </div>
     {showSourceDetails ? <div className="source-provider-detail__details">
 
