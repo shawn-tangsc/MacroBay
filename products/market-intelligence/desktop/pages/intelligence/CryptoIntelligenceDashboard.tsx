@@ -118,7 +118,7 @@ type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEn
   onManageSource: (focus?: BusinessFocus) => void
   onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, onOpenSourceConfig, cellEnabledIo }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -143,6 +143,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   initialSettingsMenu?: ConfigDrawerMenu
   /** 「来源与采集」那一屏挂载时的初值过滤器；不传就是看板默认（只作初值，不进受控状态）。 */
   initialSourceId?: string
+  /** 「采集与数据」里点源名/整行：切到「数据源」屏并定位这个源（页面层实现菜单切换）。 */
+  onOpenSourceConfig?: (sourceId: string) => void
   /** 「采集与数据」那一屏的屏内定位（只作初值）：业务 / 模块卡 / 格。 */
   initialBusinessPosition?: BusinessFocus
   /** 三屏的屏内分区（只作初值）：菜单 + 那一块。只交给对得上的那一屏。 */
@@ -357,10 +359,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
               {...(initialDrawerSection?.menu === 'notifications'
                 ? { initialSection: initialDrawerSection.section as NotificationSection }
                 : {})} /></ConfigDrawerPanel>}
-              sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel pane="sources" initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
+              sourcesPanel={<ConfigDrawerPanel screen="sources"><DashboardSourcesPanel pane="sources" {...(onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig })} initialFilter={initialSourceFilter} onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
               sourcesDataPanel={<ConfigDrawerPanel screen="sourcesData"><DashboardSourcesPanel
                 pane="business"
                 {...(initialBusinessPosition === undefined ? {} : { initialBusinessPosition })}
+                {...(onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig })}
                 onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
           </DrawerDiscardConfirm>
         </ConfirmProvider>

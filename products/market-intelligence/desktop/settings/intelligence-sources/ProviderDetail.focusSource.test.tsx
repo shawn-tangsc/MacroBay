@@ -107,6 +107,8 @@ describe('focus.sourceId 落到那个源的那一行', () => {
     const marked = [...host.querySelectorAll<HTMLElement>('[data-focused="true"]')]
     expect(marked).toHaveLength(1)
     expect(marked[0]?.getAttribute('data-source-row')).toBe('binance-api-updates')
+    // 看得见 ≠ 到了：焦点也落到这一行（行本来不可聚焦，定位时临时 tabIndex=-1）。
+    expect(document.activeElement).toBe(marked[0])
   })
 
   it('does nothing at all when that source is not in this provider', async () => {

@@ -325,10 +325,25 @@ function cellRow(args: {
       : undefined}
     role={sourceOff ? 'button' : undefined}
     tabIndex={sourceOff ? 0 : undefined}>
-    <span className="business-card__label">{label}</span>
+    {sourceOff || args.onOpenSourceConfig === undefined
+      /* 源没开：整行是按钮（这一行只能去配置），名字不再单独做按钮——按钮套按钮是嵌套交互。
+         源开着：名字是**真按钮**（原生 button，键盘可达），行本身不是按钮。 */
+      ? <span className="business-card__label">{label}</span>
+      : <button
+        aria-label={args.resolveText('settings.intelligenceSources.openSourceConfig').replace('{name}', label)}
+        className="business-card__label business-card__label--action"
+        onClick={(event) => {
+          // 名字是这一行唯一的交互目标；行本身没有点击，这里不必反向阻止，但也不许冒泡给卡片。
+          event.stopPropagation()
+          args.onOpenSourceConfig!(sourceId)
+        }}
+        type="button">{label}</button>}
     {onCellToggle === undefined
       ? null
-      : <span className="business-card__toggle">
+      : <span
+        className="business-card__toggle"
+        /* 开关只切换，不许冒泡成「点整行跳转」（红辉光那一行整行可点）。 */
+        onClick={(event) => event.stopPropagation()}>
         <Switch
           aria-disabled={sourceOff ? true : undefined}
           aria-label={args.resolveText(toggleKey).replace('{cell}', label)}

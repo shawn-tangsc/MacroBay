@@ -197,9 +197,17 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     const row = document.querySelector<HTMLElement>(`[data-source-row="${initialSourceId}"]`)
     if (row === null) return
     row.scrollIntoView?.({ block: 'nearest' })
-    // 唯一的「标记」：一个属性 + 一条 CSS 描边。不隐藏 DOM、不加 tabIndex、不动富行形状。
+    // 唯一的「标记」：一个属性 + 一条 CSS 描边。不隐藏 DOM、不动富行形状。
     row.setAttribute('data-focused', 'true')
-    return () => { row.removeAttribute('data-focused') }
+    // 看得见 ≠ 到了：把焦点也交给目标行（读屏用户要能听见落点）。行默认不可聚焦，
+    // 临时给 `tabIndex=-1`，离开时还原——不把整屏每一行都变成可 Tab 的停靠点。
+    const hadTabIndex = row.hasAttribute('tabindex')
+    if (!hadTabIndex) row.setAttribute('tabindex', '-1')
+    row.focus({ preventScroll: true })
+    return () => {
+      row.removeAttribute('data-focused')
+      if (!hadTabIndex) row.removeAttribute('tabindex')
+    }
   }, [initialSourceId])
 
   const runAndRefresh = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
@@ -374,8 +382,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       onOpenProxySettings={openProxySettings}
     /> : null}
     {/* 卡一 = 页头卡：源名行 + 注册/获取 Key 按钮 + API Key 行**同一张卡**（用户 2026-11-11：
-        它们属于同一个「这个来源是什么、怎么连上」的事实，不该拆成三块）。
-        邀请推广句已按用户 2026-11-12「这个不显示」整句删除，不补位。 */}
+        它们属于同一个「这个来源是什么、怎么连上」的事实，不该拆成三块）。 */}
     <header className="source-provider-detail__header source-provider-detail__card">
       {/* 源名同一行：名字 + 「官网」+「测试连接」，三样一行、都是小号文字按钮（用户 2026-11-10）。
           它们属于「这是哪个源、它通不通」，不是页头的一排实心大按钮——所以整屏不再有

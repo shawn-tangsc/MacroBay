@@ -34,6 +34,8 @@ export function DashboardSourcesPanel(props: {
   pane?: 'sources' | 'business'
   /** 抽屉的定位：只作初值，把该源那一行带进视野一次。 */
   initialSourceId?: string
+  /** 「采集与数据」里点源名/整行：切到「数据源」屏并定位这个源（宿主实现菜单切换）。 */
+  onOpenSourceConfig?: (sourceId: string) => void
   /** 「采集与数据」那屏的定位（只作初值）：业务 / 模块卡 / 格。 */
   initialBusinessPosition?: BusinessFocus
   /**
@@ -49,6 +51,11 @@ export function DashboardSourcesPanel(props: {
   // 抽屉落「看板」：打开就省一步。**设置页仍默认「全部」**（那是完整管理面），两边不一致是有意的。
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(props.initialFilter ?? 'all')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
+  /**
+   * 这一屏自己的定位（点名字/点红行之后）：只作初值传给详情，滚动与描边归 `ProviderDetail`。
+   * 与宿主给的 `initialSourceId` 合并：先到先用，之后由读者自己的点击接管。
+   */
+  const [focusSourceId, setFocusSourceId] = useState<string | undefined>(props.initialSourceId)
   /**
    * 「业务设置」那一屏自己的三项（看板 / 日历 / 舆情）。
    * 它只在 `sourceFilter === 'dashboard'`（业务设置页签）时生效；切到别的页签就回到那面的树。
@@ -83,6 +90,26 @@ export function DashboardSourcesPanel(props: {
     if (first !== undefined) setSelectedProviderId(first.providerId)
   }, [settingsView, selectedProviderId])
 
+  /** 一个源属于哪个 provider（点名字/整行跳转时要先选中它，否则详情根本不显示这个源）。 */
+  const providerOfSource = (sourceId: string): string | undefined => settingsView?.groups
+    .flatMap((group) => group.providers)
+    .find((provider) => provider.sources.some((source) => source.sourceId === sourceId))?.providerId
+
+  // 宿主带着 `initialSourceId` 打开时，先把它的 provider 选中（只做一次，读者之后可以自己换）。
+  const initialFocusProvider = props.initialSourceId === undefined ? undefined : providerOfSource(props.initialSourceId)
+  useEffect(() => {
+    if (initialFocusProvider === undefined) return
+    setSelectedProviderId((current) => current ?? initialFocusProvider)
+  }, [initialFocusProvider])
+
+  /** 「采集与数据」里点源：选中它所属的 provider、把详情定位到该源，再交给宿主切菜单。 */
+  const openSourceConfig = (sourceId: string): void => {
+    const providerId = providerOfSource(sourceId)
+    if (providerId !== undefined) setSelectedProviderId(providerId)
+    setFocusSourceId(sourceId)
+    props.onOpenSourceConfig?.(sourceId)
+  }
+
   // 四态：读不到是**错误态 + 真重试**，确实没有源是**空态**，加载中不许把树画成「没有源」。
   // 这三条以前由抽屉里那套扁平源行给，扁平屏退役后必须落在这里，否则「读不到」会被画成「一个源都没配」。
   const state = sourcesPanelState({ errorCode: settings.errorCode, loading: settings.loading, view: settingsView })
@@ -106,6 +133,7 @@ export function DashboardSourcesPanel(props: {
 
   return <SourcesSettingsPane
     {...(props.pane === undefined ? {} : { pane: props.pane })}
+    onOpenSourceConfig={openSourceConfig}
     {...(props.initialBusinessPosition === undefined ? {} : { initialBusinessPosition: props.initialBusinessPosition })}
     /* 格级开关的读写：与看板读取链**同一个客户端实例**（同一份存储，不各建一份）。 */
     cellEnabledIo={{ read: () => cellEnabledClient.read(), write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled) }}
@@ -124,7 +152,7 @@ export function DashboardSourcesPanel(props: {
       onDraftChange: reportDraftDirty,
       showSourceDetails: true,
       surface: 'settings',
-      ...(props.initialSourceId === undefined ? {} : { initialSourceId: props.initialSourceId })
+      ...(focusSourceId === undefined ? {} : { initialSourceId: focusSourceId })
     }}
     treeLabels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther }}
     view={settingsView} />
