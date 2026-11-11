@@ -66,8 +66,6 @@ function provider(): ProviderView {
   }
 }
 
-const SUPPORTS_SENTIMENT: Readonly<Record<string, boolean>> = { s1: true, s2: false }
-
 /** 页面把它交给两行策略行的同一份 profile（值从声明读，但视图必须给到）。 */
 const PROFILES: Readonly<Record<string, { collectionPreset?: string }>> = {
   s1: { collectionPreset: 'balanced' },
@@ -78,7 +76,6 @@ function policy(): NonNullable<Parameters<typeof ProviderDetail>[0]['policy']> {
   return {
     onChange: () => undefined,
     profiles: PROFILES as never,
-    supportsSentimentById: SUPPORTS_SENTIMENT,
     labels: {
       title: 'p', collectionPreset: 'c', manualPresetNote: 'm',
       presets: { manual: '手动', balanced: '均衡', frequent: '频繁' }
@@ -91,8 +88,7 @@ function viewOf(entry: SourceView): unknown {
   return {
     ...entry,
     displayName: entry.displayName,
-    profile: PROFILES[entry.sourceId],
-    supportsSentiment: SUPPORTS_SENTIMENT[entry.sourceId] === true
+    profile: PROFILES[entry.sourceId]
   }
 }
 

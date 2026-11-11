@@ -75,7 +75,7 @@ async function render(position?: { business?: 'dashboard' | 'calendar' | 'sentim
           onDraftChange: vi.fn(),
           onRunNow: async () => undefined,
           onToggleSource: async () => true,
-          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} },
+          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
           showSourceDetails: true
         } as never,
         treeLabels: {

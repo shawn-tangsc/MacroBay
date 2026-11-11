@@ -72,12 +72,9 @@ export function DashboardSourcesPanel(props: {
     props.onDraftChange?.(dirty)
   }, [props.onDraftChange, setDraftDirty])
 
-  // 采集策略：每源一份 profile；是否支持情绪分析由源定义决定（同一个事实只读一处）。
+  // 采集策略：每源一份 profile。
   const policyProfiles: Readonly<Record<string, IntelligenceSourceProfile>> = Object.fromEntries(
     profiles.map((profile) => [profile.sourceId, profile])
-  )
-  const supportsSentimentById: Readonly<Record<string, boolean>> = Object.fromEntries(
-    definitions.map((definition) => [definition.sourceId, definition.supportsSentiment === true])
   )
   const supportsRunNowById: Readonly<Record<string, boolean>> = Object.fromEntries(
     definitions.map((definition) => [definition.sourceId, definition.supportsRunNow])
@@ -145,7 +142,7 @@ export function DashboardSourcesPanel(props: {
     selectedProviderId={selectedProviderId}
     surface={{
       text: t,
-      policy: { labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById },
+      policy: { labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles },
       supportsRunNowById,
       onRunNow: runSourceNow,
       onToggleSource: toggleSourceEnabled,

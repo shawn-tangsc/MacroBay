@@ -101,7 +101,7 @@ function drawerHost(sourceView: SourceView): SourcesSettingsPaneProps {
 function surfaceOf(sourceView: SourceView): SourcesSettingsPaneProps['surface'] {
   return {
     text: settingsText,
-    policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: { [sourceView.sourceId]: true } },
+    policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never },
     supportsRunNowById: { [sourceView.sourceId]: true },
     onToggleSource: async () => true,
     onRunNow: async () => ({ kind: 'succeeded' as const, notice: '采集成功。' }),
@@ -201,7 +201,7 @@ describe('the config surface adapts a host that only has the three write callbac
     const props: SourceConfigSurfaceProps = {
       text: settingsText,
       provider: provider(sourceView),
-      policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: { [sourceView.sourceId]: true } },
+      policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never },
       supportsRunNowById: { [sourceView.sourceId]: true },
       onWriteSourceEnabled: write,
       writeOrigin: 'calendar-drawer',

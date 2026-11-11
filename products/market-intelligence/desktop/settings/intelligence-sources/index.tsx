@@ -57,9 +57,6 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
   const policyProfiles: Readonly<Record<string, IntelligenceSourceProfile>> = Object.fromEntries(
     profiles.map((profile) => [profile.sourceId, profile])
   )
-  const supportsSentimentById: Readonly<Record<string, boolean>> = Object.fromEntries(
-    definitions.map((definition) => [definition.sourceId, definition.supportsSentiment === true])
-  )
   // 「能不能立刻采」只认平台声明：目录里有 `supportsRunNow` 的源才可能有这颗按钮/这个答案。
   const supportsRunNowById: Readonly<Record<string, boolean>> = Object.fromEntries(
     definitions.map((definition) => [definition.sourceId, definition.supportsRunNow])
@@ -111,7 +108,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         selectedProviderId={selectedProviderId}
         surface={{
           text: t,
-          policy: { labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles, supportsSentimentById },
+          policy: { labels: t.collectionPolicy, onChange: updateSourceProfile, profiles: policyProfiles },
           supportsRunNowById,
           onRunNow: runSourceNow,
           onToggleSource: toggleSourceEnabled,

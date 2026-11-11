@@ -63,7 +63,7 @@ async function render(pane?: 'sources' | 'business'): Promise<HTMLElement> {
           onDraftChange: vi.fn(),
           onRunNow: async () => undefined,
           onToggleSource: async () => true,
-          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} },
+          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
           showSourceDetails: true
         } as never,
         treeLabels: {

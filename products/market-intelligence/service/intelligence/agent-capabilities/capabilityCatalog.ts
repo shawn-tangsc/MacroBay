@@ -231,7 +231,7 @@ export const intelligenceAgentCapabilities = [
     kind: 'read',
     title: { 'zh-CN': '情报源清单', 'en-US': 'Intelligence sources' },
     description:
-      '列出一个安装里存在的情报源及其配置与凭据状态：是否启用、采集节奏、是否纳入情绪、保留策略，以及 revision（配置修订号）。限制：返回的是投影，不含 profileId、credentialRef、sourceSpecificConfigJson 或任何密钥/掩码；credentialStatus 只有布尔值与最近校验时间。默认只列已启用的源，includeDisabled=true 才包含停用项；domain 按面板归属过滤为 dashboard 或 calendar。',
+      '列出一个安装里存在的情报源及其配置与凭据状态：是否启用、采集节奏、保留策略，以及 revision（配置修订号）。限制：返回的是投影，不含 profileId、credentialRef、sourceSpecificConfigJson 或任何密钥/掩码；credentialStatus 只有布尔值与最近校验时间。默认只列已启用的源，includeDisabled=true 才包含停用项；domain 按面板归属过滤为 dashboard 或 calendar。',
     inputSchema: listSourcesInputSchema,
     outputSchema: listSourcesOutputSchema,
     handlerId: 'market-intelligence.list-intelligence-sources',

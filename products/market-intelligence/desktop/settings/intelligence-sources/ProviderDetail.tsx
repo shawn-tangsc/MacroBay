@@ -107,13 +107,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** 只作初值：挂载时把这一源所在行带进视野一次（不做受控、不写回状态；找不到就什么都不做）。 */
   initialSourceId?: string
   /**
-   * 每个源的采集策略（频率档 / 范围 / 是否纳入舆情）。页面上常显：读者不必先选中某个源。
+   * 每个源的采集策略（频率档 / 范围 / 保留）。页面上常显：读者不必先选中某个源。
    * 数据与写入都来自页面的 profile 列表，这里只画。
    */
   policy?: {
     profiles: Readonly<Record<string, IntelligenceSourceProfile>>
     labels: CollectionPolicyLabels
-    supportsSentimentById: Readonly<Record<string, boolean>>
     onChange: (sourceId: string, patch: Partial<IntelligenceSourceProfile>) => void
   }
   translation?: Parameters<typeof TranslationPreferencesSection>[0]

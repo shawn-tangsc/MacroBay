@@ -58,7 +58,7 @@ async function render(initial: Readonly<Record<string, boolean>> = {}) {
           onDraftChange: vi.fn(),
           onRunNow: async () => undefined,
           onToggleSource,
-          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} },
+          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
           showSourceDetails: true
         } as never,
         treeLabels: {

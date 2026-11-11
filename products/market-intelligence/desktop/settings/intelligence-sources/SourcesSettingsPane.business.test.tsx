@@ -47,7 +47,7 @@ async function render(filter: 'all' | 'dashboard'): Promise<HTMLElement> {
           onDraftChange: vi.fn(),
           onRunNow: async () => undefined,
           onToggleSource: async () => true,
-          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} },
+          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
           showSourceDetails: true
         } as never,
         treeLabels: {
@@ -99,7 +99,7 @@ describe('骨架：页签条只渲染一次', () => {
           onDraftChange: vi.fn(),
           onRunNow: async () => undefined,
           onToggleSource: async () => true,
-          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} },
+          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
           showSourceDetails: true
         } as never,
         treeLabels: {
@@ -148,7 +148,7 @@ describe('格级开关接存储（注入 IO）', () => {
           onDraftChange: vi.fn(),
           onRunNow: async () => undefined,
           onToggleSource: async () => true,
-          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} },
+          policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
           showSourceDetails: true
         } as never,
         treeLabels: {
@@ -179,7 +179,7 @@ describe('格级开关接存储（注入 IO）', () => {
         filter: 'dashboard',
         onFilterChange: vi.fn(),
         onSelectProvider: vi.fn(),
-        surface: { text: t, onDraftChange: vi.fn(), onRunNow: async () => undefined, onToggleSource: async () => true, policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} }, showSourceDetails: true } as never,
+        surface: { text: t, onDraftChange: vi.fn(), onRunNow: async () => undefined, onToggleSource: async () => true, policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} }, showSourceDetails: true } as never,
         treeLabels: { title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther } as never,
         view
       }) })
@@ -206,7 +206,7 @@ describe('格级开关接存储（注入 IO）', () => {
         filter: 'dashboard',
         onFilterChange: vi.fn(),
         onSelectProvider: vi.fn(),
-        surface: { text: t, onDraftChange: vi.fn(), onRunNow: async () => undefined, onToggleSource: async () => true, policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} }, showSourceDetails: true } as never,
+        surface: { text: t, onDraftChange: vi.fn(), onRunNow: async () => undefined, onToggleSource: async () => true, policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} }, showSourceDetails: true } as never,
         treeLabels: { title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther } as never,
         view
       }) })
@@ -238,7 +238,7 @@ describe('卡片行：源名做标签 / 同一格的候选源互斥', () => {
           filter: 'dashboard',
           onFilterChange: vi.fn(),
           onSelectProvider: vi.fn(),
-          surface: { text: t, onDraftChange: vi.fn(), onRunNow: async () => undefined, onToggleSource: async () => true, policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {}, supportsSentimentById: {} }, showSourceDetails: true } as never,
+          surface: { text: t, onDraftChange: vi.fn(), onRunNow: async () => undefined, onToggleSource: async () => true, policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} }, showSourceDetails: true } as never,
           treeLabels: { title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, unavailableCountOne: t.unavailableCountOne, unavailableCountOther: t.unavailableCountOther } as never,
           view
         })
