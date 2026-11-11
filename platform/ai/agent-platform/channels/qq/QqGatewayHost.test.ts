@@ -186,6 +186,18 @@ describe('qq gateway host', () => {
     expect(harness.diagnostics).toContain('qq-commit:rejected')
   })
 
+  it('keeps the connection after READY when the commit is accepted', async () => {
+    // 回归钉：READY 之后 commit 成功时，绝不能还按「序号过期」关连接（现场就是每次握手自我关闭）。
+    const harness = await createHarness()
+    harness.sockets[0].message(HELLO)
+    harness.sockets[0].message(READY)
+    await flush()
+
+    expect(harness.audits()).not.toContain('qq-sequence-stale')
+    expect(harness.diagnostics).toContain('qq-commit:ok')
+    expect(harness.sockets[0].closed).toBe(false)
+  })
+
   it('opens nothing without a token', async () => {
     const harness = await createHarness({ token: null })
     expect(harness.sockets).toHaveLength(0)

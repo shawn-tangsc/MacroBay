@@ -4,7 +4,10 @@ import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase
 import { qqChannelSql, supportedChannelSql } from '../ChannelManagementPredicates'
 
 const QQ_CHANNEL_C_SQL = qqChannelSql('c')
-const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
+// 必须是**函数**：`supportedChannelSql` 里含「进程内取证放行」，而放行是用户点启用之后才建立的。
+// 写成常量会在模块加载时就把放行集算死（那时是空的），于是内存判定通过、写库永远为假——
+// QQ 每连上一次、握手成功、立刻被当成「序号过期」关掉，单聊消息永远推不下来。
+const RUNTIME_CHANNEL_C_SQL = (): string => supportedChannelSql('c')
 
 /** State transition only; authorization remains inside QqRuntimeRepository.commitIfCurrent. */
 export function qqGatewayStateUpsertSql(): string {
@@ -29,7 +32,7 @@ export class QqRuntimeRepository {
     return this.database.transact(() => {
       const current = this.database.connection.prepare(
         `select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
-         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${QQ_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
+         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${QQ_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL()}
            and c.lifecycle_state='enabled' and c.requested_enabled=1`
       ).get(channelId, generation)
       if (!current) return false
@@ -54,7 +57,7 @@ export class QqRuntimeRepository {
     return this.database.connection.prepare(
       `insert into channel_qq_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?
        where exists (select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
-         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${QQ_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
+         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${QQ_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL()}
            and c.lifecycle_state='enabled' and c.requested_enabled=1)`
     ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
   }
