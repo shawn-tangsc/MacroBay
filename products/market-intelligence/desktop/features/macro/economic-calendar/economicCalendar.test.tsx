@@ -151,15 +151,73 @@ describe('macro economic calendar', () => {
       window.removeEventListener('app-shell:navigate', navigation)
     } finally { query.mockRestore() }
   })
-  it('keeps the proxy notice away when no failure was detected', async () => {
+  /**
+   * `MI-11-R196` 的同一类病：读者已经把自定义代理配好（`http://127.0.0.1:7888` 带绕过规则），
+   * 横幅却还在让他「去设置 → 基础设置 → 代理模式选自定义代理」——提示与实际配置无关。
+   * 四档判据：已配置+失败 / 未配置+失败 / 已配置+没失败 / 按钮文案跟着档位。
+   */
+  const failedNetworkSources = ([ 'economic-indicator', 'financial-event', 'central-bank-activity' ] as const)
+    .map(eventType => ({ eventType, status: 'unavailable' as const, sourceObservedAt: null,
+      latestAttempt: { state: 'failed' as const, attemptedAt: asOf, failureCode: 'response-unavailable' as const, trigger: 'automatic' as const } }))
+  const configuredProxy = { network: { proxyMode: 'custom' as const, proxyUrl: 'http://127.0.0.1:7888', bypass: ['localhost'] } }
+  const withProxySettings = async <T,>(settings: unknown, run: () => Promise<T>): Promise<T> => {
+    const previous = (window as { platform?: unknown }).platform
+    vi.stubGlobal('platform', { ...(previous as object | undefined), settings: { get: async () => settings } })
+    try { return await run() } finally { vi.unstubAllGlobals() }
+  }
+  it('says the configured proxy did not connect instead of asking for a proxy already filled in', async () => {
+    const copy = productText['zh-CN'].settings.intelligenceSources.proxyNotice
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [], sources: failedNetworkSources })
+    try {
+      const { container } = await withProxySettings(configuredProxy, async () => renderCalendar({
+        queryMonth: async () => ({ state: 'available', asOf, events: [] }),
+        getEventDetail: async () => ({ state: 'unavailable' })
+      }))
+      await flush()
+      const banner = container.querySelector('[data-network-proxy-banner]')!
+      expect(banner, 'a configured proxy that failed still explains itself').not.toBeNull()
+      expect(banner.getAttribute('data-proxy-configured')).toBe('yes')
+      expect(banner.getAttribute('data-tone')).toBe('failed')
+      // 已配置：标题是「这次没连上」，正文让他查地址与端口；不许再出现「去…选自定义代理」。
+      expect(banner.textContent).toContain(copy.configuredFailedTitle)
+      expect(banner.textContent).toContain('检查代理地址与端口')
+      expect(banner.textContent).not.toContain('选「自定义代理」')
+      expect(banner.textContent).not.toContain(copy.body)
+      // 按钮也跟着档位：已配好时是「检查代理地址」，不是「去设置代理」。
+      expect(banner.querySelector('[data-network-proxy-settings]')?.textContent).toContain(copy.configuredFailedAction)
+      expect(banner.querySelector('[data-network-proxy-settings]')?.textContent).not.toContain(copy.action)
+    } finally { query.mockRestore() }
+  })
+  it('keeps the "set up a proxy" wording when no proxy is configured yet', async () => {
+    const copy = productText['zh-CN'].settings.intelligenceSources.proxyNotice
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [], sources: failedNetworkSources })
+    try {
+      const { container } = await withProxySettings({ network: { proxyMode: 'direct' as const, proxyUrl: '' } }, async () => renderCalendar({
+        queryMonth: async () => ({ state: 'available', asOf, events: [] }),
+        getEventDetail: async () => ({ state: 'unavailable' })
+      }))
+      await flush()
+      const banner = container.querySelector('[data-network-proxy-banner]')!
+      expect(banner.getAttribute('data-proxy-configured')).toBe('no')
+      expect(banner.getAttribute('data-tone')).toBe('requires')
+      expect(banner.textContent).toContain(copy.body)
+      expect(banner.textContent).not.toContain(copy.configuredFailedBody)
+      expect(banner.querySelector('[data-network-proxy-settings]')?.textContent).toContain(copy.action)
+    } finally { query.mockRestore() }
+  })
+  // 没有失败就没有横幅——代理配没配都一样：读者没有要做的动作，横幅就是在占他的注意力。
+  it.each([
+    ['未配置', { network: { proxyMode: 'direct' as const, proxyUrl: '' } }],
+    ['已配置', { network: { proxyMode: 'custom' as const, proxyUrl: 'http://127.0.0.1:7888' } }]
+  ])('keeps the proxy notice away when no failure was detected (%s)', async (_label, settings) => {
     const sources = ([ 'economic-indicator', 'financial-event', 'central-bank-activity' ] as const)
       .map(eventType => ({ eventType, status: 'success' as const, sourceObservedAt: marketEvent.sourceObservedAt }))
     const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [marketEvent], sources })
     try {
-      const { container } = await renderCalendar({
+      const { container } = await withProxySettings(settings, async () => renderCalendar({
         queryMonth: async () => ({ state: 'available', asOf, events: [] }),
         getEventDetail: async () => ({ state: 'unavailable' })
-      })
+      }))
       await flush()
       expect(container.querySelector('[data-network-proxy-banner]')).toBeNull()
     } finally { query.mockRestore() }

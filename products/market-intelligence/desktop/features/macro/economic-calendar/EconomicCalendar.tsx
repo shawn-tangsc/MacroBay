@@ -4,7 +4,6 @@ import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, Settings2, Upload } fr
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
-import { NetworkProxyBanner } from '../../../shared/NetworkProxyBanner'
 import { openIntelligenceSourcesSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
 import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../../settings/intelligence-sources/sourceWrites'
 import {
@@ -23,6 +22,7 @@ import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CalendarDetailSurface, type CalendarDetailState } from './CalendarDetailSurface'
 import { calendarRowFor } from './calendarRowFocus'
+import { MarketCalendarProxyBanner } from './MarketCalendarProxyBanner'
 import { useBlsAvailability, useBlsYearSync } from './useBlsAvailability'
 import type { BlsScheduleFeedback } from './blsAvailability'
 import { type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
@@ -37,7 +37,6 @@ import { CalendarSourceStatusInfo, MarketCalendarSourceStatus } from './MarketCa
 import { CalendarEventStatusPolicy } from './calendarEventStatusModel'
 import { useCalendarStatusClock } from './useCalendarStatusClock'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import { shouldShowMarketCalendarProxyNotice } from './marketCalendarProxyNotice'
 import { economicCalendarMonthLoadingPolicy, toDetailEvent } from './economicCalendarMonthResult'
 import type { EconomicCalendarText } from './economicCalendarText'
 import { useEconomicCalendarMonthWindow, type EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
@@ -367,7 +366,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
           <Button icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack}>{text.backToDashboard}</Button>
         </div>
       </header>
-      {shouldShowMarketCalendarProxyNotice(market.sources) ? <NetworkProxyBanner onOpenProxySettings={openProxySettings} /> : null}
+      {/* 档位跟着真实代理配置走：配好却未连上 ≠ 去配一个代理（`MI-11-R196`）。 */}
+      <MarketCalendarProxyBanner onOpenProxySettings={openProxySettings} sources={market.sources} />
       <section className="mi-market-calendar__status" aria-live="polite">
         {/* 常态说明（读取范围、刷新成功、采集时刻、更新频率）都收进那颗 ⓘ；正文只留状态。 */}
         {market.pending ? <span>{text.market.pending}</span> : market.feedback && market.feedback.state !== 'completed' ? <span>{text.market[market.feedback.state]}</span> : null}
