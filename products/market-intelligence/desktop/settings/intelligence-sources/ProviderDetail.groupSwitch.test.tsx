@@ -148,7 +148,6 @@ describe('组开关按能力算，不被单独一项待接入锁死', () => {
 describe('两张卡的范围', () => {
   it('keeps the API Key row inside the header card', async () => {
     // 用户 2026-11-11：卡一 = 名字/动作/组开关 + API Key 行，三行同一张卡；卡二 = 能力行。
-    // 邀请推广句已按用户 2026-11-12 删除（`28518a1`），这里只剩 API Key 行要核。
     const { host } = await render([true], {
       credential: 'api-key',
       hasCredential: true,
