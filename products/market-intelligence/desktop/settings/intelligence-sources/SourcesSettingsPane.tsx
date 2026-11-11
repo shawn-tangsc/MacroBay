@@ -118,16 +118,18 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
    * 不新造通道、也不使用详情那份草稿快照。
    */
   const presetValues: Record<string, string> = {}
-  const productCadence = new Set<string>()
+  const builtinCadence = new Set<string>()
   const presetPolicy = props.surface.policy
   for (const group of props.view?.groups ?? []) {
     for (const provider of group.providers) {
       for (const source of provider.sources) {
         if (!source.enabled || source.visibility === 'pending' || source.unavailable !== undefined) continue
-        if (source.collection === 'none') continue
-        // 产品自有采集：节奏由产品作业定，只显示文字、不画下拉（数值不在组件里写死）。
-        if (source.collectionOwner === 'product') {
-          productCadence.add(source.sourceId)
+        /* 已启用的源项**一律**占住频率那一行（用户 2026-11-12：不可调的也要占位、说明「内置频率」，
+           否则并排的卡片会高高低低，读者看不出这些源有什么区别）。
+           不能调的两种事实——节奏由产品自己的作业定、没有通用采集器——走同一个「内置」形态；
+           判定只读投影里的 `collectionOwner` / `collection`，不按源 id 写死。 */
+        if (source.collectionOwner === 'product' || source.collection === 'none') {
+          builtinCadence.add(source.sourceId)
           continue
         }
         if (presetPolicy === undefined) continue
@@ -220,7 +222,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {...(props.onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig: props.onOpenSourceConfig })}
           {...(onPresetChange === undefined ? {} : { onPresetChange })}
           presets={presetValues}
-          {...(productCadence.size === 0 ? {} : { productCadence })}
+          {...(builtinCadence.size === 0 ? {} : { builtinCadence })}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <>

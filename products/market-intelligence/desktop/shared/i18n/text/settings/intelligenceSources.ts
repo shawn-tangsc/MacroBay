@@ -393,7 +393,9 @@ export const intelligenceSourcesText = {
     /* 窄格短标（产品 2026-11-12）：读者判的是「多久采一次」，「预设」是内部说法。 */
     frequency: '频率',
     /* 产品自有采集的源：节奏由产品作业定，只写事实、不画控件（用户 2026-11-12）。 */
-    fixedCadence: '固定节奏',
+    builtinCadence: '内置频率',
+    builtinCadenceNote: '这个源的采集节奏由产品内置，不能在这里调整。',
+    builtinCadenceNoteAria: '内置频率说明',
     manualPresetNote: '手动模式启用后不会自动采集，需点击「立即运行」。',
     manualPresetNoteAria: '采集预设说明',
     plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
@@ -955,7 +957,9 @@ export const intelligenceSourcesText = {
     title: 'Collection Policy',
     collectionPreset: 'Collection Preset',
     frequency: 'Frequency',
-    fixedCadence: 'Fixed cadence',
+    builtinCadence: 'Built-in cadence',
+    builtinCadenceNote: 'This source is collected on a cadence built into the product; it cannot be changed here.',
+    builtinCadenceNoteAria: 'About the built-in cadence',
     manualPresetNote: 'Manual mode does not collect automatically after enable. Use Run Now.',
     manualPresetNoteAria: 'About the collection preset',
     plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',

@@ -1706,12 +1706,14 @@
   min-height: 44px;
 }
 
-/* 第二行：频率（11/400 muted + 8 + 下拉占满、最小 96；ⓘ 紧跟短标 4px）。只用既有档位。 */
+/* 第二行：频率（11/400 muted + 8 + 下拉占满、最小 96；ⓘ 紧跟短标 4px）。只用既有档位。
+   `min-height` 而不是 `height`：可调（下拉）与不可调（「内置频率」）两种形态共用同一行高，
+   内容再长也不会被裁掉；两种形态行高相同，并排的卡片才不会高高低低。 */
 .business-card__preset {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 24px;
+  min-height: 24px;
   min-width: 0;
 }
 
@@ -1734,9 +1736,11 @@
   min-width: 96px;
 }
 
+/* 「内置频率」这个值：与可调时下拉里选中的「均衡」同一档（12/400/`--text`），
+   不写死具体周期；「不可操作」靠没有控件外观表达，不靠次级色、不加锁图标、不染色。 */
 .business-card__preset-value {
   color: var(--text);
-  font-size: var(--font-meta);
+  font-size: var(--font-body);
   font-weight: 400;
   line-height: var(--line-meta);
 }

@@ -165,10 +165,11 @@ export function BusinessSettingsContent(props: {
   /** 写回一个源的预设；由宿主注入 `updateSourceProfile`（按源单字段 patch，不是整份回写）。 */
   onPresetChange?: (sourceId: string, preset: string) => void
   /**
-   * 产品自有采集的已启用源：节奏由产品作业定，**只显示「固定节奏」文字、不画下拉**——
-   * 画成禁用控件就是假控件（用户 2026-11-12）。数值不在组件里写死。
+   * 节奏由产品内置、不能在这里调的已启用源（产品自有作业 / 没有通用采集器）。
+   * 这一行**照样占位**：写「内置频率」这个值，不画下拉——画成禁用控件就是假控件（用户 2026-11-12）。
+   * 具体周期不在组件里写死：没有真实排期读口就不编数字。
    */
-  productCadence?: ReadonlySet<string>
+  builtinCadence?: ReadonlySet<string>
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
@@ -195,7 +196,7 @@ export function BusinessSettingsContent(props: {
           preset: props.presets[cell.sourceId],
           onPresetChange: (next: string) => props.onPresetChange!(cell.sourceId, next)
         }),
-      ...(props.productCadence?.has(cell.sourceId) === true ? { productCadence: true } : {}),
+      ...(props.builtinCadence?.has(cell.sourceId) === true ? { builtinCadence: true } : {}),
     })
   }
   return <div className="intelligence-detail-scroll">
@@ -313,8 +314,8 @@ function cellRow(args: {
   /** 这个源当前的采集预设；给了才画第二行（未启用/待接入/无采集的源不给）。 */
   preset?: string
   onPresetChange?: (next: string) => void
-  /** 产品自有采集：第二行只写「固定节奏」文字，不画下拉。 */
-  productCadence?: boolean
+  /** 节奏由产品内置：第二行只写「内置频率」这个值，不画任何启停/采集控件。 */
+  builtinCadence?: boolean
   resolveText: (key: string) => string
 }): React.ReactElement {
   const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
@@ -388,13 +389,20 @@ function cellRow(args: {
         不是「没值所以禁用」（禁用等于承诺以后能开）。 */}
     {sourceOff
       ? null
-      : args.productCadence === true
-        ? <div className="business-card__preset" data-preset-row={sourceId} data-preset-fixed="true" {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId)}>
+      : args.builtinCadence === true
+        /* 不可调也要**占住这一行**（用户 2026-11-12：否则并排的卡片高高低低）：
+           标签「频率」+ 值「内置频率」+ 一颗 ⓘ 说明为什么内置。**没有 select / 开关 / 勾选框**，
+           「不可操作」靠没有控件外观表达，不靠颜色、不加锁图标。 */
+        ? <div className="business-card__preset" data-preset-row={sourceId} data-preset-builtin="true">
           <span className="business-card__preset-label-group">
             <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
+            <SettingsInfo
+              ariaLabelKey="settings.intelligenceSources.collectionPolicy.builtinCadenceNoteAria"
+              labelKeys={['settings.intelligenceSources.collectionPolicy.builtinCadenceNote']}
+              resolveText={args.resolveText} />
           </span>
-          {/* 产品自有作业的节奏：只写事实，不画点不动的控件。具体数字由产品排期决定，组件不写死。 */}
-          <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.fixedCadence')}</span>
+          {/* 只写事实：具体周期由产品排期决定，没有真实读口就不编数字（不写「内置 · 5 分钟」）。 */}
+          <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.builtinCadence')}</span>
         </div>
         : args.preset === undefined || args.onPresetChange === undefined
       ? null
