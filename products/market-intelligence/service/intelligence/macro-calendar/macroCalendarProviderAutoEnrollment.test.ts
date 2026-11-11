@@ -20,22 +20,24 @@ function store(initial: readonly MacroCalendarProviderProfile[]) {
 }
 
 describe('calendar provider auto enrollment', () => {
-  it('enables BEA and BLS on first run when their runtime is ready, and leaves Fed alone', async () => {
+  // 读者 2026-11-12：Fed 与 BEA 两个官方日历默认启动（BLS 按自己的就绪判断走）。
+  it('enables Fed, BEA and BLS on first run when their runtime is ready', async () => {
     const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
     const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: [...credentialFreeCalendarProviders] })
-    expect([...enabled].sort()).toEqual(['macro-calendar-bea', 'macro-calendar-bls'])
-    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-bea')?.enabled).toBe(true)
-    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-bls')?.enabled).toBe(true)
-    // Fed 不在自动列表里：默认值不是它，读者自己的开关原样保留。
-    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-fed')?.enabled).toBe(false)
+    expect([...enabled].sort()).toEqual(['macro-calendar-bea', 'macro-calendar-bls', 'macro-calendar-fed'])
+    for (const providerId of ['macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls'] as const) {
+      expect(s.profiles.find(candidate => candidate.providerId === providerId)?.enabled, providerId).toBe(true)
+    }
   })
 
   it('does not enable a provider whose runtime dependency was missing this boot', async () => {
     const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
     const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-fed'] })
-    expect(enabled).toEqual([])
-    expect(s.profiles.every(candidate => !candidate.enabled)).toBe(true)
-    expect(s.save).not.toHaveBeenCalled()
+    // 只有就绪的那个被写；另外两个缺依赖的保持关闭（缺依赖的启动不许写成「开着但从不刷新」）。
+    expect([...enabled]).toEqual(['macro-calendar-fed'])
+    expect(s.profiles.filter(candidate => candidate.providerId !== 'macro-calendar-fed').every(candidate => !candidate.enabled)).toBe(true)
+    // 只写就绪的那一个：缺依赖的两次启动都不许被写成「开着」。
+    expect(s.save).toHaveBeenCalledTimes(1)
   })
 
   it('leaves an already enabled provider untouched, including its timestamp', async () => {
