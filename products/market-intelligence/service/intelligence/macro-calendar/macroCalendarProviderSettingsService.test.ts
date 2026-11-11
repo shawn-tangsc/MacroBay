@@ -83,7 +83,8 @@ describe('macroCalendarProviderSettingsService', () => {
       provider: { providerId: 'macro-calendar-bea', enabled: true, scheduleHealth: 'never-run', consecutiveFailures: 0 }
     })
     await expect(service.runProviderNow('macro-calendar-fed')).resolves.toEqual({ state: 'skipped', failureCode: 'provider-disabled' })
-    expect(save).toHaveBeenCalledWith({ providerId: 'macro-calendar-bea', enabled: true })
+    // 读者动作写 `decidedBy: 'reader'`：自动启用下次就不许翻回去。
+    expect(save).toHaveBeenCalledWith({ providerId: 'macro-calendar-bea', enabled: true, decidedBy: 'reader' })
     expect(initialize).toHaveBeenCalledOnce()
     expect(runProviderNow).not.toHaveBeenCalled()
   })

@@ -55,8 +55,8 @@ describe('macroCalendarScheduleBackend', () => {
     })
     const requestFomcStatement = vi.fn(async () => ({ ok: false as const, descriptorId: 'macro-calendar-fed-statement-body', failureCode: 'network-request-failed' as const }))
     const backend = createMacroCalendarScheduleBackend({ rawRecords: createRawRecordStore(), dataDir: testDataDir(), request, requestFomcStatement })
-    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true })
-    await backend.profiles.save({ providerId: 'macro-calendar-bea', enabled: true })
+    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true, decidedBy: 'reader' })
+    await backend.profiles.save({ providerId: 'macro-calendar-bea', enabled: true, decidedBy: 'reader' })
 
     await backend.health.collectAndUpdateHealth({ descriptorId: 'macro-calendar-fed-schedule', runId: 'fed-run', detectedAt })
     await backend.health.collectAndUpdateHealth({ descriptorId: 'macro-calendar-bea-schedule', runId: 'bea-run', detectedAt })
@@ -105,7 +105,7 @@ describe('macroCalendarScheduleBackend', () => {
       rawRecords, dataDir: testDataDir(), request, requestFomcStatement,
       evidenceArchive: createMacroCalendarEvidenceArchive({ rawRecords, archiveDirectory: testDataDir() })
     })
-    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true })
+    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true, decidedBy: 'reader' })
 
     await expect(backend.health.collectAndUpdateHealth({ descriptorId: 'macro-calendar-fed-schedule', runId: 'fed-run', detectedAt })).resolves.toMatchObject({
       state: 'updated', healthStatus: 'healthy'
@@ -139,7 +139,7 @@ describe('macroCalendarScheduleBackend', () => {
       rawRecords, dataDir: testDataDir(), request, requestFomcStatement,
       evidenceArchive: createMacroCalendarEvidenceArchive({ rawRecords, archiveDirectory: testDataDir() })
     })
-    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true })
+    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true, decidedBy: 'reader' })
 
     await expect(backend.health.collectAndUpdateHealth({
       descriptorId: 'macro-calendar-fed-schedule', runId: 'fed-signal-run', detectedAt, signal: controller.signal
@@ -154,7 +154,7 @@ describe('macroCalendarScheduleBackend', () => {
     const request = vi.fn(async descriptor => ({ ok: false as const, descriptorId: descriptor.descriptorId, failureCode: 'network-request-failed' as const }))
     const requestFomcStatement = vi.fn()
     const backend = createMacroCalendarScheduleBackend({ rawRecords: createRawRecordStore(), dataDir: testDataDir(), request, requestFomcStatement })
-    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true })
+    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true, decidedBy: 'reader' })
     await backend.health.collectAndUpdateHealth({ descriptorId: 'macro-calendar-fed-schedule', runId: 'failed-schedule', detectedAt })
     expect(request.mock.calls.map(([descriptor]) => descriptor.descriptorId)).toEqual(['macro-calendar-fed-schedule'])
     expect(requestFomcStatement).not.toHaveBeenCalled()
@@ -184,7 +184,7 @@ describe('macroCalendarScheduleBackend', () => {
       blsScheduleBridge,
       evidenceReady: false
     })
-    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true })
+    await backend.profiles.save({ providerId: 'macro-calendar-fed', enabled: true, decidedBy: 'reader' })
 
     await expect(backend.health.collectAndUpdateHealth({
       descriptorId: 'macro-calendar-fed-schedule', runId: 'blocked-run', detectedAt

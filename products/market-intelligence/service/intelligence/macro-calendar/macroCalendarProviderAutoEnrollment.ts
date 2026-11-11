@@ -47,7 +47,7 @@ export async function autoEnrollCalendarProviders(deps: Readonly<{
 }>): Promise<readonly MacroCalendarProviderId[]> {
   const ready = new Set(deps.readyProviderIds)
   const enabled: MacroCalendarProviderId[] = []
-  let current: readonly { providerId: MacroCalendarProviderId; enabled: boolean }[]
+  let current: readonly { providerId: MacroCalendarProviderId; enabled: boolean; decidedBy?: 'auto' | 'reader' }[]
   try {
     current = await deps.profiles.list()
   } catch {
@@ -56,9 +56,10 @@ export async function autoEnrollCalendarProviders(deps: Readonly<{
   for (const providerId of macroCalendarProviderAutoEnrollmentPolicy.autoEnabledProviders) {
     if (!ready.has(providerId)) continue
     const profile = current.find(candidate => candidate.providerId === providerId)
-    if (profile?.enabled === true) continue
+    // 只从关到开，且**不碰读者自己决定的开关**：读者关掉的 provider 下次启动也不许被翻回去。
+    if (profile?.enabled === true || profile?.decidedBy === 'reader') continue
     try {
-      await deps.profiles.save({ providerId, enabled: true })
+      await deps.profiles.save({ providerId, enabled: true, decidedBy: 'auto' })
       enabled.push(providerId)
     } catch {
       // A single failing write must not block the other providers.

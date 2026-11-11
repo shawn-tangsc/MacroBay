@@ -88,7 +88,7 @@ export function createMacroCalendarProviderSettingsService(deps: {
     async saveProfile(input) {
       if (!isSaveInput(input)) return failed()
       try {
-        const saved = await deps.profiles.save(input)
+        const saved = await deps.profiles.save({ ...input, decidedBy: 'reader' })
         if (!isRecord(saved) || saved.providerId !== input.providerId || saved.enabled !== input.enabled) return failed()
         await deps.jobs.initialize()
         const page = await pageState()

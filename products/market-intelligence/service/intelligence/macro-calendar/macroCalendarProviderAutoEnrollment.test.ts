@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import { autoEnrollCalendarProviders, credentialFreeCalendarProviders, isCredentialFreeCalendarProvider } from './macroCalendarProviderAutoEnrollment'
 import type { MacroCalendarProviderProfile } from './macroCalendarProviderProfile'
+import { createInMemoryMacroCalendarProviderProfileStorage, createMacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 
-const profile = (providerId: MacroCalendarProviderId, enabled: boolean): MacroCalendarProviderProfile =>
-  ({ providerId, enabled, updatedAt: '2026-08-01T00:00:00.000Z' })
+const profile = (providerId: MacroCalendarProviderId, enabled: boolean, decidedBy: 'auto' | 'reader' = 'auto'): MacroCalendarProviderProfile =>
+  ({ providerId, enabled, decidedBy, updatedAt: '2026-08-01T00:00:00.000Z' })
 
 function store(initial: readonly MacroCalendarProviderProfile[]) {
   const profiles = [...initial]
@@ -28,6 +29,36 @@ describe('calendar provider auto enrollment', () => {
     for (const providerId of ['macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls'] as const) {
       expect(s.profiles.find(candidate => candidate.providerId === providerId)?.enabled, providerId).toBe(true)
     }
+  })
+
+  // 架构师的形状：`decidedBy` 记住「最后一次写 enabled 的是谁」。读者关掉的不许被下次启动翻回去。
+  it('never reopens a provider the reader turned off', async () => {
+    const s = store([profile('macro-calendar-fed', false, 'reader'), profile('macro-calendar-bea', false, 'reader'), profile('macro-calendar-bls', false, 'reader')])
+    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: [...credentialFreeCalendarProviders] })
+    expect(enabled).toEqual([])
+    expect(s.save).not.toHaveBeenCalled()
+  })
+
+  it('enables a provider that was never persisted', async () => {
+    const s = store([])
+    const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: [...credentialFreeCalendarProviders] })
+    expect([...enabled].sort()).toEqual(['macro-calendar-bea', 'macro-calendar-bls', 'macro-calendar-fed'])
+  })
+
+  // 老文件（只有 `enabled:false`、没有 `decidedBy`）→ 推断成读者写的 → **两次启动都仍然关**。
+  // 这条专抓「推断只在内存、写回时丢了」：第二次启动读的是第一次写回的文件。
+  it('keeps an old disabled file row closed across two boots, and writes the inferred decision back', async () => {
+    const storage = createInMemoryMacroCalendarProviderProfileStorage([{ providerId: 'macro-calendar-fed', enabled: false, updatedAt: '2026-08-01T00:00:00.000Z' }])
+    const first = createMacroCalendarProviderProfileStore(storage)
+    const firstBoot = await autoEnrollCalendarProviders({ profiles: first, readyProviderIds: [...credentialFreeCalendarProviders] })
+    expect(firstBoot).not.toContain('macro-calendar-fed')
+    // 写回之后文件里必须带上 `decidedBy: 'reader'`（推断结果落盘，不是只在内存里）。
+    const persisted = await storage.readAll()
+    expect(persisted.find(row => row.providerId === 'macro-calendar-fed')?.decidedBy).toBe('reader')
+    const second = createMacroCalendarProviderProfileStore(storage)
+    const secondBoot = await autoEnrollCalendarProviders({ profiles: second, readyProviderIds: [...credentialFreeCalendarProviders] })
+    expect(secondBoot).not.toContain('macro-calendar-fed')
+    expect((await second.list()).find(row => row.providerId === 'macro-calendar-fed')?.enabled).toBe(false)
   })
 
   it('does not enable a provider whose runtime dependency was missing this boot', async () => {
