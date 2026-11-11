@@ -348,10 +348,9 @@ mi: miText['zh-CN'],
                 sentimentUnknownReason: '评分模型设置读不到'
               },
               openModelService: '去模型服务',
-              /* 「采集与数据 › 舆情」右边那张入口卡：标题用 menus.processing，短标只写「全局」。 */
+              /* 「采集与数据 › 舆情」卡内那行收尾：标题用 menus.processing，辅助词是两块设置的**字段名**。 */
               scopeGlobal: '全局',
               processingEntryAria: '打开内容处理设置（翻译偏好、情绪评分）',
-              processingEntryHint: '翻译偏好 · 情绪评分',
               menus: {
                 sources: '数据源', sourcesData: '采集与数据', processing: '内容处理', analysis: 'AI 分析',
                 briefing: '日报', notifications: '通知', runLog: '运行日志'
@@ -360,6 +359,7 @@ mi: miText['zh-CN'],
                 thisSource: '这一条源',
                 status: '状态',
                 policy: '采集策略',
+                translation: '翻译偏好',
                 sentimentScoring: '情绪评分'
               },
               rows: {
@@ -1830,7 +1830,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               openModelService: 'Open model service',
               scopeGlobal: 'Global',
               processingEntryAria: 'Open content processing settings (translation preferences, sentiment scoring)',
-              processingEntryHint: 'Translation preferences · Sentiment scoring',
               menus: {
                 sources: 'Data sources', sourcesData: 'Collection and data', processing: 'Content processing', analysis: 'AI analysis',
                 briefing: 'Daily briefing', notifications: 'Notifications', runLog: 'Run log'
@@ -1839,6 +1838,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 thisSource: 'This source',
                 status: 'Status',
                 policy: 'Collection policy',
+                translation: 'Translation preferences',
                 sentimentScoring: 'Sentiment scoring'
               },
               rows: {

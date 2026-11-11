@@ -84,7 +84,9 @@ describe('舆情卡内部那行「内容处理」入口', () => {
     const row = host.querySelector<HTMLElement>(ROW)!
     expect(row.children).toHaveLength(3)
     expect(row.textContent).toContain(copy.menus.processing)
-    expect(row.textContent).toContain(copy.processingEntryHint)
+    // 辅助词由两块设置的字段名拼成，不是一个合成句（正文门禁按 `*Hint` 键名判说明句）。
+    expect(row.textContent).toContain(copy.groups.translation)
+    expect(row.textContent).toContain(copy.groups.sentimentScoring)
     // 老形态那两行字段列表不再存在。
     expect(row.querySelectorAll('[data-processing-field]')).toHaveLength(0)
   })
