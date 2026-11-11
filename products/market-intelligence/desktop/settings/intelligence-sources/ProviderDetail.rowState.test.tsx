@@ -9,11 +9,12 @@ import { productText } from '../../shared/i18n/productText'
 import { ProviderDetail } from './ProviderDetail'
 
 /**
- * 能力行的只读状态 = **这个源自己开没开**（`source.enabled`）。
+ * 能力行的状态文字 = **这个源自己开没开**（`source.enabled`）。
  *
  * 用户 2026-11-11：「币安」摘要写「已启用 4」，点进去只有 2 颗开关是开的——因为行开关当时读的是
  * 「看板某一格有没有用它」。同一个词在两处指两件事，两个数必然对不上。
- * 现在页头组开关、行开关、左上角摘要读同一个字段；「哪一格用不用它」归「采集与数据」那面。
+ * 现在页头组开关、行尾状态文字、左上角摘要读同一个字段；「哪一格用不用它」归「采集与数据」那面。
+ * 用户 2026-11-12：行尾那颗点不动的开关换成文字（假控件不许留）。
  */
 const t = productText['zh-CN'].settings.intelligenceSources
 let root: ReturnType<typeof createRoot> | undefined
@@ -60,39 +61,40 @@ async function render(sources: ReadonlyArray<unknown>) {
   return host
 }
 
-function rowSwitch(host: HTMLElement, sourceId: string): HTMLElement | null {
-  return host.querySelector<HTMLElement>(`[data-setting-key$="${sourceId}"] [role="switch"]`)
+function rowState(host: HTMLElement, sourceId: string): string {
+  return host.querySelector(`[data-setting-key$="${sourceId}"] .source-provider-detail__row-state`)?.textContent ?? ''
 }
 
 describe('能力行状态读源自己的 enabled', () => {
-  it('shows exactly the enabled sources as on, and the disabled ones as off', async () => {
+  it('shows exactly the enabled sources as 已启用, and the disabled ones as 未启用', async () => {
     const host = await render([
       source('binance-announcements', true),
       source('binance-futures-positioning', true),
       source('binance-api-updates', false),
       source('binance-spot-market', false)
     ])
-    expect(rowSwitch(host, 'binance-announcements')?.getAttribute('aria-checked')).toBe('true')
-    expect(rowSwitch(host, 'binance-futures-positioning')?.getAttribute('aria-checked')).toBe('true')
-    expect(rowSwitch(host, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('false')
-    expect(rowSwitch(host, 'binance-spot-market')?.getAttribute('aria-checked')).toBe('false')
+    expect(rowState(host, 'binance-announcements')).toBe(t.status.enabled)
+    expect(rowState(host, 'binance-futures-positioning')).toBe(t.status.enabled)
+    expect(rowState(host, 'binance-api-updates')).toBe(t.status.disabled)
+    expect(rowState(host, 'binance-spot-market')).toBe(t.status.disabled)
   })
 
   it('keeps working for a source used by no dashboard cell at all', async () => {
-    // 维护备用 / 只供分析的源没有格开关：它们的开关现在只回答「这个源自己开没开」。
+    // 维护备用 / 只供分析的源没有格开关：这一行只回答「这个源自己开没开」。
     const on = await render([source('binance-api-updates', true)])
-    expect(rowSwitch(on, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('true')
+    expect(rowState(on, 'binance-api-updates')).toBe(t.status.enabled)
     await act(async () => root?.unmount())
     const off = await render([source('binance-api-updates', false)])
-    expect(rowSwitch(off, 'binance-api-updates')?.getAttribute('aria-checked')).toBe('false')
+    expect(rowState(off, 'binance-api-updates')).toBe(t.status.disabled)
   })
 
-  it('never renders a writable row: the header group switch is the only write path', async () => {
+  it('never renders a control in the row: the header group switch is the only write path', async () => {
+    // 用户 2026-11-12：画成能拨却拨不动的开关是假控件，行尾改成文字状态。
     const host = await render([source('binance-announcements', true), source('binance-api-updates', false)])
-    const rows = [...host.querySelectorAll<HTMLButtonElement>(
-      '[data-setting-key^="setting:sources.enabled"] [role="switch"]'
-    )]
-    expect(rows.length).toBe(2)
-    for (const control of rows) expect(control.disabled).toBe(true)
+    expect(host.querySelectorAll('[data-setting-key^="setting:sources.enabled"] [role="switch"]')).toHaveLength(0)
+    expect(host.querySelectorAll('[data-setting-key^="setting:sources.enabled"] button')).toHaveLength(0)
+    // 页头那颗仍可编辑：它才是启停的唯一写入口。
+    const header = host.querySelector<HTMLButtonElement>('.source-provider-detail__group-toggle button[role="switch"]')
+    expect(header?.disabled).toBe(false)
   })
 })

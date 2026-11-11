@@ -1008,13 +1008,13 @@
 }
 
 .source-provider-detail__row {
-  /* 两列：左字段区吃满剩余宽度，右开关固定 34 + 8 间距。
+  /* 两列：左字段区吃满剩余宽度，右端状态文字按内容宽。
      原来按字段分窄列，把名字和状态压成一字一格竖排——这是那一类的根因。 */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 32px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   column-gap: 8px;
-  /* 名字 / meta / 「高级」/ 开关共用一条水平中线（用户 2026-11-10）：
-     整行 44 高、四个子项都居中，谁都不许被 margin 顶偏。 */
+  /* 名字 / meta / 状态文字共用一条水平中线（用户 2026-11-10）：
+     整行 44 高、各子项都居中，谁都不许被 margin 顶偏。 */
   align-items: center;
   min-height: 44px;
   padding: 10px 12px;
@@ -1026,10 +1026,11 @@
   background: color-mix(in srgb, var(--surface-soft) 35%, transparent);
 }
 
-.source-provider-detail__row > .ant-switch {
-  /* 居中靠容器的 `align-items: center`：开关自己不留 margin，否则它就被顶偏 1px。 */
-  align-self: center;
-  margin: 0;
+/* 行尾状态文字（用户 2026-11-12）：这里是**文字**不是开关——启停唯一编辑入口是页头组开关，
+   行上画一颗点不动的开关就是假控件。正文色、不染状态色；单行不折，长度随文案走。 */
+.source-provider-detail__row-state {
+  font-size: var(--font-meta);
+  white-space: nowrap;
 }
 
 /* 状态串：状态词 + 人话原因 + 上次成功，一条 ` · ` 串起来。
@@ -1042,7 +1043,7 @@
   max-width: 100%;
 }
 
-/* B4 四格：单独一行，宽度按整块算（不挤在 32px 开关那一列里）。 */
+/* B4 四格：单独一行，宽度按整块算（不挤在行尾状态那一列里）。 */
 .source-provider-detail__health {
   display: grid;
 }

@@ -3,18 +3,17 @@ import type { ProviderDetailLabels } from './ProviderDetail'
 import { SourceEnabledRow } from './SourceRows'
 
 /**
- * 「一个源一行」：启用行（只读状态）+ 行尾开关。
+ * 「一个源一行」：启用行（只读状态文字）。
  *
  * 「高级」与整个展开区已按用户 2026-11-12「这些都没用了」删除：源行的职责只剩
  * 「这个源开没开」。健康/运行状态改由日志与审计看，界面不再展示。
- * 页头（整组开关）与凭据块仍留在 `ProviderDetail`——它们属于「这个供应商」，不属于某一个源。
+ * 行尾不再画开关（用户 2026-11-12：点不动的开关是假控件）——启停唯一编辑入口是页头组开关。
  */
 export function ProviderSourceRow(props: Readonly<{
   source: SourceView
   labels: ProviderDetailLabels
-  /** 需要 API Key 的源，Key 没配好之前开关灰着（判据在服务层）。 */
+  /** 需要 API Key 的源，Key 没配好之前行内给一句「先配置 API Key」的 ⓘ。 */
   credentialMissing: boolean
-  onToggle: (enabled: boolean) => void
   proxyConfigured: boolean
   resolveText: (key: string) => string
 }>): React.ReactElement {
@@ -31,11 +30,9 @@ export function ProviderSourceRow(props: Readonly<{
   ].filter((tag): tag is string => Boolean(tag))
   return <div className="source-provider-detail__block">
     <SourceEnabledRow
-      readOnlyEnabled
       {...(props.credentialMissing ? { credentialMissing: true } : {})}
       labels={labels}
       name={name}
-      onToggle={props.onToggle}
       proxyConfigured={props.proxyConfigured}
       resolveText={props.resolveText}
       source={source}

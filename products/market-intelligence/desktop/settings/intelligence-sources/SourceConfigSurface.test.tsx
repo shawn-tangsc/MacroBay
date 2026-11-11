@@ -221,15 +221,14 @@ describe('the config surface adapts a host that only has the three write callbac
     // 「立即运行」随展开区一起删除（用户 2026-11-12）：这里不再有那颗按钮。
     expect([...container.querySelectorAll('button')].some((button) => button.textContent === settingsText.health.runAction.run)).toBe(false)
 
-    // 启停的编辑入口是页头那颗组开关（用户 2026-11-12）；能力行仍只读，点了不写。
-    // 只看能力行（启用）那颗：策略表单里还有「纳入情绪分析」开关，它不是启停入口。
-    const rows = [...container.querySelectorAll<HTMLButtonElement>('[data-setting-key^="setting:sources.enabled"] button[role="switch"]')]
-    expect(rows.length).toBeGreaterThan(0)
-    for (const toggle of rows) {
-      expect(toggle.disabled).toBe(true)
-      await act(async () => { toggle.click() })
+    // 启停的编辑入口是页头那颗组开关（用户 2026-11-12）；能力行行尾是文字状态，
+    // 一颗控件都不留（用户 2026-11-12：点不动的开关是假控件）。
+    // 只看能力行（启用）那几行：策略表单里还有「纳入情绪分析」开关，它不是启停入口。
+    expect(container.querySelectorAll('[data-setting-key^="setting:sources.enabled"] button[role="switch"]')).toHaveLength(0)
+    for (const row of container.querySelectorAll('[data-setting-key^="setting:sources.enabled"]')) {
+      expect(row.querySelectorAll('button, select, input')).toHaveLength(0)
+      expect(row.querySelector('.source-provider-detail__row-state')?.textContent).not.toBe('')
     }
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(write).not.toHaveBeenCalled()
 
     // 页头组开关走宿主那条写入口，并带上宿主声明的 origin。

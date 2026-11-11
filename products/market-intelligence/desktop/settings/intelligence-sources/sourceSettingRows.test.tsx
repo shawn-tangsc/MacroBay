@@ -177,24 +177,20 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
     }
   })
 
-  it('keeps the capability rows read-only: only the header group switch writes', async () => {
-    // 用户 2026-11-12：编辑入口是「数据源」页头那颗组开关（写源自己的 `enabled`）；能力行仍只读。
-    // 点能力行不产生任何写入，也不会走 IPC。
+  it('keeps the capability rows free of controls: only the header group switch writes', async () => {
+    // 用户 2026-11-12：编辑入口是「数据源」页头那颗组开关（写源自己的 `enabled`）；
+    // 能力行行尾是**文字状态**，不是开关——点不动的东西一颗都不留（假控件比没有更坏）。
     const invoke = vi.fn(async (_productId: string, _method: string) => undefined)
     ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const write = vi.fn(async (_source: Readonly<{ sourceId: string; kind: string }>, _enabled: boolean) => true)
     const container = await mount(write)
 
-    // 能力行的 `setting:sources.enabled@…`：只读、零写。
-    const rows = [...container.querySelectorAll<HTMLButtonElement>(
-      '[data-setting-key^="setting:sources.enabled"] button[role="switch"]'
-    )]
-    expect(rows.length).toBeGreaterThan(0)
-    for (const control of rows) {
-      expect(control.disabled).toBe(true)
-      await act(async () => { control.click() })
+    // 能力行的 `setting:sources.enabled@…`：零控件、零写。
+    expect(container.querySelectorAll('[data-setting-key^="setting:sources.enabled"] [role="switch"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[data-setting-key^="setting:sources.enabled"] button')).toHaveLength(0)
+    for (const row of container.querySelectorAll('[data-setting-key^="setting:sources.enabled"]')) {
+      expect(row.querySelector('.source-provider-detail__row-state')?.textContent).not.toBe('')
     }
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(write).not.toHaveBeenCalled()
 
     // 页头组开关可编辑：点一次只写可操作项（s2 待接入不参与）。

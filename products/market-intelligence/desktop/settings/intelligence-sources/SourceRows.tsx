@@ -1,4 +1,4 @@
-import { Button, Switch } from 'antd'
+import { Button } from 'antd'
 
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { StatusPill } from '@platform/ui/components/status-pill'
@@ -44,17 +44,10 @@ function SourceHealthPill({ state, resolveText, unavailable }: {
 
 export type SourceEnabledRowProps = Readonly<{
   /**
-   * 需要 API Key 但还没配好：开关灰着不可点（`aria-disabled` 可读），旁边一颗 ⓘ 说「先配置 API Key」。
-   * 读者配好并验证通过后由上级把这个值变掉，开关自动可用。
+   * 需要 API Key 但还没配好：旁边一颗 ⓘ 说「先配置 API Key」。
+   * 读者配好并验证通过后由上级把这个值变掉，提示自动消失。
    */
   credentialMissing?: boolean
-  /**
-   * 只读展示：开关只显示状态、不可点、不发写请求（整组启停由页头那颗接管）。
-   * `aria-disabled` 让读屏能读出「不可操作」；仍读每项自己的 `enabled`，所以组开关的混合态就是这里不全开。
-   */
-  readOnlyEnabled?: boolean
-  /** 只读状态下显示的值：能力行读**格开关**（无格 = 关），页头组开关读源自己的 `enabled`。 */
-  enabledOverride?: boolean
   source: SourceView
   /** 已解析好的来源名（`sourceNames` 有的用文案，没有的用投影里的名字）。 */
   name: string
@@ -62,11 +55,10 @@ export type SourceEnabledRowProps = Readonly<{
   tags: readonly string[]
   /** 「这个源现在取不到」：药丸换 `unavailableShort`，与行尾那颗标同词。 */
   unavailable: boolean
-  labels: Pick<ProviderDetailLabels, 'badges' | 'jobRegistered' | 'jobNotRegistered' | 'toggleSource'>
+  labels: Pick<ProviderDetailLabels, 'badges' | 'jobRegistered' | 'jobNotRegistered' | 'status'>
   resolveText: (key: string) => string
   /** 读者配过自定义代理时不再提示「需要代理」。 */
   proxyConfigured: boolean
-  onToggle: (enabled: boolean) => void
 }>
 
 /**
@@ -79,7 +71,7 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
   const row = sourceRowView(SOURCE_ROW_TEMPLATES.enabled, view)
   if (!row.visible) return null
   const label = row.descriptor.labelText?.(view) || props.name
-  const enabled = props.enabledOverride ?? (row.value === true)
+  const enabled = row.value === true
   const metaParts = [
     ...new Set(props.tags),
     ...(source.requiresProxy && !props.proxyConfigured ? [labels.badges.proxy] : []),
@@ -122,21 +114,15 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
         labelKeys={['settings.intelligenceSources.credentialRequiredToEnable']}
         resolveText={resolveText} />
       : null}
-    <Switch
-      /* The row's label is the source name; the switch has to say what it does, or a screen
-         reader reads the same name twice and cannot tell the two controls apart. */
-      aria-label={(enabled ? labels.toggleSource.disable : labels.toggleSource.enable).replace('{name}', label)}
-      aria-disabled={props.credentialMissing === true || props.readOnlyEnabled === true ? true : undefined}
-      checked={enabled}
-      /* 缺凭据时灰着：不调写接口、状态也不变（后端另有同一条拒绝，界面不是唯一防线）。 */
-      disabled={source.visibility === 'pending' || props.credentialMissing === true || props.readOnlyEnabled === true}
-      onChange={(next) => {
-        if (props.credentialMissing === true || props.readOnlyEnabled === true) return
-        props.onToggle(next)
-      }}
-      /* ui-spec §8.3：开关唯一实现是 antd Switch，统一 small（32×18），默认尺寸不在允许写法内。 */
-      size="small"
-    />
+    {/* 行尾是**文字状态**，不是开关（用户 2026-11-12）：这一屏的启停唯一编辑入口是页头那颗
+        组开关，行上再画一颗点不动的开关就是假控件——「假控件比没有更坏」。
+        文字不带交互语义、读屏按正文读出；只说这个源开没开，不写解释（解释进 ⓘ，这里不需要）。 */}
+    <span
+      className="source-provider-detail__row-state"
+      data-source-enabled={enabled ? 'true' : 'false'}
+    >
+      {enabled ? labels.status.enabled : labels.status.disabled}
+    </span>
   </div>
 }
 

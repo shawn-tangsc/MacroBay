@@ -10,7 +10,7 @@ import type { ProviderView, SourceView } from '../../../service/intelligence/app
 /**
  * 启用状态**一个值、一个写入点**（用户 2026-11-12 定稿）：
  * 页头那颗组开关写**源自己的采集开关**（`enabled`），它是这一屏唯一的写入口；
- * 下面能力行的开关只读——读的是「采集与数据」里用到它的那些格，点了不发写请求。
+ * 下面能力行只写这个源开没开（文字状态，不是开关——用户 2026-11-12：点不动的开关是假控件）。
  *
  * 两处控件（这里是同一投影出的两份宿主）读同一个 `enabled`，写入失败时一起保持旧值。
  */
@@ -85,12 +85,10 @@ describe('one enable value, one write', () => {
     await flush()
     expect(writes).toEqual([['s1', false]])
 
-    // 能力行那颗只读：点了不发写请求（状态由「采集与数据」的格开关决定）。
-    const row = container.querySelector<HTMLButtonElement>(ROW_SWITCH)
-    expect(row?.disabled).toBe(true)
-    await act(async () => { row?.click() })
-    await flush()
-    expect(writes).toEqual([['s1', false]])
+    // 能力行行尾是文字状态、没有开关：写入口只有页头那一颗。
+    expect(container.querySelector(ROW_SWITCH)).toBeNull()
+    expect(container.querySelector('.source-provider-detail__list .source-provider-detail__row-state')?.textContent)
+      .toBe(settingsText.status.disabled)
   })
 
   it('keeps both hosts on the same value: one write, both headers follow', async () => {

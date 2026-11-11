@@ -456,12 +456,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         ? <StateView reasonCode="not-yet" size="md" state="empty" />
         : null}
       {sources.map((source) => <ProviderSourceRow
-        /* 组开关（页头最右那颗）是**唯一可编辑入口**：行开关只读展示这个源自己开没开；
-           「某一格用不用它」属于「采集与数据」那面，不在这面出现。 */
+        /* 组开关（页头最右那颗）是**唯一可编辑入口**：行上只写这个源自己开没开（文字状态，
+           不是开关——点不动的开关是假控件）；「某一格用不用它」属于「采集与数据」那面。 */
         credentialMissing={provider.credential === 'api-key' && credentialStatus?.hasCredential === false}
         key={source.sourceId}
         labels={labels}
-        onToggle={(enabled) => void toggle(source, enabled)}
         proxyConfigured={proxyConfigured}
         resolveText={resolveText}
         source={source}
