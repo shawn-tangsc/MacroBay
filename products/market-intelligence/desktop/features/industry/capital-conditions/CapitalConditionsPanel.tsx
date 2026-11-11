@@ -28,7 +28,8 @@ import {
   type DashboardEtfReading
 } from './capitalConditionsModel'
 import { EtfOutflowChip, EtfSignalDetailDialog, type EtfSignalText } from './EtfOutflowSignal'
-import { SkeletonEtfRow, unavailableNotice, type UnavailableNotice } from './capitalUnavailable'
+import { SkeletonEtfRow, unavailableNotice } from './capitalUnavailable'
+import { CellSourceWord, EtfTable, StablecoinTable, format, type CapitalTableText } from './capitalTables'
 import './capitalConditions.css'
 
 type Text = {
@@ -148,11 +149,26 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   //
   // 两格都没启用时**这一次根本不去读**（宿主把读口关了），所以卡片不许停在「正在加载」：
   // 它照旧渲染，两行各自说自己那一态。这也是「关掉来源不等于这张卡消失」的判据。
+  // 第一支：**这块没有任何可用的源**（两格都没启用）→ 内容区盖共享遮罩、居中一颗「启用数据」。
+  //
+  // 不画表头骨架：骨架说的是「有表、只是这次没数」，而这一支连源都没开，画出来就是在暗示数据在。
+  // 标题行**不给动作**——遮罩里那颗就是这张卡唯一的入口（同一个动作两颗按钮是上一轮收掉的形状）。
+  //
+  // 「源从未配置过」这一事实在这条链上判不出来（源是 `dashboardSourceModules.ts` 的固定条目，
+  // 读者不能删源；`decideCellRead` 把「没配」并进了 `not-enabled`），所以这一支的判据是
+  // 「两格都未启用」，不是「一个都没配」——要做真的那一支，得先有数据层事实。
   if (cellAvailability?.stablecoin && cellAvailability.etf) return <section className="mi-capital-conditions" aria-label={text.title}>
-    <div className="mi-capital-conditions__summary">
-      <h2>{text.title}</h2>
-      <CellSourceState availability={cellAvailability.stablecoin} dataText={dataText} />
-      <CellSourceState availability={cellAvailability.etf} dataText={dataText} />
+    <div className="mi-capital-conditions__header-band"><h2>{text.title}</h2></div>
+    <div className="mi-source-veil-host" data-veiled="true">
+      <div className="mi-source-veil" data-state="disabled">
+        <p className="mi-source-state" data-state="disabled">
+          <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
+          <span>{dataText('pages.intelligence.portal.data.sourcesNotEnabled')}</span>
+        </p>
+        <Button onClick={cellAvailability.stablecoin.onOpenSources} size="small">
+          {dataText('pages.intelligence.portal.dashboard.crossAsset.enableData')}
+        </Button>
+      </div>
     </div>
   </section>
 
@@ -191,6 +207,14 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     {/* 面板级「重新采集失败」：提示条只报事、不带动作——上面那一行里的那颗就是同一个 `onRefresh`。 */}
     {refreshFailed ? <InlineNotice tone="danger">{text.refreshFailed}</InlineNotice> : null}
   </section>
+  // 有格没启用 →「启用数据」（走那一格的宿主回跳）；都启用但 ETF 那块读不到 →「再试一次」。
+  const firstCellOff = cellAvailability?.stablecoin ?? cellAvailability?.etf
+  const titleAction = firstCellOff
+    ? { label: dataText('pages.intelligence.portal.dashboard.crossAsset.enableData'), run: firstCellOff.onOpenSources }
+    : state.etfReading.state === 'unreadable'
+      ? { label: dataText('pages.intelligence.portal.data.retry'), run: onRefresh }
+      : undefined
+
   return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
@@ -204,6 +228,11 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
                 onToggle={() => setDetailOpen(true)} triggerRef={chipTrigger} />
             : null}
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
+          {/* 这张卡唯一的「补数据」入口（用户 2026-11-11：卡内不带按钮，收到标题行右侧）。
+              有格没启用 →「启用数据」；都启用但有块读不到 →「再试一次」；都读到 → 整颗不出现。 */}
+          {titleAction
+            ? <Button className="mi-capital-conditions__title-action" onClick={titleAction.run} size="small" type="link">{titleAction.label}</Button>
+            : null}
         </div>
         {/* state-ternary: reviewed — 这一处只决定「要不要把采集时刻传给详情弹窗」，不决定任何内容画不画；
             unreadable 时本来就没有可信的采集时刻，传 undefined 只是不给那个时间戳。 */}
@@ -217,18 +246,15 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         {/* These are the last numbers that read successfully. Saying so is the difference between
             "old" and "gone", and only one of those is true after a failed re-read. */}
         {state.stale ? <p className="mi-capital-conditions__stale" role="status">{text.staleRead}</p> : null}
-        {/* 两格各自说话：这一格没启用就**在这一行**说，并只给这一颗动作；
-            另一格没问题的照旧画读数——关掉一格不许把整张卡降级。 */}
-        {cellAvailability?.stablecoin
-          ? <CellSourceState availability={cellAvailability.stablecoin} dataText={dataText} />
-          : <StablecoinTable state={state} text={text} />}
-        {cellAvailability?.etf
-          ? <CellSourceState availability={cellAvailability.etf} dataText={dataText} />
-          : <EtfTable reading={state.etfReading} text={text} onRetry={onRefresh} />}
+        {/* 两格各自说话，而且**只说一次、摆法一致**：缺哪一格，就在那一格的表里用行内状态词说；
+            同一张卡内不许「一行用行内词、另一块整块换成状态面」——那是缺陷不是风格。
+            卡内不带按钮：这张卡的唯一动作在标题行右侧（见 `titleAction`）。 */}
+        <StablecoinTable state={state} text={text} {...(cellAvailability?.stablecoin ? { cellOff: cellAvailability.stablecoin } : {})} />
+        <EtfTable reading={state.etfReading} text={text} onRetry={onRefresh}
+          {...(cellAvailability?.etf ? { cellOff: cellAvailability.etf } : {})} />
       </div>
-      {cellAvailability?.etf
-        ? null
-        : <EtfFlow reading={state.etfReading} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />}
+      <EtfFlow reading={state.etfReading} flowHistory={state.flowHistory} text={text} onRetry={onRefresh}
+        {...(cellAvailability?.etf ? { cellOff: cellAvailability.etf } : {})} />
     </div>
   </section>
 }
@@ -242,203 +268,19 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
  *
  * Stock and flow share one compact table language: supply plus its 1D / 7D / 30D changes.
  */
-function StablecoinTable({ state, text, notice }: Readonly<{
-  state?: AvailableState
-  text: Text
-  notice?: UnavailableNotice
-}>): React.ReactElement {
-  const column = (flow: 'change1dUsd' | 'change7dUsd' | 'change30dUsd', percent: 'change1dPercent' | 'change7dPercent' | 'change30dPercent'): React.ReactElement =>
-    state === undefined
-      ? <td />
-      : <td data-flow-direction={flowDirection(state[flow])}>{state[flow]}</td>
-  // state-ternary: reviewed — 只决定要不要给百分号小格子挂方向属性；五列表头两种状态下都在。
-  const head = (label: string, flow: 'change1dUsd' | 'change7dUsd' | 'change30dUsd', percent: 'change1dPercent' | 'change7dPercent' | 'change30dPercent'): React.ReactElement =>
-    <th scope="col">{label}<span className="mi-capital-conditions__pct" {...(state === undefined ? {} : { 'data-flow-direction': flowDirection(state[flow]) })}>{state === undefined ? '' : `(${state[percent]})`}</span></th>
-  return <table className="mi-capital-conditions__etf-table mi-capital-conditions__stable-table">
-    <colgroup>
-      <col className="mi-capital-conditions__etf-col-asset" />
-      <col span={3} />
-      <col className="mi-capital-conditions__etf-col-supply" />
-    </colgroup>
-    <thead><tr>
-      <th scope="col">{text.asset}</th>
-      {head(text.change1d, 'change1dUsd', 'change1dPercent')}
-      {head(text.change7d, 'change7dUsd', 'change7dPercent')}
-      {head(text.change30d, 'change30dUsd', 'change30dPercent')}
-      <th scope="col">{text.totalSupply}</th>
-    </tr></thead>
-    <tbody>
-      {/* 状态行：表头下面的第一行、跨全部数据列。行名与表头一个字不改。 */}
-      {notice
-        ? <tr className="mi-capital-conditions__status-row" data-status-row="unavailable">
-          <td colSpan={5}>
-            <div className="mi-capital-conditions__status-inline">
-              <span className="mi-source-state" data-state="unreadable">
-                <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
-                <span>{notice.sentence}</span>
-              </span>
-              <Button onClick={notice.onAction} size="small">{notice.action}</Button>
-            </div>
-          </td>
-        </tr>
-        : null}
-      <tr>
-        <th scope="row">
-          <span className="mi-capital-conditions__asset-name">{text.stablecoin}</span>
-          <span className="mi-capital-conditions__asset-scope">{text.stablecoinScope}</span>
-        </th>
-        {column('change1dUsd', 'change1dPercent')}
-        {column('change7dUsd', 'change7dPercent')}
-        {column('change30dUsd', 'change30dPercent')}
-        <td className="mi-capital-conditions__stable-supply">{state === undefined ? null : state.currentUsd}</td>
-      </tr>
-    </tbody>
-  </table>
-}
-
-
-/** One row per asset, one column per horizon: no label repeats inside the body. */
-/**
- * ETF 两行：**每一支各说各的**。一支有值就照常显示数字（0 就是 0，不许拿另一支补），
- * 另一支显示「未知」+ 具体原因；两支都读不到才整块换成错误态。
- * 窗口不等长只让**对比列**不可比，不把两份数字一起撤掉（「ETH 晚一天整份作废」就是这么来的）。
- */
-/**
- * 一格的「没启用」：**行内一句 + 一颗动作**，用共享类 `mi-source-state`
- * （规范 `2026-11-11-source-availability-styles.md`；行级/格级就长这样）。
- *
- * 不用错误色——它不是故障，是读者要动手的事；读不到不在这一支（由读数自己说）。
- */
-function CellSourceState({ availability, dataText }: Readonly<{
-  availability: DashboardCapitalCellOff
-  dataText: (key: string) => string
-}>): React.ReactElement {
-  return <p className="mi-source-state" data-state="disabled">
-    <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
-    <span>{`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${availability.sourceLabel}）`}</span>
-    <Button onClick={availability.onOpenSources} size="small" type="link">
-      {dataText('pages.intelligence.portal.data.enableSources')}
-    </Button>
-  </p>
-}
-
-function EtfTable({ reading, text, onRetry, skeleton = false }: {
-  reading?: DashboardEtfReading
-  text: Text
-  onRetry?: () => void
-  /** 整卡读不到：表头、列名、行名照常，数据格留空（不写「未知」、不铺状态词）。 */
-  skeleton?: boolean
-}): React.ReactElement {
-  const unreadable = reading === undefined || reading.state === 'unreadable'
-  const coverage = unreadable ? undefined : reading.coverage
-  const span = 2 + etfFlowPolicy.cumulativeWindows.length
-  return <>
-  <table className="mi-capital-conditions__etf-table">
-    <colgroup>
-      <col className="mi-capital-conditions__etf-col-asset" />
-      <col span={3} />
-      <col className="mi-capital-conditions__etf-col-streak" />
-    </colgroup>
-    <thead><tr>
-      <th scope="col">{text.asset}</th>
-      <th scope="col">{text.latest}</th>
-      {etfFlowPolicy.cumulativeWindows.map((days) => {
-        const windowCoverage = coverage?.find((candidate) => candidate.windowDays === days)
-        return <th scope="col" key={days}>
-          {format(text.windowDays, { days })}
-          {windowCoverage && !windowCoverage.complete
-            ? <> <span className="mi-capital-conditions__coverage">{format(text.coverage, { days: windowCoverage.coveredDays })}</span></>
-            : null}
-        </th>
-      })}
-      <th scope="col">{text.streakColumn}</th>
-    </tr></thead>
-    <tbody>
-      {skeleton
-        ? <>
-            <SkeletonEtfRow label={text.btc} series="btc" span={span} />
-            <SkeletonEtfRow label={text.eth} series="eth" span={span} />
-          </>
-        : unreadable
-          ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={span}><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => onRetry?.() }} /></td></tr>
-          : <>
-              <EtfRow asset={reading.btc} label={text.btc} missing={reading.missing?.btc} text={text} />
-              <EtfRow asset={reading.eth} label={text.eth} missing={reading.missing?.eth} text={text} />
-            </>}
-    </tbody>
-  </table>
-  {/* 对比列单独说：不可比，且只在有 `laggingDays` 时念出落后几个交易日。 */}
-  {!unreadable && reading.comparison.state === 'unaligned'
-    ? <p className="mi-capital-conditions__etf-comparison" data-etf-comparison="unaligned">
-        {text.etfComparisonUnaligned}
-        {/* 只有「最新交易日不同」那一支带得出落后几个交易日；另一支没有这个数就不念。 */}
-        {'laggingDays' in reading.comparison
-          ? ` · ${format(text.etfComparisonLagging, { days: reading.comparison.laggingDays })}`
-          : null}
-      </p>
-    : null}
-  </>
-}
-
-function EtfRow({ asset, label, missing, text }: {
-  asset?: DashboardEtfFlowAsset
-  label: string
-  /** 这一支读不到时由模型给的原因；有 `asset` 就不用它。 */
-  missing?: DashboardEtfMissingReason
-  text: Text
-}): React.ReactElement {
-  // 这一支没值：说「未知」并给原因，**不补 0、不拿另一支顶**。
-  if (asset === undefined) {
-    return <tr data-etf-missing={missing ?? 'asset-missing'}>
-      <th scope="row"><i className="mi-capital-conditions__asset-dot" data-series={label === text.eth ? 'eth' : 'btc'} aria-hidden="true" />{label}</th>
-      <td className="mi-capital-conditions__etf-unknown" colSpan={1 + etfFlowPolicy.cumulativeWindows.length + 1}>
-        {text.etfUnknown} · {missingReasonText(missing, text)}
-      </td>
-    </tr>
-  }
-  const latest = asset.rows.at(-1)
-  const days = latest ? consecutiveDirectionDays(asset.rows, latest.direction) : 0
-  const streak = latest && days > 0
-    ? format(days === 1 ? text.streakSingle : text.streak, { flow: text.shortFlowDirections[latest.direction], count: days })
-    : ''
-  return <tr>
-    <th scope="row"><i className="mi-capital-conditions__asset-dot" data-series={asset.asset.toLowerCase()} aria-hidden="true" />{label}</th>
-    <td data-flow-direction={flowDirection(asset.latestNetFlowUsd)}>{asset.latestNetFlowUsd}</td>
-    {asset.cumulative.map((window) => <td key={window.windowDays} data-flow-direction={flowDirection(window.netFlowUsd)}>{window.netFlowUsd}</td>)}
-    <td className="mi-capital-conditions__streak" data-flow-direction={latest?.direction}>{streak}</td>
-  </tr>
-}
-
-function missingReasonText(reason: DashboardEtfMissingReason | undefined, text: Text): string {
-  switch (reason) {
-    case 'source-unreadable': return text.etfMissingSourceUnreadable
-    case 'value-missing': return text.etfMissingValueMissing
-    default: return text.etfMissingAssetMissing
-  }
-}
-
-function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflow' | 'zero' }[], direction: 'inflow' | 'outflow' | 'zero'): number {
-  let days = 0
-  for (let index = rows.length - 1; index >= 0 && rows[index]?.direction === direction; index -= 1) days += 1
-  return days
-}
-
-/**
- * The chart, the info bubble and the daily table. All of them read the same
- * `flowHistory.rows` handed down by the projection — the seven-day window is cut once, in the
- * model — and the table's trigger sits in the title row while its panel hangs off this section's
- * bottom edge, so opening it moves nothing in the card.
- */
-function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false }: {
+function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false, cellOff }: {
   reading?: DashboardEtfReading
   flowHistory?: AvailableState['flowHistory']
   text: Text
   onRetry?: () => void
+  /** 这一格没启用：标题留着，里面一句行内状态词。 */
+  cellOff?: DashboardCapitalCellOff
   /** 整卡读不到：**标题、图例留外面，图里没有数据**（不画假曲线、不画 0 值柱）。 */
   skeleton?: boolean
 }): React.ReactElement {
   const [dialogOpen, setDialogOpen] = useState(false)
   const resolveText = useProductTextKey()
+  const inlineText = (key: string): string => resolveText(key)
   if (skeleton) {
     return <section className="mi-capital-conditions__etf-flow" data-etf-flow="skeleton">
       <header><div className="mi-capital-conditions__etf-flow-title"><h3>{text.etfFlow}</h3></div></header>
@@ -448,9 +290,16 @@ function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false }: {
   }
   // "The sources did not answer" stays an error with a retry; "they answered with too few days"
   // is a not-yet with the count, so the two never share a sentence.
-  if (reading === undefined || reading.state === 'unreadable' || !flowHistory) {
-    return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3>
-      <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => onRetry?.() }} />
+  if (cellOff !== undefined || reading === undefined || reading.state === 'unreadable' || !flowHistory) {
+    // 行内状态词：这一块读不到（或这一格没启用）时只在这里说一句，不把整块换成状态面，
+    // 也不在这里挂按钮——这张卡的动作在标题行右侧。
+    return <section className="mi-capital-conditions__etf-flow" data-etf-flow={cellOff === undefined ? 'unavailable' : 'cell-off'}><h3>{text.etfFlow}</h3>
+      {cellOff
+        ? <CellSourceWord availability={cellOff} />
+        : <span className="mi-source-state" data-state="unreadable">
+            <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
+            <span>{inlineText('pages.intelligence.portal.data.temporarilyUnavailable')}</span>
+          </span>}
     </section>
   }
   if (flowHistory.state === 'not-yet') {
@@ -491,10 +340,3 @@ function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false }: {
   </section>
 }
 
-function flowDirection(value: string): 'inflow' | 'outflow' | 'zero' {
-  return value.startsWith('+') ? 'inflow' : value.startsWith('-') ? 'outflow' : 'zero'
-}
-
-function format(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_match, key) => String(values[key] ?? ''))
-}

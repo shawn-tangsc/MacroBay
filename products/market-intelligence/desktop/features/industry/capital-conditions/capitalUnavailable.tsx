@@ -50,3 +50,23 @@ export function SkeletonEtfRow({ label, series, span }: { label: string; series:
     {cells}
   </tr>
 }
+
+/** 稳定币那一行的四个数据格（1D / 7D / 30D / 总供给）：源未启用时逐格画横杠。 */
+export const DASH_CELLS = ['change1d', 'change7d', 'change30d', 'supply'] as const
+
+/**
+ * 源未启用的一行：**行名照旧，每一格一个横杠**。
+ *
+ * 横杠的意思是「确实没有」——这一格是读者自己关掉的，不是这次读失败。所以整行**一个数字都不画**，
+ * 也不沿用上一次的读数：关掉一个源以后还继续报数，就是把「没开」画成「有数据」。
+ */
+export function DashEtfRow({ label, series, span }: { label: string; series: 'btc' | 'eth'; span: number }): React.ReactElement {
+  const cells = Array.from({ length: Math.max(span - 1, 0) }, (_, index) => <td key={index} data-cell-dash="true">—</td>)
+  return <tr data-etf-cell-off={series}>
+    <th scope="row">
+      <i aria-hidden="true" className="mi-capital-conditions__asset-dot" data-series={series} />
+      {label}
+    </th>
+    {cells}
+  </tr>
+}

@@ -124,15 +124,19 @@ describe('CapitalConditionsPanel', () => {
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
     const body = etfTableBody(markup)
 
-    // Both halves answer through the platform error state: a part of the panel that could not be
-    // read is still "could not read", and neither half may fall back to a sentence of its own.
-    expect(body).toContain('data-state="error"')
+    // 读不到 = 「拿不到」：表里留空 + 一句行内状态词（不是横杠——横杠的意思是「确实没有」），
+    // 两块用同一摆法，谁也不换成整块状态面。
+    expect(body).toContain('data-etf-unavailable="true"')
+    expect(body).toContain('mi-source-state')
+    expect(body).not.toContain('—')
     const bodyText = body.replace(/<[^>]*>/g, '')
     expect(bodyText).not.toMatch(/\d/)
     expect(markup).toContain('$1B')
     expect(markup).toContain('data-etf-flow="unavailable"')
     const flow = /data-etf-flow="unavailable"([\s\S]*?)<\/section>/.exec(markup)![1]!
-    expect(flow).toContain('data-state="error"')
+    expect(flow).toContain('mi-source-state')
+    // 这张卡的动作只有一处：标题行右侧那颗「再试一次」。
+    expect(markup).toContain('mi-capital-conditions__title-action')
   })
 
   it('renders one shared zero-axis chart with exactly three series per day', () => {
@@ -649,7 +653,7 @@ describe('CapitalConditionsPanel', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1)
   })
 
-  it('gives both unavailable ETF surfaces the same retry as the card', async () => {
+  it('keeps one retry for the whole card, in the title row, when the ETF half cannot read', async () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const onRefresh = vi.fn()
     const container = document.createElement('div')
@@ -658,11 +662,12 @@ describe('CapitalConditionsPanel', () => {
 
     const state = { ...fullState(), etfReading: unreadableReading() }
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh })))
-    const actions = [...container.querySelectorAll<HTMLButtonElement>('.state-view__action')]
-    expect(actions).toHaveLength(2)
+    // 卡内两块各说各的（行内状态词），**动作只有一处**：标题行右侧那颗。
+    const actions = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    expect(actions).toHaveLength(1)
+    expect(actions[0]!.closest('.mi-capital-conditions__header-band')).not.toBeNull()
     await act(async () => actions[0]!.click())
-    await act(async () => actions[1]!.click())
-    expect(onRefresh).toHaveBeenCalledTimes(2)
+    expect(onRefresh).toHaveBeenCalledTimes(1)
   })
 
   it.each(['zh-CN', 'en-US'] as const)('gives %s readers exactly one action on the read-failure state', async (locale) => {
