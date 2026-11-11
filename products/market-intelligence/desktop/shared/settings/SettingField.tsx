@@ -61,6 +61,12 @@ export type SettingFieldProps = Readonly<{
   selectStyle?: Readonly<Record<string, string | number>>
   /** `unimplemented` 的一行说明，由页面给句子。 */
   unimplementedText?: string
+  /**
+   * 行级**条件说明**追加到声明的 `helpKeys` 之后（例如「这一项被自己的开关挡住」时的解释）。
+   * 为什么要有这一格：这类说明只在某一种状态下才成立，写进声明就变成常驻；写在正文又违反
+   * 「正文只留字段名 / 当前值 / 控件」——所以由调用方按状态追加，仍然只进 ⓘ 浮层。
+   */
+  extraHelpKeys?: readonly string[]
   /** 页面渲染的行级状态（保存中 / 存不上）。组件不生产、不改写、不吞掉。 */
   children?: ReactNode
 }>
@@ -72,8 +78,11 @@ export function SettingField(props: SettingFieldProps): ReactElement | null {
   // 按实例化的行的行名是**数据**（来源名 / feed 名）；静态行才用文案键。
   const label = descriptor.labelText ? descriptor.labelText(props.view) : props.resolveText(descriptor.copy?.labelKey ?? '')
   // 说明：单条简写 helpKey 或多条 helpKeys，两者互斥；读屏名优先用声明里的 helpAriaKey。
-  const helpKeys = descriptor.copy?.helpKeys
-    ?? (descriptor.copy?.helpKey === undefined ? [] : [descriptor.copy.helpKey])
+  const helpKeys = [
+    ...(descriptor.copy?.helpKeys
+      ?? (descriptor.copy?.helpKey === undefined ? [] : [descriptor.copy.helpKey])),
+    ...(props.extraHelpKeys ?? [])
+  ]
   const helpAriaKey = descriptor.copy?.helpAriaKey ?? props.helpAriaLabelKey ?? helpKeys[0]
   const info = helpKeys.length === 0 || helpAriaKey === undefined || props.showHelp === false
     ? null

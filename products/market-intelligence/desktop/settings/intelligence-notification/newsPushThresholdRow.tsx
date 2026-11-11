@@ -15,6 +15,12 @@ const LABEL_CLASS = 'intelligence-notification-form-label'
 const LABEL_TEXT_CLASS = 'intelligence-notification-form-label-text'
 const CONTROL_CLASS = 'intelligence-notification-form-control'
 
+/**
+ * 这一项被自己的开关挡住时那句话。它是**说明**，不是状态句：只在关着时成立，所以按状态追加到
+ * ⓘ 里（用户口径：正文只留字段名、当前值、控件），不删这句——读者需要知道去哪儿开。
+ */
+const THRESHOLD_DISABLED_NOTE_KEY = 'pages.intelligence.notification.threshold.disabledNote'
+
 function thresholdDescriptor(): SettingDescriptor {
   const descriptor = settingRegistry.notifications.find((row) => row.key === 'setting:notifications.push-threshold')
   if (!descriptor) throw new Error('missing setting descriptor: setting:notifications.push-threshold')
@@ -43,11 +49,6 @@ export function NewsPushThresholdRow(props: Readonly<{
   disabled?: boolean
 }>): ReactElement {
   const label = props.text['pages.intelligence.notification.threshold.row'] ?? ''
-  const disabledNote = props.disabled === true
-    ? <span className="intelligence-notification-form-note" role="status">
-      {props.text['pages.intelligence.notification.threshold.disabledNote']}
-    </span>
-    : null
   const failed = props.state.saveFailed
     ? <span className="intelligence-notification-form-note" role="status">
       {props.text['pages.intelligence.notification.saveFailed']}
@@ -85,6 +86,7 @@ export function NewsPushThresholdRow(props: Readonly<{
     copyClassName={LABEL_CLASS}
     descriptor={thresholdDescriptor()}
     disabled={props.disabled === true}
+    extraHelpKeys={props.disabled === true ? [THRESHOLD_DISABLED_NOTE_KEY] : undefined}
     labelTextClassName={LABEL_TEXT_CLASS}
     onChange={(next) => props.state.setThreshold(next as NewsSentimentTierThreshold)}
     resolveOptionLabel={(option) =>
@@ -96,6 +98,5 @@ export function NewsPushThresholdRow(props: Readonly<{
   >
     {/* 存不上是**状态**，不是说明：它只在出事时出现，必须当场看见。 */}
     {failed}
-    {disabledNote}
   </SettingField>
 }

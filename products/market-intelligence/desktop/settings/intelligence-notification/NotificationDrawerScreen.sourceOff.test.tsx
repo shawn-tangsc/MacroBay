@@ -129,8 +129,20 @@ describe('抽屉 · 日历关着也不丢「看已存值」和「测试发生后
   })
 })
 
+/** 点开某一行标签旁的 ⓘ，读**它自己**指向的浮层内容（浮层挂在 body 的 overlay 容器里）。 */
+async function openRowInfo(ariaLabel: string): Promise<string> {
+  const trigger = [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .find((button) => button.getAttribute('aria-label') === ariaLabel)
+  expect(trigger, `row info trigger: ${ariaLabel}`).toBeDefined()
+  await act(async () => { trigger!.click() })
+  await act(async () => { await Promise.resolve() })
+  const describedBy = trigger!.getAttribute('aria-describedby') ?? ''
+  const node = describedBy.split(' ').map((id) => document.getElementById(id)).find((each) => each !== null)
+  return node?.textContent ?? ''
+}
+
 describe('抽屉 · 舆情关着也能选到最低强度', () => {
-  it('keeps the threshold row, disables it, and says to turn the alert on first', async () => {
+  it('keeps the threshold row and disables it, with the reason behind the row ⓘ, not in the body', async () => {
     install({ calendarEnabled: false, outletEnabled: false })
     const container = await render()
 
@@ -141,7 +153,10 @@ describe('抽屉 · 舆情关着也能选到最低强度', () => {
     expect(choices.length).toBeGreaterThan(0)
     for (const choice of choices) expect(choice.disabled).toBe(true)
 
-    expect(row?.textContent).toContain(text['pages.intelligence.notification.threshold.disabledNote'])
+    // 正文只留字段名与控件：那句解释不进正文，进这一行的 ⓘ（用户口径，`check:body-prose` 守的就是它）。
+    const note = text['pages.intelligence.notification.threshold.disabledNote']!
+    expect(row?.textContent).not.toContain(note)
+    expect(await openRowInfo(text['pages.intelligence.notification.threshold.aria']!)).toContain(note)
   })
 
   it('keeps the threshold editable while the alert is on', async () => {
@@ -151,6 +166,9 @@ describe('抽屉 · 舆情关着也能选到最低强度', () => {
     const choices = [...(row?.querySelectorAll<HTMLButtonElement>('.segmented button') ?? [])]
     expect(choices.length).toBeGreaterThan(0)
     expect(choices.some((choice) => choice.disabled)).toBe(false)
-    expect(row?.textContent).not.toContain(text['pages.intelligence.notification.threshold.disabledNote'])
+    // 关着才成立的那句解释，开着时连 ⓘ 里也不该出现（否则它就变成一句常驻的假前提）。
+    const note = text['pages.intelligence.notification.threshold.disabledNote']!
+    expect(row?.textContent).not.toContain(note)
+    expect(await openRowInfo(text['pages.intelligence.notification.threshold.aria']!)).not.toContain(note)
   })
 })
