@@ -1,3 +1,5 @@
+import { providerLinks } from './providerLinks'
+
 export type AgentId = 'crypto' | 'stocks' | 'futures'
 export type PanelId = 'dashboard' | 'economic-calendar'
 /**
@@ -449,37 +451,6 @@ export const agentRegistry: readonly AgentDefinition[] = [
   { agentId: 'stocks', displayName: 'Equities Market Analyst', activation: 'coming-soon', groups: [] },
   { agentId: 'futures', displayName: 'Futures Market Analyst', activation: 'coming-soon', groups: [] }
 ]
-
-/**
- * Provider links. `signupUrl` is the operator's invite/signup entry and is
- * opened in the system browser; keep it in sync with the provider registry.
- */
-const providerLinks: Readonly<Record<string, Pick<ProviderDefinition, 'website' | 'signupUrl' | 'invite' | 'notice'>>> = {
-  fed: { website: 'https://www.federalreserve.gov/' },
-  bea: { website: 'https://www.bea.gov/' },
-  bls: { website: 'https://www.bls.gov/' },
-  fred: { website: 'https://fred.stlouisfed.org/', signupUrl: 'https://fred.stlouisfed.org/docs/api/api_key.html' },
-  treasury: { website: 'https://home.treasury.gov/' },
-  sec: { website: 'https://www.sec.gov/' },
-  cftc: { website: 'https://www.cftc.gov/' },
-  binance: { website: 'https://www.binance.com/' },
-  okx: { website: 'https://www.okx.com/' },
-  coingecko: { website: 'https://www.coingecko.com/' },
-  defillama: { website: 'https://defillama.com/' },
-  alternative: { website: 'https://alternative.me/crypto/fear-and-greed-index/' },
-  coindesk: { website: 'https://www.coindesk.com/' },
-  ethereum: { website: 'https://ethereum.org/' },
-  coinmarketcal: { website: 'https://coinmarketcal.com/', signupUrl: 'https://coinmarketcal.com/en/api' },
-  cryptopanic: { website: 'https://cryptopanic.com/', signupUrl: 'https://cryptopanic.com/developers/api/' },
-  '0xrouter': { website: 'https://0xrouter.app/', signupUrl: 'https://0xrouter.app/index.html?invite=tangscsh', invite: true, notice: 'private-data-source' },
-  realmarketapi: { website: 'https://realmarketapi.com/', signupUrl: 'https://realmarketapi.com/?via=Macrobay', invite: true },
-  'policy-path': { website: 'https://polymarket.com/zh?tag=fed' },
-  twelvedata: { website: 'https://twelvedata.com/', signupUrl: 'https://twelvedata.com/pricing' },
-  coinbase: { website: 'https://www.coinbase.com/' },
-  kraken: { website: 'https://www.kraken.com/' },
-  solana: { website: 'https://solana.com/' },
-  github: { website: 'https://github.com/' }
-}
 
 export const providerRegistry: readonly ProviderDefinition[] = providerDefinitions.map((provider) => ({
   ...provider,
