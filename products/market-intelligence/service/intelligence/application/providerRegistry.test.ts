@@ -138,15 +138,8 @@ describe('source projections', () => {
   })
 
   it('marks every proxy-only source as needing a proxy and leaves reachable sources unmarked', () => {
-    const routers = getProvider('0xrouter')?.sources ?? []
-    expect(routers).toHaveLength(4)
-    for (const source of routers) expect(source.requiresProxy, source.sourceId).toBe(true)
-
-    // The projection carries the flag to both panes, so the tag and the banner read one field.
-    const projected = panelView('dashboard')?.providers.find((provider) => provider.providerId === '0xrouter')
-    expect(projected?.sources.every((source) => source.requiresProxy === true)).toBe(true)
-
-    // Mainland-blocked crypto venues and news: the bar and the 需要代理 tag must reach them too.
+    // 判据是实测（2026-11-12：直连 vs 经本地代理对照），不是名单印象：
+    // 直连 000、经代理 2xx/4xx 的才算「需要代理」。
     const blocked = [
       'binance-announcements',
       'binance-api-updates',
@@ -154,9 +147,14 @@ describe('source projections', () => {
       'binance-futures-positioning',
       'okx-latest-announcements',
       'okx-api-announcements',
-      'defillama-stablecoins',
-      'defillama-tvl',
-      'coindesk-rss'
+      'coingecko-market',
+      'coindesk-rss',
+      'policy-path-market',
+      'ethereum-foundation-blog',
+      'coinbase-status',
+      'kraken-status',
+      'kraken-system-status',
+      'solana-status'
     ]
     for (const sourceId of blocked) {
       expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBe(true)
@@ -164,11 +162,20 @@ describe('source projections', () => {
     expect(panelView('dashboard')?.providers.find((provider) => provider.providerId === 'binance')?.sources
       .every((source) => source.requiresProxy === true)).toBe(true)
 
-    for (const reachable of ['coingecko-market', 'fred-rates-liquidity', 'alternative-fear-greed']) {
-      expect(allSources().find((source) => source.sourceId === reachable)?.requiresProxy).toBeUndefined()
+    // 直连就能拿回 HTTP 状态码的（含 401/403：那是缺钥匙/缺 UA，不是连不上）一律不标。
+    const reachable = [
+      'defillama-stablecoins', 'defillama-tvl',
+      '0xrouter-aggregate-provider', 'macro-calendar-0xrouter-economic-data',
+      'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities',
+      'fred-rates-liquidity', 'alternative-fear-greed', 'federal-reserve-rss', 'cftc-rss',
+      'sec-rss', 'bls-economic-series', 'bea-economic-series', 'treasury-fiscal-data',
+      'twelve-data-market', 'realmarketapi-market', 'github-releases'
+    ]
+    for (const sourceId of reachable) {
+      expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBeUndefined()
     }
     expect(providerRegistry.filter((provider) => provider.sources.some((source) => source.requiresProxy)).map((provider) => provider.providerId))
-      .toEqual(['binance', 'okx', 'defillama', 'coindesk', '0xrouter'])
+      .toEqual(['policy-path', 'binance', 'okx', 'coingecko', 'coindesk', 'ethereum-foundation', 'coinbase', 'kraken', 'solana'])
   })
 
   it('names the provider credential source even in a panel that does not list it', () => {

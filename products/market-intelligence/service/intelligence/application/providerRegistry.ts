@@ -63,6 +63,13 @@ export type SourceDefinition = {
    * The source's API host is edge-blocked from some networks (for example mainland China) and is
    * only reachable through a working local proxy. Declared once per source; a provider-level
    * need is derived with `sources.some(...)` rather than stored a second time.
+   *
+   * **这是实测出来的，不是猜的**（2026-11-12）：对每个源的接口做「直连 vs 经本地代理」对照，
+   * 直连返回 000（DNS/连接失败）而经代理返回 2xx/4xx 的才标记；直连能拿回任何 HTTP 状态码
+   * （含 401/403，那只是缺钥匙或缺 UA）的一律不标。当天结论：
+   * binance / okx / coingecko / coindesk / Polymarket / 以太坊基金会博客 / Coinbase·Kraken·Solana
+   * 状态页需要代理；DeFiLlama、0xRouter、美联储、SEC、CFTC、BLS、BEA、财政部、FRED、GitHub、
+   * Alternative.me、realmarketapi、Twelve Data 直连可达。
    */
   requiresProxy?: boolean
   /**
@@ -222,6 +229,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       displayName: 'FOMC decision market',
       purposes: ['dashboard', 'briefing'],
       collection: 'none',
+      // 实测（2026-11-12）：`gamma-api.polymarket.com` / `clob.polymarket.com` 直连 000、经代理 200。
+      requiresProxy: true,
       capabilities: { runNow: 'none', testConnection: true },
       adapterRef: 'policy-path-market'
     })]
@@ -286,7 +295,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'CoinGecko',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ purposes: ['analysis'], sourceId: 'coingecko-market', summaryKey: 'settings.intelligenceSources.sourceSummary.coingecko-market', displayName: 'CoinGecko market', adapterRef: 'coingecko-market' })]
+    sources: [src({ purposes: ['analysis'], sourceId: 'coingecko-market', summaryKey: 'settings.intelligenceSources.sourceSummary.coingecko-market', displayName: 'CoinGecko market', requiresProxy: true, adapterRef: 'coingecko-market' })]
   }),
   provider({
     providerId: 'defillama',
@@ -294,8 +303,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'defillama-stablecoins', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-stablecoins', displayName: 'DeFiLlama stablecoins', purposes: ['dashboard', 'briefing'], requiresProxy: true, adapterRef: 'defillama-stablecoins' }),
-      src({ purposes: ['analysis'], sourceId: 'defillama-tvl', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-tvl', displayName: 'DeFiLlama TVL', requiresProxy: true, adapterRef: 'defillama-tvl' })
+      src({ sourceId: 'defillama-stablecoins', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-stablecoins', displayName: 'DeFiLlama stablecoins', purposes: ['dashboard', 'briefing'], adapterRef: 'defillama-stablecoins' }),
+      src({ purposes: ['analysis'], sourceId: 'defillama-tvl', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-tvl', displayName: 'DeFiLlama TVL', adapterRef: 'defillama-tvl' })
     ]
   }),
   provider({
@@ -317,7 +326,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Ethereum Foundation',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'ethereum-foundation-blog', summaryKey: 'settings.intelligenceSources.sourceSummary.ethereum-foundation-blog', displayName: 'Ethereum Foundation blog', visibility: 'advanced', adapterRef: 'ethereum-foundation-blog' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'ethereum-foundation-blog', summaryKey: 'settings.intelligenceSources.sourceSummary.ethereum-foundation-blog', displayName: 'Ethereum Foundation blog', visibility: 'advanced', requiresProxy: true, adapterRef: 'ethereum-foundation-blog' })]
   }),
   provider({
     providerId: 'cryptopanic',
@@ -342,10 +351,10 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'aggregate',
     credential: 'api-key',
     sources: [
-      src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
+      src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider' }),
+      src({ sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true } }),
+      src({ sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true } }),
+      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true } })
     ]
   }),
   provider({
@@ -367,7 +376,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Coinbase',
     category: 'system',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'coinbase-status', summaryKey: 'settings.intelligenceSources.sourceSummary.coinbase-status', displayName: 'Coinbase status', visibility: 'advanced', kind: 'status', adapterRef: 'coinbase-status' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'coinbase-status', summaryKey: 'settings.intelligenceSources.sourceSummary.coinbase-status', displayName: 'Coinbase status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'coinbase-status' })]
   }),
   provider({
     providerId: 'kraken',
@@ -375,8 +384,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'system',
     credential: 'none',
     sources: [
-      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-status', displayName: 'Kraken status', visibility: 'advanced', kind: 'status', adapterRef: 'kraken-status' }),
-      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-system-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-system-status', displayName: 'Kraken system status', visibility: 'advanced', kind: 'status', adapterRef: 'kraken-system-status' })
+      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-status', displayName: 'Kraken status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'kraken-status' }),
+      src({ purposes: [], maintenanceOnly: true, sourceId: 'kraken-system-status', summaryKey: 'settings.intelligenceSources.sourceSummary.kraken-system-status', displayName: 'Kraken system status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'kraken-system-status' })
     ]
   }),
   provider({
@@ -384,7 +393,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Solana',
     category: 'system',
     credential: 'none',
-    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'solana-status', summaryKey: 'settings.intelligenceSources.sourceSummary.solana-status', displayName: 'Solana status', visibility: 'advanced', kind: 'status', adapterRef: 'solana-status' })]
+    sources: [src({ purposes: [], maintenanceOnly: true, sourceId: 'solana-status', summaryKey: 'settings.intelligenceSources.sourceSummary.solana-status', displayName: 'Solana status', visibility: 'advanced', requiresProxy: true, kind: 'status', adapterRef: 'solana-status' })]
   }),
   provider({
     providerId: 'github',
