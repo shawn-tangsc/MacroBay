@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
 
-import { notifySettingsRevision } from '../../shared/events/settingsRevision'
+import { notifySettingsRevision, subscribeSettingsRevision } from '../../shared/events/settingsRevision'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { BusinessSettingsContent, BusinessSettingsView, type BusinessFocus, type BusinessKey } from './BusinessSettingsView'
 import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
@@ -151,15 +151,40 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
    * 存储层之外不再造第二份默认值表。
    */
   const [cellEnabled, setCellEnabled] = useState<Readonly<Record<string, boolean>>>({})
+  /**
+   * 读这张格表，并在**同窗口别处改了格级设置**时重读一次（用户 2026-11-12：抽屉常驻，
+   * 别处改了这里不跟——看板那条是镜像，两边必须同一套）。
+   *
+   * 三条：**不轮询**（只靠域信号）；**同一时刻只跑一轮读**，读的过程中又来信号只记一个排队、
+   * 本轮结束后补读一次（连点不会打出一串读）；写失败/读失败都沿用上一次，绝不把整屏画成「全关」。
+   */
+  const cellRevisionOrigin = props.surface.revisionOrigin ?? 'sources-cell'
   useEffect(() => {
-    let cancelled = false
-    if (props.cellEnabledIo === undefined) return
-    void props.cellEnabledIo.read()
-      .then((saved) => { if (!cancelled) setCellEnabled(saved) })
-      // 读失败不是「全关」：保持空表 → 所有格按启用显示。
-      .catch(() => { if (!cancelled) setCellEnabled({}) })
-    return () => { cancelled = true }
-  }, [props.cellEnabledIo])
+    const io = props.cellEnabledIo
+    if (io === undefined) return
+    let active = true
+    let inFlight = false
+    let queued = false
+    const readState = (): void => {
+      if (inFlight) { queued = true; return }
+      inFlight = true
+      void io.read()
+        .then((saved) => { if (active) setCellEnabled(saved) })
+        // 读失败不是「全关」：保持空表 → 所有格按启用显示。
+        .catch(() => { if (active) setCellEnabled({}) })
+        .finally(() => {
+          inFlight = false
+          if (queued && active) { queued = false; readState() }
+        })
+    }
+    readState()
+    const unsubscribe = subscribeSettingsRevision('sources', (detail) => {
+      // 自己写出的那一次已经就地更新过，不再多读一轮。
+      if (detail.origin === cellRevisionOrigin) return
+      readState()
+    })
+    return () => { active = false; unsubscribe() }
+  }, [props.cellEnabledIo, cellRevisionOrigin])
   /* 只回**显式写过**的格；缺键交给调用方按「主源默认开、备用行默认关」解释，
      否则界面上主备两个源会同时显示为开（用户 2026-11-11：同一格只有一个源在用）。 */
   const isCellEnabled = (cellId: string): boolean | undefined => cellEnabled[cellId]
@@ -172,7 +197,6 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
   for (const module of modulesForBusiness('dashboard')) {
     for (const cell of module.cells) cellSourceOf.set(cellIdOf(module.id, cell), cell.sourceId)
   }
-  const cellRevisionOrigin = props.surface.revisionOrigin ?? 'sources-cell'
   const onCellToggle = props.cellEnabledIo === undefined
     ? undefined
     : (cellId: string, enabled: boolean): void => {
