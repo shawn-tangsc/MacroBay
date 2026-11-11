@@ -95,7 +95,13 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     <section className="settings-workspace intelligence-sources-workspace">
       <SourcesSettingsPane
         /* 与抽屉、看板读取链同一个客户端实例：同一份存储。 */
-        cellEnabledIo={{ read: () => cellEnabledClient.read(), write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled) }}
+        cellEnabledIo={{
+          read: () => cellEnabledClient.read(),
+          write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled),
+          /* 「打开一格 = 选中该源」：契约、客户端、存储都在，缺的只是这一处注入。
+             打开时选的就是该格的主源，与今天的默认规则一致，不改变任何读数。 */
+          writeSelection: (cellId, sourceId) => cellEnabledClient.writeSelection(cellId, sourceId)
+        }}
         filter={sourceFilter}
         notice={<>
           {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">

@@ -136,7 +136,12 @@ export function DashboardSourcesPanel(props: {
     {...(props.onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings: props.onOpenProcessingSettings })}
     {...(props.initialBusinessPosition === undefined ? {} : { initialBusinessPosition: props.initialBusinessPosition })}
     /* 格级开关的读写：与看板读取链**同一个客户端实例**（同一份存储，不各建一份）。 */
-    cellEnabledIo={{ read: () => cellEnabledClient.read(), write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled) }}
+    cellEnabledIo={{
+      read: () => cellEnabledClient.read(),
+      write: (cellId, enabled) => cellEnabledClient.write(cellId, enabled),
+      /* 同上：抽屉这一份也要能写选源，否则「换备用源」这个动作存不下来。 */
+      writeSelection: (cellId, sourceId) => cellEnabledClient.writeSelection(cellId, sourceId)
+    }}
     filter={sourceFilter}
     /* 抽屉五块：全部 / 看板 / 日历 / 舆情 / 其他（第四块是兜底）（用户 2026-11-10：先砍掉「全部」「高级」，
        随后要求把「全部」恢复到 tab 最前；「高级」仍不要）。默认筛选仍是**看板**。设置页仍是原来的六项。 */
