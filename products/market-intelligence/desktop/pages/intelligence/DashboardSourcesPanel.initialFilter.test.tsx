@@ -127,7 +127,7 @@ describe('业务设置：只有卡片，没有源详情头', () => {
     expect(container.querySelector('.source-provider-detail__row')).toBeNull()
     // 也没有状态词与「高级」。
     expect(body).not.toContain(text.advancedToggle)
-    expect(body).not.toContain(text.status.disabled)
+    expect(body).not.toContain(text.status.notApplied)
   })
 
 })
