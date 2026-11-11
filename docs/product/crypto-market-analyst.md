@@ -168,10 +168,10 @@ Each source is one row, and only these are adjustable:
 - **API Key** — only for sources that need a credential. You can press **Test connection** before saving it.
 - **Private-source note** — for example 0xRouter: a private data source; after registering an account you request an API Key from the developer. That sentence describes the source; it is not a status.
 
-**Not offered in this version** (the data is still used, there is just no control for it):
+**Two more things sit on the row**:
 
-- **Run now** — collect once without waiting for the timer. It comes back when readers ask for it in their own words.
-- **Source health** — last success, last failure, consecutive failures, last run summary. The health reading still feeds the status shown on cards, but the settings page no longer expands it.
+- **Run now** — collect once without waiting for the timer. The button is disabled while it runs, and the result stays on that row: the server's summary on success, the reason on failure.
+- **Source health** — four cells: whether it has a reading today, when it last succeeded, why it is not collecting, and whether it can run right now. All four come from one read, and the dot in the catalog uses the same judgement.
 
 **Not offered, and not affected by anything you set**: scope policy, raw archiving, retention mode, and replay after a parser upgrade. Nothing in this version reads them, so a switch would change nothing.
 
@@ -179,7 +179,7 @@ Each source is one row, and only these are adjustable:
 
 After enabling a source, see whether it delivers:
 
-- **Wait for the first collection** — it collects on the frequency you set. This version has no **Run now**, so there is no button to look for.
+- **Wait for the first collection** — it collects on the frequency you set; for a reading right now, use **Run now** on that source's row.
 - **Missing credential** — the source is on but the required key is not filled in; the page names what is missing.
 - **Switched off** — configured but not enabled; it collects once you turn it on.
 - **Collection failed** — the page names which kind of failure it is and marks it on the source.

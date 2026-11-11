@@ -21,9 +21,12 @@ supported yet.
 
 ### Channel integrations
 
-All five adapters — Telegram, Slack, Discord, QQ and Lark — can be created and enabled. Whether one
-actually connects depends on your credentials, the platform-side switches and the network (a direct
-connection from this machine needs a proxy first). WeChat is still unavailable.
+All five adapters — Telegram, Slack, Discord, QQ and Lark — can be created and enabled, but **only one
+channel is active at a time**: enabling a new one turns the previous one off, and a message still in
+flight on the old channel leaves a "not delivered: the channel just changed" record instead of
+disappearing. What works is **one-to-one chat messages**; in-group @mentions and channel posts are
+only partly verified. **WeChat cannot be connected in this version** — do not read it as
+"supported later".
 
 ### Official BLS calendar
 

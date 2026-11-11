@@ -86,8 +86,11 @@ the roadmap.
 
 ## Current status
 
-The app runs from source. Packaged installers, a demo dataset, and channel integrations are not
-part of this release. See [Status and limitations](./reference/status-and-limitations.md).
+The app runs from source, and packaged installers ship too: macOS on Apple silicon is verified; the
+Intel build ships but has not been verified on Intel hardware; the Windows x64 installer builds in CI
+and on Windows 11 x64 and ships, with its installed app not yet accepted; Linux is not packaged.
+Both installers are unsigned and not notarized. All five channels send and receive one-to-one
+messages, one channel at a time. See [Status and limitations](reference/status-and-limitations.md).
 
 ## Documentation
 
